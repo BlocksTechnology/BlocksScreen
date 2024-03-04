@@ -14,7 +14,7 @@
    <string>MainWindow</string>
   </property>
   <widget class="QWidget" name="centralwidget">
-   <widget class="QWidget" name="">
+   <widget class="QWidget" name="layoutWidget">
     <property name="geometry">
      <rect>
       <x>0</x>
@@ -50,7 +50,6 @@
 	max-width: 150px;
 	min-height: 140px;
     background: #000000;
-    border: 2px solid #C4C4C3;
 	text-color: #999999;
 }
 QWidget {background-color: black }</string>
@@ -62,7 +61,7 @@ QWidget {background-color: black }</string>
         <enum>QTabWidget::Rounded</enum>
        </property>
        <property name="currentIndex">
-        <number>0</number>
+        <number>1</number>
        </property>
        <property name="iconSize">
         <size>
@@ -79,10 +78,17 @@ QWidget {background-color: black }</string>
        <property name="documentMode">
         <bool>false</bool>
        </property>
+       <property name="tabsClosable">
+        <bool>false</bool>
+       </property>
+       <property name="movable">
+        <bool>false</bool>
+       </property>
        <widget class="QWidget" name="tab">
         <attribute name="icon">
          <iconset>
-          <normaloff>../../../../../../../../../../../GuilhermeLemos/Firmware/Klipper Screen/Icones Brinca/1_ICONS/HOME_unpressed.png</normaloff>../../../../../../../../../../../GuilhermeLemos/Firmware/Klipper Screen/Icones Brinca/1_ICONS/HOME_unpressed.png</iconset>
+          <normaloff>../MEDIA/1_icons/ICON_home.png</normaloff>
+          <normalon>../MEDIA/1_icons/ICON_home_pressed.png</normalon>../MEDIA/1_icons/ICON_home.png</iconset>
         </attribute>
         <attribute name="title">
          <string/>
@@ -91,7 +97,8 @@ QWidget {background-color: black }</string>
        <widget class="QWidget" name="Filament">
         <attribute name="icon">
          <iconset>
-          <normaloff>../../../../../../../../../../../GuilhermeLemos/Firmware/Klipper Screen/Icones Brinca/1_ICONS/FILAMENT_unpressed.png</normaloff>../../../../../../../../../../../GuilhermeLemos/Firmware/Klipper Screen/Icones Brinca/1_ICONS/FILAMENT_unpressed.png</iconset>
+          <normaloff>../MEDIA/1_icons/ICON_filamente.png</normaloff>
+          <normalon>../MEDIA/1_icons/ICON_filament_pressed.png</normalon>../MEDIA/1_icons/ICON_filamente.png</iconset>
         </attribute>
         <attribute name="title">
          <string>Filament</string>
@@ -100,7 +107,8 @@ QWidget {background-color: black }</string>
        <widget class="QWidget" name="tab_2">
         <attribute name="icon">
          <iconset>
-          <normaloff>../../../../../../../../../../../GuilhermeLemos/Firmware/Klipper Screen/Icones Brinca/1_ICONS/DEFINITIONS_unpressed.png</normaloff>../../../../../../../../../../../GuilhermeLemos/Firmware/Klipper Screen/Icones Brinca/1_ICONS/DEFINITIONS_unpressed.png</iconset>
+          <normaloff>../MEDIA/1_icons/ICON_control.png</normaloff>
+          <normalon>../MEDIA/1_icons/ICON_control_pressed.png</normalon>../MEDIA/1_icons/ICON_control.png</iconset>
         </attribute>
         <attribute name="title">
          <string>Page</string>
@@ -109,7 +117,8 @@ QWidget {background-color: black }</string>
        <widget class="QWidget" name="tab_3">
         <attribute name="icon">
          <iconset>
-          <normaloff>../../../../../../../../../../../GuilhermeLemos/Firmware/Klipper Screen/Icones Brinca/1_ICONS/CONTROL_unpressed.png</normaloff>../../../../../../../../../../../GuilhermeLemos/Firmware/Klipper Screen/Icones Brinca/1_ICONS/CONTROL_unpressed.png</iconset>
+          <normaloff>../MEDIA/1_icons/ICON_utilities.png</normaloff>
+          <normalon>../MEDIA/1_icons/ICON_utilities_pressed.png</normalon>../MEDIA/1_icons/ICON_utilities.png</iconset>
         </attribute>
         <attribute name="title">
          <string>Page</string>
@@ -118,7 +127,7 @@ QWidget {background-color: black }</string>
       </widget>
      </item>
      <item row="0" column="0">
-      <widget class="QGroupBox" name="">
+      <widget class="QGroupBox" name="groupBox">
        <property name="styleSheet">
         <string notr="true">background-color: rgb(50, 50, 50);
 border-bottom-color: rgb(145, 145, 145);</string>
@@ -148,7 +157,7 @@ border-bottom-color: rgb(145, 145, 145);</string>
           </property>
           <property name="icon">
            <iconset>
-            <normaloff>../../../../../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</normaloff>../../../../../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</iconset>
+            <normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</iconset>
           </property>
           <property name="iconSize">
            <size>
@@ -188,7 +197,7 @@ border-bottom-color: rgb(145, 145, 145);</string>
           </property>
           <property name="icon">
            <iconset>
-            <normaloff>../../../../../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</normaloff>../../../../../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</iconset>
+            <normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</iconset>
           </property>
           <property name="iconSize">
            <size>
@@ -229,7 +238,7 @@ border-bottom-color: rgb(145, 145, 145);</string>
           </property>
           <property name="icon">
            <iconset>
-            <normaloff>../../../../../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/18.jpg</normaloff>../../../../../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/18.jpg</iconset>
+            <normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/18.jpg</normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/18.jpg</iconset>
           </property>
           <property name="iconSize">
            <size>
@@ -269,7 +278,7 @@ border-bottom-color: rgb(145, 145, 145);</string>
           </property>
           <property name="icon">
            <iconset>
-            <normaloff>../../../../../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</normaloff>../../../../../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</iconset>
+            <normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</iconset>
           </property>
           <property name="iconSize">
            <size>
@@ -309,7 +318,7 @@ border-bottom-color: rgb(145, 145, 145);</string>
           </property>
           <property name="icon">
            <iconset>
-            <normaloff>../../../../../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/20.jpg</normaloff>../../../../../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/20.jpg</iconset>
+            <normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/20.jpg</normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/20.jpg</iconset>
           </property>
           <property name="iconSize">
            <size>
