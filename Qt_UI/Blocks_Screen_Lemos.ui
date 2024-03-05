@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>925</width>
-    <height>673</height>
+    <width>800</width>
+    <height>480</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -24,119 +24,99 @@
      </rect>
     </property>
     <layout class="QGridLayout" name="gridLayout_2">
-     <item row="1" column="0">
-      <widget class="QTabWidget" name="tabWidget">
-       <property name="enabled">
-        <bool>true</bool>
-       </property>
-       <property name="minimumSize">
-        <size>
-         <width>100</width>
-         <height>100</height>
-        </size>
-       </property>
-       <property name="baseSize">
-        <size>
-         <width>100</width>
-         <height>100</height>
-        </size>
-       </property>
-       <property name="layoutDirection">
-        <enum>Qt::LeftToRight</enum>
-       </property>
-       <property name="styleSheet">
-        <string notr="true">QTabBar::tab {
-	min-width: 100px;
-	max-width: 150px;
-	min-height: 140px;
-    background: #000000;
-	text-color: #999999;
-}
-QWidget {background-color: black }</string>
-       </property>
-       <property name="tabPosition">
-        <enum>QTabWidget::West</enum>
-       </property>
-       <property name="tabShape">
-        <enum>QTabWidget::Rounded</enum>
-       </property>
-       <property name="currentIndex">
-        <number>1</number>
-       </property>
-       <property name="iconSize">
-        <size>
-         <width>78</width>
-         <height>78</height>
-        </size>
-       </property>
-       <property name="elideMode">
-        <enum>Qt::ElideLeft</enum>
-       </property>
-       <property name="usesScrollButtons">
-        <bool>false</bool>
-       </property>
-       <property name="documentMode">
-        <bool>false</bool>
-       </property>
-       <property name="tabsClosable">
-        <bool>false</bool>
-       </property>
-       <property name="movable">
-        <bool>false</bool>
-       </property>
-       <widget class="QWidget" name="tab">
-        <attribute name="icon">
-         <iconset>
-          <normaloff>../MEDIA/1_icons/ICON_home.png</normaloff>
-          <normalon>../MEDIA/1_icons/ICON_home_pressed.png</normalon>../MEDIA/1_icons/ICON_home.png</iconset>
-        </attribute>
-        <attribute name="title">
-         <string/>
-        </attribute>
-       </widget>
-       <widget class="QWidget" name="Filament">
-        <attribute name="icon">
-         <iconset>
-          <normaloff>../MEDIA/1_icons/ICON_filamente.png</normaloff>
-          <normalon>../MEDIA/1_icons/ICON_filament_pressed.png</normalon>../MEDIA/1_icons/ICON_filamente.png</iconset>
-        </attribute>
-        <attribute name="title">
-         <string>Filament</string>
-        </attribute>
-       </widget>
-       <widget class="QWidget" name="tab_2">
-        <attribute name="icon">
-         <iconset>
-          <normaloff>../MEDIA/1_icons/ICON_control.png</normaloff>
-          <normalon>../MEDIA/1_icons/ICON_control_pressed.png</normalon>../MEDIA/1_icons/ICON_control.png</iconset>
-        </attribute>
-        <attribute name="title">
-         <string>Page</string>
-        </attribute>
-       </widget>
-       <widget class="QWidget" name="tab_3">
-        <attribute name="icon">
-         <iconset>
-          <normaloff>../MEDIA/1_icons/ICON_utilities.png</normaloff>
-          <normalon>../MEDIA/1_icons/ICON_utilities_pressed.png</normalon>../MEDIA/1_icons/ICON_utilities.png</iconset>
-        </attribute>
-        <attribute name="title">
-         <string>Page</string>
-        </attribute>
-       </widget>
-      </widget>
-     </item>
      <item row="0" column="0">
       <widget class="QGroupBox" name="groupBox">
        <property name="styleSheet">
         <string notr="true">background-color: rgb(50, 50, 50);
-border-bottom-color: rgb(145, 145, 145);</string>
+border-bottom-color: rgb(145, 145, 145);
+max-height: 60px;
+padding-right: 40px;</string>
        </property>
        <layout class="QGridLayout" name="gridLayout">
         <property name="spacing">
          <number>0</number>
         </property>
         <item row="0" column="2">
+         <widget class="QPushButton" name="pushButton_5">
+          <property name="enabled">
+           <bool>true</bool>
+          </property>
+          <property name="styleSheet">
+           <string notr="true">QWidget{
+	background-color: rgb(60, 60, 60);
+	selection-background-color: rgb(60, 60, 60);
+	gridline-color: rgb(60, 60, 60);
+	color: rgb(255, 255, 255);
+	border-color: rgb(60, 60, 60);
+	selection-color: rgb(60, 60, 60);
+	border-bottom-color: rgb(60, 60, 60);
+}</string>
+          </property>
+          <property name="text">
+           <string>210 ºC /220 ºC</string>
+          </property>
+          <property name="icon">
+           <iconset>
+            <normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</iconset>
+          </property>
+          <property name="iconSize">
+           <size>
+            <width>19</width>
+            <height>19</height>
+           </size>
+          </property>
+          <property name="checkable">
+           <bool>false</bool>
+          </property>
+          <property name="checked">
+           <bool>false</bool>
+          </property>
+          <property name="flat">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="1">
+         <widget class="QPushButton" name="pushButton">
+          <property name="enabled">
+           <bool>true</bool>
+          </property>
+          <property name="styleSheet">
+           <string notr="true">QWidget{
+	background-color: rgb(60, 60, 60);
+	selection-background-color: rgb(60, 60, 60);
+	gridline-color: rgb(60, 60, 60);
+	color: rgb(255, 255, 255);
+	border-color: rgb(60, 60, 60);
+	selection-color: rgb(60, 60, 60);
+	border-bottom-color: rgb(60, 60, 60);
+}</string>
+          </property>
+          <property name="text">
+           <string>210 ºC /220 ºC</string>
+          </property>
+          <property name="icon">
+           <iconset>
+            <normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/20.jpg</normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/20.jpg</iconset>
+          </property>
+          <property name="iconSize">
+           <size>
+            <width>19</width>
+            <height>19</height>
+           </size>
+          </property>
+          <property name="checkable">
+           <bool>false</bool>
+          </property>
+          <property name="checked">
+           <bool>false</bool>
+          </property>
+          <property name="flat">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+        <item row="0" column="1">
          <widget class="QPushButton" name="pushButton_2">
           <property name="enabled">
            <bool>true</bool>
@@ -176,7 +156,7 @@ border-bottom-color: rgb(145, 145, 145);</string>
           </property>
          </widget>
         </item>
-        <item row="1" column="3">
+        <item row="1" column="2">
          <widget class="QPushButton" name="pushButton_4">
           <property name="enabled">
            <bool>true</bool>
@@ -217,127 +197,6 @@ border-bottom-color: rgb(145, 145, 145);</string>
          </widget>
         </item>
         <item row="0" column="0" rowspan="2">
-         <widget class="QPushButton" name="pushButton_3">
-          <property name="enabled">
-           <bool>true</bool>
-          </property>
-          <property name="styleSheet">
-           <string notr="true">QWidget{
-	background-color: rgb(60, 60, 60);
-	selection-background-color: rgb(60, 60, 60);
-	gridline-color: rgb(60, 60, 60);
-	color: rgb(255, 255, 255);
-	border-color: rgb(60, 60, 60);
-	selection-color: rgb(60, 60, 60);
-	border-bottom-color: rgb(60, 60, 60);
-	padding: 0px;
-}</string>
-          </property>
-          <property name="text">
-           <string/>
-          </property>
-          <property name="icon">
-           <iconset>
-            <normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/18.jpg</normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/18.jpg</iconset>
-          </property>
-          <property name="iconSize">
-           <size>
-            <width>65</width>
-            <height>51</height>
-           </size>
-          </property>
-          <property name="checkable">
-           <bool>false</bool>
-          </property>
-          <property name="checked">
-           <bool>false</bool>
-          </property>
-          <property name="flat">
-           <bool>true</bool>
-          </property>
-         </widget>
-        </item>
-        <item row="0" column="3">
-         <widget class="QPushButton" name="pushButton_5">
-          <property name="enabled">
-           <bool>true</bool>
-          </property>
-          <property name="styleSheet">
-           <string notr="true">QWidget{
-	background-color: rgb(60, 60, 60);
-	selection-background-color: rgb(60, 60, 60);
-	gridline-color: rgb(60, 60, 60);
-	color: rgb(255, 255, 255);
-	border-color: rgb(60, 60, 60);
-	selection-color: rgb(60, 60, 60);
-	border-bottom-color: rgb(60, 60, 60);
-}</string>
-          </property>
-          <property name="text">
-           <string>210 ºC /220 ºC</string>
-          </property>
-          <property name="icon">
-           <iconset>
-            <normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</iconset>
-          </property>
-          <property name="iconSize">
-           <size>
-            <width>19</width>
-            <height>19</height>
-           </size>
-          </property>
-          <property name="checkable">
-           <bool>false</bool>
-          </property>
-          <property name="checked">
-           <bool>false</bool>
-          </property>
-          <property name="flat">
-           <bool>true</bool>
-          </property>
-         </widget>
-        </item>
-        <item row="1" column="2">
-         <widget class="QPushButton" name="pushButton">
-          <property name="enabled">
-           <bool>true</bool>
-          </property>
-          <property name="styleSheet">
-           <string notr="true">QWidget{
-	background-color: rgb(60, 60, 60);
-	selection-background-color: rgb(60, 60, 60);
-	gridline-color: rgb(60, 60, 60);
-	color: rgb(255, 255, 255);
-	border-color: rgb(60, 60, 60);
-	selection-color: rgb(60, 60, 60);
-	border-bottom-color: rgb(60, 60, 60);
-}</string>
-          </property>
-          <property name="text">
-           <string>210 ºC /220 ºC</string>
-          </property>
-          <property name="icon">
-           <iconset>
-            <normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/20.jpg</normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/20.jpg</iconset>
-          </property>
-          <property name="iconSize">
-           <size>
-            <width>19</width>
-            <height>19</height>
-           </size>
-          </property>
-          <property name="checkable">
-           <bool>false</bool>
-          </property>
-          <property name="checked">
-           <bool>false</bool>
-          </property>
-          <property name="flat">
-           <bool>true</bool>
-          </property>
-         </widget>
-        </item>
-        <item row="0" column="1" rowspan="2">
          <widget class="QLabel" name="label">
           <property name="text">
            <string>TextLabel</string>
@@ -349,8 +208,277 @@ border-bottom-color: rgb(145, 145, 145);</string>
        <zorder>pushButton_2</zorder>
        <zorder>pushButton_4</zorder>
        <zorder>pushButton_5</zorder>
-       <zorder>pushButton_3</zorder>
        <zorder>label</zorder>
+      </widget>
+     </item>
+     <item row="1" column="0">
+      <widget class="QTabWidget" name="tabWidget">
+       <property name="enabled">
+        <bool>true</bool>
+       </property>
+       <property name="minimumSize">
+        <size>
+         <width>100</width>
+         <height>100</height>
+        </size>
+       </property>
+       <property name="baseSize">
+        <size>
+         <width>100</width>
+         <height>100</height>
+        </size>
+       </property>
+       <property name="layoutDirection">
+        <enum>Qt::RightToLeft</enum>
+       </property>
+       <property name="autoFillBackground">
+        <bool>false</bool>
+       </property>
+       <property name="styleSheet">
+        <string notr="true">QTabBar::tab {
+	min-width: 90px;
+	max-width: 90px;
+	min-height: 20px;
+	max-height: 98px;
+    background: #000000;
+	text-color: #999999;
+}
+QWidget {background-color: transparent;
+height: 400px;
+background-image: url(:/MainBackground/MEDIA/1st_background.png);
+}</string>
+       </property>
+       <property name="tabPosition">
+        <enum>QTabWidget::West</enum>
+       </property>
+       <property name="tabShape">
+        <enum>QTabWidget::Rounded</enum>
+       </property>
+       <property name="currentIndex">
+        <number>1</number>
+       </property>
+       <property name="iconSize">
+        <size>
+         <width>78</width>
+         <height>78</height>
+        </size>
+       </property>
+       <property name="elideMode">
+        <enum>Qt::ElideLeft</enum>
+       </property>
+       <property name="usesScrollButtons">
+        <bool>false</bool>
+       </property>
+       <property name="documentMode">
+        <bool>false</bool>
+       </property>
+       <property name="tabsClosable">
+        <bool>false</bool>
+       </property>
+       <property name="movable">
+        <bool>false</bool>
+       </property>
+       <widget class="QWidget" name="tab">
+        <attribute name="icon">
+         <iconset>
+          <normaloff>../MEDIA/1_icons/main_menu/ICON_home.png</normaloff>
+          <normalon>../MEDIA/1_icons/main_menu/ICON_home_pressed.png</normalon>../MEDIA/1_icons/main_menu/ICON_home.png</iconset>
+        </attribute>
+        <attribute name="title">
+         <string/>
+        </attribute>
+       </widget>
+       <widget class="QWidget" name="Filament">
+        <attribute name="icon">
+         <iconset>
+          <normaloff>../MEDIA/1_icons/main_menu/ICON_filament.png</normaloff>
+          <normalon>../MEDIA/1_icons/main_menu/ICON_filament_pressed.png</normalon>../MEDIA/1_icons/main_menu/ICON_filament.png</iconset>
+        </attribute>
+        <attribute name="title">
+         <string>Filament</string>
+        </attribute>
+        <widget class="QPushButton" name="pushButton_6">
+         <property name="geometry">
+          <rect>
+           <x>80</x>
+           <y>100</y>
+           <width>300</width>
+           <height>60</height>
+          </rect>
+         </property>
+         <property name="palette">
+          <palette>
+           <active>
+            <colorrole role="Button">
+             <brush brushstyle="SolidPattern">
+              <color alpha="255">
+               <red>255</red>
+               <green>255</green>
+               <blue>0</blue>
+              </color>
+             </brush>
+            </colorrole>
+            <colorrole role="Base">
+             <brush brushstyle="SolidPattern">
+              <color alpha="255">
+               <red>255</red>
+               <green>255</green>
+               <blue>0</blue>
+              </color>
+             </brush>
+            </colorrole>
+            <colorrole role="Window">
+             <brush brushstyle="SolidPattern">
+              <color alpha="255">
+               <red>255</red>
+               <green>255</green>
+               <blue>0</blue>
+              </color>
+             </brush>
+            </colorrole>
+           </active>
+           <inactive>
+            <colorrole role="Button">
+             <brush brushstyle="SolidPattern">
+              <color alpha="255">
+               <red>255</red>
+               <green>255</green>
+               <blue>0</blue>
+              </color>
+             </brush>
+            </colorrole>
+            <colorrole role="Base">
+             <brush brushstyle="SolidPattern">
+              <color alpha="255">
+               <red>255</red>
+               <green>255</green>
+               <blue>0</blue>
+              </color>
+             </brush>
+            </colorrole>
+            <colorrole role="Window">
+             <brush brushstyle="SolidPattern">
+              <color alpha="255">
+               <red>255</red>
+               <green>255</green>
+               <blue>0</blue>
+              </color>
+             </brush>
+            </colorrole>
+           </inactive>
+           <disabled>
+            <colorrole role="Button">
+             <brush brushstyle="SolidPattern">
+              <color alpha="255">
+               <red>255</red>
+               <green>255</green>
+               <blue>0</blue>
+              </color>
+             </brush>
+            </colorrole>
+            <colorrole role="Base">
+             <brush brushstyle="SolidPattern">
+              <color alpha="255">
+               <red>255</red>
+               <green>255</green>
+               <blue>0</blue>
+              </color>
+             </brush>
+            </colorrole>
+            <colorrole role="Window">
+             <brush brushstyle="SolidPattern">
+              <color alpha="255">
+               <red>255</red>
+               <green>255</green>
+               <blue>0</blue>
+              </color>
+             </brush>
+            </colorrole>
+           </disabled>
+          </palette>
+         </property>
+         <property name="layoutDirection">
+          <enum>Qt::RightToLeft</enum>
+         </property>
+         <property name="autoFillBackground">
+          <bool>false</bool>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">QPushButton {
+border:none;
+height: 60px;
+width: 300px;
+background-image-y: 300;
+background-color: yellow;
+}
+QPushButton::!pressed{
+icon: url(:/Filament/MEDIA/2_buttons/filament_menu/LOAD.png);
+background-color: yellow;
+}
+QPushButton::pressed {
+border:none;
+height: 60px;
+width: 300px;
+background-color: transparent;
+}</string>
+         </property>
+         <property name="text">
+          <string notr="true"/>
+         </property>
+         <property name="icon">
+          <iconset resource="../UI_Resources.qrc">
+           <normaloff>:/Filament/MEDIA/2_buttons/filament_menu/LOAD.png</normaloff>
+           <activeoff>:/Filament/MEDIA/2_buttons/filament_menu/LOAD_pressed.png</activeoff>:/Filament/MEDIA/2_buttons/filament_menu/LOAD.png</iconset>
+         </property>
+         <property name="iconSize">
+          <size>
+           <width>300</width>
+           <height>80</height>
+          </size>
+         </property>
+         <property name="checkable">
+          <bool>false</bool>
+         </property>
+         <property name="checked">
+          <bool>false</bool>
+         </property>
+         <property name="autoRepeat">
+          <bool>false</bool>
+         </property>
+         <property name="autoExclusive">
+          <bool>false</bool>
+         </property>
+         <property name="autoDefault">
+          <bool>false</bool>
+         </property>
+         <property name="default">
+          <bool>false</bool>
+         </property>
+         <property name="flat">
+          <bool>false</bool>
+         </property>
+        </widget>
+       </widget>
+       <widget class="QWidget" name="tab_2">
+        <attribute name="icon">
+         <iconset>
+          <normaloff>../MEDIA/1_icons/main_menu/ICON_control.png</normaloff>
+          <normalon>../MEDIA/1_icons/main_menu/ICON_control_pressed.png</normalon>../MEDIA/1_icons/main_menu/ICON_control.png</iconset>
+        </attribute>
+        <attribute name="title">
+         <string>Page</string>
+        </attribute>
+       </widget>
+       <widget class="QWidget" name="tab_3">
+        <attribute name="icon">
+         <iconset>
+          <normaloff>../MEDIA/1_icons/main_menu/ICON_utilities.png</normaloff>
+          <normalon>../MEDIA/1_icons/main_menu/ICON_utilities_pressed.png</normalon>../MEDIA/1_icons/main_menu/ICON_utilities.png</iconset>
+        </attribute>
+        <attribute name="title">
+         <string>Page</string>
+        </attribute>
+       </widget>
       </widget>
      </item>
     </layout>
@@ -361,13 +489,15 @@ border-bottom-color: rgb(145, 145, 145);</string>
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>925</width>
+     <width>800</width>
      <height>22</height>
     </rect>
    </property>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
  </widget>
- <resources/>
+ <resources>
+  <include location="../UI_Resources.qrc"/>
+ </resources>
  <connections/>
 </ui>

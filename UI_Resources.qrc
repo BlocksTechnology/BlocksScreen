@@ -37,6 +37,9 @@
     <file>MEDIA/2_buttons/filament_menu/UNLOAD_pressed_PT.png</file>
     <file>MEDIA/2_buttons/filament_menu/UNLOAD_PT.png</file>
   </qresource>
+  <qresource prefix="MainBackground">
+    <file>MEDIA/1st_background.png</file>
+  </qresource>
   <qresource prefix="General_icons">
     <file>MEDIA/1_icons/general_icons/print core 1_2.png</file>
     <file>MEDIA/1_icons/general_icons/print core 1_2_pressed.png</file>
