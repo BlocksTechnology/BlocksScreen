@@ -241,9 +241,9 @@ padding-right: 40px;</string>
         <bool>false</bool>
        </property>
        <property name="styleSheet">
-        <string notr="true">#mainTabWidget {background-color: yellow;
-height: 400px;
+        <string notr="true">#mainTabWidget {
 background-image: url(:/MainBackground/MEDIA/1st_background.png);
+height: 400px;
 }
 
 QTabBar::tab {
