@@ -241,7 +241,7 @@ padding-right: 40px;</string>
         <bool>false</bool>
        </property>
        <property name="styleSheet">
-        <string notr="true">mainTabWidget {background-color: transparent;
+        <string notr="true">#mainTabWidget {background-color: transparent;
 height: 400px;
 background-image: url(:/MainBackground/MEDIA/1st_background.png);
 }
