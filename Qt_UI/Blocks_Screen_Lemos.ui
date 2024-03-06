@@ -241,7 +241,7 @@ padding-right: 40px;</string>
         <bool>false</bool>
        </property>
        <property name="styleSheet">
-        <string notr="true">#mainTabWidget {background-color: transparent;
+        <string notr="true">#mainTabWidget {background-color: yellow;
 height: 400px;
 background-image: url(:/MainBackground/MEDIA/1st_background.png);
 }
@@ -306,10 +306,10 @@ QTabBar::tab {
         <widget class="QWidget" name="gridLayoutWidget">
          <property name="geometry">
           <rect>
-           <x>40</x>
-           <y>10</y>
-           <width>701</width>
-           <height>371</height>
+           <x>140</x>
+           <y>50</y>
+           <width>341</width>
+           <height>271</height>
           </rect>
          </property>
          <layout class="QGridLayout" name="gridLayout_4">
