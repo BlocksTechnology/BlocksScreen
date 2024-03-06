@@ -241,7 +241,7 @@ padding-right: 40px;</string>
         <bool>false</bool>
        </property>
        <property name="styleSheet">
-        <string notr="true">QWidget #mainTabWidget {background-color: yellow;
+        <string notr="true">mainTabWidget {background-color: transparent;
 height: 400px;
 background-image: url(:/MainBackground/MEDIA/1st_background.png);
 }
@@ -417,8 +417,6 @@ QTabBar::tab {
 border:none;
 height: 60px;
 width: 300px;
-background-image-y: 300;
-background-color: yellow;
 }
 .QPushButton::!pressed{
 icon: url(:/Filament/MEDIA/2_buttons/filament_menu/LOAD.png);
@@ -572,8 +570,6 @@ background-color: transparent;
 border:none;
 height: 60px;
 width: 300px;
-background-image-y: 300;
-background-color: yellow;
 }
 QPushButton::!pressed{
 icon: url(:/Filament/MEDIA/2_buttons/filament_menu/LOAD.png);
