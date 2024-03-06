@@ -242,7 +242,7 @@ padding-right: 40px;</string>
        </property>
        <property name="styleSheet">
         <string notr="true">#mainTabWidget {
-background-image: url(:/MainBackground/MEDIA/1st_background.png);
+image: url(:/MainBackground/MEDIA/1st_background.png);
 height: 400px;
 }
 
