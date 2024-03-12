@@ -1093,7 +1093,7 @@ QPushButton::pressed {
            <property name="font">
             <font>
              <family>Momcake</family>
-             <pointsize>18</pointsize>
+             <pointsize>20</pointsize>
             </font>
            </property>
            <property name="styleSheet">
