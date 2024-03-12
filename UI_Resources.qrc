@@ -45,6 +45,8 @@
     <file>MEDIA/1st_background.png</file>
   </qresource>
   <qresource prefix="General_icons">
+    <file>MEDIA/1_icons/top_bar_icons/nozzle_temp_1.png</file>
+    <file>MEDIA/1_icons/top_bar_icons/nozzle_temp_2.png</file>
     <file>MEDIA/1_icons/general_icons/ICON_filament.png</file>
     <file>MEDIA/1_icons/general_icons/ICON_filament_pressed.png</file>
     <file>MEDIA/1_icons/general_icons/print core 1_2.png</file>
