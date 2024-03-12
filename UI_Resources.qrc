@@ -37,6 +37,9 @@
     <file>MEDIA/2_buttons/filament_menu/UNLOAD_pressed_PT.png</file>
     <file>MEDIA/2_buttons/filament_menu/UNLOAD_PT.png</file>
   </qresource>
+  <qresource prefix="Images">
+    <file>MEDIA/logoblocks.png</file>
+  </qresource>
   <qresource prefix="Simple_btns">
     <file>MEDIA/2_buttons/simple_btn.png</file>
     <file>MEDIA/2_buttons/simple_btn_pressed.png</file>

@@ -37,7 +37,7 @@
        <property name="maximumSize">
         <size>
          <width>800</width>
-         <height>62</height>
+         <height>60</height>
         </size>
        </property>
        <property name="styleSheet">
@@ -46,7 +46,7 @@
 	selection-background-color: rgb(60, 60, 60);
 	gridline-color: rgb(60, 60, 60);
 	color: rgb(255, 255, 255);
-	border-color: rgb(60, 60, 60);
+	border:none ;
 	selection-color: rgb(60, 60, 60);
 	border-bottom-color: rgb(60, 60, 60);
 	max-height: 60px;
@@ -56,53 +56,6 @@
         <property name="spacing">
          <number>0</number>
         </property>
-        <item row="2" column="1">
-         <widget class="QPushButton" name="pushButton">
-          <property name="enabled">
-           <bool>true</bool>
-          </property>
-          <property name="styleSheet">
-           <string notr="true">QWidget{
-	background-color: rgb(60, 60, 60);
-	selection-background-color: rgb(60, 60, 60);
-	gridline-color: rgb(60, 60, 60);
-	color: rgb(255, 255, 255);
-	border-color: rgb(60, 60, 60);
-	selection-color: rgb(60, 60, 60);
-	border-bottom-color: rgb(60, 60, 60);
-}</string>
-          </property>
-          <property name="text">
-           <string>210 ºC /220 ºC</string>
-          </property>
-          <property name="icon">
-           <iconset>
-            <normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/20.jpg</normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/20.jpg</iconset>
-          </property>
-          <property name="iconSize">
-           <size>
-            <width>19</width>
-            <height>19</height>
-           </size>
-          </property>
-          <property name="checkable">
-           <bool>false</bool>
-          </property>
-          <property name="checked">
-           <bool>false</bool>
-          </property>
-          <property name="flat">
-           <bool>true</bool>
-          </property>
-         </widget>
-        </item>
-        <item row="0" column="0" rowspan="3">
-         <widget class="QLabel" name="label">
-          <property name="text">
-           <string>TextLabel</string>
-          </property>
-         </widget>
-        </item>
         <item row="0" column="3">
          <widget class="QPushButton" name="pushButton_6">
           <property name="enabled">
@@ -110,7 +63,7 @@
           </property>
           <property name="styleSheet">
            <string notr="true">QWidget{
-	background-color: rgb(60, 60, 60);
+	background-color: rgb(50, 50, 50);
 	selection-background-color: rgb(60, 60, 60);
 	gridline-color: rgb(60, 60, 60);
 	color: rgb(255, 255, 255);
@@ -124,7 +77,7 @@
           </property>
           <property name="icon">
            <iconset>
-            <normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</iconset>
+            <normaloff>../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</normaloff>../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</iconset>
           </property>
           <property name="iconSize">
            <size>
@@ -150,7 +103,7 @@
           </property>
           <property name="styleSheet">
            <string notr="true">QWidget{
-	background-color: rgb(60, 60, 60);
+	background-color: rgb(50, 50, 50);
 	selection-background-color: rgb(60, 60, 60);
 	gridline-color: rgb(60, 60, 60);
 	color: rgb(255, 255, 255);
@@ -164,7 +117,7 @@
           </property>
           <property name="icon">
            <iconset>
-            <normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</iconset>
+            <normaloff>../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</normaloff>../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</iconset>
           </property>
           <property name="iconSize">
            <size>
@@ -190,7 +143,7 @@
           </property>
           <property name="styleSheet">
            <string notr="true">QWidget{
-	background-color: rgb(60, 60, 60);
+	background-color: rgb(50, 50, 50);
 	selection-background-color: rgb(60, 60, 60);
 	gridline-color: rgb(60, 60, 60);
 	color: rgb(255, 255, 255);
@@ -204,7 +157,7 @@
           </property>
           <property name="icon">
            <iconset>
-            <normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</iconset>
+            <normaloff>../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</normaloff>../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</iconset>
           </property>
           <property name="iconSize">
            <size>
@@ -230,7 +183,7 @@
           </property>
           <property name="styleSheet">
            <string notr="true">QWidget{
-	background-color: rgb(60, 60, 60);
+	background-color: rgb(50, 50, 50);
 	selection-background-color: rgb(60, 60, 60);
 	gridline-color: rgb(60, 60, 60);
 	color: rgb(255, 255, 255);
@@ -244,7 +197,7 @@
           </property>
           <property name="icon">
            <iconset>
-            <normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</iconset>
+            <normaloff>../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</normaloff>../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</iconset>
           </property>
           <property name="iconSize">
            <size>
@@ -263,14 +216,26 @@
           </property>
          </widget>
         </item>
-        <item row="1" column="4">
-         <widget class="QPushButton" name="pushButton_10">
+        <item row="0" column="0" rowspan="3">
+         <widget class="QLabel" name="blocks_logo">
+          <property name="styleSheet">
+           <string notr="true">#blocks_logo {
+image: url(:/Images/MEDIA/logoblocks.png);
+}</string>
+          </property>
+          <property name="text">
+           <string/>
+          </property>
+         </widget>
+        </item>
+        <item row="2" column="1">
+         <widget class="QPushButton" name="pushButton">
           <property name="enabled">
            <bool>true</bool>
           </property>
           <property name="styleSheet">
            <string notr="true">QWidget{
-	background-color: rgb(60, 60, 60);
+	background-color: rgb(50, 50, 50);
 	selection-background-color: rgb(60, 60, 60);
 	gridline-color: rgb(60, 60, 60);
 	color: rgb(255, 255, 255);
@@ -284,7 +249,7 @@
           </property>
           <property name="icon">
            <iconset>
-            <normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</iconset>
+            <normaloff>../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/20.jpg</normaloff>../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/20.jpg</iconset>
           </property>
           <property name="iconSize">
            <size>
@@ -319,7 +284,47 @@
           </property>
           <property name="icon">
            <iconset>
-            <normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</iconset>
+            <normaloff>../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</normaloff>../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</iconset>
+          </property>
+          <property name="iconSize">
+           <size>
+            <width>19</width>
+            <height>19</height>
+           </size>
+          </property>
+          <property name="checkable">
+           <bool>false</bool>
+          </property>
+          <property name="checked">
+           <bool>false</bool>
+          </property>
+          <property name="flat">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="4">
+         <widget class="QPushButton" name="pushButton_10">
+          <property name="enabled">
+           <bool>true</bool>
+          </property>
+          <property name="styleSheet">
+           <string notr="true">QWidget{
+	background-color: rgb(50, 50, 50);
+	selection-background-color: rgb(60, 60, 60);
+	gridline-color: rgb(60, 60, 60);
+	color: rgb(255, 255, 255);
+	border-color: rgb(60, 60, 60);
+	selection-color: rgb(60, 60, 60);
+	border-bottom-color: rgb(60, 60, 60);
+}</string>
+          </property>
+          <property name="text">
+           <string>210 ºC /220 ºC</string>
+          </property>
+          <property name="icon">
+           <iconset>
+            <normaloff>../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</normaloff>../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</iconset>
           </property>
           <property name="iconSize">
            <size>
@@ -343,7 +348,7 @@
        <zorder>nozzle_1_temp</zorder>
        <zorder>pushButton_4</zorder>
        <zorder>pushButton_5</zorder>
-       <zorder>label</zorder>
+       <zorder>blocks_logo</zorder>
        <zorder>pushButton_6</zorder>
        <zorder>pushButton_7</zorder>
        <zorder>pushButton_10</zorder>
@@ -700,15 +705,6 @@ QPushButton::pressed {
                 </color>
                </brush>
               </colorrole>
-              <colorrole role="PlaceholderText">
-               <brush brushstyle="SolidPattern">
-                <color alpha="128">
-                 <red>66</red>
-                 <green>66</green>
-                 <blue>66</blue>
-                </color>
-               </brush>
-              </colorrole>
              </active>
              <inactive>
               <colorrole role="WindowText">
@@ -765,15 +761,6 @@ QPushButton::pressed {
                 </color>
                </brush>
               </colorrole>
-              <colorrole role="PlaceholderText">
-               <brush brushstyle="SolidPattern">
-                <color alpha="128">
-                 <red>66</red>
-                 <green>66</green>
-                 <blue>66</blue>
-                </color>
-               </brush>
-              </colorrole>
              </inactive>
              <disabled>
               <colorrole role="WindowText">
@@ -827,15 +814,6 @@ QPushButton::pressed {
                  <red>0</red>
                  <green>0</green>
                  <blue>0</blue>
-                </color>
-               </brush>
-              </colorrole>
-              <colorrole role="PlaceholderText">
-               <brush brushstyle="SolidPattern">
-                <color alpha="128">
-                 <red>66</red>
-                 <green>66</green>
-                 <blue>66</blue>
                 </color>
                </brush>
               </colorrole>
@@ -948,15 +926,6 @@ QPushButton::pressed {
                 </color>
                </brush>
               </colorrole>
-              <colorrole role="PlaceholderText">
-               <brush brushstyle="SolidPattern">
-                <color alpha="128">
-                 <red>66</red>
-                 <green>66</green>
-                 <blue>66</blue>
-                </color>
-               </brush>
-              </colorrole>
              </active>
              <inactive>
               <colorrole role="WindowText">
@@ -1010,15 +979,6 @@ QPushButton::pressed {
                  <red>0</red>
                  <green>0</green>
                  <blue>0</blue>
-                </color>
-               </brush>
-              </colorrole>
-              <colorrole role="PlaceholderText">
-               <brush brushstyle="SolidPattern">
-                <color alpha="128">
-                 <red>66</red>
-                 <green>66</green>
-                 <blue>66</blue>
                 </color>
                </brush>
               </colorrole>
@@ -1078,15 +1038,6 @@ QPushButton::pressed {
                 </color>
                </brush>
               </colorrole>
-              <colorrole role="PlaceholderText">
-               <brush brushstyle="SolidPattern">
-                <color alpha="128">
-                 <red>66</red>
-                 <green>66</green>
-                 <blue>66</blue>
-                </color>
-               </brush>
-              </colorrole>
              </disabled>
             </palette>
            </property>
@@ -1142,7 +1093,7 @@ QPushButton::pressed {
            <property name="font">
             <font>
              <family>Momcake</family>
-             <pointsize>16</pointsize>
+             <pointsize>18</pointsize>
             </font>
            </property>
            <property name="styleSheet">
@@ -1237,15 +1188,6 @@ QPushButton::pressed {
                 </color>
                </brush>
               </colorrole>
-              <colorrole role="PlaceholderText">
-               <brush brushstyle="SolidPattern">
-                <color alpha="128">
-                 <red>66</red>
-                 <green>66</green>
-                 <blue>66</blue>
-                </color>
-               </brush>
-              </colorrole>
              </active>
              <inactive>
               <colorrole role="WindowText">
@@ -1302,15 +1244,6 @@ QPushButton::pressed {
                 </color>
                </brush>
               </colorrole>
-              <colorrole role="PlaceholderText">
-               <brush brushstyle="SolidPattern">
-                <color alpha="128">
-                 <red>66</red>
-                 <green>66</green>
-                 <blue>66</blue>
-                </color>
-               </brush>
-              </colorrole>
              </inactive>
              <disabled>
               <colorrole role="WindowText">
@@ -1364,15 +1297,6 @@ QPushButton::pressed {
                  <red>0</red>
                  <green>0</green>
                  <blue>0</blue>
-                </color>
-               </brush>
-              </colorrole>
-              <colorrole role="PlaceholderText">
-               <brush brushstyle="SolidPattern">
-                <color alpha="128">
-                 <red>66</red>
-                 <green>66</green>
-                 <blue>66</blue>
                 </color>
                </brush>
               </colorrole>
@@ -1491,7 +1415,7 @@ background-image: none;
      <x>0</x>
      <y>0</y>
      <width>800</width>
-     <height>22</height>
+     <height>21</height>
     </rect>
    </property>
   </widget>
