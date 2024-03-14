@@ -37,7 +37,7 @@
        <property name="maximumSize">
         <size>
          <width>800</width>
-         <height>60</height>
+         <height>62</height>
         </size>
        </property>
        <property name="styleSheet">
@@ -46,7 +46,7 @@
 	selection-background-color: rgb(60, 60, 60);
 	gridline-color: rgb(60, 60, 60);
 	color: rgb(255, 255, 255);
-	border:none ;
+	border-color: rgb(60, 60, 60);
 	selection-color: rgb(60, 60, 60);
 	border-bottom-color: rgb(60, 60, 60);
 	max-height: 60px;
@@ -56,94 +56,14 @@
         <property name="spacing">
          <number>0</number>
         </property>
-        <item row="0" column="3">
-         <widget class="QPushButton" name="pushButton_6">
+        <item row="2" column="1">
+         <widget class="QPushButton" name="chamber_temp">
           <property name="enabled">
            <bool>true</bool>
           </property>
           <property name="styleSheet">
            <string notr="true">QWidget{
-	background-color: rgb(50, 50, 50);
-	selection-background-color: rgb(60, 60, 60);
-	gridline-color: rgb(60, 60, 60);
-	color: rgb(255, 255, 255);
-	border-color: rgb(60, 60, 60);
-	selection-color: rgb(60, 60, 60);
-	border-bottom-color: rgb(60, 60, 60);
-}</string>
-          </property>
-          <property name="text">
-           <string>PLA</string>
-          </property>
-          <property name="icon">
-           <iconset>
-            <normaloff>../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</normaloff>../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</iconset>
-          </property>
-          <property name="iconSize">
-           <size>
-            <width>19</width>
-            <height>19</height>
-           </size>
-          </property>
-          <property name="checkable">
-           <bool>false</bool>
-          </property>
-          <property name="checked">
-           <bool>false</bool>
-          </property>
-          <property name="flat">
-           <bool>true</bool>
-          </property>
-         </widget>
-        </item>
-        <item row="2" column="3">
-         <widget class="QPushButton" name="pushButton_7">
-          <property name="enabled">
-           <bool>true</bool>
-          </property>
-          <property name="styleSheet">
-           <string notr="true">QWidget{
-	background-color: rgb(50, 50, 50);
-	selection-background-color: rgb(60, 60, 60);
-	gridline-color: rgb(60, 60, 60);
-	color: rgb(255, 255, 255);
-	border-color: rgb(60, 60, 60);
-	selection-color: rgb(60, 60, 60);
-	border-bottom-color: rgb(60, 60, 60);
-}</string>
-          </property>
-          <property name="text">
-           <string>PLA</string>
-          </property>
-          <property name="icon">
-           <iconset>
-            <normaloff>../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</normaloff>../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</iconset>
-          </property>
-          <property name="iconSize">
-           <size>
-            <width>19</width>
-            <height>19</height>
-           </size>
-          </property>
-          <property name="checkable">
-           <bool>false</bool>
-          </property>
-          <property name="checked">
-           <bool>false</bool>
-          </property>
-          <property name="flat">
-           <bool>true</bool>
-          </property>
-         </widget>
-        </item>
-        <item row="2" column="2">
-         <widget class="QPushButton" name="pushButton_4">
-          <property name="enabled">
-           <bool>true</bool>
-          </property>
-          <property name="styleSheet">
-           <string notr="true">QWidget{
-	background-color: rgb(50, 50, 50);
+	background-color: rgb(60, 60, 60);
 	selection-background-color: rgb(60, 60, 60);
 	gridline-color: rgb(60, 60, 60);
 	color: rgb(255, 255, 255);
@@ -157,99 +77,7 @@
           </property>
           <property name="icon">
            <iconset>
-            <normaloff>../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</normaloff>../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</iconset>
-          </property>
-          <property name="iconSize">
-           <size>
-            <width>19</width>
-            <height>19</height>
-           </size>
-          </property>
-          <property name="checkable">
-           <bool>false</bool>
-          </property>
-          <property name="checked">
-           <bool>false</bool>
-          </property>
-          <property name="flat">
-           <bool>true</bool>
-          </property>
-         </widget>
-        </item>
-        <item row="0" column="2">
-         <widget class="QPushButton" name="pushButton_5">
-          <property name="enabled">
-           <bool>true</bool>
-          </property>
-          <property name="styleSheet">
-           <string notr="true">QWidget{
-	background-color: rgb(50, 50, 50);
-	selection-background-color: rgb(60, 60, 60);
-	gridline-color: rgb(60, 60, 60);
-	color: rgb(255, 255, 255);
-	border-color: rgb(60, 60, 60);
-	selection-color: rgb(60, 60, 60);
-	border-bottom-color: rgb(60, 60, 60);
-}</string>
-          </property>
-          <property name="text">
-           <string>45 ºC /50 ºC</string>
-          </property>
-          <property name="icon">
-           <iconset>
-            <normaloff>../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</normaloff>../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</iconset>
-          </property>
-          <property name="iconSize">
-           <size>
-            <width>19</width>
-            <height>19</height>
-           </size>
-          </property>
-          <property name="checkable">
-           <bool>false</bool>
-          </property>
-          <property name="checked">
-           <bool>false</bool>
-          </property>
-          <property name="flat">
-           <bool>true</bool>
-          </property>
-         </widget>
-        </item>
-        <item row="0" column="0" rowspan="3">
-         <widget class="QLabel" name="blocks_logo">
-          <property name="styleSheet">
-           <string notr="true">#blocks_logo {
-image: url(:/Images/MEDIA/logoblocks.png);
-}</string>
-          </property>
-          <property name="text">
-           <string/>
-          </property>
-         </widget>
-        </item>
-        <item row="2" column="1">
-         <widget class="QPushButton" name="pushButton">
-          <property name="enabled">
-           <bool>true</bool>
-          </property>
-          <property name="styleSheet">
-           <string notr="true">QWidget{
-	background-color: rgb(50, 50, 50);
-	selection-background-color: rgb(60, 60, 60);
-	gridline-color: rgb(60, 60, 60);
-	color: rgb(255, 255, 255);
-	border-color: rgb(60, 60, 60);
-	selection-color: rgb(60, 60, 60);
-	border-bottom-color: rgb(60, 60, 60);
-}</string>
-          </property>
-          <property name="text">
-           <string>210 ºC /220 ºC</string>
-          </property>
-          <property name="icon">
-           <iconset>
-            <normaloff>../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/20.jpg</normaloff>../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/20.jpg</iconset>
+            <normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/20.jpg</normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/20.jpg</iconset>
           </property>
           <property name="iconSize">
            <size>
@@ -269,22 +97,19 @@ image: url(:/Images/MEDIA/logoblocks.png);
          </widget>
         </item>
         <item row="0" column="1">
-         <widget class="QPushButton" name="nozzle_1_temp">
+         <widget class="QPushButton" name="bed_temp">
           <property name="enabled">
            <bool>true</bool>
           </property>
           <property name="styleSheet">
-           <string notr="true">#nozzle_1_temp{ 
-	image: url(:/General_icons/MEDIA/1_icons/top_bar_icons/nozzle_temp_1.png);
-	image-position: left;
-}</string>
+           <string notr="true"/>
           </property>
           <property name="text">
-           <string>210 ºC /220 ºC</string>
+           <string>50 ºC /70 ºC</string>
           </property>
           <property name="icon">
            <iconset>
-            <normaloff>../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</normaloff>../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</iconset>
+            <normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</iconset>
           </property>
           <property name="iconSize">
            <size>
@@ -303,14 +128,21 @@ image: url(:/Images/MEDIA/logoblocks.png);
           </property>
          </widget>
         </item>
-        <item row="1" column="4">
-         <widget class="QPushButton" name="pushButton_10">
+        <item row="0" column="0" rowspan="3">
+         <widget class="QLabel" name="label">
+          <property name="text">
+           <string/>
+          </property>
+         </widget>
+        </item>
+        <item row="2" column="2">
+         <widget class="QPushButton" name="nozzle_2_temp">
           <property name="enabled">
            <bool>true</bool>
           </property>
           <property name="styleSheet">
            <string notr="true">QWidget{
-	background-color: rgb(50, 50, 50);
+	background-color: rgb(60, 60, 60);
 	selection-background-color: rgb(60, 60, 60);
 	gridline-color: rgb(60, 60, 60);
 	color: rgb(255, 255, 255);
@@ -320,11 +152,246 @@ image: url(:/Images/MEDIA/logoblocks.png);
 }</string>
           </property>
           <property name="text">
+           <string>210 ºC /230 ºC</string>
+          </property>
+          <property name="icon">
+           <iconset>
+            <normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</iconset>
+          </property>
+          <property name="iconSize">
+           <size>
+            <width>19</width>
+            <height>19</height>
+           </size>
+          </property>
+          <property name="checkable">
+           <bool>false</bool>
+          </property>
+          <property name="checked">
+           <bool>false</bool>
+          </property>
+          <property name="flat">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+        <item row="0" column="2">
+         <widget class="QPushButton" name="nozzle_1_temp">
+          <property name="enabled">
+           <bool>true</bool>
+          </property>
+          <property name="styleSheet">
+           <string notr="true">#nozzle_1_temp{ 
+	image: url(:/General_icons/MEDIA/1_icons/top_bar_icons/nozzle_temp_1.png);
+	image-position: left;
+}</string>
+          </property>
+          <property name="text">
            <string>210 ºC /220 ºC</string>
           </property>
           <property name="icon">
            <iconset>
-            <normaloff>../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</normaloff>../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</iconset>
+            <normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</iconset>
+          </property>
+          <property name="iconSize">
+           <size>
+            <width>19</width>
+            <height>19</height>
+           </size>
+          </property>
+          <property name="checkable">
+           <bool>false</bool>
+          </property>
+          <property name="checked">
+           <bool>false</bool>
+          </property>
+          <property name="flat">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+        <item row="0" column="4">
+         <widget class="QPushButton" name="filament_type_1">
+          <property name="enabled">
+           <bool>true</bool>
+          </property>
+          <property name="styleSheet">
+           <string notr="true">QWidget{
+	background-color: rgb(60, 60, 60);
+	selection-background-color: rgb(60, 60, 60);
+	gridline-color: rgb(60, 60, 60);
+	color: rgb(255, 255, 255);
+	border-color: rgb(60, 60, 60);
+	selection-color: rgb(60, 60, 60);
+	border-bottom-color: rgb(60, 60, 60);
+}</string>
+          </property>
+          <property name="text">
+           <string>PLA</string>
+          </property>
+          <property name="icon">
+           <iconset>
+            <normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</iconset>
+          </property>
+          <property name="iconSize">
+           <size>
+            <width>19</width>
+            <height>19</height>
+           </size>
+          </property>
+          <property name="checkable">
+           <bool>false</bool>
+          </property>
+          <property name="checked">
+           <bool>false</bool>
+          </property>
+          <property name="flat">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+        <item row="2" column="4">
+         <widget class="QPushButton" name="filament_type_2">
+          <property name="enabled">
+           <bool>true</bool>
+          </property>
+          <property name="styleSheet">
+           <string notr="true">QWidget{
+	background-color: rgb(60, 60, 60);
+	selection-background-color: rgb(60, 60, 60);
+	gridline-color: rgb(60, 60, 60);
+	color: rgb(255, 255, 255);
+	border-color: rgb(60, 60, 60);
+	selection-color: rgb(60, 60, 60);
+	border-bottom-color: rgb(60, 60, 60);
+}</string>
+          </property>
+          <property name="text">
+           <string>PLA</string>
+          </property>
+          <property name="icon">
+           <iconset>
+            <normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</iconset>
+          </property>
+          <property name="iconSize">
+           <size>
+            <width>19</width>
+            <height>19</height>
+           </size>
+          </property>
+          <property name="checkable">
+           <bool>false</bool>
+          </property>
+          <property name="checked">
+           <bool>false</bool>
+          </property>
+          <property name="flat">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+        <item row="2" column="3">
+         <widget class="QPushButton" name="nozzle_2">
+          <property name="enabled">
+           <bool>true</bool>
+          </property>
+          <property name="styleSheet">
+           <string notr="true">QWidget{
+	background-color: rgb(60, 60, 60);
+	selection-background-color: rgb(60, 60, 60);
+	gridline-color: rgb(60, 60, 60);
+	color: rgb(255, 255, 255);
+	border-color: rgb(60, 60, 60);
+	selection-color: rgb(60, 60, 60);
+	border-bottom-color: rgb(60, 60, 60);
+}</string>
+          </property>
+          <property name="text">
+           <string>0.4</string>
+          </property>
+          <property name="icon">
+           <iconset>
+            <normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</iconset>
+          </property>
+          <property name="iconSize">
+           <size>
+            <width>19</width>
+            <height>19</height>
+           </size>
+          </property>
+          <property name="checkable">
+           <bool>false</bool>
+          </property>
+          <property name="checked">
+           <bool>false</bool>
+          </property>
+          <property name="flat">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+        <item row="0" column="3">
+         <widget class="QPushButton" name="nozzle_1">
+          <property name="enabled">
+           <bool>true</bool>
+          </property>
+          <property name="styleSheet">
+           <string notr="true">QWidget{
+	background-color: rgb(60, 60, 60);
+	selection-background-color: rgb(60, 60, 60);
+	gridline-color: rgb(60, 60, 60);
+	color: rgb(255, 255, 255);
+	border-color: rgb(60, 60, 60);
+	selection-color: rgb(60, 60, 60);
+	border-bottom-color: rgb(60, 60, 60);
+}</string>
+          </property>
+          <property name="text">
+           <string>0.4</string>
+          </property>
+          <property name="icon">
+           <iconset>
+            <normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</iconset>
+          </property>
+          <property name="iconSize">
+           <size>
+            <width>19</width>
+            <height>19</height>
+           </size>
+          </property>
+          <property name="checkable">
+           <bool>false</bool>
+          </property>
+          <property name="checked">
+           <bool>false</bool>
+          </property>
+          <property name="flat">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+        <item row="0" column="5" rowspan="3">
+         <widget class="QPushButton" name="wifi_signal">
+          <property name="enabled">
+           <bool>true</bool>
+          </property>
+          <property name="styleSheet">
+           <string notr="true">QWidget{
+	background-color: rgb(60, 60, 60);
+	selection-background-color: rgb(60, 60, 60);
+	gridline-color: rgb(60, 60, 60);
+	color: rgb(255, 255, 255);
+	border-color: rgb(60, 60, 60);
+	selection-color: rgb(60, 60, 60);
+	border-bottom-color: rgb(60, 60, 60);
+}</string>
+          </property>
+          <property name="text">
+           <string>Wifi</string>
+          </property>
+          <property name="icon">
+           <iconset>
+            <normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</iconset>
           </property>
           <property name="iconSize">
            <size>
@@ -344,14 +411,16 @@ image: url(:/Images/MEDIA/logoblocks.png);
          </widget>
         </item>
        </layout>
-       <zorder>pushButton</zorder>
+       <zorder>chamber_temp</zorder>
+       <zorder>bed_temp</zorder>
+       <zorder>nozzle_2_temp</zorder>
+       <zorder>label</zorder>
+       <zorder>wifi_signal</zorder>
        <zorder>nozzle_1_temp</zorder>
-       <zorder>pushButton_4</zorder>
-       <zorder>pushButton_5</zorder>
-       <zorder>blocks_logo</zorder>
-       <zorder>pushButton_6</zorder>
-       <zorder>pushButton_7</zorder>
-       <zorder>pushButton_10</zorder>
+       <zorder>filament_type_1</zorder>
+       <zorder>filament_type_2</zorder>
+       <zorder>nozzle_2</zorder>
+       <zorder>nozzle_1</zorder>
       </widget>
      </item>
      <item row="1" column="0">
@@ -385,9 +454,9 @@ image: url(:/Images/MEDIA/logoblocks.png);
        </property>
        <property name="styleSheet">
         <string notr="true">#mainTabWidget {
-background-image: url(:/MainBackground/MEDIA/1st_background.png);
-
-height: 400px;
+	background-image: url(:/MainBackground/MEDIA/1st_background.png);
+	border-color: yellow;
+	height: 400px;
 }
 
 QTabBar::tab {
@@ -405,7 +474,7 @@ QTabBar::tab {
         <enum>QTabWidget::Rounded</enum>
        </property>
        <property name="currentIndex">
-        <number>1</number>
+        <number>0</number>
        </property>
        <property name="iconSize">
         <size>
@@ -440,8 +509,8 @@ QTabBar::tab {
         <widget class="QPushButton" name="load_eng_btn_3">
          <property name="geometry">
           <rect>
-           <x>90</x>
-           <y>90</y>
+           <x>140</x>
+           <y>140</y>
            <width>301</width>
            <height>60</height>
           </rect>
@@ -705,6 +774,15 @@ QPushButton::pressed {
                 </color>
                </brush>
               </colorrole>
+              <colorrole role="PlaceholderText">
+               <brush brushstyle="SolidPattern">
+                <color alpha="128">
+                 <red>66</red>
+                 <green>66</green>
+                 <blue>66</blue>
+                </color>
+               </brush>
+              </colorrole>
              </active>
              <inactive>
               <colorrole role="WindowText">
@@ -758,6 +836,15 @@ QPushButton::pressed {
                  <red>0</red>
                  <green>0</green>
                  <blue>0</blue>
+                </color>
+               </brush>
+              </colorrole>
+              <colorrole role="PlaceholderText">
+               <brush brushstyle="SolidPattern">
+                <color alpha="128">
+                 <red>66</red>
+                 <green>66</green>
+                 <blue>66</blue>
                 </color>
                </brush>
               </colorrole>
@@ -817,6 +904,15 @@ QPushButton::pressed {
                 </color>
                </brush>
               </colorrole>
+              <colorrole role="PlaceholderText">
+               <brush brushstyle="SolidPattern">
+                <color alpha="128">
+                 <red>66</red>
+                 <green>66</green>
+                 <blue>66</blue>
+                </color>
+               </brush>
+              </colorrole>
              </disabled>
             </palette>
            </property>
@@ -864,7 +960,7 @@ QPushButton::pressed {
            <property name="geometry">
             <rect>
              <x>400</x>
-             <y>70</y>
+             <y>90</y>
              <width>231</width>
              <height>60</height>
             </rect>
@@ -926,6 +1022,15 @@ QPushButton::pressed {
                 </color>
                </brush>
               </colorrole>
+              <colorrole role="PlaceholderText">
+               <brush brushstyle="SolidPattern">
+                <color alpha="128">
+                 <red>66</red>
+                 <green>66</green>
+                 <blue>66</blue>
+                </color>
+               </brush>
+              </colorrole>
              </active>
              <inactive>
               <colorrole role="WindowText">
@@ -979,6 +1084,15 @@ QPushButton::pressed {
                  <red>0</red>
                  <green>0</green>
                  <blue>0</blue>
+                </color>
+               </brush>
+              </colorrole>
+              <colorrole role="PlaceholderText">
+               <brush brushstyle="SolidPattern">
+                <color alpha="128">
+                 <red>66</red>
+                 <green>66</green>
+                 <blue>66</blue>
                 </color>
                </brush>
               </colorrole>
@@ -1038,6 +1152,15 @@ QPushButton::pressed {
                 </color>
                </brush>
               </colorrole>
+              <colorrole role="PlaceholderText">
+               <brush brushstyle="SolidPattern">
+                <color alpha="128">
+                 <red>66</red>
+                 <green>66</green>
+                 <blue>66</blue>
+                </color>
+               </brush>
+              </colorrole>
              </disabled>
             </palette>
            </property>
@@ -1084,16 +1207,16 @@ QPushButton::pressed {
           <widget class="QPushButton" name="load_btn">
            <property name="geometry">
             <rect>
-             <x>40</x>
-             <y>70</y>
-             <width>311</width>
-             <height>71</height>
+             <x>30</x>
+             <y>90</y>
+             <width>261</width>
+             <height>51</height>
             </rect>
            </property>
            <property name="font">
             <font>
              <family>Momcake</family>
-             <pointsize>20</pointsize>
+             <pointsize>16</pointsize>
             </font>
            </property>
            <property name="styleSheet">
@@ -1108,7 +1231,7 @@ QPushButton::pressed {
 }</string>
            </property>
            <property name="text">
-            <string>LOAD</string>
+            <string>PINTING</string>
            </property>
            <property name="iconSize">
             <size>
@@ -1188,6 +1311,15 @@ QPushButton::pressed {
                 </color>
                </brush>
               </colorrole>
+              <colorrole role="PlaceholderText">
+               <brush brushstyle="SolidPattern">
+                <color alpha="128">
+                 <red>66</red>
+                 <green>66</green>
+                 <blue>66</blue>
+                </color>
+               </brush>
+              </colorrole>
              </active>
              <inactive>
               <colorrole role="WindowText">
@@ -1244,6 +1376,15 @@ QPushButton::pressed {
                 </color>
                </brush>
               </colorrole>
+              <colorrole role="PlaceholderText">
+               <brush brushstyle="SolidPattern">
+                <color alpha="128">
+                 <red>66</red>
+                 <green>66</green>
+                 <blue>66</blue>
+                </color>
+               </brush>
+              </colorrole>
              </inactive>
              <disabled>
               <colorrole role="WindowText">
@@ -1297,6 +1438,15 @@ QPushButton::pressed {
                  <red>0</red>
                  <green>0</green>
                  <blue>0</blue>
+                </color>
+               </brush>
+              </colorrole>
+              <colorrole role="PlaceholderText">
+               <brush brushstyle="SolidPattern">
+                <color alpha="128">
+                 <red>66</red>
+                 <green>66</green>
+                 <blue>66</blue>
                 </color>
                </brush>
               </colorrole>
@@ -1415,7 +1565,7 @@ background-image: none;
      <x>0</x>
      <y>0</y>
      <width>800</width>
-     <height>21</height>
+     <height>22</height>
     </rect>
    </property>
   </widget>
