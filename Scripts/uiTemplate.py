@@ -64,6 +64,9 @@ class Ui_MainWindow(object):
         self.gridLayout.setObjectName("gridLayout")
         self.pushButton_2 = QtWidgets.QPushButton(parent=self.groupbox)
         self.pushButton_2.setObjectName("pushButton_2")
+        self.pushButton_2.setCheckable(True)
+        self.pushButton_2.clicked.connect(self.the_button_was_clicked)
+        
         self.gridLayout.addWidget(self.pushButton_2, 0, 2, 1, 1)
         self.pushButton_4 = QtWidgets.QPushButton(parent=self.groupbox)
         self.pushButton_4.setObjectName("pushButton_4")
@@ -114,6 +117,12 @@ class Ui_MainWindow(object):
         self.pushButton.setText(_translate("MainWindow", "PushButton"))
         self.pushButton_3.setText(_translate("MainWindow", "PushButton"))
 
+    def the_button_was_clicked(self, _callback=[]):
+        if len(_callback) != 0:
+            if callable(_callback[0]):
+                _callback[0]()
+
+        return True
 
 if __name__ == "__main__":
     import sys
