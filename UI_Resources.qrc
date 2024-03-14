@@ -37,26 +37,27 @@
     <file>MEDIA/2_buttons/filament_menu/UNLOAD_pressed_PT.png</file>
     <file>MEDIA/2_buttons/filament_menu/UNLOAD_PT.png</file>
   </qresource>
-  <qresource prefix="Images">
-    <file>MEDIA/logoblocks.png</file>
-  </qresource>
-  <qresource prefix="Simple_btns">
-    <file>MEDIA/2_buttons/simple_btn.png</file>
-    <file>MEDIA/2_buttons/simple_btn_pressed.png</file>
-  </qresource>
   <qresource prefix="MainBackground">
     <file>MEDIA/1st_background.png</file>
   </qresource>
   <qresource prefix="General_icons">
-    <file>MEDIA/1_icons/top_bar_icons/nozzle_temp_1.png</file>
-    <file>MEDIA/1_icons/top_bar_icons/nozzle_temp_2.png</file>
-    <file>MEDIA/1_icons/general_icons/ICON_filament.png</file>
-    <file>MEDIA/1_icons/general_icons/ICON_filament_pressed.png</file>
+    <file>MEDIA/test_media/icons/dryer_icon.png</file>
+    <file>MEDIA/test_media/icons/dryer_icon_PRESSED.png</file>
+    <file>MEDIA/test_media/icons/change_filament.png</file>
+    <file>MEDIA/test_media/icons/change_filament_PRESSED.png</file>
+    <file>MEDIA/test_media/icons/filament_unload.png</file>
+    <file>MEDIA/test_media/icons/filament_unload_PRESSED.png</file>
+    <file>MEDIA/test_media/icons/filament_icon_PRESSED.png</file>
+    <file>MEDIA/test_media/icons/filament_icon.png</file>
     <file>MEDIA/1_icons/general_icons/print core 1_2.png</file>
     <file>MEDIA/1_icons/general_icons/print core 1_2_pressed.png</file>
     <file>MEDIA/1_icons/general_icons/print core_1.png</file>
     <file>MEDIA/1_icons/general_icons/print core_1_pressed.png</file>
     <file>MEDIA/1_icons/general_icons/print core_2.png</file>
     <file>MEDIA/1_icons/general_icons/print core_2_pressed.png</file>
+  </qresource>
+  <qresource prefix="simple_btn">
+    <file>MEDIA/test_media/btn_simple.png</file>
+    <file>MEDIA/test_media/btn_simple_PRESSED.png</file>
   </qresource>
 </RCC>
