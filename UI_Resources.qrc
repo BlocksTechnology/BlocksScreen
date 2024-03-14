@@ -41,6 +41,14 @@
     <file>MEDIA/1st_background.png</file>
   </qresource>
   <qresource prefix="General_icons">
+    <file>MEDIA/test_media/icons/dryer_icon.png</file>
+    <file>MEDIA/test_media/icons/dryer_icon_PRESSED.png</file>
+    <file>MEDIA/test_media/icons/change_filament.png</file>
+    <file>MEDIA/test_media/icons/change_filament_PRESSED.png</file>
+    <file>MEDIA/test_media/icons/filament_unload.png</file>
+    <file>MEDIA/test_media/icons/filament_unload_PRESSED.png</file>
+    <file>MEDIA/test_media/icons/filament_icon_PRESSED.png</file>
+    <file>MEDIA/test_media/icons/filament_icon.png</file>
     <file>MEDIA/1_icons/general_icons/print core 1_2.png</file>
     <file>MEDIA/1_icons/general_icons/print core 1_2_pressed.png</file>
     <file>MEDIA/1_icons/general_icons/print core_1.png</file>

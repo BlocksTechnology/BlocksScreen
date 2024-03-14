@@ -437,114 +437,241 @@ QTabBar::tab {
         <attribute name="title">
          <string/>
         </attribute>
-        <widget class="QPushButton" name="load_eng_btn_3">
+        <widget class="QStackedWidget" name="filamentStackedWidget_2">
          <property name="geometry">
           <rect>
-           <x>90</x>
-           <y>90</y>
-           <width>301</width>
-           <height>60</height>
+           <x>0</x>
+           <y>0</y>
+           <width>711</width>
+           <height>400</height>
           </rect>
-         </property>
-         <property name="palette">
-          <palette>
-           <active>
-            <colorrole role="Button">
-             <brush brushstyle="SolidPattern">
-              <color alpha="0">
-               <red>0</red>
-               <green>0</green>
-               <blue>0</blue>
-              </color>
-             </brush>
-            </colorrole>
-            <colorrole role="Base">
-             <brush brushstyle="SolidPattern">
-              <color alpha="0">
-               <red>0</red>
-               <green>0</green>
-               <blue>0</blue>
-              </color>
-             </brush>
-            </colorrole>
-            <colorrole role="Window">
-             <brush brushstyle="SolidPattern">
-              <color alpha="0">
-               <red>0</red>
-               <green>0</green>
-               <blue>0</blue>
-              </color>
-             </brush>
-            </colorrole>
-           </active>
-           <inactive>
-            <colorrole role="Button">
-             <brush brushstyle="SolidPattern">
-              <color alpha="0">
-               <red>0</red>
-               <green>0</green>
-               <blue>0</blue>
-              </color>
-             </brush>
-            </colorrole>
-            <colorrole role="Base">
-             <brush brushstyle="SolidPattern">
-              <color alpha="0">
-               <red>0</red>
-               <green>0</green>
-               <blue>0</blue>
-              </color>
-             </brush>
-            </colorrole>
-            <colorrole role="Window">
-             <brush brushstyle="SolidPattern">
-              <color alpha="0">
-               <red>0</red>
-               <green>0</green>
-               <blue>0</blue>
-              </color>
-             </brush>
-            </colorrole>
-           </inactive>
-           <disabled>
-            <colorrole role="Button">
-             <brush brushstyle="SolidPattern">
-              <color alpha="0">
-               <red>0</red>
-               <green>0</green>
-               <blue>0</blue>
-              </color>
-             </brush>
-            </colorrole>
-            <colorrole role="Base">
-             <brush brushstyle="SolidPattern">
-              <color alpha="0">
-               <red>0</red>
-               <green>0</green>
-               <blue>0</blue>
-              </color>
-             </brush>
-            </colorrole>
-            <colorrole role="Window">
-             <brush brushstyle="SolidPattern">
-              <color alpha="0">
-               <red>0</red>
-               <green>0</green>
-               <blue>0</blue>
-              </color>
-             </brush>
-            </colorrole>
-           </disabled>
-          </palette>
-         </property>
-         <property name="layoutDirection">
-          <enum>Qt::RightToLeft</enum>
-         </property>
-         <property name="autoFillBackground">
-          <bool>false</bool>
          </property>
          <property name="styleSheet">
           <string notr="true">QPushButton {
+    border-image: url(:/simple_btn/MEDIA/test_media/btn_simple.png) 0 0 0 0 stretch stretch;
+	color: #424242;
+min-height: 95px;
+max-height: 95px; 
+min-width: 310px;
+max-width: 310px;
+}
+
+QPushButton::pressed {
+	 border-image: url(:/simple_btn/MEDIA/test_media/btn_simple_PRESSED.png) 0 0 0 0 stretch stretch;
+	color: #8e8d8d
+}</string>
+         </property>
+         <property name="frameShape">
+          <enum>QFrame::NoFrame</enum>
+         </property>
+         <property name="currentIndex">
+          <number>0</number>
+         </property>
+         <widget class="QWidget" name="page_5">
+          <widget class="QPushButton" name="pushButton_2">
+           <property name="geometry">
+            <rect>
+             <x>200</x>
+             <y>120</y>
+             <width>310</width>
+             <height>95</height>
+            </rect>
+           </property>
+           <property name="text">
+            <string>PushButton</string>
+           </property>
+          </widget>
+         </widget>
+         <widget class="QWidget" name="page_6">
+          <widget class="QPushButton" name="load_eng_btn_5">
+           <property name="geometry">
+            <rect>
+             <x>60</x>
+             <y>100</y>
+             <width>310</width>
+             <height>95</height>
+            </rect>
+           </property>
+           <property name="palette">
+            <palette>
+             <active>
+              <colorrole role="WindowText">
+               <brush brushstyle="SolidPattern">
+                <color alpha="255">
+                 <red>66</red>
+                 <green>66</green>
+                 <blue>66</blue>
+                </color>
+               </brush>
+              </colorrole>
+              <colorrole role="Button">
+               <brush brushstyle="SolidPattern">
+                <color alpha="0">
+                 <red>0</red>
+                 <green>0</green>
+                 <blue>0</blue>
+                </color>
+               </brush>
+              </colorrole>
+              <colorrole role="Text">
+               <brush brushstyle="SolidPattern">
+                <color alpha="255">
+                 <red>66</red>
+                 <green>66</green>
+                 <blue>66</blue>
+                </color>
+               </brush>
+              </colorrole>
+              <colorrole role="ButtonText">
+               <brush brushstyle="SolidPattern">
+                <color alpha="255">
+                 <red>66</red>
+                 <green>66</green>
+                 <blue>66</blue>
+                </color>
+               </brush>
+              </colorrole>
+              <colorrole role="Base">
+               <brush brushstyle="SolidPattern">
+                <color alpha="0">
+                 <red>0</red>
+                 <green>0</green>
+                 <blue>0</blue>
+                </color>
+               </brush>
+              </colorrole>
+              <colorrole role="Window">
+               <brush brushstyle="SolidPattern">
+                <color alpha="0">
+                 <red>0</red>
+                 <green>0</green>
+                 <blue>0</blue>
+                </color>
+               </brush>
+              </colorrole>
+             </active>
+             <inactive>
+              <colorrole role="WindowText">
+               <brush brushstyle="SolidPattern">
+                <color alpha="255">
+                 <red>66</red>
+                 <green>66</green>
+                 <blue>66</blue>
+                </color>
+               </brush>
+              </colorrole>
+              <colorrole role="Button">
+               <brush brushstyle="SolidPattern">
+                <color alpha="0">
+                 <red>0</red>
+                 <green>0</green>
+                 <blue>0</blue>
+                </color>
+               </brush>
+              </colorrole>
+              <colorrole role="Text">
+               <brush brushstyle="SolidPattern">
+                <color alpha="255">
+                 <red>66</red>
+                 <green>66</green>
+                 <blue>66</blue>
+                </color>
+               </brush>
+              </colorrole>
+              <colorrole role="ButtonText">
+               <brush brushstyle="SolidPattern">
+                <color alpha="255">
+                 <red>66</red>
+                 <green>66</green>
+                 <blue>66</blue>
+                </color>
+               </brush>
+              </colorrole>
+              <colorrole role="Base">
+               <brush brushstyle="SolidPattern">
+                <color alpha="0">
+                 <red>0</red>
+                 <green>0</green>
+                 <blue>0</blue>
+                </color>
+               </brush>
+              </colorrole>
+              <colorrole role="Window">
+               <brush brushstyle="SolidPattern">
+                <color alpha="0">
+                 <red>0</red>
+                 <green>0</green>
+                 <blue>0</blue>
+                </color>
+               </brush>
+              </colorrole>
+             </inactive>
+             <disabled>
+              <colorrole role="WindowText">
+               <brush brushstyle="SolidPattern">
+                <color alpha="255">
+                 <red>66</red>
+                 <green>66</green>
+                 <blue>66</blue>
+                </color>
+               </brush>
+              </colorrole>
+              <colorrole role="Button">
+               <brush brushstyle="SolidPattern">
+                <color alpha="0">
+                 <red>0</red>
+                 <green>0</green>
+                 <blue>0</blue>
+                </color>
+               </brush>
+              </colorrole>
+              <colorrole role="Text">
+               <brush brushstyle="SolidPattern">
+                <color alpha="255">
+                 <red>66</red>
+                 <green>66</green>
+                 <blue>66</blue>
+                </color>
+               </brush>
+              </colorrole>
+              <colorrole role="ButtonText">
+               <brush brushstyle="SolidPattern">
+                <color alpha="255">
+                 <red>66</red>
+                 <green>66</green>
+                 <blue>66</blue>
+                </color>
+               </brush>
+              </colorrole>
+              <colorrole role="Base">
+               <brush brushstyle="SolidPattern">
+                <color alpha="0">
+                 <red>0</red>
+                 <green>0</green>
+                 <blue>0</blue>
+                </color>
+               </brush>
+              </colorrole>
+              <colorrole role="Window">
+               <brush brushstyle="SolidPattern">
+                <color alpha="0">
+                 <red>0</red>
+                 <green>0</green>
+                 <blue>0</blue>
+                </color>
+               </brush>
+              </colorrole>
+             </disabled>
+            </palette>
+           </property>
+           <property name="layoutDirection">
+            <enum>Qt::RightToLeft</enum>
+           </property>
+           <property name="autoFillBackground">
+            <bool>false</bool>
+           </property>
+           <property name="styleSheet">
+            <string notr="true">QPushButton {
 border:none;
 height: 60px;
 width: 60px;
@@ -552,7 +679,7 @@ background-color: transparent;
 background-image: none;
 }
 QPushButton::!pressed{
-icon: url(:/Filament/MEDIA/2_buttons/filament_menu/LOAD.png);
+icon: url(:/Filament/MEDIA/2_buttons/filament_menu/PLA.png);
 background-color: transparent;
 background-image: none;
 }
@@ -563,42 +690,44 @@ width: 60px;
 background-color: transparent;
 background-image: none;
 }</string>
-         </property>
-         <property name="text">
-          <string notr="true"/>
-         </property>
-         <property name="icon">
-          <iconset resource="../UI_Resources.qrc">
-           <normaloff>:/Filament/MEDIA/2_buttons/filament_menu/LOAD.png</normaloff>
-           <activeoff>:/Filament/MEDIA/2_buttons/filament_menu/LOAD_pressed.png</activeoff>:/Filament/MEDIA/2_buttons/filament_menu/LOAD.png</iconset>
-         </property>
-         <property name="iconSize">
-          <size>
-           <width>300</width>
-           <height>80</height>
-          </size>
-         </property>
-         <property name="checkable">
-          <bool>false</bool>
-         </property>
-         <property name="checked">
-          <bool>false</bool>
-         </property>
-         <property name="autoRepeat">
-          <bool>false</bool>
-         </property>
-         <property name="autoExclusive">
-          <bool>false</bool>
-         </property>
-         <property name="autoDefault">
-          <bool>false</bool>
-         </property>
-         <property name="default">
-          <bool>false</bool>
-         </property>
-         <property name="flat">
-          <bool>false</bool>
-         </property>
+           </property>
+           <property name="text">
+            <string notr="true"/>
+           </property>
+           <property name="icon">
+            <iconset resource="../UI_Resources.qrc">
+             <normaloff>:/Filament/MEDIA/2_buttons/filament_menu/PLA.png</normaloff>
+             <activeoff>:/Filament/MEDIA/2_buttons/filament_menu/PLA_pressed.png</activeoff>:/Filament/MEDIA/2_buttons/filament_menu/PLA.png</iconset>
+           </property>
+           <property name="iconSize">
+            <size>
+             <width>300</width>
+             <height>100</height>
+            </size>
+           </property>
+           <property name="checkable">
+            <bool>false</bool>
+           </property>
+           <property name="checked">
+            <bool>false</bool>
+           </property>
+           <property name="autoRepeat">
+            <bool>false</bool>
+           </property>
+           <property name="autoExclusive">
+            <bool>false</bool>
+           </property>
+           <property name="autoDefault">
+            <bool>false</bool>
+           </property>
+           <property name="default">
+            <bool>false</bool>
+           </property>
+           <property name="flat">
+            <bool>false</bool>
+           </property>
+          </widget>
+         </widget>
         </widget>
        </widget>
        <widget class="QWidget" name="Filament">
@@ -621,12 +750,16 @@ background-image: none;
          </property>
          <property name="styleSheet">
           <string notr="true">QPushButton {
-    border-image: url(:/Simple_btns/MEDIA/2_buttons/simple_btn.png) 0 0 0 0 stretch stretch;
+    border-image: url(:/simple_btn/MEDIA/test_media/btn_simple.png) 0 0 0 0 stretch stretch;
 	color: #424242;
+min-height: 95px;
+max-height: 95px; 
+min-width: 310px;
+max-width: 310px;
 }
 
 QPushButton::pressed {
-	 border-image: url(:/Simple_btns/MEDIA/2_buttons/simple_btn_pressed.png) 0 0 0 0 stretch stretch;
+	 border-image: url(:/simple_btn/MEDIA/test_media/btn_simple_PRESSED.png) 0 0 0 0 stretch stretch;
 	color: #8e8d8d
 }</string>
          </property>
@@ -637,487 +770,115 @@ QPushButton::pressed {
           <number>0</number>
          </property>
          <widget class="QWidget" name="page_3">
-          <widget class="QPushButton" name="load_eng_btn_2">
-           <property name="geometry">
-            <rect>
-             <x>430</x>
-             <y>210</y>
-             <width>231</width>
-             <height>61</height>
-            </rect>
-           </property>
-           <property name="palette">
-            <palette>
-             <active>
-              <colorrole role="WindowText">
-               <brush brushstyle="SolidPattern">
-                <color alpha="255">
-                 <red>66</red>
-                 <green>66</green>
-                 <blue>66</blue>
-                </color>
-               </brush>
-              </colorrole>
-              <colorrole role="Button">
-               <brush brushstyle="SolidPattern">
-                <color alpha="0">
-                 <red>0</red>
-                 <green>0</green>
-                 <blue>0</blue>
-                </color>
-               </brush>
-              </colorrole>
-              <colorrole role="Text">
-               <brush brushstyle="SolidPattern">
-                <color alpha="255">
-                 <red>66</red>
-                 <green>66</green>
-                 <blue>66</blue>
-                </color>
-               </brush>
-              </colorrole>
-              <colorrole role="ButtonText">
-               <brush brushstyle="SolidPattern">
-                <color alpha="255">
-                 <red>66</red>
-                 <green>66</green>
-                 <blue>66</blue>
-                </color>
-               </brush>
-              </colorrole>
-              <colorrole role="Base">
-               <brush brushstyle="SolidPattern">
-                <color alpha="0">
-                 <red>0</red>
-                 <green>0</green>
-                 <blue>0</blue>
-                </color>
-               </brush>
-              </colorrole>
-              <colorrole role="Window">
-               <brush brushstyle="SolidPattern">
-                <color alpha="0">
-                 <red>0</red>
-                 <green>0</green>
-                 <blue>0</blue>
-                </color>
-               </brush>
-              </colorrole>
-             </active>
-             <inactive>
-              <colorrole role="WindowText">
-               <brush brushstyle="SolidPattern">
-                <color alpha="255">
-                 <red>66</red>
-                 <green>66</green>
-                 <blue>66</blue>
-                </color>
-               </brush>
-              </colorrole>
-              <colorrole role="Button">
-               <brush brushstyle="SolidPattern">
-                <color alpha="0">
-                 <red>0</red>
-                 <green>0</green>
-                 <blue>0</blue>
-                </color>
-               </brush>
-              </colorrole>
-              <colorrole role="Text">
-               <brush brushstyle="SolidPattern">
-                <color alpha="255">
-                 <red>66</red>
-                 <green>66</green>
-                 <blue>66</blue>
-                </color>
-               </brush>
-              </colorrole>
-              <colorrole role="ButtonText">
-               <brush brushstyle="SolidPattern">
-                <color alpha="255">
-                 <red>66</red>
-                 <green>66</green>
-                 <blue>66</blue>
-                </color>
-               </brush>
-              </colorrole>
-              <colorrole role="Base">
-               <brush brushstyle="SolidPattern">
-                <color alpha="0">
-                 <red>0</red>
-                 <green>0</green>
-                 <blue>0</blue>
-                </color>
-               </brush>
-              </colorrole>
-              <colorrole role="Window">
-               <brush brushstyle="SolidPattern">
-                <color alpha="0">
-                 <red>0</red>
-                 <green>0</green>
-                 <blue>0</blue>
-                </color>
-               </brush>
-              </colorrole>
-             </inactive>
-             <disabled>
-              <colorrole role="WindowText">
-               <brush brushstyle="SolidPattern">
-                <color alpha="255">
-                 <red>66</red>
-                 <green>66</green>
-                 <blue>66</blue>
-                </color>
-               </brush>
-              </colorrole>
-              <colorrole role="Button">
-               <brush brushstyle="SolidPattern">
-                <color alpha="0">
-                 <red>0</red>
-                 <green>0</green>
-                 <blue>0</blue>
-                </color>
-               </brush>
-              </colorrole>
-              <colorrole role="Text">
-               <brush brushstyle="SolidPattern">
-                <color alpha="255">
-                 <red>66</red>
-                 <green>66</green>
-                 <blue>66</blue>
-                </color>
-               </brush>
-              </colorrole>
-              <colorrole role="ButtonText">
-               <brush brushstyle="SolidPattern">
-                <color alpha="255">
-                 <red>66</red>
-                 <green>66</green>
-                 <blue>66</blue>
-                </color>
-               </brush>
-              </colorrole>
-              <colorrole role="Base">
-               <brush brushstyle="SolidPattern">
-                <color alpha="0">
-                 <red>0</red>
-                 <green>0</green>
-                 <blue>0</blue>
-                </color>
-               </brush>
-              </colorrole>
-              <colorrole role="Window">
-               <brush brushstyle="SolidPattern">
-                <color alpha="0">
-                 <red>0</red>
-                 <green>0</green>
-                 <blue>0</blue>
-                </color>
-               </brush>
-              </colorrole>
-             </disabled>
-            </palette>
-           </property>
-           <property name="layoutDirection">
-            <enum>Qt::RightToLeft</enum>
-           </property>
-           <property name="autoFillBackground">
-            <bool>false</bool>
-           </property>
-           <property name="styleSheet">
-            <string notr="true"/>
-           </property>
-           <property name="text">
-            <string notr="true"/>
-           </property>
-           <property name="iconSize">
-            <size>
-             <width>300</width>
-             <height>80</height>
-            </size>
-           </property>
-           <property name="checkable">
-            <bool>false</bool>
-           </property>
-           <property name="checked">
-            <bool>false</bool>
-           </property>
-           <property name="autoRepeat">
-            <bool>false</bool>
-           </property>
-           <property name="autoExclusive">
-            <bool>false</bool>
-           </property>
-           <property name="autoDefault">
-            <bool>false</bool>
-           </property>
-           <property name="default">
-            <bool>false</bool>
-           </property>
-           <property name="flat">
-            <bool>false</bool>
-           </property>
-          </widget>
-          <widget class="QPushButton" name="load_eng_btn">
-           <property name="geometry">
-            <rect>
-             <x>400</x>
-             <y>70</y>
-             <width>231</width>
-             <height>60</height>
-            </rect>
-           </property>
-           <property name="palette">
-            <palette>
-             <active>
-              <colorrole role="WindowText">
-               <brush brushstyle="SolidPattern">
-                <color alpha="255">
-                 <red>66</red>
-                 <green>66</green>
-                 <blue>66</blue>
-                </color>
-               </brush>
-              </colorrole>
-              <colorrole role="Button">
-               <brush brushstyle="SolidPattern">
-                <color alpha="0">
-                 <red>0</red>
-                 <green>0</green>
-                 <blue>0</blue>
-                </color>
-               </brush>
-              </colorrole>
-              <colorrole role="Text">
-               <brush brushstyle="SolidPattern">
-                <color alpha="255">
-                 <red>66</red>
-                 <green>66</green>
-                 <blue>66</blue>
-                </color>
-               </brush>
-              </colorrole>
-              <colorrole role="ButtonText">
-               <brush brushstyle="SolidPattern">
-                <color alpha="255">
-                 <red>66</red>
-                 <green>66</green>
-                 <blue>66</blue>
-                </color>
-               </brush>
-              </colorrole>
-              <colorrole role="Base">
-               <brush brushstyle="SolidPattern">
-                <color alpha="0">
-                 <red>0</red>
-                 <green>0</green>
-                 <blue>0</blue>
-                </color>
-               </brush>
-              </colorrole>
-              <colorrole role="Window">
-               <brush brushstyle="SolidPattern">
-                <color alpha="0">
-                 <red>0</red>
-                 <green>0</green>
-                 <blue>0</blue>
-                </color>
-               </brush>
-              </colorrole>
-             </active>
-             <inactive>
-              <colorrole role="WindowText">
-               <brush brushstyle="SolidPattern">
-                <color alpha="255">
-                 <red>66</red>
-                 <green>66</green>
-                 <blue>66</blue>
-                </color>
-               </brush>
-              </colorrole>
-              <colorrole role="Button">
-               <brush brushstyle="SolidPattern">
-                <color alpha="0">
-                 <red>0</red>
-                 <green>0</green>
-                 <blue>0</blue>
-                </color>
-               </brush>
-              </colorrole>
-              <colorrole role="Text">
-               <brush brushstyle="SolidPattern">
-                <color alpha="255">
-                 <red>66</red>
-                 <green>66</green>
-                 <blue>66</blue>
-                </color>
-               </brush>
-              </colorrole>
-              <colorrole role="ButtonText">
-               <brush brushstyle="SolidPattern">
-                <color alpha="255">
-                 <red>66</red>
-                 <green>66</green>
-                 <blue>66</blue>
-                </color>
-               </brush>
-              </colorrole>
-              <colorrole role="Base">
-               <brush brushstyle="SolidPattern">
-                <color alpha="0">
-                 <red>0</red>
-                 <green>0</green>
-                 <blue>0</blue>
-                </color>
-               </brush>
-              </colorrole>
-              <colorrole role="Window">
-               <brush brushstyle="SolidPattern">
-                <color alpha="0">
-                 <red>0</red>
-                 <green>0</green>
-                 <blue>0</blue>
-                </color>
-               </brush>
-              </colorrole>
-             </inactive>
-             <disabled>
-              <colorrole role="WindowText">
-               <brush brushstyle="SolidPattern">
-                <color alpha="255">
-                 <red>66</red>
-                 <green>66</green>
-                 <blue>66</blue>
-                </color>
-               </brush>
-              </colorrole>
-              <colorrole role="Button">
-               <brush brushstyle="SolidPattern">
-                <color alpha="0">
-                 <red>0</red>
-                 <green>0</green>
-                 <blue>0</blue>
-                </color>
-               </brush>
-              </colorrole>
-              <colorrole role="Text">
-               <brush brushstyle="SolidPattern">
-                <color alpha="255">
-                 <red>66</red>
-                 <green>66</green>
-                 <blue>66</blue>
-                </color>
-               </brush>
-              </colorrole>
-              <colorrole role="ButtonText">
-               <brush brushstyle="SolidPattern">
-                <color alpha="255">
-                 <red>66</red>
-                 <green>66</green>
-                 <blue>66</blue>
-                </color>
-               </brush>
-              </colorrole>
-              <colorrole role="Base">
-               <brush brushstyle="SolidPattern">
-                <color alpha="0">
-                 <red>0</red>
-                 <green>0</green>
-                 <blue>0</blue>
-                </color>
-               </brush>
-              </colorrole>
-              <colorrole role="Window">
-               <brush brushstyle="SolidPattern">
-                <color alpha="0">
-                 <red>0</red>
-                 <green>0</green>
-                 <blue>0</blue>
-                </color>
-               </brush>
-              </colorrole>
-             </disabled>
-            </palette>
-           </property>
-           <property name="layoutDirection">
-            <enum>Qt::RightToLeft</enum>
-           </property>
-           <property name="autoFillBackground">
-            <bool>false</bool>
-           </property>
-           <property name="styleSheet">
-            <string notr="true"/>
-           </property>
-           <property name="text">
-            <string notr="true"/>
-           </property>
-           <property name="iconSize">
-            <size>
-             <width>300</width>
-             <height>80</height>
-            </size>
-           </property>
-           <property name="checkable">
-            <bool>false</bool>
-           </property>
-           <property name="checked">
-            <bool>false</bool>
-           </property>
-           <property name="autoRepeat">
-            <bool>false</bool>
-           </property>
-           <property name="autoExclusive">
-            <bool>false</bool>
-           </property>
-           <property name="autoDefault">
-            <bool>false</bool>
-           </property>
-           <property name="default">
-            <bool>false</bool>
-           </property>
-           <property name="flat">
-            <bool>false</bool>
-           </property>
-          </widget>
-          <widget class="QPushButton" name="load_btn">
+          <widget class="QWidget" name="">
            <property name="geometry">
             <rect>
              <x>40</x>
-             <y>70</y>
-             <width>311</width>
-             <height>71</height>
+             <y>80</y>
+             <width>628</width>
+             <height>198</height>
             </rect>
            </property>
-           <property name="font">
-            <font>
-             <family>Momcake</family>
-             <pointsize>20</pointsize>
-            </font>
-           </property>
-           <property name="styleSheet">
-            <string notr="true">#load_btn {
-	image: url(:/General_icons/MEDIA/1_icons/general_icons/ICON_filament.png);
+           <layout class="QGridLayout" name="gridLayout_3">
+            <item row="0" column="0">
+             <widget class="QPushButton" name="load_btn">
+              <property name="font">
+               <font>
+                <family>Momcake</family>
+                <pointsize>20</pointsize>
+                <stylestrategy>PreferDefault</stylestrategy>
+               </font>
+              </property>
+              <property name="styleSheet">
+               <string notr="true">#load_btn {
+	image:url(:/General_icons/MEDIA/test_media/icons/filament_icon.png);
 	image-position: left;
 }
 
 #load_btn::pressed {
-	image: url(:/General_icons/MEDIA/1_icons/general_icons/ICON_filament_pressed.png);
+	image:url(:/General_icons/MEDIA/test_media/icons/filament_icon_PRESSED.png);
 	image-position: left;
 }</string>
-           </property>
-           <property name="text">
-            <string>LOAD</string>
-           </property>
-           <property name="iconSize">
-            <size>
-             <width>50</width>
-             <height>50</height>
-            </size>
-           </property>
+              </property>
+              <property name="text">
+               <string>load</string>
+              </property>
+             </widget>
+            </item>
+            <item row="0" column="1">
+             <widget class="QPushButton" name="unload_btn">
+              <property name="font">
+               <font>
+                <family>Momcake</family>
+                <pointsize>20</pointsize>
+               </font>
+              </property>
+              <property name="styleSheet">
+               <string notr="true">#unload_btn {
+	image:url(:/General_icons/MEDIA/test_media/icons/filament_unload.png);
+	image-position: left;
+}
+
+#unload_btn::pressed {
+	image:url(:/General_icons/MEDIA/test_media/icons/filament_unload_PRESSED.png);
+	image-position: left;
+}</string>
+              </property>
+              <property name="text">
+               <string>unload</string>
+              </property>
+             </widget>
+            </item>
+            <item row="1" column="0">
+             <widget class="QPushButton" name="change_filament_btn">
+              <property name="font">
+               <font>
+                <family>Momcake</family>
+                <pointsize>20</pointsize>
+               </font>
+              </property>
+              <property name="styleSheet">
+               <string notr="true">#change_filament_btn {
+	image:url(:/General_icons/MEDIA/test_media/icons/change_filament.png);
+	image-position: left;
+}
+
+#change_filament_btn::pressed {
+	image:url(:/General_icons/MEDIA/test_media/icons/change_filament_PRESSED.png);
+	image-position: left;
+}</string>
+              </property>
+              <property name="text">
+               <string>change</string>
+              </property>
+             </widget>
+            </item>
+            <item row="1" column="1">
+             <widget class="QPushButton" name="dryer_btn">
+              <property name="font">
+               <font>
+                <family>Momcake</family>
+                <pointsize>20</pointsize>
+               </font>
+              </property>
+              <property name="styleSheet">
+               <string notr="true">#dryer_btn {
+	image:url(:/General_icons/MEDIA/test_media/icons/dryer_icon.png);
+	image-position: left;
+}
+
+#dryer_btn::pressed {
+	image:url(:/General_icons/MEDIA/test_media/icons/dryer_icon_PRESSED.png);
+	image-position: left;
+}</string>
+              </property>
+              <property name="text">
+               <string>dryer</string>
+              </property>
+             </widget>
+            </item>
+           </layout>
           </widget>
-          <zorder>load_btn</zorder>
-          <zorder>load_eng_btn_2</zorder>
-          <zorder>load_eng_btn</zorder>
          </widget>
          <widget class="QWidget" name="page_4">
           <widget class="QPushButton" name="load_eng_btn_4">
@@ -1125,8 +886,8 @@ QPushButton::pressed {
             <rect>
              <x>60</x>
              <y>100</y>
-             <width>300</width>
-             <height>60</height>
+             <width>310</width>
+             <height>95</height>
             </rect>
            </property>
            <property name="palette">
