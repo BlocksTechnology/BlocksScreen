@@ -31,7 +31,7 @@
       <height>646</height>
      </rect>
     </property>
-    <layout class="QGridLayout" name="central_grid">
+    <layout class="QGridLayout" name="central_grid" rowstretch="4,3">
      <item row="0" column="0">
       <widget class="QGroupBox" name="top_bar">
        <property name="maximumSize">
@@ -523,7 +523,7 @@ image: url(:/General_icons/MEDIA/media/graphics/logo_blocks.png);
        <property name="styleSheet">
         <string notr="true">#mainTabWidget {
 background-image: url(:/MainBackground/MEDIA/1st_background.png);
-height: 400px;
+height: 360px;
 }
 
 QTabBar::tab {
@@ -552,6 +552,14 @@ QPushButton.menu_btn::pressed {
 	font-family: Momcake;
 	font-style: normal;
 	font-size: 20pt;
+}
+
+QLabel.title_text {
+	align-text: center;
+	font-family: Momcake;
+	font-style: normal;
+	font-size: 30pt;
+	color: white;
 }</string>
        </property>
        <property name="tabPosition">
@@ -561,7 +569,7 @@ QPushButton.menu_btn::pressed {
         <enum>QTabWidget::Rounded</enum>
        </property>
        <property name="currentIndex">
-        <number>1</number>
+        <number>3</number>
        </property>
        <property name="iconSize">
         <size>
@@ -675,9 +683,9 @@ QPushButto::pressed {
           <widget class="QWidget" name="layoutWidget">
            <property name="geometry">
             <rect>
-             <x>0</x>
-             <y>0</y>
-             <width>701</width>
+             <x>20</x>
+             <y>20</y>
+             <width>661</width>
              <height>341</height>
             </rect>
            </property>
@@ -688,19 +696,16 @@ QPushButto::pressed {
                <enum>Qt::RightToLeft</enum>
               </property>
               <property name="styleSheet">
-               <string notr="true">#main_title {
-	align-text: center;
-	font-family: Momcake;
-	font-style: normal;
-	font-size: 30pt;
-	color: white;
-}</string>
+               <string notr="true"/>
               </property>
               <property name="text">
                <string>Filament</string>
               </property>
               <property name="alignment">
                <set>Qt::AlignCenter</set>
+              </property>
+              <property name="class" stdset="0">
+               <string>title_text</string>
               </property>
              </widget>
             </item>
@@ -809,19 +814,16 @@ QPushButto::pressed {
                <enum>Qt::RightToLeft</enum>
               </property>
               <property name="styleSheet">
-               <string notr="true">#filament_title {
-	align-text: center;
-	font-family: Momcake;
-	font-style: normal;
-	font-size: 30pt;
-	color: white;
-}</string>
+               <string notr="true"/>
               </property>
               <property name="text">
                <string>Filament</string>
               </property>
               <property name="alignment">
                <set>Qt::AlignCenter</set>
+              </property>
+              <property name="class" stdset="0">
+               <string>title_text</string>
               </property>
              </widget>
             </item>
@@ -1072,15 +1074,13 @@ filament</string>
             </rect>
            </property>
            <property name="styleSheet">
-            <string notr="true">QLabel{
-	font-family: Momcake;
-	font-style: normal;
-	font-size: 30pt;
-	color: white;
-}</string>
+            <string notr="true"/>
            </property>
            <property name="text">
             <string>Load Tool Head 1 </string>
+           </property>
+           <property name="class" stdset="0">
+            <string>title_text</string>
            </property>
           </widget>
          </widget>
@@ -1143,15 +1143,13 @@ filament</string>
             </rect>
            </property>
            <property name="styleSheet">
-            <string notr="true">QLabel{
-	font-family: Momcake;
-	font-style: normal;
-	font-size: 30pt;
-	color: white;
-}</string>
+            <string notr="true"/>
            </property>
            <property name="text">
             <string>Load Tool Head 2</string>
+           </property>
+           <property name="class" stdset="0">
+            <string>title_text</string>
            </property>
           </widget>
           <widget class="QPushButton" name="load_t2_tpu">
@@ -1220,7 +1218,7 @@ filament</string>
           </widget>
          </widget>
          <widget class="QWidget" name="dryers_page">
-          <widget class="QLabel" name="label">
+          <widget class="QLabel" name="dryer_1_icon">
            <property name="geometry">
             <rect>
              <x>70</x>
@@ -1233,7 +1231,7 @@ filament</string>
             <string>Dryer Icon</string>
            </property>
           </widget>
-          <widget class="QLabel" name="label_2">
+          <widget class="QLabel" name="dryer_2_icon">
            <property name="geometry">
             <rect>
              <x>440</x>
@@ -1246,20 +1244,84 @@ filament</string>
             <string>Dryer 2 Icon</string>
            </property>
           </widget>
-          <widget class="QLabel" name="label_3">
+          <widget class="QLabel" name="dryers_title">
            <property name="geometry">
             <rect>
-             <x>280</x>
-             <y>60</y>
-             <width>49</width>
-             <height>16</height>
+             <x>290</x>
+             <y>40</y>
+             <width>111</width>
+             <height>61</height>
             </rect>
            </property>
            <property name="text">
-            <string>TextLabel</string>
+            <string>Dryers</string>
            </property>
            <property name="class" stdset="0">
-            <string>text_title</string>
+            <string>title_text</string>
+           </property>
+          </widget>
+          <widget class="QPushButton" name="dryer_1_auto_btn">
+           <property name="geometry">
+            <rect>
+             <x>50</x>
+             <y>210</y>
+             <width>310</width>
+             <height>95</height>
+            </rect>
+           </property>
+           <property name="text">
+            <string>auto temperature</string>
+           </property>
+           <property name="class" stdset="0">
+            <string>menu_btn</string>
+           </property>
+          </widget>
+          <widget class="QPushButton" name="dryer_1_off_btn">
+           <property name="geometry">
+            <rect>
+             <x>50</x>
+             <y>300</y>
+             <width>310</width>
+             <height>95</height>
+            </rect>
+           </property>
+           <property name="text">
+            <string>turn off dryer</string>
+           </property>
+           <property name="class" stdset="0">
+            <string>menu_btn</string>
+           </property>
+          </widget>
+          <widget class="QPushButton" name="dryer_2_auto_btn">
+           <property name="geometry">
+            <rect>
+             <x>360</x>
+             <y>210</y>
+             <width>310</width>
+             <height>95</height>
+            </rect>
+           </property>
+           <property name="text">
+            <string>Auto temperature</string>
+           </property>
+           <property name="class" stdset="0">
+            <string>menu_btn</string>
+           </property>
+          </widget>
+          <widget class="QPushButton" name="dryer_2_off_btn">
+           <property name="geometry">
+            <rect>
+             <x>360</x>
+             <y>300</y>
+             <width>310</width>
+             <height>95</height>
+            </rect>
+           </property>
+           <property name="text">
+            <string>turn off dryer</string>
+           </property>
+           <property name="class" stdset="0">
+            <string>menu_btn</string>
            </property>
           </widget>
          </widget>
@@ -1374,13 +1436,7 @@ calibration</string>
             <item row="0" column="0">
              <widget class="QLabel" name="control_title">
               <property name="styleSheet">
-               <string notr="true">#control_title {
-	align-text: center;
-	font-family: Momcake;
-	font-style: normal;
-	font-size: 30pt;
-	color: white;
-}</string>
+               <string notr="true"/>
               </property>
               <property name="text">
                <string>Control</string>
@@ -1388,12 +1444,14 @@ calibration</string>
               <property name="alignment">
                <set>Qt::AlignCenter</set>
               </property>
+              <property name="class" stdset="0">
+               <string>title_text</string>
+              </property>
              </widget>
             </item>
            </layout>
           </widget>
          </widget>
-         <widget class="QWidget" name="page"/>
          <widget class="QWidget" name="motion_page">
           <widget class="QWidget" name="layoutWidget_3">
            <property name="geometry">
@@ -1411,19 +1469,16 @@ calibration</string>
                <enum>Qt::RightToLeft</enum>
               </property>
               <property name="styleSheet">
-               <string notr="true">#motion_title {
-	align-text: center;
-	font-family: Momcake;
-	font-style: normal;
-	font-size: 30pt;
-	color: white;
-}</string>
+               <string notr="true"/>
               </property>
               <property name="text">
                <string>Motion</string>
               </property>
               <property name="alignment">
                <set>Qt::AlignCenter</set>
+              </property>
+              <property name="class" stdset="0">
+               <string>title_text</string>
               </property>
              </widget>
             </item>
@@ -1551,6 +1606,7 @@ steppers</string>
            </layout>
           </widget>
          </widget>
+         <widget class="QWidget" name="page"/>
         </widget>
        </widget>
        <widget class="QWidget" name="utilities_tab">
@@ -1705,19 +1761,16 @@ Check</string>
             <item row="0" column="0">
              <widget class="QLabel" name="utilities_title">
               <property name="styleSheet">
-               <string notr="true">#utilities_title {
-	align-text: center;
-	font-family: Momcake;
-	font-style: normal;
-	font-size: 30pt;
-	color: white;
-}</string>
+               <string notr="true"/>
               </property>
               <property name="text">
                <string>Utilities</string>
               </property>
               <property name="alignment">
                <set>Qt::AlignCenter</set>
+              </property>
+              <property name="class" stdset="0">
+               <string>title_text</string>
               </property>
              </widget>
             </item>
