@@ -27,13 +27,13 @@
      <rect>
       <x>0</x>
       <y>0</y>
-      <width>801</width>
+      <width>802</width>
       <height>646</height>
      </rect>
     </property>
-    <layout class="QGridLayout" name="gridLayout_2">
+    <layout class="QGridLayout" name="central_grid">
      <item row="0" column="0">
-      <widget class="QGroupBox" name="groupBox">
+      <widget class="QGroupBox" name="top_bar">
        <property name="maximumSize">
         <size>
          <width>800</width>
@@ -56,88 +56,8 @@
         <property name="spacing">
          <number>0</number>
         </property>
-        <item row="0" column="3">
-         <widget class="QPushButton" name="pushButton_6">
-          <property name="enabled">
-           <bool>true</bool>
-          </property>
-          <property name="styleSheet">
-           <string notr="true">QWidget{
-	background-color: rgb(50, 50, 50);
-	selection-background-color: rgb(60, 60, 60);
-	gridline-color: rgb(60, 60, 60);
-	color: rgb(255, 255, 255);
-	border-color: rgb(60, 60, 60);
-	selection-color: rgb(60, 60, 60);
-	border-bottom-color: rgb(60, 60, 60);
-}</string>
-          </property>
-          <property name="text">
-           <string>PLA</string>
-          </property>
-          <property name="icon">
-           <iconset>
-            <normaloff>../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</normaloff>../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</iconset>
-          </property>
-          <property name="iconSize">
-           <size>
-            <width>19</width>
-            <height>19</height>
-           </size>
-          </property>
-          <property name="checkable">
-           <bool>false</bool>
-          </property>
-          <property name="checked">
-           <bool>false</bool>
-          </property>
-          <property name="flat">
-           <bool>true</bool>
-          </property>
-         </widget>
-        </item>
-        <item row="2" column="3">
-         <widget class="QPushButton" name="pushButton_7">
-          <property name="enabled">
-           <bool>true</bool>
-          </property>
-          <property name="styleSheet">
-           <string notr="true">QWidget{
-	background-color: rgb(50, 50, 50);
-	selection-background-color: rgb(60, 60, 60);
-	gridline-color: rgb(60, 60, 60);
-	color: rgb(255, 255, 255);
-	border-color: rgb(60, 60, 60);
-	selection-color: rgb(60, 60, 60);
-	border-bottom-color: rgb(60, 60, 60);
-}</string>
-          </property>
-          <property name="text">
-           <string>PLA</string>
-          </property>
-          <property name="icon">
-           <iconset>
-            <normaloff>../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</normaloff>../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</iconset>
-          </property>
-          <property name="iconSize">
-           <size>
-            <width>19</width>
-            <height>19</height>
-           </size>
-          </property>
-          <property name="checkable">
-           <bool>false</bool>
-          </property>
-          <property name="checked">
-           <bool>false</bool>
-          </property>
-          <property name="flat">
-           <bool>true</bool>
-          </property>
-         </widget>
-        </item>
         <item row="2" column="2">
-         <widget class="QPushButton" name="pushButton_4">
+         <widget class="QPushButton" name="chamber_temp">
           <property name="enabled">
            <bool>true</bool>
           </property>
@@ -157,7 +77,47 @@
           </property>
           <property name="icon">
            <iconset>
-            <normaloff>../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</normaloff>../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</iconset>
+            <normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</iconset>
+          </property>
+          <property name="iconSize">
+           <size>
+            <width>19</width>
+            <height>19</height>
+           </size>
+          </property>
+          <property name="checkable">
+           <bool>false</bool>
+          </property>
+          <property name="checked">
+           <bool>false</bool>
+          </property>
+          <property name="flat">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+        <item row="0" column="5">
+         <widget class="QPushButton" name="filament_type_1">
+          <property name="enabled">
+           <bool>true</bool>
+          </property>
+          <property name="styleSheet">
+           <string notr="true">QWidget{
+	background-color: rgb(50, 50, 50);
+	selection-background-color: rgb(60, 60, 60);
+	gridline-color: rgb(60, 60, 60);
+	color: rgb(255, 255, 255);
+	border-color: rgb(60, 60, 60);
+	selection-color: rgb(60, 60, 60);
+	border-bottom-color: rgb(60, 60, 60);
+}</string>
+          </property>
+          <property name="text">
+           <string>PLA</string>
+          </property>
+          <property name="icon">
+           <iconset>
+            <normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</iconset>
           </property>
           <property name="iconSize">
            <size>
@@ -177,7 +137,7 @@
          </widget>
         </item>
         <item row="0" column="2">
-         <widget class="QPushButton" name="pushButton_5">
+         <widget class="QPushButton" name="hot_bed_temp">
           <property name="enabled">
            <bool>true</bool>
           </property>
@@ -197,7 +157,122 @@
           </property>
           <property name="icon">
            <iconset>
-            <normaloff>../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</normaloff>../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</iconset>
+            <normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</iconset>
+          </property>
+          <property name="iconSize">
+           <size>
+            <width>19</width>
+            <height>19</height>
+           </size>
+          </property>
+          <property name="checkable">
+           <bool>false</bool>
+          </property>
+          <property name="checked">
+           <bool>false</bool>
+          </property>
+          <property name="flat">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+        <item row="2" column="5">
+         <widget class="QPushButton" name="filament_type_2">
+          <property name="enabled">
+           <bool>true</bool>
+          </property>
+          <property name="styleSheet">
+           <string notr="true">QWidget{
+	background-color: rgb(50, 50, 50);
+	selection-background-color: rgb(60, 60, 60);
+	gridline-color: rgb(60, 60, 60);
+	color: rgb(255, 255, 255);
+	border-color: rgb(60, 60, 60);
+	selection-color: rgb(60, 60, 60);
+	border-bottom-color: rgb(60, 60, 60);
+}</string>
+          </property>
+          <property name="text">
+           <string>PLA</string>
+          </property>
+          <property name="icon">
+           <iconset>
+            <normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</iconset>
+          </property>
+          <property name="iconSize">
+           <size>
+            <width>19</width>
+            <height>19</height>
+           </size>
+          </property>
+          <property name="checkable">
+           <bool>false</bool>
+          </property>
+          <property name="checked">
+           <bool>false</bool>
+          </property>
+          <property name="flat">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+        <item row="0" column="3">
+         <widget class="QPushButton" name="nozzle_1_temp">
+          <property name="enabled">
+           <bool>true</bool>
+          </property>
+          <property name="styleSheet">
+           <string notr="true">#nozzle_1_temp{ 
+	image: url(:/General_icons/MEDIA/1_icons/top_bar_icons/nozzle_temp_1.png);
+	image-position: left;
+}</string>
+          </property>
+          <property name="text">
+           <string>210 ºC /220 ºC</string>
+          </property>
+          <property name="icon">
+           <iconset>
+            <normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</iconset>
+          </property>
+          <property name="iconSize">
+           <size>
+            <width>19</width>
+            <height>19</height>
+           </size>
+          </property>
+          <property name="checkable">
+           <bool>false</bool>
+          </property>
+          <property name="checked">
+           <bool>false</bool>
+          </property>
+          <property name="flat">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+        <item row="2" column="3">
+         <widget class="QPushButton" name="nozzle_2_temp">
+          <property name="enabled">
+           <bool>true</bool>
+          </property>
+          <property name="styleSheet">
+           <string notr="true">QWidget{
+	background-color: rgb(50, 50, 50);
+	selection-background-color: rgb(60, 60, 60);
+	gridline-color: rgb(60, 60, 60);
+	color: rgb(255, 255, 255);
+	border-color: rgb(60, 60, 60);
+	selection-color: rgb(60, 60, 60);
+	border-bottom-color: rgb(60, 60, 60);
+}</string>
+          </property>
+          <property name="text">
+           <string>210 ºC /220 ºC</string>
+          </property>
+          <property name="icon">
+           <iconset>
+            <normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/20.jpg</normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/20.jpg</iconset>
           </property>
           <property name="iconSize">
            <size>
@@ -224,12 +299,12 @@ image: url(:/Images/MEDIA/logoblocks.png);
 }</string>
           </property>
           <property name="text">
-           <string/>
+           <string>Blocks</string>
           </property>
          </widget>
         </item>
-        <item row="2" column="1">
-         <widget class="QPushButton" name="pushButton">
+        <item row="0" column="4">
+         <widget class="QPushButton" name="nozzle_1">
           <property name="enabled">
            <bool>true</bool>
           </property>
@@ -245,11 +320,11 @@ image: url(:/Images/MEDIA/logoblocks.png);
 }</string>
           </property>
           <property name="text">
-           <string>210 ºC /220 ºC</string>
+           <string>Nozzle: 0.4</string>
           </property>
           <property name="icon">
            <iconset>
-            <normaloff>../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/20.jpg</normaloff>../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/20.jpg</iconset>
+            <normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</iconset>
           </property>
           <property name="iconSize">
            <size>
@@ -268,23 +343,28 @@ image: url(:/Images/MEDIA/logoblocks.png);
           </property>
          </widget>
         </item>
-        <item row="0" column="1">
-         <widget class="QPushButton" name="nozzle_1_temp">
+        <item row="2" column="4">
+         <widget class="QPushButton" name="nozzle_2">
           <property name="enabled">
            <bool>true</bool>
           </property>
           <property name="styleSheet">
-           <string notr="true">#nozzle_1_temp{ 
-	image: url(:/General_icons/MEDIA/1_icons/top_bar_icons/nozzle_temp_1.png);
-	image-position: left;
+           <string notr="true">QWidget{
+	background-color: rgb(50, 50, 50);
+	selection-background-color: rgb(60, 60, 60);
+	gridline-color: rgb(60, 60, 60);
+	color: rgb(255, 255, 255);
+	border-color: rgb(60, 60, 60);
+	selection-color: rgb(60, 60, 60);
+	border-bottom-color: rgb(60, 60, 60);
 }</string>
           </property>
           <property name="text">
-           <string>210 ºC /220 ºC</string>
+           <string>Nozzle: 0.3</string>
           </property>
           <property name="icon">
            <iconset>
-            <normaloff>../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</normaloff>../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</iconset>
+            <normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</iconset>
           </property>
           <property name="iconSize">
            <size>
@@ -303,8 +383,8 @@ image: url(:/Images/MEDIA/logoblocks.png);
           </property>
          </widget>
         </item>
-        <item row="1" column="4">
-         <widget class="QPushButton" name="pushButton_10">
+        <item row="0" column="6" rowspan="3">
+         <widget class="QPushButton" name="wifi_signal">
           <property name="enabled">
            <bool>true</bool>
           </property>
@@ -320,11 +400,11 @@ image: url(:/Images/MEDIA/logoblocks.png);
 }</string>
           </property>
           <property name="text">
-           <string>210 ºC /220 ºC</string>
+           <string>Wifi</string>
           </property>
           <property name="icon">
            <iconset>
-            <normaloff>../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</normaloff>../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</iconset>
+            <normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</iconset>
           </property>
           <property name="iconSize">
            <size>
@@ -344,14 +424,16 @@ image: url(:/Images/MEDIA/logoblocks.png);
          </widget>
         </item>
        </layout>
-       <zorder>pushButton</zorder>
-       <zorder>nozzle_1_temp</zorder>
-       <zorder>pushButton_4</zorder>
-       <zorder>pushButton_5</zorder>
+       <zorder>chamber_temp</zorder>
+       <zorder>hot_bed_temp</zorder>
        <zorder>blocks_logo</zorder>
-       <zorder>pushButton_6</zorder>
-       <zorder>pushButton_7</zorder>
-       <zorder>pushButton_10</zorder>
+       <zorder>filament_type_1</zorder>
+       <zorder>filament_type_2</zorder>
+       <zorder>wifi_signal</zorder>
+       <zorder>nozzle_1_temp</zorder>
+       <zorder>nozzle_2_temp</zorder>
+       <zorder>nozzle_1</zorder>
+       <zorder>nozzle_2</zorder>
       </widget>
      </item>
      <item row="1" column="0">
@@ -386,16 +468,35 @@ image: url(:/Images/MEDIA/logoblocks.png);
        <property name="styleSheet">
         <string notr="true">#mainTabWidget {
 background-image: url(:/MainBackground/MEDIA/1st_background.png);
-
 height: 400px;
 }
 
 QTabBar::tab {
 	min-width: 90px;
 	max-width: 90px;
-	min-height: 93px;
+	min-height: 100px;
 	max-height: 200px;
     background: transparent;
+}
+
+QPushButton.menu_btn {
+    border-image: url(:/simple_btn/MEDIA/test_media/btn_simple.png) 0 0 0 0 stretch stretch;
+	color: #424242;
+	min-height: 95px;
+	max-height: 95px; 
+	min-width: 310px;
+	max-width: 310px;
+	font-family: Momcake;
+	font-style: normal;
+	font-size: 20pt;
+}
+
+QPushButton.menu_btn::pressed {
+	border-image: url(:/simple_btn/MEDIA/test_media/btn_simple_PRESSED.png) 0 0 0 0 stretch stretch;
+	color: #8e8d8d;
+	font-family: Momcake;
+	font-style: normal;
+	font-size: 20pt;
 }</string>
        </property>
        <property name="tabPosition">
@@ -405,7 +506,7 @@ QTabBar::tab {
         <enum>QTabWidget::Rounded</enum>
        </property>
        <property name="currentIndex">
-        <number>1</number>
+        <number>0</number>
        </property>
        <property name="iconSize">
         <size>
@@ -428,16 +529,16 @@ QTabBar::tab {
        <property name="movable">
         <bool>false</bool>
        </property>
-       <widget class="QWidget" name="tab">
+       <widget class="QWidget" name="main_tab">
         <attribute name="icon">
-         <iconset>
-          <normaloff>../MEDIA/1_icons/main_menu/ICON_home.png</normaloff>
-          <normalon>../MEDIA/1_icons/main_menu/ICON_home_pressed.png</normalon>../MEDIA/1_icons/main_menu/ICON_home.png</iconset>
+         <iconset resource="../UI_Resources.qrc">
+          <normaloff>:/General_icons/MEDIA/1_icons/main_menu/ICON_home.png</normaloff>
+          <normalon>:/General_icons/MEDIA/1_icons/main_menu/ICON_home_pressed.png</normalon>:/General_icons/MEDIA/1_icons/main_menu/ICON_home.png</iconset>
         </attribute>
         <attribute name="title">
          <string/>
         </attribute>
-        <widget class="QStackedWidget" name="filamentStackedWidget_2">
+        <widget class="QStackedWidget" name="main_stacked_widget">
          <property name="geometry">
           <rect>
            <x>0</x>
@@ -447,19 +548,26 @@ QTabBar::tab {
           </rect>
          </property>
          <property name="styleSheet">
-          <string notr="true">QPushButton {
+          <string notr="true">QPushButt {
     border-image: url(:/simple_btn/MEDIA/test_media/btn_simple.png) 0 0 0 0 stretch stretch;
 	color: #424242;
-min-height: 95px;
-max-height: 95px; 
-min-width: 310px;
-max-width: 310px;
+	min-height: 95px;
+	max-height: 95px; 
+	min-width: 310px;
+	max-width: 310px;
+	font-family: Momcake;
+	font-style: normal;
+	font-size: 20pt;
 }
 
-QPushButton::pressed {
-	 border-image: url(:/simple_btn/MEDIA/test_media/btn_simple_PRESSED.png) 0 0 0 0 stretch stretch;
-	color: #8e8d8d
-}</string>
+QPushButto::pressed {
+	border-image: url(:/simple_btn/MEDIA/test_media/btn_simple_PRESSED.png) 0 0 0 0 stretch stretch;
+	color: #8e8d8d;
+	font-family: Momcake;
+	font-style: normal;
+	font-size: 20pt;
+}
+</string>
          </property>
          <property name="frameShape">
           <enum>QFrame::NoFrame</enum>
@@ -467,351 +575,91 @@ QPushButton::pressed {
          <property name="currentIndex">
           <number>0</number>
          </property>
-         <widget class="QWidget" name="page_5">
-          <widget class="QPushButton" name="pushButton_2">
-           <property name="geometry">
-            <rect>
-             <x>200</x>
-             <y>120</y>
-             <width>310</width>
-             <height>95</height>
-            </rect>
-           </property>
-           <property name="text">
-            <string>PushButton</string>
-           </property>
-          </widget>
-         </widget>
-         <widget class="QWidget" name="page_6">
-          <widget class="QPushButton" name="load_eng_btn_5">
+         <widget class="QWidget" name="Select_file_page">
+          <widget class="QScrollArea" name="select_file_scroll_area">
            <property name="geometry">
             <rect>
              <x>60</x>
-             <y>100</y>
-             <width>310</width>
-             <height>95</height>
+             <y>120</y>
+             <width>481</width>
+             <height>241</height>
             </rect>
            </property>
-           <property name="palette">
-            <palette>
-             <active>
-              <colorrole role="WindowText">
-               <brush brushstyle="SolidPattern">
-                <color alpha="255">
-                 <red>66</red>
-                 <green>66</green>
-                 <blue>66</blue>
-                </color>
-               </brush>
-              </colorrole>
-              <colorrole role="Button">
-               <brush brushstyle="SolidPattern">
-                <color alpha="0">
-                 <red>0</red>
-                 <green>0</green>
-                 <blue>0</blue>
-                </color>
-               </brush>
-              </colorrole>
-              <colorrole role="Text">
-               <brush brushstyle="SolidPattern">
-                <color alpha="255">
-                 <red>66</red>
-                 <green>66</green>
-                 <blue>66</blue>
-                </color>
-               </brush>
-              </colorrole>
-              <colorrole role="ButtonText">
-               <brush brushstyle="SolidPattern">
-                <color alpha="255">
-                 <red>66</red>
-                 <green>66</green>
-                 <blue>66</blue>
-                </color>
-               </brush>
-              </colorrole>
-              <colorrole role="Base">
-               <brush brushstyle="SolidPattern">
-                <color alpha="0">
-                 <red>0</red>
-                 <green>0</green>
-                 <blue>0</blue>
-                </color>
-               </brush>
-              </colorrole>
-              <colorrole role="Window">
-               <brush brushstyle="SolidPattern">
-                <color alpha="0">
-                 <red>0</red>
-                 <green>0</green>
-                 <blue>0</blue>
-                </color>
-               </brush>
-              </colorrole>
-             </active>
-             <inactive>
-              <colorrole role="WindowText">
-               <brush brushstyle="SolidPattern">
-                <color alpha="255">
-                 <red>66</red>
-                 <green>66</green>
-                 <blue>66</blue>
-                </color>
-               </brush>
-              </colorrole>
-              <colorrole role="Button">
-               <brush brushstyle="SolidPattern">
-                <color alpha="0">
-                 <red>0</red>
-                 <green>0</green>
-                 <blue>0</blue>
-                </color>
-               </brush>
-              </colorrole>
-              <colorrole role="Text">
-               <brush brushstyle="SolidPattern">
-                <color alpha="255">
-                 <red>66</red>
-                 <green>66</green>
-                 <blue>66</blue>
-                </color>
-               </brush>
-              </colorrole>
-              <colorrole role="ButtonText">
-               <brush brushstyle="SolidPattern">
-                <color alpha="255">
-                 <red>66</red>
-                 <green>66</green>
-                 <blue>66</blue>
-                </color>
-               </brush>
-              </colorrole>
-              <colorrole role="Base">
-               <brush brushstyle="SolidPattern">
-                <color alpha="0">
-                 <red>0</red>
-                 <green>0</green>
-                 <blue>0</blue>
-                </color>
-               </brush>
-              </colorrole>
-              <colorrole role="Window">
-               <brush brushstyle="SolidPattern">
-                <color alpha="0">
-                 <red>0</red>
-                 <green>0</green>
-                 <blue>0</blue>
-                </color>
-               </brush>
-              </colorrole>
-             </inactive>
-             <disabled>
-              <colorrole role="WindowText">
-               <brush brushstyle="SolidPattern">
-                <color alpha="255">
-                 <red>66</red>
-                 <green>66</green>
-                 <blue>66</blue>
-                </color>
-               </brush>
-              </colorrole>
-              <colorrole role="Button">
-               <brush brushstyle="SolidPattern">
-                <color alpha="0">
-                 <red>0</red>
-                 <green>0</green>
-                 <blue>0</blue>
-                </color>
-               </brush>
-              </colorrole>
-              <colorrole role="Text">
-               <brush brushstyle="SolidPattern">
-                <color alpha="255">
-                 <red>66</red>
-                 <green>66</green>
-                 <blue>66</blue>
-                </color>
-               </brush>
-              </colorrole>
-              <colorrole role="ButtonText">
-               <brush brushstyle="SolidPattern">
-                <color alpha="255">
-                 <red>66</red>
-                 <green>66</green>
-                 <blue>66</blue>
-                </color>
-               </brush>
-              </colorrole>
-              <colorrole role="Base">
-               <brush brushstyle="SolidPattern">
-                <color alpha="0">
-                 <red>0</red>
-                 <green>0</green>
-                 <blue>0</blue>
-                </color>
-               </brush>
-              </colorrole>
-              <colorrole role="Window">
-               <brush brushstyle="SolidPattern">
-                <color alpha="0">
-                 <red>0</red>
-                 <green>0</green>
-                 <blue>0</blue>
-                </color>
-               </brush>
-              </colorrole>
-             </disabled>
-            </palette>
+           <property name="widgetResizable">
+            <bool>true</bool>
            </property>
-           <property name="layoutDirection">
-            <enum>Qt::RightToLeft</enum>
-           </property>
-           <property name="autoFillBackground">
-            <bool>false</bool>
-           </property>
-           <property name="styleSheet">
-            <string notr="true">QPushButton {
-border:none;
-height: 60px;
-width: 60px;
-background-color: transparent;
-background-image: none;
-}
-QPushButton::!pressed{
-icon: url(:/Filament/MEDIA/2_buttons/filament_menu/PLA.png);
-background-color: transparent;
-background-image: none;
-}
-QPushButton::pressed {
-border:none;
-height: 60px;
-width: 60px;
-background-color: transparent;
-background-image: none;
-}</string>
+           <widget class="QWidget" name="scrollAreaWidgetContents">
+            <property name="geometry">
+             <rect>
+              <x>0</x>
+              <y>0</y>
+              <width>479</width>
+              <height>239</height>
+             </rect>
+            </property>
+           </widget>
+          </widget>
+          <widget class="QPushButton" name="pushButton">
+           <property name="geometry">
+            <rect>
+             <x>580</x>
+             <y>60</y>
+             <width>71</width>
+             <height>51</height>
+            </rect>
            </property>
            <property name="text">
-            <string notr="true"/>
+            <string>Back</string>
            </property>
-           <property name="icon">
-            <iconset resource="../UI_Resources.qrc">
-             <normaloff>:/Filament/MEDIA/2_buttons/filament_menu/PLA.png</normaloff>
-             <activeoff>:/Filament/MEDIA/2_buttons/filament_menu/PLA_pressed.png</activeoff>:/Filament/MEDIA/2_buttons/filament_menu/PLA.png</iconset>
-           </property>
-           <property name="iconSize">
-            <size>
-             <width>300</width>
-             <height>100</height>
-            </size>
-           </property>
-           <property name="checkable">
-            <bool>false</bool>
-           </property>
-           <property name="checked">
-            <bool>false</bool>
-           </property>
-           <property name="autoRepeat">
-            <bool>false</bool>
-           </property>
-           <property name="autoExclusive">
-            <bool>false</bool>
-           </property>
-           <property name="autoDefault">
-            <bool>false</bool>
-           </property>
-           <property name="default">
-            <bool>false</bool>
-           </property>
-           <property name="flat">
-            <bool>false</bool>
+           <property name="class" stdset="0">
+            <string>back_btn</string>
            </property>
           </widget>
          </widget>
-        </widget>
-       </widget>
-       <widget class="QWidget" name="Filament">
-        <attribute name="icon">
-         <iconset>
-          <normaloff>../MEDIA/1_icons/main_menu/ICON_filament.png</normaloff>
-          <normalon>../MEDIA/1_icons/main_menu/ICON_filament_pressed.png</normalon>../MEDIA/1_icons/main_menu/ICON_filament.png</iconset>
-        </attribute>
-        <attribute name="title">
-         <string/>
-        </attribute>
-        <widget class="QStackedWidget" name="filamentStackedWidget">
-         <property name="geometry">
-          <rect>
-           <x>0</x>
-           <y>0</y>
-           <width>711</width>
-           <height>400</height>
-          </rect>
-         </property>
-         <property name="styleSheet">
-          <string notr="true">QPushButton {
-    border-image: url(:/simple_btn/MEDIA/test_media/btn_simple.png) 0 0 0 0 stretch stretch;
-	color: #424242;
-min-height: 95px;
-max-height: 95px; 
-min-width: 310px;
-max-width: 310px;
-}
-
-QPushButton::pressed {
-	 border-image: url(:/simple_btn/MEDIA/test_media/btn_simple_PRESSED.png) 0 0 0 0 stretch stretch;
-	color: #8e8d8d
-}</string>
-         </property>
-         <property name="frameShape">
-          <enum>QFrame::NoFrame</enum>
-         </property>
-         <property name="currentIndex">
-          <number>0</number>
-         </property>
-         <widget class="QWidget" name="page_3">
-          <widget class="QWidget" name="">
+         <widget class="QWidget" name="main_page">
+          <widget class="QWidget" name="layoutWidget">
            <property name="geometry">
             <rect>
-             <x>40</x>
-             <y>80</y>
-             <width>628</width>
-             <height>198</height>
+             <x>0</x>
+             <y>0</y>
+             <width>701</width>
+             <height>341</height>
             </rect>
            </property>
-           <layout class="QGridLayout" name="gridLayout_3">
-            <item row="0" column="0">
-             <widget class="QPushButton" name="load_btn">
-              <property name="font">
-               <font>
-                <family>Momcake</family>
-                <pointsize>20</pointsize>
-                <stylestrategy>PreferDefault</stylestrategy>
-               </font>
+           <layout class="QVBoxLayout" name="verticalLayout">
+            <item alignment="Qt::AlignHCenter">
+             <widget class="QLabel" name="main_title">
+              <property name="layoutDirection">
+               <enum>Qt::RightToLeft</enum>
               </property>
               <property name="styleSheet">
-               <string notr="true">#load_btn {
-	image:url(:/General_icons/MEDIA/test_media/icons/filament_icon.png);
-	image-position: left;
-}
-
-#load_btn::pressed {
-	image:url(:/General_icons/MEDIA/test_media/icons/filament_icon_PRESSED.png);
-	image-position: left;
+               <string notr="true">#main_title {
+	align-text: center;
+	font-family: Momcake;
+	font-style: normal;
+	font-size: 30pt;
+	color: white;
 }</string>
               </property>
               <property name="text">
-               <string>load</string>
+               <string>Filament</string>
+              </property>
+              <property name="alignment">
+               <set>Qt::AlignCenter</set>
               </property>
              </widget>
             </item>
-            <item row="0" column="1">
-             <widget class="QPushButton" name="unload_btn">
+            <item alignment="Qt::AlignHCenter|Qt::AlignVCenter">
+             <widget class="QPushButton" name="print_btn">
               <property name="font">
                <font>
                 <family>Momcake</family>
                 <pointsize>20</pointsize>
+                <italic>false</italic>
                </font>
+              </property>
+              <property name="layoutDirection">
+               <enum>Qt::LeftToRight</enum>
               </property>
               <property name="styleSheet">
                <string notr="true">#unload_btn {
@@ -825,20 +673,119 @@ QPushButton::pressed {
 }</string>
               </property>
               <property name="text">
-               <string>unload</string>
+               <string>PRINT</string>
+              </property>
+              <property name="class" stdset="0">
+               <string>menu_btn</string>
+              </property>
+             </widget>
+            </item>
+            <item alignment="Qt::AlignHCenter">
+             <widget class="QLabel" name="main_text_box">
+              <property name="font">
+               <font>
+                <family>Montserrat</family>
+                <pointsize>14</pointsize>
+                <italic>false</italic>
+               </font>
+              </property>
+              <property name="styleSheet">
+               <string notr="true">#main_text_box{
+	align-text: center;
+	font-family: Montserrat;
+	font-style: montserrat;
+	font-size: 14pt;
+	color: white;
+	padding-left: 100px;
+	padding-right: 100px;
+}</string>
+              </property>
+              <property name="text">
+               <string>Printer ready to use</string>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </widget>
+         </widget>
+        </widget>
+       </widget>
+       <widget class="QWidget" name="filament_tab">
+        <attribute name="icon">
+         <iconset resource="../UI_Resources.qrc">
+          <normaloff>:/General_icons/MEDIA/1_icons/main_menu/ICON_filament.png</normaloff>
+          <normalon>:/General_icons/MEDIA/1_icons/main_menu/ICON_filament_pressed.png</normalon>:/General_icons/MEDIA/1_icons/main_menu/ICON_filament.png</iconset>
+        </attribute>
+        <attribute name="title">
+         <string/>
+        </attribute>
+        <widget class="QStackedWidget" name="filament_stacked_widget">
+         <property name="geometry">
+          <rect>
+           <x>0</x>
+           <y>0</y>
+           <width>710</width>
+           <height>421</height>
+          </rect>
+         </property>
+         <property name="styleSheet">
+          <string notr="true"/>
+         </property>
+         <property name="frameShape">
+          <enum>QFrame::NoFrame</enum>
+         </property>
+         <property name="currentIndex">
+          <number>1</number>
+         </property>
+         <widget class="QWidget" name="page_3">
+          <widget class="QWidget" name="layoutWidget">
+           <property name="geometry">
+            <rect>
+             <x>9</x>
+             <y>30</y>
+             <width>691</width>
+             <height>311</height>
+            </rect>
+           </property>
+           <layout class="QGridLayout" name="filament_grid">
+            <item row="0" column="0">
+             <widget class="QLabel" name="filament_title">
+              <property name="layoutDirection">
+               <enum>Qt::RightToLeft</enum>
+              </property>
+              <property name="styleSheet">
+               <string notr="true">#filament_title {
+	align-text: center;
+	font-family: Momcake;
+	font-style: normal;
+	font-size: 30pt;
+	color: white;
+}</string>
+              </property>
+              <property name="text">
+               <string>Filament</string>
+              </property>
+              <property name="alignment">
+               <set>Qt::AlignCenter</set>
               </property>
              </widget>
             </item>
             <item row="1" column="0">
-             <widget class="QPushButton" name="change_filament_btn">
-              <property name="font">
-               <font>
-                <family>Momcake</family>
-                <pointsize>20</pointsize>
-               </font>
+             <layout class="QGridLayout" name="filament_btns_grid" columnstretch="0,0">
+              <property name="sizeConstraint">
+               <enum>QLayout::SetDefaultConstraint</enum>
               </property>
-              <property name="styleSheet">
-               <string notr="true">#change_filament_btn {
+              <item row="2" column="0">
+               <widget class="QPushButton" name="change_filament_btn">
+                <property name="font">
+                 <font>
+                  <family>Momcake</family>
+                  <pointsize>20</pointsize>
+                  <italic>false</italic>
+                 </font>
+                </property>
+                <property name="styleSheet">
+                 <string notr="true">#change_filament_btn {
 	image:url(:/General_icons/MEDIA/test_media/icons/change_filament.png);
 	image-position: left;
 }
@@ -847,22 +794,27 @@ QPushButton::pressed {
 	image:url(:/General_icons/MEDIA/test_media/icons/change_filament_PRESSED.png);
 	image-position: left;
 }</string>
-              </property>
-              <property name="text">
-               <string>change</string>
-              </property>
-             </widget>
-            </item>
-            <item row="1" column="1">
-             <widget class="QPushButton" name="dryer_btn">
-              <property name="font">
-               <font>
-                <family>Momcake</family>
-                <pointsize>20</pointsize>
-               </font>
-              </property>
-              <property name="styleSheet">
-               <string notr="true">#dryer_btn {
+                </property>
+                <property name="text">
+                 <string>change
+filament</string>
+                </property>
+                <property name="class" stdset="0">
+                 <string>menu_btn</string>
+                </property>
+               </widget>
+              </item>
+              <item row="2" column="1">
+               <widget class="QPushButton" name="dryer_btn">
+                <property name="font">
+                 <font>
+                  <family>Momcake</family>
+                  <pointsize>20</pointsize>
+                  <italic>false</italic>
+                 </font>
+                </property>
+                <property name="styleSheet">
+                 <string notr="true">#dryer_btn {
 	image:url(:/General_icons/MEDIA/test_media/icons/dryer_icon.png);
 	image-position: left;
 }
@@ -871,314 +823,680 @@ QPushButton::pressed {
 	image:url(:/General_icons/MEDIA/test_media/icons/dryer_icon_PRESSED.png);
 	image-position: left;
 }</string>
+                </property>
+                <property name="text">
+                 <string>dryer</string>
+                </property>
+                <property name="class" stdset="0">
+                 <string>menu_btn</string>
+                </property>
+               </widget>
+              </item>
+              <item row="0" column="0">
+               <widget class="QPushButton" name="unload_btn">
+                <property name="font">
+                 <font>
+                  <family>Momcake</family>
+                  <pointsize>20</pointsize>
+                  <italic>false</italic>
+                 </font>
+                </property>
+                <property name="styleSheet">
+                 <string notr="true">#unload_btn {
+	image:url(:/General_icons/MEDIA/test_media/icons/filament_unload.png);
+	image-position: left;
+}
+
+#unload_btn::pressed {
+	image:url(:/General_icons/MEDIA/test_media/icons/filament_unload_PRESSED.png);
+	image-position: left;
+}</string>
+                </property>
+                <property name="text">
+                 <string>unload</string>
+                </property>
+                <property name="class" stdset="0">
+                 <string>menu_btn</string>
+                </property>
+               </widget>
+              </item>
+              <item row="0" column="1">
+               <widget class="QPushButton" name="load_btn">
+                <property name="font">
+                 <font>
+                  <family>Momcake</family>
+                  <pointsize>20</pointsize>
+                  <italic>false</italic>
+                  <stylestrategy>PreferDefault</stylestrategy>
+                 </font>
+                </property>
+                <property name="styleSheet">
+                 <string notr="true">#load_btn {
+	image:url(:/General_icons/MEDIA/test_media/icons/filament_icon.png);
+	image-position: left;
+}
+
+#load_btn::pressed {
+	image:url(:/General_icons/MEDIA/test_media/icons/filament_icon_PRESSED.png);
+	image-position: left;
+}</string>
+                </property>
+                <property name="text">
+                 <string>load</string>
+                </property>
+                <property name="class" stdset="0">
+                 <string>menu_btn</string>
+                </property>
+               </widget>
+              </item>
+             </layout>
+            </item>
+           </layout>
+          </widget>
+         </widget>
+         <widget class="QWidget" name="page_4">
+          <widget class="QPushButton" name="pushButton_16">
+           <property name="geometry">
+            <rect>
+             <x>50</x>
+             <y>90</y>
+             <width>310</width>
+             <height>95</height>
+            </rect>
+           </property>
+           <property name="text">
+            <string>PushButton</string>
+           </property>
+           <property name="class" stdset="0">
+            <string>menu_btn</string>
+           </property>
+          </widget>
+          <widget class="QPushButton" name="pushButton_17">
+           <property name="geometry">
+            <rect>
+             <x>340</x>
+             <y>90</y>
+             <width>310</width>
+             <height>95</height>
+            </rect>
+           </property>
+           <property name="text">
+            <string>PushButton</string>
+           </property>
+           <property name="class" stdset="0">
+            <string>menu_btn</string>
+           </property>
+          </widget>
+          <widget class="QPushButton" name="pushButton_18">
+           <property name="geometry">
+            <rect>
+             <x>50</x>
+             <y>160</y>
+             <width>310</width>
+             <height>95</height>
+            </rect>
+           </property>
+           <property name="text">
+            <string>PushButton</string>
+           </property>
+           <property name="class" stdset="0">
+            <string>menu_btn</string>
+           </property>
+          </widget>
+          <widget class="QPushButton" name="pushButton_19">
+           <property name="geometry">
+            <rect>
+             <x>350</x>
+             <y>160</y>
+             <width>310</width>
+             <height>95</height>
+            </rect>
+           </property>
+           <property name="text">
+            <string>PushButton</string>
+           </property>
+           <property name="class" stdset="0">
+            <string>menu_btn</string>
+           </property>
+          </widget>
+          <widget class="QPushButton" name="pushButton_20">
+           <property name="geometry">
+            <rect>
+             <x>50</x>
+             <y>230</y>
+             <width>310</width>
+             <height>95</height>
+            </rect>
+           </property>
+           <property name="text">
+            <string>PushButton</string>
+           </property>
+           <property name="class" stdset="0">
+            <string>menu_btn</string>
+           </property>
+          </widget>
+          <widget class="QPushButton" name="pushButton_21">
+           <property name="geometry">
+            <rect>
+             <x>340</x>
+             <y>230</y>
+             <width>310</width>
+             <height>95</height>
+            </rect>
+           </property>
+           <property name="text">
+            <string>PushButton</string>
+           </property>
+           <property name="class" stdset="0">
+            <string>menu_btn</string>
+           </property>
+          </widget>
+          <widget class="QPushButton" name="pushButton_22">
+           <property name="geometry">
+            <rect>
+             <x>190</x>
+             <y>300</y>
+             <width>310</width>
+             <height>95</height>
+            </rect>
+           </property>
+           <property name="text">
+            <string>PushButton</string>
+           </property>
+           <property name="class" stdset="0">
+            <string>menu_btn</string>
+           </property>
+          </widget>
+          <widget class="QLabel" name="load_tool_1_page">
+           <property name="geometry">
+            <rect>
+             <x>260</x>
+             <y>30</y>
+             <width>221</width>
+             <height>61</height>
+            </rect>
+           </property>
+           <property name="styleSheet">
+            <string notr="true">QLabel{
+	font-family: Momcake;
+	font-style: normal;
+	font-size: 30pt;
+	color: white;
+}</string>
+           </property>
+           <property name="text">
+            <string>TextLabel</string>
+           </property>
+          </widget>
+         </widget>
+        </widget>
+       </widget>
+       <widget class="QWidget" name="control_tab">
+        <attribute name="icon">
+         <iconset resource="../UI_Resources.qrc">
+          <normaloff>:/General_icons/MEDIA/1_icons/main_menu/ICON_control.png</normaloff>
+          <normalon>:/General_icons/MEDIA/1_icons/main_menu/ICON_control_pressed.png</normalon>:/General_icons/MEDIA/1_icons/main_menu/ICON_control.png</iconset>
+        </attribute>
+        <attribute name="title">
+         <string/>
+        </attribute>
+        <widget class="QStackedWidget" name="control_stacked_widget">
+         <property name="geometry">
+          <rect>
+           <x>0</x>
+           <y>0</y>
+           <width>711</width>
+           <height>421</height>
+          </rect>
+         </property>
+         <property name="styleSheet">
+          <string notr="true"/>
+         </property>
+         <property name="lineWidth">
+          <number>3</number>
+         </property>
+         <property name="currentIndex">
+          <number>0</number>
+         </property>
+         <widget class="QWidget" name="control_page">
+          <widget class="QWidget" name="layoutWidget">
+           <property name="geometry">
+            <rect>
+             <x>40</x>
+             <y>42</y>
+             <width>630</width>
+             <height>347</height>
+            </rect>
+           </property>
+           <layout class="QGridLayout" name="control_grid">
+            <item row="1" column="0">
+             <layout class="QGridLayout" name="control_btns_grid">
+              <item row="2" column="0">
+               <widget class="QPushButton" name="printer_settings_btn">
+                <property name="text">
+                 <string>Printer
+Settings</string>
+                </property>
+                <property name="class" stdset="0">
+                 <string>menu_btn</string>
+                </property>
+               </widget>
+              </item>
+              <item row="1" column="0">
+               <widget class="QPushButton" name="bed_leveling_btn">
+                <property name="text">
+                 <string>Bed
+Leveling</string>
+                </property>
+                <property name="class" stdset="0">
+                 <string>menu_btn</string>
+                </property>
+               </widget>
+              </item>
+              <item row="2" column="1">
+               <widget class="QPushButton" name="switch_print_core_btn">
+                <property name="text">
+                 <string>Switch
+Print Core</string>
+                </property>
+                <property name="class" stdset="0">
+                 <string>menu_btn</string>
+                </property>
+               </widget>
+              </item>
+              <item row="0" column="1">
+               <widget class="QPushButton" name="motion_btn">
+                <property name="text">
+                 <string>Motion</string>
+                </property>
+                <property name="class" stdset="0">
+                 <string>menu_btn</string>
+                </property>
+               </widget>
+              </item>
+              <item row="0" column="0">
+               <widget class="QPushButton" name="temperature_btn">
+                <property name="text">
+                 <string>Temperature</string>
+                </property>
+                <property name="class" stdset="0">
+                 <string>menu_btn</string>
+                </property>
+               </widget>
+              </item>
+              <item row="1" column="1">
+               <widget class="QPushButton" name="nozzles_calibration_btn">
+                <property name="text">
+                 <string>nozzles
+calibration</string>
+                </property>
+                <property name="class" stdset="0">
+                 <string>menu_btn</string>
+                </property>
+               </widget>
+              </item>
+             </layout>
+            </item>
+            <item row="0" column="0">
+             <widget class="QLabel" name="control_title">
+              <property name="styleSheet">
+               <string notr="true">#control_title {
+	align-text: center;
+	font-family: Momcake;
+	font-style: normal;
+	font-size: 30pt;
+	color: white;
+}</string>
               </property>
               <property name="text">
-               <string>dryer</string>
+               <string>Control</string>
+              </property>
+              <property name="alignment">
+               <set>Qt::AlignCenter</set>
               </property>
              </widget>
             </item>
            </layout>
           </widget>
          </widget>
-         <widget class="QWidget" name="page_4">
-          <widget class="QPushButton" name="load_eng_btn_4">
+         <widget class="QWidget" name="page"/>
+         <widget class="QWidget" name="motion_page">
+          <widget class="QWidget" name="layoutWidget_3">
            <property name="geometry">
             <rect>
-             <x>60</x>
-             <y>100</y>
-             <width>310</width>
-             <height>95</height>
+             <x>10</x>
+             <y>30</y>
+             <width>691</width>
+             <height>311</height>
             </rect>
            </property>
-           <property name="palette">
-            <palette>
-             <active>
-              <colorrole role="WindowText">
-               <brush brushstyle="SolidPattern">
-                <color alpha="255">
-                 <red>66</red>
-                 <green>66</green>
-                 <blue>66</blue>
-                </color>
-               </brush>
-              </colorrole>
-              <colorrole role="Button">
-               <brush brushstyle="SolidPattern">
-                <color alpha="0">
-                 <red>0</red>
-                 <green>0</green>
-                 <blue>0</blue>
-                </color>
-               </brush>
-              </colorrole>
-              <colorrole role="Text">
-               <brush brushstyle="SolidPattern">
-                <color alpha="255">
-                 <red>66</red>
-                 <green>66</green>
-                 <blue>66</blue>
-                </color>
-               </brush>
-              </colorrole>
-              <colorrole role="ButtonText">
-               <brush brushstyle="SolidPattern">
-                <color alpha="255">
-                 <red>66</red>
-                 <green>66</green>
-                 <blue>66</blue>
-                </color>
-               </brush>
-              </colorrole>
-              <colorrole role="Base">
-               <brush brushstyle="SolidPattern">
-                <color alpha="0">
-                 <red>0</red>
-                 <green>0</green>
-                 <blue>0</blue>
-                </color>
-               </brush>
-              </colorrole>
-              <colorrole role="Window">
-               <brush brushstyle="SolidPattern">
-                <color alpha="0">
-                 <red>0</red>
-                 <green>0</green>
-                 <blue>0</blue>
-                </color>
-               </brush>
-              </colorrole>
-             </active>
-             <inactive>
-              <colorrole role="WindowText">
-               <brush brushstyle="SolidPattern">
-                <color alpha="255">
-                 <red>66</red>
-                 <green>66</green>
-                 <blue>66</blue>
-                </color>
-               </brush>
-              </colorrole>
-              <colorrole role="Button">
-               <brush brushstyle="SolidPattern">
-                <color alpha="0">
-                 <red>0</red>
-                 <green>0</green>
-                 <blue>0</blue>
-                </color>
-               </brush>
-              </colorrole>
-              <colorrole role="Text">
-               <brush brushstyle="SolidPattern">
-                <color alpha="255">
-                 <red>66</red>
-                 <green>66</green>
-                 <blue>66</blue>
-                </color>
-               </brush>
-              </colorrole>
-              <colorrole role="ButtonText">
-               <brush brushstyle="SolidPattern">
-                <color alpha="255">
-                 <red>66</red>
-                 <green>66</green>
-                 <blue>66</blue>
-                </color>
-               </brush>
-              </colorrole>
-              <colorrole role="Base">
-               <brush brushstyle="SolidPattern">
-                <color alpha="0">
-                 <red>0</red>
-                 <green>0</green>
-                 <blue>0</blue>
-                </color>
-               </brush>
-              </colorrole>
-              <colorrole role="Window">
-               <brush brushstyle="SolidPattern">
-                <color alpha="0">
-                 <red>0</red>
-                 <green>0</green>
-                 <blue>0</blue>
-                </color>
-               </brush>
-              </colorrole>
-             </inactive>
-             <disabled>
-              <colorrole role="WindowText">
-               <brush brushstyle="SolidPattern">
-                <color alpha="255">
-                 <red>66</red>
-                 <green>66</green>
-                 <blue>66</blue>
-                </color>
-               </brush>
-              </colorrole>
-              <colorrole role="Button">
-               <brush brushstyle="SolidPattern">
-                <color alpha="0">
-                 <red>0</red>
-                 <green>0</green>
-                 <blue>0</blue>
-                </color>
-               </brush>
-              </colorrole>
-              <colorrole role="Text">
-               <brush brushstyle="SolidPattern">
-                <color alpha="255">
-                 <red>66</red>
-                 <green>66</green>
-                 <blue>66</blue>
-                </color>
-               </brush>
-              </colorrole>
-              <colorrole role="ButtonText">
-               <brush brushstyle="SolidPattern">
-                <color alpha="255">
-                 <red>66</red>
-                 <green>66</green>
-                 <blue>66</blue>
-                </color>
-               </brush>
-              </colorrole>
-              <colorrole role="Base">
-               <brush brushstyle="SolidPattern">
-                <color alpha="0">
-                 <red>0</red>
-                 <green>0</green>
-                 <blue>0</blue>
-                </color>
-               </brush>
-              </colorrole>
-              <colorrole role="Window">
-               <brush brushstyle="SolidPattern">
-                <color alpha="0">
-                 <red>0</red>
-                 <green>0</green>
-                 <blue>0</blue>
-                </color>
-               </brush>
-              </colorrole>
-             </disabled>
-            </palette>
-           </property>
-           <property name="layoutDirection">
-            <enum>Qt::RightToLeft</enum>
-           </property>
-           <property name="autoFillBackground">
-            <bool>false</bool>
-           </property>
-           <property name="styleSheet">
-            <string notr="true">QPushButton {
-border:none;
-height: 60px;
-width: 60px;
-background-color: transparent;
-background-image: none;
-}
-QPushButton::!pressed{
-icon: url(:/Filament/MEDIA/2_buttons/filament_menu/PLA.png);
-background-color: transparent;
-background-image: none;
-}
-QPushButton::pressed {
-border:none;
-height: 60px;
-width: 60px;
-background-color: transparent;
-background-image: none;
+           <layout class="QGridLayout" name="motion_grid">
+            <item row="0" column="0">
+             <widget class="QLabel" name="motion_title">
+              <property name="layoutDirection">
+               <enum>Qt::RightToLeft</enum>
+              </property>
+              <property name="styleSheet">
+               <string notr="true">#motion_title {
+	align-text: center;
+	font-family: Momcake;
+	font-style: normal;
+	font-size: 30pt;
+	color: white;
 }</string>
-           </property>
-           <property name="text">
-            <string notr="true"/>
-           </property>
-           <property name="icon">
-            <iconset resource="../UI_Resources.qrc">
-             <normaloff>:/Filament/MEDIA/2_buttons/filament_menu/PLA.png</normaloff>
-             <activeoff>:/Filament/MEDIA/2_buttons/filament_menu/PLA_pressed.png</activeoff>:/Filament/MEDIA/2_buttons/filament_menu/PLA.png</iconset>
-           </property>
-           <property name="iconSize">
-            <size>
-             <width>300</width>
-             <height>100</height>
-            </size>
-           </property>
-           <property name="checkable">
-            <bool>false</bool>
-           </property>
-           <property name="checked">
-            <bool>false</bool>
-           </property>
-           <property name="autoRepeat">
-            <bool>false</bool>
-           </property>
-           <property name="autoExclusive">
-            <bool>false</bool>
-           </property>
-           <property name="autoDefault">
-            <bool>false</bool>
-           </property>
-           <property name="default">
-            <bool>false</bool>
-           </property>
-           <property name="flat">
-            <bool>false</bool>
-           </property>
+              </property>
+              <property name="text">
+               <string>Motion</string>
+              </property>
+              <property name="alignment">
+               <set>Qt::AlignCenter</set>
+              </property>
+             </widget>
+            </item>
+            <item row="1" column="0">
+             <layout class="QGridLayout" name="motion_btns_grid" columnstretch="0,0">
+              <property name="sizeConstraint">
+               <enum>QLayout::SetDefaultConstraint</enum>
+              </property>
+              <item row="1" column="1">
+               <widget class="QPushButton" name="auto_home_btn">
+                <property name="font">
+                 <font>
+                  <family>Momcake</family>
+                  <pointsize>20</pointsize>
+                  <italic>false</italic>
+                 </font>
+                </property>
+                <property name="styleSheet">
+                 <string notr="true">#unload_btn {
+	image:url(:/General_icons/MEDIA/test_media/icons/filament_unload.png);
+	image-position: left;
+}
+
+#unload_btn::pressed {
+	image:url(:/General_icons/MEDIA/test_media/icons/filament_unload_PRESSED.png);
+	image-position: left;
+}</string>
+                </property>
+                <property name="text">
+                 <string>auto home</string>
+                </property>
+                <property name="class" stdset="0">
+                 <string>menu_btn</string>
+                </property>
+               </widget>
+              </item>
+              <item row="1" column="0">
+               <widget class="QPushButton" name="disable_steppers_btn">
+                <property name="font">
+                 <font>
+                  <family>Momcake</family>
+                  <pointsize>20</pointsize>
+                  <italic>false</italic>
+                  <stylestrategy>PreferDefault</stylestrategy>
+                 </font>
+                </property>
+                <property name="styleSheet">
+                 <string notr="true">#load_btn {
+	image:url(:/General_icons/MEDIA/test_media/icons/filament_icon.png);
+	image-position: left;
+}
+
+#load_btn::pressed {
+	image:url(:/General_icons/MEDIA/test_media/icons/filament_icon_PRESSED.png);
+	image-position: left;
+}</string>
+                </property>
+                <property name="text">
+                 <string>disable
+steppers</string>
+                </property>
+                <property name="class" stdset="0">
+                 <string>menu_btn</string>
+                </property>
+               </widget>
+              </item>
+              <item row="2" column="0">
+               <widget class="QPushButton" name="extrude_btn">
+                <property name="font">
+                 <font>
+                  <family>Momcake</family>
+                  <pointsize>20</pointsize>
+                  <italic>false</italic>
+                 </font>
+                </property>
+                <property name="styleSheet">
+                 <string notr="true">#change_filament_btn {
+	image:url(:/General_icons/MEDIA/test_media/icons/change_filament.png);
+	image-position: left;
+}
+
+#change_filament_btn::pressed {
+	image:url(:/General_icons/MEDIA/test_media/icons/change_filament_PRESSED.png);
+	image-position: left;
+}</string>
+                </property>
+                <property name="text">
+                 <string>extrude</string>
+                </property>
+                <property name="class" stdset="0">
+                 <string>menu_btn</string>
+                </property>
+               </widget>
+              </item>
+              <item row="2" column="1">
+               <widget class="QPushButton" name="move_axis_btn">
+                <property name="font">
+                 <font>
+                  <family>Momcake</family>
+                  <pointsize>20</pointsize>
+                  <italic>false</italic>
+                 </font>
+                </property>
+                <property name="styleSheet">
+                 <string notr="true">#dryer_btn {
+	image:url(:/General_icons/MEDIA/test_media/icons/dryer_icon.png);
+	image-position: left;
+}
+
+#dryer_btn::pressed {
+	image:url(:/General_icons/MEDIA/test_media/icons/dryer_icon_PRESSED.png);
+	image-position: left;
+}</string>
+                </property>
+                <property name="text">
+                 <string>move axis</string>
+                </property>
+                <property name="class" stdset="0">
+                 <string>menu_btn</string>
+                </property>
+               </widget>
+              </item>
+             </layout>
+            </item>
+           </layout>
           </widget>
          </widget>
         </widget>
        </widget>
-       <widget class="QWidget" name="tab_2">
+       <widget class="QWidget" name="utilities_tab">
         <attribute name="icon">
-         <iconset>
-          <normaloff>../MEDIA/1_icons/main_menu/ICON_control.png</normaloff>
-          <normalon>../MEDIA/1_icons/main_menu/ICON_control_pressed.png</normalon>../MEDIA/1_icons/main_menu/ICON_control.png</iconset>
+         <iconset resource="../UI_Resources.qrc">
+          <normaloff>:/General_icons/MEDIA/1_icons/main_menu/ICON_utilities.png</normaloff>
+          <normalon>:/General_icons/MEDIA/1_icons/main_menu/ICON_utilities_pressed.png</normalon>:/General_icons/MEDIA/1_icons/main_menu/ICON_utilities.png</iconset>
         </attribute>
         <attribute name="title">
          <string/>
         </attribute>
-        <widget class="QStackedWidget" name="stackedWidget">
+        <widget class="QStackedWidget" name="utilities_stacked_widget">
          <property name="geometry">
           <rect>
            <x>0</x>
            <y>0</y>
            <width>711</width>
-           <height>371</height>
+           <height>400</height>
           </rect>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">QStackedWidget {
+	background-colour: black;
+}</string>
+         </property>
+         <property name="frameShape">
+          <enum>QFrame::NoFrame</enum>
          </property>
          <property name="currentIndex">
           <number>0</number>
          </property>
-         <widget class="QWidget" name="page"/>
-         <widget class="QWidget" name="page_2"/>
+         <widget class="QWidget" name="page_9">
+          <widget class="QPushButton" name="pushButton_2">
+           <property name="geometry">
+            <rect>
+             <x>90</x>
+             <y>80</y>
+             <width>310</width>
+             <height>95</height>
+            </rect>
+           </property>
+           <property name="text">
+            <string>LEDs</string>
+           </property>
+           <property name="class" stdset="0">
+            <string>menu_btn</string>
+           </property>
+          </widget>
+          <widget class="QPushButton" name="pushButton_3">
+           <property name="geometry">
+            <rect>
+             <x>120</x>
+             <y>190</y>
+             <width>310</width>
+             <height>95</height>
+            </rect>
+           </property>
+           <property name="text">
+            <string>PushButton</string>
+           </property>
+           <property name="class" stdset="0">
+            <string>menu_btn</string>
+           </property>
+          </widget>
+         </widget>
+         <widget class="QWidget" name="utilities_page">
+          <widget class="QWidget" name="layoutWidget_2">
+           <property name="geometry">
+            <rect>
+             <x>20</x>
+             <y>16</y>
+             <width>684</width>
+             <height>371</height>
+            </rect>
+           </property>
+           <layout class="QGridLayout" name="utilities_grid" rowstretch="0,0" columnstretch="0">
+            <property name="verticalSpacing">
+             <number>0</number>
+            </property>
+            <item row="1" column="0">
+             <layout class="QGridLayout" name="utilities_btns_grid">
+              <property name="topMargin">
+               <number>0</number>
+              </property>
+              <property name="spacing">
+               <number>0</number>
+              </property>
+              <item row="2" column="0">
+               <widget class="QPushButton" name="pushButton_10">
+                <property name="text">
+                 <string>Axes
+Maintenance</string>
+                </property>
+                <property name="class" stdset="0">
+                 <string>menu_btn</string>
+                </property>
+               </widget>
+              </item>
+              <item row="1" column="0">
+               <widget class="QPushButton" name="pushButton_11">
+                <property name="text">
+                 <string>Routine
+Check</string>
+                </property>
+                <property name="class" stdset="0">
+                 <string>menu_btn</string>
+                </property>
+               </widget>
+              </item>
+              <item row="2" column="1">
+               <widget class="QPushButton" name="pushButton_12">
+                <property name="text">
+                 <string>Factory Reset</string>
+                </property>
+                <property name="class" stdset="0">
+                 <string>menu_btn</string>
+                </property>
+               </widget>
+              </item>
+              <item row="0" column="1">
+               <widget class="QPushButton" name="pushButton_13">
+                <property name="text">
+                 <string>LEDs</string>
+                </property>
+                <property name="class" stdset="0">
+                 <string>menu_btn</string>
+                </property>
+               </widget>
+              </item>
+              <item row="0" column="0">
+               <widget class="QPushButton" name="pushButton_14">
+                <property name="text">
+                 <string>Info</string>
+                </property>
+                <property name="class" stdset="0">
+                 <string>menu_btn</string>
+                </property>
+               </widget>
+              </item>
+              <item row="1" column="1">
+               <widget class="QPushButton" name="pushButton_15">
+                <property name="text">
+                 <string>LCD Settings</string>
+                </property>
+                <property name="class" stdset="0">
+                 <string>menu_btn</string>
+                </property>
+               </widget>
+              </item>
+             </layout>
+            </item>
+            <item row="0" column="0">
+             <widget class="QLabel" name="utilities_title">
+              <property name="styleSheet">
+               <string notr="true">#utilities_title {
+	align-text: center;
+	font-family: Momcake;
+	font-style: normal;
+	font-size: 30pt;
+	color: white;
+}</string>
+              </property>
+              <property name="text">
+               <string>Utilities</string>
+              </property>
+              <property name="alignment">
+               <set>Qt::AlignCenter</set>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </widget>
+         </widget>
         </widget>
-       </widget>
-       <widget class="QWidget" name="tab_3">
-        <attribute name="icon">
-         <iconset>
-          <normaloff>../MEDIA/1_icons/main_menu/ICON_utilities.png</normaloff>
-          <normalon>../MEDIA/1_icons/main_menu/ICON_utilities_pressed.png</normalon>../MEDIA/1_icons/main_menu/ICON_utilities.png</iconset>
-        </attribute>
-        <attribute name="title">
-         <string/>
-        </attribute>
        </widget>
       </widget>
      </item>
     </layout>
    </widget>
   </widget>
-  <widget class="QMenuBar" name="menubar">
-   <property name="geometry">
-    <rect>
-     <x>0</x>
-     <y>0</y>
-     <width>800</width>
-     <height>21</height>
-    </rect>
-   </property>
-  </widget>
-  <widget class="QStatusBar" name="statusbar"/>
  </widget>
  <resources>
   <include location="../UI_Resources.qrc"/>
