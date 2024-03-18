@@ -42,6 +42,18 @@
     <file>MEDIA/1st_background.png</file>
   </qresource>
   <qresource prefix="General_icons">
+    <file>MEDIA/1_icons/main_menu/ICON_control.png</file>
+    <file>MEDIA/1_icons/main_menu/ICON_control_blocked.png</file>
+    <file>MEDIA/1_icons/main_menu/ICON_control_pressed.png</file>
+    <file>MEDIA/1_icons/main_menu/ICON_filament.png</file>
+    <file>MEDIA/1_icons/main_menu/ICON_filament_pressed.png</file>
+    <file>MEDIA/1_icons/main_menu/ICON_filamente_blocked.png</file>
+    <file>MEDIA/1_icons/main_menu/ICON_home.png</file>
+    <file>MEDIA/1_icons/main_menu/ICON_home_blocked.png</file>
+    <file>MEDIA/1_icons/main_menu/ICON_home_pressed.png</file>
+    <file>MEDIA/1_icons/main_menu/ICON_utilities.png</file>
+    <file>MEDIA/1_icons/main_menu/ICON_utilities_blocked.png</file>
+    <file>MEDIA/1_icons/main_menu/ICON_utilities_pressed.png</file>
     <file>MEDIA/test_media/icons/dryer_icon.png</file>
     <file>MEDIA/test_media/icons/dryer_icon_PRESSED.png</file>
     <file>MEDIA/test_media/icons/change_filament.png</file>
