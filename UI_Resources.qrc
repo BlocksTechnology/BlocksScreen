@@ -38,6 +38,7 @@
     <file>MEDIA/2_buttons/filament_menu/UNLOAD_PT.png</file>
   </qresource>
   <qresource prefix="MainBackground">
+    <file>MEDIA/test_media/scroll_window.png</file>
     <file>MEDIA/1st_background.png</file>
   </qresource>
   <qresource prefix="General_icons">
