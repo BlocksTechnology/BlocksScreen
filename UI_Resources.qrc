@@ -1,48 +1,31 @@
 <RCC>
-  <qresource prefix="Filament">
-    <file>MEDIA/2_buttons/filament_menu/ABS.png</file>
-    <file>MEDIA/2_buttons/filament_menu/ABS_pressed.png</file>
-    <file>MEDIA/2_buttons/filament_menu/CHANGE.png</file>
-    <file>MEDIA/2_buttons/filament_menu/CHANGE_pressed.png</file>
-    <file>MEDIA/2_buttons/filament_menu/CHANGE_pressed_PT.png</file>
-    <file>MEDIA/2_buttons/filament_menu/CHANGE_PT.png</file>
-    <file>MEDIA/2_buttons/filament_menu/CUSTOM.png</file>
-    <file>MEDIA/2_buttons/filament_menu/CUSTOM_pressed.png</file>
-    <file>MEDIA/2_buttons/filament_menu/CUSTOM_pressed_PT.png</file>
-    <file>MEDIA/2_buttons/filament_menu/CUSTOM_PT.png</file>
-    <file>MEDIA/2_buttons/filament_menu/DRYER.png</file>
-    <file>MEDIA/2_buttons/filament_menu/DRYER_pressed.png</file>
-    <file>MEDIA/2_buttons/filament_menu/DRYER_pressed_PT.png</file>
-    <file>MEDIA/2_buttons/filament_menu/DRYER_PT.png</file>
-    <file>MEDIA/2_buttons/filament_menu/HIPS.png</file>
-    <file>MEDIA/2_buttons/filament_menu/HIPS_pressed.png</file>
-    <file>MEDIA/2_buttons/filament_menu/LOAD.png</file>
-    <file>MEDIA/2_buttons/filament_menu/LOAD_pressed.png</file>
-    <file>MEDIA/2_buttons/filament_menu/LOAD_pressed_PT.png</file>
-    <file>MEDIA/2_buttons/filament_menu/LOAD_PT.png</file>
-    <file>MEDIA/2_buttons/filament_menu/NYLON.png</file>
-    <file>MEDIA/2_buttons/filament_menu/NYLON_pressed.png</file>
-    <file>MEDIA/2_buttons/filament_menu/OTHERS.png</file>
-    <file>MEDIA/2_buttons/filament_menu/OTHERS_pressed.png</file>
-    <file>MEDIA/2_buttons/filament_menu/OTHERS_pressed_PT.png</file>
-    <file>MEDIA/2_buttons/filament_menu/OTHERS_PT.png</file>
-    <file>MEDIA/2_buttons/filament_menu/PETG.png</file>
-    <file>MEDIA/2_buttons/filament_menu/PETG_pressed.png</file>
-    <file>MEDIA/2_buttons/filament_menu/PLA.png</file>
-    <file>MEDIA/2_buttons/filament_menu/PLA_pressed.png</file>
-    <file>MEDIA/2_buttons/filament_menu/TPU.png</file>
-    <file>MEDIA/2_buttons/filament_menu/TPU_pressed.png</file>
-    <file>MEDIA/2_buttons/filament_menu/UNLOAD.png</file>
-    <file>MEDIA/2_buttons/filament_menu/UNLOAD_pressed.png</file>
-    <file>MEDIA/2_buttons/filament_menu/UNLOAD_pressed_PT.png</file>
-    <file>MEDIA/2_buttons/filament_menu/UNLOAD_PT.png</file>
-  </qresource>
   <qresource prefix="MainBackground">
-    <file>MEDIA/test_media/graphics/logo_blocks.png</file>
-    <file>MEDIA/test_media/scroll_window.png</file>
     <file>MEDIA/1st_background.png</file>
   </qresource>
   <qresource prefix="General_icons">
+    <file>MEDIA/media/graphics/babystep_image.png</file>
+    <file>MEDIA/media/graphics/cutom_filament_icon.png</file>
+    <file>MEDIA/media/graphics/dryer_1.png</file>
+    <file>MEDIA/media/graphics/dryer_2.png</file>
+    <file>MEDIA/media/graphics/extrude_manual.png</file>
+    <file>MEDIA/media/graphics/fan_speed_icon.png</file>
+    <file>MEDIA/media/graphics/heat_chamber_icon.png</file>
+    <file>MEDIA/media/graphics/layer_position.png</file>
+    <file>MEDIA/media/graphics/logo_blocks.png</file>
+    <file>MEDIA/media/graphics/speed_manipulation_icon.png</file>
+    <file>MEDIA/media/graphics/time_print.png</file>
+    <file>MEDIA/1_icons/main_menu/ICON_control.png</file>
+    <file>MEDIA/1_icons/main_menu/ICON_control_blocked.png</file>
+    <file>MEDIA/1_icons/main_menu/ICON_control_pressed.png</file>
+    <file>MEDIA/1_icons/main_menu/ICON_filament.png</file>
+    <file>MEDIA/1_icons/main_menu/ICON_filament_pressed.png</file>
+    <file>MEDIA/1_icons/main_menu/ICON_filamente_blocked.png</file>
+    <file>MEDIA/1_icons/main_menu/ICON_home.png</file>
+    <file>MEDIA/1_icons/main_menu/ICON_home_blocked.png</file>
+    <file>MEDIA/1_icons/main_menu/ICON_home_pressed.png</file>
+    <file>MEDIA/1_icons/main_menu/ICON_utilities.png</file>
+    <file>MEDIA/1_icons/main_menu/ICON_utilities_blocked.png</file>
+    <file>MEDIA/1_icons/main_menu/ICON_utilities_pressed.png</file>
     <file>MEDIA/test_media/icons/dryer_icon.png</file>
     <file>MEDIA/test_media/icons/dryer_icon_PRESSED.png</file>
     <file>MEDIA/test_media/icons/change_filament.png</file>
@@ -58,8 +41,18 @@
     <file>MEDIA/1_icons/general_icons/print core_2.png</file>
     <file>MEDIA/1_icons/general_icons/print core_2_pressed.png</file>
   </qresource>
-  <qresource prefix="simple_btn">
-    <file>MEDIA/test_media/btn_simple.png</file>
-    <file>MEDIA/test_media/btn_simple_PRESSED.png</file>
+  <qresource prefix="Btn_Backgrounds">
+    <file>MEDIA/media/1st_value_btn.png</file>
+    <file>MEDIA/media/1st_value_btn_PRESSED.png</file>
+    <file>MEDIA/media/2nd_value_btn.png</file>
+    <file>MEDIA/media/2nd_value_btn_PRESSED.png</file>
+    <file>MEDIA/media/3rd_value_btn.png</file>
+    <file>MEDIA/media/3rd_value_btn_PRESSED.png</file>
+    <file>MEDIA/media/btn_printing_screen.png</file>
+    <file>MEDIA/media/btn_printing_screen_PRESSED.png</file>
+    <file>MEDIA/media/btn_simple.png</file>
+    <file>MEDIA/media/btn_simple_PRESSED.png</file>
+    <file>MEDIA/media/custom_btn.png</file>
+    <file>MEDIA/media/custom_btn_PRESSED.png</file>
   </qresource>
 </RCC>

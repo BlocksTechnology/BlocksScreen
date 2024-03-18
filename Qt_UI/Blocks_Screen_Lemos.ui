@@ -52,17 +52,20 @@
 	max-height: 60px;
 }</string>
        </property>
-       <layout class="QGridLayout" name="gridLayout">
-        <property name="spacing">
-         <number>0</number>
+       <widget class="QPushButton" name="chamber_temp">
+        <property name="enabled">
+         <bool>true</bool>
         </property>
-        <item row="2" column="2">
-         <widget class="QPushButton" name="chamber_temp">
-          <property name="enabled">
-           <bool>true</bool>
-          </property>
-          <property name="styleSheet">
-           <string notr="true">QWidget{
+        <property name="geometry">
+         <rect>
+          <x>190</x>
+          <y>28</y>
+          <width>87</width>
+          <height>19</height>
+         </rect>
+        </property>
+        <property name="styleSheet">
+         <string notr="true">QWidget{
 	background-color: rgb(50, 50, 50);
 	selection-background-color: rgb(60, 60, 60);
 	gridline-color: rgb(60, 60, 60);
@@ -71,38 +74,44 @@
 	selection-color: rgb(60, 60, 60);
 	border-bottom-color: rgb(60, 60, 60);
 }</string>
-          </property>
-          <property name="text">
-           <string>30 ºC /60 ºC</string>
-          </property>
-          <property name="icon">
-           <iconset>
-            <normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</iconset>
-          </property>
-          <property name="iconSize">
-           <size>
-            <width>19</width>
-            <height>19</height>
-           </size>
-          </property>
-          <property name="checkable">
-           <bool>false</bool>
-          </property>
-          <property name="checked">
-           <bool>false</bool>
-          </property>
-          <property name="flat">
-           <bool>true</bool>
-          </property>
-         </widget>
-        </item>
-        <item row="0" column="5">
-         <widget class="QPushButton" name="filament_type_1">
-          <property name="enabled">
-           <bool>true</bool>
-          </property>
-          <property name="styleSheet">
-           <string notr="true">QWidget{
+        </property>
+        <property name="text">
+         <string>30 ºC /60 ºC</string>
+        </property>
+        <property name="icon">
+         <iconset>
+          <normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</iconset>
+        </property>
+        <property name="iconSize">
+         <size>
+          <width>19</width>
+          <height>19</height>
+         </size>
+        </property>
+        <property name="checkable">
+         <bool>false</bool>
+        </property>
+        <property name="checked">
+         <bool>false</bool>
+        </property>
+        <property name="flat">
+         <bool>true</bool>
+        </property>
+       </widget>
+       <widget class="QPushButton" name="filament_type_1">
+        <property name="enabled">
+         <bool>true</bool>
+        </property>
+        <property name="geometry">
+         <rect>
+          <x>581</x>
+          <y>9</y>
+          <width>44</width>
+          <height>19</height>
+         </rect>
+        </property>
+        <property name="styleSheet">
+         <string notr="true">QWidget{
 	background-color: rgb(50, 50, 50);
 	selection-background-color: rgb(60, 60, 60);
 	gridline-color: rgb(60, 60, 60);
@@ -111,38 +120,44 @@
 	selection-color: rgb(60, 60, 60);
 	border-bottom-color: rgb(60, 60, 60);
 }</string>
-          </property>
-          <property name="text">
-           <string>PLA</string>
-          </property>
-          <property name="icon">
-           <iconset>
-            <normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</iconset>
-          </property>
-          <property name="iconSize">
-           <size>
-            <width>19</width>
-            <height>19</height>
-           </size>
-          </property>
-          <property name="checkable">
-           <bool>false</bool>
-          </property>
-          <property name="checked">
-           <bool>false</bool>
-          </property>
-          <property name="flat">
-           <bool>true</bool>
-          </property>
-         </widget>
-        </item>
-        <item row="0" column="2">
-         <widget class="QPushButton" name="hot_bed_temp">
-          <property name="enabled">
-           <bool>true</bool>
-          </property>
-          <property name="styleSheet">
-           <string notr="true">QWidget{
+        </property>
+        <property name="text">
+         <string>PLA</string>
+        </property>
+        <property name="icon">
+         <iconset>
+          <normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</iconset>
+        </property>
+        <property name="iconSize">
+         <size>
+          <width>19</width>
+          <height>19</height>
+         </size>
+        </property>
+        <property name="checkable">
+         <bool>false</bool>
+        </property>
+        <property name="checked">
+         <bool>false</bool>
+        </property>
+        <property name="flat">
+         <bool>true</bool>
+        </property>
+       </widget>
+       <widget class="QPushButton" name="hot_bed_temp">
+        <property name="enabled">
+         <bool>true</bool>
+        </property>
+        <property name="geometry">
+         <rect>
+          <x>190</x>
+          <y>9</y>
+          <width>87</width>
+          <height>19</height>
+         </rect>
+        </property>
+        <property name="styleSheet">
+         <string notr="true">QWidget{
 	background-color: rgb(50, 50, 50);
 	selection-background-color: rgb(60, 60, 60);
 	gridline-color: rgb(60, 60, 60);
@@ -151,38 +166,44 @@
 	selection-color: rgb(60, 60, 60);
 	border-bottom-color: rgb(60, 60, 60);
 }</string>
-          </property>
-          <property name="text">
-           <string>45 ºC /50 ºC</string>
-          </property>
-          <property name="icon">
-           <iconset>
-            <normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</iconset>
-          </property>
-          <property name="iconSize">
-           <size>
-            <width>19</width>
-            <height>19</height>
-           </size>
-          </property>
-          <property name="checkable">
-           <bool>false</bool>
-          </property>
-          <property name="checked">
-           <bool>false</bool>
-          </property>
-          <property name="flat">
-           <bool>true</bool>
-          </property>
-         </widget>
-        </item>
-        <item row="2" column="5">
-         <widget class="QPushButton" name="filament_type_2">
-          <property name="enabled">
-           <bool>true</bool>
-          </property>
-          <property name="styleSheet">
-           <string notr="true">QWidget{
+        </property>
+        <property name="text">
+         <string>45 ºC /50 ºC</string>
+        </property>
+        <property name="icon">
+         <iconset>
+          <normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</iconset>
+        </property>
+        <property name="iconSize">
+         <size>
+          <width>19</width>
+          <height>19</height>
+         </size>
+        </property>
+        <property name="checkable">
+         <bool>false</bool>
+        </property>
+        <property name="checked">
+         <bool>false</bool>
+        </property>
+        <property name="flat">
+         <bool>true</bool>
+        </property>
+       </widget>
+       <widget class="QPushButton" name="filament_type_2">
+        <property name="enabled">
+         <bool>true</bool>
+        </property>
+        <property name="geometry">
+         <rect>
+          <x>581</x>
+          <y>28</y>
+          <width>44</width>
+          <height>19</height>
+         </rect>
+        </property>
+        <property name="styleSheet">
+         <string notr="true">QWidget{
 	background-color: rgb(50, 50, 50);
 	selection-background-color: rgb(60, 60, 60);
 	gridline-color: rgb(60, 60, 60);
@@ -191,73 +212,85 @@
 	selection-color: rgb(60, 60, 60);
 	border-bottom-color: rgb(60, 60, 60);
 }</string>
-          </property>
-          <property name="text">
-           <string>PLA</string>
-          </property>
-          <property name="icon">
-           <iconset>
-            <normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</iconset>
-          </property>
-          <property name="iconSize">
-           <size>
-            <width>19</width>
-            <height>19</height>
-           </size>
-          </property>
-          <property name="checkable">
-           <bool>false</bool>
-          </property>
-          <property name="checked">
-           <bool>false</bool>
-          </property>
-          <property name="flat">
-           <bool>true</bool>
-          </property>
-         </widget>
-        </item>
-        <item row="0" column="3">
-         <widget class="QPushButton" name="nozzle_1_temp">
-          <property name="enabled">
-           <bool>true</bool>
-          </property>
-          <property name="styleSheet">
-           <string notr="true">#nozzle_1_temp{ 
+        </property>
+        <property name="text">
+         <string>PLA</string>
+        </property>
+        <property name="icon">
+         <iconset>
+          <normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</iconset>
+        </property>
+        <property name="iconSize">
+         <size>
+          <width>19</width>
+          <height>19</height>
+         </size>
+        </property>
+        <property name="checkable">
+         <bool>false</bool>
+        </property>
+        <property name="checked">
+         <bool>false</bool>
+        </property>
+        <property name="flat">
+         <bool>true</bool>
+        </property>
+       </widget>
+       <widget class="QPushButton" name="nozzle_1_temp">
+        <property name="enabled">
+         <bool>true</bool>
+        </property>
+        <property name="geometry">
+         <rect>
+          <x>321</x>
+          <y>9</y>
+          <width>99</width>
+          <height>19</height>
+         </rect>
+        </property>
+        <property name="styleSheet">
+         <string notr="true">#nozzle_1_temp{ 
 	image: url(:/General_icons/MEDIA/1_icons/top_bar_icons/nozzle_temp_1.png);
 	image-position: left;
 }</string>
-          </property>
-          <property name="text">
-           <string>210 ºC /220 ºC</string>
-          </property>
-          <property name="icon">
-           <iconset>
-            <normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</iconset>
-          </property>
-          <property name="iconSize">
-           <size>
-            <width>19</width>
-            <height>19</height>
-           </size>
-          </property>
-          <property name="checkable">
-           <bool>false</bool>
-          </property>
-          <property name="checked">
-           <bool>false</bool>
-          </property>
-          <property name="flat">
-           <bool>true</bool>
-          </property>
-         </widget>
-        </item>
-        <item row="2" column="3">
-         <widget class="QPushButton" name="nozzle_2_temp">
-          <property name="enabled">
-           <bool>true</bool>
-          </property>
-          <property name="styleSheet">
-           <string notr="true">QWidget{
+        </property>
+        <property name="text">
+         <string>210 ºC /220 ºC</string>
+        </property>
+        <property name="icon">
+         <iconset>
+          <normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</iconset>
+        </property>
+        <property name="iconSize">
+         <size>
+          <width>19</width>
+          <height>19</height>
+         </size>
+        </property>
+        <property name="checkable">
+         <bool>false</bool>
+        </property>
+        <property name="checked">
+         <bool>false</bool>
+        </property>
+        <property name="flat">
+         <bool>true</bool>
+        </property>
+       </widget>
+       <widget class="QPushButton" name="nozzle_2_temp">
+        <property name="enabled">
+         <bool>true</bool>
+        </property>
+        <property name="geometry">
+         <rect>
+          <x>321</x>
+          <y>28</y>
+          <width>99</width>
+          <height>19</height>
+         </rect>
+        </property>
+        <property name="styleSheet">
+         <string notr="true">QWidget{
 	background-color: rgb(50, 50, 50);
 	selection-background-color: rgb(60, 60, 60);
 	gridline-color: rgb(60, 60, 60);
@@ -266,50 +299,62 @@
 	selection-color: rgb(60, 60, 60);
 	border-bottom-color: rgb(60, 60, 60);
 }</string>
-          </property>
-          <property name="text">
-           <string>210 ºC /220 ºC</string>
-          </property>
-          <property name="icon">
-           <iconset>
-            <normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/20.jpg</normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/20.jpg</iconset>
-          </property>
-          <property name="iconSize">
-           <size>
-            <width>19</width>
-            <height>19</height>
-           </size>
-          </property>
-          <property name="checkable">
-           <bool>false</bool>
-          </property>
-          <property name="checked">
-           <bool>false</bool>
-          </property>
-          <property name="flat">
-           <bool>true</bool>
-          </property>
-         </widget>
-        </item>
-        <item row="0" column="0" rowspan="3">
-         <widget class="QLabel" name="blocks_logo">
-          <property name="styleSheet">
-           <string notr="true">#blocks_logo {
-image: url(:/Images/MEDIA/logoblocks.png);
+        </property>
+        <property name="text">
+         <string>210 ºC /220 ºC</string>
+        </property>
+        <property name="icon">
+         <iconset>
+          <normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/20.jpg</normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/20.jpg</iconset>
+        </property>
+        <property name="iconSize">
+         <size>
+          <width>19</width>
+          <height>19</height>
+         </size>
+        </property>
+        <property name="checkable">
+         <bool>false</bool>
+        </property>
+        <property name="checked">
+         <bool>false</bool>
+        </property>
+        <property name="flat">
+         <bool>true</bool>
+        </property>
+       </widget>
+       <widget class="QLabel" name="blocks_logo">
+        <property name="geometry">
+         <rect>
+          <x>9</x>
+          <y>9</y>
+          <width>71</width>
+          <height>38</height>
+         </rect>
+        </property>
+        <property name="styleSheet">
+         <string notr="true">#blocks_logo {
+image: url(:/General_icons/MEDIA/media/graphics/logo_blocks.png);
 }</string>
-          </property>
-          <property name="text">
-           <string>Blocks</string>
-          </property>
-         </widget>
-        </item>
-        <item row="0" column="4">
-         <widget class="QPushButton" name="nozzle_1">
-          <property name="enabled">
-           <bool>true</bool>
-          </property>
-          <property name="styleSheet">
-           <string notr="true">QWidget{
+        </property>
+        <property name="text">
+         <string/>
+        </property>
+       </widget>
+       <widget class="QPushButton" name="nozzle_1">
+        <property name="enabled">
+         <bool>true</bool>
+        </property>
+        <property name="geometry">
+         <rect>
+          <x>451</x>
+          <y>9</y>
+          <width>79</width>
+          <height>19</height>
+         </rect>
+        </property>
+        <property name="styleSheet">
+         <string notr="true">QWidget{
 	background-color: rgb(50, 50, 50);
 	selection-background-color: rgb(60, 60, 60);
 	gridline-color: rgb(60, 60, 60);
@@ -318,38 +363,44 @@ image: url(:/Images/MEDIA/logoblocks.png);
 	selection-color: rgb(60, 60, 60);
 	border-bottom-color: rgb(60, 60, 60);
 }</string>
-          </property>
-          <property name="text">
-           <string>Nozzle: 0.4</string>
-          </property>
-          <property name="icon">
-           <iconset>
-            <normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</iconset>
-          </property>
-          <property name="iconSize">
-           <size>
-            <width>19</width>
-            <height>19</height>
-           </size>
-          </property>
-          <property name="checkable">
-           <bool>false</bool>
-          </property>
-          <property name="checked">
-           <bool>false</bool>
-          </property>
-          <property name="flat">
-           <bool>true</bool>
-          </property>
-         </widget>
-        </item>
-        <item row="2" column="4">
-         <widget class="QPushButton" name="nozzle_2">
-          <property name="enabled">
-           <bool>true</bool>
-          </property>
-          <property name="styleSheet">
-           <string notr="true">QWidget{
+        </property>
+        <property name="text">
+         <string>Nozzle: 0.4</string>
+        </property>
+        <property name="icon">
+         <iconset>
+          <normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</iconset>
+        </property>
+        <property name="iconSize">
+         <size>
+          <width>19</width>
+          <height>19</height>
+         </size>
+        </property>
+        <property name="checkable">
+         <bool>false</bool>
+        </property>
+        <property name="checked">
+         <bool>false</bool>
+        </property>
+        <property name="flat">
+         <bool>true</bool>
+        </property>
+       </widget>
+       <widget class="QPushButton" name="nozzle_2">
+        <property name="enabled">
+         <bool>true</bool>
+        </property>
+        <property name="geometry">
+         <rect>
+          <x>451</x>
+          <y>28</y>
+          <width>79</width>
+          <height>19</height>
+         </rect>
+        </property>
+        <property name="styleSheet">
+         <string notr="true">QWidget{
 	background-color: rgb(50, 50, 50);
 	selection-background-color: rgb(60, 60, 60);
 	gridline-color: rgb(60, 60, 60);
@@ -358,38 +409,44 @@ image: url(:/Images/MEDIA/logoblocks.png);
 	selection-color: rgb(60, 60, 60);
 	border-bottom-color: rgb(60, 60, 60);
 }</string>
-          </property>
-          <property name="text">
-           <string>Nozzle: 0.3</string>
-          </property>
-          <property name="icon">
-           <iconset>
-            <normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</iconset>
-          </property>
-          <property name="iconSize">
-           <size>
-            <width>19</width>
-            <height>19</height>
-           </size>
-          </property>
-          <property name="checkable">
-           <bool>false</bool>
-          </property>
-          <property name="checked">
-           <bool>false</bool>
-          </property>
-          <property name="flat">
-           <bool>true</bool>
-          </property>
-         </widget>
-        </item>
-        <item row="0" column="6" rowspan="3">
-         <widget class="QPushButton" name="wifi_signal">
-          <property name="enabled">
-           <bool>true</bool>
-          </property>
-          <property name="styleSheet">
-           <string notr="true">QWidget{
+        </property>
+        <property name="text">
+         <string>Nozzle: 0.3</string>
+        </property>
+        <property name="icon">
+         <iconset>
+          <normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</iconset>
+        </property>
+        <property name="iconSize">
+         <size>
+          <width>19</width>
+          <height>19</height>
+         </size>
+        </property>
+        <property name="checkable">
+         <bool>false</bool>
+        </property>
+        <property name="checked">
+         <bool>false</bool>
+        </property>
+        <property name="flat">
+         <bool>true</bool>
+        </property>
+       </widget>
+       <widget class="QPushButton" name="wifi_signal">
+        <property name="enabled">
+         <bool>true</bool>
+        </property>
+        <property name="geometry">
+         <rect>
+          <x>720</x>
+          <y>20</y>
+          <width>44</width>
+          <height>19</height>
+         </rect>
+        </property>
+        <property name="styleSheet">
+         <string notr="true">QWidget{
 	background-color: rgb(50, 50, 50);
 	selection-background-color: rgb(60, 60, 60);
 	gridline-color: rgb(60, 60, 60);
@@ -398,32 +455,30 @@ image: url(:/Images/MEDIA/logoblocks.png);
 	selection-color: rgb(60, 60, 60);
 	border-bottom-color: rgb(60, 60, 60);
 }</string>
-          </property>
-          <property name="text">
-           <string>Wifi</string>
-          </property>
-          <property name="icon">
-           <iconset>
-            <normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</iconset>
-          </property>
-          <property name="iconSize">
-           <size>
-            <width>19</width>
-            <height>19</height>
-           </size>
-          </property>
-          <property name="checkable">
-           <bool>false</bool>
-          </property>
-          <property name="checked">
-           <bool>false</bool>
-          </property>
-          <property name="flat">
-           <bool>true</bool>
-          </property>
-         </widget>
-        </item>
-       </layout>
+        </property>
+        <property name="text">
+         <string>Wifi</string>
+        </property>
+        <property name="icon">
+         <iconset>
+          <normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</iconset>
+        </property>
+        <property name="iconSize">
+         <size>
+          <width>19</width>
+          <height>19</height>
+         </size>
+        </property>
+        <property name="checkable">
+         <bool>false</bool>
+        </property>
+        <property name="checked">
+         <bool>false</bool>
+        </property>
+        <property name="flat">
+         <bool>true</bool>
+        </property>
+       </widget>
        <zorder>chamber_temp</zorder>
        <zorder>hot_bed_temp</zorder>
        <zorder>blocks_logo</zorder>
@@ -480,7 +535,7 @@ QTabBar::tab {
 }
 
 QPushButton.menu_btn {
-    border-image: url(:/simple_btn/MEDIA/test_media/btn_simple.png) 0 0 0 0 stretch stretch;
+    border-image: url(:/Btn_Backgrounds/MEDIA/media/btn_simple.png) 0 0 0 0 stretch stretch;
 	color: #424242;
 	min-height: 95px;
 	max-height: 95px; 
@@ -492,7 +547,7 @@ QPushButton.menu_btn {
 }
 
 QPushButton.menu_btn::pressed {
-	border-image: url(:/simple_btn/MEDIA/test_media/btn_simple_PRESSED.png) 0 0 0 0 stretch stretch;
+	border-image: url(:/Btn_Backgrounds/MEDIA/media/btn_simple_PRESSED.png) 0 0 0 0 stretch stretch;
 	color: #8e8d8d;
 	font-family: Momcake;
 	font-style: normal;
@@ -506,7 +561,7 @@ QPushButton.menu_btn::pressed {
         <enum>QTabWidget::Rounded</enum>
        </property>
        <property name="currentIndex">
-        <number>0</number>
+        <number>1</number>
        </property>
        <property name="iconSize">
         <size>
@@ -573,7 +628,7 @@ QPushButto::pressed {
           <enum>QFrame::NoFrame</enum>
          </property>
          <property name="currentIndex">
-          <number>0</number>
+          <number>1</number>
          </property>
          <widget class="QWidget" name="Select_file_page">
           <widget class="QScrollArea" name="select_file_scroll_area">
@@ -735,9 +790,9 @@ QPushButto::pressed {
           <enum>QFrame::NoFrame</enum>
          </property>
          <property name="currentIndex">
-          <number>1</number>
+          <number>0</number>
          </property>
-         <widget class="QWidget" name="page_3">
+         <widget class="QWidget" name="filament_page">
           <widget class="QWidget" name="layoutWidget">
            <property name="geometry">
             <rect>
@@ -894,8 +949,8 @@ filament</string>
            </layout>
           </widget>
          </widget>
-         <widget class="QWidget" name="page_4">
-          <widget class="QPushButton" name="pushButton_16">
+         <widget class="QWidget" name="load_t1_page">
+          <widget class="QPushButton" name="load_t1_pla">
            <property name="geometry">
             <rect>
              <x>50</x>
@@ -905,13 +960,13 @@ filament</string>
             </rect>
            </property>
            <property name="text">
-            <string>PushButton</string>
+            <string>PLA</string>
            </property>
            <property name="class" stdset="0">
             <string>menu_btn</string>
            </property>
           </widget>
-          <widget class="QPushButton" name="pushButton_17">
+          <widget class="QPushButton" name="load_t1_petg">
            <property name="geometry">
             <rect>
              <x>340</x>
@@ -921,13 +976,13 @@ filament</string>
             </rect>
            </property>
            <property name="text">
-            <string>PushButton</string>
+            <string>PETG</string>
            </property>
            <property name="class" stdset="0">
             <string>menu_btn</string>
            </property>
           </widget>
-          <widget class="QPushButton" name="pushButton_18">
+          <widget class="QPushButton" name="load_t1_abs">
            <property name="geometry">
             <rect>
              <x>50</x>
@@ -937,13 +992,13 @@ filament</string>
             </rect>
            </property>
            <property name="text">
-            <string>PushButton</string>
+            <string>ABS</string>
            </property>
            <property name="class" stdset="0">
             <string>menu_btn</string>
            </property>
           </widget>
-          <widget class="QPushButton" name="pushButton_19">
+          <widget class="QPushButton" name="load_t1_hips">
            <property name="geometry">
             <rect>
              <x>350</x>
@@ -953,13 +1008,13 @@ filament</string>
             </rect>
            </property>
            <property name="text">
-            <string>PushButton</string>
+            <string>HIPS</string>
            </property>
            <property name="class" stdset="0">
             <string>menu_btn</string>
            </property>
           </widget>
-          <widget class="QPushButton" name="pushButton_20">
+          <widget class="QPushButton" name="load_t1_nylon">
            <property name="geometry">
             <rect>
              <x>50</x>
@@ -969,13 +1024,13 @@ filament</string>
             </rect>
            </property>
            <property name="text">
-            <string>PushButton</string>
+            <string>NYLON</string>
            </property>
            <property name="class" stdset="0">
             <string>menu_btn</string>
            </property>
           </widget>
-          <widget class="QPushButton" name="pushButton_21">
+          <widget class="QPushButton" name="load_t1_tpu">
            <property name="geometry">
             <rect>
              <x>340</x>
@@ -985,13 +1040,13 @@ filament</string>
             </rect>
            </property>
            <property name="text">
-            <string>PushButton</string>
+            <string>TPU</string>
            </property>
            <property name="class" stdset="0">
             <string>menu_btn</string>
            </property>
           </widget>
-          <widget class="QPushButton" name="pushButton_22">
+          <widget class="QPushButton" name="load_t1_custom">
            <property name="geometry">
             <rect>
              <x>190</x>
@@ -1001,18 +1056,18 @@ filament</string>
             </rect>
            </property>
            <property name="text">
-            <string>PushButton</string>
+            <string>CUSTOM</string>
            </property>
            <property name="class" stdset="0">
             <string>menu_btn</string>
            </property>
           </widget>
-          <widget class="QLabel" name="load_tool_1_page">
+          <widget class="QLabel" name="load_t1_title">
            <property name="geometry">
             <rect>
-             <x>260</x>
+             <x>210</x>
              <y>30</y>
-             <width>221</width>
+             <width>271</width>
              <height>61</height>
             </rect>
            </property>
@@ -1025,7 +1080,186 @@ filament</string>
 }</string>
            </property>
            <property name="text">
+            <string>Load Tool Head 1 </string>
+           </property>
+          </widget>
+         </widget>
+         <widget class="QWidget" name="load_t2_page">
+          <widget class="QPushButton" name="load_t2_nylon">
+           <property name="geometry">
+            <rect>
+             <x>50</x>
+             <y>230</y>
+             <width>310</width>
+             <height>95</height>
+            </rect>
+           </property>
+           <property name="text">
+            <string>NYLON</string>
+           </property>
+           <property name="class" stdset="0">
+            <string>menu_btn</string>
+           </property>
+          </widget>
+          <widget class="QPushButton" name="load_t2_abs">
+           <property name="geometry">
+            <rect>
+             <x>50</x>
+             <y>160</y>
+             <width>310</width>
+             <height>95</height>
+            </rect>
+           </property>
+           <property name="text">
+            <string>ABS</string>
+           </property>
+           <property name="class" stdset="0">
+            <string>menu_btn</string>
+           </property>
+          </widget>
+          <widget class="QPushButton" name="load_t2_pla">
+           <property name="geometry">
+            <rect>
+             <x>50</x>
+             <y>90</y>
+             <width>310</width>
+             <height>95</height>
+            </rect>
+           </property>
+           <property name="text">
+            <string>PLA</string>
+           </property>
+           <property name="class" stdset="0">
+            <string>menu_btn</string>
+           </property>
+          </widget>
+          <widget class="QLabel" name="load_t2_title">
+           <property name="geometry">
+            <rect>
+             <x>210</x>
+             <y>30</y>
+             <width>271</width>
+             <height>61</height>
+            </rect>
+           </property>
+           <property name="styleSheet">
+            <string notr="true">QLabel{
+	font-family: Momcake;
+	font-style: normal;
+	font-size: 30pt;
+	color: white;
+}</string>
+           </property>
+           <property name="text">
+            <string>Load Tool Head 2</string>
+           </property>
+          </widget>
+          <widget class="QPushButton" name="load_t2_tpu">
+           <property name="geometry">
+            <rect>
+             <x>340</x>
+             <y>230</y>
+             <width>310</width>
+             <height>95</height>
+            </rect>
+           </property>
+           <property name="text">
+            <string>TPU</string>
+           </property>
+           <property name="class" stdset="0">
+            <string>menu_btn</string>
+           </property>
+          </widget>
+          <widget class="QPushButton" name="load_t2_petg">
+           <property name="geometry">
+            <rect>
+             <x>340</x>
+             <y>90</y>
+             <width>310</width>
+             <height>95</height>
+            </rect>
+           </property>
+           <property name="text">
+            <string>PETG</string>
+           </property>
+           <property name="class" stdset="0">
+            <string>menu_btn</string>
+           </property>
+          </widget>
+          <widget class="QPushButton" name="load_t2_custom">
+           <property name="geometry">
+            <rect>
+             <x>190</x>
+             <y>300</y>
+             <width>310</width>
+             <height>95</height>
+            </rect>
+           </property>
+           <property name="text">
+            <string>CUSTOM</string>
+           </property>
+           <property name="class" stdset="0">
+            <string>menu_btn</string>
+           </property>
+          </widget>
+          <widget class="QPushButton" name="load_t2_hips">
+           <property name="geometry">
+            <rect>
+             <x>350</x>
+             <y>160</y>
+             <width>310</width>
+             <height>95</height>
+            </rect>
+           </property>
+           <property name="text">
+            <string>HIPS</string>
+           </property>
+           <property name="class" stdset="0">
+            <string>menu_btn</string>
+           </property>
+          </widget>
+         </widget>
+         <widget class="QWidget" name="dryers_page">
+          <widget class="QLabel" name="label">
+           <property name="geometry">
+            <rect>
+             <x>70</x>
+             <y>110</y>
+             <width>91</width>
+             <height>61</height>
+            </rect>
+           </property>
+           <property name="text">
+            <string>Dryer Icon</string>
+           </property>
+          </widget>
+          <widget class="QLabel" name="label_2">
+           <property name="geometry">
+            <rect>
+             <x>440</x>
+             <y>110</y>
+             <width>91</width>
+             <height>61</height>
+            </rect>
+           </property>
+           <property name="text">
+            <string>Dryer 2 Icon</string>
+           </property>
+          </widget>
+          <widget class="QLabel" name="label_3">
+           <property name="geometry">
+            <rect>
+             <x>280</x>
+             <y>60</y>
+             <width>49</width>
+             <height>16</height>
+            </rect>
+           </property>
+           <property name="text">
             <string>TextLabel</string>
+           </property>
+           <property name="class" stdset="0">
+            <string>text_title</string>
            </property>
           </widget>
          </widget>
@@ -1064,8 +1298,8 @@ filament</string>
             <rect>
              <x>40</x>
              <y>42</y>
-             <width>630</width>
-             <height>347</height>
+             <width>634</width>
+             <height>353</height>
             </rect>
            </property>
            <layout class="QGridLayout" name="control_grid">
