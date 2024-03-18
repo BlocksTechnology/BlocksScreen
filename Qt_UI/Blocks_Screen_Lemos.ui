@@ -479,7 +479,7 @@ QTabBar::tab {
     background: transparent;
 }
 
-QPushButton {
+QPushButton.menu_btn {
     border-image: url(:/simple_btn/MEDIA/test_media/btn_simple.png) 0 0 0 0 stretch stretch;
 	color: #424242;
 	min-height: 95px;
@@ -491,7 +491,7 @@ QPushButton {
 	font-size: 20pt;
 }
 
-QPushButton::pressed {
+QPushButton.menu_btn::pressed {
 	border-image: url(:/simple_btn/MEDIA/test_media/btn_simple_PRESSED.png) 0 0 0 0 stretch stretch;
 	color: #8e8d8d;
 	font-family: Momcake;
@@ -506,7 +506,7 @@ QPushButton::pressed {
         <enum>QTabWidget::Rounded</enum>
        </property>
        <property name="currentIndex">
-        <number>2</number>
+        <number>0</number>
        </property>
        <property name="iconSize">
         <size>
@@ -548,7 +548,7 @@ QPushButton::pressed {
           </rect>
          </property>
          <property name="styleSheet">
-          <string notr="true">QPushButton {
+          <string notr="true">QPushButt {
     border-image: url(:/simple_btn/MEDIA/test_media/btn_simple.png) 0 0 0 0 stretch stretch;
 	color: #424242;
 	min-height: 95px;
@@ -560,7 +560,7 @@ QPushButton::pressed {
 	font-size: 20pt;
 }
 
-QPushButton::pressed {
+QPushButto::pressed {
 	border-image: url(:/simple_btn/MEDIA/test_media/btn_simple_PRESSED.png) 0 0 0 0 stretch stretch;
 	color: #8e8d8d;
 	font-family: Momcake;
@@ -573,7 +573,7 @@ QPushButton::pressed {
           <enum>QFrame::NoFrame</enum>
          </property>
          <property name="currentIndex">
-          <number>1</number>
+          <number>0</number>
          </property>
          <widget class="QWidget" name="Select_file_page">
           <widget class="QScrollArea" name="select_file_scroll_area">
@@ -602,14 +602,17 @@ QPushButton::pressed {
           <widget class="QPushButton" name="pushButton">
            <property name="geometry">
             <rect>
-             <x>470</x>
-             <y>40</y>
-             <width>310</width>
-             <height>95</height>
+             <x>580</x>
+             <y>60</y>
+             <width>71</width>
+             <height>51</height>
             </rect>
            </property>
            <property name="text">
             <string>Back</string>
+           </property>
+           <property name="class" stdset="0">
+            <string>back_btn</string>
            </property>
           </widget>
          </widget>
@@ -672,6 +675,9 @@ QPushButton::pressed {
               <property name="text">
                <string>PRINT</string>
               </property>
+              <property name="class" stdset="0">
+               <string>menu_btn</string>
+              </property>
              </widget>
             </item>
             <item alignment="Qt::AlignHCenter">
@@ -723,33 +729,13 @@ QPushButton::pressed {
           </rect>
          </property>
          <property name="styleSheet">
-          <string notr="true">QPushButton {
-    border-image: url(:/simple_btn/MEDIA/test_media/btn_simple.png) 0 0 0 0 stretch stretch;
-	color: #424242;
-	min-height: 95px;
-	max-height: 95px; 
-	min-width: 310px;
-	max-width: 310px;
-	font-family: Momcake;
-	font-style: normal;
-	font-size: 20pt;
-}
-
-QPushButton::pressed {
-	border-image: url(:/simple_btn/MEDIA/test_media/btn_simple_PRESSED.png) 0 0 0 0 stretch stretch;
-	color: #8e8d8d;
-	font-family: Momcake;
-	font-style: normal;
-	font-size: 20pt;
-}
-
-</string>
+          <string notr="true"/>
          </property>
          <property name="frameShape">
           <enum>QFrame::NoFrame</enum>
          </property>
          <property name="currentIndex">
-          <number>0</number>
+          <number>1</number>
          </property>
          <widget class="QWidget" name="page_3">
           <widget class="QWidget" name="layoutWidget">
@@ -813,6 +799,9 @@ QPushButton::pressed {
                  <string>change
 filament</string>
                 </property>
+                <property name="class" stdset="0">
+                 <string>menu_btn</string>
+                </property>
                </widget>
               </item>
               <item row="2" column="1">
@@ -838,6 +827,9 @@ filament</string>
                 <property name="text">
                  <string>dryer</string>
                 </property>
+                <property name="class" stdset="0">
+                 <string>menu_btn</string>
+                </property>
                </widget>
               </item>
               <item row="0" column="0">
@@ -862,6 +854,9 @@ filament</string>
                 </property>
                 <property name="text">
                  <string>unload</string>
+                </property>
+                <property name="class" stdset="0">
+                 <string>menu_btn</string>
                 </property>
                </widget>
               </item>
@@ -889,6 +884,9 @@ filament</string>
                 <property name="text">
                  <string>load</string>
                 </property>
+                <property name="class" stdset="0">
+                 <string>menu_btn</string>
+                </property>
                </widget>
               </item>
              </layout>
@@ -909,6 +907,9 @@ filament</string>
            <property name="text">
             <string>PushButton</string>
            </property>
+           <property name="class" stdset="0">
+            <string>menu_btn</string>
+           </property>
           </widget>
           <widget class="QPushButton" name="pushButton_17">
            <property name="geometry">
@@ -921,6 +922,9 @@ filament</string>
            </property>
            <property name="text">
             <string>PushButton</string>
+           </property>
+           <property name="class" stdset="0">
+            <string>menu_btn</string>
            </property>
           </widget>
           <widget class="QPushButton" name="pushButton_18">
@@ -935,6 +939,9 @@ filament</string>
            <property name="text">
             <string>PushButton</string>
            </property>
+           <property name="class" stdset="0">
+            <string>menu_btn</string>
+           </property>
           </widget>
           <widget class="QPushButton" name="pushButton_19">
            <property name="geometry">
@@ -947,6 +954,9 @@ filament</string>
            </property>
            <property name="text">
             <string>PushButton</string>
+           </property>
+           <property name="class" stdset="0">
+            <string>menu_btn</string>
            </property>
           </widget>
           <widget class="QPushButton" name="pushButton_20">
@@ -961,6 +971,9 @@ filament</string>
            <property name="text">
             <string>PushButton</string>
            </property>
+           <property name="class" stdset="0">
+            <string>menu_btn</string>
+           </property>
           </widget>
           <widget class="QPushButton" name="pushButton_21">
            <property name="geometry">
@@ -974,6 +987,9 @@ filament</string>
            <property name="text">
             <string>PushButton</string>
            </property>
+           <property name="class" stdset="0">
+            <string>menu_btn</string>
+           </property>
           </widget>
           <widget class="QPushButton" name="pushButton_22">
            <property name="geometry">
@@ -986,6 +1002,9 @@ filament</string>
            </property>
            <property name="text">
             <string>PushButton</string>
+           </property>
+           <property name="class" stdset="0">
+            <string>menu_btn</string>
            </property>
           </widget>
           <widget class="QLabel" name="load_tool_1_page">
@@ -1031,31 +1050,13 @@ filament</string>
           </rect>
          </property>
          <property name="styleSheet">
-          <string notr="true">QPushButton {
-    border-image: url(:/simple_btn/MEDIA/test_media/btn_simple.png) 0 0 0 0 stretch stretch;
-	color: #424242;
-	min-height: 95px;
-	max-height: 95px; 
-	min-width: 310px;
-	max-width: 310px;
-	font-family: Momcake;
-	font-style: normal;
-	font-size: 20pt;
-}
-
-QPushButton::pressed {
-	border-image: url(:/simple_btn/MEDIA/test_media/btn_simple_PRESSED.png) 0 0 0 0 stretch stretch;
-	color: #8e8d8d;
-	font-family: Momcake;
-	font-style: normal;
-	font-size: 20pt;
-}</string>
+          <string notr="true"/>
          </property>
          <property name="lineWidth">
           <number>3</number>
          </property>
          <property name="currentIndex">
-          <number>2</number>
+          <number>0</number>
          </property>
          <widget class="QWidget" name="control_page">
           <widget class="QWidget" name="layoutWidget">
@@ -1076,6 +1077,9 @@ QPushButton::pressed {
                  <string>Printer
 Settings</string>
                 </property>
+                <property name="class" stdset="0">
+                 <string>menu_btn</string>
+                </property>
                </widget>
               </item>
               <item row="1" column="0">
@@ -1083,6 +1087,9 @@ Settings</string>
                 <property name="text">
                  <string>Bed
 Leveling</string>
+                </property>
+                <property name="class" stdset="0">
+                 <string>menu_btn</string>
                 </property>
                </widget>
               </item>
@@ -1092,12 +1099,18 @@ Leveling</string>
                  <string>Switch
 Print Core</string>
                 </property>
+                <property name="class" stdset="0">
+                 <string>menu_btn</string>
+                </property>
                </widget>
               </item>
               <item row="0" column="1">
                <widget class="QPushButton" name="motion_btn">
                 <property name="text">
                  <string>Motion</string>
+                </property>
+                <property name="class" stdset="0">
+                 <string>menu_btn</string>
                 </property>
                </widget>
               </item>
@@ -1106,6 +1119,9 @@ Print Core</string>
                 <property name="text">
                  <string>Temperature</string>
                 </property>
+                <property name="class" stdset="0">
+                 <string>menu_btn</string>
+                </property>
                </widget>
               </item>
               <item row="1" column="1">
@@ -1113,6 +1129,9 @@ Print Core</string>
                 <property name="text">
                  <string>nozzles
 calibration</string>
+                </property>
+                <property name="class" stdset="0">
+                 <string>menu_btn</string>
                 </property>
                </widget>
               </item>
@@ -1202,6 +1221,9 @@ calibration</string>
                 <property name="text">
                  <string>auto home</string>
                 </property>
+                <property name="class" stdset="0">
+                 <string>menu_btn</string>
+                </property>
                </widget>
               </item>
               <item row="1" column="0">
@@ -1229,6 +1251,9 @@ calibration</string>
                  <string>disable
 steppers</string>
                 </property>
+                <property name="class" stdset="0">
+                 <string>menu_btn</string>
+                </property>
                </widget>
               </item>
               <item row="2" column="0">
@@ -1254,6 +1279,9 @@ steppers</string>
                 <property name="text">
                  <string>extrude</string>
                 </property>
+                <property name="class" stdset="0">
+                 <string>menu_btn</string>
+                </property>
                </widget>
               </item>
               <item row="2" column="1">
@@ -1278,6 +1306,9 @@ steppers</string>
                 </property>
                 <property name="text">
                  <string>move axis</string>
+                </property>
+                <property name="class" stdset="0">
+                 <string>menu_btn</string>
                 </property>
                </widget>
               </item>
@@ -1307,27 +1338,7 @@ steppers</string>
           </rect>
          </property>
          <property name="styleSheet">
-          <string notr="true">QPushButton {
-    border-image: url(:/simple_btn/MEDIA/test_media/btn_simple.png) 0 0 0 0 stretch stretch;
-	color: #424242;
-	min-height: 95px;
-	max-height: 95px; 
-	min-width: 310px;
-	max-width: 310px;
-	font-family: Momcake;
-	font-style: normal;
-	font-size: 20pt;
-}
-
-QPushButton::pressed {
-	border-image: url(:/simple_btn/MEDIA/test_media/btn_simple_PRESSED.png) 0 0 0 0 stretch stretch;
-	color: #8e8d8d;
-	font-family: Momcake;
-	font-style: normal;
-	font-size: 20pt;
-}
-
-QStackedWidget {
+          <string notr="true">QStackedWidget {
 	background-colour: black;
 }</string>
          </property>
@@ -1335,7 +1346,7 @@ QStackedWidget {
           <enum>QFrame::NoFrame</enum>
          </property>
          <property name="currentIndex">
-          <number>1</number>
+          <number>0</number>
          </property>
          <widget class="QWidget" name="page_9">
           <widget class="QPushButton" name="pushButton_2">
@@ -1350,6 +1361,9 @@ QStackedWidget {
            <property name="text">
             <string>LEDs</string>
            </property>
+           <property name="class" stdset="0">
+            <string>menu_btn</string>
+           </property>
           </widget>
           <widget class="QPushButton" name="pushButton_3">
            <property name="geometry">
@@ -1362,6 +1376,9 @@ QStackedWidget {
            </property>
            <property name="text">
             <string>PushButton</string>
+           </property>
+           <property name="class" stdset="0">
+            <string>menu_btn</string>
            </property>
           </widget>
          </widget>
@@ -1393,6 +1410,9 @@ QStackedWidget {
                  <string>Axes
 Maintenance</string>
                 </property>
+                <property name="class" stdset="0">
+                 <string>menu_btn</string>
+                </property>
                </widget>
               </item>
               <item row="1" column="0">
@@ -1401,12 +1421,18 @@ Maintenance</string>
                  <string>Routine
 Check</string>
                 </property>
+                <property name="class" stdset="0">
+                 <string>menu_btn</string>
+                </property>
                </widget>
               </item>
               <item row="2" column="1">
                <widget class="QPushButton" name="pushButton_12">
                 <property name="text">
                  <string>Factory Reset</string>
+                </property>
+                <property name="class" stdset="0">
+                 <string>menu_btn</string>
                 </property>
                </widget>
               </item>
@@ -1415,6 +1441,9 @@ Check</string>
                 <property name="text">
                  <string>LEDs</string>
                 </property>
+                <property name="class" stdset="0">
+                 <string>menu_btn</string>
+                </property>
                </widget>
               </item>
               <item row="0" column="0">
@@ -1422,12 +1451,18 @@ Check</string>
                 <property name="text">
                  <string>Info</string>
                 </property>
+                <property name="class" stdset="0">
+                 <string>menu_btn</string>
+                </property>
                </widget>
               </item>
               <item row="1" column="1">
                <widget class="QPushButton" name="pushButton_15">
                 <property name="text">
                  <string>LCD Settings</string>
+                </property>
+                <property name="class" stdset="0">
+                 <string>menu_btn</string>
                 </property>
                </widget>
               </item>
