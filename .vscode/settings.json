@@ -1,5 +1,9 @@
 {
     "autoDocstring.docstringFormat": "google",
-    "python.analysis.typeCheckingMode": "basic"
+    "python.analysis.typeCheckingMode": "basic",
+    "cSpell.enableFiletypes": [
+        "dockerfile",
+        "xml"
+    ]
     
 }
