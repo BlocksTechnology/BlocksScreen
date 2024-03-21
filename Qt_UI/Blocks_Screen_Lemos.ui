@@ -569,7 +569,7 @@ QLabel.title_text {
         <enum>QTabWidget::Rounded</enum>
        </property>
        <property name="currentIndex">
-        <number>1</number>
+        <number>3</number>
        </property>
        <property name="iconSize">
         <size>
@@ -1636,7 +1636,7 @@ steppers</string>
           <enum>QFrame::NoFrame</enum>
          </property>
          <property name="currentIndex">
-          <number>1</number>
+          <number>0</number>
          </property>
          <widget class="QWidget" name="page_9">
           <widget class="QPushButton" name="pushButton_2">
