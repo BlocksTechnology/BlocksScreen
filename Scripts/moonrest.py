@@ -39,7 +39,7 @@ class MoonRest():
         """        
         # Response data is generally an object itself, however for some requests this may simply be an "ok" string.
         response = self.get_request(method="access/oneshot_token")
-        return response['response'] if 'response' in response else False
+        return response['result'] if 'result' in response else False
 
 
     def get_server_info(self):
