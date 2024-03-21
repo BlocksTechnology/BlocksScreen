@@ -55,6 +55,7 @@ class MoonWebSocket(QObject, threading.Thread):
         websocket.setdefaulttimeout(self.timeout)
 
         # Events
+        # ! Probably not needed, and may be deleted in the future 
         self.connectEvent = threading.Event()
         self.connectingEvent = threading.Event()
         self.disconnectEvent = threading.Event()
@@ -78,6 +79,11 @@ class MoonWebSocket(QObject, threading.Thread):
 
         if self._reconnect_count >= self.max_retries:
             self._retry_timer.stopTimer()
+            unable_to_connect_event = WebSocketErrorEvent(data="Unable to Connect to Websocket")
+            try:
+                QCoreApplication.sendEvent(self._main_window, unable_to_connect_event)
+            except Exception as e:
+                _logger.error(f"Error sending Event {unable_to_connect_event.__class__.__name__}")
             _logger.debug("Max number of connection retries reached.")
             _logger.info("Could not connect to moonraker.")
             return False
@@ -178,7 +184,7 @@ class MoonWebSocket(QObject, threading.Thread):
         # self.message_signal.emit()
         # _logger.info(json.loads(response))
         # ! An error on th websocket daemon appears when i call this message.
-        message_event = MessageReceivedEvent(
+        message_event = WebSocketMessageReceivedEvent(
             data="websocket message", kwargs=response)
         try:
             QCoreApplication.postEvent(self._main_window, message_event, 10000)         # Queue, pop, push, definir prioridade do evento  
@@ -207,12 +213,12 @@ class MoonWebSocket(QObject, threading.Thread):
         return True
 
 
-class MessageReceivedEvent(QEvent):
+class WebSocketMessageReceivedEvent(QEvent):
     message_event_type = QEvent.Type(QEvent.registerEventType())
 
     def __init__(self, data, **kwargs):
-        super(MessageReceivedEvent, self).__init__(
-            MessageReceivedEvent.message_event_type)
+        super(WebSocketMessageReceivedEvent, self).__init__(
+            WebSocketMessageReceivedEvent.message_event_type)
         self.data = data
         self.kwargs = kwargs
 

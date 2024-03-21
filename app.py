@@ -8,7 +8,7 @@ from PyQt6.QtWidgets import (QApplication, QDockWidget, QFrame, QMainWindow,
 
 from Qt_UI.Blocks_Screen_Lemos_ui import Ui_MainWindow
 from Qt_UI.connectionWindow_ui import Ui_Form
-from Scripts.moonrakerComm import (MessageReceivedEvent, MoonAPI,
+from Scripts.moonrakerComm import (WebSocketMessageReceivedEvent, MoonAPI,
                                    MoonWebSocket, WebSocketConnectEvent)
 from Scripts.moonrest import MoonRest
 
@@ -85,7 +85,7 @@ class MainWindow(QMainWindow):
 
     def event(self, event):
         # print(event)
-        if event.type() == MessageReceivedEvent.message_event_type:
+        if event.type() == WebSocketMessageReceivedEvent.message_event_type:
             # print(event.kwargs)
             return True
             # return super().event(event)
