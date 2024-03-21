@@ -569,7 +569,7 @@ QLabel.title_text {
         <enum>QTabWidget::Rounded</enum>
        </property>
        <property name="currentIndex">
-        <number>0</number>
+        <number>1</number>
        </property>
        <property name="iconSize">
         <size>
@@ -795,7 +795,7 @@ QPushButto::pressed {
           <enum>QFrame::NoFrame</enum>
          </property>
          <property name="currentIndex">
-          <number>3</number>
+          <number>0</number>
          </property>
          <widget class="QWidget" name="filament_page">
           <widget class="QWidget" name="layoutWidget">
