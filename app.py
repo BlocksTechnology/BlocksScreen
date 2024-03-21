@@ -1,19 +1,22 @@
+import logging
 import sys
 
-from PyQt6.QtCore import Qt, QEvent,QEventLoop, pyqtSlot, pyqtSignal, QObject
-from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QDockWidget, QFrame
 from PyQt6 import uic
+from PyQt6.QtCore import QEvent, QEventLoop, QObject, Qt, pyqtSignal, pyqtSlot
+from PyQt6.QtWidgets import (QApplication, QDockWidget, QFrame, QMainWindow,
+                             QWidget)
 
-
-from Scripts.moonrakerComm import MoonAPI, MoonWebSocket, MessageReceivedEvent, WebSocketConnectEvent
-from Scripts.moonrest import MoonRest
 from Qt_UI.Blocks_Screen_Lemos_ui import Ui_MainWindow
 from Qt_UI.connectionWindow_ui import Ui_Form
-import logging
+from Scripts.moonrakerComm import (MessageReceivedEvent, MoonAPI,
+                                   MoonWebSocket, WebSocketConnectEvent)
+from Scripts.moonrest import MoonRest
 
-class ConnectionWindow(QWidget):
+
+class ConnectionWindow(QFrame):
     def __init__(self, main_window, *args, **kwargs):
-        super(ConnectionWindow, self).__init__(parent=main_window, *args, **kwargs)
+        super(ConnectionWindow, self).__init__(
+            parent=main_window, *args, **kwargs)
         self.main_window = main_window
         self.con_window = Ui_Form()
         self.con_window.setupUi(self)
@@ -21,26 +24,29 @@ class ConnectionWindow(QWidget):
         # self.mapToParent()
         # self.show()
         self.setFocus()
+        self.setEnabled(True)
+        # self.setHi
         self.show()
 
     @pyqtSlot()
     def initialize(self):
         self.main_window.ws.start()
         self.main_window.ws.try_connection()
-        self.con_window.TextFrame.setWindowIconText("Connecting to Moonraker and Klipper")
+        self.con_window.TextFrame.setWindowIconText(
+            "Connecting to Moonraker and Klipper")
 
     def event(self, event):
         if event.type() == WebSocketConnectEvent.wb_connect_event_type:
             # print(event.kwargs)
             self.close()
             self.main_window.show()
-            
+
             return True
             # return super().event(event)
             # return self.message_received_event(event)
         return super().event(event)
 
-        
+
 class MainWindow(QMainWindow):
 
     def __init__(self, *args, **kwargs):
@@ -50,23 +56,22 @@ class MainWindow(QMainWindow):
         self.ui.setupUi(self)
         # uic.loadUi("Scripts/uiTemplate.ui", self)        In Case i want to use the .ui file
 
-        self.start_window = ConnectionWindow(main_window = self)  
-        
+        self.start_window = ConnectionWindow(main_window=self)
+
         self._moonRest = MoonRest()
         self.ws = MoonWebSocket(self)
 
         # self.ui.pushButton_2.clicked.connect(self.initialize)
         # self.con_window..Re.clicked.connect(self.initialize)
-        # self._ws.message_signal.connect(self.message)
+        # self.ws.message_signal.connect(self.message)
 
     # This slot is called when the button is pressed, it represents
     @pyqtSlot()
     def initialize(self):
         self.ws.start()
         self.ws.try_connection()
-        
-        # if self._ws.connected: 
-            
+
+        # if self._ws.connected:
 
     @pyqtSlot(name="message_received")
     def message(self):
@@ -79,6 +84,7 @@ class MainWindow(QMainWindow):
         print("event")
 
     def event(self, event):
+        # print(event)
         if event.type() == MessageReceivedEvent.message_event_type:
             # print(event.kwargs)
             return True

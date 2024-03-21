@@ -181,9 +181,14 @@ class MoonWebSocket(QObject, threading.Thread):
         message_event = MessageReceivedEvent(
             data="websocket message", kwargs=response)
         try:
-            QCoreApplication.postEvent(self._main_window, message_event, 10000)
+            QCoreApplication.postEvent(self._main_window, message_event, 10000)         # Queue, pop, push, definir prioridade do evento  
+            QCoreApplication.sendEvent(self._main_window, message_event)                # Mais rapido e não ha queue
         except Exception as e:
             _logger.error(f"Error posting event: {e}")
+
+
+
+
 
     def send_request(self, method: str, params: dict = {}):
         # TODO: Missing callbacks in here
