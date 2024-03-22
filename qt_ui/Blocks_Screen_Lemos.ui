@@ -22,7 +22,7 @@
 	background-image: url(:/MainBackground/MEDIA/1st_background.png);
 }
 
-QPushButton.menu_btn {
+.menu_btn {
     border-image: url(:/Btn_Backgrounds/MEDIA/media/btn_simple.png) 0 0 0 0 stretch stretch;
 	color: #424242;
 	min-height: 95px;
@@ -34,7 +34,7 @@ QPushButton.menu_btn {
 	font-size: 20pt;
 }
 
-QPushButton.menu_btn::pressed {
+.menu_btn::pressed {
 	border-image: url(:/Btn_Backgrounds/MEDIA/media/btn_simple_PRESSED.png) 0 0 0 0 stretch stretch;
 	color: #8e8d8d;
 	font-family: Momcake;
@@ -42,7 +42,7 @@ QPushButton.menu_btn::pressed {
 	font-size: 20pt;
 }
 
-QLabel.title_text {
+.title_text {
 	font-family: Momcake;
 	font-style: normal;
 	font-size: 30pt;
