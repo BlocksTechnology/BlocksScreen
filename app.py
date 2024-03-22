@@ -6,12 +6,11 @@ from PyQt6.QtCore import QEvent, QEventLoop, QObject, Qt, pyqtSignal, pyqtSlot
 from PyQt6.QtWidgets import (QApplication, QDockWidget, QFrame, QMainWindow,
                              QWidget)
 
-from Qt_UI.Blocks_Screen_Lemos_ui import Ui_MainWindow
-from Qt_UI.connectionWindow_ui import Ui_Form
-from Scripts.moonrakerComm import (WebSocketMessageReceivedEvent, MoonAPI,
+from qt_ui.Blocks_Screen_Lemos_ui import Ui_MainWindow
+from qt_ui.connectionWindow_ui import Ui_Form
+from scripts.moonrakerComm import (WebSocketMessageReceivedEvent, MoonAPI,
                                    MoonWebSocket, WebSocketConnectEvent)
-from Scripts.moonrest import MoonRest
-
+from scripts.moonrest import MoonRest
 
 class ConnectionWindow(QFrame):
     def __init__(self, main_window, *args, **kwargs):

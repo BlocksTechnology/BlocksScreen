@@ -11,8 +11,8 @@ from threading import Timer
 import json
 from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot, QEvent, QEventLoop, QCoreApplication
 
-from Scripts.util import RepeatedTimer
-from Scripts.moonrest import MoonRest
+from scripts.util import RepeatedTimer
+from scripts.moonrest import MoonRest
 
 
 # My Logger object
