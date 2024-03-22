@@ -2,17 +2,36 @@ import logging
 import sys
 
 from PyQt6 import uic
-from PyQt6.QtCore import QEvent, QEventLoop, QObject, Qt, pyqtSignal, pyqtSlot
-from PyQt6.QtWidgets import (QApplication, QDockWidget, QFrame, QMainWindow,
+from PyQt6.QtCore import QEvent, QEventLoop, QObject, Qt, pyqtSignal, pyqtSlot, QCoreApplication
+from PyQt6.QtWidgets import (QApplication, QDockWidget, QFrame, QMainWindow, QSplashScreen,
                              QWidget)
-
+from PyQt6.QtGui import QColor, QPixmap
 from Qt_UI.Blocks_Screen_Lemos_ui import Ui_MainWindow
 from Qt_UI.connectionWindow_ui import Ui_Form
 from Scripts.moonrakerComm import (WebSocketMessageReceivedEvent, MoonAPI,
                                    MoonWebSocket, WebSocketConnectEvent)
 from Scripts.moonrest import MoonRest
 
-
+"""
+    QSplashScreen
+    Functions ->
+        finish()
+        message()
+        pixmap()
+        setPixmap()
+        
+    Virtual Functions ->
+        drawContents()
+        
+    Slots ->
+        clearMessage()
+        showMessage()
+        
+    More Info on ->
+        https://doc.qt.io/qtforpython-6/PySide6/QtWidgets/QSplashScreen.html#qsplashscreen
+    
+"""
+    
 class ConnectionWindow(QFrame):
     def __init__(self, main_window, *args, **kwargs):
         super(ConnectionWindow, self).__init__(
@@ -21,9 +40,9 @@ class ConnectionWindow(QFrame):
         self.con_window = Ui_Form()
         self.con_window.setupUi(self)
         self.con_window.RetryConnection.clicked.connect(self.initialize)
-        # self.mapToParent()
-        # self.show()
-        self.setFocus()
+       
+        self.setStyleSheet("background-color: white;")
+        self.setGeometry(self.frameRect())
         self.setEnabled(True)
         # self.setHi
         self.show()
@@ -52,6 +71,7 @@ class MainWindow(QMainWindow):
     def __init__(self, *args, **kwargs):
         super(MainWindow, self).__init__(*args, **kwargs)
         self.ui = Ui_MainWindow()
+        
         # self.con_window.setupUi(self)
         self.ui.setupUi(self)
         # uic.loadUi("Scripts/uiTemplate.ui", self)        In Case i want to use the .ui file
@@ -94,10 +114,20 @@ class MainWindow(QMainWindow):
 
 
 if __name__ == "__main__":
+    
+    
     app = QApplication([])
-    main_window = MainWindow()
-    main_window.show()
-    sys.exit(app.exec())
+    pixmap = QPixmap("/home/bugo/github/Blocks_Screen/MEDIA/logoblocks.png")
+    splash = QSplashScreen(pixmap)
+    # splash.setGeometry(main_window)
+    splash.showNormal()
+    splash.showMessage("Loading")
+    app.processEvents()
+    
     # There is another way i can do this, by passing the .ui file to .py and then use that .py file in my app.
     # I can do this with the command pyuic6 -o <pythonfile>.py -x <uifile>.ui
     # Then i get a .py file from the .ui file
+    main_window = MainWindow()
+    main_window.show()
+    splash.finish(main_window)
+    sys.exit(app.exec())
