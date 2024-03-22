@@ -43,7 +43,6 @@ QPushButton.menu_btn::pressed {
 }
 
 QLabel.title_text {
-	align-text: center;
 	font-family: Momcake;
 	font-style: normal;
 	font-size: 30pt;
@@ -535,7 +534,7 @@ QTabBar::tab {
         <enum>QTabWidget::Rounded</enum>
        </property>
        <property name="currentIndex">
-        <number>3</number>
+        <number>0</number>
        </property>
        <property name="iconSize">
         <size>
@@ -560,7 +559,7 @@ QTabBar::tab {
        </property>
        <widget class="QWidget" name="main_tab">
         <attribute name="icon">
-         <iconset resource="../UI_Resources.qrc">
+         <iconset resource="../resources/UI_Resources.qrc">
           <normaloff>:/General_icons/MEDIA/1_icons/main_menu/ICON_home.png</normaloff>
           <normalon>:/General_icons/MEDIA/1_icons/main_menu/ICON_home_pressed.png</normalon>:/General_icons/MEDIA/1_icons/main_menu/ICON_home.png</iconset>
         </attribute>
@@ -665,7 +664,7 @@ QPushButto::pressed {
                <string notr="true"/>
               </property>
               <property name="text">
-               <string>Filament</string>
+               <string>Main</string>
               </property>
               <property name="alignment">
                <set>Qt::AlignCenter</set>
@@ -717,7 +716,6 @@ QPushButto::pressed {
               </property>
               <property name="styleSheet">
                <string notr="true">#main_text_box{
-	align-text: center;
 	font-family: Montserrat;
 	font-style: montserrat;
 	font-size: 14pt;
@@ -738,7 +736,7 @@ QPushButto::pressed {
        </widget>
        <widget class="QWidget" name="filament_tab">
         <attribute name="icon">
-         <iconset resource="../UI_Resources.qrc">
+         <iconset resource="../resources/UI_Resources.qrc">
           <normaloff>:/General_icons/MEDIA/1_icons/main_menu/ICON_filament.png</normaloff>
           <normalon>:/General_icons/MEDIA/1_icons/main_menu/ICON_filament_pressed.png</normalon>:/General_icons/MEDIA/1_icons/main_menu/ICON_filament.png</iconset>
         </attribute>
@@ -1295,7 +1293,7 @@ filament</string>
        </widget>
        <widget class="QWidget" name="control_tab">
         <attribute name="icon">
-         <iconset resource="../UI_Resources.qrc">
+         <iconset resource="../resources/UI_Resources.qrc">
           <normaloff>:/General_icons/MEDIA/1_icons/main_menu/ICON_control.png</normaloff>
           <normalon>:/General_icons/MEDIA/1_icons/main_menu/ICON_control_pressed.png</normalon>:/General_icons/MEDIA/1_icons/main_menu/ICON_control.png</iconset>
         </attribute>
@@ -1577,7 +1575,7 @@ steppers</string>
        </widget>
        <widget class="QWidget" name="utilities_tab">
         <attribute name="icon">
-         <iconset resource="../UI_Resources.qrc">
+         <iconset resource="../resources/UI_Resources.qrc">
           <normaloff>:/General_icons/MEDIA/1_icons/main_menu/ICON_utilities.png</normaloff>
           <normalon>:/General_icons/MEDIA/1_icons/main_menu/ICON_utilities_pressed.png</normalon>:/General_icons/MEDIA/1_icons/main_menu/ICON_utilities.png</iconset>
         </attribute>
@@ -1750,7 +1748,7 @@ Check</string>
   </widget>
  </widget>
  <resources>
-  <include location="../UI_Resources.qrc"/>
+  <include location="../resources/UI_Resources.qrc"/>
  </resources>
  <connections/>
 </ui>
