@@ -20,6 +20,34 @@
    <property name="styleSheet">
     <string notr="true">#centralwidget {
 	background-image: url(:/MainBackground/MEDIA/1st_background.png);
+}
+
+QPushButton.menu_btn {
+    border-image: url(:/Btn_Backgrounds/MEDIA/media/btn_simple.png) 0 0 0 0 stretch stretch;
+	color: #424242;
+	min-height: 95px;
+	max-height: 95px; 
+	min-width: 310px;
+	max-width: 310px;
+	font-family: Momcake;
+	font-style: normal;
+	font-size: 20pt;
+}
+
+QPushButton.menu_btn::pressed {
+	border-image: url(:/Btn_Backgrounds/MEDIA/media/btn_simple_PRESSED.png) 0 0 0 0 stretch stretch;
+	color: #8e8d8d;
+	font-family: Momcake;
+	font-style: normal;
+	font-size: 20pt;
+}
+
+QLabel.title_text {
+	align-text: center;
+	font-family: Momcake;
+	font-style: normal;
+	font-size: 30pt;
+	color: white;
 }</string>
    </property>
    <widget class="QWidget" name="layoutWidget">
@@ -78,10 +106,6 @@
         <property name="text">
          <string>30 ºC /60 ºC</string>
         </property>
-        <property name="icon">
-         <iconset>
-          <normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</iconset>
-        </property>
         <property name="iconSize">
          <size>
           <width>19</width>
@@ -123,10 +147,6 @@
         </property>
         <property name="text">
          <string>PLA</string>
-        </property>
-        <property name="icon">
-         <iconset>
-          <normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</iconset>
         </property>
         <property name="iconSize">
          <size>
@@ -170,10 +190,6 @@
         <property name="text">
          <string>45 ºC /50 ºC</string>
         </property>
-        <property name="icon">
-         <iconset>
-          <normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</iconset>
-        </property>
         <property name="iconSize">
          <size>
           <width>19</width>
@@ -216,10 +232,6 @@
         <property name="text">
          <string>PLA</string>
         </property>
-        <property name="icon">
-         <iconset>
-          <normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</iconset>
-        </property>
         <property name="iconSize">
          <size>
           <width>19</width>
@@ -256,10 +268,6 @@
         </property>
         <property name="text">
          <string>210 ºC /220 ºC</string>
-        </property>
-        <property name="icon">
-         <iconset>
-          <normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</iconset>
         </property>
         <property name="iconSize">
          <size>
@@ -302,10 +310,6 @@
         </property>
         <property name="text">
          <string>210 ºC /220 ºC</string>
-        </property>
-        <property name="icon">
-         <iconset>
-          <normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/20.jpg</normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/20.jpg</iconset>
         </property>
         <property name="iconSize">
          <size>
@@ -367,10 +371,6 @@ image: url(:/General_icons/MEDIA/media/graphics/logo_blocks.png);
         <property name="text">
          <string>Nozzle: 0.4</string>
         </property>
-        <property name="icon">
-         <iconset>
-          <normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</iconset>
-        </property>
         <property name="iconSize">
          <size>
           <width>19</width>
@@ -413,10 +413,6 @@ image: url(:/General_icons/MEDIA/media/graphics/logo_blocks.png);
         <property name="text">
          <string>Nozzle: 0.3</string>
         </property>
-        <property name="icon">
-         <iconset>
-          <normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</iconset>
-        </property>
         <property name="iconSize">
          <size>
           <width>19</width>
@@ -458,10 +454,6 @@ image: url(:/General_icons/MEDIA/media/graphics/logo_blocks.png);
         </property>
         <property name="text">
          <string>Wifi</string>
-        </property>
-        <property name="icon">
-         <iconset>
-          <normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</normaloff>../../../../../../Desktop/DGUS/BLOCKS_DGUS_R21_V1/27_Icons/19.jpg</iconset>
         </property>
         <property name="iconSize">
          <size>
@@ -534,33 +526,7 @@ QTabBar::tab {
     background: transparent;
 }
 
-QPushButton.menu_btn {
-    border-image: url(:/Btn_Backgrounds/MEDIA/media/btn_simple.png) 0 0 0 0 stretch stretch;
-	color: #424242;
-	min-height: 95px;
-	max-height: 95px; 
-	min-width: 310px;
-	max-width: 310px;
-	font-family: Momcake;
-	font-style: normal;
-	font-size: 20pt;
-}
-
-QPushButton.menu_btn::pressed {
-	border-image: url(:/Btn_Backgrounds/MEDIA/media/btn_simple_PRESSED.png) 0 0 0 0 stretch stretch;
-	color: #8e8d8d;
-	font-family: Momcake;
-	font-style: normal;
-	font-size: 20pt;
-}
-
-QLabel.title_text {
-	align-text: center;
-	font-family: Momcake;
-	font-style: normal;
-	font-size: 30pt;
-	color: white;
-}</string>
+</string>
        </property>
        <property name="tabPosition">
         <enum>QTabWidget::West</enum>
@@ -1628,9 +1594,7 @@ steppers</string>
           </rect>
          </property>
          <property name="styleSheet">
-          <string notr="true">QStackedWidget {
-	background-colour: black;
-}</string>
+          <string notr="true"/>
          </property>
          <property name="frameShape">
           <enum>QFrame::NoFrame</enum>
