@@ -268,8 +268,8 @@
     </property>
     <property name="iconSize">
      <size>
-      <width>245</width>
-      <height>45</height>
+      <width>46</width>
+      <height>42</height>
      </size>
     </property>
     <property name="checkable">
@@ -286,6 +286,12 @@
     </property>
     <property name="autoRepeatInterval">
      <number>0</number>
+    </property>
+    <property name="setIconPosition" stdset="0">
+     <point>
+      <x>-2</x>
+      <y>-2</y>
+     </point>
     </property>
    </widget>
    <widget class="QPushButton" name="RetryConnectionButton">
