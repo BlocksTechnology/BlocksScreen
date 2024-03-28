@@ -1,6 +1,6 @@
 from PyQt6.QtWidgets import (
     QPushButton, QStyle)
-from PyQt6 import QtGui, QtWidgets, QtCore
+from PyQt6 import QtGui, QtWidgets, QtCore, QtSvg
 import typing
 
 
@@ -15,11 +15,14 @@ class CustomQPushButton(QPushButton):
 
     def __init__(self, parent,  x: int = 0, y: int = 0, *args, **kwargs):
         super(CustomQPushButton, self).__init__(parent, *args, **kwargs)
+
         self._icon = self.icon()
         if not self._icon.isNull():
             super().setIcon(QtGui.QIcon())
-            
+
         self.iconPosition = QtCore.QPoint(0, 0)
+        self.iconPixmap: QtGui.QPixmap | None = None
+        self._colorSet = False
 
     def sizeHint(self):
         hint = super().sizeHint()
@@ -33,7 +36,7 @@ class CustomQPushButton(QPushButton):
         spacing = style.pixelMetric(
             style.PixelMetric.PM_LayoutVerticalSpacing, opt, self)
 
-        #* get the possible rect required for the current label
+        # * get the possible rect required for the current label
         labelRect = self.fontMetrics().boundingRect(
             0, 0, 5000, 5000, QtCore.Qt.TextFlag.TextShowMnemonic, self.text())
         iconHeight = self.iconSize().height()
@@ -59,11 +62,6 @@ class CustomQPushButton(QPushButton):
             return
 
         with QtGui.QPainter(self) as painter:
-            painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing, True)
-            painter.setRenderHint(
-                QtGui.QPainter.RenderHint.SmoothPixmapTransform, True)
-            painter.setRenderHint(
-                QtGui.QPainter.RenderHint.LosslessImageRendering, True)
 
             opt = QtWidgets.QStyleOptionButton()
             self.initStyleOption(opt)
@@ -71,7 +69,6 @@ class CustomQPushButton(QPushButton):
             qp = QtWidgets.QStylePainter(self)
 
             # * draw the button without any text or icon
-            qp.drawControl(QStyle.ControlElement.CE_PushButton, opt)
             qp.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing, True)
             qp.setRenderHint(
                 QtGui.QPainter.RenderHint.SmoothPixmapTransform, True)
@@ -84,47 +81,94 @@ class CustomQPushButton(QPushButton):
             margin = style.pixelMetric(
                 style.PixelMetric.PM_ButtonMargin, opt, self)
 
-            
-            state = QtGui.QIcon.State.Off
-            if self.underMouse():
-                mode = QtGui.QIcon.Mode.Active
-            elif self.isEnabled():
-                mode = QtGui.QIcon.Mode.Normal
-            elif self.mousePressEvent:
-                    mode = QtGui.QIcon.Mode.Normal
-                    state = QtGui.QIcon.State.On
-            else:
-                state = QtGui.QIcon.Mode.Disabled
-
+            # * Icon Coloring and drawing
             iconSize = self.iconSize()
-            # * Icon position
             iconCenter = QtCore.QPoint(
                 self.iconPosition.x() + int(iconSize.width() / 2), self.iconPosition.y() + int(iconSize.height() / 2))
             iconRect = QtCore.QRect(iconCenter, iconSize)
 
-            qp.drawPixmap(iconRect, self._icon.pixmap(
-                iconSize, mode=mode, state=state))
-            qp.setPen(QtGui.QColor(164, 41, 4, 255))
+            if self.iconPixmap is not None:
+                self._iconColored = self.setIconColor(
+                    self.iconPixmap, QtGui.QColor(188, 188, 188, 255), qp, iconSize, iconCenter, iconRect)
+                self._icon = self._iconColored
 
-            # qp.drawRect(iconRect)
-            # qp.drawPoint(22, 20)
+            # * Draw the Button
+            qp.drawControl(QStyle.ControlElement.CE_PushButton, opt)
 
-            qp.setRenderHints(qp.renderHints().Antialiasing, True)
-            qp.setRenderHints(qp.renderHints().LosslessImageRendering, True)
-            qp.setRenderHints(qp.renderHints().SmoothPixmapTransform, True)
-
-            #*  Text stuff
+            # *  Draw Text stuff over the button
+            # qp.setCompositionMode(qp.CompositionMode.CompositionMode_SourceOver)
             labelRect = QtCore.QRect(rect)
             labelRect.setLeft(iconRect.width())
             qp.drawText(labelRect,
                         QtCore.Qt.TextFlag.TextShowMnemonic | QtCore.Qt.AlignmentFlag.AlignHCenter | QtCore.Qt.AlignmentFlag.AlignVCenter,
                         self.text())
+
             # qp.drawRect(labelRect)
+
+    def setIconColor(self, pixmap: QtGui.QPixmap, iconColor: QtGui.QColor, qp: QtWidgets.QStylePainter, iconSize, iconCenter, iconRect) -> QtGui.QIcon:  # ,
+
+        # TODO: Button States is funky
+        state = QtGui.QIcon.State.Off
+        if self.isEnabled() and not self.isDown():
+            mode = QtGui.QIcon.Mode.Normal
+        elif self.isDown():
+            mode = QtGui.QIcon.Mode.Normal
+            state = QtGui.QIcon.State.On
+            # super().pressed.emit()
+        else:
+            mode = QtGui.QIcon.Mode.Disabled
+            state = QtGui.QIcon.State.Off
+
+        _transparentColor = QtGui.QColor(0, 0, 0, 0)
+
+        # * alpha
+        _iconMask = QtGui.QPixmap(iconRect.x(), iconRect.y())
+        _iconMask.fill(_transparentColor)
+
+        _iconColor = QtGui.QPixmap(iconRect.x(), iconRect.y())
+        _iconColor.fill(iconColor)
+
+        # * Create new icon with color
+        qp.setRenderHints(qp.RenderHint.Antialiasing)
+        qp.setRenderHints(qp.RenderHint.LosslessImageRendering)
+
+        # * Save previous Painter state
+        qp.save()
+
+        # *Clear Inside of the icon
+        qp.drawPixmap(iconRect, _iconMask)
+        qp.setCompositionMode(
+            qp.CompositionMode.CompositionMode_Xor)
+
+        qp.drawPixmap(iconRect, self._icon.pixmap(
+            iconSize, mode=mode, state=state))
+
+        qp.setCompositionMode(
+            qp.CompositionMode.CompositionMode_Overlay)
+
+        qp.drawPixmap(iconRect, _iconColor)
+
+        # ? This makes the icon be grayer when i click it
+        self._icon.addPixmap(_iconMask, mode=mode, state=state)
+
+        # * Paint the Icon Color
+
+        # * Draw the Icon
+        qp.drawPixmap(iconRect, self._icon.pixmap(
+            iconSize, mode=mode, state=state))
+
+        # * Restore previous Painter State
+        qp.restore()
+        return QtGui.QIcon(pixmap)
 
     def setProperty(self, name: str, value: typing.Any) -> bool:
         if name == "setIconPosition":
             self.iconPosition.setX(value.x())
             self.iconPosition.setY(value.y())
+        elif name == "iconPixmap":
+            # self._icon.addPixmap(value)
+            self.iconPixmap = value
+            # super().setIcon(QtGui.QIcon())
         return super().setProperty(name, value)
 
     def hitButton(self, pos: QtCore.QPoint) -> bool:
@@ -134,6 +178,7 @@ class CustomQPushButton(QPushButton):
         return super().mouseMoveEvent(a0)
 
     def mousePressEvent(self, e: typing.Optional[QtGui.QMouseEvent]) -> None:
+        print("PRESSED")
         return super().mousePressEvent(e)
 
     def mouseDoubleClickEvent(self, a0: typing.Optional[QtGui.QMouseEvent]) -> None:
