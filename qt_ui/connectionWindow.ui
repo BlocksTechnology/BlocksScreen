@@ -42,7 +42,7 @@
 	background-image: url(:/Main_background/1st_background.png);
 }
 #ButtonFrame &gt; QPushButton{
-	border-image: url(:/Svgtype/media/btn_small.svg);
+	
 	color: #424242;
 	min-height: 80px;
 	max-height: 80px; 
@@ -50,19 +50,13 @@
 	max-width: 200px;	
 }
 #ButtonFrame &gt; QPushButton::pressed{
-	border-image: url(:/Svgtype/media/btn_small_PRESSED.svg);
-	color: #8e8d8d;
+	
+	border-color: #8e8d8d;
 	font-family: Momcake;
 	font-style: normal;
-	font-size: 20pt;
+	font-size: 14pt;
 }
-#ButtonFrame &gt; CustomQPushButton::pressed{
-	border-image: url(:/Svgtype/media/btn_small_PRESSED.svg);
-	color: #8e8d8d;
-	font-family: Momcake;
-	font-style: normal;
-	font-size: 20pt;
-}
+
 #TextFrame &gt; QLabel{
 	text-align: center;
 	font-family: Momcake;
@@ -70,7 +64,9 @@
 	font-size: 18pt;
 	color: rgba(255,255,255,1);
 	text-align: center
-}</string>
+}
+
+</string>
   </property>
   <property name="class" stdset="0">
    <string/>
@@ -125,8 +121,8 @@
      <rect>
       <x>0</x>
       <y>0</y>
-      <width>200</width>
-      <height>80</height>
+      <width>202</width>
+      <height>82</height>
      </rect>
     </property>
     <property name="sizePolicy">
@@ -137,14 +133,20 @@
     </property>
     <property name="minimumSize">
      <size>
-      <width>200</width>
-      <height>80</height>
+      <width>202</width>
+      <height>82</height>
+     </size>
+    </property>
+    <property name="maximumSize">
+     <size>
+      <width>202</width>
+      <height>82</height>
      </size>
     </property>
     <property name="baseSize">
      <size>
       <width>200</width>
-      <height>50</height>
+      <height>80</height>
      </size>
     </property>
     <property name="palette">
@@ -240,8 +242,11 @@
     </property>
     <property name="font">
      <font>
-      <stylestrategy>NoAntialias</stylestrategy>
+      <stylestrategy>PreferAntialias</stylestrategy>
      </font>
+    </property>
+    <property name="cursor">
+     <cursorShape>BlankCursor</cursorShape>
     </property>
     <property name="focusPolicy">
      <enum>Qt::NoFocus</enum>
@@ -263,8 +268,7 @@
     </property>
     <property name="icon">
      <iconset resource="../resources/UI_Resources.qrc">
-      <normaloff>:/Svgtype/media/icons/restart_klippersvg.svg</normaloff>
-      <normalon>:/Svgtype/media/icons/restart_klippersvg_PRESSED.svg</normalon>:/Svgtype/media/icons/restart_klippersvg.svg</iconset>
+      <normaloff>:/Svgtype/media/icons/restart_klippersvg.svg</normaloff>:/Svgtype/media/icons/restart_klippersvg.svg</iconset>
     </property>
     <property name="iconSize">
      <size>
@@ -287,68 +291,59 @@
     <property name="autoRepeatInterval">
      <number>0</number>
     </property>
+    <property name="flat">
+     <bool>true</bool>
+    </property>
     <property name="setIconPosition" stdset="0">
      <point>
       <x>-2</x>
       <y>-2</y>
      </point>
     </property>
-   </widget>
-   <widget class="QPushButton" name="RetryConnectionButton">
-    <property name="geometry">
+    <property name="iconPath" stdset="0">
+     <pixmap resource="../resources/UI_Resources.qrc">:/Svgtype/media/icons/restart_klippersvg.svg</pixmap>
+    </property>
+    <property name="iconPixmap" stdset="0">
+     <pixmap resource="../resources/UI_Resources.qrc">:/Svgtype/media/icons/restart_klippersvg.svg</pixmap>
+    </property>
+    <property name="borderLeftPixmap" stdset="0">
+     <pixmap resource="../resources/UI_Resources.qrc">:/seperated_borders/media/separated_border/btn1.svg</pixmap>
+    </property>
+    <property name="borderCenterPixmap" stdset="0">
+     <pixmap resource="../resources/UI_Resources.qrc">:/seperated_borders/media/separated_border/btn2.svg</pixmap>
+    </property>
+    <property name="borderRightPixmap" stdset="0">
+     <pixmap resource="../resources/UI_Resources.qrc">:/seperated_borders/media/separated_border/btn3.svg</pixmap>
+    </property>
+    <property name="borderRightRect" stdset="0">
      <rect>
-      <x>204</x>
+      <x>0</x>
       <y>0</y>
-      <width>200</width>
+      <width>50</width>
       <height>80</height>
      </rect>
     </property>
-    <property name="sizePolicy">
-     <sizepolicy hsizetype="MinimumExpanding" vsizetype="Fixed">
-      <horstretch>0</horstretch>
-      <verstretch>0</verstretch>
-     </sizepolicy>
-    </property>
-    <property name="minimumSize">
-     <size>
-      <width>200</width>
+    <property name="borderLeftRect" stdset="0">
+     <rect>
+      <x>0</x>
+      <y>0</y>
+      <width>80</width>
       <height>80</height>
-     </size>
+     </rect>
     </property>
-    <property name="focusPolicy">
-     <enum>Qt::ClickFocus</enum>
-    </property>
-    <property name="autoFillBackground">
-     <bool>false</bool>
-    </property>
-    <property name="styleSheet">
-     <string notr="true"/>
-    </property>
-    <property name="text">
-     <string>Retry Connection</string>
-    </property>
-    <property name="icon">
-     <iconset resource="../resources/UI_Resources.qrc">
-      <normaloff>:/General_icons/media/icons/retry_connection.png</normaloff>
-      <normalon>:/General_icons/media/icons/retry_connection_PRESSED.png</normalon>:/General_icons/media/icons/retry_connection.png</iconset>
-    </property>
-    <property name="autoDefault">
-     <bool>false</bool>
-    </property>
-    <property name="default">
-     <bool>false</bool>
-    </property>
-    <property name="flat">
-     <bool>false</bool>
-    </property>
-    <property name="class" stdset="0">
-     <string>system_control_btn</string>
+    <property name="borderCenterRect" stdset="0">
+     <rect>
+      <x>0</x>
+      <y>0</y>
+      <width>100</width>
+      <height>80</height>
+     </rect>
     </property>
    </widget>
-   <widget class="QPushButton" name="WifiButton">
+   <widget class="CustomQPushButton" name="RetryConnectionButton">
     <property name="geometry">
      <rect>
-      <x>403</x>
+      <x>200</x>
       <y>0</y>
       <width>200</width>
       <height>80</height>
@@ -372,19 +367,34 @@
       <height>80</height>
      </size>
     </property>
+    <property name="baseSize">
+     <size>
+      <width>200</width>
+      <height>80</height>
+     </size>
+    </property>
     <property name="focusPolicy">
      <enum>Qt::ClickFocus</enum>
     </property>
     <property name="autoFillBackground">
      <bool>false</bool>
     </property>
+    <property name="styleSheet">
+     <string notr="true"/>
+    </property>
     <property name="text">
-     <string>Wifi Settings</string>
+     <string>Retry Connection</string>
     </property>
     <property name="icon">
      <iconset resource="../resources/UI_Resources.qrc">
-      <normaloff>:/General_icons/media/icons/wifi_settings.png</normaloff>
-      <normalon>:/General_icons/media/icons/wifi_settings_PRESSED.png</normalon>:/General_icons/media/icons/wifi_settings.png</iconset>
+      <normaloff>:/General_icons/media/icons/retry_connection.png</normaloff>
+      <normalon>:/General_icons/media/icons/retry_connection_PRESSED.png</normalon>:/General_icons/media/icons/retry_connection.png</iconset>
+    </property>
+    <property name="autoRepeatDelay">
+     <number>0</number>
+    </property>
+    <property name="autoRepeatInterval">
+     <number>0</number>
     </property>
     <property name="autoDefault">
      <bool>false</bool>
@@ -399,10 +409,10 @@
      <string>system_control_btn</string>
     </property>
    </widget>
-   <widget class="QPushButton" name="pushButton">
+   <widget class="CustomQPushButton" name="WifiButton">
     <property name="geometry">
      <rect>
-      <x>601</x>
+      <x>400</x>
       <y>0</y>
       <width>200</width>
       <height>80</height>
@@ -415,6 +425,73 @@
      </sizepolicy>
     </property>
     <property name="minimumSize">
+     <size>
+      <width>200</width>
+      <height>80</height>
+     </size>
+    </property>
+    <property name="maximumSize">
+     <size>
+      <width>200</width>
+      <height>80</height>
+     </size>
+    </property>
+    <property name="baseSize">
+     <size>
+      <width>200</width>
+      <height>80</height>
+     </size>
+    </property>
+    <property name="focusPolicy">
+     <enum>Qt::ClickFocus</enum>
+    </property>
+    <property name="autoFillBackground">
+     <bool>false</bool>
+    </property>
+    <property name="text">
+     <string>Wifi Settings</string>
+    </property>
+    <property name="autoDefault">
+     <bool>false</bool>
+    </property>
+    <property name="default">
+     <bool>false</bool>
+    </property>
+    <property name="flat">
+     <bool>false</bool>
+    </property>
+    <property name="class" stdset="0">
+     <string>system_control_btn</string>
+    </property>
+   </widget>
+   <widget class="CustomQPushButton" name="pushButton">
+    <property name="geometry">
+     <rect>
+      <x>600</x>
+      <y>0</y>
+      <width>200</width>
+      <height>80</height>
+     </rect>
+    </property>
+    <property name="sizePolicy">
+     <sizepolicy hsizetype="MinimumExpanding" vsizetype="Fixed">
+      <horstretch>0</horstretch>
+      <verstretch>0</verstretch>
+     </sizepolicy>
+    </property>
+    <property name="minimumSize">
+     <size>
+      <width>200</width>
+      <height>80</height>
+     </size>
+    </property>
+    <property name="maximumSize">
+     <size>
+      <width>200</width>
+      <height>80</height>
+     </size>
+    </property>
+    <property name="baseSize">
      <size>
       <width>200</width>
       <height>80</height>
@@ -544,7 +621,7 @@
   <customwidget>
    <class>CustomQPushButton</class>
    <extends>QPushButton</extends>
-   <header location="global">customqpushbutton.h</header>
+   <header location="global">qt_ui.ui_util.h</header>
   </customwidget>
  </customwidgets>
  <resources>

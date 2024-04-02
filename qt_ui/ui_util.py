@@ -12,6 +12,7 @@ class CustomQPushButton(QPushButton):
         QPushButton (_type_): 
     """
     # TODO: Icon image quality fix
+    # TODO: Icon Transparency
 
     def __init__(self, parent,  x: int = 0, y: int = 0, *args, **kwargs):
         super(CustomQPushButton, self).__init__(parent, *args, **kwargs)
@@ -22,6 +23,12 @@ class CustomQPushButton(QPushButton):
 
         self.iconPosition = QtCore.QPoint(0, 0)
         self.iconPixmap: QtGui.QPixmap | None = None
+        self.borderIconLeft: QtGui.QPixmap | None = None
+        self.borderIconCenter: QtGui.QPixmap | None = None
+        self.borderIconRight: QtGui.QPixmap | None = None
+        self.borderLeftRect: QtCore.QRect = QtCore.QRect()
+        self.borderCenterRect: QtCore.QRect = QtCore.QRect()
+        self.borderRightRect: QtCore.QRect = QtCore.QRect()
         self._colorSet = False
 
     def sizeHint(self):
@@ -88,13 +95,16 @@ class CustomQPushButton(QPushButton):
             iconRect = QtCore.QRect(iconCenter, iconSize)
 
             if self.iconPixmap is not None:
+
                 self._iconColored = self.setIconColor(
-                    self.iconPixmap, QtGui.QColor(188, 188, 188, 255), qp, iconSize, iconCenter, iconRect)
+                    # self.iconPixmap, QtGui.QColor(188, 188, 188, 255), qp, iconSize, iconCenter, iconRect)
+                    self.iconPixmap, QtGui.QColor(188, 1, 188, 255), qp, iconSize, iconCenter, iconRect)
                 self._icon = self._iconColored
+                # * Draw border image
+                self.setButtonBorder(qp)
 
             # * Draw the Button
             qp.drawControl(QStyle.ControlElement.CE_PushButton, opt)
-
             # *  Draw Text stuff over the button
             # qp.setCompositionMode(qp.CompositionMode.CompositionMode_SourceOver)
             labelRect = QtCore.QRect(rect)
@@ -141,17 +151,19 @@ class CustomQPushButton(QPushButton):
             qp.CompositionMode.CompositionMode_Xor)
 
         qp.drawPixmap(iconRect, self._icon.pixmap(
-            iconSize, mode=mode, state=state))
+            iconSize, 2.0, mode=mode, state=state))
 
+        # * Paint the Icon Color
         qp.setCompositionMode(
             qp.CompositionMode.CompositionMode_Overlay)
 
         qp.drawPixmap(iconRect, _iconColor)
 
         # ? This makes the icon be grayer when i click it
-        self._icon.addPixmap(_iconMask, mode=mode, state=state)
-
-        # * Paint the Icon Color
+        self._icon.addPixmap(_iconMask.scaled(_iconMask.size(),
+                                              QtCore.Qt.AspectRatioMode.KeepAspectRatio,
+                                              QtCore.Qt.TransformationMode.SmoothTransformation
+                                              ), mode=mode, state=state)
 
         # * Draw the Icon
         qp.drawPixmap(iconRect, self._icon.pixmap(
@@ -161,6 +173,43 @@ class CustomQPushButton(QPushButton):
         qp.restore()
         return QtGui.QIcon(pixmap)
 
+    def setButtonBorder(self,  qp: QtWidgets.QStylePainter):
+
+        qp.save()
+
+        qp.setCompositionMode(
+            qp.CompositionMode.CompositionMode_Plus)
+        rect = self.rect()
+
+        if self.borderLeftRect is not None and self.borderIconLeft is not None:
+            qp.drawItemPixmap(
+                self.borderLeftRect, QtCore.Qt.AlignmentFlag.AlignLeft,
+                self.borderIconLeft.scaled(self.borderLeftRect.size(),
+                                           QtCore.Qt.AspectRatioMode.KeepAspectRatio,
+                                           QtCore.Qt.TransformationMode.SmoothTransformation)
+            )
+
+            print(self.borderLeftRect.right())
+            self.borderCenterRect.setLeft(self.borderLeftRect.right())
+            # print(self.borderCenterRect
+            qp.drawItemPixmap(
+                self.borderCenterRect, QtCore.Qt.AlignmentFlag.AlignTrailing,
+                self.borderIconCenter.scaled(self.borderCenterRect.size(),
+                                             QtCore.Qt.AspectRatioMode.KeepAspectRatio,
+                                             QtCore.Qt.TransformationMode.SmoothTransformation)
+            )
+
+            # self.borderRightRect.setLeft(self.borderCenterRect.right())
+            # qp.drawItemPixmap(
+            #     self.borderRightRect, QtCore.Qt.AlignmentFlag.AlignRight, self.borderIconRight
+            # )
+
+            # qp.fillRect(self.borderLeftRect , QtGui.QColor(23,144,111,1))
+
+        qp.restore()
+
+        return True
+
     def setProperty(self, name: str, value: typing.Any) -> bool:
         if name == "setIconPosition":
             self.iconPosition.setX(value.x())
@@ -169,6 +218,18 @@ class CustomQPushButton(QPushButton):
             # self._icon.addPixmap(value)
             self.iconPixmap = value
             # super().setIcon(QtGui.QIcon())
+        elif name == "borderLeftPixmap":
+            self.borderIconLeft = value
+        elif name == "borderCenterPixmap":
+            self.borderIconCenter = value
+        elif name == "borderRightPixmap":
+            self.borderIconRight = value
+        elif name == "borderLeftRect":
+            self.borderLeftRect = value
+        elif name == "borderCenterRect":
+            self.borderCenterRect = value
+        elif name == "borderRightRect":
+            self.borderRightRect = value
         return super().setProperty(name, value)
 
     def hitButton(self, pos: QtCore.QPoint) -> bool:

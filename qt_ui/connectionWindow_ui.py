@@ -26,7 +26,7 @@ class Ui_ConnectivityForm(object):
 "    background-image: url(:/Main_background/1st_background.png);\n"
 "}\n"
 "#ButtonFrame > QPushButton{\n"
-"    border-image: url(:/Svgtype/media/btn_small.svg);\n"
+"    \n"
 "    color: #424242;\n"
 "    min-height: 80px;\n"
 "    max-height: 80px; \n"
@@ -34,19 +34,13 @@ class Ui_ConnectivityForm(object):
 "    max-width: 200px;    \n"
 "}\n"
 "#ButtonFrame > QPushButton::pressed{\n"
-"    border-image: url(:/Svgtype/media/btn_small_PRESSED.svg);\n"
-"    color: #8e8d8d;\n"
+"    \n"
+"    border-color: #8e8d8d;\n"
 "    font-family: Momcake;\n"
 "    font-style: normal;\n"
-"    font-size: 20pt;\n"
+"    font-size: 14pt;\n"
 "}\n"
-"#ButtonFrame > CustomQPushButton::pressed{\n"
-"    border-image: url(:/Svgtype/media/btn_small_PRESSED.svg);\n"
-"    color: #8e8d8d;\n"
-"    font-family: Momcake;\n"
-"    font-style: normal;\n"
-"    font-size: 20pt;\n"
-"}\n"
+"\n"
 "#TextFrame > QLabel{\n"
 "    text-align: center;\n"
 "    font-family: Momcake;\n"
@@ -54,7 +48,9 @@ class Ui_ConnectivityForm(object):
 "    font-size: 18pt;\n"
 "    color: rgba(255,255,255,1);\n"
 "    text-align: center\n"
-"}")
+"}\n"
+"\n"
+"")
         ConnectivityForm.setProperty("class", "")
         self.ButtonFrame = QtWidgets.QFrame(parent=ConnectivityForm)
         self.ButtonFrame.setGeometry(QtCore.QRect(-1, 400, 800, 80))
@@ -72,14 +68,15 @@ class Ui_ConnectivityForm(object):
         self.ButtonFrame.setLineWidth(0)
         self.ButtonFrame.setObjectName("ButtonFrame")
         self.RestartKlipperButton = CustomQPushButton(parent=self.ButtonFrame)
-        self.RestartKlipperButton.setGeometry(QtCore.QRect(0, 0, 200, 80))
+        self.RestartKlipperButton.setGeometry(QtCore.QRect(0, 0, 202, 82))
         sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Minimum)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(self.RestartKlipperButton.sizePolicy().hasHeightForWidth())
         self.RestartKlipperButton.setSizePolicy(sizePolicy)
-        self.RestartKlipperButton.setMinimumSize(QtCore.QSize(200, 80))
-        self.RestartKlipperButton.setBaseSize(QtCore.QSize(200, 50))
+        self.RestartKlipperButton.setMinimumSize(QtCore.QSize(202, 82))
+        self.RestartKlipperButton.setMaximumSize(QtCore.QSize(202, 82))
+        self.RestartKlipperButton.setBaseSize(QtCore.QSize(200, 80))
         palette = QtGui.QPalette()
         brush = QtGui.QBrush(QtGui.QColor(66, 66, 66))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
@@ -110,8 +107,9 @@ class Ui_ConnectivityForm(object):
         palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.ButtonText, brush)
         self.RestartKlipperButton.setPalette(palette)
         font = QtGui.QFont()
-        font.setStyleStrategy(QtGui.QFont.StyleStrategy.NoAntialias)
+        font.setStyleStrategy(QtGui.QFont.StyleStrategy.PreferAntialias)
         self.RestartKlipperButton.setFont(font)
+        self.RestartKlipperButton.setCursor(QtGui.QCursor(QtCore.Qt.CursorShape.BlankCursor))
         self.RestartKlipperButton.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
         self.RestartKlipperButton.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.NoContextMenu)
         self.RestartKlipperButton.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
@@ -119,7 +117,6 @@ class Ui_ConnectivityForm(object):
         self.RestartKlipperButton.setStyleSheet("")
         icon = QtGui.QIcon()
         icon.addPixmap(QtGui.QPixmap(":/Svgtype/media/icons/restart_klippersvg.svg"), QtGui.QIcon.Mode.Normal, QtGui.QIcon.State.Off)
-        icon.addPixmap(QtGui.QPixmap(":/Svgtype/media/icons/restart_klippersvg_PRESSED.svg"), QtGui.QIcon.Mode.Normal, QtGui.QIcon.State.On)
         self.RestartKlipperButton.setIcon(icon)
         self.RestartKlipperButton.setIconSize(QtCore.QSize(46, 42))
         self.RestartKlipperButton.setCheckable(False)
@@ -127,16 +124,27 @@ class Ui_ConnectivityForm(object):
         self.RestartKlipperButton.setAutoExclusive(False)
         self.RestartKlipperButton.setAutoRepeatDelay(0)
         self.RestartKlipperButton.setAutoRepeatInterval(0)
+        self.RestartKlipperButton.setFlat(True)
         self.RestartKlipperButton.setProperty("setIconPosition", QtCore.QPoint(-2, -2))
+        self.RestartKlipperButton.setProperty("iconPath", QtGui.QPixmap(":/Svgtype/media/icons/restart_klippersvg.svg"))
+        self.RestartKlipperButton.setProperty("iconPixmap", QtGui.QPixmap(":/Svgtype/media/icons/restart_klippersvg.svg"))
+        self.RestartKlipperButton.setProperty("borderLeftPixmap", QtGui.QPixmap(":/seperated_borders/media/separated_border/btn1.svg"))
+        self.RestartKlipperButton.setProperty("borderCenterPixmap", QtGui.QPixmap(":/seperated_borders/media/separated_border/btn2.svg"))
+        self.RestartKlipperButton.setProperty("borderRightPixmap", QtGui.QPixmap(":/seperated_borders/media/separated_border/btn3.svg"))
+        self.RestartKlipperButton.setProperty("borderRightRect", QtCore.QRect(0, 0, 50, 80))
+        self.RestartKlipperButton.setProperty("borderLeftRect", QtCore.QRect(0, 0, 80, 80))
+        self.RestartKlipperButton.setProperty("borderCenterRect", QtCore.QRect(0, 0, 100, 80))
         self.RestartKlipperButton.setObjectName("RestartKlipperButton")
-        self.RetryConnectionButton = QtWidgets.QPushButton(parent=self.ButtonFrame)
-        self.RetryConnectionButton.setGeometry(QtCore.QRect(204, 0, 200, 80))
+        self.RetryConnectionButton = CustomQPushButton(parent=self.ButtonFrame)
+        self.RetryConnectionButton.setGeometry(QtCore.QRect(200, 0, 200, 80))
         sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.MinimumExpanding, QtWidgets.QSizePolicy.Policy.Fixed)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(self.RetryConnectionButton.sizePolicy().hasHeightForWidth())
         self.RetryConnectionButton.setSizePolicy(sizePolicy)
         self.RetryConnectionButton.setMinimumSize(QtCore.QSize(200, 80))
+        self.RetryConnectionButton.setMaximumSize(QtCore.QSize(200, 80))
+        self.RetryConnectionButton.setBaseSize(QtCore.QSize(200, 80))
         self.RetryConnectionButton.setFocusPolicy(QtCore.Qt.FocusPolicy.ClickFocus)
         self.RetryConnectionButton.setAutoFillBackground(False)
         self.RetryConnectionButton.setStyleSheet("")
@@ -144,12 +152,14 @@ class Ui_ConnectivityForm(object):
         icon1.addPixmap(QtGui.QPixmap(":/General_icons/media/icons/retry_connection.png"), QtGui.QIcon.Mode.Normal, QtGui.QIcon.State.Off)
         icon1.addPixmap(QtGui.QPixmap(":/General_icons/media/icons/retry_connection_PRESSED.png"), QtGui.QIcon.Mode.Normal, QtGui.QIcon.State.On)
         self.RetryConnectionButton.setIcon(icon1)
+        self.RetryConnectionButton.setAutoRepeatDelay(0)
+        self.RetryConnectionButton.setAutoRepeatInterval(0)
         self.RetryConnectionButton.setAutoDefault(False)
         self.RetryConnectionButton.setDefault(False)
         self.RetryConnectionButton.setFlat(False)
         self.RetryConnectionButton.setObjectName("RetryConnectionButton")
-        self.WifiButton = QtWidgets.QPushButton(parent=self.ButtonFrame)
-        self.WifiButton.setGeometry(QtCore.QRect(403, 0, 200, 80))
+        self.WifiButton = CustomQPushButton(parent=self.ButtonFrame)
+        self.WifiButton.setGeometry(QtCore.QRect(400, 0, 200, 80))
         sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.MinimumExpanding, QtWidgets.QSizePolicy.Policy.Fixed)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
@@ -157,30 +167,29 @@ class Ui_ConnectivityForm(object):
         self.WifiButton.setSizePolicy(sizePolicy)
         self.WifiButton.setMinimumSize(QtCore.QSize(200, 80))
         self.WifiButton.setMaximumSize(QtCore.QSize(200, 80))
+        self.WifiButton.setBaseSize(QtCore.QSize(200, 80))
         self.WifiButton.setFocusPolicy(QtCore.Qt.FocusPolicy.ClickFocus)
         self.WifiButton.setAutoFillBackground(False)
-        icon2 = QtGui.QIcon()
-        icon2.addPixmap(QtGui.QPixmap(":/General_icons/media/icons/wifi_settings.png"), QtGui.QIcon.Mode.Normal, QtGui.QIcon.State.Off)
-        icon2.addPixmap(QtGui.QPixmap(":/General_icons/media/icons/wifi_settings_PRESSED.png"), QtGui.QIcon.Mode.Normal, QtGui.QIcon.State.On)
-        self.WifiButton.setIcon(icon2)
         self.WifiButton.setAutoDefault(False)
         self.WifiButton.setDefault(False)
         self.WifiButton.setFlat(False)
         self.WifiButton.setObjectName("WifiButton")
-        self.pushButton = QtWidgets.QPushButton(parent=self.ButtonFrame)
-        self.pushButton.setGeometry(QtCore.QRect(601, 0, 200, 80))
+        self.pushButton = CustomQPushButton(parent=self.ButtonFrame)
+        self.pushButton.setGeometry(QtCore.QRect(600, 0, 200, 80))
         sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.MinimumExpanding, QtWidgets.QSizePolicy.Policy.Fixed)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(self.pushButton.sizePolicy().hasHeightForWidth())
         self.pushButton.setSizePolicy(sizePolicy)
         self.pushButton.setMinimumSize(QtCore.QSize(200, 80))
+        self.pushButton.setMaximumSize(QtCore.QSize(200, 80))
+        self.pushButton.setBaseSize(QtCore.QSize(200, 80))
         self.pushButton.setFocusPolicy(QtCore.Qt.FocusPolicy.ClickFocus)
         self.pushButton.setAutoFillBackground(False)
-        icon3 = QtGui.QIcon()
-        icon3.addPixmap(QtGui.QPixmap(":/General_icons/media/icons/system_reboot.png"), QtGui.QIcon.Mode.Normal, QtGui.QIcon.State.Off)
-        icon3.addPixmap(QtGui.QPixmap(":/General_icons/media/icons/system_reboot_PRESSED.png"), QtGui.QIcon.Mode.Normal, QtGui.QIcon.State.On)
-        self.pushButton.setIcon(icon3)
+        icon2 = QtGui.QIcon()
+        icon2.addPixmap(QtGui.QPixmap(":/General_icons/media/icons/system_reboot.png"), QtGui.QIcon.Mode.Normal, QtGui.QIcon.State.Off)
+        icon2.addPixmap(QtGui.QPixmap(":/General_icons/media/icons/system_reboot_PRESSED.png"), QtGui.QIcon.Mode.Normal, QtGui.QIcon.State.On)
+        self.pushButton.setIcon(icon2)
         self.pushButton.setAutoDefault(False)
         self.pushButton.setDefault(False)
         self.pushButton.setFlat(False)

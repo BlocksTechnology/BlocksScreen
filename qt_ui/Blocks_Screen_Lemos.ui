@@ -663,7 +663,7 @@ QPushButto::pressed{
                <string notr="true"/>
               </property>
               <property name="text">
-               <string>Main</string>
+               <string>Filament</string>
               </property>
               <property name="alignment">
                <set>Qt::AlignCenter</set>
