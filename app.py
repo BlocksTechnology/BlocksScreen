@@ -1,19 +1,15 @@
-import logging
 import sys
-import PyQt6
-from PyQt6 import uic
-from PyQt6.QtCore import QEvent, QEventLoop, QObject, Qt, pyqtSignal, pyqtSlot, QCoreApplication
-from PyQt6.QtWidgets import (QApplication, QDockWidget, QFrame, QMainWindow, QSplashScreen,
-                             QWidget, QPushButton)
-from PyQt6.QtGui import QColor, QPixmap
+from PyQt6.QtCore import pyqtSignal, pyqtSlot
+from PyQt6.QtWidgets import (QApplication, QMainWindow, QSplashScreen)
+from PyQt6.QtGui import QPixmap
 from qt_ui.Blocks_Screen_Lemos_ui import Ui_MainWindow
-from qt_ui.connectionWindow_ui import Ui_ConnectivityForm
-from scripts.moonrakerComm import (WebSocketMessageReceivedEvent, MoonAPI,
-                                   MoonWebSocket, WebSocketConnectingEvent, WebSocketOpenEvent)
+from scripts.moonrakerComm import (WebSocketMessageReceivedEvent, MoonWebSocket)
 from scripts.moonrest import MoonRest
-from resources import UI_Resources_rc
-from qt_ui.ui_util import CustomQPushButton
 
+
+from panels.connectionWindow import ConnectionWindow
+
+from resources.UI_Resources_rc import *
 """
     QSplashScreen
     Functions ->
@@ -35,57 +31,8 @@ from qt_ui.ui_util import CustomQPushButton
 """
 
 
-class ConnectionWindow(QFrame):
-    def __init__(self, main_window, *args, **kwargs):
-        super(ConnectionWindow, self).__init__(
-            parent=main_window, *args, **kwargs)
-        self.main_window = main_window
-        self.con_window = Ui_ConnectivityForm()
-        self.con_window.setupUi(self)
-        
-        # self.con_window.RestartKlipperButton.clicked.connect(self.yo)
-        # self.newButton.setIcon(self)
-        self.setGeometry(self.frameRect())
-        self.setEnabled(True)
-        self.show()
-    
-    @pyqtSlot(name="App-start")
-    def initialize(self):
-        print("HLELL")
-        self.main_window.ws.start()
-        self.main_window.ws.try_connection()
-
-    
-    @pyqtSlot(int)
-    @pyqtSlot(name="update-text")
-    def text_update(self, reconnect_count):
-        if reconnect_count == 0:
-            self.con_window.connectionTextBox.setText("""
-                Unable to Connect to moonraker websocket\n
-                \t Try again by reconnecting or \n
-                \t restarting klipper.
-                                                      """)
-            return True
-        self.con_window.connectionTextBox.setText(
-            f"Connecting to Moonraker and Klipper. \n \
-                Connection Try number {reconnect_count}.")
-        return False
-    
-    # def event(self, event):
-    #     if event.type() == WebSocketConnectingEvent.wb_connecting_event_type:
-    #         # print(event.kwargs)
-    #         # self.close()
-    #         # self.main_window.show()
-
-    #         return True
-    #         # return super().event(event)
-    #         # return self.message_received_event(event)
-    #     # elif event.type() == WebSoc
-    #     return super().event(event)
-
-
 class MainWindow(QMainWindow):
-    app_initialize = pyqtSignal(name="App-start")
+    app_initialize = pyqtSignal(name="app-start-websocket-connection")
 
     def __init__(self, *args, **kwargs):
         super(MainWindow, self).__init__(*args, **kwargs)
@@ -99,22 +46,25 @@ class MainWindow(QMainWindow):
         # self.ui.pushButton_2.clicked.connect(self.initialize)
         # self.con_window..Re.clicked.connect(self.initialize)
         # self.ws.message_signal.connect(self.message)
-        
-        # @ Slot connections
-        self.app_initialize.connect(slot=self.start_window.initialize)
 
+        # @ Slot connections
+        self.app_initialize.connect(slot=self.initialize_websocket_connection)
+        self.ws.connected_signal.connect(slot= self.start_window.websocket_connection_achieved)
+        # self.ws.connection_lost.connect(slot= self.start_window.show_panel)
     # This slot is called when the button is pressed, it represents
 
-    @pyqtSlot()
-    def initialize(self):
+    @pyqtSlot(name="app-start-websocket-connection")
+    def initialize_websocket_connection(self):
         self.ws.start()
         self.ws.try_connection()
 
-        # if self._ws.connected:
+    @pyqtSlot(str)
+    @pyqtSlot(name="websocket-connection-lost")
+    def websocket_connection_lost(self, reason:str):
+        self.start_window.show_panel(reason)
 
     def event(self, event):
-        # print(event)
-        if event.type() == WebSocketMessageReceivedEvent.message_event_type:
+        if event.type() == WebSocketMessageReceivedEvent.message_event_type:  # TODO: This will go to another place
             # print(event.kwargs)
             return True
             # return super().event(event)
@@ -128,8 +78,10 @@ if __name__ == "__main__":
     pixmap = QPixmap("Blocks_Screen/media/logoblocks.png")
     splash = QSplashScreen(pixmap)
     # splash.setGeometry(main_window)
-    splash.showNormal()
+    splash.showNormal() 
     splash.showMessage("Loading")
+    
+    # @ Someone said that .processEvents sometimes crashes the system
     app.processEvents()
 
     # There is another way i can do this, by passing the .ui file to .py and then use that .py file in my app.
