@@ -923,8 +923,8 @@ filament</string>
             <rect>
              <x>50</x>
              <y>90</y>
-             <width>310</width>
-             <height>95</height>
+             <width>312</width>
+             <height>97</height>
             </rect>
            </property>
            <property name="text">
@@ -939,8 +939,8 @@ filament</string>
             <rect>
              <x>340</x>
              <y>90</y>
-             <width>310</width>
-             <height>95</height>
+             <width>312</width>
+             <height>97</height>
             </rect>
            </property>
            <property name="text">
@@ -955,8 +955,8 @@ filament</string>
             <rect>
              <x>50</x>
              <y>160</y>
-             <width>310</width>
-             <height>95</height>
+             <width>312</width>
+             <height>97</height>
             </rect>
            </property>
            <property name="text">
@@ -971,8 +971,8 @@ filament</string>
             <rect>
              <x>350</x>
              <y>160</y>
-             <width>310</width>
-             <height>95</height>
+             <width>312</width>
+             <height>97</height>
             </rect>
            </property>
            <property name="text">
@@ -987,8 +987,8 @@ filament</string>
             <rect>
              <x>50</x>
              <y>230</y>
-             <width>310</width>
-             <height>95</height>
+             <width>312</width>
+             <height>97</height>
             </rect>
            </property>
            <property name="text">
@@ -1003,8 +1003,8 @@ filament</string>
             <rect>
              <x>340</x>
              <y>230</y>
-             <width>310</width>
-             <height>95</height>
+             <width>312</width>
+             <height>97</height>
             </rect>
            </property>
            <property name="text">
@@ -1019,8 +1019,8 @@ filament</string>
             <rect>
              <x>190</x>
              <y>300</y>
-             <width>310</width>
-             <height>95</height>
+             <width>312</width>
+             <height>97</height>
             </rect>
            </property>
            <property name="text">
@@ -1056,8 +1056,8 @@ filament</string>
             <rect>
              <x>50</x>
              <y>230</y>
-             <width>310</width>
-             <height>95</height>
+             <width>312</width>
+             <height>97</height>
             </rect>
            </property>
            <property name="text">
@@ -1072,8 +1072,8 @@ filament</string>
             <rect>
              <x>50</x>
              <y>160</y>
-             <width>310</width>
-             <height>95</height>
+             <width>312</width>
+             <height>97</height>
             </rect>
            </property>
            <property name="text">
@@ -1088,8 +1088,8 @@ filament</string>
             <rect>
              <x>50</x>
              <y>90</y>
-             <width>310</width>
-             <height>95</height>
+             <width>312</width>
+             <height>97</height>
             </rect>
            </property>
            <property name="text">
@@ -1123,8 +1123,8 @@ filament</string>
             <rect>
              <x>340</x>
              <y>230</y>
-             <width>310</width>
-             <height>95</height>
+             <width>312</width>
+             <height>97</height>
             </rect>
            </property>
            <property name="text">
@@ -1139,8 +1139,8 @@ filament</string>
             <rect>
              <x>340</x>
              <y>90</y>
-             <width>310</width>
-             <height>95</height>
+             <width>312</width>
+             <height>97</height>
             </rect>
            </property>
            <property name="text">
@@ -1155,8 +1155,8 @@ filament</string>
             <rect>
              <x>190</x>
              <y>300</y>
-             <width>310</width>
-             <height>95</height>
+             <width>312</width>
+             <height>97</height>
             </rect>
            </property>
            <property name="text">
@@ -1171,8 +1171,8 @@ filament</string>
             <rect>
              <x>350</x>
              <y>160</y>
-             <width>310</width>
-             <height>95</height>
+             <width>312</width>
+             <height>97</height>
             </rect>
            </property>
            <property name="text">
@@ -1231,8 +1231,8 @@ filament</string>
             <rect>
              <x>50</x>
              <y>210</y>
-             <width>310</width>
-             <height>95</height>
+             <width>312</width>
+             <height>97</height>
             </rect>
            </property>
            <property name="text">
@@ -1247,8 +1247,8 @@ filament</string>
             <rect>
              <x>50</x>
              <y>300</y>
-             <width>310</width>
-             <height>95</height>
+             <width>312</width>
+             <height>97</height>
             </rect>
            </property>
            <property name="text">
@@ -1263,8 +1263,8 @@ filament</string>
             <rect>
              <x>360</x>
              <y>210</y>
-             <width>310</width>
-             <height>95</height>
+             <width>312</width>
+             <height>97</height>
             </rect>
            </property>
            <property name="text">
@@ -1279,8 +1279,8 @@ filament</string>
             <rect>
              <x>360</x>
              <y>300</y>
-             <width>310</width>
-             <height>95</height>
+             <width>312</width>
+             <height>97</height>
             </rect>
            </property>
            <property name="text">
@@ -1328,7 +1328,7 @@ filament</string>
              <x>40</x>
              <y>42</y>
              <width>634</width>
-             <height>355</height>
+             <height>361</height>
             </rect>
            </property>
            <layout class="QGridLayout" name="control_grid">
@@ -1609,8 +1609,8 @@ steppers</string>
             <rect>
              <x>90</x>
              <y>80</y>
-             <width>310</width>
-             <height>95</height>
+             <width>312</width>
+             <height>97</height>
             </rect>
            </property>
            <property name="text">
@@ -1625,8 +1625,8 @@ steppers</string>
             <rect>
              <x>120</x>
              <y>190</y>
-             <width>310</width>
-             <height>95</height>
+             <width>312</width>
+             <height>97</height>
             </rect>
            </property>
            <property name="text">

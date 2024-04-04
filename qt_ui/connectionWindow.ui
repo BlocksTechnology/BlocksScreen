@@ -2,6 +2,9 @@
 <ui version="4.0">
  <class>ConnectivityForm</class>
  <widget class="QWidget" name="ConnectivityForm">
+  <property name="windowModality">
+   <enum>Qt::WindowModal</enum>
+  </property>
   <property name="geometry">
    <rect>
     <x>0</x>
@@ -81,7 +84,7 @@
     </rect>
    </property>
    <property name="sizePolicy">
-    <sizepolicy hsizetype="Minimum" vsizetype="Minimum">
+    <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
      <horstretch>0</horstretch>
      <verstretch>0</verstretch>
     </sizepolicy>
@@ -101,8 +104,19 @@
    <property name="baseSize">
     <size>
      <width>800</width>
-     <height>100</height>
+     <height>80</height>
     </size>
+   </property>
+   <property name="font">
+    <font>
+     <stylestrategy>PreferAntialias</stylestrategy>
+    </font>
+   </property>
+   <property name="tabletTracking">
+    <bool>true</bool>
+   </property>
+   <property name="autoFillBackground">
+    <bool>false</bool>
    </property>
    <property name="styleSheet">
     <string notr="true"/>
@@ -116,418 +130,425 @@
    <property name="lineWidth">
     <number>0</number>
    </property>
-   <widget class="CustomQPushButton" name="RestartKlipperButton">
-    <property name="geometry">
-     <rect>
-      <x>0</x>
-      <y>0</y>
-      <width>202</width>
-      <height>82</height>
-     </rect>
-    </property>
-    <property name="sizePolicy">
-     <sizepolicy hsizetype="Minimum" vsizetype="Minimum">
-      <horstretch>0</horstretch>
-      <verstretch>0</verstretch>
-     </sizepolicy>
-    </property>
-    <property name="minimumSize">
-     <size>
-      <width>202</width>
-      <height>82</height>
-     </size>
-    </property>
-    <property name="maximumSize">
-     <size>
-      <width>202</width>
-      <height>82</height>
-     </size>
-    </property>
-    <property name="baseSize">
-     <size>
-      <width>200</width>
-      <height>80</height>
-     </size>
-    </property>
-    <property name="palette">
-     <palette>
-      <active>
-       <colorrole role="WindowText">
-        <brush brushstyle="SolidPattern">
-         <color alpha="255">
-          <red>66</red>
-          <green>66</green>
-          <blue>66</blue>
-         </color>
-        </brush>
-       </colorrole>
-       <colorrole role="Text">
-        <brush brushstyle="SolidPattern">
-         <color alpha="255">
-          <red>66</red>
-          <green>66</green>
-          <blue>66</blue>
-         </color>
-        </brush>
-       </colorrole>
-       <colorrole role="ButtonText">
-        <brush brushstyle="SolidPattern">
-         <color alpha="255">
-          <red>66</red>
-          <green>66</green>
-          <blue>66</blue>
-         </color>
-        </brush>
-       </colorrole>
-      </active>
-      <inactive>
-       <colorrole role="WindowText">
-        <brush brushstyle="SolidPattern">
-         <color alpha="255">
-          <red>66</red>
-          <green>66</green>
-          <blue>66</blue>
-         </color>
-        </brush>
-       </colorrole>
-       <colorrole role="Text">
-        <brush brushstyle="SolidPattern">
-         <color alpha="255">
-          <red>66</red>
-          <green>66</green>
-          <blue>66</blue>
-         </color>
-        </brush>
-       </colorrole>
-       <colorrole role="ButtonText">
-        <brush brushstyle="SolidPattern">
-         <color alpha="255">
-          <red>66</red>
-          <green>66</green>
-          <blue>66</blue>
-         </color>
-        </brush>
-       </colorrole>
-      </inactive>
-      <disabled>
-       <colorrole role="WindowText">
-        <brush brushstyle="SolidPattern">
-         <color alpha="255">
-          <red>66</red>
-          <green>66</green>
-          <blue>66</blue>
-         </color>
-        </brush>
-       </colorrole>
-       <colorrole role="Text">
-        <brush brushstyle="SolidPattern">
-         <color alpha="255">
-          <red>66</red>
-          <green>66</green>
-          <blue>66</blue>
-         </color>
-        </brush>
-       </colorrole>
-       <colorrole role="ButtonText">
-        <brush brushstyle="SolidPattern">
-         <color alpha="255">
-          <red>66</red>
-          <green>66</green>
-          <blue>66</blue>
-         </color>
-        </brush>
-       </colorrole>
-      </disabled>
-     </palette>
-    </property>
-    <property name="font">
-     <font>
-      <stylestrategy>PreferAntialias</stylestrategy>
-     </font>
-    </property>
-    <property name="cursor">
-     <cursorShape>BlankCursor</cursorShape>
-    </property>
-    <property name="focusPolicy">
-     <enum>Qt::NoFocus</enum>
-    </property>
-    <property name="contextMenuPolicy">
-     <enum>Qt::NoContextMenu</enum>
-    </property>
-    <property name="layoutDirection">
-     <enum>Qt::LeftToRight</enum>
-    </property>
-    <property name="autoFillBackground">
-     <bool>false</bool>
-    </property>
-    <property name="styleSheet">
-     <string notr="true"/>
-    </property>
-    <property name="text">
-     <string>Restart Klipper</string>
-    </property>
-    <property name="icon">
-     <iconset resource="../resources/UI_Resources.qrc">
-      <normaloff>:/Svgtype/media/icons/restart_klippersvg.svg</normaloff>:/Svgtype/media/icons/restart_klippersvg.svg</iconset>
-    </property>
-    <property name="iconSize">
-     <size>
-      <width>46</width>
-      <height>42</height>
-     </size>
-    </property>
-    <property name="checkable">
-     <bool>false</bool>
-    </property>
-    <property name="autoRepeat">
-     <bool>false</bool>
-    </property>
-    <property name="autoExclusive">
-     <bool>false</bool>
-    </property>
-    <property name="autoRepeatDelay">
+   <layout class="QHBoxLayout" name="horizontalLayout">
+    <property name="spacing">
      <number>0</number>
     </property>
-    <property name="autoRepeatInterval">
+    <property name="sizeConstraint">
+     <enum>QLayout::SetDefaultConstraint</enum>
+    </property>
+    <property name="leftMargin">
      <number>0</number>
     </property>
-    <property name="flat">
-     <bool>true</bool>
-    </property>
-    <property name="setIconPosition" stdset="0">
-     <point>
-      <x>-2</x>
-      <y>-2</y>
-     </point>
-    </property>
-    <property name="iconPath" stdset="0">
-     <pixmap resource="../resources/UI_Resources.qrc">:/Svgtype/media/icons/restart_klippersvg.svg</pixmap>
-    </property>
-    <property name="iconPixmap" stdset="0">
-     <pixmap resource="../resources/UI_Resources.qrc">:/Svgtype/media/icons/restart_klippersvg.svg</pixmap>
-    </property>
-    <property name="borderLeftPixmap" stdset="0">
-     <pixmap resource="../resources/UI_Resources.qrc">:/seperated_borders/media/separated_border/btn1.svg</pixmap>
-    </property>
-    <property name="borderCenterPixmap" stdset="0">
-     <pixmap resource="../resources/UI_Resources.qrc">:/seperated_borders/media/separated_border/btn2.svg</pixmap>
-    </property>
-    <property name="borderRightPixmap" stdset="0">
-     <pixmap resource="../resources/UI_Resources.qrc">:/seperated_borders/media/separated_border/btn3.svg</pixmap>
-    </property>
-    <property name="borderRightRect" stdset="0">
-     <rect>
-      <x>0</x>
-      <y>0</y>
-      <width>50</width>
-      <height>80</height>
-     </rect>
-    </property>
-    <property name="borderLeftRect" stdset="0">
-     <rect>
-      <x>0</x>
-      <y>0</y>
-      <width>80</width>
-      <height>80</height>
-     </rect>
-    </property>
-    <property name="borderCenterRect" stdset="0">
-     <rect>
-      <x>0</x>
-      <y>0</y>
-      <width>100</width>
-      <height>80</height>
-     </rect>
-    </property>
-   </widget>
-   <widget class="CustomQPushButton" name="RetryConnectionButton">
-    <property name="geometry">
-     <rect>
-      <x>200</x>
-      <y>0</y>
-      <width>200</width>
-      <height>80</height>
-     </rect>
-    </property>
-    <property name="sizePolicy">
-     <sizepolicy hsizetype="MinimumExpanding" vsizetype="Fixed">
-      <horstretch>0</horstretch>
-      <verstretch>0</verstretch>
-     </sizepolicy>
-    </property>
-    <property name="minimumSize">
-     <size>
-      <width>200</width>
-      <height>80</height>
-     </size>
-    </property>
-    <property name="maximumSize">
-     <size>
-      <width>200</width>
-      <height>80</height>
-     </size>
-    </property>
-    <property name="baseSize">
-     <size>
-      <width>200</width>
-      <height>80</height>
-     </size>
-    </property>
-    <property name="focusPolicy">
-     <enum>Qt::ClickFocus</enum>
-    </property>
-    <property name="autoFillBackground">
-     <bool>false</bool>
-    </property>
-    <property name="styleSheet">
-     <string notr="true"/>
-    </property>
-    <property name="text">
-     <string>Retry Connection</string>
-    </property>
-    <property name="icon">
-     <iconset resource="../resources/UI_Resources.qrc">
-      <normaloff>:/General_icons/media/icons/retry_connection.png</normaloff>
-      <normalon>:/General_icons/media/icons/retry_connection_PRESSED.png</normalon>:/General_icons/media/icons/retry_connection.png</iconset>
-    </property>
-    <property name="autoRepeatDelay">
+    <property name="topMargin">
      <number>0</number>
     </property>
-    <property name="autoRepeatInterval">
+    <property name="rightMargin">
      <number>0</number>
     </property>
-    <property name="autoDefault">
-     <bool>false</bool>
+    <property name="bottomMargin">
+     <number>0</number>
     </property>
-    <property name="default">
-     <bool>false</bool>
-    </property>
-    <property name="flat">
-     <bool>false</bool>
-    </property>
-    <property name="class" stdset="0">
-     <string>system_control_btn</string>
-    </property>
-   </widget>
-   <widget class="CustomQPushButton" name="WifiButton">
-    <property name="geometry">
-     <rect>
-      <x>400</x>
-      <y>0</y>
-      <width>200</width>
-      <height>80</height>
-     </rect>
-    </property>
-    <property name="sizePolicy">
-     <sizepolicy hsizetype="MinimumExpanding" vsizetype="Fixed">
-      <horstretch>0</horstretch>
-      <verstretch>0</verstretch>
-     </sizepolicy>
-    </property>
-    <property name="minimumSize">
-     <size>
-      <width>200</width>
-      <height>80</height>
-     </size>
-    </property>
-    <property name="maximumSize">
-     <size>
-      <width>200</width>
-      <height>80</height>
-     </size>
-    </property>
-    <property name="baseSize">
-     <size>
-      <width>200</width>
-      <height>80</height>
-     </size>
-    </property>
-    <property name="focusPolicy">
-     <enum>Qt::ClickFocus</enum>
-    </property>
-    <property name="autoFillBackground">
-     <bool>false</bool>
-    </property>
-    <property name="text">
-     <string>Wifi Settings</string>
-    </property>
-    <property name="autoDefault">
-     <bool>false</bool>
-    </property>
-    <property name="default">
-     <bool>false</bool>
-    </property>
-    <property name="flat">
-     <bool>false</bool>
-    </property>
-    <property name="class" stdset="0">
-     <string>system_control_btn</string>
-    </property>
-   </widget>
-   <widget class="CustomQPushButton" name="pushButton">
-    <property name="geometry">
-     <rect>
-      <x>600</x>
-      <y>0</y>
-      <width>200</width>
-      <height>80</height>
-     </rect>
-    </property>
-    <property name="sizePolicy">
-     <sizepolicy hsizetype="MinimumExpanding" vsizetype="Fixed">
-      <horstretch>0</horstretch>
-      <verstretch>0</verstretch>
-     </sizepolicy>
-    </property>
-    <property name="minimumSize">
-     <size>
-      <width>200</width>
-      <height>80</height>
-     </size>
-    </property>
-    <property name="maximumSize">
-     <size>
-      <width>200</width>
-      <height>80</height>
-     </size>
-    </property>
-    <property name="baseSize">
-     <size>
-      <width>200</width>
-      <height>80</height>
-     </size>
-    </property>
-    <property name="focusPolicy">
-     <enum>Qt::ClickFocus</enum>
-    </property>
-    <property name="autoFillBackground">
-     <bool>false</bool>
-    </property>
-    <property name="text">
-     <string>Reboot System</string>
-    </property>
-    <property name="icon">
-     <iconset resource="../resources/UI_Resources.qrc">
-      <normaloff>:/General_icons/media/icons/system_reboot.png</normaloff>
-      <normalon>:/General_icons/media/icons/system_reboot_PRESSED.png</normalon>:/General_icons/media/icons/system_reboot.png</iconset>
-    </property>
-    <property name="autoDefault">
-     <bool>false</bool>
-    </property>
-    <property name="default">
-     <bool>false</bool>
-    </property>
-    <property name="flat">
-     <bool>false</bool>
-    </property>
-    <property name="class" stdset="0">
-     <string>system_control_btn</string>
-    </property>
-   </widget>
-   <zorder>RetryConnectionButton</zorder>
-   <zorder>WifiButton</zorder>
-   <zorder>pushButton</zorder>
-   <zorder>RestartKlipperButton</zorder>
+    <item alignment="Qt::AlignHCenter|Qt::AlignTop">
+     <widget class="CustomQPushButton" name="RestartKlipperButton">
+      <property name="sizePolicy">
+       <sizepolicy hsizetype="Minimum" vsizetype="Minimum">
+        <horstretch>0</horstretch>
+        <verstretch>0</verstretch>
+       </sizepolicy>
+      </property>
+      <property name="minimumSize">
+       <size>
+        <width>200</width>
+        <height>80</height>
+       </size>
+      </property>
+      <property name="maximumSize">
+       <size>
+        <width>200</width>
+        <height>80</height>
+       </size>
+      </property>
+      <property name="baseSize">
+       <size>
+        <width>200</width>
+        <height>80</height>
+       </size>
+      </property>
+      <property name="palette">
+       <palette>
+        <active>
+         <colorrole role="WindowText">
+          <brush brushstyle="SolidPattern">
+           <color alpha="255">
+            <red>66</red>
+            <green>66</green>
+            <blue>66</blue>
+           </color>
+          </brush>
+         </colorrole>
+         <colorrole role="Text">
+          <brush brushstyle="SolidPattern">
+           <color alpha="255">
+            <red>66</red>
+            <green>66</green>
+            <blue>66</blue>
+           </color>
+          </brush>
+         </colorrole>
+         <colorrole role="ButtonText">
+          <brush brushstyle="SolidPattern">
+           <color alpha="255">
+            <red>66</red>
+            <green>66</green>
+            <blue>66</blue>
+           </color>
+          </brush>
+         </colorrole>
+        </active>
+        <inactive>
+         <colorrole role="WindowText">
+          <brush brushstyle="SolidPattern">
+           <color alpha="255">
+            <red>66</red>
+            <green>66</green>
+            <blue>66</blue>
+           </color>
+          </brush>
+         </colorrole>
+         <colorrole role="Text">
+          <brush brushstyle="SolidPattern">
+           <color alpha="255">
+            <red>66</red>
+            <green>66</green>
+            <blue>66</blue>
+           </color>
+          </brush>
+         </colorrole>
+         <colorrole role="ButtonText">
+          <brush brushstyle="SolidPattern">
+           <color alpha="255">
+            <red>66</red>
+            <green>66</green>
+            <blue>66</blue>
+           </color>
+          </brush>
+         </colorrole>
+        </inactive>
+        <disabled>
+         <colorrole role="WindowText">
+          <brush brushstyle="SolidPattern">
+           <color alpha="255">
+            <red>66</red>
+            <green>66</green>
+            <blue>66</blue>
+           </color>
+          </brush>
+         </colorrole>
+         <colorrole role="Text">
+          <brush brushstyle="SolidPattern">
+           <color alpha="255">
+            <red>66</red>
+            <green>66</green>
+            <blue>66</blue>
+           </color>
+          </brush>
+         </colorrole>
+         <colorrole role="ButtonText">
+          <brush brushstyle="SolidPattern">
+           <color alpha="255">
+            <red>66</red>
+            <green>66</green>
+            <blue>66</blue>
+           </color>
+          </brush>
+         </colorrole>
+        </disabled>
+       </palette>
+      </property>
+      <property name="font">
+       <font>
+        <strikeout>false</strikeout>
+        <stylestrategy>PreferAntialias</stylestrategy>
+       </font>
+      </property>
+      <property name="cursor">
+       <cursorShape>BlankCursor</cursorShape>
+      </property>
+      <property name="tabletTracking">
+       <bool>true</bool>
+      </property>
+      <property name="focusPolicy">
+       <enum>Qt::NoFocus</enum>
+      </property>
+      <property name="contextMenuPolicy">
+       <enum>Qt::NoContextMenu</enum>
+      </property>
+      <property name="layoutDirection">
+       <enum>Qt::LeftToRight</enum>
+      </property>
+      <property name="autoFillBackground">
+       <bool>false</bool>
+      </property>
+      <property name="styleSheet">
+       <string notr="true"/>
+      </property>
+      <property name="text">
+       <string>Restart Klipper</string>
+      </property>
+      <property name="icon">
+       <iconset resource="../resources/UI_Resources.qrc">
+        <normaloff>:/Svgtype/media/icons/restart_klippersvg.svg</normaloff>:/Svgtype/media/icons/restart_klippersvg.svg</iconset>
+      </property>
+      <property name="iconSize">
+       <size>
+        <width>46</width>
+        <height>42</height>
+       </size>
+      </property>
+      <property name="checkable">
+       <bool>false</bool>
+      </property>
+      <property name="autoRepeat">
+       <bool>false</bool>
+      </property>
+      <property name="autoExclusive">
+       <bool>false</bool>
+      </property>
+      <property name="autoRepeatDelay">
+       <number>0</number>
+      </property>
+      <property name="autoRepeatInterval">
+       <number>0</number>
+      </property>
+      <property name="autoDefault">
+       <bool>false</bool>
+      </property>
+      <property name="flat">
+       <bool>true</bool>
+      </property>
+      <property name="setIconPosition" stdset="0">
+       <point>
+        <x>-2</x>
+        <y>-2</y>
+       </point>
+      </property>
+      <property name="iconPath" stdset="0">
+       <pixmap resource="../resources/UI_Resources.qrc">:/Svgtype/media/icons/restart_klippersvg.svg</pixmap>
+      </property>
+      <property name="iconPixmap" stdset="0">
+       <pixmap resource="../resources/UI_Resources.qrc">:/Svgtype/media/icons/restart_klippersvg.svg</pixmap>
+      </property>
+      <property name="borderLeftPixmap" stdset="0">
+       <pixmap resource="../resources/UI_Resources.qrc">:/seperated_borders/media/separated_border/btn1.svg</pixmap>
+      </property>
+      <property name="borderCenterPixmap" stdset="0">
+       <pixmap resource="../resources/UI_Resources.qrc">:/seperated_borders/media/separated_border/btn2.svg</pixmap>
+      </property>
+      <property name="borderRightPixmap" stdset="0">
+       <pixmap resource="../resources/UI_Resources.qrc">:/seperated_borders/media/separated_border/btn3.svg</pixmap>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="CustomQPushButton" name="RebootSystemButton">
+      <property name="sizePolicy">
+       <sizepolicy hsizetype="Minimum" vsizetype="Minimum">
+        <horstretch>0</horstretch>
+        <verstretch>0</verstretch>
+       </sizepolicy>
+      </property>
+      <property name="minimumSize">
+       <size>
+        <width>200</width>
+        <height>80</height>
+       </size>
+      </property>
+      <property name="maximumSize">
+       <size>
+        <width>200</width>
+        <height>80</height>
+       </size>
+      </property>
+      <property name="baseSize">
+       <size>
+        <width>200</width>
+        <height>80</height>
+       </size>
+      </property>
+      <property name="focusPolicy">
+       <enum>Qt::ClickFocus</enum>
+      </property>
+      <property name="autoFillBackground">
+       <bool>false</bool>
+      </property>
+      <property name="text">
+       <string>Reboot System</string>
+      </property>
+      <property name="icon">
+       <iconset resource="../resources/UI_Resources.qrc">
+        <normaloff>:/General_icons/media/icons/system_reboot.png</normaloff>
+        <normalon>:/General_icons/media/icons/system_reboot_PRESSED.png</normalon>:/General_icons/media/icons/system_reboot.png</iconset>
+      </property>
+      <property name="autoDefault">
+       <bool>false</bool>
+      </property>
+      <property name="default">
+       <bool>false</bool>
+      </property>
+      <property name="flat">
+       <bool>true</bool>
+      </property>
+      <property name="class" stdset="0">
+       <string>system_control_btn</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="CustomQPushButton" name="RetryConnectionButton">
+      <property name="sizePolicy">
+       <sizepolicy hsizetype="Minimum" vsizetype="Minimum">
+        <horstretch>0</horstretch>
+        <verstretch>0</verstretch>
+       </sizepolicy>
+      </property>
+      <property name="minimumSize">
+       <size>
+        <width>200</width>
+        <height>80</height>
+       </size>
+      </property>
+      <property name="maximumSize">
+       <size>
+        <width>200</width>
+        <height>80</height>
+       </size>
+      </property>
+      <property name="baseSize">
+       <size>
+        <width>0</width>
+        <height>0</height>
+       </size>
+      </property>
+      <property name="tabletTracking">
+       <bool>true</bool>
+      </property>
+      <property name="focusPolicy">
+       <enum>Qt::ClickFocus</enum>
+      </property>
+      <property name="autoFillBackground">
+       <bool>false</bool>
+      </property>
+      <property name="styleSheet">
+       <string notr="true"/>
+      </property>
+      <property name="text">
+       <string>Retry Connection</string>
+      </property>
+      <property name="icon">
+       <iconset resource="../resources/UI_Resources.qrc">
+        <normaloff>:/Svgtype/media/icons/retry_connectionsvg.svg</normaloff>:/Svgtype/media/icons/retry_connectionsvg.svg</iconset>
+      </property>
+      <property name="iconSize">
+       <size>
+        <width>38</width>
+        <height>16</height>
+       </size>
+      </property>
+      <property name="checkable">
+       <bool>false</bool>
+      </property>
+      <property name="autoRepeatDelay">
+       <number>0</number>
+      </property>
+      <property name="autoRepeatInterval">
+       <number>0</number>
+      </property>
+      <property name="autoDefault">
+       <bool>false</bool>
+      </property>
+      <property name="default">
+       <bool>false</bool>
+      </property>
+      <property name="flat">
+       <bool>true</bool>
+      </property>
+      <property name="class" stdset="0">
+       <string>system_control_btn</string>
+      </property>
+      <property name="borderLeftPixmap" stdset="0">
+       <pixmap resource="../resources/UI_Resources.qrc">:/seperated_borders/media/separated_border/btn1.svg</pixmap>
+      </property>
+      <property name="borderCenterPixmap" stdset="0">
+       <pixmap resource="../resources/UI_Resources.qrc">:/seperated_borders/media/separated_border/btn2.svg</pixmap>
+      </property>
+      <property name="borderRightPixmap" stdset="0">
+       <pixmap resource="../resources/UI_Resources.qrc">:/seperated_borders/media/separated_border/btn3.svg</pixmap>
+      </property>
+      <property name="setIconPosition" stdset="0">
+       <point>
+        <x>-2</x>
+        <y>-2</y>
+       </point>
+      </property>
+      <property name="iconPixmap" stdset="0">
+       <pixmap resource="../resources/UI_Resources.qrc">:/Svgtype/media/icons/retry_connectionsvg.svg</pixmap>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="CustomQPushButton" name="WifiButton">
+      <property name="sizePolicy">
+       <sizepolicy hsizetype="Minimum" vsizetype="Minimum">
+        <horstretch>0</horstretch>
+        <verstretch>0</verstretch>
+       </sizepolicy>
+      </property>
+      <property name="minimumSize">
+       <size>
+        <width>200</width>
+        <height>80</height>
+       </size>
+      </property>
+      <property name="maximumSize">
+       <size>
+        <width>200</width>
+        <height>80</height>
+       </size>
+      </property>
+      <property name="baseSize">
+       <size>
+        <width>200</width>
+        <height>80</height>
+       </size>
+      </property>
+      <property name="tabletTracking">
+       <bool>true</bool>
+      </property>
+      <property name="focusPolicy">
+       <enum>Qt::ClickFocus</enum>
+      </property>
+      <property name="autoFillBackground">
+       <bool>false</bool>
+      </property>
+      <property name="text">
+       <string>Wifi Settings</string>
+      </property>
+      <property name="autoDefault">
+       <bool>false</bool>
+      </property>
+      <property name="default">
+       <bool>false</bool>
+      </property>
+      <property name="flat">
+       <bool>true</bool>
+      </property>
+      <property name="class" stdset="0">
+       <string>system_control_btn</string>
+      </property>
+     </widget>
+    </item>
+   </layout>
   </widget>
   <widget class="QFrame" name="TextFrame">
    <property name="geometry">
