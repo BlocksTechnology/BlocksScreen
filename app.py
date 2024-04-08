@@ -9,7 +9,11 @@ from scripts.moonrest import MoonRest
 
 from panels.connectionWindow import ConnectionWindow
 
-from resources.UI_Resources_rc import *
+from resources.background_resources_rc import *
+from resources.button_resources_rc import *
+from resources.main_menu_resources_rc import *
+from resources.system_resources_rc import *
+
 """
     QSplashScreen
     Functions ->
@@ -22,13 +26,14 @@ from resources.UI_Resources_rc import *
         drawContents()
         
     Slots ->
+    
         clearMessage()
         showMessage()
 
     More Info on ->
         https://doc.qt.io/qtforpython-6/PySide6/QtWidgets/QSplashScreen.html#qsplashscreen
     
-"""
+""" 
 
 
 class MainWindow(QMainWindow):
@@ -50,8 +55,12 @@ class MainWindow(QMainWindow):
         # @ Slot connections
         self.app_initialize.connect(slot=self.initialize_websocket_connection)
         self.ws.connected_signal.connect(slot= self.start_window.websocket_connection_achieved)
+        
+        # self.start_window.text_updated.connect(self.text_has_been_updated)
         # self.ws.connection_lost.connect(slot= self.start_window.show_panel)
     # This slot is called when the button is pressed, it represents
+
+    
 
     @pyqtSlot(name="app-start-websocket-connection")
     def initialize_websocket_connection(self):
@@ -63,6 +72,8 @@ class MainWindow(QMainWindow):
     def websocket_connection_lost(self, reason:str):
         self.start_window.show_panel(reason)
 
+
+    # @pyqtSlot(name
     def event(self, event):
         if event.type() == WebSocketMessageReceivedEvent.message_event_type:  # TODO: This will go to another place
             # print(event.kwargs)
@@ -92,3 +103,32 @@ if __name__ == "__main__":
     main_window.app_initialize.emit()
     splash.finish(main_window)
     sys.exit(app.exec())
+
+
+
+
+
+""" 
+    MECANISMO NR 1
+    
+        Eventos -> ser rapidos ou ter um queue 
+
+            rapidos -> sendEvent(local, event)
+            queue -> postEvent()
+
+
+        Podem ser vistos em qualquer parte do programa ou podem ser explicitamente transmitidos
+        para uma classe.
+        
+        
+        Qualquer classe que seja um "child" de uma outra do QT
+        
+            def event(self, event):         Sempre chamada quando existe um event 
+                <qualquer coisa>
+        
+    MECANISMO NR 2 
+    
+        SINALS & SLOTS 
+    
+        
+"""
