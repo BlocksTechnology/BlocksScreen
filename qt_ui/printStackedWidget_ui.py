@@ -1,4 +1,4 @@
-# Form implementation generated from reading ui file '/home/bugo/github/Blocks_Screen/qt_ui/printStackedWidget.ui'
+# Form implementation generated from reading ui file '/home/gleb/github/Blocks_Screen/qt_ui/printStackedWidget.ui'
 #
 # Created by: PyQt6 UI code generator 6.4.2
 #
