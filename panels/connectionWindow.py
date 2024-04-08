@@ -1,7 +1,7 @@
-from PyQt6.QtWidgets import QFrame
+import typing
+from PyQt6.QtWidgets import QFrame, QTabWidget, QWidget, QStackedWidget
 from PyQt6.QtCore import pyqtSlot, pyqtSignal
 from qt_ui.connectionWindow_ui import *
-
 
 class ConnectionWindow(QFrame):
     
