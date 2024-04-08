@@ -1,0 +1,192 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>printStackedWidget</class>
+ <widget class="QStackedWidget" name="printStackedWidget">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>716</width>
+    <height>380</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>StackedWidget</string>
+  </property>
+  <widget class="QWidget" name="print_page">
+   <widget class="QWidget" name="layoutWidget">
+    <property name="geometry">
+     <rect>
+      <x>0</x>
+      <y>0</y>
+      <width>661</width>
+      <height>341</height>
+     </rect>
+    </property>
+    <layout class="QVBoxLayout" name="verticalLayout">
+     <item alignment="Qt::AlignHCenter">
+      <widget class="QLabel" name="main_title">
+       <property name="layoutDirection">
+        <enum>Qt::RightToLeft</enum>
+       </property>
+       <property name="styleSheet">
+        <string notr="true"/>
+       </property>
+       <property name="text">
+        <string>Filament</string>
+       </property>
+       <property name="alignment">
+        <set>Qt::AlignCenter</set>
+       </property>
+       <property name="class" stdset="0">
+        <string>title_text</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="CustomQPushButton" name="print_btn">
+       <property name="minimumSize">
+        <size>
+         <width>312</width>
+         <height>97</height>
+        </size>
+       </property>
+       <property name="font">
+        <font>
+         <family>Momcake-Bold</family>
+         <pointsize>20</pointsize>
+         <italic>false</italic>
+         <stylestrategy>PreferAntialias</stylestrategy>
+        </font>
+       </property>
+       <property name="mouseTracking">
+        <bool>false</bool>
+       </property>
+       <property name="tabletTracking">
+        <bool>true</bool>
+       </property>
+       <property name="contextMenuPolicy">
+        <enum>Qt::NoContextMenu</enum>
+       </property>
+       <property name="layoutDirection">
+        <enum>Qt::LeftToRight</enum>
+       </property>
+       <property name="styleSheet">
+        <string notr="true">#unload_btn {
+	image:url(:/General_icons/test_media/icons/filament_unload.png);
+	image-position: left;
+}
+
+#unload_btn::pressed {
+	image:url(:/General_icons/test_media/icons/filament_unload_PRESSED.png);
+	image-position: left;
+}</string>
+       </property>
+       <property name="text">
+        <string>PRINT</string>
+       </property>
+       <property name="autoDefault">
+        <bool>false</bool>
+       </property>
+       <property name="flat">
+        <bool>true</bool>
+       </property>
+       <property name="class" stdset="0">
+        <string>menu_btn</string>
+       </property>
+       <property name="borderLeftPixmap" stdset="0">
+        <pixmap resource="../resources/button_resources.qrc">:/button_borders/media/buttons/btn_part1.svg</pixmap>
+       </property>
+       <property name="borderCenterPixmap" stdset="0">
+        <pixmap resource="../resources/button_resources.qrc">:/button_borders/media/buttons/btn_part2.svg</pixmap>
+       </property>
+       <property name="borderRightPixmap" stdset="0">
+        <pixmap resource="../resources/button_resources.qrc">:/button_borders/media/buttons/btn_part3.svg</pixmap>
+       </property>
+      </widget>
+     </item>
+     <item alignment="Qt::AlignHCenter">
+      <widget class="QLabel" name="main_text_box">
+       <property name="enabled">
+        <bool>true</bool>
+       </property>
+       <property name="font">
+        <font>
+         <family>Momcake</family>
+         <pointsize>14</pointsize>
+        </font>
+       </property>
+       <property name="styleSheet">
+        <string notr="true">#main_text_box{
+	align-text: center;
+	font-family: Momcake;
+	font-style: Momcake-Thin;
+	font-size: 14pt;
+	color: white;
+	padding-left: 100px;
+	padding-right: 100px;
+}</string>
+       </property>
+       <property name="text">
+        <string>Printer ready to use</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </widget>
+  </widget>
+  <widget class="QWidget" name="files_page">
+   <widget class="QPushButton" name="pushButton">
+    <property name="geometry">
+     <rect>
+      <x>520</x>
+      <y>0</y>
+      <width>71</width>
+      <height>51</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Back</string>
+    </property>
+    <property name="class" stdset="0">
+     <string>back_btn</string>
+    </property>
+   </widget>
+   <widget class="QScrollArea" name="select_file_scroll_area">
+    <property name="geometry">
+     <rect>
+      <x>0</x>
+      <y>60</y>
+      <width>481</width>
+      <height>241</height>
+     </rect>
+    </property>
+    <property name="widgetResizable">
+     <bool>true</bool>
+    </property>
+    <widget class="QWidget" name="scrollAreaWidgetContents">
+     <property name="geometry">
+      <rect>
+       <x>0</x>
+       <y>0</y>
+       <width>479</width>
+       <height>239</height>
+      </rect>
+     </property>
+    </widget>
+   </widget>
+  </widget>
+ </widget>
+ <customwidgets>
+  <customwidget>
+   <class>CustomQPushButton</class>
+   <extends>QPushButton</extends>
+   <header location="global">qt_ui.ui_util.h</header>
+  </customwidget>
+ </customwidgets>
+ <resources>
+  <include location="../resources/button_resources.qrc"/>
+  <include location="C:/Program Files (x86)/resources/button_resources.qrc"/>
+ </resources>
+ <connections/>
+</ui>

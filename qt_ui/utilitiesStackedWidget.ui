@@ -1,0 +1,158 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>utilitiesStackedWidget</class>
+ <widget class="QStackedWidget" name="utilitiesStackedWidget">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>400</width>
+    <height>300</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>StackedWidget</string>
+  </property>
+  <widget class="QWidget" name="utilities_page">
+   <widget class="QWidget" name="layoutWidget_2">
+    <property name="geometry">
+     <rect>
+      <x>0</x>
+      <y>0</y>
+      <width>684</width>
+      <height>371</height>
+     </rect>
+    </property>
+    <layout class="QGridLayout" name="utilities_grid" rowstretch="0,0" columnstretch="0">
+     <property name="verticalSpacing">
+      <number>0</number>
+     </property>
+     <item row="1" column="0">
+      <layout class="QGridLayout" name="utilities_btns_grid">
+       <property name="topMargin">
+        <number>0</number>
+       </property>
+       <property name="spacing">
+        <number>0</number>
+       </property>
+       <item row="2" column="0">
+        <widget class="QPushButton" name="pushButton_10">
+         <property name="text">
+          <string>Axes
+Maintenance</string>
+         </property>
+         <property name="class" stdset="0">
+          <string>menu_btn</string>
+         </property>
+        </widget>
+       </item>
+       <item row="1" column="0">
+        <widget class="QPushButton" name="pushButton_11">
+         <property name="text">
+          <string>Routine
+Check</string>
+         </property>
+         <property name="class" stdset="0">
+          <string>menu_btn</string>
+         </property>
+        </widget>
+       </item>
+       <item row="2" column="1">
+        <widget class="QPushButton" name="pushButton_12">
+         <property name="text">
+          <string>Factory Reset</string>
+         </property>
+         <property name="class" stdset="0">
+          <string>menu_btn</string>
+         </property>
+        </widget>
+       </item>
+       <item row="0" column="1">
+        <widget class="QPushButton" name="pushButton_13">
+         <property name="text">
+          <string>LEDs</string>
+         </property>
+         <property name="class" stdset="0">
+          <string>menu_btn</string>
+         </property>
+        </widget>
+       </item>
+       <item row="0" column="0">
+        <widget class="QPushButton" name="pushButton_14">
+         <property name="text">
+          <string>Info</string>
+         </property>
+         <property name="class" stdset="0">
+          <string>menu_btn</string>
+         </property>
+        </widget>
+       </item>
+       <item row="1" column="1">
+        <widget class="QPushButton" name="pushButton_15">
+         <property name="text">
+          <string>LCD Settings</string>
+         </property>
+         <property name="class" stdset="0">
+          <string>menu_btn</string>
+         </property>
+        </widget>
+       </item>
+      </layout>
+     </item>
+     <item row="0" column="0">
+      <widget class="QLabel" name="utilities_title">
+       <property name="styleSheet">
+        <string notr="true"/>
+       </property>
+       <property name="text">
+        <string>Utilities</string>
+       </property>
+       <property name="alignment">
+        <set>Qt::AlignCenter</set>
+       </property>
+       <property name="class" stdset="0">
+        <string>title_text</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </widget>
+  </widget>
+  <widget class="QWidget" name="page">
+   <widget class="QPushButton" name="pushButton_3">
+    <property name="geometry">
+     <rect>
+      <x>30</x>
+      <y>110</y>
+      <width>312</width>
+      <height>97</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>PushButton</string>
+    </property>
+    <property name="class" stdset="0">
+     <string>menu_btn</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="pushButton_2">
+    <property name="geometry">
+     <rect>
+      <x>0</x>
+      <y>0</y>
+      <width>312</width>
+      <height>97</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>LEDs</string>
+    </property>
+    <property name="class" stdset="0">
+     <string>menu_btn</string>
+    </property>
+   </widget>
+  </widget>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>
