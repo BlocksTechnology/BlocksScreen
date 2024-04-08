@@ -2,18 +2,24 @@ import sys
 from PyQt6.QtCore import pyqtSignal, pyqtSlot
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QSplashScreen)
 from PyQt6.QtGui import QPixmap
-from qt_ui.Blocks_Screen_Lemos_ui import Ui_MainWindow
+
 from scripts.moonrakerComm import (WebSocketMessageReceivedEvent, MoonWebSocket)
 from scripts.moonrest import MoonRest
 
 
+
+# * Panels
 from panels.connectionWindow import ConnectionWindow
+from panels.printTab import PrintTab
+
+
 
 from resources.background_resources_rc import *
 from resources.button_resources_rc import *
 from resources.main_menu_resources_rc import *
 from resources.system_resources_rc import *
 
+from qt_ui.Blocks_Screen_Lemos_ui import Ui_MainWindow
 """
     QSplashScreen
     Functions ->
@@ -42,6 +48,7 @@ class MainWindow(QMainWindow):
     def __init__(self, *args, **kwargs):
         super(MainWindow, self).__init__(*args, **kwargs)
         self.ui = Ui_MainWindow()
+        
         # self.con_window.setupUi(self)
         self.ui.setupUi(self)
         # uic.loadUi("Scripts/uiTemplate.ui", self)        In Case i want to use the .ui file
@@ -52,6 +59,9 @@ class MainWindow(QMainWindow):
         # self.con_window..Re.clicked.connect(self.initialize)
         # self.ws.message_signal.connect(self.message)
 
+        # @ Panels 
+        self.printPanel = PrintTab(self.ui.printTab)
+        
         # @ Slot connections
         self.app_initialize.connect(slot=self.initialize_websocket_connection)
         self.ws.connected_signal.connect(slot= self.start_window.websocket_connection_achieved)
