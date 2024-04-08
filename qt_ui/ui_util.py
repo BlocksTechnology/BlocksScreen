@@ -77,7 +77,7 @@ class CustomQPushButton(QPushButton):
         # if self._icon.isNull() or not self.text():
         #     super().paintEvent(event)
         #     return
-        print(event)
+        
         opt = QtWidgets.QStyleOptionButton()
         self.initStyleOption(opt)
 
@@ -90,18 +90,15 @@ class CustomQPushButton(QPushButton):
             qp.RenderHint.SmoothPixmapTransform, True)
         qp.setRenderHint(
             qp.RenderHint.LosslessImageRendering, True)
+        
         rect = self.rect()
         style = self.style()
 
         margin = style.pixelMetric(
             style.PixelMetric.PM_ButtonMargin, opt, self)
 
-        
         # * Draw the Button control
         qp.drawControl(QStyle.ControlElement.CE_PushButton, opt)
-
-
-
         
         # * Draw border image
         self.buttonPixmapRects = self.setButtonBorder(
@@ -213,7 +210,6 @@ class CustomQPushButton(QPushButton):
         buttonRect = self.rect()
 
         _leftBorderRectF = self.borderIconLeft.rect().toRectF()
-        print(_leftBorderRectF)
         _centerBorderRectF: QtCore.QRectF = QtCore.QRectF(
             _leftBorderRectF.width() - 1,
             0.0,
@@ -282,6 +278,7 @@ class CustomQPushButton(QPushButton):
 
     def hitButton(self, pos: QtCore.QPoint) -> bool:
         return super().hitButton(pos)
+        
 
     def mouseMoveEvent(self, a0: typing.Optional[QtGui.QMouseEvent]) -> None:
         return super().mouseMoveEvent(a0)
@@ -295,6 +292,7 @@ class CustomQPushButton(QPushButton):
 
     def keyPressEvent(self, a0: typing.Optional[QtGui.QKeyEvent]) -> None:
         return super().keyPressEvent(a0)
+        
 
     def event(self, e: typing.Optional[QtCore.QEvent]) -> bool:
         return super().event(e)

@@ -19,10 +19,11 @@
   <widget class="QWidget" name="centralwidget">
    <property name="styleSheet">
     <string notr="true">#centralwidget{
-	background-image: url(:/Main_background/1st_background.png);
+	
+	background-image: url(:/background/1st_background.png);
 }
 QPushButton.menu_btn{
-    border-image: url(:/Btn_Backgrounds/media/btn_simple.png) 0 0 0 0 stretch stretch;
+   
 	color: #424242;
 	min-height: 95px;
 	max-height: 95px; 
@@ -34,7 +35,7 @@ QPushButton.menu_btn{
 }
 
 QPushButton.menu_btn::pressed{
-	border-image: url(:/Btn_Backgrounds/media/btn_simple_PRESSED.png) 0 0 0 0 stretch stretch;
+	
 	color: #8e8d8d;
 	font-family: Momcake;
 	font-style: normal;
@@ -513,7 +514,7 @@ image: url(:/General_icons/media/graphics/logo_blocks.png);
        </property>
        <property name="styleSheet">
         <string notr="true">#mainTabWidget{
-background-image: url(:/MainBackground/1st_background.png);
+background-image: url(:/background/1st_background.png);
 height: 360px;
 }
 QTabBar::tab{
@@ -558,7 +559,7 @@ QTabBar::tab{
        </property>
        <widget class="QWidget" name="main_tab">
         <attribute name="icon">
-         <iconset resource="../resources/UI_Resources.qrc">
+         <iconset>
           <normaloff>:/Menu_icons/media/main_menu/ICON_home.png</normaloff>
           <normalon>:/Menu_icons/media/main_menu/ICON_home_pressed.png</normalon>
           <disabledon>:/Menu_icons/media/main_menu/ICON_home_blocked.png</disabledon>:/Menu_icons/media/main_menu/ICON_home.png</iconset>
@@ -644,6 +645,9 @@ QPushButto::pressed{
           </widget>
          </widget>
          <widget class="QWidget" name="main_page">
+          <property name="autoFillBackground">
+           <bool>false</bool>
+          </property>
           <widget class="QWidget" name="layoutWidget">
            <property name="geometry">
             <rect>
@@ -674,13 +678,29 @@ QPushButto::pressed{
              </widget>
             </item>
             <item>
-             <widget class="QPushButton" name="print_btn">
+             <widget class="CustomQPushButton" name="print_btn">
+              <property name="minimumSize">
+               <size>
+                <width>312</width>
+                <height>97</height>
+               </size>
+              </property>
               <property name="font">
                <font>
                 <family>Momcake-Bold</family>
                 <pointsize>20</pointsize>
                 <italic>false</italic>
+                <stylestrategy>PreferAntialias</stylestrategy>
                </font>
+              </property>
+              <property name="mouseTracking">
+               <bool>false</bool>
+              </property>
+              <property name="tabletTracking">
+               <bool>true</bool>
+              </property>
+              <property name="contextMenuPolicy">
+               <enum>Qt::NoContextMenu</enum>
               </property>
               <property name="layoutDirection">
                <enum>Qt::LeftToRight</enum>
@@ -700,15 +720,30 @@ QPushButto::pressed{
                <string>PRINT</string>
               </property>
               <property name="autoDefault">
+               <bool>false</bool>
+              </property>
+              <property name="flat">
                <bool>true</bool>
               </property>
               <property name="class" stdset="0">
                <string>menu_btn</string>
               </property>
+              <property name="borderLeftPixmap" stdset="0">
+               <pixmap resource="../resources/button_resources.qrc">:/button_borders/media/buttons/btn_part1.svg</pixmap>
+              </property>
+              <property name="borderCenterPixmap" stdset="0">
+               <pixmap resource="../resources/button_resources.qrc">:/button_borders/media/buttons/btn_part2.svg</pixmap>
+              </property>
+              <property name="borderRightPixmap" stdset="0">
+               <pixmap resource="../resources/button_resources.qrc">:/button_borders/media/buttons/btn_part3.svg</pixmap>
+              </property>
              </widget>
             </item>
             <item alignment="Qt::AlignHCenter">
              <widget class="QLabel" name="main_text_box">
+              <property name="enabled">
+               <bool>true</bool>
+              </property>
               <property name="font">
                <font>
                 <family>Momcake</family>
@@ -738,7 +773,7 @@ QPushButto::pressed{
        </widget>
        <widget class="QWidget" name="filament_tab">
         <attribute name="icon">
-         <iconset resource="../resources/UI_Resources.qrc">
+         <iconset>
           <normaloff>:/Menu_icons/media/main_menu/ICON_filament.png</normaloff>
           <normalon>:/Menu_icons/media/main_menu/ICON_filament_pressed.png</normalon>
           <disabledon>:/Menu_icons/media/main_menu/ICON_filamente_blocked.png</disabledon>:/Menu_icons/media/main_menu/ICON_filament.png</iconset>
@@ -1295,7 +1330,7 @@ filament</string>
        </widget>
        <widget class="QWidget" name="control_tab">
         <attribute name="icon">
-         <iconset resource="../resources/UI_Resources.qrc">
+         <iconset>
           <normaloff>:/Menu_icons/media/main_menu/ICON_control.png</normaloff>
           <normalon>:/Menu_icons/media/main_menu/ICON_control_pressed.png</normalon>
           <disabledon>:/Menu_icons/media/main_menu/ICON_control_blocked.png</disabledon>:/Menu_icons/media/main_menu/ICON_control.png</iconset>
@@ -1577,7 +1612,7 @@ steppers</string>
        </widget>
        <widget class="QWidget" name="utilities_tab">
         <attribute name="icon">
-         <iconset resource="../resources/UI_Resources.qrc">
+         <iconset>
           <normaloff>:/Menu_icons/media/main_menu/ICON_utilities.png</normaloff>
           <normalon>:/Menu_icons/media/main_menu/ICON_utilities_pressed.png</normalon>
           <disabledon>:/Menu_icons/media/main_menu/ICON_utilities_blocked.png</disabledon>:/Menu_icons/media/main_menu/ICON_utilities.png</iconset>
@@ -1750,8 +1785,20 @@ Check</string>
    </widget>
   </widget>
  </widget>
+ <customwidgets>
+  <customwidget>
+   <class>CustomQPushButton</class>
+   <extends>QPushButton</extends>
+   <header location="global">qt_ui.ui_util.h</header>
+  </customwidget>
+ </customwidgets>
  <resources>
-  <include location="../resources/UI_Resources.qrc"/>
+  <include location="../resources/background_resources.qrc"/>
+  <include location="../resources/button_resources.qrc"/>
+  <include location="../resources/icon_resources.qrc"/>
+  <include location="../resources/main_menu_resources.qrc"/>
+  <include location="../resources/system_resources.qrc"/>
+  <include location="../resources/top_bar_resources.qrc"/>
  </resources>
  <connections/>
 </ui>

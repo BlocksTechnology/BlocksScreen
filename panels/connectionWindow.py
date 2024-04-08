@@ -4,6 +4,9 @@ from qt_ui.connectionWindow_ui import *
 
 
 class ConnectionWindow(QFrame):
+    
+    text_updated = pyqtSignal(int,name="connection-text-updated")
+    
     def __init__(self, main_window, *args, **kwargs):
         super(ConnectionWindow, self).__init__(
             parent=main_window, *args, **kwargs)
@@ -20,10 +23,17 @@ class ConnectionWindow(QFrame):
         # @ Slot connections
         self.con_window.RetryConnectionButton.clicked.connect(
             self.retry_connection)
+        
+        # self.con_window.RebootSystemButton.clicked.connect(
+        #     self.text_has_been_updated
+        # )
+        
         # TODO: self.con_window.RestartKlipperButton.clicked.connect()
         # TODO: self.con_window.WifiButton.clicked.connect()
-        # TODO: self.con_window.pushButton.connect()
 
+    # def text_has_been_updated(self):
+    #     print("HEllo")
+        
     def show_panel(self, reason: str = None):
         self.show()
         if reason is not None:
@@ -54,6 +64,7 @@ class ConnectionWindow(QFrame):
         self.con_window.connectionTextBox.setText(
             f"Connecting to Moonraker and Klipper. \n \
                 Connection Try number {text}.")
+        
         return False
 
     @pyqtSlot(name="websocket-connected")

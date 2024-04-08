@@ -16,10 +16,11 @@ class Ui_MainWindow(object):
         MainWindow.setStyleSheet("")
         self.centralwidget = QtWidgets.QWidget(parent=MainWindow)
         self.centralwidget.setStyleSheet("#centralwidget{\n"
-"    background-image: url(:/Main_background/1st_background.png);\n"
+"    \n"
+"    background-image: url(:/background/1st_background.png);\n"
 "}\n"
 "QPushButton.menu_btn{\n"
-"    border-image: url(:/Btn_Backgrounds/media/btn_simple.png) 0 0 0 0 stretch stretch;\n"
+"   \n"
 "    color: #424242;\n"
 "    min-height: 95px;\n"
 "    max-height: 95px; \n"
@@ -31,7 +32,7 @@ class Ui_MainWindow(object):
 "}\n"
 "\n"
 "QPushButton.menu_btn::pressed{\n"
-"    border-image: url(:/Btn_Backgrounds/media/btn_simple_PRESSED.png) 0 0 0 0 stretch stretch;\n"
+"    \n"
 "    color: #8e8d8d;\n"
 "    font-family: Momcake;\n"
 "    font-style: normal;\n"
@@ -239,7 +240,7 @@ class Ui_MainWindow(object):
         self.mainTabWidget.setLayoutDirection(QtCore.Qt.LayoutDirection.RightToLeft)
         self.mainTabWidget.setAutoFillBackground(False)
         self.mainTabWidget.setStyleSheet("#mainTabWidget{\n"
-"background-image: url(:/MainBackground/1st_background.png);\n"
+"background-image: url(:/background/1st_background.png);\n"
 "height: 360px;\n"
 "}\n"
 "QTabBar::tab{\n"
@@ -300,6 +301,7 @@ class Ui_MainWindow(object):
         self.pushButton.setObjectName("pushButton")
         self.main_stacked_widget.addWidget(self.Select_file_page)
         self.main_page = QtWidgets.QWidget()
+        self.main_page.setAutoFillBackground(False)
         self.main_page.setObjectName("main_page")
         self.layoutWidget1 = QtWidgets.QWidget(parent=self.main_page)
         self.layoutWidget1.setGeometry(QtCore.QRect(20, 20, 661, 341))
@@ -313,12 +315,17 @@ class Ui_MainWindow(object):
         self.main_title.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self.main_title.setObjectName("main_title")
         self.verticalLayout.addWidget(self.main_title, 0, QtCore.Qt.AlignmentFlag.AlignHCenter)
-        self.print_btn = QtWidgets.QPushButton(parent=self.layoutWidget1)
+        self.print_btn = CustomQPushButton(parent=self.layoutWidget1)
+        self.print_btn.setMinimumSize(QtCore.QSize(312, 97))
         font = QtGui.QFont()
         font.setFamily("Momcake-Bold")
         font.setPointSize(20)
         font.setItalic(False)
+        font.setStyleStrategy(QtGui.QFont.StyleStrategy.PreferAntialias)
         self.print_btn.setFont(font)
+        self.print_btn.setMouseTracking(False)
+        self.print_btn.setTabletTracking(True)
+        self.print_btn.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.NoContextMenu)
         self.print_btn.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
         self.print_btn.setStyleSheet("#unload_btn {\n"
 "    image:url(:/General_icons/test_media/icons/filament_unload.png);\n"
@@ -329,10 +336,15 @@ class Ui_MainWindow(object):
 "    image:url(:/General_icons/test_media/icons/filament_unload_PRESSED.png);\n"
 "    image-position: left;\n"
 "}")
-        self.print_btn.setAutoDefault(True)
+        self.print_btn.setAutoDefault(False)
+        self.print_btn.setFlat(True)
+        self.print_btn.setProperty("borderLeftPixmap", QtGui.QPixmap(":/button_borders/media/buttons/btn_part1.svg"))
+        self.print_btn.setProperty("borderCenterPixmap", QtGui.QPixmap(":/button_borders/media/buttons/btn_part2.svg"))
+        self.print_btn.setProperty("borderRightPixmap", QtGui.QPixmap(":/button_borders/media/buttons/btn_part3.svg"))
         self.print_btn.setObjectName("print_btn")
         self.verticalLayout.addWidget(self.print_btn)
         self.main_text_box = QtWidgets.QLabel(parent=self.layoutWidget1)
+        self.main_text_box.setEnabled(True)
         font = QtGui.QFont()
         font.setFamily("Momcake")
         font.setPointSize(14)
@@ -451,25 +463,25 @@ class Ui_MainWindow(object):
         self.load_t1_page = QtWidgets.QWidget()
         self.load_t1_page.setObjectName("load_t1_page")
         self.load_t1_pla = QtWidgets.QPushButton(parent=self.load_t1_page)
-        self.load_t1_pla.setGeometry(QtCore.QRect(50, 90, 310, 95))
+        self.load_t1_pla.setGeometry(QtCore.QRect(50, 90, 312, 97))
         self.load_t1_pla.setObjectName("load_t1_pla")
         self.load_t1_petg = QtWidgets.QPushButton(parent=self.load_t1_page)
-        self.load_t1_petg.setGeometry(QtCore.QRect(340, 90, 310, 95))
+        self.load_t1_petg.setGeometry(QtCore.QRect(340, 90, 312, 97))
         self.load_t1_petg.setObjectName("load_t1_petg")
         self.load_t1_abs = QtWidgets.QPushButton(parent=self.load_t1_page)
-        self.load_t1_abs.setGeometry(QtCore.QRect(50, 160, 310, 95))
+        self.load_t1_abs.setGeometry(QtCore.QRect(50, 160, 312, 97))
         self.load_t1_abs.setObjectName("load_t1_abs")
         self.load_t1_hips = QtWidgets.QPushButton(parent=self.load_t1_page)
-        self.load_t1_hips.setGeometry(QtCore.QRect(350, 160, 310, 95))
+        self.load_t1_hips.setGeometry(QtCore.QRect(350, 160, 312, 97))
         self.load_t1_hips.setObjectName("load_t1_hips")
         self.load_t1_nylon = QtWidgets.QPushButton(parent=self.load_t1_page)
-        self.load_t1_nylon.setGeometry(QtCore.QRect(50, 230, 310, 95))
+        self.load_t1_nylon.setGeometry(QtCore.QRect(50, 230, 312, 97))
         self.load_t1_nylon.setObjectName("load_t1_nylon")
         self.load_t1_tpu = QtWidgets.QPushButton(parent=self.load_t1_page)
-        self.load_t1_tpu.setGeometry(QtCore.QRect(340, 230, 310, 95))
+        self.load_t1_tpu.setGeometry(QtCore.QRect(340, 230, 312, 97))
         self.load_t1_tpu.setObjectName("load_t1_tpu")
         self.load_t1_custom = QtWidgets.QPushButton(parent=self.load_t1_page)
-        self.load_t1_custom.setGeometry(QtCore.QRect(190, 300, 310, 95))
+        self.load_t1_custom.setGeometry(QtCore.QRect(190, 300, 312, 97))
         self.load_t1_custom.setObjectName("load_t1_custom")
         self.load_t1_title = QtWidgets.QLabel(parent=self.load_t1_page)
         self.load_t1_title.setGeometry(QtCore.QRect(210, 30, 271, 61))
@@ -479,29 +491,29 @@ class Ui_MainWindow(object):
         self.load_t2_page = QtWidgets.QWidget()
         self.load_t2_page.setObjectName("load_t2_page")
         self.load_t2_nylon = QtWidgets.QPushButton(parent=self.load_t2_page)
-        self.load_t2_nylon.setGeometry(QtCore.QRect(50, 230, 310, 95))
+        self.load_t2_nylon.setGeometry(QtCore.QRect(50, 230, 312, 97))
         self.load_t2_nylon.setObjectName("load_t2_nylon")
         self.load_t2_abs = QtWidgets.QPushButton(parent=self.load_t2_page)
-        self.load_t2_abs.setGeometry(QtCore.QRect(50, 160, 310, 95))
+        self.load_t2_abs.setGeometry(QtCore.QRect(50, 160, 312, 97))
         self.load_t2_abs.setObjectName("load_t2_abs")
         self.load_t2_pla = QtWidgets.QPushButton(parent=self.load_t2_page)
-        self.load_t2_pla.setGeometry(QtCore.QRect(50, 90, 310, 95))
+        self.load_t2_pla.setGeometry(QtCore.QRect(50, 90, 312, 97))
         self.load_t2_pla.setObjectName("load_t2_pla")
         self.load_t2_title = QtWidgets.QLabel(parent=self.load_t2_page)
         self.load_t2_title.setGeometry(QtCore.QRect(210, 30, 271, 61))
         self.load_t2_title.setStyleSheet("")
         self.load_t2_title.setObjectName("load_t2_title")
         self.load_t2_tpu = QtWidgets.QPushButton(parent=self.load_t2_page)
-        self.load_t2_tpu.setGeometry(QtCore.QRect(340, 230, 310, 95))
+        self.load_t2_tpu.setGeometry(QtCore.QRect(340, 230, 312, 97))
         self.load_t2_tpu.setObjectName("load_t2_tpu")
         self.load_t2_petg = QtWidgets.QPushButton(parent=self.load_t2_page)
-        self.load_t2_petg.setGeometry(QtCore.QRect(340, 90, 310, 95))
+        self.load_t2_petg.setGeometry(QtCore.QRect(340, 90, 312, 97))
         self.load_t2_petg.setObjectName("load_t2_petg")
         self.load_t2_custom = QtWidgets.QPushButton(parent=self.load_t2_page)
-        self.load_t2_custom.setGeometry(QtCore.QRect(190, 300, 310, 95))
+        self.load_t2_custom.setGeometry(QtCore.QRect(190, 300, 312, 97))
         self.load_t2_custom.setObjectName("load_t2_custom")
         self.load_t2_hips = QtWidgets.QPushButton(parent=self.load_t2_page)
-        self.load_t2_hips.setGeometry(QtCore.QRect(350, 160, 310, 95))
+        self.load_t2_hips.setGeometry(QtCore.QRect(350, 160, 312, 97))
         self.load_t2_hips.setObjectName("load_t2_hips")
         self.filament_stacked_widget.addWidget(self.load_t2_page)
         self.dryers_page = QtWidgets.QWidget()
@@ -516,16 +528,16 @@ class Ui_MainWindow(object):
         self.dryers_title.setGeometry(QtCore.QRect(290, 40, 111, 61))
         self.dryers_title.setObjectName("dryers_title")
         self.dryer_1_auto_btn = QtWidgets.QPushButton(parent=self.dryers_page)
-        self.dryer_1_auto_btn.setGeometry(QtCore.QRect(50, 210, 310, 95))
+        self.dryer_1_auto_btn.setGeometry(QtCore.QRect(50, 210, 312, 97))
         self.dryer_1_auto_btn.setObjectName("dryer_1_auto_btn")
         self.dryer_1_off_btn = QtWidgets.QPushButton(parent=self.dryers_page)
-        self.dryer_1_off_btn.setGeometry(QtCore.QRect(50, 300, 310, 95))
+        self.dryer_1_off_btn.setGeometry(QtCore.QRect(50, 300, 312, 97))
         self.dryer_1_off_btn.setObjectName("dryer_1_off_btn")
         self.dryer_2_auto_btn = QtWidgets.QPushButton(parent=self.dryers_page)
-        self.dryer_2_auto_btn.setGeometry(QtCore.QRect(360, 210, 310, 95))
+        self.dryer_2_auto_btn.setGeometry(QtCore.QRect(360, 210, 312, 97))
         self.dryer_2_auto_btn.setObjectName("dryer_2_auto_btn")
         self.dryer_2_off_btn = QtWidgets.QPushButton(parent=self.dryers_page)
-        self.dryer_2_off_btn.setGeometry(QtCore.QRect(360, 300, 310, 95))
+        self.dryer_2_off_btn.setGeometry(QtCore.QRect(360, 300, 312, 97))
         self.dryer_2_off_btn.setObjectName("dryer_2_off_btn")
         self.filament_stacked_widget.addWidget(self.dryers_page)
         icon1 = QtGui.QIcon()
@@ -543,7 +555,7 @@ class Ui_MainWindow(object):
         self.control_page = QtWidgets.QWidget()
         self.control_page.setObjectName("control_page")
         self.layoutWidget3 = QtWidgets.QWidget(parent=self.control_page)
-        self.layoutWidget3.setGeometry(QtCore.QRect(40, 42, 634, 355))
+        self.layoutWidget3.setGeometry(QtCore.QRect(40, 42, 634, 361))
         self.layoutWidget3.setObjectName("layoutWidget3")
         self.control_grid = QtWidgets.QGridLayout(self.layoutWidget3)
         self.control_grid.setContentsMargins(0, 0, 0, 0)
@@ -680,10 +692,10 @@ class Ui_MainWindow(object):
         self.page_9 = QtWidgets.QWidget()
         self.page_9.setObjectName("page_9")
         self.pushButton_2 = QtWidgets.QPushButton(parent=self.page_9)
-        self.pushButton_2.setGeometry(QtCore.QRect(90, 80, 310, 95))
+        self.pushButton_2.setGeometry(QtCore.QRect(90, 80, 312, 97))
         self.pushButton_2.setObjectName("pushButton_2")
         self.pushButton_3 = QtWidgets.QPushButton(parent=self.page_9)
-        self.pushButton_3.setGeometry(QtCore.QRect(120, 190, 310, 95))
+        self.pushButton_3.setGeometry(QtCore.QRect(120, 190, 312, 97))
         self.pushButton_3.setObjectName("pushButton_3")
         self.utilities_stacked_widget.addWidget(self.page_9)
         self.utilities_page = QtWidgets.QWidget()
@@ -865,3 +877,4 @@ class Ui_MainWindow(object):
         self.pushButton_15.setProperty("class", _translate("MainWindow", "menu_btn"))
         self.utilities_title.setText(_translate("MainWindow", "Utilities"))
         self.utilities_title.setProperty("class", _translate("MainWindow", "title_text"))
+from qt_ui.ui_util import CustomQPushButton
