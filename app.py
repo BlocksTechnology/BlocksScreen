@@ -1,17 +1,15 @@
 import sys
-from PyQt6.QtCore import pyqtSignal, pyqtSlot
-from PyQt6.QtWidgets import (QApplication, QMainWindow, QSplashScreen)
+from PyQt6.QtCore import pyqtSignal, pyqtSlot, QObject
+from PyQt6.QtWidgets import QApplication, QMainWindow, QSplashScreen
 from PyQt6.QtGui import QPixmap
 
-from scripts.moonrakerComm import (WebSocketMessageReceivedEvent, MoonWebSocket)
+from scripts.moonrakerComm import WebSocketMessageReceivedEvent, MoonWebSocket
 from scripts.moonrest import MoonRest
-
-
+from scripts.bo_includes.bo_machine import MachineControl
 
 # * Panels
 from panels.connectionWindow import ConnectionWindow
 from panels.printTab import PrintTab
-
 
 
 from resources.background_resources_rc import *
@@ -20,6 +18,9 @@ from resources.main_menu_resources_rc import *
 from resources.system_resources_rc import *
 
 from qt_ui.Blocks_Screen_Lemos_ui import Ui_MainWindow
+
+
+
 """
     QSplashScreen
     Functions ->
@@ -39,7 +40,7 @@ from qt_ui.Blocks_Screen_Lemos_ui import Ui_MainWindow
     More Info on ->
         https://doc.qt.io/qtforpython-6/PySide6/QtWidgets/QSplashScreen.html#qsplashscreen
     
-""" 
+"""
 
 
 class MainWindow(QMainWindow):
@@ -48,29 +49,33 @@ class MainWindow(QMainWindow):
     def __init__(self, *args, **kwargs):
         super(MainWindow, self).__init__(*args, **kwargs)
         self.ui = Ui_MainWindow()
-        
+
         # self.con_window.setupUi(self)
         self.ui.setupUi(self)
         # uic.loadUi("Scripts/uiTemplate.ui", self)        In Case i want to use the .ui file
-        self.start_window = ConnectionWindow(main_window=self)
+        self.start_window = ConnectionWindow(self)
+
         self._moonRest = MoonRest()
         self.ws = MoonWebSocket(self)
-        # self.ui.pushButton_2.clicked.connect(self.initialize)
-        # self.con_window..Re.clicked.connect(self.initialize)
-        # self.ws.message_signal.connect(self.message)
+        self.mc = MachineControl(self)
 
-        # @ Panels 
+        # @ Panels
         self.printPanel = PrintTab(self.ui.printTab)
-        
+
         # @ Slot connections
         self.app_initialize.connect(slot=self.initialize_websocket_connection)
-        self.ws.connected_signal.connect(slot= self.start_window.websocket_connection_achieved)
+        self.ws.connecting_signal.connect(slot=self.start_window.text_update)
+        self.ws.connected_signal.connect(
+            slot=self.start_window.websocket_connection_achieved
+        )
+        self.start_window.retry_connection_clicked.connect(slot=self.ws.retry)
+        self.start_window.restart_klipper_clicked.connect(slot=self.mc.restart_klipper_service)
+        self.start_window.reboot_clicked.connect(slot=self.mc.machine_restart)
         
         # self.start_window.text_updated.connect(self.text_has_been_updated)
         # self.ws.connection_lost.connect(slot= self.start_window.show_panel)
-    # This slot is called when the button is pressed, it represents
 
-    
+    # This slot is called when the button is pressed, it represents
 
     @pyqtSlot(name="app-start-websocket-connection")
     def initialize_websocket_connection(self):
@@ -78,14 +83,15 @@ class MainWindow(QMainWindow):
         self.ws.try_connection()
 
     @pyqtSlot(str)
-    @pyqtSlot(name="websocket-connection-lost")
-    def websocket_connection_lost(self, reason:str):
+    @pyqtSlot(name="websocket_connection_lost")
+    def websocket_connection_lost(self, reason: str):
         self.start_window.show_panel(reason)
-
 
     # @pyqtSlot(name
     def event(self, event):
-        if event.type() == WebSocketMessageReceivedEvent.message_event_type:  # TODO: This will go to another place
+        if (
+            event.type() == WebSocketMessageReceivedEvent.message_event_type
+        ):  # TODO: This will go to another place
             # print(event.kwargs)
             return True
             # return super().event(event)
@@ -99,9 +105,9 @@ if __name__ == "__main__":
     pixmap = QPixmap("Blocks_Screen/media/logoblocks.png")
     splash = QSplashScreen(pixmap)
     # splash.setGeometry(main_window)
-    splash.showNormal() 
+    splash.showNormal()
     splash.showMessage("Loading")
-    
+
     # @ Someone said that .processEvents sometimes crashes the system
     app.processEvents()
 
@@ -113,9 +119,6 @@ if __name__ == "__main__":
     main_window.app_initialize.emit()
     splash.finish(main_window)
     sys.exit(app.exec())
-
-
-
 
 
 """ 
