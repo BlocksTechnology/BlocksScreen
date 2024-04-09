@@ -13,6 +13,9 @@
   <property name="windowTitle">
    <string>StackedWidget</string>
   </property>
+  <property name="currentIndex">
+   <number>1</number>
+  </property>
   <widget class="QWidget" name="print_page">
    <widget class="QWidget" name="layoutWidget">
     <property name="geometry">
@@ -136,7 +139,7 @@
    </widget>
   </widget>
   <widget class="QWidget" name="files_page">
-   <widget class="QPushButton" name="pushButton">
+   <widget class="QPushButton" name="back_btn">
     <property name="geometry">
      <rect>
       <x>520</x>
@@ -173,6 +176,24 @@
        <height>239</height>
       </rect>
      </property>
+     <widget class="QListWidget" name="listWidget">
+      <property name="geometry">
+       <rect>
+        <x>0</x>
+        <y>0</y>
+        <width>481</width>
+        <height>241</height>
+       </rect>
+      </property>
+      <item>
+       <property name="text">
+        <string>tem one</string>
+       </property>
+       <property name="flags">
+        <set>ItemIsSelectable|ItemIsEnabled</set>
+       </property>
+      </item>
+     </widget>
     </widget>
    </widget>
   </widget>

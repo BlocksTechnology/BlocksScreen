@@ -303,4 +303,4 @@ class CustomQPushButton(QPushButton):
     def focusOutEvent(self, a0: typing.Optional[QtGui.QFocusEvent]) -> None:
         return super().focusOutEvent(a0)
 
-  
+    
