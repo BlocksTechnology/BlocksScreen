@@ -20,7 +20,6 @@ from resources.system_resources_rc import *
 from qt_ui.Blocks_Screen_Lemos_ui import Ui_MainWindow
 
 
-
 """
     QSplashScreen
     Functions ->
@@ -49,7 +48,6 @@ class MainWindow(QMainWindow):
     def __init__(self, *args, **kwargs):
         super(MainWindow, self).__init__(*args, **kwargs)
         self.ui = Ui_MainWindow()
-
         # self.con_window.setupUi(self)
         self.ui.setupUi(self)
         # uic.loadUi("Scripts/uiTemplate.ui", self)        In Case i want to use the .ui file
@@ -63,26 +61,25 @@ class MainWindow(QMainWindow):
         self.printPanel = PrintTab(self.ui.printTab)
 
         # @ Slot connections
-        self.app_initialize.connect(slot=self.initialize_websocket_connection)
+        self.app_initialize.connect(slot=self.start_websocket_connection)
         self.ws.connecting_signal.connect(slot=self.start_window.text_update)
         self.ws.connected_signal.connect(
             slot=self.start_window.websocket_connection_achieved
         )
+        self.ws.connection_lost.connect(slot=self.websocket_connection_lost)
         self.start_window.retry_connection_clicked.connect(slot=self.ws.retry)
-        self.start_window.restart_klipper_clicked.connect(slot=self.mc.restart_klipper_service)
+        self.start_window.restart_klipper_clicked.connect(
+            slot=self.mc.restart_klipper_service
+        )
         self.start_window.reboot_clicked.connect(slot=self.mc.machine_restart)
-        
-        # self.start_window.text_updated.connect(self.text_has_been_updated)
-        # self.ws.connection_lost.connect(slot= self.start_window.show_panel)
 
-    # This slot is called when the button is pressed, it represents
-
-    @pyqtSlot(name="app-start-websocket-connection")
-    def initialize_websocket_connection(self):
+    @pyqtSlot(name="start_websocket_connection")
+    def start_websocket_connection(self):
         self.ws.start()
         self.ws.try_connection()
 
-    @pyqtSlot(str)
+    @pyqtSlot()
+    @pyqtSlot((str))
     @pyqtSlot(name="websocket_connection_lost")
     def websocket_connection_lost(self, reason: str):
         self.start_window.show_panel(reason)
