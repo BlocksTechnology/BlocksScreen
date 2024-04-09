@@ -5,8 +5,8 @@ import json
 import logging
 import websocket
 import json
-import json
-from PyQt6.QtCore import QObject, pyqtSignal, QEvent, QCoreApplication
+import typing
+from PyQt6.QtCore import QObject, pyqtSignal, QEvent, QCoreApplication, pyqtSlot
 
 from scripts.util import RepeatedTimer
 from scripts.moonrest import MoonRest
@@ -29,16 +29,19 @@ class MoonWebSocket(QObject, threading.Thread):
     max_retries = 3
     timeout = 3
 
-    # @ Class Signals
+    # @ Signals
     message_signal = pyqtSignal()
     connecting_signal = pyqtSignal((int,),(str,), name = "websocket-connecting")        # * For optional types use (<type>,)
     connected_signal = pyqtSignal(name="websocket-connected")
-    connection_lost = pyqtSignal(str, name="websocket-connection-lost")
-    def __init__(self, mainWindow):
+    connection_lost = pyqtSignal([str], name="websocket-connection-lost")
+    
+    def __init__(self, parent: typing.Optional["QObject"] = ...) -> None:
+        super(MoonWebSocket, self).__init__(parent)
+    # def __init__(self, mainWindow):
         # * Both lines bellow are the same shit i guess
-        super(MoonWebSocket, self).__init__()
+        # super(MoonWebSocket, self).__init__()
         self.daemon = True
-        self._main_window = mainWindow
+        self._main_window = parent
         # self.host: str=None
         # self.port: int = None
         # self.ws: websocket.WebSocketApp = None
@@ -49,7 +52,7 @@ class MoonWebSocket(QObject, threading.Thread):
         self._moonRest = MoonRest()
         self.api = MoonAPI(self)
 
-        self._retry_timer: RepeatedTimer = None
+        self._retry_timer: RepeatedTimer 
         # ! Websocket options
         # websocket.enableTrace(True)
         websocket.setdefaulttimeout(self.timeout)
@@ -60,11 +63,10 @@ class MoonWebSocket(QObject, threading.Thread):
         self.connectingEvent = threading.Event()
         self.disconnectEvent = threading.Event()
 
-        # Connect signals
-        # self.connecting_signal.connect(self._main_window.)
-        self.connecting_signal.connect(
-            slot=self._main_window.start_window.text_update)
-
+        
+        
+        
+    @pyqtSlot(name="retry-websocket-connection")
     def retry(self):
         if self.connecting is True and self.connected is False:
             return False
@@ -151,6 +153,7 @@ class MoonWebSocket(QObject, threading.Thread):
         _error = args[1] if len(args) == 2 else args[0]
         # TODO: Handle error messages
         _logger.info(f"Websocket error:{_error}")
+        
         self.connected = False
         self.disconnected = True
 
@@ -161,7 +164,8 @@ class MoonWebSocket(QObject, threading.Thread):
         # _close_status_code, _close_message = args[1],args[2] if len(args) == 3 else None, None
         self.connected = False
         self.ws.keep_running = False
-        # self.reconnect()
+        
+        self.connection_lost[str].emit(f"code: {_close_status_code} | message {_close_message}")
 
         _logger.info(
             f"Websocket closed, code: {_close_status_code}, message: {_close_message}")
@@ -183,6 +187,7 @@ class MoonWebSocket(QObject, threading.Thread):
             _logger.error(f"Error posting event: {e}")
 
         self.connected_signal.emit()
+        self._retry_timer.stopTimer()
         _logger.info(f"Connection to websocket made on {_ws}")
         # * Verify the connection is made
         self.api.query_server_info()
