@@ -7,8 +7,7 @@ from qt_ui.connectionWindow_ui import *
 class ConnectionWindow(QFrame):
 
     # @ Signals
-    text_updated = pyqtSignal(int, name="connection-text-updated")
-
+    text_updated = pyqtSignal(int, name="connection_text_updated")
     retry_connection_clicked = pyqtSignal(name="retry_connection_clicked")
     wifi_clicked = pyqtSignal(name="wifi_clicked")
     reboot_clicked = pyqtSignal(name="reboot_clicked")
@@ -17,7 +16,6 @@ class ConnectionWindow(QFrame):
     def __init__(self, parent, *args, **kwargs):
         super(ConnectionWindow, self).__init__(parent, *args, **kwargs)
         self.main_window = parent
-
         self.panel = Ui_ConnectivityForm()
         self.panel.setupUi(self)
 
@@ -35,7 +33,7 @@ class ConnectionWindow(QFrame):
         self.panel.RestartKlipperButton.clicked.connect(
             self.restart_klipper_clicked.emit
         )
- 
+
     def show_panel(self, reason: str | None = None):
         self.show()
         if reason is not None:
@@ -46,42 +44,40 @@ class ConnectionWindow(QFrame):
 
     @pyqtSlot(int)
     @pyqtSlot(str)
-    @pyqtSlot(name="update-text")
+    @pyqtSlot(name="text_update")
     def text_update(self, text: int | str | None = None):
         if text is None:
             self.panel.connectionTextBox.setText(
                 """
-                Connecting to Moonrakers Websocket. 
+                Not connected to Moonrakers Websocket. 
                 """
             )
             return True
-        if text == 0:
+        if isinstance(text, str):
             self.panel.connectionTextBox.setText(
-                """
-                Unable to Connect to moonraker websocket\n
-                Try again by reconnecting or \n
-                restarting klipper.
-                """
+                f"\
+                Connection to Moonraker unavailable\n \
+                Try again by reconnecting or \n\
+                restarting klipper.\n\
+                    {text}\
+                "
             )
             return True
-        self.panel.connectionTextBox.setText(
-            f"Connecting to Moonraker and Klipper. \n \
-                Connection Try number {text}."
-        )
+        if isinstance(text, int):
+            if text == 0:
+                self.panel.connectionTextBox.setText(
+                    f"Unable to Connect to Moonraker. \n \
+                   Try again."
+                )
+                return False
+            self.panel.connectionTextBox.setText(
+                f"Attempting to reconnect to Moonraker. \n \
+                  Connection try number: {text}."
+            )
 
         return False
 
-    @pyqtSlot(name="websocket-connected")
+    @pyqtSlot(name="websocket_connected_achieved")
     def websocket_connection_achieved(self):
         # * Close this window
         self.close()
-
-    @pyqtSlot(name="websocket-connection-lost")
-    def websocket_connection_lost(self, reason: str | None = None):
-        # Text update that connection was lost
-        if reason is None:
-            pass
-            # Text without reason
-            return False
-        # ^Text with reason
-        pass
