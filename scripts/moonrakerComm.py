@@ -3,13 +3,11 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 import threading
 import json
 import logging
-import sys
 import websocket
 import json
-from time import monotonic as monotonic_time
-from threading import Timer
-import json
-from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot, QEvent, QEventLoop, QCoreApplication
+import typing
+from PyQt6.QtCore import QObject, pyqtSignal, QEvent, QCoreApplication, pyqtSlot
+
 
 from scripts.util import RepeatedTimer
 from scripts.moonrest import MoonRest
@@ -32,13 +30,20 @@ class MoonWebSocket(QObject, threading.Thread):
     max_retries = 3
     timeout = 3
 
+    # @ Signals
     message_signal = pyqtSignal()
-
-    def __init__(self, mainWindow):
+    connecting_signal = pyqtSignal((int,),(str,), name = "websocket-connecting")        # * For optional types use (<type>,)
+    connected_signal = pyqtSignal(name="websocket-connected")
+    connection_lost = pyqtSignal([str], name="websocket-connection-lost")
+    
+    def __init__(self, parent: typing.Optional["QObject"] = ...) -> None:
+        super(MoonWebSocket, self).__init__(parent)
+    # def __init__(self, mainWindow):
         # * Both lines bellow are the same shit i guess
-        super(MoonWebSocket, self).__init__()
+        # super(MoonWebSocket, self).__init__()
         self.daemon = True
-        self._main_window = mainWindow
+        self._main_window = parent
+
         # self.host: str=None
         # self.port: int = None
         # self.ws: websocket.WebSocketApp = None
@@ -49,18 +54,26 @@ class MoonWebSocket(QObject, threading.Thread):
         self._moonRest = MoonRest()
         self.api = MoonAPI(self)
 
-        self._retry_timer: RepeatedTimer = None
+
+        self._retry_timer: RepeatedTimer 
+
         # ! Websocket options
         # websocket.enableTrace(True)
         websocket.setdefaulttimeout(self.timeout)
 
         # Events
-        # ! Probably not needed, and may be deleted in the future 
+
+        # ! Probably not needed, and may be deleted in the future
+
         self.connectEvent = threading.Event()
         self.connectingEvent = threading.Event()
         self.disconnectEvent = threading.Event()
-
+        
+          
+    @pyqtSlot(name="retry-websocket-connection")
     def retry(self):
+        if self.connecting is True and self.connected is False:
+            return False
         _logger.info("Retrying connection.")
 
         self._reconnect_count = 0
@@ -79,11 +92,17 @@ class MoonWebSocket(QObject, threading.Thread):
 
         if self._reconnect_count >= self.max_retries:
             self._retry_timer.stopTimer()
-            unable_to_connect_event = WebSocketErrorEvent(data="Unable to Connect to Websocket")
+            unable_to_connect_event = WebSocketErrorEvent(
+                data="Unable to Connect to Websocket")
+            self.connecting_signal.emit(0)
+            self.connecting = False
             try:
-                QCoreApplication.sendEvent(self._main_window, unable_to_connect_event)
+                QCoreApplication.sendEvent(
+                    self._main_window, unable_to_connect_event)
             except Exception as e:
-                _logger.error(f"Error sending Event {unable_to_connect_event.__class__.__name__}")
+                _logger.error(
+                    f"Error sending Event {unable_to_connect_event.__class__.__name__}")
+
             _logger.debug("Max number of connection retries reached.")
             _logger.info("Could not connect to moonraker.")
             return False
@@ -97,6 +116,8 @@ class MoonWebSocket(QObject, threading.Thread):
             _logger.debug("Connection already established.")
             return True
         self._reconnect_count += 1
+
+        self.connecting_signal.emit(int(self._reconnect_count))
         _logger.debug(f"Connect try number:{self._reconnect_count}")
 
         # Request oneshot token
@@ -133,13 +154,16 @@ class MoonWebSocket(QObject, threading.Thread):
     def disconnect(self):
         # TODO: Handle disconnect or close state
         self.ws.close()
-        # _logger.info("Socket disconnected:")
+
+        _logger.info("Socket disconnected:")
+
 
     def on_error(self, *args):  # ws, error):
         # First argument is ws second is error message
         _error = args[1] if len(args) == 2 else args[0]
         # TODO: Handle error messages
         _logger.info(f"Websocket error:{_error}")
+
         self.connected = False
         self.disconnected = True
 
@@ -150,7 +174,8 @@ class MoonWebSocket(QObject, threading.Thread):
         # _close_status_code, _close_message = args[1],args[2] if len(args) == 3 else None, None
         self.connected = False
         self.ws.keep_running = False
-        # self.reconnect()
+        self.connection_lost[str].emit(f"code: {_close_status_code} | message {_close_message}")
+
 
         _logger.info(
             f"Websocket closed, code: {_close_status_code}, message: {_close_message}")
@@ -160,14 +185,21 @@ class MoonWebSocket(QObject, threading.Thread):
         _ws = args[0] if len(args) == 1 else None
         self.connecting = False
         self.connected = True
-        
-        connecting_event = WebSocketConnectEvent(
+
+
+        open_event = WebSocketOpenEvent(
             data="Connected")
         try:
-            QCoreApplication.postEvent(self._main_window.start_window, connecting_event, 10000)
+            # QCoreApplication.postEvent(
+            #     self._main_window.start_window, open_event, 10000)
+            QCoreApplication.sendEvent(
+                self._main_window.start_window, open_event)
         except Exception as e:
             _logger.error(f"Error posting event: {e}")
-            
+
+        self.connected_signal.emit()
+        self._retry_timer.stopTimer()
+
         _logger.info(f"Connection to websocket made on {_ws}")
         # * Verify the connection is made
         self.api.query_server_info()
@@ -179,21 +211,14 @@ class MoonWebSocket(QObject, threading.Thread):
         _logger.debug(f"Message received from websocket: {_message}")
         response = json.loads(_message)
 
-        # !         EXPERIMENTS WITH SIGNALS SLOTS AND EVENTS, ALL WORKING I GUESS
-        # ? Signals and Slots or do i create an Event?
-        # self.message_signal.emit()
-        # _logger.info(json.loads(response))
-        # ! An error on th websocket daemon appears when i call this message.
         message_event = WebSocketMessageReceivedEvent(
             data="websocket message", kwargs=response)
         try:
-            QCoreApplication.postEvent(self._main_window, message_event, 10000)         # Queue, pop, push, definir prioridade do evento  
-            QCoreApplication.sendEvent(self._main_window, message_event)                # Mais rapido e não ha queue
+            # QCoreApplication.postEvent(self._main_window, message_event, 10000)         # Queue, pop, push, definir prioridade do evento
+            # Mais rapido e nao ha queue
+            QCoreApplication.sendEvent(self._main_window, message_event)
         except Exception as e:
             _logger.error(f"Error posting event: {e}")
-
-
-
 
 
     def send_request(self, method: str, params: dict = {}):
@@ -213,7 +238,31 @@ class MoonWebSocket(QObject, threading.Thread):
         return True
 
 
+
+class WebSocketConnectingEvent(QEvent):
+    """WebSocketConnectingEvent Event for websocket connecting to Moonraker 
+
+    Args:
+        QEvent (_type_): QEvent type argument
+    """
+    wb_connecting_event_type = QEvent.Type(QEvent.registerEventType())
+
+    def __init__(self, data, *args, **kwargs):
+        raise NotImplementedError
+        super(WebSocketConnectingEvent, self).__init__(
+            WebSocketConnectingEvent.wb_connecting_event_type
+        )
+        self.data = data
+        self.args = args
+        self.kwargs = kwargs
+
+
 class WebSocketMessageReceivedEvent(QEvent):
+    """WebSocketMessageReceivedEvent Event for message received from Moonrakers websocket 
+
+    Args:
+        QEvent (_type_): QEvent type argument
+    """
     message_event_type = QEvent.Type(QEvent.registerEventType())
 
     def __init__(self, data, **kwargs):
@@ -222,6 +271,37 @@ class WebSocketMessageReceivedEvent(QEvent):
         self.data = data
         self.kwargs = kwargs
 
+class WebSocketOpenEvent(QEvent):
+    """WebSocketOpenEvent Event for websocket connection to Moonraker
+
+    Args:
+        QEvent (_type_): QEvent type argument
+    """
+    wb_open_event_type = QEvent.Type(QEvent.registerEventType())
+
+    def __init__(self, data, *args, **kwargs):
+        super(WebSocketOpenEvent, self).__init__(
+            WebSocketOpenEvent.wb_open_event_type)
+        self.data = data
+        self.args = args
+        self.kwargs = kwargs
+
+class WebSocketErrorEvent(QEvent):
+    """WebSocketErrorEvent Event for websocket error
+
+
+    Args:
+        QEvent (_type_): QEvent type argument
+    """
+    wb_error_event_type = QEvent.Type(QEvent.registerEventType())
+
+    def __init__(self, data, *args, **kwargs):
+        super(WebSocketErrorEvent, self).__init__(
+            WebSocketErrorEvent.wb_error_event_type)
+
+        self.data = data
+        self.args = args
+        self.kwargs = kwargs
 
 class WebSocketDisconnectEvent(QEvent):
     """WebSocketDisconnectEvent Event for websocket diconnection to Moonraker
@@ -238,10 +318,8 @@ class WebSocketDisconnectEvent(QEvent):
         self.args = args
         self.kwargs = kwargs
 
-
 class KlipperConnectEvent(QEvent):
     """KlipperConnectEvent Event to klipper connection
-
     Args:
         QEvent (_type_): QEvent type argument
     """
@@ -256,39 +334,21 @@ class KlipperConnectEvent(QEvent):
         self.kwargs = kwargs
 
 
-class WebSocketConnectEvent(QEvent):
-    """WebSocketConnectEvent Event for websocket connection to Moonraker
-
-    Args:
-        QEvent (_type_): QEvent type argument
-    """
-    wb_connect_event_type = QEvent.Type(QEvent.registerEventType())
-
-    def __init__(self, data, *args, **kwargs):
-        super(WebSocketConnectEvent, self).__init__(
-            WebSocketConnectEvent.wb_connect_event_type)
-        self.data = data
-        self.args = args
-        self.kwargs = kwargs
-
-
-class WebSocketErrorEvent(QEvent):
-    """WebSocketErrorEvent Event for websocket error
-
-    Args:
-        QEvent (_type_): QEvent type argument
-    """
-    wb_error_event_type = QEvent.Type(QEvent.registerEventType())
-
-    def __init__(self, data, *args, **kwargs):
-        super(WebSocketErrorEvent, self).__init__(
-            WebSocketErrorEvent.wb_error_event_type)
-        self.data = data
-        self.args = args
-        self.kwargs = kwargs
-
-
 class MoonAPI:
+    """ MoonAPI
+            Moonraker API implementation
+
+    Raises:
+        NotImplementedError: _description_
+        NotImplementedError: _description_
+        NotImplementedError: _description_
+        NotImplementedError: _description_
+        NotImplementedError: _description_
+        NotImplementedError: _description_
+
+    Returns:
+        JSON: request 
+    """
     # TODO: Callbacks for each method
     def __init__(self, ws):
         self._ws = ws

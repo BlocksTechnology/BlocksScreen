@@ -99,9 +99,11 @@ class RepeatedTimer(threading.Thread):
             self._function(*self._args, **self._kwargs)
 
     def stopTimer(self):
-        self._timer.cancel()
-        self.stopEvent.clear()
-        self.running = False
+        # self._timer.cancel()
+        if self.running :
+            self._timer.cancel()
+            self.stopEvent.clear()
+            self.running = False
 
     @staticmethod
     def pauseTimer(self):

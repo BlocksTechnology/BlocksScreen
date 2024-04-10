@@ -1,52 +1,52 @@
-import logging
 import sys
+from PyQt6.QtCore import pyqtSignal, pyqtSlot, QObject
+from PyQt6.QtWidgets import QApplication, QMainWindow, QSplashScreen
+from PyQt6.QtGui import QPixmap
+
+
+from scripts.moonrakerComm import WebSocketMessageReceivedEvent, MoonWebSocket
+from scripts.moonrest import MoonRest
+from scripts.bo_includes.bo_machine import MachineControl
 
 from PyQt6 import uic
-from PyQt6.QtCore import QEvent, QEventLoop, QObject, Qt, pyqtSignal, pyqtSlot
-from PyQt6.QtWidgets import (QApplication, QDockWidget, QFrame, QMainWindow,
-                             QWidget)
+
+# * Panels
+from panels.connectionWindow import ConnectionWindow
+from panels.printTab import PrintTab
+
+
+from resources.background_resources_rc import *
+from resources.button_resources_rc import *
+from resources.main_menu_resources_rc import *
+from resources.system_resources_rc import *
 
 from qt_ui.Blocks_Screen_Lemos_ui import Ui_MainWindow
-from qt_ui.connectionWindow_ui import Ui_Form
-from scripts.moonrakerComm import (WebSocketMessageReceivedEvent, MoonAPI,
-                                   MoonWebSocket, WebSocketConnectEvent)
-from scripts.moonrest import MoonRest
 
-class ConnectionWindow(QFrame):
-    def __init__(self, main_window, *args, **kwargs):
-        super(ConnectionWindow, self).__init__(
-            parent=main_window, *args, **kwargs)
-        self.main_window = main_window
-        self.con_window = Ui_Form()
-        self.con_window.setupUi(self)
-        self.con_window.RetryConnection.clicked.connect(self.initialize)
-        # self.mapToParent()
-        # self.show()
-        self.setFocus()
-        self.setEnabled(True)
-        # self.setHi
-        self.show()
 
-    @pyqtSlot()
-    def initialize(self):
-        self.main_window.ws.start()
-        self.main_window.ws.try_connection()
-        self.con_window.TextFrame.setWindowIconText(
-            "Connecting to Moonraker and Klipper")
+"""
+    QSplashScreen
+    Functions ->
+        finish()
+        message()
+        pixmap()
+        setPixmap()
+        
+    Virtual Functions ->
+        drawContents()
+        
+    Slots ->
+    
+        clearMessage()
+        showMessage()
 
-    def event(self, event):
-        if event.type() == WebSocketConnectEvent.wb_connect_event_type:
-            # print(event.kwargs)
-            self.close()
-            self.main_window.show()
-
-            return True
-            # return super().event(event)
-            # return self.message_received_event(event)
-        return super().event(event)
+    More Info on ->
+        https://doc.qt.io/qtforpython-6/PySide6/QtWidgets/QSplashScreen.html#qsplashscreen
+    
+"""
 
 
 class MainWindow(QMainWindow):
+    app_initialize = pyqtSignal(name="app-start-websocket-connection")
 
     def __init__(self, *args, **kwargs):
         super(MainWindow, self).__init__(*args, **kwargs)
@@ -54,37 +54,44 @@ class MainWindow(QMainWindow):
         # self.con_window.setupUi(self)
         self.ui.setupUi(self)
         # uic.loadUi("Scripts/uiTemplate.ui", self)        In Case i want to use the .ui file
-
-        self.start_window = ConnectionWindow(main_window=self)
+        self.start_window = ConnectionWindow(self)
 
         self._moonRest = MoonRest()
         self.ws = MoonWebSocket(self)
+        self.mc = MachineControl(self)
 
-        # self.ui.pushButton_2.clicked.connect(self.initialize)
-        # self.con_window..Re.clicked.connect(self.initialize)
-        # self.ws.message_signal.connect(self.message)
+        # @ Panels
+        self.printPanel = PrintTab(self.ui.printTab)
 
-    # This slot is called when the button is pressed, it represents
-    @pyqtSlot()
-    def initialize(self):
+        # @ Slot connections
+        self.app_initialize.connect(slot=self.start_websocket_connection)
+        self.ws.connecting_signal.connect(slot=self.start_window.text_update)
+        self.ws.connected_signal.connect(
+            slot=self.start_window.websocket_connection_achieved
+        )
+        self.ws.connection_lost.connect(slot=self.websocket_connection_lost)
+        self.start_window.retry_connection_clicked.connect(slot=self.ws.retry)
+        self.start_window.restart_klipper_clicked.connect(
+            slot=self.mc.restart_klipper_service
+        )
+        self.start_window.reboot_clicked.connect(slot=self.mc.machine_restart)
+
+    @pyqtSlot(name="start_websocket_connection")
+    def start_websocket_connection(self):
         self.ws.start()
         self.ws.try_connection()
 
-        # if self._ws.connected:
+    @pyqtSlot()
+    @pyqtSlot((str))
+    @pyqtSlot(name="websocket_connection_lost")
+    def websocket_connection_lost(self, reason: str):
+        self.start_window.show_panel(reason)
 
-    @pyqtSlot(name="message_received")
-    def message(self):
-        self.ui.pushButton_2.setText("BITCH")
-
-    # def message_received(self, event, *args):
-    #     print("Hello")
-
-    def message_received_event(self, event):
-        print("event")
-
+    # @pyqtSlot(name
     def event(self, event):
-        # print(event)
-        if event.type() == WebSocketMessageReceivedEvent.message_event_type:
+        if (
+            event.type() == WebSocketMessageReceivedEvent.message_event_type
+        ):  # TODO: This will go to another place
             # print(event.kwargs)
             return True
             # return super().event(event)
@@ -93,10 +100,48 @@ class MainWindow(QMainWindow):
 
 
 if __name__ == "__main__":
+
     app = QApplication([])
-    main_window = MainWindow()
-    main_window.show()
-    sys.exit(app.exec())
+    pixmap = QPixmap("Blocks_Screen/media/logoblocks.png")
+    splash = QSplashScreen(pixmap)
+    # splash.setGeometry(main_window)
+    splash.showNormal()
+    splash.showMessage("Loading")
+
+    # @ Someone said that .processEvents sometimes crashes the system
+    app.processEvents()
+
     # There is another way i can do this, by passing the .ui file to .py and then use that .py file in my app.
     # I can do this with the command pyuic6 -o <pythonfile>.py -x <uifile>.ui
     # Then i get a .py file from the .ui file
+    main_window = MainWindow()
+    main_window.show()
+    main_window.app_initialize.emit()
+    splash.finish(main_window)
+    sys.exit(app.exec())
+
+
+""" 
+    MECANISMO NR 1
+    
+        Eventos -> ser rapidos ou ter um queue 
+
+            rapidos -> sendEvent(local, event)
+            queue -> postEvent()
+
+
+        Podem ser vistos em qualquer parte do programa ou podem ser explicitamente transmitidos
+        para uma classe.
+        
+        
+        Qualquer classe que seja um "child" de uma outra do QT
+        
+            def event(self, event):         Sempre chamada quando existe um event 
+                <qualquer coisa>
+        
+    MECANISMO NR 2 
+    
+        SINALS & SLOTS 
+    
+        
+"""

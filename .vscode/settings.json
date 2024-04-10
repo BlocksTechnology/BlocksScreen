@@ -4,6 +4,26 @@
     "cSpell.enableFiletypes": [
         "dockerfile",
         "xml"
-    ]
+    ],
+    "workbench.colorCustomizations": {
+        "activityBar.activeBackground": "#f1abe0",
+        "activityBar.background": "#f1abe0",
+        "activityBar.foreground": "#15202b",
+        "activityBar.inactiveForeground": "#15202b99",
+        "activityBarBadge.background": "#6d8917",
+        "activityBarBadge.foreground": "#e7e7e7",
+        "commandCenter.border": "#15202b99",
+        "sash.hoverBorder": "#f1abe0",
+        "statusBar.background": "#ea7fd0",
+        "statusBar.foreground": "#15202b",
+        "statusBarItem.hoverBackground": "#e353c0",
+        "statusBarItem.remoteBackground": "#ea7fd0",
+        "statusBarItem.remoteForeground": "#15202b",
+        "titleBar.activeBackground": "#ea7fd0",
+        "titleBar.activeForeground": "#15202b",
+        "titleBar.inactiveBackground": "#ea7fd099",
+        "titleBar.inactiveForeground": "#15202b99"
+    },
+    "peacock.remoteColor": "#ea7fd0"
     
 }

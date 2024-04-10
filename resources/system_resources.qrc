@@ -1,0 +1,16 @@
+<RCC>
+  <qresource prefix="icons">
+    <file>media/btn_icons/filament_icon.svg</file>
+    <file>media/btn_icons/filament_unload.svg</file>
+    <file>media/btn_icons/factory_reset_icon.svg</file>
+    <file>media/btn_icons/factory_reset_icon_PRESSED.svg</file>
+    <file>media/btn_icons/firmware_restart.svg</file>
+    <file>media/btn_icons/firmware_restart_PRESSED.svg</file>
+    <file>media/btn_icons/restart_klipper.svg</file>
+    <file>media/btn_icons/restart_klipper_PRESSED.svg</file>
+    <file>media/btn_icons/retry_connection.svg</file>
+    <file>media/btn_icons/retry_connection_PRESSED.svg</file>
+    <file>media/btn_icons/system_reboot.svg</file>
+    <file>media/btn_icons/system_reboot_PRESSED.svg</file>
+  </qresource>
+</RCC>
