@@ -18,6 +18,7 @@
   </property>
   <widget class="QWidget" name="centralwidget">
    <property name="styleSheet">
+
     <string notr="true">#centralwidget{
 	
 	background-image: url(:/background/1st_background.png);
@@ -29,25 +30,22 @@ QPushButton.menu_btn{
 	max-height: 95px; 
 	min-width: 310px;
 	max-width: 310px;
-	font-family: Momcake-Bold;
+
+	font-family: Momcake-Bold
 	font-style: normal;
 	font-size: 20pt;
 }
 
-QPushButton.menu_btn::pressed{
 	
-	color: #8e8d8d;
-	font-family: Momcake;
-	font-style: normal;
-	font-size: 20pt;
+.menu_btn::pressed {
+	border-image: url(:/Btn_Backgrounds/MEDIA/media/btn_simple_PRESSED.png) 0 0 0 0 stretch stretch;
 }
 
 QLabel.title_text {
 	align-text: center;
 	font-family: Momcake-bold;
-	font-style: normal;
-	font-size: 30pt;
-	color: white;
+.title_text {
+	font-family: Momcake;
 }</string>
    </property>
    <widget class="QWidget" name="layoutWidget">
@@ -262,7 +260,9 @@ QLabel.title_text {
         </property>
         <property name="styleSheet">
          <string notr="true">#nozzle_1_temp{ 
+
 	image: url(:/General_icons/1_icons/top_bar_icons/nozzle_temp_1.png);
+
 	image-position: left;
 }</string>
         </property>
@@ -338,7 +338,9 @@ QLabel.title_text {
         </property>
         <property name="styleSheet">
          <string notr="true">#blocks_logo {
+
 image: url(:/General_icons/media/graphics/logo_blocks.png);
+
 }</string>
         </property>
         <property name="text">
@@ -513,6 +515,7 @@ image: url(:/General_icons/media/graphics/logo_blocks.png);
         <bool>false</bool>
        </property>
        <property name="styleSheet">
+
         <string notr="true">#mainTabWidget{
 background-image: url(:/background/1st_background.png);
 height: 360px;
@@ -557,16 +560,19 @@ QTabBar::tab{
        <property name="movable">
         <bool>false</bool>
        </property>
+
        <widget class="QWidget" name="printTab">
         <attribute name="icon">
          <iconset resource="../resources/main_menu_resources.qrc">
           <normaloff>:/icons/media/main_menu/ICON_home.png</normaloff>
           <normalon>:/icons/media/main_menu/ICON_home_pressed.png</normalon>
           <disabledon>:/icons/media/main_menu/ICON_home_blocked.png</disabledon>:/icons/media/main_menu/ICON_home.png</iconset>
+
         </attribute>
         <attribute name="title">
          <string/>
         </attribute>
+
        </widget>
        <widget class="QWidget" name="filamentTab">
         <attribute name="icon">
@@ -574,10 +580,12 @@ QTabBar::tab{
           <normaloff>:/icons/media/main_menu/ICON_filament.png</normaloff>
           <normalon>:/icons/media/main_menu/ICON_filament_pressed.png</normalon>
           <disabledon>:/icons/media/main_menu/ICON_filamente_blocked.png</disabledon>:/icons/media/main_menu/ICON_filament.png</iconset>
+
         </attribute>
         <attribute name="title">
          <string/>
         </attribute>
+
        </widget>
        <widget class="QWidget" name="controlTab">
         <attribute name="icon">
@@ -585,6 +593,7 @@ QTabBar::tab{
           <normaloff>:/icons/media/main_menu/ICON_control.png</normaloff>
           <normalon>:/icons/media/main_menu/ICON_control_pressed.png</normalon>
           <disabledon>:/icons/media/main_menu/ICON_control_blocked.png</disabledon>:/icons/media/main_menu/ICON_control.png</iconset>
+
         </attribute>
         <attribute name="title">
          <string/>
@@ -596,6 +605,7 @@ QTabBar::tab{
           <normaloff>:/icons/media/main_menu/ICON_utilities.png</normaloff>
           <normalon>:/icons/media/main_menu/ICON_utilities_pressed.png</normalon>
           <disabledon>:/icons/media/main_menu/ICON_utilities_blocked.png</disabledon>:/icons/media/main_menu/ICON_utilities.png</iconset>
+
         </attribute>
         <attribute name="title">
          <string/>
@@ -608,12 +618,14 @@ QTabBar::tab{
   </widget>
  </widget>
  <resources>
+
   <include location="../resources/background_resources.qrc"/>
   <include location="../resources/button_resources.qrc"/>
   <include location="../resources/icon_resources.qrc"/>
   <include location="../resources/main_menu_resources.qrc"/>
   <include location="../resources/system_resources.qrc"/>
   <include location="../resources/top_bar_resources.qrc"/>
+
  </resources>
  <connections/>
 </ui>

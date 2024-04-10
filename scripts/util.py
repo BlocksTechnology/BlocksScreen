@@ -102,7 +102,6 @@ class RepeatedTimer(threading.Thread):
         # self._timer.cancel()
         if self.running :
             self._timer.cancel()
-            
             self.stopEvent.clear()
             self.running = False
 

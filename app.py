@@ -3,9 +3,12 @@ from PyQt6.QtCore import pyqtSignal, pyqtSlot, QObject
 from PyQt6.QtWidgets import QApplication, QMainWindow, QSplashScreen
 from PyQt6.QtGui import QPixmap
 
+
 from scripts.moonrakerComm import WebSocketMessageReceivedEvent, MoonWebSocket
 from scripts.moonrest import MoonRest
 from scripts.bo_includes.bo_machine import MachineControl
+
+from PyQt6 import uic
 
 # * Panels
 from panels.connectionWindow import ConnectionWindow
