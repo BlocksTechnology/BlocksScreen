@@ -15,37 +15,7 @@ class Ui_MainWindow(object):
         MainWindow.resize(800, 480)
         MainWindow.setStyleSheet("")
         self.centralwidget = QtWidgets.QWidget(parent=MainWindow)
-        self.centralwidget.setStyleSheet("#centralwidget{\n"
-"    \n"
-"    background-image: url(:/background/1st_background.png);\n"
-"}\n"
-"QPushButton.menu_btn{\n"
-"   \n"
-"    color: #424242;\n"
-"    min-height: 95px;\n"
-"    max-height: 95px; \n"
-"    min-width: 310px;\n"
-"    max-width: 310px;\n"
-"    font-family: Momcake-Bold;\n"
-"    font-style: normal;\n"
-"    font-size: 20pt;\n"
-"}\n"
-"\n"
-"QPushButton.menu_btn::pressed{\n"
-"    \n"
-"    color: #8e8d8d;\n"
-"    font-family: Momcake;\n"
-"    font-style: normal;\n"
-"    font-size: 20pt;\n"
-"}\n"
-"\n"
-"QLabel.title_text {\n"
-"    align-text: center;\n"
-"    font-family: Momcake-bold;\n"
-"    font-style: normal;\n"
-"    font-size: 30pt;\n"
-"    color: white;\n"
-"}")
+        self.centralwidget.setStyleSheet("#centralwidget{background-image: url(:/background/1st_background.png);}")
         self.centralwidget.setObjectName("centralwidget")
         self.layoutWidget = QtWidgets.QWidget(parent=self.centralwidget)
         self.layoutWidget.setGeometry(QtCore.QRect(0, 0, 802, 646))
@@ -69,15 +39,7 @@ class Ui_MainWindow(object):
         self.chamber_temp = QtWidgets.QPushButton(parent=self.top_bar)
         self.chamber_temp.setEnabled(True)
         self.chamber_temp.setGeometry(QtCore.QRect(190, 28, 87, 19))
-        self.chamber_temp.setStyleSheet("QWidget{\n"
-"    background-color: rgb(50, 50, 50);\n"
-"    selection-background-color: rgb(60, 60, 60);\n"
-"    gridline-color: rgb(60, 60, 60);\n"
-"    color: rgb(255, 255, 255);\n"
-"    border-color: rgb(60, 60, 60);\n"
-"    selection-color: rgb(60, 60, 60);\n"
-"    border-bottom-color: rgb(60, 60, 60);\n"
-"}")
+        self.chamber_temp.setStyleSheet("")
         self.chamber_temp.setIconSize(QtCore.QSize(19, 19))
         self.chamber_temp.setCheckable(False)
         self.chamber_temp.setChecked(False)
@@ -86,15 +48,7 @@ class Ui_MainWindow(object):
         self.filament_type_1 = QtWidgets.QPushButton(parent=self.top_bar)
         self.filament_type_1.setEnabled(True)
         self.filament_type_1.setGeometry(QtCore.QRect(581, 9, 44, 19))
-        self.filament_type_1.setStyleSheet("QWidget{\n"
-"    background-color: rgb(50, 50, 50);\n"
-"    selection-background-color: rgb(60, 60, 60);\n"
-"    gridline-color: rgb(60, 60, 60);\n"
-"    color: rgb(255, 255, 255);\n"
-"    border-color: rgb(60, 60, 60);\n"
-"    selection-color: rgb(60, 60, 60);\n"
-"    border-bottom-color: rgb(60, 60, 60);\n"
-"}")
+        self.filament_type_1.setStyleSheet("")
         self.filament_type_1.setIconSize(QtCore.QSize(19, 19))
         self.filament_type_1.setCheckable(False)
         self.filament_type_1.setChecked(False)
@@ -103,15 +57,7 @@ class Ui_MainWindow(object):
         self.hot_bed_temp = QtWidgets.QPushButton(parent=self.top_bar)
         self.hot_bed_temp.setEnabled(True)
         self.hot_bed_temp.setGeometry(QtCore.QRect(190, 9, 87, 19))
-        self.hot_bed_temp.setStyleSheet("QWidget{\n"
-"    background-color: rgb(50, 50, 50);\n"
-"    selection-background-color: rgb(60, 60, 60);\n"
-"    gridline-color: rgb(60, 60, 60);\n"
-"    color: rgb(255, 255, 255);\n"
-"    border-color: rgb(60, 60, 60);\n"
-"    selection-color: rgb(60, 60, 60);\n"
-"    border-bottom-color: rgb(60, 60, 60);\n"
-"}")
+        self.hot_bed_temp.setStyleSheet("")
         self.hot_bed_temp.setIconSize(QtCore.QSize(19, 19))
         self.hot_bed_temp.setCheckable(False)
         self.hot_bed_temp.setChecked(False)
@@ -120,15 +66,7 @@ class Ui_MainWindow(object):
         self.filament_type_2 = QtWidgets.QPushButton(parent=self.top_bar)
         self.filament_type_2.setEnabled(True)
         self.filament_type_2.setGeometry(QtCore.QRect(581, 28, 44, 19))
-        self.filament_type_2.setStyleSheet("QWidget{\n"
-"    background-color: rgb(50, 50, 50);\n"
-"    selection-background-color: rgb(60, 60, 60);\n"
-"    gridline-color: rgb(60, 60, 60);\n"
-"    color: rgb(255, 255, 255);\n"
-"    border-color: rgb(60, 60, 60);\n"
-"    selection-color: rgb(60, 60, 60);\n"
-"    border-bottom-color: rgb(60, 60, 60);\n"
-"}")
+        self.filament_type_2.setStyleSheet("")
         self.filament_type_2.setIconSize(QtCore.QSize(19, 19))
         self.filament_type_2.setCheckable(False)
         self.filament_type_2.setChecked(False)
@@ -137,10 +75,7 @@ class Ui_MainWindow(object):
         self.nozzle_1_temp = QtWidgets.QPushButton(parent=self.top_bar)
         self.nozzle_1_temp.setEnabled(True)
         self.nozzle_1_temp.setGeometry(QtCore.QRect(321, 9, 99, 19))
-        self.nozzle_1_temp.setStyleSheet("#nozzle_1_temp{ \n"
-"    image: url(:/General_icons/1_icons/top_bar_icons/nozzle_temp_1.png);\n"
-"    image-position: left;\n"
-"}")
+        self.nozzle_1_temp.setStyleSheet("")
         self.nozzle_1_temp.setIconSize(QtCore.QSize(19, 19))
         self.nozzle_1_temp.setCheckable(False)
         self.nozzle_1_temp.setChecked(False)
@@ -149,15 +84,7 @@ class Ui_MainWindow(object):
         self.nozzle_2_temp = QtWidgets.QPushButton(parent=self.top_bar)
         self.nozzle_2_temp.setEnabled(True)
         self.nozzle_2_temp.setGeometry(QtCore.QRect(321, 28, 99, 19))
-        self.nozzle_2_temp.setStyleSheet("QWidget{\n"
-"    background-color: rgb(50, 50, 50);\n"
-"    selection-background-color: rgb(60, 60, 60);\n"
-"    gridline-color: rgb(60, 60, 60);\n"
-"    color: rgb(255, 255, 255);\n"
-"    border-color: rgb(60, 60, 60);\n"
-"    selection-color: rgb(60, 60, 60);\n"
-"    border-bottom-color: rgb(60, 60, 60);\n"
-"}")
+        self.nozzle_2_temp.setStyleSheet("")
         self.nozzle_2_temp.setIconSize(QtCore.QSize(19, 19))
         self.nozzle_2_temp.setCheckable(False)
         self.nozzle_2_temp.setChecked(False)
@@ -173,15 +100,7 @@ class Ui_MainWindow(object):
         self.nozzle_1 = QtWidgets.QPushButton(parent=self.top_bar)
         self.nozzle_1.setEnabled(True)
         self.nozzle_1.setGeometry(QtCore.QRect(451, 9, 79, 19))
-        self.nozzle_1.setStyleSheet("QWidget{\n"
-"    background-color: rgb(50, 50, 50);\n"
-"    selection-background-color: rgb(60, 60, 60);\n"
-"    gridline-color: rgb(60, 60, 60);\n"
-"    color: rgb(255, 255, 255);\n"
-"    border-color: rgb(60, 60, 60);\n"
-"    selection-color: rgb(60, 60, 60);\n"
-"    border-bottom-color: rgb(60, 60, 60);\n"
-"}")
+        self.nozzle_1.setStyleSheet("")
         self.nozzle_1.setIconSize(QtCore.QSize(19, 19))
         self.nozzle_1.setCheckable(False)
         self.nozzle_1.setChecked(False)
@@ -190,15 +109,7 @@ class Ui_MainWindow(object):
         self.nozzle_2 = QtWidgets.QPushButton(parent=self.top_bar)
         self.nozzle_2.setEnabled(True)
         self.nozzle_2.setGeometry(QtCore.QRect(451, 28, 79, 19))
-        self.nozzle_2.setStyleSheet("QWidget{\n"
-"    background-color: rgb(50, 50, 50);\n"
-"    selection-background-color: rgb(60, 60, 60);\n"
-"    gridline-color: rgb(60, 60, 60);\n"
-"    color: rgb(255, 255, 255);\n"
-"    border-color: rgb(60, 60, 60);\n"
-"    selection-color: rgb(60, 60, 60);\n"
-"    border-bottom-color: rgb(60, 60, 60);\n"
-"}")
+        self.nozzle_2.setStyleSheet("")
         self.nozzle_2.setIconSize(QtCore.QSize(19, 19))
         self.nozzle_2.setCheckable(False)
         self.nozzle_2.setChecked(False)
@@ -207,15 +118,7 @@ class Ui_MainWindow(object):
         self.wifi_signal = QtWidgets.QPushButton(parent=self.top_bar)
         self.wifi_signal.setEnabled(True)
         self.wifi_signal.setGeometry(QtCore.QRect(720, 20, 44, 19))
-        self.wifi_signal.setStyleSheet("QWidget{\n"
-"    background-color: rgb(50, 50, 50);\n"
-"    selection-background-color: rgb(60, 60, 60);\n"
-"    gridline-color: rgb(60, 60, 60);\n"
-"    color: rgb(255, 255, 255);\n"
-"    border-color: rgb(60, 60, 60);\n"
-"    selection-color: rgb(60, 60, 60);\n"
-"    border-bottom-color: rgb(60, 60, 60);\n"
-"}")
+        self.wifi_signal.setStyleSheet("")
         self.wifi_signal.setIconSize(QtCore.QSize(19, 19))
         self.wifi_signal.setCheckable(False)
         self.wifi_signal.setChecked(False)
@@ -291,7 +194,6 @@ class Ui_MainWindow(object):
         self.mainTabWidget.addTab(self.utilitiesTab, icon3, "")
         self.central_grid.addWidget(self.mainTabWidget, 1, 0, 1, 1)
         self.central_grid.setRowStretch(0, 4)
-        self.central_grid.setRowStretch(1, 3)
         MainWindow.setCentralWidget(self.centralwidget)
 
         self.retranslateUi(MainWindow)

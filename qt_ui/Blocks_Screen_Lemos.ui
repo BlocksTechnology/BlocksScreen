@@ -18,37 +18,7 @@
   </property>
   <widget class="QWidget" name="centralwidget">
    <property name="styleSheet">
-    <string notr="true">#centralwidget{
-	
-	background-image: url(:/background/1st_background.png);
-}
-QPushButton.menu_btn{
-   
-	color: #424242;
-	min-height: 95px;
-	max-height: 95px; 
-	min-width: 310px;
-	max-width: 310px;
-	font-family: Momcake-Bold;
-	font-style: normal;
-	font-size: 20pt;
-}
-
-QPushButton.menu_btn::pressed{
-	
-	color: #8e8d8d;
-	font-family: Momcake;
-	font-style: normal;
-	font-size: 20pt;
-}
-
-QLabel.title_text {
-	align-text: center;
-	font-family: Momcake-bold;
-	font-style: normal;
-	font-size: 30pt;
-	color: white;
-}</string>
+    <string notr="true">#centralwidget{background-image: url(:/background/1st_background.png);}</string>
    </property>
    <widget class="QWidget" name="layoutWidget">
     <property name="geometry">
@@ -59,7 +29,7 @@ QLabel.title_text {
       <height>646</height>
      </rect>
     </property>
-    <layout class="QGridLayout" name="central_grid" rowstretch="4,3">
+    <layout class="QGridLayout" name="central_grid" rowstretch="4,0">
      <item row="0" column="0">
       <widget class="QGroupBox" name="top_bar">
        <property name="maximumSize">
@@ -93,15 +63,7 @@ QLabel.title_text {
          </rect>
         </property>
         <property name="styleSheet">
-         <string notr="true">QWidget{
-	background-color: rgb(50, 50, 50);
-	selection-background-color: rgb(60, 60, 60);
-	gridline-color: rgb(60, 60, 60);
-	color: rgb(255, 255, 255);
-	border-color: rgb(60, 60, 60);
-	selection-color: rgb(60, 60, 60);
-	border-bottom-color: rgb(60, 60, 60);
-}</string>
+         <string notr="true"/>
         </property>
         <property name="text">
          <string>30 ºC /60 ºC</string>
@@ -135,15 +97,7 @@ QLabel.title_text {
          </rect>
         </property>
         <property name="styleSheet">
-         <string notr="true">QWidget{
-	background-color: rgb(50, 50, 50);
-	selection-background-color: rgb(60, 60, 60);
-	gridline-color: rgb(60, 60, 60);
-	color: rgb(255, 255, 255);
-	border-color: rgb(60, 60, 60);
-	selection-color: rgb(60, 60, 60);
-	border-bottom-color: rgb(60, 60, 60);
-}</string>
+         <string notr="true"/>
         </property>
         <property name="text">
          <string>PLA</string>
@@ -177,15 +131,7 @@ QLabel.title_text {
          </rect>
         </property>
         <property name="styleSheet">
-         <string notr="true">QWidget{
-	background-color: rgb(50, 50, 50);
-	selection-background-color: rgb(60, 60, 60);
-	gridline-color: rgb(60, 60, 60);
-	color: rgb(255, 255, 255);
-	border-color: rgb(60, 60, 60);
-	selection-color: rgb(60, 60, 60);
-	border-bottom-color: rgb(60, 60, 60);
-}</string>
+         <string notr="true"/>
         </property>
         <property name="text">
          <string>45 ºC /50 ºC</string>
@@ -219,15 +165,7 @@ QLabel.title_text {
          </rect>
         </property>
         <property name="styleSheet">
-         <string notr="true">QWidget{
-	background-color: rgb(50, 50, 50);
-	selection-background-color: rgb(60, 60, 60);
-	gridline-color: rgb(60, 60, 60);
-	color: rgb(255, 255, 255);
-	border-color: rgb(60, 60, 60);
-	selection-color: rgb(60, 60, 60);
-	border-bottom-color: rgb(60, 60, 60);
-}</string>
+         <string notr="true"/>
         </property>
         <property name="text">
          <string>PLA</string>
@@ -261,10 +199,7 @@ QLabel.title_text {
          </rect>
         </property>
         <property name="styleSheet">
-         <string notr="true">#nozzle_1_temp{ 
-	image: url(:/General_icons/1_icons/top_bar_icons/nozzle_temp_1.png);
-	image-position: left;
-}</string>
+         <string notr="true"/>
         </property>
         <property name="text">
          <string>210 ºC /220 ºC</string>
@@ -298,15 +233,7 @@ QLabel.title_text {
          </rect>
         </property>
         <property name="styleSheet">
-         <string notr="true">QWidget{
-	background-color: rgb(50, 50, 50);
-	selection-background-color: rgb(60, 60, 60);
-	gridline-color: rgb(60, 60, 60);
-	color: rgb(255, 255, 255);
-	border-color: rgb(60, 60, 60);
-	selection-color: rgb(60, 60, 60);
-	border-bottom-color: rgb(60, 60, 60);
-}</string>
+         <string notr="true"/>
         </property>
         <property name="text">
          <string>210 ºC /220 ºC</string>
@@ -358,15 +285,7 @@ image: url(:/General_icons/media/graphics/logo_blocks.png);
          </rect>
         </property>
         <property name="styleSheet">
-         <string notr="true">QWidget{
-	background-color: rgb(50, 50, 50);
-	selection-background-color: rgb(60, 60, 60);
-	gridline-color: rgb(60, 60, 60);
-	color: rgb(255, 255, 255);
-	border-color: rgb(60, 60, 60);
-	selection-color: rgb(60, 60, 60);
-	border-bottom-color: rgb(60, 60, 60);
-}</string>
+         <string notr="true"/>
         </property>
         <property name="text">
          <string>Nozzle: 0.4</string>
@@ -400,15 +319,7 @@ image: url(:/General_icons/media/graphics/logo_blocks.png);
          </rect>
         </property>
         <property name="styleSheet">
-         <string notr="true">QWidget{
-	background-color: rgb(50, 50, 50);
-	selection-background-color: rgb(60, 60, 60);
-	gridline-color: rgb(60, 60, 60);
-	color: rgb(255, 255, 255);
-	border-color: rgb(60, 60, 60);
-	selection-color: rgb(60, 60, 60);
-	border-bottom-color: rgb(60, 60, 60);
-}</string>
+         <string notr="true"/>
         </property>
         <property name="text">
          <string>Nozzle: 0.3</string>
@@ -442,15 +353,7 @@ image: url(:/General_icons/media/graphics/logo_blocks.png);
          </rect>
         </property>
         <property name="styleSheet">
-         <string notr="true">QWidget{
-	background-color: rgb(50, 50, 50);
-	selection-background-color: rgb(60, 60, 60);
-	gridline-color: rgb(60, 60, 60);
-	color: rgb(255, 255, 255);
-	border-color: rgb(60, 60, 60);
-	selection-color: rgb(60, 60, 60);
-	border-bottom-color: rgb(60, 60, 60);
-}</string>
+         <string notr="true"/>
         </property>
         <property name="text">
          <string>Wifi</string>
