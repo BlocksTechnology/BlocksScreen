@@ -18,35 +18,7 @@
   </property>
   <widget class="QWidget" name="centralwidget">
    <property name="styleSheet">
-
-    <string notr="true">#centralwidget{
-	
-	background-image: url(:/background/1st_background.png);
-}
-QPushButton.menu_btn{
-   
-	color: #424242;
-	min-height: 95px;
-	max-height: 95px; 
-	min-width: 310px;
-	max-width: 310px;
-
-	font-family: Momcake-Bold
-	font-style: normal;
-	font-size: 20pt;
-}
-
-	
-.menu_btn::pressed {
-	border-image: url(:/Btn_Backgrounds/MEDIA/media/btn_simple_PRESSED.png) 0 0 0 0 stretch stretch;
-}
-
-QLabel.title_text {
-	align-text: center;
-	font-family: Momcake-bold;
-.title_text {
-	font-family: Momcake;
-}</string>
+    <string notr="true">#centralwidget{background-image: url(:/background/1st_background.png);}</string>
    </property>
    <widget class="QWidget" name="layoutWidget">
     <property name="geometry">
@@ -57,7 +29,7 @@ QLabel.title_text {
       <height>646</height>
      </rect>
     </property>
-    <layout class="QGridLayout" name="central_grid" rowstretch="4,3">
+    <layout class="QGridLayout" name="central_grid" rowstretch="4,0">
      <item row="0" column="0">
       <widget class="QGroupBox" name="top_bar">
        <property name="maximumSize">
@@ -91,15 +63,7 @@ QLabel.title_text {
          </rect>
         </property>
         <property name="styleSheet">
-         <string notr="true">QWidget{
-	background-color: rgb(50, 50, 50);
-	selection-background-color: rgb(60, 60, 60);
-	gridline-color: rgb(60, 60, 60);
-	color: rgb(255, 255, 255);
-	border-color: rgb(60, 60, 60);
-	selection-color: rgb(60, 60, 60);
-	border-bottom-color: rgb(60, 60, 60);
-}</string>
+         <string notr="true"/>
         </property>
         <property name="text">
          <string>30 ºC /60 ºC</string>
@@ -133,15 +97,7 @@ QLabel.title_text {
          </rect>
         </property>
         <property name="styleSheet">
-         <string notr="true">QWidget{
-	background-color: rgb(50, 50, 50);
-	selection-background-color: rgb(60, 60, 60);
-	gridline-color: rgb(60, 60, 60);
-	color: rgb(255, 255, 255);
-	border-color: rgb(60, 60, 60);
-	selection-color: rgb(60, 60, 60);
-	border-bottom-color: rgb(60, 60, 60);
-}</string>
+         <string notr="true"/>
         </property>
         <property name="text">
          <string>PLA</string>
@@ -175,15 +131,7 @@ QLabel.title_text {
          </rect>
         </property>
         <property name="styleSheet">
-         <string notr="true">QWidget{
-	background-color: rgb(50, 50, 50);
-	selection-background-color: rgb(60, 60, 60);
-	gridline-color: rgb(60, 60, 60);
-	color: rgb(255, 255, 255);
-	border-color: rgb(60, 60, 60);
-	selection-color: rgb(60, 60, 60);
-	border-bottom-color: rgb(60, 60, 60);
-}</string>
+         <string notr="true"/>
         </property>
         <property name="text">
          <string>45 ºC /50 ºC</string>
@@ -217,15 +165,7 @@ QLabel.title_text {
          </rect>
         </property>
         <property name="styleSheet">
-         <string notr="true">QWidget{
-	background-color: rgb(50, 50, 50);
-	selection-background-color: rgb(60, 60, 60);
-	gridline-color: rgb(60, 60, 60);
-	color: rgb(255, 255, 255);
-	border-color: rgb(60, 60, 60);
-	selection-color: rgb(60, 60, 60);
-	border-bottom-color: rgb(60, 60, 60);
-}</string>
+         <string notr="true"/>
         </property>
         <property name="text">
          <string>PLA</string>
@@ -259,12 +199,7 @@ QLabel.title_text {
          </rect>
         </property>
         <property name="styleSheet">
-         <string notr="true">#nozzle_1_temp{ 
-
-	image: url(:/General_icons/1_icons/top_bar_icons/nozzle_temp_1.png);
-
-	image-position: left;
-}</string>
+         <string notr="true"/>
         </property>
         <property name="text">
          <string>210 ºC /220 ºC</string>
@@ -298,15 +233,7 @@ QLabel.title_text {
          </rect>
         </property>
         <property name="styleSheet">
-         <string notr="true">QWidget{
-	background-color: rgb(50, 50, 50);
-	selection-background-color: rgb(60, 60, 60);
-	gridline-color: rgb(60, 60, 60);
-	color: rgb(255, 255, 255);
-	border-color: rgb(60, 60, 60);
-	selection-color: rgb(60, 60, 60);
-	border-bottom-color: rgb(60, 60, 60);
-}</string>
+         <string notr="true"/>
         </property>
         <property name="text">
          <string>210 ºC /220 ºC</string>
@@ -338,9 +265,7 @@ QLabel.title_text {
         </property>
         <property name="styleSheet">
          <string notr="true">#blocks_logo {
-
 image: url(:/General_icons/media/graphics/logo_blocks.png);
-
 }</string>
         </property>
         <property name="text">
@@ -360,15 +285,7 @@ image: url(:/General_icons/media/graphics/logo_blocks.png);
          </rect>
         </property>
         <property name="styleSheet">
-         <string notr="true">QWidget{
-	background-color: rgb(50, 50, 50);
-	selection-background-color: rgb(60, 60, 60);
-	gridline-color: rgb(60, 60, 60);
-	color: rgb(255, 255, 255);
-	border-color: rgb(60, 60, 60);
-	selection-color: rgb(60, 60, 60);
-	border-bottom-color: rgb(60, 60, 60);
-}</string>
+         <string notr="true"/>
         </property>
         <property name="text">
          <string>Nozzle: 0.4</string>
@@ -402,15 +319,7 @@ image: url(:/General_icons/media/graphics/logo_blocks.png);
          </rect>
         </property>
         <property name="styleSheet">
-         <string notr="true">QWidget{
-	background-color: rgb(50, 50, 50);
-	selection-background-color: rgb(60, 60, 60);
-	gridline-color: rgb(60, 60, 60);
-	color: rgb(255, 255, 255);
-	border-color: rgb(60, 60, 60);
-	selection-color: rgb(60, 60, 60);
-	border-bottom-color: rgb(60, 60, 60);
-}</string>
+         <string notr="true"/>
         </property>
         <property name="text">
          <string>Nozzle: 0.3</string>
@@ -444,15 +353,7 @@ image: url(:/General_icons/media/graphics/logo_blocks.png);
          </rect>
         </property>
         <property name="styleSheet">
-         <string notr="true">QWidget{
-	background-color: rgb(50, 50, 50);
-	selection-background-color: rgb(60, 60, 60);
-	gridline-color: rgb(60, 60, 60);
-	color: rgb(255, 255, 255);
-	border-color: rgb(60, 60, 60);
-	selection-color: rgb(60, 60, 60);
-	border-bottom-color: rgb(60, 60, 60);
-}</string>
+         <string notr="true"/>
         </property>
         <property name="text">
          <string>Wifi</string>
@@ -515,7 +416,6 @@ image: url(:/General_icons/media/graphics/logo_blocks.png);
         <bool>false</bool>
        </property>
        <property name="styleSheet">
-
         <string notr="true">#mainTabWidget{
 background-image: url(:/background/1st_background.png);
 height: 360px;
@@ -560,19 +460,16 @@ QTabBar::tab{
        <property name="movable">
         <bool>false</bool>
        </property>
-
        <widget class="QWidget" name="printTab">
         <attribute name="icon">
          <iconset resource="../resources/main_menu_resources.qrc">
           <normaloff>:/icons/media/main_menu/ICON_home.png</normaloff>
           <normalon>:/icons/media/main_menu/ICON_home_pressed.png</normalon>
           <disabledon>:/icons/media/main_menu/ICON_home_blocked.png</disabledon>:/icons/media/main_menu/ICON_home.png</iconset>
-
         </attribute>
         <attribute name="title">
          <string/>
         </attribute>
-
        </widget>
        <widget class="QWidget" name="filamentTab">
         <attribute name="icon">
@@ -580,12 +477,10 @@ QTabBar::tab{
           <normaloff>:/icons/media/main_menu/ICON_filament.png</normaloff>
           <normalon>:/icons/media/main_menu/ICON_filament_pressed.png</normalon>
           <disabledon>:/icons/media/main_menu/ICON_filamente_blocked.png</disabledon>:/icons/media/main_menu/ICON_filament.png</iconset>
-
         </attribute>
         <attribute name="title">
          <string/>
         </attribute>
-
        </widget>
        <widget class="QWidget" name="controlTab">
         <attribute name="icon">
@@ -593,7 +488,6 @@ QTabBar::tab{
           <normaloff>:/icons/media/main_menu/ICON_control.png</normaloff>
           <normalon>:/icons/media/main_menu/ICON_control_pressed.png</normalon>
           <disabledon>:/icons/media/main_menu/ICON_control_blocked.png</disabledon>:/icons/media/main_menu/ICON_control.png</iconset>
-
         </attribute>
         <attribute name="title">
          <string/>
@@ -605,7 +499,6 @@ QTabBar::tab{
           <normaloff>:/icons/media/main_menu/ICON_utilities.png</normaloff>
           <normalon>:/icons/media/main_menu/ICON_utilities_pressed.png</normalon>
           <disabledon>:/icons/media/main_menu/ICON_utilities_blocked.png</disabledon>:/icons/media/main_menu/ICON_utilities.png</iconset>
-
         </attribute>
         <attribute name="title">
          <string/>
@@ -618,14 +511,12 @@ QTabBar::tab{
   </widget>
  </widget>
  <resources>
-
   <include location="../resources/background_resources.qrc"/>
   <include location="../resources/button_resources.qrc"/>
   <include location="../resources/icon_resources.qrc"/>
   <include location="../resources/main_menu_resources.qrc"/>
   <include location="../resources/system_resources.qrc"/>
   <include location="../resources/top_bar_resources.qrc"/>
-
  </resources>
  <connections/>
 </ui>
