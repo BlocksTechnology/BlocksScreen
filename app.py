@@ -12,6 +12,9 @@ from scripts.moonrest import MoonRest
 from panels.connectionWindow import ConnectionWindow
 from panels.printTab import PrintTab
 
+from panels.controlTab import ControlTab
+from panels.filamentTab import FilamentTab
+from panels.utilitiesTab import UtilitiesTab
 
 
 from resources.background_resources_rc import *
@@ -61,6 +64,9 @@ class MainWindow(QMainWindow):
 
         # @ Panels 
         self.printPanel = PrintTab(self.ui.printTab)
+        self.filamentPanel = FilamentTab(self.ui.filamentTab)
+        self.controlPanel = ControlTab(self.ui.controlTab)
+        self.utilitiesPanel = UtilitiesTab(self.ui.utilitiesTab)
         
         # @ Slot connections
         self.app_initialize.connect(slot=self.initialize_websocket_connection)
