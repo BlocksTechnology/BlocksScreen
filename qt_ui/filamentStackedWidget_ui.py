@@ -15,90 +15,96 @@ class Ui_filamentStacketWidget(object):
         filamentStacketWidget.resize(821, 461)
         self.filament_page = QtWidgets.QWidget()
         self.filament_page.setObjectName("filament_page")
-        self.layoutWidget = QtWidgets.QWidget(parent=self.filament_page)
-        self.layoutWidget.setGeometry(QtCore.QRect(0, 0, 691, 311))
-        self.layoutWidget.setObjectName("layoutWidget")
-        self.filament_grid = QtWidgets.QGridLayout(self.layoutWidget)
-        self.filament_grid.setContentsMargins(0, 0, 0, 0)
-        self.filament_grid.setObjectName("filament_grid")
-        self.filament_title = QtWidgets.QLabel(parent=self.layoutWidget)
-        self.filament_title.setLayoutDirection(QtCore.Qt.LayoutDirection.RightToLeft)
-        self.filament_title.setStyleSheet("")
-        self.filament_title.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
-        self.filament_title.setObjectName("filament_title")
-        self.filament_grid.addWidget(self.filament_title, 0, 0, 1, 1)
-        self.filament_btns_grid = QtWidgets.QGridLayout()
-        self.filament_btns_grid.setSizeConstraint(QtWidgets.QLayout.SizeConstraint.SetDefaultConstraint)
-        self.filament_btns_grid.setObjectName("filament_btns_grid")
-        self.change_filament_btn = QtWidgets.QPushButton(parent=self.layoutWidget)
+        self.filament_stop_printing_btn = CustomQPushButton(parent=self.filament_page)
+        self.filament_stop_printing_btn.setGeometry(QtCore.QRect(130, 170, 211, 71))
+        self.filament_stop_printing_btn.setMinimumSize(QtCore.QSize(10, 10))
         font = QtGui.QFont()
-        font.setFamily("Momcake-Bold")
+        font.setFamily("Momcake")
         font.setPointSize(20)
         font.setItalic(False)
-        self.change_filament_btn.setFont(font)
-        self.change_filament_btn.setStyleSheet("#change_filament_btn {\n"
-"    image:url(:/General_icons/test_media/icons/change_filament.png);\n"
-"    image-position: left;\n"
-"}\n"
-"\n"
-"#change_filament_btn::pressed {\n"
-"    image:url(:/General_icons/test_media/icons/change_filament_PRESSED.png);\n"
-"    image-position: left;\n"
-"}")
-        self.change_filament_btn.setObjectName("change_filament_btn")
-        self.filament_btns_grid.addWidget(self.change_filament_btn, 2, 0, 1, 1)
-        self.dryer_btn = QtWidgets.QPushButton(parent=self.layoutWidget)
+        font.setStyleStrategy(QtGui.QFont.StyleStrategy.PreferAntialias)
+        self.filament_stop_printing_btn.setFont(font)
+        self.filament_stop_printing_btn.setMouseTracking(False)
+        self.filament_stop_printing_btn.setTabletTracking(True)
+        self.filament_stop_printing_btn.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.NoContextMenu)
+        self.filament_stop_printing_btn.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
+        self.filament_stop_printing_btn.setStyleSheet("")
+        self.filament_stop_printing_btn.setAutoDefault(False)
+        self.filament_stop_printing_btn.setFlat(True)
+        self.filament_stop_printing_btn.setProperty("borderLeftPixmap", QtGui.QPixmap(":/button_borders/media/buttons/btn_part1.svg"))
+        self.filament_stop_printing_btn.setProperty("borderCenterPixmap", QtGui.QPixmap(":/button_borders/media/buttons/btn_part2.svg"))
+        self.filament_stop_printing_btn.setProperty("borderRightPixmap", QtGui.QPixmap(":/button_borders/media/buttons/btn_part3.svg"))
+        self.filament_stop_printing_btn.setObjectName("filament_stop_printing_btn")
+        self.filament_load_btn = CustomQPushButton(parent=self.filament_page)
+        self.filament_load_btn.setGeometry(QtCore.QRect(450, 190, 211, 71))
+        self.filament_load_btn.setMinimumSize(QtCore.QSize(10, 10))
         font = QtGui.QFont()
-        font.setFamily("Momcake-Bold")
+        font.setFamily("Momcake")
         font.setPointSize(20)
         font.setItalic(False)
-        self.dryer_btn.setFont(font)
-        self.dryer_btn.setStyleSheet("#dryer_btn {\n"
-"    image:url(:/General_icons/test_media/icons/dryer_icon.png);\n"
-"    image-position: left;\n"
-"}\n"
-"\n"
-"#dryer_btn::pressed {\n"
-"    image:url(:/General_icons/test_media/icons/dryer_icon_PRESSED.png);\n"
-"    image-position: left;\n"
-"}")
-        self.dryer_btn.setObjectName("dryer_btn")
-        self.filament_btns_grid.addWidget(self.dryer_btn, 2, 1, 1, 1)
-        self.unload_btn = QtWidgets.QPushButton(parent=self.layoutWidget)
+        font.setStyleStrategy(QtGui.QFont.StyleStrategy.PreferAntialias)
+        self.filament_load_btn.setFont(font)
+        self.filament_load_btn.setMouseTracking(False)
+        self.filament_load_btn.setTabletTracking(True)
+        self.filament_load_btn.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.NoContextMenu)
+        self.filament_load_btn.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
+        self.filament_load_btn.setStyleSheet("")
+        self.filament_load_btn.setAutoDefault(False)
+        self.filament_load_btn.setFlat(True)
+        self.filament_load_btn.setProperty("borderLeftPixmap", QtGui.QPixmap(":/button_borders/media/buttons/btn_part1.svg"))
+        self.filament_load_btn.setProperty("borderCenterPixmap", QtGui.QPixmap(":/button_borders/media/buttons/btn_part2.svg"))
+        self.filament_load_btn.setProperty("borderRightPixmap", QtGui.QPixmap(":/button_borders/media/buttons/btn_part3.svg"))
+        self.filament_load_btn.setObjectName("filament_load_btn")
+        self.filament_dryers_btn = CustomQPushButton(parent=self.filament_page)
+        self.filament_dryers_btn.setGeometry(QtCore.QRect(440, 280, 211, 71))
+        self.filament_dryers_btn.setMinimumSize(QtCore.QSize(10, 10))
         font = QtGui.QFont()
-        font.setFamily("Momcake-Bold")
+        font.setFamily("Momcake")
         font.setPointSize(20)
         font.setItalic(False)
-        self.unload_btn.setFont(font)
-        self.unload_btn.setStyleSheet("#unload_btn {\n"
-"    image:url(:/General_icons/test_media/icons/filament_unload.png);\n"
-"    image-position: left;\n"
-"}\n"
-"\n"
-"#unload_btn::pressed {\n"
-"    image:url(:/General_icons/test_media/icons/filament_unload_PRESSED.png);\n"
-"    image-position: left;\n"
-"}")
-        self.unload_btn.setObjectName("unload_btn")
-        self.filament_btns_grid.addWidget(self.unload_btn, 0, 0, 1, 1)
-        self.load_btn = QtWidgets.QPushButton(parent=self.layoutWidget)
+        font.setStyleStrategy(QtGui.QFont.StyleStrategy.PreferAntialias)
+        self.filament_dryers_btn.setFont(font)
+        self.filament_dryers_btn.setMouseTracking(False)
+        self.filament_dryers_btn.setTabletTracking(True)
+        self.filament_dryers_btn.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.NoContextMenu)
+        self.filament_dryers_btn.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
+        self.filament_dryers_btn.setStyleSheet("")
+        self.filament_dryers_btn.setAutoDefault(False)
+        self.filament_dryers_btn.setFlat(True)
+        self.filament_dryers_btn.setProperty("borderLeftPixmap", QtGui.QPixmap(":/button_borders/media/buttons/btn_part1.svg"))
+        self.filament_dryers_btn.setProperty("borderCenterPixmap", QtGui.QPixmap(":/button_borders/media/buttons/btn_part2.svg"))
+        self.filament_dryers_btn.setProperty("borderRightPixmap", QtGui.QPixmap(":/button_borders/media/buttons/btn_part3.svg"))
+        self.filament_dryers_btn.setObjectName("filament_dryers_btn")
+        self.filament_change_filament_btn = CustomQPushButton(parent=self.filament_page)
+        self.filament_change_filament_btn.setGeometry(QtCore.QRect(120, 270, 211, 71))
+        self.filament_change_filament_btn.setMinimumSize(QtCore.QSize(10, 10))
         font = QtGui.QFont()
-        font.setFamily("Momcake-Bold")
+        font.setFamily("Momcake")
         font.setPointSize(20)
         font.setItalic(False)
-        self.load_btn.setFont(font)
-        self.load_btn.setStyleSheet("#load_btn {\n"
-"    image:url(:/General_icons/test_media/icons/filament_icon.png);\n"
-"    image-position: left;\n"
-"}\n"
-"\n"
-"#load_btn::pressed {\n"
-"    image:url(:/General_icons/test_media/icons/filament_icon_PRESSED.png);\n"
-"    image-position: left;\n"
-"}")
-        self.load_btn.setObjectName("load_btn")
-        self.filament_btns_grid.addWidget(self.load_btn, 0, 1, 1, 1)
-        self.filament_grid.addLayout(self.filament_btns_grid, 1, 0, 1, 1)
+        font.setStyleStrategy(QtGui.QFont.StyleStrategy.PreferAntialias)
+        self.filament_change_filament_btn.setFont(font)
+        self.filament_change_filament_btn.setMouseTracking(False)
+        self.filament_change_filament_btn.setTabletTracking(True)
+        self.filament_change_filament_btn.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.NoContextMenu)
+        self.filament_change_filament_btn.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
+        self.filament_change_filament_btn.setStyleSheet("")
+        self.filament_change_filament_btn.setAutoDefault(False)
+        self.filament_change_filament_btn.setFlat(True)
+        self.filament_change_filament_btn.setProperty("borderLeftPixmap", QtGui.QPixmap(":/button_borders/media/buttons/btn_part1.svg"))
+        self.filament_change_filament_btn.setProperty("borderCenterPixmap", QtGui.QPixmap(":/button_borders/media/buttons/btn_part2.svg"))
+        self.filament_change_filament_btn.setProperty("borderRightPixmap", QtGui.QPixmap(":/button_borders/media/buttons/btn_part3.svg"))
+        self.filament_change_filament_btn.setObjectName("filament_change_filament_btn")
+        self.printing_title_lable = QtWidgets.QLabel(parent=self.filament_page)
+        self.printing_title_lable.setGeometry(QtCore.QRect(320, 80, 181, 41))
+        font = QtGui.QFont()
+        font.setFamily("Momcake")
+        font.setPointSize(24)
+        self.printing_title_lable.setFont(font)
+        self.printing_title_lable.setLayoutDirection(QtCore.Qt.LayoutDirection.RightToLeft)
+        self.printing_title_lable.setStyleSheet("background: transparent; color: white;")
+        self.printing_title_lable.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.printing_title_lable.setObjectName("printing_title_lable")
         filamentStacketWidget.addWidget(self.filament_page)
         self.load_t1_page = QtWidgets.QWidget()
         self.load_t1_page.setObjectName("load_t1_page")
@@ -182,22 +188,23 @@ class Ui_filamentStacketWidget(object):
         filamentStacketWidget.addWidget(self.dryer_page)
 
         self.retranslateUi(filamentStacketWidget)
+        filamentStacketWidget.setCurrentIndex(0)
         QtCore.QMetaObject.connectSlotsByName(filamentStacketWidget)
 
     def retranslateUi(self, filamentStacketWidget):
         _translate = QtCore.QCoreApplication.translate
         filamentStacketWidget.setWindowTitle(_translate("filamentStacketWidget", "StackedWidget"))
-        self.filament_title.setText(_translate("filamentStacketWidget", "Filament"))
-        self.filament_title.setProperty("class", _translate("filamentStacketWidget", "title_text"))
-        self.change_filament_btn.setText(_translate("filamentStacketWidget", "change\n"
-"filament"))
-        self.change_filament_btn.setProperty("class", _translate("filamentStacketWidget", "menu_btn"))
-        self.dryer_btn.setText(_translate("filamentStacketWidget", "dryer"))
-        self.dryer_btn.setProperty("class", _translate("filamentStacketWidget", "menu_btn"))
-        self.unload_btn.setText(_translate("filamentStacketWidget", "unload"))
-        self.unload_btn.setProperty("class", _translate("filamentStacketWidget", "menu_btn"))
-        self.load_btn.setText(_translate("filamentStacketWidget", "load"))
-        self.load_btn.setProperty("class", _translate("filamentStacketWidget", "menu_btn"))
+        self.filament_stop_printing_btn.setText(_translate("filamentStacketWidget", "UNLOAD"))
+        self.filament_stop_printing_btn.setProperty("class", _translate("filamentStacketWidget", "menu_btn"))
+        self.filament_load_btn.setText(_translate("filamentStacketWidget", "LOAD"))
+        self.filament_load_btn.setProperty("class", _translate("filamentStacketWidget", "menu_btn"))
+        self.filament_dryers_btn.setText(_translate("filamentStacketWidget", "Dryers"))
+        self.filament_dryers_btn.setProperty("class", _translate("filamentStacketWidget", "menu_btn"))
+        self.filament_change_filament_btn.setText(_translate("filamentStacketWidget", "CHANGE\n"
+"FILAMENT"))
+        self.filament_change_filament_btn.setProperty("class", _translate("filamentStacketWidget", "menu_btn"))
+        self.printing_title_lable.setText(_translate("filamentStacketWidget", "Filament"))
+        self.printing_title_lable.setProperty("class", _translate("filamentStacketWidget", "title_text"))
         self.load_t1_pla.setText(_translate("filamentStacketWidget", "PLA"))
         self.load_t1_pla.setProperty("class", _translate("filamentStacketWidget", "menu_btn"))
         self.load_t1_petg.setText(_translate("filamentStacketWidget", "PETG"))
@@ -242,3 +249,4 @@ class Ui_filamentStacketWidget(object):
         self.dryer_2_off_btn.setProperty("class", _translate("filamentStacketWidget", "menu_btn"))
         self.dryer_1_off_btn.setText(_translate("filamentStacketWidget", "turn off dryer"))
         self.dryer_1_off_btn.setProperty("class", _translate("filamentStacketWidget", "menu_btn"))
+from qt_ui.ui_util import CustomQPushButton
