@@ -1,10 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
+
  <class>ConnectivityForm</class>
  <widget class="QWidget" name="ConnectivityForm">
   <property name="windowModality">
    <enum>Qt::WindowModal</enum>
   </property>
+
   <property name="geometry">
    <rect>
     <x>0</x>
@@ -13,6 +15,7 @@
     <height>480</height>
    </rect>
   </property>
+
   <property name="sizePolicy">
    <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
     <horstretch>0</horstretch>
@@ -62,10 +65,12 @@
   <property name="class" stdset="0">
    <string/>
   </property>
+
   <widget class="QFrame" name="ButtonFrame">
    <property name="geometry">
     <rect>
      <x>-1</x>
+
      <y>400</y>
      <width>800</width>
      <height>80</height>
@@ -119,11 +124,14 @@
     <number>0</number>
    </property>
    <layout class="QHBoxLayout" name="horizontalLayout">
+
     <property name="spacing">
      <number>0</number>
     </property>
     <property name="sizeConstraint">
+
      <enum>QLayout::SetDefaultConstraint</enum>
+
     </property>
     <property name="leftMargin">
      <number>0</number>
@@ -138,6 +146,7 @@
      <number>0</number>
     </property>
     <item>
+
      <widget class="CustomQPushButton" name="RestartKlipperButton">
       <property name="sizePolicy">
        <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
@@ -383,7 +392,16 @@
        <string>system_control_btn</string>
       </property>
       <property name="iconPixmap" stdset="0">
-       <pixmap resource="../resources/system_resources.qrc">:/icons/media/btn_icons/system_reboot.svg</pixmap>
+       <pixmap/>
+      </property>
+      <property name="borderLeftPixmap" stdset="0">
+       <pixmap resource="../resources/button_resources.qrc">:/button_borders/media/buttons/btn_part1.svg</pixmap>
+      </property>
+      <property name="borderCenterPixmap" stdset="0">
+       <pixmap resource="../resources/button_resources.qrc">:/button_borders/media/buttons/btn_part2.svg</pixmap>
+      </property>
+      <property name="borderRightPixmap" stdset="0">
+       <pixmap resource="../resources/button_resources.qrc">:/button_borders/media/buttons/btn_part3.svg</pixmap>
       </property>
      </widget>
     </item>
@@ -470,19 +488,23 @@
       </property>
       <property name="iconPixmap" stdset="0">
        <pixmap resource="../resources/system_resources.qrc">:/icons/media/btn_icons/filament_unload.svg</pixmap>
+
       </property>
      </widget>
     </item>
     <item>
+
      <widget class="CustomQPushButton" name="WifiButton">
       <property name="sizePolicy">
        <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+
         <horstretch>0</horstretch>
         <verstretch>0</verstretch>
        </sizepolicy>
       </property>
       <property name="minimumSize">
        <size>
+
         <width>200</width>
         <height>80</height>
        </size>
@@ -491,10 +513,12 @@
        <size>
         <width>200</width>
         <height>80</height>
+
        </size>
       </property>
       <property name="baseSize">
        <size>
+
         <width>200</width>
         <height>80</height>
        </size>
@@ -526,6 +550,16 @@
       <property name="class" stdset="0">
        <string>system_control_btn</string>
       </property>
+      <property name="borderLeftPixmap" stdset="0">
+       <pixmap resource="../resources/button_resources.qrc">:/button_borders/media/buttons/btn_part1.svg</pixmap>
+      </property>
+      <property name="borderCenterPixmap" stdset="0">
+       <pixmap resource="../resources/button_resources.qrc">:/button_borders/media/buttons/btn_part2.svg</pixmap>
+      </property>
+      <property name="borderRightPixmap" stdset="0">
+       <pixmap resource="../resources/button_resources.qrc">:/button_borders/media/buttons/btn_part3.svg</pixmap>
+
+      </property>
      </widget>
     </item>
    </layout>
@@ -535,6 +569,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
+
      <width>800</width>
      <height>400</height>
     </rect>
@@ -569,6 +604,7 @@
    </property>
    <property name="frameShape">
     <enum>QFrame::NoFrame</enum>
+
    </property>
    <property name="frameShadow">
     <enum>QFrame::Raised</enum>
