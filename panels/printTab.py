@@ -53,7 +53,7 @@ class PrintTab(QStackedWidget):
         self.setCurrentIndex(0)
         self.panel.listWidget.setLayoutDirection(Qt.LayoutDirection.LeftToRight)
         # @ Slot connections
-        self.panel.print_btn.clicked.connect(self.showFilesPanel)
+        self.panel.main_print_btn.clicked.connect(self.showFilesPanel)
         self.panel.back_btn.clicked.connect(self.back)
         self.currentChanged.connect(self.view_changed)
         # @ Signals for QListItems
