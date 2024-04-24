@@ -1,4 +1,4 @@
-# Form implementation generated from reading ui file '/home/gleb/github/Blocks_Screen/qt_ui/connectionWindow.ui'
+# Form implementation generated from reading ui file '/home/bugo/github/Blocks_Screen/qt_ui/connectionWindow.ui'
 #
 # Created by: PyQt6 UI code generator 6.4.2
 #
@@ -42,7 +42,7 @@ class Ui_ConnectivityForm(object):
 "")
         ConnectivityForm.setProperty("class", "")
         self.ButtonFrame = QtWidgets.QFrame(parent=ConnectivityForm)
-        self.ButtonFrame.setGeometry(QtCore.QRect(-1, 400, 800, 80))
+        self.ButtonFrame.setGeometry(QtCore.QRect(-1, 390, 800, 80))
         sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Preferred, QtWidgets.QSizePolicy.Policy.Preferred)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
@@ -147,7 +147,9 @@ class Ui_ConnectivityForm(object):
         self.RebootSystemButton.setAutoDefault(False)
         self.RebootSystemButton.setDefault(False)
         self.RebootSystemButton.setFlat(True)
-        self.RebootSystemButton.setProperty("iconPixmap", QtGui.QPixmap(":/icons/media/btn_icons/system_reboot.svg"))
+        self.RebootSystemButton.setProperty("borderLeftPixmap", QtGui.QPixmap(":/button_borders/media/buttons/btn_part1.svg"))
+        self.RebootSystemButton.setProperty("borderCenterPixmap", QtGui.QPixmap(":/button_borders/media/buttons/btn_part2.svg"))
+        self.RebootSystemButton.setProperty("borderRightPixmap", QtGui.QPixmap(":/button_borders/media/buttons/btn_part3.svg"))
         self.RebootSystemButton.setObjectName("RebootSystemButton")
         self.horizontalLayout.addWidget(self.RebootSystemButton)
         self.RetryConnectionButton = CustomQPushButton(parent=self.ButtonFrame)
@@ -195,6 +197,9 @@ class Ui_ConnectivityForm(object):
         self.WifiButton.setAutoDefault(False)
         self.WifiButton.setDefault(False)
         self.WifiButton.setFlat(True)
+        self.WifiButton.setProperty("borderLeftPixmap", QtGui.QPixmap(":/button_borders/media/buttons/btn_part1.svg"))
+        self.WifiButton.setProperty("borderCenterPixmap", QtGui.QPixmap(":/button_borders/media/buttons/btn_part2.svg"))
+        self.WifiButton.setProperty("borderRightPixmap", QtGui.QPixmap(":/button_borders/media/buttons/btn_part3.svg"))
         self.WifiButton.setObjectName("WifiButton")
         self.horizontalLayout.addWidget(self.WifiButton)
         self.TextFrame = QtWidgets.QFrame(parent=ConnectivityForm)
