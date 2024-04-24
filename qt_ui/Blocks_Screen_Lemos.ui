@@ -23,15 +23,9 @@
 	background-image: url(:/background/1st_background.png);
 }
 QPushButton.menu_btn{
-   
-	color: #424242;
-	min-height: 95px;
-	max-height: 95px; 
-	min-width: 310px;
-	max-width: 310px;
 	font-family: Momcake-Bold;
 	font-style: normal;
-	font-size: 20pt;
+	font-size: 15pt;
 }
 
 QPushButton.menu_btn::pressed{

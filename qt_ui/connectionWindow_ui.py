@@ -42,7 +42,7 @@ class Ui_ConnectivityForm(object):
 "")
         ConnectivityForm.setProperty("class", "")
         self.ButtonFrame = QtWidgets.QFrame(parent=ConnectivityForm)
-        self.ButtonFrame.setGeometry(QtCore.QRect(-1, 400, 800, 80))
+        self.ButtonFrame.setGeometry(QtCore.QRect(-1, 390, 800, 80))
         sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Preferred, QtWidgets.QSizePolicy.Policy.Preferred)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
