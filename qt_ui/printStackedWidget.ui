@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>716</width>
-    <height>380</height>
+    <width>711</width>
+    <height>413</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -39,7 +39,7 @@
      <string notr="true">background: transparent; color: white;</string>
     </property>
     <property name="text">
-     <string>Main</string>
+     <string>MAIN</string>
     </property>
     <property name="alignment">
      <set>Qt::AlignCenter</set>
@@ -631,7 +631,7 @@
      <string notr="true">background: transparent; color: white;</string>
     </property>
     <property name="text">
-     <string>Filament</string>
+     <string>PRINTING</string>
     </property>
     <property name="alignment">
      <set>Qt::AlignCenter</set>
@@ -1503,20 +1503,64 @@
      <string>0</string>
     </property>
    </widget>
-   <widget class="QPushButton" name="tune_back_btn">
+   <widget class="CustomQPushButton" name="extrude_back_btn">
     <property name="geometry">
      <rect>
-      <x>620</x>
+      <x>590</x>
       <y>20</y>
-      <width>71</width>
-      <height>51</height>
+      <width>101</width>
+      <height>71</height>
      </rect>
+    </property>
+    <property name="minimumSize">
+     <size>
+      <width>10</width>
+      <height>10</height>
+     </size>
+    </property>
+    <property name="font">
+     <font>
+      <family>Momcake</family>
+      <pointsize>20</pointsize>
+      <italic>false</italic>
+      <stylestrategy>PreferAntialias</stylestrategy>
+     </font>
+    </property>
+    <property name="mouseTracking">
+     <bool>false</bool>
+    </property>
+    <property name="tabletTracking">
+     <bool>true</bool>
+    </property>
+    <property name="contextMenuPolicy">
+     <enum>Qt::NoContextMenu</enum>
+    </property>
+    <property name="layoutDirection">
+     <enum>Qt::LeftToRight</enum>
+    </property>
+    <property name="styleSheet">
+     <string notr="true"/>
     </property>
     <property name="text">
      <string>Back</string>
     </property>
+    <property name="autoDefault">
+     <bool>false</bool>
+    </property>
+    <property name="flat">
+     <bool>true</bool>
+    </property>
     <property name="class" stdset="0">
-     <string>back_btn</string>
+     <string>menu_btn</string>
+    </property>
+    <property name="borderLeftPixmap" stdset="0">
+     <pixmap resource="../resources/button_resources.qrc">:/button_borders/media/buttons/btn_part1.svg</pixmap>
+    </property>
+    <property name="borderCenterPixmap" stdset="0">
+     <pixmap resource="../resources/button_resources.qrc">:/button_borders/media/buttons/btn_part2.svg</pixmap>
+    </property>
+    <property name="borderRightPixmap" stdset="0">
+     <pixmap resource="../resources/button_resources.qrc">:/button_borders/media/buttons/btn_part3.svg</pixmap>
     </property>
    </widget>
   </widget>

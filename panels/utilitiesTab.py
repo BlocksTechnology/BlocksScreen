@@ -2,14 +2,14 @@ from PyQt6.QtWidgets import QStackedWidget, QWidget
 from PyQt6 import QtCore
 import typing
 
-from qt_ui.printStackedWidget_ui import Ui_printStackedWidget
+from qt_ui.utilitiesStackedWidget_ui import Ui_utilitiesStackedWidget
 
 class UtilitiesTab(QStackedWidget):
     
     def __init__(self, parent: typing.Optional[QWidget] = ...) -> None:
         super().__init__(parent)
 
-        self.panel = Ui_printStackedWidget()
+        self.panel = Ui_utilitiesStackedWidget()
         self.panel.setupUi(self)
         self.show()
         
