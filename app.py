@@ -14,6 +14,10 @@ from scripts.bo_includes.bo_files import *
 # * Panels
 from panels.connectionWindow import ConnectionWindow
 from panels.printTab import PrintTab
+from panels.filamentTab import FilamentTab
+from panels.controlTab import ControlTab
+from panels.utilitiesTab import UtilitiesTab
+from panels.connectionWindow import ConnectionWindow
 
 
 from resources.background_resources_rc import *
