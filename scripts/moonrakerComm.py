@@ -328,7 +328,8 @@ class MoonAPI(QObject):
         return self._ws.send_request(
             method="printer.objects.query", params={"objects": objects}
         )
-
+    @pyqtSlot(dict)
+    @pyqtSlot(name="object_subscriptions")
     def object_subscription(self, objects: dict, attributes: list[str]):
         # TODO: finishi this
         return self._ws.send_request(
@@ -338,6 +339,7 @@ class MoonAPI(QObject):
     def query_endstops(self):
         return self._ws.send_request(method="printer.query_endstops.status")
 
+    @pyqtSlot(name="")
     def run_gcode(self, gcode: str):
         if isinstance(gcode, str) is False or gcode is None:
             return False
