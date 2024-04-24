@@ -55,7 +55,7 @@ class MainWindow(QMainWindow):
         # self.con_window.setupUi(self)
         self.ui.setupUi(self)
         # uic.loadUi("Scripts/uiTemplate.ui", self)        In Case i want to use the .ui file
-        self.start_window = ConnectionWindow(main_window=self)
+        self.start_window = ConnectionWindow(self)
         self._moonRest = MoonRest()
         self.ws = MoonWebSocket(self)
         # self.ui.pushButton_2.clicked.connect(self.initialize)

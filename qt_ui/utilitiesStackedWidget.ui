@@ -6,153 +6,805 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>400</width>
-    <height>300</height>
+    <width>715</width>
+    <height>411</height>
    </rect>
   </property>
   <property name="windowTitle">
    <string>StackedWidget</string>
   </property>
+  <property name="currentIndex">
+   <number>0</number>
+  </property>
   <widget class="QWidget" name="utilities_page">
-   <widget class="QWidget" name="layoutWidget_2">
+   <widget class="CustomQPushButton" name="utilities_axes_maintenance_btn">
     <property name="geometry">
      <rect>
-      <x>0</x>
-      <y>0</y>
-      <width>684</width>
-      <height>371</height>
+      <x>130</x>
+      <y>280</y>
+      <width>141</width>
+      <height>71</height>
      </rect>
     </property>
-    <layout class="QGridLayout" name="utilities_grid" rowstretch="0,0" columnstretch="0">
-     <property name="verticalSpacing">
-      <number>0</number>
-     </property>
-     <item row="1" column="0">
-      <layout class="QGridLayout" name="utilities_btns_grid">
-       <property name="topMargin">
-        <number>0</number>
-       </property>
-       <property name="spacing">
-        <number>0</number>
-       </property>
-       <item row="2" column="0">
-        <widget class="QPushButton" name="pushButton_10">
-         <property name="text">
-          <string>Axes
-Maintenance</string>
-         </property>
-         <property name="class" stdset="0">
-          <string>menu_btn</string>
-         </property>
-        </widget>
-       </item>
-       <item row="1" column="0">
-        <widget class="QPushButton" name="pushButton_11">
-         <property name="text">
-          <string>Routine
-Check</string>
-         </property>
-         <property name="class" stdset="0">
-          <string>menu_btn</string>
-         </property>
-        </widget>
-       </item>
-       <item row="2" column="1">
-        <widget class="QPushButton" name="pushButton_12">
-         <property name="text">
-          <string>Factory Reset</string>
-         </property>
-         <property name="class" stdset="0">
-          <string>menu_btn</string>
-         </property>
-        </widget>
-       </item>
-       <item row="0" column="1">
-        <widget class="QPushButton" name="pushButton_13">
-         <property name="text">
-          <string>LEDs</string>
-         </property>
-         <property name="class" stdset="0">
-          <string>menu_btn</string>
-         </property>
-        </widget>
-       </item>
-       <item row="0" column="0">
-        <widget class="QPushButton" name="pushButton_14">
-         <property name="text">
-          <string>Info</string>
-         </property>
-         <property name="class" stdset="0">
-          <string>menu_btn</string>
-         </property>
-        </widget>
-       </item>
-       <item row="1" column="1">
-        <widget class="QPushButton" name="pushButton_15">
-         <property name="text">
-          <string>LCD Settings</string>
-         </property>
-         <property name="class" stdset="0">
-          <string>menu_btn</string>
-         </property>
-        </widget>
-       </item>
-      </layout>
-     </item>
-     <item row="0" column="0">
-      <widget class="QLabel" name="utilities_title">
-       <property name="styleSheet">
-        <string notr="true"/>
-       </property>
-       <property name="text">
-        <string>Utilities</string>
-       </property>
-       <property name="alignment">
-        <set>Qt::AlignCenter</set>
-       </property>
-       <property name="class" stdset="0">
-        <string>title_text</string>
-       </property>
-      </widget>
-     </item>
-    </layout>
-   </widget>
-  </widget>
-  <widget class="QWidget" name="page">
-   <widget class="QPushButton" name="pushButton_3">
-    <property name="geometry">
-     <rect>
-      <x>30</x>
-      <y>110</y>
-      <width>312</width>
-      <height>97</height>
-     </rect>
+    <property name="minimumSize">
+     <size>
+      <width>10</width>
+      <height>10</height>
+     </size>
+    </property>
+    <property name="font">
+     <font>
+      <family>Momcake</family>
+      <pointsize>20</pointsize>
+      <italic>false</italic>
+      <stylestrategy>PreferAntialias</stylestrategy>
+     </font>
+    </property>
+    <property name="mouseTracking">
+     <bool>false</bool>
+    </property>
+    <property name="tabletTracking">
+     <bool>true</bool>
+    </property>
+    <property name="contextMenuPolicy">
+     <enum>Qt::NoContextMenu</enum>
+    </property>
+    <property name="layoutDirection">
+     <enum>Qt::LeftToRight</enum>
+    </property>
+    <property name="styleSheet">
+     <string notr="true"/>
     </property>
     <property name="text">
-     <string>PushButton</string>
+     <string>Axes
+Maintenance</string>
+    </property>
+    <property name="autoDefault">
+     <bool>false</bool>
+    </property>
+    <property name="flat">
+     <bool>true</bool>
     </property>
     <property name="class" stdset="0">
      <string>menu_btn</string>
     </property>
+    <property name="borderLeftPixmap" stdset="0">
+     <pixmap resource="../resources/button_resources.qrc">:/button_borders/media/buttons/btn_part1.svg</pixmap>
+    </property>
+    <property name="borderCenterPixmap" stdset="0">
+     <pixmap resource="../resources/button_resources.qrc">:/button_borders/media/buttons/btn_part2.svg</pixmap>
+    </property>
+    <property name="borderRightPixmap" stdset="0">
+     <pixmap resource="../resources/button_resources.qrc">:/button_borders/media/buttons/btn_part3.svg</pixmap>
+    </property>
    </widget>
-   <widget class="QPushButton" name="pushButton_2">
+   <widget class="CustomQPushButton" name="utilities_routine_check_btn">
     <property name="geometry">
      <rect>
-      <x>0</x>
-      <y>0</y>
-      <width>312</width>
-      <height>97</height>
+      <x>130</x>
+      <y>190</y>
+      <width>141</width>
+      <height>71</height>
      </rect>
+    </property>
+    <property name="minimumSize">
+     <size>
+      <width>10</width>
+      <height>10</height>
+     </size>
+    </property>
+    <property name="font">
+     <font>
+      <family>Momcake</family>
+      <pointsize>20</pointsize>
+      <italic>false</italic>
+      <stylestrategy>PreferAntialias</stylestrategy>
+     </font>
+    </property>
+    <property name="mouseTracking">
+     <bool>false</bool>
+    </property>
+    <property name="tabletTracking">
+     <bool>true</bool>
+    </property>
+    <property name="contextMenuPolicy">
+     <enum>Qt::NoContextMenu</enum>
+    </property>
+    <property name="layoutDirection">
+     <enum>Qt::LeftToRight</enum>
+    </property>
+    <property name="styleSheet">
+     <string notr="true"/>
+    </property>
+    <property name="text">
+     <string>Routine
+Check</string>
+    </property>
+    <property name="autoDefault">
+     <bool>false</bool>
+    </property>
+    <property name="flat">
+     <bool>true</bool>
+    </property>
+    <property name="class" stdset="0">
+     <string>menu_btn</string>
+    </property>
+    <property name="borderLeftPixmap" stdset="0">
+     <pixmap resource="../resources/button_resources.qrc">:/button_borders/media/buttons/btn_part1.svg</pixmap>
+    </property>
+    <property name="borderCenterPixmap" stdset="0">
+     <pixmap resource="../resources/button_resources.qrc">:/button_borders/media/buttons/btn_part2.svg</pixmap>
+    </property>
+    <property name="borderRightPixmap" stdset="0">
+     <pixmap resource="../resources/button_resources.qrc">:/button_borders/media/buttons/btn_part3.svg</pixmap>
+    </property>
+   </widget>
+   <widget class="CustomQPushButton" name="utilities_info_btn">
+    <property name="geometry">
+     <rect>
+      <x>150</x>
+      <y>110</y>
+      <width>101</width>
+      <height>71</height>
+     </rect>
+    </property>
+    <property name="minimumSize">
+     <size>
+      <width>10</width>
+      <height>10</height>
+     </size>
+    </property>
+    <property name="font">
+     <font>
+      <family>Momcake</family>
+      <pointsize>20</pointsize>
+      <italic>false</italic>
+      <stylestrategy>PreferAntialias</stylestrategy>
+     </font>
+    </property>
+    <property name="mouseTracking">
+     <bool>false</bool>
+    </property>
+    <property name="tabletTracking">
+     <bool>true</bool>
+    </property>
+    <property name="contextMenuPolicy">
+     <enum>Qt::NoContextMenu</enum>
+    </property>
+    <property name="layoutDirection">
+     <enum>Qt::LeftToRight</enum>
+    </property>
+    <property name="styleSheet">
+     <string notr="true"/>
+    </property>
+    <property name="text">
+     <string>Info</string>
+    </property>
+    <property name="autoDefault">
+     <bool>false</bool>
+    </property>
+    <property name="flat">
+     <bool>true</bool>
+    </property>
+    <property name="class" stdset="0">
+     <string>menu_btn</string>
+    </property>
+    <property name="borderLeftPixmap" stdset="0">
+     <pixmap resource="../resources/button_resources.qrc">:/button_borders/media/buttons/btn_part1.svg</pixmap>
+    </property>
+    <property name="borderCenterPixmap" stdset="0">
+     <pixmap resource="../resources/button_resources.qrc">:/button_borders/media/buttons/btn_part2.svg</pixmap>
+    </property>
+    <property name="borderRightPixmap" stdset="0">
+     <pixmap resource="../resources/button_resources.qrc">:/button_borders/media/buttons/btn_part3.svg</pixmap>
+    </property>
+   </widget>
+   <widget class="CustomQPushButton" name="utilities_factory_reset_btn">
+    <property name="geometry">
+     <rect>
+      <x>400</x>
+      <y>280</y>
+      <width>171</width>
+      <height>71</height>
+     </rect>
+    </property>
+    <property name="minimumSize">
+     <size>
+      <width>10</width>
+      <height>10</height>
+     </size>
+    </property>
+    <property name="font">
+     <font>
+      <family>Momcake</family>
+      <pointsize>20</pointsize>
+      <italic>false</italic>
+      <stylestrategy>PreferAntialias</stylestrategy>
+     </font>
+    </property>
+    <property name="mouseTracking">
+     <bool>false</bool>
+    </property>
+    <property name="tabletTracking">
+     <bool>true</bool>
+    </property>
+    <property name="contextMenuPolicy">
+     <enum>Qt::NoContextMenu</enum>
+    </property>
+    <property name="layoutDirection">
+     <enum>Qt::LeftToRight</enum>
+    </property>
+    <property name="styleSheet">
+     <string notr="true"/>
+    </property>
+    <property name="text">
+     <string>Factory Reset</string>
+    </property>
+    <property name="autoDefault">
+     <bool>false</bool>
+    </property>
+    <property name="flat">
+     <bool>true</bool>
+    </property>
+    <property name="class" stdset="0">
+     <string>menu_btn</string>
+    </property>
+    <property name="borderLeftPixmap" stdset="0">
+     <pixmap resource="../resources/button_resources.qrc">:/button_borders/media/buttons/btn_part1.svg</pixmap>
+    </property>
+    <property name="borderCenterPixmap" stdset="0">
+     <pixmap resource="../resources/button_resources.qrc">:/button_borders/media/buttons/btn_part2.svg</pixmap>
+    </property>
+    <property name="borderRightPixmap" stdset="0">
+     <pixmap resource="../resources/button_resources.qrc">:/button_borders/media/buttons/btn_part3.svg</pixmap>
+    </property>
+   </widget>
+   <widget class="QLabel" name="utilities_title_label">
+    <property name="geometry">
+     <rect>
+      <x>300</x>
+      <y>30</y>
+      <width>161</width>
+      <height>61</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <family>Momcake</family>
+      <pointsize>24</pointsize>
+     </font>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background: transparent; color: white;</string>
+    </property>
+    <property name="text">
+     <string>UTILITIES</string>
+    </property>
+    <property name="alignment">
+     <set>Qt::AlignCenter</set>
+    </property>
+    <property name="class" stdset="0">
+     <string>title_text</string>
+    </property>
+   </widget>
+   <widget class="CustomQPushButton" name="utilities_lcd_settings_btn">
+    <property name="geometry">
+     <rect>
+      <x>420</x>
+      <y>190</y>
+      <width>141</width>
+      <height>71</height>
+     </rect>
+    </property>
+    <property name="minimumSize">
+     <size>
+      <width>10</width>
+      <height>10</height>
+     </size>
+    </property>
+    <property name="font">
+     <font>
+      <family>Momcake</family>
+      <pointsize>20</pointsize>
+      <italic>false</italic>
+      <stylestrategy>PreferAntialias</stylestrategy>
+     </font>
+    </property>
+    <property name="mouseTracking">
+     <bool>false</bool>
+    </property>
+    <property name="tabletTracking">
+     <bool>true</bool>
+    </property>
+    <property name="contextMenuPolicy">
+     <enum>Qt::NoContextMenu</enum>
+    </property>
+    <property name="layoutDirection">
+     <enum>Qt::LeftToRight</enum>
+    </property>
+    <property name="styleSheet">
+     <string notr="true"/>
+    </property>
+    <property name="text">
+     <string>LCD Settings</string>
+    </property>
+    <property name="autoDefault">
+     <bool>false</bool>
+    </property>
+    <property name="flat">
+     <bool>true</bool>
+    </property>
+    <property name="class" stdset="0">
+     <string>menu_btn</string>
+    </property>
+    <property name="borderLeftPixmap" stdset="0">
+     <pixmap resource="../resources/button_resources.qrc">:/button_borders/media/buttons/btn_part1.svg</pixmap>
+    </property>
+    <property name="borderCenterPixmap" stdset="0">
+     <pixmap resource="../resources/button_resources.qrc">:/button_borders/media/buttons/btn_part2.svg</pixmap>
+    </property>
+    <property name="borderRightPixmap" stdset="0">
+     <pixmap resource="../resources/button_resources.qrc">:/button_borders/media/buttons/btn_part3.svg</pixmap>
+    </property>
+   </widget>
+   <widget class="CustomQPushButton" name="utilities_leds_btn">
+    <property name="geometry">
+     <rect>
+      <x>420</x>
+      <y>110</y>
+      <width>141</width>
+      <height>71</height>
+     </rect>
+    </property>
+    <property name="minimumSize">
+     <size>
+      <width>10</width>
+      <height>10</height>
+     </size>
+    </property>
+    <property name="font">
+     <font>
+      <family>Momcake</family>
+      <pointsize>20</pointsize>
+      <italic>false</italic>
+      <stylestrategy>PreferAntialias</stylestrategy>
+     </font>
+    </property>
+    <property name="mouseTracking">
+     <bool>false</bool>
+    </property>
+    <property name="tabletTracking">
+     <bool>true</bool>
+    </property>
+    <property name="contextMenuPolicy">
+     <enum>Qt::NoContextMenu</enum>
+    </property>
+    <property name="layoutDirection">
+     <enum>Qt::LeftToRight</enum>
+    </property>
+    <property name="styleSheet">
+     <string notr="true"/>
+    </property>
+    <property name="text">
+     <string>LEDs</string>
+    </property>
+    <property name="autoDefault">
+     <bool>false</bool>
+    </property>
+    <property name="flat">
+     <bool>true</bool>
+    </property>
+    <property name="class" stdset="0">
+     <string>menu_btn</string>
+    </property>
+    <property name="borderLeftPixmap" stdset="0">
+     <pixmap resource="../resources/button_resources.qrc">:/button_borders/media/buttons/btn_part1.svg</pixmap>
+    </property>
+    <property name="borderCenterPixmap" stdset="0">
+     <pixmap resource="../resources/button_resources.qrc">:/button_borders/media/buttons/btn_part2.svg</pixmap>
+    </property>
+    <property name="borderRightPixmap" stdset="0">
+     <pixmap resource="../resources/button_resources.qrc">:/button_borders/media/buttons/btn_part3.svg</pixmap>
+    </property>
+   </widget>
+  </widget>
+  <widget class="QWidget" name="info_page"/>
+  <widget class="QWidget" name="leds_page">
+   <widget class="QSlider" name="leds_r_slider">
+    <property name="geometry">
+     <rect>
+      <x>90</x>
+      <y>140</y>
+      <width>411</width>
+      <height>22</height>
+     </rect>
+    </property>
+    <property name="orientation">
+     <enum>Qt::Horizontal</enum>
+    </property>
+   </widget>
+   <widget class="QSlider" name="leds_g_slider">
+    <property name="geometry">
+     <rect>
+      <x>90</x>
+      <y>190</y>
+      <width>411</width>
+      <height>22</height>
+     </rect>
+    </property>
+    <property name="orientation">
+     <enum>Qt::Horizontal</enum>
+    </property>
+   </widget>
+   <widget class="QSlider" name="leds_b_slider">
+    <property name="geometry">
+     <rect>
+      <x>90</x>
+      <y>240</y>
+      <width>411</width>
+      <height>22</height>
+     </rect>
+    </property>
+    <property name="orientation">
+     <enum>Qt::Horizontal</enum>
+    </property>
+   </widget>
+   <widget class="QSlider" name="leds_w_slider">
+    <property name="geometry">
+     <rect>
+      <x>90</x>
+      <y>290</y>
+      <width>411</width>
+      <height>22</height>
+     </rect>
+    </property>
+    <property name="orientation">
+     <enum>Qt::Horizontal</enum>
+    </property>
+   </widget>
+   <widget class="QLabel" name="leds_title_label">
+    <property name="geometry">
+     <rect>
+      <x>310</x>
+      <y>40</y>
+      <width>71</width>
+      <height>61</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <family>Momcake</family>
+      <pointsize>24</pointsize>
+     </font>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background: transparent; color: white;</string>
     </property>
     <property name="text">
      <string>LEDs</string>
     </property>
     <property name="class" stdset="0">
+     <string>title_text</string>
+    </property>
+   </widget>
+   <widget class="CustomQPushButton" name="leds_back_btn">
+    <property name="geometry">
+     <rect>
+      <x>590</x>
+      <y>30</y>
+      <width>101</width>
+      <height>71</height>
+     </rect>
+    </property>
+    <property name="minimumSize">
+     <size>
+      <width>10</width>
+      <height>10</height>
+     </size>
+    </property>
+    <property name="font">
+     <font>
+      <family>Momcake</family>
+      <pointsize>20</pointsize>
+      <italic>false</italic>
+      <stylestrategy>PreferAntialias</stylestrategy>
+     </font>
+    </property>
+    <property name="mouseTracking">
+     <bool>false</bool>
+    </property>
+    <property name="tabletTracking">
+     <bool>true</bool>
+    </property>
+    <property name="contextMenuPolicy">
+     <enum>Qt::NoContextMenu</enum>
+    </property>
+    <property name="layoutDirection">
+     <enum>Qt::LeftToRight</enum>
+    </property>
+    <property name="styleSheet">
+     <string notr="true"/>
+    </property>
+    <property name="text">
+     <string>Back</string>
+    </property>
+    <property name="autoDefault">
+     <bool>false</bool>
+    </property>
+    <property name="flat">
+     <bool>true</bool>
+    </property>
+    <property name="class" stdset="0">
      <string>menu_btn</string>
+    </property>
+    <property name="borderLeftPixmap" stdset="0">
+     <pixmap resource="../resources/button_resources.qrc">:/button_borders/media/buttons/btn_part1.svg</pixmap>
+    </property>
+    <property name="borderCenterPixmap" stdset="0">
+     <pixmap resource="../resources/button_resources.qrc">:/button_borders/media/buttons/btn_part2.svg</pixmap>
+    </property>
+    <property name="borderRightPixmap" stdset="0">
+     <pixmap resource="../resources/button_resources.qrc">:/button_borders/media/buttons/btn_part3.svg</pixmap>
+    </property>
+   </widget>
+   <widget class="CustomQPushButton" name="leds_off_btn">
+    <property name="geometry">
+     <rect>
+      <x>100</x>
+      <y>330</y>
+      <width>211</width>
+      <height>71</height>
+     </rect>
+    </property>
+    <property name="minimumSize">
+     <size>
+      <width>10</width>
+      <height>10</height>
+     </size>
+    </property>
+    <property name="font">
+     <font>
+      <family>Momcake</family>
+      <pointsize>20</pointsize>
+      <italic>false</italic>
+      <stylestrategy>PreferAntialias</stylestrategy>
+     </font>
+    </property>
+    <property name="mouseTracking">
+     <bool>false</bool>
+    </property>
+    <property name="tabletTracking">
+     <bool>true</bool>
+    </property>
+    <property name="contextMenuPolicy">
+     <enum>Qt::NoContextMenu</enum>
+    </property>
+    <property name="layoutDirection">
+     <enum>Qt::LeftToRight</enum>
+    </property>
+    <property name="styleSheet">
+     <string notr="true"/>
+    </property>
+    <property name="text">
+     <string>Tool 1 Icon</string>
+    </property>
+    <property name="autoDefault">
+     <bool>false</bool>
+    </property>
+    <property name="flat">
+     <bool>true</bool>
+    </property>
+    <property name="class" stdset="0">
+     <string>menu_btn</string>
+    </property>
+    <property name="borderLeftPixmap" stdset="0">
+     <pixmap resource="../resources/button_resources.qrc">:/button_borders/media/buttons/btn_part1.svg</pixmap>
+    </property>
+    <property name="borderCenterPixmap" stdset="0">
+     <pixmap resource="../resources/button_resources.qrc">:/button_borders/media/buttons/btn_part2.svg</pixmap>
+    </property>
+    <property name="borderRightPixmap" stdset="0">
+     <pixmap resource="../resources/button_resources.qrc">:/button_borders/media/buttons/btn_part3.svg</pixmap>
+    </property>
+   </widget>
+   <widget class="CustomQPushButton" name="leds_on_btn">
+    <property name="geometry">
+     <rect>
+      <x>390</x>
+      <y>330</y>
+      <width>211</width>
+      <height>71</height>
+     </rect>
+    </property>
+    <property name="minimumSize">
+     <size>
+      <width>10</width>
+      <height>10</height>
+     </size>
+    </property>
+    <property name="font">
+     <font>
+      <family>Momcake</family>
+      <pointsize>20</pointsize>
+      <italic>false</italic>
+      <stylestrategy>PreferAntialias</stylestrategy>
+     </font>
+    </property>
+    <property name="mouseTracking">
+     <bool>false</bool>
+    </property>
+    <property name="tabletTracking">
+     <bool>true</bool>
+    </property>
+    <property name="contextMenuPolicy">
+     <enum>Qt::NoContextMenu</enum>
+    </property>
+    <property name="layoutDirection">
+     <enum>Qt::LeftToRight</enum>
+    </property>
+    <property name="styleSheet">
+     <string notr="true"/>
+    </property>
+    <property name="text">
+     <string>Tool 2 icon</string>
+    </property>
+    <property name="autoDefault">
+     <bool>false</bool>
+    </property>
+    <property name="flat">
+     <bool>true</bool>
+    </property>
+    <property name="class" stdset="0">
+     <string>menu_btn</string>
+    </property>
+    <property name="borderLeftPixmap" stdset="0">
+     <pixmap resource="../resources/button_resources.qrc">:/button_borders/media/buttons/btn_part1.svg</pixmap>
+    </property>
+    <property name="borderCenterPixmap" stdset="0">
+     <pixmap resource="../resources/button_resources.qrc">:/button_borders/media/buttons/btn_part2.svg</pixmap>
+    </property>
+    <property name="borderRightPixmap" stdset="0">
+     <pixmap resource="../resources/button_resources.qrc">:/button_borders/media/buttons/btn_part3.svg</pixmap>
+    </property>
+   </widget>
+   <widget class="QLabel" name="leds_r_value_label">
+    <property name="enabled">
+     <bool>true</bool>
+    </property>
+    <property name="geometry">
+     <rect>
+      <x>530</x>
+      <y>130</y>
+      <width>31</width>
+      <height>41</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <family>Montserrat</family>
+      <pointsize>14</pointsize>
+     </font>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background: transparent; color: white;</string>
+    </property>
+    <property name="text">
+     <string>0</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="leds_g_value_label">
+    <property name="enabled">
+     <bool>true</bool>
+    </property>
+    <property name="geometry">
+     <rect>
+      <x>530</x>
+      <y>180</y>
+      <width>31</width>
+      <height>41</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <family>Montserrat</family>
+      <pointsize>14</pointsize>
+     </font>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background: transparent; color: white;</string>
+    </property>
+    <property name="text">
+     <string>0</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="leds_b_value_label">
+    <property name="enabled">
+     <bool>true</bool>
+    </property>
+    <property name="geometry">
+     <rect>
+      <x>530</x>
+      <y>230</y>
+      <width>31</width>
+      <height>41</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <family>Montserrat</family>
+      <pointsize>14</pointsize>
+     </font>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background: transparent; color: white;</string>
+    </property>
+    <property name="text">
+     <string>0</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="leds_w_value_label">
+    <property name="enabled">
+     <bool>true</bool>
+    </property>
+    <property name="geometry">
+     <rect>
+      <x>530</x>
+      <y>280</y>
+      <width>31</width>
+      <height>41</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <family>Montserrat</family>
+      <pointsize>14</pointsize>
+     </font>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background: transparent; color: white;</string>
+    </property>
+    <property name="text">
+     <string>0</string>
+    </property>
+   </widget>
+  </widget>
+  <widget class="QWidget" name="lcd_settings_page">
+   <widget class="QLabel" name="lcd_settings_title_label">
+    <property name="geometry">
+     <rect>
+      <x>270</x>
+      <y>40</y>
+      <width>181</width>
+      <height>61</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <family>Momcake</family>
+      <pointsize>24</pointsize>
+     </font>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background: transparent; color: white;</string>
+    </property>
+    <property name="text">
+     <string>LCD Settings</string>
+    </property>
+    <property name="class" stdset="0">
+     <string>title_text</string>
     </property>
    </widget>
   </widget>
  </widget>
- <resources/>
+ <customwidgets>
+  <customwidget>
+   <class>CustomQPushButton</class>
+   <extends>QPushButton</extends>
+   <header location="global">qt_ui.ui_util.h</header>
+  </customwidget>
+ </customwidgets>
+ <resources>
+  <include location="../resources/button_resources.qrc"/>
+ </resources>
  <connections/>
 </ui>
