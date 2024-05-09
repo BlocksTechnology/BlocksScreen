@@ -17,12 +17,12 @@
    <number>0</number>
   </property>
   <widget class="QWidget" name="filament_page">
-   <widget class="CustomQPushButton" name="filament_stop_printing_btn">
+   <widget class="CustomQPushButton" name="filament_unload_btn">
     <property name="geometry">
      <rect>
-      <x>70</x>
-      <y>120</y>
-      <width>211</width>
+      <x>380</x>
+      <y>150</y>
+      <width>241</width>
       <height>71</height>
      </rect>
     </property>
@@ -80,9 +80,9 @@
    <widget class="CustomQPushButton" name="filament_load_btn">
     <property name="geometry">
      <rect>
-      <x>390</x>
-      <y>140</y>
-      <width>211</width>
+      <x>50</x>
+      <y>150</y>
+      <width>241</width>
       <height>71</height>
      </rect>
     </property>
@@ -141,8 +141,8 @@
     <property name="geometry">
      <rect>
       <x>380</x>
-      <y>230</y>
-      <width>211</width>
+      <y>240</y>
+      <width>241</width>
       <height>71</height>
      </rect>
     </property>
@@ -200,9 +200,9 @@
    <widget class="CustomQPushButton" name="filament_change_filament_btn">
     <property name="geometry">
      <rect>
-      <x>60</x>
-      <y>220</y>
-      <width>211</width>
+      <x>50</x>
+      <y>240</y>
+      <width>241</width>
       <height>71</height>
      </rect>
     </property>
@@ -261,9 +261,9 @@ FILAMENT</string>
    <widget class="QLabel" name="printing_title_lable">
     <property name="geometry">
      <rect>
-      <x>260</x>
-      <y>30</y>
-      <width>181</width>
+      <x>230</x>
+      <y>40</y>
+      <width>231</width>
       <height>41</height>
      </rect>
     </property>
@@ -345,18 +345,18 @@ FILAMENT</string>
      <pixmap/>
     </property>
     <property name="borderCenterPixmap" stdset="0">
-     <pixmap/>
+     <pixmap resource="../resources/button_resources.qrc">:/button_borders/media/buttons/custom_value.svg</pixmap>
     </property>
     <property name="borderRightPixmap" stdset="0">
      <pixmap/>
     </property>
    </widget>
-   <widget class="QLabel" name="load_title_label">
+   <widget class="QLabel" name="load_tool_title_label">
     <property name="geometry">
      <rect>
-      <x>310</x>
+      <x>260</x>
       <y>60</y>
-      <width>71</width>
+      <width>171</width>
       <height>61</height>
      </rect>
     </property>
@@ -372,11 +372,14 @@ FILAMENT</string>
     <property name="text">
      <string>Load</string>
     </property>
+    <property name="alignment">
+     <set>Qt::AlignCenter</set>
+    </property>
     <property name="class" stdset="0">
      <string>title_text</string>
     </property>
    </widget>
-   <widget class="CustomQPushButton" name="loadtool_2_icon_btn">
+   <widget class="CustomQPushButton" name="load_tool_2_icon_btn">
     <property name="geometry">
      <rect>
       <x>410</x>
@@ -430,10 +433,70 @@ FILAMENT</string>
      <pixmap/>
     </property>
     <property name="borderCenterPixmap" stdset="0">
-     <pixmap/>
+     <pixmap resource="../resources/button_resources.qrc">:/button_borders/media/buttons/custom_value.svg</pixmap>
     </property>
     <property name="borderRightPixmap" stdset="0">
      <pixmap/>
+    </property>
+   </widget>
+   <widget class="CustomQPushButton" name="load_tool_back_btn">
+    <property name="geometry">
+     <rect>
+      <x>510</x>
+      <y>20</y>
+      <width>181</width>
+      <height>71</height>
+     </rect>
+    </property>
+    <property name="minimumSize">
+     <size>
+      <width>10</width>
+      <height>10</height>
+     </size>
+    </property>
+    <property name="font">
+     <font>
+      <family>Momcake</family>
+      <pointsize>20</pointsize>
+      <italic>false</italic>
+      <stylestrategy>PreferAntialias</stylestrategy>
+     </font>
+    </property>
+    <property name="mouseTracking">
+     <bool>false</bool>
+    </property>
+    <property name="tabletTracking">
+     <bool>true</bool>
+    </property>
+    <property name="contextMenuPolicy">
+     <enum>Qt::NoContextMenu</enum>
+    </property>
+    <property name="layoutDirection">
+     <enum>Qt::LeftToRight</enum>
+    </property>
+    <property name="styleSheet">
+     <string notr="true"/>
+    </property>
+    <property name="text">
+     <string>Back</string>
+    </property>
+    <property name="autoDefault">
+     <bool>false</bool>
+    </property>
+    <property name="flat">
+     <bool>true</bool>
+    </property>
+    <property name="class" stdset="0">
+     <string>menu_btn</string>
+    </property>
+    <property name="borderLeftPixmap" stdset="0">
+     <pixmap resource="../resources/button_resources.qrc">:/button_borders/media/buttons/btn_part1.svg</pixmap>
+    </property>
+    <property name="borderCenterPixmap" stdset="0">
+     <pixmap resource="../resources/button_resources.qrc">:/button_borders/media/buttons/btn_part2.svg</pixmap>
+    </property>
+    <property name="borderRightPixmap" stdset="0">
+     <pixmap resource="../resources/button_resources.qrc">:/button_borders/media/buttons/btn_part3.svg</pixmap>
     </property>
    </widget>
   </widget>
@@ -441,9 +504,9 @@ FILAMENT</string>
    <widget class="QLabel" name="load_t1_title_label">
     <property name="geometry">
      <rect>
-      <x>220</x>
+      <x>120</x>
       <y>20</y>
-      <width>271</width>
+      <width>451</width>
       <height>61</height>
      </rect>
     </property>
@@ -459,6 +522,9 @@ FILAMENT</string>
     <property name="text">
      <string>Load Tool Head 1 </string>
     </property>
+    <property name="alignment">
+     <set>Qt::AlignCenter</set>
+    </property>
     <property name="class" stdset="0">
      <string>title_text</string>
     </property>
@@ -466,9 +532,9 @@ FILAMENT</string>
    <widget class="CustomQPushButton" name="load_t1_abs_btn">
     <property name="geometry">
      <rect>
-      <x>70</x>
-      <y>160</y>
-      <width>211</width>
+      <x>30</x>
+      <y>180</y>
+      <width>241</width>
       <height>71</height>
      </rect>
     </property>
@@ -526,9 +592,9 @@ FILAMENT</string>
    <widget class="CustomQPushButton" name="load_t1_pla_btn">
     <property name="geometry">
      <rect>
-      <x>60</x>
-      <y>90</y>
-      <width>211</width>
+      <x>30</x>
+      <y>100</y>
+      <width>241</width>
       <height>71</height>
      </rect>
     </property>
@@ -586,9 +652,9 @@ FILAMENT</string>
    <widget class="CustomQPushButton" name="load_t1_petg_btn">
     <property name="geometry">
      <rect>
-      <x>390</x>
-      <y>90</y>
-      <width>211</width>
+      <x>400</x>
+      <y>100</y>
+      <width>261</width>
       <height>71</height>
      </rect>
     </property>
@@ -646,9 +712,9 @@ FILAMENT</string>
    <widget class="CustomQPushButton" name="load_t1_hips_btn">
     <property name="geometry">
      <rect>
-      <x>390</x>
-      <y>170</y>
-      <width>211</width>
+      <x>400</x>
+      <y>180</y>
+      <width>261</width>
       <height>71</height>
      </rect>
     </property>
@@ -707,8 +773,8 @@ FILAMENT</string>
     <property name="geometry">
      <rect>
       <x>400</x>
-      <y>250</y>
-      <width>211</width>
+      <y>260</y>
+      <width>261</width>
       <height>71</height>
      </rect>
     </property>
@@ -766,9 +832,9 @@ FILAMENT</string>
    <widget class="CustomQPushButton" name="load_t1_custom_btn">
     <property name="geometry">
      <rect>
-      <x>240</x>
-      <y>310</y>
-      <width>211</width>
+      <x>220</x>
+      <y>340</y>
+      <width>231</width>
       <height>71</height>
      </rect>
     </property>
@@ -826,9 +892,9 @@ FILAMENT</string>
    <widget class="CustomQPushButton" name="load_t1_nylon_btn">
     <property name="geometry">
      <rect>
-      <x>60</x>
-      <y>240</y>
-      <width>211</width>
+      <x>30</x>
+      <y>260</y>
+      <width>241</width>
       <height>71</height>
      </rect>
     </property>
@@ -883,14 +949,74 @@ FILAMENT</string>
      <pixmap resource="../resources/button_resources.qrc">:/button_borders/media/buttons/btn_part3.svg</pixmap>
     </property>
    </widget>
+   <widget class="CustomQPushButton" name="load_t1_back_btn">
+    <property name="geometry">
+     <rect>
+      <x>520</x>
+      <y>20</y>
+      <width>171</width>
+      <height>71</height>
+     </rect>
+    </property>
+    <property name="minimumSize">
+     <size>
+      <width>10</width>
+      <height>10</height>
+     </size>
+    </property>
+    <property name="font">
+     <font>
+      <family>Momcake</family>
+      <pointsize>20</pointsize>
+      <italic>false</italic>
+      <stylestrategy>PreferAntialias</stylestrategy>
+     </font>
+    </property>
+    <property name="mouseTracking">
+     <bool>false</bool>
+    </property>
+    <property name="tabletTracking">
+     <bool>true</bool>
+    </property>
+    <property name="contextMenuPolicy">
+     <enum>Qt::NoContextMenu</enum>
+    </property>
+    <property name="layoutDirection">
+     <enum>Qt::LeftToRight</enum>
+    </property>
+    <property name="styleSheet">
+     <string notr="true"/>
+    </property>
+    <property name="text">
+     <string>Back</string>
+    </property>
+    <property name="autoDefault">
+     <bool>false</bool>
+    </property>
+    <property name="flat">
+     <bool>true</bool>
+    </property>
+    <property name="class" stdset="0">
+     <string>menu_btn</string>
+    </property>
+    <property name="borderLeftPixmap" stdset="0">
+     <pixmap resource="../resources/button_resources.qrc">:/button_borders/media/buttons/btn_part1.svg</pixmap>
+    </property>
+    <property name="borderCenterPixmap" stdset="0">
+     <pixmap resource="../resources/button_resources.qrc">:/button_borders/media/buttons/btn_part2.svg</pixmap>
+    </property>
+    <property name="borderRightPixmap" stdset="0">
+     <pixmap resource="../resources/button_resources.qrc">:/button_borders/media/buttons/btn_part3.svg</pixmap>
+    </property>
+   </widget>
   </widget>
   <widget class="QWidget" name="load_t2_page">
    <widget class="CustomQPushButton" name="load_t2_hips_btn">
     <property name="geometry">
      <rect>
       <x>390</x>
-      <y>170</y>
-      <width>211</width>
+      <y>180</y>
+      <width>281</width>
       <height>71</height>
      </rect>
     </property>
@@ -948,9 +1074,9 @@ FILAMENT</string>
    <widget class="CustomQPushButton" name="load_t2_nylon_btn">
     <property name="geometry">
      <rect>
-      <x>60</x>
-      <y>240</y>
-      <width>211</width>
+      <x>20</x>
+      <y>260</y>
+      <width>261</width>
       <height>71</height>
      </rect>
     </property>
@@ -1008,9 +1134,9 @@ FILAMENT</string>
    <widget class="CustomQPushButton" name="load_t2_pla_btn">
     <property name="geometry">
      <rect>
-      <x>60</x>
-      <y>90</y>
-      <width>211</width>
+      <x>20</x>
+      <y>100</y>
+      <width>261</width>
       <height>71</height>
      </rect>
     </property>
@@ -1068,9 +1194,9 @@ FILAMENT</string>
    <widget class="CustomQPushButton" name="load_t2_tpu_btn">
     <property name="geometry">
      <rect>
-      <x>400</x>
-      <y>250</y>
-      <width>211</width>
+      <x>390</x>
+      <y>260</y>
+      <width>281</width>
       <height>71</height>
      </rect>
     </property>
@@ -1128,9 +1254,9 @@ FILAMENT</string>
    <widget class="CustomQPushButton" name="load_t2_abs_btn">
     <property name="geometry">
      <rect>
-      <x>70</x>
-      <y>160</y>
-      <width>211</width>
+      <x>20</x>
+      <y>180</y>
+      <width>261</width>
       <height>71</height>
      </rect>
     </property>
@@ -1189,8 +1315,8 @@ FILAMENT</string>
     <property name="geometry">
      <rect>
       <x>390</x>
-      <y>90</y>
-      <width>211</width>
+      <y>100</y>
+      <width>281</width>
       <height>71</height>
      </rect>
     </property>
@@ -1248,9 +1374,9 @@ FILAMENT</string>
    <widget class="QLabel" name="load_t2_title_label">
     <property name="geometry">
      <rect>
-      <x>220</x>
+      <x>160</x>
       <y>20</y>
-      <width>271</width>
+      <width>361</width>
       <height>61</height>
      </rect>
     </property>
@@ -1266,6 +1392,9 @@ FILAMENT</string>
     <property name="text">
      <string>Load Tool Head 2</string>
     </property>
+    <property name="alignment">
+     <set>Qt::AlignCenter</set>
+    </property>
     <property name="class" stdset="0">
      <string>title_text</string>
     </property>
@@ -1273,9 +1402,9 @@ FILAMENT</string>
    <widget class="CustomQPushButton" name="load_t2_custom_btn">
     <property name="geometry">
      <rect>
-      <x>240</x>
-      <y>310</y>
-      <width>211</width>
+      <x>190</x>
+      <y>340</y>
+      <width>291</width>
       <height>71</height>
      </rect>
     </property>
@@ -1330,14 +1459,354 @@ FILAMENT</string>
      <pixmap resource="../resources/button_resources.qrc">:/button_borders/media/buttons/btn_part3.svg</pixmap>
     </property>
    </widget>
-  </widget>
-  <widget class="QWidget" name="unload_page">
-   <widget class="QLabel" name="unload_title_label">
+   <widget class="CustomQPushButton" name="load_t2_back_btn">
     <property name="geometry">
      <rect>
-      <x>300</x>
+      <x>520</x>
       <y>20</y>
-      <width>101</width>
+      <width>171</width>
+      <height>71</height>
+     </rect>
+    </property>
+    <property name="minimumSize">
+     <size>
+      <width>10</width>
+      <height>10</height>
+     </size>
+    </property>
+    <property name="font">
+     <font>
+      <family>Momcake</family>
+      <pointsize>20</pointsize>
+      <italic>false</italic>
+      <stylestrategy>PreferAntialias</stylestrategy>
+     </font>
+    </property>
+    <property name="mouseTracking">
+     <bool>false</bool>
+    </property>
+    <property name="tabletTracking">
+     <bool>true</bool>
+    </property>
+    <property name="contextMenuPolicy">
+     <enum>Qt::NoContextMenu</enum>
+    </property>
+    <property name="layoutDirection">
+     <enum>Qt::LeftToRight</enum>
+    </property>
+    <property name="styleSheet">
+     <string notr="true"/>
+    </property>
+    <property name="text">
+     <string>Back</string>
+    </property>
+    <property name="autoDefault">
+     <bool>false</bool>
+    </property>
+    <property name="flat">
+     <bool>true</bool>
+    </property>
+    <property name="class" stdset="0">
+     <string>menu_btn</string>
+    </property>
+    <property name="borderLeftPixmap" stdset="0">
+     <pixmap resource="../resources/button_resources.qrc">:/button_borders/media/buttons/btn_part1.svg</pixmap>
+    </property>
+    <property name="borderCenterPixmap" stdset="0">
+     <pixmap resource="../resources/button_resources.qrc">:/button_borders/media/buttons/btn_part2.svg</pixmap>
+    </property>
+    <property name="borderRightPixmap" stdset="0">
+     <pixmap resource="../resources/button_resources.qrc">:/button_borders/media/buttons/btn_part3.svg</pixmap>
+    </property>
+   </widget>
+  </widget>
+  <widget class="QWidget" name="custom_fil_page">
+   <widget class="QLabel" name="custom_fil_hot_bed_value_label">
+    <property name="enabled">
+     <bool>true</bool>
+    </property>
+    <property name="geometry">
+     <rect>
+      <x>520</x>
+      <y>160</y>
+      <width>31</width>
+      <height>41</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <family>Montserrat</family>
+      <pointsize>14</pointsize>
+     </font>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background: transparent; color: white;</string>
+    </property>
+    <property name="text">
+     <string>0</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="custom_fil_hot_bed_icon_label">
+    <property name="geometry">
+     <rect>
+      <x>420</x>
+      <y>160</y>
+      <width>91</width>
+      <height>41</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Hotbed Icon</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="custom_fil_hotend_icon_label">
+    <property name="geometry">
+     <rect>
+      <x>150</x>
+      <y>160</y>
+      <width>91</width>
+      <height>41</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Hotend Icon</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="custom_fil_hotend_value_label">
+    <property name="enabled">
+     <bool>true</bool>
+    </property>
+    <property name="geometry">
+     <rect>
+      <x>250</x>
+      <y>160</y>
+      <width>31</width>
+      <height>41</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <family>Montserrat</family>
+      <pointsize>14</pointsize>
+     </font>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background: transparent; color: white;</string>
+    </property>
+    <property name="text">
+     <string>0</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="custom_fil_title_lable">
+    <property name="geometry">
+     <rect>
+      <x>70</x>
+      <y>30</y>
+      <width>571</width>
+      <height>41</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <family>Momcake</family>
+      <pointsize>24</pointsize>
+     </font>
+    </property>
+    <property name="layoutDirection">
+     <enum>Qt::RightToLeft</enum>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background: transparent; color: white;</string>
+    </property>
+    <property name="text">
+     <string>CUSTOM FILAMENT SETTINGS</string>
+    </property>
+    <property name="alignment">
+     <set>Qt::AlignCenter</set>
+    </property>
+    <property name="class" stdset="0">
+     <string>title_text</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="custom_fil_chamber_value_label">
+    <property name="enabled">
+     <bool>true</bool>
+    </property>
+    <property name="geometry">
+     <rect>
+      <x>400</x>
+      <y>260</y>
+      <width>31</width>
+      <height>41</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <family>Montserrat</family>
+      <pointsize>14</pointsize>
+     </font>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background: transparent; color: white;</string>
+    </property>
+    <property name="text">
+     <string>0</string>
+    </property>
+   </widget>
+   <widget class="CustomQPushButton" name="custom_fil_load_btn">
+    <property name="geometry">
+     <rect>
+      <x>220</x>
+      <y>320</y>
+      <width>241</width>
+      <height>71</height>
+     </rect>
+    </property>
+    <property name="minimumSize">
+     <size>
+      <width>10</width>
+      <height>10</height>
+     </size>
+    </property>
+    <property name="font">
+     <font>
+      <family>Momcake</family>
+      <pointsize>20</pointsize>
+      <italic>false</italic>
+      <stylestrategy>PreferAntialias</stylestrategy>
+     </font>
+    </property>
+    <property name="mouseTracking">
+     <bool>false</bool>
+    </property>
+    <property name="tabletTracking">
+     <bool>true</bool>
+    </property>
+    <property name="contextMenuPolicy">
+     <enum>Qt::NoContextMenu</enum>
+    </property>
+    <property name="layoutDirection">
+     <enum>Qt::LeftToRight</enum>
+    </property>
+    <property name="styleSheet">
+     <string notr="true"/>
+    </property>
+    <property name="text">
+     <string>LOAD</string>
+    </property>
+    <property name="autoDefault">
+     <bool>false</bool>
+    </property>
+    <property name="flat">
+     <bool>true</bool>
+    </property>
+    <property name="class" stdset="0">
+     <string>menu_btn</string>
+    </property>
+    <property name="borderLeftPixmap" stdset="0">
+     <pixmap resource="../resources/button_resources.qrc">:/button_borders/media/buttons/btn_part1.svg</pixmap>
+    </property>
+    <property name="borderCenterPixmap" stdset="0">
+     <pixmap resource="../resources/button_resources.qrc">:/button_borders/media/buttons/btn_part2.svg</pixmap>
+    </property>
+    <property name="borderRightPixmap" stdset="0">
+     <pixmap resource="../resources/button_resources.qrc">:/button_borders/media/buttons/btn_part3.svg</pixmap>
+    </property>
+   </widget>
+   <widget class="QLabel" name="custom_fil_chamber_icon_label">
+    <property name="geometry">
+     <rect>
+      <x>290</x>
+      <y>260</y>
+      <width>91</width>
+      <height>41</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Chamber Icon</string>
+    </property>
+   </widget>
+   <widget class="CustomQPushButton" name="custom_fil_back_btn">
+    <property name="geometry">
+     <rect>
+      <x>520</x>
+      <y>60</y>
+      <width>171</width>
+      <height>71</height>
+     </rect>
+    </property>
+    <property name="minimumSize">
+     <size>
+      <width>10</width>
+      <height>10</height>
+     </size>
+    </property>
+    <property name="font">
+     <font>
+      <family>Momcake</family>
+      <pointsize>20</pointsize>
+      <italic>false</italic>
+      <stylestrategy>PreferAntialias</stylestrategy>
+     </font>
+    </property>
+    <property name="mouseTracking">
+     <bool>false</bool>
+    </property>
+    <property name="tabletTracking">
+     <bool>true</bool>
+    </property>
+    <property name="contextMenuPolicy">
+     <enum>Qt::NoContextMenu</enum>
+    </property>
+    <property name="layoutDirection">
+     <enum>Qt::LeftToRight</enum>
+    </property>
+    <property name="styleSheet">
+     <string notr="true"/>
+    </property>
+    <property name="text">
+     <string>Back</string>
+    </property>
+    <property name="autoDefault">
+     <bool>false</bool>
+    </property>
+    <property name="flat">
+     <bool>true</bool>
+    </property>
+    <property name="class" stdset="0">
+     <string>menu_btn</string>
+    </property>
+    <property name="borderLeftPixmap" stdset="0">
+     <pixmap resource="../resources/button_resources.qrc">:/button_borders/media/buttons/btn_part1.svg</pixmap>
+    </property>
+    <property name="borderCenterPixmap" stdset="0">
+     <pixmap resource="../resources/button_resources.qrc">:/button_borders/media/buttons/btn_part2.svg</pixmap>
+    </property>
+    <property name="borderRightPixmap" stdset="0">
+     <pixmap resource="../resources/button_resources.qrc">:/button_borders/media/buttons/btn_part3.svg</pixmap>
+    </property>
+   </widget>
+   <widget class="QLabel" name="custom_fil_active_tool_icon_label">
+    <property name="geometry">
+     <rect>
+      <x>20</x>
+      <y>80</y>
+      <width>111</width>
+      <height>41</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Active Tool Icon</string>
+    </property>
+   </widget>
+  </widget>
+  <widget class="QWidget" name="unload_tool_page">
+   <widget class="QLabel" name="unload_tool_title_label">
+    <property name="geometry">
+     <rect>
+      <x>210</x>
+      <y>20</y>
+      <width>271</width>
       <height>61</height>
      </rect>
     </property>
@@ -1353,6 +1822,9 @@ FILAMENT</string>
     <property name="text">
      <string>Unload</string>
     </property>
+    <property name="alignment">
+     <set>Qt::AlignCenter</set>
+    </property>
     <property name="class" stdset="0">
      <string>title_text</string>
     </property>
@@ -1362,7 +1834,7 @@ FILAMENT</string>
      <rect>
       <x>390</x>
       <y>170</y>
-      <width>211</width>
+      <width>261</width>
       <height>71</height>
      </rect>
     </property>
@@ -1420,9 +1892,9 @@ FILAMENT</string>
    <widget class="CustomQPushButton" name="unload_tool_1_icon_btn">
     <property name="geometry">
      <rect>
-      <x>80</x>
+      <x>40</x>
       <y>170</y>
-      <width>211</width>
+      <width>281</width>
       <height>71</height>
      </rect>
     </property>
@@ -1477,13 +1949,73 @@ FILAMENT</string>
      <pixmap resource="../resources/button_resources.qrc">:/button_borders/media/buttons/btn_part3.svg</pixmap>
     </property>
    </widget>
+   <widget class="CustomQPushButton" name="unload_back_btn">
+    <property name="geometry">
+     <rect>
+      <x>530</x>
+      <y>20</y>
+      <width>171</width>
+      <height>71</height>
+     </rect>
+    </property>
+    <property name="minimumSize">
+     <size>
+      <width>10</width>
+      <height>10</height>
+     </size>
+    </property>
+    <property name="font">
+     <font>
+      <family>Momcake</family>
+      <pointsize>20</pointsize>
+      <italic>false</italic>
+      <stylestrategy>PreferAntialias</stylestrategy>
+     </font>
+    </property>
+    <property name="mouseTracking">
+     <bool>false</bool>
+    </property>
+    <property name="tabletTracking">
+     <bool>true</bool>
+    </property>
+    <property name="contextMenuPolicy">
+     <enum>Qt::NoContextMenu</enum>
+    </property>
+    <property name="layoutDirection">
+     <enum>Qt::LeftToRight</enum>
+    </property>
+    <property name="styleSheet">
+     <string notr="true"/>
+    </property>
+    <property name="text">
+     <string>Back</string>
+    </property>
+    <property name="autoDefault">
+     <bool>false</bool>
+    </property>
+    <property name="flat">
+     <bool>true</bool>
+    </property>
+    <property name="class" stdset="0">
+     <string>menu_btn</string>
+    </property>
+    <property name="borderLeftPixmap" stdset="0">
+     <pixmap resource="../resources/button_resources.qrc">:/button_borders/media/buttons/btn_part1.svg</pixmap>
+    </property>
+    <property name="borderCenterPixmap" stdset="0">
+     <pixmap resource="../resources/button_resources.qrc">:/button_borders/media/buttons/btn_part2.svg</pixmap>
+    </property>
+    <property name="borderRightPixmap" stdset="0">
+     <pixmap resource="../resources/button_resources.qrc">:/button_borders/media/buttons/btn_part3.svg</pixmap>
+    </property>
+   </widget>
   </widget>
   <widget class="QWidget" name="dryer_page">
    <widget class="QLabel" name="dryer_1_icon_label">
     <property name="geometry">
      <rect>
       <x>40</x>
-      <y>80</y>
+      <y>90</y>
       <width>91</width>
       <height>61</height>
      </rect>
@@ -1496,7 +2028,7 @@ FILAMENT</string>
     <property name="geometry">
      <rect>
       <x>410</x>
-      <y>80</y>
+      <y>90</y>
       <width>91</width>
       <height>61</height>
      </rect>
@@ -1508,9 +2040,9 @@ FILAMENT</string>
    <widget class="QLabel" name="dryers_title_label">
     <property name="geometry">
      <rect>
-      <x>300</x>
+      <x>210</x>
       <y>20</y>
-      <width>111</width>
+      <width>261</width>
       <height>61</height>
      </rect>
     </property>
@@ -1526,6 +2058,9 @@ FILAMENT</string>
     <property name="text">
      <string>DRYERS</string>
     </property>
+    <property name="alignment">
+     <set>Qt::AlignCenter</set>
+    </property>
     <property name="class" stdset="0">
      <string>title_text</string>
     </property>
@@ -1533,9 +2068,9 @@ FILAMENT</string>
    <widget class="CustomQPushButton" name="dryer_1_auto_btn">
     <property name="geometry">
      <rect>
-      <x>80</x>
-      <y>190</y>
-      <width>211</width>
+      <x>70</x>
+      <y>200</y>
+      <width>221</width>
       <height>71</height>
      </rect>
     </property>
@@ -1595,7 +2130,7 @@ FILAMENT</string>
      <rect>
       <x>70</x>
       <y>300</y>
-      <width>211</width>
+      <width>221</width>
       <height>71</height>
      </rect>
     </property>
@@ -1654,8 +2189,8 @@ FILAMENT</string>
     <property name="geometry">
      <rect>
       <x>410</x>
-      <y>290</y>
-      <width>211</width>
+      <y>300</y>
+      <width>221</width>
       <height>71</height>
      </rect>
     </property>
@@ -1715,7 +2250,7 @@ FILAMENT</string>
      <rect>
       <x>410</x>
       <y>200</y>
-      <width>211</width>
+      <width>221</width>
       <height>71</height>
      </rect>
     </property>
@@ -1868,6 +2403,66 @@ FILAMENT</string>
     </property>
     <property name="text">
      <string>0</string>
+    </property>
+   </widget>
+   <widget class="CustomQPushButton" name="dryers_back_btn">
+    <property name="geometry">
+     <rect>
+      <x>500</x>
+      <y>20</y>
+      <width>181</width>
+      <height>71</height>
+     </rect>
+    </property>
+    <property name="minimumSize">
+     <size>
+      <width>10</width>
+      <height>10</height>
+     </size>
+    </property>
+    <property name="font">
+     <font>
+      <family>Momcake</family>
+      <pointsize>20</pointsize>
+      <italic>false</italic>
+      <stylestrategy>PreferAntialias</stylestrategy>
+     </font>
+    </property>
+    <property name="mouseTracking">
+     <bool>false</bool>
+    </property>
+    <property name="tabletTracking">
+     <bool>true</bool>
+    </property>
+    <property name="contextMenuPolicy">
+     <enum>Qt::NoContextMenu</enum>
+    </property>
+    <property name="layoutDirection">
+     <enum>Qt::LeftToRight</enum>
+    </property>
+    <property name="styleSheet">
+     <string notr="true"/>
+    </property>
+    <property name="text">
+     <string>Back</string>
+    </property>
+    <property name="autoDefault">
+     <bool>false</bool>
+    </property>
+    <property name="flat">
+     <bool>true</bool>
+    </property>
+    <property name="class" stdset="0">
+     <string>menu_btn</string>
+    </property>
+    <property name="borderLeftPixmap" stdset="0">
+     <pixmap resource="../resources/button_resources.qrc">:/button_borders/media/buttons/btn_part1.svg</pixmap>
+    </property>
+    <property name="borderCenterPixmap" stdset="0">
+     <pixmap resource="../resources/button_resources.qrc">:/button_borders/media/buttons/btn_part2.svg</pixmap>
+    </property>
+    <property name="borderRightPixmap" stdset="0">
+     <pixmap resource="../resources/button_resources.qrc">:/button_borders/media/buttons/btn_part3.svg</pixmap>
     </property>
    </widget>
   </widget>
