@@ -1,3 +1,4 @@
+from collections import deque
 import sys
 from PyQt6.QtCore import QEvent, pyqtSignal, pyqtSlot, QObject
 from PyQt6.QtWidgets import QApplication, QMainWindow, QSplashScreen
@@ -87,6 +88,8 @@ class MainWindow(QMainWindow):
         # @ Structures
         self.file_data = Files(parent=self, ws=self.ws)
         self.installEventFilter(self.file_data)
+        self.index_stack = deque(maxlen=4)
+        
         # @ Panels
         self.start_window = ConnectionWindow(self, self.ws)
         self.printPanel = PrintTab(self.ui.printTab, self.file_data, self.ws)
@@ -101,6 +104,14 @@ class MainWindow(QMainWindow):
         self.ws.connection_lost.connect(
             slot=self.start_window.websocket_connection_lost
         )
+        self.printPanel.request_back_button_pressed.connect(slot=self.global_back_button_pressed)
+        self.printPanel.request_change_page.connect(slot=self.global_change_page)
+        self.filamentPanel.request_back_button_pressed.connect(slot=self.global_back_button_pressed)
+        self.filamentPanel.request_change_page.connect(slot=self.global_change_page)
+        self.controlPanel.request_back_button_pressed.connect(slot=self.global_back_button_pressed)
+        self.controlPanel.request_change_page.connect(slot=self.global_change_page) 
+        self.utilitiesPanel.request_back_button_pressed.connect(slot=self.global_back_button_pressed)
+        self.utilitiesPanel.request_change_page.connect(slot=self.global_change_page)
 
         ##* Also connect to files list when connection is achieved to imidiatly get the files
         self.ws.connected_signal.connect(slot=self.file_data.request_file_list.emit)
@@ -110,6 +121,41 @@ class MainWindow(QMainWindow):
             slot=self.mc.restart_klipper_service
         )
         self.start_window.reboot_clicked.connect(slot=self.mc.machine_restart)
+    def current_panel_index(self):
+        match self.ui.mainTabWidget.currentIndex():
+            case 0:
+                return self.printPanel.currentIndex()
+            case 1:
+                return self.filamentPanel.currentIndex()
+            case 2:
+                return self.controlPanel.currentIndex()
+            case 3:
+                return self.utilitiesPanel.currentIndex()
+
+    def set_current_panel_index(self, tab_index, panel_index):
+        match self.ui.mainTabWidget.currentIndex():
+            case 0:
+                self.printPanel.setCurrentIndex(panel_index)
+            case 1:
+                self.filamentPanel.setCurrentIndex(panel_index)
+            case 2:
+                self.controlPanel.setCurrentIndex(panel_index)
+            case 3:
+                self.utilitiesPanel.setCurrentIndex(panel_index)
+
+    @pyqtSlot(int, int, name="request_change_page")
+    def global_change_page(self, tab_index, panel_index):
+        print(tab_index)
+        self.index_stack.append([self.ui.mainTabWidget.currentIndex(), self.current_panel_index()])
+        self.ui.mainTabWidget.setCurrentIndex(tab_index)
+        self.set_current_panel_index(tab_index, panel_index)
+                
+    @pyqtSlot(name="request_back_button_pressed")
+    def global_back_button_pressed(self):
+        self.ui.mainTabWidget.setCurrentIndex(self.index_stack[-1][0])                  # Go to the last position of the stack.
+        self.set_current_panel_index(self.index_stack[-1][0], self.index_stack[-1][1])  # 
+        print(self.index_stack)                                                         #
+        self.index_stack.pop()                                                          # Remove the last position.
 
     @pyqtSlot(name="start_websocket_connection")
     def start_websocket_connection(self):
