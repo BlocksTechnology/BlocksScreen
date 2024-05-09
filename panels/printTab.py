@@ -33,6 +33,8 @@ class PrintTab(QStackedWidget):
     request_print_resume_signal = pyqtSignal(name="resume_print")
     request_print_stop_signal = pyqtSignal(name="stop_print")
     request_print_pause_signal = pyqtSignal(name="pause_print")
+    request_back_button_pressed = pyqtSignal(name = "request_back_button_pressed")
+    request_change_page = pyqtSignal(int, int, name = "request_change_page")
 
     def __init__(
         self, parent: typing.Optional["QWidget"], file_data: Files, ws: MoonWebSocket
