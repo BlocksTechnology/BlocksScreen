@@ -93,7 +93,11 @@ class MainWindow(QMainWindow):
         # @ Panels
         self.start_window = ConnectionWindow(self, self.ws)
         self.printPanel = PrintTab(self.ui.printTab, self.file_data, self.ws)
-
+        self.filamentPanel = FilamentTab(self.ui.filamentTab)
+        self.controlPanel = ControlTab(self.ui.controlTab)
+        self.utilitiesPanel = UtilitiesTab(self.ui.utilitiesTab)
+        self.ui.mainTabWidget.setCurrentIndex(0) # Make it so Print panel is the first to be displayed
+    
         # @ Slot connections
         self.app_initialize.connect(slot=self.start_websocket_connection)
 
@@ -121,6 +125,16 @@ class MainWindow(QMainWindow):
             slot=self.mc.restart_klipper_service
         )
         self.start_window.reboot_clicked.connect(slot=self.mc.machine_restart)
+        
+        # If the user changes tab, the indexes of all stacked widgets reset
+        self.ui.mainTabWidget.currentChanged.connect(slot=self.reset_tab_indexes)
+
+    def reset_tab_indexes(self):
+        self.printPanel.setCurrentIndex(0)
+        self.filamentPanel.setCurrentIndex(0)
+        self.controlPanel.setCurrentIndex(0)
+        self.utilitiesPanel.setCurrentIndex(0)
+        
     def current_panel_index(self):
         match self.ui.mainTabWidget.currentIndex():
             case 0:
