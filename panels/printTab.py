@@ -51,12 +51,13 @@ class PrintTab(QStackedWidget):
         self.panel = Ui_printStackedWidget()
         self.panel.setupUi(self)
         self.setCurrentIndex(0)
+        
         self.panel.listWidget.setLayoutDirection(Qt.LayoutDirection.LeftToRight)
         # @ Slot connections
         self.panel.main_print_btn.clicked.connect(self.showFilesPanel)
         self.panel.back_btn.clicked.connect(self.back)
         self.currentChanged.connect(self.view_changed)
-        # @ Signals for QListItems
+        # @ Signals for QListItems 
         self.panel.listWidget.itemClicked.connect(self.fileItemClicked)
         self.panel.listWidget.itemPressed.connect(self.itemPressed)
         ## Signals for confirm page
