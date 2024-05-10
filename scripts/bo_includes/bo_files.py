@@ -18,7 +18,7 @@ class Files(QtCore.QObject):
 
     def __init__(
         self,
-        parent: typing.Optional["QObject"] | None,
+        parent: typing.Optional["QObject"],
         ws: MoonWebSocket,
         update_interval: int = 5000,
     ) -> None:
@@ -29,8 +29,6 @@ class Files(QtCore.QObject):
         self.files: list = []
         self.thumbnails: dict = {}
         self.files_metadata: dict = {}
-
-        
         # @ Connect signals
         self.request_file_list.connect(slot=self.ws.api.get_file_list)
         self.request_file_metadata.connect(slot=self.ws.api.get_gcode_metadata)
@@ -74,3 +72,4 @@ class Files(QtCore.QObject):
     #         self.request_file_list.emit()
 
     #     return super().eventFilter(a0, a1)
+    
