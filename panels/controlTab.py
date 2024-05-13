@@ -30,7 +30,7 @@ class ControlTab(QStackedWidget):
     
         self.index_stack = deque(maxlen=4)
         
-        # Connecting buttons in the panel tree
+        # Connecting buttons in the panel routing tree
         # Control Screen
         self.panel.control_motion_btn.clicked.connect(partial(self.change_page, 1))
         self.panel.control_temperature_btn.clicked.connect(partial(self.change_page, 4))
@@ -41,6 +41,8 @@ class ControlTab(QStackedWidget):
         self.panel.motion_back_btn.clicked.connect(self.back_button)
         # Move Axis
         self.panel.move_axis_back_btn.clicked.connect(self.back_button)
+        # Temperature
+        self.panel.temperature_back_btn.clicked.connect(self.back_button)
         # Extrude
         self.panel.extrude_back_btn.clicked.connect(self.back_button)
         # Printer Settings Screen
@@ -48,7 +50,6 @@ class ControlTab(QStackedWidget):
     
     def change_page(self, index):
         self.request_change_page.emit(2, index)
-        print("requested to change page to ", index)
         # self.index_stack.append(self.currentIndex())
         # self.setCurrentIndex(index)
  
