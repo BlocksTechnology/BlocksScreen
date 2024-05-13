@@ -20,9 +20,9 @@
    <widget class="CustomQPushButton" name="utilities_axes_maintenance_btn">
     <property name="geometry">
      <rect>
-      <x>130</x>
+      <x>50</x>
       <y>280</y>
-      <width>141</width>
+      <width>301</width>
       <height>71</height>
      </rect>
     </property>
@@ -56,8 +56,8 @@
      <string notr="true"/>
     </property>
     <property name="text">
-     <string>Axes
-Maintenance</string>
+     <string>AXES
+MAINTENANCE</string>
     </property>
     <property name="autoDefault">
      <bool>false</bool>
@@ -81,9 +81,9 @@ Maintenance</string>
    <widget class="CustomQPushButton" name="utilities_routine_check_btn">
     <property name="geometry">
      <rect>
-      <x>130</x>
+      <x>50</x>
       <y>190</y>
-      <width>141</width>
+      <width>301</width>
       <height>71</height>
      </rect>
     </property>
@@ -117,8 +117,8 @@ Maintenance</string>
      <string notr="true"/>
     </property>
     <property name="text">
-     <string>Routine
-Check</string>
+     <string>ROUTINE
+CHECK</string>
     </property>
     <property name="autoDefault">
      <bool>false</bool>
@@ -142,9 +142,9 @@ Check</string>
    <widget class="CustomQPushButton" name="utilities_info_btn">
     <property name="geometry">
      <rect>
-      <x>150</x>
-      <y>110</y>
-      <width>101</width>
+      <x>50</x>
+      <y>100</y>
+      <width>301</width>
       <height>71</height>
      </rect>
     </property>
@@ -178,7 +178,7 @@ Check</string>
      <string notr="true"/>
     </property>
     <property name="text">
-     <string>Info</string>
+     <string>INFO</string>
     </property>
     <property name="autoDefault">
      <bool>false</bool>
@@ -202,9 +202,9 @@ Check</string>
    <widget class="CustomQPushButton" name="utilities_factory_reset_btn">
     <property name="geometry">
      <rect>
-      <x>400</x>
+      <x>360</x>
       <y>280</y>
-      <width>171</width>
+      <width>301</width>
       <height>71</height>
      </rect>
     </property>
@@ -238,7 +238,7 @@ Check</string>
      <string notr="true"/>
     </property>
     <property name="text">
-     <string>Factory Reset</string>
+     <string>FACTORY RESET</string>
     </property>
     <property name="autoDefault">
      <bool>false</bool>
@@ -262,9 +262,9 @@ Check</string>
    <widget class="QLabel" name="utilities_title_label">
     <property name="geometry">
      <rect>
-      <x>300</x>
+      <x>220</x>
       <y>30</y>
-      <width>161</width>
+      <width>271</width>
       <height>61</height>
      </rect>
     </property>
@@ -290,9 +290,9 @@ Check</string>
    <widget class="CustomQPushButton" name="utilities_lcd_settings_btn">
     <property name="geometry">
      <rect>
-      <x>420</x>
+      <x>360</x>
       <y>190</y>
-      <width>141</width>
+      <width>301</width>
       <height>71</height>
      </rect>
     </property>
@@ -326,7 +326,7 @@ Check</string>
      <string notr="true"/>
     </property>
     <property name="text">
-     <string>LCD Settings</string>
+     <string>LCD SETTINGS</string>
     </property>
     <property name="autoDefault">
      <bool>false</bool>
@@ -350,9 +350,9 @@ Check</string>
    <widget class="CustomQPushButton" name="utilities_leds_btn">
     <property name="geometry">
      <rect>
-      <x>420</x>
-      <y>110</y>
-      <width>141</width>
+      <x>360</x>
+      <y>100</y>
+      <width>301</width>
       <height>71</height>
      </rect>
     </property>
@@ -408,13 +408,130 @@ Check</string>
     </property>
    </widget>
   </widget>
-  <widget class="QWidget" name="info_page"/>
+  <widget class="QWidget" name="info_page">
+   <widget class="QLabel" name="info_title_label">
+    <property name="geometry">
+     <rect>
+      <x>230</x>
+      <y>30</y>
+      <width>271</width>
+      <height>61</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <family>Momcake</family>
+      <pointsize>24</pointsize>
+     </font>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background: transparent; color: white;</string>
+    </property>
+    <property name="text">
+     <string>INFO</string>
+    </property>
+    <property name="alignment">
+     <set>Qt::AlignCenter</set>
+    </property>
+    <property name="class" stdset="0">
+     <string>title_text</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="info_text_label">
+    <property name="geometry">
+     <rect>
+      <x>100</x>
+      <y>140</y>
+      <width>531</width>
+      <height>61</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <family>Momcake</family>
+      <pointsize>24</pointsize>
+     </font>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background: transparent; color: white;</string>
+    </property>
+    <property name="text">
+     <string>This is some curious text</string>
+    </property>
+    <property name="alignment">
+     <set>Qt::AlignCenter</set>
+    </property>
+    <property name="class" stdset="0">
+     <string>title_text</string>
+    </property>
+   </widget>
+   <widget class="CustomQPushButton" name="info_back_btn">
+    <property name="geometry">
+     <rect>
+      <x>490</x>
+      <y>30</y>
+      <width>201</width>
+      <height>71</height>
+     </rect>
+    </property>
+    <property name="minimumSize">
+     <size>
+      <width>10</width>
+      <height>10</height>
+     </size>
+    </property>
+    <property name="font">
+     <font>
+      <family>Momcake</family>
+      <pointsize>20</pointsize>
+      <italic>false</italic>
+      <stylestrategy>PreferAntialias</stylestrategy>
+     </font>
+    </property>
+    <property name="mouseTracking">
+     <bool>false</bool>
+    </property>
+    <property name="tabletTracking">
+     <bool>true</bool>
+    </property>
+    <property name="contextMenuPolicy">
+     <enum>Qt::NoContextMenu</enum>
+    </property>
+    <property name="layoutDirection">
+     <enum>Qt::LeftToRight</enum>
+    </property>
+    <property name="styleSheet">
+     <string notr="true"/>
+    </property>
+    <property name="text">
+     <string>Back</string>
+    </property>
+    <property name="autoDefault">
+     <bool>false</bool>
+    </property>
+    <property name="flat">
+     <bool>true</bool>
+    </property>
+    <property name="class" stdset="0">
+     <string>menu_btn</string>
+    </property>
+    <property name="borderLeftPixmap" stdset="0">
+     <pixmap resource="../resources/button_resources.qrc">:/button_borders/media/buttons/btn_part1.svg</pixmap>
+    </property>
+    <property name="borderCenterPixmap" stdset="0">
+     <pixmap resource="../resources/button_resources.qrc">:/button_borders/media/buttons/btn_part2.svg</pixmap>
+    </property>
+    <property name="borderRightPixmap" stdset="0">
+     <pixmap resource="../resources/button_resources.qrc">:/button_borders/media/buttons/btn_part3.svg</pixmap>
+    </property>
+   </widget>
+  </widget>
   <widget class="QWidget" name="leds_page">
    <widget class="QSlider" name="leds_r_slider">
     <property name="geometry">
      <rect>
-      <x>90</x>
-      <y>140</y>
+      <x>80</x>
+      <y>130</y>
       <width>411</width>
       <height>22</height>
      </rect>
@@ -426,8 +543,8 @@ Check</string>
    <widget class="QSlider" name="leds_g_slider">
     <property name="geometry">
      <rect>
-      <x>90</x>
-      <y>190</y>
+      <x>80</x>
+      <y>180</y>
       <width>411</width>
       <height>22</height>
      </rect>
@@ -439,8 +556,8 @@ Check</string>
    <widget class="QSlider" name="leds_b_slider">
     <property name="geometry">
      <rect>
-      <x>90</x>
-      <y>240</y>
+      <x>80</x>
+      <y>230</y>
       <width>411</width>
       <height>22</height>
      </rect>
@@ -452,8 +569,8 @@ Check</string>
    <widget class="QSlider" name="leds_w_slider">
     <property name="geometry">
      <rect>
-      <x>90</x>
-      <y>290</y>
+      <x>80</x>
+      <y>280</y>
       <width>411</width>
       <height>22</height>
      </rect>
@@ -465,9 +582,9 @@ Check</string>
    <widget class="QLabel" name="leds_title_label">
     <property name="geometry">
      <rect>
-      <x>310</x>
-      <y>40</y>
-      <width>71</width>
+      <x>240</x>
+      <y>30</y>
+      <width>231</width>
       <height>61</height>
      </rect>
     </property>
@@ -483,6 +600,9 @@ Check</string>
     <property name="text">
      <string>LEDs</string>
     </property>
+    <property name="alignment">
+     <set>Qt::AlignCenter</set>
+    </property>
     <property name="class" stdset="0">
      <string>title_text</string>
     </property>
@@ -490,9 +610,9 @@ Check</string>
    <widget class="CustomQPushButton" name="leds_back_btn">
     <property name="geometry">
      <rect>
-      <x>590</x>
+      <x>490</x>
       <y>30</y>
-      <width>101</width>
+      <width>201</width>
       <height>71</height>
      </rect>
     </property>
@@ -550,9 +670,9 @@ Check</string>
    <widget class="CustomQPushButton" name="leds_off_btn">
     <property name="geometry">
      <rect>
-      <x>100</x>
-      <y>330</y>
-      <width>211</width>
+      <x>90</x>
+      <y>320</y>
+      <width>231</width>
       <height>71</height>
      </rect>
     </property>
@@ -586,7 +706,7 @@ Check</string>
      <string notr="true"/>
     </property>
     <property name="text">
-     <string>Tool 1 Icon</string>
+     <string>TURN ON</string>
     </property>
     <property name="autoDefault">
      <bool>false</bool>
@@ -611,8 +731,8 @@ Check</string>
     <property name="geometry">
      <rect>
       <x>390</x>
-      <y>330</y>
-      <width>211</width>
+      <y>320</y>
+      <width>231</width>
       <height>71</height>
      </rect>
     </property>
@@ -646,7 +766,7 @@ Check</string>
      <string notr="true"/>
     </property>
     <property name="text">
-     <string>Tool 2 icon</string>
+     <string>TURN OFF</string>
     </property>
     <property name="autoDefault">
      <bool>false</bool>
@@ -674,7 +794,7 @@ Check</string>
     <property name="geometry">
      <rect>
       <x>530</x>
-      <y>130</y>
+      <y>120</y>
       <width>31</width>
       <height>41</height>
      </rect>
@@ -699,7 +819,7 @@ Check</string>
     <property name="geometry">
      <rect>
       <x>530</x>
-      <y>180</y>
+      <y>170</y>
       <width>31</width>
       <height>41</height>
      </rect>
@@ -724,7 +844,7 @@ Check</string>
     <property name="geometry">
      <rect>
       <x>530</x>
-      <y>230</y>
+      <y>220</y>
       <width>31</width>
       <height>41</height>
      </rect>
@@ -749,7 +869,7 @@ Check</string>
     <property name="geometry">
      <rect>
       <x>530</x>
-      <y>280</y>
+      <y>270</y>
       <width>31</width>
       <height>41</height>
      </rect>
@@ -772,9 +892,9 @@ Check</string>
    <widget class="QLabel" name="lcd_settings_title_label">
     <property name="geometry">
      <rect>
-      <x>270</x>
+      <x>200</x>
       <y>40</y>
-      <width>181</width>
+      <width>301</width>
       <height>61</height>
      </rect>
     </property>
@@ -790,8 +910,71 @@ Check</string>
     <property name="text">
      <string>LCD Settings</string>
     </property>
+    <property name="alignment">
+     <set>Qt::AlignCenter</set>
+    </property>
     <property name="class" stdset="0">
      <string>title_text</string>
+    </property>
+   </widget>
+   <widget class="CustomQPushButton" name="lcd_settings_back_btn">
+    <property name="geometry">
+     <rect>
+      <x>490</x>
+      <y>30</y>
+      <width>201</width>
+      <height>71</height>
+     </rect>
+    </property>
+    <property name="minimumSize">
+     <size>
+      <width>10</width>
+      <height>10</height>
+     </size>
+    </property>
+    <property name="font">
+     <font>
+      <family>Momcake</family>
+      <pointsize>20</pointsize>
+      <italic>false</italic>
+      <stylestrategy>PreferAntialias</stylestrategy>
+     </font>
+    </property>
+    <property name="mouseTracking">
+     <bool>false</bool>
+    </property>
+    <property name="tabletTracking">
+     <bool>true</bool>
+    </property>
+    <property name="contextMenuPolicy">
+     <enum>Qt::NoContextMenu</enum>
+    </property>
+    <property name="layoutDirection">
+     <enum>Qt::LeftToRight</enum>
+    </property>
+    <property name="styleSheet">
+     <string notr="true"/>
+    </property>
+    <property name="text">
+     <string>Back</string>
+    </property>
+    <property name="autoDefault">
+     <bool>false</bool>
+    </property>
+    <property name="flat">
+     <bool>true</bool>
+    </property>
+    <property name="class" stdset="0">
+     <string>menu_btn</string>
+    </property>
+    <property name="borderLeftPixmap" stdset="0">
+     <pixmap resource="../resources/button_resources.qrc">:/button_borders/media/buttons/btn_part1.svg</pixmap>
+    </property>
+    <property name="borderCenterPixmap" stdset="0">
+     <pixmap resource="../resources/button_resources.qrc">:/button_borders/media/buttons/btn_part2.svg</pixmap>
+    </property>
+    <property name="borderRightPixmap" stdset="0">
+     <pixmap resource="../resources/button_resources.qrc">:/button_borders/media/buttons/btn_part3.svg</pixmap>
     </property>
    </widget>
   </widget>
