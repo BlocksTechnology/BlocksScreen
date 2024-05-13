@@ -1,3 +1,4 @@
+from functools import partial
 from PyQt6 import QtWidgets
 from PyQt6.QtGui import QPaintEvent
 from PyQt6.QtWidgets import (
@@ -55,8 +56,6 @@ class PrintTab(QStackedWidget):
         self.setCurrentIndex(0)
         self.panel.listWidget.setLayoutDirection(Qt.LayoutDirection.LeftToRight)
         # @ Slot connections
-        self.panel.main_print_btn.clicked.connect(self.showFilesPanel)
-        self.panel.back_btn.clicked.connect(self.back)
         self.currentChanged.connect(self.view_changed)
         # @ Signals for QListItems
         self.panel.listWidget.itemClicked.connect(self.fileItemClicked)
@@ -71,7 +70,12 @@ class PrintTab(QStackedWidget):
         self.request_print_pause_signal.connect(self.ws.api.pause_print)
         self.panel.stop_printing_btn.clicked.connect(self.request_print_stop_signal.emit)
         self.panel.pause_printing_btn.clicked.connect(self.pause_resume_print)
-
+        # Connecting buttons in the panel routing tree
+        # Main Screen
+        self.panel.main_print_btn.clicked.connect(partial(self.change_page, 1))
+        # File List Screen
+        self.panel.back_btn.clicked.connect(partial(self.back_button))
+        
         self.show()
 
     @pyqtSlot(name="pause_resume_print")
@@ -312,6 +316,12 @@ class PrintTab(QStackedWidget):
             self.background = value
         return super().setProperty(name, value)
 
+    def change_page(self, index):
+        # Emits with the request its tab index and its page index
+        self.request_change_page.emit(0, index)
+ 
+    def back_button(self):
+        self.request_back_button_pressed.emit()
 
 # TODO: Add folder icon to the topbar of the files list
 # TODO: Add A icon such as ">" to indicate that when you press the file you get the information and go to the next page
