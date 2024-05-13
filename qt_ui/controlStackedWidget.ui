@@ -21,8 +21,8 @@
     <property name="geometry">
      <rect>
       <x>50</x>
-      <y>110</y>
-      <width>281</width>
+      <y>100</y>
+      <width>301</width>
       <height>71</height>
      </rect>
     </property>
@@ -56,7 +56,7 @@
      <string notr="true"/>
     </property>
     <property name="text">
-     <string>Motion</string>
+     <string>MOTION</string>
     </property>
     <property name="autoDefault">
      <bool>false</bool>
@@ -80,8 +80,8 @@
    <widget class="QLabel" name="control_title_label">
     <property name="geometry">
      <rect>
-      <x>230</x>
-      <y>40</y>
+      <x>240</x>
+      <y>30</y>
       <width>231</width>
       <height>61</height>
      </rect>
@@ -108,9 +108,9 @@
    <widget class="CustomQPushButton" name="control_temperature_btn">
     <property name="geometry">
      <rect>
-      <x>380</x>
-      <y>110</y>
-      <width>281</width>
+      <x>360</x>
+      <y>100</y>
+      <width>301</width>
       <height>71</height>
      </rect>
     </property>
@@ -144,7 +144,7 @@
      <string notr="true"/>
     </property>
     <property name="text">
-     <string>Temperature</string>
+     <string>TEMPERATURE</string>
     </property>
     <property name="autoDefault">
      <bool>false</bool>
@@ -168,8 +168,8 @@
    <widget class="CustomQPushButton" name="control_bed_leveling_btn">
     <property name="geometry">
      <rect>
-      <x>370</x>
-      <y>200</y>
+      <x>360</x>
+      <y>190</y>
       <width>301</width>
       <height>71</height>
      </rect>
@@ -229,8 +229,8 @@
     <property name="geometry">
      <rect>
       <x>50</x>
-      <y>200</y>
-      <width>281</width>
+      <y>190</y>
+      <width>301</width>
       <height>71</height>
      </rect>
     </property>
@@ -290,8 +290,8 @@ CALIBRATION</string>
     <property name="geometry">
      <rect>
       <x>50</x>
-      <y>300</y>
-      <width>281</width>
+      <y>280</y>
+      <width>301</width>
       <height>71</height>
      </rect>
     </property>
@@ -350,9 +350,9 @@ PRINT CORE</string>
    <widget class="CustomQPushButton" name="control_printer_settings_btn">
     <property name="geometry">
      <rect>
-      <x>370</x>
-      <y>300</y>
-      <width>311</width>
+      <x>360</x>
+      <y>280</y>
+      <width>301</width>
       <height>71</height>
      </rect>
     </property>
@@ -413,9 +413,9 @@ SETTINGS</string>
    <widget class="QLabel" name="motion_title_label">
     <property name="geometry">
      <rect>
-      <x>270</x>
-      <y>50</y>
-      <width>151</width>
+      <x>240</x>
+      <y>40</y>
+      <width>231</width>
       <height>61</height>
      </rect>
     </property>
@@ -444,9 +444,9 @@ SETTINGS</string>
    <widget class="CustomQPushButton" name="motion_disable_steppers_btn">
     <property name="geometry">
      <rect>
-      <x>370</x>
-      <y>150</y>
-      <width>261</width>
+      <x>360</x>
+      <y>140</y>
+      <width>301</width>
       <height>71</height>
      </rect>
     </property>
@@ -505,9 +505,9 @@ STEPPERS</string>
    <widget class="CustomQPushButton" name="motion_auto_home_btn">
     <property name="geometry">
      <rect>
-      <x>40</x>
+      <x>50</x>
       <y>140</y>
-      <width>271</width>
+      <width>301</width>
       <height>71</height>
      </rect>
     </property>
@@ -565,9 +565,9 @@ STEPPERS</string>
    <widget class="CustomQPushButton" name="motion_extrude_btn">
     <property name="geometry">
      <rect>
-      <x>380</x>
-      <y>270</y>
-      <width>251</width>
+      <x>360</x>
+      <y>230</y>
+      <width>301</width>
       <height>71</height>
      </rect>
     </property>
@@ -625,9 +625,9 @@ STEPPERS</string>
    <widget class="CustomQPushButton" name="motion_move_axis_btn">
     <property name="geometry">
      <rect>
-      <x>40</x>
-      <y>270</y>
-      <width>271</width>
+      <x>50</x>
+      <y>230</y>
+      <width>301</width>
       <height>71</height>
      </rect>
     </property>
@@ -685,9 +685,9 @@ STEPPERS</string>
    <widget class="CustomQPushButton" name="motion_back_btn">
     <property name="geometry">
      <rect>
-      <x>520</x>
+      <x>490</x>
       <y>30</y>
-      <width>171</width>
+      <width>201</width>
       <height>71</height>
      </rect>
     </property>
@@ -1127,9 +1127,9 @@ STEPPERS</string>
    <widget class="CustomQPushButton" name="move_axis_back_btn">
     <property name="geometry">
      <rect>
-      <x>500</x>
+      <x>490</x>
       <y>30</y>
-      <width>191</width>
+      <width>211</width>
       <height>71</height>
      </rect>
     </property>
@@ -1187,9 +1187,9 @@ STEPPERS</string>
    <widget class="CustomQPushButton" name="move_axis_tool_switch_btn">
     <property name="geometry">
      <rect>
-      <x>500</x>
+      <x>490</x>
       <y>100</y>
-      <width>191</width>
+      <width>211</width>
       <height>71</height>
      </rect>
     </property>
@@ -1247,9 +1247,9 @@ STEPPERS</string>
    <widget class="QLabel" name="move_axis_title_label">
     <property name="geometry">
      <rect>
-      <x>270</x>
+      <x>190</x>
       <y>40</y>
-      <width>131</width>
+      <width>311</width>
       <height>61</height>
      </rect>
     </property>
@@ -1264,6 +1264,9 @@ STEPPERS</string>
     </property>
     <property name="text">
      <string>Move Axis</string>
+    </property>
+    <property name="alignment">
+     <set>Qt::AlignCenter</set>
     </property>
     <property name="class" stdset="0">
      <string>title_text</string>
@@ -2927,9 +2930,9 @@ STEPPERS</string>
    <widget class="CustomQPushButton" name="printer_settings_back_btn">
     <property name="geometry">
      <rect>
-      <x>600</x>
-      <y>20</y>
-      <width>101</width>
+      <x>490</x>
+      <y>30</y>
+      <width>201</width>
       <height>71</height>
      </rect>
     </property>
