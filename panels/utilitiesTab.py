@@ -1,3 +1,4 @@
+from functools import partial
 from PyQt6.QtWidgets import QStackedWidget, QWidget
 from PyQt6 import QtCore
 import typing
@@ -25,22 +26,27 @@ class UtilitiesTab(QStackedWidget):
         self.panel.setupUi(self)
         self.show()
         
-        self.index_stack = []
+        # Connecting buttons in the panel routing tree
+        # Utilities Screen
+        self.panel.utilities_info_btn.clicked.connect(partial(self.change_page, 1))
+        self.panel.utilities_leds_btn.clicked.connect(partial(self.change_page, 2))
+        self.panel.utilities_lcd_settings_btn.clicked.connect(partial(self.change_page, 3))
         
-        # Connecting the print_btn.clicked event to the change_page method
-        #self.panel.main_print_btn.clicked.connect(self.change_page)
-        #self.panel.files_back_folder_btn.clicked.connect(self.change_page)
+        # Info Screen
+        self.panel.info_back_btn.clicked.connect(self.back_button)
+        
+        # LEDs Screen
+        self.panel.leds_back_btn.clicked.connect(self.back_button)
+        
+        # LCD Settings Screen
+        self.panel.lcd_settings_back_btn.clicked.connect(self.back_button)
         
     
     def change_page(self, index):
+        # Emits with the request its tab index and its page index
         self.request_change_page.emit(3, index)
-        # self.index_stack.append(self.currentIndex())
-        # self.setCurrentIndex(index)
  
     def back_button(self):
         self.request_back_button_pressed.emit()
-        # self.back_button_signal.emit()
-        # self.setCurrentIndex(self.index_stack[-1])  #Go to the last position of the stack.
-        # self.index_stack.pop()                      #Remove the last position.
         
     
