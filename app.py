@@ -1,4 +1,5 @@
 from collections import deque
+from functools import partial
 import sys
 from PyQt6.QtCore import QEvent, pyqtSignal, pyqtSlot, QObject
 from PyQt6.QtWidgets import QApplication, QMainWindow, QSplashScreen
@@ -116,6 +117,14 @@ class MainWindow(QMainWindow):
         self.controlPanel.request_change_page.connect(slot=self.global_change_page) 
         self.utilitiesPanel.request_back_button_pressed.connect(slot=self.global_back_button_pressed)
         self.utilitiesPanel.request_change_page.connect(slot=self.global_change_page)
+        # All the buttons on the top bar that send the user to the Temperature page
+        self.ui.nozzle_1_temp.clicked.connect(partial(self.global_change_page, 2, 4))
+        self.ui.nozzle_2_temp.clicked.connect(partial(self.global_change_page, 2, 4))
+        self.ui.hot_bed_temp.clicked.connect(partial(self.global_change_page, 2, 4))
+        self.ui.chamber_temp.clicked.connect(partial(self.global_change_page, 2, 4))
+        # # All the buttons on the top bar that send the user to the Load page
+        self.ui.filament_type_1.clicked.connect(partial(self.global_change_page, 1, 1))
+        self.ui.filament_type_2.clicked.connect(partial(self.global_change_page, 1, 1))
 
         ##* Also connect to files list when connection is achieved to imidiatly get the files
         self.ws.connected_signal.connect(slot=self.file_data.request_file_list.emit)
@@ -129,12 +138,14 @@ class MainWindow(QMainWindow):
         # If the user changes tab, the indexes of all stacked widgets reset
         self.ui.mainTabWidget.currentChanged.connect(slot=self.reset_tab_indexes)
 
+    # Used to garantee all tabs reset to their first page once the user leaves the tab
     def reset_tab_indexes(self):
         self.printPanel.setCurrentIndex(0)
         self.filamentPanel.setCurrentIndex(0)
         self.controlPanel.setCurrentIndex(0)
         self.utilitiesPanel.setCurrentIndex(0)
-        
+    
+    # Helper function to get the index of the current page in the current tab  
     def current_panel_index(self):
         match self.ui.mainTabWidget.currentIndex():
             case 0:
@@ -146,7 +157,8 @@ class MainWindow(QMainWindow):
             case 3:
                 return self.utilitiesPanel.currentIndex()
 
-    def set_current_panel_index(self, tab_index, panel_index):
+    # Helper function to set the index of the current page in the current tab  
+    def set_current_panel_index(self, panel_index):
         match self.ui.mainTabWidget.currentIndex():
             case 0:
                 self.printPanel.setCurrentIndex(panel_index)
@@ -159,17 +171,30 @@ class MainWindow(QMainWindow):
 
     @pyqtSlot(int, int, name="request_change_page")
     def global_change_page(self, tab_index, panel_index):
-        print(tab_index)
-        self.index_stack.append([self.ui.mainTabWidget.currentIndex(), self.current_panel_index()])
+        current_page = [self.ui.mainTabWidget.currentIndex(), self.current_panel_index()]
+        requested_page = [tab_index, panel_index]
+        
+        # Return if user is already on the requested page
+        if (requested_page == current_page):
+            return
+        
+        # Add to the stack of indexes the indexes of current tab and page in tab to later be able to come back to them
+        self.index_stack.append(current_page)
+        # Go to the requested tab and page
         self.ui.mainTabWidget.setCurrentIndex(tab_index)
-        self.set_current_panel_index(tab_index, panel_index)
+        self.set_current_panel_index(panel_index)
+        # print("Requesting Tab ", tab_index, " and page index: ", panel_index)   
                 
     @pyqtSlot(name="request_back_button_pressed")
     def global_back_button_pressed(self):
-        self.ui.mainTabWidget.setCurrentIndex(self.index_stack[-1][0])                  # Go to the last position of the stack.
-        self.set_current_panel_index(self.index_stack[-1][0], self.index_stack[-1][1])  # 
-        print(self.index_stack)                                                         #
-        self.index_stack.pop()                                                          # Remove the last position.
+        # Just a safety measure to avoid accessing an inexistant position of the index_stack
+        if (not len(self.index_stack)):
+            return
+        # From the last position of the stack use the first value of its tuple, tab index
+        self.ui.mainTabWidget.setCurrentIndex(self.index_stack[-1][0])                 
+        self.set_current_panel_index(self.index_stack[-1][1])  # From the same position, use the tab and stacked widget page indexes
+        #print(self.index_stack)                                                         
+        self.index_stack.pop() # Remove the last position.
 
     @pyqtSlot(name="start_websocket_connection")
     def start_websocket_connection(self):
