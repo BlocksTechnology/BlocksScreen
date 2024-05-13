@@ -32,7 +32,7 @@ class FilamentTab(QStackedWidget):
         
         self.index_stack = []
         
-        # Connecting buttons in the panel tree
+        # Connecting buttons in the panel routing tree
         # Filament Screen
         self.panel.filament_load_btn.clicked.connect(partial(self.change_page, 1))
         self.panel.filament_unload_btn.clicked.connect(partial(self.change_page, 5))
@@ -73,15 +73,11 @@ class FilamentTab(QStackedWidget):
         self.panel.dryers_back_btn.clicked.connect(self.back_button) 
     
     def change_page(self, index):
+        # Emits with the request its tab index and its page index
         self.request_change_page.emit(1, index)
-        # self.index_stack.append(self.currentIndex())
-        # self.setCurrentIndex(index)
  
     def back_button(self):
         self.request_back_button_pressed.emit()
-        # self.back_button_signal.emit()
-        # self.setCurrentIndex(self.index_stack[-1])  #Go to the last position of the stack.
-        # self.index_stack.pop()                      #Remove the last position.
         
     def load_filament_t1(self, filament):
         self.request_filament_load_t1.emit
