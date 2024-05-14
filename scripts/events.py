@@ -168,6 +168,24 @@ class KlippyDisconnectedEvent(QEvent):
     def type() -> QEvent.Type:
         return QEvent.Type(KlippyDisconnectedEvent.kp_disconnected_event_type)
 
+class KlippyErrorEvent(QEvent):
+    """KlippyErrorEvent Event when klippy errors 
+
+    Args:
+        QEvent (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
+    kp_error_event_type = QEvent.Type(QEvent.registerEventType())
+    def __init__(self, data, message):
+        self.data = data
+        self.message = message 
+    
+    @staticmethod 
+    def type() -> QEvent.Type:
+        return QEvent.Type(KlippyErrorEvent.kp_error_event_type)
+
 
 class ReceivedFileDataEvent(QEvent):
     """ReceivedFileDataEvent Event for file related messages received
