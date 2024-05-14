@@ -68,14 +68,18 @@ class Printer(QObject):
         super(Printer, self).__init__(parent)
         self.main_window = parent
         self.ws = ws
+        
         self.available_objects: dict = {}
-
         self.printer_state_webhook: str = ""
         self.printer_message_webhook: str = ""
-
         self._last_eventTime: float = 0.0
         self.printer_objects: dict = {}
-
+        
+        self.printing : bool = False 
+        self.print_file_loaded: bool = False
+        self.printing_state : str = ""
+        self.printing_error_message: str|None = None        
+        self.printer_busy: bool = False
         # @ Signal/Slot Connections
         self.ws.klippy_state_signal.connect(self.klippy_ready_report)
         self.request_available_objects_signal.connect(self.ws.api.get_available_objects)
@@ -275,6 +279,9 @@ class Printer(QObject):
     def idle_timeout_object_updated(self, value: dict, name: str = "") -> None:
         if "state" in value.keys():
             self.idle_timeout_update_signal[str, str].emit("state", value["state"])
+            if "printing" in value["state"]: 
+                self.printer_busy = True
+                
         if "printing_time" in value.keys():
             self.idle_timeout_update_signal[str, float].emit(
                 "printing_time", value["printing_time"]
@@ -299,6 +306,7 @@ class Printer(QObject):
             self.print_stats_update_signal[str, str].emit(
                 "filename", values["filename"]
             )
+            self.print_file_loaded = True
         if "total_duration" in values.keys():
             self.print_stats_update_signal[str, float].emit(
                 "total_duration", values["total_duration"]
@@ -313,8 +321,13 @@ class Printer(QObject):
             )
         if "state" in values.keys():
             self.print_stats_update_signal[str, str].emit("state", values["state"])
+            self.printing_state = values["state"]
+            if values["state"] == "standby" or values["state"] == "error": 
+                self.print_file_loaded = False
+                self.printing = False
         if "message" in values.keys():
             self.print_stats_update_signal[str, str].emit("message", values["message"])
+            self.printing_error_message = values["message"]
         if "info" in values.keys():
             self.print_stats_update_signal[str, dict].emit("info", values["info"])
 
