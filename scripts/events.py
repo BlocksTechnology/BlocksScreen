@@ -180,7 +180,7 @@ class ReceivedFileDataEvent(QEvent):
 
     def __init__(self, data, method, params):
         super(ReceivedFileDataEvent, self).__init__(
-            self.file_data_event,
+            self.file_data_event
         )
         self.data = data
         self.method = method
@@ -189,3 +189,25 @@ class ReceivedFileDataEvent(QEvent):
     @staticmethod
     def type() -> QEvent.Type:
         return QEvent.Type(ReceivedFileDataEvent.file_data_event)
+
+
+class PrintStartEvent(QEvent):
+    """PrintStartEvent Event for starting a print job
+
+    Args:
+        QEvent (QEvent): QEvent type argument
+
+    """    
+    print_start_event_type = QEvent.Type(QEvent.registerEventType())
+
+    def __init__(self, data, *args, **kwargs):
+        super(PrintStartEvent, self).__init__(
+            self.print_start_event_type
+        )
+        self.data = data
+        self.args= args
+        self.kwargs = kwargs
+        
+    @staticmethod
+    def type() -> QEvent.Type:
+        return QEvent.Type(PrintStartEvent.print_start_event_type)
