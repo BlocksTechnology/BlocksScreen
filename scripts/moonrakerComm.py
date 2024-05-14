@@ -374,7 +374,7 @@ class MoonAPI(QObject):
     def query_endstops(self):
         return self._ws.send_request(method="printer.query_endstops.status")
 
-    @pyqtSlot(name="")
+    @pyqtSlot(str, name="run_gcode")
     def run_gcode(self, gcode: str):
         if isinstance(gcode, str) is False or gcode is None:
             return False

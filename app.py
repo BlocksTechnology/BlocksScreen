@@ -25,6 +25,7 @@ from resources.system_resources_rc import *
 # * UI
 from qt_ui.Blocks_Screen_Lemos_ui import Ui_MainWindow
 
+
 import logging
 
 # My Logger object
@@ -86,7 +87,7 @@ class MainWindow(QMainWindow):
         self.start_window = ConnectionWindow(self, self.ws)
         self.installEventFilter(self.start_window)
 
-        self.printPanel = PrintTab(self.ui.printTab, self.file_data, self.ws)
+        self.printPanel = PrintTab(self.ui.printTab, self.file_data, self.ws, self.printer)
         self.controlPanel = ControlTab(self.ui.controlTab)
         # @ Signal/Slot connections
         self.app_initialize.connect(slot=self.start_websocket_connection)
@@ -111,10 +112,12 @@ class MainWindow(QMainWindow):
         self.printer_object_list_received_signal.connect(
             self.printer.object_list_received
         )
-        
-        
-        self.printer.extruder_temperature_update_signal.connect(self.extruder_temperature_change)
-        self.printer.heater_bed_temperature_update_signal.connect(self.heater_bed_temperature_change)
+
+        self.printer.extruder_update_signal.connect(self.extruder_temperature_change)
+        self.printer.heater_bed_update_signal.connect(
+            self.heater_bed_temperature_change
+        )
+        # self.printer.idle_timeout_update_signal.connect(self.idle_timeout_update)
 
     @pyqtSlot(name="start_websocket_connection")
     def start_websocket_connection(self):
@@ -220,15 +223,22 @@ class MainWindow(QMainWindow):
             _object_report = _response["params"]
             self.printer_object_report_signal[list].emit(_object_report)
 
-    @pyqtSlot(str, str, float, name="extruder_temperature_update")
+    @pyqtSlot(str, str, float, name="extruder_update")
     def extruder_temperature_change(
         self, extruder_name: str, field: str, new_value: float
-    ):
-        self.ui.nozzle_1_temp.setText(str(new_value))
+    ): 
+        
+        if field == "temperature":
+            # _last_text = self.ui.nozzle_1_temp.text() 
+            # if not -1 < int(_last_text) - int(new_value)  < 1:
+                # self.ui.nozzle_1_temp.setText(f"{str(new_value)} / 0 °C")
+            self.ui.nozzle_1_temp.setText(f"{str(new_value)}")
 
-    @pyqtSlot(str, str, float, name="heater_bed_temperature_update")
+        elif field == "target":
+            # TODO: Replace with a new label to update the target temperature 
+            pass
+    @pyqtSlot(str, str, float, name="heater_bed_update")
     def heater_bed_temperature_change(self, name: str, field: str, new_value: float):
-
         self.ui.hot_bed_temp.setText(str(new_value))
 
 
