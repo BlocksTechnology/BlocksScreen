@@ -4,6 +4,7 @@ from PyQt6.QtWidgets import QApplication, QMainWindow, QSplashScreen
 from PyQt6.QtGui import QDragLeaveEvent, QPixmap
 
 # * System imports
+from scripts import events
 from scripts.moonrakerComm import MoonWebSocket
 from scripts.moonrest import MoonRest
 from scripts.events import *
@@ -87,7 +88,9 @@ class MainWindow(QMainWindow):
         self.start_window = ConnectionWindow(self, self.ws)
         self.installEventFilter(self.start_window)
 
-        self.printPanel = PrintTab(self.ui.printTab, self.file_data, self.ws, self.printer)
+        self.printPanel = PrintTab(
+            self.ui.printTab, self.file_data, self.ws, self.printer
+        )
         self.controlPanel = ControlTab(self.ui.controlTab)
         # @ Signal/Slot connections
         self.app_initialize.connect(slot=self.start_websocket_connection)
@@ -128,7 +131,8 @@ class MainWindow(QMainWindow):
         if event.type() == WebSocketMessageReceivedEvent.type():
             self.messageReceivedEvent(event)
             return True
-
+        if event.type() == KlippyReadyEvent.type():
+            print("Received event ready type ")
         return super().event(event)
 
     def messageReceivedEvent(self, event):
@@ -166,31 +170,28 @@ class MainWindow(QMainWindow):
                 _objects_response_list = [_response["status"], _response["eventtime"]]
                 self.printer_object_report_signal[list].emit(_objects_response_list)
 
-        elif "notify_klippy_ready" in _method:
-            try:
-                kp_ready = KlippyReadyEvent(data="Moonraker reported klippy is ready")
-                QApplication.instance().sendEvent(self, kp_ready)
-            except Exception as e:
-                _logger.debug(f"Unable to send internal klippy ready notification: {e}")
-        elif "notify_klippy_shutdown" in _method:
-            try:
-                kp_shutdown = KlippyShudownEvent(
-                    data="Moonraker reported klippy shutdown"
-                )
-                QApplication.instance().sendEvent(self, kp_shutdown)
-            except:
-                _logger.debug(f"Unable to send internal klippy shutdown signal: {e}")
-        elif "notify_klippy_disconnected" in _method:
-            try:
-                kp_disconnected = KlippyDisconnectedEvent(
-                    data="Websocket reported klippy disconnection"
-                )
-                QApplication.instance().sendEvent(self, kp_disconnected)
-
-            except Exception as e:
+        elif "notify_klippy" in _method:
+            _split = _method.split("_")
+            if len(_split) > 2:
+                _state_upper = _split[2].upper()
+                _state_call = f"{_state_upper}{_split[2][1:]}"
                 _logger.debug(
-                    f"Unable to send internal klippy disconnected signal: {e}"
+                    f"Notify_klippy {_state_call} Received from object subscription."
                 )
+                if hasattr(events, f"Klippy{_state_call}Event"):
+                    _klippy_event_callback = getattr(
+                        events, f"Klippy{_state_call}Event"
+                    )
+                    if callable(_klippy_event_callback):
+                        try:
+                            event = _klippy_event_callback(
+                                data=f"Moonraker reported klippy is {_state_call}"
+                            )
+                            QApplication.instance().sendEvent(self, event)
+                        except Exception as e:
+                            _logger.debug(
+                                f"Unable to send internal klippy {_state_call} notification: {e}"
+                            )
         elif "notify_filelist_changed" in _method:
             self.file_data.request_file_list.emit()
 
@@ -226,17 +227,18 @@ class MainWindow(QMainWindow):
     @pyqtSlot(str, str, float, name="extruder_update")
     def extruder_temperature_change(
         self, extruder_name: str, field: str, new_value: float
-    ): 
-        
+    ):
+
         if field == "temperature":
-            # _last_text = self.ui.nozzle_1_temp.text() 
+            # _last_text = self.ui.nozzle_1_temp.text()
             # if not -1 < int(_last_text) - int(new_value)  < 1:
-                # self.ui.nozzle_1_temp.setText(f"{str(new_value)} / 0 °C")
+            # self.ui.nozzle_1_temp.setText(f"{str(new_value)} / 0 °C")
             self.ui.nozzle_1_temp.setText(f"{str(new_value)}")
 
         elif field == "target":
-            # TODO: Replace with a new label to update the target temperature 
+            # TODO: Replace with a new label to update the target temperature
             pass
+
     @pyqtSlot(str, str, float, name="heater_bed_update")
     def heater_bed_temperature_change(self, name: str, field: str, new_value: float):
         self.ui.hot_bed_temp.setText(str(new_value))

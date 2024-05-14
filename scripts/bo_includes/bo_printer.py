@@ -4,10 +4,14 @@ import sys
 import re
 from PyQt6 import QtCore, QtWidgets
 from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot
+from PyQt6.QtWidgets import QApplication
 import typing
 
 from scripts.moonrakerComm import MoonWebSocket
-
+from scripts.events import *
+from scripts import events
+import logging 
+_logger = logging.getLogger(__name__)
 
 class Printer(QObject):
     # TODO: Handle subscriptions and information received by subscriptions
@@ -58,13 +62,17 @@ class Printer(QObject):
     )
     gcode_macro_update_signal = pyqtSignal(str, dict, name="gcode_macro_update")
 
+    printer_webhooks_updated_signal = pyqtSignal(str, str, name="webhooks_update")
+
     def __init__(self, parent: typing.Optional["QObject"], ws: MoonWebSocket) -> None:
         super(Printer, self).__init__(parent)
         self.main_window = parent
         self.ws = ws
         self.available_objects: dict = {}
 
-        self.printer_state: str = "none"
+        self.printer_state_webhook: str = ""
+        self.printer_message_webhook: str = ""
+
         self._last_eventTime: float = 0.0
         self.printer_objects: dict = {}
 
@@ -133,6 +141,28 @@ class Printer(QObject):
         return False
 
     #####*## Callbacks for the objects ##*#####
+    def webhooks_object_updated(self, value: dict, name: str = "") -> None:
+        """webhooks_object_updated Sends an event type according to the state received from w
+                webhooks subcribed object 
+
+        Args:
+            value (dict): _description_
+            name (str, optional): _description_. Defaults to "".
+        """
+        if "state" in value.keys() and "state_message" in value.keys():
+            _logger.debug("Webhooks message received")
+            _state: str = value["state"]
+            _state_upper = _state[0].upper()
+            _state_call = f"{_state_upper}{_state[1:]}"
+            if hasattr(events, f"Klippy{_state_call}Event"): 
+                _event_callback = getattr(events, f"Klippy{_state_call}Event")
+                if callable(_event_callback):
+                    try:
+                        event = _event_callback(value["state"], value["state_message"])
+                        QApplication.instance().sendEvent(self.main_window, event)
+                    except Exception as e : 
+                        _logger.debug(f"Unable to send internal Klippy {_state_call} notification : {e}")            
+                        
     def gcode_move_object_updated(self, value: dict, name: str = "") -> None:
         if "speed_factor" in value.keys():
             self.gcode_move_update_signal[str, float].emit(
