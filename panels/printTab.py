@@ -29,6 +29,7 @@ from scripts.bo_includes.bo_files import *
 from scripts.bo_includes.bo_printer import *
 import datetime
 
+
 class PrintTab(QStackedWidget):
     request_print_file_signal = pyqtSignal(str, name="start_print")
     request_print_resume_signal = pyqtSignal(name="resume_print")
@@ -66,7 +67,7 @@ class PrintTab(QStackedWidget):
         # @ Signals for QListItems
         self.panel.listWidget.itemClicked.connect(self.fileItemClicked)
         self.panel.listWidget.itemPressed.connect(self.itemPressed)
-        ## Signals for confirm page
+        ## Signals for confirm page.
         self.panel.confirm_no_text_label.clicked.connect(self.back)
         self.panel.confirm_yes_text_label.clicked.connect(self.print_start)
         ## Signals for printing operations
@@ -83,7 +84,7 @@ class PrintTab(QStackedWidget):
         self.printer.print_stats_update_signal.connect(self.print_stats_update)
         self.show()
 
-    # TODO: This is not working 
+    # TODO: This is not working
     @pyqtSlot(str, dict, name="print_stats_update")
     @pyqtSlot(str, float, name="print_stats_update")
     @pyqtSlot(str, str, name="print_stats_update")
@@ -99,26 +100,28 @@ class PrintTab(QStackedWidget):
                 )
 
         elif isinstance(value, float):
-            if "total_duration" in field: 
+            if "total_duration" in field:
                 self.print_total_duration = value
-            elif "print_duration" in field: 
+            elif "print_duration" in field:
                 self.current_print_duration_seconds = value
-                num_min, seconds = divmod(self.current_print_duration_seconds, 60)
-                num_hours, minutes = divmod(num_min, 60)
-                days, hours = divmod(num_hours, 24)
-                
-                _print_time_string = f"{days}Day {hours}H {minutes}min {seconds} s" if days != 0 else f"{hours}H {minutes}min {seconds}s"
-                
+
+                _time = self._estimate_print_time(
+                    int(self.current_print_duration_seconds)
+                )
+
+                _print_time_string = (
+                    f"{_time[0]}Day {_time[1]}H {_time[2]}min {_time[3]} s"
+                    if _time[0] != 0
+                    else f"{_time[1]}H {_time[2]}min {_time[3]}s"
+                )
+
                 self.panel.remaining_time_text_label.setText(_print_time_string)
             elif "filament_used" in field:
                 self.filament_used_mm = value
-            
+
         elif isinstance(value, str):
             if "state" in field:
-                self.printer_state = value    
-            
-
-        
+                self.printer_state = value
 
     @pyqtSlot(str, float, name="virtual_sdcard_update")
     @pyqtSlot(str, bool, name="virtual_sdcard_update")
@@ -126,8 +129,10 @@ class PrintTab(QStackedWidget):
         if isinstance(value, bool):
             self.sdcard_read = value
         elif isinstance(value, float):
-            self.print_progress = value
-            self.panel.printing_progress_bar.setValue(int(self.print_progress * 100))
+            if "progress" == field:
+                self.print_progress = value
+                self.panel.printing_progress_bar.setValue(int(self.print_progress * 100))
+                self.panel.progress_text_label.setText(f"{self.print_progress * 100:.0f}")
 
     @pyqtSlot(name="pause_resume_print")
     def pause_resume_print(self):
@@ -161,6 +166,7 @@ class PrintTab(QStackedWidget):
         self.setCurrentIndex(3)
         # * Display the current printing file
         self.panel.file_printing_text_label.setText(self._current_file_name)
+        self.panel.printing_progress_bar.reset()
 
     def back(self) -> None:
         """back Returns to the previous panel of the QStackedWidget"""
@@ -196,8 +202,7 @@ class PrintTab(QStackedWidget):
 
             index += 1
 
-    @pyqtSlot(str)
-    @pyqtSlot(name="print_state")
+    @pyqtSlot(str, name="print_state")
     def print_state(self, state: str):
         """print_state -> Slot for received signal about the current printing state of the machine
 
@@ -223,8 +228,7 @@ class PrintTab(QStackedWidget):
         elif "canceled" in state:
             pass
 
-    @pyqtSlot(int)
-    @pyqtSlot(name="currentChanged")
+    @pyqtSlot(int, name="currentChanged")
     def view_changed(self, window_index: int) -> None:
         """view_changed -> Slot for the current displayed panel
 
@@ -238,8 +242,7 @@ class PrintTab(QStackedWidget):
             # * On files panel
             self.add_file_entries()
 
-    @pyqtSlot(QListWidgetItem)
-    @pyqtSlot(name="file_item_clicked")
+    @pyqtSlot(QListWidgetItem, name="file_item_clicked")
     def fileItemClicked(self, item: QListWidgetItem) -> None:
         """fileItemClicked-> Slot for List Item clicked
 
@@ -247,13 +250,13 @@ class PrintTab(QStackedWidget):
             item (QListWidgetItem): Clicked item
         """
         # * Get the filename from the list item pressed
-        _current_item = self.panel.listWidget.itemWidget(item)
-        self._current_file_name = _current_item.findChild(QtWidgets.QLabel).text()
-        self.panel.confirm_file_name_text_label.setText(self._current_file_name)
-        self.setCurrentIndex(2)
+        _current_item: QWidget | None = self.panel.listWidget.itemWidget(item)
+        if not _current_item is None:
+            self._current_file_name = _current_item.findChild(QtWidgets.QLabel).text()
+            self.panel.confirm_file_name_text_label.setText(self._current_file_name)
+            self.setCurrentIndex(2)
 
-    @pyqtSlot(QListWidgetItem)
-    @pyqtSlot(name="list_item_pressed")
+    @pyqtSlot(QListWidgetItem, name="list_item_pressed")
     def itemPressed(self, item):
         pass
 
@@ -268,7 +271,6 @@ class PrintTab(QStackedWidget):
         """
         if self.background is None:
             return
-
         if self.panel.file_area.isVisible():
             painter = QtGui.QPainter()
             painter.begin(self)
@@ -278,9 +280,7 @@ class PrintTab(QStackedWidget):
             painter.setRenderHint(painter.RenderHint.Antialiasing, True)
             painter.setRenderHint(painter.RenderHint.SmoothPixmapTransform, True)
             painter.setRenderHint(painter.RenderHint.LosslessImageRendering, True)
-
             list_area_rect = self.panel.file_area.geometry()
-
             # * Scale the pixmap to the correct Dimensions
             # TODO: Background is not really in SVG mode
             _scaled_pixmap = self.background.scaled(
@@ -293,8 +293,19 @@ class PrintTab(QStackedWidget):
             painter.end()
 
         if self.panel.confirm_page.isVisible():
+            _item_metadata: dict = self.file_data.files_metadata[
+                self._current_file_name
+            ]
+            if "estimated_time" in _item_metadata.keys():
+                # * Place the estimated time the file takes to print first, updated with print_stats after
+                _time = self._estimate_print_time(_item_metadata["estimated_time"])
+                _print_time_string = (
+                    f"{_time[0]}Day {_time[1]}H {_time[2]}min {_time[3]} s"
+                    if _time[0] != 0
+                    else f"{_time[1]}H {_time[2]}min {_time[3]}s"
+                )
+                self.panel.remaining_time_text_label.setText(_print_time_string)
             # * Paint the thumbnail on the image
-            _item_metadata = self.file_data.files_metadata[self._current_file_name]
             _scene = QtWidgets.QGraphicsScene()
             if "thumbnails" in _item_metadata:
                 _item_thumbnail = _item_metadata["thumbnails"][1]["relative_path"]
@@ -359,6 +370,13 @@ class PrintTab(QStackedWidget):
         if name == "backgroundPixmap":
             self.background = value
         return super().setProperty(name, value)
+
+    def _estimate_print_time(self, seconds: int):
+        num_min, seconds = divmod(seconds, 60)
+        num_hours, minutes = divmod(num_min, 60)
+        days, hours = divmod(num_hours, 24)
+
+        return [days, hours, minutes, seconds]
 
 
 # TODO: Add folder icon to the topbar of the files list
