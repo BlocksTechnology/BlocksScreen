@@ -61,15 +61,10 @@ class Files(QtCore.QObject):
 
     def event(self, a0: QtCore.QEvent) -> bool:
         if a0.type() == ReceivedFileDataEvent.type():
-            self.handle_message_received(a0.method, a0.data, a0.params)
-            # * Handled
-            return True
+            if isinstance(a0, ReceivedFileDataEvent):
+                self.handle_message_received(a0.method, a0.data, a0.params)
+                # * Handled
+                return True
         return super().event(a0)
 
-    # def eventFilter(self, a0: QObject, a1: QtCore.QEvent) -> bool:
-    #     if a1.type() == WebSocketOpenEvent.type():
-    #         print("HERE")
-    #         self.request_file_list.emit()
-
-    #     return super().eventFilter(a0, a1)
     
