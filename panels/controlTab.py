@@ -2,6 +2,7 @@ from collections import deque
 from PyQt6.QtWidgets import QStackedWidget, QWidget
 from functools import partial
 from PyQt6 import QtCore
+from PyQt6.QtCore import pyqtSignal, pyqtSlot
 import typing
 
 from PyQt6.QtCore import (
@@ -12,20 +13,25 @@ from PyQt6.QtCore import (
     QAbstractListModel,
     QAbstractItemModel,
 )
+from scripts.moonrakerComm import MoonWebSocket
+from scripts.bo_includes.bo_printer import Printer
+from functools import partial
 
 from qt_ui.controlStackedWidget_ui import Ui_controlStackedWidget
 
 class ControlTab(QStackedWidget):
-    
     request_back_button_pressed = pyqtSignal(name = "request_back_button_pressed")
     request_change_page = pyqtSignal(int, int, name = "request_change_page")
-    
-    def __init__(self, parent: typing.Optional[QWidget] = ...) -> None:
+    def __init__(self, parent: typing.Optional[QWidget], ws: MoonWebSocket, printer: Printer) -> None:
         super().__init__(parent)
 
         self.panel = Ui_controlStackedWidget()
         self.panel.setupUi(self)
         self.setCurrentIndex(0)
+        self.main_panel = parent
+        self.ws = ws
+        self.printer = printer
+        
         self.show()
     
         self.index_stack = deque(maxlen=4)

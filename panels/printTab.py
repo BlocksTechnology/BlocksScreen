@@ -27,6 +27,8 @@ from qt_ui.printStackedWidget_ui import Ui_printStackedWidget
 import re
 import os
 from scripts.bo_includes.bo_files import *
+from scripts.bo_includes.bo_printer import *
+import datetime
 
 
 class PrintTab(QStackedWidget):
@@ -38,12 +40,17 @@ class PrintTab(QStackedWidget):
     request_change_page = pyqtSignal(int, int, name = "request_change_page")
 
     def __init__(
-        self, parent: typing.Optional["QWidget"], file_data: Files, ws: MoonWebSocket
+        self,
+        parent: typing.Optional["QWidget"],
+        file_data: Files,
+        ws: MoonWebSocket,
+        printer: Printer,
     ) -> None:
         super(PrintTab, self).__init__(parent)
         self.main_panel = parent
         self.file_data: Files = file_data
         self.ws: MoonWebSocket = ws
+        self.printer: Printer = printer
         self.background: QtGui.QPixmap | None = None
         self._internal_print_status: bool = False
         #  virtual sdcard Path
@@ -54,13 +61,14 @@ class PrintTab(QStackedWidget):
         self.panel = Ui_printStackedWidget()
         self.panel.setupUi(self)
         self.setCurrentIndex(0)
+
         self.panel.listWidget.setLayoutDirection(Qt.LayoutDirection.LeftToRight)
         # @ Slot connections
         self.currentChanged.connect(self.view_changed)
         # @ Signals for QListItems
         self.panel.listWidget.itemClicked.connect(self.fileItemClicked)
         self.panel.listWidget.itemPressed.connect(self.itemPressed)
-        ## Signals for confirm page
+        ## Signals for confirm page.
         self.panel.confirm_no_text_label.clicked.connect(self.back)
         self.panel.confirm_yes_text_label.clicked.connect(self.print_start)
         ## Signals for printing operations
@@ -68,7 +76,9 @@ class PrintTab(QStackedWidget):
         self.request_print_stop_signal.connect(self.ws.api.cancel_print)
         self.request_print_resume_signal.connect(self.ws.api.resume_print)
         self.request_print_pause_signal.connect(self.ws.api.pause_print)
-        self.panel.stop_printing_btn.clicked.connect(self.request_print_stop_signal.emit)
+        self.panel.stop_printing_btn.clicked.connect(
+            self.request_print_stop_signal.emit
+        )
         self.panel.pause_printing_btn.clicked.connect(self.pause_resume_print)
         # Connecting buttons in the panel routing tree
         # Main Screen
@@ -76,21 +86,73 @@ class PrintTab(QStackedWidget):
         # File List Screen
         self.panel.back_btn.clicked.connect(partial(self.back_button))
         
+        self.printer.virtual_sdcard_update_signal.connect(self.virtual_sdcard_update)
+        self.printer.print_stats_update_signal.connect(self.print_stats_update)
         self.show()
+
+    # TODO: This is not working
+    @pyqtSlot(str, dict, name="print_stats_update")
+    @pyqtSlot(str, float, name="print_stats_update")
+    @pyqtSlot(str, str, name="print_stats_update")
+    def print_stats_update(self, field: str, value: dict | float | str):
+        if isinstance(value, dict):
+            if "total_layer" in value.keys():
+                self.current_print_file_total_layer = value["total_layer"]
+                self.panel.total_layer.setText(str(self.current_print_file_total_layer))
+            if "current_layer" in value.keys():
+                self.current_print_file_current_layer = value["current_layer"]
+                self.panel.current_layer.setText(
+                    str(self.current_print_file_current_layer)
+                )
+
+        elif isinstance(value, float):
+            if "total_duration" in field:
+                self.print_total_duration = value
+            elif "print_duration" in field:
+                self.current_print_duration_seconds = value
+
+                _time = self._estimate_print_time(
+                    int(self.current_print_duration_seconds)
+                )
+
+                _print_time_string = (
+                    f"{_time[0]}Day {_time[1]}H {_time[2]}min {_time[3]} s"
+                    if _time[0] != 0
+                    else f"{_time[1]}H {_time[2]}min {_time[3]}s"
+                )
+
+                self.panel.remaining_time_text_label.setText(_print_time_string)
+            elif "filament_used" in field:
+                self.filament_used_mm = value
+
+        elif isinstance(value, str):
+            if "state" in field:
+                self.printer_state = value
+
+    @pyqtSlot(str, float, name="virtual_sdcard_update")
+    @pyqtSlot(str, bool, name="virtual_sdcard_update")
+    def virtual_sdcard_update(self, field: str, value: float | bool) -> None:
+        if isinstance(value, bool):
+            self.sdcard_read = value
+        elif isinstance(value, float):
+            if "progress" == field:
+                self.print_progress = value
+                self.panel.printing_progress_bar.setValue(int(self.print_progress * 100))
+                self.panel.progress_text_label.setText(f"{self.print_progress * 100:.0f}")
 
     @pyqtSlot(name="pause_resume_print")
     def pause_resume_print(self):
         """pause_resume_print Handles what signal to emit to the printer when a printing job is ongoing
-        
+
         Can either be:
-        
+
         - A pause is supose to happen -> request a pause
-        
+
         - A resume is suppose to happen -> request a resume
         """
         # TODO: Maybe i have to wait for the websocket to respond if it's really printing
         print(self._internal_print_status)
-        if self._internal_print_status :
+        if self._internal_print_status:
             # * It's printing
             self.request_print_pause_signal.emit()
             self._internal_print_status = False
@@ -110,16 +172,15 @@ class PrintTab(QStackedWidget):
         self.setCurrentIndex(3)
         # * Display the current printing file
         self.panel.file_printing_text_label.setText(self._current_file_name)
+        self.panel.printing_progress_bar.reset()
 
     def back(self) -> None:
-        """back Returns to the previous panel of the QStackedWidget 
-        """
+        """back Returns to the previous panel of the QStackedWidget"""
         _currentIndex = self.currentIndex()
         self.setCurrentIndex(_currentIndex - 1)
 
     def add_file_entries(self) -> None:
-        """add_file_entries -> Inserts the currently available gcode files on the QListWidget 
-        """
+        """add_file_entries -> Inserts the currently available gcode files on the QListWidget"""
         # * Delete table contents
         self.panel.listWidget.clear()
         index = 0
@@ -147,17 +208,16 @@ class PrintTab(QStackedWidget):
 
             index += 1
 
-    @pyqtSlot(str)
-    @pyqtSlot(name="print_state")
-    def print_state(self, state:str):
+    @pyqtSlot(str, name="print_state")
+    def print_state(self, state: str):
         """print_state -> Slot for received signal about the current printing state of the machine
-       
+
         States:
         - Printing
-        
+
         - Paused
-        
-        - Canceled        
+
+        - Canceled
 
         Args:
             state (str): _description_
@@ -167,22 +227,19 @@ class PrintTab(QStackedWidget):
             self._internal_print_status = True
             self.panel.pause_printing_btn.setText("Pause")
 
-            
         elif "paused" in state:
             self._internal_print_status = False
             self.panel.pause_printing_btn.setText("Resume")
-            
+
         elif "canceled" in state:
             pass
-    
-  
-    @pyqtSlot(int)
-    @pyqtSlot(name="currentChanged")
-    def view_changed(self, window_index: int)-> None:
+
+    @pyqtSlot(int, name="currentChanged")
+    def view_changed(self, window_index: int) -> None:
         """view_changed -> Slot for the current displayed panel
 
         Args:
-            window_index (int): Current QStackedWidget index 
+            window_index (int): Current QStackedWidget index
 
         Returns:
             _type_: None
@@ -190,11 +247,8 @@ class PrintTab(QStackedWidget):
         if window_index == 1:
             # * On files panel
             self.add_file_entries()
-            
 
-   
-    @pyqtSlot(QListWidgetItem)
-    @pyqtSlot(name="file_item_clicked")
+    @pyqtSlot(QListWidgetItem, name="file_item_clicked")
     def fileItemClicked(self, item: QListWidgetItem) -> None:
         """fileItemClicked-> Slot for List Item clicked
 
@@ -202,16 +256,15 @@ class PrintTab(QStackedWidget):
             item (QListWidgetItem): Clicked item
         """
         # * Get the filename from the list item pressed
-        _current_item = self.panel.listWidget.itemWidget(item)
-        self._current_file_name = _current_item.findChild(QtWidgets.QLabel).text()
-        self.panel.confirm_file_name_text_label.setText(self._current_file_name)
-        self.setCurrentIndex(2)
+        _current_item: QWidget | None = self.panel.listWidget.itemWidget(item)
+        if not _current_item is None:
+            self._current_file_name = _current_item.findChild(QtWidgets.QLabel).text()
+            self.panel.confirm_file_name_text_label.setText(self._current_file_name)
+            self.setCurrentIndex(2)
 
-    @pyqtSlot(QListWidgetItem)
-    @pyqtSlot(name="list_item_pressed")
+    @pyqtSlot(QListWidgetItem, name="list_item_pressed")
     def itemPressed(self, item):
         pass
-
 
     def paintEvent(self, a0: QPaintEvent) -> None:
         """paintEvent-> Paints UI aspects on the current panel, such as images
@@ -224,7 +277,6 @@ class PrintTab(QStackedWidget):
         """
         if self.background is None:
             return
-
         if self.panel.file_area.isVisible():
             painter = QtGui.QPainter()
             painter.begin(self)
@@ -234,9 +286,7 @@ class PrintTab(QStackedWidget):
             painter.setRenderHint(painter.RenderHint.Antialiasing, True)
             painter.setRenderHint(painter.RenderHint.SmoothPixmapTransform, True)
             painter.setRenderHint(painter.RenderHint.LosslessImageRendering, True)
-
             list_area_rect = self.panel.file_area.geometry()
-
             # * Scale the pixmap to the correct Dimensions
             # TODO: Background is not really in SVG mode
             _scaled_pixmap = self.background.scaled(
@@ -249,8 +299,19 @@ class PrintTab(QStackedWidget):
             painter.end()
 
         if self.panel.confirm_page.isVisible():
+            _item_metadata: dict = self.file_data.files_metadata[
+                self._current_file_name
+            ]
+            if "estimated_time" in _item_metadata.keys():
+                # * Place the estimated time the file takes to print first, updated with print_stats after
+                _time = self._estimate_print_time(_item_metadata["estimated_time"])
+                _print_time_string = (
+                    f"{_time[0]}Day {_time[1]}H {_time[2]}min {_time[3]} s"
+                    if _time[0] != 0
+                    else f"{_time[1]}H {_time[2]}min {_time[3]}s"
+                )
+                self.panel.remaining_time_text_label.setText(_print_time_string)
             # * Paint the thumbnail on the image
-            _item_metadata = self.file_data.files_metadata[self._current_file_name]
             _scene = QtWidgets.QGraphicsScene()
             if "thumbnails" in _item_metadata:
                 _item_thumbnail = _item_metadata["thumbnails"][1]["relative_path"]
@@ -291,26 +352,26 @@ class PrintTab(QStackedWidget):
         return super().paintEvent(a0)
 
     def convert_bytes_to_mb(self, bytes: int | float) -> float:
-        """convert_bytes_to_mb-> Converts byte size to megabyte size 
+        """convert_bytes_to_mb-> Converts byte size to megabyte size
 
         Args:
             bytes (int | float): bytes
 
         Returns:
-            mb: float that represents the number of mb  
+            mb: float that represents the number of mb
         """
         _relation = 2 ** (-20)
         return bytes * _relation
 
     def setProperty(self, name: str, value: typing.Any) -> bool:
-        """setProperty-> Intercept the set property method 
+        """setProperty-> Intercept the set property method
 
         Args:
-            name (str): Name of the dynamic property 
+            name (str): Name of the dynamic property
             value (typing.Any): Value for the dynamic property
 
         Returns:
-            bool: Returns to the super class 
+            bool: Returns to the super class
         """
         if name == "backgroundPixmap":
             self.background = value
@@ -322,6 +383,13 @@ class PrintTab(QStackedWidget):
  
     def back_button(self):
         self.request_back_button_pressed.emit()
+    def _estimate_print_time(self, seconds: int):
+        num_min, seconds = divmod(seconds, 60)
+        num_hours, minutes = divmod(num_min, 60)
+        days, hours = divmod(num_hours, 24)
+
+        return [days, hours, minutes, seconds]
+
 
 # TODO: Add folder icon to the topbar of the files list
 # TODO: Add A icon such as ">" to indicate that when you press the file you get the information and go to the next page

@@ -18,7 +18,7 @@ class Files(QtCore.QObject):
 
     def __init__(
         self,
-        parent: typing.Optional["QObject"] | None,
+        parent: typing.Optional["QObject"],
         ws: MoonWebSocket,
         update_interval: int = 5000,
     ) -> None:
@@ -29,8 +29,6 @@ class Files(QtCore.QObject):
         self.files: list = []
         self.thumbnails: dict = {}
         self.files_metadata: dict = {}
-
-        
         # @ Connect signals
         self.request_file_list.connect(slot=self.ws.api.get_file_list)
         self.request_file_metadata.connect(slot=self.ws.api.get_gcode_metadata)
@@ -63,14 +61,10 @@ class Files(QtCore.QObject):
 
     def event(self, a0: QtCore.QEvent) -> bool:
         if a0.type() == ReceivedFileDataEvent.type():
-            self.handle_message_received(a0.method, a0.data, a0.params)
-            # * Handled
-            return True
+            if isinstance(a0, ReceivedFileDataEvent):
+                self.handle_message_received(a0.method, a0.data, a0.params)
+                # * Handled
+                return True
         return super().event(a0)
 
-    # def eventFilter(self, a0: QObject, a1: QtCore.QEvent) -> bool:
-    #     if a1.type() == WebSocketOpenEvent.type():
-    #         print("HERE")
-    #         self.request_file_list.emit()
-
-    #     return super().eventFilter(a0, a1)
+    
