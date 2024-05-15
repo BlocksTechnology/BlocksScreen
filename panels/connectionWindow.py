@@ -53,13 +53,11 @@ class ConnectionWindow(QFrame):
         self.text_update()
         return False
 
-    @pyqtSlot(bool)
-    @pyqtSlot(name="klippy_connection")
+    @pyqtSlot(bool, name="klippy_connection")
     def klippy_connection(self, state: bool):
         pass
 
-    @pyqtSlot(str)
-    @pyqtSlot(name="klippy_state")
+    @pyqtSlot(str, name="klippy_state")
     def klippy_state(self, state: str):
         if state == "error":
             if not self.isVisible():
@@ -71,9 +69,8 @@ class ConnectionWindow(QFrame):
         elif state == "ready":
             self.close()
 
-    @pyqtSlot(int)
-    @pyqtSlot(str)
-    @pyqtSlot(name="websocket_connecting")
+    @pyqtSlot(int, name="websocket_connecting")
+    @pyqtSlot(str, name="websocket_connecting")
     def websocket_connecting(self, attempt: int):
         print(attempt)
         self.text_update(attempt)
