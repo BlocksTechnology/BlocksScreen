@@ -30,16 +30,8 @@ from resources.system_resources_rc import *
 # * UI
 from qt_ui.Blocks_Screen_Lemos_ui import Ui_MainWindow
 
-
 import logging
 
-# My Logger object
-# logging.basicConfig(
-#     format="'%(asctime)s - %(name)s - %(threadName)s - %(levelname)s - %(message)s",
-#     filename=r"E:\gitHub\Blocks_Screen\logFile1.log",
-#     encoding="utf-8",
-#     level=logging.DEBUG,
-# )
 _logger = logging.getLogger(__name__)
 """
     QSplashScreen
@@ -85,14 +77,16 @@ class MainWindow(QMainWindow):
 
         # @ Structures
         self.file_data = Files(parent=self, ws=self.ws)
-        self.index_stack = deque(maxlen=4)        
-        self.printer = Printer(parent=self,ws= self.ws)
+        self.index_stack = deque(maxlen=4)
+        self.printer = Printer(parent=self, ws=self.ws)
         # @ Panels
         self.start_window = ConnectionWindow(self, self.ws)
         self.installEventFilter(self.start_window)
-        self.printPanel = PrintTab(self.ui.printTab, self.file_data, self.ws, self.printer)
+        self.printPanel = PrintTab(
+            self.ui.printTab, self.file_data, self.ws, self.printer
+        )
         self.filamentPanel = FilamentTab(self.ui.filamentTab)
-        self.controlPanel= ControlTab(self.ui.controlTab, self.ws, self.printer)
+        self.controlPanel = ControlTab(self.ui.controlTab, self.ws, self.printer)
         self.utilitiesPanel = UtilitiesTab(self.ui.utilitiesTab)
         # @ Slot connections
         self.app_initialize.connect(slot=self.start_websocket_connection)
@@ -104,13 +98,21 @@ class MainWindow(QMainWindow):
         self.ws.connection_lost.connect(
             slot=self.start_window.websocket_connection_lost
         )
-        self.printPanel.request_back_button_pressed.connect(slot=self.global_back_button_pressed)
+        self.printPanel.request_back_button_pressed.connect(
+            slot=self.global_back_button_pressed
+        )
         self.printPanel.request_change_page.connect(slot=self.global_change_page)
-        self.filamentPanel.request_back_button_pressed.connect(slot=self.global_back_button_pressed)
+        self.filamentPanel.request_back_button_pressed.connect(
+            slot=self.global_back_button_pressed
+        )
         self.filamentPanel.request_change_page.connect(slot=self.global_change_page)
-        self.controlPanel.request_back_button_pressed.connect(slot=self.global_back_button_pressed)
-        self.controlPanel.request_change_page.connect(slot=self.global_change_page) 
-        self.utilitiesPanel.request_back_button_pressed.connect(slot=self.global_back_button_pressed)
+        self.controlPanel.request_back_button_pressed.connect(
+            slot=self.global_back_button_pressed
+        )
+        self.controlPanel.request_change_page.connect(slot=self.global_change_page)
+        self.utilitiesPanel.request_back_button_pressed.connect(
+            slot=self.global_back_button_pressed
+        )
         self.utilitiesPanel.request_change_page.connect(slot=self.global_change_page)
         # All the buttons on the top bar that send the user to the Temperature page
         self.ui.nozzle_1_temp.clicked.connect(partial(self.global_change_page, 2, 4))
@@ -128,7 +130,7 @@ class MainWindow(QMainWindow):
             slot=self.mc.restart_klipper_service
         )
         self.start_window.reboot_clicked.connect(slot=self.mc.machine_restart)
-        
+
         # If the user changes tab, the indexes of all stacked widgets reset
         self.ui.mainTabWidget.currentChanged.connect(slot=self.reset_tab_indexes)
         self.printer_object_report_signal.connect(self.printer.report_received)
@@ -147,8 +149,8 @@ class MainWindow(QMainWindow):
         self.filamentPanel.setCurrentIndex(0)
         self.controlPanel.setCurrentIndex(0)
         self.utilitiesPanel.setCurrentIndex(0)
-    
-    # Helper function to get the index of the current page in the current tab  
+
+    # Helper function to get the index of the current page in the current tab
     def current_panel_index(self):
         match self.ui.mainTabWidget.currentIndex():
             case 0:
@@ -160,7 +162,7 @@ class MainWindow(QMainWindow):
             case 3:
                 return self.utilitiesPanel.currentIndex()
 
-    # Helper function to set the index of the current page in the current tab  
+    # Helper function to set the index of the current page in the current tab
     def set_current_panel_index(self, panel_index):
         match self.ui.mainTabWidget.currentIndex():
             case 0:
@@ -174,30 +176,33 @@ class MainWindow(QMainWindow):
 
     @pyqtSlot(int, int, name="request_change_page")
     def global_change_page(self, tab_index, panel_index):
-        current_page = [self.ui.mainTabWidget.currentIndex(), self.current_panel_index()]
+        current_page = [
+            self.ui.mainTabWidget.currentIndex(),
+            self.current_panel_index(),
+        ]
         requested_page = [tab_index, panel_index]
-        
         # Return if user is already on the requested page
-        if (requested_page == current_page):
+        if requested_page == current_page:
             return
-        
         # Add to the stack of indexes the indexes of current tab and page in tab to later be able to come back to them
         self.index_stack.append(current_page)
         # Go to the requested tab and page
         self.ui.mainTabWidget.setCurrentIndex(tab_index)
         self.set_current_panel_index(panel_index)
-        # print("Requesting Tab ", tab_index, " and page index: ", panel_index)   
-                
+        # print("Requesting Tab ", tab_index, " and page index: ", panel_index)
+
     @pyqtSlot(name="request_back_button_pressed")
     def global_back_button_pressed(self):
         # Just a safety measure to avoid accessing an inexistant position of the index_stack
-        if (not len(self.index_stack)):
+        if not len(self.index_stack):
             return
         # From the last position of the stack use the first value of its tuple, tab index
-        self.ui.mainTabWidget.setCurrentIndex(self.index_stack[-1][0])                 
-        self.set_current_panel_index(self.index_stack[-1][1])  # From the same position, use the tab and stacked widget page indexes
-        #print(self.index_stack)                                                         
-        self.index_stack.pop() # Remove the last position.
+        self.ui.mainTabWidget.setCurrentIndex(self.index_stack[-1][0])
+        self.set_current_panel_index(
+            self.index_stack[-1][1]
+        )  # From the same position, use the tab and stacked widget page indexes
+        # print(self.index_stack)
+        self.index_stack.pop()  # Remove the last position.
 
         self.printer_object_report_signal.connect(self.printer.report_received)
         self.printer_object_list_received_signal.connect(
@@ -226,6 +231,7 @@ class MainWindow(QMainWindow):
         return super().event(event)
 
     def messageReceivedEvent(self, event: WebSocketMessageReceivedEvent):
+        
         _response: dict = event.packet
         _method = event.method
         _params = event.params if event.params is not None else None
@@ -313,7 +319,6 @@ class MainWindow(QMainWindow):
             # * Handle object subscriptions messages
             _object_report = _response["params"]
             self.printer_object_report_signal[list].emit(_object_report)
-
 
     @pyqtSlot(str, str, float, name="extruder_update")
     def extruder_temperature_change(
