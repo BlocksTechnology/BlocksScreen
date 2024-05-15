@@ -50,7 +50,7 @@ class MoonWebSocket(QObject, threading.Thread):
     # @ Signals
     message_signal = pyqtSignal()
 
-    connecting_signal = pyqtSignal((int,), (str,), name="websocket_connecting")
+    connecting_signal = pyqtSignal([int], [str], name="websocket_connecting")
     connected_signal = pyqtSignal(name="websocket-connected")
     connection_lost = pyqtSignal([str], name="websocket-connection-lost")
     klippy_connected_signal = pyqtSignal(bool, name="klippy_connection_status")
@@ -354,8 +354,7 @@ class MoonAPI(QObject):
     def get_available_objects(self):
         return self._ws.send_request(method="printer.objects.list")
 
-    @pyqtSlot(dict)
-    @pyqtSlot(name="query_object")
+    @pyqtSlot(dict,name="query_object")
     def object_query(self, objects: dict):
         # TODO: Finish
         # Check if the types are correct
@@ -363,8 +362,7 @@ class MoonAPI(QObject):
             method="printer.objects.query", params={"objects": objects}
         )
 
-    @pyqtSlot(dict)
-    @pyqtSlot(name="object_subscription")
+    @pyqtSlot(dict, name="object_subscription")
     def object_subscription(self, objects: dict):
         # TODO: finishi this
         return self._ws.send_request(
@@ -385,8 +383,7 @@ class MoonAPI(QObject):
     def gcode_help(self):
         return self._ws.send_request(method="printer.gcode.help")
 
-    @pyqtSlot(str)
-    @pyqtSlot(name="start_print")
+    @pyqtSlot(str, name="start_print")
     def start_print(self, filename):
         return self._ws.send_request(
             method="printer.print.start", params={"filename": filename}
@@ -467,8 +464,7 @@ class MoonAPI(QObject):
     def list_registered_roots(self):
         return self._ws.send_request(method="server.files.roots")
 
-    @pyqtSlot(str)
-    @pyqtSlot(name="api_request_file_list")
+    @pyqtSlot(str, name="api_request_file_list")
     def get_gcode_metadata(self, filename_dir: str):
         if isinstance(filename_dir, str) is False or filename_dir is None:
             return False
