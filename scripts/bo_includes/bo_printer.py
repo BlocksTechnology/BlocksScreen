@@ -10,8 +10,10 @@ import typing
 from scripts.moonrakerComm import MoonWebSocket
 from scripts.events import *
 from scripts import events
-import logging 
+import logging
+
 _logger = logging.getLogger(__name__)
+
 
 class Printer(QObject):
     # TODO: Handle subscriptions and information received by subscriptions
@@ -68,18 +70,22 @@ class Printer(QObject):
         super(Printer, self).__init__(parent)
         self.main_window = parent
         self.ws = ws
-        
+
         self.available_objects: dict = {}
+        self.active_extruder_name: str = ""
         self.printer_state_webhook: str = ""
         self.printer_message_webhook: str = ""
         self._last_eventTime: float = 0.0
         self.printer_objects: dict = {}
-        
-        self.printing : bool = False 
+
+        self.printing: bool = False
         self.print_file_loaded: bool = False
-        self.printing_state : str = ""
-        self.printing_error_message: str|None = None        
+        self.printing_state: str = ""
+        self.printing_error_message: str | None = None
         self.printer_busy: bool = False
+        self.current_loaded_file: str = ""
+        self.current_loaded_file_metadata: str = ""
+
         # @ Signal/Slot Connections
         self.ws.klippy_state_signal.connect(self.klippy_ready_report)
         self.request_available_objects_signal.connect(self.ws.api.get_available_objects)
@@ -146,8 +152,8 @@ class Printer(QObject):
 
     #####*## Callbacks for the objects ##*#####
     def webhooks_object_updated(self, value: dict, name: str = "") -> None:
-        """webhooks_object_updated Sends an event type according to the state received from w
-                webhooks subcribed object 
+        """webhooks_object_updated Sends an event type according to the state received from
+                webhooks subscribed object
 
         Args:
             value (dict): _description_
@@ -158,15 +164,17 @@ class Printer(QObject):
             _state: str = value["state"]
             _state_upper = _state[0].upper()
             _state_call = f"{_state_upper}{_state[1:]}"
-            if hasattr(events, f"Klippy{_state_call}Event"): 
+            if hasattr(events, f"Klippy{_state_call}Event"):
                 _event_callback = getattr(events, f"Klippy{_state_call}Event")
                 if callable(_event_callback):
                     try:
                         event = _event_callback(value["state"], value["state_message"])
                         QApplication.instance().sendEvent(self.main_window, event)
-                    except Exception as e : 
-                        _logger.debug(f"Unable to send internal Klippy {_state_call} notification : {e}")            
-                        
+                    except Exception as e:
+                        _logger.debug(
+                            f"Unable to send internal Klippy {_state_call} notification : {e}"
+                        )
+
     def gcode_move_object_updated(self, value: dict, name: str = "") -> None:
         if "speed_factor" in value.keys():
             self.gcode_move_update_signal[str, float].emit(
@@ -202,18 +210,17 @@ class Printer(QObject):
             self.toolhead_update_signal[str, str].emit(
                 "homed_axes", values["homed_axes"]
             )
-
         if "print_time" in values.keys():
             self.toolhead_update_signal[str, float].emit(
                 "print_time", values["print_time"]
             )
-
         if "estimated_print_time" in values.keys():
             self.toolhead_update_signal[str, float].emit(
                 "estimated_print_time", values["estimated_print_time"]
             )
         if "extruder" in values.keys():
             self.toolhead_update_signal[str, str].emit("extruder", values["extruder"])
+            self.active_extruder_name = values["extruder"]
         if "position" in values.keys():
             self.toolhead_update_signal[str, list].emit("position", values["position"])
         if "max_velocity" in values.keys():
@@ -279,9 +286,9 @@ class Printer(QObject):
     def idle_timeout_object_updated(self, value: dict, name: str = "") -> None:
         if "state" in value.keys():
             self.idle_timeout_update_signal[str, str].emit("state", value["state"])
-            if "printing" in value["state"]: 
+            if "printing" in value["state"]:
                 self.printer_busy = True
-                
+
         if "printing_time" in value.keys():
             self.idle_timeout_update_signal[str, float].emit(
                 "printing_time", value["printing_time"]
@@ -322,7 +329,7 @@ class Printer(QObject):
         if "state" in values.keys():
             self.print_stats_update_signal[str, str].emit("state", values["state"])
             self.printing_state = values["state"]
-            if values["state"] == "standby" or values["state"] == "error": 
+            if values["state"] == "standby" or values["state"] == "error":
                 self.print_file_loaded = False
                 self.printing = False
         if "message" in values.keys():
@@ -391,23 +398,30 @@ class Printer(QObject):
                 output_pin_name, "value", values["value"]
             )
 
-    # def bed_mesh_object_updated(self, values: dict) -> None:
-    #     bed_mesh_names = [
-    #         "profile_name",
-    #         "mesh_min",
-    #         "mesh_max",
-    #         "probed_matrix",
-    #         "mesh_matrix",
-    #     ]
-    #     if bed_mesh_names in values.keys():
-    #         self.bed_mesh_update_signal.emit(
-    #             values["profile_name"],
-    #             values["mesh_min"],
-    #             values["mesh_max"],
-    #             values["probed_matrix"],
-    #             values["mesh_matrix"],
-    #         )
+    def bed_mesh_object_updated(self, values: dict, name: str) -> None:
+        # * Handle the bed mesh received from the printer here
+        pass
+        bed_mesh_names = [
+            "profile_name",
+            "mesh_min",
+            "mesh_max",
+            "probed_matrix",
+            "mesh_matrix",
+        ]
+        if bed_mesh_names in values.keys():
+            self.bed_mesh_update_signal.emit(
+                values["profile_name"],
+                values["mesh_min"],
+                values["mesh_max"],
+                values["probed_matrix"],
+                values["mesh_matrix"],
+            )
 
     def gcode_macro_object_updated(self, values: dict, gcode_macro_name: str) -> None:
         # * values argument can come with many different types for this macro so handle them in another place
         self.gcode_macro_update_signal.emit(gcode_macro_name, values)
+        pass
+
+    def configfile_object_updated(self, values: dict, name: str) -> None:
+        # * Handle the printer config file here
+        pass
