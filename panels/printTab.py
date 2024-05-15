@@ -1,3 +1,4 @@
+from functools import partial
 from PyQt6 import QtWidgets
 from PyQt6.QtGui import QPaintEvent
 from PyQt6.QtWidgets import (
@@ -35,6 +36,8 @@ class PrintTab(QStackedWidget):
     request_print_resume_signal = pyqtSignal(name="resume_print")
     request_print_stop_signal = pyqtSignal(name="stop_print")
     request_print_pause_signal = pyqtSignal(name="pause_print")
+    request_back_button_pressed = pyqtSignal(name = "request_back_button_pressed")
+    request_change_page = pyqtSignal(int, int, name = "request_change_page")
 
     def __init__(
         self,
@@ -61,8 +64,6 @@ class PrintTab(QStackedWidget):
 
         self.panel.listWidget.setLayoutDirection(Qt.LayoutDirection.LeftToRight)
         # @ Slot connections
-        self.panel.main_print_btn.clicked.connect(self.showFilesPanel)
-        self.panel.back_btn.clicked.connect(self.back)
         self.currentChanged.connect(self.view_changed)
         # @ Signals for QListItems
         self.panel.listWidget.itemClicked.connect(self.fileItemClicked)
@@ -79,7 +80,12 @@ class PrintTab(QStackedWidget):
             self.request_print_stop_signal.emit
         )
         self.panel.pause_printing_btn.clicked.connect(self.pause_resume_print)
-
+        # Connecting buttons in the panel routing tree
+        # Main Screen
+        self.panel.main_print_btn.clicked.connect(partial(self.change_page, 1))
+        # File List Screen
+        self.panel.back_btn.clicked.connect(partial(self.back_button))
+        
         self.printer.virtual_sdcard_update_signal.connect(self.virtual_sdcard_update)
         self.printer.print_stats_update_signal.connect(self.print_stats_update)
         self.show()
@@ -371,6 +377,12 @@ class PrintTab(QStackedWidget):
             self.background = value
         return super().setProperty(name, value)
 
+    def change_page(self, index):
+        # Emits with the request its tab index and its page index
+        self.request_change_page.emit(0, index)
+ 
+    def back_button(self):
+        self.request_back_button_pressed.emit()
     def _estimate_print_time(self, seconds: int):
         num_min, seconds = divmod(seconds, 60)
         num_hours, minutes = divmod(num_min, 60)

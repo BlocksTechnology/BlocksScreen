@@ -379,7 +379,6 @@ color: #ffffff;
       </property>
       <property name="font">
        <font>
-        <weight>75</weight>
         <bold>true</bold>
        </font>
       </property>
@@ -957,8 +956,8 @@ background-color: transparent;
     </property>
     <property name="font">
      <font>
-      <family>MS Gothic</family>
-      <pointsize>7</pointsize>
+      <family>Momcake</family>
+      <pointsize>20</pointsize>
       <italic>false</italic>
       <stylestrategy>PreferAntialias</stylestrategy>
      </font>
