@@ -63,7 +63,6 @@ class MainWindow(QMainWindow):
     # @ Signals
     app_initialize = pyqtSignal(name="app-start-websocket-connection")
     printer_state_signal = pyqtSignal(str, name="printer_state")
-
     printer_object_list_received_signal = pyqtSignal(list, name="object_list_received")
     printer_object_report_signal = pyqtSignal(list, name="object_report_received")
 
@@ -87,11 +86,11 @@ class MainWindow(QMainWindow):
         # @ Panels
         self.start_window = ConnectionWindow(self, self.ws)
         self.installEventFilter(self.start_window)
-
+        
         self.printPanel = PrintTab(
             self.ui.printTab, self.file_data, self.ws, self.printer
         )
-        self.controlPanel = ControlTab(self.ui.controlTab)
+        self.controlPanel = ControlTab(self.ui.controlTab, self.ws, self.printer)
         # @ Signal/Slot connections
         self.app_initialize.connect(slot=self.start_websocket_connection)
 
@@ -129,13 +128,15 @@ class MainWindow(QMainWindow):
 
     def event(self, event: QEvent) -> bool:
         if event.type() == WebSocketMessageReceivedEvent.type():
-            self.messageReceivedEvent(event)
-            return True
-        if event.type() == KlippyReadyEvent.type():
-            print("Received event ready type ")
+            if isinstance(event, WebSocketMessageReceivedEvent):
+                self.messageReceivedEvent(event)
+                return True
+            return False
+        # if event.type() == KlippyReadyEvent.type():
+        #     print("Received event ready type ")
         return super().event(event)
 
-    def messageReceivedEvent(self, event):
+    def messageReceivedEvent(self, event: WebSocketMessageReceivedEvent):
         _response: dict = event.packet
         _method = event.method
         _params = event.params if event.params is not None else None
@@ -228,7 +229,6 @@ class MainWindow(QMainWindow):
     def extruder_temperature_change(
         self, extruder_name: str, field: str, new_value: float
     ):
-
         if field == "temperature":
             # _last_text = self.ui.nozzle_1_temp.text()
             # if not -1 < int(_last_text) - int(new_value)  < 1:
