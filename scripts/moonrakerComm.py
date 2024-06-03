@@ -26,7 +26,7 @@ from scripts.moonrest import MoonRest
 
 # My Logger object
 logging.basicConfig(
-    format="'%(asctime)s - %(name)s - %(threadName)s - %(levelname)s - %(message)s",
+    format="'%(asctime)s - %(name)s - %(relativeCreated)6d / %(threadName)s  - %(levelname)s - %(message)s",
     filename=r"E:\gitHub\Blocks_Screen\logFile.log",
     encoding="utf-8",
     level=logging.DEBUG,
@@ -114,9 +114,13 @@ class MoonWebSocket(QObject, threading.Thread):
             self.connecting = False
             try:
                 # QCoreApplication.sendEvent(self._main_window, unable_to_connect_event)
-                QApplication.instance().sendEvent(
-                    self._main_window, unable_to_connect_event
-                )
+                instance = QApplication.instance()
+                if instance is not None:
+                    instance.sendEvent(
+                        self._main_window, unable_to_connect_event
+                    )
+                else: 
+                    raise Exception("QApplication.instance is None type")
             except Exception as e:
                 _logger.error(
                     f"Error sending Event {unable_to_connect_event.__class__.__name__}"
@@ -145,9 +149,10 @@ class MoonWebSocket(QObject, threading.Thread):
         except Exception as e:
             _logger.debug("Unable to get oneshot token")
             return False
-        self.ws = websocket.WebSocketApp(
             # f"ws://localhost:7125/websocket?token={_oneshot_token}",
-            f"ws://192.168.1.202:7125/websocket?token={_oneshot_token}",
+        _url = f"ws://192.168.1.202:7125/websocket?token={_oneshot_token}"
+        self.ws = websocket.WebSocketApp(
+            _url,
             on_open=self.on_open,
             on_close=self.on_close,
             on_error=self.on_error,
@@ -197,7 +202,11 @@ class MoonWebSocket(QObject, threading.Thread):
             data="Disconnected", args=[_close_status_code, _close_message]
         )
         try:
-            QApplication.instance().sendEvent(self._main_window, close_event)
+            instance = QApplication.instance()
+            if instance is not None:
+                instance.sendEvent(self._main_window, close_event)
+            else: 
+                raise Exception("QApplication.instance is None type")
         except Exception as e:
             _logger.debug(
                 f"Unable to send close_event websocket event on disconnection: {e}"
@@ -220,9 +229,13 @@ class MoonWebSocket(QObject, threading.Thread):
         try:
             # QCoreApplication.instance().sendEvent(
             # TODO: the location to send the event changed from self._main_window.start_window to just self._main_window
-            QApplication.instance().sendEvent(self._main_window, open_event)
+            instance = QApplication.instance()
+            if instance is not None:
+                instance.sendEvent(self._main_window, open_event)
+            else:
+                raise Exception("QApplication.instance is None type.")
         except Exception as e:
-            _logger.error(f"Error posting event: {e}")
+            _logger.error(f"On Open - Error posting event: {e}")
 
         self.connected_signal.emit()
         self._retry_timer.stopTimer()
@@ -250,12 +263,20 @@ class MoonWebSocket(QObject, threading.Thread):
                 return
 
             else:
-                message_event = WebSocketMessageReceivedEvent(
-                    data="websocket message",
-                    packet=response["result"],
-                    method=_entry[0],
-                    params=_entry[1],
-                )
+                if "error" in response:
+                    message_event = WebSocketMessageReceivedEvent(
+                        data="websocket message error", 
+                        packet=response["error"]["message"], 
+                        method="error", 
+                        params= None
+                    )
+                else:
+                    message_event = WebSocketMessageReceivedEvent(
+                        data="websocket message",
+                        packet=response["result"],
+                        method=_entry[0],
+                        params=_entry[1],
+                    )
 
         elif "method" in response:
             # This is a message received without a request, but it has a method parameter in there
@@ -265,11 +286,16 @@ class MoonWebSocket(QObject, threading.Thread):
                 method=response["method"],
                 params=None,
             )
+        
         try:
-            QApplication.instance().sendEvent(self._main_window, message_event)
-            # QApplication.instance().sendEvent(self._main_window, message_event)
+            instance = QApplication.instance()
+            if instance is not None:
+                instance.sendEvent(self._main_window, message_event)
+            else: 
+                raise Exception("QApplication.instance is None type")
         except Exception as e:
-            _logger.error(f"Error posting event: {e}")
+            _logger.error(f"On Message- Error posting event: {e}")
+        
 
     def send_request(self, method: str, params: dict = {}):
         if not self.connected:
@@ -349,7 +375,10 @@ class MoonAPI(QObject):
             method="server.temperature_store",
             params={"include_monitors": include_monitors},
         )
-
+    @pyqtSlot(name="query_printer_info")
+    def request_printer_info(self):
+        return self._ws.send_request(method="printer.info")
+        
     @pyqtSlot(name="get_available_objects")
     def get_available_objects(self):
         return self._ws.send_request(method="printer.objects.list")
