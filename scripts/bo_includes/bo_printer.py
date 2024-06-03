@@ -30,6 +30,7 @@ class Printer(QObject):
     fan_update_signal = pyqtSignal(
         [str, str, float], [str, str, int], name="fan_update"
     )
+    chamber_update_signal = pyqtSignal()
 
     # idle_timeout_update_signal = pyqtSignal(str,[float], [str], name="idle_timeout_update")
     idle_timeout_update_signal = pyqtSignal(
@@ -66,6 +67,9 @@ class Printer(QObject):
 
     printer_webhooks_updated_signal = pyqtSignal(str, str, name="webhooks_update")
 
+    
+    query_printer_object = pyqtSignal(dict, name="query_object")
+
     def __init__(self, parent: typing.Optional["QObject"], ws: MoonWebSocket) -> None:
         super(Printer, self).__init__(parent)
         self.main_window = parent
@@ -86,15 +90,27 @@ class Printer(QObject):
         self.current_loaded_file: str = ""
         self.current_loaded_file_metadata: str = ""
 
+        self.has_chamber : bool = False
+        
         # @ Signal/Slot Connections
         self.ws.klippy_state_signal.connect(self.klippy_ready_report)
+        
         self.request_available_objects_signal.connect(self.ws.api.get_available_objects)
         self.request_object_subscription_signal.connect(self.ws.api.object_subscription)
+        self.query_printer_object.connect(self.ws.api.object_query)    
 
     @pyqtSlot(str, name="klippy_ready_report")
     def klippy_ready_report(self, state: str):
         if state == "ready":
             self.request_available_objects_signal.emit()
+            
+            # * Query some objects to determine the printer state 
+            _query_request: dict = {
+                "idle_timeout": None, 
+                "print_stats": None,
+                "virtual_sdcard": None
+            }    
+            self.query_printer_object.emit(_query_request)
 
     @pyqtSlot(list, name="object_list_received")
     def object_list_received(self, object_list: list):
@@ -105,7 +121,7 @@ class Printer(QObject):
         # _object_list: list = list(self.printer_objects.keys())
         _find = list(filter(_extruder_regex.match, object_list))
         self.extruder_number = len(_find)
-        print(object_list)
+        # print(object_list)
 
     @pyqtSlot(list, name="object_report_received")
     def report_received(self, report: list) -> None:
@@ -125,6 +141,14 @@ class Printer(QObject):
             )
         )
 
+    @pyqtSlot(list, name="gcode_reponse_report_received")
+    def gcode_response_report(self, report: list) -> None:
+        # TODO: Handle reports coming from subscribed websocket object
+        # if not isinstance(report):
+        _split_information = report[0].split("// ")
+
+        # print(_split_information)
+    
     ###*# Callback Related #*###
     # TODO : Names for the objects must be passed, ex:. "extruder", "extruder1"
     # TODO: Extruder name, right now is different, but i want to use the same method for all extruders.
@@ -169,7 +193,11 @@ class Printer(QObject):
                 if callable(_event_callback):
                     try:
                         event = _event_callback(value["state"], value["state_message"])
-                        QApplication.instance().sendEvent(self.main_window, event)
+                        instance = QApplication.instance()
+                        if instance is not None:
+                            instance.sendEvent(self.main_window, event)
+                        else:
+                            raise Exception("QApplication.instance is None type.")
                     except Exception as e:
                         _logger.debug(
                             f"Unable to send internal Klippy {_state_call} notification : {e}"
@@ -275,6 +303,10 @@ class Printer(QObject):
         if "power" in value.keys():
             self.heater_bed_update_signal.emit(heater_name, "power", value["power"])
 
+    def chamber_object_updated(self, value:dict, heater_name:str = "chamber"):
+        # TODO: this needs to be completed 
+        self.has_chamber = True
+        
     def fan_object_updated(self, value: dict, fan_name: str = "fan") -> None:
         if "speed" in value.keys():
             self.fan_update_signal[str, str, float].emit(
@@ -287,8 +319,11 @@ class Printer(QObject):
         if "state" in value.keys():
             self.idle_timeout_update_signal[str, str].emit("state", value["state"])
             if "printing" in value["state"]:
-                self.printer_busy = True
 
+                self.printer_busy = True
+            elif self.printing_state != "printing" and value["state"] != "printing": 
+                # It's also busy if the printer is printing or paused 
+                self.printer_busy = False
         if "printing_time" in value.keys():
             self.idle_timeout_update_signal[str, float].emit(
                 "printing_time", value["printing_time"]
@@ -309,36 +344,45 @@ class Printer(QObject):
             )
 
     def print_stats_object_updated(self, values: dict, name: str = "") -> None:
-        if "filename" in values.keys():
-            self.print_stats_update_signal[str, str].emit(
-                "filename", values["filename"]
-            )
-            self.print_file_loaded = True
-        if "total_duration" in values.keys():
-            self.print_stats_update_signal[str, float].emit(
-                "total_duration", values["total_duration"]
-            )
-        if "print_duration" in values.keys():
-            self.print_stats_update_signal[str, float].emit(
-                "print_duration", values["print_duration"]
-            )
-        if "filament_used" in values.keys():
-            self.print_stats_update_signal[str, float].emit(
-                "filament_used", values["filament_used"]
-            )
-        if "state" in values.keys():
-            self.print_stats_update_signal[str, str].emit("state", values["state"])
-            self.printing_state = values["state"]
-            if values["state"] == "standby" or values["state"] == "error":
-                self.print_file_loaded = False
-                self.printing = False
-        if "message" in values.keys():
-            self.print_stats_update_signal[str, str].emit("message", values["message"])
-            self.printing_error_message = values["message"]
-        if "info" in values.keys():
-            self.print_stats_update_signal[str, dict].emit("info", values["info"])
+        try:
+            if "filename" in values.keys():
+                self.print_stats_update_signal[str, str].emit(
+                    "filename", values["filename"]
+                )
+                self.print_file_loaded = True
+            if "total_duration" in values.keys():
+                self.print_stats_update_signal[str, float].emit(
+                    "total_duration", values["total_duration"]
+                )
+            if "print_duration" in values.keys():
+                self.print_stats_update_signal[str, float].emit(
+                    "print_duration", values["print_duration"]
+                )
+            if "filament_used" in values.keys():
+                self.print_stats_update_signal[str, float].emit(
+                    "filament_used", values["filament_used"]
+                )
+            if "state" in values.keys():
+                self.print_stats_update_signal[str, str].emit("state", values["state"])
+                self.printing_state = values["state"]
+                if values["state"] == "standby" or values["state"] == "error":
+                    self.print_file_loaded = False
+                    self.printing = False
+                else: 
+                    self.print_file_loaded = True 
+                    if values['state'] == "printing" or values['state'] == 'pause': 
+                        self.printing = True
 
-    def display_object_updated(self, values: dict, name: str = "") -> None:
+            if "message" in values.keys():
+                self.print_stats_update_signal[str, str].emit("message", values["message"])
+                self.printing_error_message = values["message"]
+            if "info" in values.keys():
+                self.print_stats_update_signal[str, dict].emit("info", values["info"])
+            return
+        except Exception as e: 
+            _logger.debug(f"Error sending print stats update {e}")
+
+    def display_status_object_updated(self, values: dict, name: str = "") -> None:
         if "message" in values.keys():
             self.display_update_signal[str, str].emit("message", values["message"])
         if "progress" in values.keys():
@@ -401,21 +445,21 @@ class Printer(QObject):
     def bed_mesh_object_updated(self, values: dict, name: str) -> None:
         # * Handle the bed mesh received from the printer here
         pass
-        bed_mesh_names = [
-            "profile_name",
-            "mesh_min",
-            "mesh_max",
-            "probed_matrix",
-            "mesh_matrix",
-        ]
-        if bed_mesh_names in values.keys():
-            self.bed_mesh_update_signal.emit(
-                values["profile_name"],
-                values["mesh_min"],
-                values["mesh_max"],
-                values["probed_matrix"],
-                values["mesh_matrix"],
-            )
+        # bed_mesh_names = [
+        #     "profile_name",
+        #     "mesh_min",
+        #     "mesh_max",
+        #     "probed_matrix",
+        #     "mesh_matrix",
+        # ]
+        # if bed_mesh_names in values.keys():
+        #     self.bed_mesh_update_signal.emit(
+        #         values["profile_name"],
+        #         values["mesh_min"],
+        #         values["mesh_max"],
+        #         values["probed_matrix"],
+        #         values["mesh_matrix"],
+        #     )
 
     def gcode_macro_object_updated(self, values: dict, gcode_macro_name: str) -> None:
         # * values argument can come with many different types for this macro so handle them in another place
