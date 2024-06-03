@@ -1,7 +1,7 @@
 from collections import deque
 from functools import partial
 import sys
-from PyQt6.QtCore import QEvent, pyqtSignal, pyqtSlot, QObject
+from PyQt6.QtCore import QEvent, pyqtSignal, pyqtSlot, QObject, QCoreApplication, QRect
 from PyQt6.QtWidgets import QApplication, QMainWindow, QSplashScreen
 from PyQt6.QtGui import QDragLeaveEvent, QPixmap
 
@@ -29,8 +29,11 @@ from resources.system_resources_rc import *
 
 # * UI
 from qt_ui.Blocks_Screen_Lemos_ui import Ui_MainWindow
+from qt_ui.ui_util import *
 
 import logging
+import os
+
 
 _logger = logging.getLogger(__name__)
 """
@@ -61,24 +64,28 @@ class MainWindow(QMainWindow):
     printer_state_signal = pyqtSignal(str, name="printer_state")
     printer_object_list_received_signal = pyqtSignal(list, name="object_list_received")
     printer_object_report_signal = pyqtSignal(list, name="object_report_received")
+    gcode_response_report_signal = pyqtSignal(list, name="gcode_response_received")
+
+    call_numpad_signal = pyqtSignal(
+        int, str, str, "PyQt_PyObject", QStackedWidget, name="call_numpad"
+    )
 
     def __init__(self, *args, **kwargs):
         super(MainWindow, self).__init__(*args, **kwargs)
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
-
         self.objects_subscriptions: dict = {}
         self._moonRest = MoonRest()
         self.ws = MoonWebSocket(self)
         self.mc = MachineControl(self)
-        # @ Force main panel to be displayed on startup
-        self.ui.mainTabWidget.setCurrentIndex(0)
-        # @ Install event filter
 
         # @ Structures
         self.file_data = Files(parent=self, ws=self.ws)
         self.index_stack = deque(maxlen=4)
         self.printer = Printer(parent=self, ws=self.ws)
+        # @ UI Elements
+        self.numpad_object = CustomNumpad(self)
+        self.numpad_object.hide()
         # @ Panels
         self.start_window = ConnectionWindow(self, self.ws)
         self.installEventFilter(self.start_window)
@@ -98,10 +105,12 @@ class MainWindow(QMainWindow):
         self.ws.connection_lost.connect(
             slot=self.start_window.websocket_connection_lost
         )
+
         self.printPanel.request_back_button_pressed.connect(
             slot=self.global_back_button_pressed
         )
         self.printPanel.request_change_page.connect(slot=self.global_change_page)
+        
         self.filamentPanel.request_back_button_pressed.connect(
             slot=self.global_back_button_pressed
         )
@@ -115,10 +124,15 @@ class MainWindow(QMainWindow):
         )
         self.utilitiesPanel.request_change_page.connect(slot=self.global_change_page)
         # All the buttons on the top bar that send the user to the Temperature page
-        self.ui.nozzle_1_temp.clicked.connect(partial(self.global_change_page, 2, 4))
-        self.ui.nozzle_2_temp.clicked.connect(partial(self.global_change_page, 2, 4))
-        self.ui.hot_bed_temp.clicked.connect(partial(self.global_change_page, 2, 4))
-        self.ui.chamber_temp.clicked.connect(partial(self.global_change_page, 2, 4))
+        self.ui.extruder_temp_btn.clicked.connect(
+            partial(self.global_change_page, 2, 4)
+        )
+        self.ui.extruder1_temp_bnt.clicked.connect(
+            partial(self.global_change_page, 2, 4)
+        )
+        self.ui.bed_temp_btn.clicked.connect(partial(self.global_change_page, 2, 4))
+        self.ui.chamber_temp_btn.clicked.connect(partial(self.global_change_page, 2, 4))
+
         # # All the buttons on the top bar that send the user to the Load page
         self.ui.filament_type_1.clicked.connect(partial(self.global_change_page, 1, 1))
         self.ui.filament_type_2.clicked.connect(partial(self.global_change_page, 1, 1))
@@ -134,6 +148,8 @@ class MainWindow(QMainWindow):
         # If the user changes tab, the indexes of all stacked widgets reset
         self.ui.mainTabWidget.currentChanged.connect(slot=self.reset_tab_indexes)
         self.printer_object_report_signal.connect(self.printer.report_received)
+        self.gcode_response_report_signal.connect(self.printer.gcode_response_report)
+
         self.printer_object_list_received_signal.connect(
             self.printer.object_list_received
         )
@@ -143,15 +159,86 @@ class MainWindow(QMainWindow):
             self.heater_bed_temperature_change
         )
 
-    # Used to garantee all tabs reset to their first page once the user leaves the tab
+        # self.ui.extruder_temp_btn.clicked.connect(self.printee)
+        self.ws.klippy_state_signal.connect(self.ws.api.request_printer_info)
+
+        # @ Related to the pages that need numpad
+        self.call_numpad_signal.connect(self.numpad_object.call_numpad)
+        self.controlPanel.request_numpad_signal.connect(
+            partial(self.call_numpad_signal.emit)
+        )
+        self.numpad_object.request_change_page.connect(self.global_change_page)
+        # self.numpad_object.request_back_button_pressed.connect(
+        #     self.global_back_button_pressed
+        # )
+
+        self.printPanel.request_block_manual_tab_change.connect(self.disable_tab_bar)
+        self.printPanel.request_activate_manual_tab_change.connect(self.enable_tab_bar)
+
+        # @ Force main panel to be displayed on startup
+        self.ui.mainTabWidget.setCurrentIndex(0)
+
+    @pyqtSlot(name="activate_manual_tab_change")
+    def enable_tab_bar(self) -> None:
+        if (
+            self.ui.mainTabWidget.isTabEnabled(1)
+            and self.ui.mainTabWidget.isTabEnabled(2)
+            and self.ui.mainTabWidget.isTabEnabled(3)
+            and self.ui.mainTabWidget.isTabEnabled(4)
+        ):
+            self.ui.mainTabWidget.setTabEnabled(1, True)
+            self.ui.mainTabWidget.setTabEnabled(2, True)
+            self.ui.mainTabWidget.setTabEnabled(3, True)
+            self.ui.mainTabWidget.setTabEnabled(4, True)
+
+    @pyqtSlot(name="block_manual_tab_change")
+    def disable_tab_bar(self) -> bool:
+        """disable_tab_bar
+            Disables the tab bar so to not change the tab.
+
+        Returns:
+            bool: True if the TabBar was disabled
+        """
+
+        self.ui.mainTabWidget.setTabEnabled(1, False)
+        self.ui.mainTabWidget.setTabEnabled(2, False)
+        self.ui.mainTabWidget.setTabEnabled(3, False)
+        self.ui.mainTabWidget.setTabEnabled(4, False)
+
+        return (
+            True
+            if self.ui.mainTabWidget.isTabEnabled(1)
+            and self.ui.mainTabWidget.isTabEnabled(2)
+            and self.ui.mainTabWidget.isTabEnabled(3)
+            and self.ui.mainTabWidget.isTabEnabled(4)
+            else False
+        )
+
+    # def calculate_tab_size(self) -> int:
+    #     """calculate_tab_size
+    #         For a QTabBar Widget calculates the number of accesible tabs
+
+    #     Returns:
+    #         int: The number of tabs
+    #     """
+    #     # TODO
+    #     pass
+
     def reset_tab_indexes(self):
+        """reset_tab_indexes
+        Used to garentee all tabs reset to their first page once the user leaves the tab
+        """
         self.printPanel.setCurrentIndex(0)
         self.filamentPanel.setCurrentIndex(0)
         self.controlPanel.setCurrentIndex(0)
         self.utilitiesPanel.setCurrentIndex(0)
 
-    # Helper function to get the index of the current page in the current tab
-    def current_panel_index(self):
+    def current_panel_index(self) -> int:
+        """current_panel_index
+            Helper function to get the index of the current page in the current tab
+        Returns:
+            int: The index os the page
+        """
         match self.ui.mainTabWidget.currentIndex():
             case 0:
                 return self.printPanel.currentIndex()
@@ -161,9 +248,15 @@ class MainWindow(QMainWindow):
                 return self.controlPanel.currentIndex()
             case 3:
                 return self.utilitiesPanel.currentIndex()
+        return -1
 
-    # Helper function to set the index of the current page in the current tab
-    def set_current_panel_index(self, panel_index):
+    def set_current_panel_index(self, panel_index: int) -> None:
+        """set_current_panel_index
+            Helper function to set the index of the current page in the current tab
+
+        Args:
+            panel_index (int): The index of the page we want to go to
+        """
         match self.ui.mainTabWidget.currentIndex():
             case 0:
                 self.printPanel.setCurrentIndex(panel_index)
@@ -175,28 +268,51 @@ class MainWindow(QMainWindow):
                 self.utilitiesPanel.setCurrentIndex(panel_index)
 
     @pyqtSlot(int, int, name="request_change_page")
-    def global_change_page(self, tab_index, panel_index):
+    def global_change_page(self, tab_index: int, panel_index: int) -> None:
+        """global_change_page Changes panels pages globally
+
+        Args:
+            tab_index (int): The tab index of the panel
+            panel_index (int): The index of the panel page
+        """
+        if not isinstance(tab_index, int):
+            _logger.debug(
+                "Tab index argument is not of type integer, field must be integer."
+            )
+        if not isinstance(panel_index, int):
+            _logger.debug(
+                "Panel page index is not of type integet, field must be integer."
+            )
         current_page = [
             self.ui.mainTabWidget.currentIndex(),
             self.current_panel_index(),
         ]
         requested_page = [tab_index, panel_index]
-        # Return if user is already on the requested page
+        # * Return if user is already on the requested page
         if requested_page == current_page:
+            _logger.debug("User already on the requested page.")
             return
-        # Add to the stack of indexes the indexes of current tab and page in tab to later be able to come back to them
+        # * Add to the stack of indexes the indexes of current tab and page in tab to later be able to come back to them
         self.index_stack.append(current_page)
-        # Go to the requested tab and page
+        # * Go to the requested tab and page
         self.ui.mainTabWidget.setCurrentIndex(tab_index)
         self.set_current_panel_index(panel_index)
         # print("Requesting Tab ", tab_index, " and page index: ", panel_index)
+        _logger.debug(
+            f"Requested page change -> Tab index :{requested_page[0]}, pane panel index : {requested_page[1]}"
+        )
 
     @pyqtSlot(name="request_back_button_pressed")
-    def global_back_button_pressed(self):
-        # Just a safety measure to avoid accessing an inexistant position of the index_stack
+    def global_back_button_pressed(self) -> None:
+        """global_back_button_pressed
+
+        Requests to go back a page globally
+        """
+        # * Just a safety measure to avoid accessing an inexistant position of the index_stack
         if not len(self.index_stack):
+            _logger.debug("Index stack is empty cannot got further back.")
             return
-        # From the last position of the stack use the first value of its tuple, tab index
+        # * From the last position of the stack use the first value of its tuple, tab index
         self.ui.mainTabWidget.setCurrentIndex(self.index_stack[-1][0])
         self.set_current_panel_index(
             self.index_stack[-1][1]
@@ -213,25 +329,47 @@ class MainWindow(QMainWindow):
         self.printer.heater_bed_update_signal.connect(
             self.heater_bed_temperature_change
         )
+        _logger.debug("Sucessfully went back a page.")
         # self.printer.idle_timeout_update_signal.connect(self.idle_timeout_update)
 
     @pyqtSlot(name="start_websocket_connection")
-    def start_websocket_connection(self):
+    def start_websocket_connection(self) -> None:
+        """start_websocket_connection
+
+        Starts the Websocket connection
+        """
         self.ws.start()
         self.ws.try_connection()
 
     def event(self, event: QEvent) -> bool:
+        """event Receives PyQt Events, this method is reimplemented from the QEvent class
+
+        Args:
+            event (QEvent): An Event
+
+        Returns:
+            bool: If the event is handled or not
+        """
         if event.type() == WebSocketMessageReceivedEvent.type():
             if isinstance(event, WebSocketMessageReceivedEvent):
                 self.messageReceivedEvent(event)
                 return True
             return False
-        # if event.type() == KlippyReadyEvent.type():
-        #     print("Received event ready type ")
+
         return super().event(event)
 
-    def messageReceivedEvent(self, event: WebSocketMessageReceivedEvent):
-        
+    def messageReceivedEvent(self, event: WebSocketMessageReceivedEvent) -> None:
+        """messageReceivedEvent
+            Helper method that handles the event messages received from the websocket
+
+        Args:
+            event (WebSocketMessageReceivedEvent): The message event with all its contents
+
+        Raises:
+            Exception: When a klippy status change comes from the websocket, tries to send another event
+            corresponding to the incoming status. If the QApplication instance is of type None raises an exception
+            because the event cannot be sent.
+        """
         _response: dict = event.packet
         _method = event.method
         _params = event.params if event.params is not None else None
@@ -244,8 +382,15 @@ class MainWindow(QMainWindow):
                 _logger.error(
                     f"Error emitting event for file related information received from websocket"
                 )
+        elif "error" in _method:
+            # ! Here i received an error message from the websocket, but it doesn't mean it's closed the connection
+            # ! But it might say that klipper had an error with something and has reported back
+            pass
         elif "machine" in _method:
             # * Handle machine related stuff
+            pass
+        elif "printer.info" in _method:
+            # print(_response)
             pass
         elif "printer.print" in _method:
             if "start" in _method and "ok" in _response:
@@ -265,14 +410,34 @@ class MainWindow(QMainWindow):
             if "subscribe" in _method:
                 _objects_response_list = [_response["status"], _response["eventtime"]]
                 self.printer_object_report_signal[list].emit(_objects_response_list)
+                # TODO: This
+                # ! Don't display chamber temperatures if there is no chamber, should do the
+                if not self.printer.has_chamber:
+                    self.ui.chamber_temperature_frame.hide()
+            if "query" in _method:
+                # Comes from querying an object
+                if isinstance(_response["status"], dict):
+                    _object_report = [_response["status"]]
+                    _object_report_keys = _response["status"].items()
+                    _object_report_list_dict: list = []
+                    for index, key in enumerate(_object_report_keys):
+                        _helper_dict: dict = {key[0]: key[1]}
+                        _object_report_list_dict.append(_helper_dict)
+
+                    self.printer_object_report_signal[list].emit(
+                        _object_report_list_dict
+                    )
 
         elif "notify_klippy" in _method:
             _split = _method.split("_")
             if len(_split) > 2:
-                _state_upper = _split[2].upper()
-                _state_call = f"{_state_upper}{_split[2][1:]}"
+                status_type = _split[2]
+                _state_upper = status_type[0].upper()
+                _state_call = f"{_state_upper}{status_type[1:]}"
+                # print(_state_call)
+
                 _logger.debug(
-                    f"Notify_klippy {_state_call} Received from object subscription."
+                    f"Notify_klippy_{_state_call} Received from object subscription."
                 )
                 if hasattr(events, f"Klippy{_state_call}Event"):
                     _klippy_event_callback = getattr(
@@ -283,7 +448,11 @@ class MainWindow(QMainWindow):
                             event = _klippy_event_callback(
                                 data=f"Moonraker reported klippy is {_state_call}"
                             )
-                            QApplication.instance().sendEvent(self, event)
+                            instance = QApplication.instance()
+                            if instance is not None:
+                                instance.sendEvent(self, event)
+                            else:
+                                raise Exception("QApplication.instance is None type.")
                         except Exception as e:
                             _logger.debug(
                                 f"Unable to send internal klippy {_state_call} notification: {e}"
@@ -310,7 +479,10 @@ class MainWindow(QMainWindow):
             # THese are all messages that require for the connection panel to show up
             # Because i'll always need to restart klipper and other functionalities are disabled except the wifi shit
             # This field will receive alot of print updates, such as "Must home axis first"
-            pass
+            # I'll also receive responses for temperature on the bed and extruder here on something like the line bellow
+            # "method": "notify_gcode_response", "params": ["B:34.2 /60.0 T0:22.9 /0.0"]
+            _gcode_reponse = _response["params"]
+            self.gcode_response_report_signal.emit(_gcode_reponse)
         elif "notify_history_changed" in _method:
             # * Handle received notification when a file stop printing for whatever reason
             # This is where i receive notifications about the current print progress, such as canceled
@@ -323,24 +495,30 @@ class MainWindow(QMainWindow):
     @pyqtSlot(str, str, float, name="extruder_update")
     def extruder_temperature_change(
         self, extruder_name: str, field: str, new_value: float
-    ):
+    ) -> None:
         if field == "temperature":
             # _last_text = self.ui.nozzle_1_temp.text()
             # if not -1 < int(_last_text) - int(new_value)  < 1:
             # self.ui.nozzle_1_temp.setText(f"{str(new_value)} / 0 °C")
-            self.ui.nozzle_1_temp.setText(f"{str(new_value)}")
+            self.ui.actual_temp.setText(f"{new_value:.1f}")
 
         elif field == "target":
             # TODO: Replace with a new label to update the target temperature
+            self.ui.target_temp.setText(f"{new_value:.1f}")
             pass
 
     @pyqtSlot(str, str, float, name="heater_bed_update")
-    def heater_bed_temperature_change(self, name: str, field: str, new_value: float):
-        self.ui.hot_bed_temp.setText(str(new_value))
+    def heater_bed_temperature_change(
+        self, name: str, field: str, new_value: float
+    ) -> None:
+        # print("[INFO] heater_bed_temperature changed ")
+        if field == "temperature":
+            self.ui.actual_temp_2.setText(f"{new_value:.1f}")
+        elif field == "target":
+            self.ui.target_temp_2.setText(f"{new_value:.1f}")
 
 
 if __name__ == "__main__":
-
     app = QApplication([])
     pixmap = QPixmap("Blocks_Screen/media/logoblocks.png")
     splash = QSplashScreen(pixmap)
