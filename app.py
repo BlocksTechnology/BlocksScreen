@@ -185,11 +185,13 @@ class MainWindow(QMainWindow):
             and self.ui.mainTabWidget.isTabEnabled(2)
             and self.ui.mainTabWidget.isTabEnabled(3)
             and self.ui.mainTabWidget.isTabEnabled(4)
+            and self.ui.top_bar.isEnabled()
         ):
             self.ui.mainTabWidget.setTabEnabled(1, True)
             self.ui.mainTabWidget.setTabEnabled(2, True)
             self.ui.mainTabWidget.setTabEnabled(3, True)
             self.ui.mainTabWidget.setTabEnabled(4, True)
+            self.ui.top_bar.setEnabled(True)
 
     @pyqtSlot(name="block_manual_tab_change")
     def disable_tab_bar(self) -> bool:
@@ -204,14 +206,16 @@ class MainWindow(QMainWindow):
         self.ui.mainTabWidget.setTabEnabled(2, False)
         self.ui.mainTabWidget.setTabEnabled(3, False)
         self.ui.mainTabWidget.setTabEnabled(4, False)
+        self.ui.top_bar.setEnabled(False)
 
         return (
-            True
+            False
             if self.ui.mainTabWidget.isTabEnabled(1)
             and self.ui.mainTabWidget.isTabEnabled(2)
             and self.ui.mainTabWidget.isTabEnabled(3)
             and self.ui.mainTabWidget.isTabEnabled(4)
-            else False
+            and self.ui.top_bar.isEnabled()
+            else True
         )
 
     # def calculate_tab_size(self) -> int:
@@ -325,10 +329,6 @@ class MainWindow(QMainWindow):
             self.printer.object_list_received
         )
 
-        self.printer.extruder_update_signal.connect(self.extruder_temperature_change)
-        self.printer.heater_bed_update_signal.connect(
-            self.heater_bed_temperature_change
-        )
         _logger.debug("Sucessfully went back a page.")
         # self.printer.idle_timeout_update_signal.connect(self.idle_timeout_update)
 
@@ -496,16 +496,28 @@ class MainWindow(QMainWindow):
     def extruder_temperature_change(
         self, extruder_name: str, field: str, new_value: float
     ) -> None:
-        if field == "temperature":
-            # _last_text = self.ui.nozzle_1_temp.text()
-            # if not -1 < int(_last_text) - int(new_value)  < 1:
-            # self.ui.nozzle_1_temp.setText(f"{str(new_value)} / 0 °C")
-            self.ui.actual_temp.setText(f"{new_value:.1f}")
+        if extruder_name == "extruder":
+            if field == "temperature":
+                # _last_text = self.ui.nozzle_1_temp.text()
+                # if not -1 < int(_last_text) - int(new_value)  < 1:
+                # self.ui.nozzle_1_temp.setText(f"{str(new_value)} / 0 °C")
+                self.ui.actual_temp.setText(f"{new_value:.1f}")
 
-        elif field == "target":
-            # TODO: Replace with a new label to update the target temperature
-            self.ui.target_temp.setText(f"{new_value:.1f}")
-            pass
+            elif field == "target":
+                # TODO: Replace with a new label to update the target temperature
+                self.ui.target_temp.setText(f"{new_value:.1f}")
+                pass
+        if extruder_name == "extruder1":
+            if field == "temperature":
+                # _last_text = self.ui.nozzle_1_temp.text()
+                # if not -1 < int(_last_text) - int(new_value)  < 1:
+                # self.ui.nozzle_1_temp.setText(f"{str(new_value)} / 0 °C")
+                self.ui.actual_temp_4.setText(f"{new_value:.1f}")
+
+            elif field == "target":
+                # TODO: Replace with a new label to update the target temperature
+                self.ui.target_temp_4.setText(f"{new_value:.1f}")
+                pass
 
     @pyqtSlot(str, str, float, name="heater_bed_update")
     def heater_bed_temperature_change(
