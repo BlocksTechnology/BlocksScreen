@@ -89,6 +89,16 @@ class Printer(QObject):
         self.printer_busy: bool = False
         self.current_loaded_file: str = ""
         self.current_loaded_file_metadata: str = ""
+        heater_attributes: dict = {
+            "current_temperature": 0,
+            "target_temperature": 0,
+            "can_extrude": False
+        }
+        self.heaters_object: dict = {
+            "extruder": heater_attributes.copy(),
+            "extruder1": heater_attributes.copy(),
+            "bed": heater_attributes.copy()
+        }
 
         self.has_chamber : bool = False
         
@@ -275,8 +285,12 @@ class Printer(QObject):
             self.extruder_update_signal.emit(
                 extruder_name, "temperature", value["temperature"]
             )
+            self.heaters_object[f"{extruder_name}"]["actual_temperature"] = value["temperature"]
         if "target" in value.keys():
             self.extruder_update_signal.emit(extruder_name, "target", value["target"])
+            self.heaters_object[f"{extruder_name}"]["target_temperature"] = value["target"]
+        if "can_extrude" in value.keys():
+            self.heaters_object[f"{extruder_name}"]["can_extrude"] = value["can_extrude"]
         if "power" in value.keys():
             self.extruder_update_signal.emit(extruder_name, "power", value["power"])
         if "pressure_advance" in value.keys():
@@ -298,8 +312,10 @@ class Printer(QObject):
             self.heater_bed_update_signal.emit(
                 heater_name, "temperature", value["temperature"]
             )
+            self.heaters_object["bed"]["actual_temperature"] = value["temperature"]
         if "target" in value.keys():
             self.heater_bed_update_signal.emit(heater_name, "target", value["target"])
+            self.heaters_object["bed"]["target_temperature"] = value["target"]
         if "power" in value.keys():
             self.heater_bed_update_signal.emit(heater_name, "power", value["power"])
 
