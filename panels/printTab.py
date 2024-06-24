@@ -1,44 +1,60 @@
-from functools import partial
+import os
+import sys
 import math
+import typing
+import logging
+from functools import partial
 from PyQt6 import QtWidgets
 from PyQt6.QtGui import QPaintEvent
 from PyQt6.QtWidgets import QStackedWidget, QWidget, QListWidgetItem, QLabel
-from PyQt6.QtCore import (
-    pyqtSlot,
-    pyqtSignal,
-    Qt,
-)
+from PyQt6.QtCore import pyqtSlot, pyqtSignal, Qt, QObject
 from PyQt6 import QtCore, QtGui
-import typing
-from scripts.events import *
 from qt_ui.printStackedWidget_ui import Ui_printStackedWidget
 from qt_ui.ui_util import CustomQPushButton
-import os
-from scripts.bo_includes.bo_files import *
-from scripts.bo_includes.bo_printer import *
-import logging
+from scripts.bo_includes.bo_files import Files
+from scripts.moonrakerComm import MoonWebSocket
+from scripts.bo_includes.bo_printer import Printer
 
 _logger = logging.getLogger(__name__)
 
 
 class PrintTab(QStackedWidget):
+    """PrintTab -> QStackedWidget UI panel that has the following panels:
+    
+    - Main page: Simple page with a message field and a button to start a print;
+    - File list page: A file list where displayed files are selectable to be printed;
+    - Confirm page: A page to confirm or not if the selected file is to be printed;
+    - Print page: A page for controlling the ongoing job, Pause/Resume and stop functionality
+    - Tune page: Accessible only from the print page;
+    - Babystep page: Control the z_offset during a ongoing print; 
+    - Change page: A page that permits changing the filament, stops the print -> change the filament -> resume the print;
+    
+    On the tune page, the user can additionally change the temperature/speed of the extruder(s), heated bed, fan(s) and the print velocity
+
+    Args:
+        QStackedWidget (QStackedWidget): This class is inherited from QStackedWidget from Qt6
+        
+    __init__:
+        parent (QWidget | QObject): The parent for this tab.
+        file_data (Files): Class object that handles printer files.
+        ws (MoonWebSocket): Moonraker websocket instance.
+        printer (Printer): Class object that handles printer objects information.
+
+    """
     request_print_file_signal = pyqtSignal(str, name="start_print")
     request_print_resume_signal = pyqtSignal(name="resume_print")
     request_print_stop_signal = pyqtSignal(name="stop_print")
     request_print_pause_signal = pyqtSignal(name="pause_print")
-
     request_block_manual_tab_change = pyqtSignal(name="block_manual_tab_change")
     request_activate_manual_tab_change = pyqtSignal(name="activate_manual_tab_change")
-
     request_back_button_pressed = pyqtSignal(name="request_back_button_pressed")
     request_change_page = pyqtSignal(int, int, name="request_change_page")
-
     printer_state_signal = pyqtSignal(str, name="printer_state_updated")
-
     verify_printer_state_signal = pyqtSignal(name="verify_printer_state")
-    
     run_gcode_signal = pyqtSignal(str, name="run_gcode")
-
+    request_numpad_signal = pyqtSignal(
+        int, str, str, "PyQt_PyObject", QStackedWidget, name="request_numpad"
+    )
     def __init__(
         self,
         parent: typing.Optional["QWidget"],
@@ -62,12 +78,10 @@ class PrintTab(QStackedWidget):
         self.panel.listWidget.setLayoutDirection(Qt.LayoutDirection.LeftToRight)
         ##@ Force showing the base panel
         self.change_page(0)
-
         #  virtual sdcard Path
         # TODO: Get this path from the configfile by asking the websocket first
         # @ GCode directory paths
         self.gcode_path = os.path.expanduser("~/printer_data/gcodes")
-
         # @ Slot connections
         self.currentChanged.connect(self.view_changed)
         # @ Signals for QListItems
@@ -89,11 +103,10 @@ class PrintTab(QStackedWidget):
         self.panel.main_print_btn.clicked.connect(partial(self.change_page, 1))
         self.panel.tune_menu_btn.clicked.connect(partial(self.change_page, 4))
         self.panel.tune_babystep_menu_btn.clicked.connect(partial(self.change_page, 5))
-
         # File List Screen
         self.panel.back_btn.clicked.connect(partial(self.back_button))
         self.panel.tune_back_btn.clicked.connect(partial(self.back_button))
-
+        self.panel.babystep_back_btn.clicked.connect(partial(self.back_button))
         self.printer.virtual_sdcard_update_signal[str, bool].connect(
             self.virtual_sdcard_update
         )
@@ -117,76 +130,171 @@ class PrintTab(QStackedWidget):
             self.idle_timeout_update
         )
         self.printer.idle_timeout_update_signal.connect(self.idle_timeout_update)
-
         self.printer.display_update_signal[str, str].connect(self.display_update)
         self.printer.display_update_signal[str, float].connect(self.display_update)
-
         self.printer.gcode_move_update_signal[str, list].connect(self.gcode_move_update)
         self.printer.gcode_move_update_signal[str, bool].connect(self.gcode_move_update)
         self.printer.gcode_move_update_signal[str, float].connect(
             self.gcode_move_update
         )
-
         self.panel.nozzle_close_to_bed.clicked.connect(self.move_nozzle_close_to_bed)
         self.panel.nozzle_far_to_bed.clicked.connect(self.move_nozzle_far_to_bed)
-
         self.panel.nozzle_offset_001.clicked.connect(self.z_offset_change)
         self.panel.nozzle_offset_005.clicked.connect(self.z_offset_change)
         self.panel.nozzle_offset_01.clicked.connect(self.z_offset_change)
         self.panel.nozzle_offset_025.clicked.connect(self.z_offset_change)
         self.panel.nozzle_offset_05.clicked.connect(self.z_offset_change)
-
         self.run_gcode_signal.connect(self.ws.api.run_gcode)
-
         # @ Get the temperatures for the objects
         self.printer.extruder_update_signal.connect(self.extruder_temperature_change)
-        self.printer.heater_bed_update_signal.connect(self.heater_bed_temperature_change)
+        self.printer.heater_bed_update_signal.connect(
+            self.heater_bed_temperature_change
+        )
         self.printer.fan_update_signal[str, str, float].connect(self.fan_object_update)
         self.printer.fan_update_signal[str, str, int].connect(self.fan_object_update)
-        
+        # @ Numpad stuff
+        self.panel.tune_hotbed_value_btn.clicked.connect(
+            partial(
+                self.request_numpad_signal.emit,
+                0,
+                "heater_bed",
+                self.panel.tune_hotbed_value.text(),
+                self.handle_numpad_change,
+                self,
+            )
+        )
+        self.panel.tune_hotend_value_1_btn.clicked.connect(
+            partial(
+                self.request_numpad_signal.emit,
+                0,
+                "extruder",
+                self.panel.tune_hotend_value_1.text(),
+                self.handle_numpad_change,
+                self,
+            )
+        )
+        self.panel.tune_hotend_value_2_btn.clicked.connect(
+            partial(
+                self.request_numpad_signal.emit,
+                0,
+                "extruder1",
+                self.panel.tune_hotend_value_2.text(),
+                self.handle_numpad_change,
+                self,
+            )
+        )
+        # TODO: Might need to adjust the heater name here don't rebember if it's really called chamber
+        self.panel.tune_chamber_value_btn.clicked.connect(
+            partial(
+                self.request_numpad_signal.emit,
+                0,
+                "chamber",
+                self.panel.tune_chamber_value.text(),
+                self.handle_numpad_change,
+                self,
+            )
+        )
+        # TODO: Need to change the name for the fans aswell
+        self.panel.tune_fan_value_1_btn.clicked.connect(
+            partial(
+                self.request_numpad_signal.emit,
+                0,
+                "fan",
+                self.panel.tune_fan_value_1.text(),
+                self.handle_numpad_change,
+                self,
+            )
+        )
+        self.panel.tune_fan_value_2_btn.clicked.connect(
+            partial(
+                self.request_numpad_signal.emit,
+                0,
+                "fan 1",
+                self.panel.tune_fan_value_2.text(),
+                self.handle_numpad_change,
+                self,
+            )
+        )
+        self.panel.tune_speed_btn.clicked.connect(
+            partial(
+                self.request_numpad_signal.emit,
+                0,
+                "speed",
+                self.panel.tune_speed_value_label.text(),
+                self.handle_numpad_change,
+                self,
+            )
+        )
         # TODO: The chamber configuration
-        # self.printer.
-        # self.printer.chamber_object_updated.connect()
-
         ## @ Show the panel
         self.show()
-    
-    
-    
+
+    @pyqtSlot(str, int, name="numpad_new_value")
+    @pyqtSlot(str, float, name="numpad_new_value")
+    def handle_numpad_change(self, name: str, new_value: int | float) -> None:
+        """handle_numpad_change Handles the introduced value on the numpad 
+        Changes the temperature/speed/velocity of an object accordingly 
+
+        Args:
+            name (str): Name of the object that is to be updated
+            new_value (int | float): New value for the object
+        """
+        if isinstance(new_value, float):
+            if name.startswith("fan") and 0 <= new_value <= 100:
+                _new_range = int((new_value / 100) * 255)
+                # * Covert from percentage to interval from 0 to 255
+                # ! self.run_gcode_signal.emit(f"SET_FAN_SPEED FAN={name} SPEED={new_value / 100 :.1f}")  This works id the fan has a name, but has for blowers i can just use the gcode command, the interval is 0-255
+                self.run_gcode_signal.emit(f"M106 S{_new_range}")
+            elif name.startswith("speed") and 0 <= new_value <= 100:
+                _new_range = int(new_value)
+                self.run_gcode_signal.emit(f"M220 S{_new_range}")
+
+        elif isinstance(new_value, int):
+            self.run_gcode_signal.emit(
+                f"SET_HEATER_TEMPERATURE HEATER={name} TARGET={new_value}"
+            )
+
     @pyqtSlot(str, str, float, name="fan_update")
     @pyqtSlot(str, str, int, name="fan_update")
-    def fan_object_update(self, name:str, field:str, new_value: int | float): 
-        pass
-    
-    
+    def fan_object_update(self, name: str, field: str, new_value: int | float) -> None:
+        """fan_object_update Processes the information that comes from the printer object "fan"
+
+        Args:
+            name (str): Name of the fan object
+            field (str): Name of the updated field 
+            new_value (int | float): New value for field
+        """
+        if "speed" in field:
+            self.panel.tune_fan_value_1.setText(f"{new_value * 100 :.0f}")
+
     @pyqtSlot(str, str, float, name="extruder_update")
     def extruder_temperature_change(
         self, extruder_name: str, field: str, new_value: float
     ) -> None:
-        pass
-        # if field == "temperature":
-        #     # _last_text = self.ui.nozzle_1_temp.text()
-        #     # if not -1 < int(_last_text) - int(new_value)  < 1:
-        #     # self.ui.nozzle_1_temp.setText(f"{str(new_value)} / 0 °C")
-        #     self.ui.actual_temp.setText(f"{new_value:.1f}")
+        """extruder_temperature_change Processes the information that comes from the printer object "extruder"
 
-        # elif field == "target":
-        #     # TODO: Replace with a new label to update the target temperature
-        #     self.ui.target_temp.setText(f"{new_value:.1f}")
-        #     pass
+        Args:
+            extruder_name (str): Name of the extruder object
+            field (str): Name of the updated field
+            new_value (float): New value for the field
+        """
+        if field == "temperature":
+            self.panel.tune_hotend_value_1.setText(f"{new_value:.1f}")
 
     @pyqtSlot(str, str, float, name="heater_bed_update")
     def heater_bed_temperature_change(
         self, name: str, field: str, new_value: float
     ) -> None:
-        pass
-        # print("[INFO] heater_bed_temperature changed ")
-        # if field == "temperature":
-        #     self.ui.actual_temp_2.setText(f"{new_value:.1f}")
-        # elif field == "target":
-        #     self.ui.target_temp_2.setText(f"{new_value:.1f}")
+        """heater_bed_temperature_change Processes the information that comes from the printer object "heater_bed"
 
-    
+        Args:
+            name (str): Name of the heater bed object.
+            field (str): Name od the updated field.
+            new_value (float): New value for the fiels.
+        """
+        if field == "temperature":
+            self.panel.tune_hotbed_value.setText(f"{new_value:.1f}")
+
     @pyqtSlot(str, str, float)
     @pyqtSlot(str, str, name="idle_timeout_update")
     @pyqtSlot(str, float, name="idle_timeout_update")
@@ -214,6 +322,9 @@ class PrintTab(QStackedWidget):
                 self._current_z_position = value[2]
                 if self._internal_print_status == "printing":
                     self._calculate_current_layer()
+        if isinstance(value, float):
+            if "speed" in field:
+                self.panel.tune_speed_value_label.setText(str(value))
 
     @pyqtSlot(str, dict, name="print_stats_update")
     @pyqtSlot(str, float, name="print_stats_update")
@@ -243,7 +354,6 @@ class PrintTab(QStackedWidget):
             or self._internal_print_status == "paused"
         ):
             if isinstance(value, dict):
-                print(value)
                 if "total_layer" in value.keys():
                     if value["total_layer"] is not None:
                         self.current_print_file_total_layer = value["total_layer"]
@@ -377,47 +487,6 @@ class PrintTab(QStackedWidget):
             self.request_print_resume_signal.emit()
             self._internal_print_status = "printing"
 
-    @pyqtSlot(name="print_state")
-    def print_state(self) -> None:
-        """print_state -> Slot for received signal about the current printing state of the machine
-
-        States:
-        - Printing
-
-        - Paused
-
-        - Canceled
-
-        Args:
-            state (str): _description_
-        """
-        # TODO Maybe i can do this more dinamically
-        # print("here")
-        # print(f"Print state verification {self.printer_stats_object_state}")
-        if self._internal_print_status != "" and self.printer_stats_object_state != "":
-            # print(self._internal_print_status)
-            # print(self.printer_stats_object_state)
-            if self._internal_print_status == self.printer_stats_object_state:
-                self.printer_state_signal.emit()
-
-        # if "printing" in state:
-        #     # * Indicate that it is printing
-        #     self._internal_print_status = "printing"
-        #     self.panel.pause_printing_btn.setText("Pause")
-
-        # elif "paused" in state:
-        #     self._internal_print_status = "paused"
-        #     self.panel.pause_printing_btn.setText("Resume")
-
-        # elif "canceled" in state:
-        #     self._intewrnal_print_status = "canceled"
-        #     # self.panel.
-        # elif "error" in state:
-        #     self._internal_print_status = "error"
-        _logger.debug(
-            f"Verified Printer state on {self.__class__.__name__} | Method {sys._getframe().f_code.co_name} "
-        )
-
     def add_file_entries(self) -> None:
         """add_file_entries ->
 
@@ -451,24 +520,33 @@ class PrintTab(QStackedWidget):
 
     @pyqtSlot(name="request_noozle_close_to_bed")
     def move_nozzle_close_to_bed(self) -> None:
+        """move_nozzle_close_to_bed Slot for Babystep button to get closer to the bed. 
+        """                 
         self.run_gcode_signal.emit(
             f"SET_GCODE_OFFSET Z_ADJUST=-{self._z_offset} MOVE=1"
         )
 
     @pyqtSlot(name="request_noozle_far_to_bed")
     def move_nozzle_far_to_bed(self) -> None:
+        """move_nozzle_far_to_bed Slot for Babystep button to get far from the bed.
+        """
         self.run_gcode_signal.emit(
             f"SET_GCODE_OFFSET Z_ADJUST=+{self._z_offset} MOVE=1"
         )
 
     @pyqtSlot(name="z_offset_change")
     def z_offset_change(self) -> None:
+        """z_offset_change Helper method for changing the value for Babystep.
+        
+        When a button is clicked, and the button has the mm value i the text, 
+        it'll change the internal value **z_offset** to the same has the button 
+        
+        Possible values are: 0.001, 0.005, 0.01, 0.025, 0.05
+        """
         _possible_z_values: typing.List = [0.001, 0.005, 0.01, 0.025, 0.05]
         _sender: QObject | None = self.sender()
-        # print(f"Changing the value for the z_offset to {_sender.text()}")
         if _sender is not None and isinstance(_sender, QLabel):
             if float(_sender.text()) in _possible_z_values:
-                print(f"changed the zz_offset value to {self._z_offset}")
                 self._z_offset = float(_sender.text())
                 _logger.debug(f"z_offset changed to {self._z_offset}")
 
@@ -531,7 +609,6 @@ class PrintTab(QStackedWidget):
             )
             painter.drawPixmap(list_area_rect, _scaled_pixmap, self.background.rect())
             painter.end()
-
         if self.panel.confirm_page.isVisible():
             _item_metadata: dict = self.file_data.files_metadata[
                 self._current_file_name
@@ -583,20 +660,18 @@ class PrintTab(QStackedWidget):
             if self.panel.confirm_print_preview_graphics.isVisible():
                 self.panel.confirm_print_preview_graphics.close()
 
-        if self.panel.babystep_page.isVisible(): 
+        if self.panel.babystep_page.isVisible():
             # * If there is a z_offset value already paint the button a little greyer to indicate that is the current offset
+            # TODO: It's not working now 
             _button_name_str = f"nozzle_offset_{self._z_offset}"
-            if hasattr(self.panel, _button_name_str): 
+            if hasattr(self.panel, _button_name_str):
                 _button_attr = getattr(self.panel, _button_name_str)
                 # TODO: This will have to change if the button goes from QPushButton to QCustomPushButton
-                if callable(_button_attr) and isinstance(_button_attr, CustomQPushButton):
+                if callable(_button_attr) and isinstance(
+                    _button_attr, CustomQPushButton
+                ):
                     _button_attr.setChecked(True)
-            # _button_to_check = 
-            
-            # self.panel.nozzle_offset_001.setChecked(True)
-            
-            
-            
+
         return super().paintEvent(a0)
 
     def convert_bytes_to_mb(self, bytes: int | float) -> float:
@@ -681,7 +756,3 @@ class PrintTab(QStackedWidget):
         num_hours, minutes = divmod(num_min, 60)
         days, hours = divmod(num_hours, 24)
         return [days, hours, minutes, seconds]
-
-
-# TODO: Add folder icon to the topbar of the files list
-# TODO: Add A icon such as ">" to indicate that when you press the file you get the information and go to the next page

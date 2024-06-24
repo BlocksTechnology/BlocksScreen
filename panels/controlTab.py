@@ -199,7 +199,7 @@ class ControlTab(QStackedWidget):
 
         if name.startswith("fan") and isinstance(new_value, float):
             if 0.0 <= new_value <= 1.0:
-                self.run_gcode_signal.emit(f"SET_FAN_SPEED FAN={name} SPEED{new_value}")
+                self.run_gcode_signal.emit(f"SET_FAN_SPEED FAN={name} SPEED={new_value}")
 
         elif isinstance(new_value, int):
             self.run_gcode_signal.emit(
