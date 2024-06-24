@@ -1,10 +1,16 @@
+from collections import deque
 import logging
 import queue
 import threading
-from PyQt6.QtWidgets import (
-    QPushButton, QStyle)
+from PyQt6.QtWidgets import QPushButton, QStyle, QWidget, QStackedWidget
 from PyQt6 import QtGui, QtWidgets, QtCore, QtSvg
+from PyQt6.QtCore import pyqtSignal, pyqtSlot, QRect, Qt
 import typing
+from functools import partial
+
+from qt_ui.customNumpad_ui import Ui_customNumpad
+
+_logger = logging.getLogger(__name__)
 
 
 class CustomQPushButton(QPushButton):
@@ -48,6 +54,9 @@ class CustomQPushButton(QPushButton):
         style = self.style()
         opt = QtWidgets.QStyleOptionButton()
         self.initStyleOption(opt)
+        if style is None:
+            return None
+
         margin = style.pixelMetric(style.PixelMetric.PM_ButtonMargin, opt, self)
         spacing = style.pixelMetric(
             style.PixelMetric.PM_LayoutVerticalSpacing, opt, self
@@ -101,6 +110,9 @@ class CustomQPushButton(QPushButton):
 
         rect = self.rect()
         style = self.style()
+
+        if style is None:
+            return None
 
         margin = style.pixelMetric(style.PixelMetric.PM_ButtonMargin, opt, self)
 
@@ -333,6 +345,217 @@ class CustomQPushButton(QPushButton):
     def focusOutEvent(self, a0: typing.Optional[QtGui.QFocusEvent]) -> None:
         return super().focusOutEvent(a0)
 
+
+class CustomNumpad(QWidget):
+    """CustomNumpad
+        A custom numpad for inserting integer values.
+
+    Args:
+        QFrame (_type_): _description_
+    """
+
+    inserted_new_value = pyqtSignal([str, int], [str, float], name="numpad_new_value")
+    request_change_page = pyqtSignal(int, int, name="request_change_page")
+    request_back_button_pressed = pyqtSignal(name="request_back_button_pressed")
+
+    def __init__(
+        self,
+        parent: typing.Optional["QWidget"],
+    ) -> None:
+        super(CustomNumpad, self).__init__(parent)
+
+        self.panel = Ui_customNumpad()
+        self.panel.setupUi(self)
+        # TODO: Add the current temperature to display the user the current temperature of the extruder for example or just leave it as nothing in the begining
+        self.setLayoutDirection(Qt.LayoutDirection.LeftToRight)
+
+        self.main_window = parent
+        self.global_panel_index: int = -1
+        self.current_number: str = ""
+        self.current_object: str | None = None
+        self.slot_method = None
+        self.numpad_window_index: int = -1
+        self.previous_window_index: int = -1
+        self.caller_panel: QStackedWidget | None = None
+        self.panel.numpad_0.clicked.connect(partial(self.insert_number, 0))
+        self.panel.numpad_1.clicked.connect(partial(self.insert_number, 1))
+        self.panel.numpad_2.clicked.connect(partial(self.insert_number, 2))
+        self.panel.numpad_3.clicked.connect(partial(self.insert_number, 3))
+        self.panel.numpad_4.clicked.connect(partial(self.insert_number, 4))
+        self.panel.numpad_5.clicked.connect(partial(self.insert_number, 5))
+        self.panel.numpad_6.clicked.connect(partial(self.insert_number, 6))
+        self.panel.numpad_7.clicked.connect(partial(self.insert_number, 7))
+        self.panel.numpad_8.clicked.connect(partial(self.insert_number, 8))
+        self.panel.numpad_9.clicked.connect(partial(self.insert_number, 9))
+        self.panel.numpad_enter.clicked.connect(partial(self.insert_number, "enter"))
+        self.panel.numpad_clear.clicked.connect(partial(self.insert_number, "clear"))
+
+        self.panel.numpad_back_btn.clicked.connect(self.back_button)
+
+    def insert_number(self, value: int | str) -> None:
+        if isinstance(value, int):
+            #
+            self.current_number = self.current_number + str(value)
+            self.panel.inserted_value.setText(self.current_number)
+        elif isinstance(value, str):
+            if (
+                "enter" in value
+                and self.current_number.isnumeric()
+                and self.current_object is not None
+            ):
+                if self.current_object.startswith("fan"):
+                    if 0 <= int(self.current_number) <= 100:
+                        # * For the fan i'll the user will only be able to insert a value between 0 and 100
+                        ("Sending the new value for the fan")
+                        self.inserted_new_value[str, float].emit(
+                            self.current_object, float(self.current_number)
+                        )
+                else:
+                    self.inserted_new_value[str, int].emit(
+                        self.current_object, int(self.current_number)
+                    )
+                self.reset_numpad()
+                self.hide()
+            elif "clear" in value:
+                self.current_number = self.current_number[
+                    : len(self.current_number) - 1
+                ]
+                self.panel.inserted_value.setText(self.current_number)
+
+    def back_button(self):
+        """back_button
+        Controls what the numpad page does when the back button is pressed.
+        """
+        self.reset_numpad()
+        self.request_back_button_pressed.emit()
+
+    @pyqtSlot(int, str, str, "PyQt_PyObject", QStackedWidget, name="call_numpad")
+    def call_numpad(
+        self,
+        global_panel_index: int,
+        printer_object: str,
+        current_temperature: str,
+        callback_slot,  # Add: type here
+        caller: QStackedWidget,
+    ) -> None:
+        self.caller_panel = caller
+        _logger.info(
+            f"Numpad panel was called from global panel index: {global_panel_index} | Caller object name: {caller.__class__.__name__}."
+        )
+        if callable(callback_slot):
+            self.slot_method = callback_slot
+            if "fan" in printer_object:
+                self.inserted_new_value[str, float].connect(callback_slot)
+            else:
+                self.inserted_new_value[str, int].connect(callback_slot)
+
+        self.global_panel_index = global_panel_index
+        self.previous_window_index = self.caller_panel.currentIndex()
+        self.numpad_window_index = self.caller_panel.addWidget(self)
+
+        self.request_change_page.emit(global_panel_index, self.numpad_window_index)
+
+        # * Reset the displayed temperature
+        self.panel.inserted_value.setText(current_temperature)
+        self.current_object = printer_object
+
+        _logger.info(
+            f"Panel {self.global_panel_index} Called numpad \n"
+            f"Caller panel name {self.caller_panel.__class__.__name__}"
+            f"Previous panel index was {self.previous_window_index}\n"
+            f"Numpad inserted at index {self.numpad_window_index}\n"
+        )
+
+    def reset_numpad(self) -> bool:
+
+        try:
+
+            self.current_number = ""
+            if self.slot_method is not None and callable(self.slot_method):
+                if self.current_object is not None and "fan" in self.current_object:
+                    self.inserted_new_value[str, float].disconnect(self.slot_method)
+                else:
+                    self.inserted_new_value[str, int].disconnect(self.slot_method)
+                self.slot_method = None
+                if self.caller_panel is not None:
+                    self.caller_panel.setCurrentIndex(self.previous_window_index)
+                    self.caller_panel.removeWidget(self)
+                    self.window_index = -1
+                    self.caller_panel = None
+            self.global_panel_index = -1
+            self.numpad_window_index = -1
+            self.previous_window_index = -1
+            self.panel.inserted_value.setText(self.current_number)
+            return True
+        except Exception as e:
+            _logger.debug(f"Could not reset numpad, error message caught : {e}")
+
+            return False
+
+    def paintEvent(self, a0: QtGui.QPaintEvent | None) -> None:
+        """paintEvent
+            Repaints the widget with custom controls
+
+        Args:
+            a0 (QtGui.QPaintEvent | None): The event for repainting
+
+        Returns:
+            Nothing: Nothing
+        """
+        if self.current_object is not None:
+            self.panel.heater.setText(self.current_object)
+        if self.isVisible():
+            # painter = QtGui.QPainter()
+            # painter.begin(self)
+
+            # * The are where the numpad was called
+
+            if self.current_object is not None and "fan" in self.current_object:
+                pass
+
+                # painter = QtGui.QPainter(self.panel.inserted_value)
+
+                # painter.begin(self)
+                # painter.setCompositionMode(
+                #     painter.CompositionMode.CompositionMode_SourceOver
+                # )
+                # painter.setRenderHint(painter.RenderHint.Antialiasing, True)
+                # painter.setRenderHint(painter.RenderHint.SmoothPixmapTransform, True)
+                # painter.setRenderHint(painter.RenderHint.LosslessImageRendering, True)
+                # # * We have a fan so i need to verify that the inserted value is between 0 and 100
+                # _label_rect: QRect = self.panel.inserted_value.rect()
+                # _new_rect: QRect = _label_rect
+                # _margins: QtCore.QMargins = QtCore.QMargins(1, 1, 1, 1)
+
+                # TODO: Add limits to what the user can input for the fan speed 0 to 100
+                # TODO: Also add limitis for speed parameter, the value should also be between 0 and 100 
+                # TODO: The field (QLabel) where the value is inserted, should flash red when the value is not between 0 and 100
+                # # print(f"The current number for the fan value: {self.current_number}")
+                # # if not 0 <= int(self.current_number) <= 100:
+                # #     _red_color: QtGui.QColor = QtGui.QColor(255, 30, 30, 1)
+                # #     _new_rect = _new_rect.marginsAdded(_margins)
+
+                # #     painter.setCompositionMode(
+                # #         painter.CompositionMode.CompositionMode_SourceIn
+                # #     )
+                # #     painter.fillRect(_new_rect, _red_color)
+
+                # #     painter.drawRoundedRect(_new_rect.toRectF(), 5.0, 5.0)
+
+                # # else:
+                # #     _new_rect = _new_rect.marginsRemoved(_margins)
+
+                # painter.end()
+            # painter.end()
+        # return super().paintEvent(a0)
+
+    def sizeHint(self) -> QtCore.QSize:
+        return super().sizeHint()
+
+    def event(self, e: QtCore.QEvent | None) -> bool:
+        return super().event(e)
+
+
 class RoutingQueue(queue.LifoQueue):
 
     def __init__(self):
@@ -370,27 +593,36 @@ class RoutingQueue(queue.LifoQueue):
         # Sets the flag to True
         self._clear_to_move.set()
 
-    def add_command(self, command, line_number, timestamp=None, resend=False, block=True, timeout=None):
+    def add_command(
+        self,
+        command,
+        line_number,
+        timestamp=None,
+        resend=False,
+        block=True,
+        timeout=None,
+    ):
         """
-            Adds a command to the send queue if resend is False
-            Adds a command to the resend queue if resend is True
+        Adds a command to the send queue if resend is False
+        Adds a command to the resend queue if resend is True
         """
         self._clear_to_move.wait()
         try:
             if command is not None:
-                self.put((command, line_number, timestamp),
-                         block=block, timeout=timeout)
+                self.put(
+                    (command, line_number, timestamp), block=block, timeout=timeout
+                )
                 self._resend_queue.put(
-                    (command, line_number, timestamp), block=block, timeout=timeout)
+                    (command, line_number, timestamp), block=block, timeout=timeout
+                )
                 self._read_lines += 1
         except Exception:
-            self._logger.exception(
-                "Unexpected error while adding command to queue.")
+            self._logger.exception("Unexpected error while adding command to queue.")
 
     def get_command(self, block=True, timeout=None, resend=False):
         """
-            Gets a command depending if resend if True or False
-                If resend is True then it gets the command from the resend queue.
+        Gets a command depending if resend if True or False
+            If resend is True then it gets the command from the resend queue.
 
 
         """
@@ -398,18 +630,22 @@ class RoutingQueue(queue.LifoQueue):
         if not resend:
             try:
                 _command, _line_number, _timestamp = self.get(
-                    block=block, timeout=timeout)
+                    block=block, timeout=timeout
+                )
             except queue.Empty:
                 self._logger.exception(
-                    "Unexpected error while getting command from queue.")
+                    "Unexpected error while getting command from queue."
+                )
                 return None
         elif resend:
             try:
                 _command, _line_number, _timestamp = self._resend_queue.get(
-                    block=block, timeout=timeout)
+                    block=block, timeout=timeout
+                )
             except queue.Empty:
                 self._logger.exception(
-                    "Unexpected error while getting command from the resend queue.")
+                    "Unexpected error while getting command from the resend queue."
+                )
                 return None
 
         return _command, _line_number, _timestamp
@@ -418,11 +654,11 @@ class RoutingQueue(queue.LifoQueue):
         """
 
 
-            Clears both the MAIN and RESEND queues
+        Clears both the MAIN and RESEND queues
 
-            Returns:
-                True if the queues are all empty
-                False if one of the queues or both of them are not emty
+        Returns:
+            True if the queues are all empty
+            False if one of the queues or both of them are not emty
         """
         if self.empty():
             return

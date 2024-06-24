@@ -138,6 +138,9 @@ class ConnectionWindow(QFrame):
 
     def eventFilter(self, a0: QObject | None, a1: QEvent | None) -> bool:
         # print(f"Event method in connectionWindow ->\n\t Event class : {e.__class__}")
+        if a1 is None:
+            return super().eventFilter(a0, a1)
+            
         if a1.type() == KlippyDisconnectedEvent.type():
             if not self.isVisible():
                 self.show()

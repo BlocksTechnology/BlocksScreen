@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>710</width>
+    <width>711</width>
     <height>410</height>
    </rect>
   </property>
@@ -14,7 +14,7 @@
    <string>StackedWidget</string>
   </property>
   <property name="currentIndex">
-   <number>3</number>
+   <number>0</number>
   </property>
   <property name="backgroundPixmap" stdset="0">
    <pixmap resource="../resources/background_resources.qrc">:/background/media/graphics/scroll_list_window.svg</pixmap>
@@ -134,6 +134,9 @@
     </property>
     <property name="text">
      <string>Printer ready to use</string>
+    </property>
+    <property name="alignment">
+     <set>Qt::AlignCenter</set>
     </property>
    </widget>
   </widget>
@@ -379,6 +382,7 @@ color: #ffffff;
       </property>
       <property name="font">
        <font>
+        <weight>75</weight>
         <bold>true</bold>
        </font>
       </property>
@@ -701,6 +705,9 @@ background-color: transparent;
       <height>23</height>
      </rect>
     </property>
+    <property name="layoutDirection">
+     <enum>Qt::LeftToRight</enum>
+    </property>
     <property name="value">
      <number>24</number>
     </property>
@@ -774,7 +781,7 @@ background-color: transparent;
      <enum>Qt::RightToLeft</enum>
     </property>
     <property name="styleSheet">
-     <string notr="true"/>
+     <string notr="true">background: transparent; color: white;</string>
     </property>
     <property name="text">
      <string>File Name:</string>
@@ -805,7 +812,7 @@ background-color: transparent;
      <enum>Qt::RightToLeft</enum>
     </property>
     <property name="styleSheet">
-     <string notr="true"/>
+     <string notr="true">background: transparent; color: white;</string>
     </property>
     <property name="text">
      <string>Progress</string>
@@ -1222,13 +1229,16 @@ background-color: transparent;
      <string notr="true">background: transparent; color: white;</string>
     </property>
     <property name="text">
-     <string>TextLabel</string>
+     <string>0</string>
+    </property>
+    <property name="alignment">
+     <set>Qt::AlignCenter</set>
     </property>
    </widget>
    <widget class="QLabel" name="total_layer">
     <property name="geometry">
      <rect>
-      <x>610</x>
+      <x>600</x>
       <y>300</y>
       <width>47</width>
       <height>41</height>
@@ -1238,7 +1248,10 @@ background-color: transparent;
      <string notr="true">background: transparent; color: white;</string>
     </property>
     <property name="text">
-     <string>TextLabel</string>
+     <string>0</string>
+    </property>
+    <property name="alignment">
+     <set>Qt::AlignCenter</set>
     </property>
    </widget>
    <widget class="QLabel" name="label_3">
@@ -1275,15 +1288,15 @@ background-color: transparent;
      <string>Hotend1 Icon</string>
     </property>
    </widget>
-   <widget class="QLabel" name="tune_fan_2_value_label_5">
+   <widget class="QLabel" name="tune_chamber_value">
     <property name="enabled">
      <bool>true</bool>
     </property>
     <property name="geometry">
      <rect>
-      <x>120</x>
+      <x>130</x>
       <y>240</y>
-      <width>31</width>
+      <width>71</width>
       <height>41</height>
      </rect>
     </property>
@@ -1298,6 +1311,9 @@ background-color: transparent;
     </property>
     <property name="text">
      <string>0</string>
+    </property>
+    <property name="alignment">
+     <set>Qt::AlignCenter</set>
     </property>
    </widget>
    <widget class="CustomQPushButton" name="tune_babystep_menu_btn">
@@ -1360,15 +1376,15 @@ background-color: transparent;
      <pixmap resource="../resources/button_resources.qrc">:/button_borders/media/buttons/btn_part3.svg</pixmap>
     </property>
    </widget>
-   <widget class="QLabel" name="tune_fan_2_value_label_4">
+   <widget class="QLabel" name="tune_hotbed_value">
     <property name="enabled">
      <bool>true</bool>
     </property>
     <property name="geometry">
      <rect>
-      <x>110</x>
+      <x>130</x>
       <y>170</y>
-      <width>31</width>
+      <width>71</width>
       <height>41</height>
      </rect>
     </property>
@@ -1383,6 +1399,9 @@ background-color: transparent;
     </property>
     <property name="text">
      <string>0</string>
+    </property>
+    <property name="alignment">
+     <set>Qt::AlignCenter</set>
     </property>
    </widget>
    <widget class="QLabel" name="tune_fan_1_icon_label">
@@ -1411,15 +1430,15 @@ background-color: transparent;
      <string>Hotend2 Icon</string>
     </property>
    </widget>
-   <widget class="QLabel" name="tune_fan_1_value_label">
+   <widget class="QLabel" name="tune_fan_value_1">
     <property name="enabled">
      <bool>true</bool>
     </property>
     <property name="geometry">
      <rect>
-      <x>540</x>
-      <y>170</y>
-      <width>31</width>
+      <x>510</x>
+      <y>160</y>
+      <width>91</width>
       <height>41</height>
      </rect>
     </property>
@@ -1434,6 +1453,9 @@ background-color: transparent;
     </property>
     <property name="text">
      <string>0</string>
+    </property>
+    <property name="alignment">
+     <set>Qt::AlignCenter</set>
     </property>
    </widget>
    <widget class="QLabel" name="tune_title_lable">
@@ -1467,7 +1489,7 @@ background-color: transparent;
      <string>title_text</string>
     </property>
    </widget>
-   <widget class="QLabel" name="tune_fan_2_value_label_3">
+   <widget class="QLabel" name="tune_hotend_value_1">
     <property name="enabled">
      <bool>true</bool>
     </property>
@@ -1475,7 +1497,7 @@ background-color: transparent;
      <rect>
       <x>320</x>
       <y>170</y>
-      <width>31</width>
+      <width>81</width>
       <height>41</height>
      </rect>
     </property>
@@ -1490,6 +1512,9 @@ background-color: transparent;
     </property>
     <property name="text">
      <string>0</string>
+    </property>
+    <property name="alignment">
+     <set>Qt::AlignCenter</set>
     </property>
    </widget>
    <widget class="QLabel" name="tune_fan_2_icon_label">
@@ -1540,9 +1565,9 @@ background-color: transparent;
     </property>
     <property name="geometry">
      <rect>
-      <x>540</x>
+      <x>520</x>
       <y>100</y>
-      <width>31</width>
+      <width>81</width>
       <height>41</height>
      </rect>
     </property>
@@ -1557,6 +1582,9 @@ background-color: transparent;
     </property>
     <property name="text">
      <string>0</string>
+    </property>
+    <property name="alignment">
+     <set>Qt::AlignCenter</set>
     </property>
    </widget>
    <widget class="QLabel" name="tune_bed_icon_label">
@@ -1585,7 +1613,7 @@ background-color: transparent;
      <string>Chamber Icon</string>
     </property>
    </widget>
-   <widget class="QLabel" name="tune_hotend_2_value_label">
+   <widget class="QLabel" name="tune_hotend_value_2">
     <property name="enabled">
      <bool>true</bool>
     </property>
@@ -1593,7 +1621,7 @@ background-color: transparent;
      <rect>
       <x>320</x>
       <y>230</y>
-      <width>31</width>
+      <width>81</width>
       <height>41</height>
      </rect>
     </property>
@@ -1609,16 +1637,19 @@ background-color: transparent;
     <property name="text">
      <string>0</string>
     </property>
+    <property name="alignment">
+     <set>Qt::AlignCenter</set>
+    </property>
    </widget>
-   <widget class="QLabel" name="tune_fan_2_value_label">
+   <widget class="QLabel" name="tune_fan_value_2">
     <property name="enabled">
      <bool>true</bool>
     </property>
     <property name="geometry">
      <rect>
-      <x>540</x>
+      <x>520</x>
       <y>230</y>
-      <width>31</width>
+      <width>91</width>
       <height>41</height>
      </rect>
     </property>
@@ -1633,6 +1664,9 @@ background-color: transparent;
     </property>
     <property name="text">
      <string>0</string>
+    </property>
+    <property name="alignment">
+     <set>Qt::AlignCenter</set>
     </property>
    </widget>
    <widget class="CustomQPushButton" name="tune_change_filament_btn">
@@ -1695,224 +1729,282 @@ background-color: transparent;
      <pixmap resource="../resources/button_resources.qrc">:/button_borders/media/buttons/btn_part3.svg</pixmap>
     </property>
    </widget>
-   <widget class="CustomQPushButton" name="files_up_arrow_btn">
-    <property name="enabled">
-     <bool>true</bool>
-    </property>
+   <widget class="QPushButton" name="tune_hotbed_value_btn">
     <property name="geometry">
      <rect>
-      <x>600</x>
-      <y>150</y>
-      <width>81</width>
-      <height>51</height>
-     </rect>
-    </property>
-    <property name="minimumSize">
-     <size>
-      <width>10</width>
-      <height>10</height>
-     </size>
-    </property>
-    <property name="font">
-     <font>
-      <family>Momcake-Bold</family>
-      <pointsize>20</pointsize>
-      <italic>false</italic>
-      <stylestrategy>PreferAntialias</stylestrategy>
-     </font>
-    </property>
-    <property name="mouseTracking">
-     <bool>false</bool>
-    </property>
-    <property name="tabletTracking">
-     <bool>true</bool>
-    </property>
-    <property name="contextMenuPolicy">
-     <enum>Qt::NoContextMenu</enum>
-    </property>
-    <property name="layoutDirection">
-     <enum>Qt::LeftToRight</enum>
-    </property>
-    <property name="styleSheet">
-     <string notr="true"/>
-    </property>
-    <property name="text">
-     <string>/\</string>
-    </property>
-    <property name="autoDefault">
-     <bool>false</bool>
-    </property>
-    <property name="flat">
-     <bool>true</bool>
-    </property>
-    <property name="class" stdset="0">
-     <string>menu_btn</string>
-    </property>
-    <property name="borderLeftPixmap" stdset="0">
-     <pixmap/>
-    </property>
-    <property name="borderCenterPixmap" stdset="0">
-     <pixmap/>
-    </property>
-    <property name="borderRightPixmap" stdset="0">
-     <pixmap/>
-    </property>
-   </widget>
-   <widget class="CustomQPushButton" name="files_down_arrow_btn">
-    <property name="enabled">
-     <bool>true</bool>
-    </property>
-    <property name="geometry">
-     <rect>
-      <x>600</x>
-      <y>220</y>
-      <width>81</width>
-      <height>51</height>
-     </rect>
-    </property>
-    <property name="minimumSize">
-     <size>
-      <width>10</width>
-      <height>10</height>
-     </size>
-    </property>
-    <property name="font">
-     <font>
-      <family>Momcake-Bold</family>
-      <pointsize>20</pointsize>
-      <italic>false</italic>
-      <stylestrategy>PreferAntialias</stylestrategy>
-     </font>
-    </property>
-    <property name="mouseTracking">
-     <bool>false</bool>
-    </property>
-    <property name="tabletTracking">
-     <bool>true</bool>
-    </property>
-    <property name="contextMenuPolicy">
-     <enum>Qt::NoContextMenu</enum>
-    </property>
-    <property name="layoutDirection">
-     <enum>Qt::LeftToRight</enum>
-    </property>
-    <property name="styleSheet">
-     <string notr="true"/>
-    </property>
-    <property name="text">
-     <string>V</string>
-    </property>
-    <property name="autoDefault">
-     <bool>false</bool>
-    </property>
-    <property name="flat">
-     <bool>true</bool>
-    </property>
-    <property name="class" stdset="0">
-     <string>menu_btn</string>
-    </property>
-    <property name="borderLeftPixmap" stdset="0">
-     <pixmap/>
-    </property>
-    <property name="borderCenterPixmap" stdset="0">
-     <pixmap/>
-    </property>
-    <property name="borderRightPixmap" stdset="0">
-     <pixmap/>
-    </property>
-   </widget>
-   <widget class="CustomQPushButton" name="files_back_folder_btn">
-    <property name="enabled">
-     <bool>true</bool>
-    </property>
-    <property name="geometry">
-     <rect>
-      <x>600</x>
-      <y>290</y>
-      <width>81</width>
-      <height>51</height>
-     </rect>
-    </property>
-    <property name="minimumSize">
-     <size>
-      <width>10</width>
-      <height>10</height>
-     </size>
-    </property>
-    <property name="font">
-     <font>
-      <family>Momcake-Bold</family>
-      <pointsize>20</pointsize>
-      <italic>false</italic>
-      <stylestrategy>PreferAntialias</stylestrategy>
-     </font>
-    </property>
-    <property name="mouseTracking">
-     <bool>false</bool>
-    </property>
-    <property name="tabletTracking">
-     <bool>true</bool>
-    </property>
-    <property name="contextMenuPolicy">
-     <enum>Qt::NoContextMenu</enum>
-    </property>
-    <property name="layoutDirection">
-     <enum>Qt::LeftToRight</enum>
-    </property>
-    <property name="styleSheet">
-     <string notr="true"/>
-    </property>
-    <property name="text">
-     <string>[&lt;]</string>
-    </property>
-    <property name="autoDefault">
-     <bool>false</bool>
-    </property>
-    <property name="flat">
-     <bool>true</bool>
-    </property>
-    <property name="class" stdset="0">
-     <string>menu_btn</string>
-    </property>
-    <property name="borderLeftPixmap" stdset="0">
-     <pixmap/>
-    </property>
-    <property name="borderCenterPixmap" stdset="0">
-     <pixmap/>
-    </property>
-    <property name="borderRightPixmap" stdset="0">
-     <pixmap/>
-    </property>
-   </widget>
-   <widget class="QLabel" name="files_title_label">
-    <property name="geometry">
-     <rect>
-      <x>260</x>
-      <y>20</y>
-      <width>181</width>
+      <x>130</x>
+      <y>170</y>
+      <width>71</width>
       <height>41</height>
      </rect>
     </property>
+    <property name="styleSheet">
+     <string notr="true">QPushButton{background:Transparent;}</string>
+    </property>
+    <property name="text">
+     <string/>
+    </property>
+    <property name="flat">
+     <bool>true</bool>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="tune_hotend_value_1_btn">
+    <property name="geometry">
+     <rect>
+      <x>320</x>
+      <y>170</y>
+      <width>91</width>
+      <height>41</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">QPushButton{background:Transparent;}</string>
+    </property>
+    <property name="text">
+     <string/>
+    </property>
+    <property name="flat">
+     <bool>true</bool>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="tune_hotend_value_2_btn">
+    <property name="geometry">
+     <rect>
+      <x>320</x>
+      <y>230</y>
+      <width>91</width>
+      <height>41</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">QPushButton{background:Transparent;}</string>
+    </property>
+    <property name="text">
+     <string/>
+    </property>
+    <property name="flat">
+     <bool>true</bool>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="tune_fan_value_1_btn">
+    <property name="geometry">
+     <rect>
+      <x>510</x>
+      <y>160</y>
+      <width>81</width>
+      <height>41</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">QPushButton{background:Transparent;}</string>
+    </property>
+    <property name="text">
+     <string/>
+    </property>
+    <property name="flat">
+     <bool>true</bool>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="tune_fan_value_2_btn">
+    <property name="geometry">
+     <rect>
+      <x>520</x>
+      <y>230</y>
+      <width>81</width>
+      <height>41</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">QPushButton{background:Transparent;}</string>
+    </property>
+    <property name="text">
+     <string/>
+    </property>
+    <property name="flat">
+     <bool>true</bool>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="tune_chamber_value_btn">
+    <property name="geometry">
+     <rect>
+      <x>130</x>
+      <y>240</y>
+      <width>61</width>
+      <height>51</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">QPushButton{background:Transparent;}</string>
+    </property>
+    <property name="text">
+     <string/>
+    </property>
+    <property name="flat">
+     <bool>true</bool>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="tune_speed_btn">
+    <property name="geometry">
+     <rect>
+      <x>520</x>
+      <y>100</y>
+      <width>91</width>
+      <height>41</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">QPushButton{background:Transparent;}</string>
+    </property>
+    <property name="text">
+     <string/>
+    </property>
+    <property name="flat">
+     <bool>true</bool>
+    </property>
+   </widget>
+  </widget>
+  <widget class="QWidget" name="babystep_page">
+   <property name="styleSheet">
+    <string notr="true"/>
+   </property>
+   <widget class="QPushButton" name="nozzle_close_to_bed">
+    <property name="geometry">
+     <rect>
+      <x>150</x>
+      <y>160</y>
+      <width>91</width>
+      <height>91</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>^</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="nozzle_far_to_bed">
+    <property name="geometry">
+     <rect>
+      <x>460</x>
+      <y>160</y>
+      <width>91</width>
+      <height>91</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>~^</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="babystep_back_btn">
+    <property name="geometry">
+     <rect>
+      <x>530</x>
+      <y>40</y>
+      <width>75</width>
+      <height>23</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>back</string>
+    </property>
+   </widget>
+   <widget class="QWidget" name="horizontalLayoutWidget">
+    <property name="geometry">
+     <rect>
+      <x>80</x>
+      <y>280</y>
+      <width>541</width>
+      <height>80</height>
+     </rect>
+    </property>
+    <layout class="QHBoxLayout" name="horizontalLayout_2">
+     <item>
+      <widget class="QPushButton" name="nozzle_offset_05">
+       <property name="minimumSize">
+        <size>
+         <width>0</width>
+         <height>50</height>
+        </size>
+       </property>
+       <property name="text">
+        <string>0.05</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="nozzle_offset_025">
+       <property name="minimumSize">
+        <size>
+         <width>0</width>
+         <height>50</height>
+        </size>
+       </property>
+       <property name="text">
+        <string>0.025</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="nozzle_offset_01">
+       <property name="minimumSize">
+        <size>
+         <width>0</width>
+         <height>50</height>
+        </size>
+       </property>
+       <property name="text">
+        <string>0.01</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="nozzle_offset_005">
+       <property name="minimumSize">
+        <size>
+         <width>0</width>
+         <height>50</height>
+        </size>
+       </property>
+       <property name="text">
+        <string>0.005</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="nozzle_offset_001">
+       <property name="minimumSize">
+        <size>
+         <width>0</width>
+         <height>50</height>
+        </size>
+       </property>
+       <property name="text">
+        <string>0.001</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </widget>
+   <widget class="QLabel" name="label_4">
+    <property name="geometry">
+     <rect>
+      <x>70</x>
+      <y>20</y>
+      <width>321</width>
+      <height>61</height>
+     </rect>
+    </property>
     <property name="font">
      <font>
-      <family>Momcake</family>
       <pointsize>24</pointsize>
      </font>
-    </property>
-    <property name="layoutDirection">
-     <enum>Qt::RightToLeft</enum>
     </property>
     <property name="styleSheet">
      <string notr="true">background: transparent; color: white;</string>
     </property>
     <property name="text">
-     <string>Files</string>
+     <string>Z Babystep</string>
     </property>
     <property name="alignment">
      <set>Qt::AlignCenter</set>
-    </property>
-    <property name="class" stdset="0">
-     <string>title_text</string>
     </property>
    </widget>
   </widget>
