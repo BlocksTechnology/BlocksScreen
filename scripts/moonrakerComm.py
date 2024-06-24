@@ -10,21 +10,24 @@ import threading
 import json
 import logging
 import websocket
-import json
 import typing
-import queue
-from scripts.events import *
-from PyQt6.QtCore import QObject, pyqtSignal, QEvent, QCoreApplication, pyqtSlot
+from scripts.events import (
+    WebSocketErrorEvent,
+    WebSocketDisconnectEvent,
+    WebSocketOpenEvent,
+    WebSocketMessageReceivedEvent,
+)
+from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot
 from PyQt6.QtWidgets import QApplication
-from PyQt6 import QtCore
-
 from scripts.util import RepeatedTimer
 from scripts.moonrest import MoonRest
 
 
 # TODO: Try and use multiprocessing as it sidesteps the GIL
 
-# My Logger object
+
+# TODO: Pass the logger object instanteation to another class so that the main window defines and calls it 
+# * My Logger object
 logging.basicConfig(
     format="'%(asctime)s - %(name)s - %(relativeCreated)6d / %(threadName)s  - %(levelname)s - %(message)s",
     filename=r"E:\gitHub\Blocks_Screen\logFile.log",
@@ -37,25 +40,40 @@ _logger = logging.getLogger(__name__)
 
 
 class MoonWebSocket(QObject, threading.Thread):
-    QUERY_KLIPPY_TIMEOUT: int = 5
+    """MoonWebSocket Class object for creating a websocket connection to Moonraker.
+    
+    This class handles all there is to do with connecting to Moonraker to gather information.
+    Tries the to connect the the websocket, if no connection is established the class retries three times, after which it may or may not 
+    successfully connect to the websocket. If not sends an event accordingly, the user may then try to connect again. 
 
+    
+    The class also exposes an api to use with moonraker.
+    
+    
+    Args:
+        QObject (QObject): Double inheritance from QObject.
+        threading.Thread (threading.Thread): Double inheritance from threading.Thread
+
+    Raises:
+        Exception: _description_
+        Exception: _description_
+        Exception: _description_
+        Exception: _description_
+
+    """
+    QUERY_KLIPPY_TIMEOUT: int = 5
     connected = False
     connecting = False
     callback_table = {}
     _reconnect_count = 0
     max_retries = 3
     timeout = 3
-
-    # * For optional types use (<type>,)
     # @ Signals
-    message_signal = pyqtSignal()
-
     connecting_signal = pyqtSignal([int], [str], name="websocket_connecting")
     connected_signal = pyqtSignal(name="websocket-connected")
     connection_lost = pyqtSignal([str], name="websocket-connection-lost")
     klippy_connected_signal = pyqtSignal(bool, name="klippy_connection_status")
     klippy_state_signal = pyqtSignal(str, name="klippy_state")
-
     query_server_info_signal = pyqtSignal(name="query_server_information")
 
     def __init__(self, parent: typing.Optional["QObject"]) -> None:
@@ -63,12 +81,10 @@ class MoonWebSocket(QObject, threading.Thread):
         super(MoonWebSocket, self).__init__(parent)
         self.daemon = True
         self._main_window = parent
-
         # * This information should be in a  configuration file
         # self.host: str=None
         # self.port: int = None
         # self.ws: websocket.WebSocketApp = None
-
         self._callback = None
         self._wst = None
         self._request_id = 0
@@ -116,14 +132,12 @@ class MoonWebSocket(QObject, threading.Thread):
                 # QCoreApplication.sendEvent(self._main_window, unable_to_connect_event)
                 instance = QApplication.instance()
                 if instance is not None:
-                    instance.sendEvent(
-                        self._main_window, unable_to_connect_event
-                    )
-                else: 
+                    instance.sendEvent(self._main_window, unable_to_connect_event)
+                else:
                     raise Exception("QApplication.instance is None type")
             except Exception as e:
                 _logger.error(
-                    f"Error sending Event {unable_to_connect_event.__class__.__name__}"
+                    f"Error sending Event {unable_to_connect_event.__class__.__name__} | Error message caught : {e}"
                 )
             _logger.debug("Max number of connection retries reached.")
             _logger.info("Could not connect to moonraker.")
@@ -141,7 +155,7 @@ class MoonWebSocket(QObject, threading.Thread):
         self.connecting_signal[int].emit(int(self._reconnect_count))
         _logger.debug(f"Connect try number:{self._reconnect_count}")
 
-        # Request oneshot token
+        # * Request oneshot token
         # TODO Handle if i cannot connect to moonraker, request server.info and see if i get a result
         try:
             _oneshot_token = self._moonRest.get_oneshot_token()
@@ -150,7 +164,8 @@ class MoonWebSocket(QObject, threading.Thread):
             _logger.debug("Unable to get oneshot token")
             return False
             # f"ws://localhost:7125/websocket?token={_oneshot_token}",
-        _url = f"ws://192.168.1.202:7125/websocket?token={_oneshot_token}"
+        # _url = f"ws://192.168.1.202:7125/websocket?token={_oneshot_token}"
+        _url = f"ws://192.168.1.134:7125/websocket?token={_oneshot_token}"
         self.ws = websocket.WebSocketApp(
             _url,
             on_open=self.on_open,
@@ -205,7 +220,7 @@ class MoonWebSocket(QObject, threading.Thread):
             instance = QApplication.instance()
             if instance is not None:
                 instance.sendEvent(self._main_window, close_event)
-            else: 
+            else:
                 raise Exception("QApplication.instance is None type")
         except Exception as e:
             _logger.debug(
@@ -265,10 +280,10 @@ class MoonWebSocket(QObject, threading.Thread):
             else:
                 if "error" in response:
                     message_event = WebSocketMessageReceivedEvent(
-                        data="websocket message error", 
-                        packet=response["error"]["message"], 
-                        method="error", 
-                        params= None
+                        data="websocket message error",
+                        packet=response["error"]["message"],
+                        method="error",
+                        params=None,
                     )
                 else:
                     message_event = WebSocketMessageReceivedEvent(
@@ -286,16 +301,15 @@ class MoonWebSocket(QObject, threading.Thread):
                 method=response["method"],
                 params=None,
             )
-        
+
         try:
             instance = QApplication.instance()
             if instance is not None:
                 instance.sendEvent(self._main_window, message_event)
-            else: 
+            else:
                 raise Exception("QApplication.instance is None type")
         except Exception as e:
             _logger.error(f"On Message- Error posting event: {e}")
-        
 
     def send_request(self, method: str, params: dict = {}):
         if not self.connected:
@@ -375,15 +389,16 @@ class MoonAPI(QObject):
             method="server.temperature_store",
             params={"include_monitors": include_monitors},
         )
+
     @pyqtSlot(name="query_printer_info")
     def request_printer_info(self):
         return self._ws.send_request(method="printer.info")
-        
+
     @pyqtSlot(name="get_available_objects")
     def get_available_objects(self):
         return self._ws.send_request(method="printer.objects.list")
 
-    @pyqtSlot(dict,name="query_object")
+    @pyqtSlot(dict, name="query_object")
     def object_query(self, objects: dict):
         # TODO: Finish
         # Check if the types are correct
@@ -743,36 +758,3 @@ class MoonAPI(QObject):
 
     # TODO: WEBSOCKET NOTIFICATIONS
 
-
-##############################################################################
-# if __name__ == "__main__":
-#     try:
-#         _api = MoonRest()
-#         wb = MoonWebSocket()
-#         wb.start()
-#         wb.try_connection()
-
-#         while wb.is_alive:
-#             if wb._request_id == 0:
-#                 # wb.send_request("access.oneshot_token")
-#                 wb.send_request("access.get_api_key")
-#             if wb._request_id == 1:
-#                 wb.send_request(method="server.info")
-
-#             if wb._request_id == 2:
-#                 wb.send_request(method="access.info")
-
-#             if wb._request_id == 3:
-#                 wb.send_request(method="access.users.list")
-#             # _this_time = time.monotonic()
-#             # _current = _this_time - _inital_time
-#             # if _current > 2:
-#             #     wb.disconnect()
-#             # for thread in threading.enumerate():
-#             #     print(thread.name)
-#             wb.join(0.5)
-#     except KeyboardInterrupt:
-#         sys.exit(1)
-
-
-# ! Can also connect to the moonraker using Unix Socket connection instead of websocket.
