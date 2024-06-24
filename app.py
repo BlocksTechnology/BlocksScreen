@@ -1,10 +1,9 @@
 from collections import deque
-import typing
 from functools import partial
 import sys
 import logging
 from PyQt6.QtCore import QEvent, pyqtSignal, pyqtSlot
-from PyQt6.QtWidgets import QApplication, QMainWindow, QSplashScreen, QStackedWidget, QLabel
+from PyQt6.QtWidgets import QApplication, QMainWindow, QSplashScreen, QStackedWidget
 from PyQt6.QtGui import QPixmap
 
 # * System imports
@@ -378,8 +377,9 @@ class MainWindow(QMainWindow):
                 QApplication.sendEvent(self.file_data, file_data_event)
             except Exception as e:
                 _logger.error(
-                    f"Error emitting event for file related information received from websocket"
+                    f"Error emitting event for file related information received from websocket | error message received: {e}"
                 )
+                
         elif "error" in _method:
             # ! Here i received an error message from the websocket, but it doesn't mean it's closed the connection
             # ! But it might say that klipper had an error with something and has reported back
