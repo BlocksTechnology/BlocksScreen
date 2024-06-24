@@ -744,71 +744,11 @@ STEPPERS</string>
    </widget>
   </widget>
   <widget class="QWidget" name="extrude_page">
-   <widget class="CustomQPushButton" name="extrude_select_length_btn">
-    <property name="geometry">
-     <rect>
-      <x>150</x>
-      <y>110</y>
-      <width>391</width>
-      <height>71</height>
-     </rect>
-    </property>
-    <property name="minimumSize">
-     <size>
-      <width>10</width>
-      <height>10</height>
-     </size>
-    </property>
-    <property name="font">
-     <font>
-      <family>Momcake</family>
-      <pointsize>20</pointsize>
-      <italic>false</italic>
-      <stylestrategy>PreferAntialias</stylestrategy>
-     </font>
-    </property>
-    <property name="mouseTracking">
-     <bool>false</bool>
-    </property>
-    <property name="tabletTracking">
-     <bool>true</bool>
-    </property>
-    <property name="contextMenuPolicy">
-     <enum>Qt::NoContextMenu</enum>
-    </property>
-    <property name="layoutDirection">
-     <enum>Qt::LeftToRight</enum>
-    </property>
-    <property name="styleSheet">
-     <string notr="true"/>
-    </property>
-    <property name="text">
-     <string>Extrude Length Select</string>
-    </property>
-    <property name="autoDefault">
-     <bool>false</bool>
-    </property>
-    <property name="flat">
-     <bool>true</bool>
-    </property>
-    <property name="class" stdset="0">
-     <string>menu_btn</string>
-    </property>
-    <property name="borderLeftPixmap" stdset="0">
-     <pixmap resource="../resources/button_resources.qrc">:/button_borders/media/buttons/btn_part1.svg</pixmap>
-    </property>
-    <property name="borderCenterPixmap" stdset="0">
-     <pixmap resource="../resources/button_resources.qrc">:/button_borders/media/buttons/btn_part2.svg</pixmap>
-    </property>
-    <property name="borderRightPixmap" stdset="0">
-     <pixmap resource="../resources/button_resources.qrc">:/button_borders/media/buttons/btn_part3.svg</pixmap>
-    </property>
-   </widget>
    <widget class="CustomQPushButton" name="extrude_extrude_btn">
     <property name="geometry">
      <rect>
-      <x>450</x>
-      <y>210</y>
+      <x>480</x>
+      <y>260</y>
       <width>191</width>
       <height>71</height>
      </rect>
@@ -868,7 +808,7 @@ STEPPERS</string>
     <property name="geometry">
      <rect>
       <x>10</x>
-      <y>30</y>
+      <y>20</y>
       <width>221</width>
       <height>71</height>
      </rect>
@@ -927,8 +867,8 @@ STEPPERS</string>
    <widget class="CustomQPushButton" name="extrude_retract_btn">
     <property name="geometry">
      <rect>
-      <x>30</x>
-      <y>210</y>
+      <x>60</x>
+      <y>260</y>
       <width>211</width>
       <height>71</height>
      </rect>
@@ -1075,8 +1015,8 @@ STEPPERS</string>
    <widget class="QLabel" name="extrude_nozzle_icon_label">
     <property name="geometry">
      <rect>
-      <x>280</x>
-      <y>210</y>
+      <x>320</x>
+      <y>260</y>
       <width>131</width>
       <height>61</height>
      </rect>
@@ -1103,9 +1043,9 @@ STEPPERS</string>
     </property>
     <property name="geometry">
      <rect>
-      <x>150</x>
-      <y>290</y>
-      <width>411</width>
+      <x>60</x>
+      <y>310</y>
+      <width>641</width>
       <height>91</height>
      </rect>
     </property>
@@ -1121,14 +1061,145 @@ STEPPERS</string>
     <property name="text">
      <string>Nozzle heating to extrude</string>
     </property>
+    <property name="alignment">
+     <set>Qt::AlignCenter</set>
+    </property>
+   </widget>
+   <widget class="QLabel" name="extrude_length_text_label">
+    <property name="enabled">
+     <bool>true</bool>
+    </property>
+    <property name="geometry">
+     <rect>
+      <x>20</x>
+      <y>100</y>
+      <width>201</width>
+      <height>91</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <family>Montserrat</family>
+      <pointsize>14</pointsize>
+     </font>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background: transparent; color: white;</string>
+    </property>
+    <property name="text">
+     <string>Extrude Length</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="extrude_feedrate_text_label">
+    <property name="enabled">
+     <bool>true</bool>
+    </property>
+    <property name="geometry">
+     <rect>
+      <x>20</x>
+      <y>170</y>
+      <width>201</width>
+      <height>91</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <family>Montserrat</family>
+      <pointsize>14</pointsize>
+     </font>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background: transparent; color: white;</string>
+    </property>
+    <property name="text">
+     <string>Extrude feedrate</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="extrude_select_length_10_btn">
+    <property name="geometry">
+     <rect>
+      <x>230</x>
+      <y>110</y>
+      <width>111</width>
+      <height>71</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>10mm</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="extrude_select_feedrate_2_btn">
+    <property name="geometry">
+     <rect>
+      <x>230</x>
+      <y>180</y>
+      <width>111</width>
+      <height>71</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>2mm/s</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="extrude_select_length_50_btn">
+    <property name="geometry">
+     <rect>
+      <x>400</x>
+      <y>110</y>
+      <width>111</width>
+      <height>71</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>50mm</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="extrude_select_feedrate_5_btn">
+    <property name="geometry">
+     <rect>
+      <x>400</x>
+      <y>180</y>
+      <width>111</width>
+      <height>71</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>5mm/s</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="extrude_select_feedrate_10_btn">
+    <property name="geometry">
+     <rect>
+      <x>570</x>
+      <y>180</y>
+      <width>111</width>
+      <height>71</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>10mm/s</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="extrude_select_length_100_btn">
+    <property name="geometry">
+     <rect>
+      <x>570</x>
+      <y>110</y>
+      <width>111</width>
+      <height>71</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>100mm</string>
+    </property>
    </widget>
   </widget>
   <widget class="QWidget" name="move_axis_page">
    <widget class="CustomQPushButton" name="move_axis_back_btn">
     <property name="geometry">
      <rect>
-      <x>490</x>
-      <y>30</y>
+      <x>510</x>
+      <y>20</y>
       <width>211</width>
       <height>71</height>
      </rect>
@@ -1187,8 +1258,8 @@ STEPPERS</string>
    <widget class="CustomQPushButton" name="move_axis_tool_switch_btn">
     <property name="geometry">
      <rect>
-      <x>490</x>
-      <y>100</y>
+      <x>0</x>
+      <y>40</y>
       <width>211</width>
       <height>71</height>
      </rect>
@@ -1247,8 +1318,8 @@ STEPPERS</string>
    <widget class="QLabel" name="move_axis_title_label">
     <property name="geometry">
      <rect>
-      <x>190</x>
-      <y>40</y>
+      <x>210</x>
+      <y>30</y>
       <width>311</width>
       <height>61</height>
      </rect>
@@ -1272,74 +1343,14 @@ STEPPERS</string>
      <string>title_text</string>
     </property>
    </widget>
-   <widget class="CustomQPushButton" name="move_axis_select_length_btn">
-    <property name="geometry">
-     <rect>
-      <x>540</x>
-      <y>180</y>
-      <width>161</width>
-      <height>171</height>
-     </rect>
-    </property>
-    <property name="minimumSize">
-     <size>
-      <width>10</width>
-      <height>10</height>
-     </size>
-    </property>
-    <property name="font">
-     <font>
-      <family>Momcake</family>
-      <pointsize>20</pointsize>
-      <italic>false</italic>
-      <stylestrategy>PreferAntialias</stylestrategy>
-     </font>
-    </property>
-    <property name="mouseTracking">
-     <bool>false</bool>
-    </property>
-    <property name="tabletTracking">
-     <bool>true</bool>
-    </property>
-    <property name="contextMenuPolicy">
-     <enum>Qt::NoContextMenu</enum>
-    </property>
-    <property name="layoutDirection">
-     <enum>Qt::LeftToRight</enum>
-    </property>
-    <property name="styleSheet">
-     <string notr="true"/>
-    </property>
-    <property name="text">
-     <string>select length</string>
-    </property>
-    <property name="autoDefault">
-     <bool>false</bool>
-    </property>
-    <property name="flat">
-     <bool>true</bool>
-    </property>
-    <property name="class" stdset="0">
-     <string>menu_btn</string>
-    </property>
-    <property name="borderLeftPixmap" stdset="0">
-     <pixmap/>
-    </property>
-    <property name="borderCenterPixmap" stdset="0">
-     <pixmap/>
-    </property>
-    <property name="borderRightPixmap" stdset="0">
-     <pixmap/>
-    </property>
-   </widget>
    <widget class="QLabel" name="move_axis_x_label">
     <property name="enabled">
      <bool>true</bool>
     </property>
     <property name="geometry">
      <rect>
-      <x>130</x>
-      <y>350</y>
+      <x>210</x>
+      <y>360</y>
       <width>51</width>
       <height>41</height>
      </rect>
@@ -1363,8 +1374,8 @@ STEPPERS</string>
     </property>
     <property name="geometry">
      <rect>
-      <x>290</x>
-      <y>350</y>
+      <x>370</x>
+      <y>360</y>
       <width>51</width>
       <height>41</height>
      </rect>
@@ -1388,8 +1399,8 @@ STEPPERS</string>
     </property>
     <property name="geometry">
      <rect>
-      <x>440</x>
-      <y>350</y>
+      <x>520</x>
+      <y>360</y>
       <width>51</width>
       <height>41</height>
      </rect>
@@ -1413,9 +1424,9 @@ STEPPERS</string>
     </property>
     <property name="geometry">
      <rect>
-      <x>490</x>
-      <y>350</y>
-      <width>51</width>
+      <x>570</x>
+      <y>360</y>
+      <width>91</width>
       <height>41</height>
      </rect>
     </property>
@@ -1438,9 +1449,9 @@ STEPPERS</string>
     </property>
     <property name="geometry">
      <rect>
-      <x>320</x>
-      <y>350</y>
-      <width>51</width>
+      <x>400</x>
+      <y>360</y>
+      <width>91</width>
       <height>41</height>
      </rect>
     </property>
@@ -1463,9 +1474,9 @@ STEPPERS</string>
     </property>
     <property name="geometry">
      <rect>
-      <x>160</x>
-      <y>350</y>
-      <width>51</width>
+      <x>240</x>
+      <y>360</y>
+      <width>81</width>
       <height>41</height>
      </rect>
     </property>
@@ -1482,10 +1493,10 @@ STEPPERS</string>
      <string>0</string>
     </property>
    </widget>
-   <widget class="CustomQPushButton" name="move_axis_up_btn">
+   <widget class="QPushButton" name="move_axis_up_btn">
     <property name="geometry">
      <rect>
-      <x>180</x>
+      <x>510</x>
       <y>150</y>
       <width>71</width>
       <height>51</height>
@@ -1518,7 +1529,7 @@ STEPPERS</string>
      <enum>Qt::LeftToRight</enum>
     </property>
     <property name="styleSheet">
-     <string notr="true"/>
+     <string notr="true">background: transparent; color: white;</string>
     </property>
     <property name="text">
      <string>^</string>
@@ -1529,24 +1540,12 @@ STEPPERS</string>
     <property name="flat">
      <bool>true</bool>
     </property>
-    <property name="class" stdset="0">
-     <string>menu_btn</string>
-    </property>
-    <property name="borderLeftPixmap" stdset="0">
-     <pixmap/>
-    </property>
-    <property name="borderCenterPixmap" stdset="0">
-     <pixmap/>
-    </property>
-    <property name="borderRightPixmap" stdset="0">
-     <pixmap/>
-    </property>
    </widget>
-   <widget class="CustomQPushButton" name="move_axis_right_btn">
+   <widget class="QPushButton" name="move_axis_right_btn">
     <property name="geometry">
      <rect>
-      <x>230</x>
-      <y>180</y>
+      <x>560</x>
+      <y>190</y>
       <width>71</width>
       <height>51</height>
      </rect>
@@ -1578,7 +1577,7 @@ STEPPERS</string>
      <enum>Qt::LeftToRight</enum>
     </property>
     <property name="styleSheet">
-     <string notr="true"/>
+     <string notr="true">background: transparent; color: white;</string>
     </property>
     <property name="text">
      <string>&gt;</string>
@@ -1589,24 +1588,12 @@ STEPPERS</string>
     <property name="flat">
      <bool>true</bool>
     </property>
-    <property name="class" stdset="0">
-     <string>menu_btn</string>
-    </property>
-    <property name="borderLeftPixmap" stdset="0">
-     <pixmap/>
-    </property>
-    <property name="borderCenterPixmap" stdset="0">
-     <pixmap/>
-    </property>
-    <property name="borderRightPixmap" stdset="0">
-     <pixmap/>
-    </property>
    </widget>
-   <widget class="CustomQPushButton" name="move_axis_left_btn">
+   <widget class="QPushButton" name="move_axis_left_btn">
     <property name="geometry">
      <rect>
-      <x>130</x>
-      <y>180</y>
+      <x>460</x>
+      <y>190</y>
       <width>71</width>
       <height>51</height>
      </rect>
@@ -1638,7 +1625,7 @@ STEPPERS</string>
      <enum>Qt::LeftToRight</enum>
     </property>
     <property name="styleSheet">
-     <string notr="true"/>
+     <string notr="true">background: transparent; color: white;</string>
     </property>
     <property name="text">
      <string>&lt;</string>
@@ -1649,24 +1636,12 @@ STEPPERS</string>
     <property name="flat">
      <bool>true</bool>
     </property>
-    <property name="class" stdset="0">
-     <string>menu_btn</string>
-    </property>
-    <property name="borderLeftPixmap" stdset="0">
-     <pixmap/>
-    </property>
-    <property name="borderCenterPixmap" stdset="0">
-     <pixmap/>
-    </property>
-    <property name="borderRightPixmap" stdset="0">
-     <pixmap/>
-    </property>
    </widget>
-   <widget class="CustomQPushButton" name="move_axis_down_btn">
+   <widget class="QPushButton" name="move_axis_down_btn">
     <property name="geometry">
      <rect>
-      <x>180</x>
-      <y>230</y>
+      <x>510</x>
+      <y>240</y>
       <width>71</width>
       <height>51</height>
      </rect>
@@ -1698,7 +1673,7 @@ STEPPERS</string>
      <enum>Qt::LeftToRight</enum>
     </property>
     <property name="styleSheet">
-     <string notr="true"/>
+     <string notr="true">background: transparent; color: white;</string>
     </property>
     <property name="text">
      <string>v</string>
@@ -1709,24 +1684,12 @@ STEPPERS</string>
     <property name="flat">
      <bool>true</bool>
     </property>
-    <property name="class" stdset="0">
-     <string>menu_btn</string>
-    </property>
-    <property name="borderLeftPixmap" stdset="0">
-     <pixmap/>
-    </property>
-    <property name="borderCenterPixmap" stdset="0">
-     <pixmap/>
-    </property>
-    <property name="borderRightPixmap" stdset="0">
-     <pixmap/>
-    </property>
    </widget>
-   <widget class="CustomQPushButton" name="move_bed_up_btn">
+   <widget class="QPushButton" name="move_bed_up_btn">
     <property name="geometry">
      <rect>
-      <x>370</x>
-      <y>140</y>
+      <x>640</x>
+      <y>160</y>
       <width>71</width>
       <height>51</height>
      </rect>
@@ -1758,7 +1721,7 @@ STEPPERS</string>
      <enum>Qt::LeftToRight</enum>
     </property>
     <property name="styleSheet">
-     <string notr="true"/>
+     <string notr="true">background: transparent; color: white;</string>
     </property>
     <property name="text">
      <string>^</string>
@@ -1769,24 +1732,12 @@ STEPPERS</string>
     <property name="flat">
      <bool>true</bool>
     </property>
-    <property name="class" stdset="0">
-     <string>menu_btn</string>
-    </property>
-    <property name="borderLeftPixmap" stdset="0">
-     <pixmap/>
-    </property>
-    <property name="borderCenterPixmap" stdset="0">
-     <pixmap/>
-    </property>
-    <property name="borderRightPixmap" stdset="0">
-     <pixmap/>
-    </property>
    </widget>
-   <widget class="CustomQPushButton" name="move_bed_down_btn">
+   <widget class="QPushButton" name="move_bed_down_btn">
     <property name="geometry">
      <rect>
-      <x>370</x>
-      <y>220</y>
+      <x>640</x>
+      <y>240</y>
       <width>71</width>
       <height>51</height>
      </rect>
@@ -1818,7 +1769,7 @@ STEPPERS</string>
      <enum>Qt::LeftToRight</enum>
     </property>
     <property name="styleSheet">
-     <string notr="true"/>
+     <string notr="true">background: transparent; color: white;</string>
     </property>
     <property name="text">
      <string>v</string>
@@ -1829,204 +1780,12 @@ STEPPERS</string>
     <property name="flat">
      <bool>true</bool>
     </property>
-    <property name="class" stdset="0">
-     <string>menu_btn</string>
-    </property>
-    <property name="borderLeftPixmap" stdset="0">
-     <pixmap/>
-    </property>
-    <property name="borderCenterPixmap" stdset="0">
-     <pixmap/>
-    </property>
-    <property name="borderRightPixmap" stdset="0">
-     <pixmap/>
-    </property>
    </widget>
-   <widget class="CustomQPushButton" name="move_axis_home_x_btn">
+   <widget class="QPushButton" name="move_axis_home_x_btn">
     <property name="geometry">
      <rect>
       <x>10</x>
-      <y>70</y>
-      <width>91</width>
-      <height>71</height>
-     </rect>
-    </property>
-    <property name="minimumSize">
-     <size>
-      <width>10</width>
-      <height>10</height>
-     </size>
-    </property>
-    <property name="font">
-     <font>
-      <family>Momcake</family>
-      <pointsize>20</pointsize>
-      <italic>false</italic>
-      <stylestrategy>PreferAntialias</stylestrategy>
-     </font>
-    </property>
-    <property name="mouseTracking">
-     <bool>false</bool>
-    </property>
-    <property name="tabletTracking">
-     <bool>true</bool>
-    </property>
-    <property name="contextMenuPolicy">
-     <enum>Qt::NoContextMenu</enum>
-    </property>
-    <property name="layoutDirection">
-     <enum>Qt::LeftToRight</enum>
-    </property>
-    <property name="styleSheet">
-     <string notr="true"/>
-    </property>
-    <property name="text">
-     <string>Home X</string>
-    </property>
-    <property name="autoDefault">
-     <bool>false</bool>
-    </property>
-    <property name="flat">
-     <bool>true</bool>
-    </property>
-    <property name="class" stdset="0">
-     <string>menu_btn</string>
-    </property>
-    <property name="borderLeftPixmap" stdset="0">
-     <pixmap/>
-    </property>
-    <property name="borderCenterPixmap" stdset="0">
-     <pixmap/>
-    </property>
-    <property name="borderRightPixmap" stdset="0">
-     <pixmap/>
-    </property>
-   </widget>
-   <widget class="CustomQPushButton" name="move_axis_home_y_btn">
-    <property name="geometry">
-     <rect>
-      <x>10</x>
-      <y>140</y>
-      <width>91</width>
-      <height>71</height>
-     </rect>
-    </property>
-    <property name="minimumSize">
-     <size>
-      <width>10</width>
-      <height>10</height>
-     </size>
-    </property>
-    <property name="font">
-     <font>
-      <family>Momcake</family>
-      <pointsize>20</pointsize>
-      <italic>false</italic>
-      <stylestrategy>PreferAntialias</stylestrategy>
-     </font>
-    </property>
-    <property name="mouseTracking">
-     <bool>false</bool>
-    </property>
-    <property name="tabletTracking">
-     <bool>true</bool>
-    </property>
-    <property name="contextMenuPolicy">
-     <enum>Qt::NoContextMenu</enum>
-    </property>
-    <property name="layoutDirection">
-     <enum>Qt::LeftToRight</enum>
-    </property>
-    <property name="styleSheet">
-     <string notr="true"/>
-    </property>
-    <property name="text">
-     <string>Home Y</string>
-    </property>
-    <property name="autoDefault">
-     <bool>false</bool>
-    </property>
-    <property name="flat">
-     <bool>true</bool>
-    </property>
-    <property name="class" stdset="0">
-     <string>menu_btn</string>
-    </property>
-    <property name="borderLeftPixmap" stdset="0">
-     <pixmap/>
-    </property>
-    <property name="borderCenterPixmap" stdset="0">
-     <pixmap/>
-    </property>
-    <property name="borderRightPixmap" stdset="0">
-     <pixmap/>
-    </property>
-   </widget>
-   <widget class="CustomQPushButton" name="move_axis_home_z_btn">
-    <property name="geometry">
-     <rect>
-      <x>10</x>
-      <y>210</y>
-      <width>91</width>
-      <height>71</height>
-     </rect>
-    </property>
-    <property name="minimumSize">
-     <size>
-      <width>10</width>
-      <height>10</height>
-     </size>
-    </property>
-    <property name="font">
-     <font>
-      <family>Momcake</family>
-      <pointsize>20</pointsize>
-      <italic>false</italic>
-      <stylestrategy>PreferAntialias</stylestrategy>
-     </font>
-    </property>
-    <property name="mouseTracking">
-     <bool>false</bool>
-    </property>
-    <property name="tabletTracking">
-     <bool>true</bool>
-    </property>
-    <property name="contextMenuPolicy">
-     <enum>Qt::NoContextMenu</enum>
-    </property>
-    <property name="layoutDirection">
-     <enum>Qt::LeftToRight</enum>
-    </property>
-    <property name="styleSheet">
-     <string notr="true"/>
-    </property>
-    <property name="text">
-     <string>Home Z</string>
-    </property>
-    <property name="autoDefault">
-     <bool>false</bool>
-    </property>
-    <property name="flat">
-     <bool>true</bool>
-    </property>
-    <property name="class" stdset="0">
-     <string>menu_btn</string>
-    </property>
-    <property name="borderLeftPixmap" stdset="0">
-     <pixmap/>
-    </property>
-    <property name="borderCenterPixmap" stdset="0">
-     <pixmap/>
-    </property>
-    <property name="borderRightPixmap" stdset="0">
-     <pixmap/>
-    </property>
-   </widget>
-   <widget class="CustomQPushButton" name="move_axis_home_all_btn">
-    <property name="geometry">
-     <rect>
-      <x>10</x>
-      <y>280</y>
+      <y>120</y>
       <width>111</width>
       <height>71</height>
      </rect>
@@ -2058,7 +1817,151 @@ STEPPERS</string>
      <enum>Qt::LeftToRight</enum>
     </property>
     <property name="styleSheet">
-     <string notr="true"/>
+     <string notr="true">background: transparent; color: white;</string>
+    </property>
+    <property name="text">
+     <string>Home X</string>
+    </property>
+    <property name="autoDefault">
+     <bool>false</bool>
+    </property>
+    <property name="flat">
+     <bool>true</bool>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="move_axis_home_y_btn">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>190</y>
+      <width>111</width>
+      <height>71</height>
+     </rect>
+    </property>
+    <property name="minimumSize">
+     <size>
+      <width>10</width>
+      <height>10</height>
+     </size>
+    </property>
+    <property name="font">
+     <font>
+      <family>Momcake</family>
+      <pointsize>20</pointsize>
+      <italic>false</italic>
+      <stylestrategy>PreferAntialias</stylestrategy>
+     </font>
+    </property>
+    <property name="mouseTracking">
+     <bool>false</bool>
+    </property>
+    <property name="tabletTracking">
+     <bool>true</bool>
+    </property>
+    <property name="contextMenuPolicy">
+     <enum>Qt::NoContextMenu</enum>
+    </property>
+    <property name="layoutDirection">
+     <enum>Qt::LeftToRight</enum>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background: transparent; color: white;</string>
+    </property>
+    <property name="text">
+     <string>Home Y</string>
+    </property>
+    <property name="autoDefault">
+     <bool>false</bool>
+    </property>
+    <property name="flat">
+     <bool>true</bool>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="move_axis_home_z_btn">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>260</y>
+      <width>111</width>
+      <height>71</height>
+     </rect>
+    </property>
+    <property name="minimumSize">
+     <size>
+      <width>10</width>
+      <height>10</height>
+     </size>
+    </property>
+    <property name="font">
+     <font>
+      <family>Momcake</family>
+      <pointsize>20</pointsize>
+      <italic>false</italic>
+      <stylestrategy>PreferAntialias</stylestrategy>
+     </font>
+    </property>
+    <property name="mouseTracking">
+     <bool>false</bool>
+    </property>
+    <property name="tabletTracking">
+     <bool>true</bool>
+    </property>
+    <property name="contextMenuPolicy">
+     <enum>Qt::NoContextMenu</enum>
+    </property>
+    <property name="layoutDirection">
+     <enum>Qt::LeftToRight</enum>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background: transparent; color: white;</string>
+    </property>
+    <property name="text">
+     <string>Home Z</string>
+    </property>
+    <property name="autoDefault">
+     <bool>false</bool>
+    </property>
+    <property name="flat">
+     <bool>true</bool>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="move_axis_home_all_btn">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>330</y>
+      <width>131</width>
+      <height>71</height>
+     </rect>
+    </property>
+    <property name="minimumSize">
+     <size>
+      <width>10</width>
+      <height>10</height>
+     </size>
+    </property>
+    <property name="font">
+     <font>
+      <family>Momcake</family>
+      <pointsize>20</pointsize>
+      <italic>false</italic>
+      <stylestrategy>PreferAntialias</stylestrategy>
+     </font>
+    </property>
+    <property name="mouseTracking">
+     <bool>false</bool>
+    </property>
+    <property name="tabletTracking">
+     <bool>true</bool>
+    </property>
+    <property name="contextMenuPolicy">
+     <enum>Qt::NoContextMenu</enum>
+    </property>
+    <property name="layoutDirection">
+     <enum>Qt::LeftToRight</enum>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background: transparent; color: white;</string>
     </property>
     <property name="text">
      <string>Home All</string>
@@ -2069,17 +1972,139 @@ STEPPERS</string>
     <property name="flat">
      <bool>true</bool>
     </property>
-    <property name="class" stdset="0">
-     <string>menu_btn</string>
+   </widget>
+   <widget class="QPushButton" name="move_axis_select_feedrate_25_btn">
+    <property name="geometry">
+     <rect>
+      <x>150</x>
+      <y>260</y>
+      <width>91</width>
+      <height>71</height>
+     </rect>
     </property>
-    <property name="borderLeftPixmap" stdset="0">
-     <pixmap/>
+    <property name="text">
+     <string>25mm/s</string>
     </property>
-    <property name="borderCenterPixmap" stdset="0">
-     <pixmap/>
+   </widget>
+   <widget class="QPushButton" name="move_axis_select_length_1_btn">
+    <property name="geometry">
+     <rect>
+      <x>150</x>
+      <y>140</y>
+      <width>91</width>
+      <height>71</height>
+     </rect>
     </property>
-    <property name="borderRightPixmap" stdset="0">
-     <pixmap/>
+    <property name="text">
+     <string>1mm</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="move_axis_select_length_100_btn">
+    <property name="geometry">
+     <rect>
+      <x>350</x>
+      <y>140</y>
+      <width>91</width>
+      <height>71</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>100mm</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="move_axis_select_feedrate_50_btn">
+    <property name="geometry">
+     <rect>
+      <x>250</x>
+      <y>260</y>
+      <width>91</width>
+      <height>71</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>50mm/s</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="move_axis_length_text_label">
+    <property name="enabled">
+     <bool>true</bool>
+    </property>
+    <property name="geometry">
+     <rect>
+      <x>200</x>
+      <y>70</y>
+      <width>201</width>
+      <height>91</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <family>Montserrat</family>
+      <pointsize>14</pointsize>
+     </font>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background: transparent; color: white;</string>
+    </property>
+    <property name="text">
+     <string>Move Length</string>
+    </property>
+    <property name="alignment">
+     <set>Qt::AlignCenter</set>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="move_axis_select_length_10_btn">
+    <property name="geometry">
+     <rect>
+      <x>250</x>
+      <y>140</y>
+      <width>91</width>
+      <height>71</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>10mm</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="move_axis_feedrate_text_label">
+    <property name="enabled">
+     <bool>true</bool>
+    </property>
+    <property name="geometry">
+     <rect>
+      <x>200</x>
+      <y>220</y>
+      <width>201</width>
+      <height>41</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <family>Montserrat</family>
+      <pointsize>14</pointsize>
+     </font>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background: transparent; color: white;</string>
+    </property>
+    <property name="text">
+     <string>Move Feedrate</string>
+    </property>
+    <property name="alignment">
+     <set>Qt::AlignCenter</set>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="move_axis_select_feedrate_100_btn">
+    <property name="geometry">
+     <rect>
+      <x>350</x>
+      <y>260</y>
+      <width>91</width>
+      <height>71</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>100mm/s</string>
     </property>
    </widget>
   </widget>
@@ -2093,6 +2118,9 @@ STEPPERS</string>
       <height>41</height>
      </rect>
     </property>
+    <property name="styleSheet">
+     <string notr="true">background: transparent; color: white;</string>
+    </property>
     <property name="text">
      <string>Hotend2 Icon</string>
     </property>
@@ -2103,9 +2131,9 @@ STEPPERS</string>
     </property>
     <property name="geometry">
      <rect>
-      <x>370</x>
+      <x>360</x>
       <y>150</y>
-      <width>31</width>
+      <width>71</width>
       <height>41</height>
      </rect>
     </property>
@@ -2131,9 +2159,9 @@ STEPPERS</string>
     </property>
     <property name="geometry">
      <rect>
-      <x>160</x>
+      <x>150</x>
       <y>240</y>
-      <width>31</width>
+      <width>71</width>
       <height>41</height>
      </rect>
     </property>
@@ -2162,6 +2190,9 @@ STEPPERS</string>
       <height>41</height>
      </rect>
     </property>
+    <property name="styleSheet">
+     <string notr="true">background: transparent; color: white;</string>
+    </property>
     <property name="text">
      <string>Fan1 Icon</string>
     </property>
@@ -2172,9 +2203,9 @@ STEPPERS</string>
     </property>
     <property name="geometry">
      <rect>
-      <x>590</x>
+      <x>580</x>
       <y>150</y>
-      <width>31</width>
+      <width>71</width>
       <height>41</height>
      </rect>
     </property>
@@ -2200,9 +2231,9 @@ STEPPERS</string>
     </property>
     <property name="geometry">
      <rect>
-      <x>370</x>
+      <x>360</x>
       <y>240</y>
-      <width>31</width>
+      <width>71</width>
       <height>41</height>
      </rect>
     </property>
@@ -2228,9 +2259,9 @@ STEPPERS</string>
     </property>
     <property name="geometry">
      <rect>
-      <x>590</x>
+      <x>580</x>
       <y>240</y>
-      <width>31</width>
+      <width>71</width>
       <height>41</height>
      </rect>
     </property>
@@ -2258,6 +2289,9 @@ STEPPERS</string>
       <width>81</width>
       <height>41</height>
      </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background: transparent; color: white;</string>
     </property>
     <property name="text">
      <string>Chamber Icon</string>
@@ -2303,19 +2337,22 @@ STEPPERS</string>
       <height>41</height>
      </rect>
     </property>
+    <property name="styleSheet">
+     <string notr="true">background: transparent; color: white;</string>
+    </property>
     <property name="text">
      <string>Hotbed Icon</string>
     </property>
    </widget>
-   <widget class="QLabel" name="temperature_bed_value_label_4">
+   <widget class="QLabel" name="temperature_bed_value_label">
     <property name="enabled">
      <bool>true</bool>
     </property>
     <property name="geometry">
      <rect>
-      <x>160</x>
+      <x>150</x>
       <y>150</y>
-      <width>31</width>
+      <width>71</width>
       <height>41</height>
      </rect>
     </property>
@@ -2404,6 +2441,9 @@ STEPPERS</string>
       <height>41</height>
      </rect>
     </property>
+    <property name="styleSheet">
+     <string notr="true">background: transparent; color: white;</string>
+    </property>
     <property name="text">
      <string>Fan2 Icon</string>
     </property>
@@ -2416,6 +2456,9 @@ STEPPERS</string>
       <width>81</width>
       <height>41</height>
      </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">background: transparent; color: white;</string>
     </property>
     <property name="text">
      <string>Hotend1 Icon</string>
@@ -2544,9 +2587,9 @@ STEPPERS</string>
    <widget class="QPushButton" name="hotend_temp_btn">
     <property name="geometry">
      <rect>
-      <x>150</x>
+      <x>60</x>
       <y>150</y>
-      <width>41</width>
+      <width>171</width>
       <height>41</height>
      </rect>
     </property>
@@ -2563,9 +2606,9 @@ STEPPERS</string>
    <widget class="QPushButton" name="hotend_1_temp_btn">
     <property name="geometry">
      <rect>
-      <x>370</x>
+      <x>260</x>
       <y>150</y>
-      <width>41</width>
+      <width>191</width>
       <height>51</height>
      </rect>
     </property>
@@ -2582,9 +2625,9 @@ STEPPERS</string>
    <widget class="QPushButton" name="fan_power_btn">
     <property name="geometry">
      <rect>
-      <x>580</x>
+      <x>490</x>
       <y>150</y>
-      <width>41</width>
+      <width>181</width>
       <height>41</height>
      </rect>
     </property>
@@ -2601,9 +2644,9 @@ STEPPERS</string>
    <widget class="QPushButton" name="chamber_temp_btn">
     <property name="geometry">
      <rect>
-      <x>150</x>
+      <x>50</x>
       <y>240</y>
-      <width>41</width>
+      <width>181</width>
       <height>41</height>
      </rect>
     </property>
@@ -2620,9 +2663,9 @@ STEPPERS</string>
    <widget class="QPushButton" name="chamber_1_temp_btn">
     <property name="geometry">
      <rect>
-      <x>370</x>
+      <x>260</x>
       <y>240</y>
-      <width>41</width>
+      <width>181</width>
       <height>41</height>
      </rect>
     </property>
@@ -2639,9 +2682,9 @@ STEPPERS</string>
    <widget class="QPushButton" name="fan_1_power_btn">
     <property name="geometry">
      <rect>
-      <x>590</x>
+      <x>500</x>
       <y>240</y>
-      <width>31</width>
+      <width>171</width>
       <height>41</height>
      </rect>
     </property>
@@ -2655,6 +2698,28 @@ STEPPERS</string>
      <bool>true</bool>
     </property>
    </widget>
+   <zorder>temperature_hotend_2_icon_label</zorder>
+   <zorder>temperature_hotend_1_value_label</zorder>
+   <zorder>temperature_chamber_value_label_5</zorder>
+   <zorder>temperature_fan_1_icon_label</zorder>
+   <zorder>temperature_fan_1_value_label</zorder>
+   <zorder>temperature_hotend_2_value_label</zorder>
+   <zorder>temperature_fan_2_value_label</zorder>
+   <zorder>temperature_chamber_icon_label</zorder>
+   <zorder>temperature_title_lable</zorder>
+   <zorder>temperature_bed_icon_label</zorder>
+   <zorder>temperature_bed_value_label</zorder>
+   <zorder>temperature_cooldown_btn</zorder>
+   <zorder>temperature_fan_2_icon_label</zorder>
+   <zorder>temperature_hotend_1_icon_label</zorder>
+   <zorder>temperature_preheat_btn</zorder>
+   <zorder>temperature_back_btn</zorder>
+   <zorder>chamber_1_temp_btn</zorder>
+   <zorder>chamber_temp_btn</zorder>
+   <zorder>fan_1_power_btn</zorder>
+   <zorder>fan_power_btn</zorder>
+   <zorder>hotend_1_temp_btn</zorder>
+   <zorder>hotend_temp_btn</zorder>
   </widget>
   <widget class="QWidget" name="z_adjustment_page">
    <widget class="CustomQPushButton" name="z_adjustment_up_btn">
