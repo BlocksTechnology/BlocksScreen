@@ -1,18 +1,20 @@
 from collections import deque
+import typing
 from functools import partial
 import sys
-from PyQt6.QtCore import QEvent, pyqtSignal, pyqtSlot, QObject, QCoreApplication, QRect
-from PyQt6.QtWidgets import QApplication, QMainWindow, QSplashScreen
-from PyQt6.QtGui import QDragLeaveEvent, QPixmap
+import logging
+from PyQt6.QtCore import QEvent, pyqtSignal, pyqtSlot
+from PyQt6.QtWidgets import QApplication, QMainWindow, QSplashScreen, QStackedWidget, QLabel
+from PyQt6.QtGui import QPixmap
 
 # * System imports
 from scripts import events
+from scripts.events import WebSocketMessageReceivedEvent, ReceivedFileDataEvent
 from scripts.moonrakerComm import MoonWebSocket
 from scripts.moonrest import MoonRest
-from scripts.events import *
 from scripts.bo_includes.bo_machine import MachineControl
-from scripts.bo_includes.bo_files import *
-from scripts.bo_includes.bo_printer import *
+from scripts.bo_includes.bo_files import Files
+from scripts.bo_includes.bo_printer import Printer
 
 # * Panels
 from panels.connectionWindow import ConnectionWindow
@@ -29,10 +31,7 @@ from resources.system_resources_rc import *
 
 # * UI
 from qt_ui.Blocks_Screen_Lemos_ui import Ui_MainWindow
-from qt_ui.ui_util import *
-
-import logging
-import os
+from qt_ui.ui_util import CustomNumpad, CustomQPushButton
 
 
 _logger = logging.getLogger(__name__)
@@ -110,7 +109,7 @@ class MainWindow(QMainWindow):
             slot=self.global_back_button_pressed
         )
         self.printPanel.request_change_page.connect(slot=self.global_change_page)
-        
+
         self.filamentPanel.request_back_button_pressed.connect(
             slot=self.global_back_button_pressed
         )
@@ -133,7 +132,6 @@ class MainWindow(QMainWindow):
         self.ui.bed_temp_btn.clicked.connect(partial(self.global_change_page, 2, 4))
         self.ui.chamber_temp_btn.clicked.connect(partial(self.global_change_page, 2, 4))
 
-        # # All the buttons on the top bar that send the user to the Load page
         self.ui.filament_type_1.clicked.connect(partial(self.global_change_page, 1, 1))
         self.ui.filament_type_2.clicked.connect(partial(self.global_change_page, 1, 1))
         ##* Also connect to files list when connection is achieved to imidiatly get the files
@@ -164,10 +162,13 @@ class MainWindow(QMainWindow):
 
         # @ Related to the pages that need numpad
         self.call_numpad_signal.connect(self.numpad_object.call_numpad)
+        self.numpad_object.request_change_page.connect(self.global_change_page)
         self.controlPanel.request_numpad_signal.connect(
             partial(self.call_numpad_signal.emit)
         )
-        self.numpad_object.request_change_page.connect(self.global_change_page)
+        self.printPanel.request_numpad_signal.connect(
+            partial(self.call_numpad_signal.emit)
+        )
         # self.numpad_object.request_back_button_pressed.connect(
         #     self.global_back_button_pressed
         # )
@@ -297,7 +298,6 @@ class MainWindow(QMainWindow):
         # * Go to the requested tab and page
         self.ui.mainTabWidget.setCurrentIndex(tab_index)
         self.set_current_panel_index(panel_index)
-        # print("Requesting Tab ", tab_index, " and page index: ", panel_index)
         _logger.debug(
             f"Requested page change -> Tab index :{requested_page[0]}, pane panel index : {requested_page[1]}"
         )
@@ -317,7 +317,6 @@ class MainWindow(QMainWindow):
         self.set_current_panel_index(
             self.index_stack[-1][1]
         )  # From the same position, use the tab and stacked widget page indexes
-        # print(self.index_stack)
         self.index_stack.pop()  # Remove the last position.
 
         self.printer_object_report_signal.connect(self.printer.report_received)
@@ -330,7 +329,6 @@ class MainWindow(QMainWindow):
             self.heater_bed_temperature_change
         )
         _logger.debug("Sucessfully went back a page.")
-        # self.printer.idle_timeout_update_signal.connect(self.idle_timeout_update)
 
     @pyqtSlot(name="start_websocket_connection")
     def start_websocket_connection(self) -> None:
@@ -496,6 +494,10 @@ class MainWindow(QMainWindow):
     def extruder_temperature_change(
         self, extruder_name: str, field: str, new_value: float
     ) -> None:
+        # if self.printer.extruder_number >= 2: 
+        #     _qlabel_objects: typing.List = self.findChildren(QLabel, options= QtCore.Qt.FindChildOption.FindChildrenRecursively)
+            
+            # print(_qlabel_objects)
         if field == "temperature":
             # _last_text = self.ui.nozzle_1_temp.text()
             # if not -1 < int(_last_text) - int(new_value)  < 1:
@@ -511,12 +513,12 @@ class MainWindow(QMainWindow):
     def heater_bed_temperature_change(
         self, name: str, field: str, new_value: float
     ) -> None:
-        # print("[INFO] heater_bed_temperature changed ")
         if field == "temperature":
             self.ui.actual_temp_2.setText(f"{new_value:.1f}")
         elif field == "target":
             self.ui.target_temp_2.setText(f"{new_value:.1f}")
 
+    
 
 if __name__ == "__main__":
     app = QApplication([])
