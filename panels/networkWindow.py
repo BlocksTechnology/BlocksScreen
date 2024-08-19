@@ -41,7 +41,7 @@ class NetworkControlWindow(QStackedWidget):
         # * Instantiate the network control class sdbus
         self.sdbus_network = SdbusNetworkManagerDummy()
         self.current_ip_address: typing.List | None = []
-        # * Network List 
+        # * Network List
         self.panel.network_list_widget.itemClicked.connect(self.ssid_item_clicked)
         self.panel.wifi_backButton.clicked.connect(self.hide)
         self.panel.rescan_button.clicked.connect(self.sdbus_network.rescan_networks)
@@ -57,7 +57,7 @@ class NetworkControlWindow(QStackedWidget):
         self.request_network_scan.connect(self.rescan_networks)
         self.panel.call_hotspot_button.clicked.connect(
             partial(self.setCurrentIndex, 3)
-        )  # Go to hotspot settings page        
+        )  # Go to hotspot settings page
         # * Add Network page widget
         self.panel.add_network_validation_button.clicked.connect(self.add_network)
         self.panel.add_network_page_backButton.clicked.connect(
@@ -149,20 +149,18 @@ class NetworkControlWindow(QStackedWidget):
     @pyqtSlot(name="rescan_networks")
     def rescan_networks(self) -> None:
         self.sdbus_network.rescan_networks()
+
     request_signal_strength = pyqtSignal(str, name="network_signal_strength")
 
     @pyqtSlot(str, name="network_signal_strength")
-    def network_signal_strength(self, ssid: str): 
+    def network_signal_strength(self, ssid: str):
         _strength = self.sdbus_network.get_connection_signal_by_ssid(ssid)
 
     @pyqtSlot(name="new_connection_result")
     @pyqtSlot(str, name="new_connection_result")
     def process_new_connection_result(self, msg: str | None):
-        # TODO: Not working
         print("In the processingnn")
         if msg is not None:
-            # TODO: There was an error message, display on the panel that the network wasn't added
-            print("not added brother")
             self.panel.add_network_password_field.setStyleSheet(
                 "border: 2px solid red;"
             )
@@ -170,7 +168,6 @@ class NetworkControlWindow(QStackedWidget):
             self.update()
 
         else:
-            # TODO: The connection was successfully added, i don't think i need to actually do anything here
             print("Connection was added, with no return message")
 
     @pyqtSlot(name="add_network")
@@ -184,17 +181,14 @@ class NetworkControlWindow(QStackedWidget):
         # Check if a password was inserted
 
         if self.panel.add_network_password_field.text() is None:
-            # TODO: Make the input field red and request that something is inserted
             return
         _network_psk = self.panel.add_network_password_field.text()
 
         _add_network_result: typing.Dict = self.sdbus_network.add_wifi_network(
             ssid=self.panel.add_network_network_label.text(), psk=_network_psk
         )  # Add the network connection
-        print(_add_network_result)
         # Send a signal with the result of adding a new network
         if ("error" or "exception" or "failure") in _add_network_result["status"]:
-            print("There was error brother ")
             self.new_connection_result[str].emit(str(_add_network_result["msg"]))
         else:
             self.new_connection_result.emit()
@@ -217,10 +211,7 @@ class NetworkControlWindow(QStackedWidget):
                 self.panel.saved_connection_network_name.setText(
                     str(_current_ssid_name)
                 )
-                # TODO: Add information about the saved network
             else:  # Network not saved go to the add network page
-                # TODO: Can set the name of some labels here with then name of the pressed ssid
-                # TODO: Check if the change page direction is correct or not, don't remeber the page numbering
                 self.setCurrentIndex(1)
                 self.panel.add_network_network_label.setText(
                     str(_current_ssid_name)
@@ -260,7 +251,6 @@ class NetworkControlWindow(QStackedWidget):
         if not isinstance(ssid, str):
             return None
 
-        # TODO: Add icon to the button here
         _list_item = QtWidgets.QListWidgetItem()
         _list_item_widget = QWidget()
         _item_layout = QtWidgets.QHBoxLayout()
@@ -284,8 +274,6 @@ class NetworkControlWindow(QStackedWidget):
         _list_item.setFlags(
             ~Qt.ItemFlag.ItemIsEditable
         )  # ~ is for making the item not editable
-
-        # TODO: Add a button inside the item that permits the user to delete the network if it's saved or not
 
         return _list_item, _list_item_widget
 
@@ -332,9 +320,8 @@ class NetworkControlWindow(QStackedWidget):
             return
 
         _cur = self.currentIndex()
-        # TODO : Clear and set placeholder texts and initialise each page again
         if index == 0:  # Main page
-            self.panel.network_list_widget.clear()            
+            self.panel.network_list_widget.clear()
             self.add_ssid_network_entry()  # Add network entries to the list
         elif index == 1:  # Add network page
             self.panel.add_network_password_field.clear()
@@ -346,7 +333,6 @@ class NetworkControlWindow(QStackedWidget):
             self.panel.saved_connection_change_password_field.setPlaceholderText(
                 "Change network password"
             )
-            # TODO: Add text to corresponding fields
             _security_type = self.sdbus_network.get_security_type_by_ssid(
                 ssid=self.panel.saved_connection_network_name.text()
             )
@@ -366,8 +352,6 @@ class NetworkControlWindow(QStackedWidget):
         return super().setCurrentIndex(index)
 
     def sizeHint(self) -> QtCore.QSize:
-        # _size= self.main_panel.size()
-        # self.setMinimumSize(_size.width, _size.height)
         """
         When implementing a new widget, it is almost always useful to reimplement sizeHint() to provide a reasonable default size for the widget and to set the correct size policy with setSizePolicy().
 
@@ -398,12 +382,10 @@ class NetworkControlWindow(QStackedWidget):
     @pyqtSlot(name="call_network_page")
     def call_network_panel(
         self,
-        # geometry: QtCore.QRect,
-        # callback_slot,
     ) -> None:
         if self.main_panel is None:
             return
-        
+
         self.panel.network_list_widget.clear()
 
         _main_size = self.main_panel.size()
@@ -411,9 +393,13 @@ class NetworkControlWindow(QStackedWidget):
 
         self.updateGeometry()
         self.add_ssid_network_entry()
-        # self.setGeometry(self.main_panel.frameGeometry())
         self.setCurrentIndex(0)
         self.show()
-        # print(self.main_panel.frameGeometry())
-        # print(self.main_panel.frameSize())
-        # print(self.main_panel.frameGeometry())
+
+
+# TODO: Capture events to know when we have no network, in order to automatically enable the hotspot
+# TODO: Add Icons to buttons and others to the panel
+# TODO: Add a our custom q push buttons to make it pretty
+# TODO: When adding a new connection, if the password is wrong, make the screen red or the input text box shake to indicate that it didn't work
+# TODO: Add a button inside the item that permits the user to delete the network if it's saved or not
+# TODO: On each entry on the networks list, make it so, there is an icon that also displays the signal strength, the wifi icon we have on the project
