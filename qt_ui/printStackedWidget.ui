@@ -14,7 +14,7 @@
    <string>StackedWidget</string>
   </property>
   <property name="currentIndex">
-   <number>0</number>
+   <number>1</number>
   </property>
   <property name="backgroundPixmap" stdset="0">
    <pixmap resource="../resources/background_resources.qrc">:/background/media/graphics/scroll_list_window.svg</pixmap>

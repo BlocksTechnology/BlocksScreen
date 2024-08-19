@@ -1,26 +1,23 @@
+import logging
+import sys
 from collections import deque
 from functools import partial
-import sys
-import logging
-from PyQt6.QtCore import QEvent, pyqtSignal, pyqtSlot
-from PyQt6.QtWidgets import QApplication, QMainWindow, QSplashScreen, QStackedWidget
-from PyQt6.QtGui import QPixmap
 
-# * System imports
-from scripts import events
-from scripts.events import WebSocketMessageReceivedEvent, ReceivedFileDataEvent
-from scripts.moonrakerComm import MoonWebSocket
-from scripts.moonrest import MoonRest
-from scripts.bo_includes.bo_machine import MachineControl
-from scripts.bo_includes.bo_files import Files
-from scripts.bo_includes.bo_printer import Printer
+from PyQt6.QtCore import QEvent, pyqtSignal, pyqtSlot
+from PyQt6.QtGui import QPaintEvent, QPixmap
+from PyQt6.QtWidgets import QApplication, QMainWindow, QSplashScreen, QStackedWidget
 
 # * Panels
 from panels.connectionWindow import ConnectionWindow
-from panels.printTab import PrintTab
-from panels.filamentTab import FilamentTab
 from panels.controlTab import ControlTab
+from panels.filamentTab import FilamentTab
+from panels.networkWindow import NetworkControlWindow
+from panels.printTab import PrintTab
 from panels.utilitiesTab import UtilitiesTab
+
+# * UI
+from qt_ui.Blocks_Screen_Lemos_ui import Ui_MainWindow
+from qt_ui.ui_util import CustomNumpad, CustomQPushButton
 
 # * Resources
 from resources.background_resources_rc import *
@@ -28,10 +25,14 @@ from resources.button_resources_rc import *
 from resources.main_menu_resources_rc import *
 from resources.system_resources_rc import *
 
-# * UI
-from qt_ui.Blocks_Screen_Lemos_ui import Ui_MainWindow
-from qt_ui.ui_util import CustomNumpad, CustomQPushButton
-
+# * System imports
+from scripts import events
+from scripts.bo_includes.bo_files import Files
+from scripts.bo_includes.bo_machine import MachineControl
+from scripts.bo_includes.bo_printer import Printer
+from scripts.events import ReceivedFileDataEvent, WebSocketMessageReceivedEvent
+from scripts.moonrakerComm import MoonWebSocket
+from scripts.moonrest import MoonRest
 
 _logger = logging.getLogger(__name__)
 """
@@ -68,6 +69,8 @@ class MainWindow(QMainWindow):
         int, str, str, "PyQt_PyObject", QStackedWidget, name="call_numpad"
     )
 
+    call_network_panel = pyqtSignal( name="visibilityChange_networkPanel")
+    
     def __init__(self, *args, **kwargs):
         super(MainWindow, self).__init__(*args, **kwargs)
         self.ui = Ui_MainWindow()
@@ -93,9 +96,12 @@ class MainWindow(QMainWindow):
         self.filamentPanel = FilamentTab(self.ui.filamentTab)
         self.controlPanel = ControlTab(self.ui.controlTab, self.ws, self.printer)
         self.utilitiesPanel = UtilitiesTab(self.ui.utilitiesTab)
+        self.networkPanel = NetworkControlWindow(self.ui.centralwidget)
+        
+        
         # @ Slot connections
         self.app_initialize.connect(slot=self.start_websocket_connection)
-
+        # * Websocket state signals
         self.ws.connecting_signal.connect(slot=self.start_window.websocket_connecting)
         self.ws.connected_signal.connect(
             slot=self.start_window.websocket_connection_achieved
@@ -103,25 +109,35 @@ class MainWindow(QMainWindow):
         self.ws.connection_lost.connect(
             slot=self.start_window.websocket_connection_lost
         )
-
+        self.ws.klippy_state_signal.connect(self.ws.api.request_printer_info)
+        
+        # * Print panel
         self.printPanel.request_back_button_pressed.connect(
             slot=self.global_back_button_pressed
         )
         self.printPanel.request_change_page.connect(slot=self.global_change_page)
-
+        # * Filament panel
         self.filamentPanel.request_back_button_pressed.connect(
             slot=self.global_back_button_pressed
         )
         self.filamentPanel.request_change_page.connect(slot=self.global_change_page)
+        # * Control panel
         self.controlPanel.request_back_button_pressed.connect(
             slot=self.global_back_button_pressed
         )
         self.controlPanel.request_change_page.connect(slot=self.global_change_page)
+        # * Utilities panel
         self.utilitiesPanel.request_back_button_pressed.connect(
             slot=self.global_back_button_pressed
         )
         self.utilitiesPanel.request_change_page.connect(slot=self.global_change_page)
-        # All the buttons on the top bar that send the user to the Temperature page
+        # # * Network panel
+        # self.networkPanel.request_back_button_pressed.connect(
+        #     slot=self.global_back_button_pressed
+        # )
+        # self.networkPanel.request_change_page.connect(slot=self.global_change_page)
+
+        # * Main page - Top bar Buttons 
         self.ui.extruder_temp_btn.clicked.connect(
             partial(self.global_change_page, 2, 4)
         )
@@ -130,7 +146,6 @@ class MainWindow(QMainWindow):
         )
         self.ui.bed_temp_btn.clicked.connect(partial(self.global_change_page, 2, 4))
         self.ui.chamber_temp_btn.clicked.connect(partial(self.global_change_page, 2, 4))
-
         self.ui.filament_type_1.clicked.connect(partial(self.global_change_page, 1, 1))
         self.ui.filament_type_2.clicked.connect(partial(self.global_change_page, 1, 1))
         ##* Also connect to files list when connection is achieved to imidiatly get the files
@@ -156,10 +171,8 @@ class MainWindow(QMainWindow):
             self.heater_bed_temperature_change
         )
 
-        # self.ui.extruder_temp_btn.clicked.connect(self.printee)
-        self.ws.klippy_state_signal.connect(self.ws.api.request_printer_info)
 
-        # @ Related to the pages that need numpad
+        # * Pages that need the Numpad 
         self.call_numpad_signal.connect(self.numpad_object.call_numpad)
         self.numpad_object.request_change_page.connect(self.global_change_page)
         self.controlPanel.request_numpad_signal.connect(
@@ -168,16 +181,24 @@ class MainWindow(QMainWindow):
         self.printPanel.request_numpad_signal.connect(
             partial(self.call_numpad_signal.emit)
         )
-        # self.numpad_object.request_back_button_pressed.connect(
-        #     self.global_back_button_pressed
-        # )
 
         self.printPanel.request_block_manual_tab_change.connect(self.disable_tab_bar)
         self.printPanel.request_activate_manual_tab_change.connect(self.enable_tab_bar)
 
+        # * Network page visibility and calling, there are two places from which you can call the network page, main page and connectivity page 
+        # self.call_network_panel.connect(self.networkPanel.visibilityChange)
+        
+        self.call_network_panel.connect(self.networkPanel.call_network_panel)
+        self.start_window.wifi_clicked.connect(self.call_network_panel.emit)
+        self.ui.wifi_signal.clicked.connect(self.call_network_panel.emit)
+        
         # @ Force main panel to be displayed on startup
         self.ui.mainTabWidget.setCurrentIndex(0)
 
+        
+
+        
+        
     @pyqtSlot(name="activate_manual_tab_change")
     def enable_tab_bar(self) -> None:
         if (
@@ -236,7 +257,8 @@ class MainWindow(QMainWindow):
         self.filamentPanel.setCurrentIndex(0)
         self.controlPanel.setCurrentIndex(0)
         self.utilitiesPanel.setCurrentIndex(0)
-
+        self.networkPanel.setCurrentIndex(0)
+        
     def current_panel_index(self) -> int:
         """current_panel_index
             Helper function to get the index of the current page in the current tab
@@ -354,7 +376,8 @@ class MainWindow(QMainWindow):
             return False
 
         return super().event(event)
-
+    
+   
     def messageReceivedEvent(self, event: WebSocketMessageReceivedEvent) -> None:
         """messageReceivedEvent
             Helper method that handles the event messages received from the websocket
@@ -379,7 +402,7 @@ class MainWindow(QMainWindow):
                 _logger.error(
                     f"Error emitting event for file related information received from websocket | error message received: {e}"
                 )
-                
+
         elif "error" in _method:
             # ! Here i received an error message from the websocket, but it doesn't mean it's closed the connection
             # ! But it might say that klipper had an error with something and has reported back
@@ -432,8 +455,6 @@ class MainWindow(QMainWindow):
                 status_type = _split[2]
                 _state_upper = status_type[0].upper()
                 _state_call = f"{_state_upper}{status_type[1:]}"
-                # print(_state_call)
-
                 _logger.debug(
                     f"Notify_klippy_{_state_call} Received from object subscription."
                 )
@@ -457,28 +478,14 @@ class MainWindow(QMainWindow):
                             )
         elif "notify_filelist_changed" in _method:
             self.file_data.request_file_list.emit()
-
         elif "notify_update_response" in _method:
             # * Handle update manager message about updates
             pass
         elif "notify_service_state_changed" in _method:
-            # * Handle service changes like klipper service just started or any other than moonraker
-            # watch for klipper service and moonraker service in here and any other service that
-            # we might need for controling our software.
-            # Îf any of them fails make the app respond to it
-
+            # * Handle service changes, such as klipper or moonraker restart or start, anything like that.
             pass
         elif "notify_gcode_response" in _method:
             # * Handle klipper gcode responses.
-            # When the printer stop ptinting and there is a need to restart the firmware or restart klipper i
-            # get a message here, can be messages such as mcu lost ocnnection or thermocouple reader fault
-            # Or MCU shutdown or anything like that
-            # Can even receive a klipper shudown message here
-            # THese are all messages that require for the connection panel to show up
-            # Because i'll always need to restart klipper and other functionalities are disabled except the wifi shit
-            # This field will receive alot of print updates, such as "Must home axis first"
-            # I'll also receive responses for temperature on the bed and extruder here on something like the line bellow
-            # "method": "notify_gcode_response", "params": ["B:34.2 /60.0 T0:22.9 /0.0"]
             _gcode_reponse = _response["params"]
             self.gcode_response_report_signal.emit(_gcode_reponse)
         elif "notify_history_changed" in _method:
@@ -494,6 +501,7 @@ class MainWindow(QMainWindow):
     def extruder_temperature_change(
         self, extruder_name: str, field: str, new_value: float
     ) -> None:
+        # TODO: This needs to be better, this method is a little hardcoded, we need, not to insert the extruder name, but make it dynamic
         if extruder_name == "extruder":
             if field == "temperature":
                 # _last_text = self.ui.nozzle_1_temp.text()
@@ -526,8 +534,12 @@ class MainWindow(QMainWindow):
         elif field == "target":
             self.ui.target_temp_2.setText(f"{new_value:.1f}")
 
-    
 
+    def paintEvent(self, a0: QPaintEvent | None) -> None:
+        self.updateGeometry()
+        return super().paintEvent(a0)
+    
+    
 if __name__ == "__main__":
     app = QApplication([])
     pixmap = QPixmap("Blocks_Screen/media/logoblocks.png")
