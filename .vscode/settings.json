@@ -24,6 +24,13 @@
         "titleBar.inactiveBackground": "#ea7fd099",
         "titleBar.inactiveForeground": "#15202b99"
     },
-    "peacock.remoteColor": "#ea7fd0"
+    "peacock.remoteColor": "#ea7fd0",
+    "cSpell.words": [
+        "Reimplementation",
+        "sdbus"
+    ],
+    "todo-tree.tree.scanMode": "workspace",
+    "todo-tree.tree.showCountsInTree": true,
+    "todo-tree.tree.showBadges": true
     
 }

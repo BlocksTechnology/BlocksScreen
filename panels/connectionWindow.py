@@ -11,7 +11,7 @@ class ConnectionWindow(QFrame):
     # @ Signals
     text_updated = pyqtSignal(int, name="connection_text_updated")
     retry_connection_clicked = pyqtSignal(name="retry_connection_clicked")
-    wifi_clicked = pyqtSignal(name="wifi_clicked")
+    wifi_clicked = pyqtSignal(name="call_network_page")
     reboot_clicked = pyqtSignal(name="reboot_clicked")
     restart_klipper_clicked = pyqtSignal(name="restart_klipper_clicked")
 
@@ -72,7 +72,7 @@ class ConnectionWindow(QFrame):
     @pyqtSlot(int, name="websocket_connecting")
     @pyqtSlot(str, name="websocket_connecting")
     def websocket_connecting(self, attempt: int):
-        print(attempt)
+        # print(attempt)
         self.text_update(attempt)
 
     @pyqtSlot(name="websocket_connection_achieved")

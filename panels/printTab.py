@@ -1,39 +1,40 @@
+import logging
+import math
 import os
 import sys
-import math
 import typing
-import logging
 from functools import partial
-from PyQt6 import QtWidgets
+
+from PyQt6 import QtCore, QtGui, QtWidgets
+from PyQt6.QtCore import QObject, Qt, pyqtSignal, pyqtSlot
 from PyQt6.QtGui import QPaintEvent
-from PyQt6.QtWidgets import QStackedWidget, QWidget, QListWidgetItem, QLabel
-from PyQt6.QtCore import pyqtSlot, pyqtSignal, Qt, QObject
-from PyQt6 import QtCore, QtGui
+from PyQt6.QtWidgets import QLabel, QListWidgetItem, QStackedWidget, QWidget
+
 from qt_ui.printStackedWidget_ui import Ui_printStackedWidget
 from qt_ui.ui_util import CustomQPushButton
 from scripts.bo_includes.bo_files import Files
-from scripts.moonrakerComm import MoonWebSocket
 from scripts.bo_includes.bo_printer import Printer
+from scripts.moonrakerComm import MoonWebSocket
 
 _logger = logging.getLogger(__name__)
 
 
 class PrintTab(QStackedWidget):
     """PrintTab -> QStackedWidget UI panel that has the following panels:
-    
+
     - Main page: Simple page with a message field and a button to start a print;
     - File list page: A file list where displayed files are selectable to be printed;
     - Confirm page: A page to confirm or not if the selected file is to be printed;
     - Print page: A page for controlling the ongoing job, Pause/Resume and stop functionality
     - Tune page: Accessible only from the print page;
-    - Babystep page: Control the z_offset during a ongoing print; 
+    - Babystep page: Control the z_offset during a ongoing print;
     - Change page: A page that permits changing the filament, stops the print -> change the filament -> resume the print;
-    
+
     On the tune page, the user can additionally change the temperature/speed of the extruder(s), heated bed, fan(s) and the print velocity
 
     Args:
         QStackedWidget (QStackedWidget): This class is inherited from QStackedWidget from Qt6
-        
+
     __init__:
         parent (QWidget | QObject): The parent for this tab.
         file_data (Files): Class object that handles printer files.
@@ -41,6 +42,7 @@ class PrintTab(QStackedWidget):
         printer (Printer): Class object that handles printer objects information.
 
     """
+
     request_print_file_signal = pyqtSignal(str, name="start_print")
     request_print_resume_signal = pyqtSignal(name="resume_print")
     request_print_stop_signal = pyqtSignal(name="stop_print")
@@ -55,6 +57,7 @@ class PrintTab(QStackedWidget):
     request_numpad_signal = pyqtSignal(
         int, str, str, "PyQt_PyObject", QStackedWidget, name="request_numpad"
     )
+
     def __init__(
         self,
         parent: typing.Optional["QWidget"],
@@ -232,8 +235,8 @@ class PrintTab(QStackedWidget):
     @pyqtSlot(str, int, name="numpad_new_value")
     @pyqtSlot(str, float, name="numpad_new_value")
     def handle_numpad_change(self, name: str, new_value: int | float) -> None:
-        """handle_numpad_change Handles the introduced value on the numpad 
-        Changes the temperature/speed/velocity of an object accordingly 
+        """handle_numpad_change Handles the introduced value on the numpad
+        Changes the temperature/speed/velocity of an object accordingly
 
         Args:
             name (str): Name of the object that is to be updated
@@ -261,7 +264,7 @@ class PrintTab(QStackedWidget):
 
         Args:
             name (str): Name of the fan object
-            field (str): Name of the updated field 
+            field (str): Name of the updated field
             new_value (int | float): New value for field
         """
         if "speed" in field:
@@ -362,7 +365,6 @@ class PrintTab(QStackedWidget):
                         )
                 if "current_layer" in value.keys():
                     if value["current_layer"] is not None:
-
                         self.current_print_file_current_layer = value["current_layer"]
                         self.panel.current_layer.setText(
                             str(self.current_print_file_current_layer)
@@ -520,16 +522,14 @@ class PrintTab(QStackedWidget):
 
     @pyqtSlot(name="request_noozle_close_to_bed")
     def move_nozzle_close_to_bed(self) -> None:
-        """move_nozzle_close_to_bed Slot for Babystep button to get closer to the bed. 
-        """                 
+        """move_nozzle_close_to_bed Slot for Babystep button to get closer to the bed."""
         self.run_gcode_signal.emit(
             f"SET_GCODE_OFFSET Z_ADJUST=-{self._z_offset} MOVE=1"
         )
 
     @pyqtSlot(name="request_noozle_far_to_bed")
     def move_nozzle_far_to_bed(self) -> None:
-        """move_nozzle_far_to_bed Slot for Babystep button to get far from the bed.
-        """
+        """move_nozzle_far_to_bed Slot for Babystep button to get far from the bed."""
         self.run_gcode_signal.emit(
             f"SET_GCODE_OFFSET Z_ADJUST=+{self._z_offset} MOVE=1"
         )
@@ -537,10 +537,10 @@ class PrintTab(QStackedWidget):
     @pyqtSlot(name="z_offset_change")
     def z_offset_change(self) -> None:
         """z_offset_change Helper method for changing the value for Babystep.
-        
-        When a button is clicked, and the button has the mm value i the text, 
-        it'll change the internal value **z_offset** to the same has the button 
-        
+
+        When a button is clicked, and the button has the mm value i the text,
+        it'll change the internal value **z_offset** to the same has the button
+
         Possible values are: 0.001, 0.005, 0.01, 0.025, 0.05
         """
         _possible_z_values: typing.List = [0.001, 0.005, 0.01, 0.025, 0.05]
@@ -558,8 +558,6 @@ class PrintTab(QStackedWidget):
         Args:
             window_index (int): Current QStackedWidget index
 
-        Returns:
-            _type_: None
         """
         if window_index == 1:
             # * On files panel
@@ -656,13 +654,12 @@ class PrintTab(QStackedWidget):
             else:
                 self.panel.confirm_print_preview_graphics.setScene(_scene)
         else:
-
             if self.panel.confirm_print_preview_graphics.isVisible():
                 self.panel.confirm_print_preview_graphics.close()
 
         if self.panel.babystep_page.isVisible():
             # * If there is a z_offset value already paint the button a little greyer to indicate that is the current offset
-            # TODO: It's not working now 
+            # TODO: It's not working now
             _button_name_str = f"nozzle_offset_{self._z_offset}"
             if hasattr(self.panel, _button_name_str):
                 _button_attr = getattr(self.panel, _button_name_str)

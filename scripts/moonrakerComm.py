@@ -164,7 +164,7 @@ class MoonWebSocket(QObject, threading.Thread):
             _logger.debug("Unable to get oneshot token")
             return False
 
-        #_url = f"ws://localhost:7125/websocket?token={_oneshot_token}"
+        # _url = f"ws://localhost:7125/websocket?token={_oneshot_token}"
         _url = f"ws://192.168.1.134:7125/websocket?token={_oneshot_token}"
         self.ws = websocket.WebSocketApp(
             _url,

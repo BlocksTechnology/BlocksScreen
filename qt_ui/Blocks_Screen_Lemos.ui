@@ -10,6 +10,12 @@
     <height>480</height>
    </rect>
   </property>
+  <property name="sizePolicy">
+   <sizepolicy hsizetype="MinimumExpanding" vsizetype="MinimumExpanding">
+    <horstretch>0</horstretch>
+    <verstretch>0</verstretch>
+   </sizepolicy>
+  </property>
   <property name="windowTitle">
    <string>MainWindow</string>
   </property>
@@ -17,6 +23,12 @@
    <string notr="true"/>
   </property>
   <widget class="QWidget" name="centralwidget">
+   <property name="sizePolicy">
+    <sizepolicy hsizetype="MinimumExpanding" vsizetype="MinimumExpanding">
+     <horstretch>0</horstretch>
+     <verstretch>0</verstretch>
+    </sizepolicy>
+   </property>
    <property name="styleSheet">
     <string notr="true">#centralwidget{background-image: url(:/background/1st_background.png);}</string>
    </property>
@@ -32,9 +44,21 @@
     <layout class="QGridLayout" name="central_grid" rowstretch="4,0">
      <item row="0" column="0">
       <widget class="QGroupBox" name="top_bar">
-       <property name="maximumSize">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="MinimumExpanding" vsizetype="MinimumExpanding">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="minimumSize">
         <size>
          <width>800</width>
+         <height>60</height>
+        </size>
+       </property>
+       <property name="maximumSize">
+        <size>
+         <width>16777215</width>
          <height>60</height>
         </size>
        </property>
@@ -699,7 +723,7 @@ image: url(:/General_icons/media/graphics/logo_blocks.png);
        </property>
        <property name="maximumSize">
         <size>
-         <width>800</width>
+         <width>16777215</width>
          <height>16777215</height>
         </size>
        </property>
