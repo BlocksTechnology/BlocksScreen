@@ -6,31 +6,57 @@
         "xml"
     ],
     "workbench.colorCustomizations": {
-        "activityBar.activeBackground": "#f1abe0",
-        "activityBar.background": "#f1abe0",
+        "activityBar.activeBackground": "#ddfdc1",
+        "activityBar.background": "#ddfdc1",
         "activityBar.foreground": "#15202b",
         "activityBar.inactiveForeground": "#15202b99",
-        "activityBarBadge.background": "#6d8917",
-        "activityBarBadge.foreground": "#e7e7e7",
+        "activityBarBadge.background": "#65aafa",
+        "activityBarBadge.foreground": "#15202b",
         "commandCenter.border": "#15202b99",
-        "sash.hoverBorder": "#f1abe0",
-        "statusBar.background": "#ea7fd0",
+        "sash.hoverBorder": "#ddfdc1",
+        "statusBar.background": "#c2fb90",
         "statusBar.foreground": "#15202b",
-        "statusBarItem.hoverBackground": "#e353c0",
-        "statusBarItem.remoteBackground": "#ea7fd0",
+        "statusBarItem.hoverBackground": "#a7f95f",
+        "statusBarItem.remoteBackground": "#c2fb90",
         "statusBarItem.remoteForeground": "#15202b",
-        "titleBar.activeBackground": "#ea7fd0",
+        "titleBar.activeBackground": "#c2fb90",
         "titleBar.activeForeground": "#15202b",
-        "titleBar.inactiveBackground": "#ea7fd099",
+        "titleBar.inactiveBackground": "#c2fb9099",
         "titleBar.inactiveForeground": "#15202b99"
     },
-    "peacock.remoteColor": "#ea7fd0",
+    "peacock.remoteColor": "#c2fb90",
     "cSpell.words": [
+        "gcode",
+        "klippy",
+        "metascan",
+        "qtobject",
         "Reimplementation",
-        "sdbus"
+        "sdbus",
+        "unextrude"
     ],
     "todo-tree.tree.scanMode": "workspace",
     "todo-tree.tree.showCountsInTree": true,
-    "todo-tree.tree.showBadges": true
+    "todo-tree.tree.showBadges": true,
+    "vsintellicode.python.completionsEnabled": true, 
+    "editor.quickSuggestions": {
+        "other": true,
+        "comments": true,
+        "strings": true
+    }, 
+    // "editor."
+    "python.autoComplete.extraPaths": [
+        "..\\..\\klipper\\klippy",
+    ], 
+    "python.analysis.extraPaths": [
+        "..\\..\\klipper\\klippy",
+        
+    ],
+    "python.analysis.include": [
+        "..\\..\\klipper\\klippy",   
+    ],
+    "editor.fastScrollSensitivity": 10,
+    "workbench.list.fastScrollSensitivity": 10,
+    "terminal.integrated.fastScrollSensitivity": 10,
+    "workbench.list.mouseWheelScrollSensitivity": 2,
     
 }

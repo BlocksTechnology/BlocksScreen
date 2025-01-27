@@ -1,0 +1,39 @@
+{
+	"folders": [
+		{
+			"path": "."
+		}
+	],
+	"settings": {
+		"autoDocstring.docstringFormat": "google",
+		"workbench.colorCustomizations": {
+			"activityBar.activeBackground": "#75a9bb",
+			"activityBar.background": "#75a9bb",
+			"activityBar.foreground": "#15202b",
+			"activityBar.inactiveForeground": "#15202b99",
+			"activityBarBadge.background": "#f4eaf2",
+			"activityBarBadge.foreground": "#15202b",
+			"commandCenter.border": "#15202b99",
+			"sash.hoverBorder": "#75a9bb",
+			"statusBar.background": "#5493a9",
+			"statusBar.foreground": "#15202b",
+			"statusBarItem.hoverBackground": "#437587",
+			"statusBarItem.remoteBackground": "#5493a9",
+			"statusBarItem.remoteForeground": "#15202b",
+			"titleBar.activeBackground": "#5493a9",
+			"titleBar.activeForeground": "#15202b",
+			"titleBar.inactiveBackground": "#5493a999",
+			"titleBar.inactiveForeground": "#15202b99"
+		},
+		"peacock.remoteColor": "#5493a9",
+		"todo-tree.tree.scanMode": "workspace",
+		"todo-tree.tree.showCountsInTree": true,
+		"todo-tree.tree.showBadges": true,
+		"vsintellicode.python.completionsEnabled": true,
+		"cSpell.words": [
+			"logoblocks",
+			"Pixmap",
+			"qtobject"
+		]
+	}
+}

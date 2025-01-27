@@ -1,0 +1,27 @@
+[Unit]
+Description=BlocksScreen 
+StartLimitIntervalSec=0
+After=systemd-user-sessions.service plymouth-quit-wait.service
+ConditionPathExists=/dev/tty0
+Wants=dbus.socket systemd-logind.service 
+After=dbus.socket systemd-logind.service
+
+[Service]
+Type=simple 
+Restart=always 
+RestartSec=2
+User=BS_USER
+SupplementaryGroups=blocksscreen
+WorkingDirectory=BS_DIR
+Environment="BS_XCLIENT=BS_ENV/bin/python3.11 BS_DIR/app.py" BACKEND=BS_BACKEND
+ExecStart="BS_DIR/scripts/BlocksScreen-start.sh"
+
+UtmpIdentifier=tty7
+UtmpMode=user
+TTYPath=/dev/tty7
+TTYReset=yes
+TTYVHangup=yes
+TTYVTDisallocate=yes
+
+[Install]
+WantedBy=multi-user.target
