@@ -2,7 +2,7 @@
 Name=BlocksScreen 
 GenericName=Touch Screen GUI for klipper based on KlipperScreen Project! For Blockstech printers.
 Icon=BlocksScreen 
-Exec=sh -c "$HOME/.BlocksScreen-env/bin/python3.11 $HOME/BlocksScreen/app.py
+Exec=sh -c "$HOME/.BlocksScreen-env/bin/python3.11 $HOME/BlocksScreen/BlocksScreen/BlocksScreen.py
 Terminal=false 
 Type=Application 
 Categories=Graphics;3DGraphics;Engineering

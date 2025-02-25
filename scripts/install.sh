@@ -23,7 +23,8 @@ XSERVER="xinit xinput x11-xserver-utils xserver-xorg-input-evdev xserver-xorg-in
 CAGE="cage seatd xwayland"
 PYOBJECT="pkg-config python3-dev"
 MISC="autoconf python3-venv libdbus-glib-1-dev"
-QTMISC=" '^libxcb.*-dev' libx11-xcb-dev libglu1-mesa-dev libxrender-dev libxi-dev libxkbcommon-dev libxkbcommon-x11-dev libxcb-cursor0 opencv-python-headless"
+# QTMISC="'^libxcb.*-dev' libx11-xcb-dev libglu1-mesa-dev libxrender-dev libxi-dev libxkbcommon-dev libxkbcommon-x11-dev libxcb-cursor0 opencv-python-headless"
+QTMISC=" ^libxcb.*-dev libx11-xcb-dev libglu1-mesa-dev libxrender-dev libxi-dev libxkbcommon-dev libxkbcommon-x11-dev libxcb-cursor0"
 
 Red='\033[0;31m'
 Green='\033[0;32m'
@@ -124,7 +125,7 @@ function install_packages(){
         exit 1
     fi 
 
-    if sudo apt install -y $QTMISC; then
+    if sudo apt-get install -y $QTMISC; then
         echo_ok "Installed PyQt6 dependencies"
     else 
         echo_error "Installation of PyQT dependencie packages failed ($QTMISC)"

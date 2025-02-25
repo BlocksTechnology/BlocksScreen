@@ -13,7 +13,7 @@ RestartSec=2
 User=BS_USER
 SupplementaryGroups=blocksscreen
 WorkingDirectory=BS_DIR
-Environment="BS_XCLIENT=BS_ENV/bin/python3.11 BS_DIR/app.py" BACKEND=BS_BACKEND
+Environment="BS_XCLIENT=BS_ENV/bin/python3.11 BS_DIR/BlocksScreen/BlocksScreen.py" BACKEND=BS_BACKEND
 ExecStart="BS_DIR/scripts/BlocksScreen-start.sh"
 
 UtmpIdentifier=tty7

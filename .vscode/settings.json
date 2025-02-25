@@ -38,23 +38,13 @@
     "todo-tree.tree.showCountsInTree": true,
     "todo-tree.tree.showBadges": true,
     "vsintellicode.python.completionsEnabled": true, 
-    "editor.quickSuggestions": {
-        "other": true,
-        "comments": true,
-        "strings": true
-    }, 
-    // "editor."
-    "python.autoComplete.extraPaths": [
-        "..\\..\\klipper\\klippy",
-    ], 
-    "python.analysis.extraPaths": [
-        "..\\..\\klipper\\klippy",
-        
-    ],
-    "python.analysis.include": [
-        "..\\..\\klipper\\klippy",   
-    ],
-    "editor.fastScrollSensitivity": 10,
+    // "editor.quickSuggestions": {
+    //     "other": false,
+    //     "comments": true,
+    //     "strings": true,        
+    // }, 
+    // "editor.quickSuggestionsDelay": 500,    
+    // "editor.fastScrollSensitivity": 10,
     "workbench.list.fastScrollSensitivity": 10,
     "terminal.integrated.fastScrollSensitivity": 10,
     "workbench.list.mouseWheelScrollSensitivity": 2,

@@ -1,5 +1,6 @@
 import copy
 import logging
+import logging.config
 import logging.handlers
 import queue
 import threading
@@ -99,3 +100,8 @@ def destroy_logger(name): ...  # TODO: Implement this
 
 
 # [ ] SLOW: Currently the logging is slow, which slows down the initialization of the screen
+
+
+
+
+

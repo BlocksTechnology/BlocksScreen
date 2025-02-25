@@ -13,3 +13,4 @@ sdbus-networkmanager==2.0.0
 typing==3.7.4.3
 urllib3==2.2.2
 websocket-client==1.8.0
+opencv-python-headless==4.11.0.86

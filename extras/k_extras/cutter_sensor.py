@@ -62,7 +62,7 @@ class CutterSensor:
         )
 
         self.filament_present: bool = False
-        self.sensor_enabled: bool = True
+        self.sensor_enabled = True
         self.min_event_systime = self.reactor.NEVER
 
         # * Register button sensor for the cutter filament sensor
@@ -324,7 +324,7 @@ class CutterSensor:
         is_printing = idle_timeout.get_status(eventtime)["state"] == "Printing"
 
         # * Perform filament action associated with status change (if any)
-        # if self.load_filament_object is not None:
+        self.gcode.respond_info("[CUTTTTTER] IN CUTTER SENSOR CALLBACK")
         if (
           self.load_filament_object is not None 
           and self.load_filament_object.load_started  
@@ -341,6 +341,7 @@ class CutterSensor:
                 self.printer.send_event("cutter_sensor:filament_present")
                 # filament inserted detected
                 self.min_event_systime = self.reactor.NEVER
+                
                 logging.info(
                     f"Cutter filament sensor insert detected, time : {eventtime}"
                 )
@@ -352,7 +353,8 @@ class CutterSensor:
         ):  # When not printing and there is a runout gcode
             self.printer.send_event("cutter_sensor:no_filament")
             # Act During printing
-            self.min_event_systime = self.reactor.NEVER
+            # self.min_event_systime = self.reactor.NEVER
+            self.min_event_systime = eventtime
             logging.info(
                 f"Cutter filament sensor runout detected, while not printing, time: {eventtime}"
             )
@@ -362,7 +364,8 @@ class CutterSensor:
             is_printing and self.runout_gcode is not None
         ):  # When printing and there is a runout gcode
             self.printer.send_event("cutter_sensor:no_filament")
-            self.min_event_systime = self.reactor.NEVER
+            # self.min_event_systime = self.reactor.NEVER
+            self.min_event_systime = eventtime 
             logging.info(f"Cutter filament sensor runout detected, time: {eventtime}")
             self.reactor.register_callback(self._runout_event_handler)
         
@@ -392,7 +395,7 @@ class CutterSensor:
         """Gets the status of the sensor of the cutter"""
         return {
             "filament_detect": self.filament_present,
-            "enabled": self.sensor_enabled,
+            "enabled": bool(self.sensor_enabled),
         }
         
 
