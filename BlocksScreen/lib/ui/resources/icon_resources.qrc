@@ -1,0 +1,14 @@
+<RCC>
+  <qresource prefix="button_icons">
+    <file>media/graphics/go_up.svg</file>
+    <file>media/graphics/go_down.svg</file>
+    <file>media/btn_icons/filament_sensor_icon.svg</file>
+    <file>media/graphics/back.svg</file>
+    <file>media/btn_icons/temperature_icon.svg</file>
+    <file>media/graphics/layer_countig.svg</file>
+    <file>media/graphics/time_to_finish.svg</file>
+    <file>media/graphics/speed_fan.svg</file>
+    <file>media/graphics/speed_manipulation.svg</file>
+    <file>media/graphics/heated_chamber.svg</file>
+  </qresource>
+</RCC>

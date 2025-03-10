@@ -1,0 +1,6 @@
+<RCC>
+  <qresource prefix="graphics">
+    <file>media/btn_icons/z_offset_adjust.svg</file>
+    <file>media/graphics/babystep_graphic.png</file>
+  </qresource>
+</RCC>

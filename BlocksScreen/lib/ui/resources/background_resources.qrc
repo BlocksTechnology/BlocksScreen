@@ -1,0 +1,7 @@
+<RCC>
+  <qresource prefix="background">
+    <file>media/graphics/scroll_list_window.svg</file>
+    <file>1st_background.png</file>
+    <file>logoblocks.png</file>
+  </qresource>
+</RCC>

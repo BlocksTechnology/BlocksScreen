@@ -1,0 +1,6 @@
+<RCC>
+  <qresource prefix="font">
+    <file>media/fonts for text/Momcake-Thin.ttf</file>
+    <file>media/fonts for text/Momcake-Bold.ttf</file>
+  </qresource>
+</RCC>

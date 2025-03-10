@@ -1,0 +1,26 @@
+<RCC>
+  <qresource prefix="top_bar_icons">
+    <file>media/topbar/abs_filament_topbar.svg</file>
+    <file>media/topbar/bed_temp_topbar.svg</file>
+    <file>media/topbar/chamber_temp_topbar.svg</file>
+    <file>media/topbar/custom_filament_topbar.svg</file>
+    <file>media/topbar/high_temp_printcore.svg</file>
+    <file>media/topbar/hips_filament_topbar.svg</file>
+    <file>media/topbar/internet_cable.svg</file>
+    <file>media/topbar/not_avaible_printcore.svg</file>
+    <file>media/topbar/not_available_filament_topbar.svg</file>
+    <file>media/topbar/nozzle_temp_topbar.svg</file>
+    <file>media/topbar/nozzle1_temperature.svg</file>
+    <file>media/topbar/nozzle2_temperature.svg</file>
+    <file>media/topbar/nylon_filament_topbar.svg</file>
+    <file>media/topbar/petg_filament_topbar.svg</file>
+    <file>media/topbar/pla_filament_topbar.svg</file>
+    <file>media/topbar/signal_good_signal.svg</file>
+    <file>media/topbar/signal_no_signal.svg</file>
+    <file>media/topbar/signal_very_good_signal.svg</file>
+    <file>media/topbar/signal_veryweak_signal.svg</file>
+    <file>media/topbar/signal_weak_signal.svg</file>
+    <file>media/topbar/standard_temp_printcore.svg</file>
+    <file>media/topbar/tpu_filament_topbar.svg</file>
+  </qresource>
+</RCC>
