@@ -37,6 +37,7 @@
 		],
 		"[python]": {	
 			"editor.wordBasedSuggestions": "allDocuments", 
+			"editor.defaultFormatter": "charliermarsh.ruff"
 		},
 		"python.analysis.autoSearchPaths": true, 
 		"python.analysis.autoImportCompletions": true,

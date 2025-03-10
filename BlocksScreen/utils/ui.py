@@ -99,6 +99,8 @@ class BlocksCustomButton(QPushButton):
             style.PixelMetric.PM_LayoutVerticalSpacing, opt, self
         )
         if self.button_type == "normal":
+            if self._text is None:
+                return hint
             labelRect = self.fontMetrics().boundingRect(
                 0, 0, 5000, 5000, QtCore.Qt.TextFlag.TextShowMnemonic, self._text
             )
@@ -139,8 +141,10 @@ class BlocksCustomButton(QPushButton):
         qp.setRenderHint(qp.RenderHint.LosslessImageRendering, True)
         rect = self.rect()
         style = self.style()
+
         if style is None or rect is None:
             return
+
         margin = style.pixelMetric(style.PixelMetric.PM_ButtonMargin, opt, self)
         qp.drawControl(QStyle.ControlElement.CE_PushButton, opt)
 
@@ -151,22 +155,25 @@ class BlocksCustomButton(QPushButton):
             self.buttonPixmapRects = self.set_button_graphics(qp, margin)
             if self.icon_pixmap is not None:
                 _, self._icon_rectF = self.paint_icon(qp)
-
-            # *  Draw Text stuff over the button
-            if self.buttonPixmapRects and self.text is not None:
-                labelRect = QtCore.QRect(rect)
+            if self.buttonPixmapRects and self.text() is not None:
+                _label_rect = rect
                 _start_text_position = int(self.buttonPixmapRects[0].width())
-                labelRect.setLeft(_start_text_position + margin)
+                _label_rect.setLeft(_start_text_position + margin)
                 # labelRect.setRight(
                 #     int(self.buttonPixmapRects[1].width() + _start_text_position)
                 # )  # Set the right limit for the button rect
                 qp.drawText(
-                    labelRect,
+                    _label_rect,
                     QtCore.Qt.TextFlag.TextShowMnemonic
                     | QtCore.Qt.AlignmentFlag.AlignLeft
                     | QtCore.Qt.AlignmentFlag.AlignVCenter,
-                    self.text(),
+                    str(self.text()),
                 )
+        elif "icon" == self.button_type:
+            # TODO: icon type button  paintEvent
+            _icon_rectF = None
+            if self.icon_pixmap is not None:
+                _, _icon_rectF = self.paint_icon(qp)
 
         elif "display" in self.button_type:
             _icon_rectF = None
@@ -194,39 +201,46 @@ class BlocksCustomButton(QPushButton):
                         int(_ptl_rect.right()), 0.0, 10, rect.height()
                     )
                     _stl_rect = QtCore.QRectF(
-                        int(_mtl.center().x() + 5),
+                        int(_mtl.center().x() + 3),
                         0.0,
                         int(_mtl.width() / 2),
                         rect.height(),
                     )
-                    # TEST The following lines are to be deleted, this is being used to test the buttons limits
-                    qp.setPen(QtGui.QColor(255, 0, 255, 255))
-                    qp.drawRect(_ptl_rect)
-                    qp.setPen(QtGui.QColor(0, 0, 255, 255))
-                    qp.drawRect(_stl_rect)
-                    qp.setPen(QtGui.QColor(255, 255, 255, 255))
+                    qp.drawText(
+                        _ptl_rect,
+                        QtCore.Qt.TextFlag.TextShowMnemonic
+                        | QtCore.Qt.AlignmentFlag.AlignHCenter
+                        | QtCore.Qt.AlignmentFlag.AlignVCenter,
+                        str(self.text()),
+                    )
+                    qp.drawText(
+                        _stl_rect,
+                        QtCore.Qt.TextFlag.TextShowMnemonic
+                        | QtCore.Qt.AlignmentFlag.AlignHCenter
+                        | QtCore.Qt.AlignmentFlag.AlignVCenter,
+                        str(234),
+                    )
+                    qp.drawText(
+                        _mtl_rect,
+                        QtCore.Qt.TextFlag.TextShowMnemonic
+                        | QtCore.Qt.AlignmentFlag.AlignHCenter
+                        | QtCore.Qt.AlignmentFlag.AlignVCenter,
+                        str("/"),
+                    )
 
-                qp.drawText(
-                    _mtl,
-                    QtCore.Qt.TextFlag.TextShowMnemonic
-                    | QtCore.Qt.AlignmentFlag.AlignHCenter
-                    if "secondary" in self.button_type
-                    else QtCore.Qt.AlignmentFlag.AlignLeft
-                    | QtCore.Qt.AlignmentFlag.AlignVCenter,
-                    self.text(),
-                )
-
-        elif "icon":
-            
-            # TODO: icon type button  paintEvent
-            _icon_rectF = None
-            if self.icon_pixmap is not None: 
-                _, _icon_rectF = self.paint_icon(qp)
-            
-            
-                
+                else:
+                    qp.drawText(
+                        _mtl,
+                        QtCore.Qt.TextFlag.TextShowMnemonic
+                        | QtCore.Qt.AlignmentFlag.AlignHCenter
+                        | QtCore.Qt.AlignmentFlag.AlignVCenter,
+                        str(self.text()),
+                    )
 
         qp.restore()
+
+        if e is None:
+            return
         return super().paintEvent(e)
 
     def paint_icon(
@@ -235,6 +249,9 @@ class BlocksCustomButton(QPushButton):
     ) -> typing.Tuple[QtGui.QIcon, QtCore.QRectF] | None:
         if self.icon_pixmap is None or self.button_type is None:
             return None
+        qp.setRenderHints(qp.RenderHint.Antialiasing)
+        qp.setRenderHints(qp.RenderHint.LosslessImageRendering)
+        qp.setRenderHints(qp.RenderHint.SmoothPixmapTransform)
         if "normal" == self.button_type:
             if self.buttonPixmapRects:
                 _iconParentRect = self.buttonPixmapRects[0]
@@ -245,59 +262,47 @@ class BlocksCustomButton(QPushButton):
                     _pixmap_size.width() - _iconParentRect.width() * 0.5,
                     _pixmap_size.height() - _iconParentRect.height() * 0.5,
                 )
-                qp.setRenderHints(qp.RenderHint.Antialiasing)
-                qp.setRenderHints(qp.RenderHint.LosslessImageRendering)
-                qp.setRenderHints(qp.RenderHint.SmoothPixmapTransform)
+
                 _icon_scaled = self.icon_pixmap.scaled(
                     int(_pixmap_size.width()),
                     int(_pixmap_size.height()),
                     QtCore.Qt.AspectRatioMode.KeepAspectRatio,
                     QtCore.Qt.TransformationMode.SmoothTransformation,
                 )
-                qp.drawPixmap(
-                    _icon_rect, _icon_scaled, self.icon_pixmap.rect().toRectF()
-                )
-                return (QtGui.QIcon(_icon_scaled), _icon_rect)
 
-        elif "display" in self.button_type:
-            _parent_rect: QtCore.QRect = self.rect()
-            _icon_rect = QtCore.QRectF(  # x,y, width, height
-                0.0,
-                0.0,
-                _parent_rect.width() * 0.4,
-                _parent_rect.height(),
-            )
-            qp.setCompositionMode(qp.CompositionMode.CompositionMode_SourceOver)
-            qp.setRenderHint(qp.RenderHint.Antialiasing)
-            qp.setRenderHint(qp.RenderHint.LosslessImageRendering)
-            qp.setRenderHint(qp.RenderHint.SmoothPixmapTransform)
-            _icon_scaled = self.icon_pixmap.scaled(
-                int(self.icon_pixmap.width()),
-                int(self.icon_pixmap.height()),
-                QtCore.Qt.AspectRatioMode.KeepAspectRatio,
-                QtCore.Qt.TransformationMode.SmoothTransformation,
-            )
-            qp.drawPixmap(_icon_rect, _icon_scaled, self.icon_pixmap.rect().toRectF())
-            # print(_icon_scaled.size())
-            return (QtGui.QIcon(_icon_scaled), _icon_rect)
         elif self.button_type == "icon":
             _parent_rect = QtCore.QRect = self.rect()
             _icon_rect = QtCore.QRectF(
                 0.0, 0.0, _parent_rect.width(), _parent_rect.height()
             )
             qp.setCompositionMode(qp.CompositionMode.CompositionMode_SourceOver)
-            qp.setRenderHint(qp.RenderHint.Antialiasing)
-            qp.setRenderHint(qp.RenderHint.LosslessImageRendering)
-            qp.setRenderHint(qp.RenderHint.SmoothPixmapTransform)
-
             _icon_scaled = self.icon_pixmap.scaled(
                 int(self.icon_pixmap.width()),
                 int(self.icon_pixmap.height()),
                 QtCore.Qt.AspectRatioMode.KeepAspectRatio,
                 QtCore.Qt.TransformationMode.SmoothTransformation,
             )
-            qp.drawPixmap(_icon_rect, _icon_scaled, self.icon_pixmap.rect().toRectF())
-            return (QtGui.QIcon(_icon_scaled), _icon_rect)
+
+        elif "display" in self.button_type:
+            _parent_rect: QtCore.QRect = self.rect()
+            _icon_rect = QtCore.QRectF(  # x,y, width * size reduction factor, height
+                0.0,
+                0.0,
+                _parent_rect.width() * 0.3,
+                _parent_rect.height(),
+            )
+            qp.setCompositionMode(qp.CompositionMode.CompositionMode_SourceOver)
+            _icon_scaled = self.icon_pixmap.scaled(
+                # int(self.icon_pixmap.width()),
+                int(_icon_rect.width()),
+                # int(self.icon_pixmap.height()),
+                int(_parent_rect.height()),
+                QtCore.Qt.AspectRatioMode.KeepAspectRatio,
+                QtCore.Qt.TransformationMode.SmoothTransformation,
+            )
+
+        qp.drawPixmap(_icon_rect, _icon_scaled, self.icon_pixmap.rect().toRectF())
+        return (QtGui.QIcon(_icon_scaled), _icon_rect)
 
     def set_button_graphics(
         self, qp: QtWidgets.QStylePainter, margin
@@ -379,7 +384,8 @@ class BlocksCustomButton(QPushButton):
             self._name = name
         elif name == "button_type":
             self.button_type = value
-
+        elif name == "font": 
+            self.setFont(QtGui.QFont(value))
         return super().setProperty(name, value)
 
 

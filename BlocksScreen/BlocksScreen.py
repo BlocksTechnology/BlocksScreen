@@ -59,11 +59,15 @@ def run():
     BlocksScreen.setApplicationName("BlocksScreen")
     BlocksScreen.setApplicationDisplayName("BlocksScreen")
     BlocksScreen.setDesktopFileName("BlocksScreen")
-    
+
     # ! Someone said that .processEvents sometimes crashes the system
     BlocksScreen.processEvents()
 
-    main_window.show()
+    # main_window.setScreen(BlocksScreen.screens()[2])
+
+    # main_window.showFullScreen()
+    main_window.showNormal()
+
     main_window.bo_startup.emit()
     _logger.info(f"THREAD COUNT {PyQt6.QtCore.QThreadPool().activeThreadCount()}")
 
