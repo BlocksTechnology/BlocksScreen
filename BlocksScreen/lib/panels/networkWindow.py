@@ -7,20 +7,19 @@ from PyQt6.QtGui import QPaintEvent
 from PyQt6.QtWidgets import QListWidgetItem, QStackedWidget, QWidget
 
 from lib.ui.wifiConnectivityWindow_ui import Ui_wifi_stacked_page
-from lib.bo.network import SdbusNetworkManager , SdbusNetworkManagerDummy
+from lib.bo.network import SdbusNetworkManagerDummy
 
 # TEST: Network saving, Adding new Network connections, Toggle on and off hotspot, etc....
 # TODO: Complete this panel
 # TODO: Add a Virtual Keyboard
 
-class NetworkControlWindow(QStackedWidget):
-    request_change_page = pyqtSignal(int, int, name="request_change_page")
-    request_back_button_pressed = pyqtSignal(name="request_back_button_pressed")
-    request_network_scan = pyqtSignal(name="scan_network")
 
+class NetworkControlWindow(QStackedWidget):
+    request_network_scan = pyqtSignal(name="scan_network")
     new_ip_signal = pyqtSignal(str, name="ip_address_change")
     get_hotspot_ssid = pyqtSignal(str, name="hotspot_ssid_name")
     delete_network_signal = pyqtSignal(str, name="delete_network")
+    request_signal_strength = pyqtSignal(str, name="network_signal_strength")
     new_connection_result = pyqtSignal(
         [],
         [
@@ -54,7 +53,7 @@ class NetworkControlWindow(QStackedWidget):
         self.panel.wifi_toggle_button.clicked.connect(
             partial(
                 self.sdbus_network.toggle_wifi,
-                toggle=not self.sdbus_network.wifi_enabled(),
+                toggle=not bool(self.sdbus_network.wifi_enabled()),
             )
         )  # Turn off if enabled/Turn on if disabled
         self.request_network_scan.connect(self.rescan_networks)
@@ -143,6 +142,7 @@ class NetworkControlWindow(QStackedWidget):
         self.new_ip_signal.connect(partial(self.panel.hotspot_info_ip_field.setText))
         # * request a initial network scan
         self.request_network_scan.emit()
+
         self.hide()
 
     @pyqtSlot(str, name="delete_network")
@@ -153,8 +153,6 @@ class NetworkControlWindow(QStackedWidget):
     def rescan_networks(self) -> None:
         self.sdbus_network.rescan_networks()
 
-    request_signal_strength = pyqtSignal(str, name="network_signal_strength")
-
     @pyqtSlot(str, name="network_signal_strength")
     def network_signal_strength(self, ssid: str):
         _strength = self.sdbus_network.get_connection_signal_by_ssid(ssid)
@@ -162,7 +160,6 @@ class NetworkControlWindow(QStackedWidget):
     @pyqtSlot(name="new_connection_result")
     @pyqtSlot(str, name="new_connection_result")
     def process_new_connection_result(self, msg: str | None):
-        print("In the processingnn")
         if msg is not None:
             self.panel.add_network_password_field.setStyleSheet(
                 "border: 2px solid red;"
@@ -227,7 +224,7 @@ class NetworkControlWindow(QStackedWidget):
         for item in self.sdbus_network.get_available_networks():
             if not isinstance(item, dict):
                 continue
-            if "ssid" in item.keys() and item is not None:
+            if "ssid" in item.keys() and item is not None: # REFACTOR: Can be better implemented 
                 results = self.configure_network_entry(str(item["ssid"]))
                 # _item, _item_widget = self.configure_network_entry(str(item["ssid"]))
                 if results is not None and isinstance(results, tuple):
@@ -242,7 +239,7 @@ class NetworkControlWindow(QStackedWidget):
     @staticmethod
     def configure_network_entry(
         ssid: str,
-    ) -> typing.Tuple[QtWidgets.QListWidgetItem, QWidget] | None:
+    ) -> typing.Tuple[QtWidgets.QListWidgetItem, QWidget] | None: 
         """Creates a QListWidgetItem to be inserted on the QListWidget with a network information.
 
         Args:
@@ -253,7 +250,7 @@ class NetworkControlWindow(QStackedWidget):
         """
         if not isinstance(ssid, str):
             return None
-
+        # REFACTOR: this code is pretty bad 
         _list_item = QtWidgets.QListWidgetItem()
         _list_item_widget = QWidget()
         _item_layout = QtWidgets.QHBoxLayout()
@@ -261,7 +258,7 @@ class NetworkControlWindow(QStackedWidget):
         _item_button = QtWidgets.QPushButton()
 
         _item_button.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
-        _item_button.setStyleSheet("QPushButton{background:Transparent;}")
+        # _item_button.setStyleSheet("QPushButton{background:Transparent;}")
 
         _item_text.setText(str(ssid))
         _item_layout.addWidget(_item_text)
@@ -380,8 +377,6 @@ class NetworkControlWindow(QStackedWidget):
             self.background = value
         return super().setProperty(name, value)
 
-    # @pyqtSlot(QtCore.QRect, "PyQt_PyObject", name="call_network_page")
-    # @pyqtSlot(QtCore.QRect, name="call_network_page")
     @pyqtSlot(name="call_network_page")
     def call_network_panel(
         self,
@@ -390,13 +385,12 @@ class NetworkControlWindow(QStackedWidget):
             return
 
         self.panel.network_list_widget.clear()
-
+        self.setCurrentIndex(0)
         _main_size = self.main_panel.size()
         self.setGeometry(0, 0, _main_size.width(), _main_size.height())
-
         self.updateGeometry()
+        self.update()
         self.add_ssid_network_entry()
-        self.setCurrentIndex(0)
         self.show()
 
 

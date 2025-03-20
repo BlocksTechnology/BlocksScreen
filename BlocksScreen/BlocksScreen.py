@@ -1,38 +1,28 @@
 import logging
 import logging.handlers
 import sys
-from time import sleep
 import typing
 
+import logger
+import PyQt6
 import PyQt6.Qt6
 import PyQt6.Qt6.lib
+import PyQt6.QtCore
 import PyQt6.QtGui
 import PyQt6.QtWidgets
-from lib.panels import mainWindow
-import events
-import logger
-import manager
-import PyQt6
-import PyQt6.QtCore
-import userauth
-
 from lib.panels.mainWindow import MainWindow
-
-# * PyQt6 imports
 from PyQt6.QtGui import QPixmap
 from PyQt6.QtWidgets import QApplication, QSplashScreen, QWidget
 
-_logger = logging.getLogger(name="logs/BlocksScreen.logs")
+_logger = logging.getLogger(name="logs/BlocksScreen.log")
 
 
-def setup_working_dir():
-    ...
-    # cur_work_dir = os.getcwd()
+def setup_working_dir(): ...
 
 
 def setup_app_loggers():
-    ql = logger.create_logger(name="logs/BlocksScreen.logs", level=logging.DEBUG)
-    _logger = logging.getLogger(name="logs/BlocksScreen.logs")
+    ql = logger.create_logger(name="logs/BlocksScreen.log", level=logging.DEBUG)
+    _logger = logging.getLogger(name="logs/BlocksScreen.log")
     _logger.info("============ BlocksScreen Initializing ============")
 
 
@@ -67,10 +57,7 @@ def run():
 
     # main_window.showFullScreen()
     main_window.showNormal()
-
     main_window.bo_startup.emit()
-    _logger.info(f"THREAD COUNT {PyQt6.QtCore.QThreadPool().activeThreadCount()}")
-
     sys.exit(BlocksScreen.exec())
 
 

@@ -1,14 +1,57 @@
 <RCC>
-  <qresource prefix="button_icons">
-    <file>media/graphics/go_up.svg</file>
-    <file>media/graphics/go_down.svg</file>
-    <file>media/btn_icons/filament_sensor_icon.svg</file>
-    <file>media/graphics/back.svg</file>
-    <file>media/btn_icons/temperature_icon.svg</file>
-    <file>media/graphics/layer_countig.svg</file>
-    <file>media/graphics/time_to_finish.svg</file>
-    <file>media/graphics/speed_fan.svg</file>
-    <file>media/graphics/speed_manipulation.svg</file>
-    <file>media/graphics/heated_chamber.svg</file>
+  <qresource prefix="wifi_icons">
+    <file>media/btn_icons/0noWIFI.svg</file>
+    <file>media/btn_icons/wifi_settings.svg</file>
+    <file>media/btn_icons/1barWIFI.svg</file>
+    <file>media/btn_icons/2barWIFI.svg</file>
+    <file>media/btn_icons/3fullWIFI.svg</file>
+  </qresource>
+  <qresource prefix="system">
+    <file>media/btn_icons/system_reboot.svg</file>
+  </qresource>
+  <qresource prefix="klipper">
+    <file>media/btn_icons/firmware_restart.svg</file>
+    <file>media/btn_icons/restart_klipper.svg</file>
+  </qresource>
+  <qresource prefix="temperatures">
+    <file>media/btn_icons/nozzle.svg</file>
+    <file>media/btn_icons/chamber temp.svg</file>
+    <file>media/btn_icons/temp_icon.svg</file>
+    <file>media/btn_icons/blower.svg</file>
+    <file>media/btn_icons/BED temp.svg</file>
+    <file>media/btn_icons/fan.svg</file>
+  </qresource>
+  <qresource prefix="arrow_icons">
+    <file>media/btn_icons/left move axis.svg</file>
+    <file>media/btn_icons/right move axis.svg</file>
+    <file>media/btn_icons/down_arrow.svg</file>
+    <file>media/btn_icons/up_arrow.svg</file>
+  </qresource>
+  <qresource prefix="filament">
+    <file>media/topbar/abs_filament_topbar.svg</file>
+    <file>media/topbar/custom_filament_topbar.svg</file>
+    <file>media/topbar/hips_filament_topbar.svg</file>
+    <file>media/topbar/nylon_filament_topbar.svg</file>
+    <file>media/topbar/petg_filament_topbar.svg</file>
+    <file>media/topbar/pla_filament_topbar.svg</file>
+    <file>media/topbar/tpu_filament_topbar.svg</file>
+    <file>media/btn_icons/material top bar.svg</file>
+    <file>media/btn_icons/change_filament.svg</file>
+    <file>media/btn_icons/filament sensor.svg</file>
+    <file>media/btn_icons/filament_icon.svg</file>
+    <file>media/btn_icons/filament_unload.svg</file>
+  </qresource>
+  <qresource prefix="axis">
+    <file>media/btn_icons/auto_home.svg</file>
+    <file>media/btn_icons/homeALL.svg</file>
+    <file>media/btn_icons/homeX.svg</file>
+    <file>media/btn_icons/homeY.svg</file>
+    <file>media/btn_icons/homeZ.svg</file>
+    <file>media/btn_icons/axes_maintenance_icon.svg</file>
+  </qresource>
+  <qresource prefix="misc">
+    <file>media/btn_icons/speed.svg</file>
+    <file>media/btn_icons/layers.svg</file>
+    <file>media/btn_icons/time.svg</file>
   </qresource>
 </RCC>

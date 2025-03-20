@@ -23,12 +23,12 @@
    <string notr="true">#wifi_stacked_page{
 	
 	
-	background-image: url(:/background/1st_background.png);
+	background-image: url(:/background/media/1st_background.png);
 }
 </string>
   </property>
   <property name="currentIndex">
-   <number>0</number>
+   <number>1</number>
   </property>
   <widget class="QWidget" name="network_list_page">
    <property name="sizePolicy">

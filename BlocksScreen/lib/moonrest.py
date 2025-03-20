@@ -4,9 +4,6 @@ from typing import Type
 import requests
 from requests import Request, Response
 
-import tornado
-
-from tornado.httpclient import HTTPClient, AsyncHTTPClient
 
 
 class UncallableError(Exception):
@@ -130,7 +127,7 @@ class MoonRest:
 
 
 # Blocking HTTP Client
-class MoonRestClientBlocking(tornado.httpclient.HTTPClient):
+# class MoonRestClientBlocking(tornado.httpclient.HTTPClient):
     ...
 
     # def __init__(self, async_client_class: AsyncHTTPClient | None = None, **kwargs: logging.Any) -> None:
@@ -138,4 +135,4 @@ class MoonRestClientBlocking(tornado.httpclient.HTTPClient):
 
 
 # ASYNC HTTP Client
-class MoonRestClientNonBlocking(tornado.httpclient.AsyncHTTPClient): ...
+# class MoonRestClientNonBlocking(tornado.httpclient.AsyncHTTPClient): ...

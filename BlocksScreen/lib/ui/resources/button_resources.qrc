@@ -1,5 +1,6 @@
 <RCC>
   <qresource prefix="button_borders">
+    <file>media/btn_icons/back.svg</file>
     <file>media/buttons/1st_value.svg</file>
     <file>media/buttons/1st_value_PRESSED.svg</file>
     <file>media/buttons/2nd_value.svg</file>

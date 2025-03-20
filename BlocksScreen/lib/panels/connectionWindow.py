@@ -1,6 +1,7 @@
 import logging
 
 from PyQt6.QtCore import QEvent, QObject, pyqtSignal, pyqtSlot
+from PyQt6 import QtGui
 from PyQt6.QtWidgets import QFrame
 
 from events import KlippyDisconnected, KlippyReady, KlippyShutdown
@@ -13,7 +14,7 @@ class ConnectionWindow(QFrame):
     # @ Signals
     text_updated = pyqtSignal(int, name="connection_text_updated")
     retry_connection_clicked = pyqtSignal(name="retry_connection_clicked")
-    wifi_clicked = pyqtSignal(name="call_network_page")
+    wifi_button_clicked = pyqtSignal(name="call_network_page")
     reboot_clicked = pyqtSignal(name="reboot_clicked")
     restart_klipper_clicked = pyqtSignal(name="restart_klipper_clicked")
     firmware_restart_clicked = pyqtSignal(name="firmware_restart_clicked")
@@ -27,17 +28,13 @@ class ConnectionWindow(QFrame):
         self._moonraker_status: str = "disconnected"
         self._klippy_state: str = "closed"
         self._klippy_connection: bool = False
+        self.installEventFilter(self.main_window)
+        # self.text_update()
 
-        self.setGeometry(self.frameRect())
-        self.setEnabled(True)
-        self.show_panel()
-        self.text_update()
-
-        # @ Slot connections
         self.panel.RetryConnectionButton.clicked.connect(
             self.retry_connection_clicked.emit
         )
-        self.panel.WifiButton.clicked.connect(self.wifi_clicked.emit)
+        self.panel.wifi_button.clicked.connect(self.wifi_button_clicked.emit)
         self.panel.FirmwareRestartButton.clicked.connect(
             self.firmware_restart_clicked.emit
         )
@@ -45,13 +42,9 @@ class ConnectionWindow(QFrame):
         self.panel.RestartKlipperButton.clicked.connect(
             self.restart_klipper_clicked.emit
         )
-
-        # TODO: Don't know if i should use these signals here or not, maybe they should be outside
         self.ws.connection_lost.connect(slot=self.show)
         self.ws.klippy_connected_signal.connect(self.klippy_connection)
         self.ws.klippy_state_signal.connect(self.klippy_state)
-
-        logging.info("[ConnectionWindowPanel] Initialized")
 
     def show_panel(self, reason: str | None = None):
         self.show()
@@ -76,7 +69,7 @@ class ConnectionWindow(QFrame):
             self.panel.connectionTextBox.setText("Klipper Startup")
         elif state == "ready":
             self.panel.connectionTextBox.setText("Klipper Ready")
-            self.close()
+            self.hide()
 
     @pyqtSlot(int, name="websocket_connecting")
     @pyqtSlot(str, name="websocket_connecting")
@@ -86,8 +79,7 @@ class ConnectionWindow(QFrame):
     @pyqtSlot(name="websocket_connection_achieved")
     def websocket_connection_achieved(self):
         self.panel.connectionTextBox.setText("Moonraker Connected\n Klippy not ready")
-        # # * Close this window
-        # self.close()
+        self.hide()
 
     @pyqtSlot(name="websocket_connection_lost")
     def websocket_connection_lost(self):
@@ -131,35 +123,23 @@ class ConnectionWindow(QFrame):
 
         return False
 
-    # def customEvent(self, a0: QEvent ) -> None:
-    #     # * In here i know i receive custom events such as the WebsocketOpenEvent
-    #     # But i'm not sending it as a custom event but as a normal one.. .
-    #     # Why is that??? shouldn't i send it with customEvent method?
-    #     # why is that method here if it doesn't do shit ?
-    #     if a0.type() >= 65500:
-    #         print(f"a custom event was received in connectionWindow:\n\t {a0.__class__} ")
-    #         # print(a0.__class__)
-    #         if a0.type() == KlippyDisconnectedEvent.type():
-    #             print("REceived custom event klippy ready ")
-    #             return False
+    def eventFilter(self, object: QObject, event: QEvent) -> bool:
+        if event is None:
+            return super().eventFilter(object, event)
 
-    #     return super().customEvent(a0)
-
-    def eventFilter(self, a0: QObject | None, a1: QEvent | None) -> bool:
-        if a1 is None:
-            return super().eventFilter(a0, a1)
-
-        if a1.type() == KlippyDisconnected.type():
+        if event.type() == KlippyDisconnected.type():
             if not self.isVisible():
                 self.show()
                 self.panel.connectionTextBox.setText("Klippy is disconnected")
-        elif a1.type() == KlippyReady.type():
+        elif event.type() == KlippyReady.type():
             self.panel.connectionTextBox.setText("Klippy Ready")
             self.hide()
             return False
-        elif a1.type() == KlippyShutdown.type():
+
+        elif event.type() == KlippyShutdown.type():
             if not self.isVisible():
                 self.show()
                 self.panel.connectionTextBox.setText("Klippy shutdown")
-                return False
-        return super().eventFilter(a0, a1)
+                return True
+
+        return super().eventFilter(object, event)

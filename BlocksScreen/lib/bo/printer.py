@@ -19,6 +19,8 @@ class Printer(QObject):
     request_object_subscription_signal = pyqtSignal(dict, name="object_subscription")
     toolhead_number_signal = pyqtSignal(int, name="toolhead_number_received")
 
+    available_objects_signal = pyqtSignal(name="available_objects")
+
     extruder_update_signal = pyqtSignal(str, str, float, name="extruder_update")
     heater_bed_update_signal = pyqtSignal(str, str, float, name="heater_bed_update")
     fan_update_signal = pyqtSignal(
@@ -52,6 +54,9 @@ class Printer(QObject):
     filament_switch_sensor_update_signal = pyqtSignal(
         str, str, bool, name="filament_switch_sensor_update"
     )
+    filament_motion_sensor_update_signal = pyqtSignal(
+        str, str, bool, name="filament_motion_sensor_update"
+    )
     output_pin_update_signal = pyqtSignal(str, str, float, name="output_pin_update")
     bed_mesh_update_signal = pyqtSignal(
         str, list, list, list, list, name="bed_mesh_updated"
@@ -82,6 +87,7 @@ class Printer(QObject):
         self.current_loaded_file: str = ""
         self.current_loaded_file_metadata: str = ""
 
+        self.available_filament_sensors: dict = {}
         heater_attributes: dict = {
             "current_temperature": 0.0,
             "target_temperature": 0.0,
@@ -105,7 +111,7 @@ class Printer(QObject):
     @pyqtSlot(str, name="klippy_ready_report")
     def klippy_ready_report(self, state: str):
         if state.lower() == "ready" or state == "printing":
-            self.request_available_objects_signal.emit()
+            self.request_available_objects_signal.emit() # request available objects
 
             # * Query some objects to determine the printer state
             _query_request: dict = {
@@ -113,13 +119,12 @@ class Printer(QObject):
                 "print_stats": None,
                 "virtual_sdcard": None,
             }
-            # Immediately query the printers objects
             self.query_printer_object.emit(_query_request)
 
     @pyqtSlot(list, name="object_list_received")
     def object_list_received(self, object_list: list):
         [self.available_objects.update({obj: None}) for obj in object_list]
-        self.request_object_subscription_signal[dict].emit(self.available_objects)
+        self.request_object_subscription_signal[dict].emit(self.available_objects) # request subscription for each object
         # * Find how many extruders the printer has
         _extruder_regex = re.compile(r"^extruder{1}?\d?")
         # _object_list: list = list(self.printer_objects.keys())
@@ -137,7 +142,7 @@ class Printer(QObject):
         _objects_updated_names = list(report[0])
         self._last_eventTime = report[_report_length]
         self.printer_objects.update(dict(report[0]))
-        # * Calls callbacks for each object that was updated
+        # * Callbacks for each object that was updated
         list(
             map(
                 lambda n: self.check_callback_method(n, _objects_updated_dict[n]),
@@ -180,8 +185,6 @@ class Printer(QObject):
         # TODO: Handle reports coming from subscribed websocket object
         # if not isinstance(report):
         _split_information = report[0].split("// ")
-
-        # print(_split_information)
 
     def webhooks_object_updated(self, value: dict, name: str = "") -> None:
         """webhooks_object_updated Sends an event type according to the state received from
@@ -453,10 +456,27 @@ class Printer(QObject):
             self.filament_switch_sensor_update_signal.emit(
                 filament_switch_name, "filament_detected", values["filament_detected"]
             )
+            self.available_filament_sensors.update({f"{filament_switch_name}": values})
         if "enabled" in values.keys():
             self.filament_switch_sensor_update_signal.emit(
                 filament_switch_name, "enabled", values["enabled"]
             )
+            self.available_filament_sensors.update({f"{filament_switch_name}": values})
+
+    def filament_motion_sensor_object_updated(
+        self, values: dict, filament_motion_name: str
+    ) -> None:
+        if "filament_detected" in values.keys():
+            self.filament_motion_sensor_update_signal.emit(
+                filament_motion_name, "filament_detected", values["filament_detected"]
+            )
+            self.available_filament_sensors.update({f"{filament_motion_name}": values})
+
+        if "enabled" in values.keys():
+            self.filament_motion_sensor_update_signal.emit(
+                filament_motion_name, "enabled", values["enabled"]
+            )
+            self.available_filament_sensors.update({f"{filament_motion_name}": values})
 
     def output_pin_object_updated(self, values: dict, output_pin_name: str) -> None:
         if "value" in values.keys():

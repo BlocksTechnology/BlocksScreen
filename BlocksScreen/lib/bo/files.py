@@ -79,7 +79,9 @@ class Files(QtCore.QObject):
             if os.access(path, os.R_OK):  # Has access to the thumbnail
                 return QtGui.QImage(path)
             else:  # Does not have access to the thumbnail, check if i can download the file from moonraker
-                return self.request_file_download[str, str].emit("~/printer_data/gcodes/.thumbs", filename)
+                return self.request_file_download[str, str].emit(
+                    "~/printer_data/gcodes/.thumbs", filename
+                )
 
         return None
 

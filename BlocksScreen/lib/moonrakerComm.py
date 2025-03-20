@@ -17,7 +17,7 @@ from events import (
 from lib.moonrest import MoonRest
 from utils.RepeatedTimer import RepeatedTimer
 
-_logger = logging.getLogger(name=f"logs/BlocksScreen.logs")
+_logger = logging.getLogger(name=f"logs/BlocksScreen.log")
 
 
 class OneShotTokenError(Exception):
@@ -161,7 +161,6 @@ class MoonWebSocket(QObject, threading.Thread):
 
         # TODO: Get the url from the config file, rather than being statically set
 
-        # _url = f"ws://192.168.1.100:7125/websocket?token={_oneshot_token}"
         _url = f"ws://192.168.1.100:7125/websocket?token={_oneshot_token}"
 
         self.ws = websocket.WebSocketApp(

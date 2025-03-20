@@ -33,7 +33,8 @@
 		"cSpell.words": [
 			"logoblocks",
 			"Pixmap",
-			"qtobject"
+			"qtobject",
+			"rescanning"
 		],
 		"[python]": {	
 			"editor.wordBasedSuggestions": "allDocuments", 

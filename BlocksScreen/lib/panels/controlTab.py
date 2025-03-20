@@ -52,9 +52,6 @@ class ControlTab(QStackedWidget):
         self.printer.toolhead_update_signal[str, list].connect(
             self.toolhead_position_change
         )
-        self.printer.toolhead_update_signal[str, str].connect(
-            self.toolhead_extruder_active
-        )
         self.printer.extruder_update_signal.connect(self.extruder_temperature_change)
         self.printer.heater_bed_update_signal.connect(
             self.heater_bed_temperature_change
@@ -62,15 +59,15 @@ class ControlTab(QStackedWidget):
 
         # Connecting buttons in the panel routing tree
         # Control Screen
-        self.panel.control_motion_btn.clicked.connect(partial(self.change_page, 1))
-        self.panel.control_temperature_btn.clicked.connect(partial(self.change_page, 4))
-        self.panel.control_printer_settings_btn.clicked.connect(
+        self.panel.cp_motion_btn.clicked.connect(partial(self.change_page, 1))
+        self.panel.cp_temperature_btn.clicked.connect(partial(self.change_page, 4))
+        self.panel.cp_printer_settings_btn.clicked.connect(
             partial(self.change_page, 6)
         )
         # Motion Screen
         self.panel.motion_extrude_btn.clicked.connect(partial(self.change_page, 2))
         self.panel.motion_move_axis_btn.clicked.connect(partial(self.change_page, 3))
-        self.panel.motion_back_btn.clicked.connect(self.back_button)
+        self.panel.mp_back_btn.clicked.connect(self.back_button)
         self.panel.motion_auto_home_btn.clicked.connect(
             partial(self.handle_gcode, ["G28"])
         )
@@ -104,10 +101,9 @@ class ControlTab(QStackedWidget):
         self.panel.extrude_retract_btn.clicked.connect(
             partial(self.handle_extrusion, False)
         )  # False for retraction
-        self.panel.extrude_active_tool_switch_btn.clicked.connect(self.switch_extruder)
-
+        
         # Move Axis
-        self.panel.move_axis_back_btn.clicked.connect(self.back_button)
+        self.panel.mva_back_btn.clicked.connect(self.back_button)
         # REVIEW: Aggregate these .connect(...)
         self.panel.move_axis_home_x_btn.clicked.connect(
             partial(self.handle_gcode, ["G28 X"])
@@ -140,7 +136,7 @@ class ControlTab(QStackedWidget):
         self.panel.move_axis_select_feedrate_100_btn.clicked.connect(
             partial(self.select_move_feedrate, 100)
         )
-        self.panel.move_axis_tool_switch_btn.clicked.connect(self.switch_extruder)
+        
         # Move Axis arrow buttons
         # REVIEW: Aggregate these .connect(...)
         self.panel.move_axis_up_btn.clicked.connect(partial(self.handle_move_axis, "Y"))
@@ -153,13 +149,13 @@ class ControlTab(QStackedWidget):
         self.panel.move_axis_left_btn.clicked.connect(
             partial(self.handle_move_axis, "X-")
         )
-        self.panel.move_bed_up_btn.clicked.connect(partial(self.handle_move_axis, "Z"))
-        self.panel.move_bed_down_btn.clicked.connect(
+        self.panel.mva_z_up.clicked.connect(partial(self.handle_move_axis, "Z"))
+        self.panel.mva_z_down.clicked.connect(
             partial(self.handle_move_axis, "Z-")
         )
 
         # Temperature
-        self.panel.temperature_back_btn.clicked.connect(self.back_button)
+        self.panel.temp_back_button.clicked.connect(self.back_button)
 
         # Printer Settings Screen
         self.panel.printer_settings_back_btn.clicked.connect(self.back_button)
@@ -167,64 +163,64 @@ class ControlTab(QStackedWidget):
         self.run_gcode_signal.connect(self.ws.api.run_gcode)
         # @ object temperature change clicked
 
-        self.panel.hotend_temp_btn.clicked.connect(
-            partial(
-                self.request_numpad_signal.emit,
-                2,
-                "extruder",
-                self.panel.temperature_hotend_1_value_label.text(),
-                self.handle_numpad_change,
-                self,
-            )
-        )
-        self.panel.hotend_1_temp_btn.clicked.connect(
-            partial(
-                self.request_numpad_signal.emit,
-                2,
-                "extruder1",
-                self.panel.temperature_hotend_2_value_label.text(),
-                self.handle_numpad_change,
-                self,
-            )
-        )
-        self.panel.chamber_temp_btn.clicked.connect(
-            partial(
-                self.request_numpad_signal.emit,
-                2,
-                "chamber",
-                self.panel.temperature_chamber_value_label_5.text(),
-                self.handle_numpad_change,
-                self,
-            )
-        )
-        # self.panel.chamber_1_temp_btn.clicked.connect(
+        # self.panel..clicked.connect(
         #     partial(
         #         self.request_numpad_signal.emit,
-        #         "chamber1",
-        #         self.panel.tempere
+        #         2,
+        #         "extruder",
+        #         self.panel.temperature_hotend_1_value_label.text(),
+        #         self.handle_numpad_change,
+        #         self,
         #     )
         # )
-        self.panel.fan_power_btn.clicked.connect(
-            partial(
-                self.request_numpad_signal.emit,
-                2,
-                "fan",
-                self.panel.temperature_fan_1_value_label.text(),
-                self.handle_numpad_change,
-                self,
-            )
-        )
+        # self.panel.hotend_1_temp_btn.clicked.connect(
+        #     partial(
+        #         self.request_numpad_signal.emit,
+        #         2,
+        #         "extruder1",
+        #         self.panel.temperature_hotend_2_value_label.text(),
+        #         self.handle_numpad_change,
+        #         self,
+        #     )
+        # )
+        # self.panel.chamber_temp_btn.clicked.connect(
+        #     partial(
+        #         self.request_numpad_signal.emit,
+        #         2,
+        #         "chamber",
+        #         self.panel.temperature_chamber_value_label_5.text(),
+        #         self.handle_numpad_change,
+        #         self,
+        #     )
+        # )
+        # # self.panel.chamber_1_temp_btn.clicked.connect(
+        # #     partial(
+        # #         self.request_numpad_signal.emit,
+        # #         "chamber1",
+        # #         self.panel.tempere
+        # #     )
+        # # )
+        # self.panel.fan_power_btn.clicked.connect(
+        #     partial(
+        #         self.request_numpad_signal.emit,
+        #         2,
+        #         "fan",
+        #         self.panel.temperature_fan_1_value_label.text(),
+        #         self.handle_numpad_change,
+        #         self,
+        #     )
+        # )
 
-        self.panel.fan_1_power_btn.clicked.connect(
-            partial(
-                self.request_numpad_signal.emit,
-                2,
-                "fan1",
-                self.panel.temperature_fan_2_value_label.text(),
-                self.handle_numpad_change,
-                self,
-            )
-        )
+        # self.panel.fan_1_power_btn.clicked.connect(
+        #     partial(
+        #         self.request_numpad_signal.emit,
+        #         2,
+        #         "fan1",
+        #         self.panel.temperature_fan_2_value_label.text(),
+        #         self.handle_numpad_change,
+        #         self,
+        #     )
+        # )
         
 
         logging.info("[ControlTabPanel] Initialized")
@@ -337,15 +333,7 @@ class ControlTab(QStackedWidget):
         else:
             self.handle_gcode(["T0"])
 
-    @pyqtSlot(str, str, name="toolhead_update")
-    def toolhead_extruder_active(self, field: str, extruder: str) -> None:
-        # TEST: Check if it works
-        # TODO: What happens when there is more than one extruder
-
-        if field == "extruder":
-            logging.debug(f"[ControlTabPanel] Active {field} is: {extruder}")
-            self.panel.extrude_active_tool_switch_btn.setText(f"{extruder}")
-            self.panel.move_axis_tool_switch_btn.setText(f"{extruder}")
+    
 
     @pyqtSlot(str, list, name="toolhead_update")
     def toolhead_position_change(self, field: str, values: list) -> None:
@@ -363,16 +351,16 @@ class ControlTab(QStackedWidget):
     ) -> None:
         # REVIEW: Naming convention when more than one extruder exists
         # TEST: Check if this is bulletproof
-        if extruder_name == "extruder" and field == "temperature":
-            self.panel.temperature_hotend_1_value_label.setText(f"{new_value:.1f}")
+        if extruder_name == "extruder" and field == "temperature": ...
+            # self.panel.temperature_hotend_1_value_label.setText(f"{new_value:.1f}")
 
-        if extruder_name == "extruder1" and field == "temperature":
-            self.panel.temperature_hotend_2_value_label.setText(f"{new_value:.1f}")
+        if extruder_name == "extruder1" and field == "temperature": ...
+            # self.panel.temperature_hotend_2_value_label.setText(f"{new_value:.1f}")
 
     @pyqtSlot(str, str, float, name="heater_bed_update")
     def heater_bed_temperature_change(
         self, name: str, field: str, new_value: float
     ) -> None:
         # TEST: Test if it works in all cases.
-        if field == "temperature":
-            self.panel.temperature_bed_value_label.setText(f"{new_value:.1f}")
+        if field == "temperature": ...
+            # self.panel.temperature_bed_value_label.setText(f"{new_value:.1f}")

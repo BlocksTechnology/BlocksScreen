@@ -4,6 +4,7 @@ from uuid import uuid4
 
 import sdbus
 import sdbus.dbus_common_elements
+from PyQt6.QtCore import QObject, pyqtSlot
 from sdbus_block.networkmanager import (
     AccessPoint,
     AccessPointCapabilities,
@@ -25,13 +26,16 @@ from sdbus_block.networkmanager.exceptions import (
     NmConnectionPropertyNotFoundError,
 )
 
-from PyQt6.QtCore import QObject, QEvent
-from PyQt6.QtWidgets import QApplication
-
-import events
-
 # TODO: Add Logging, separate logger in this case so i can structure it better
 # TODO: Remove the statically attributed variables
+
+
+class NetworkManagerRescanError(Exception):
+    """Exception raised when rescanning the network fails."""
+
+    def __init__(self, error):
+        super(NetworkManagerRescanError, self).__init__()
+        self.error = error
 
 
 class SdbusNetworkManager(QObject):
@@ -48,7 +52,6 @@ class SdbusNetworkManager(QObject):
     def __init__(self, parent: typing.Optional["QObject"]):
         super(SdbusNetworkManager, self).__init__()
 
-        
         self.system_dbus = sdbus.sd_bus_open_system()
 
         if self.system_dbus is None:
@@ -85,20 +88,19 @@ class SdbusNetworkManager(QObject):
 
         self.rescan_networks()
 
-    # def send_event(e0: QEvent): 
+    # def send_event(e0: QEvent):
     #     if self.parent is None:
     #         return None
-    #     try: 
+    #     try:
     #         event = events.NetworkScan("Scanning networks")
     #         instance = QApplication.instance()
-    #         if instance is not None: 
+    #         if instance is not None:
     #             instance.sendEvent(self.parent, event)
-    #         else: 
+    #         else:
     #             raise TypeError("QApplication.instance expected a non-None value")
     #     except Exception as e :
     #         _logger.info(f"Unexpected error sending event {event}")
-            
-            
+
     def get_available_interfaces(self) -> typing.List[str]:
         """get_available_interfaces Gets the names of all available interfaces
 
@@ -251,21 +253,14 @@ class SdbusNetworkManager(QObject):
             self.nm.primary_connection_type,
         )
 
-    def rescan_networks(self) -> bool:
-        """rescan_networks Scan for available networks.
-
-        Returns:
-            bool | None: True if the scan was successful, False otherwise. None if there is no primary wifi interface to use for the scan.
-        """
+    def rescan_networks(self) -> None:
+        """rescan_networks Scan for available networks."""
         if self.primary_wifi_interface == "/" or self.primary_wifi_interface is None:
-            return False
+            return
         try:
             self.primary_wifi_interface.request_scan({})
-            # event = events.NetworkScan("Scanning networks")
-            # sendEvent = self.send_event(event)
-            return True
-        except Exception:
-            return False
+        except Exception as e:
+            raise NetworkManagerRescanError(f"Network rescan failed: {e}")
 
     def get_available_networks(self) -> typing.Dict:
         """get_available_networks Scan for networks, get the information about each network.
@@ -955,8 +950,7 @@ class SdbusNetworkManagerDummy:
 
         """
         self.wireless_active = not self.wireless_active
-        print(self.wireless_active)
-        return self.wireless_active
+        return
 
     def toggle_hotspot(self, toggle: bool):
         """Activate/Deactivate device hotspot
@@ -1021,13 +1015,13 @@ class SdbusNetworkManagerDummy:
         """
         return "path/wlan0Dummy"
 
-    def rescan_networks(self):
+    def rescan_networks(self) -> None:
         """rescan_networks Scan for available networks.
 
         Returns:
             bool | None: True if the scan was successful, False otherwise. None if there is no primary wifi interface to use for the scan.
         """
-        return True
+        return
 
     def get_available_networks(self):
         """get_available_networks Scan for networks, get the information about each network.
@@ -1254,5 +1248,3 @@ class SdbusNetworkManagerDummy:
             typing.Dict: status dictionary with possible keys "error" and "status"
         """
         print(f"Updated a network connection {ssid} | {password} | {new_ssid}")
-
-

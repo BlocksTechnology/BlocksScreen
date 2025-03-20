@@ -1,3 +1,4 @@
+
 from functools import partial
 from PyQt6.QtWidgets import QStackedWidget, QWidget
 from PyQt6 import QtCore

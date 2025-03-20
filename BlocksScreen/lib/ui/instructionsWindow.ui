@@ -14,7 +14,7 @@
    <string>StackedWidget</string>
   </property>
   <property name="currentIndex">
-   <number>2</number>
+   <number>1</number>
   </property>
   <widget class="QWidget" name="switch_pc_page">
    <widget class="QLabel" name="switch_pc_title_label">
@@ -371,7 +371,7 @@
  </customwidgets>
  <resources>
   <include location="resources/button_resources.qrc"/>
-  <include location="../resources/button_resources.qrc"/>
+  <include location="resources/button_resources.qrc"/>
  </resources>
  <connections/>
 </ui>

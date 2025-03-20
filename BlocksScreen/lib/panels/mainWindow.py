@@ -7,6 +7,7 @@ from functools import partial
 import PyQt6
 import PyQt6.QtGui
 
+
 # * System imports
 import events
 from events import ReceivedFileData, WebSocketMessageReceived
@@ -34,18 +35,17 @@ from lib.ui.resources.main_menu_resources_rc import *
 from lib.ui.resources.system_resources_rc import *
 from lib.ui.resources.top_bar_resources_rc import *
 from lib.ui.resources.graphic_resources_rc import *
+
 # * PyQt6 imports
 from PyQt6.QtCore import QEvent, QSize, pyqtSignal, pyqtSlot
 from PyQt6.QtGui import QCloseEvent, QPaintEvent
 from PyQt6.QtWidgets import QApplication, QMainWindow, QStackedWidget
 from utils.ui import CustomNumpad
 
-_logger = logging.getLogger(name="logs/BlocksScreen.logs")
+_logger = logging.getLogger(name="logs/BlocksScreen.log")
 
 
 class MainWindow(QMainWindow):
-    # @ Signals
-
     bo_startup = pyqtSignal(name="bo-start-websocket-connection")
     printer_state_signal = pyqtSignal(str, name="printer_state")
     printer_object_list_received_signal = pyqtSignal(list, name="object_list_received")
@@ -64,26 +64,13 @@ class MainWindow(QMainWindow):
         self.ws = MoonWebSocket(self)
         self.mc = MachineControl(self)
 
-        # cursor_shape =QtCore.Qt.CursorShape.BlankCursor
-        # cursor = PyQt6.QtGui.QCursor()
-
-        # new_cursor = cursor.setShape(cursor_shape)
-
-        # self.setCursor(new_cursor)
-
-        # cursor_blank = QtCore.Qt.CursorShape.BlankCursor
-        # self.graphWidget.setCursor(cursor_blank)
-
-        # @ Structures
         self.file_data = Files(parent=self, ws=self.ws)
         self.index_stack = deque(maxlen=4)
         self.printer = Printer(parent=self, ws=self.ws)
 
-        # @ UI Elements
         self.numpad_object = CustomNumpad(self)
         self.numpad_object.hide()
 
-        # @ Panels
         self.start_window = ConnectionWindow(self, self.ws)
         self.installEventFilter(self.start_window)
         self.printPanel = PrintTab(
@@ -92,7 +79,7 @@ class MainWindow(QMainWindow):
         self.filamentPanel = FilamentTab(self.ui.filamentTab, self.printer, self.ws)
         self.controlPanel = ControlTab(self.ui.controlTab, self.ws, self.printer)
         self.utilitiesPanel = UtilitiesTab(self.ui.utilitiesTab)
-        self.networkPanel = NetworkControlWindow(self.ui.main_widget)
+        self.networkPanel = NetworkControlWindow(self)
 
         # @ Slot connections
         self.bo_startup.connect(slot=self.start_websocket_connection)
@@ -126,11 +113,6 @@ class MainWindow(QMainWindow):
             slot=self.global_back_button_pressed
         )
         self.utilitiesPanel.request_change_page.connect(slot=self.global_change_page)
-        # # * Network panel
-        # self.networkPanel.request_back_button_pressed.connect(
-        #     slot=self.global_back_button_pressed
-        # )
-        # self.networkPanel.request_change_page.connect(slot=self.global_change_page)
 
         # * Main page - Top bar Buttons
         self.ui.extruder_temp_display.clicked.connect(
@@ -138,11 +120,14 @@ class MainWindow(QMainWindow):
         )
 
         self.ui.bed_temp_display.clicked.connect(partial(self.global_change_page, 2, 4))
-        # self.ui.chamber_temp_btn.clicked.connect(partial(self.global_change_page, 2, 4))
-        self.ui.filament_type_display.clicked.connect(
+
+        self.ui.filament_type_icon.clicked.connect(
             partial(self.global_change_page, 1, 1)
         )
-        # self.ui.filament_type_2.clicked.connect(partial(self.global_change_page, 1, 1))
+        self.ui.filament_type_icon.setText("PLA")
+        self.ui.filament_type_icon.update()
+        self.ui.nozzle_size_icon.setText("0.4mm")
+        self.ui.nozzle_size_icon.update()
         ##* Also connect to files list when connection is achieved to imm1ediately get the files
         self.ws.connected_signal.connect(slot=self.file_data.request_file_list.emit)
         self.start_window.retry_connection_clicked.connect(slot=self.ws.retry)
@@ -153,8 +138,6 @@ class MainWindow(QMainWindow):
             slot=self.mc.restart_klipper_service
         )
         self.start_window.reboot_clicked.connect(slot=self.mc.machine_restart)
-
-        # If the user changes tab, the indexes of all stacked widgets reset
 
         # *  To Printer object
         self.printer_object_report_signal.connect(self.printer.report_received)
@@ -183,15 +166,13 @@ class MainWindow(QMainWindow):
         self.printPanel.request_block_manual_tab_change.connect(self.disable_tab_bar)
         self.printPanel.request_activate_manual_tab_change.connect(self.enable_tab_bar)
 
-        # * Network page visibility and calling, there are two places from which you can call the network page, main page and connectivity page
-        # self.call_network_panel.connect(self.networkPanel.visibilityChange)
+        # * Network panel call
         self.call_network_panel.connect(self.networkPanel.call_network_panel)
-
-        self.start_window.wifi_clicked.connect(self.call_network_panel.emit)
+        self.start_window.wifi_button_clicked.connect(self.call_network_panel.emit)
         self.ui.wifi_button.clicked.connect(self.call_network_panel.emit)
 
         # @ Force main panel to be displayed on startup
-        # self.reset_tab_indexes()
+        self.reset_tab_indexes()
         self.ui.main_content_widget.setCurrentIndex(0)
 
     @pyqtSlot(name="activate_manual_tab_change")
@@ -352,12 +333,12 @@ class MainWindow(QMainWindow):
         Returns:
             bool: If the event is handled or not
         """
+
         if event.type() == WebSocketMessageReceived.type():
             if isinstance(event, WebSocketMessageReceived):
                 self.messageReceivedEvent(event)
                 return True
             return False
-
         return super().event(event)
 
     def messageReceivedEvent(self, event: WebSocketMessageReceived) -> None:
@@ -440,24 +421,22 @@ class MainWindow(QMainWindow):
                 _logger.debug(
                     f"Notify_klippy_{_state_call} Received from object subscription."
                 )
-                # if hasattr(events, f"Klippy{_state_call}Event"):
                 if hasattr(events, f"Klippy{_state_call}"):
                     _klippy_event_callback = getattr(
                         events,
                         f"Klippy{_state_call}",
-                        # events, f"Klippy{_state_call}Event"
                     )
-                    _logger.info(f"The name: {_klippy_event_callback}")
-                    if callable(_klippy_event_callback) and isinstance(
-                        _klippy_event_callback, QEvent
-                    ):
+                    if callable(_klippy_event_callback):
                         try:
-                            event = _klippy_event_callback(
+                            _event = _klippy_event_callback(
                                 data=f"Moonraker reported klippy is {_state_call}"
                             )
                             instance = QApplication.instance()
+                            if not isinstance(_event, QEvent):
+                                return
                             if instance is not None:
-                                instance.sendEvent(self, event)
+                                _logger.info(f"Event {_klippy_event_callback} sent")
+                                instance.sendEvent(self, _event)
                             else:
                                 raise Exception("QApplication.instance is None type.")
                         except Exception as e:
@@ -514,6 +493,16 @@ class MainWindow(QMainWindow):
         if a0 is None:
             return  # TEST: Maybe this return fucks up the app
         return super().paintEvent(a0)
+
+    @pyqtSlot(str, name="set_header_filament_type")
+    def set_header_filament_type(self, type: str):
+        self.ui.filament_type_icon.setText(f"{type}")
+        self.ui.filament_type_icon.update()
+
+    @pyqtSlot(str, name="set_header_nozzle_diameter")
+    def set_header_nozzle_diameter(self, diam: str):
+        self.ui.nozzle_size_icon.setText(f"{diam}mm")
+        self.ui.nozzle_size_icon.update()
 
     def closeEvent(self, a0: typing.Optional[QCloseEvent]) -> None:
         _loggers = [

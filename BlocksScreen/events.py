@@ -1,3 +1,4 @@
+from typing import Any
 from PyQt6.QtCore import QEvent
 
 
@@ -134,13 +135,12 @@ class KlippyShutdown(QEvent):
 
     Args:
         data (any): Data or message to pass onto the event
-
-
     """
 
     KlippyShutdownEvent = QEvent.Type(QEvent.registerEventType())
 
     def __init__(self, data, *args, **kwargs):
+        QEvent.__instancecheck__(self)
         super(KlippyShutdown, self).__init__(KlippyShutdown.KlippyShutdownEvent)
         self.data = data
         self.args = args
@@ -148,7 +148,13 @@ class KlippyShutdown(QEvent):
 
     @staticmethod
     def type() -> QEvent.Type:
-        return QEvent.Type(KlippyShutdown.KlippyShutdownEvent)
+        return KlippyShutdown.KlippyShutdownEvent
+
+    # def __instancecheck__(self, instance: Any) -> bool:
+    #     return True if self.KlippyShutdownEvent in QEvent.Type else False
+        # return True
+
+        # return super().__instancecheck__(instance)
 
 
 class KlippyReady(QEvent):

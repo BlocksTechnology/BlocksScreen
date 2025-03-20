@@ -14,7 +14,7 @@ class InstructionsWindow(QStackedWidget):
 
         self.panel = Ui_utilitiesStackedWidget()
         self.panel.setupUi(self)
-        self.show()
+        # self.show()
         
         self.index_stack = []
         
