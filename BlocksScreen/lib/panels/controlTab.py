@@ -44,28 +44,26 @@ class ControlTab(QtWidgets.QStackedWidget):
 
         self.setLayoutDirection(Qt.LayoutDirection.LeftToRight)
 
-        # Values to extrude in the extrude menu.
         self.extrude_length: int = 10
         self.extrude_feedrate: int = 2
 
         # Value to move axis
-        self.move_length: float = 10.0
-        self.move_feedrate: float = 25.0
+        self.move_length: float = 1.0
+        self.move_speed: float = 25.0
 
         # Signal to update labels
         self.printer.toolhead_update_signal[str, list].connect(
             self.toolhead_position_change
         )
-        self.printer.extruder_update_signal.connect(self.extruder_temperature_change)
-        self.printer.heater_bed_update_signal.connect(
-            self.heater_bed_temperature_change
-        )
+        self.printer.extruder_update_signal.connect(self.handle_extruder_temp_change)
+        self.printer.heater_bed_update_signal.connect(self.handle_bed_temp_change)
 
         # Connecting buttons in the panel routing tree
         # Control Screen
         self.panel.cp_motion_btn.clicked.connect(partial(self.change_page, 1))
         self.panel.cp_temperature_btn.clicked.connect(partial(self.change_page, 4))
         self.panel.cp_printer_settings_btn.clicked.connect(partial(self.change_page, 6))
+
         # Motion Screen
         self.panel.motion_extrude_btn.clicked.connect(partial(self.change_page, 2))
         self.panel.motion_move_axis_btn.clicked.connect(partial(self.change_page, 3))
@@ -126,19 +124,19 @@ class ControlTab(QtWidgets.QStackedWidget):
             partial(self.handle_select_move_length, value=1.0)
         )
         self.panel.move_axis_select_length_10_btn.toggled.connect(
-            partial(self.handle_select_move_length, value = 10.)
+            partial(self.handle_select_move_length, value=10.0)
         )
         self.panel.move_axis_select_length_100_btn.toggled.connect(
-            partial(self.handle_select_move_length, 100)
+            partial(self.handle_select_move_length, value=100.0)
         )
-        self.panel.move_axis_select_feedrate_25_btn.toggled.connect(
-            partial(self.handle_select_move_feedrate, 25)
+        self.panel.move_axis_select_speed_25_btn.toggled.connect(
+            partial(self.handle_select_move_speed, value=25.0)
         )
-        self.panel.move_axis_select_feedrate_50_btn.toggled.connect(
-            partial(self.handle_select_move_feedrate, 50)
+        self.panel.move_axis_select_speed_50_btn.toggled.connect(
+            partial(self.handle_select_move_speed, value=50.0)
         )
-        self.panel.move_axis_select_feedrate_100_btn.toggled.connect(
-            partial(self.handle_select_move_feedrate, 100)
+        self.panel.move_axis_select_speed_100_btn.toggled.connect(
+            partial(self.handle_select_move_speed, value=100.0)
         )
         self.panel.extrude_extrude_btn.clicked.connect(
             partial(self.handle_extrusion, True)
@@ -165,7 +163,6 @@ class ControlTab(QtWidgets.QStackedWidget):
         # REVIEW: Check if i can aggregate the same method, but with different values, instead of using different connects
 
         # Move Axis arrow buttons
-        # REVIEW: Aggregate these .connect(...)
         self.panel.move_axis_up_btn.clicked.connect(partial(self.handle_move_axis, "Y"))
         self.panel.move_axis_down_btn.clicked.connect(
             partial(self.handle_move_axis, "Y-")
@@ -240,73 +237,121 @@ class ControlTab(QtWidgets.QStackedWidget):
             )
 
     @pyqtSlot(bool, "PyQt_PyObject", int, name="select_extrude_feedrate")
-    def handle_toggle_extrude_feedrate(self, checked, caller, value) -> None:
+    def handle_toggle_extrude_feedrate(self, checked: bool, caller, value: int) -> None:
+        """Slot to change the extruder feedrate, mainly used for toggle buttons
+
+        Args:
+            checked (bool): Button checked state
+            caller (PyQtObject): The button that called this slot
+            value (int): New value for the extruder feedrate
+        """
         if value == self.extrude_feedrate:
             return
         self.extrude_feedrate = value
 
     @pyqtSlot(bool, "PyQt_PyObject", int, name="select_extrude_length")
     def handle_toggle_extrude_length(self, checked: bool, caller, value: int) -> None:
+        """Slot that changes the extrude length, mainly used for toggle buttons
+
+        Args:
+            checked (bool): Button checked state
+            caller (PyQtObject): The button that called this slot
+            value (int): New value for the extrude length
+        """
         if self.extrude_length == value:
             return
         self.extrude_length = value
 
-    @pyqtSlot(bool, float, name="handle_select_move_feedrate")
-    def handle_select_move_feedrate(self, checked: bool, value: float) -> None:
-        if self.move_feedrate == value:
+    @pyqtSlot(bool, float, name="handle_select_move_speed")
+    def handle_select_move_speed(self, checked: bool, value: float) -> None:
+        """Slot that changes the move speed of manual move commands, mainly used
+        for toggle buttons
+
+        Args:
+            checked (bool): Button checked state
+            value (float): New move speed value
+        """
+        if self.move_speed == value:
             return
-        self.move_feedrate = value
+        self.move_speed = value
 
     @pyqtSlot(bool, float, name="handle_select_move_length")
     def handle_select_move_length(self, checked: bool, value: float) -> None:
+        """Slot that changes the move length of manual move commands, mainly used
+        for toggle buttons
+
+        Args:
+            checked (bool): Button checked state
+            value (float): New length value
+        """
         if self.move_length == value:
             return
         self.move_length = value
 
-    def handle_extrusion(self, extrude) -> None:
-        # TEST: Does the machine actually extrude or not
+    @pyqtSlot(str, name="handle_extrusion")
+    def handle_extrusion(self, extrude: bool) -> None:
+        """Slot that requests an extrusion/unextrusion move
+
+        Args:
+            extrude (bool): If True extrudes otherwise unextrudes.
+        """
         can_extrude = self.printer.heaters_object["extruder"]["can_extrude"]
 
         if not can_extrude:
             self.panel.extrude_text_label.setText("Temperature too cold to extrude")
             return
 
-        self.run_gcode_signal.emit("M83")
         if extrude:
-            logging.debug(
-                f"[ControlTabPanel] Emitting gcode signal:\nM83\nG1 E{self.extrude_length} F{self.extrude_feedrate * 60}"
-            )
             self.run_gcode_signal.emit(
-                f"G1 E{self.extrude_length} F{self.extrude_feedrate * 60}"
+                f"M83\nG1 E{self.extrude_length} F{self.extrude_feedrate * 60}\nM82\nM400"
             )
             self.panel.extrude_text_label.setText(
-                f"Extruding {self.extrude_length}mm at {self.extrude_feedrate}mm/s"
+                f"M83\nExtruding {self.extrude_length}mm at {self.extrude_feedrate}mm/s\nM82\nM400"
             )
         else:
-            logging.debug(
-                f"[ControlTabPanel] Emitting gcode signal:\nM83\nG1 E-{self.extrude_length} F{self.extrude_feedrate * 60}"
-            )
             self.run_gcode_signal.emit(
-                f"G1 E-{self.extrude_length} F{self.extrude_feedrate * 60}"
+                f"M83\nG1 E-{self.extrude_length} F{self.extrude_feedrate * 60}\nM82\nM400"
             )
             self.panel.extrude_text_label.setText(
                 f"Retracting {self.extrude_length}mm at {self.extrude_feedrate}mm/s"
             )
 
-    def handle_move_axis(self, axis) -> None:
-        # REVIEW: Commands to move the axis
-        logging.debug(
-            f"[ControlTabPanel] Emitting gcode signal:\nG91\nG1 {axis}{self.move_length} F{self.move_feedrate * 60}\nG90"
-        )
-        self.run_gcode_signal.emit("G91")
-        self.run_gcode_signal.emit(
-            f"G1 {axis}{self.move_length} F{self.move_feedrate * 60}"
-        )
-        self.run_gcode_signal.emit("G90")
+    @pyqtSlot(str, name="handle_move_axis")
+    def handle_move_axis(self, axis: str) -> None:
+        """Slot that requests manual move command
 
+        ***
+
+        Args:
+            axis (str): String that contains one of the following axis `
+            ['X',
+            '-X'
+            ,'Y'
+            ,'-Y'
+            ,'Z'
+            ,'-Z']`. [^1]
+
+        ***
+
+
+        [^1]: The **-** symbol indicates the negative direction for that axis
+
+        """
+        if axis not in ["X", "-X", "Y", "-Y", "Z", "-Z"]:
+            return
+
+        self.run_gcode_signal.emit(
+            f"G91\nG0 {axis}{float(self.move_length)} F{float(self.move_speed * 60)}\nG90\nM400"
+        )
+
+    @pyqtSlot(str, name="switch_extruder")
     def switch_extruder(self) -> None:
-        # REVIEW: Naming conventions
-        # TODO: Make this method available only when there is more than one extruder
+        """Requests extruder change
+
+        TODO : Only available when more than one extruder exists
+
+        **Currently not used!**
+        """
         if self.printer.active_extruder_name == "extruder":
             self.handle_gcode(["T1"])
         else:
@@ -322,8 +367,8 @@ class ControlTab(QtWidgets.QStackedWidget):
             self.panel.move_axis_y_value_label.setText(f"{values[1]}")
             self.panel.move_axis_z_value_label.setText(f"{values[2]}")
 
-    @pyqtSlot(str, str, float, name="extruder_update")
-    def extruder_temperature_change(
+    @pyqtSlot(str, str, float, name="handle_extruder_temp_change")
+    def handle_extruder_temp_change(
         self, extruder_name: str, field: str, new_value: float
     ) -> None:
         # REVIEW: Naming convention when more than one extruder exists
@@ -337,10 +382,8 @@ class ControlTab(QtWidgets.QStackedWidget):
         if extruder_name == "extruder1" and field == "temperature":
             ...
 
-    @pyqtSlot(str, str, float, name="heater_bed_update")
-    def heater_bed_temperature_change(
-        self, name: str, field: str, new_value: float
-    ) -> None:
+    @pyqtSlot(str, str, float, name="handle_bed_temp_change")
+    def handle_bed_temp_change(self, name: str, field: str, new_value: float) -> None:
         # TEST: Test if it works in all cases.
         if field == "temperature":
             self.panel.bed_temp_display.setText(f"{new_value:.1f}")
