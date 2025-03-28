@@ -122,23 +122,23 @@ class ControlTab(QtWidgets.QStackedWidget):
                 value=10,
             )
         )
-        self.panel.move_axis_select_length_1_btn.clicked.connect(
-            partial(self.select_move_length, 1)
+        self.panel.move_axis_select_length_1_btn.toggled.connect(
+            partial(self.handle_select_move_length, value=1.0)
         )
-        self.panel.move_axis_select_length_10_btn.clicked.connect(
-            partial(self.select_move_length, 10)
+        self.panel.move_axis_select_length_10_btn.toggled.connect(
+            partial(self.handle_select_move_length, value = 10.)
         )
-        self.panel.move_axis_select_length_100_btn.clicked.connect(
-            partial(self.select_move_length, 100)
+        self.panel.move_axis_select_length_100_btn.toggled.connect(
+            partial(self.handle_select_move_length, 100)
         )
-        self.panel.move_axis_select_feedrate_25_btn.clicked.connect(
-            partial(self.select_move_feedrate, 25)
+        self.panel.move_axis_select_feedrate_25_btn.toggled.connect(
+            partial(self.handle_select_move_feedrate, 25)
         )
-        self.panel.move_axis_select_feedrate_50_btn.clicked.connect(
-            partial(self.select_move_feedrate, 50)
+        self.panel.move_axis_select_feedrate_50_btn.toggled.connect(
+            partial(self.handle_select_move_feedrate, 50)
         )
-        self.panel.move_axis_select_feedrate_100_btn.clicked.connect(
-            partial(self.select_move_feedrate, 100)
+        self.panel.move_axis_select_feedrate_100_btn.toggled.connect(
+            partial(self.handle_select_move_feedrate, 100)
         )
         self.panel.extrude_extrude_btn.clicked.connect(
             partial(self.handle_extrusion, True)
@@ -239,25 +239,29 @@ class ControlTab(QtWidgets.QStackedWidget):
                 f"SET_HEATER_TEMPERATURE HEATER={name} TARGET={new_value}"
             )
 
-    @pyqtSlot("PyQt_PyObject", int, name="select_extrude_feedrate")
+    @pyqtSlot(bool, "PyQt_PyObject", int, name="select_extrude_feedrate")
     def handle_toggle_extrude_feedrate(self, checked, caller, value) -> None:
         if value == self.extrude_feedrate:
             return
         self.extrude_feedrate = value
 
-    @pyqtSlot("PyQt_PyObject", int, name="select_extrude_length")
+    @pyqtSlot(bool, "PyQt_PyObject", int, name="select_extrude_length")
     def handle_toggle_extrude_length(self, checked: bool, caller, value: int) -> None:
         if self.extrude_length == value:
             return
         self.extrude_length = value
 
-    def select_move_feedrate(self, move_feedrate) -> None:
-        # TEST: Is the value actually changed on the printer or not
+    @pyqtSlot(bool, float, name="handle_select_move_feedrate")
+    def handle_select_move_feedrate(self, checked: bool, value: float) -> None:
+        if self.move_feedrate == value:
+            return
+        self.move_feedrate = value
 
-        self.move_feedrate = move_feedrate
-
-    def select_move_length(self, move_length) -> None:
-        self.move_length = move_length
+    @pyqtSlot(bool, float, name="handle_select_move_length")
+    def handle_select_move_length(self, checked: bool, value: float) -> None:
+        if self.move_length == value:
+            return
+        self.move_length = value
 
     def handle_extrusion(self, extrude) -> None:
         # TEST: Does the machine actually extrude or not
