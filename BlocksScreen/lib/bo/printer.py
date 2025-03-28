@@ -1,5 +1,5 @@
 from __future__ import annotations
-
+import enum
 import logging
 import re
 import typing
@@ -10,6 +10,35 @@ import events
 from lib.moonrakerComm import MoonWebSocket
 
 _logger = logging.getLogger(name=f"logs/BlocksScreen.logs")
+
+
+class PrinterState(enum.Enum):
+    PRINTING = enum.auto()
+    IDLE = enum.auto()
+    ERROR = enum.auto()
+
+
+class PrintStatsStates(enum.Enum):
+    STANDBY = enum.auto()
+    PRINTING = enum.auto()
+    PAUSED = enum.auto()
+    COMPLETE = enum.auto()
+    ERROR = enum.auto()
+    CANCELLED = enum.auto()
+
+
+class IdleTimeoutStates(enum.StrEnum):
+    """
+
+    Idle timeout state field should not be used to determine if klipper is "printing" a file
+    as the state will report printing when executing manual commands
+    Args:
+        enum (_type_): _description_
+    """
+
+    PRINTING = "Printing"
+    READY = "Ready"
+    IDLE = "Idle"
 
 
 class Printer(QObject):
@@ -111,7 +140,7 @@ class Printer(QObject):
     @pyqtSlot(str, name="klippy_ready_report")
     def klippy_ready_report(self, state: str):
         if state.lower() == "ready" or state == "printing":
-            self.request_available_objects_signal.emit() # request available objects
+            self.request_available_objects_signal.emit()  # request available objects
 
             # * Query some objects to determine the printer state
             _query_request: dict = {
@@ -124,7 +153,9 @@ class Printer(QObject):
     @pyqtSlot(list, name="object_list_received")
     def object_list_received(self, object_list: list):
         [self.available_objects.update({obj: None}) for obj in object_list]
-        self.request_object_subscription_signal[dict].emit(self.available_objects) # request subscription for each object
+        self.request_object_subscription_signal[dict].emit(
+            self.available_objects
+        )  # request subscription for each object
         # * Find how many extruders the printer has
         _extruder_regex = re.compile(r"^extruder{1}?\d?")
         # _object_list: list = list(self.printer_objects.keys())

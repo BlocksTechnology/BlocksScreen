@@ -6,6 +6,9 @@
     <file>media/btn_icons/2barWIFI.svg</file>
     <file>media/btn_icons/3fullWIFI.svg</file>
   </qresource>
+  <qresource prefix="files">
+    <file>media/btn_icons/file.svg</file>
+  </qresource>
   <qresource prefix="system">
     <file>media/btn_icons/system_reboot.svg</file>
   </qresource>

@@ -5,7 +5,6 @@ import requests
 from requests import Request, Response
 
 
-
 class UncallableError(Exception):
     """Raised when a method is not callable"""
 
@@ -29,13 +28,13 @@ class MoonRest:
     timeout = 3
 
     # TODO: The ip and port need to come from a configfile
-    # def __init__(self, ip="localhost", port="7125", api_key=False):
-    # def __init__(self, ip="192.168.1.100", port="7125", api_key=False):
+
     def __init__(self, ip="192.168.1.100", port="7125", api_key=False):
+    # def __init__(self, ip="192.168.1.165", port="7125", api_key=False):
         self._ip = ip
         self._port = port
         self._api_key = api_key
-
+        
     @property
     def build_endpoint(self):
         # TODO: Need to also account for if the port is https
@@ -125,9 +124,8 @@ class MoonRest:
         except Exception as e:
             logging.info(f"Unexpected error while sending HTTP request: {e}")
 
-
-# Blocking HTTP Client
-# class MoonRestClientBlocking(tornado.httpclient.HTTPClient):
+    # Blocking HTTP Client
+    # class MoonRestClientBlocking(tornado.httpclient.HTTPClient):
     ...
 
     # def __init__(self, async_client_class: AsyncHTTPClient | None = None, **kwargs: logging.Any) -> None:

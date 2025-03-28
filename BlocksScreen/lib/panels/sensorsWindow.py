@@ -9,6 +9,7 @@ from utils.ui import BlocksLabel
 from PyQt6 import QtCore, QtWidgets
 from PyQt6.QtCore import Qt, pyqtSignal, pyqtSlot
 from PyQt6.QtWidgets import QWidget
+import logging
 
 
 class SensorWidget(QtWidgets.QWidget):
@@ -280,12 +281,14 @@ class SensorsWindow(QWidget):
         self.sensor_list = list(
             map(
                 lambda sensor: self.create_sensor_widget(name=sensor),
-                filter(
-                    lambda printer_obj: str(printer_obj).startswith(
-                        "filament_switch_sensor"
-                    )
-                    or str(printer_obj).startswith("filament_motion_sensor"),
-                    sensors.keys(),
+                list(
+                    filter(
+                        lambda printer_obj: str(printer_obj).startswith(
+                            "filament_switch_sensor"
+                        )
+                        or str(printer_obj).startswith("filament_motion_sensor"),
+                        sensors.keys(),
+                    ),
                 ),
             )
         )

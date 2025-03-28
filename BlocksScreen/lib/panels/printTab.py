@@ -134,7 +134,7 @@ class PrintTab(QStackedWidget):
             self.sensorsPanel.handle_fil_state_change
         )
         self.sensorsPanel.toggle_sensor.connect(self.ws.api.run_gcode)
-        
+
         # TODO: Get the gcode path from the configfile by asking the websocket first
         # @ GCode directory paths
         self.gcode_path = os.path.expanduser("~/printer_data/gcodes")
@@ -233,7 +233,6 @@ class PrintTab(QStackedWidget):
                 self,
             )
         )
-        # TODO: Might need to adjust the heater name here don't rebember if it's really called chamber
         self.panel.chamber_display.clicked.connect(
             partial(
                 self.request_numpad_signal.emit,
@@ -266,17 +265,13 @@ class PrintTab(QStackedWidget):
                 self,
             )
         )
-        ##@ Force showing the base panel
-        self.change_page(0)
 
-        # @ Show the panel
-        # self.show()
+        self.change_page(0)  # force set the initial page
 
-    # def add_object_numpad_call(self, )
     @pyqtSlot(str, int, name="numpad_new_value")
     @pyqtSlot(str, float, name="numpad_new_value")
     def handle_numpad_change(self, name: str, new_value: int | float) -> None:
-        """handle_numpad_change Handles the introduced value on the numpad
+        """Handles the introduced value on the numpad
         Changes the temperature/speed/velocity of an object accordingly
 
         Args:
@@ -301,7 +296,7 @@ class PrintTab(QStackedWidget):
     @pyqtSlot(str, str, float, name="fan_update")
     @pyqtSlot(str, str, int, name="fan_update")
     def fan_object_update(self, name: str, field: str, new_value: int | float) -> None:
-        """fan_object_update Processes the information that comes from the printer object "fan"
+        """Processes the information that comes from the printer object "fan"
 
         Args:
             name (str): Name of the fan object
@@ -319,7 +314,7 @@ class PrintTab(QStackedWidget):
     def extruder_temperature_change(
         self, extruder_name: str, field: str, new_value: float
     ) -> None:
-        """extruder_temperature_change Processes the information that comes from the printer object "extruder"
+        """Processes the information that comes from the printer object "extruder"
 
         Args:
             extruder_name (str): Name of the extruder object
@@ -333,7 +328,7 @@ class PrintTab(QStackedWidget):
     def heater_bed_temperature_change(
         self, name: str, field: str, new_value: float
     ) -> None:
-        """heater_bed_temperature_change Processes the information that comes from the printer object "heater_bed"
+        """Processes the information that comes from the printer object "heater_bed"
 
         Args:
             name (str): Name of the heater bed object.
@@ -347,7 +342,7 @@ class PrintTab(QStackedWidget):
     @pyqtSlot(str, str, name="idle_timeout_update")
     @pyqtSlot(str, float, name="idle_timeout_update")
     def idle_timeout_update(self, field: str, value: int | float) -> None:
-        """idle_timeout_update Processes the information that comes form the printer object "idle_timeout"
+        """Processes the information that comes form the printer object "idle_timeout"
 
         Args:
             field (str): Name of the updated field.
@@ -359,7 +354,7 @@ class PrintTab(QStackedWidget):
     @pyqtSlot(str, bool, name="gcode_move_update")
     @pyqtSlot(str, list, name="gcode_move_update")
     def gcode_move_update(self, field: str, value: bool | float | list) -> None:
-        """gcode_move_update Processes the information that comes from the printer object "gcode_move"
+        """Processes the information that comes from the printer object "gcode_move"
 
         Args:
             field (str): Name of the updated field
@@ -369,7 +364,7 @@ class PrintTab(QStackedWidget):
             if "gcode_position" in field:
                 self._current_z_position = value[2]
                 if self._internal_print_status == "printing":
-                    self._calculate_current_layer()
+                    self._calculate_current_layer()  # TODO: Add the current layer to display
         if isinstance(value, float):
             if "speed_factor" in field:
                 self.speed_factor_override = value
@@ -379,7 +374,7 @@ class PrintTab(QStackedWidget):
     @pyqtSlot(str, float, name="print_stats_update")
     @pyqtSlot(str, str, name="print_stats_update")
     def print_stats_update(self, field: str, value: dict | float | str) -> None:
-        """print_stats_update Processes the information that comes from the printer object "print_stats"
+        """Processes the information that comes from the printer object "print_stats"
             Displays information on the ui accordingly.
 
         Args:
@@ -389,8 +384,8 @@ class PrintTab(QStackedWidget):
         if isinstance(value, str):
             if "filename" in field:
                 self._current_file_name = value
-                if self.panel.file_printing_text_label.text().lower() != value.lower():
-                    self.panel.file_printing_text_label.setText(self._current_file_name)
+                if self.panel.js_file_name_label.text().lower() != value.lower():
+                    self.panel.js_file_name_label.setText(self._current_file_name)
 
             if "state" in field:
                 self.printer_stats_object_state = value
@@ -446,7 +441,7 @@ class PrintTab(QStackedWidget):
     @pyqtSlot(str, float, name="virtual_sdcard_update")
     @pyqtSlot(str, bool, name="virtual_sdcard_update")
     def virtual_sdcard_update(self, field: str, value: float | bool) -> None:
-        """virtual_sdcard_update Slot for incoming printer object virtual_sdcard information update
+        """Slot for incoming printer object virtual_sdcard information update
 
         Args:
             field (str): Name of the updated field on the virtual_sdcard object
@@ -467,7 +462,7 @@ class PrintTab(QStackedWidget):
     @pyqtSlot(str, str, name="display_update")
     @pyqtSlot(str, float, name="display_update")
     def display_update(self, field: str, value: str | float) -> None:
-        """display_update Slot for incoming printer object display information update
+        """Slot for incoming printer object display information update
 
         Args:
             field (str): Name of the update field on the display object
@@ -494,28 +489,24 @@ class PrintTab(QStackedWidget):
         )
 
     def show_print_page(self) -> None:
-        """show_print_page
-        Helper method to change the current panel to the printing page
-        """
+        """Helper method to change the current panel to the printing page"""
         if (
             not self.panel.job_status_page.isVisible()
             and self._current_file_name is not None
         ):
-            self.panel.file_printing_text_label.setText(self._current_file_name)
+            self.panel.js_file_name_label.setText(self._current_file_name)
             self.panel.printing_progress_bar.reset()
             self._internal_print_status = "printing"
-            self.total_layers = self.file_data.files_metadata[self._current_file_name][
-                "layer_count"
-            ]
-            # * Request block tab change on the main menu
-            # self.request_block_manual_tab_change.emit()
-            self.panel.layer_display_button.setText(str(self.total_layers))
 
+            self.total_layers = self.file_data.files_metadata[
+                self._current_file_name
+            ].get("layer_count", "?")
+            self.panel.layer_display_button.setText(str(self.total_layers))
             self.change_page(3)
 
     @pyqtSlot(name="pause_resume_print")
     def pause_resume_print(self) -> None:
-        """pause_resume_print Handles what signal to emit to the printer when a printing job is ongoing
+        """Handles what signal to emit to the printer when a printing job is ongoing
 
         Can either be:
 
@@ -564,21 +555,21 @@ class PrintTab(QStackedWidget):
 
     @pyqtSlot(name="request_nozzle_close_to_bed")
     def move_nozzle_close_to_bed(self) -> None:
-        """move_nozzle_close_to_bed Slot for Babystep button to get closer to the bed."""
+        """Slot for Babystep button to get closer to the bed."""
         self.run_gcode_signal.emit(
             f"SET_GCODE_OFFSET Z_ADJUST=-{self._z_offset} MOVE=1"
         )
 
     @pyqtSlot(name="request_nozzle_far_to_bed")
     def move_nozzle_far_to_bed(self) -> None:
-        """move_nozzle_far_to_bed Slot for Babystep button to get far from the bed."""
+        """Slot for Babystep button to get far from the bed."""
         self.run_gcode_signal.emit(
             f"SET_GCODE_OFFSET Z_ADJUST=+{self._z_offset} MOVE=1"
         )
 
     @pyqtSlot(name="z_offset_change")
     def z_offset_change(self) -> None:
-        """z_offset_change Helper method for changing the value for Babystep.
+        """Helper method for changing the value for Babystep.
 
         When a button is clicked, and the button has the mm value i the text,
         it'll change the internal value **z_offset** to the same has the button
@@ -594,8 +585,7 @@ class PrintTab(QStackedWidget):
 
     @pyqtSlot(int, name="currentChanged")
     def view_changed(self, window_index: int) -> None:
-        """view_changed ->
-            Slot for the current displayed panel
+        """Slot for the current displayed panel
 
         Args:
             window_index (int): Current QStackedWidget index
@@ -607,8 +597,7 @@ class PrintTab(QStackedWidget):
 
     @pyqtSlot(QListWidgetItem, name="file_item_clicked")
     def fileItemClicked(self, item: QListWidgetItem) -> None:
-        """fileItemClicked->
-            Slot for List Item clicked
+        """Slot for List Item clicked
 
         Args:
             item (QListWidgetItem): Clicked item
@@ -617,17 +606,11 @@ class PrintTab(QStackedWidget):
         _current_item: QWidget = self.panel.listWidget.itemWidget(item)
         if _current_item is not None:
             self._current_file_name = _current_item.findChild(QtWidgets.QLabel).text()
-            self.panel.cf_file_name.setText(self._current_file_name)
+            if self._current_file_name is not None:
+                self.panel.cf_file_name.setText(str(self._current_file_name))
             self.change_page(2)
 
     def paintEvent(self, a0: QPaintEvent) -> None:
-        """paintEvent->
-            Paints UI aspects on the current panel, such as images
-
-        Args:
-            a0 (QPaintEvent): _description_
-        """
-
         if self.background is None:
             return
 
@@ -772,7 +755,7 @@ class PrintTab(QStackedWidget):
     #     self.chamber_display = BlocksCustomButton(parent=self.gridLayoutWidget)
 
     def convert_bytes_to_mb(self, bytes: int | float) -> float:
-        """convert_bytes_to_mb-> Converts byte size to megabyte size
+        """Converts byte size to megabyte size
 
         Args:
             bytes (int | float): bytes
@@ -784,7 +767,7 @@ class PrintTab(QStackedWidget):
         return bytes * _relation
 
     def setProperty(self, name: str, value: typing.Any) -> bool:
-        """setProperty-> Intercept the set property method
+        """Intercept the set property method
 
         Args:
             name (str): Name of the dynamic property
@@ -798,8 +781,7 @@ class PrintTab(QStackedWidget):
         return super().setProperty(name, value)
 
     def _calculate_current_layer(self) -> int:
-        """_calculate_current_layer
-            Calculated the current printing layer given the GCODE z position received by the
+        """Calculated the current printing layer given the GCODE z position received by the
             gcode_move object update.
 
 
@@ -808,28 +790,35 @@ class PrintTab(QStackedWidget):
         Returns:
             int: Current layer
         """
-        _object_height: float = self.file_data.files_metadata[self._current_file_name][
-            "object_height"
-        ]
+        _object_height: float = self.file_data.files_metadata[
+            self._current_file_name
+        ].get("object_height", None)
         _normal_layer_height: float = self.file_data.files_metadata[
             self._current_file_name
-        ]["layer_height"]
+        ].get("layer_height", None)
         _first_layer_height: float = self.file_data.files_metadata[
             self._current_file_name
-        ]["first_layer_height"]
+        ].get("first_layer_height", None)
 
         # _current_layer = int(1 + (_object_height - _first_layer_height) / _normal_layer_height)
-
+        if (
+            _object_height is None
+            or _normal_layer_height is None
+            or _first_layer_height is None
+        ):
+            return int(-1)
         _current_layer = (
             1 + (self._current_z_position - _first_layer_height) / _normal_layer_height
         )
 
-        self.panel.layer_display_button.setText(f"{int(_current_layer)}")
+        self.panel.layer_display_button.setText(
+            f"{int(_current_layer)}" if _current_layer != -1 else "?"
+        )
 
         return int(_current_layer)
 
     def change_page(self, index: int) -> None:
-        """change_page Requests a change page, to the global page thingy
+        """Requests a change page, to the global page thingy
 
         Args:
             index (int): The index of the page we wan't to go
@@ -838,11 +827,11 @@ class PrintTab(QStackedWidget):
         self.request_change_page.emit(0, index)
 
     def back_button(self) -> None:
-        """back_button Goes back to the previous page"""
+        """Goes back to the previous page"""
         self.request_back_button_pressed.emit()
 
     def _estimate_print_time(self, seconds: int):
-        """_estimate_print_time Convert time in seconds format to days, hours, minutes, seconds.
+        """Convert time in seconds format to days, hours, minutes, seconds.
 
         Args:
             seconds (int): Seconds

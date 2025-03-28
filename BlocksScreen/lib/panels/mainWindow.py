@@ -25,7 +25,8 @@ from lib.panels.printTab import PrintTab
 from lib.panels.utilitiesTab import UtilitiesTab
 
 # * UI
-from lib.ui.mainWindow_ui import Ui_MainWindow
+from lib.ui.mainWindow_ui import Ui_MainWindow  # With header
+# from lib.ui.mainWindow_v2_ui import Ui_MainWindow # No header
 
 # * Resources
 from lib.ui.resources.background_resources_rc import *
