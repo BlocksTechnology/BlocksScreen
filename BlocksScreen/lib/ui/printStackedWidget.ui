@@ -35,7 +35,7 @@
    <string>StackedWidget</string>
   </property>
   <property name="currentIndex">
-   <number>3</number>
+   <number>4</number>
   </property>
   <property name="backgroundPixmap" stdset="0">
    <pixmap>:/background/media/graphics/scroll_list_window.svg</pixmap>
@@ -2553,7 +2553,7 @@ background-color: transparent;
      <string/>
     </property>
     <property name="pixmap">
-     <pixmap resource="resources/graphic_resources.qrc">:/graphics/media/graphics/babystep_graphic.png</pixmap>
+     <pixmap>:/graphics/media/graphics/babystep_graphic.png</pixmap>
     </property>
     <property name="scaledContents">
      <bool>false</bool>
@@ -2699,7 +2699,7 @@ background-color: transparent;
      <string/>
     </property>
     <property name="pixmap">
-     <pixmap resource="resources/graphic_resources.qrc">:/graphics/media/btn_icons/z_offset_adjust.svg</pixmap>
+     <pixmap>:/graphics/media/btn_icons/z_offset_adjust.svg</pixmap>
     </property>
     <property name="alignment">
      <set>Qt::AlignCenter</set>

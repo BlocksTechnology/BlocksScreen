@@ -2,14 +2,16 @@ import logging
 import typing
 from functools import partial
 
+
 from PyQt6.QtGui import QPaintEvent
+
 
 from lib.bo.printer import Printer
 from lib.moonrakerComm import MoonWebSocket
 from lib.ui.controlStackedWidget_ui import Ui_controlStackedWidget
 from PyQt6 import QtWidgets
+from PyQt6 import QtCore
 from PyQt6.QtCore import (
-    Qt,
     pyqtSignal,
     pyqtSlot,
 )
@@ -42,8 +44,13 @@ class ControlTab(QtWidgets.QStackedWidget):
         self.ws = ws
         self.printer = printer
 
-        self.setLayoutDirection(Qt.LayoutDirection.LeftToRight)
+        self.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
 
+        self.timers = []
+
+        self.extruder_info: dict = {}
+        self.bed_info: dict = {}
+        self.toolhead_info: dict = {}
         self.extrude_length: int = 10
         self.extrude_feedrate: int = 2
 
@@ -76,7 +83,7 @@ class ControlTab(QtWidgets.QStackedWidget):
         )
 
         # Extrude
-        self.panel.extrude_back_btn.clicked.connect(self.back_button)
+        self.panel.exp_back_btn.clicked.connect(self.back_button)
 
         self.panel.extrude_select_length_10_btn.toggled.connect(
             partial(
@@ -138,16 +145,16 @@ class ControlTab(QtWidgets.QStackedWidget):
         self.panel.move_axis_select_speed_100_btn.toggled.connect(
             partial(self.handle_select_move_speed, value=100.0)
         )
-        self.panel.extrude_extrude_btn.clicked.connect(
+        self.panel.exp_extrude_btn.clicked.connect(
             partial(self.handle_extrusion, True)
         )  # True for extrusion
-        self.panel.extrude_retract_btn.clicked.connect(
+        self.panel.exp_unextrude_btn.clicked.connect(
             partial(self.handle_extrusion, False)
         )  # False for retraction
 
         # Move Axis
         self.panel.mva_back_btn.clicked.connect(self.back_button)
-        # REVIEW: Aggregate these .connect(...)
+
         self.panel.move_axis_home_x_btn.clicked.connect(
             partial(self.handle_gcode, ["G28 X"])
         )
@@ -160,9 +167,6 @@ class ControlTab(QtWidgets.QStackedWidget):
         self.panel.move_axis_home_all_btn.clicked.connect(
             partial(self.handle_gcode, ["G28"])
         )
-        # REVIEW: Check if i can aggregate the same method, but with different values, instead of using different connects
-
-        # Move Axis arrow buttons
         self.panel.move_axis_up_btn.clicked.connect(partial(self.handle_move_axis, "Y"))
         self.panel.move_axis_down_btn.clicked.connect(
             partial(self.handle_move_axis, "Y-")
@@ -176,10 +180,8 @@ class ControlTab(QtWidgets.QStackedWidget):
         self.panel.mva_z_up.clicked.connect(partial(self.handle_move_axis, "Z"))
         self.panel.mva_z_down.clicked.connect(partial(self.handle_move_axis, "Z-"))
 
-        # Temperature
         self.panel.temp_back_button.clicked.connect(self.back_button)
 
-        # Printer Settings Screen
         self.panel.printer_settings_back_btn.clicked.connect(self.back_button)
 
         self.run_gcode_signal.connect(self.ws.api.run_gcode)
@@ -221,6 +223,13 @@ class ControlTab(QtWidgets.QStackedWidget):
     def back_button(self):
         self.request_back_button_pressed.emit()
         logging.debug("[ControlTabPanel] back button pressed")
+
+    def register_timed_callback(self, time, callback) -> None:
+        _timer = QtCore.QTimer()
+        _timer.setSingleShot(True)
+        _timer.timeout.connect(callback)
+        _timer.start(int(time))
+        self.timers.append(_timer)
 
     @pyqtSlot(str, int, name="numpad_new_value")
     @pyqtSlot(str, float, name="numpad_new_value")
@@ -295,26 +304,32 @@ class ControlTab(QtWidgets.QStackedWidget):
         Args:
             extrude (bool): If True extrudes otherwise unextrudes.
         """
-        can_extrude = self.printer.heaters_object["extruder"]["can_extrude"]
+        can_extrude = bool(self.printer.heaters_object["extruder"]["can_extrude"])
 
         if not can_extrude:
-            self.panel.extrude_text_label.setText("Temperature too cold to extrude")
+            self.panel.exp_info_label.setText("Temperature too cold to extrude")
             return
 
         if extrude:
             self.run_gcode_signal.emit(
                 f"M83\nG1 E{self.extrude_length} F{self.extrude_feedrate * 60}\nM82\nM400"
             )
-            self.panel.extrude_text_label.setText(
-                f"M83\nExtruding {self.extrude_length}mm at {self.extrude_feedrate}mm/s\nM82\nM400"
-            )
+            self.panel.exp_info_label.setText("Extruding")
         else:
             self.run_gcode_signal.emit(
                 f"M83\nG1 E-{self.extrude_length} F{self.extrude_feedrate * 60}\nM82\nM400"
             )
-            self.panel.extrude_text_label.setText(
-                f"Retracting {self.extrude_length}mm at {self.extrude_feedrate}mm/s"
-            )
+            self.panel.exp_info_label.setText("Retracting")
+
+        # This block of code schedules a method to be called in x amount of milliseconds
+        _sch_time_s = float(
+            self.extrude_length / self.extrude_feedrate
+        )  # calculate the amount of time it'll take for the operation
+
+        self.register_timed_callback(
+            int(_sch_time_s + 2.0) * 1000,  # In milliseconds
+            lambda: self.panel.exp_info_label.setText("Ready"),
+        )
 
     @pyqtSlot(str, name="handle_move_axis")
     def handle_move_axis(self, axis: str) -> None:
@@ -359,38 +374,29 @@ class ControlTab(QtWidgets.QStackedWidget):
 
     @pyqtSlot(str, list, name="toolhead_update")
     def toolhead_position_change(self, field: str, values: list) -> None:
-        # TEST: Does this actually work correctly?
-        # TODO: What head is it moving? Adapt to show the number of the extruder/head
         if field == "position":
             logging.debug(f"[ControlTabPanel] Updating toolhead {field} to: {values}")
             self.panel.move_axis_x_value_label.setText(f"{values[0]}")
             self.panel.move_axis_y_value_label.setText(f"{values[1]}")
             self.panel.move_axis_z_value_label.setText(f"{values[2]}")
 
+        self.toolhead_info.update({f"{field}": values})
+
     @pyqtSlot(str, str, float, name="handle_extruder_temp_change")
     def handle_extruder_temp_change(
         self, extruder_name: str, field: str, new_value: float
     ) -> None:
-        # REVIEW: Naming convention when more than one extruder exists
-        # TEST: Check if this is bulletproof
         if extruder_name == "extruder" and field == "temperature":
             self.panel.extruder_temp_display.setText(f"{new_value:.1f}")
-
         if extruder_name == "extruder" and field == "target":
             self.panel.extruder_temp_display.setSecondaryText(f"{new_value:.1f}")
 
-        if extruder_name == "extruder1" and field == "temperature":
-            ...
+        self.extruder_info.update({f"{extruder_name}": {f"{field}": new_value}})
 
     @pyqtSlot(str, str, float, name="handle_bed_temp_change")
     def handle_bed_temp_change(self, name: str, field: str, new_value: float) -> None:
-        # TEST: Test if it works in all cases.
         if field == "temperature":
             self.panel.bed_temp_display.setText(f"{new_value:.1f}")
-
         if field == "target":
             self.panel.bed_temp_display.setSecondaryText(f"{new_value:.1f}")
-
-    def paintEvent(self, a0: QPaintEvent) -> None:
-        # Paint button bars
-        return super().paintEvent(a0)
+        self.bed_info.update({f"{name}": {f"{field}": new_value}})

@@ -32,7 +32,7 @@
    <string>StackedWidget</string>
   </property>
   <property name="currentIndex">
-   <number>3</number>
+   <number>2</number>
   </property>
   <widget class="QWidget" name="control_page">
    <property name="sizePolicy">
@@ -972,9 +972,9 @@ STEPPERS</string>
       <height>62</height>
      </rect>
     </property>
-    <layout class="QHBoxLayout" name="extrude_header_layout">
+    <layout class="QHBoxLayout" name="exp_header_layout">
      <item>
-      <widget class="QLabel" name="extrude_title_label">
+      <widget class="QLabel" name="exp_title_label">
        <property name="font">
         <font>
          <family>Momcake</family>
@@ -996,7 +996,7 @@ STEPPERS</string>
       </widget>
      </item>
      <item>
-      <widget class="BlocksCustomButton" name="extrude_back_btn">
+      <widget class="BlocksCustomButton" name="exp_back_btn">
        <property name="minimumSize">
         <size>
          <width>60</width>
@@ -1063,7 +1063,7 @@ STEPPERS</string>
       <height>311</height>
      </rect>
     </property>
-    <layout class="QVBoxLayout" name="extrude_page_vertical_content_layout" stretch="0,0,1">
+    <layout class="QVBoxLayout" name="exp_vertical_content_layout" stretch="0,0,1">
      <property name="leftMargin">
       <number>5</number>
      </property>
@@ -1077,7 +1077,7 @@ STEPPERS</string>
       <number>5</number>
      </property>
      <item>
-      <layout class="QHBoxLayout" name="extruder_length_content_layout">
+      <layout class="QHBoxLayout" name="exp_length_content_layout">
        <property name="spacing">
         <number>5</number>
        </property>
@@ -1695,7 +1695,7 @@ STEPPERS</string>
       </layout>
      </item>
      <item>
-      <layout class="QHBoxLayout" name="extruder_feedrate_content_layout">
+      <layout class="QHBoxLayout" name="exp_feedrate_content_layout">
        <property name="spacing">
         <number>5</number>
        </property>
@@ -2313,14 +2313,14 @@ STEPPERS</string>
       </layout>
      </item>
      <item>
-      <layout class="QVBoxLayout" name="extruder_movement_content_layout">
+      <layout class="QVBoxLayout" name="exp_movement_content_layout">
        <property name="spacing">
         <number>0</number>
        </property>
        <item>
-        <layout class="QHBoxLayout" name="extrude_btns_layout">
+        <layout class="QHBoxLayout" name="exp_buttons_layout">
          <item>
-          <widget class="BlocksCustomButton" name="extrude_retract_btn">
+          <widget class="BlocksCustomButton" name="exp_unextrude_btn">
            <property name="minimumSize">
             <size>
              <width>150</width>
@@ -2380,7 +2380,7 @@ STEPPERS</string>
           </widget>
          </item>
          <item>
-          <widget class="BlocksLabel" name="extrude_nozzle_icon_label">
+          <widget class="BlocksLabel" name="exp_nozzle_icon_label">
            <property name="minimumSize">
             <size>
              <width>60</width>
@@ -2414,7 +2414,7 @@ STEPPERS</string>
           </widget>
          </item>
          <item>
-          <widget class="BlocksCustomButton" name="extrude_extrude_btn">
+          <widget class="BlocksCustomButton" name="exp_extrude_btn">
            <property name="minimumSize">
             <size>
              <width>150</width>
@@ -2479,9 +2479,9 @@ STEPPERS</string>
         </layout>
        </item>
        <item>
-        <layout class="QHBoxLayout" name="extrude_label_layout">
+        <layout class="QHBoxLayout" name="exp_info_layout">
          <item>
-          <widget class="QLabel" name="extrude_text_label">
+          <widget class="QLabel" name="exp_info_label">
            <property name="enabled">
             <bool>true</bool>
            </property>
