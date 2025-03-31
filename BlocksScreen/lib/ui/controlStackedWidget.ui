@@ -32,7 +32,7 @@
    <string>StackedWidget</string>
   </property>
   <property name="currentIndex">
-   <number>2</number>
+   <number>6</number>
   </property>
   <widget class="QWidget" name="control_page">
    <property name="sizePolicy">
@@ -137,8 +137,8 @@
        </property>
        <property name="font">
         <font>
-         <family>Momcake</family>
-         <pointsize>20</pointsize>
+         <family>MS Shell Dlg 2</family>
+         <pointsize>18</pointsize>
          <italic>false</italic>
          <stylestrategy>PreferAntialias</stylestrategy>
         </font>
@@ -159,8 +159,8 @@
         <string notr="true"/>
        </property>
        <property name="text">
-        <string>NOZZLES
-CALIBRATION</string>
+        <string>Nozzle
+Calib.</string>
        </property>
        <property name="autoDefault">
         <bool>false</bool>
@@ -207,8 +207,8 @@ CALIBRATION</string>
        </property>
        <property name="font">
         <font>
-         <family>Momcake</family>
-         <pointsize>20</pointsize>
+         <family>MS Shell Dlg 2</family>
+         <pointsize>18</pointsize>
          <italic>false</italic>
          <stylestrategy>PreferAntialias</stylestrategy>
         </font>
@@ -229,7 +229,8 @@ CALIBRATION</string>
         <string notr="true"/>
        </property>
        <property name="text">
-        <string>MOTION</string>
+        <string>Motion
+Control</string>
        </property>
        <property name="autoDefault">
         <bool>false</bool>
@@ -276,8 +277,8 @@ CALIBRATION</string>
        </property>
        <property name="font">
         <font>
-         <family>Momcake</family>
-         <pointsize>20</pointsize>
+         <family>MS Shell Dlg 2</family>
+         <pointsize>18</pointsize>
          <italic>false</italic>
          <stylestrategy>PreferAntialias</stylestrategy>
         </font>
@@ -298,7 +299,8 @@ CALIBRATION</string>
         <string notr="true"/>
        </property>
        <property name="text">
-        <string>TEMPERATURE</string>
+        <string>Temp.
+Control</string>
        </property>
        <property name="autoDefault">
         <bool>false</bool>
@@ -345,8 +347,8 @@ CALIBRATION</string>
        </property>
        <property name="font">
         <font>
-         <family>Momcake</family>
-         <pointsize>20</pointsize>
+         <family>MS Shell Dlg 2</family>
+         <pointsize>18</pointsize>
          <italic>false</italic>
          <stylestrategy>PreferAntialias</stylestrategy>
         </font>
@@ -367,7 +369,7 @@ CALIBRATION</string>
         <string notr="true"/>
        </property>
        <property name="text">
-        <string>BED LEVELING</string>
+        <string>Bed Level</string>
        </property>
        <property name="autoDefault">
         <bool>false</bool>
@@ -414,8 +416,8 @@ CALIBRATION</string>
        </property>
        <property name="font">
         <font>
-         <family>Momcake</family>
-         <pointsize>20</pointsize>
+         <family>MS Shell Dlg 2</family>
+         <pointsize>18</pointsize>
          <italic>false</italic>
          <stylestrategy>PreferAntialias</stylestrategy>
         </font>
@@ -436,8 +438,8 @@ CALIBRATION</string>
         <string notr="true"/>
        </property>
        <property name="text">
-        <string>SWITCH
-PRINT CORE</string>
+        <string>Swap
+PrintCore</string>
        </property>
        <property name="autoDefault">
         <bool>false</bool>
@@ -484,8 +486,8 @@ PRINT CORE</string>
        </property>
        <property name="font">
         <font>
-         <family>Momcake</family>
-         <pointsize>20</pointsize>
+         <family>MS Shell Dlg 2</family>
+         <pointsize>18</pointsize>
          <italic>false</italic>
          <stylestrategy>PreferAntialias</stylestrategy>
         </font>
@@ -506,8 +508,8 @@ PRINT CORE</string>
         <string notr="true"/>
        </property>
        <property name="text">
-        <string>PRINTER
-SETTINGS</string>
+        <string>Printer
+Settings</string>
        </property>
        <property name="autoDefault">
         <bool>false</bool>
@@ -692,8 +694,8 @@ SETTINGS</string>
        </property>
        <property name="font">
         <font>
-         <family>Momcake</family>
-         <pointsize>20</pointsize>
+         <family>MS Shell Dlg 2</family>
+         <pointsize>18</pointsize>
          <italic>false</italic>
          <stylestrategy>PreferAntialias</stylestrategy>
         </font>
@@ -714,8 +716,8 @@ SETTINGS</string>
         <string notr="true"/>
        </property>
        <property name="text">
-        <string>DISABLE
-STEPPERS</string>
+        <string>Disable
+Steppers</string>
        </property>
        <property name="autoDefault">
         <bool>false</bool>
@@ -762,8 +764,8 @@ STEPPERS</string>
        </property>
        <property name="font">
         <font>
-         <family>Momcake</family>
-         <pointsize>20</pointsize>
+         <family>MS Shell Dlg 2</family>
+         <pointsize>18</pointsize>
          <italic>false</italic>
          <stylestrategy>PreferAntialias</stylestrategy>
         </font>
@@ -784,7 +786,8 @@ STEPPERS</string>
         <string notr="true"/>
        </property>
        <property name="text">
-        <string>AUTO HOME</string>
+        <string>Auto.
+Home</string>
        </property>
        <property name="autoDefault">
         <bool>false</bool>
@@ -831,8 +834,8 @@ STEPPERS</string>
        </property>
        <property name="font">
         <font>
-         <family>Momcake</family>
-         <pointsize>20</pointsize>
+         <family>MS Shell Dlg 2</family>
+         <pointsize>18</pointsize>
          <italic>false</italic>
          <stylestrategy>PreferAntialias</stylestrategy>
         </font>
@@ -853,7 +856,7 @@ STEPPERS</string>
         <string notr="true"/>
        </property>
        <property name="text">
-        <string>MOVE AXIS</string>
+        <string>Axis</string>
        </property>
        <property name="autoDefault">
         <bool>false</bool>
@@ -900,8 +903,8 @@ STEPPERS</string>
        </property>
        <property name="font">
         <font>
-         <family>Momcake</family>
-         <pointsize>20</pointsize>
+         <family>MS Shell Dlg 2</family>
+         <pointsize>18</pointsize>
          <italic>false</italic>
          <stylestrategy>PreferAntialias</stylestrategy>
         </font>
@@ -922,7 +925,7 @@ STEPPERS</string>
         <string notr="true"/>
        </property>
        <property name="text">
-        <string>EXTRUDE</string>
+        <string>Extrude</string>
        </property>
        <property name="autoDefault">
         <bool>false</bool>
@@ -4646,8 +4649,8 @@ STEPPERS</string>
        </property>
        <property name="font">
         <font>
-         <family>Momcake</family>
-         <pointsize>20</pointsize>
+         <family>MS Shell Dlg 2</family>
+         <pointsize>18</pointsize>
          <italic>false</italic>
          <stylestrategy>PreferAntialias</stylestrategy>
         </font>
@@ -5051,8 +5054,8 @@ STEPPERS</string>
        </property>
        <property name="font">
         <font>
-         <family>Momcake</family>
-         <pointsize>20</pointsize>
+         <family>MS Shell Dlg 2</family>
+         <pointsize>18</pointsize>
          <italic>false</italic>
          <stylestrategy>PreferAntialias</stylestrategy>
         </font>
@@ -5073,7 +5076,7 @@ STEPPERS</string>
         <string notr="true"/>
        </property>
        <property name="text">
-        <string>CONFIRM</string>
+        <string>Confirm</string>
        </property>
        <property name="autoDefault">
         <bool>false</bool>
@@ -5108,8 +5111,8 @@ STEPPERS</string>
        </property>
        <property name="font">
         <font>
-         <family>Momcake</family>
-         <pointsize>20</pointsize>
+         <family>MS Shell Dlg 2</family>
+         <pointsize>18</pointsize>
          <italic>false</italic>
          <stylestrategy>PreferAntialias</stylestrategy>
         </font>
@@ -5130,7 +5133,7 @@ STEPPERS</string>
         <string notr="true"/>
        </property>
        <property name="text">
-        <string>CANCEL</string>
+        <string>Cancel</string>
        </property>
        <property name="autoDefault">
         <bool>false</bool>
