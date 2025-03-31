@@ -1048,7 +1048,7 @@ STEPPERS</string>
         <string>icon</string>
        </property>
        <property name="icon_pixmap" stdset="0">
-        <pixmap>:/button_icons/media/graphics/back.svg</pixmap>
+        <pixmap resource="resources/button_resources.qrc">:/button_borders/media/btn_icons/back.svg</pixmap>
        </property>
       </widget>
      </item>
@@ -1093,7 +1093,7 @@ STEPPERS</string>
        <property name="bottomMargin">
         <number>5</number>
        </property>
-       <item>
+       <item alignment="Qt::AlignLeft">
         <widget class="QLabel" name="extrude_length_content_title">
          <property name="enabled">
           <bool>true</bool>
@@ -1711,7 +1711,7 @@ STEPPERS</string>
        <property name="bottomMargin">
         <number>5</number>
        </property>
-       <item>
+       <item alignment="Qt::AlignLeft">
         <widget class="QLabel" name="extrude_feedrate_text_label">
          <property name="enabled">
           <bool>true</bool>
@@ -5311,7 +5311,7 @@ STEPPERS</string>
  <buttongroups>
   <buttongroup name="extrude_select_length_group"/>
   <buttongroup name="axis_select_length_group"/>
-  <buttongroup name="axis_select_speed_group"/>
   <buttongroup name="extrude_select_feedrate_group"/>
+  <buttongroup name="axis_select_speed_group"/>
  </buttongroups>
 </ui>

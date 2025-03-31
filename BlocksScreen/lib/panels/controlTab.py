@@ -76,10 +76,10 @@ class ControlTab(QtWidgets.QStackedWidget):
         self.panel.motion_move_axis_btn.clicked.connect(partial(self.change_page, 3))
         self.panel.mp_back_btn.clicked.connect(self.back_button)
         self.panel.motion_auto_home_btn.clicked.connect(
-            partial(self.handle_gcode, ["G28"])
+            partial(self.run_gcode_signal.emit, "G28\nM400")
         )
         self.panel.motion_disable_steppers_btn.clicked.connect(
-            partial(self.handle_gcode, ["M84"])
+            partial(self.run_gcode_signal.emit, "M84\nM400")
         )
 
         # Extrude
@@ -156,16 +156,16 @@ class ControlTab(QtWidgets.QStackedWidget):
         self.panel.mva_back_btn.clicked.connect(self.back_button)
 
         self.panel.move_axis_home_x_btn.clicked.connect(
-            partial(self.handle_gcode, ["G28 X"])
+            partial(self.run_gcode_signal.emit, "G28 X\nM400")
         )
         self.panel.move_axis_home_y_btn.clicked.connect(
-            partial(self.handle_gcode, ["G28 Y"])
+            partial(self.run_gcode_signal.emit, "G28 Y\nM400")
         )
         self.panel.move_axis_home_z_btn.clicked.connect(
-            partial(self.handle_gcode, ["G28 Z"])
+            partial(self.run_gcode_signal.emit, "G28 Z\nM400")
         )
         self.panel.move_axis_home_all_btn.clicked.connect(
-            partial(self.handle_gcode, ["G28"])
+            partial(self.run_gcode_signal.emit, "G28\nM400")
         )
         self.panel.move_axis_up_btn.clicked.connect(partial(self.handle_move_axis, "Y"))
         self.panel.move_axis_down_btn.clicked.connect(
@@ -208,11 +208,6 @@ class ControlTab(QtWidgets.QStackedWidget):
                 self,
             )
         )
-
-    def handle_gcode(self, gcode_list) -> None:
-        for gcode in gcode_list:
-            logging.debug(f"[ControlTabPanel] Emitting gcode signal: {gcode}")
-            self.run_gcode_signal.emit(gcode)
 
     def change_page(self, index):
         self.request_change_page.emit(2, index)
@@ -371,9 +366,9 @@ class ControlTab(QtWidgets.QStackedWidget):
         **Currently not used!**
         """
         if self.printer.active_extruder_name == "extruder":
-            self.handle_gcode(["T1"])
+            self.run_gcode_signal.emit("T1\nM400")
         else:
-            self.handle_gcode(["T0"])
+            self.run_gcode_signal.emit("T0\nM400")
 
     @pyqtSlot(str, list, name="toolhead_update")
     def toolhead_position_change(self, field: str, values: list) -> None:
@@ -407,5 +402,4 @@ class ControlTab(QtWidgets.QStackedWidget):
     def paintEvent(self, a0: QPaintEvent) -> None:
         if self.panel.extrude_page.isVisible():
             self.panel.exp_info_label.setText(self.extrude_page_message)
-
         return super().paintEvent(a0)
