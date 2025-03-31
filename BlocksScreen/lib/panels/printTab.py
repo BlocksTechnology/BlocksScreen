@@ -199,10 +199,10 @@ class PrintTab(QStackedWidget):
         # * Signals from panel widgets
         self.panel.bbp_close_to_bed.clicked.connect(self.move_nozzle_close_to_bed)
         self.panel.bbp_away_from_bed.clicked.connect(self.move_nozzle_far_to_bed)
-        self.panel.bbp_nozzle_offset_01.clicked.connect(self.z_offset_change)
-        self.panel.bbp_nozzle_offset_025.clicked.connect(self.z_offset_change)
-        self.panel.bbp_nozzle_offset_05.clicked.connect(self.z_offset_change)
-        self.panel.bbp_nozzle_offset_1.clicked.connect(self.z_offset_change)
+        self.panel.bbp_nozzle_offset_01.toggled.connect(self.handle_z_offset_change)
+        self.panel.bbp_nozzle_offset_025.toggled.connect(self.handle_z_offset_change)
+        self.panel.bbp_nozzle_offset_05.toggled.connect(self.handle_z_offset_change)
+        self.panel.bbp_nozzle_offset_1.toggled.connect(self.handle_z_offset_change)
 
         self.run_gcode_signal.connect(self.ws.api.run_gcode)
         # @ Get the temperatures for the objects
@@ -361,10 +361,20 @@ class PrintTab(QStackedWidget):
             value (bool | float | list): New value for the field
         """
         if isinstance(value, list):
-            if "gcode_position" in field:
+            if "gcode_position" in field:  # Without offsets
                 self._current_z_position = value[2]
                 if self._internal_print_status == "printing":
                     self._calculate_current_layer()  # TODO: Add the current layer to display
+            elif "position" in field:  # With offsets applied
+                ...
+            elif (
+                "homing_origin" in field
+            ):  # The actual amount of offset applied to each axis
+                if self.panel.babystep_page.isVisible():
+                    self.panel.bbp_z_offset_current_value.setText(
+                        str(value[2]) if value[2] is not None else "?"
+                    )
+
         if isinstance(value, float):
             if "speed_factor" in field:
                 self.speed_factor_override = value
@@ -557,35 +567,48 @@ class PrintTab(QStackedWidget):
     def move_nozzle_close_to_bed(self) -> None:
         """Slot for Babystep button to get closer to the bed."""
         self.run_gcode_signal.emit(
-            f"SET_GCODE_OFFSET Z_ADJUST=-{self._z_offset} MOVE=1"
+            f"SET_GCODE_OFFSET Z_ADJUST=-{self._z_offset} MOVE=1"  # Z_ADJUST adds the value to the existing offset
         )
 
     @pyqtSlot(name="request_nozzle_far_to_bed")
     def move_nozzle_far_to_bed(self) -> None:
         """Slot for Babystep button to get far from the bed."""
         self.run_gcode_signal.emit(
-            f"SET_GCODE_OFFSET Z_ADJUST=+{self._z_offset} MOVE=1"
+            f"SET_GCODE_OFFSET Z_ADJUST=+{self._z_offset} MOVE=1"  # Z_ADJUST adds the value to the existing offset
         )
 
-    @pyqtSlot(name="z_offset_change")
-    def z_offset_change(self) -> None:
+    @pyqtSlot(name="handle_z_offset_change")
+    def handle_z_offset_change(self) -> None:
         """Helper method for changing the value for Babystep.
 
         When a button is clicked, and the button has the mm value i the text,
         it'll change the internal value **z_offset** to the same has the button
 
-        Possible values are: 0.001, 0.005, 0.01, 0.025, 0.05
+        ***
+
+        Possible values are: 0.01, 0.025, 0.05, 0.1 **mm**
         """
-        _possible_z_values: typing.List = [0.001, 0.005, 0.01, 0.025, 0.05]
+        _possible_z_values: typing.List = [0.01, 0.025, 0.05, 0.1]
         _sender: QObject | None = self.sender()
+        # PyQt6 documentation states the following :
+        #
+        # Using the self.sender() method does get the object that sent the signal for this method
+        # But it actually breaks the principles of OOP (which i don't mind doing at all in this case.)
+        #
+        # self.sender() return ´nullptr´  if the slot was called via DirectConnection from another
+        # thread different from the this objects Thread
         if _sender is not None and isinstance(_sender, QLabel):
             if float(_sender.text()) in _possible_z_values:
+                if self._z_offset == float(_sender.text()):
+                    return
                 self._z_offset = float(_sender.text())
                 logging.debug(f"z_offset changed to {self._z_offset}")
 
     @pyqtSlot(int, name="currentChanged")
     def view_changed(self, window_index: int) -> None:
-        """Slot for the current displayed panel
+        """Slot for the currentChanged signal
+
+        It receives an index which represents the current window showing
 
         Args:
             window_index (int): Current QStackedWidget index
@@ -614,7 +637,7 @@ class PrintTab(QStackedWidget):
         if self.background is None:
             return
 
-        if self.panel.file_area.isVisible():
+        if self.panel.files_page.isVisible():
             painter = QtGui.QPainter()
             painter.begin(self)
             painter.setCompositionMode(
@@ -623,7 +646,7 @@ class PrintTab(QStackedWidget):
             painter.setRenderHint(painter.RenderHint.Antialiasing, True)
             painter.setRenderHint(painter.RenderHint.SmoothPixmapTransform, True)
             painter.setRenderHint(painter.RenderHint.LosslessImageRendering, True)
-            list_area_rect = self.panel.file_area.geometry()
+            list_area_rect = self.panel.listWidget.geometry()
             # * Scale the pixmap to the correct Dimensions
             # TODO: Background is not really in SVG mode
             _scaled_pixmap = self.background.scaled(
@@ -692,67 +715,6 @@ class PrintTab(QStackedWidget):
                     _button_attr.setChecked(True)
 
         return super().paintEvent(a0)
-
-    # def create_button(
-    #     self,
-    #     name: str,
-    #     type: typing.Literal["normal", "icon", "display", "display_secondary"],
-    # ) -> BlocksCustomButton:
-    #     _new_display_button = BlocksCustomButton()
-    #     _policy = QtWidgets.QSizePolicy.Policy.MinimumExpanding
-    #     _sizePolicy = QtWidgets.QSizePolicy(_policy, _policy)
-    #     _sizePolicy.setHorizontalStretch(0)
-    #     _sizePolicy.setVerticalStretch(0)
-    #     _sizePolicy.setHeightForWidth(
-    #         _new_display_button.sizePolicy().hasHeightForWidth
-    #     )
-
-    #     _new_display_button.setMinimumSize(QtCore.QSize(150, 60))
-    #     _new_display_button.setMaximumSize(QtCore.QSize(150, 60))
-    #     _new_display_button.setSizePolicy(_sizePolicy)
-
-    #     _new_display_button.setObjectName(f"{name}")
-
-    #     sizePolicy = QtWidgets.QSizePolicy(
-    #         QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-    #         QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-    #     )
-    #     sizePolicy.setHorizontalStretch(0)
-    #     sizePolicy.setVerticalStretch(0)
-    #     sizePolicy.setHeightForWidth(
-    #         self.extruder_display.sizePolicy().hasHeightForWidth()
-    #     )
-    #     self.extruder_display.setSizePolicy(sizePolicy)
-    #     self.extruder_display.setMaximumSize(QtCore.QSize(150, 60))
-    #     palette = QtGui.QPalette()
-    #     brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
-    #     brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-    #     palette.setBrush(
-    #         QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.ButtonText, brush
-    #     )
-    #     brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
-    #     brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-    #     palette.setBrush(
-    #         QtGui.QPalette.ColorGroup.Inactive,
-    #         QtGui.QPalette.ColorRole.ButtonText,
-    #         brush,
-    #     )
-    #     brush = QtGui.QBrush(QtGui.QColor(120, 120, 120))
-    #     brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-    #     palette.setBrush(
-    #         QtGui.QPalette.ColorGroup.Disabled,
-    #         QtGui.QPalette.ColorRole.ButtonText,
-    #         brush,
-    #     )
-    #     self.extruder_display.setPalette(palette)
-    #     self.extruder_display.setText("")
-    #     self.extruder_display.setFlat(True)
-    #     self.extruder_display.setProperty(
-    #         "icon_pixmap", QtGui.QPixmap(":/temperatures/media/btn_icons/nozzle.svg")
-    #     )
-    #     self.extruder_display.setObjectName("extruder_display")
-    #     self.tune_display_buttons_layout.addWidget(self.extruder_display, 0, 0, 1, 1)
-    #     self.chamber_display = BlocksCustomButton(parent=self.gridLayoutWidget)
 
     def convert_bytes_to_mb(self, bytes: int | float) -> float:
         """Converts byte size to megabyte size

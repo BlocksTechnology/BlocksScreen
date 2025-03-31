@@ -2403,9 +2403,9 @@ Change</string>
    <widget class="QWidget" name="horizontalLayoutWidget">
     <property name="geometry">
      <rect>
-      <x>80</x>
+      <x>20</x>
       <y>300</y>
-      <width>541</width>
+      <width>681</width>
       <height>80</height>
      </rect>
     </property>
@@ -2418,10 +2418,82 @@ Change</string>
          <height>50</height>
         </size>
        </property>
+       <property name="palette">
+        <palette>
+         <active>
+          <colorrole role="WindowText">
+           <brush brushstyle="SolidPattern">
+            <color alpha="255">
+             <red>255</red>
+             <green>255</green>
+             <blue>255</blue>
+            </color>
+           </brush>
+          </colorrole>
+          <colorrole role="ButtonText">
+           <brush brushstyle="SolidPattern">
+            <color alpha="255">
+             <red>255</red>
+             <green>255</green>
+             <blue>255</blue>
+            </color>
+           </brush>
+          </colorrole>
+         </active>
+         <inactive>
+          <colorrole role="WindowText">
+           <brush brushstyle="SolidPattern">
+            <color alpha="255">
+             <red>255</red>
+             <green>255</green>
+             <blue>255</blue>
+            </color>
+           </brush>
+          </colorrole>
+          <colorrole role="ButtonText">
+           <brush brushstyle="SolidPattern">
+            <color alpha="255">
+             <red>255</red>
+             <green>255</green>
+             <blue>255</blue>
+            </color>
+           </brush>
+          </colorrole>
+         </inactive>
+         <disabled>
+          <colorrole role="WindowText">
+           <brush brushstyle="SolidPattern">
+            <color alpha="255">
+             <red>120</red>
+             <green>120</green>
+             <blue>120</blue>
+            </color>
+           </brush>
+          </colorrole>
+          <colorrole role="ButtonText">
+           <brush brushstyle="SolidPattern">
+            <color alpha="255">
+             <red>120</red>
+             <green>120</green>
+             <blue>120</blue>
+            </color>
+           </brush>
+          </colorrole>
+         </disabled>
+        </palette>
+       </property>
+       <property name="font">
+        <font>
+         <pointsize>14</pointsize>
+        </font>
+       </property>
        <property name="text">
         <string>0.01</string>
        </property>
        <property name="checkable">
+        <bool>true</bool>
+       </property>
+       <property name="flat">
         <bool>true</bool>
        </property>
        <property name="button_type" stdset="0">
@@ -2443,10 +2515,82 @@ Change</string>
          <height>50</height>
         </size>
        </property>
+       <property name="palette">
+        <palette>
+         <active>
+          <colorrole role="WindowText">
+           <brush brushstyle="SolidPattern">
+            <color alpha="255">
+             <red>255</red>
+             <green>255</green>
+             <blue>255</blue>
+            </color>
+           </brush>
+          </colorrole>
+          <colorrole role="ButtonText">
+           <brush brushstyle="SolidPattern">
+            <color alpha="255">
+             <red>255</red>
+             <green>255</green>
+             <blue>255</blue>
+            </color>
+           </brush>
+          </colorrole>
+         </active>
+         <inactive>
+          <colorrole role="WindowText">
+           <brush brushstyle="SolidPattern">
+            <color alpha="255">
+             <red>255</red>
+             <green>255</green>
+             <blue>255</blue>
+            </color>
+           </brush>
+          </colorrole>
+          <colorrole role="ButtonText">
+           <brush brushstyle="SolidPattern">
+            <color alpha="255">
+             <red>255</red>
+             <green>255</green>
+             <blue>255</blue>
+            </color>
+           </brush>
+          </colorrole>
+         </inactive>
+         <disabled>
+          <colorrole role="WindowText">
+           <brush brushstyle="SolidPattern">
+            <color alpha="255">
+             <red>120</red>
+             <green>120</green>
+             <blue>120</blue>
+            </color>
+           </brush>
+          </colorrole>
+          <colorrole role="ButtonText">
+           <brush brushstyle="SolidPattern">
+            <color alpha="255">
+             <red>120</red>
+             <green>120</green>
+             <blue>120</blue>
+            </color>
+           </brush>
+          </colorrole>
+         </disabled>
+        </palette>
+       </property>
+       <property name="font">
+        <font>
+         <pointsize>14</pointsize>
+        </font>
+       </property>
        <property name="text">
         <string>0.025</string>
        </property>
        <property name="checkable">
+        <bool>true</bool>
+       </property>
+       <property name="flat">
         <bool>true</bool>
        </property>
        <property name="button_type" stdset="0">
@@ -2468,10 +2612,82 @@ Change</string>
          <height>50</height>
         </size>
        </property>
+       <property name="palette">
+        <palette>
+         <active>
+          <colorrole role="WindowText">
+           <brush brushstyle="SolidPattern">
+            <color alpha="255">
+             <red>255</red>
+             <green>255</green>
+             <blue>255</blue>
+            </color>
+           </brush>
+          </colorrole>
+          <colorrole role="ButtonText">
+           <brush brushstyle="SolidPattern">
+            <color alpha="255">
+             <red>255</red>
+             <green>255</green>
+             <blue>255</blue>
+            </color>
+           </brush>
+          </colorrole>
+         </active>
+         <inactive>
+          <colorrole role="WindowText">
+           <brush brushstyle="SolidPattern">
+            <color alpha="255">
+             <red>255</red>
+             <green>255</green>
+             <blue>255</blue>
+            </color>
+           </brush>
+          </colorrole>
+          <colorrole role="ButtonText">
+           <brush brushstyle="SolidPattern">
+            <color alpha="255">
+             <red>255</red>
+             <green>255</green>
+             <blue>255</blue>
+            </color>
+           </brush>
+          </colorrole>
+         </inactive>
+         <disabled>
+          <colorrole role="WindowText">
+           <brush brushstyle="SolidPattern">
+            <color alpha="255">
+             <red>120</red>
+             <green>120</green>
+             <blue>120</blue>
+            </color>
+           </brush>
+          </colorrole>
+          <colorrole role="ButtonText">
+           <brush brushstyle="SolidPattern">
+            <color alpha="255">
+             <red>120</red>
+             <green>120</green>
+             <blue>120</blue>
+            </color>
+           </brush>
+          </colorrole>
+         </disabled>
+        </palette>
+       </property>
+       <property name="font">
+        <font>
+         <pointsize>14</pointsize>
+        </font>
+       </property>
        <property name="text">
         <string>0.05</string>
        </property>
        <property name="checkable">
+        <bool>true</bool>
+       </property>
+       <property name="flat">
         <bool>true</bool>
        </property>
        <property name="button_type" stdset="0">
@@ -2493,10 +2709,85 @@ Change</string>
          <height>50</height>
         </size>
        </property>
+       <property name="palette">
+        <palette>
+         <active>
+          <colorrole role="WindowText">
+           <brush brushstyle="SolidPattern">
+            <color alpha="255">
+             <red>255</red>
+             <green>255</green>
+             <blue>255</blue>
+            </color>
+           </brush>
+          </colorrole>
+          <colorrole role="ButtonText">
+           <brush brushstyle="SolidPattern">
+            <color alpha="255">
+             <red>255</red>
+             <green>255</green>
+             <blue>255</blue>
+            </color>
+           </brush>
+          </colorrole>
+         </active>
+         <inactive>
+          <colorrole role="WindowText">
+           <brush brushstyle="SolidPattern">
+            <color alpha="255">
+             <red>255</red>
+             <green>255</green>
+             <blue>255</blue>
+            </color>
+           </brush>
+          </colorrole>
+          <colorrole role="ButtonText">
+           <brush brushstyle="SolidPattern">
+            <color alpha="255">
+             <red>255</red>
+             <green>255</green>
+             <blue>255</blue>
+            </color>
+           </brush>
+          </colorrole>
+         </inactive>
+         <disabled>
+          <colorrole role="WindowText">
+           <brush brushstyle="SolidPattern">
+            <color alpha="255">
+             <red>120</red>
+             <green>120</green>
+             <blue>120</blue>
+            </color>
+           </brush>
+          </colorrole>
+          <colorrole role="ButtonText">
+           <brush brushstyle="SolidPattern">
+            <color alpha="255">
+             <red>120</red>
+             <green>120</green>
+             <blue>120</blue>
+            </color>
+           </brush>
+          </colorrole>
+         </disabled>
+        </palette>
+       </property>
+       <property name="font">
+        <font>
+         <pointsize>14</pointsize>
+        </font>
+       </property>
        <property name="text">
         <string>0.1</string>
        </property>
        <property name="checkable">
+        <bool>true</bool>
+       </property>
+       <property name="checked">
+        <bool>true</bool>
+       </property>
+       <property name="flat">
         <bool>true</bool>
        </property>
        <property name="button_type" stdset="0">
@@ -2597,9 +2888,9 @@ Change</string>
    <widget class="QLabel" name="bbp_babystep_graphic">
     <property name="geometry">
      <rect>
-      <x>140</x>
-      <y>150</y>
-      <width>351</width>
+      <x>180</x>
+      <y>110</y>
+      <width>371</width>
       <height>121</height>
      </rect>
     </property>
@@ -2622,10 +2913,10 @@ Change</string>
    <widget class="QWidget" name="verticalLayoutWidget_2">
     <property name="geometry">
      <rect>
-      <x>510</x>
-      <y>135</y>
+      <x>550</x>
+      <y>120</y>
       <width>91</width>
-      <height>151</height>
+      <height>176</height>
      </rect>
     </property>
     <layout class="QVBoxLayout" name="bbp_buttons_layout" stretch="1,1">
@@ -2651,14 +2942,14 @@ Change</string>
        </property>
        <property name="minimumSize">
         <size>
-         <width>70</width>
-         <height>60</height>
+         <width>80</width>
+         <height>80</height>
         </size>
        </property>
        <property name="maximumSize">
         <size>
          <width>80</width>
-         <height>60</height>
+         <height>80</height>
         </size>
        </property>
        <property name="text">
@@ -2688,14 +2979,14 @@ Change</string>
        </property>
        <property name="minimumSize">
         <size>
-         <width>70</width>
-         <height>60</height>
+         <width>80</width>
+         <height>80</height>
         </size>
        </property>
        <property name="maximumSize">
         <size>
          <width>80</width>
-         <height>60</height>
+         <height>80</height>
         </size>
        </property>
        <property name="text">
@@ -2717,12 +3008,12 @@ Change</string>
      </item>
     </layout>
    </widget>
-   <widget class="QLabel" name="bbp_z_offset_current_value">
+   <widget class="BlocksLabel" name="bbp_z_offset_current_value">
     <property name="geometry">
      <rect>
-      <x>300</x>
-      <y>190</y>
-      <width>100</width>
+      <x>310</x>
+      <y>150</y>
+      <width>200</width>
       <height>60</height>
      </rect>
     </property>
@@ -2734,13 +3025,13 @@ Change</string>
     </property>
     <property name="minimumSize">
      <size>
-      <width>100</width>
+      <width>150</width>
       <height>60</height>
      </size>
     </property>
     <property name="maximumSize">
      <size>
-      <width>100</width>
+      <width>200</width>
       <height>60</height>
      </size>
     </property>
@@ -2760,6 +3051,9 @@ Change</string>
     </property>
     <property name="alignment">
      <set>Qt::AlignCenter</set>
+    </property>
+    <property name="icon_pixmap" stdset="0">
+     <pixmap/>
     </property>
    </widget>
   </widget>
