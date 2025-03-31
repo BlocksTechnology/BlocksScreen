@@ -53,7 +53,7 @@ class ControlTab(QtWidgets.QStackedWidget):
         self.toolhead_info: dict = {}
         self.extrude_length: int = 10
         self.extrude_feedrate: int = 2
-
+        self.extrude_page_message: str = ""
         # Value to move axis
         self.move_length: float = 1.0
         self.move_speed: float = 25.0
@@ -307,28 +307,31 @@ class ControlTab(QtWidgets.QStackedWidget):
         can_extrude = bool(self.printer.heaters_object["extruder"]["can_extrude"])
 
         if not can_extrude:
-            self.panel.exp_info_label.setText("Temperature too cold to extrude")
+            self.extrude_page_message = "Temperature too cold to extrude"
+            self.panel.exp_info_label.setText(self.extrude_page_message)
             return
 
         if extrude:
             self.run_gcode_signal.emit(
                 f"M83\nG1 E{self.extrude_length} F{self.extrude_feedrate * 60}\nM82\nM400"
             )
-            self.panel.exp_info_label.setText("Extruding")
+            self.extrude_page_message = "Extruding"
+            self.panel.exp_info_label.setText(self.extrude_page_message)
         else:
             self.run_gcode_signal.emit(
                 f"M83\nG1 E-{self.extrude_length} F{self.extrude_feedrate * 60}\nM82\nM400"
             )
-            self.panel.exp_info_label.setText("Retracting")
+            self.extrude_page_message = "Retracting"
+            self.panel.exp_info_label.setText(self.extrude_page_message)
 
         # This block of code schedules a method to be called in x amount of milliseconds
         _sch_time_s = float(
             self.extrude_length / self.extrude_feedrate
         )  # calculate the amount of time it'll take for the operation
-
+        self.extrude_page_message = "Ready"
         self.register_timed_callback(
             int(_sch_time_s + 2.0) * 1000,  # In milliseconds
-            lambda: self.panel.exp_info_label.setText("Ready"),
+            lambda: self.panel.exp_info_label.setText(self.extrude_page_message),
         )
 
     @pyqtSlot(str, name="handle_move_axis")
@@ -400,3 +403,9 @@ class ControlTab(QtWidgets.QStackedWidget):
         if field == "target":
             self.panel.bed_temp_display.setSecondaryText(f"{new_value:.1f}")
         self.bed_info.update({f"{name}": {f"{field}": new_value}})
+
+    def paintEvent(self, a0: QPaintEvent) -> None:
+        if self.panel.extrude_page.isVisible():
+            self.panel.exp_info_label.setText(self.extrude_page_message)
+
+        return super().paintEvent(a0)
