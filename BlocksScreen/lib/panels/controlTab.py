@@ -43,35 +43,36 @@ class ControlTab(QtWidgets.QStackedWidget):
         self.main_panel = parent
         self.ws = ws
         self.printer = printer
-
         self.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
-
         self.timers = []
-
         self.extruder_info: dict = {}
         self.bed_info: dict = {}
         self.toolhead_info: dict = {}
         self.extrude_length: int = 10
         self.extrude_feedrate: int = 2
         self.extrude_page_message: str = ""
-        # Value to move axis
         self.move_length: float = 1.0
         self.move_speed: float = 25.0
 
-        # Signal to update labels
         self.printer.toolhead_update_signal[str, list].connect(
             self.toolhead_position_change
         )
         self.printer.extruder_update_signal.connect(self.handle_extruder_temp_change)
         self.printer.heater_bed_update_signal.connect(self.handle_bed_temp_change)
 
-        # Connecting buttons in the panel routing tree
-        # Control Screen
-        self.panel.cp_motion_btn.clicked.connect(partial(self.change_page, 1))
-        self.panel.cp_temperature_btn.clicked.connect(partial(self.change_page, 4))
-        self.panel.cp_printer_settings_btn.clicked.connect(partial(self.change_page, 6))
+        self.panel.cp_motion_btn.clicked.connect(
+            partial(self.change_page, self.indexOf(self.panel.motion_page))
+        )
+        self.panel.cp_temperature_btn.clicked.connect(
+            partial(self.change_page, self.indexOf(self.panel.temperature_page))
+        )
+        self.panel.cp_printer_settings_btn.clicked.connect(
+            partial(self.change_page, self.indexOf(self.panel.printer_settings_page))
+        )
+        self.panel.cp_nozzles_calibration_btn.clicked.connect(
+            partial(self.change_page, self.indexOf(self.panel.z_adjustment_page))
+        )
 
-        # Motion Screen
         self.panel.motion_extrude_btn.clicked.connect(partial(self.change_page, 2))
         self.panel.motion_move_axis_btn.clicked.connect(partial(self.change_page, 3))
         self.panel.mp_back_btn.clicked.connect(self.back_button)
@@ -82,7 +83,6 @@ class ControlTab(QtWidgets.QStackedWidget):
             partial(self.run_gcode_signal.emit, "M84\nM400")
         )
 
-        # Extrude
         self.panel.exp_back_btn.clicked.connect(self.back_button)
 
         self.panel.extrude_select_length_10_btn.toggled.connect(
