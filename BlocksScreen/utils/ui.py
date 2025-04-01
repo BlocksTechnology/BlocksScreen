@@ -1,3 +1,4 @@
+from pickle import NONE
 import typing
 from functools import partial
 
@@ -50,12 +51,13 @@ class BlocksCustomButton(QPushButton):
         self.button_background_pixmap: typing.Optional[QtGui.QPixmap] = QtGui.QPixmap()
 
         self.button_type = None
+        self.text_formatting: str | None = None
         self._text: str | None = None
         self.pt_rect: QtCore.QRect | None = None
         self._secondary_text: str | None = None
         self.st_rect: QtCore.QRect | None = None
         self._name: str | None = None
-
+        self.text_color: QtGui.QColor = QtGui.QColor(0, 0, 0, 255)
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_AcceptTouchEvents, True)
 
         if self.button_type == "normal":
@@ -215,35 +217,50 @@ class BlocksCustomButton(QPushButton):
                 )
         elif "icon" in self.button_type:
             if "text" in self.button_type and self.text() is not None:
-                qp.setCompositionMode(qp.CompositionMode.CompositionMode_SourceOut)
+                # qp.setCompositionMode(qp.CompositionMode.CompositionMode_SourceOut)
+                qp.setCompositionMode(qp.CompositionMode.CompositionMode_SourceIn)
                 if self._icon_rectF is not None:
-                    scaled_width = self._icon_rectF.width()
-                    scaled_height = self._icon_rectF.height()
-                    adjusted_x = (self._icon_rectF.width() - scaled_width) / 2.0
-                    adjusted_y = (self._icon_rectF.height() - scaled_height) / 2.0
-                    adjusted_rectF = QtCore.QRectF(
-                        self._icon_rectF.x() + adjusted_x,
-                        self._icon_rectF.y() + adjusted_y,
-                        scaled_width,
-                        scaled_height,
-                    )
+                    if self.text_formatting is None:
+                        scaled_width = self._icon_rectF.width()
+                        scaled_height = self._icon_rectF.height()
+
+                        adjusted_x = (self._icon_rectF.width() - scaled_width) / 2.0
+                        adjusted_y = (self._icon_rectF.height() - scaled_height) / 2.0
+                        adjusted_rectF = QtCore.QRectF(
+                            self._icon_rectF.x() + adjusted_x,
+                            self._icon_rectF.y() + adjusted_y,
+                            scaled_width,
+                            scaled_height,
+                        )
+                    elif self.text_formatting == "bottom":
+                        adjusted_x = (
+                            self._icon_rectF.width() - self.width() + 5.0
+                        ) / 2.0
+                        adjusted_rectF = QtCore.QRectF(
+                            self._icon_rectF.x() + adjusted_x,
+                            self._icon_rectF.height() ,
+                            self.width(),
+                            self.height() - self._icon_rectF.height(),
+                        )
+
                     _font = QtGui.QFont()
                     _font.setBold(True)
                     _palette = self.palette()
                     _palette.setColor(
-                        QtGui.QPalette.ColorRole.WindowText, QtGui.QColor("black")
+                        QtGui.QPalette.ColorRole.WindowText, self.text_color
                     )
                     _palette.setColor(
-                        QtGui.QPalette.ColorRole.Text, QtGui.QColor("black")
+                        QtGui.QPalette.ColorRole.PlaceholderText, self.text_color
                     )
+                    _palette.setColor(QtGui.QPalette.ColorRole.Text, self.text_color)
                     _palette.setColor(
-                        QtGui.QPalette.ColorRole.ButtonText, QtGui.QColor("black")
+                        QtGui.QPalette.ColorRole.ButtonText, self.text_color
                     )
                     self.setFont(_font)
                     self.setPalette(_palette)
                     qp.drawText(
                         adjusted_rectF,
-                        QtCore.Qt.TextFlag.TextShowMnemonic
+                        QtCore.Qt.TextFlag.TextSingleLine
                         | QtCore.Qt.AlignmentFlag.AlignHCenter
                         | QtCore.Qt.AlignmentFlag.AlignVCenter,
                         str(self.text()),
@@ -375,14 +392,24 @@ class BlocksCustomButton(QPushButton):
                 )
 
         elif "icon" in self.button_type:
-            _icon_rect = QtCore.QRectF(  # x, y, width , height
-                0.0, 0.0, self.width() - 5.0, self.height() - 5.0
-            )
-            _icon_scaled = self.icon_pixmap.scaled(
-                _icon_rect.size().toSize(),
-                QtCore.Qt.AspectRatioMode.KeepAspectRatio,
-                QtCore.Qt.TransformationMode.SmoothTransformation,
-            )
+            if self.text_formatting is None:
+                _icon_rect = QtCore.QRectF(  # x, y, width , height
+                    0.0, 0.0, self.width() - 5.0, self.height() - 5.0
+                )
+                _icon_scaled = self.icon_pixmap.scaled(
+                    _icon_rect.size().toSize(),
+                    QtCore.Qt.AspectRatioMode.KeepAspectRatio,
+                    QtCore.Qt.TransformationMode.SmoothTransformation,
+                )
+            else:
+                _icon_rect = QtCore.QRectF(
+                    0.0, 0.0, (self.width() - 15.0), (self.height() - 15.0)
+                )
+                _icon_scaled = self.icon_pixmap.scaled(
+                    _icon_rect.size().toSize(),
+                    QtCore.Qt.AspectRatioMode.KeepAspectRatio,
+                    QtCore.Qt.TransformationMode.SmoothTransformation,
+                )
 
         elif "display" in self.button_type:
             _parent_rect: QtCore.QRect = self.rect()
@@ -516,6 +543,10 @@ class BlocksCustomButton(QPushButton):
             self.button_type = value
         elif name == "font":
             self.setFont(QtGui.QFont(value))
+        elif name == "text_formatting":
+            self.text_formatting = value
+        elif name == "text_color":
+            self.text_color = QtGui.QColor(value)
         return super().setProperty(name, value)
 
 
@@ -540,7 +571,8 @@ class BlocksLabel(QtWidgets.QLabel):
     def setText(self, a0: str) -> None:
         self._text = a0
         self.update()
-        return
+
+        return super().setText(a0)
 
     @property
     def background_color(self) -> typing.Optional[QtGui.QColor]:
