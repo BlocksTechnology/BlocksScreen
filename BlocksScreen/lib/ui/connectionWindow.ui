@@ -486,21 +486,33 @@
       </property>
       <property name="minimumSize">
        <size>
-        <width>150</width>
+        <width>60</width>
         <height>60</height>
        </size>
       </property>
       <property name="maximumSize">
        <size>
-        <width>200</width>
+        <width>60</width>
         <height>60</height>
        </size>
       </property>
       <property name="baseSize">
        <size>
-        <width>160</width>
+        <width>60</width>
         <height>80</height>
        </size>
+      </property>
+      <property name="palette">
+       <palette>
+        <active/>
+        <inactive/>
+        <disabled/>
+       </palette>
+      </property>
+      <property name="font">
+       <font>
+        <pointsize>13</pointsize>
+       </font>
       </property>
       <property name="tabletTracking">
        <bool>true</bool>
@@ -515,7 +527,7 @@
        <string notr="true"/>
       </property>
       <property name="text">
-       <string>Retry Connection</string>
+       <string>Retry </string>
       </property>
       <property name="icon">
        <iconset resource="resources/system_resources.qrc">
@@ -523,7 +535,7 @@
       </property>
       <property name="iconSize">
        <size>
-        <width>38</width>
+        <width>16</width>
         <height>16</height>
        </size>
       </property>
@@ -557,11 +569,21 @@
       <property name="borderRightPixmap" stdset="0">
        <pixmap resource="resources/button_resources.qrc">:/button_borders/media/buttons/btn_part3.svg</pixmap>
       </property>
-      <property name="iconPixmap" stdset="0">
-       <pixmap>:/icons/media/btn_icons/filament_unload.svg</pixmap>
-      </property>
       <property name="button_type" stdset="0">
-       <string>normal</string>
+       <string>icon_text</string>
+      </property>
+      <property name="text_formatting" stdset="0">
+       <string>bottom</string>
+      </property>
+      <property name="icon_pixmap" stdset="0">
+       <pixmap resource="resources/system_resources.qrc">:/system_icons/media/btn_icons/retry_connection.svg</pixmap>
+      </property>
+      <property name="text_color" stdset="0">
+       <color>
+        <red>255</red>
+        <green>255</green>
+        <blue>255</blue>
+       </color>
       </property>
      </widget>
     </item>
