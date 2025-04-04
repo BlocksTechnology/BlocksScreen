@@ -1,4 +1,4 @@
-from typing import Any
+import typing
 from PyQt6.QtCore import QEvent
 
 
@@ -33,14 +33,18 @@ class WebSocketMessageReceived(QEvent):
 
     WebsocketMessageReceivedEvent = QEvent.Type(QEvent.registerEventType())
 
-    def __init__(self, data, packet, method, params):
+    def __init__(
+        self,
+        method: typing.Optional[str] = None,
+        data: typing.Optional[dict] = None,
+        metadata: typing.Optional[dict] = None,
+    ):
         super(WebSocketMessageReceived, self).__init__(
             WebSocketMessageReceived.WebsocketMessageReceivedEvent
         )
-        self.data = data
-        self.packet = packet
         self.method = method
-        self.params = params
+        self.data = data
+        self.metadata = metadata
 
     @staticmethod
     def type() -> QEvent.Type:
@@ -152,9 +156,9 @@ class KlippyShutdown(QEvent):
 
     # def __instancecheck__(self, instance: Any) -> bool:
     #     return True if self.KlippyShutdownEvent in QEvent.Type else False
-        # return True
+    # return True
 
-        # return super().__instancecheck__(instance)
+    # return super().__instancecheck__(instance)
 
 
 class KlippyReady(QEvent):

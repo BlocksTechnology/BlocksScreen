@@ -4,7 +4,7 @@ import threading
 import typing
 
 import websocket
-from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot, QCoreApplication
+from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot
 from PyQt6.QtWidgets import QApplication
 
 
@@ -17,7 +17,7 @@ from events import (
 from lib.moonrest import MoonRest
 from utils.RepeatedTimer import RepeatedTimer
 
-_logger = logging.getLogger(name=f"logs/BlocksScreen.log")
+_logger = logging.getLogger(name="logs/BlocksScreen.log")
 
 
 class OneShotTokenError(Exception):
@@ -199,11 +199,10 @@ class MoonWebSocket(QObject, threading.Thread):
 
             _logger.info("Websocket closed")
 
-    def on_error(self, *args):  # ws, error):
+    def on_error(self, *args) -> None:
         # First argument is ws second is error message
-        _error = args[1] if len(args) == 2 else args[0]
         # TODO: Handle error messages
-
+        _error = args[1] if len(args) == 2 else args[0]
         _logger.info(f"Websocket error, disconnected: {_error}")
         self.connected = False
         self.disconnected = True
@@ -225,7 +224,7 @@ class MoonWebSocket(QObject, threading.Thread):
         try:
             instance = QApplication.instance()
             if instance is not None:
-                instance.sendEvent(self._main_window, close_event)
+                instance.postEvent(self._main_window, close_event)
             else:
                 raise TypeError("QApplication.instance expected non None value")
         except Exception as e:
@@ -253,7 +252,7 @@ class MoonWebSocket(QObject, threading.Thread):
             # TODO: the location to send the event changed from self._main_window.start_window to just self._main_window
             instance = QApplication.instance()
             if instance is not None:
-                instance.sendEvent(self._main_window, open_event)
+                instance.postEvent(self._main_window, open_event)
             else:
                 raise TypeError("QApplication.instance expected non None value")
         except Exception as e:
@@ -265,12 +264,10 @@ class MoonWebSocket(QObject, threading.Thread):
         _logger.info(f"Connection to websocket achieved on {_ws}")
 
     def on_message(self, *args):
-        # TODO: Handle receiving message from websocket
         # First argument is ws second is message
         _message = args[1] if len(args) == 2 else args[0]
-
         _logger.debug(f"Message received from the websocket: {_message}")
-        response = json.loads(_message)
+        response: dict = json.loads(_message)
         if "id" in response and response["id"] in self.request_table:
             _entry = self.request_table.pop(response["id"])
             # * Can query and send signals about klippy connection here
@@ -288,26 +285,24 @@ class MoonWebSocket(QObject, threading.Thread):
             else:
                 if "error" in response:
                     message_event = WebSocketMessageReceived(
-                        data="websocket message error",
-                        packet=response["error"]["message"],
                         method="error",
-                        params=None,
+                        data=response["error"],
+                        metadata=_entry,
                     )
                 else:
                     message_event = WebSocketMessageReceived(
-                        data="websocket message",
-                        packet=response["result"],
-                        method=_entry[0],
-                        params=_entry[1],
+                        method=str(_entry[0]),
+                        data=response["result"],
+                        metadata=_entry,
                     )
 
         elif "method" in response:
-            # This is a message received without a request, but it has a method parameter in there
+            # This is a message received without a request,
+            # but with the method in the response
             message_event = WebSocketMessageReceived(
-                data="websocket message",
-                packet=response,
-                method=response["method"],
-                params=None,
+                method=str(response["method"]),
+                data=response,
+                metadata=None,
             )
 
         try:
