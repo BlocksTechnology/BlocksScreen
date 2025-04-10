@@ -68,10 +68,10 @@ class MoonWebSocket(QObject, threading.Thread):
     klippy_state_signal = pyqtSignal(str, name="klippy_state")
     query_server_info_signal = pyqtSignal(name="query_server_information")
 
-    def __init__(self, parent: typing.Optional["QObject"]) -> None:
+    def __init__(self, parent: QObject) -> None:
         super().__init__(parent)
         self.daemon = True
-        self._main_window = parent
+        # self._main_window = parent
 
         # * This information should be in a  configuration file
         # self.host: str | None = None
@@ -123,7 +123,7 @@ class MoonWebSocket(QObject, threading.Thread):
             try:
                 instance = QApplication.instance()
                 if instance is not None:
-                    instance.sendEvent(self._main_window, unable_to_connect_event)
+                    instance.sendEvent(self.parent(), unable_to_connect_event)
                 else:
                     raise TypeError("QApplication.instance expected ad non-None value")
             except Exception as e:
@@ -224,7 +224,7 @@ class MoonWebSocket(QObject, threading.Thread):
         try:
             instance = QApplication.instance()
             if instance is not None:
-                instance.postEvent(self._main_window, close_event)
+                instance.postEvent(self.parent(), close_event)
             else:
                 raise TypeError("QApplication.instance expected non None value")
         except Exception as e:
@@ -252,7 +252,7 @@ class MoonWebSocket(QObject, threading.Thread):
             # TODO: the location to send the event changed from self._main_window.start_window to just self._main_window
             instance = QApplication.instance()
             if instance is not None:
-                instance.postEvent(self._main_window, open_event)
+                instance.postEvent(self.parent(), open_event)
             else:
                 raise TypeError("QApplication.instance expected non None value")
         except Exception as e:
@@ -266,7 +266,7 @@ class MoonWebSocket(QObject, threading.Thread):
     def on_message(self, *args):
         # First argument is ws second is message
         _message = args[1] if len(args) == 2 else args[0]
-        _logger.debug(f"Message received from the websocket: {_message}")
+        # _logger.debug(f"Message received from the websocket: {_message}")
         response: dict = json.loads(_message)
         if "id" in response and response["id"] in self.request_table:
             _entry = self.request_table.pop(response["id"])
@@ -308,7 +308,7 @@ class MoonWebSocket(QObject, threading.Thread):
         try:
             instance = QApplication.instance()
             if instance is not None:
-                instance.sendEvent(self._main_window, message_event)
+                instance.sendEvent(self.parent(), message_event)
             else:
                 raise TypeError("QApplication.instance expected non None value")
         except Exception as e:

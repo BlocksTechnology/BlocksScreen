@@ -1,15 +1,10 @@
 import logging
-import logging.handlers
 import sys
 import typing
 
 import logger
 import PyQt6
-import PyQt6.Qt6
-import PyQt6.Qt6.lib
 import PyQt6.QtCore
-import PyQt6.QtGui
-import PyQt6.QtWidgets
 from lib.panels.mainWindow import MainWindow
 from PyQt6.QtGui import QPixmap
 from PyQt6.QtWidgets import QApplication, QSplashScreen, QWidget
@@ -65,19 +60,11 @@ if __name__ == "__main__":
     run()
 
 
-# =============== VISUAL ASPECTS =============== #
-# TODO: Add Bed heater icon
-# TODO: Add Extruder heater icon
-
-
 # =============== FUNCTIONALITY =============== #
 # TODO: Add dynamically heater objects to the header
 # TODO: Block the bar when the printer is doing stuff
 # TODO: Create a callable window for errors, or warnings, that does not fade until the problem is corrected
-# TODO: Add the wifi panel button with the icon
 
-
-# TODO: When closing the application i need to guarantee that every single thread is also stopped.
 
 # EXPLORE IMPLEMENTATION: Garbage collector (python gc package) !!
 

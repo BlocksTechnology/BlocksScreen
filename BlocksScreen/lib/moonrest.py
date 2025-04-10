@@ -28,13 +28,12 @@ class MoonRest:
     timeout = 3
 
     # TODO: The ip and port need to come from a configfile
-
+    # def __init__(self, ip="192.168.1.100", port="7125", api_key=False):
     def __init__(self, ip="192.168.1.100", port="7125", api_key=False):
-    # def __init__(self, ip="192.168.1.165", port="7125", api_key=False):
         self._ip = ip
         self._port = port
         self._api_key = api_key
-        
+
     @property
     def build_endpoint(self):
         # TODO: Need to also account for if the port is https
