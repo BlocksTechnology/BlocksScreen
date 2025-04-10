@@ -1,5 +1,7 @@
 <RCC>
   <qresource prefix="graphics">
+    <file>media/btn_icons/new_z_offset_icon.svg</file>
+    <file>media/btn_icons/old_z_offset_icon.svg</file>
     <file>media/btn_icons/z_offset_adjust.svg</file>
     <file>media/graphics/babystep_graphic.png</file>
   </qresource>

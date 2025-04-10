@@ -6,6 +6,14 @@
     <file>media/btn_icons/2barWIFI.svg</file>
     <file>media/btn_icons/3fullWIFI.svg</file>
   </qresource>
+  <qresource prefix="dialog">
+    <file>media/btn_icons/new_abort_hugo.svg</file>
+    <file>media/btn_icons/new_accept_hugo.svg</file>
+    <file>media/btn_icons/no_cancel_icon.svg</file>
+    <file>media/btn_icons/no icon.svg</file>
+    <file>media/btn_icons/yes_icon.svg</file>
+    <file>media/btn_icons/yes_save_icon.svg</file>
+  </qresource>
   <qresource prefix="files">
     <file>media/btn_icons/file.svg</file>
   </qresource>
@@ -53,6 +61,7 @@
     <file>media/btn_icons/axes_maintenance_icon.svg</file>
   </qresource>
   <qresource prefix="misc">
+    <file>media/btn_icons/start_hugo.svg</file>
     <file>media/btn_icons/speed.svg</file>
     <file>media/btn_icons/layers.svg</file>
     <file>media/btn_icons/time.svg</file>
