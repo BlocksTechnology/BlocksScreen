@@ -18,7 +18,7 @@ class Files(QtCore.QObject):
 
     def __init__(
         self,
-        parent: typing.Optional["QObject"],
+        parent: QObject,
         ws: MoonWebSocket,
         update_interval: int = 5000,
     ) -> None:

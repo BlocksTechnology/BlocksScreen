@@ -32,7 +32,7 @@
    <string>StackedWidget</string>
   </property>
   <property name="currentIndex">
-   <number>2</number>
+   <number>0</number>
   </property>
   <widget class="QWidget" name="control_page">
    <property name="sizePolicy">
@@ -1144,7 +1144,7 @@ Home</string>
        <property name="flat">
         <bool>true</bool>
        </property>
-       <widget class="QWidget" name="">
+       <widget class="QWidget" name="layoutWidget">
         <property name="geometry">
          <rect>
           <x>0</x>
@@ -1795,7 +1795,7 @@ Home</string>
        <property name="flat">
         <bool>true</bool>
        </property>
-       <widget class="QWidget" name="">
+       <widget class="QWidget" name="layoutWidget">
         <property name="geometry">
          <rect>
           <x>0</x>
@@ -5442,8 +5442,8 @@ Home</string>
  </resources>
  <connections/>
  <buttongroups>
-  <buttongroup name="extrude_select_length_group"/>
   <buttongroup name="axis_select_length_group"/>
+  <buttongroup name="extrude_select_length_group"/>
   <buttongroup name="extrude_select_feedrate_group"/>
   <buttongroup name="axis_select_speed_group"/>
  </buttongroups>

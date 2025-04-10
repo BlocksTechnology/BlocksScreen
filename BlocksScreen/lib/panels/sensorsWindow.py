@@ -324,8 +324,8 @@ class SensorsWindow(QWidget):
             self.toggle_sensor.emit(_item.toggle_sensor_gcode_command)
 
     def create_sensor_widget(self, name: str) -> SensorWidget:
-        """
-            Creates a sensor row to be added to the QListWidget
+        """Creates a sensor row to be added to the QListWidget
+
         Args:
             name (str): The name of the filament sensor object
         """

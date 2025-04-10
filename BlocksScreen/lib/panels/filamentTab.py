@@ -30,7 +30,7 @@ class FilamentTab(QStackedWidget):
         def __repr__(self) -> str:
             return "<%s.%s>" % (self.__class__.__name__, self._name_)
 
-    def __init__(self, parent: typing.Optional[QWidget], printer: Printer, ws) -> None:
+    def __init__(self, parent: QWidget, printer: Printer, ws, /) -> None:
         super().__init__(parent)
 
         self.panel = Ui_filamentStackedWidget()

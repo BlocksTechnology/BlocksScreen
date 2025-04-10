@@ -64,7 +64,7 @@ class PrintTab(QStackedWidget):
         name="pause_print"
     )
     request_query_print_stats: typing.ClassVar[PyQt6.QtCore.pyqtSignal] = pyqtSignal(
-        dict, name="query_object"
+        dict, name="request_query_print_stats"
     )
     request_block_manual_tab_change: typing.ClassVar[PyQt6.QtCore.pyqtSignal] = (
         pyqtSignal(name="block_manual_tab_change")
@@ -93,13 +93,15 @@ class PrintTab(QStackedWidget):
 
     def __init__(
         self,
-        parent: typing.Optional["QWidget"],
+        parent: QWidget,
         file_data: Files,
         ws: MoonWebSocket,
         printer: Printer,
     ) -> None:
         super(PrintTab, self).__init__(parent)
-        self.main_panel = parent
+        # self.main_panel = parent # Redundant
+        self.panel = Ui_printStackedWidget()
+        self.panel.setupUi(self)
         self.file_data: Files = file_data
         self.ws: MoonWebSocket = ws
         self.printer: Printer = printer
@@ -111,8 +113,6 @@ class PrintTab(QStackedWidget):
         self.speed_factor_override: float = 100.0
         self._current_file_name: str | None = None
         self._z_offset: float = 0.05
-        self.panel = Ui_printStackedWidget()
-        self.panel.setupUi(self)
         self.panel.listWidget.setLayoutDirection(Qt.LayoutDirection.LeftToRight)
 
         # handle filament sensors page
@@ -127,10 +127,10 @@ class PrintTab(QStackedWidget):
         self.sensorsPanel.panel.fs_back_button.clicked.connect(self.back_button)
         self.sensorsPanel.run_gcode_signal.connect(self.ws.api.run_gcode)
 
-        self.printer.filament_motion_sensor_update_signal.connect(
+        self.printer.on_filament_motion_sensor_update.connect(
             self.sensorsPanel.handle_fil_state_change
         )
-        self.printer.filament_switch_sensor_update_signal.connect(
+        self.printer.on_filament_switch_sensor_update.connect(
             self.sensorsPanel.handle_fil_state_change
         )
         self.sensorsPanel.toggle_sensor.connect(self.ws.api.run_gcode)
@@ -165,36 +165,32 @@ class PrintTab(QStackedWidget):
         self.panel.back_btn.clicked.connect(self.back_button)
         self.panel.tune_back_btn.clicked.connect(self.back_button)
         self.panel.babystep_back_btn.clicked.connect(self.back_button)
-        self.printer.virtual_sdcard_update_signal[str, bool].connect(
+        self.printer.on_virtual_sdcard_update[str, bool].connect(
             self.virtual_sdcard_update
         )
-        self.printer.virtual_sdcard_update_signal[str, float].connect(
+        self.printer.on_virtual_sdcard_update[str, float].connect(
             self.virtual_sdcard_update
         )
-        self.printer.virtual_sdcard_update_signal.connect(self.virtual_sdcard_update)
-        self.printer.print_stats_update_signal[str, str].connect(
-            self.print_stats_update
+        self.printer.on_virtual_sdcard_update.connect(self.virtual_sdcard_update)
+        self.printer.on_print_stats_update[str, str].connect(self.on_print_stats_update)
+        self.printer.on_print_stats_update[str, dict].connect(
+            self.on_print_stats_update
         )
-        self.printer.print_stats_update_signal[str, dict].connect(
-            self.print_stats_update
+        self.printer.on_print_stats_update[str, float].connect(
+            self.on_print_stats_update
         )
-        self.printer.print_stats_update_signal[str, float].connect(
-            self.print_stats_update
+        self.printer.on_idle_timeout_update[str, str].connect(
+            self.on_idle_timeout_update
         )
-        self.printer.idle_timeout_update_signal[str, str].connect(
-            self.idle_timeout_update
+        self.printer.on_idle_timeout_update[str, float].connect(
+            self.on_idle_timeout_update
         )
-        self.printer.idle_timeout_update_signal[str, float].connect(
-            self.idle_timeout_update
-        )
-        self.printer.idle_timeout_update_signal.connect(self.idle_timeout_update)
-        self.printer.display_update_signal[str, str].connect(self.display_update)
-        self.printer.display_update_signal[str, float].connect(self.display_update)
-        self.printer.gcode_move_update_signal[str, list].connect(self.gcode_move_update)
-        self.printer.gcode_move_update_signal[str, bool].connect(self.gcode_move_update)
-        self.printer.gcode_move_update_signal[str, float].connect(
-            self.gcode_move_update
-        )
+        self.printer.on_idle_timeout_update.connect(self.on_idle_timeout_update)
+        self.printer.on_display_update[str, str].connect(self.display_update)
+        self.printer.on_display_update[str, float].connect(self.display_update)
+        self.printer.on_gcode_move_update[str, list].connect(self.gcode_move_update)
+        self.printer.on_gcode_move_update[str, bool].connect(self.gcode_move_update)
+        self.printer.on_gcode_move_update[str, float].connect(self.gcode_move_update)
 
         # * Signals from panel widgets
         self.panel.bbp_close_to_bed.clicked.connect(self.move_nozzle_close_to_bed)
@@ -206,12 +202,10 @@ class PrintTab(QStackedWidget):
 
         self.run_gcode_signal.connect(self.ws.api.run_gcode)
         # @ Get the temperatures for the objects
-        self.printer.extruder_update_signal.connect(self.extruder_temperature_change)
-        self.printer.heater_bed_update_signal.connect(
-            self.heater_bed_temperature_change
-        )
-        self.printer.fan_update_signal[str, str, float].connect(self.fan_object_update)
-        self.printer.fan_update_signal[str, str, int].connect(self.fan_object_update)
+        self.printer.on_extruder_update.connect(self.on_extruder_temperature_change)
+        self.printer.on_heater_bed_update.connect(self.on_heater_bed_temperature_change)
+        self.printer.on_fan_update[str, str, float].connect(self.on_fan_object_update)
+        self.printer.on_fan_update[str, str, int].connect(self.on_fan_object_update)
         # @ Numpad stuff
         self.panel.bed_display.clicked.connect(
             partial(
@@ -293,9 +287,11 @@ class PrintTab(QStackedWidget):
                 f"SET_HEATER_TEMPERATURE HEATER={name} TARGET={new_value}"
             )
 
-    @pyqtSlot(str, str, float, name="fan_update")
-    @pyqtSlot(str, str, int, name="fan_update")
-    def fan_object_update(self, name: str, field: str, new_value: int | float) -> None:
+    @pyqtSlot(str, str, float, name="on_fan_update")
+    @pyqtSlot(str, str, int, name="on_fan_update")
+    def on_fan_object_update(
+        self, name: str, field: str, new_value: int | float
+    ) -> None:
         """Processes the information that comes from the printer object "fan"
 
         Args:
@@ -310,8 +306,8 @@ class PrintTab(QStackedWidget):
 
             self.panel.blower_display.setText(f"{new_value * 100:.0f}")
 
-    @pyqtSlot(str, str, float, name="extruder_update")
-    def extruder_temperature_change(
+    @pyqtSlot(str, str, float, name="on_extruder_update")
+    def on_extruder_temperature_change(
         self, extruder_name: str, field: str, new_value: float
     ) -> None:
         """Processes the information that comes from the printer object "extruder"
@@ -324,8 +320,8 @@ class PrintTab(QStackedWidget):
         if field == "temperature":
             self.panel.extruder_display.setText(f"{new_value:.1f}")
 
-    @pyqtSlot(str, str, float, name="heater_bed_update")
-    def heater_bed_temperature_change(
+    @pyqtSlot(str, str, float, name="on_heater_bed_update")
+    def on_heater_bed_temperature_change(
         self, name: str, field: str, new_value: float
     ) -> None:
         """Processes the information that comes from the printer object "heater_bed"
@@ -339,9 +335,9 @@ class PrintTab(QStackedWidget):
             self.panel.bed_display.setText(f"{new_value:.1f}")
 
     @pyqtSlot(str, str, float)
-    @pyqtSlot(str, str, name="idle_timeout_update")
-    @pyqtSlot(str, float, name="idle_timeout_update")
-    def idle_timeout_update(self, field: str, value: int | float) -> None:
+    @pyqtSlot(str, str, name="on_idle_timeout_update")
+    @pyqtSlot(str, float, name="on_idle_timeout_update")
+    def on_idle_timeout_update(self, field: str, value: int | float) -> None:
         """Processes the information that comes form the printer object "idle_timeout"
 
         Args:
@@ -380,10 +376,10 @@ class PrintTab(QStackedWidget):
                 self.speed_factor_override = value
                 self.panel.speed_display.setText(str({f"{value * 100}%"}))
 
-    @pyqtSlot(str, dict, name="print_stats_update")
-    @pyqtSlot(str, float, name="print_stats_update")
-    @pyqtSlot(str, str, name="print_stats_update")
-    def print_stats_update(self, field: str, value: dict | float | str) -> None:
+    @pyqtSlot(str, dict, name="on_print_stats_update")
+    @pyqtSlot(str, float, name="on_print_stats_update")
+    @pyqtSlot(str, str, name="on_print_stats_update")
+    def on_print_stats_update(self, field: str, value: dict | float | str) -> None:
         """Processes the information that comes from the printer object "print_stats"
             Displays information on the ui accordingly.
 

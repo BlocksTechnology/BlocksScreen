@@ -30,10 +30,8 @@ class NetworkControlWindow(QStackedWidget):
 
     request_signal_strength = pyqtSignal(str, name="network_signal_strength")
 
-    def __init__(self, parent: typing.Optional["QWidget"]) -> None:
+    def __init__(self, parent: QWidget, /) -> None:
         super(NetworkControlWindow, self).__init__(parent)
-
-        self.main_panel = parent
         self.background: QtGui.QPixmap | None = None
         self.panel = Ui_wifi_stacked_page()
         self.panel.setupUi(self)
@@ -224,7 +222,9 @@ class NetworkControlWindow(QStackedWidget):
         for item in self.sdbus_network.get_available_networks():
             if not isinstance(item, dict):
                 continue
-            if "ssid" in item.keys() and item is not None: # REFACTOR: Can be better implemented 
+            if (
+                "ssid" in item.keys() and item is not None
+            ):  # REFACTOR: Can be better implemented
                 results = self.configure_network_entry(str(item["ssid"]))
                 # _item, _item_widget = self.configure_network_entry(str(item["ssid"]))
                 if results is not None and isinstance(results, tuple):
@@ -239,7 +239,7 @@ class NetworkControlWindow(QStackedWidget):
     @staticmethod
     def configure_network_entry(
         ssid: str,
-    ) -> typing.Tuple[QtWidgets.QListWidgetItem, QWidget] | None: 
+    ) -> typing.Tuple[QtWidgets.QListWidgetItem, QWidget] | None:
         """Creates a QListWidgetItem to be inserted on the QListWidget with a network information.
 
         Args:
@@ -250,7 +250,7 @@ class NetworkControlWindow(QStackedWidget):
         """
         if not isinstance(ssid, str):
             return None
-        # REFACTOR: this code is pretty bad 
+        # REFACTOR: this code is pretty bad
         _list_item = QtWidgets.QListWidgetItem()
         _list_item_widget = QWidget()
         _item_layout = QtWidgets.QHBoxLayout()
@@ -381,13 +381,13 @@ class NetworkControlWindow(QStackedWidget):
     def call_network_panel(
         self,
     ) -> None:
-        if self.main_panel is None:
+        if self.parent() is None:
             return
 
         self.panel.network_list_widget.clear()
         self.setCurrentIndex(0)
-        _main_size = self.main_panel.size()
-        self.setGeometry(0, 0, _main_size.width(), _main_size.height())
+        _parent_size= self.parent().size() 
+        self.setGeometry(0, 0, _parent_size.width(), _parent_size.height())
         self.updateGeometry()
         self.update()
         self.add_ssid_network_entry()

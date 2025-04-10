@@ -144,19 +144,19 @@
       </property>
       <property name="minimumSize">
        <size>
-        <width>60</width>
-        <height>60</height>
+        <width>80</width>
+        <height>80</height>
        </size>
       </property>
       <property name="maximumSize">
        <size>
-        <width>60</width>
-        <height>60</height>
+        <width>80</width>
+        <height>80</height>
        </size>
       </property>
       <property name="baseSize">
        <size>
-        <width>160</width>
+        <width>80</width>
         <height>80</height>
        </size>
       </property>
@@ -176,7 +176,7 @@
        <bool>false</bool>
       </property>
       <property name="text">
-       <string>Reboot System</string>
+       <string>Reboot</string>
       </property>
       <property name="icon">
        <iconset resource="resources/system_resources.qrc">
@@ -195,10 +195,20 @@
        <string>system_control_btn</string>
       </property>
       <property name="button_type" stdset="0">
-       <string>icon</string>
+       <string>icon_text</string>
       </property>
       <property name="icon_pixmap" stdset="0">
        <pixmap resource="resources/icon_resources.qrc">:/system/media/btn_icons/system_reboot.svg</pixmap>
+      </property>
+      <property name="text_formatting" stdset="0">
+       <string>bottom</string>
+      </property>
+      <property name="text_color" stdset="0">
+       <color>
+        <red>255</red>
+        <green>255</green>
+        <blue>255</blue>
+       </color>
       </property>
      </widget>
     </item>
@@ -486,19 +496,19 @@
       </property>
       <property name="minimumSize">
        <size>
-        <width>60</width>
-        <height>60</height>
+        <width>80</width>
+        <height>80</height>
        </size>
       </property>
       <property name="maximumSize">
        <size>
-        <width>60</width>
-        <height>60</height>
+        <width>80</width>
+        <height>80</height>
        </size>
       </property>
       <property name="baseSize">
        <size>
-        <width>60</width>
+        <width>80</width>
         <height>80</height>
        </size>
       </property>
@@ -557,18 +567,6 @@
       <property name="flat">
        <bool>true</bool>
       </property>
-      <property name="class" stdset="0">
-       <string>system_control_btn</string>
-      </property>
-      <property name="borderLeftPixmap" stdset="0">
-       <pixmap resource="resources/button_resources.qrc">:/button_borders/media/buttons/btn_part1.svg</pixmap>
-      </property>
-      <property name="borderCenterPixmap" stdset="0">
-       <pixmap resource="resources/button_resources.qrc">:/button_borders/media/buttons/btn_part2.svg</pixmap>
-      </property>
-      <property name="borderRightPixmap" stdset="0">
-       <pixmap resource="resources/button_resources.qrc">:/button_borders/media/buttons/btn_part3.svg</pixmap>
-      </property>
       <property name="button_type" stdset="0">
        <string>icon_text</string>
       </property>
@@ -597,20 +595,20 @@
       </property>
       <property name="minimumSize">
        <size>
-        <width>60</width>
-        <height>60</height>
+        <width>80</width>
+        <height>80</height>
        </size>
       </property>
       <property name="maximumSize">
        <size>
-        <width>60</width>
-        <height>60</height>
+        <width>80</width>
+        <height>80</height>
        </size>
       </property>
       <property name="baseSize">
        <size>
-        <width>60</width>
-        <height>60</height>
+        <width>80</width>
+        <height>80</height>
        </size>
       </property>
       <property name="tabletTracking">

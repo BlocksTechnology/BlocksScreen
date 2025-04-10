@@ -1,13 +1,11 @@
 import logging
 
-from PyQt6.QtCore import QEvent, QObject, pyqtSignal, pyqtSlot
-from PyQt6 import QtGui
-from PyQt6.QtWidgets import QFrame
-
 from events import KlippyDisconnected, KlippyReady, KlippyShutdown
 from lib.moonrakerComm import MoonWebSocket
-
 from lib.ui.connectionWindow_ui import Ui_ConnectivityForm
+from PyQt6 import QtWidgets
+from PyQt6.QtCore import QEvent, QObject, pyqtSignal, pyqtSlot
+from PyQt6.QtWidgets import QFrame
 
 
 class ConnectionWindow(QFrame):
@@ -19,17 +17,15 @@ class ConnectionWindow(QFrame):
     restart_klipper_clicked = pyqtSignal(name="restart_klipper_clicked")
     firmware_restart_clicked = pyqtSignal(name="firmware_restart_clicked")
 
-    def __init__(self, parent, ws: MoonWebSocket, *args, **kwargs):
-        super(ConnectionWindow, self).__init__(parent, *args, **kwargs)
-        self.main_window = parent
+    def __init__(self, parent: QtWidgets.QWidget, ws: MoonWebSocket, /):
+        super(ConnectionWindow, self).__init__(parent)
         self.panel = Ui_ConnectivityForm()
         self.panel.setupUi(self)
         self.ws = ws
         self._moonraker_status: str = "disconnected"
         self._klippy_state: str = "closed"
         self._klippy_connection: bool = False
-        self.installEventFilter(self.main_window)
-        # self.text_update()
+        self.installEventFilter(self.parent())
 
         self.panel.RetryConnectionButton.clicked.connect(
             self.retry_connection_clicked.emit

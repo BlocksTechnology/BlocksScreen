@@ -1,9 +1,7 @@
 import logging
-import logging.handlers
 import typing
 from collections import deque
 from functools import partial
-
 
 # * System imports
 import events
@@ -23,16 +21,16 @@ from lib.panels.utilitiesTab import UtilitiesTab
 
 # * UI
 from lib.ui.mainWindow_ui import Ui_MainWindow  # With header
-# from lib.ui.mainWindow_v2_ui import Ui_MainWindow # No header
 
+# from lib.ui.mainWindow_v2_ui import Ui_MainWindow # No header
 # * Resources
 from lib.ui.resources.background_resources_rc import *
 from lib.ui.resources.button_resources_rc import *
+from lib.ui.resources.graphic_resources_rc import *
 from lib.ui.resources.icon_resources_rc import *
 from lib.ui.resources.main_menu_resources_rc import *
 from lib.ui.resources.system_resources_rc import *
 from lib.ui.resources.top_bar_resources_rc import *
-from lib.ui.resources.graphic_resources_rc import *
 
 # * PyQt6 imports
 from PyQt6.QtCore import QEvent, QSize, pyqtSignal, pyqtSlot
@@ -46,8 +44,8 @@ _logger = logging.getLogger(name="logs/BlocksScreen.log")
 class MainWindow(QMainWindow):
     bo_startup = pyqtSignal(name="bo-start-websocket-connection")
     printer_state_signal = pyqtSignal(str, name="printer_state")
-    printer_object_list_received_signal = pyqtSignal(list, name="object_list_received")
-    printer_object_report_signal = pyqtSignal(list, name="object_report_received")
+    on_object_list = pyqtSignal(list, name="on_object_list")
+    printer_object_report_signal = pyqtSignal(list, name="handle_report_received")
 
     handle_gcode_response = pyqtSignal(list, name="handle_gcode_response")
     handle_error_response = pyqtSignal(list, name="handle_error_response")
@@ -65,9 +63,9 @@ class MainWindow(QMainWindow):
         self.ws = MoonWebSocket(self)
         self.mc = MachineControl(self)
 
-        self.file_data = Files(parent=self, ws=self.ws)
+        self.file_data = Files(self, self.ws)
         self.index_stack = deque(maxlen=4)
-        self.printer = Printer(parent=self, ws=self.ws)
+        self.printer = Printer(self, self.ws)
 
         self.numpad_object = CustomNumpad(self)
         self.numpad_object.hide()
@@ -141,16 +139,14 @@ class MainWindow(QMainWindow):
         self.start_window.reboot_clicked.connect(slot=self.mc.machine_restart)
 
         # *  To Printer object
-        self.printer_object_report_signal.connect(self.printer.report_received)
+        self.printer_object_report_signal.connect(
+            self.printer.on_object_report_received
+        )
         self.handle_gcode_response.connect(self.printer.gcode_response_report)
-        self.printer_object_list_received_signal.connect(
-            self.printer.object_list_received
-        )
+        self.on_object_list.connect(self.printer.on_object_list)
         # * From Printer Object
-        self.printer.extruder_update_signal.connect(self.extruder_temperature_change)
-        self.printer.heater_bed_update_signal.connect(
-            self.heater_bed_temperature_change
-        )
+        self.printer.on_extruder_update.connect(self.extruder_temperature_change)
+        self.printer.on_heater_bed_update.connect(self.heater_bed_temperature_change)
 
         self.ui.main_content_widget.currentChanged.connect(slot=self.reset_tab_indexes)
 
@@ -315,11 +311,6 @@ class MainWindow(QMainWindow):
         )  # From the same position, use the tab and stacked widget page indexes
         self.index_stack.pop()  # Remove the last position.
 
-        self.printer_object_report_signal.connect(self.printer.report_received)
-        self.printer_object_list_received_signal.connect(
-            self.printer.object_list_received
-        )
-
         _logger.debug("Successfully went back a page.")
 
     @pyqtSlot(name="bo-start-websocket-connection")
@@ -380,10 +371,8 @@ class MainWindow(QMainWindow):
                 _logger.error(
                     f"Error emitting event for file related information received from websocket | error message received: {e}"
                 )
-
         elif "machine" in _method:
-            # TODO Handle machine related stuff
-            pass
+            ...
         elif "printer.info" in _method:
             pass
         elif "printer.print" in _method:
@@ -399,7 +388,7 @@ class MainWindow(QMainWindow):
         elif "printer.objects" in _method:
             if "list" in _method:
                 _object_list: list = _data["objects"]
-                self.printer_object_list_received_signal[list].emit(_object_list)
+                self.on_object_list[list].emit(_object_list)
 
             if "subscribe" in _method:
                 _objects_response_list = [_data["status"], _data["eventtime"]]
@@ -410,7 +399,6 @@ class MainWindow(QMainWindow):
                     # self.ui.chamber_temperature_frame.hide()
                     ...
             if "query" in _method:
-                # Comes from querying an object
                 if isinstance(_data["status"], dict):
                     _object_report = [_data["status"]]
                     _object_report_keys = _data["status"].items()
@@ -457,27 +445,18 @@ class MainWindow(QMainWindow):
         elif "notify_filelist_changed" in _method:
             self.file_data.request_file_list.emit()
         elif "notify_update_response" in _method:
-            # * Handle update manager message about updates
-            pass
+            ...
         elif "notify_service_state_changed" in _method:
-            # * Handle service changes, such as klipper or moonraker restart or start, anything like that.
-            pass
+            ...
         elif "notify_gcode_response" in _method:
-            # * Handle klipper gcode responses.
+            # TODO: Handle different types of gcode responses can be  !! or // messages
             _gcode_response = _data["params"]
-            self.handle_gcode_response.emit(_gcode_response)
+            self.handle_gcode_response[list].emit(_gcode_response)
         elif "error" in _method:
             self.handle_error_response[list].emit([_data, _metadata])
-            # [
-            #     "Must home before probe", # The received message
-            #     ["printer.gcode.script", {"script": "PROBE_CALIBRATE\nM400"}], # The command that caused the error
-            # ]
         elif "notify_history_changed" in _method:
-            # * Handle received notification when a file stop printing for whatever reason
-            # This is where i receive notifications about the current print progress, such as canceled
-            pass
+            ...
         elif "notify_status_update" in _method:
-            # * Handle object subscriptions messages
             _object_report = _data["params"]
             self.printer_object_report_signal[list].emit(_object_report)
 

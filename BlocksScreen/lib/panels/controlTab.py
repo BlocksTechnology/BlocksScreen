@@ -2,13 +2,11 @@ import logging
 import typing
 from functools import partial
 
-
 from PyQt6.QtGui import QPaintEvent
-
-
 from lib.bo.printer import Printer
 from lib.moonrakerComm import MoonWebSocket
 from lib.ui.controlStackedWidget_ui import Ui_controlStackedWidget
+from lib.panels.probeHelperPage import ProbeHelper
 from PyQt6 import QtWidgets
 from PyQt6 import QtCore
 from PyQt6.QtCore import (
@@ -18,7 +16,7 @@ from PyQt6.QtCore import (
 
 
 class ControlTab(QtWidgets.QStackedWidget):
-    request_back_button_pressed = pyqtSignal(name="request_back_button_pressed")
+    request_back_button = pyqtSignal(name="request_back_button")
     request_change_page = pyqtSignal(int, int, name="request_change_page")
 
     request_numpad_signal = pyqtSignal(
@@ -32,6 +30,7 @@ class ControlTab(QtWidgets.QStackedWidget):
         parent: typing.Optional[QtWidgets.QWidget],
         ws: MoonWebSocket,
         printer: Printer,
+        /,
     ) -> None:
         if parent is not None:
             super().__init__(parent)
@@ -40,7 +39,7 @@ class ControlTab(QtWidgets.QStackedWidget):
         self.panel = Ui_controlStackedWidget()
         self.panel.setupUi(self)
         self.setCurrentIndex(0)
-        self.main_panel = parent
+        # self.main_panel = parent # Redundant
         self.ws = ws
         self.printer = printer
         self.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
@@ -54,11 +53,19 @@ class ControlTab(QtWidgets.QStackedWidget):
         self.move_length: float = 1.0
         self.move_speed: float = 25.0
 
-        self.printer.toolhead_update_signal[str, list].connect(
-            self.toolhead_position_change
+        self.probe_helper_page = ProbeHelper(self)
+        self.addWidget(self.probe_helper_page)
+        self.probe_helper_page.run_gcode_signal.connect(self.ws.api.run_gcode)
+        self.probe_helper_page.request_back.connect(self.back_button)
+        self.printer.on_printer_config.connect(self.probe_helper_page.on_printer_config)
+        self.probe_helper_page.on_request_object_config.connect(
+            self.printer.on_request_object_config
         )
-        self.printer.extruder_update_signal.connect(self.handle_extruder_temp_change)
-        self.printer.heater_bed_update_signal.connect(self.handle_bed_temp_change)
+        self.printer.on_object_config.connect(self.probe_helper_page.on_object_config)
+
+        self.printer.on_toolhead_update[str, list].connect(self.on_toolhead_update)
+        self.printer.on_extruder_update.connect(self.on_extruder_update)
+        self.printer.on_heater_bed_update.connect(self.on_heater_bed_update)
 
         self.panel.cp_motion_btn.clicked.connect(
             partial(self.change_page, self.indexOf(self.panel.motion_page))
@@ -69,8 +76,11 @@ class ControlTab(QtWidgets.QStackedWidget):
         self.panel.cp_printer_settings_btn.clicked.connect(
             partial(self.change_page, self.indexOf(self.panel.printer_settings_page))
         )
+        # self.panel.cp_nozzles_calibration_btn.clicked.connect(
+        #     partial(self.change_page, self.indexOf(self.panel.z_adjustment_page))
+        # )
         self.panel.cp_nozzles_calibration_btn.clicked.connect(
-            partial(self.change_page, self.indexOf(self.panel.z_adjustment_page))
+            partial(self.change_page, self.indexOf(self.probe_helper_page))
         )
 
         self.panel.motion_extrude_btn.clicked.connect(partial(self.change_page, 2))
@@ -216,7 +226,7 @@ class ControlTab(QtWidgets.QStackedWidget):
         )
 
     def back_button(self):
-        self.request_back_button_pressed.emit()
+        self.request_back_button.emit()
         logging.debug("[ControlTabPanel] back button pressed")
 
     def register_timed_callback(self, time, callback) -> None:
@@ -333,18 +343,18 @@ class ControlTab(QtWidgets.QStackedWidget):
     def handle_move_axis(self, axis: str) -> None:
         """Slot that requests manual move command
 
-        ***
+
 
         Args:
             axis (str): String that contains one of the following axis `
-            ['X',
-            '-X'
-            ,'Y'
-            ,'-Y'
-            ,'Z'
-            ,'-Z']`. [^1]
+                ['X',
+                '-X'
+                ,'Y'
+                ,'-Y'
+                ,'Z'
+                ,'-Z']`. [^1]
 
-        ***
+        ---
 
 
         [^1]: The **-** symbol indicates the negative direction for that axis
@@ -370,8 +380,8 @@ class ControlTab(QtWidgets.QStackedWidget):
         else:
             self.run_gcode_signal.emit("T0\nM400")
 
-    @pyqtSlot(str, list, name="toolhead_update")
-    def toolhead_position_change(self, field: str, values: list) -> None:
+    @pyqtSlot(str, list, name="on_toolhead_update")
+    def on_toolhead_update(self, field: str, values: list) -> None:
         if field == "position":
             logging.debug(f"[ControlTabPanel] Updating toolhead {field} to: {values}")
             self.panel.move_axis_x_value_label.setText(f"{values[0]}")
@@ -380,8 +390,8 @@ class ControlTab(QtWidgets.QStackedWidget):
 
         self.toolhead_info.update({f"{field}": values})
 
-    @pyqtSlot(str, str, float, name="handle_extruder_temp_change")
-    def handle_extruder_temp_change(
+    @pyqtSlot(str, str, float, name="on_extruder_update")
+    def on_extruder_update(
         self, extruder_name: str, field: str, new_value: float
     ) -> None:
         if extruder_name == "extruder" and field == "temperature":
@@ -391,8 +401,8 @@ class ControlTab(QtWidgets.QStackedWidget):
 
         self.extruder_info.update({f"{extruder_name}": {f"{field}": new_value}})
 
-    @pyqtSlot(str, str, float, name="handle_bed_temp_change")
-    def handle_bed_temp_change(self, name: str, field: str, new_value: float) -> None:
+    @pyqtSlot(str, str, float, name="on_heater_bed_update")
+    def on_heater_bed_update(self, name: str, field: str, new_value: float) -> None:
         if field == "temperature":
             self.panel.bed_temp_display.setText(f"{new_value:.1f}")
         if field == "target":
