@@ -217,8 +217,8 @@ class BlocksCustomButton(QPushButton):
                 )
         elif "icon" in self.button_type:
             if "text" in self.button_type and self.text() is not None:
-                # qp.setCompositionMode(qp.CompositionMode.CompositionMode_SourceOut)
-                qp.setCompositionMode(qp.CompositionMode.CompositionMode_SourceIn)
+                qp.setCompositionMode(qp.CompositionMode.CompositionMode_Difference)
+                # qp.setCompositionMode(qp.CompositionMode.CompositionMode_SourceIn)
                 if self._icon_rectF is not None:
                     if self.text_formatting is None:
                         scaled_width = self._icon_rectF.width()
@@ -581,6 +581,7 @@ class BlocksLabel(QtWidgets.QLabel):
     @background_color.setter
     def background_color(self, color: QtGui.QColor) -> None:
         self._background_color = color
+        self.update()
 
     @property
     def rounded(self) -> bool:
@@ -588,7 +589,7 @@ class BlocksLabel(QtWidgets.QLabel):
 
     @rounded.setter
     def rounded(self, on: bool) -> None:
-        self._rounded = True
+        self._rounded = on
 
     # TODO: Add rounded object acording to the size, calculate the edge pixels radius according to the label size
 

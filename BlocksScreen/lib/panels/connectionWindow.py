@@ -56,11 +56,16 @@ class ConnectionWindow(QFrame):
 
     @pyqtSlot(str, name="klippy_state")
     def klippy_state(self, state: str):
+        
         if state == "error":
             if not self.isVisible():
                 self.show()
             self.panel.connectionTextBox.setText("Klipper Connection Error")
-
+        elif state == "shutdown": 
+            if not self.isVisible(): 
+                self.show()
+            self.panel.connectionTextBox.setText("Klipper reports: SHUTDOWN")
+            
         elif state == "startup":
             self.panel.connectionTextBox.setText("Klipper Startup")
         elif state == "ready":

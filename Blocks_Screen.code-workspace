@@ -31,17 +31,25 @@
 		"todo-tree.tree.showBadges": true,
 		"vsintellicode.python.completionsEnabled": true,
 		"cSpell.words": [
+			"ENDSTOP",
 			"logoblocks",
 			"Pixmap",
 			"qtobject",
-			"rescanning"
+			"rescanning",
+			"TESTZ"
 		],
 		"[python]": {	
 			"editor.wordBasedSuggestions": "allDocuments", 
 			"editor.defaultFormatter": "charliermarsh.ruff"
+			
 		},
+		"ruff.lineLength": 79,
+		"ruff.organizeImports": true,
+		"breadcrumbs.showStrings": true,
 		"python.analysis.autoSearchPaths": true, 
 		"python.analysis.autoImportCompletions": true,
+		"editor.codeLensFontSize": 0,
+		"editor.inlayHints.fontFamily": "Source Code Pro",
 		
 	}
 }

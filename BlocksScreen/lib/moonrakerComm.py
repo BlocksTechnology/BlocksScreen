@@ -23,7 +23,9 @@ _logger = logging.getLogger(name="logs/BlocksScreen.log")
 class OneShotTokenError(Exception):
     """Raised when unable to get oneshot token to connect to a websocket"""
 
-    def __init__(self, message="Unable to get oneshot token", errors=None) -> None:
+    def __init__(
+        self, message="Unable to get oneshot token", errors=None
+    ) -> None:
         super(OneShotTokenError).__init__(message, errors)
         self.errors = errors
         self.message = message
@@ -125,7 +127,9 @@ class MoonWebSocket(QObject, threading.Thread):
                 if instance is not None:
                     instance.sendEvent(self.parent(), unable_to_connect_event)
                 else:
-                    raise TypeError("QApplication.instance expected ad non-None value")
+                    raise TypeError(
+                        "QApplication.instance expected ad non-None value"
+                    )
             except Exception as e:
                 _logger.error(
                     f"Error sending Event {unable_to_connect_event.__class__.__name__} | Error message caught : {e}"
@@ -156,12 +160,12 @@ class MoonWebSocket(QObject, threading.Thread):
             if _oneshot_token is None:
                 raise OneShotTokenError("Unable to get oneshot token")
         except Exception as e:
-            _logger.info(f"Unexpected error when trying to acquire oneshot token: {e}")
+            _logger.info(
+                f"Unexpected error when trying to acquire oneshot token: {e}"
+            )
             return False
 
-        # TODO: Get the url from the config file, rather than being statically set
-
-        _url = f"ws://192.168.1.100:7125/websocket?token={_oneshot_token}"
+        _url = f"ws://192.168.1.109:7125/websocket?token={_oneshot_token}"
 
         self.ws = websocket.WebSocketApp(
             _url,
@@ -173,7 +177,9 @@ class MoonWebSocket(QObject, threading.Thread):
 
         _kwargs = {"reconnect": self.timeout}  # FIXME: This goes nowhere
         self._wst = threading.Thread(
-            name="websocket.run_forever", target=self.ws.run_forever, daemon=True
+            name="websocket.run_forever",
+            target=self.ws.run_forever,
+            daemon=True,
         )
         try:
             _logger.info("Starting Websocket")
@@ -182,7 +188,9 @@ class MoonWebSocket(QObject, threading.Thread):
         except (
             Exception
         ) as e:  # TEST: Send an event here when connection is unsuccessful
-            _logger.info(f"Unexpected while starting websocket {self._wst.name}: {e}")
+            _logger.info(
+                f"Unexpected while starting websocket {self._wst.name}: {e}"
+            )
             return False
         return True
 
@@ -226,7 +234,9 @@ class MoonWebSocket(QObject, threading.Thread):
             if instance is not None:
                 instance.postEvent(self.parent(), close_event)
             else:
-                raise TypeError("QApplication.instance expected non None value")
+                raise TypeError(
+                    "QApplication.instance expected non None value"
+                )
         except Exception as e:
             _logger.info(
                 f"Unexpected error when sending websocket close_event on disconnection: {e}"
@@ -254,7 +264,9 @@ class MoonWebSocket(QObject, threading.Thread):
             if instance is not None:
                 instance.postEvent(self.parent(), open_event)
             else:
-                raise TypeError("QApplication.instance expected non None value")
+                raise TypeError(
+                    "QApplication.instance expected non None value"
+                )
         except Exception as e:
             _logger.info(f"Unexpected error opening websocket: {e}")
 
@@ -266,20 +278,20 @@ class MoonWebSocket(QObject, threading.Thread):
     def on_message(self, *args):
         # First argument is ws second is message
         _message = args[1] if len(args) == 2 else args[0]
-        # _logger.debug(f"Message received from the websocket: {_message}")
         response: dict = json.loads(_message)
         if "id" in response and response["id"] in self.request_table:
             _entry = self.request_table.pop(response["id"])
-            # * Can query and send signals about klippy connection here
             if "server.info" in _entry[0]:
                 if response["result"]["klippy_state"] == "ready":
-                    # * If klippy reports ready stop accessing it's state
+                    
                     self.query_klippy_status_timer.stopTimer()
 
                 self.klippy_connected_signal.emit(
                     response["result"]["klippy_connected"]
                 )
-                self.klippy_state_signal.emit(response["result"]["klippy_state"])
+                self.klippy_state_signal.emit(
+                    response["result"]["klippy_state"]
+                )
                 return
 
             else:
@@ -310,7 +322,9 @@ class MoonWebSocket(QObject, threading.Thread):
             if instance is not None:
                 instance.sendEvent(self.parent(), message_event)
             else:
-                raise TypeError("QApplication.instance expected non None value")
+                raise TypeError(
+                    "QApplication.instance expected non None value"
+                )
         except Exception as e:
             _logger.info(
                 f"Unexpected error while creating websocket message event: {e}"
@@ -498,7 +512,8 @@ class MoonAPI(QObject):
 
     def get_cabus_devices(self, interface: str = "can0"):
         return self._ws.send_request(
-            method="machine.peripherals.canbus", params={"interface": interface}
+            method="machine.peripherals.canbus",
+            params={"interface": interface},
         )
 
     @pyqtSlot(name="api_request_file_list")
@@ -551,7 +566,9 @@ class MoonAPI(QObject):
         if not isinstance(filename, str) or not isinstance(root, str):
             return False
 
-        return self._ws._moonRest.get_request(f"/server/files/{root}/{filename}")
+        return self._ws._moonRest.get_request(
+            f"/server/files/{root}/{filename}"
+        )
 
     # def upload_file(self, ) # TODO: Maybe this is not necessary but either way do it
 
@@ -592,7 +609,8 @@ class MoonAPI(QObject):
         ):
             return False
         return self._ws.send_request(
-            method="server.files.move", params={"source": source_dir, "dest": dest_dir}
+            method="server.files.move",
+            params={"source": source_dir, "dest": dest_dir},
         )
 
     def copy_file(self, source_dir: str, dest_dir: str):
@@ -604,7 +622,8 @@ class MoonAPI(QObject):
         ):
             return False
         return self._ws.send_request(
-            method="server.files.copy", params={"source": source_dir, "dest": dest_dir}
+            method="server.files.copy",
+            params={"source": source_dir, "dest": dest_dir},
         )
 
     def zip_archive(self, items: list):
@@ -637,14 +656,21 @@ class MoonAPI(QObject):
         return self._ws.send_request(method="server.announcements.feeds")
 
     def post_announcement_feed(self, announcement_name: str):
-        if isinstance(announcement_name, str) is False or announcement_name is None:
+        if (
+            isinstance(announcement_name, str) is False
+            or announcement_name is None
+        ):
             return False
         return self._ws.send_request(
-            method="server.announcements.post_feed", params={"name": announcement_name}
+            method="server.announcements.post_feed",
+            params={"name": announcement_name},
         )
 
     def delete_announcement_feed(self, announcement_name: str):
-        if isinstance(announcement_name, str) is False or announcement_name is None:
+        if (
+            isinstance(announcement_name, str) is False
+            or announcement_name is None
+        ):
             return False
         return self._ws.send_request(
             method="server.announcements.delete_feed",
@@ -665,7 +691,9 @@ class MoonAPI(QObject):
 
     # TODO: Can create a class that irs a URL type like i've done before to validate the links
     # TODO: There are more options in this section, alot more options, later see if it's worth to implement or not
-    def add_update_webcam(self, cam_name: str, snapshot_url: str, stream_url: str):
+    def add_update_webcam(
+        self, cam_name: str, snapshot_url: str, stream_url: str
+    ):
         if (
             isinstance(cam_name, str) is False
             or isinstance(snapshot_url, str) is False
@@ -694,7 +722,9 @@ class MoonAPI(QObject):
     def test_webcam(self, uid: str):
         if isinstance(uid, str) is False or uid is None:
             return False
-        return self._ws.send_request(method="server.webcams.test", params={"uid": uid})
+        return self._ws.send_request(
+            method="server.webcams.test", params={"uid": uid}
+        )
 
     def list_notifiers(self):
         return self._ws.send_request(method="server.notifiers.list")
@@ -734,7 +764,8 @@ class MoonAPI(QObject):
         if isinstance(name, str) is False or name is None:
             return False
         return self._ws.send_request(
-            method="machine.update.recover", params={"name": name, "hard": hard}
+            method="machine.update.recover",
+            params={"name": name, "hard": hard},
         )
 
     def rollback_update(self, name: str):

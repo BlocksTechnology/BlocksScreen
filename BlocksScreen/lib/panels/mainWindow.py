@@ -45,7 +45,9 @@ class MainWindow(QMainWindow):
     bo_startup = pyqtSignal(name="bo-start-websocket-connection")
     printer_state_signal = pyqtSignal(str, name="printer_state")
     on_object_list = pyqtSignal(list, name="on_object_list")
-    printer_object_report_signal = pyqtSignal(list, name="handle_report_received")
+    printer_object_report_signal = pyqtSignal(
+        list, name="handle_report_received"
+    )
 
     handle_gcode_response = pyqtSignal(list, name="handle_gcode_response")
     handle_error_response = pyqtSignal(list, name="handle_error_response")
@@ -75,15 +77,21 @@ class MainWindow(QMainWindow):
         self.printPanel = PrintTab(
             self.ui.printTab, self.file_data, self.ws, self.printer
         )
-        self.filamentPanel = FilamentTab(self.ui.filamentTab, self.printer, self.ws)
-        self.controlPanel = ControlTab(self.ui.controlTab, self.ws, self.printer)
+        self.filamentPanel = FilamentTab(
+            self.ui.filamentTab, self.printer, self.ws
+        )
+        self.controlPanel = ControlTab(
+            self.ui.controlTab, self.ws, self.printer
+        )
         self.utilitiesPanel = UtilitiesTab(self.ui.utilitiesTab)
         self.networkPanel = NetworkControlWindow(self)
 
         # @ Slot connections
         self.bo_startup.connect(slot=self.start_websocket_connection)
         # * Websocket state signals
-        self.ws.connecting_signal.connect(slot=self.start_window.websocket_connecting)
+        self.ws.connecting_signal.connect(
+            slot=self.start_window.websocket_connecting
+        )
         self.ws.connected_signal.connect(
             slot=self.start_window.websocket_connection_achieved
         )
@@ -96,29 +104,39 @@ class MainWindow(QMainWindow):
         self.printPanel.request_back_button_pressed.connect(
             slot=self.global_back_button_pressed
         )
-        self.printPanel.request_change_page.connect(slot=self.global_change_page)
+        self.printPanel.request_change_page.connect(
+            slot=self.global_change_page
+        )
         # * Filament panel
         self.filamentPanel.request_back_button_pressed.connect(
             slot=self.global_back_button_pressed
         )
-        self.filamentPanel.request_change_page.connect(slot=self.global_change_page)
+        self.filamentPanel.request_change_page.connect(
+            slot=self.global_change_page
+        )
         # * Control panel
         self.controlPanel.request_back_button.connect(
             slot=self.global_back_button_pressed
         )
-        self.controlPanel.request_change_page.connect(slot=self.global_change_page)
+        self.controlPanel.request_change_page.connect(
+            slot=self.global_change_page
+        )
         # * Utilities panel
         self.utilitiesPanel.request_back_button_pressed.connect(
             slot=self.global_back_button_pressed
         )
-        self.utilitiesPanel.request_change_page.connect(slot=self.global_change_page)
+        self.utilitiesPanel.request_change_page.connect(
+            slot=self.global_change_page
+        )
 
         # * Main page - Top bar Buttons
         self.ui.extruder_temp_display.clicked.connect(
             partial(self.global_change_page, 2, 4)
         )
 
-        self.ui.bed_temp_display.clicked.connect(partial(self.global_change_page, 2, 4))
+        self.ui.bed_temp_display.clicked.connect(
+            partial(self.global_change_page, 2, 4)
+        )
 
         self.ui.filament_type_icon.clicked.connect(
             partial(self.global_change_page, 1, 1)
@@ -128,7 +146,9 @@ class MainWindow(QMainWindow):
         self.ui.nozzle_size_icon.setText("0.4mm")
         self.ui.nozzle_size_icon.update()
         ##* Also connect to files list when connection is achieved to imm1ediately get the files
-        self.ws.connected_signal.connect(slot=self.file_data.request_file_list.emit)
+        self.ws.connected_signal.connect(
+            slot=self.file_data.request_file_list.emit
+        )
         self.start_window.retry_connection_clicked.connect(slot=self.ws.retry)
         self.start_window.firmware_restart_clicked.connect(
             slot=self.ws.api.firmware_restart
@@ -142,13 +162,21 @@ class MainWindow(QMainWindow):
         self.printer_object_report_signal.connect(
             self.printer.on_object_report_received
         )
-        self.handle_gcode_response.connect(self.printer.gcode_response_report)
+        self.handle_gcode_response.connect(
+            self.printer.on_gcode_response_received
+        )  ####
         self.on_object_list.connect(self.printer.on_object_list)
         # * From Printer Object
-        self.printer.on_extruder_update.connect(self.extruder_temperature_change)
-        self.printer.on_heater_bed_update.connect(self.heater_bed_temperature_change)
+        self.printer.on_extruder_update.connect(
+            self.extruder_temperature_change
+        )
+        self.printer.on_heater_bed_update.connect(
+            self.heater_bed_temperature_change
+        )
 
-        self.ui.main_content_widget.currentChanged.connect(slot=self.reset_tab_indexes)
+        self.ui.main_content_widget.currentChanged.connect(
+            slot=self.reset_tab_indexes
+        )
 
         # * Pages that need the Numpad
         self.call_numpad_signal.connect(self.numpad_object.call_numpad)
@@ -160,12 +188,18 @@ class MainWindow(QMainWindow):
             partial(self.call_numpad_signal.emit)
         )
 
-        self.printPanel.request_block_manual_tab_change.connect(self.disable_tab_bar)
-        self.printPanel.request_activate_manual_tab_change.connect(self.enable_tab_bar)
+        self.printPanel.request_block_manual_tab_change.connect(
+            self.disable_tab_bar
+        )
+        self.printPanel.request_activate_manual_tab_change.connect(
+            self.enable_tab_bar
+        )
 
         # * Network panel call
         self.call_network_panel.connect(self.networkPanel.call_network_panel)
-        self.start_window.wifi_button_clicked.connect(self.call_network_panel.emit)
+        self.start_window.wifi_button_clicked.connect(
+            self.call_network_panel.emit
+        )
         self.ui.wifi_button.clicked.connect(self.call_network_panel.emit)
 
         #####
@@ -275,7 +309,9 @@ class MainWindow(QMainWindow):
                 f"Tab index argument expected type int, got {type(tab_index)}"
             )
         if not isinstance(panel_index, int):
-            _logger.debug(f"Panel page index expected type int, {type(panel_index)}")
+            _logger.debug(
+                f"Panel page index expected type int, {type(panel_index)}"
+            )
         current_page = [
             self.ui.main_content_widget.currentIndex(),
             self.current_panel_index(),
@@ -356,12 +392,14 @@ class MainWindow(QMainWindow):
         _data = event.data
         _metadata = event.metadata
 
-        if _method is None:
-            print("has no method on the received websocket response ")
-            raise Exception("Message received from websocket has no method")
-        if _data is None:
-            print("No data on the received websocket response ")
-            raise Exception("Message received from websocket has no data")
+        if not _method:
+            raise Exception(
+                "No method found on message received from websocket"
+            )
+        if not _data:
+            raise Exception(
+                "No data found on message received from websocket."
+            )
 
         if "server.file" in _method:
             file_data_event = ReceivedFileData(_data, _method, _metadata)
@@ -374,6 +412,7 @@ class MainWindow(QMainWindow):
         elif "machine" in _method:
             ...
         elif "printer.info" in _method:
+            print(_data)
             pass
         elif "printer.print" in _method:
             if "start" in _method and "ok" in _data:
@@ -392,7 +431,9 @@ class MainWindow(QMainWindow):
 
             if "subscribe" in _method:
                 _objects_response_list = [_data["status"], _data["eventtime"]]
-                self.printer_object_report_signal[list].emit(_objects_response_list)
+                self.printer_object_report_signal[list].emit(
+                    _objects_response_list
+                )
                 # TODO: This
                 # ! Don't display chamber temperatures if there is no chamber, should do the
                 if not self.printer.has_chamber:
@@ -434,10 +475,14 @@ class MainWindow(QMainWindow):
                             if not isinstance(_event, QEvent):
                                 return
                             if instance is not None:
-                                _logger.info(f"Event {_klippy_event_callback} sent")
+                                _logger.info(
+                                    f"Event {_klippy_event_callback} sent"
+                                )
                                 instance.sendEvent(self, _event)
                             else:
-                                raise Exception("QApplication.instance is None type.")
+                                raise Exception(
+                                    "QApplication.instance is None type."
+                                )
                         except Exception as e:
                             _logger.debug(
                                 f"Unable to send internal klippy {_state_call} notification: {e}"
@@ -470,7 +515,9 @@ class MainWindow(QMainWindow):
                 self.ui.extruder_temp_display.setText(f"{new_value:.1f}")
                 ...
             elif field == "target":
-                self.ui.extruder_temp_display.setSecondaryText(f"{new_value:.1f}")
+                self.ui.extruder_temp_display.setSecondaryText(
+                    f"{new_value:.1f}"
+                )
 
     @pyqtSlot(str, str, float, name="heater_bed_update")
     def heater_bed_temperature_change(

@@ -6,6 +6,12 @@
     <file>media/btn_icons/2barWIFI.svg</file>
     <file>media/btn_icons/3fullWIFI.svg</file>
   </qresource>
+  <qresource prefix="probe">
+    <file>media/btn_icons/1bltouch zoom.svg</file>
+    <file>media/btn_icons/1eddy mech zoom.svg</file>
+    <file>media/btn_icons/1inductive zoom.svg</file>
+    <file>media/btn_icons/1switch zoom.svg</file>
+  </qresource>
   <qresource prefix="dialog">
     <file>media/btn_icons/new_abort_hugo.svg</file>
     <file>media/btn_icons/new_accept_hugo.svg</file>

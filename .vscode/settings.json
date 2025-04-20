@@ -26,12 +26,15 @@
     },
     "peacock.remoteColor": "#c2fb90",
     "cSpell.words": [
+        "bltouch",
+        "ENDSTOP",
         "gcode",
         "klippy",
         "metascan",
         "qtobject",
         "Reimplementation",
         "sdbus",
+        "TESTZ",
         "unextrude"
     ],
     "todo-tree.tree.scanMode": "workspace",

@@ -20,7 +20,12 @@ class ControlTab(QtWidgets.QStackedWidget):
     request_change_page = pyqtSignal(int, int, name="request_change_page")
 
     request_numpad_signal = pyqtSignal(
-        int, str, str, "PyQt_PyObject", QtWidgets.QStackedWidget, name="request_numpad"
+        int,
+        str,
+        str,
+        "PyQt_PyObject",
+        QtWidgets.QStackedWidget,
+        name="request_numpad",
     )
 
     run_gcode_signal = pyqtSignal(str, name="run_gcode")
@@ -39,7 +44,6 @@ class ControlTab(QtWidgets.QStackedWidget):
         self.panel = Ui_controlStackedWidget()
         self.panel.setupUi(self)
         self.setCurrentIndex(0)
-        # self.main_panel = parent # Redundant
         self.ws = ws
         self.printer = printer
         self.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
@@ -57,13 +61,25 @@ class ControlTab(QtWidgets.QStackedWidget):
         self.addWidget(self.probe_helper_page)
         self.probe_helper_page.run_gcode_signal.connect(self.ws.api.run_gcode)
         self.probe_helper_page.request_back.connect(self.back_button)
-        self.printer.on_printer_config.connect(self.probe_helper_page.on_printer_config)
-        self.probe_helper_page.on_request_object_config.connect(
-            self.printer.on_request_object_config
+        self.printer.on_available_gcode_cmds.connect(
+            self.probe_helper_page.on_available_gcode_cmds
         )
-        self.printer.on_object_config.connect(self.probe_helper_page.on_object_config)
+        self.probe_helper_page.on_subscribe_config[
+            str, "PyQt_PyObject"
+        ].connect(self.printer.on_subscribe_config)
+        self.probe_helper_page.on_subscribe_config[
+            list, "PyQt_PyObject"
+        ].connect(self.printer.on_subscribe_config)
+        self.printer.on_printer_config.connect(
+            self.probe_helper_page.on_printer_config
+        )
+        self.printer.on_gcode_response.connect(
+            self.probe_helper_page.handle_gcode_response
+        )
 
-        self.printer.on_toolhead_update[str, list].connect(self.on_toolhead_update)
+        self.printer.on_toolhead_update[str, list].connect(
+            self.on_toolhead_update
+        )
         self.printer.on_extruder_update.connect(self.on_extruder_update)
         self.printer.on_heater_bed_update.connect(self.on_heater_bed_update)
 
@@ -71,10 +87,15 @@ class ControlTab(QtWidgets.QStackedWidget):
             partial(self.change_page, self.indexOf(self.panel.motion_page))
         )
         self.panel.cp_temperature_btn.clicked.connect(
-            partial(self.change_page, self.indexOf(self.panel.temperature_page))
+            partial(
+                self.change_page, self.indexOf(self.panel.temperature_page)
+            )
         )
         self.panel.cp_printer_settings_btn.clicked.connect(
-            partial(self.change_page, self.indexOf(self.panel.printer_settings_page))
+            partial(
+                self.change_page,
+                self.indexOf(self.panel.printer_settings_page),
+            )
         )
         # self.panel.cp_nozzles_calibration_btn.clicked.connect(
         #     partial(self.change_page, self.indexOf(self.panel.z_adjustment_page))
@@ -83,8 +104,12 @@ class ControlTab(QtWidgets.QStackedWidget):
             partial(self.change_page, self.indexOf(self.probe_helper_page))
         )
 
-        self.panel.motion_extrude_btn.clicked.connect(partial(self.change_page, 2))
-        self.panel.motion_move_axis_btn.clicked.connect(partial(self.change_page, 3))
+        self.panel.motion_extrude_btn.clicked.connect(
+            partial(self.change_page, 2)
+        )
+        self.panel.motion_move_axis_btn.clicked.connect(
+            partial(self.change_page, 3)
+        )
         self.panel.mp_back_btn.clicked.connect(self.back_button)
         self.panel.motion_auto_home_btn.clicked.connect(
             partial(self.run_gcode_signal.emit, "G28\nM400")
@@ -177,7 +202,9 @@ class ControlTab(QtWidgets.QStackedWidget):
         self.panel.move_axis_home_all_btn.clicked.connect(
             partial(self.run_gcode_signal.emit, "G28\nM400")
         )
-        self.panel.move_axis_up_btn.clicked.connect(partial(self.handle_move_axis, "Y"))
+        self.panel.move_axis_up_btn.clicked.connect(
+            partial(self.handle_move_axis, "Y")
+        )
         self.panel.move_axis_down_btn.clicked.connect(
             partial(self.handle_move_axis, "Y-")
         )
@@ -187,8 +214,12 @@ class ControlTab(QtWidgets.QStackedWidget):
         self.panel.move_axis_left_btn.clicked.connect(
             partial(self.handle_move_axis, "X-")
         )
-        self.panel.mva_z_up.clicked.connect(partial(self.handle_move_axis, "Z"))
-        self.panel.mva_z_down.clicked.connect(partial(self.handle_move_axis, "Z-"))
+        self.panel.mva_z_up.clicked.connect(
+            partial(self.handle_move_axis, "Z")
+        )
+        self.panel.mva_z_down.clicked.connect(
+            partial(self.handle_move_axis, "Z-")
+        )
 
         self.panel.temp_back_button.clicked.connect(self.back_button)
 
@@ -251,7 +282,9 @@ class ControlTab(QtWidgets.QStackedWidget):
             )
 
     @pyqtSlot(bool, "PyQt_PyObject", int, name="select_extrude_feedrate")
-    def handle_toggle_extrude_feedrate(self, checked: bool, caller, value: int) -> None:
+    def handle_toggle_extrude_feedrate(
+        self, checked: bool, caller, value: int
+    ) -> None:
         """Slot to change the extruder feedrate, mainly used for toggle buttons
 
         Args:
@@ -264,7 +297,9 @@ class ControlTab(QtWidgets.QStackedWidget):
         self.extrude_feedrate = value
 
     @pyqtSlot(bool, "PyQt_PyObject", int, name="select_extrude_length")
-    def handle_toggle_extrude_length(self, checked: bool, caller, value: int) -> None:
+    def handle_toggle_extrude_length(
+        self, checked: bool, caller, value: int
+    ) -> None:
         """Slot that changes the extrude length, mainly used for toggle buttons
 
         Args:
@@ -291,8 +326,9 @@ class ControlTab(QtWidgets.QStackedWidget):
 
     @pyqtSlot(bool, float, name="handle_select_move_length")
     def handle_select_move_length(self, checked: bool, value: float) -> None:
-        """Slot that changes the move length of manual move commands, mainly used
-        for toggle buttons
+        """Slot that changes the move length of manual move commands,
+        mainly used for toggle buttons
+
 
         Args:
             checked (bool): Button checked state
@@ -309,7 +345,9 @@ class ControlTab(QtWidgets.QStackedWidget):
         Args:
             extrude (bool): If True extrudes otherwise unextrudes.
         """
-        can_extrude = bool(self.printer.heaters_object["extruder"]["can_extrude"])
+        can_extrude = bool(
+            self.printer.heaters_object["extruder"]["can_extrude"]
+        )
 
         if not can_extrude:
             self.extrude_page_message = "Temperature too cold to extrude"
@@ -336,7 +374,9 @@ class ControlTab(QtWidgets.QStackedWidget):
         self.extrude_page_message = "Ready"
         self.register_timed_callback(
             int(_sch_time_s + 2.0) * 1000,  # In milliseconds
-            lambda: self.panel.exp_info_label.setText(self.extrude_page_message),
+            lambda: self.panel.exp_info_label.setText(
+                self.extrude_page_message
+            ),
         )
 
     @pyqtSlot(str, name="handle_move_axis")
@@ -348,11 +388,11 @@ class ControlTab(QtWidgets.QStackedWidget):
         Args:
             axis (str): String that contains one of the following axis `
                 ['X',
-                '-X'
+                'X-'
                 ,'Y'
-                ,'-Y'
+                ,'Y-'
                 ,'Z'
-                ,'-Z']`. [^1]
+                ,'Z-']`. [^1]
 
         ---
 
@@ -360,7 +400,7 @@ class ControlTab(QtWidgets.QStackedWidget):
         [^1]: The **-** symbol indicates the negative direction for that axis
 
         """
-        if axis not in ["X", "-X", "Y", "-Y", "Z", "-Z"]:
+        if axis not in ["X", "X-", "Y", "Y-", "Z", "Z-"]:
             return
 
         self.run_gcode_signal.emit(
@@ -383,7 +423,9 @@ class ControlTab(QtWidgets.QStackedWidget):
     @pyqtSlot(str, list, name="on_toolhead_update")
     def on_toolhead_update(self, field: str, values: list) -> None:
         if field == "position":
-            logging.debug(f"[ControlTabPanel] Updating toolhead {field} to: {values}")
+            logging.debug(
+                f"[ControlTabPanel] Updating toolhead {field} to: {values}"
+            )
             self.panel.move_axis_x_value_label.setText(f"{values[0]}")
             self.panel.move_axis_y_value_label.setText(f"{values[1]}")
             self.panel.move_axis_z_value_label.setText(f"{values[2]}")
@@ -397,12 +439,18 @@ class ControlTab(QtWidgets.QStackedWidget):
         if extruder_name == "extruder" and field == "temperature":
             self.panel.extruder_temp_display.setText(f"{new_value:.1f}")
         if extruder_name == "extruder" and field == "target":
-            self.panel.extruder_temp_display.setSecondaryText(f"{new_value:.1f}")
+            self.panel.extruder_temp_display.setSecondaryText(
+                f"{new_value:.1f}"
+            )
 
-        self.extruder_info.update({f"{extruder_name}": {f"{field}": new_value}})
+        self.extruder_info.update(
+            {f"{extruder_name}": {f"{field}": new_value}}
+        )
 
     @pyqtSlot(str, str, float, name="on_heater_bed_update")
-    def on_heater_bed_update(self, name: str, field: str, new_value: float) -> None:
+    def on_heater_bed_update(
+        self, name: str, field: str, new_value: float
+    ) -> None:
         if field == "temperature":
             self.panel.bed_temp_display.setText(f"{new_value:.1f}")
         if field == "target":
