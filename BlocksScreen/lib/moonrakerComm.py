@@ -1,23 +1,26 @@
 import json
 import logging
 import threading
-import typing
 
 import websocket
-from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot
-from PyQt6.QtWidgets import QApplication
-
-
 from events import (
+    KlippyDisconnected,
+    KlippyShutdown,
     WebSocketDisconnected,
     WebSocketError,
     WebSocketMessageReceived,
     WebSocketOpen,
 )
 from lib.moonrest import MoonRest
+from PyQt6 import QtCore, QtWidgets
 from utils.RepeatedTimer import RepeatedTimer
 
 _logger = logging.getLogger(name="logs/BlocksScreen.log")
+
+RED = "\033[31m"
+GREEN = "\033[32m"
+YELLOW = "\033[33m"
+RESET = "\033[0m"
 
 
 class OneShotTokenError(Exception):
@@ -31,7 +34,7 @@ class OneShotTokenError(Exception):
         self.message = message
 
 
-class MoonWebSocket(QObject, threading.Thread):
+class MoonWebSocket(QtCore.QObject, threading.Thread):
     """MoonWebSocket class object for creating a websocket connection to Moonraker.
 
     This class handles all there is to do with connecting to Moonraker to gather information.
@@ -43,7 +46,7 @@ class MoonWebSocket(QObject, threading.Thread):
 
 
     Args:
-        QObject (QObject): Double inheritance from QObject.
+        QObject (QtCore.QObject): Double inheritance from QObject.
         threading.Thread (threading.Thread): Double inheritance from threading.Thread
 
     Raises:
@@ -54,7 +57,7 @@ class MoonWebSocket(QObject, threading.Thread):
 
     """
 
-    QUERY_KLIPPY_TIMEOUT: int = 5
+    QUERY_KLIPPY_TIMEOUT: int = 2
     connected = False
     connecting = False
     callback_table = {}
@@ -63,17 +66,24 @@ class MoonWebSocket(QObject, threading.Thread):
     timeout = 3
 
     # @ Signals
-    connecting_signal = pyqtSignal([int], [str], name="websocket_connecting")
-    connected_signal = pyqtSignal(name="websocket-connected")
-    connection_lost = pyqtSignal([str], name="websocket-connection-lost")
-    klippy_connected_signal = pyqtSignal(bool, name="klippy_connection_status")
-    klippy_state_signal = pyqtSignal(str, name="klippy_state")
-    query_server_info_signal = pyqtSignal(name="query_server_information")
+    connecting_signal = QtCore.pyqtSignal(
+        [int], [str], name="websocket_connecting"
+    )
+    connected_signal = QtCore.pyqtSignal(name="websocket-connected")
+    connection_lost = QtCore.pyqtSignal(
+        [str], name="websocket-connection-lost"
+    )
+    klippy_connected_signal = QtCore.pyqtSignal(
+        bool, name="klippy_connection_status"
+    )
+    klippy_state_signal = QtCore.pyqtSignal(str, name="klippy_state")
+    query_server_info_signal = QtCore.pyqtSignal(
+        name="query_server_information"
+    )
 
-    def __init__(self, parent: QObject) -> None:
-        super().__init__(parent)
+    def __init__(self, parent: QtCore.QObject) -> None:
+        super().__init__(parent=parent)
         self.daemon = True
-        # self._main_window = parent
 
         # * This information should be in a  configuration file
         # self.host: str | None = None
@@ -85,22 +95,20 @@ class MoonWebSocket(QObject, threading.Thread):
         self._request_id = 0
         self.request_table = {}
         self._moonRest = MoonRest()
-        self.api: MoonAPI = MoonAPI(self, self)
+        self.api: MoonAPI = MoonAPI(self)
         self._retry_timer: RepeatedTimer
-
-        # * Websocket options
         websocket.setdefaulttimeout(self.timeout)
 
-        # @ Signals
-        self.query_server_info_signal.connect(self.api.query_server_info)
+        self.query_server_info_signal.connect(self.api.api_query_server_info)
         self.query_klippy_status_timer = RepeatedTimer(
             self.QUERY_KLIPPY_TIMEOUT, self.query_server_info_signal.emit
         )
 
+        self.klippy_state_signal.connect(self.api.request_printer_info)
         _logger.info("Websocket object initialized")
 
-    @pyqtSlot(name="retry-websocket-connection")
-    def retry(self):
+    @QtCore.pyqtSlot(name="retry_wb_conn")
+    def retry_wb_conn(self):
         if self.connecting is True and self.connected is False:
             return False
         self._reconnect_count = 0
@@ -123,7 +131,7 @@ class MoonWebSocket(QObject, threading.Thread):
             self.connecting_signal[int].emit(0)
             self.connecting = False
             try:
-                instance = QApplication.instance()
+                instance = QtWidgets.QApplication.instance()
                 if instance is not None:
                     instance.sendEvent(self.parent(), unable_to_connect_event)
                 else:
@@ -132,41 +140,35 @@ class MoonWebSocket(QObject, threading.Thread):
                     )
             except Exception as e:
                 _logger.error(
-                    f"Error sending Event {unable_to_connect_event.__class__.__name__} | Error message caught : {e}"
+                    f"Error on sending Event {unable_to_connect_event.__class__.__name__} | Error message: {e}"
                 )
             _logger.info(
                 "Maximum number of connection retries reached, Unable to establish connection with Moonraker"
             )
             return False
-
-        # TODO: OR in the future maybe an event or something, a callback for example
         return self.connect()
 
     def connect(self) -> bool:
         if self.connected:
-            _logger.info("Connection is established.")
+            _logger.info("Connection established")
             return True
         self._reconnect_count += 1
         self.connecting_signal[int].emit(int(self._reconnect_count))
         _logger.debug(
-            f"Trying to establish connection with Moonraker, try number {self._reconnect_count}"
+            f"Establishing connection to Moonraker...\n Try number {self._reconnect_count}"
         )
-
-        # * Request oneshot token
         # TODO Handle if i cannot connect to moonraker, request server.info and see if i get a result
         try:
             _oneshot_token = self._moonRest.get_oneshot_token()
-
             if _oneshot_token is None:
-                raise OneShotTokenError("Unable to get oneshot token")
+                raise OneShotTokenError("Unable to retrieve oneshot token")
         except Exception as e:
             _logger.info(
-                f"Unexpected error when trying to acquire oneshot token: {e}"
+                f"Unexpected error occurred when trying to acquire oneshot token: {e}"
             )
             return False
-
+        # _url = f"ws://192.168.1.100:7125/websocket?token={_oneshot_token}"
         _url = f"ws://192.168.1.109:7125/websocket?token={_oneshot_token}"
-
         self.ws = websocket.WebSocketApp(
             _url,
             on_open=self.on_open,
@@ -174,40 +176,36 @@ class MoonWebSocket(QObject, threading.Thread):
             on_error=self.on_error,
             on_message=self.on_message,
         )
-
         _kwargs = {"reconnect": self.timeout}  # FIXME: This goes nowhere
+
         self._wst = threading.Thread(
             name="websocket.run_forever",
             target=self.ws.run_forever,
             daemon=True,
         )
         try:
-            _logger.info("Starting Websocket")
+            _logger.info("Websocket Start...")
             _logger.debug(self.ws.url)
             self._wst.start()
-        except (
-            Exception
-        ) as e:  # TEST: Send an event here when connection is unsuccessful
+        except Exception as e:
             _logger.info(
                 f"Unexpected while starting websocket {self._wst.name}: {e}"
             )
             return False
         return True
 
-    # TODO: messages from *args, and pass it to other variables.
-    def disconnect(self):
-        # TODO: Handle disconnect or close state
+    def wb_disconnect(self) -> None:
+        """Websocket disconnect"""
         if self._wst is not None and self.ws is not None:
             self.ws.close()
-
             if self._wst.is_alive():
                 self._wst.join()
             # self.join()
             # self.ws.close()
-
             _logger.info("Websocket closed")
 
     def on_error(self, *args) -> None:
+        """Websocket error callback"""
         # First argument is ws second is error message
         # TODO: Handle error messages
         _error = args[1] if len(args) == 2 else args[0]
@@ -215,7 +213,12 @@ class MoonWebSocket(QObject, threading.Thread):
         self.connected = False
         self.disconnected = True
 
-    def on_close(self, *args):
+    def on_close(self, *args) -> None:
+        """Websocket on close callback
+
+        Raises:
+            TypeError: When websocket Events cannot be sent because QApplication.instance `is` None
+        """
         # First argument is ws, second is close status code, third is close message
         if self.ws is None:
             return
@@ -230,7 +233,7 @@ class MoonWebSocket(QObject, threading.Thread):
             data="Disconnected", args=[_close_status_code, _close_message]
         )
         try:
-            instance = QApplication.instance()
+            instance = QtWidgets.QApplication.instance()
             if instance is not None:
                 instance.postEvent(self.parent(), close_event)
             else:
@@ -246,21 +249,25 @@ class MoonWebSocket(QObject, threading.Thread):
             f"Websocket closed, code: {_close_status_code}, message: {_close_message}"
         )
 
-    def on_open(self, *args):
-        # TODO: Handle initial connection as per moonraker api documentation
-        _ws = args[0] if len(args) == 1 else None
-        self.connecting = False
-        self.connected = True
-
-        # Query server information, for klippy status
+    @QtCore.pyqtSlot(name="evaluate_klippy_status")
+    def evaluate_klippy_status(self) -> None:
+        """Query server information for klippy status"""
         self.query_klippy_status_timer.startTimer()
         self.query_server_info_signal.emit()
 
+    def on_open(self, *args) -> None:
+        """Websocket on open callback
+
+        Raises:
+            TypeError: When QApplication.instance `is` None
+        """
+        _ws = args[0] if len(args) == 1 else None
+        self.connecting = False
+        self.connected = True
+        self.evaluate_klippy_status()
         open_event = WebSocketOpen(data="Connected")
         try:
-            # QCoreApplication.instance().sendEvent(
-            # TODO: the location to send the event changed from self._main_window.start_window to just self._main_window
-            instance = QApplication.instance()
+            instance = QtWidgets.QApplication.instance()
             if instance is not None:
                 instance.postEvent(self.parent(), open_event)
             else:
@@ -272,20 +279,30 @@ class MoonWebSocket(QObject, threading.Thread):
 
         self.connected_signal.emit()
         self._retry_timer.stopTimer()
-
         _logger.info(f"Connection to websocket achieved on {_ws}")
 
-    def on_message(self, *args):
-        # First argument is ws second is message
-        _message = args[1] if len(args) == 2 else args[0]
+    def on_message(self, *args) -> None:
+        """Websocket on message callback
+
+        Raises:
+            TypeError: Raised when events cannot be sent because QApplication.instance is None
+        """
+        _message = (
+            args[1] if len(args) == 2 else args[0]
+        )  # First argument is ws second is message
+
         response: dict = json.loads(_message)
+
         if "id" in response and response["id"] in self.request_table:
             _entry = self.request_table.pop(response["id"])
             if "server.info" in _entry[0]:
                 if response["result"]["klippy_state"] == "ready":
-                    
                     self.query_klippy_status_timer.stopTimer()
 
+                elif response["result"]["klippy_state"] == "startup":
+                    # request server.info in 2 seconds
+                    if not self.query_klippy_status_timer.running:
+                        self.query_klippy_status_timer.startTimer()
                 self.klippy_connected_signal.emit(
                     response["result"]["klippy_connected"]
                 )
@@ -293,7 +310,6 @@ class MoonWebSocket(QObject, threading.Thread):
                     response["result"]["klippy_state"]
                 )
                 return
-
             else:
                 if "error" in response:
                     message_event = WebSocketMessageReceived(
@@ -307,10 +323,12 @@ class MoonWebSocket(QObject, threading.Thread):
                         data=response["result"],
                         metadata=_entry,
                     )
-
         elif "method" in response:
-            # This is a message received without a request,
-            # but with the method in the response
+            if (
+                str(response["method"]).lower() == "notify_klippy_disconnected"
+            ):  # Checkout for notify_klippy_disconnect
+                self.evaluate_klippy_status()
+
             message_event = WebSocketMessageReceived(
                 method=str(response["method"]),
                 data=response,
@@ -318,9 +336,9 @@ class MoonWebSocket(QObject, threading.Thread):
             )
 
         try:
-            instance = QApplication.instance()
-            if instance is not None:
-                instance.sendEvent(self.parent(), message_event)
+            instance = QtWidgets.QApplication.instance()
+            if instance:
+                instance.postEvent(self.parent(), message_event)
             else:
                 raise TypeError(
                     "QApplication.instance expected non None value"
@@ -330,15 +348,22 @@ class MoonWebSocket(QObject, threading.Thread):
                 f"Unexpected error while creating websocket message event: {e}"
             )
 
-    def send_request(self, method: str, params: dict = {}):
+    def send_request(self, method: str, params: dict = {}) -> bool:
+        """Send a request over the websocket
+
+        Args:
+            method (str): Websocket method name
+            params (dict, optional): parameters for the websocket method. Defaults to {}.
+
+        Returns:
+            bool: Whether the method finished and a request was sent
+        """
         if not self.connected or self.ws is None:
             return False
 
         self._request_id += 1
-        # * Keep track of the sent requests and their id
-        # TODO: This data structure could be better, think abou other implementations
+        # REVIEW: This data structure could be better, think about other implementations
         self.request_table[self._request_id] = [method, params]
-
         packet = {
             "jsonrpc": "2.0",
             "method": method,
@@ -346,32 +371,29 @@ class MoonWebSocket(QObject, threading.Thread):
             "id": self._request_id,
         }
         self.ws.send(json.dumps(packet))
-
-        _logger.debug(f"Sending method:{method} , id: {self._request_id}")
         return True
 
-    # def event(self, a0: QtCore.QEvent) -> bool:
-    #     return super().event(a0)
+    # def customEvent(self, event: QtCore.QEvent | None) -> None:
+    #     if not event:
+    #         return
 
-    # def customEvent(self, a0: QtCore.QEvent | None) -> None:
-    #     if a0 is not None and (a0.type() == KlippyDisconnectedEvent.type() or a0.type() == KlippyShudownEvent.type()):
-    #         # * Received notify_klippy_diconnected, start querying server inforamtion again to check if klipper is available
+    #     if (
+    #         event.type() == KlippyDisconnected.type()
+    #         or event.type() == KlippyShutdown.type()
+    #     ):
+    #         # * Received notify_klippy_disconnected, start querying server information again to check if klipper is available
     #         print("Klipper reported shutdown or error")
-    #         self.query_klippy_status_timer.startTimer()
+    #         self.evaluate_klippy_status()
+    #     return super().customEvent(event)
 
-    #     return super().customEvent(a0)
 
-
-class MoonAPI(QObject):
-    # TODO: Callbacks for each method
-    # TODO: Finish the pyqt slots for needed requests on the API
-
-    def __init__(self, parent: typing.Optional["QObject"], ws: MoonWebSocket):
-        super(MoonAPI, self).__init__(parent)
+class MoonAPI(QtCore.QObject):
+    def __init__(self, ws: MoonWebSocket):
+        super(MoonAPI, self).__init__(ws)
         self._ws: MoonWebSocket = ws
 
-    @pyqtSlot(name="query_klippy_status")
-    def query_server_info(self):
+    @QtCore.pyqtSlot(name="api_query_server_info")
+    def api_query_server_info(self):
         _logger.debug("Requested server.info")
         return self._ws.send_request(method="server.info")
 
@@ -396,30 +418,31 @@ class MoonAPI(QObject):
             params={"include_monitors": include_monitors},
         )
 
-    @pyqtSlot(name="query_printer_info")
+    @QtCore.pyqtSlot(name="query_printer_info")
     def request_printer_info(self):
         return self._ws.send_request(method="printer.info")
 
-    @pyqtSlot(name="get_available_objects")
+    @QtCore.pyqtSlot(name="get_available_objects")
     def get_available_objects(self):
         return self._ws.send_request(method="printer.objects.list")
 
-    @pyqtSlot(dict, name="query_object")
+    @QtCore.pyqtSlot(dict, name="query_object")
     def object_query(self, objects: dict):
         return self._ws.send_request(
             method="printer.objects.query", params={"objects": objects}
         )
 
-    @pyqtSlot(dict, name="object_subscription")
+    @QtCore.pyqtSlot(dict, name="object_subscription")
     def object_subscription(self, objects: dict):
         return self._ws.send_request(
             method="printer.objects.subscribe", params={"objects": objects}
         )
 
+    @QtCore.pyqtSlot(name="ws_query_endstops")
     def query_endstops(self):
         return self._ws.send_request(method="printer.query_endstops.status")
 
-    @pyqtSlot(str, name="run_gcode")
+    @QtCore.pyqtSlot(str, name="run_gcode")
     def run_gcode(self, gcode: str):
         if isinstance(gcode, str) is False or gcode is None:
             return False
@@ -430,21 +453,21 @@ class MoonAPI(QObject):
     def gcode_help(self):
         return self._ws.send_request(method="printer.gcode.help")
 
-    @pyqtSlot(str, name="start_print")
+    @QtCore.pyqtSlot(str, name="start_print")
     def start_print(self, filename):
         return self._ws.send_request(
             method="printer.print.start", params={"filename": filename}
         )
 
-    @pyqtSlot(name="pause_print")
+    @QtCore.pyqtSlot(name="pause_print")
     def pause_print(self):
         return self._ws.send_request(method="printer.print.pause")
 
-    @pyqtSlot(name="resume_print")
+    @QtCore.pyqtSlot(name="resume_print")
     def resume_print(self):
         return self._ws.send_request(method="printer.print.resume")
 
-    @pyqtSlot(name="stop_print")
+    @QtCore.pyqtSlot(name="stop_print")
     def cancel_print(self):
         return self._ws.send_request(method="printer.print.cancel")
 
@@ -464,7 +487,7 @@ class MoonAPI(QObject):
             method="machine.services.restart", params={"service": service}
         )
 
-    @pyqtSlot(name="firmware_restart")
+    @QtCore.pyqtSlot(name="firmware_restart")
     def firmware_restart(self):
         """firmware_restart
 
@@ -516,7 +539,7 @@ class MoonAPI(QObject):
             params={"interface": interface},
         )
 
-    @pyqtSlot(name="api_request_file_list")
+    @QtCore.pyqtSlot(name="api_request_file_list")
     def get_file_list(self, root_folder: str | None = None):
         # If the root argument is omitted the request will default to the gcodes root.
         if root_folder is None:
@@ -528,7 +551,7 @@ class MoonAPI(QObject):
     def list_registered_roots(self):
         return self._ws.send_request(method="server.files.roots")
 
-    @pyqtSlot(str, name="api_request_file_list")
+    @QtCore.pyqtSlot(str, name="api_request_file_list")
     def get_gcode_metadata(self, filename_dir: str):
         if isinstance(filename_dir, str) is False or filename_dir is None:
             return False
@@ -543,7 +566,7 @@ class MoonAPI(QObject):
             method="server.files.metascan", params={"filename": filename_dir}
         )
 
-    @pyqtSlot(name="api_get_gcode_thumbnail")
+    @QtCore.pyqtSlot(name="api_get_gcode_thumbnail")
     def get_gcode_thumbnail(self, filename_dir: str):
         if isinstance(filename_dir, str) is False or filename_dir is None:
             return False
@@ -551,7 +574,7 @@ class MoonAPI(QObject):
             method="server.files.thumbnails", params={"filename": filename_dir}
         )
 
-    @pyqtSlot(str, str, name="file_download")
+    @QtCore.pyqtSlot(str, str, name="file_download")
     def download_file(self, root: str, filename: str):
         """download_file Retrieves file *filename* at root *root*, the filename must include the relative path if
         it is not in the root folder

@@ -5,7 +5,11 @@ from functools import partial
 
 # * System imports
 import events
-from events import ReceivedFileData, WebSocketMessageReceived
+from events import (
+    KlippyDisconnected,
+    ReceivedFileData,
+    WebSocketMessageReceived,
+)
 from lib.bo.files import Files
 from lib.bo.machine import MachineControl
 from lib.bo.printer import Printer
@@ -42,14 +46,14 @@ _logger = logging.getLogger(name="logs/BlocksScreen.log")
 
 
 class MainWindow(QMainWindow):
-    bo_startup = pyqtSignal(name="bo-start-websocket-connection")
+    bo_ws_startup = pyqtSignal(name="bo_start_websocket_connection")
     printer_state_signal = pyqtSignal(str, name="printer_state")
-    on_object_list = pyqtSignal(list, name="on_object_list")
+    query_object_list = pyqtSignal(list, name="query_object_list")
     printer_object_report_signal = pyqtSignal(
         list, name="handle_report_received"
     )
 
-    handle_gcode_response = pyqtSignal(list, name="handle_gcode_response")
+    gcode_response = pyqtSignal(list, name="gcode_response")
     handle_error_response = pyqtSignal(list, name="handle_error_response")
 
     call_numpad_signal = pyqtSignal(
@@ -57,21 +61,21 @@ class MainWindow(QMainWindow):
     )
     call_network_panel = pyqtSignal(name="visibilityChange_networkPanel")
 
+    objects_subscriptions: dict = {}
+
     def __init__(self, *args, **kwargs):
         super(MainWindow, self).__init__(*args, **kwargs)
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
-        self.objects_subscriptions: dict = {}
+        # @ Force main panel to be displayed on startup
+        self.ui.main_content_widget.setCurrentIndex(0)
+
         self.ws = MoonWebSocket(self)
         self.mc = MachineControl(self)
-
         self.file_data = Files(self, self.ws)
         self.index_stack = deque(maxlen=4)
         self.printer = Printer(self, self.ws)
-
         self.numpad_object = CustomNumpad(self)
-        self.numpad_object.hide()
-
         self.start_window = ConnectionWindow(self, self.ws)
         self.installEventFilter(self.start_window)
         self.printPanel = PrintTab(
@@ -86,58 +90,47 @@ class MainWindow(QMainWindow):
         self.utilitiesPanel = UtilitiesTab(self.ui.utilitiesTab)
         self.networkPanel = NetworkControlWindow(self)
 
-        # @ Slot connections
-        self.bo_startup.connect(slot=self.start_websocket_connection)
-        # * Websocket state signals
+        self.bo_ws_startup.connect(slot=self.bo_start_websocket_connection)
         self.ws.connecting_signal.connect(
-            slot=self.start_window.websocket_connecting
+            slot=self.start_window.on_websocket_connecting
         )
         self.ws.connected_signal.connect(
-            slot=self.start_window.websocket_connection_achieved
+            slot=self.start_window.on_websocket_connection_achieved
         )
         self.ws.connection_lost.connect(
-            slot=self.start_window.websocket_connection_lost
+            slot=self.start_window.on_websocket_connection_lost
         )
-        self.ws.klippy_state_signal.connect(self.ws.api.request_printer_info)
 
-        # * Print panel
         self.printPanel.request_back_button_pressed.connect(
             slot=self.global_back_button_pressed
         )
         self.printPanel.request_change_page.connect(
             slot=self.global_change_page
         )
-        # * Filament panel
         self.filamentPanel.request_back_button_pressed.connect(
             slot=self.global_back_button_pressed
         )
         self.filamentPanel.request_change_page.connect(
             slot=self.global_change_page
         )
-        # * Control panel
         self.controlPanel.request_back_button.connect(
             slot=self.global_back_button_pressed
         )
         self.controlPanel.request_change_page.connect(
             slot=self.global_change_page
         )
-        # * Utilities panel
         self.utilitiesPanel.request_back_button_pressed.connect(
             slot=self.global_back_button_pressed
         )
         self.utilitiesPanel.request_change_page.connect(
             slot=self.global_change_page
         )
-
-        # * Main page - Top bar Buttons
         self.ui.extruder_temp_display.clicked.connect(
             partial(self.global_change_page, 2, 4)
         )
-
         self.ui.bed_temp_display.clicked.connect(
             partial(self.global_change_page, 2, 4)
         )
-
         self.ui.filament_type_icon.clicked.connect(
             partial(self.global_change_page, 1, 1)
         )
@@ -145,11 +138,12 @@ class MainWindow(QMainWindow):
         self.ui.filament_type_icon.update()
         self.ui.nozzle_size_icon.setText("0.4mm")
         self.ui.nozzle_size_icon.update()
-        ##* Also connect to files list when connection is achieved to imm1ediately get the files
         self.ws.connected_signal.connect(
             slot=self.file_data.request_file_list.emit
         )
-        self.start_window.retry_connection_clicked.connect(slot=self.ws.retry)
+        self.start_window.retry_connection_clicked.connect(
+            slot=self.ws.retry_wb_conn
+        )
         self.start_window.firmware_restart_clicked.connect(
             slot=self.ws.api.firmware_restart
         )
@@ -157,28 +151,18 @@ class MainWindow(QMainWindow):
             slot=self.mc.restart_klipper_service
         )
         self.start_window.reboot_clicked.connect(slot=self.mc.machine_restart)
-
-        # *  To Printer object
         self.printer_object_report_signal.connect(
             self.printer.on_object_report_received
         )
-        self.handle_gcode_response.connect(
-            self.printer.on_gcode_response_received
-        )  ####
-        self.on_object_list.connect(self.printer.on_object_list)
-        # * From Printer Object
-        self.printer.on_extruder_update.connect(
-            self.extruder_temperature_change
-        )
-        self.printer.on_heater_bed_update.connect(
+        self.gcode_response.connect(self.printer.gcode_response)
+        self.query_object_list.connect(self.printer.on_object_list)
+        self.printer.extruder_update.connect(self.extruder_temperature_change)
+        self.printer.heater_bed_update.connect(
             self.heater_bed_temperature_change
         )
-
         self.ui.main_content_widget.currentChanged.connect(
             slot=self.reset_tab_indexes
         )
-
-        # * Pages that need the Numpad
         self.call_numpad_signal.connect(self.numpad_object.call_numpad)
         self.numpad_object.request_change_page.connect(self.global_change_page)
         self.controlPanel.request_numpad_signal.connect(
@@ -195,25 +179,22 @@ class MainWindow(QMainWindow):
             self.enable_tab_bar
         )
 
-        # * Network panel call
         self.call_network_panel.connect(self.networkPanel.call_network_panel)
         self.start_window.wifi_button_clicked.connect(
             self.call_network_panel.emit
         )
         self.ui.wifi_button.clicked.connect(self.call_network_panel.emit)
 
-        #####
+        ##### handle error response for probe helper page
         self.handle_error_response.connect(
             self.controlPanel.probe_helper_page.handle_error_response
         )
-        #####
 
-        # @ Force main panel to be displayed on startup
         self.reset_tab_indexes()
-        self.ui.main_content_widget.setCurrentIndex(0)
 
-    @pyqtSlot(name="activate_manual_tab_change")
+    @pyqtSlot(name="enable_tab_bar")
     def enable_tab_bar(self) -> None:
+        """Enables the tab bar"""
         if (
             self.ui.main_content_widget.isTabEnabled(1)
             and self.ui.main_content_widget.isTabEnabled(2)
@@ -227,10 +208,9 @@ class MainWindow(QMainWindow):
             self.ui.main_content_widget.setTabEnabled(4, True)
             self.ui.header_main_layout.setEnabled(True)
 
-    @pyqtSlot(name="block_manual_tab_change")
+    @pyqtSlot(name="disable_tab_bar")
     def disable_tab_bar(self) -> bool:
-        """disable_tab_bar
-            Disables the tab bar so to not change the tab.
+        """Disables the tab bar so to not change the tab.
 
         Returns:
             bool: True if the TabBar was disabled
@@ -253,9 +233,7 @@ class MainWindow(QMainWindow):
         )
 
     def reset_tab_indexes(self):
-        """reset_tab_indexes
-        Used to grantee all tabs reset to their first page once the user leaves the tab
-        """
+        """Used to grantee all tabs reset to their first page once the user leaves the tab"""
         self.printPanel.setCurrentIndex(0)
         self.filamentPanel.setCurrentIndex(0)
         self.controlPanel.setCurrentIndex(0)
@@ -263,8 +241,8 @@ class MainWindow(QMainWindow):
         self.networkPanel.setCurrentIndex(0)
 
     def current_panel_index(self) -> int:
-        """current_panel_index
-            Helper function to get the index of the current page in the current tab
+        """Helper function to get the index of the current page in the current tab
+
         Returns:
             int: The index os the page
         """
@@ -280,8 +258,7 @@ class MainWindow(QMainWindow):
         return -1
 
     def set_current_panel_index(self, panel_index: int) -> None:
-        """set_current_panel_index
-            Helper function to set the index of the current page in the current tab
+        """Helper function to set the index of the current page in the current tab
 
         Args:
             panel_index (int): The index of the page we want to go to
@@ -298,7 +275,7 @@ class MainWindow(QMainWindow):
 
     @pyqtSlot(int, int, name="request_change_page")
     def global_change_page(self, tab_index: int, panel_index: int) -> None:
-        """global_change_page Changes panels pages globally
+        """Changes panels pages globally
 
         Args:
             tab_index (int): The tab index of the panel
@@ -317,13 +294,10 @@ class MainWindow(QMainWindow):
             self.current_panel_index(),
         ]
         requested_page = [tab_index, panel_index]
-        # * Return if user is already on the requested page
         if requested_page == current_page:
             _logger.debug("User is already on the requested page")
             return
-        # * Add to the stack of indexes the indexes of current tab and page in tab to later be able to come back to them
         self.index_stack.append(current_page)
-        # * Go to the requested tab and page
         self.ui.main_content_widget.setCurrentIndex(tab_index)
         self.set_current_panel_index(panel_index)
         _logger.debug(
@@ -332,42 +306,23 @@ class MainWindow(QMainWindow):
 
     @pyqtSlot(name="request_back_button_pressed")
     def global_back_button_pressed(self) -> None:
-        """global_back_button_pressed
-
-        Requests to go back a page globally
-        """
-        # * Just a safety measure to avoid accessing an inexistant position of the index_stack
+        """Requests to go back a page globally"""
         if not len(self.index_stack):
             _logger.debug("Index stack is empty cannot got further back.")
             return
-        # * From the last position of the stack use the first value of its tuple, tab index
         self.ui.main_content_widget.setCurrentIndex(self.index_stack[-1][0])
-        self.set_current_panel_index(
-            self.index_stack[-1][1]
-        )  # From the same position, use the tab and stacked widget page indexes
+        self.set_current_panel_index(self.index_stack[-1][1])
         self.index_stack.pop()  # Remove the last position.
-
         _logger.debug("Successfully went back a page.")
 
-    @pyqtSlot(name="bo-start-websocket-connection")
-    def start_websocket_connection(self) -> None:
-        """start_websocket_connection
-
-        Starts the Websocket connection
-        """
+    @pyqtSlot(name="bo_start_websocket_connection")
+    def bo_start_websocket_connection(self) -> None:
+        """Starts the Websocket connection with moonraker"""
         self.ws.start()
         self.ws.try_connection()
 
     def event(self, event: QEvent) -> bool:
-        """event Receives PyQt Events, this method is reimplemented from the QEvent class
-
-        Args:
-            event (QEvent): An Event
-
-        Returns:
-            bool: If the event is handled or not
-        """
-
+        """Receives PyQt Events, reimplemented method from the QEvent class"""
         if event.type() == WebSocketMessageReceived.type():
             if isinstance(event, WebSocketMessageReceived):
                 self.messageReceivedEvent(event)
@@ -376,16 +331,21 @@ class MainWindow(QMainWindow):
         return super().event(event)
 
     def messageReceivedEvent(self, event: WebSocketMessageReceived) -> None:
-        """messageReceivedEvent
-            Helper method that handles the event messages received from the websocket
+        """Helper method that handles the event messages
+        received from the websocket
+
 
         Args:
             event (WebSocketMessageReceivedEvent): The message event with all its contents
 
+
         Raises:
-            Exception: When a klippy status change comes from the websocket, tries to send another event
-            corresponding to the incoming status. If the QApplication instance is of type None raises an exception
-            because the event cannot be sent.
+            Exception: When a klippy status change comes from the
+            websocket, tries to send another event
+            corresponding to the incoming status.
+            If the QApplication instance is of type
+            None raises an exception because the event
+            cannot be sent.
         """
 
         _method = event.method
@@ -407,13 +367,13 @@ class MainWindow(QMainWindow):
                 QApplication.postEvent(self.file_data, file_data_event)
             except Exception as e:
                 _logger.error(
-                    f"Error emitting event for file related information received from websocket | error message received: {e}"
+                    f"Error emitting event for file related information \
+                        received from websocket | error message received: {e}"
                 )
         elif "machine" in _method:
             ...
         elif "printer.info" in _method:
-            print(_data)
-            pass
+            ...
         elif "printer.print" in _method:
             if "start" in _method and "ok" in _data:
                 self.printer_state_signal.emit("printing")
@@ -427,7 +387,7 @@ class MainWindow(QMainWindow):
         elif "printer.objects" in _method:
             if "list" in _method:
                 _object_list: list = _data["objects"]
-                self.on_object_list[list].emit(_object_list)
+                self.query_object_list[list].emit(_object_list)
 
             if "subscribe" in _method:
                 _objects_response_list = [_data["status"], _data["eventtime"]]
@@ -474,11 +434,11 @@ class MainWindow(QMainWindow):
                             instance = QApplication.instance()
                             if not isinstance(_event, QEvent):
                                 return
-                            if instance is not None:
+                            if instance :
                                 _logger.info(
                                     f"Event {_klippy_event_callback} sent"
                                 )
-                                instance.sendEvent(self, _event)
+                                instance.postEvent(self, _event)
                             else:
                                 raise Exception(
                                     "QApplication.instance is None type."
@@ -494,9 +454,8 @@ class MainWindow(QMainWindow):
         elif "notify_service_state_changed" in _method:
             ...
         elif "notify_gcode_response" in _method:
-            # TODO: Handle different types of gcode responses can be  !! or // messages
             _gcode_response = _data["params"]
-            self.handle_gcode_response[list].emit(_gcode_response)
+            self.gcode_response[list].emit(_gcode_response)
         elif "error" in _method:
             self.handle_error_response[list].emit([_data, _metadata])
         elif "notify_history_changed" in _method:
@@ -556,7 +515,7 @@ class MainWindow(QMainWindow):
                 _callback = getattr(logger, "cancel")
                 if callable(_callback):
                     _callback()
-        self.ws.disconnect()
+        self.ws.wb_disconnect()
         self.close()
         if a0 is None:
             return  # TEST Maybe this return fucks up the app
