@@ -30,6 +30,12 @@ class OptionCard(QtWidgets.QFrame):
         self.set_card_icon(icon)
         self.set_card_text(text)
 
+    def disable_button(self) -> None:
+        self.continue_button.setDisabled(True)
+
+    def enable_button(self) -> None:
+        self.continue_button.setEnabled(True)
+
     def set_card_icon(self, pixmap: QtGui.QPixmap) -> None:
         self.option_icon.setPixmap(pixmap)
         self.update()

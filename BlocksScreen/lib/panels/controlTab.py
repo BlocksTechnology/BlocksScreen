@@ -59,29 +59,40 @@ class ControlTab(QtWidgets.QStackedWidget):
 
         self.probe_helper_page = ProbeHelper(self)
         self.addWidget(self.probe_helper_page)
+        self.probe_helper_page.request_page_view.connect(
+            partial(self.change_page, self.indexOf(self.probe_helper_page))
+        )
+        self.probe_helper_page.query_printer_object.connect(self.ws.api.object_query)
         self.probe_helper_page.run_gcode_signal.connect(self.ws.api.run_gcode)
         self.probe_helper_page.request_back.connect(self.back_button)
-        self.printer.on_available_gcode_cmds.connect(
+        self.printer.available_gcode_cmds.connect(
             self.probe_helper_page.on_available_gcode_cmds
         )
-        self.probe_helper_page.on_subscribe_config[
-            str, "PyQt_PyObject"
-        ].connect(self.printer.on_subscribe_config)
-        self.probe_helper_page.on_subscribe_config[
-            list, "PyQt_PyObject"
-        ].connect(self.printer.on_subscribe_config)
-        self.printer.on_printer_config.connect(
+        self.probe_helper_page.subscribe_config[str, "PyQt_PyObject"].connect(
+            self.printer.on_subscribe_config
+        )
+
+        self.probe_helper_page.subscribe_config[list, "PyQt_PyObject"].connect(
+            self.printer.on_subscribe_config
+        )
+        self.printer.gcode_move_update.connect(
+            self.probe_helper_page.on_gcode_move_update
+        )
+        self.printer.manual_probe_update.connect(
+            self.probe_helper_page.on_manual_probe_update
+        )
+        self.printer.printer_config.connect(
             self.probe_helper_page.on_printer_config
         )
-        self.printer.on_gcode_response.connect(
+        self.printer.gcode_response.connect(
             self.probe_helper_page.handle_gcode_response
         )
 
-        self.printer.on_toolhead_update[str, list].connect(
+        self.printer.toolhead_update[str, list].connect(
             self.on_toolhead_update
         )
-        self.printer.on_extruder_update.connect(self.on_extruder_update)
-        self.printer.on_heater_bed_update.connect(self.on_heater_bed_update)
+        self.printer.extruder_update.connect(self.on_extruder_update)
+        self.printer.heater_bed_update.connect(self.on_heater_bed_update)
 
         self.panel.cp_motion_btn.clicked.connect(
             partial(self.change_page, self.indexOf(self.panel.motion_page))
@@ -105,10 +116,10 @@ class ControlTab(QtWidgets.QStackedWidget):
         )
 
         self.panel.motion_extrude_btn.clicked.connect(
-            partial(self.change_page, 2)
+            partial(self.change_page, self.indexOf(self.panel.extrude_page))
         )
         self.panel.motion_move_axis_btn.clicked.connect(
-            partial(self.change_page, 3)
+            partial(self.change_page, self.indexOf(self.panel.move_axis_page))
         )
         self.panel.mp_back_btn.clicked.connect(self.back_button)
         self.panel.motion_auto_home_btn.clicked.connect(

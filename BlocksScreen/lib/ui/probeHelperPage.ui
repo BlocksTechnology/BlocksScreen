@@ -230,8 +230,8 @@
            <widget class="QLabel" name="tool_image">
             <property name="geometry">
              <rect>
-              <x>20</x>
-              <y>30</y>
+              <x>40</x>
+              <y>0</y>
               <width>346</width>
               <height>211</height>
              </rect>
@@ -246,9 +246,9 @@
            <widget class="QWidget" name="verticalLayoutWidget">
             <property name="geometry">
              <rect>
-              <x>130</x>
-              <y>30</y>
-              <width>220</width>
+              <x>150</x>
+              <y>10</y>
+              <width>212</width>
               <height>154</height>
              </rect>
             </property>
@@ -808,7 +808,4 @@
   <include location="resources/button_resources.qrc"/>
  </resources>
  <connections/>
- <buttongroups>
-  <buttongroup name="move_intervals_button_group"/>
- </buttongroups>
 </ui>
