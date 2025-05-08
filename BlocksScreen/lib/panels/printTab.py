@@ -48,47 +48,54 @@ class PrintTab(QStackedWidget):
 
     """
 
-    request_file_thumbnail: typing.ClassVar[PyQt6.QtCore.pyqtSignal] = pyqtSignal(
-        str, name="get_file_thumbnail"
+    request_file_thumbnail: typing.ClassVar[PyQt6.QtCore.pyqtSignal] = (
+        pyqtSignal(str, name="get_file_thumbnail")
     )
-    request_print_file_signal: typing.ClassVar[PyQt6.QtCore.pyqtSignal] = pyqtSignal(
-        str, name="start_print"
+    request_print_file_signal: typing.ClassVar[PyQt6.QtCore.pyqtSignal] = (
+        pyqtSignal(str, name="start_print")
     )
-    request_print_resume_signal: typing.ClassVar[PyQt6.QtCore.pyqtSignal] = pyqtSignal(
-        name="resume_print"
+    request_print_resume_signal: typing.ClassVar[PyQt6.QtCore.pyqtSignal] = (
+        pyqtSignal(name="resume_print")
     )
-    request_print_stop_signal: typing.ClassVar[PyQt6.QtCore.pyqtSignal] = pyqtSignal(
-        name="stop_print"
+    request_print_stop_signal: typing.ClassVar[PyQt6.QtCore.pyqtSignal] = (
+        pyqtSignal(name="stop_print")
     )
-    request_print_pause_signal: typing.ClassVar[PyQt6.QtCore.pyqtSignal] = pyqtSignal(
-        name="pause_print"
+    request_print_pause_signal: typing.ClassVar[PyQt6.QtCore.pyqtSignal] = (
+        pyqtSignal(name="pause_print")
     )
-    request_query_print_stats: typing.ClassVar[PyQt6.QtCore.pyqtSignal] = pyqtSignal(
-        dict, name="request_query_print_stats"
+    request_query_print_stats: typing.ClassVar[PyQt6.QtCore.pyqtSignal] = (
+        pyqtSignal(dict, name="request_query_print_stats")
     )
-    request_block_manual_tab_change: typing.ClassVar[PyQt6.QtCore.pyqtSignal] = (
-        pyqtSignal(name="block_manual_tab_change")
-    )
-    request_activate_manual_tab_change: typing.ClassVar[PyQt6.QtCore.pyqtSignal] = (
-        pyqtSignal(name="activate_manual_tab_change")
-    )
-    request_back_button_pressed: typing.ClassVar[PyQt6.QtCore.pyqtSignal] = pyqtSignal(
-        name="request_back_button_pressed"
+    request_block_manual_tab_change: typing.ClassVar[
+        PyQt6.QtCore.pyqtSignal
+    ] = pyqtSignal(name="block_manual_tab_change")
+    request_activate_manual_tab_change: typing.ClassVar[
+        PyQt6.QtCore.pyqtSignal
+    ] = pyqtSignal(name="activate_manual_tab_change")
+    request_back_button_pressed: typing.ClassVar[PyQt6.QtCore.pyqtSignal] = (
+        pyqtSignal(name="request_back_button_pressed")
     )
     request_change_page: typing.ClassVar[PyQt6.QtCore.pyqtSignal] = pyqtSignal(
         int, int, name="request_change_page"
     )
-    printer_state_signal: typing.ClassVar[PyQt6.QtCore.pyqtSignal] = pyqtSignal(
-        str, name="printer_state_updated"
+    printer_state_signal: typing.ClassVar[PyQt6.QtCore.pyqtSignal] = (
+        pyqtSignal(str, name="printer_state_updated")
     )
-    verify_printer_state_signal: typing.ClassVar[PyQt6.QtCore.pyqtSignal] = pyqtSignal(
-        name="verify_printer_state"
+    verify_printer_state_signal: typing.ClassVar[PyQt6.QtCore.pyqtSignal] = (
+        pyqtSignal(name="verify_printer_state")
     )
     run_gcode_signal: typing.ClassVar[PyQt6.QtCore.pyqtSignal] = pyqtSignal(
         str, name="run_gcode"
     )
-    request_numpad_signal: typing.ClassVar[PyQt6.QtCore.pyqtSignal] = pyqtSignal(
-        int, str, str, "PyQt_PyObject", QStackedWidget, name="request_numpad"
+    request_numpad_signal: typing.ClassVar[PyQt6.QtCore.pyqtSignal] = (
+        pyqtSignal(
+            int,
+            str,
+            str,
+            "PyQt_PyObject",
+            QStackedWidget,
+            name="request_numpad",
+        )
     )
 
     def __init__(
@@ -99,9 +106,12 @@ class PrintTab(QStackedWidget):
         printer: Printer,
     ) -> None:
         super(PrintTab, self).__init__(parent)
-        # self.main_panel = parent # Redundant
         self.panel = Ui_printStackedWidget()
         self.panel.setupUi(self)
+        self.change_page(
+            self.indexOf(self.panel.print_page)
+        )  # force set the initial page
+
         self.file_data: Files = file_data
         self.ws: MoonWebSocket = ws
         self.printer: Printer = printer
@@ -113,9 +123,10 @@ class PrintTab(QStackedWidget):
         self.speed_factor_override: float = 100.0
         self._current_file_name: str | None = None
         self._z_offset: float = 0.05
-        self.panel.listWidget.setLayoutDirection(Qt.LayoutDirection.LeftToRight)
+        self.panel.listWidget.setLayoutDirection(
+            Qt.LayoutDirection.LeftToRight
+        )
 
-        # handle filament sensors page
         self.sensorsPanel = SensorsWindow(self)
         self.addWidget(self.sensorsPanel)
         self.panel.sensors_menu_btn.clicked.connect(
@@ -124,28 +135,25 @@ class PrintTab(QStackedWidget):
         self.printer.request_object_subscription_signal.connect(
             self.sensorsPanel.handle_available_fil_sensors
         )
-        self.sensorsPanel.panel.fs_back_button.clicked.connect(self.back_button)
+        self.sensorsPanel.panel.fs_back_button.clicked.connect(
+            self.back_button
+        )
         self.sensorsPanel.run_gcode_signal.connect(self.ws.api.run_gcode)
 
-        self.printer.on_filament_motion_sensor_update.connect(
+        self.printer.filament_motion_sensor_update.connect(
             self.sensorsPanel.handle_fil_state_change
         )
-        self.printer.on_filament_switch_sensor_update.connect(
+        self.printer.filament_switch_sensor_update.connect(
             self.sensorsPanel.handle_fil_state_change
         )
         self.sensorsPanel.toggle_sensor.connect(self.ws.api.run_gcode)
 
         # TODO: Get the gcode path from the configfile by asking the websocket first
-        # @ GCode directory paths
         self.gcode_path = os.path.expanduser("~/printer_data/gcodes")
-        # @ Slot connections
         self.currentChanged.connect(self.view_changed)
-        # @ Signals for QListItems
         self.panel.listWidget.itemClicked.connect(self.fileItemClicked)
-        ##@ Signals for confirm page
         self.panel.confirm_no_text_label.clicked.connect(self.back_button)
         self.panel.confirm_yes_text_label.clicked.connect(self.print_start)
-        ##@ Signals for printing operations
         self.request_print_file_signal.connect(self.ws.api.start_print)
         self.request_print_stop_signal.connect(self.ws.api.cancel_print)
         self.request_print_resume_signal.connect(self.ws.api.resume_print)
@@ -156,56 +164,89 @@ class PrintTab(QStackedWidget):
         )
         self.panel.pause_printing_btn.clicked.connect(self.pause_resume_print)
 
-        # Main Screen
-        self.panel.main_print_btn.clicked.connect(partial(self.change_page, 1))
-        self.panel.tune_menu_btn.clicked.connect(partial(self.change_page, 4))
-        self.panel.tune_babystep_menu_btn.clicked.connect(partial(self.change_page, 5))
+        self.panel.main_print_btn.clicked.connect(
+            partial(self.change_page, self.indexOf(self.panel.files_page))
+        )
+        self.panel.tune_menu_btn.clicked.connect(
+            partial(self.change_page, self.indexOf(self.panel.tune_page))
+        )
+        self.panel.tune_babystep_menu_btn.clicked.connect(
+            partial(self.change_page, self.indexOf(self.panel.babystep_page))
+        )
         # File List Screen
         self.request_file_thumbnail.connect(self.file_data.get_file_thumbnail)
         self.panel.back_btn.clicked.connect(self.back_button)
         self.panel.tune_back_btn.clicked.connect(self.back_button)
         self.panel.babystep_back_btn.clicked.connect(self.back_button)
-        self.printer.on_virtual_sdcard_update[str, bool].connect(
+        self.printer.virtual_sdcard_update[str, bool].connect(
             self.virtual_sdcard_update
         )
-        self.printer.on_virtual_sdcard_update[str, float].connect(
+        self.printer.virtual_sdcard_update[str, float].connect(
             self.virtual_sdcard_update
         )
-        self.printer.on_virtual_sdcard_update.connect(self.virtual_sdcard_update)
-        self.printer.on_print_stats_update[str, str].connect(self.on_print_stats_update)
-        self.printer.on_print_stats_update[str, dict].connect(
+        self.printer.virtual_sdcard_update.connect(self.virtual_sdcard_update)
+        self.printer.print_stats_update[str, str].connect(
             self.on_print_stats_update
         )
-        self.printer.on_print_stats_update[str, float].connect(
+        self.printer.print_stats_update[str, dict].connect(
             self.on_print_stats_update
         )
-        self.printer.on_idle_timeout_update[str, str].connect(
+        self.printer.print_stats_update[str, float].connect(
+            self.on_print_stats_update
+        )
+        self.printer.idle_timeout_update[str, str].connect(
             self.on_idle_timeout_update
         )
-        self.printer.on_idle_timeout_update[str, float].connect(
+        self.printer.idle_timeout_update[str, float].connect(
             self.on_idle_timeout_update
         )
-        self.printer.on_idle_timeout_update.connect(self.on_idle_timeout_update)
-        self.printer.on_display_update[str, str].connect(self.display_update)
-        self.printer.on_display_update[str, float].connect(self.display_update)
-        self.printer.on_gcode_move_update[str, list].connect(self.gcode_move_update)
-        self.printer.on_gcode_move_update[str, bool].connect(self.gcode_move_update)
-        self.printer.on_gcode_move_update[str, float].connect(self.gcode_move_update)
+        self.printer.idle_timeout_update.connect(self.on_idle_timeout_update)
+        self.printer.display_update[str, str].connect(self.on_display_update)
+        self.printer.display_update[str, float].connect(self.on_display_update)
+        self.printer.gcode_move_update[str, list].connect(
+            self.on_gcode_move_update
+        )
+        self.printer.gcode_move_update[str, bool].connect(
+            self.on_gcode_move_update
+        )
+        self.printer.gcode_move_update[str, float].connect(
+            self.on_gcode_move_update
+        )
 
         # * Signals from panel widgets
-        self.panel.bbp_close_to_bed.clicked.connect(self.move_nozzle_close_to_bed)
-        self.panel.bbp_away_from_bed.clicked.connect(self.move_nozzle_far_to_bed)
-        self.panel.bbp_nozzle_offset_01.toggled.connect(self.handle_z_offset_change)
-        self.panel.bbp_nozzle_offset_025.toggled.connect(self.handle_z_offset_change)
-        self.panel.bbp_nozzle_offset_05.toggled.connect(self.handle_z_offset_change)
-        self.panel.bbp_nozzle_offset_1.toggled.connect(self.handle_z_offset_change)
+        self.panel.bbp_close_to_bed.clicked.connect(
+            self.move_nozzle_close_to_bed
+        )
+        self.panel.bbp_away_from_bed.clicked.connect(
+            self.move_nozzle_far_to_bed
+        )
+        self.panel.bbp_nozzle_offset_01.toggled.connect(
+            self.handle_z_offset_change
+        )
+        self.panel.bbp_nozzle_offset_025.toggled.connect(
+            self.handle_z_offset_change
+        )
+        self.panel.bbp_nozzle_offset_05.toggled.connect(
+            self.handle_z_offset_change
+        )
+        self.panel.bbp_nozzle_offset_1.toggled.connect(
+            self.handle_z_offset_change
+        )
 
         self.run_gcode_signal.connect(self.ws.api.run_gcode)
         # @ Get the temperatures for the objects
-        self.printer.on_extruder_update.connect(self.on_extruder_temperature_change)
-        self.printer.on_heater_bed_update.connect(self.on_heater_bed_temperature_change)
-        self.printer.on_fan_update[str, str, float].connect(self.on_fan_object_update)
-        self.printer.on_fan_update[str, str, int].connect(self.on_fan_object_update)
+        self.printer.extruder_update.connect(
+            self.on_extruder_temperature_change
+        )
+        self.printer.heater_bed_update.connect(
+            self.on_heater_bed_temperature_change
+        )
+        self.printer.fan_update[str, str, float].connect(
+            self.on_fan_object_update
+        )
+        self.printer.fan_update[str, str, int].connect(
+            self.on_fan_object_update
+        )
         # @ Numpad stuff
         self.panel.bed_display.clicked.connect(
             partial(
@@ -259,8 +300,6 @@ class PrintTab(QStackedWidget):
                 self,
             )
         )
-
-        self.change_page(0)  # force set the initial page
 
     @pyqtSlot(str, int, name="numpad_new_value")
     @pyqtSlot(str, float, name="numpad_new_value")
@@ -346,10 +385,12 @@ class PrintTab(QStackedWidget):
         """
         pass
 
-    @pyqtSlot(str, float, name="gcode_move_update")
-    @pyqtSlot(str, bool, name="gcode_move_update")
-    @pyqtSlot(str, list, name="gcode_move_update")
-    def gcode_move_update(self, field: str, value: bool | float | list) -> None:
+    @pyqtSlot(str, float, name="on_gcode_move_update")
+    @pyqtSlot(str, bool, name="on_gcode_move_update")
+    @pyqtSlot(str, list, name="on_gcode_move_update")
+    def on_gcode_move_update(
+        self, field: str, value: bool | float | list
+    ) -> None:
         """Processes the information that comes from the printer object "gcode_move"
 
         Args:
@@ -379,7 +420,9 @@ class PrintTab(QStackedWidget):
     @pyqtSlot(str, dict, name="on_print_stats_update")
     @pyqtSlot(str, float, name="on_print_stats_update")
     @pyqtSlot(str, str, name="on_print_stats_update")
-    def on_print_stats_update(self, field: str, value: dict | float | str) -> None:
+    def on_print_stats_update(
+        self, field: str, value: dict | float | str
+    ) -> None:
         """Processes the information that comes from the printer object "print_stats"
             Displays information on the ui accordingly.
 
@@ -390,17 +433,25 @@ class PrintTab(QStackedWidget):
         if isinstance(value, str):
             if "filename" in field:
                 self._current_file_name = value
-                if self.panel.js_file_name_label.text().lower() != value.lower():
-                    self.panel.js_file_name_label.setText(self._current_file_name)
+                if (
+                    self.panel.js_file_name_label.text().lower()
+                    != value.lower()
+                ):
+                    self.panel.js_file_name_label.setText(
+                        self._current_file_name
+                    )
 
             if "state" in field:
                 self.printer_stats_object_state = value
                 if value.lower() == "printing" or value == "paused":
-                    self.request_query_print_stats.emit({"print_stats": ["filename"]})
+                    self.request_query_print_stats.emit(
+                        {"print_stats": ["filename"]}
+                    )
                     self.show_print_page()
-                elif value == "cancelled" or value == "complete" or value == "standby":
+                elif value == "cancelled" or value == "complete":
                     # TODO: Print cancelled or complete or standby
                     self.change_page(0)
+
                 self._internal_print_status = value
         if self.panel.job_status_page.isVisible() and (
             self._internal_print_status == "printing"
@@ -418,18 +469,24 @@ class PrintTab(QStackedWidget):
                     if value["current_layer"] is not None:
                         _current_layer = value["current_layer"]
                         if _current_layer is not None:
-                            self.panel.layer_display_button.setText(str(_current_layer))
+                            self.panel.layer_display_button.setText(
+                                str(_current_layer)
+                            )
 
             elif isinstance(value, float):
                 if "total_duration" in field:
                     self.print_total_duration = value
-                    _time = self._estimate_print_time(int(self.print_total_duration))
+                    _time = self._estimate_print_time(
+                        int(self.print_total_duration)
+                    )
                     _print_time_string = (
                         f"{_time[0]}Day {_time[1]}H {_time[2]}min {_time[3]} s"
                         if _time[0] != 0
                         else f"{_time[1]}H {_time[2]}min {_time[3]}s"
                     )
-                    self.panel.print_time_display_button.setText(_print_time_string)
+                    self.panel.print_time_display_button.setText(
+                        _print_time_string
+                    )
                 elif "print_duration" in field:
                     self.current_print_duration_seconds = value
                     # _time = self._estimate_print_time(
@@ -465,9 +522,9 @@ class PrintTab(QStackedWidget):
                     f"{math.trunc(self.print_progress * 100)}"
                 )
 
-    @pyqtSlot(str, str, name="display_update")
-    @pyqtSlot(str, float, name="display_update")
-    def display_update(self, field: str, value: str | float) -> None:
+    @pyqtSlot(str, str, name="on_display_update")
+    @pyqtSlot(str, float, name="on_display_update")
+    def on_display_update(self, field: str, value: str | float) -> None:
         """Slot for incoming printer object display information update
 
         Args:
@@ -482,11 +539,7 @@ class PrintTab(QStackedWidget):
             pass
 
     def print_start(self) -> None:
-        """print_start
-
-        Start a print job, *INTERNAL USE ONLY*
-        """
-        # * Emit the print file signal and send to the websocket the request
+        """Start a print job, **INTERNAL USE ONLY**"""
         self.request_print_file_signal.emit(self._current_file_name)
         self.show_print_page()
         logging.debug(
@@ -508,7 +561,7 @@ class PrintTab(QStackedWidget):
                 self._current_file_name
             ].get("layer_count", "?")
             self.panel.layer_display_button.setText(str(self.total_layers))
-            self.change_page(3)
+            self.change_page(self.indexOf(self.panel.job_status_page))
 
     @pyqtSlot(name="pause_resume_print")
     def pause_resume_print(self) -> None:
@@ -547,7 +600,8 @@ class PrintTab(QStackedWidget):
             _item_text = QtWidgets.QLabel()
             _item_text.setText(str(item["path"]))
             _item_text.setAlignment(
-                QtCore.Qt.AlignmentFlag.AlignLeft & QtCore.Qt.AlignmentFlag.AlignVCenter
+                QtCore.Qt.AlignmentFlag.AlignLeft
+                & QtCore.Qt.AlignmentFlag.AlignVCenter
             )
             _item_layout.addWidget(_item_text)
             _item_widget.setLayout(_item_layout)
@@ -624,7 +678,9 @@ class PrintTab(QStackedWidget):
         # * Get the filename from the list item pressed
         _current_item: QWidget = self.panel.listWidget.itemWidget(item)
         if _current_item is not None:
-            self._current_file_name = _current_item.findChild(QtWidgets.QLabel).text()
+            self._current_file_name = _current_item.findChild(
+                QtWidgets.QLabel
+            ).text()
             if self._current_file_name is not None:
                 self.panel.cf_file_name.setText(str(self._current_file_name))
             self.change_page(2)
@@ -640,8 +696,12 @@ class PrintTab(QStackedWidget):
                 painter.CompositionMode.CompositionMode_SourceOver
             )
             painter.setRenderHint(painter.RenderHint.Antialiasing, True)
-            painter.setRenderHint(painter.RenderHint.SmoothPixmapTransform, True)
-            painter.setRenderHint(painter.RenderHint.LosslessImageRendering, True)
+            painter.setRenderHint(
+                painter.RenderHint.SmoothPixmapTransform, True
+            )
+            painter.setRenderHint(
+                painter.RenderHint.LosslessImageRendering, True
+            )
             list_area_rect = self.panel.listWidget.geometry()
             # * Scale the pixmap to the correct Dimensions
             # TODO: Background is not really in SVG mode
@@ -651,28 +711,34 @@ class PrintTab(QStackedWidget):
                 QtCore.Qt.AspectRatioMode.KeepAspectRatio,
                 QtCore.Qt.TransformationMode.SmoothTransformation,
             )
-            painter.drawPixmap(list_area_rect, _scaled_pixmap, self.background.rect())
+            painter.drawPixmap(
+                list_area_rect, _scaled_pixmap, self.background.rect()
+            )
             painter.end()
-        if (
-            self.panel.confirm_page.isVisible()
-        ):  # Get and place file thumbnail preview in the container and all information
+        if self.panel.confirm_page.isVisible():  # Get and place file thumbnail preview in the container and all information
             if self._current_file_name is None:
                 return
             _item_metadata: dict = self.file_data.files_metadata[
                 self._current_file_name
             ]
             if "estimated_time" in _item_metadata.keys():
-                _time = self._estimate_print_time(_item_metadata["estimated_time"])
+                _time = self._estimate_print_time(
+                    _item_metadata["estimated_time"]
+                )
                 _print_time_string = (
                     f"{_time[0]}Day {_time[1]}H {_time[2]}min {_time[3]} s"
                     if _time[0] != 0
                     else f"{_time[1]}H {_time[2]}min {_time[3]}s"
                 )
-                self.panel.print_time_display_button.setText(_print_time_string)
+                self.panel.print_time_display_button.setText(
+                    _print_time_string
+                )
 
             _scene = QtWidgets.QGraphicsScene()
             if "thumbnails" in _item_metadata:
-                _image = self.request_file_thumbnail.emit(self._current_file_name)
+                _image = self.request_file_thumbnail.emit(
+                    self._current_file_name
+                )
 
                 if _image is not None:
                     _scene.setSceneRect(_image.rect().toRectF())
@@ -766,7 +832,9 @@ class PrintTab(QStackedWidget):
         ):
             return int(-1)
         _current_layer = (
-            1 + (self._current_z_position - _first_layer_height) / _normal_layer_height
+            1
+            + (self._current_z_position - _first_layer_height)
+            / _normal_layer_height
         )
 
         self.panel.layer_display_button.setText(
@@ -776,12 +844,11 @@ class PrintTab(QStackedWidget):
         return int(_current_layer)
 
     def change_page(self, index: int) -> None:
-        """Requests a change page, to the global page thingy
+        """Requests a page change page to the global manager
 
         Args:
-            index (int): The index of the page we wan't to go
+            index (int): page index
         """
-        # Emits with the request its tab index and its page index
         self.request_change_page.emit(0, index)
 
     def back_button(self) -> None:

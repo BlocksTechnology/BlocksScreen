@@ -3,40 +3,48 @@ import sys
 import typing
 
 import logger
-import PyQt6
-import PyQt6.QtCore
 from lib.panels.mainWindow import MainWindow
-from PyQt6.QtGui import QPixmap
-from PyQt6.QtWidgets import QApplication, QSplashScreen, QWidget
+from PyQt6 import QtCore, QtGui, QtWidgets
 
 _logger = logging.getLogger(name="logs/BlocksScreen.log")
+
+
+RED = "\033[31m"
+GREEN = "\033[32m"
+YELLOW = "\033[33m"
+RESET = "\033[0m"
 
 
 def setup_working_dir(): ...
 
 
 def setup_app_loggers():
-    ql = logger.create_logger(name="logs/BlocksScreen.log", level=logging.DEBUG)
+    ql = logger.create_logger(
+        name="logs/BlocksScreen.log", level=logging.DEBUG
+    )
     _logger = logging.getLogger(name="logs/BlocksScreen.log")
     _logger.info("============ BlocksScreen Initializing ============")
 
 
-def show_splash(window: typing.Optional["QWidget"] = None):
-    logo = QPixmap("Blocks_Screen/BlocksScreen/lib/ui/resources/logoblocks.png")
-    splash = QSplashScreen(pixmap=logo)
-    splash.setGeometry(PyQt6.QtCore.QRect(0, 0, 400, 200))
+def show_splash(window: typing.Optional["QtWidgets.QWidget"] = None):
+    logo = QtGui.QPixmap(
+        "Blocks_Screen/BlocksScreen/lib/ui/resources/logoblocks.png"
+    )
+    splash = QtWidgets.QSplashScreen(pixmap=logo)
+    splash.setGeometry(QtCore.QRect(0, 0, 400, 200))
     # splash.showFullScreen()
     # splash.show()
     # sleep(2)
 
     # * Wait until the *window* is in view to close the splash screen
-    if window is not None and isinstance(window, QWidget):
+    if window is not None and isinstance(window, QtWidgets.QWidget):
         splash.finish(window)
 
 
 def run():
+    print(f"{RED} STARTING BLOCKS SCREEN {RESET}")
     setup_app_loggers()
-    BlocksScreen = QApplication([])
+    BlocksScreen = QtWidgets.QApplication([])
     main_window = MainWindow()
 
     show_splash(main_window)
@@ -52,7 +60,7 @@ def run():
 
     # main_window.showFullScreen()
     main_window.showNormal()
-    main_window.bo_startup.emit()
+    main_window.bo_ws_startup.emit()
     sys.exit(BlocksScreen.exec())
 
 

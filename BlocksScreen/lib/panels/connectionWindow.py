@@ -39,8 +39,8 @@ class ConnectionWindow(QFrame):
             self.restart_klipper_clicked.emit
         )
         self.ws.connection_lost.connect(slot=self.show)
-        self.ws.klippy_connected_signal.connect(self.klippy_connection)
-        self.ws.klippy_state_signal.connect(self.klippy_state)
+        self.ws.klippy_connected_signal.connect(self.on_klippy_connection)
+        self.ws.klippy_state_signal.connect(self.on_klippy_state)
 
     def show_panel(self, reason: str | None = None):
         self.show()
@@ -51,39 +51,45 @@ class ConnectionWindow(QFrame):
         return False
 
     @pyqtSlot(bool, name="klippy_connection")
-    def klippy_connection(self, state: bool):
+    def on_klippy_connection(self, state: bool):
         pass
 
-    @pyqtSlot(str, name="klippy_state")
-    def klippy_state(self, state: str):
-        
+    @pyqtSlot(str, name="on_klippy_state")
+    def on_klippy_state(self, state: str):
         if state == "error":
+            self.panel.connectionTextBox.setText("Klipper Connection Error")
             if not self.isVisible():
                 self.show()
-            self.panel.connectionTextBox.setText("Klipper Connection Error")
-        elif state == "shutdown": 
-            if not self.isVisible(): 
+        elif state == "disconnected":
+            self.panel.connectionTextBox.setText("Klipper Disconnected")
+
+            if not self.isVisible():
                 self.show()
+
+        elif state == "shutdown":
             self.panel.connectionTextBox.setText("Klipper reports: SHUTDOWN")
-            
+            if not self.isVisible():
+                self.show()
         elif state == "startup":
             self.panel.connectionTextBox.setText("Klipper Startup")
         elif state == "ready":
             self.panel.connectionTextBox.setText("Klipper Ready")
             self.hide()
 
-    @pyqtSlot(int, name="websocket_connecting")
-    @pyqtSlot(str, name="websocket_connecting")
-    def websocket_connecting(self, attempt: int):
+    @pyqtSlot(int, name="on_websocket_connecting")
+    @pyqtSlot(str, name="on_websocket_connecting")
+    def on_websocket_connecting(self, attempt: int):
         self.text_update(attempt)
 
-    @pyqtSlot(name="websocket_connection_achieved")
-    def websocket_connection_achieved(self):
-        self.panel.connectionTextBox.setText("Moonraker Connected\n Klippy not ready")
+    @pyqtSlot(name="on_websocket_connection_achieved")
+    def on_websocket_connection_achieved(self):
+        self.panel.connectionTextBox.setText(
+            "Moonraker Connected\n Klippy not ready"
+        )
         self.hide()
 
-    @pyqtSlot(name="websocket_connection_lost")
-    def websocket_connection_lost(self):
+    @pyqtSlot(name="on_websocket_connection_lost")
+    def on_websocket_connection_lost(self):
         if not self.isVisible():
             self.show()
         self.text_update(text="Websocket lost")
@@ -125,13 +131,11 @@ class ConnectionWindow(QFrame):
         return False
 
     def eventFilter(self, object: QObject, event: QEvent) -> bool:
-        if event is None:
-            return super().eventFilter(object, event)
-
         if event.type() == KlippyDisconnected.type():
             if not self.isVisible():
+                self.panel.connectionTextBox.setText("Klippy Disconnected")
                 self.show()
-                self.panel.connectionTextBox.setText("Klippy is disconnected")
+
         elif event.type() == KlippyReady.type():
             self.panel.connectionTextBox.setText("Klippy Ready")
             self.hide()
@@ -139,8 +143,8 @@ class ConnectionWindow(QFrame):
 
         elif event.type() == KlippyShutdown.type():
             if not self.isVisible():
-                self.show()
                 self.panel.connectionTextBox.setText("Klippy shutdown")
+                self.show()
                 return True
 
         return super().eventFilter(object, event)
