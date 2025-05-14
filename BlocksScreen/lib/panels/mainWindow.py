@@ -25,8 +25,8 @@ from lib.panels.utilitiesTab import UtilitiesTab
 
 # * UI
 from lib.ui.mainWindow_ui import Ui_MainWindow  # With header
-
 # from lib.ui.mainWindow_v2_ui import Ui_MainWindow # No header
+
 # * Resources
 from lib.ui.resources.background_resources_rc import *
 from lib.ui.resources.button_resources_rc import *
@@ -474,7 +474,7 @@ class MainWindow(QMainWindow):
                 self.ui.extruder_temp_display.setText(f"{new_value:.1f}")
                 ...
             elif field == "target":
-                self.ui.extruder_temp_display.setSecondaryText(
+                self.ui.extruder_temp_display.set_secondary_text(
                     f"{new_value:.1f}"
                 )
 
@@ -487,7 +487,7 @@ class MainWindow(QMainWindow):
             self.ui.bed_temp_display.setText(f"{new_value:.1f}")
 
         elif field == "target":
-            self.ui.bed_temp_display.setSecondaryText(f"{new_value:.1f}")
+            self.ui.bed_temp_display.set_secondary_text(f"{new_value:.1f}")
 
     def paintEvent(self, a0: QPaintEvent | None) -> None:
         # TODO: If tab bar is disabled gray it out

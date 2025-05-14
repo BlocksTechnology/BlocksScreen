@@ -1,16 +1,11 @@
 from __future__ import annotations
 
-import enum
 import logging
 import typing
 
-import qt6_applications
-
 import events
-
-import PyQt6.QtCore
-from PyQt6 import QtCore, QtWidgets
 from lib.moonrakerComm import MoonWebSocket
+from PyQt6 import QtCore, QtWidgets
 
 _logger = logging.getLogger(name="logs/BlocksScreen.logs")
 
@@ -81,36 +76,36 @@ class Printer(QtCore.QObject):
     )
     webhooks_update = QtCore.pyqtSignal(str, str, name="webhooks_update")
     query_printer_object = QtCore.pyqtSignal(dict, name="query_printer_object")
-    save_config_pending: typing.ClassVar[PyQt6.QtCore.pyqtSignal] = (
+    save_config_pending: typing.ClassVar[QtCore.pyqtSignal] = (
         QtCore.pyqtSignal(name="save_config_pending")
     )
-    printer_config: typing.ClassVar[PyQt6.QtCore.pyqtSignal] = (
-        QtCore.pyqtSignal(dict, name="printer_config")
+    printer_config: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        dict, name="printer_config"
     )
 
-    configfile_update: typing.ClassVar[PyQt6.QtCore.pyqtSignal] = (
-        QtCore.pyqtSignal(dict, name="configfile_update")
+    configfile_update: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        dict, name="configfile_update"
     )
 
-    # object_config: typing.ClassVar[PyQt6.QtCore.pyqtSignal] = pyqtSignal(
+    # object_config: typing.ClassVar[QtCore.pyqtSignal] = pyqtSignal(
     #     [list, list], [str, dict], name="object_config"
     # )
 
-    config_subscription: typing.ClassVar[PyQt6.QtCore.pyqtSignal] = (
+    config_subscription: typing.ClassVar[QtCore.pyqtSignal] = (
         QtCore.pyqtSignal(
             [dict],
             [list],
             name="config_subscription",
         )
     )
-    manual_probe_update: typing.ClassVar[PyQt6.QtCore.pyqtSignal] = (
+    manual_probe_update: typing.ClassVar[QtCore.pyqtSignal] = (
         QtCore.pyqtSignal(dict, name="manual_probe_update")
     )
-    available_gcode_cmds: typing.ClassVar[PyQt6.QtCore.pyqtSignal] = (
+    available_gcode_cmds: typing.ClassVar[QtCore.pyqtSignal] = (
         QtCore.pyqtSignal(dict, name="available_gcode_cmds")
     )
-    gcode_response: typing.ClassVar[PyQt6.QtCore.pyqtSignal] = (
-        QtCore.pyqtSignal(list, name="gcode_response")
+    gcode_response: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        list, name="gcode_response"
     )
     extruder_number: int = 0
     available_gcode_commands: dict = {}
@@ -128,24 +123,19 @@ class Printer(QtCore.QObject):
 
         self.ws = ws
         self.active_extruder_name: str = ""
-        self.printer_state_webhook: str = ""
-        self.printer_message_webhook: str = ""
-        self._last_eventTime: float = 0.0
-        self.printer_objects: dict = {}
-        self.printing_error_message: str | None = None
         self.available_filament_sensors: dict = {}
+        self.has_chamber: bool = False
 
-        heater_attributes: dict = {
+        _heater_attributes: dict = {
             "current_temperature": 0.0,
             "target_temperature": 0.0,
             "can_extrude": False,
         }
         self.heaters_object: dict = {
-            "extruder": heater_attributes.copy(),
-            "extruder1": heater_attributes.copy(),
-            "bed": heater_attributes.copy(),
+            "extruder": _heater_attributes.copy(),
+            "extruder1": _heater_attributes.copy(),
+            "bed": _heater_attributes.copy(),
         }
-        self.has_chamber: bool = False
 
         self.ws.klippy_state_signal.connect(self.on_klippy_status)
         self.request_available_objects_signal.connect(
@@ -160,6 +150,7 @@ class Printer(QtCore.QObject):
         self.available_gcode_commands.clear()
         self.available_objects.clear()
         self.configfile.clear()
+        print(self.configfile)
         self.printing = False
         self.printing_state = ""
         self.print_file_loaded = False
@@ -170,11 +161,9 @@ class Printer(QtCore.QObject):
 
     @QtCore.pyqtSlot(str, name="on_klippy_status")
     def on_klippy_status(self, state: str):
-        if (
-            state.lower() == "ready"
-            or state.lower() == "printing"
-            or state.lower() == "idle"
-        ):
+        # "startup", "error", "ready", "shutdown", "disconnected"
+        print(state)
+        if state.lower() == "ready":
             self.request_available_objects_signal.emit()  # request available objects
             _query_request: dict = {
                 "idle_timeout": None,
@@ -182,7 +171,11 @@ class Printer(QtCore.QObject):
                 "virtual_sdcard": None,
             }
             self.query_printer_object.emit(_query_request)
-        else:
+        elif (
+            state.lower() == "error"
+            or state.lower() == "disconnected"
+            or state.lower() == "shutdown"
+        ):
             self.clear_printer_objs()
 
     @QtCore.pyqtSlot(list, name="on_object_list")
@@ -276,7 +269,7 @@ class Printer(QtCore.QObject):
     @QtCore.pyqtSlot(str, "PyQt_PyObject", name="on_subscribe_config")
     @QtCore.pyqtSlot(list, "PyQt_PyObject", name="on_subscribe_config")
     def on_subscribe_config(self, section: str | list, callback) -> None:
-        """_summary_
+        """Slot that manages object config subscriptions
 
         Args:
             section (str | list): Config section to subscribe to
@@ -330,9 +323,6 @@ class Printer(QtCore.QObject):
         if isinstance(report[0], dict):
             _objects_updated_dict: dict = report[0]
         _objects_updated_names = list(report[0])
-        self._last_eventTime = report[len(report) - 1]
-        self.printer_objects.update(dict(report[0]))
-        # * Callbacks for each object updated object
         list(
             map(
                 lambda n: self._check_callback(n, _objects_updated_dict[n]),
@@ -344,14 +334,14 @@ class Printer(QtCore.QObject):
             objects,going to callbacks"""
         )
 
-    ####################*# Callbacks #*####################
+    ####################*# Callbacks #*#####################
     @QtCore.pyqtSlot(list, name="_gcode_response")
     def _gcode_response(self, report: list) -> None:
-        # TODO: Handle reports coming from subscribed websocket object
-        # _split_information = report[0].split("// ")
         self.gcode_response.emit(report)
 
-    def _webhooks_object_updated(self, value: dict, name: str = "") -> None:
+    def _webhooks_object_updated(
+        self, value: dict, name: str = "webhooks"
+    ) -> None:
         """Sends an event type according to the received state
             from webhooks object
 
@@ -386,7 +376,9 @@ class Printer(QtCore.QObject):
                             f"Unable to send internal Klippy {_state_call} notification : {e}"
                         )
 
-    def _gcode_move_object_updated(self, value: dict, name: str = "") -> None:
+    def _gcode_move_object_updated(
+        self, value: dict, name: str = "gcode_move"
+    ) -> None:
         if "speed_factor" in value.keys():
             self.gcode_move_update[str, float].emit(
                 "speed_factor", value["speed_factor"]
@@ -418,7 +410,9 @@ class Printer(QtCore.QObject):
                 "gcode_position", value["gcode_position"]
             )
 
-    def _toolhead_object_updated(self, values: dict, name: str = "") -> None:
+    def _toolhead_object_updated(
+        self, values: dict, name: str = "toolhead"
+    ) -> None:
         if "homed_axes" in values.keys():
             self.toolhead_update[str, str].emit(
                 "homed_axes", values["homed_axes"]
@@ -507,7 +501,7 @@ class Printer(QtCore.QObject):
     def _chamber_object_updated(
         self, value: dict, heater_name: str = "chamber"
     ):
-        # TODO: Complete the search for the chamber object, but there is no actual chamber heater. If i create a klippy module it can be done like this maybe
+        # TODO: Complete Chamber object, this object does not actually exist on klippy, i would need to create it
         self.has_chamber = True
 
     def _fan_object_updated(self, value: dict, fan_name: str = "fan") -> None:
@@ -519,7 +513,7 @@ class Printer(QtCore.QObject):
             self.fan_update[str, str, int].emit(fan_name, "rpm", value["rpm"])
 
     def _idle_timeout_object_updated(
-        self, value: dict, name: str = ""
+        self, value: dict, name: str = "idle_timeout"
     ) -> None:
         if "state" in value.keys():
             self.idle_timeout_update[str, str].emit("state", value["state"])
@@ -537,7 +531,7 @@ class Printer(QtCore.QObject):
             )
 
     def _virtual_sdcard_object_updated(
-        self, values: dict, name: str = ""
+        self, values: dict, name: str = "virtual_sdcard"
     ) -> None:
         if "progress" in values.keys():
             self.virtual_sdcard_update[str, float].emit(
@@ -553,7 +547,7 @@ class Printer(QtCore.QObject):
             )
 
     def _print_stats_object_updated(
-        self, values: dict, name: str = ""
+        self, values: dict, name: str = "print_stats"
     ) -> None:
         try:
             if "filename" in values.keys():
@@ -593,7 +587,7 @@ class Printer(QtCore.QObject):
                 self.print_stats_update[str, str].emit(
                     "message", values["message"]
                 )
-                self.printing_error_message = values["message"]
+                # self.printing_error_message = values["message"]
             if "info" in values.keys():
                 self.print_stats_update[str, dict].emit("info", values["info"])
             return
@@ -601,7 +595,7 @@ class Printer(QtCore.QObject):
             _logger.error(f"Error sending print stats update {e}")
 
     def _display_status_object_updated(
-        self, values: dict, name: str = ""
+        self, values: dict, name: str = "display_status"
     ) -> None:
         if "message" in values.keys():
             self.display_update[str, str].emit("message", values["message"])
@@ -695,7 +689,9 @@ class Printer(QtCore.QObject):
                 output_pin_name, "value", values["value"]
             )
 
-    def _bed_mesh_object_updated(self, values: dict, name: str) -> None:
+    def _bed_mesh_object_updated(
+        self, values: dict, name: str = "bed_mesh"
+    ) -> None:
         # TODO
         pass
 
@@ -707,7 +703,9 @@ class Printer(QtCore.QObject):
         self.gcode_macro_update.emit(gcode_macro_name, values)
         return
 
-    def _configfile_object_updated(self, values: dict, name: str = "") -> None:
+    def _configfile_object_updated(
+        self, values: dict, name: str = "configfile"
+    ) -> None:
         self.configfile.update(values)
         if "config" in values.keys():
             self.printer_config.emit(values["config"])
@@ -728,7 +726,9 @@ class Printer(QtCore.QObject):
 
         return
 
-    def _gcode_object_updated(self, values: dict, name: str = "") -> None:
+    def _gcode_object_updated(
+        self, values: dict, name: str = "gcode_object"
+    ) -> None:
         if not values.get("commands"):
             return
         self.available_gcode_commands.update(values.get("commands"))  # type: ignore
@@ -741,7 +741,7 @@ class Printer(QtCore.QObject):
 
     def _probe_object_updated(self, values: dict, name: str) -> None:
         # TODO
-        # print(values)
+        print(values)
         ...
 
     def _bltouch_object_updated(self, values: dict, name: str) -> None:

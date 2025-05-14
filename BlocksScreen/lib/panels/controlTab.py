@@ -1,18 +1,18 @@
+from __future__ import annotations
 import logging
 import typing
 from functools import partial
 
-from PyQt6.QtGui import QPaintEvent
-from lib.bo.printer import Printer
-from lib.moonrakerComm import MoonWebSocket
-from lib.ui.controlStackedWidget_ui import Ui_controlStackedWidget
+# from lib.bo.printer import Printer
+# from lib.moonrakerComm import MoonWebSocket
 from lib.panels.probeHelperPage import ProbeHelper
-from PyQt6 import QtWidgets
-from PyQt6 import QtCore
+from lib.ui.controlStackedWidget_ui import Ui_controlStackedWidget
+from PyQt6 import QtCore, QtWidgets
 from PyQt6.QtCore import (
     pyqtSignal,
     pyqtSlot,
 )
+from PyQt6.QtGui import QPaintEvent
 
 
 class ControlTab(QtWidgets.QStackedWidget):
@@ -32,18 +32,15 @@ class ControlTab(QtWidgets.QStackedWidget):
 
     def __init__(
         self,
-        parent: typing.Optional[QtWidgets.QWidget],
-        ws: MoonWebSocket,
-        printer: Printer,
+        parent: QtWidgets.QWidget,
+        ws: typing.Type["MoonWebSocket"],
+        printer: typing.Type["Printer"],
         /,
     ) -> None:
-        if parent is not None:
-            super().__init__(parent)
-        else:
-            super().__init__()
+        super().__init__(parent)
         self.panel = Ui_controlStackedWidget()
         self.panel.setupUi(self)
-        self.setCurrentIndex(0)
+
         self.ws = ws
         self.printer = printer
         self.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
@@ -62,7 +59,9 @@ class ControlTab(QtWidgets.QStackedWidget):
         self.probe_helper_page.request_page_view.connect(
             partial(self.change_page, self.indexOf(self.probe_helper_page))
         )
-        self.probe_helper_page.query_printer_object.connect(self.ws.api.object_query)
+        self.probe_helper_page.query_printer_object.connect(
+            self.ws.api.object_query
+        )
         self.probe_helper_page.run_gcode_signal.connect(self.ws.api.run_gcode)
         self.probe_helper_page.request_back.connect(self.back_button)
         self.printer.available_gcode_cmds.connect(
@@ -260,6 +259,12 @@ class ControlTab(QtWidgets.QStackedWidget):
                 self,
             )
         )
+        self.panel.cooldown_btn.clicked.connect(
+            lambda: self.run_gcode_signal.emit(
+                "SET_HEATER_TEMPERATURE HEATER=heater_bed TARGET=0\n\
+                SET_HEATER_TEMPERATURE HEATER=extruder TARGET=0"
+            )
+        )
 
     def change_page(self, index):
         self.request_change_page.emit(2, index)
@@ -450,7 +455,7 @@ class ControlTab(QtWidgets.QStackedWidget):
         if extruder_name == "extruder" and field == "temperature":
             self.panel.extruder_temp_display.setText(f"{new_value:.1f}")
         if extruder_name == "extruder" and field == "target":
-            self.panel.extruder_temp_display.setSecondaryText(
+            self.panel.extruder_temp_display.set_secondary_text(
                 f"{new_value:.1f}"
             )
 
@@ -465,7 +470,7 @@ class ControlTab(QtWidgets.QStackedWidget):
         if field == "temperature":
             self.panel.bed_temp_display.setText(f"{new_value:.1f}")
         if field == "target":
-            self.panel.bed_temp_display.setSecondaryText(f"{new_value:.1f}")
+            self.panel.bed_temp_display.set_secondary_text(f"{new_value:.1f}")
         self.bed_info.update({f"{name}": {f"{field}": new_value}})
 
     def paintEvent(self, a0: QPaintEvent) -> None:

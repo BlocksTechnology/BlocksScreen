@@ -167,8 +167,8 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
                 f"Unexpected error occurred when trying to acquire oneshot token: {e}"
             )
             return False
-        # _url = f"ws://192.168.1.100:7125/websocket?token={_oneshot_token}"
-        _url = f"ws://192.168.1.109:7125/websocket?token={_oneshot_token}"
+        _url = f"ws://192.168.1.100:7125/websocket?token={_oneshot_token}"
+        # _url = f"ws://192.168.1.109:7125/websocket?token={_oneshot_token}"
         self.ws = websocket.WebSocketApp(
             _url,
             on_open=self.on_open,
@@ -302,6 +302,9 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
                 elif response["result"]["klippy_state"] == "startup":
                     # request server.info in 2 seconds
                     if not self.query_klippy_status_timer.running:
+                        self.query_klippy_status_timer.startTimer()
+                elif response["result"]["klippy_state"] == "disconnected": 
+                    if not self.query_klippy_status_timer.running: 
                         self.query_klippy_status_timer.startTimer()
                 self.klippy_connected_signal.emit(
                     response["result"]["klippy_connected"]

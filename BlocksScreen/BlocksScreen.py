@@ -1,13 +1,29 @@
 import logging
+import os
 import sys
 import typing
 
+
 import logger
+
 from lib.panels.mainWindow import MainWindow
 from PyQt6 import QtCore, QtGui, QtWidgets
 
+os.environ["QT_AUTO_SCREEN_SCALE_FACTOR"] = "1.0"
+os.environ["QT_SCALE_FACTOR"] = "1.0"
+os.environ["QT_DEVICE_PIXEL_RATIO"] = "1.0"
+os.environ["QT_QPA_PLATFORM"] = "xcb"
+os.environ["QT_STYLE_OVERRIDE"] = "fusion"
+
+
 _logger = logging.getLogger(name="logs/BlocksScreen.log")
 
+QtGui.QGuiApplication.setHighDpiScaleFactorRoundingPolicy(  # type: ignore
+    QtCore.Qt.HighDpiScaleFactorRoundingPolicy.Ceil
+)
+QtGui.QGuiApplication.setLayoutDirection(  # type: ignore
+    QtCore.Qt.LayoutDirection.LayoutDirectionAuto
+)
 
 RED = "\033[31m"
 GREEN = "\033[32m"
@@ -52,12 +68,15 @@ def run():
     BlocksScreen.setApplicationName("BlocksScreen")
     BlocksScreen.setApplicationDisplayName("BlocksScreen")
     BlocksScreen.setDesktopFileName("BlocksScreen")
+    BlocksScreen.setHighDpiScaleFactorRoundingPolicy(
+        QtCore.Qt.HighDpiScaleFactorRoundingPolicy.Round
+    )
+    
 
+    print(BlocksScreen.devicePixelRatio())
     # ! Someone said that .processEvents sometimes crashes the system
     BlocksScreen.processEvents()
-
     # main_window.setScreen(BlocksScreen.screens()[2])
-
     # main_window.showFullScreen()
     main_window.showNormal()
     main_window.bo_ws_startup.emit()
@@ -66,23 +85,3 @@ def run():
 
 if __name__ == "__main__":
     run()
-
-
-# =============== FUNCTIONALITY =============== #
-# TODO: Add dynamically heater objects to the header
-# TODO: Block the bar when the printer is doing stuff
-# TODO: Create a callable window for errors, or warnings, that does not fade until the problem is corrected
-
-
-# EXPLORE IMPLEMENTATION: Garbage collector (python gc package) !!
-
-# TODO: Grey out the tab menu when the printer is actually printing
-# BUG:  After printing, the tab bar remain disabled and cannot go to other menus
-
-
-# TODO: Create a class that handles all the connections of signals and redirection
-
-
-# QCoreApplication.postEvent -> post event is handled asynchronously
-
-# QCoreApplication.sendEvent -> sendEvent is handled immediately
