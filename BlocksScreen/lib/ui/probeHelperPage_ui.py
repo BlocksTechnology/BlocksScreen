@@ -287,4 +287,5 @@ class Ui_probe_offset_page(object):
         self.move_option_3.setText(_translate("probe_offset_page", "0.05"))
         self.move_option_4.setText(_translate("probe_offset_page", "0.1"))
         self.move_option_5.setText(_translate("probe_offset_page", "1"))
-from utils.ui import BlocksCustomButton, BlocksLabel
+from utils.blocks_button import BlocksCustomButton
+from utils.blocks_label import  BlocksLabel

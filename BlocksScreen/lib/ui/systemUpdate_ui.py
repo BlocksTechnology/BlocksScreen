@@ -46,4 +46,4 @@ class Ui_systemUpdatePanel(object):
         self.su_header_title.setText(_translate("systemUpdatePanel", "System Update"))
         self.su_back_button.setText(_translate("systemUpdatePanel", "PushButton"))
         self.su_back_button.setProperty("button_type", _translate("systemUpdatePanel", "icon"))
-from utils.ui import BlocksCustomButton
+from utils.blocks_button import BlocksCustomButton

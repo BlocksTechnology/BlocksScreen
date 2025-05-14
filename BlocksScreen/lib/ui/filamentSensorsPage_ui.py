@@ -50,7 +50,7 @@ class Ui_filament_sensors_page(object):
         self.fs_back_button.setMaximumSize(QtCore.QSize(60, 60))
         self.fs_back_button.setText("")
         self.fs_back_button.setFlat(True)
-        self.fs_back_button.setProperty("icon_pixmap", QtGui.QPixmap(":/button_borders/media/btn_icons/back.svg"))
+        self.fs_back_button.setProperty("icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/back.svg"))
         self.fs_back_button.setObjectName("fs_back_button")
         self.fs_header_layout.addWidget(self.fs_back_button, 0, QtCore.Qt.AlignmentFlag.AlignRight|QtCore.Qt.AlignmentFlag.AlignVCenter)
         self.verticalLayoutWidget = QtWidgets.QWidget(parent=filament_sensors_page)
@@ -86,4 +86,4 @@ class Ui_filament_sensors_page(object):
         filament_sensors_page.setWindowTitle(_translate("filament_sensors_page", "Form"))
         self.fs_page_title.setText(_translate("filament_sensors_page", "Filament Sensors"))
         self.fs_back_button.setProperty("button_type", _translate("filament_sensors_page", "icon"))
-from utils.ui import BlocksCustomButton
+from utils.blocks_button import BlocksCustomButton

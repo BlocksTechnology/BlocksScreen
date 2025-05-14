@@ -399,4 +399,4 @@ class Ui_utilitiesStackedWidget(object):
         self.lcd_settings_back_btn.setText(_translate("utilitiesStackedWidget", "Back"))
         self.lcd_settings_back_btn.setProperty("class", _translate("utilitiesStackedWidget", "menu_btn"))
         self.lcd_settings_back_btn.setProperty("button_type", _translate("utilitiesStackedWidget", "icon"))
-from utils.ui import BlocksCustomButton
+from utils.blocks_button import BlocksCustomButton

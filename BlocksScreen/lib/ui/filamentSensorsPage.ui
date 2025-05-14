@@ -104,7 +104,7 @@
        <string>icon</string>
       </property>
       <property name="icon_pixmap" stdset="0">
-       <pixmap resource="resources/button_resources.qrc">:/button_borders/media/btn_icons/back.svg</pixmap>
+       <pixmap resource="resources/icon_resources.qrc">:/ui/media/btn_icons/back.svg</pixmap>
       </property>
      </widget>
     </item>
@@ -165,7 +165,7 @@ color: #ffffff;
   <customwidget>
    <class>BlocksCustomButton</class>
    <extends>QPushButton</extends>
-   <header location="global">utils.ui</header>
+   <header location="global">utils.blocks_button</header>
   </customwidget>
  </customwidgets>
  <resources>

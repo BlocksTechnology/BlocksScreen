@@ -58,4 +58,6 @@ class Ui_option_card(object):
         self.option_icon.setText(_translate("option_card", "TextLabel"))
         self.option_text.setText(_translate("option_card", "TextLabel"))
         self.continue_button.setProperty("button_type", _translate("option_card", "icon"))
-from utils.ui import BlocksCustomButton, BlocksLabel
+
+from utils.blocks_button import BlocksCustomButton
+from utils.blocks_label import BlocksLabel

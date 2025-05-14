@@ -83,4 +83,5 @@ class Ui_fansPage(object):
         self.fp_header_back_btn.setProperty("button_type", _translate("fansPage", "icon"))
         self.part_cooling_fan_display.setProperty("button_type", _translate("fansPage", "display"))
         self.auxiliary_fan_display.setProperty("button_type", _translate("fansPage", "display"))
-from utils.ui import BlocksCustomButton
+from utils.blocks_button import BlocksCustomButton
+

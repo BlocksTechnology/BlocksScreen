@@ -1,50 +1,68 @@
 <RCC>
-  <qresource prefix="wifi_icons">
-    <file>media/btn_icons/0noWIFI.svg</file>
-    <file>media/btn_icons/wifi_settings.svg</file>
-    <file>media/btn_icons/1barWIFI.svg</file>
-    <file>media/btn_icons/2barWIFI.svg</file>
-    <file>media/btn_icons/3fullWIFI.svg</file>
+  <qresource prefix="network">
+    <file>media/btn_icons/wifi_config.svg</file>
+    <file>media/btn_icons/wifi_locked.svg</file>
+    <file>media/btn_icons/wifi_unlocked.svg</file>
+    <file>media/btn_icons/1bar_wifi.svg</file>
+    <file>media/btn_icons/2bar_wifi.svg</file>
+    <file>media/btn_icons/3bar_wifi.svg</file>
+    <file>media/btn_icons/hotspot.svg</file>
+    <file>media/btn_icons/no_wifi.svg</file>
+    <file>media/btn_icons/retry_wifi.svg</file>
   </qresource>
-  <qresource prefix="probe">
-    <file>media/btn_icons/1bltouch zoom.svg</file>
-    <file>media/btn_icons/1eddy mech zoom.svg</file>
-    <file>media/btn_icons/1inductive zoom.svg</file>
-    <file>media/btn_icons/1switch zoom.svg</file>
+  <qresource prefix="blocks">
+    <file>media/btn_icons/blocks_contacts.svg</file>
+    <file>media/btn_icons/logo_BLOCKS.svg</file>
   </qresource>
   <qresource prefix="dialog">
-    <file>media/btn_icons/new_abort_hugo.svg</file>
-    <file>media/btn_icons/new_accept_hugo.svg</file>
-    <file>media/btn_icons/no_cancel_icon.svg</file>
-    <file>media/btn_icons/no icon.svg</file>
-    <file>media/btn_icons/yes_icon.svg</file>
-    <file>media/btn_icons/yes_save_icon.svg</file>
+    <file>media/btn_icons/no.svg</file>
+    <file>media/btn_icons/yes.svg</file>
+    <file>media/btn_icons/off.svg</file>
+    <file>media/btn_icons/on.svg</file>
   </qresource>
   <qresource prefix="files">
-    <file>media/btn_icons/file.svg</file>
+    <file>media/btn_icons/file_icon.svg</file>
   </qresource>
   <qresource prefix="system">
-    <file>media/btn_icons/system_reboot.svg</file>
-  </qresource>
-  <qresource prefix="klipper">
-    <file>media/btn_icons/firmware_restart.svg</file>
+    <file>media/btn_icons/reboot.svg</file>
+    <file>media/btn_icons/developer_mode.svg</file>
+    <file>media/btn_icons/restart_firmware.svg</file>
     <file>media/btn_icons/restart_klipper.svg</file>
+    <file>media/btn_icons/restart_printer.svg</file>
+    <file>media/btn_icons/factory_reset.svg</file>
+    <file>media/btn_icons/update_system.svg</file>
+
   </qresource>
-  <qresource prefix="temperatures">
-    <file>media/btn_icons/nozzle.svg</file>
-    <file>media/btn_icons/chamber temp.svg</file>
-    <file>media/btn_icons/temp_icon.svg</file>
-    <file>media/btn_icons/blower.svg</file>
-    <file>media/btn_icons/BED temp.svg</file>
+  <qresource prefix="fan_related">
     <file>media/btn_icons/fan.svg</file>
+    <file>media/btn_icons/fan_cage.svg</file>
   </qresource>
-  <qresource prefix="arrow_icons">
-    <file>media/btn_icons/left move axis.svg</file>
-    <file>media/btn_icons/right move axis.svg</file>
-    <file>media/btn_icons/down_arrow.svg</file>
-    <file>media/btn_icons/up_arrow.svg</file>
+  <qresource prefix="temperature_related">
+    <file>media/btn_icons/standart_temperature.svg</file>
+    <file>media/btn_icons/temperature.svg</file>
+    <file>media/btn_icons/temperature_error.svg</file>
+    <file>media/btn_icons/temperature_plate.svg</file>
+    <file>media/btn_icons/temperature_up.svg</file>
+    <file>media/btn_icons/blower.svg</file>
+    <file>media/btn_icons/fan.svg</file>
+    <file>media/btn_icons/cooldown.svg</file>
+    <file>media/btn_icons/hot_temperature.svg</file>
   </qresource>
-  <qresource prefix="filament">
+  <qresource prefix="motion">
+    <file>media/btn_icons/disable_steppers.svg</file>
+    <file>media/btn_icons/endstop_error.svg</file>
+    <file>media/btn_icons/auto_home.svg</file>
+    <file>media/btn_icons/home_all.svg</file>
+    <file>media/btn_icons/home_x.svg</file>
+    <file>media/btn_icons/home_z.svg</file>
+    <file>media/btn_icons/home_y.svg</file>
+    <file>media/btn_icons/axis_maintenance.svg</file>
+    <file>media/btn_icons/axis_maintenance_2.svg</file>
+    <file>media/btn_icons/axis_maintenance_3.svg</file>
+    <file>media/btn_icons/bed_maintenance.svg</file>
+    <file>media/btn_icons/speed.svg</file>
+  </qresource>
+  <qresource prefix="filament_related">
     <file>media/topbar/abs_filament_topbar.svg</file>
     <file>media/topbar/custom_filament_topbar.svg</file>
     <file>media/topbar/hips_filament_topbar.svg</file>
@@ -52,24 +70,101 @@
     <file>media/topbar/petg_filament_topbar.svg</file>
     <file>media/topbar/pla_filament_topbar.svg</file>
     <file>media/topbar/tpu_filament_topbar.svg</file>
-    <file>media/btn_icons/material top bar.svg</file>
     <file>media/btn_icons/change_filament.svg</file>
-    <file>media/btn_icons/filament sensor.svg</file>
-    <file>media/btn_icons/filament_icon.svg</file>
-    <file>media/btn_icons/filament_unload.svg</file>
+    <file>media/btn_icons/filament_sensor.svg</file>
+    <file>media/btn_icons/filament_sensor_off.svg</file>
+    <file>media/btn_icons/filament_sensor_turn_on.svg</file>
+    <file>media/btn_icons/load_filament.svg</file>
+    <file>media/btn_icons/unload_filament.svg</file>
   </qresource>
-  <qresource prefix="axis">
-    <file>media/btn_icons/auto_home.svg</file>
-    <file>media/btn_icons/homeALL.svg</file>
-    <file>media/btn_icons/homeX.svg</file>
-    <file>media/btn_icons/homeY.svg</file>
-    <file>media/btn_icons/homeZ.svg</file>
-    <file>media/btn_icons/axes_maintenance_icon.svg</file>
-  </qresource>
-  <qresource prefix="misc">
-    <file>media/btn_icons/start_hugo.svg</file>
-    <file>media/btn_icons/speed.svg</file>
+  <qresource prefix="ui">
+    <file>media/btn_icons/back.svg</file>
+    <file>media/btn_icons/refresh.svg</file>
+    <file>media/btn_icons/back_folder.svg</file>
+    <file>media/btn_icons/background_list.svg</file>
+    <file>media/btn_icons/center_arrows.svg</file>
+    <file>media/btn_icons/confirm_stl_window.svg</file>
+    <file>media/btn_icons/horizontal_scroll_bar.svg</file>
+    <file>media/btn_icons/info.svg</file>
+    <file>media/btn_icons/info_prints.svg</file>
+    <file>media/btn_icons/LCD_settings.svg</file>
+    <file>media/btn_icons/LEDs.svg</file>
+    <file>media/btn_icons/LEDs_off.svg</file>
+    <file>media/btn_icons/light_bar.svg</file>
+    <file>media/btn_icons/pause.svg</file>
+    <file>media/btn_icons/play.svg</file>
+    <file>media/btn_icons/print.svg</file>
+    <file>media/btn_icons/stop.svg</file>
     <file>media/btn_icons/layers.svg</file>
+    <file>media/btn_icons/sun.svg</file>
+    <file>media/btn_icons/printer_details.svg</file>
+    <file>media/btn_icons/printer_settings.svg</file>
+    <file>media/btn_icons/routine.svg</file>
+    <file>media/btn_icons/routine_check.svg</file>
+    <file>media/btn_icons/save.svg</file>
+    <file>media/btn_icons/scroll_bar.svg</file>
+    <file>media/btn_icons/scroll_btn.svg</file>
+    <file>media/btn_icons/short_text_box.svg</file>
+    <file>media/btn_icons/small_btn.svg</file>
+    <file>media/btn_icons/sound_off.svg</file>
+    <file>media/btn_icons/sound_on.svg</file>
+    <file>media/btn_icons/statistics.svg</file>
     <file>media/btn_icons/time.svg</file>
+    <file>media/btn_icons/troubleshoot.svg</file>
+    <file>media/btn_icons/tune.svg</file>
   </qresource>
+  <qresource prefix="z_levelling">
+    <file>media/btn_icons/baby_step.svg</file>
+    <file>media/btn_icons/btn1_babystep.svg</file>
+    <file>media/btn_icons/btn2_babystep.svg</file>
+    <file>media/btn_icons/btn3_babystep.svg</file>
+    <file>media/btn_icons/btn4_babystep.svg</file>
+    <file>media/btn_icons/baby_step_icon.svg</file>
+    <file>media/btn_icons/bed_levelling.svg</file>
+    <file>media/btn_icons/eddy_mech.svg</file>
+    <file>media/btn_icons/eddy_bed_mech_PROBE.svg</file>
+    <file>media/btn_icons/inductive_PROBE.svg</file>
+    <file>media/btn_icons/inductive.svg</file>
+    <file>media/btn_icons/endstop.svg</file>
+    <file>media/btn_icons/bltouch.svg</file>
+  </qresource>
+  <qresource prefix="extruder_related">
+    <file>media/btn_icons/extrude.svg</file>
+    <file>media/btn_icons/extrusion_failure.svg</file>
+    <file>media/btn_icons/nozzle.svg</file>
+    <file>media/btn_icons/nozzle_topbar.svg</file>
+    <file>media/btn_icons/nozzle_clogged.svg</file>
+    <file>media/btn_icons/no_material_topbar.svg</file>
+    <file>media/btn_icons/no_printcore_available.svg</file>
+    <file>media/btn_icons/switch_print_core.svg</file>
+    <file>media/btn_icons/switch_PROBE.svg</file>
+    <file>media/btn_icons/switch_zoom.svg</file>
+  </qresource>
+  <qresource prefix="input_shaper">
+    <file>media/btn_icons/calibrate_manual.svg</file>
+    <file>media/btn_icons/calibrate_x_y.svg</file>
+    <file>media/btn_icons/calibrate_z.svg</file>
+    <file>media/btn_icons/frequency_X.svg</file>
+    <file>media/btn_icons/frequency_Y.svg</file>
+    <file>media/btn_icons/input_shape_model_type.svg</file>
+    <file>media/btn_icons/input_shaper.svg</file>
+    <file>media/btn_icons/input_shaper_auto.svg</file>
+    <file>media/btn_icons/input_shaper_auto_X.svg</file>
+    <file>media/btn_icons/input_shaper_auto_Y.svg</file>
+    <file>media/btn_icons/input_shaper_manual.svg</file>
+    <file>media/btn_icons/input_shaper_manual_X.svg</file>
+    <file>media/btn_icons/input_shaper_manual_Y.svg</file>
+  </qresource>
+  <qresource prefix="arrow_icons">
+    <file>media/btn_icons/left_arrow.svg</file>
+    <file>media/btn_icons/right_arrow.svg</file>
+    <file>media/btn_icons/down_arrow.svg</file>
+    <file>media/btn_icons/up_arrow.svg</file>
+  </qresource>
+  <qresource prefix="language_settings">
+    <file>media/btn_icons/eng.svg</file>
+    <file>media/btn_icons/pt.svg</file>
+  </qresource>
+
+
 </RCC>

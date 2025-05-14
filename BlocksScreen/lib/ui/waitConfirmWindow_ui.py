@@ -254,4 +254,4 @@ class Ui_utilitiesStackedWidget(object):
         self.confirm_yes_btn.setProperty("button_type", _translate("utilitiesStackedWidget", "normal"))
         self.confirm_no_btn.setText(_translate("utilitiesStackedWidget", "NO"))
         self.confirm_no_btn.setProperty("class", _translate("utilitiesStackedWidget", "menu_btn"))
-from utils.ui import BlocksCustomButton
+from utils.blocks_button import BlocksCustomButton

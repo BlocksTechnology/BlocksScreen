@@ -135,7 +135,7 @@
      <number>0</number>
     </property>
     <item>
-     <widget class="BlocksCustomButton" name="RebootSystemButton">
+     <widget class="IconButton" name="RebootSystemButton">
       <property name="sizePolicy">
        <sizepolicy hsizetype="MinimumExpanding" vsizetype="Fixed">
         <horstretch>0</horstretch>
@@ -179,7 +179,7 @@
        <string>Reboot</string>
       </property>
       <property name="icon">
-       <iconset resource="resources/system_resources.qrc">
+       <iconset>
         <normaloff>:/system_icons/media/btn_icons/firmware_restart.svg</normaloff>:/system_icons/media/btn_icons/firmware_restart.svg</iconset>
       </property>
       <property name="autoDefault">
@@ -191,14 +191,8 @@
       <property name="flat">
        <bool>true</bool>
       </property>
-      <property name="class" stdset="0">
-       <string>system_control_btn</string>
-      </property>
-      <property name="button_type" stdset="0">
-       <string>icon_text</string>
-      </property>
       <property name="icon_pixmap" stdset="0">
-       <pixmap resource="resources/icon_resources.qrc">:/system/media/btn_icons/system_reboot.svg</pixmap>
+       <pixmap resource="resources/icon_resources.qrc">:/system/media/btn_icons/restart_printer.svg</pixmap>
       </property>
       <property name="text_formatting" stdset="0">
        <string>bottom</string>
@@ -209,6 +203,9 @@
         <green>255</green>
         <blue>255</blue>
        </color>
+      </property>
+      <property name="has_text" stdset="0">
+       <bool>true</bool>
       </property>
      </widget>
     </item>
@@ -392,20 +389,11 @@
       <property name="flat">
        <bool>true</bool>
       </property>
-      <property name="iconPixmap" stdset="0">
-       <pixmap resource="resources/system_resources.qrc">:/system_icons/media/btn_icons/restart_klipper.svg</pixmap>
-      </property>
-      <property name="borderLeftPixmap" stdset="0">
-       <pixmap resource="resources/button_resources.qrc">:/button_borders/media/buttons/btn_part1.svg</pixmap>
-      </property>
-      <property name="borderCenterPixmap" stdset="0">
-       <pixmap resource="resources/button_resources.qrc">:/button_borders/media/buttons/btn_part2.svg</pixmap>
-      </property>
-      <property name="borderRightPixmap" stdset="0">
-       <pixmap resource="resources/button_resources.qrc">:/button_borders/media/buttons/btn_part3.svg</pixmap>
-      </property>
       <property name="button_type" stdset="0">
        <string>normal</string>
+      </property>
+      <property name="icon_pixmap" stdset="0">
+       <pixmap resource="resources/icon_resources.qrc">:/system/media/btn_icons/restart_klipper.svg</pixmap>
       </property>
      </widget>
     </item>
@@ -454,7 +442,7 @@
        <string>Firmware Restart</string>
       </property>
       <property name="icon">
-       <iconset resource="resources/system_resources.qrc">
+       <iconset>
         <normaloff>:/system_icons/media/btn_icons/firmware_restart.svg</normaloff>:/system_icons/media/btn_icons/firmware_restart.svg</iconset>
       </property>
       <property name="autoDefault">
@@ -469,25 +457,16 @@
       <property name="class" stdset="0">
        <string>system_control_btn</string>
       </property>
-      <property name="borderLeftPixmap" stdset="0">
-       <pixmap resource="resources/button_resources.qrc">:/button_borders/media/buttons/btn_part1.svg</pixmap>
-      </property>
-      <property name="borderCenterPixmap" stdset="0">
-       <pixmap resource="resources/button_resources.qrc">:/button_borders/media/buttons/btn_part2.svg</pixmap>
-      </property>
-      <property name="borderRightPixmap" stdset="0">
-       <pixmap resource="resources/button_resources.qrc">:/button_borders/media/buttons/btn_part3.svg</pixmap>
-      </property>
       <property name="button_type" stdset="0">
        <string>normal</string>
       </property>
       <property name="icon_pixmap" stdset="0">
-       <pixmap/>
+       <pixmap resource="resources/icon_resources.qrc">:/system/media/btn_icons/restart_firmware.svg</pixmap>
       </property>
      </widget>
     </item>
     <item alignment="Qt::AlignVCenter">
-     <widget class="BlocksCustomButton" name="RetryConnectionButton">
+     <widget class="IconButton" name="RetryConnectionButton">
       <property name="sizePolicy">
        <sizepolicy hsizetype="MinimumExpanding" vsizetype="Fixed">
         <horstretch>0</horstretch>
@@ -540,7 +519,7 @@
        <string>Retry </string>
       </property>
       <property name="icon">
-       <iconset resource="resources/system_resources.qrc">
+       <iconset>
         <normaloff>:/system_icons/media/btn_icons/retry_connection.svg</normaloff>:/system_icons/media/btn_icons/retry_connection.svg</iconset>
       </property>
       <property name="iconSize">
@@ -567,14 +546,11 @@
       <property name="flat">
        <bool>true</bool>
       </property>
-      <property name="button_type" stdset="0">
-       <string>icon_text</string>
-      </property>
       <property name="text_formatting" stdset="0">
        <string>bottom</string>
       </property>
       <property name="icon_pixmap" stdset="0">
-       <pixmap resource="resources/system_resources.qrc">:/system_icons/media/btn_icons/retry_connection.svg</pixmap>
+       <pixmap resource="resources/icon_resources.qrc">:/system/media/btn_icons/restart_printer.svg</pixmap>
       </property>
       <property name="text_color" stdset="0">
        <color>
@@ -583,10 +559,13 @@
         <blue>255</blue>
        </color>
       </property>
+      <property name="has_text" stdset="0">
+       <bool>true</bool>
+      </property>
      </widget>
     </item>
     <item alignment="Qt::AlignVCenter">
-     <widget class="BlocksCustomButton" name="wifi_button">
+     <widget class="IconButton" name="wifi_button">
       <property name="sizePolicy">
        <sizepolicy hsizetype="MinimumExpanding" vsizetype="Fixed">
         <horstretch>0</horstretch>
@@ -627,7 +606,7 @@
        <string>Wifi Settings</string>
       </property>
       <property name="icon">
-       <iconset resource="resources/system_resources.qrc">
+       <iconset>
         <normaloff>:/system_icons/media/btn_icons/retry_connection.svg</normaloff>:/system_icons/media/btn_icons/retry_connection.svg</iconset>
       </property>
       <property name="autoDefault">
@@ -642,11 +621,11 @@
       <property name="class" stdset="0">
        <string>system_control_btn</string>
       </property>
-      <property name="button_type" stdset="0">
-       <string>icon</string>
-      </property>
       <property name="icon_pixmap" stdset="0">
-       <pixmap resource="resources/icon_resources.qrc">:/wifi_icons/media/btn_icons/wifi_settings.svg</pixmap>
+       <pixmap resource="resources/icon_resources.qrc">:/network/media/btn_icons/wifi_config.svg</pixmap>
+      </property>
+      <property name="has_text" stdset="0">
+       <bool>false</bool>
       </property>
      </widget>
     </item>
@@ -805,7 +784,12 @@
   <customwidget>
    <class>BlocksCustomButton</class>
    <extends>QPushButton</extends>
-   <header location="global">utils.ui</header>
+   <header location="global">utils.blocks_button</header>
+  </customwidget>
+  <customwidget>
+   <class>IconButton</class>
+   <extends>QPushButton</extends>
+   <header location="global">utils.iconButton</header>
   </customwidget>
  </customwidgets>
  <resources>
@@ -813,7 +797,6 @@
   <include location="resources/button_resources.qrc"/>
   <include location="resources/icon_resources.qrc"/>
   <include location="resources/main_menu_resources.qrc"/>
-  <include location="resources/system_resources.qrc"/>
   <include location="resources/top_bar_resources.qrc"/>
  </resources>
  <connections/>

@@ -357,4 +357,4 @@ class Ui_MainWindow(object):
         self.extruder_temp_display.setProperty("name", _translate("MainWindow", "extruder_temperature_display"))
         self.extruder_temp_display.setProperty("button_type", _translate("MainWindow", "secondary_display"))
         self.main_content_widget.setTabText(self.main_content_widget.indexOf(self.wifiTab), _translate("MainWindow", "Page"))
-from utils.ui import BlocksCustomButton
+from utils.blocks_button import BlocksCustomButton

@@ -287,7 +287,7 @@ QTabBar::tab{
       <cursorShape>BlankCursor</cursorShape>
      </property>
      <attribute name="icon">
-      <iconset>
+      <iconset resource="resources/main_menu_resources.qrc">
        <normaloff>:/icons/media/main_menu/ICON_home.png</normaloff>
        <normalon>:/icons/media/main_menu/ICON_home_pressed.png</normalon>
        <disabledon>:/icons/media/main_menu/ICON_home_blocked.png</disabledon>:/icons/media/main_menu/ICON_home.png</iconset>
@@ -325,7 +325,7 @@ QTabBar::tab{
       <cursorShape>BlankCursor</cursorShape>
      </property>
      <attribute name="icon">
-      <iconset>
+      <iconset resource="resources/main_menu_resources.qrc">
        <normaloff>:/icons/media/main_menu/ICON_filament.png</normaloff>
        <normalon>:/icons/media/main_menu/ICON_filament_pressed.png</normalon>
        <disabledon>:/icons/media/main_menu/ICON_filamente_blocked.png</disabledon>:/icons/media/main_menu/ICON_filament.png</iconset>
@@ -363,7 +363,7 @@ QTabBar::tab{
       <cursorShape>BlankCursor</cursorShape>
      </property>
      <attribute name="icon">
-      <iconset>
+      <iconset resource="resources/main_menu_resources.qrc">
        <normaloff>:/icons/media/main_menu/ICON_control.png</normaloff>
        <normalon>:/icons/media/main_menu/ICON_control_pressed.png</normalon>
        <disabledon>:/icons/media/main_menu/ICON_control_blocked.png</disabledon>:/icons/media/main_menu/ICON_control.png</iconset>
@@ -401,7 +401,7 @@ QTabBar::tab{
       <cursorShape>BlankCursor</cursorShape>
      </property>
      <attribute name="icon">
-      <iconset>
+      <iconset resource="resources/main_menu_resources.qrc">
        <normaloff>:/icons/media/main_menu/ICON_utilities.png</normaloff>
        <normalon>:/icons/media/main_menu/ICON_utilities_pressed.png</normalon>
        <disabledon>:/icons/media/main_menu/ICON_utilities_blocked.png</disabledon>:/icons/media/main_menu/ICON_utilities.png</iconset>
@@ -870,7 +870,7 @@ QPushButton:pressed{
          <number>0</number>
         </property>
         <item row="0" column="0">
-         <widget class="BlocksCustomButton" name="extruder_temp_display">
+         <widget class="DisplayButton" name="extruder_temp_display">
           <property name="sizePolicy">
            <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
             <horstretch>1</horstretch>
@@ -899,7 +899,7 @@ QPushButton:pressed{
            <bool>true</bool>
           </property>
           <property name="icon_pixmap" stdset="0">
-           <pixmap resource="resources/icon_resources.qrc">:/temperatures/media/btn_icons/nozzle.svg</pixmap>
+           <pixmap resource="resources/icon_resources.qrc">:/extruder_related/media/btn_icons/nozzle_topbar.svg</pixmap>
           </property>
           <property name="name" stdset="0">
            <string>extruder_temperature_display</string>
@@ -910,7 +910,7 @@ QPushButton:pressed{
          </widget>
         </item>
         <item row="0" column="2">
-         <widget class="BlocksCustomButton" name="filament_type_icon">
+         <widget class="IconButton" name="filament_type_icon">
           <property name="sizePolicy">
            <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
             <horstretch>1</horstretch>
@@ -942,7 +942,7 @@ QPushButton:pressed{
            <bool>true</bool>
           </property>
           <property name="icon_pixmap" stdset="0">
-           <pixmap resource="resources/icon_resources.qrc">:/filament/media/btn_icons/material top bar.svg</pixmap>
+           <pixmap resource="resources/icon_resources.qrc">:/filament_related/media/btn_icons/load_filament.svg</pixmap>
           </property>
           <property name="name" stdset="0">
            <string>filament_type_display</string>
@@ -953,7 +953,7 @@ QPushButton:pressed{
          </widget>
         </item>
         <item row="0" column="3">
-         <widget class="BlocksCustomButton" name="nozzle_size_icon">
+         <widget class="IconButton" name="nozzle_size_icon">
           <property name="sizePolicy">
            <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
             <horstretch>1</horstretch>
@@ -985,7 +985,7 @@ QPushButton:pressed{
            <bool>true</bool>
           </property>
           <property name="icon_pixmap" stdset="0">
-           <pixmap resource="resources/icon_resources.qrc">:/temperatures/media/btn_icons/nozzle.svg</pixmap>
+           <pixmap resource="resources/icon_resources.qrc">:/temperature_related/media/btn_icons/standart_temperature.svg</pixmap>
           </property>
           <property name="button_type" stdset="0">
            <string>icon_text</string>
@@ -993,7 +993,7 @@ QPushButton:pressed{
          </widget>
         </item>
         <item row="0" column="1">
-         <widget class="BlocksCustomButton" name="bed_temp_display">
+         <widget class="DisplayButton" name="bed_temp_display">
           <property name="sizePolicy">
            <sizepolicy hsizetype="MinimumExpanding" vsizetype="MinimumExpanding">
             <horstretch>1</horstretch>
@@ -1251,7 +1251,7 @@ QPushButton:pressed{
            <bool>true</bool>
           </property>
           <property name="icon_pixmap" stdset="0">
-           <pixmap resource="resources/icon_resources.qrc">:/temperatures/media/btn_icons/BED temp.svg</pixmap>
+           <pixmap resource="resources/icon_resources.qrc">:/temperature_related/media/btn_icons/temperature_plate.svg</pixmap>
           </property>
           <property name="name" stdset="0">
            <string>bed_temperature_display</string>
@@ -1269,7 +1269,7 @@ QPushButton:pressed{
       </widget>
      </item>
      <item alignment="Qt::AlignRight|Qt::AlignTop">
-      <widget class="BlocksCustomButton" name="wifi_button">
+      <widget class="IconButton" name="wifi_button">
        <property name="enabled">
         <bool>true</bool>
        </property>
@@ -1316,7 +1316,7 @@ QPushButton:pressed{
         <string>icon</string>
        </property>
        <property name="icon_pixmap" stdset="0">
-        <pixmap resource="resources/icon_resources.qrc">:/wifi_icons/media/btn_icons/3fullWIFI.svg</pixmap>
+        <pixmap resource="resources/icon_resources.qrc">:/network/media/btn_icons/3bar_wifi.svg</pixmap>
        </property>
       </widget>
      </item>
@@ -1326,9 +1326,14 @@ QPushButton:pressed{
  </widget>
  <customwidgets>
   <customwidget>
-   <class>BlocksCustomButton</class>
+   <class>IconButton</class>
    <extends>QPushButton</extends>
-   <header location="global">utils.ui</header>
+   <header location="global">utils.iconButton</header>
+  </customwidget>
+  <customwidget>
+   <class>DisplayButton</class>
+   <extends>QPushButton</extends>
+   <header location="global">utils.display_button</header>
   </customwidget>
  </customwidgets>
  <resources>
