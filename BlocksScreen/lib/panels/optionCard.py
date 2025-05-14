@@ -1,7 +1,8 @@
 import typing
 
 from PyQt6 import QtCore, QtGui, QtWidgets
-from utils.ui import BlocksCustomButton, BlocksLabel
+from utils.blocks_label import BlocksLabel
+from utils.icon_button import IconButton
 
 
 class OptionCard(QtWidgets.QFrame):
@@ -19,6 +20,7 @@ class OptionCard(QtWidgets.QFrame):
     ) -> None:
         super().__init__(parent)
         self.color = QtGui.QColor(100, 130, 180, 80)
+        self.highlight_color = "#2AC9F9"
         self.text_color = QtGui.QColor(255, 255, 255, 255)
         self.icon_background_color = QtGui.QColor(150, 150, 130, 80)
         self.name = name
@@ -53,29 +55,84 @@ class OptionCard(QtWidgets.QFrame):
 
     def set_background_color(self, color: QtGui.QColor) -> None:
         self.color = color
-
         self.update()
 
     def sizeHint(self) -> QtCore.QSize:
         return super().sizeHint()
 
+    def underMouse(self) -> bool:
+        return super().underMouse()
+
+    def enterEvent(self, event: QtGui.QEnterEvent) -> None:
+        # Illuminate the edges to a lighter blue
+        # To achieve this just Force update the widget 
+        self.update()
+        return super().enterEvent(event)
+
+    def leaveEvent(self, a0: QtCore.QEvent) -> None:
+        # Reset the color
+        # Just as before force update the widget 
+        self.update()
+        return super().leaveEvent(a0)
+
+    def mousePressEvent(self, a0: QtGui.QMouseEvent) -> None:
+        self.update()
+        return super().mousePressEvent(a0)
+
     def paintEvent(self, a0: QtGui.QPaintEvent) -> None:
         # Rounded background edges
-        path = QtGui.QPainterPath()
-        path.addRoundedRect(
+        self.background_path = QtGui.QPainterPath()
+        self.background_path.addRoundedRect(
             self.rect().toRectF(), 20.0, 20.0, QtCore.Qt.SizeMode.AbsoluteSize
         )
-        mask = QtGui.QRegion(path.toFillPolygon().toPolygon())
-        self.setMask(mask)
+
+        bg_color = (
+            QtGui.QColor(self.color)
+            if self.underMouse()
+            else QtGui.QColor(
+                *(
+                    map(
+                        lambda component: int(component * 0.70),
+                        self.color.getRgb(),
+                    )
+                )
+            )
+        )
 
         painter = QtGui.QPainter()
         painter.begin(self)
         painter.setRenderHint(painter.RenderHint.Antialiasing)
         painter.setRenderHint(painter.RenderHint.SmoothPixmapTransform)
-        painter.fillPath(path, self.color)
-        painter.end()
+        painter.setRenderHint(painter.RenderHint.LosslessImageRendering)
+        painter.fillPath(self.background_path, bg_color)
+        if self.underMouse():
+            _pen = QtGui.QPen()
+            _pen.setStyle(QtCore.Qt.PenStyle.SolidLine)
+            _pen.setJoinStyle(QtCore.Qt.PenJoinStyle.RoundJoin)
+            _pen.setCapStyle(QtCore.Qt.PenCapStyle.RoundCap)
+            _color = QtGui.QColor(self.highlight_color)
+            _color2 = QtGui.QColor(self.highlight_color)
+            _color3 = QtGui.QColor(self.highlight_color)
+            _color.setAlpha(30)
+            _color2.setAlpha(30)
+            _color3.setAlpha(2)
+            _pen.setColor(_color)
+            _gradient = QtGui.QRadialGradient(
+                QtCore.QPointF(
+                    self.rect().toRectF().left() + 10,
+                    self.rect().toRectF().top(),
+                ),
+                330.0,
+                self.rect().toRectF().center(),
+            )
+            _gradient.setColorAt(0, _color)
+            _gradient.setColorAt(0.5, _color2)
+            _gradient.setColorAt(1, _color3)
+            painter.setBrush(_gradient)
+            painter.setPen(QtCore.Qt.PenStyle.NoPen)
+            painter.fillPath(self.background_path, painter.brush())
 
-        return super().paintEvent(a0)
+        painter.end()
 
     def setupUi(self, option_card):
         option_card.setObjectName("option_card")
@@ -120,7 +177,7 @@ class OptionCard(QtWidgets.QFrame):
         self.verticalLayout.addWidget(
             self.option_text,
         )
-        self.continue_button = BlocksCustomButton(parent=option_card)
+        self.continue_button = IconButton(parent=option_card)
         self.option_text.setAlignment(
             QtCore.Qt.AlignmentFlag.AlignHCenter
             | QtCore.Qt.AlignmentFlag.AlignVCenter
@@ -148,7 +205,7 @@ class OptionCard(QtWidgets.QFrame):
         self.continue_button.setFlat(True)
         self.continue_button.setProperty(
             "icon_pixmap",
-            QtGui.QPixmap(":/arrow_icons/media/btn_icons/right move axis.svg"),
+            QtGui.QPixmap(":/arrow_icons/media/btn_icons/right_arrow.svg"),
         )
         self.continue_button.setObjectName("continue_button")
         self.verticalLayout.addWidget(self.continue_button)

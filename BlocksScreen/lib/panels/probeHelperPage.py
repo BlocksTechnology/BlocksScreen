@@ -2,7 +2,8 @@ import typing
 
 from lib.panels.optionCard import OptionCard
 from PyQt6 import QtCore, QtGui, QtWidgets
-from utils.ui import BlocksCustomButton, BlocksLabel
+from utils.blocks_label import BlocksLabel
+from utils.icon_button import IconButton
 
 
 class ProbeHelper(QtWidgets.QWidget):
@@ -48,16 +49,16 @@ class ProbeHelper(QtWidgets.QWidget):
         self.setupUi(self)
 
         self.inductive_icon = QtGui.QPixmap(
-            ":/probe/media/btn_icons/1inductive zoom.svg"
+            ":/z_levelling/media/btn_icons/inductive.svg"
         )
         self.bltouch_icon = QtGui.QPixmap(
-            ":/probe/media/btn_icons/1bltouch zoom.svg"
+            ":/z_levelling/media/btn_icons/bltouch.svg"
         )
         self.endstop_icon = QtGui.QPixmap(
-            ":/probe/media/btn_icons/1switch zoom.svg"
+            ":/extruder_related/media/btn_icons/switch_zoom.svg"
         )
         self.eddy_icon = QtGui.QPixmap(
-            ":/probe/media/btn_icons/1eddy mech zoom.svg"
+            ":/z_levelling/media/btn_icons/eddy_mech.svg"
         )
 
         self._toggle_tool_buttons(False)
@@ -556,7 +557,7 @@ class ProbeHelper(QtWidgets.QWidget):
         )
         self.po_header_title.setObjectName("po_header_title")
         self.po_header_layout.addWidget(self.po_header_title)
-        self.po_back_button = BlocksCustomButton(parent=probe_offset_page)
+        self.po_back_button = IconButton(parent=probe_offset_page)
         self.po_back_button.setMinimumSize(QtCore.QSize(60, 60))
         self.po_back_button.setMaximumSize(QtCore.QSize(60, 60))
         self.po_back_button.setFlat(True)
@@ -588,7 +589,7 @@ class ProbeHelper(QtWidgets.QWidget):
         self.move_buttons = QtWidgets.QVBoxLayout(self.tool_move)
         self.move_buttons.setContentsMargins(9, 9, 9, 9)
         self.move_buttons.setObjectName("move_buttons")
-        self.mb_raise_nozzle = BlocksCustomButton(parent=self.tool_move)
+        self.mb_raise_nozzle = IconButton(parent=self.tool_move)
         self.mb_raise_nozzle.setMinimumSize(QtCore.QSize(80, 80))
         self.mb_raise_nozzle.setMaximumSize(QtCore.QSize(80, 80))
         self.mb_raise_nozzle.setFlat(True)
@@ -598,7 +599,7 @@ class ProbeHelper(QtWidgets.QWidget):
         )
         self.mb_raise_nozzle.setObjectName("mb_raise_nozzle")
         self.move_buttons.addWidget(self.mb_raise_nozzle)
-        self.mb_lower_nozzle = BlocksCustomButton(parent=self.tool_move)
+        self.mb_lower_nozzle = IconButton(parent=self.tool_move)
         self.mb_lower_nozzle.setMinimumSize(QtCore.QSize(80, 80))
         self.mb_lower_nozzle.setMaximumSize(QtCore.QSize(80, 80))
         self.mb_lower_nozzle.setFlat(True)
@@ -720,13 +721,13 @@ class ProbeHelper(QtWidgets.QWidget):
         self.tool_dialog = QtWidgets.QVBoxLayout(self.tool_dialog_2)
         self.tool_dialog.setContentsMargins(9, 9, 9, 9)
         self.tool_dialog.setObjectName("tool_dialog")
-        self.accept_button = BlocksCustomButton(parent=self.tool_dialog_2)
+        self.accept_button = IconButton(parent=self.tool_dialog_2)
         self.accept_button.setMinimumSize(QtCore.QSize(80, 80))
         self.accept_button.setMaximumSize(QtCore.QSize(80, 80))
         self.accept_button.setFlat(True)
         self.accept_button.setProperty(
             "icon_pixmap",
-            QtGui.QPixmap(":/dialog/media/btn_icons/new_accept_hugo.svg"),
+            QtGui.QPixmap(":/dialog/media/btn_icons/yes.svg"),
         )
         self.accept_button.setProperty(
             "text_color", QtGui.QColor(255, 255, 255)
@@ -738,13 +739,13 @@ class ProbeHelper(QtWidgets.QWidget):
             QtCore.Qt.AlignmentFlag.AlignRight
             | QtCore.Qt.AlignmentFlag.AlignVCenter,
         )
-        self.abort_button = BlocksCustomButton(parent=self.tool_dialog_2)
+        self.abort_button = IconButton(parent=self.tool_dialog_2)
         self.abort_button.setMinimumSize(QtCore.QSize(80, 80))
         self.abort_button.setMaximumSize(QtCore.QSize(80, 80))
         self.abort_button.setFlat(True)
         self.abort_button.setProperty(
             "icon_pixmap",
-            QtGui.QPixmap(":/dialog/media/btn_icons/new_abort_hugo.svg"),
+            QtGui.QPixmap(":/dialog/media/btn_icons/no.svg"),
         )
         self.abort_button.setProperty(
             "text_color", QtGui.QColor(255, 255, 255)

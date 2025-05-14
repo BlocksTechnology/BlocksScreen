@@ -1,15 +1,12 @@
 import enum
-from pickle import TRUE
-from tarfile import GNU_MAGIC
 import typing
 
 import PyQt6.QtGui as QtGui
 from lib.ui.filamentSensorsPage_ui import Ui_filament_sensors_page
-from utils.ui import BlocksLabel
 from PyQt6 import QtCore, QtWidgets
 from PyQt6.QtCore import Qt, pyqtSignal, pyqtSlot
 from PyQt6.QtWidgets import QWidget
-import logging
+from utils.blocks_label import BlocksLabel
 
 
 class SensorWidget(QtWidgets.QWidget):

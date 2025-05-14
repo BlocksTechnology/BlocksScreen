@@ -5,7 +5,7 @@ import sys
 import typing
 from functools import partial
 
-import PyQt6
+
 import PyQt6.QtCore
 from lib.bo.files import Files
 from lib.bo.printer import Printer
@@ -16,7 +16,7 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 from PyQt6.QtCore import QObject, Qt, pyqtSignal, pyqtSlot
 from PyQt6.QtGui import QPaintEvent
 from PyQt6.QtWidgets import QLabel, QListWidgetItem, QStackedWidget, QWidget
-from utils.ui import BlocksCustomButton
+from utils.blocks_button import BlocksCustomButton
 
 # TEST: Test all functionalities, it's already mainly written, but it's missing some styles and bug catching, There are some TODOs still
 # TODO: Add time left on the print
@@ -105,7 +105,8 @@ class PrintTab(QStackedWidget):
         ws: MoonWebSocket,
         printer: Printer,
     ) -> None:
-        super(PrintTab, self).__init__(parent)
+        # super(PrintTab, self).__init__(parent)
+        super().__init__(parent)
         self.panel = Ui_printStackedWidget()
         self.panel.setupUi(self)
         self.change_page(
@@ -123,9 +124,9 @@ class PrintTab(QStackedWidget):
         self.speed_factor_override: float = 100.0
         self._current_file_name: str | None = None
         self._z_offset: float = 0.05
-        self.panel.listWidget.setLayoutDirection(
-            Qt.LayoutDirection.LeftToRight
-        )
+        # self.panel.listWidget.setLayoutDirection(
+        #     Qt.LayoutDirection.
+        # )
 
         self.sensorsPanel = SensorsWindow(self)
         self.addWidget(self.sensorsPanel)
@@ -461,7 +462,7 @@ class PrintTab(QStackedWidget):
                 if "total_layer" in value.keys():
                     if value["total_layer"] is not None:
                         _total_layers = value["total_layer"]
-                        self.panel.layer_display_button.setSecondaryText(
+                        self.panel.layer_display_button.set_secondary_text(
                             str(_total_layers)
                         )
 
@@ -680,7 +681,7 @@ class PrintTab(QStackedWidget):
         if _current_item is not None:
             self._current_file_name = _current_item.findChild(
                 QtWidgets.QLabel
-            ).text()
+            ).text() # type: ignore
             if self._current_file_name is not None:
                 self.panel.cf_file_name.setText(str(self._current_file_name))
             self.change_page(2)
