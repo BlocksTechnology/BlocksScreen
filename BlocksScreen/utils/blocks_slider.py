@@ -132,38 +132,6 @@ class BlocksSlider(QtWidgets.QSlider):
         _groove_path.addRoundedRect(self._groove_rect.toRectF(), 15, 15)
 
         # Add slider position text above de handle
-        # self.text_box_rect = _style.subControlRect(
-        #     QtWidgets.QStyle.ComplexControl.CC_Slider,
-        #     opt,
-        #     QtWidgets.QStyle.SubControl.SC_SliderTickmarks,
-        #     self,
-        # )
-        # tick_interval = self.tickInterval() or self.singleStep()
-        # min_v, max_v = self.minimum(), self.maximum()
-
-        # painter.setPen(QtGui.QColor("#888888"))
-        # fm = QtGui.QFontMetrics(painter.font())
-        # label_offset = 4
-
-        # for v in range(min_v, max_v + 1, tick_interval):
-        #     x = (
-        #         QtWidgets.QStyle.sliderPositionFromValue(
-        #             min_v, max_v, v, self._groove_rect.width()
-        #         )
-        #         + self._groove_rect.x()
-        #     )
-
-        #     y1 = self._groove_rect.bottom() + 2
-        #     y2 = y1 + 6  # tick length
-        #     painter.drawLine(x, y1, x, y2)
-
-        #     label = str(v)
-        #     text_w = fm.horizontalAdvance(label)
-
-        #     text_h = fm.ascent()
-        #     text_x = x - text_w // 2
-        #     text_y = y2 + text_h + label_offset
-        #     painter.drawText(text_x, text_y, label)
 
         # Set visual elements positions
         if self.isSliderDown():
@@ -207,6 +175,44 @@ class BlocksSlider(QtWidgets.QSlider):
         _gradient.setColorAt(0, _color)
         _gradient.setColorAt(0.5, _color_1)
         _gradient.setColorAt(1, _color_2)
+
+        self.text_box_rect = _style.subControlRect(
+            QtWidgets.QStyle.ComplexControl.CC_Slider,
+            opt,
+            QtWidgets.QStyle.SubControl.SC_SliderTickmarks,
+            self,
+        )
+        
+        tick_interval = self.tickInterval() or self.singleStep()
+
+
+
+        min_v, max_v = self.minimum(), self.maximum()
+        painter.setPen(QtGui.QColor("#888888"))
+        fm = QtGui.QFontMetrics(painter.font())
+        label_offset = 4
+
+        # for v in range(min_v, max_v + 1, tick_interval):
+        for v in [min_v, max_v + 1]:
+            x = (
+                QtWidgets.QStyle.sliderPositionFromValue(
+                    min_v, max_v, v, self._groove_rect.width()
+                )
+                + self._groove_rect.x()
+            )
+
+            y1 = self._groove_rect.bottom() 
+            y2 = y1 + 6  # tick length
+            painter.drawLine(x, y1, x, y2)
+
+            label = str(v)
+            text_w = fm.horizontalAdvance(label)
+            
+            text_h = fm.ascent()
+            text_x = x - text_w // 2
+            text_y = y2 + text_h + label_offset
+            
+            painter.drawText(text_x, text_y, label)
 
         # Paint the elements with colors
         painter.setBrush(_gradient)
