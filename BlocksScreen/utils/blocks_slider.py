@@ -8,16 +8,15 @@ class BlocksSlider(QtWidgets.QSlider):
         super().__init__(parent)
         self.highlight_color = "#2AC9F9"
         self.gradient_pos = QtCore.QPointF(0.0, 0.0)
-        self.setMinimumSize(300, 80)
-        self.setMaximumSize(400, 80)
-        self.setTickPosition(QtWidgets.QSlider.TickPosition.TicksAbove)
+        self.setMinimumSize(300, 100)
+        self.setMaximumSize(400, 100)
         self.setMouseTracking(True)
         self.setTracking(True)
         self.setOrientation(QtCore.Qt.Orientation.Horizontal)
         self.setTickInterval(20)
         self.setMinimum(0)
         self.setMaximum(100)
-        self.center()
+        
 
     def setOrientation(self, a0: QtCore.Qt.Orientation) -> None:
         return super().setOrientation(a0)
@@ -93,7 +92,9 @@ class BlocksSlider(QtWidgets.QSlider):
 
         # Clip the opt rect inside, so the handle and
         # groove doesn't exceed the limits
-        opt.rect = opt.rect.adjusted(12, 10, -18, 10) # This is a bit hardcoded
+        opt.rect = opt.rect.adjusted(
+            12, 10, -18, 20
+        )  # This is a bit hardcoded
 
         self._groove_rect = _style.subControlRect(
             QtWidgets.QStyle.ComplexControl.CC_Slider,
@@ -198,7 +199,6 @@ class BlocksSlider(QtWidgets.QSlider):
         )
         self.setStyle(_style)
 
-        # for v in range(min_v, max_v + 1, tick_interval):
         for v in [min_v, max_v]:
             x = (
                 QtWidgets.QStyle.sliderPositionFromValue(
@@ -207,13 +207,14 @@ class BlocksSlider(QtWidgets.QSlider):
                 + self._groove_rect.x()
             )
             y1 = self._groove_rect.bottom()
-            y2 = y1 + 6  # tick length
-            painter.drawLine(x, y1, x, y2)
+            y2 = y1 + 15  # tick length
             label = str(v)
             text_w = fm.horizontalAdvance(label)
             text_h = fm.ascent()
             text_x = x - text_w // 2
             text_y = y2 + text_h + label_offset
+            painter.setPen(QtGui.QColor(255, 255, 255))
+            painter.drawLine(x, y1, x, y2)
             painter.drawText(text_x, text_y, label)
 
         # Paint the elements with colors
@@ -222,30 +223,6 @@ class BlocksSlider(QtWidgets.QSlider):
         painter.fillPath(_handle_path, _handle_color)
         painter.end()
 
-    def center(self):
-        parent = QtCore.QSize(800, 470)
-        x = (parent.width() - self.width()) // 2
-        y = (parent.height() - self.height()) // 2
-
-        self.move(x, y)
 
 
-class MainWindow(QtWidgets.QMainWindow):
-    def __init__(self) -> None:
-        super().__init__()
-        self.setMinimumSize(800, 470)
-        self.setMaximumSize(800, 470)
 
-        self.slider = BlocksSlider(self)
-        self.slider.show()
-
-
-if __name__ == "__main__":
-    app = QtWidgets.QApplication([])
-    main_window = MainWindow()
-
-    app.processEvents()
-
-    main_window.showNormal()
-
-    sys.exit(app.exec())
