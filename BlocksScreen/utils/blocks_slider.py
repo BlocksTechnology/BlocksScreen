@@ -8,8 +8,8 @@ class BlocksSlider(QtWidgets.QSlider):
         super().__init__(parent)
         self.highlight_color = "#2AC9F9"
         self.gradient_pos = QtCore.QPointF(0.0, 0.0)
-        self.setMinimumSize(400, 80)
-        self.setMaximumSize(500, 80)
+        self.setMinimumSize(300, 80)
+        self.setMaximumSize(400, 80)
         self.setTickPosition(QtWidgets.QSlider.TickPosition.TicksAbove)
         self.setMouseTracking(True)
         self.setTracking(True)
@@ -23,7 +23,7 @@ class BlocksSlider(QtWidgets.QSlider):
         return super().setOrientation(a0)
 
     def mousePressEvent(self, ev: QtGui.QMouseEvent) -> None:
-        # self.sliderPosition()
+        """Handle mouse press events"""
         if (ev.button() == QtCore.Qt.MouseButton.LeftButton) and self.hit_test(
             ev.position().toPoint().toPointF()
         ):
@@ -33,15 +33,15 @@ class BlocksSlider(QtWidgets.QSlider):
             return super().mousePressEvent(ev)
 
     def mouseReleaseEvent(self, ev: QtGui.QMouseEvent) -> None:
+        """Handle mouse release events"""
         if self.isSliderDown():
             self.setSliderDown(False)
         return super().mouseReleaseEvent(ev)
 
     def mouseMoveEvent(self, ev: QtGui.QMouseEvent) -> None:
+        """Handle mouse move events"""
         opt = QtWidgets.QStyleOptionSlider()
         self.initStyleOption(opt)
-
-        print(self.sliderPosition())
         if self.isSliderDown():
             self._set_slider_pos(ev.position().toPoint().toPointF())
             self.gradient_pos = ev.position().toPoint().toPointF()
@@ -72,7 +72,7 @@ class BlocksSlider(QtWidgets.QSlider):
             pos_x = pos.x()
             new_val = (
                 min_val
-                + (max_val - min_val) * (pos_x - slider_start) / slider_length
+                + (max_val - min_val) * (pos_x - slider_start) // slider_length
             )
         else:
             slider_length = self._groove_rect.height()
@@ -90,20 +90,32 @@ class BlocksSlider(QtWidgets.QSlider):
         opt = QtWidgets.QStyleOptionSlider()
         self.initStyleOption(opt)
         _style = self.style()
+
+        # Clip the opt rect inside, so the handle and
+        # groove doesn't exceed the limits
+        opt.rect = opt.rect.adjusted(12, 10, -18, 10) # This is a bit hardcoded
+
         self._groove_rect = _style.subControlRect(
             QtWidgets.QStyle.ComplexControl.CC_Slider,
             opt,
             QtWidgets.QStyle.SubControl.SC_SliderGroove,
             self,
         )
-        self._groove_rect.setSize(QtCore.QSize(self.width() - 6, 30))
+
+        self._groove_rect.setSize(QtCore.QSize(self.width() - 25, 30))
+
         self._handle_rect = _style.subControlRect(
             QtWidgets.QStyle.ComplexControl.CC_Slider,
             opt,
             QtWidgets.QStyle.SubControl.SC_SliderHandle,
             self,
         )
+
         self._handle_rect.setSize(QtCore.QSize(20, 50))
+        # self.style().subControlRect(
+        #     QtWidgets.QStyle.ComplexControl.CC_Slider, opt, QtWidgets.QStyle.SubControl.SC_SliderGroove or QtWidgets.QStyle.SubControl.SC_SliderHandle
+        # )
+
         # if opt.state & QtWidgets.QStyle.StateFlag.State_Sunken:
         #     # give the track a color
         #     ...
@@ -113,38 +125,32 @@ class BlocksSlider(QtWidgets.QSlider):
         # else:
         #     # give a default color for the track
         #     ...
-        _x = (self.width() - self._groove_rect.width()) // 2
-        _y = (self.height() - self._groove_rect.height()) // 2
-        self._groove_rect.moveTo(QtCore.QPoint(_x, _y))
-        _x = (self.sliderPosition() - self._handle_rect.width() // 2) // 2
-        _y = (self.height() - self._handle_rect.height()) // 2
-        self._handle_rect.moveTop(_y)
+        _groove_x = (self.width() - self._groove_rect.width()) // 2
+        _groove_y = (self.height() - self._groove_rect.height()) // 2
+
+        self._groove_rect.moveTo(QtCore.QPoint(_groove_x, _groove_y))
+        _handle_y = (self.height() - self._handle_rect.height()) // 2
+        self._handle_rect.moveTop(_handle_y)
 
         _handle_color = (
             QtGui.QColor(164, 164, 164)
             if self.isSliderDown()
             else QtGui.QColor(223, 223, 223)
         )
-
         _handle_path = QtGui.QPainterPath()
         _handle_path.addRoundedRect(self._handle_rect.toRectF(), 5, 5)
         _groove_path = QtGui.QPainterPath()
         _groove_path.addRoundedRect(self._groove_rect.toRectF(), 15, 15)
 
-        # Add slider position text above de handle
-
-        # Set visual elements positions
         if self.isSliderDown():
-            _x = (
+            _handle_x = (
                 self.sliderPosition() - _handle_path.currentPosition().x()
             ) // 2
-            _handle_path.moveTo(int(round(_x)), _y)
+            _handle_path.moveTo(int(round(_handle_x)), _handle_y)
 
         gradient_path = QtGui.QPainterPath()
-
         gradient_path.addRoundedRect(
             self._groove_rect.toRectF(),
-            # _gradient_rect.toRectF(),
             15,
             15,
             QtCore.Qt.SizeMode.AbsoluteSize,
@@ -166,7 +172,6 @@ class BlocksSlider(QtWidgets.QSlider):
         _color.setAlpha(110)
         _color_1.setAlpha(50)
         _color_2.setAlpha(10)
-
         _gradient = QtGui.QRadialGradient(
             self._handle_rect.center().toPointF(),
             200.0,
@@ -182,47 +187,39 @@ class BlocksSlider(QtWidgets.QSlider):
             QtWidgets.QStyle.SubControl.SC_SliderTickmarks,
             self,
         )
-        
         tick_interval = self.tickInterval() or self.singleStep()
-
-
-
         min_v, max_v = self.minimum(), self.maximum()
         painter.setPen(QtGui.QColor("#888888"))
         fm = QtGui.QFontMetrics(painter.font())
         label_offset = 4
 
+        _style.drawComplexControl(
+            QtWidgets.QStyle.ComplexControl.CC_Slider, opt, painter, self
+        )
+        self.setStyle(_style)
+
         # for v in range(min_v, max_v + 1, tick_interval):
-        for v in [min_v, max_v + 1]:
+        for v in [min_v, max_v]:
             x = (
                 QtWidgets.QStyle.sliderPositionFromValue(
                     min_v, max_v, v, self._groove_rect.width()
                 )
                 + self._groove_rect.x()
             )
-
-            y1 = self._groove_rect.bottom() 
+            y1 = self._groove_rect.bottom()
             y2 = y1 + 6  # tick length
             painter.drawLine(x, y1, x, y2)
-
             label = str(v)
             text_w = fm.horizontalAdvance(label)
-            
             text_h = fm.ascent()
             text_x = x - text_w // 2
             text_y = y2 + text_h + label_offset
-            
             painter.drawText(text_x, text_y, label)
 
         # Paint the elements with colors
         painter.setBrush(_gradient)
         painter.fillPath(gradient_path, painter.brush())
         painter.fillPath(_handle_path, _handle_color)
-
-        _style.drawComplexControl(
-            QtWidgets.QStyle.ComplexControl.CC_Slider, opt, painter, self
-        )
-        self.setStyle(_style)
         painter.end()
 
     def center(self):
