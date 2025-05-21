@@ -5,7 +5,8 @@ import typing
 
 
 import logger
-
+import helper_methods as helper_methods
+from screensaver import ScreenSaver
 from lib.panels.mainWindow import MainWindow
 from PyQt6 import QtCore, QtGui, QtWidgets
 
@@ -71,9 +72,9 @@ def run():
     BlocksScreen.setHighDpiScaleFactorRoundingPolicy(
         QtCore.Qt.HighDpiScaleFactorRoundingPolicy.Round
     )
-    
 
-    print(BlocksScreen.devicePixelRatio())
+    screensaver = ScreenSaver()
+
     # ! Someone said that .processEvents sometimes crashes the system
     BlocksScreen.processEvents()
     # main_window.setScreen(BlocksScreen.screens()[2])
