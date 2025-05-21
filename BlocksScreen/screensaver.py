@@ -1,6 +1,3 @@
-import os
-import typing
-
 import helper_methods as helper_methods
 from PyQt6 import QtCore, QtWidgets
 
@@ -23,7 +20,7 @@ class ScreenSaver(QtCore.QObject):
         # Install event filters
         QtWidgets.QApplication.instance().installEventFilter(self)
         self.blank_timeout = (
-            self.dpms_standby_timeout if self.dpms_standby_timeout else 6000
+            self.dpms_standby_timeout if self.dpms_standby_timeout else 900000
         )
         self.timer.timeout.connect(self.check_dpms)
         self.timer.setInterval(self.blank_timeout)
@@ -37,7 +34,6 @@ class ScreenSaver(QtCore.QObject):
             QtCore.QEvent.Type.TouchUpdate,
             QtCore.QEvent.Type.TouchEnd,
             QtCore.QEvent.Type.MouseButtonPress,
-            # QtCore.QEvent.Type.MouseButtonRelease,
             QtCore.QEvent.Type.MouseButtonDblClick,
         ):
             dpms_info = helper_methods.get_dpms_info()
@@ -51,7 +47,6 @@ class ScreenSaver(QtCore.QObject):
                 or self.touch_blocked
             ):
                 if not self.timer.isActive():
-                    print("timer not active, starting")
                     self.touch_blocked = False
                     helper_methods.set_dpms_mode(helper_methods.DPMSState.ON)
                     self.timer.start()
@@ -64,4 +59,5 @@ class ScreenSaver(QtCore.QObject):
     def check_dpms(self) -> None:
         """Checks the X11 extension dpms for the status of the screen"""
         self.touch_blocked = True
+        helper_methods.set_dpms_mode(helper_methods.DPMSState.STANDBY)
         self.timer.stop()
