@@ -14,7 +14,9 @@ from PyQt6.QtWidgets import QStackedWidget, QWidget
 class FilamentTab(QStackedWidget):
     request_filament_change_page = pyqtSignal(name="filament_change_page")
     request_filament_load = pyqtSignal(name="filament_load_t1")
-    request_back_button_pressed = pyqtSignal(name="request_back_button_pressed")
+    request_back_button_pressed = pyqtSignal(
+        name="request_back_button_pressed"
+    )
     request_change_page = pyqtSignal(int, int, name="request_change_page")
     request_toolhead_count = pyqtSignal(int, name="toolhead_number_received")
     run_gcode_signal = pyqtSignal(str, name="run_gcode")
@@ -45,9 +47,14 @@ class FilamentTab(QStackedWidget):
         self._filament_state = self.FilamentStates.UNKNOWN
         self.filament_type: Filament | None = None
 
-        self.panel.filament_page_load_btn.clicked.connect(partial(self.change_page, 1))
-        self.panel.custom_filament_header_back_btn.clicked.connect(self.back_button)
-        self.panel.load_custom_btn.clicked.connect(partial(self.change_page, 2))
+        self.panel.filament_page_load_btn.clicked.connect(
+            partial(self.change_page, 1)
+        )
+        self.panel.custom_filament_header_back_btn.clicked.connect(
+            self.back_button
+        )
+        # REFACTOR self.panel.load_custom_btn.clicked.connect(partial(self.change_page, 2))
+        self.panel.load_custom_btn.hide()
         self.panel.load_header_back_button.clicked.connect(self.back_button)
 
         self.panel.load_pla_btn.clicked.connect(
@@ -67,6 +74,10 @@ class FilamentTab(QStackedWidget):
         )
         self.panel.load_tpu_btn.clicked.connect(
             partial(self.load_filament, toolhead=0, temp=230)
+        )
+
+        self.panel.filament_page_unload_btn.clicked.connect(
+            lambda: self.unload_filament(toolhead=0, temp=250)
         )
         self.run_gcode_signal.connect(self.ws.api.run_gcode)
 
