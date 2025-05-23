@@ -52,6 +52,7 @@ class CustomNumpad(QtWidgets.QWidget):
         self.panel.numpad_7.clicked.connect(partial(self.insert_number, 7))
         self.panel.numpad_8.clicked.connect(partial(self.insert_number, 8))
         self.panel.numpad_9.clicked.connect(partial(self.insert_number, 9))
+        
         self.panel.numpad_enter.clicked.connect(
             partial(self.insert_number, "enter")
         )
@@ -177,7 +178,7 @@ class CustomNumpad(QtWidgets.QWidget):
 
         """
         if self.current_object is not None:
-            self.panel.value_name.setText(self.current_object)
+            # self.panel.value_name.setText(self.current_object)
             self.panel.numpad_title.setText(self.current_object)
 
         if self.isVisible():
