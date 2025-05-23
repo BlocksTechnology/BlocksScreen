@@ -1,5 +1,3 @@
-import sys
-
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 
@@ -16,7 +14,14 @@ class BlocksSlider(QtWidgets.QSlider):
         self.setTickInterval(20)
         self.setMinimum(0)
         self.setMaximum(100)
-        
+
+    def setMinimum(self, a0: int) -> None:
+        self.update()
+        return super().setMinimum(a0)
+
+    def setMaximum(self, a0: int) -> None:
+        self.update()
+        return super().setMaximum(a0)
 
     def setOrientation(self, a0: QtCore.Qt.Orientation) -> None:
         return super().setOrientation(a0)
@@ -36,6 +41,10 @@ class BlocksSlider(QtWidgets.QSlider):
         if self.isSliderDown():
             self.setSliderDown(False)
         return super().mouseReleaseEvent(ev)
+
+    def setSliderPosition(self, a0: int) -> None:
+        self.update()
+        return super().setSliderPosition(a0)
 
     def mouseMoveEvent(self, ev: QtGui.QMouseEvent) -> None:
         """Handle mouse move events"""
@@ -222,7 +231,3 @@ class BlocksSlider(QtWidgets.QSlider):
         painter.fillPath(gradient_path, painter.brush())
         painter.fillPath(_handle_path, _handle_color)
         painter.end()
-
-
-
-
