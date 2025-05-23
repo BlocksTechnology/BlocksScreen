@@ -445,21 +445,22 @@ class ProbeHelper(QtWidgets.QWidget):
             data (list): A list containing the gcode that originated
                     the response and the response
         """
+        # TODO: Only check for messages if we are in the tool otherwise ignore them 
+        if self.isVisible():
+            if data[0].startswith("!!"):  # An error occurred
+                print(
+                    f"Calibration aborted, gcode message: {data[0].strip('!! ')}"
+                )
+                if "already in a manual z probe" in data[0].strip("!! ").lower():
+                    self._hide_option_cards()
+                    self.helper_start = True
+                    self._toggle_tool_buttons(True)
+                    return
+                self._show_option_cards()
+                self.helper_start = False
+                self._toggle_tool_buttons(False)
 
-        if data[0].startswith("!!"):  # An error occurred
-            print(
-                f"Calibration aborted, gcode message: {data[0].strip('!! ')}"
-            )
-            if "already in a manual z probe" in data[0].strip("!! ").lower():
-                self._hide_option_cards()
-                self.helper_start = True
-                self._toggle_tool_buttons(True)
-                return
-            self._show_option_cards()
-            self.helper_start = False
-            self._toggle_tool_buttons(False)
-
-        # elif data[0].startswith("// "): ...
+            # elif data[0].startswith("// "): ...
 
     @QtCore.pyqtSlot(list, name="handle_error_response")
     def handle_error_response(self, data: list) -> None:
