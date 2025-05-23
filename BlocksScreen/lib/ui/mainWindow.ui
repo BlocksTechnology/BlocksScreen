@@ -885,9 +885,14 @@ QPushButton:pressed{
           </property>
           <property name="maximumSize">
            <size>
-            <width>120</width>
+            <width>140</width>
             <height>60</height>
            </size>
+          </property>
+          <property name="font">
+           <font>
+            <pointsize>10</pointsize>
+           </font>
           </property>
           <property name="autoFillBackground">
            <bool>false</bool>
@@ -1008,7 +1013,7 @@ QPushButton:pressed{
           </property>
           <property name="maximumSize">
            <size>
-            <width>120</width>
+            <width>140</width>
             <height>60</height>
            </size>
           </property>
@@ -1238,6 +1243,11 @@ QPushButton:pressed{
             </disabled>
            </palette>
           </property>
+          <property name="font">
+           <font>
+            <pointsize>10</pointsize>
+           </font>
+          </property>
           <property name="text">
            <string/>
           </property>
@@ -1328,7 +1338,7 @@ QPushButton:pressed{
   <customwidget>
    <class>IconButton</class>
    <extends>QPushButton</extends>
-   <header location="global">utils.iconButton</header>
+   <header location="global">utils.icon_button</header>
   </customwidget>
   <customwidget>
    <class>DisplayButton</class>
