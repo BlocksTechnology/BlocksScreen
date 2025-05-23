@@ -37,6 +37,10 @@ class BlocksCustomButton(QtWidgets.QPushButton):
         self.update()  # Force button update
         return
 
+    def setPixmap(self, pixmap: QtGui.QPixmap) -> None:
+        self.icon_pixmap = pixmap
+        self.update()
+
     def mousePressEvent(self, e: QtGui.QMouseEvent) -> None:
         """Overwritten method so 'normal' buttons can only be
         pressed on the visible area
@@ -72,6 +76,7 @@ class BlocksCustomButton(QtWidgets.QPushButton):
             if self.isDown()
             else QtGui.QColor(223, 223, 223)
         )
+
         # bg_color = (
         #     QtGui.QColor(164, 164, 164)
         #     if self.isDown()
@@ -84,7 +89,7 @@ class BlocksCustomButton(QtWidgets.QPushButton):
         #         )
         #     )
         # )
-        
+
         path = QtGui.QPainterPath()
         xRadius = self.rect().toRectF().normalized().height() / 2.0
         yRadius = self.rect().toRectF().normalized().height() / 2.0
@@ -170,8 +175,6 @@ class BlocksCustomButton(QtWidgets.QPushButton):
             self.icon_pixmap = value
         elif name == "name":
             self._name = name
-        # elif name == "font":
-        # self.setFont(QtGui.QFont(value))
         elif name == "text_color":
             self.text_color = QtGui.QColor(value)
         return super().setProperty(name, value)
