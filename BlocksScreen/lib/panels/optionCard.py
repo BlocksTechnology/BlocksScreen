@@ -65,13 +65,13 @@ class OptionCard(QtWidgets.QFrame):
 
     def enterEvent(self, event: QtGui.QEnterEvent) -> None:
         # Illuminate the edges to a lighter blue
-        # To achieve this just Force update the widget 
+        # To achieve this just Force update the widget
         self.update()
         return super().enterEvent(event)
 
     def leaveEvent(self, a0: QtCore.QEvent) -> None:
         # Reset the color
-        # Just as before force update the widget 
+        # Just as before force update the widget
         self.update()
         return super().leaveEvent(a0)
 

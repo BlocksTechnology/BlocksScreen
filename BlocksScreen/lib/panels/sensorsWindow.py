@@ -1,11 +1,8 @@
 import enum
 import typing
 
-import PyQt6.QtGui as QtGui
 from lib.ui.filamentSensorsPage_ui import Ui_filament_sensors_page
-from PyQt6 import QtCore, QtWidgets
-from PyQt6.QtCore import Qt, pyqtSignal, pyqtSlot
-from PyQt6.QtWidgets import QWidget
+from PyQt6 import QtCore, QtGui, QtWidgets
 from utils.blocks_label import BlocksLabel
 
 
@@ -31,25 +28,29 @@ class SensorWidget(QtWidgets.QWidget):
         self.setObjectName(f"{str(sensor_name).split(' ')[1]}")
         self.setMinimumSize(640, 60)
         self.setMaximumSize(640, 60)
-        self.setLayoutDirection(Qt.LayoutDirection.LeftToRight)
+        self.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
 
         self._sensor_type: SensorWidget.SensorType = self.SensorType.SWITCH
         self._flags: SensorWidget.SensorFlags = self.SensorFlags.DISPLAY
         self.filament_state: SensorWidget.FilamentState = (
             SensorWidget.FilamentState.MISSING
         )
-        self.sensor_state: SensorWidget.SensorState = SensorWidget.SensorState.OFF
+        self.sensor_state: SensorWidget.SensorState = (
+            SensorWidget.SensorState.OFF
+        )
         self._button_icon_label = None
         self._icon_label = None
         self._text_label = None
         self._text: str = sensor_name.split(" ")[1]
         self._item_rect: QtCore.QRect | QtCore.QRect
-        self.slider_select_on_pixmap: typing.Optional[QtGui.QPixmap] = QtGui.QPixmap(
-            ":/button_borders/media/buttons/slide_select_yes.svg"
+        self.slider_select_on_pixmap: typing.Optional[QtGui.QPixmap] = (
+            QtGui.QPixmap(
+                ":/button_borders/media/buttons/slide_select_yes.svg"
+            )
         )
         self._scaled_select_on_pixmap: typing.Optional[QtGui.QPixmap] = None
-        self.slider_select_off_pixmap: typing.Optional[QtGui.QPixmap] = QtGui.QPixmap(
-            ":/button_borders/media/buttons/slide_select_no.svg"
+        self.slider_select_off_pixmap: typing.Optional[QtGui.QPixmap] = (
+            QtGui.QPixmap(":/button_borders/media/buttons/slide_select_no.svg")
         )
         self._scaled_select_off_pixmap: typing.Optional[QtGui.QPixmap] = None
 
@@ -59,7 +60,9 @@ class SensorWidget(QtWidgets.QWidget):
             )
         )
         self._scaled_icon_pixmap_fp: typing.Optional[QtGui.QPixmap] = None
-        self.icon_pixmap_filament_not_present: typing.Optional[QtGui.QPixmap] = None
+        self.icon_pixmap_filament_not_present: typing.Optional[
+            QtGui.QPixmap
+        ] = None
         self._scaled_icon_pixmap_fnp: typing.Optional[QtGui.QPixmap] = None
 
         self._construct_widget()
@@ -90,13 +93,14 @@ class SensorWidget(QtWidgets.QWidget):
             self._text_label.setText(f"{new_text}")
             self._text = new_text
 
-    @pyqtSlot(bool, name="change_fil_sensor_state")
+    @QtCore.pyqtSlot(bool, name="change_fil_sensor_state")
     def change_fil_sensor_state(self, state: FilamentState):
         if isinstance(state, SensorWidget.FilamentState):
             self.filament_state = state
 
     def resizeEvent(self, a0: QtGui.QResizeEvent) -> None:
         # TODO: Re-scale the icons and text content of the widget if the size of the entire widget changes
+        # self.repaint()
         return super().resizeEvent(a0)
 
     def _construct_widget(self):
@@ -107,16 +111,20 @@ class SensorWidget(QtWidgets.QWidget):
         self.sensor_horizontal_layout = QtWidgets.QWidget(parent=self)
         self.sensor_horizontal_layout.setGeometry(QtCore.QRect(0, 0, 640, 60))
         self.sensor_horizontal_layout.setObjectName("horizontalLayoutWidget")
-        self.sensor_layout = QtWidgets.QHBoxLayout(self.sensor_horizontal_layout)
+        self.sensor_layout = QtWidgets.QHBoxLayout(
+            self.sensor_horizontal_layout
+        )
         self.sensor_layout.setContentsMargins(0, 0, 0, 0)
         self.sensor_layout.setObjectName("sensor_item_layout")
         self.sensor_layout.addSpacing(5)
-        # * Sensor icon label drawing
+
         if (
             self.icon_pixmap_filament_present is not None
             and self.icon_pixmap_filament_not_present is not None
         ):
-            self._icon_label = BlocksLabel(parent=self.sensor_horizontal_layout)
+            self._icon_label = BlocksLabel(
+                parent=self.sensor_horizontal_layout
+            )
             _policy = QtWidgets.QSizePolicy.Policy.Fixed
             size_policy = QtWidgets.QSizePolicy(_policy, _policy)
             size_policy.setHeightForWidth(
@@ -129,16 +137,20 @@ class SensorWidget(QtWidgets.QWidget):
                 QtCore.Qt.AlignmentFlag.AlignHCenter
                 | QtCore.Qt.AlignmentFlag.AlignVCenter
             )
-            self._scaled_icon_pixmap_fp = self.icon_pixmap_filament_present.scaled(
-                self._icon_label.size(),
-                QtCore.Qt.AspectRatioMode.KeepAspectRatio,
-                QtCore.Qt.TransformationMode.SmoothTransformation,
+            self._scaled_icon_pixmap_fp = (
+                self.icon_pixmap_filament_present.scaled(
+                    self._icon_label.size(),
+                    QtCore.Qt.AspectRatioMode.KeepAspectRatio,
+                    QtCore.Qt.TransformationMode.SmoothTransformation,
+                )
             )
 
-            self._scaled_icon_pixmap_fnp = self.icon_pixmap_filament_not_present.scaled(
-                self._icon_label.size(),
-                QtCore.Qt.AspectRatioMode.KeepAspectRatio,
-                QtCore.Qt.TransformationMode.SmoothTransformation,
+            self._scaled_icon_pixmap_fnp = (
+                self.icon_pixmap_filament_not_present.scaled(
+                    self._icon_label.size(),
+                    QtCore.Qt.AspectRatioMode.KeepAspectRatio,
+                    QtCore.Qt.TransformationMode.SmoothTransformation,
+                )
             )
 
             self._icon_label.setPixmap(
@@ -147,17 +159,20 @@ class SensorWidget(QtWidgets.QWidget):
                 else self._scaled_icon_pixmap_fnp
             )
             self.sensor_layout.addWidget(self._icon_label)
-            self._icon_label.update()
 
-        # * Text label drawing
-        self._text_label = QtWidgets.QLabel(parent=self.sensor_horizontal_layout)
+        self._text_label = QtWidgets.QLabel(
+            parent=self.sensor_horizontal_layout
+        )
         _policy = QtWidgets.QSizePolicy.Policy.MinimumExpanding
         size_policy = QtWidgets.QSizePolicy(_policy, _policy)
-        size_policy.setHeightForWidth(self._text_label.sizePolicy().hasHeightForWidth())
+        size_policy.setHeightForWidth(
+            self._text_label.sizePolicy().hasHeightForWidth()
+        )
         self._text_label.setMinimumSize(100, 60)
         self._text_label.setMaximumSize(500, 60)
         self._text_label.setAlignment(
-            QtCore.Qt.AlignmentFlag.AlignHCenter | QtCore.Qt.AlignmentFlag.AlignVCenter,
+            QtCore.Qt.AlignmentFlag.AlignHCenter
+            | QtCore.Qt.AlignmentFlag.AlignVCenter,
         )
         _font = QtGui.QFont()
         _font.setStyleStrategy(QtGui.QFont.StyleStrategy.PreferAntialias)
@@ -167,14 +182,17 @@ class SensorWidget(QtWidgets.QWidget):
         self._text_label.setText(str(self._text))
         self.sensor_layout.addWidget(self._text_label)
         self._text_label.setAlignment(
-            QtCore.Qt.AlignmentFlag.AlignLeft | QtCore.Qt.AlignmentFlag.AlignVCenter
+            QtCore.Qt.AlignmentFlag.AlignLeft
+            | QtCore.Qt.AlignmentFlag.AlignVCenter
         )
         # * Toggle icon drawing
         if (
             self.slider_select_on_pixmap is not None
             and self.slider_select_off_pixmap is not None
         ):
-            self._button_icon_label = BlocksLabel(self.sensor_horizontal_layout)
+            self._button_icon_label = BlocksLabel(
+                self.sensor_horizontal_layout
+            )
             self._button_icon_label.setScaledContents(True)
             self._button_icon_label.setMinimumSize(60, 60)
             self._button_icon_label.setMaximumSize(60, 60)
@@ -183,16 +201,20 @@ class SensorWidget(QtWidgets.QWidget):
                 & QtCore.Qt.AlignmentFlag.AlignVCenter
             )
 
-            self._scaled_select_on_pixmap = self.slider_select_on_pixmap.scaled(
-                self._button_icon_label.size(),
-                QtCore.Qt.AspectRatioMode.KeepAspectRatio,
-                QtCore.Qt.TransformationMode.SmoothTransformation,
+            self._scaled_select_on_pixmap = (
+                self.slider_select_on_pixmap.scaled(
+                    self._button_icon_label.size(),
+                    QtCore.Qt.AspectRatioMode.KeepAspectRatio,
+                    QtCore.Qt.TransformationMode.SmoothTransformation,
+                )
             )
 
-            self._scaled_select_off_pixmap = self.slider_select_off_pixmap.scaled(
-                self._button_icon_label.size(),
-                QtCore.Qt.AspectRatioMode.KeepAspectRatio,
-                QtCore.Qt.TransformationMode.SmoothTransformation,
+            self._scaled_select_off_pixmap = (
+                self.slider_select_off_pixmap.scaled(
+                    self._button_icon_label.size(),
+                    QtCore.Qt.AspectRatioMode.KeepAspectRatio,
+                    QtCore.Qt.TransformationMode.SmoothTransformation,
+                )
             )
             self._button_icon_label.setPixmap(
                 self._scaled_select_on_pixmap
@@ -201,7 +223,7 @@ class SensorWidget(QtWidgets.QWidget):
             )
 
             self.sensor_layout.addWidget(self._button_icon_label)
-        self.update()
+        # self.update()
 
     def paintEvent(self, a0: QtGui.QPaintEvent) -> None:
         if self._button_icon_label is None:
@@ -216,9 +238,7 @@ class SensorWidget(QtWidgets.QWidget):
                 else self._scaled_select_off_pixmap
             )
 
-        # * Paint the widget background red/green according to the presence of filament
         qp = QtWidgets.QStylePainter(self)
-        qp.save()
         qp.setRenderHint(qp.RenderHint.Antialiasing, True)
         qp.setRenderHint(qp.RenderHint.SmoothPixmapTransform, True)
         qp.setRenderHint(qp.RenderHint.LosslessImageRendering, True)
@@ -233,8 +253,8 @@ class SensorWidget(QtWidgets.QWidget):
         qp.drawRoundedRect(
             self.rect().toRectF(), 15, 15, QtCore.Qt.SizeMode.AbsoluteSize
         )
-        qp.restore()
-        return super().paintEvent(a0)
+        qp.end()
+        # return super().paintEvent(a0)
 
     @property
     def toggle_sensor_gcode_command(self) -> str:
@@ -249,11 +269,9 @@ class SensorWidget(QtWidgets.QWidget):
 
 
 # TODO: Add buttons that toggle on and of the available printer sensors
-class SensorsWindow(QWidget):
-    run_gcode_signal = pyqtSignal(str, name="run_gcode")
-
-    toggle_sensor = pyqtSignal(str, name="toggle_fil_sensor")
-    change_fil_sensor_state = pyqtSignal(
+class SensorsWindow(QtWidgets.QWidget):
+    run_gcode_signal = QtCore.pyqtSignal(str, name="run_gcode")
+    change_fil_sensor_state = QtCore.pyqtSignal(
         SensorWidget.FilamentState, name="change_fil_sensor_state"
     )
 
@@ -263,14 +281,16 @@ class SensorsWindow(QWidget):
         self.parent_window = parent
         self.panel = Ui_filament_sensors_page()
         self.panel.setupUi(self)
+
         self.panel.fs_sensors_list.setLayoutDirection(
-            Qt.LayoutDirection.LayoutDirectionAuto
+            QtCore.Qt.LayoutDirection.LayoutDirectionAuto
         )
-        self.panel.fs_sensors_list.itemClicked.connect(self.handle_sensor_clicked)
-        self.setLayoutDirection(QtCore.Qt.LayoutDirection.LayoutDirectionAuto)
+        self.panel.fs_sensors_list.itemClicked.connect(
+            self.handle_sensor_clicked
+        )
         self.sensor_list: list[SensorWidget] = []
 
-    @pyqtSlot(dict, name="handle_available_fil_sensors")
+    @QtCore.pyqtSlot(dict, name="handle_available_fil_sensors")
     def handle_available_fil_sensors(self, sensors: dict) -> None:
         if not isinstance(sensors, dict):
             return
@@ -283,14 +303,16 @@ class SensorsWindow(QWidget):
                         lambda printer_obj: str(printer_obj).startswith(
                             "filament_switch_sensor"
                         )
-                        or str(printer_obj).startswith("filament_motion_sensor"),
+                        or str(printer_obj).startswith(
+                            "filament_motion_sensor"
+                        ),
                         sensors.keys(),
                     ),
                 ),
             )
         )
 
-    @pyqtSlot(str, str, bool, name="handle_fil_state_change")
+    @QtCore.pyqtSlot(str, str, bool, name="handle_fil_state_change")
     def handle_fil_state_change(
         self, sensor_name: str, parameter: str, value: bool
     ) -> None:
@@ -306,19 +328,24 @@ class SensorsWindow(QWidget):
                 if isinstance(_item, SensorWidget) and hasattr(
                     _item, "change_fil_sensor_state"
                 ):
-                    self.change_fil_sensor_state.connect(_item.change_fil_sensor_state)
+                    self.change_fil_sensor_state.connect(
+                        _item.change_fil_sensor_state
+                    )
                     self.change_fil_sensor_state.emit(state)
                     self.change_fil_sensor_state.disconnect()
-                    _item.update()
-            elif parameter == "enabled":
-                if _item is not None and isinstance(_item, SensorWidget):
-                    self.toggle_sensor.emit(_item.toggle_sensor_gcode_command)
+                    _item.repaint()
 
-    @pyqtSlot(QtWidgets.QListWidgetItem, name="handle_sensor_clicked")
+            elif parameter == "enabled":
+                if _item and isinstance(_item, SensorWidget):
+                    self.run_gcode_signal.emit(
+                        _item.toggle_sensor_gcode_command
+                    )
+
+    @QtCore.pyqtSlot(QtWidgets.QListWidgetItem, name="handle_sensor_clicked")
     def handle_sensor_clicked(self, sensor: QtWidgets.QListWidgetItem) -> None:
         _item = self.panel.fs_sensors_list.itemWidget(sensor)
-        if _item is not None and isinstance(_item, SensorWidget):
-            self.toggle_sensor.emit(_item.toggle_sensor_gcode_command)
+        if _item and isinstance(_item, SensorWidget):
+            self.run_gcode_signal.emit(_item.toggle_sensor_gcode_command)
 
     def create_sensor_widget(self, name: str) -> SensorWidget:
         """Creates a sensor row to be added to the QListWidget
@@ -326,9 +353,14 @@ class SensorsWindow(QWidget):
         Args:
             name (str): The name of the filament sensor object
         """
-        _item_widget = SensorWidget(parent=self.panel.fs_sensors_list, sensor_name=name)
-        _list_item = QtWidgets.QListWidgetItem(parent=self.panel.fs_sensors_list)
-        _list_item.setFlags(~Qt.ItemFlag.ItemIsEditable)
+
+        _item_widget = SensorWidget(
+            parent=self.panel.fs_sensors_list, sensor_name=name
+        )
+        _list_item = QtWidgets.QListWidgetItem(
+            parent=self.panel.fs_sensors_list
+        )
+        _list_item.setFlags(~QtCore.Qt.ItemFlag.ItemIsEditable)
         _list_item.setSizeHint(QtCore.QSize(500, 60))
         self.panel.fs_sensors_list.setItemWidget(_list_item, _item_widget)
 

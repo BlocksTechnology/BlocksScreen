@@ -25,8 +25,8 @@ from lib.panels.utilitiesTab import UtilitiesTab
 
 # * UI
 from lib.ui.mainWindow_ui import Ui_MainWindow  # With header
-# from lib.ui.mainWindow_v2_ui import Ui_MainWindow # No header
 
+# from lib.ui.mainWindow_v2_ui import Ui_MainWindow # No header
 # * Resources
 from lib.ui.resources.background_resources_rc import *
 from lib.ui.resources.button_resources_rc import *
@@ -37,7 +37,7 @@ from lib.ui.resources.system_resources_rc import *
 from lib.ui.resources.top_bar_resources_rc import *
 
 # * PyQt6 imports
-from PyQt6.QtCore import QEvent, QSize, pyqtSignal, pyqtSlot
+from PyQt6.QtCore import QEvent, QObject, QSize, pyqtSignal, pyqtSlot
 from PyQt6.QtGui import QCloseEvent, QPaintEvent
 from PyQt6.QtWidgets import QApplication, QMainWindow, QStackedWidget
 from utils.ui import CustomNumpad
@@ -330,6 +330,14 @@ class MainWindow(QMainWindow):
             return False
         return super().event(event)
 
+    # def eventFilter(self, a0: QObject, a1: QEvent) -> bool:
+    #     if a1.type() == WebSocketMessageReceived.type():
+    #         if isinstance(a1, WebSocketMessageReceived):
+    #             self.messageReceivedEvent(a1)
+    #             return True # filter out the event
+    #         return False
+    #     return super().eventFilter(a0, a1)
+
     def messageReceivedEvent(self, event: WebSocketMessageReceived) -> None:
         """Helper method that handles the event messages
         received from the websocket
@@ -434,7 +442,7 @@ class MainWindow(QMainWindow):
                             instance = QApplication.instance()
                             if not isinstance(_event, QEvent):
                                 return
-                            if instance :
+                            if instance:
                                 _logger.info(
                                     f"Event {_klippy_event_callback} sent"
                                 )
@@ -474,7 +482,7 @@ class MainWindow(QMainWindow):
                 self.ui.extruder_temp_display.setText(f"{new_value:.1f}")
                 ...
             elif field == "target":
-                self.ui.extruder_temp_display.set_secondary_text(
+                self.ui.extruder_temp_display.secondary_text = (
                     f"{new_value:.1f}"
                 )
 
@@ -487,7 +495,7 @@ class MainWindow(QMainWindow):
             self.ui.bed_temp_display.setText(f"{new_value:.1f}")
 
         elif field == "target":
-            self.ui.bed_temp_display.set_secondary_text(f"{new_value:.1f}")
+            self.ui.bed_temp_display.secondary_text = f"{new_value:.1f}"
 
     def paintEvent(self, a0: QPaintEvent | None) -> None:
         # TODO: If tab bar is disabled gray it out
