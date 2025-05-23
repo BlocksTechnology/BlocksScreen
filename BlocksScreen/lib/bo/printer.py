@@ -162,7 +162,6 @@ class Printer(QtCore.QObject):
     @QtCore.pyqtSlot(str, name="on_klippy_status")
     def on_klippy_status(self, state: str):
         # "startup", "error", "ready", "shutdown", "disconnected"
-        print(state)
         if state.lower() == "ready":
             self.request_available_objects_signal.emit()  # request available objects
             _query_request: dict = {
@@ -507,10 +506,55 @@ class Printer(QtCore.QObject):
     def _fan_object_updated(self, value: dict, fan_name: str = "fan") -> None:
         if "speed" in value.keys():
             self.fan_update[str, str, float].emit(
-                fan_name, "speed", value["speed"]
+                "fan", "speed", value["speed"]
             )
         if "rpm" in value.keys():
-            self.fan_update[str, str, int].emit(fan_name, "rpm", value["rpm"])
+            self.fan_update[str, str, int].emit("fan", "rpm", value["rpm"])
+
+    def _fan_generic_object_updated(
+        self, value: dict, fan_name: str = ""
+    ) -> None:
+        print("Received fan generic")
+
+        if "speed" in value.keys():
+            self.fan_update[str, str, float].emit(
+                fan_name, "speed", value.get("speed")
+            )
+        if "rpm" in value.keys():
+            self.fan_update[str, str, int].emit(
+                fan_name, "rpm", value.get("rpm")
+            )
+        
+
+    def _controller_fan_object_updated(
+        self, value: dict, fan_name: str = ""
+    ) -> None:
+        _names = ["controller_fan", fan_name]
+        object_name = " ".join(_names)
+        if "speed" in value.keys():
+            self.fan_update[str, str, float].emit(
+                object_name, "speed", value.get("speed")
+            )
+        elif "rpm" in value.keys():
+            self.fan_update[str, str, int].emit(
+                object_name, "rpm", value.get("rpm")
+            )
+
+    def _heater_fan_object_updated(
+        self, value: dict, fan_name: str = ""
+    ) -> None:
+        # Associated with a heater, on when heater is active
+        ...
+        # _names = ["heater_fan", fan_name]
+        # object_name = " ".join(_names)
+        # if "speed" in value.keys():
+        #     self.fan_update[str, str, float].emit(
+        #         object_name, "speed", value.get("speed")
+        #     )
+        # elif "rpm" in value.keys():
+        #     self.fan_update[str, str, int].emit(
+        #         object_name, "rpm", value.get("rpm")
+        #     )
 
     def _idle_timeout_object_updated(
         self, value: dict, name: str = "idle_timeout"
@@ -625,19 +669,27 @@ class Printer(QtCore.QObject):
             )
 
     def _temperature_fan_object_updated(
-        self, values: dict, temperature_fan_name: str
+        self, values: dict, temperature_fan_name: str = ""
     ) -> None:
+        _names = ["temperature_fan", temperature_fan_name]
+        object_name = " ".join(_names)
         if "speed" in values.keys():
             self.temperature_fan_update.emit(
-                temperature_fan_name, "speed", values["speed"]
+                object_name,
+                "speed",
+                values["speed"],
             )
         if "temperature" in values.keys():
             self.temperature_fan_update.emit(
-                temperature_fan_name, "temperature", values["temperature"]
+                object_name,
+                "temperature",
+                values["temperature"],
             )
         if "target" in values.keys():
             self.temperature_fan_update.emit(
-                temperature_fan_name, "target", values["target"]
+                object_name,
+                "target",
+                values["target"],
             )
 
     def _filament_switch_sensor_object_updated(
