@@ -4,11 +4,17 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 
 
 class DisplayButton(QtWidgets.QPushButton):
-    def __init__(self, parent: QtWidgets.QWidget) -> None:
-        super().__init__(parent)
+    def __init__(
+        self, parent: typing.Optional["QtWidgets.QWidget"] = None
+    ) -> None:
+        if parent:
+            super().__init__(parent=parent)
+        else:
+            super().__init__()
 
-        self.icon_pixmap: QtGui.QPixmap = QtGui.QPixmap()
+        self._icon_pixmap: QtGui.QPixmap = QtGui.QPixmap()
         self.highlight_color = "#2AC9F9"
+        self._button_type = "display"
         self.text_formatting: str = ""
         self._text: str = ""
         self._secondary_text: str = ""
@@ -20,9 +26,29 @@ class DisplayButton(QtWidgets.QPushButton):
     def name(self):
         return self._name
 
+    @property
+    def icon_pixmap(self) -> QtGui.QPixmap:
+        return self._icon_pixmap
+
+    @icon_pixmap.setter
+    def icon_pixmap(self, icon: QtGui.QPixmap) -> None:
+        self._icon_pixmap = icon
+        self.update()
+
+    @property
+    def button_type(self) -> str:
+        return self._button_type
+
+    @button_type.setter
+    def button_type(self, type) -> None:
+        if type not in ("display", "display_secondary"):
+            return
+        self._button_type = type
+
     def text(self) -> str:
         return self._text
 
+    @property
     def secondary_text(self) -> str:
         return self._secondary_text
 
@@ -31,7 +57,8 @@ class DisplayButton(QtWidgets.QPushButton):
         self.update()
         super().setText(text)
 
-    def set_secondary_text(self, text: str) -> None:
+    @secondary_text.setter
+    def secondary_text(self, text: str) -> None:
         self._secondary_text = text
         self.update()
 
@@ -103,7 +130,7 @@ class DisplayButton(QtWidgets.QPushButton):
             )
         )
 
-        _icon_scaled = self.icon_pixmap.scaled(
+        _icon_scaled = self._icon_pixmap.scaled(
             int(_icon_rect.width()),
             int(_icon_rect.height()),
             QtCore.Qt.AspectRatioMode.KeepAspectRatio,
@@ -138,7 +165,7 @@ class DisplayButton(QtWidgets.QPushButton):
                 int(_rect.width() - _icon_rect.width() - margin),
                 _rect.height(),
             )
-            if "secondary" in self.button_type:
+            if "secondary" in self._button_type:
                 _ptl_rect = QtCore.QRectF(
                     int(_mtl.left()),
                     0.0,
@@ -166,8 +193,8 @@ class DisplayButton(QtWidgets.QPushButton):
                     QtCore.Qt.TextFlag.TextShowMnemonic
                     | QtCore.Qt.AlignmentFlag.AlignHCenter
                     | QtCore.Qt.AlignmentFlag.AlignVCenter,
-                    str(self.secondary_text())
-                    if self.secondary_text() is not None
+                    str(self.secondary_text)
+                    if self.secondary_text is not None
                     else str("?"),
                 )
                 painter.drawText(
@@ -191,8 +218,8 @@ class DisplayButton(QtWidgets.QPushButton):
 
     def setProperty(self, name: str, value: typing.Any) -> bool:
         if name == "icon_pixmap":
-            self.icon_pixmap = value
+            self._icon_pixmap = value
         elif name == "button_type":
-            self.button_type = value
+            self._button_type = value
 
         return super().setProperty(name, value)
