@@ -78,8 +78,8 @@ def run():
     # ! Someone said that .processEvents sometimes crashes the system
     BlocksScreen.processEvents()
     # main_window.setScreen(BlocksScreen.screens()[2])
-    # main_window.showFullScreen()
-    main_window.showNormal()
+    main_window.showFullScreen()
+    # main_window.showNormal()
     main_window.bo_ws_startup.emit()
     sys.exit(BlocksScreen.exec())
 
