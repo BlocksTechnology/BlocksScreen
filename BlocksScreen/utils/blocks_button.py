@@ -37,9 +37,9 @@ class BlocksCustomButton(QtWidgets.QPushButton):
         self.update()  # Force button update
         return
 
-    def setPixmap(self, pixmap: QtGui.QPixmap) -> None:
+    def setIconPixmap(self, pixmap: QtGui.QPixmap) -> None:
         self.icon_pixmap = pixmap
-        self.update()
+        self.repaint()
 
     def mousePressEvent(self, e: QtGui.QMouseEvent) -> None:
         """Overwritten method so 'normal' buttons can only be

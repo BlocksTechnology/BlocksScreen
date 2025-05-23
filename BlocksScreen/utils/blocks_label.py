@@ -32,7 +32,7 @@ class BlocksLabel(QtWidgets.QLabel):
         self.update_text_metrics()
         return super().resizeEvent(a0)
 
-    def setPixmap(self, a0: QtGui.QPixmap) -> None:
+    def setIconPixmap(self, a0: QtGui.QPixmap) -> None:
         self.icon_pixmap = a0
         self.repaint()
 

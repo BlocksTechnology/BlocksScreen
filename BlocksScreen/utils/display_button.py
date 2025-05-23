@@ -12,7 +12,7 @@ class DisplayButton(QtWidgets.QPushButton):
         else:
             super().__init__()
 
-        self._icon_pixmap: QtGui.QPixmap = QtGui.QPixmap()
+        self.icon_pixmap: QtGui.QPixmap = QtGui.QPixmap()
         self.highlight_color = "#2AC9F9"
         self._button_type = "display"
         self.text_formatting: str = ""
@@ -26,14 +26,11 @@ class DisplayButton(QtWidgets.QPushButton):
     def name(self):
         return self._name
 
-    @property
-    def icon_pixmap(self) -> QtGui.QPixmap:
-        return self._icon_pixmap
 
-    @icon_pixmap.setter
-    def icon_pixmap(self, icon: QtGui.QPixmap) -> None:
-        self._icon_pixmap = icon
-        self.update()
+    def setIconPixmap(self, pixmap: QtGui.QPixmap) -> None:
+        self.icon_pixmap = pixmap
+        self.repaint()
+
 
     @property
     def button_type(self) -> str:
@@ -130,7 +127,7 @@ class DisplayButton(QtWidgets.QPushButton):
             )
         )
 
-        _icon_scaled = self._icon_pixmap.scaled(
+        _icon_scaled = self.icon_pixmap.scaled(
             int(_icon_rect.width()),
             int(_icon_rect.height()),
             QtCore.Qt.AspectRatioMode.KeepAspectRatio,
@@ -218,7 +215,7 @@ class DisplayButton(QtWidgets.QPushButton):
 
     def setProperty(self, name: str, value: typing.Any) -> bool:
         if name == "icon_pixmap":
-            self._icon_pixmap = value
+            self.icon_pixmap = value
         elif name == "button_type":
             self._button_type = value
 
