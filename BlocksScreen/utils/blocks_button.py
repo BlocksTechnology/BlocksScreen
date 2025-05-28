@@ -37,7 +37,7 @@ class BlocksCustomButton(QtWidgets.QPushButton):
         self.update()  # Force button update
         return
 
-    def setIconPixmap(self, pixmap: QtGui.QPixmap) -> None:
+    def setPixmap(self, pixmap: QtGui.QPixmap) -> None:
         self.icon_pixmap = pixmap
         self.repaint()
 

@@ -95,7 +95,6 @@ class PrintTab(QtWidgets.QStackedWidget):
         ws: MoonWebSocket,
         printer: Printer,
     ) -> None:
-        # super(PrintTab, self).__init__(parent)
         super().__init__(parent)
         self.panel = Ui_printStackedWidget()
         self.panel.setupUi(self)
@@ -636,14 +635,14 @@ class PrintTab(QtWidgets.QStackedWidget):
             self.request_print_pause_signal.emit()
             self._internal_print_status = "paused"
             self.panel.pause_printing_btn.setText("Pause")
-            self.panel.pause_printing_btn.setIconPixmap(
+            self.panel.pause_printing_btn.setPixmap(
                 QtGui.QPixmap(":/ui/media/btn_icons/pause.svg")
             )
         elif self._internal_print_status == "paused":
             self.request_print_resume_signal.emit()
             self._internal_print_status = "printing"
             self.panel.pause_printing_btn.setText("Resume")
-            self.panel.pause_printing_btn.setIconPixmap(
+            self.panel.pause_printing_btn.setPixmap(
                 QtGui.QPixmap(":/ui/media/btn_icons/resume.svg")
             )
 
@@ -653,9 +652,8 @@ class PrintTab(QtWidgets.QStackedWidget):
         """Inserts the currently available gcode files on the QListWidget"""
         self.panel.listWidget.clear()
         index = 0
-        print("here")
-        for item in self.file_data.file_list:
-            # TODO: Add a file icon before the name
+
+        def _add_entry():
             _item = QtWidgets.QListWidgetItem()
             _item_widget = QtWidgets.QWidget()
             _item_layout = QtWidgets.QHBoxLayout()
@@ -669,13 +667,20 @@ class PrintTab(QtWidgets.QStackedWidget):
             _item_widget.setLayout(_item_layout)
             _item.setSizeHint(_item_widget.sizeHint())
             _item.setFlags(~QtCore.Qt.ItemFlag.ItemIsEditable)
+            return _item, _item_widget
+
+        for item in self.file_data.file_list:
+            # TODO: Add a file icon before the name
+            _item, _item_widget = _add_entry()
             self.panel.listWidget.addItem(_item)
             self.panel.listWidget.setItemWidget(_item, _item_widget)
             index += 1
 
     @QtCore.pyqtSlot(name="request_nozzle_close_to_bed")
     def move_nozzle_close_to_bed(self) -> None:
-        """Slot for Babystep button to get closer to the bed."""
+        """Slot for babystepping the nozzle closer to the print plate,
+        by issuing a gcode command to Klipper
+        """
         self.run_gcode_signal.emit(
             f"SET_GCODE_OFFSET Z_ADJUST=-{self._z_offset} MOVE=1"  # Z_ADJUST adds the value to the existing offset
         )

@@ -34,28 +34,30 @@ class OptionCard(QtWidgets.QFrame):
 
     def disable_button(self) -> None:
         self.continue_button.setDisabled(True)
+        self.repaint()
 
     def enable_button(self) -> None:
         self.continue_button.setEnabled(True)
+        self.repaint()
 
     def set_card_icon(self, pixmap: QtGui.QPixmap) -> None:
         self.option_icon.setPixmap(pixmap)
-        self.update()
+        self.repaint()
 
     def set_card_text(self, text: str) -> None:
         self.option_text.setText(text)
-        self.update()
+        self.repaint()
 
     def set_card_text_color(self, color: QtGui.QColor) -> None:
         self.text_color = color
         _palette = self.option_text.palette()
         _palette.setColor(QtGui.QPalette.ColorRole.WindowText, color)
         self.option_text.setPalette(_palette)
-        self.update()
+        self.repaint()
 
     def set_background_color(self, color: QtGui.QColor) -> None:
         self.color = color
-        self.update()
+        self.repaint()
 
     def sizeHint(self) -> QtCore.QSize:
         return super().sizeHint()
@@ -148,7 +150,6 @@ class OptionCard(QtWidgets.QFrame):
         )
         option_card.setSizePolicy(sizePolicy)
         option_card.setMinimumSize(QtCore.QSize(200, 300))
-        # option_card.setMaximumSize(QtCore.QSize(400, 500))
         option_card.setMaximumSize(QtCore.QSize(200, 300))
         self.verticalLayout = QtWidgets.QVBoxLayout(option_card)
         self.verticalLayout.setContentsMargins(0, 0, -1, -1)

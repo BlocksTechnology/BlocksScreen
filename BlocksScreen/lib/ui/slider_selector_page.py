@@ -152,7 +152,7 @@ class SliderPage(QtWidgets.QWidget):
         )
 
         self.back_button = IconButton(self.header_horizontalLayoutWidget)
-        self.back_button.setIconPixmap(
+        self.back_button.setPixmap(
             QtGui.QPixmap(":ui/media/btn_icons/back.svg")
         )
         self.back_button.has_text = False

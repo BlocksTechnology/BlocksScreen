@@ -27,7 +27,7 @@ class DisplayButton(QtWidgets.QPushButton):
         return self._name
 
 
-    def setIconPixmap(self, pixmap: QtGui.QPixmap) -> None:
+    def setPixmap(self, pixmap: QtGui.QPixmap) -> None:
         self.icon_pixmap = pixmap
         self.repaint()
 

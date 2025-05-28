@@ -56,6 +56,7 @@ class ControlTab(QtWidgets.QStackedWidget):
 
         self.probe_helper_page = ProbeHelper(self)
         self.addWidget(self.probe_helper_page)
+        
         self.probe_helper_page.request_page_view.connect(
             partial(self.change_page, self.indexOf(self.probe_helper_page))
         )
@@ -455,7 +456,7 @@ class ControlTab(QtWidgets.QStackedWidget):
         if extruder_name == "extruder" and field == "temperature":
             self.panel.extruder_temp_display.setText(f"{new_value:.1f}")
         if extruder_name == "extruder" and field == "target":
-            self.panel.extruder_temp_display.set_secondary_text(
+            self.panel.extruder_temp_display.secondary_text = (
                 f"{new_value:.1f}"
             )
 
@@ -470,7 +471,7 @@ class ControlTab(QtWidgets.QStackedWidget):
         if field == "temperature":
             self.panel.bed_temp_display.setText(f"{new_value:.1f}")
         if field == "target":
-            self.panel.bed_temp_display.set_secondary_text(f"{new_value:.1f}")
+            self.panel.bed_temp_display.secondary_text = (f"{new_value:.1f}")
         self.bed_info.update({f"{name}": {f"{field}": new_value}})
 
     def paintEvent(self, a0: QPaintEvent) -> None:
