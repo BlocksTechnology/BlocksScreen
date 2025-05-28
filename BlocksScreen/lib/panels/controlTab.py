@@ -3,8 +3,8 @@ import logging
 import typing
 from functools import partial
 
-# from lib.bo.printer import Printer
-# from lib.moonrakerComm import MoonWebSocket
+from lib.bo.printer import Printer
+from lib.moonrakerComm import MoonWebSocket
 from lib.panels.probeHelperPage import ProbeHelper
 from lib.ui.controlStackedWidget_ui import Ui_controlStackedWidget
 from PyQt6 import QtCore, QtWidgets
@@ -173,22 +173,22 @@ class ControlTab(QtWidgets.QStackedWidget):
                 value=10,
             )
         )
-        self.panel.move_axis_select_length_1_btn.toggled.connect(
+        self.panel.mva_select_length_1_btn.toggled.connect(
             partial(self.handle_select_move_length, value=1.0)
         )
-        self.panel.move_axis_select_length_10_btn.toggled.connect(
+        self.panel.mva_select_length_10_btn.toggled.connect(
             partial(self.handle_select_move_length, value=10.0)
         )
-        self.panel.move_axis_select_length_100_btn.toggled.connect(
+        self.panel.mva_select_length_100_btn.toggled.connect(
             partial(self.handle_select_move_length, value=100.0)
         )
-        self.panel.move_axis_select_speed_25_btn.toggled.connect(
+        self.panel.mva_select_speed_25_btn.toggled.connect(
             partial(self.handle_select_move_speed, value=25.0)
         )
-        self.panel.move_axis_select_speed_50_btn.toggled.connect(
+        self.panel.mva_select_speed_50_btn.toggled.connect(
             partial(self.handle_select_move_speed, value=50.0)
         )
-        self.panel.move_axis_select_speed_100_btn.toggled.connect(
+        self.panel.mva_select_speed_100_btn.toggled.connect(
             partial(self.handle_select_move_speed, value=100.0)
         )
         self.panel.exp_extrude_btn.clicked.connect(
@@ -201,28 +201,28 @@ class ControlTab(QtWidgets.QStackedWidget):
         # Move Axis
         self.panel.mva_back_btn.clicked.connect(self.back_button)
 
-        self.panel.move_axis_home_x_btn.clicked.connect(
+        self.panel.mva_home_x_btn.clicked.connect(
             partial(self.run_gcode_signal.emit, "G28 X\nM400")
         )
-        self.panel.move_axis_home_y_btn.clicked.connect(
+        self.panel.mva_home_y_btn.clicked.connect(
             partial(self.run_gcode_signal.emit, "G28 Y\nM400")
         )
-        self.panel.move_axis_home_z_btn.clicked.connect(
+        self.panel.mva_home_z_btn.clicked.connect(
             partial(self.run_gcode_signal.emit, "G28 Z\nM400")
         )
-        self.panel.move_axis_home_all_btn.clicked.connect(
+        self.panel.mva_home_all_btn.clicked.connect(
             partial(self.run_gcode_signal.emit, "G28\nM400")
         )
-        self.panel.move_axis_up_btn.clicked.connect(
+        self.panel.mva_up_btn.clicked.connect(
             partial(self.handle_move_axis, "Y")
         )
-        self.panel.move_axis_down_btn.clicked.connect(
+        self.panel.mva_down_btn.clicked.connect(
             partial(self.handle_move_axis, "Y-")
         )
-        self.panel.move_axis_right_btn.clicked.connect(
+        self.panel.mva_right_btn.clicked.connect(
             partial(self.handle_move_axis, "X")
         )
-        self.panel.move_axis_left_btn.clicked.connect(
+        self.panel.mva_left_btn.clicked.connect(
             partial(self.handle_move_axis, "X-")
         )
         self.panel.mva_z_up.clicked.connect(
@@ -424,28 +424,15 @@ class ControlTab(QtWidgets.QStackedWidget):
             f"G91\nG0 {axis}{float(self.move_length)} F{float(self.move_speed * 60)}\nG90\nM400"
         )
 
-    @pyqtSlot(str, name="switch_extruder")
-    def switch_extruder(self) -> None:
-        """Requests extruder change
-
-        TODO : Only available when more than one extruder exists
-
-        **Currently not used!**
-        """
-        if self.printer.active_extruder_name == "extruder":
-            self.run_gcode_signal.emit("T1\nM400")
-        else:
-            self.run_gcode_signal.emit("T0\nM400")
-
     @pyqtSlot(str, list, name="on_toolhead_update")
     def on_toolhead_update(self, field: str, values: list) -> None:
         if field == "position":
             logging.debug(
                 f"[ControlTabPanel] Updating toolhead {field} to: {values}"
             )
-            self.panel.move_axis_x_value_label.setText(f"{values[0]}")
-            self.panel.move_axis_y_value_label.setText(f"{values[1]}")
-            self.panel.move_axis_z_value_label.setText(f"{values[2]}")
+            self.panel.mva_x_value_label.setText(f"{values[0]}")
+            self.panel.mva_y_value_label.setText(f"{values[1]}")
+            self.panel.mva_z_value_label.setText(f"{values[2]}")
 
         self.toolhead_info.update({f"{field}": values})
 
