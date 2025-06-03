@@ -1,6 +1,7 @@
 import enum
 
 from PyQt6 import QtCore, QtGui, QtWidgets
+import qt6_applications
 from utils.blocks_label import BlocksLabel
 
 BASE_POPUP_TIMEOUT = 6000
@@ -27,14 +28,11 @@ class Popup(QtWidgets.QDialog):
     def __init__(self, parent) -> None:
         super().__init__(parent)
         self.message_type: Popup.MessageType = Popup.MessageType.INFO
-
         self.default_background_color = QtGui.QColor(164, 164, 164)
-        self.default_border_color = QtGui.QColor(90, 90, 90)
-        self.highlight_color = "#2AC9F9"
         self.info_icon = QtGui.QPixmap(":ui/media/btn_icons/info.svg")
-
         self.warning_icon = QtGui.QPixmap(":ui/media/btn_icons/warning.svg")
         self.error_icon = QtGui.QPixmap(":ui/media/btn_icons/error.svg")
+
         self.setupUI()
         self.setMouseTracking(True)
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_MouseTracking, True)
@@ -169,7 +167,6 @@ class Popup(QtWidgets.QDialog):
     def paintEvent(self, a0: QtGui.QPaintEvent) -> None:
         popup_path = QtGui.QPainterPath()
         popup_path.addRoundedRect(self.rect().toRectF(), 10, 10)
-
         _background_color = self.default_background_color
         if self.message_type:
             if self.message_type == Popup.MessageType.INFO:
@@ -178,30 +175,21 @@ class Popup(QtWidgets.QDialog):
                 _background_color = Popup.ColorCode.ERROR.value
             elif self.message_type == Popup.MessageType.WARNING:
                 _background_color = Popup.ColorCode.WARNING.value
-
-        _pen = QtGui.QPen()
-        _pen.setStyle(QtCore.Qt.PenStyle.SolidLine)
-        _pen.setJoinStyle(QtCore.Qt.PenJoinStyle.RoundJoin)
-        _pen.setCapStyle(QtCore.Qt.PenCapStyle.RoundCap)
-        _color = QtGui.QColor(_background_color)
-        _color2 = QtGui.QColor(_background_color).darker(140)
-        _pen.setColor(_color)
         _gradient = QtGui.QRadialGradient(
             self.icon_label.contentsRect().toRectF().center(),
             self.rect().width() // 2,
             self.icon_label.contentsRect().toRectF().center(),
         )
         _gradient.setSpread(_gradient.Spread.PadSpread)
-        _gradient.setColorAt(0, _color)
-        _gradient.setColorAt(1, _color2)
-        _pen.setBrush(_gradient)
+        _gradient.setColorAt(0, QtGui.QColor(_background_color))
+        _gradient.setColorAt(1, QtGui.QColor(_background_color).darker(160))
         painter = QtGui.QPainter(self)
         painter.setRenderHint(painter.RenderHint.Antialiasing, True)
         painter.setRenderHint(painter.RenderHint.LosslessImageRendering, True)
         painter.setRenderHint(painter.RenderHint.SmoothPixmapTransform, True)
         painter.setRenderHint(painter.RenderHint.TextAntialiasing, True)
-        painter.setPen(_pen)
-        painter.fillPath(popup_path, painter.pen().brush())
+        painter.setBrush(_gradient)
+        painter.fillPath(popup_path, painter.brush())
         painter.end()
 
     def setupUI(self) -> None:
