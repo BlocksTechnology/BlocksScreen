@@ -176,12 +176,11 @@ class Popup(QtWidgets.QDialog):
                 _background_color = Popup.ColorCode.WARNING.value
         _gradient = QtGui.QRadialGradient(
             self.icon_label.contentsRect().toRectF().center(),
-            self.rect().width() // 2,
+            self.rect().width() // 2 + 50,
             self.icon_label.contentsRect().toRectF().center(),
         )
-        _gradient.setSpread(_gradient.Spread.PadSpread)
         _gradient.setColorAt(0, QtGui.QColor(_background_color))
-        _gradient.setColorAt(1, QtGui.QColor(_background_color).darker(160))
+        _gradient.setColorAt(0.9, QtGui.QColor(_background_color).darker(160))
         painter = QtGui.QPainter(self)
         painter.setRenderHint(painter.RenderHint.Antialiasing, True)
         painter.setRenderHint(painter.RenderHint.LosslessImageRendering, True)
