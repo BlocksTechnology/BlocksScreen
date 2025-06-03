@@ -15,6 +15,11 @@ class Popup(QtWidgets.QDialog):
         def __repr__(self) -> str:
             return "<%s.%s>" % (self.__class__.__name__, self._name_)
 
+    class ColorCode(enum.Enum):
+        INFO = QtGui.QColor("#446CDB")
+        WARNING = QtGui.QColor("#E7E147")
+        ERROR = QtGui.QColor("#CA4949")
+
     popup_timeout = BASE_POPUP_TIMEOUT
     timeout_timer = QtCore.QTimer()
     unmanaged_messages: list = []
@@ -22,10 +27,12 @@ class Popup(QtWidgets.QDialog):
     def __init__(self, parent) -> None:
         super().__init__(parent)
         self.message_type: Popup.MessageType = Popup.MessageType.INFO
-        self.background_color = QtGui.QColor(164, 164, 164)
-        self.border_color = QtGui.QColor(164, 164, 164)
 
+        self.default_background_color = QtGui.QColor(164, 164, 164)
+        self.default_border_color = QtGui.QColor(90, 90, 90)
+        self.highlight_color = "#2AC9F9"
         self.info_icon = QtGui.QPixmap(":ui/media/btn_icons/info.svg")
+
         self.warning_icon = QtGui.QPixmap(":ui/media/btn_icons/warning.svg")
         self.error_icon = QtGui.QPixmap(":ui/media/btn_icons/error.svg")
         self.setupUI()
@@ -158,17 +165,43 @@ class Popup(QtWidgets.QDialog):
         ):
             self.fade_in_animation.stop()
         self.fade_out_animation.start()
-        # return super().hideEvent(a0)
 
     def paintEvent(self, a0: QtGui.QPaintEvent) -> None:
         popup_path = QtGui.QPainterPath()
         popup_path.addRoundedRect(self.rect().toRectF(), 10, 10)
+
+        _background_color = self.default_background_color
+        if self.message_type:
+            if self.message_type == Popup.MessageType.INFO:
+                _background_color = Popup.ColorCode.INFO.value
+            elif self.message_type == Popup.MessageType.ERROR:
+                _background_color = Popup.ColorCode.ERROR.value
+            elif self.message_type == Popup.MessageType.WARNING:
+                _background_color = Popup.ColorCode.WARNING.value
+
+        _pen = QtGui.QPen()
+        _pen.setStyle(QtCore.Qt.PenStyle.SolidLine)
+        _pen.setJoinStyle(QtCore.Qt.PenJoinStyle.RoundJoin)
+        _pen.setCapStyle(QtCore.Qt.PenCapStyle.RoundCap)
+        _color = QtGui.QColor(_background_color)
+        _color2 = QtGui.QColor(_background_color).darker(140)
+        _pen.setColor(_color)
+        _gradient = QtGui.QRadialGradient(
+            self.icon_label.contentsRect().toRectF().center(),
+            self.rect().width() // 2,
+            self.icon_label.contentsRect().toRectF().center(),
+        )
+        _gradient.setSpread(_gradient.Spread.PadSpread)
+        _gradient.setColorAt(0, _color)
+        _gradient.setColorAt(1, _color2)
+        _pen.setBrush(_gradient)
         painter = QtGui.QPainter(self)
         painter.setRenderHint(painter.RenderHint.Antialiasing, True)
         painter.setRenderHint(painter.RenderHint.LosslessImageRendering, True)
         painter.setRenderHint(painter.RenderHint.SmoothPixmapTransform, True)
         painter.setRenderHint(painter.RenderHint.TextAntialiasing, True)
-        painter.fillPath(popup_path, self.background_color)
+        painter.setPen(_pen)
+        painter.fillPath(popup_path, painter.pen().brush())
         painter.end()
 
     def setupUI(self) -> None:
@@ -210,10 +243,14 @@ class Popup(QtWidgets.QDialog):
             QtCore.Qt.AlignmentFlag.AlignVCenter
             | QtCore.Qt.AlignmentFlag.AlignHCenter
         )
-        font = QtGui.QFont()
+        font = self.text_label.font()
         font.setPixelSize(18)
         font.setFamily("mooncake")
-
+        palette = self.text_label.palette()
+        palette.setColor(
+            QtGui.QPalette.ColorRole.WindowText, QtCore.Qt.GlobalColor.white
+        )
+        self.text_label.setPalette(palette)
         self.text_label.setFont(font)
         self.horizontal_layout.addWidget(
             self.text_label,
