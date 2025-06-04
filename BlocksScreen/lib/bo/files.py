@@ -54,8 +54,6 @@ class Files(QtCore.QObject):
             else:
                 self.files_metadata[data["filename"]] = data
 
-        print(data)
-
     def event(self, a0: QtCore.QEvent) -> bool:
         if a0.type() == ReceivedFileData.type():
             if isinstance(a0, ReceivedFileData):
