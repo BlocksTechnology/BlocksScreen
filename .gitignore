@@ -24,7 +24,6 @@ share/python-wheels/
 .installed.cfg
 *.egg
 MANIFEST
-*/*Zone.Identifier
 
 # PyInstaller
 #  Usually these files are written by a python script from a template
@@ -165,3 +164,7 @@ cython_debug/
 *.drawio
 *.logs
 *.log
+
+*/*Zone.Identifier
+*:Zone.Identifier
+*/*:Zone.Identifier
