@@ -33,16 +33,16 @@ class ControlTab(QtWidgets.QStackedWidget):
     def __init__(
         self,
         parent: QtWidgets.QWidget,
-        ws: typing.Type["MoonWebSocket"],
-        printer: typing.Type["Printer"],
+        ws: MoonWebSocket,
+        printer: Printer,
         /,
     ) -> None:
         super().__init__(parent)
         self.panel = Ui_controlStackedWidget()
         self.panel.setupUi(self)
 
-        self.ws = ws
-        self.printer = printer
+        self.ws: MoonWebSocket = ws
+        self.printer: Printer = printer
         self.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
         self.timers = []
         self.extruder_info: dict = {}
@@ -56,7 +56,7 @@ class ControlTab(QtWidgets.QStackedWidget):
 
         self.probe_helper_page = ProbeHelper(self)
         self.addWidget(self.probe_helper_page)
-        
+
         self.probe_helper_page.request_page_view.connect(
             partial(self.change_page, self.indexOf(self.probe_helper_page))
         )
@@ -458,7 +458,7 @@ class ControlTab(QtWidgets.QStackedWidget):
         if field == "temperature":
             self.panel.bed_temp_display.setText(f"{new_value:.1f}")
         if field == "target":
-            self.panel.bed_temp_display.secondary_text = (f"{new_value:.1f}")
+            self.panel.bed_temp_display.secondary_text = f"{new_value:.1f}"
         self.bed_info.update({f"{name}": {f"{field}": new_value}})
 
     def paintEvent(self, a0: QPaintEvent) -> None:
