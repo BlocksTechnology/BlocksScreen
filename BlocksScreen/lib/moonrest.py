@@ -28,9 +28,9 @@ class MoonRest:
     timeout = 3
 
     # TODO: The ip and port need to come from a configfile
-    
+
+    # def __init__(self, ip="localhost", port="7125", api_key=False):
     def __init__(self, ip="192.168.1.100", port="7125", api_key=False):
-    # def __init__(self, ip="192.168.1.109", port="7125", api_key=False):
         self._ip = ip
         self._port = port
         self._api_key = api_key
@@ -89,7 +89,10 @@ class MoonRest:
 
     def get_request(self, method, json=True, timeout=timeout):
         return self._request(
-            request_type="get", method=method, json_response=json, timeout=timeout
+            request_type="get",
+            method=method,
+            json_response=json,
+            timeout=timeout,
         )
 
     def _request(
@@ -115,11 +118,17 @@ class MoonRest:
                     )
 
                 response = _request_method(
-                    _url, json=json, data=data, headers=_headers, timeout=timeout
+                    _url,
+                    json=json,
+                    data=data,
+                    headers=_headers,
+                    timeout=timeout,
                 )
                 if isinstance(response, Response):
                     response.raise_for_status()
-                    return response.json() if json_response else response.content
+                    return (
+                        response.json() if json_response else response.content
+                    )
 
         except Exception as e:
             logging.info(f"Unexpected error while sending HTTP request: {e}")
