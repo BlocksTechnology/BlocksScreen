@@ -999,7 +999,7 @@ class Ui_printStackedWidget(object):
         printStackedWidget.addWidget(self.babystep_page)
 
         self.retranslateUi(printStackedWidget)
-        printStackedWidget.setCurrentIndex(0)
+        printStackedWidget.setCurrentIndex(1)
         QtCore.QMetaObject.connectSlotsByName(printStackedWidget)
 
     def retranslateUi(self, printStackedWidget):
@@ -1031,7 +1031,7 @@ class Ui_printStackedWidget(object):
         self.stop_printing_btn.setText(_translate("printStackedWidget", "Stop"))
         self.stop_printing_btn.setProperty("class", _translate("printStackedWidget", "menu_btn"))
         self.stop_printing_btn.setProperty("button_type", _translate("printStackedWidget", "normal"))
-        self.tune_menu_btn.setText(_translate("printStackedWidget", "Tune Settings"))
+        self.tune_menu_btn.setText(_translate("printStackedWidget", "Tune"))
         self.tune_menu_btn.setProperty("class", _translate("printStackedWidget", "menu_btn"))
         self.tune_menu_btn.setProperty("button_type", _translate("printStackedWidget", "normal"))
         self.progress_text_label.setText(_translate("printStackedWidget", "Progress"))

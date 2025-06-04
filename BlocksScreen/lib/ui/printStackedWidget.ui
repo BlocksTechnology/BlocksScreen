@@ -35,7 +35,7 @@
    <string>StackedWidget</string>
   </property>
   <property name="currentIndex">
-   <number>0</number>
+   <number>1</number>
   </property>
   <property name="backgroundPixmap" stdset="0">
    <pixmap>:/background/media/graphics/scroll_list_window.svg</pixmap>
@@ -1123,7 +1123,7 @@ background-color: transparent;
             <string notr="true"/>
            </property>
            <property name="text">
-            <string>Tune Settings</string>
+            <string>Tune</string>
            </property>
            <property name="autoDefault">
             <bool>false</bool>
@@ -2636,16 +2636,6 @@ Change</string>
  </widget>
  <customwidgets>
   <customwidget>
-   <class>BlocksCustomButton</class>
-   <extends>QPushButton</extends>
-   <header location="global">utils.blocks_button</header>
-  </customwidget>
-  <customwidget>
-   <class>BlocksLabel</class>
-   <extends>QLabel</extends>
-   <header location="global">utils.blocks_label</header>
-  </customwidget>
-  <customwidget>
    <class>IconButton</class>
    <extends>QPushButton</extends>
    <header location="global">utils.icon_button</header>
@@ -2655,9 +2645,18 @@ Change</string>
    <extends>QPushButton</extends>
    <header location="global">utils.display_button</header>
   </customwidget>
+  <customwidget>
+   <class>BlocksCustomButton</class>
+   <extends>QPushButton</extends>
+   <header location="global">utils.blocks_button</header>
+  </customwidget>
+  <customwidget>
+   <class>BlocksLabel</class>
+   <extends>QLabel</extends>
+   <header location="global">utils.blocks_label</header>
+  </customwidget>
  </customwidgets>
  <resources>
-  <include location="resources/button_resources.qrc"/>
   <include location="resources/graphic_resources.qrc"/>
   <include location="resources/icon_resources.qrc"/>
   <include location="resources/top_bar_resources.qrc"/>
@@ -2666,7 +2665,7 @@ Change</string>
  </resources>
  <connections/>
  <buttongroups>
-  <buttongroup name="bbp_option_button_group"/>
   <buttongroup name="bbp_offset_value_selector_group"/>
+  <buttongroup name="bbp_option_button_group"/>
  </buttongroups>
 </ui>
