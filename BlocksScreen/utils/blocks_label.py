@@ -192,16 +192,21 @@ class BlocksLabel(QtWidgets.QLabel):
             text_rect.translate(int(self.scroll_pos), 0)
             text_option = QtGui.QTextOption(self.alignment())
             text_option.setWrapMode(QtGui.QTextOption.WrapMode.NoWrap)
-            text_option.setAlignment(QtCore.Qt.AlignmentFlag.AlignLeft | QtCore.Qt.AlignmentFlag.AlignVCenter)
+            text_option.setAlignment(
+                QtCore.Qt.AlignmentFlag.AlignLeft
+                | QtCore.Qt.AlignmentFlag.AlignVCenter
+            )
             painter = QtGui.QPainter(self)
             text_rect.setWidth(self.text_width)
+
             painter.drawText(
                 text_rect.toRectF(),
                 self._text,
                 text_option,
             )
+
             if self.text_width > self.label_width and self.scroll_pos < 0:
-                second_text_rect = self.contentsRect()
+                second_text_rect = self.rect()
                 second_text_rect.translate(
                     int(
                         self.scroll_pos
@@ -214,11 +219,10 @@ class BlocksLabel(QtWidgets.QLabel):
                     second_text_rect.toRectF(), self._text, text_option
                 )
             painter.end()
+        qp.end()
 
     def setProperty(self, name: str, value: typing.Any) -> bool:
         if name == "icon_pixmap":
             self.setPixmap(value)
 
         return super().setProperty(name, value)
-
-    

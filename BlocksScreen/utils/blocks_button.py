@@ -43,7 +43,7 @@ class BlocksCustomButton(QtWidgets.QPushButton):
 
     def mousePressEvent(self, e: QtGui.QMouseEvent) -> None:
         """Overwritten method so 'normal' buttons can only be
-        pressed on the visible area
+        pressed in the visible area
         """
         if not self.button_background:
             if self.button_background.contains(e.pos()):  # type:ignore
@@ -54,7 +54,7 @@ class BlocksCustomButton(QtWidgets.QPushButton):
                 return
         return super().mousePressEvent(e)
 
-    def paintEvent(self, e: QtGui.QPaintEvent | None):
+    def paintEvent(self, e: typing.Optional[QtGui.QPaintEvent]):
         opt = QtWidgets.QStyleOptionButton()
         self.initStyleOption(opt)
 
@@ -137,8 +137,8 @@ class BlocksCustomButton(QtWidgets.QPushButton):
         # Calculate the actual QRect for the scaled pixmap (centering it if needed)
         scaled_width = _icon_scaled.width()
         scaled_height = _icon_scaled.height()
-        adjusted_x = (_icon_rect.width() - scaled_width) / 2.0
-        adjusted_y = (_icon_rect.height() - scaled_height) / 2.0
+        adjusted_x = (_icon_rect.width() - scaled_width) // 2.0
+        adjusted_y = (_icon_rect.height() - scaled_height) // 2.0
         adjusted_icon_rect = QtCore.QRectF(
             _icon_rect.x() + adjusted_x,
             _icon_rect.y() + adjusted_y,
