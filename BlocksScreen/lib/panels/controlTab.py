@@ -1,11 +1,10 @@
 from __future__ import annotations
 import logging
-import typing
 from functools import partial
 
-from lib.bo.printer import Printer
+from lib.printer import Printer
 from lib.moonrakerComm import MoonWebSocket
-from lib.panels.probeHelperPage import ProbeHelper
+from lib.panels.widgets.probeHelperPage import ProbeHelper
 from lib.ui.controlStackedWidget_ui import Ui_controlStackedWidget
 from PyQt6 import QtCore, QtWidgets
 from PyQt6.QtCore import (

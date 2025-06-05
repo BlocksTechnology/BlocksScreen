@@ -297,5 +297,5 @@ class Ui_ConnectivityForm(object):
         self.RetryConnectionButton.setProperty("text_formatting", _translate("ConnectivityForm", "bottom"))
         self.wifi_button.setText(_translate("ConnectivityForm", "Wifi Settings"))
         self.wifi_button.setProperty("class", _translate("ConnectivityForm", "system_control_btn"))
-from utils.blocks_button import BlocksCustomButton
-from utils.icon_button import IconButton
+from lib.utils.blocks_button import BlocksCustomButton
+from lib.utils.icon_button import IconButton

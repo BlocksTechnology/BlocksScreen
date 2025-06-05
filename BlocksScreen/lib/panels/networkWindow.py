@@ -7,7 +7,7 @@ from PyQt6.QtGui import QPaintEvent
 from PyQt6.QtWidgets import QListWidgetItem, QStackedWidget, QWidget
 
 from lib.ui.wifiConnectivityWindow_ui import Ui_wifi_stacked_page
-from lib.bo.network import SdbusNetworkManagerDummy
+from lib.network import SdbusNetworkManagerDummy
 
 # TEST: Network saving, Adding new Network connections, Toggle on and off hotspot, etc....
 # TODO: Complete this panel

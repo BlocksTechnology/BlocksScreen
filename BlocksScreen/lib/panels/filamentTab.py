@@ -3,8 +3,8 @@ import typing
 from functools import partial
 
 
-from lib.bo.printer import Printer
-from lib.bo.filament import Filament
+from lib.printer import Printer
+from lib.filament import Filament
 from lib.ui.filamentStackedWidget_ui import Ui_filamentStackedWidget
 from PyQt6.QtCore import QSize, pyqtSignal, pyqtSlot
 from PyQt6.QtGui import QPaintEngine, QPaintEvent, QResizeEvent

@@ -517,5 +517,5 @@ class Ui_MainWindow(object):
         self.bed_temp_display.setProperty("name", _translate("MainWindow", "bed_temperature_display"))
         self.bed_temp_display.setProperty("button_type", _translate("MainWindow", "secondary_display"))
         self.wifi_button.setProperty("button_type", _translate("MainWindow", "icon"))
-from utils.display_button import DisplayButton
-from utils.icon_button import IconButton
+from lib.utils.display_button import DisplayButton
+from lib.utils.icon_button import IconButton

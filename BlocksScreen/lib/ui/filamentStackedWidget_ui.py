@@ -570,4 +570,4 @@ class Ui_filamentStackedWidget(object):
         self.cfil_load_btn.setText(_translate("filamentStackedWidget", "Load"))
         self.cfil_load_btn.setProperty("class", _translate("filamentStackedWidget", "menu_btn"))
         self.cfil_load_btn.setProperty("button_type", _translate("filamentStackedWidget", "normal"))
-from utils.blocks_button import BlocksCustomButton
+from lib.utils.blocks_button import BlocksCustomButton

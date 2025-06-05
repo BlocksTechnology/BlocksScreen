@@ -1340,7 +1340,7 @@ Filament</string>
   <customwidget>
    <class>BlocksCustomButton</class>
    <extends>QPushButton</extends>
-   <header location="global">utils.blocks_button</header>
+   <header location="global">lib.utils.blocks_button</header>
   </customwidget>
  </customwidgets>
  <resources>

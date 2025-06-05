@@ -14,47 +14,33 @@ class Ui_customNumpad(object):
         customNumpad.setObjectName("customNumpad")
         customNumpad.setEnabled(True)
         customNumpad.resize(710, 410)
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.Preferred,
-            QtWidgets.QSizePolicy.Policy.Preferred,
-        )
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Preferred, QtWidgets.QSizePolicy.Policy.Preferred)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(
-            customNumpad.sizePolicy().hasHeightForWidth()
-        )
+        sizePolicy.setHeightForWidth(customNumpad.sizePolicy().hasHeightForWidth())
         customNumpad.setSizePolicy(sizePolicy)
         self.layoutWidget = QtWidgets.QWidget(parent=customNumpad)
         self.layoutWidget.setGeometry(QtCore.QRect(9, 9, 691, 62))
         self.layoutWidget.setObjectName("layoutWidget")
         self.gridLayout = QtWidgets.QGridLayout(self.layoutWidget)
-        self.gridLayout.setSizeConstraint(
-            QtWidgets.QLayout.SizeConstraint.SetMaximumSize
-        )
+        self.gridLayout.setSizeConstraint(QtWidgets.QLayout.SizeConstraint.SetMaximumSize)
         self.gridLayout.setContentsMargins(0, 0, 0, 0)
         self.gridLayout.setObjectName("gridLayout")
         self.numpad_title = QtWidgets.QLabel(parent=self.layoutWidget)
         font = QtGui.QFont()
         font.setPointSize(25)
         self.numpad_title.setFont(font)
-        self.numpad_title.setStyleSheet(
-            "background: transparent;\n"
-            "                                                                color: white;"
-        )
+        self.numpad_title.setStyleSheet("background: transparent;\n"
+"                                                                color: white;")
         self.numpad_title.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self.numpad_title.setObjectName("numpad_title")
         self.gridLayout.addWidget(self.numpad_title, 0, 0, 1, 1)
         self.numpad_back_btn = IconButton(parent=self.layoutWidget)
         self.numpad_back_btn.setEnabled(True)
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-        )
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.MinimumExpanding, QtWidgets.QSizePolicy.Policy.MinimumExpanding)
         sizePolicy.setHorizontalStretch(1)
         sizePolicy.setVerticalStretch(1)
-        sizePolicy.setHeightForWidth(
-            self.numpad_back_btn.sizePolicy().hasHeightForWidth()
-        )
+        sizePolicy.setHeightForWidth(self.numpad_back_btn.sizePolicy().hasHeightForWidth())
         self.numpad_back_btn.setSizePolicy(sizePolicy)
         self.numpad_back_btn.setMinimumSize(QtCore.QSize(60, 60))
         self.numpad_back_btn.setMaximumSize(QtCore.QSize(60, 60))
@@ -64,10 +50,8 @@ class Ui_customNumpad(object):
         self.numpad_back_btn.setCheckable(False)
         self.numpad_back_btn.setChecked(False)
         self.numpad_back_btn.setFlat(True)
-        self.numpad_back_btn.setProperty(
-            "icon_pixmap",
-            QtGui.QPixmap(":/ui/media/btn_icons/back.svg"),
-        )
+        self.numpad_back_btn.setProperty("icon_pixmap", QtGui.QPixmap("/home/bugo/github/Blocks_Screen/BlocksScreen/lib/ui/\n"
+"                                                                :/ui/media/btn_icons/back.svg"))
         self.numpad_back_btn.setObjectName("numpad_back_btn")
         self.gridLayout.addWidget(self.numpad_back_btn, 0, 1, 1, 1)
         self.gridLayout.setColumnStretch(0, 2)
@@ -85,29 +69,17 @@ class Ui_customNumpad(object):
         font.setPointSize(18)
         self.inserted_value.setFont(font)
         self.inserted_value.setAutoFillBackground(False)
-        self.inserted_value.setStyleSheet(
-            "color: white;\n"
-            "                                                        "
-        )
+        self.inserted_value.setStyleSheet("color: white;\n"
+"                                                        ")
         self.inserted_value.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
         self.inserted_value.setFrameShadow(QtWidgets.QFrame.Shadow.Sunken)
         self.inserted_value.setLineWidth(0)
         self.inserted_value.setScaledContents(False)
-        self.inserted_value.setAlignment(
-            QtCore.Qt.AlignmentFlag.AlignBottom
-            | QtCore.Qt.AlignmentFlag.AlignHCenter
-        )
+        self.inserted_value.setAlignment(QtCore.Qt.AlignmentFlag.AlignBottom|QtCore.Qt.AlignmentFlag.AlignHCenter)
         self.inserted_value.setIndent(0)
-        self.inserted_value.setTextInteractionFlags(
-            QtCore.Qt.TextInteractionFlag.LinksAccessibleByMouse
-        )
+        self.inserted_value.setTextInteractionFlags(QtCore.Qt.TextInteractionFlag.LinksAccessibleByMouse)
         self.inserted_value.setObjectName("inserted_value")
-        self.verticalLayout_2.addWidget(
-            self.inserted_value,
-            0,
-            QtCore.Qt.AlignmentFlag.AlignHCenter
-            | QtCore.Qt.AlignmentFlag.AlignBottom,
-        )
+        self.verticalLayout_2.addWidget(self.inserted_value, 0, QtCore.Qt.AlignmentFlag.AlignHCenter|QtCore.Qt.AlignmentFlag.AlignBottom)
         self.line = QtWidgets.QFrame(parent=self.layoutWidget1)
         self.line.setFrameShape(QtWidgets.QFrame.Shape.HLine)
         self.line.setFrameShadow(QtWidgets.QFrame.Shadow.Sunken)
@@ -117,22 +89,15 @@ class Ui_customNumpad(object):
         self.gridLayoutWidget.setGeometry(QtCore.QRect(120, 141, 464, 261))
         self.gridLayoutWidget.setObjectName("gridLayoutWidget")
         self.gridLayout_2 = QtWidgets.QGridLayout(self.gridLayoutWidget)
-        self.gridLayout_2.setSizeConstraint(
-            QtWidgets.QLayout.SizeConstraint.SetMaximumSize
-        )
+        self.gridLayout_2.setSizeConstraint(QtWidgets.QLayout.SizeConstraint.SetMaximumSize)
         self.gridLayout_2.setContentsMargins(0, 0, 0, 0)
         self.gridLayout_2.setSpacing(6)
         self.gridLayout_2.setObjectName("gridLayout_2")
         self.numpad_6 = NumpadButton(parent=self.gridLayoutWidget)
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.Fixed,
-            QtWidgets.QSizePolicy.Policy.Fixed,
-        )
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Fixed, QtWidgets.QSizePolicy.Policy.Fixed)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(
-            self.numpad_6.sizePolicy().hasHeightForWidth()
-        )
+        sizePolicy.setHeightForWidth(self.numpad_6.sizePolicy().hasHeightForWidth())
         self.numpad_6.setSizePolicy(sizePolicy)
         self.numpad_6.setMinimumSize(QtCore.QSize(150, 63))
         font = QtGui.QFont()
@@ -149,19 +114,12 @@ class Ui_customNumpad(object):
         self.numpad_6.setLayoutDirection(QtCore.Qt.LayoutDirection.RightToLeft)
         self.numpad_6.setFlat(True)
         self.numpad_6.setObjectName("numpad_6")
-        self.gridLayout_2.addWidget(
-            self.numpad_6, 1, 2, 1, 1, QtCore.Qt.AlignmentFlag.AlignRight
-        )
+        self.gridLayout_2.addWidget(self.numpad_6, 1, 2, 1, 1, QtCore.Qt.AlignmentFlag.AlignRight)
         self.numpad_9 = NumpadButton(parent=self.gridLayoutWidget)
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.Fixed,
-            QtWidgets.QSizePolicy.Policy.Fixed,
-        )
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Fixed, QtWidgets.QSizePolicy.Policy.Fixed)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(
-            self.numpad_9.sizePolicy().hasHeightForWidth()
-        )
+        sizePolicy.setHeightForWidth(self.numpad_9.sizePolicy().hasHeightForWidth())
         self.numpad_9.setSizePolicy(sizePolicy)
         self.numpad_9.setMinimumSize(QtCore.QSize(150, 63))
         font = QtGui.QFont()
@@ -178,19 +136,12 @@ class Ui_customNumpad(object):
         self.numpad_9.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
         self.numpad_9.setFlat(True)
         self.numpad_9.setObjectName("numpad_9")
-        self.gridLayout_2.addWidget(
-            self.numpad_9, 0, 2, 1, 1, QtCore.Qt.AlignmentFlag.AlignLeft
-        )
+        self.gridLayout_2.addWidget(self.numpad_9, 0, 2, 1, 1, QtCore.Qt.AlignmentFlag.AlignLeft)
         self.numpad_8 = NumpadButton(parent=self.gridLayoutWidget)
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.Fixed,
-            QtWidgets.QSizePolicy.Policy.Fixed,
-        )
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Fixed, QtWidgets.QSizePolicy.Policy.Fixed)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(
-            self.numpad_8.sizePolicy().hasHeightForWidth()
-        )
+        sizePolicy.setHeightForWidth(self.numpad_8.sizePolicy().hasHeightForWidth())
         self.numpad_8.setSizePolicy(sizePolicy)
         self.numpad_8.setMinimumSize(QtCore.QSize(150, 63))
         self.numpad_8.setMaximumSize(QtCore.QSize(150, 16777215))
@@ -208,19 +159,12 @@ class Ui_customNumpad(object):
         self.numpad_8.setLayoutDirection(QtCore.Qt.LayoutDirection.RightToLeft)
         self.numpad_8.setFlat(True)
         self.numpad_8.setObjectName("numpad_8")
-        self.gridLayout_2.addWidget(
-            self.numpad_8, 0, 1, 1, 1, QtCore.Qt.AlignmentFlag.AlignHCenter
-        )
+        self.gridLayout_2.addWidget(self.numpad_8, 0, 1, 1, 1, QtCore.Qt.AlignmentFlag.AlignHCenter)
         self.numpad_2 = NumpadButton(parent=self.gridLayoutWidget)
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.Fixed,
-            QtWidgets.QSizePolicy.Policy.Fixed,
-        )
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Fixed, QtWidgets.QSizePolicy.Policy.Fixed)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(
-            self.numpad_2.sizePolicy().hasHeightForWidth()
-        )
+        sizePolicy.setHeightForWidth(self.numpad_2.sizePolicy().hasHeightForWidth())
         self.numpad_2.setSizePolicy(sizePolicy)
         self.numpad_2.setMinimumSize(QtCore.QSize(150, 63))
         self.numpad_2.setMaximumSize(QtCore.QSize(150, 16777215))
@@ -238,19 +182,12 @@ class Ui_customNumpad(object):
         self.numpad_2.setLayoutDirection(QtCore.Qt.LayoutDirection.RightToLeft)
         self.numpad_2.setFlat(True)
         self.numpad_2.setObjectName("numpad_2")
-        self.gridLayout_2.addWidget(
-            self.numpad_2, 2, 1, 1, 1, QtCore.Qt.AlignmentFlag.AlignHCenter
-        )
+        self.gridLayout_2.addWidget(self.numpad_2, 2, 1, 1, 1, QtCore.Qt.AlignmentFlag.AlignHCenter)
         self.numpad_0 = NumpadButton(parent=self.gridLayoutWidget)
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.Fixed,
-            QtWidgets.QSizePolicy.Policy.Fixed,
-        )
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Fixed, QtWidgets.QSizePolicy.Policy.Fixed)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(
-            self.numpad_0.sizePolicy().hasHeightForWidth()
-        )
+        sizePolicy.setHeightForWidth(self.numpad_0.sizePolicy().hasHeightForWidth())
         self.numpad_0.setSizePolicy(sizePolicy)
         self.numpad_0.setMinimumSize(QtCore.QSize(150, 63))
         self.numpad_0.setMaximumSize(QtCore.QSize(150, 16777215))
@@ -268,19 +205,12 @@ class Ui_customNumpad(object):
         self.numpad_0.setLayoutDirection(QtCore.Qt.LayoutDirection.RightToLeft)
         self.numpad_0.setFlat(True)
         self.numpad_0.setObjectName("numpad_0")
-        self.gridLayout_2.addWidget(
-            self.numpad_0, 3, 1, 1, 1, QtCore.Qt.AlignmentFlag.AlignHCenter
-        )
+        self.gridLayout_2.addWidget(self.numpad_0, 3, 1, 1, 1, QtCore.Qt.AlignmentFlag.AlignHCenter)
         self.numpad_3 = NumpadButton(parent=self.gridLayoutWidget)
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.Fixed,
-            QtWidgets.QSizePolicy.Policy.Fixed,
-        )
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Fixed, QtWidgets.QSizePolicy.Policy.Fixed)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(
-            self.numpad_3.sizePolicy().hasHeightForWidth()
-        )
+        sizePolicy.setHeightForWidth(self.numpad_3.sizePolicy().hasHeightForWidth())
         self.numpad_3.setSizePolicy(sizePolicy)
         self.numpad_3.setMinimumSize(QtCore.QSize(150, 63))
         font = QtGui.QFont()
@@ -297,19 +227,12 @@ class Ui_customNumpad(object):
         self.numpad_3.setLayoutDirection(QtCore.Qt.LayoutDirection.RightToLeft)
         self.numpad_3.setFlat(True)
         self.numpad_3.setObjectName("numpad_3")
-        self.gridLayout_2.addWidget(
-            self.numpad_3, 2, 2, 1, 1, QtCore.Qt.AlignmentFlag.AlignRight
-        )
+        self.gridLayout_2.addWidget(self.numpad_3, 2, 2, 1, 1, QtCore.Qt.AlignmentFlag.AlignRight)
         self.numpad_4 = NumpadButton(parent=self.gridLayoutWidget)
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.Fixed,
-            QtWidgets.QSizePolicy.Policy.Fixed,
-        )
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Fixed, QtWidgets.QSizePolicy.Policy.Fixed)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(
-            self.numpad_4.sizePolicy().hasHeightForWidth()
-        )
+        sizePolicy.setHeightForWidth(self.numpad_4.sizePolicy().hasHeightForWidth())
         self.numpad_4.setSizePolicy(sizePolicy)
         self.numpad_4.setMinimumSize(QtCore.QSize(150, 63))
         font = QtGui.QFont()
@@ -326,19 +249,12 @@ class Ui_customNumpad(object):
         self.numpad_4.setLayoutDirection(QtCore.Qt.LayoutDirection.RightToLeft)
         self.numpad_4.setFlat(True)
         self.numpad_4.setObjectName("numpad_4")
-        self.gridLayout_2.addWidget(
-            self.numpad_4, 1, 0, 1, 1, QtCore.Qt.AlignmentFlag.AlignRight
-        )
+        self.gridLayout_2.addWidget(self.numpad_4, 1, 0, 1, 1, QtCore.Qt.AlignmentFlag.AlignRight)
         self.numpad_5 = NumpadButton(parent=self.gridLayoutWidget)
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.Fixed,
-            QtWidgets.QSizePolicy.Policy.Fixed,
-        )
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Fixed, QtWidgets.QSizePolicy.Policy.Fixed)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(
-            self.numpad_5.sizePolicy().hasHeightForWidth()
-        )
+        sizePolicy.setHeightForWidth(self.numpad_5.sizePolicy().hasHeightForWidth())
         self.numpad_5.setSizePolicy(sizePolicy)
         self.numpad_5.setMinimumSize(QtCore.QSize(150, 63))
         self.numpad_5.setMaximumSize(QtCore.QSize(150, 16777215))
@@ -356,19 +272,12 @@ class Ui_customNumpad(object):
         self.numpad_5.setLayoutDirection(QtCore.Qt.LayoutDirection.RightToLeft)
         self.numpad_5.setFlat(True)
         self.numpad_5.setObjectName("numpad_5")
-        self.gridLayout_2.addWidget(
-            self.numpad_5, 1, 1, 1, 1, QtCore.Qt.AlignmentFlag.AlignHCenter
-        )
+        self.gridLayout_2.addWidget(self.numpad_5, 1, 1, 1, 1, QtCore.Qt.AlignmentFlag.AlignHCenter)
         self.numpad_1 = NumpadButton(parent=self.gridLayoutWidget)
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.Fixed,
-            QtWidgets.QSizePolicy.Policy.Fixed,
-        )
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Fixed, QtWidgets.QSizePolicy.Policy.Fixed)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(
-            self.numpad_1.sizePolicy().hasHeightForWidth()
-        )
+        sizePolicy.setHeightForWidth(self.numpad_1.sizePolicy().hasHeightForWidth())
         self.numpad_1.setSizePolicy(sizePolicy)
         self.numpad_1.setMinimumSize(QtCore.QSize(150, 63))
         font = QtGui.QFont()
@@ -385,20 +294,13 @@ class Ui_customNumpad(object):
         self.numpad_1.setLayoutDirection(QtCore.Qt.LayoutDirection.RightToLeft)
         self.numpad_1.setFlat(True)
         self.numpad_1.setObjectName("numpad_1")
-        self.gridLayout_2.addWidget(
-            self.numpad_1, 2, 0, 1, 1, QtCore.Qt.AlignmentFlag.AlignRight
-        )
+        self.gridLayout_2.addWidget(self.numpad_1, 2, 0, 1, 1, QtCore.Qt.AlignmentFlag.AlignRight)
         self.numpad_enter = IconButton(parent=self.gridLayoutWidget)
         self.numpad_enter.setEnabled(True)
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-        )
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.MinimumExpanding, QtWidgets.QSizePolicy.Policy.MinimumExpanding)
         sizePolicy.setHorizontalStretch(1)
         sizePolicy.setVerticalStretch(1)
-        sizePolicy.setHeightForWidth(
-            self.numpad_enter.sizePolicy().hasHeightForWidth()
-        )
+        sizePolicy.setHeightForWidth(self.numpad_enter.sizePolicy().hasHeightForWidth())
         self.numpad_enter.setSizePolicy(sizePolicy)
         self.numpad_enter.setMinimumSize(QtCore.QSize(60, 60))
         self.numpad_enter.setMaximumSize(QtCore.QSize(60, 60))
@@ -408,24 +310,15 @@ class Ui_customNumpad(object):
         self.numpad_enter.setCheckable(False)
         self.numpad_enter.setChecked(False)
         self.numpad_enter.setFlat(True)
-        self.numpad_enter.setProperty(
-            "icon_pixmap",
-            QtGui.QPixmap(":/dialog/media/btn_icons/yes.svg"),
-        )
+        self.numpad_enter.setProperty("icon_pixmap", QtGui.QPixmap("/home/bugo/github/Blocks_Screen/BlocksScreen/lib/ui/\n"
+"                                                                :/dialog/media/btn_icons/yes.svg"))
         self.numpad_enter.setObjectName("numpad_enter")
-        self.gridLayout_2.addWidget(
-            self.numpad_enter, 3, 0, 1, 1, QtCore.Qt.AlignmentFlag.AlignHCenter
-        )
+        self.gridLayout_2.addWidget(self.numpad_enter, 3, 0, 1, 1, QtCore.Qt.AlignmentFlag.AlignHCenter)
         self.numpad_7 = NumpadButton(parent=self.gridLayoutWidget)
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.Fixed,
-            QtWidgets.QSizePolicy.Policy.Fixed,
-        )
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Fixed, QtWidgets.QSizePolicy.Policy.Fixed)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(
-            self.numpad_7.sizePolicy().hasHeightForWidth()
-        )
+        sizePolicy.setHeightForWidth(self.numpad_7.sizePolicy().hasHeightForWidth())
         self.numpad_7.setSizePolicy(sizePolicy)
         self.numpad_7.setMinimumSize(QtCore.QSize(150, 63))
         font = QtGui.QFont()
@@ -445,15 +338,10 @@ class Ui_customNumpad(object):
         self.gridLayout_2.addWidget(self.numpad_7, 0, 0, 1, 1)
         self.numpad_clear = IconButton(parent=self.gridLayoutWidget)
         self.numpad_clear.setEnabled(True)
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-        )
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.MinimumExpanding, QtWidgets.QSizePolicy.Policy.MinimumExpanding)
         sizePolicy.setHorizontalStretch(1)
         sizePolicy.setVerticalStretch(1)
-        sizePolicy.setHeightForWidth(
-            self.numpad_clear.sizePolicy().hasHeightForWidth()
-        )
+        sizePolicy.setHeightForWidth(self.numpad_clear.sizePolicy().hasHeightForWidth())
         self.numpad_clear.setSizePolicy(sizePolicy)
         self.numpad_clear.setMinimumSize(QtCore.QSize(60, 60))
         self.numpad_clear.setMaximumSize(QtCore.QSize(60, 60))
@@ -463,14 +351,10 @@ class Ui_customNumpad(object):
         self.numpad_clear.setCheckable(False)
         self.numpad_clear.setChecked(False)
         self.numpad_clear.setFlat(True)
-        self.numpad_clear.setProperty(
-            "icon_pixmap",
-            QtGui.QPixmap(":/dialog/media/btn_icons/no.svg"),
-        )
+        self.numpad_clear.setProperty("icon_pixmap", QtGui.QPixmap("/home/bugo/github/Blocks_Screen/BlocksScreen/lib/ui/\n"
+"                                                                :/dialog/media/btn_icons/no.svg"))
         self.numpad_clear.setObjectName("numpad_clear")
-        self.gridLayout_2.addWidget(
-            self.numpad_clear, 3, 2, 1, 1, QtCore.Qt.AlignmentFlag.AlignHCenter
-        )
+        self.gridLayout_2.addWidget(self.numpad_clear, 3, 2, 1, 1, QtCore.Qt.AlignmentFlag.AlignHCenter)
 
         self.retranslateUi(customNumpad)
         QtCore.QMetaObject.connectSlotsByName(customNumpad)
@@ -478,51 +362,27 @@ class Ui_customNumpad(object):
     def retranslateUi(self, customNumpad):
         _translate = QtCore.QCoreApplication.translate
         customNumpad.setWindowTitle(_translate("customNumpad", "Form"))
-        self.numpad_title.setText(
-            _translate("customNumpad", "Target Temperature")
-        )
-        self.numpad_back_btn.setProperty(
-            "button_type", _translate("customNumpad", "icon")
-        )
+        self.numpad_title.setText(_translate("customNumpad", "Target Temperature"))
+        self.numpad_back_btn.setProperty("button_type", _translate("customNumpad", "icon"))
         self.inserted_value.setText(_translate("customNumpad", "TextLabel"))
         self.numpad_6.setText(_translate("customNumpad", "6"))
-        self.numpad_6.setProperty(
-            "position", _translate("customNumpad", "right")
-        )
+        self.numpad_6.setProperty("position", _translate("customNumpad", "right"))
         self.numpad_9.setText(_translate("customNumpad", "9"))
-        self.numpad_9.setProperty(
-            "position", _translate("customNumpad", "right")
-        )
+        self.numpad_9.setProperty("position", _translate("customNumpad", "right"))
         self.numpad_8.setText(_translate("customNumpad", "8"))
         self.numpad_2.setText(_translate("customNumpad", "2"))
         self.numpad_0.setText(_translate("customNumpad", "0"))
-        self.numpad_0.setProperty(
-            "position", _translate("customNumpad", "down")
-        )
+        self.numpad_0.setProperty("position", _translate("customNumpad", "down"))
         self.numpad_3.setText(_translate("customNumpad", "3"))
-        self.numpad_3.setProperty(
-            "position", _translate("customNumpad", "right")
-        )
+        self.numpad_3.setProperty("position", _translate("customNumpad", "right"))
         self.numpad_4.setText(_translate("customNumpad", "4"))
-        self.numpad_4.setProperty(
-            "position", _translate("customNumpad", "left")
-        )
+        self.numpad_4.setProperty("position", _translate("customNumpad", "left"))
         self.numpad_5.setText(_translate("customNumpad", "5"))
         self.numpad_1.setText(_translate("customNumpad", "1"))
-        self.numpad_1.setProperty(
-            "position", _translate("customNumpad", "left")
-        )
-        self.numpad_enter.setProperty(
-            "button_type", _translate("customNumpad", "icon")
-        )
+        self.numpad_1.setProperty("position", _translate("customNumpad", "left"))
+        self.numpad_enter.setProperty("button_type", _translate("customNumpad", "icon"))
         self.numpad_7.setText(_translate("customNumpad", "7"))
-        self.numpad_7.setProperty(
-            "position", _translate("customNumpad", "left")
-        )
-        self.numpad_clear.setProperty(
-            "button_type", _translate("customNumpad", "icon")
-        )
-
-
-from utils.icon_button import IconButton
-from utils.numpad_button import NumpadButton
+        self.numpad_7.setProperty("position", _translate("customNumpad", "left"))
+        self.numpad_clear.setProperty("button_type", _translate("customNumpad", "icon"))
+from lib.utils.icon_button import IconButton
+from lib.utils.numpad_button import NumpadButton

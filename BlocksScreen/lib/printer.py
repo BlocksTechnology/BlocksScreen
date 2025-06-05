@@ -157,7 +157,6 @@ class Printer(QtCore.QObject):
         self.printer_busy = False
         self.current_loaded_file = ""
         self.current_loaded_file_metadata = ""
-        return
 
     @QtCore.pyqtSlot(str, name="on_klippy_status")
     def on_klippy_status(self, state: str):
@@ -336,6 +335,7 @@ class Printer(QtCore.QObject):
     ####################*# Callbacks #*#####################
     @QtCore.pyqtSlot(list, name="_gcode_response")
     def _gcode_response(self, report: list) -> None:
+        print(report)
         self.gcode_response.emit(report)
 
     def _webhooks_object_updated(
@@ -524,7 +524,6 @@ class Printer(QtCore.QObject):
             self.fan_update[str, str, int].emit(
                 fan_name, "rpm", value.get("rpm")
             )
-        
 
     def _controller_fan_object_updated(
         self, value: dict, fan_name: str = ""

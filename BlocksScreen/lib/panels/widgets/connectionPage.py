@@ -8,7 +8,7 @@ from PyQt6.QtCore import QEvent, QObject, pyqtSignal, pyqtSlot
 from PyQt6.QtWidgets import QFrame
 
 
-class ConnectionWindow(QFrame):
+class ConnectionPage(QFrame):
     # @ Signals
     text_updated = pyqtSignal(int, name="connection_text_updated")
     retry_connection_clicked = pyqtSignal(name="retry_connection_clicked")
@@ -18,7 +18,7 @@ class ConnectionWindow(QFrame):
     firmware_restart_clicked = pyqtSignal(name="firmware_restart_clicked")
 
     def __init__(self, parent: QtWidgets.QWidget, ws: MoonWebSocket, /):
-        super(ConnectionWindow, self).__init__(parent)
+        super().__init__(parent)
         self.panel = Ui_ConnectivityForm()
         self.panel.setupUi(self)
         self.ws = ws

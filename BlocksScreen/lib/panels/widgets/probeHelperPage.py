@@ -1,9 +1,9 @@
 import typing
 
-from lib.panels.optionCard import OptionCard
+from lib.panels.widgets.optionCardWidget import OptionCard
 from PyQt6 import QtCore, QtGui, QtWidgets
-from utils.blocks_label import BlocksLabel
-from utils.icon_button import IconButton
+from lib.utils.blocks_label import BlocksLabel
+from lib.utils.icon_button import IconButton
 
 
 class ProbeHelper(QtWidgets.QWidget):

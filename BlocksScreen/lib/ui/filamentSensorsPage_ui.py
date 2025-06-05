@@ -86,4 +86,4 @@ class Ui_filament_sensors_page(object):
         filament_sensors_page.setWindowTitle(_translate("filament_sensors_page", "Form"))
         self.fs_page_title.setText(_translate("filament_sensors_page", "Filament Sensors"))
         self.fs_back_button.setProperty("button_type", _translate("filament_sensors_page", "icon"))
-from utils.blocks_button import BlocksCustomButton
+from lib.utils.blocks_button import BlocksCustomButton

@@ -13,7 +13,7 @@ class Ui_printStackedWidget(object):
     def setupUi(self, printStackedWidget):
         printStackedWidget.setObjectName("printStackedWidget")
         printStackedWidget.setWindowModality(QtCore.Qt.WindowModality.WindowModal)
-        printStackedWidget.resize(710, 410)
+        printStackedWidget.resize(710, 411)
         sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.MinimumExpanding, QtWidgets.QSizePolicy.Policy.MinimumExpanding)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
@@ -999,7 +999,7 @@ class Ui_printStackedWidget(object):
         printStackedWidget.addWidget(self.babystep_page)
 
         self.retranslateUi(printStackedWidget)
-        printStackedWidget.setCurrentIndex(1)
+        printStackedWidget.setCurrentIndex(2)
         QtCore.QMetaObject.connectSlotsByName(printStackedWidget)
 
     def retranslateUi(self, printStackedWidget):
@@ -1068,7 +1068,7 @@ class Ui_printStackedWidget(object):
         self.bbp_nozzle_offset_025.setText(_translate("printStackedWidget", "0.025"))
         self.bbp_nozzle_offset_05.setText(_translate("printStackedWidget", "0.05"))
         self.bbp_nozzle_offset_1.setText(_translate("printStackedWidget", "0.1"))
-from utils.blocks_button import BlocksCustomButton
-from utils.blocks_label import BlocksLabel
-from utils.display_button import DisplayButton
-from utils.icon_button import IconButton
+from lib.utils.blocks_button import BlocksCustomButton
+from lib.utils.blocks_label import BlocksLabel
+from lib.utils.display_button import DisplayButton
+from lib.utils.icon_button import IconButton

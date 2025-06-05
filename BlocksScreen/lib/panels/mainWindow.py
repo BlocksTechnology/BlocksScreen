@@ -3,23 +3,21 @@ import typing
 from collections import deque
 from functools import partial
 
-# * System imports
 import events
 from events import (
     KlippyDisconnected,
     ReceivedFileData,
     WebSocketMessageReceived,
 )
-from lib.bo.files import Files
-from lib.bo.machine import MachineControl
-from lib.bo.printer import Printer
+from lib.files import Files
+from lib.machine import MachineControl
+from lib.printer import Printer
 from lib.moonrakerComm import MoonWebSocket
-
-# * Panels
-from lib.panels.connectionWindow import ConnectionWindow
+from lib.panels.widgets.connectionPage import ConnectionPage
 from lib.panels.controlTab import ControlTab
 from lib.panels.filamentTab import FilamentTab
 from lib.panels.networkWindow import NetworkControlWindow
+from lib.panels.widgets.popupDialogWidget import Popup
 from lib.panels.printTab import PrintTab
 from lib.panels.utilitiesTab import UtilitiesTab
 
@@ -29,7 +27,6 @@ from lib.ui.mainWindow_ui import Ui_MainWindow  # With header
 # from lib.ui.mainWindow_v2_ui import Ui_MainWindow # No header
 # * Resources
 from lib.ui.resources.background_resources_rc import *
-from lib.ui.resources.button_resources_rc import *
 from lib.ui.resources.graphic_resources_rc import *
 from lib.ui.resources.icon_resources_rc import *
 from lib.ui.resources.main_menu_resources_rc import *
@@ -37,10 +34,10 @@ from lib.ui.resources.system_resources_rc import *
 from lib.ui.resources.top_bar_resources_rc import *
 
 # * PyQt6 imports
-from PyQt6.QtCore import QEvent, QObject, QSize, pyqtSignal, pyqtSlot
+from PyQt6.QtCore import QEvent, QSize, pyqtSignal, pyqtSlot
 from PyQt6.QtGui import QCloseEvent, QPaintEvent
 from PyQt6.QtWidgets import QApplication, QMainWindow, QStackedWidget
-from utils.ui import CustomNumpad
+from lib.utils.ui import CustomNumpad
 
 _logger = logging.getLogger(name="logs/BlocksScreen.log")
 
@@ -60,23 +57,22 @@ class MainWindow(QMainWindow):
         int, str, str, "PyQt_PyObject", QStackedWidget, name="call_numpad"
     )
     call_network_panel = pyqtSignal(name="visibilityChange_networkPanel")
-
     objects_subscriptions: dict = {}
 
-    def __init__(self, *args, **kwargs):
-        super(MainWindow, self).__init__(*args, **kwargs)
+    def __init__(self):
+        super(MainWindow, self).__init__()
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
         # @ Force main panel to be displayed on startup
         self.ui.main_content_widget.setCurrentIndex(0)
-
+        self.popup = Popup(self)
         self.ws = MoonWebSocket(self)
         self.mc = MachineControl(self)
         self.file_data = Files(self, self.ws)
         self.index_stack = deque(maxlen=4)
         self.printer = Printer(self, self.ws)
         self.numpad_object = CustomNumpad(self)
-        self.start_window = ConnectionWindow(self, self.ws)
+        self.start_window = ConnectionPage(self, self.ws)
         self.installEventFilter(self.start_window)
         self.printPanel = PrintTab(
             self.ui.printTab, self.file_data, self.ws, self.printer
@@ -456,16 +452,58 @@ class MainWindow(QMainWindow):
                                 f"Unable to send internal klippy {_state_call} notification: {e}"
                             )
         elif "notify_filelist_changed" in _method:
+            _file_change_list = _data.get("params")
+            if _file_change_list:
+                fileaction = _file_change_list[0].get("action")
+                filepath = (
+                    _file_change_list[0].get("item").get("path")
+                )  # TODO : NOTIFY_FILELIST_CHANGED, I DON'T KNOW IF I REALLY WANT TO SEND NOTIFICATIONS ON FILE CHANGES.
+            ...
             self.file_data.request_file_list.emit()
+
         elif "notify_update_response" in _method:
             ...
         elif "notify_service_state_changed" in _method:
-            ...
+            entry = _data.get("params")
+            if entry:
+                service_entry: dict = entry[0]
+                service_name, service_info = service_entry.popitem()
+                self.popup.new_message(
+                    message_type=Popup.MessageType.INFO,
+                    message=f"""{service_name} service changed state to 
+                    {service_info.get("sub_state")}
+                    """,
+                )
         elif "notify_gcode_response" in _method:
-            _gcode_response = _data["params"]
+            _gcode_response = _data.get("params")
             self.gcode_response[list].emit(_gcode_response)
+            if _gcode_response:
+                _gcode_msg_type, _message = str(_gcode_response[0]).split(
+                    " ", maxsplit=1
+                )
+                _msg_type = Popup.MessageType.UNKNOWN
+                if _gcode_msg_type == "!!":
+                    _msg_type = Popup.MessageType.ERROR
+                elif _gcode_msg_type == "//":
+                    _msg_type = Popup.MessageType.INFO
+
+                self.popup.new_message(
+                    message_type=_msg_type, message=str(_message)
+                )
+
         elif "error" in _method:
             self.handle_error_response[list].emit([_data, _metadata])
+            self.popup.new_message(
+                message_type=Popup.MessageType.ERROR,
+                message=str(_data),
+            )
+
+        elif "notify_cpu_throttled" in _method:
+            self.popup.new_message(
+                message_type=Popup.MessageType.WARNING,
+                message=f"CPU THROTTLED: {_data} | {_metadata}",
+            )
+
         elif "notify_history_changed" in _method:
             ...
         elif "notify_status_update" in _method:

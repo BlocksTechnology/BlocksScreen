@@ -159,4 +159,4 @@ class Ui_utilitiesStackedWidget(object):
         self.axes_maintenance_cancel_btn.setText(_translate("utilitiesStackedWidget", "Cancel"))
         self.axes_maintenance_cancel_btn.setProperty("class", _translate("utilitiesStackedWidget", "menu_btn"))
         self.axes_maintenance_cancel_btn.setProperty("button_type", _translate("utilitiesStackedWidget", "normal"))
-from utils.blocks_button import BlocksCustomButton
+from lib.utils.ui import BlocksCustomButton

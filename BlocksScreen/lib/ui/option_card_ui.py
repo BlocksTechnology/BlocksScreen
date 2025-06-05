@@ -28,10 +28,11 @@ class Ui_option_card(object):
         self.option_icon.setObjectName("option_icon")
         self.verticalLayout.addWidget(self.option_icon, 0, QtCore.Qt.AlignmentFlag.AlignHCenter)
         self.line = QtWidgets.QFrame(parent=option_card)
+        self.line.setMinimumSize(QtCore.QSize(200, 0))
         self.line.setFrameShape(QtWidgets.QFrame.Shape.HLine)
         self.line.setFrameShadow(QtWidgets.QFrame.Shadow.Sunken)
         self.line.setObjectName("line")
-        self.verticalLayout.addWidget(self.line)
+        self.verticalLayout.addWidget(self.line, 0, QtCore.Qt.AlignmentFlag.AlignHCenter)
         self.option_text = QtWidgets.QLabel(parent=option_card)
         self.option_text.setMinimumSize(QtCore.QSize(200, 50))
         self.option_text.setObjectName("option_text")
@@ -58,6 +59,4 @@ class Ui_option_card(object):
         self.option_icon.setText(_translate("option_card", "TextLabel"))
         self.option_text.setText(_translate("option_card", "TextLabel"))
         self.continue_button.setProperty("button_type", _translate("option_card", "icon"))
-
-from utils.blocks_button import BlocksCustomButton
-from utils.blocks_label import BlocksLabel
+from lib.utils.ui import BlocksCustomButton, BlocksLabel

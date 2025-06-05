@@ -1,8 +1,8 @@
 import typing
 
 from PyQt6 import QtCore, QtGui, QtWidgets
-from utils.blocks_slider import BlocksSlider
-from utils.icon_button import IconButton
+from lib.utils.blocks_slider import BlocksSlider
+from lib.utils.icon_button import IconButton
 
 
 class SliderPage(QtWidgets.QWidget):

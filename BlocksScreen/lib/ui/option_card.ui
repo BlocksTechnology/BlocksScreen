@@ -111,12 +111,12 @@
   <customwidget>
    <class>BlocksCustomButton</class>
    <extends>QPushButton</extends>
-   <header location="global">utils.ui</header>
+   <header location="global">lib.utils.ui</header>
   </customwidget>
   <customwidget>
    <class>BlocksLabel</class>
    <extends>QLabel</extends>
-   <header location="global">utils.ui</header>
+   <header location="global">lib.utils.ui</header>
   </customwidget>
  </customwidgets>
  <resources>

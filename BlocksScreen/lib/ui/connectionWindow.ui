@@ -784,12 +784,12 @@
   <customwidget>
    <class>BlocksCustomButton</class>
    <extends>QPushButton</extends>
-   <header location="global">utils.blocks_button</header>
+   <header location="global">lib.utils.blocks_button</header>
   </customwidget>
   <customwidget>
    <class>IconButton</class>
    <extends>QPushButton</extends>
-   <header location="global">utils.iconButton</header>
+   <header location="global">lib.utils.iconButton</header>
   </customwidget>
  </customwidgets>
  <resources>

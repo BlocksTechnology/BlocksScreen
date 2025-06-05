@@ -13,7 +13,7 @@ from events import (
 )
 from lib.moonrest import MoonRest
 from PyQt6 import QtCore, QtWidgets
-from utils.RepeatedTimer import RepeatedTimer
+from lib.utils.RepeatedTimer import RepeatedTimer
 
 _logger = logging.getLogger(name="logs/BlocksScreen.log")
 
@@ -167,8 +167,8 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
                 f"Unexpected error occurred when trying to acquire oneshot token: {e}"
             )
             return False
-        _url = f"ws://192.168.1.100:7125/websocket?token={_oneshot_token}"
-        # _url = f"ws://192.168.1.109:7125/websocket?token={_oneshot_token}"
+        # _url = f"ws://192.168.1.100:7125/websocket?token={_oneshot_token}"
+        _url = f"ws://192.168.1.109:7125/websocket?token={_oneshot_token}"
         self.ws = websocket.WebSocketApp(
             _url,
             on_open=self.on_open,
@@ -332,7 +332,7 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
             ):  # Checkout for notify_klippy_disconnect
                 self.evaluate_klippy_status()
 
-            message_event = WebSocketMessageReceived(
+            message_event = WebSocketMessageReceived( # mainly used to pass websocket notifications 
                 method=str(response["method"]),
                 data=response,
                 metadata=None,

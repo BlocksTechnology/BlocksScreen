@@ -772,12 +772,12 @@
                 <customwidget>
                         <class>IconButton</class>
                         <extends>QPushButton</extends>
-                        <header location="global">utils.icon_button</header>
+                        <header location="global">lib.utils.icon_button</header>
                 </customwidget>
                 <customwidget>
                         <class>NumpadButton</class>
                         <extends>QPushButton</extends>
-                        <header location="global">utils.numpad_button</header>
+                        <header location="global">lib.utils.numpad_button</header>
                 </customwidget>
         </customwidgets>
         <resources>

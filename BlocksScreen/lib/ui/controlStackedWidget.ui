@@ -5538,22 +5538,22 @@ Steppers</string>
   <customwidget>
    <class>BlocksCustomButton</class>
    <extends>QPushButton</extends>
-   <header location="global">utils.blocks_button</header>
+   <header location="global">lib.utils.blocks_button</header>
   </customwidget>
   <customwidget>
    <class>BlocksLabel</class>
    <extends>QLabel</extends>
-   <header location="global">utils.blocks_label</header>
+   <header location="global">lib.utils.blocks_label</header>
   </customwidget>
   <customwidget>
    <class>IconButton</class>
    <extends>QPushButton</extends>
-   <header location="global">utils.icon_button</header>
+   <header location="global">lib.utils.icon_button</header>
   </customwidget>
   <customwidget>
    <class>DisplayButton</class>
    <extends>QPushButton</extends>
-   <header location="global">utils.display_button</header>
+   <header location="global">lib.utils.display_button</header>
   </customwidget>
  </customwidgets>
  <resources>

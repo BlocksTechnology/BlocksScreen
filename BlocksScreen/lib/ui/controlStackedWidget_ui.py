@@ -2159,7 +2159,7 @@ class Ui_controlStackedWidget(object):
         self.printer_settings_back_btn.setText(_translate("controlStackedWidget", "Back"))
         self.printer_settings_back_btn.setProperty("class", _translate("controlStackedWidget", "menu_btn"))
         self.printer_settings_back_btn.setProperty("button_type", _translate("controlStackedWidget", "icon"))
-from utils.blocks_button import BlocksCustomButton
-from utils.blocks_label import BlocksLabel
-from utils.display_button import DisplayButton
-from utils.icon_button import IconButton
+from lib.utils.blocks_button import BlocksCustomButton
+from lib.utils.blocks_label import BlocksLabel
+from lib.utils.display_button import DisplayButton
+from lib.utils.icon_button import IconButton

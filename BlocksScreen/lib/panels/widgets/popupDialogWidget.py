@@ -3,7 +3,7 @@ from collections import deque
 import typing
 from typing import Deque
 from PyQt6 import QtCore, QtGui, QtWidgets
-from utils.blocks_label import BlocksLabel
+from lib.utils.blocks_label import BlocksLabel
 
 BASE_POPUP_TIMEOUT = 6000
 

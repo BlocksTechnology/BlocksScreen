@@ -1,8 +1,8 @@
 import typing
 
 from PyQt6 import QtCore, QtGui, QtWidgets
-from utils.blocks_label import BlocksLabel
-from utils.icon_button import IconButton
+from lib.utils.blocks_label import BlocksLabel
+from lib.utils.icon_button import IconButton
 
 
 class OptionCard(QtWidgets.QFrame):

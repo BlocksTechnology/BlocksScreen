@@ -10,7 +10,7 @@
     <x>0</x>
     <y>0</y>
     <width>710</width>
-    <height>410</height>
+    <height>411</height>
    </rect>
   </property>
   <property name="sizePolicy">
@@ -35,7 +35,7 @@
    <string>StackedWidget</string>
   </property>
   <property name="currentIndex">
-   <number>1</number>
+   <number>2</number>
   </property>
   <property name="backgroundPixmap" stdset="0">
    <pixmap>:/background/media/graphics/scroll_list_window.svg</pixmap>
@@ -2638,22 +2638,22 @@ Change</string>
   <customwidget>
    <class>IconButton</class>
    <extends>QPushButton</extends>
-   <header location="global">utils.icon_button</header>
+   <header location="global">lib.utils.icon_button</header>
   </customwidget>
   <customwidget>
    <class>DisplayButton</class>
    <extends>QPushButton</extends>
-   <header location="global">utils.display_button</header>
+   <header location="global">lib.utils.display_button</header>
   </customwidget>
   <customwidget>
    <class>BlocksCustomButton</class>
    <extends>QPushButton</extends>
-   <header location="global">utils.blocks_button</header>
+   <header location="global">lib.utils.blocks_button</header>
   </customwidget>
   <customwidget>
    <class>BlocksLabel</class>
    <extends>QLabel</extends>
-   <header location="global">utils.blocks_label</header>
+   <header location="global">lib.utils.blocks_label</header>
   </customwidget>
  </customwidgets>
  <resources>

@@ -3,12 +3,11 @@ import os
 import sys
 import typing
 
-
-import logger
 import helper_methods as helper_methods
-from screensaver import ScreenSaver
+import logger
 from lib.panels.mainWindow import MainWindow
 from PyQt6 import QtCore, QtGui, QtWidgets
+from screensaver import ScreenSaver
 
 os.environ["QT_AUTO_SCREEN_SCALE_FACTOR"] = "1.0"
 os.environ["QT_SCALE_FACTOR"] = "1.0"
@@ -49,11 +48,6 @@ def show_splash(window: typing.Optional["QtWidgets.QWidget"] = None):
     )
     splash = QtWidgets.QSplashScreen(pixmap=logo)
     splash.setGeometry(QtCore.QRect(0, 0, 400, 200))
-    # splash.showFullScreen()
-    # splash.show()
-    # sleep(2)
-
-    # * Wait until the *window* is in view to close the splash screen
     if window is not None and isinstance(window, QtWidgets.QWidget):
         splash.finish(window)
 
@@ -63,23 +57,20 @@ def run():
     setup_app_loggers()
     BlocksScreen = QtWidgets.QApplication([])
     main_window = MainWindow()
-
     show_splash(main_window)
-
     BlocksScreen.setApplicationName("BlocksScreen")
     BlocksScreen.setApplicationDisplayName("BlocksScreen")
     BlocksScreen.setDesktopFileName("BlocksScreen")
     BlocksScreen.setHighDpiScaleFactorRoundingPolicy(
         QtCore.Qt.HighDpiScaleFactorRoundingPolicy.Round
     )
-
     screensaver = ScreenSaver()
-
-    # ! Someone said that .processEvents sometimes crashes the system
     BlocksScreen.processEvents()
-    # main_window.setScreen(BlocksScreen.screens()[2])
-    main_window.showFullScreen()
-    # main_window.showNormal()
+    # main_window.setScreen(BlocksScreen.screens()[0])
+
+    # main_window.showFullScreen()
+    # main_window.show()
+    main_window.show()
     main_window.bo_ws_startup.emit()
     sys.exit(BlocksScreen.exec())
 
