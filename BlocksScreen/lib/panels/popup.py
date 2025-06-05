@@ -1,5 +1,7 @@
 import enum
-
+from collections import deque
+import typing
+from typing import Deque
 from PyQt6 import QtCore, QtGui, QtWidgets
 from utils.blocks_label import BlocksLabel
 
@@ -11,6 +13,7 @@ class Popup(QtWidgets.QDialog):
         INFO = enum.auto()
         WARNING = enum.auto()
         ERROR = enum.auto()
+        UNKNOWN = enum.auto()
 
         def __repr__(self) -> str:
             return "<%s.%s>" % (self.__class__.__name__, self._name_)
@@ -22,7 +25,8 @@ class Popup(QtWidgets.QDialog):
 
     popup_timeout = BASE_POPUP_TIMEOUT
     timeout_timer = QtCore.QTimer()
-    unmanaged_messages: list = []
+    messages: Deque = deque()
+    persistent_notifications: Deque = deque()
 
     def __init__(self, parent) -> None:
         super().__init__(parent)
@@ -103,40 +107,52 @@ class Popup(QtWidgets.QDialog):
         self,
         message_type: MessageType = MessageType.INFO,
         message: str = "",
+        persistent: bool = False,
         timeout: int = 0,
-    ) -> None:
-        self.message_type = message_type
-        self.message = message
-        self.text_label.setText(message)
-        match message_type:
-            case Popup.MessageType.INFO:
-                self.icon_label.setPixmap(self.info_icon)
-            case Popup.MessageType.WARNING:
-                self.icon_label.setPixmap(self.warning_icon)
-            case Popup.MessageType.ERROR:
-                self.icon_label.setPixmap(self.error_icon)
-
-        self.unmanaged_messages.append(
-            {"message": message, "type": message_type}
+    ):
+        self.messages.append(
+            {"message": message, "type": message_type, "timeout": timeout}
         )
+        return self.add_popup()
 
-        self.timeout = timeout
-        self.show_popup()
-        self.timeout_timer.setInterval(
-            self.popup_timeout if not timeout else timeout
-        )
-        self.timeout_timer.start()
+    def add_popup(self) -> None:
+        if (
+            self.messages
+            and self.fade_in_animation.state()
+            == QtCore.QPropertyAnimation.State.Stopped
+            and self.fade_out_animation.state()
+            == QtCore.QPropertyAnimation.State.Stopped
+        ):
+            message_entry = self.messages.popleft()
+            self.message_type = message_entry.get("type")
+            self.message = message_entry.get("message")
+            self.timeout = message_entry.get("timeout")
+            self.text_label.setText(self.message)
+            match self.message_type:
+                case Popup.MessageType.INFO:
+                    self.icon_label.setPixmap(self.info_icon)
+                case Popup.MessageType.WARNING:
+                    self.icon_label.setPixmap(self.warning_icon)
+                case Popup.MessageType.ERROR:
+                    self.icon_label.setPixmap(self.error_icon)
+            self.timeout_timer.setInterval(
+                self.popup_timeout if not self.timeout else self.timeout
+            )
+            self.timeout_timer.start()
 
-    def show_popup(self):
-        self.open()
-        self.repaint()
+            self.open()
+            self.repaint()
 
     def close_popup(self):
+        if not self.messages:
+            self.close()
+            self.message_type = self.MessageType.INFO
+            self.message = ""
+            self.popup_timeout = BASE_POPUP_TIMEOUT
+            self.timeout_timer.setInterval(self.popup_timeout)
+            return
         self.close()
-        self.message_type = self.MessageType.INFO
-        self.message = ""
-        self.popup_timeout = BASE_POPUP_TIMEOUT
-        self.timeout_timer.setInterval(self.popup_timeout)
+        return self.add_popup()
 
     def showEvent(self, a0: QtGui.QShowEvent) -> None:
         if (
