@@ -28,7 +28,8 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
             (self.contentsRect().toRectF().normalized().width() * 0.20) // 2
         )
         self.icon_pixmap: QtGui.QPixmap = QtGui.QPixmap()
-        self._backgroundColor: QtGui.QColor = QtGui.QColor(255, 100, 50)
+        self._backgroundColor: QtGui.QColor = QtGui.QColor(223, 223, 223)
+        self._handleColor: QtGui.QColor = QtGui.QColor(255, 100, 10)
         self._state = ToggleAnimatedButton.State.OFF
 
         self.slide_animation = QtCore.QPropertyAnimation(
@@ -36,11 +37,11 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
         )  # type: ignore
         self.slide_animation.setDuration(500)
         self.slide_animation.setEasingCurve(QtCore.QEasingCurve().Type.OutQuad)
-
         self.clicked.connect(self.setup_animation)
 
     def sizeHint(self) -> QtCore.QSize:
-        return QtCore.QSize(100, 40)
+        return QtCore.QSize(80, 40)
+
     @property
     def state(self) -> State:
         return self._state
@@ -66,6 +67,16 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
     @backgroundColor.setter
     def backgroundColor(self, new_color: QtGui.QColor) -> None:
         self._backgroundColor = new_color
+        self.update()
+
+    @QtCore.pyqtProperty(QtGui.QColor)
+    def handleColor(self) -> QtGui.QColor:
+        return self._handleColor
+
+    @handleColor.setter
+    def handleColor(self, new_color: QtGui.QColor) -> None:
+        self._handleColor = new_color
+        self.update()
 
     def showEvent(self, a0: QtGui.QShowEvent) -> None:
         _rect = self.contentsRect()
@@ -140,9 +151,9 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
         option.state |= QtWidgets.QStyle.StateFlag.State_Active
         _rect = self.contentsRect()
         bg_color = (
-            QtGui.QColor(164, 164, 164)
+            self.backgroundColor.darker(160)
             if self.isDown()
-            else QtGui.QColor(223, 223, 223)
+            else self.backgroundColor
         )
         self.handlePath: QtGui.QPainterPath = QtGui.QPainterPath()
         self.handle_ellipseRect = QtCore.QRectF(
@@ -158,7 +169,7 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
         painter.setBackgroundMode(QtCore.Qt.BGMode.TransparentMode)
         painter.setRenderHint(painter.RenderHint.LosslessImageRendering)
         painter.fillPath(self.trailPath, bg_color)
-        painter.fillPath(self.handlePath, self._backgroundColor)
+        painter.fillPath(self.handlePath, self.handleColor)
         if not self.icon_pixmap.isNull():
             _icon_rect = QtCore.QRectF(
                 self.handle_ellipseRect.left() * 2.8,
