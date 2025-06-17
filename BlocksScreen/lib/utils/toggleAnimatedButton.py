@@ -11,7 +11,7 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
 
     def __init__(self, parent) -> None:
         super().__init__(parent)
-        self.setGeometry(QtCore.QRect(0, 0, 200, 80))
+        self.setMinimumSize(QtCore.QSize(100, 40))
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_AcceptTouchEvents, True)
         self.setAttribute(
             QtCore.Qt.WidgetAttribute.WA_TranslucentBackground, True
@@ -34,12 +34,13 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
         self.slide_animation = QtCore.QPropertyAnimation(
             self, b"handle_position"
         )  # type: ignore
-
         self.slide_animation.setDuration(500)
         self.slide_animation.setEasingCurve(QtCore.QEasingCurve().Type.OutQuad)
 
         self.clicked.connect(self.setup_animation)
 
+    def sizeHint(self) -> QtCore.QSize:
+        return QtCore.QSize(100, 40)
     @property
     def state(self) -> State:
         return self._state
@@ -121,7 +122,6 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
                     - self.handle_radius * 2
                 ),
             )
-            print("animaiton start")
             self.slide_animation.start()
             self._state = ToggleAnimatedButton.State(not self._state.value)
 
@@ -197,8 +197,8 @@ class MainWindow(QtWidgets.QMainWindow):
         super().__init__()
         self.setGeometry(QtCore.QRect(0, 0, 720, 410))
         self.slider = ToggleAnimatedButton(self)
-        self.slider.setMinimumSize(QtCore.QSize(200, 80))
-        self.slider.setMaximumSize(QtCore.QSize(200, 80))
+        self.slider.setMinimumSize(QtCore.QSize(100, 40))
+        self.slider.setMaximumSize(QtCore.QSize(100, 40))
         center_x = (self.width() - self.slider.width()) // 2
         center_y = (self.height() - self.slider.height()) // 2
 
