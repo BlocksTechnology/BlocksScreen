@@ -120,7 +120,6 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
 
     @QtCore.pyqtSlot(name="clicked")
     def setup_animation(self) -> None:
-        self.slide_animation.stop()
         self.slide_animation.setEndValue(
             int(
                 (self.contentsRect().toRectF().normalized().height() * 0.20)
@@ -138,8 +137,15 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
     def mousePressEvent(self, e: QtGui.QMouseEvent) -> None:
         if self.trailPath:
             if self.trailPath.contains(e.pos().toPointF()):
-                self.state = ToggleAnimatedButton.State(not self._state.value)
-                super().mousePressEvent(e)
+                if (
+                    not self.slide_animation.state
+                    == self.slide_animation.State.Running
+                ):
+                    self.state = ToggleAnimatedButton.State(
+                        not self._state.value
+                    )
+                    super().mousePressEvent(e)
+                e.ignore()
             else:
                 e.ignore()
 
