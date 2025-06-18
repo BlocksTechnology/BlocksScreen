@@ -1,4 +1,5 @@
 import enum
+from functools import partial
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 
@@ -9,19 +10,13 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
 
     def __init__(self, parent) -> None:
         super().__init__(parent)
-        self.setMinimumSize(QtCore.QSize(100, 40))
+        self.setMinimumSize(QtCore.QSize(80, 40))
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_AcceptTouchEvents, True)
         self.setAttribute(
             QtCore.Qt.WidgetAttribute.WA_TranslucentBackground, True
         )
         self.setMaximumHeight(80)
         self.setMouseTracking(True)
-        self.setMinimumSize(
-            QtCore.QSize(self.parent().height(), self.parent().height())  # type: ignore
-        )
-        self.setMaximumSize(
-            QtCore.QSize(self.parent().height(), self.parent().height())  # type: ignore
-        )
         self._handle_position = float(
             (self.contentsRect().toRectF().normalized().width() * 0.20) // 2
         )
@@ -29,13 +24,15 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
         self._backgroundColor: QtGui.QColor = QtGui.QColor(223, 223, 223)
         self._handleColor: QtGui.QColor = QtGui.QColor(255, 100, 10)
         self._state = ToggleAnimatedButton.State.OFF
-        self._animation_speed: int = 500
+        self._animation_speed: int = 250
         self.slide_animation = QtCore.QPropertyAnimation(
             self, b"handle_position"
         )  # type: ignore
 
         self.slide_animation.setDuration(self._animation_speed)
-        self.slide_animation.setEasingCurve(QtCore.QEasingCurve().Type.OutQuad)
+        self.slide_animation.setEasingCurve(
+            QtCore.QEasingCurve().Type.InOutQuart
+        )
         self.clicked.connect(self.setup_animation)
 
     def sizeHint(self) -> QtCore.QSize:
@@ -57,6 +54,7 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
     @state.setter
     def state(self, new_state: State) -> None:
         self._state = ToggleAnimatedButton.State(new_state)
+        self.setup_animation()
         self.update()
 
     @QtCore.pyqtProperty(float)  # type: ignore
@@ -107,6 +105,7 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
         self._handle_position = float(
             (_rect.toRectF().normalized().height() * 0.20) // 2
         )
+
         self.handle_ellipseRect = QtCore.QRectF(
             self._handle_position,
             ((_rect.toRectF().normalized().height() * 0.20) // 2),
@@ -135,11 +134,11 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
             ),
         )
         self.slide_animation.start()
-        self._state = ToggleAnimatedButton.State(not self._state.value)
 
     def mousePressEvent(self, e: QtGui.QMouseEvent) -> None:
         if self.trailPath:
             if self.trailPath.contains(e.pos().toPointF()):
+                self.state = ToggleAnimatedButton.State(not self._state.value)
                 super().mousePressEvent(e)
             else:
                 e.ignore()
