@@ -1,7 +1,5 @@
-import typing
-from PyQt6 import QtWidgets, QtCore, QtGui
 import enum
-import sys
+from PyQt6 import QtCore, QtGui, QtWidgets
 
 
 class ToggleAnimatedButton(QtWidgets.QAbstractButton):
@@ -31,16 +29,26 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
         self._backgroundColor: QtGui.QColor = QtGui.QColor(223, 223, 223)
         self._handleColor: QtGui.QColor = QtGui.QColor(255, 100, 10)
         self._state = ToggleAnimatedButton.State.OFF
-
+        self._animation_speed: int = 500
         self.slide_animation = QtCore.QPropertyAnimation(
             self, b"handle_position"
         )  # type: ignore
-        self.slide_animation.setDuration(500)
+
+        self.slide_animation.setDuration(self._animation_speed)
         self.slide_animation.setEasingCurve(QtCore.QEasingCurve().Type.OutQuad)
         self.clicked.connect(self.setup_animation)
 
     def sizeHint(self) -> QtCore.QSize:
         return QtCore.QSize(80, 40)
+
+    @QtCore.pyqtProperty(int)
+    def animation_speed(self) -> int:
+        return self._animation_speed
+
+    @animation_speed.setter
+    def animation_speed(self, new_speed: int) -> None:
+        self.slide_animation.setDuration(new_speed)
+        self._animation_speed = new_speed
 
     @property
     def state(self) -> State:
@@ -192,27 +200,3 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
                 _icon_scaled.rect().toRectF(),  # Entire source (scaled) pixmap
             )
         painter.end()
-
-
-class MainWindow(QtWidgets.QMainWindow):
-    def __init__(
-        self,
-    ) -> None:
-        super().__init__()
-        self.setGeometry(QtCore.QRect(0, 0, 720, 410))
-        self.slider = ToggleAnimatedButton(self)
-        self.slider.setMinimumSize(QtCore.QSize(100, 40))
-        self.slider.setMaximumSize(QtCore.QSize(100, 40))
-        center_x = (self.width() - self.slider.width()) // 2
-        center_y = (self.height() - self.slider.height()) // 2
-
-        self.slider.move(QtCore.QPoint(center_x, center_y))
-
-        # self.slider.handle.setState(ToggleHandle.State.ON)
-
-
-if __name__ == "__main__":
-    app = QtWidgets.QApplication([])
-    main = MainWindow()
-    main.show()
-    sys.exit(app.exec())
