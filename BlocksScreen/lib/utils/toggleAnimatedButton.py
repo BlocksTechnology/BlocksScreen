@@ -121,7 +121,6 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
 
     @QtCore.pyqtSlot(name="clicked")
     def setup_animation(self) -> None:
-        print("setting up animation")
         self.slide_animation.setEndValue(
             int(
                 (self.contentsRect().toRectF().normalized().height() * 0.20)
@@ -143,7 +142,6 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
                     not self.slide_animation.state
                     == self.slide_animation.State.Running
                 ):
-                    print("changing state")
                     self._state = ToggleAnimatedButton.State(
                         not self._state.value
                     )
@@ -207,25 +205,3 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
                 _icon_scaled.rect().toRectF(),  # Entire source (scaled) pixmap
             )
         painter.end()
-
-
-class MainWindow(QtWidgets.QMainWindow):
-    def __init__(
-        self,
-    ) -> None:
-        super().__init__()
-        self.setGeometry(QtCore.QRect(0, 0, 720, 410))
-        self.slider = ToggleAnimatedButton(self)
-        self.slider.setMinimumSize(QtCore.QSize(200, 80))
-        self.slider.setMaximumSize(QtCore.QSize(200, 80))
-        center_x = (self.width() - self.slider.width()) // 2
-        center_y = (self.height() - self.slider.height()) // 2
-
-        self.slider.move(QtCore.QPoint(center_x, center_y))
-
-
-if __name__ == "__main__":
-    app = QtWidgets.QApplication([])
-    main = MainWindow()
-    main.show()
-    sys.exit(app.exec())
