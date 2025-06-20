@@ -229,27 +229,3 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
                 _icon_scaled.rect().toRectF(),  # Entire source (scaled) pixmap
             )
         painter.end()
-
-
-class MainWindow(QtWidgets.QMainWindow):
-    def __init__(
-        self,
-    ) -> None:
-        super().__init__()
-        self.setGeometry(QtCore.QRect(0, 0, 720, 410))
-        self.slider = ToggleAnimatedButton(self)
-        self.slider.setMinimumSize(QtCore.QSize(200, 80))
-        self.slider.setMaximumSize(QtCore.QSize(200, 80))
-        center_x = (self.width() - self.slider.width()) // 2
-        center_y = (self.height() - self.slider.height()) // 2
-
-        self.slider.move(QtCore.QPoint(center_x, center_y))
-
-        self.slider.state = ToggleAnimatedButton.State.ON
-
-
-if __name__ == "__main__":
-    app = QtWidgets.QApplication([])
-    main = MainWindow()
-    main.show()
-    sys.exit(app.exec())
