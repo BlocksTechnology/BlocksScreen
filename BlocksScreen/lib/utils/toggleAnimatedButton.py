@@ -1,4 +1,5 @@
 import enum
+import sys
 from functools import partial
 from PyQt6 import QtCore, QtGui, QtWidgets
 
@@ -53,7 +54,7 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
 
     @state.setter
     def state(self, new_state: State) -> None:
-        self._state = ToggleAnimatedButton.State(new_state)
+        self._state = new_state
         self.setup_animation()
         self.update()
 
@@ -120,12 +121,13 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
 
     @QtCore.pyqtSlot(name="clicked")
     def setup_animation(self) -> None:
+        print("setting up animation")
         self.slide_animation.setEndValue(
             int(
                 (self.contentsRect().toRectF().normalized().height() * 0.20)
                 // 2
             )
-            if self._state == ToggleAnimatedButton.State.ON
+            if self.state == ToggleAnimatedButton.State.OFF
             else int(
                 self.contentsRect().width()
                 - self._handle_position
@@ -141,13 +143,12 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
                     not self.slide_animation.state
                     == self.slide_animation.State.Running
                 ):
-                    self.state = ToggleAnimatedButton.State(
+                    print("changing state")
+                    self._state = ToggleAnimatedButton.State(
                         not self._state.value
                     )
                     super().mousePressEvent(e)
-                e.ignore()
-            else:
-                e.ignore()
+        e.ignore()
 
     def paintEvent(self, a0: QtGui.QPaintEvent) -> None:
         option = QtWidgets.QStyleOptionButton()
@@ -162,6 +163,7 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
             else self.backgroundColor
         )
         self.handlePath: QtGui.QPainterPath = QtGui.QPainterPath()
+
         self.handle_ellipseRect = QtCore.QRectF(
             self._handle_position,
             ((_rect.toRectF().normalized().height() * 0.20) // 2),
@@ -205,3 +207,25 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
                 _icon_scaled.rect().toRectF(),  # Entire source (scaled) pixmap
             )
         painter.end()
+
+
+class MainWindow(QtWidgets.QMainWindow):
+    def __init__(
+        self,
+    ) -> None:
+        super().__init__()
+        self.setGeometry(QtCore.QRect(0, 0, 720, 410))
+        self.slider = ToggleAnimatedButton(self)
+        self.slider.setMinimumSize(QtCore.QSize(200, 80))
+        self.slider.setMaximumSize(QtCore.QSize(200, 80))
+        center_x = (self.width() - self.slider.width()) // 2
+        center_y = (self.height() - self.slider.height()) // 2
+
+        self.slider.move(QtCore.QPoint(center_x, center_y))
+
+
+if __name__ == "__main__":
+    app = QtWidgets.QApplication([])
+    main = MainWindow()
+    main.show()
+    sys.exit(app.exec())
