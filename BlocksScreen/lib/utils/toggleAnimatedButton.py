@@ -20,6 +20,10 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
         self._handle_position = float(
             (self.contentsRect().toRectF().normalized().width() * 0.20) // 2
         )
+        self.handle_radius = (
+            self.contentsRect().toRectF().normalized().height() * 0.80
+        ) // 2
+
         self.icon_pixmap: QtGui.QPixmap = QtGui.QPixmap()
         self._backgroundColor: QtGui.QColor = QtGui.QColor(223, 223, 223)
         self._handleColor: QtGui.QColor = QtGui.QColor(255, 100, 10)
@@ -54,7 +58,9 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
     @state.setter
     def state(self, new_state: State) -> None:
         self._state = new_state
-        self.setup_animation()
+        if self.isVisible():
+            self.setup_animation()
+
         self.update()
 
     @QtCore.pyqtProperty(float)
@@ -102,8 +108,17 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
         self.handle_radius = (
             _rect.toRectF().normalized().height() * 0.80
         ) // 2
-        self._handle_position = float(
-            (_rect.toRectF().normalized().height() * 0.20) // 2
+        self._handle_position = (
+            int(
+                (self.contentsRect().toRectF().normalized().height() * 0.20)
+                // 2
+            )
+            if self.state == ToggleAnimatedButton.State.OFF
+            else int(
+                self.contentsRect().width()
+                - self._handle_position
+                - self.handle_radius * 2
+            )
         )
 
         self.handle_ellipseRect = QtCore.QRectF(
