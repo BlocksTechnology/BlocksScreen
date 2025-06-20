@@ -185,7 +185,6 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
             else self.backgroundColor
         )
         self.handlePath: QtGui.QPainterPath = QtGui.QPainterPath()
-        print(self.handle_position)
         self.handle_ellipseRect = QtCore.QRectF(
             self._handle_position,
             ((_rect.toRectF().normalized().height() * 0.20) // 2),
