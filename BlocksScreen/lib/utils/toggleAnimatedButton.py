@@ -1,6 +1,5 @@
 import enum
-import sys
-from functools import partial
+
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 
@@ -28,7 +27,7 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
         self._animation_speed: int = 250
         self.slide_animation = QtCore.QPropertyAnimation(
             self, b"handle_position"
-        )  # type: ignore
+        )
 
         self.slide_animation.setDuration(self._animation_speed)
         self.slide_animation.setEasingCurve(
@@ -58,8 +57,8 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
         self.setup_animation()
         self.update()
 
-    @QtCore.pyqtProperty(float)  # type: ignore
-    def handle_position(self) -> float:  # type: ignore
+    @QtCore.pyqtProperty(float)
+    def handle_position(self) -> float:
         return self._handle_position
 
     @handle_position.setter
@@ -67,8 +66,8 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
         self._handle_position = new_pos
         self.update()
 
-    @QtCore.pyqtProperty(QtGui.QColor)  # type: ignore
-    def backgroundColor(self) -> QtGui.QColor:  # type: ignore
+    @QtCore.pyqtProperty(QtGui.QColor)
+    def backgroundColor(self) -> QtGui.QColor:
         return self._backgroundColor
 
     @backgroundColor.setter
@@ -151,8 +150,8 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
     def paintEvent(self, a0: QtGui.QPaintEvent) -> None:
         option = QtWidgets.QStyleOptionButton()
         option.initFrom(self)
-        option.state |= QtWidgets.QStyle.StateFlag.State_Off  # Add off effect
-        option.state |= QtWidgets.QStyle.StateFlag.State_On  # Add on effect
+        option.state |= QtWidgets.QStyle.StateFlag.State_Off
+        option.state |= QtWidgets.QStyle.StateFlag.State_On
         option.state |= QtWidgets.QStyle.StateFlag.State_Active
         _rect = self.contentsRect()
         bg_color = (
