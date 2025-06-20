@@ -1,5 +1,4 @@
 import enum
-import sys
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 
@@ -51,7 +50,7 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
         self.slide_animation.setEasingCurve(
             QtCore.QEasingCurve().Type.InOutQuart
         )
-        self.clicked.connect(self.setup_animation)
+        self.pressed.connect(self.setup_animation)
 
     def resizeEvent(self, a0: QtGui.QResizeEvent) -> None:
         self.handle_radius = (
@@ -152,16 +151,20 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
 
     @QtCore.pyqtSlot(name="clicked")
     def setup_animation(self) -> None:
-        self.slide_animation.setEndValue(
-            self._handle_ONPosition
-            if self.state == ToggleAnimatedButton.State.OFF
-            else self._handle_OFFPosition
-        )
-        self.slide_animation.start()
+        if self.underMouse():
+            self.slide_animation.setEndValue(
+                self._handle_ONPosition
+                if self.state == ToggleAnimatedButton.State.OFF
+                else self._handle_OFFPosition
+            )
+            self.slide_animation.start()
 
     def mousePressEvent(self, e: QtGui.QMouseEvent) -> None:
         if self.trailPath:
-            if self.trailPath.contains(e.pos().toPointF()):
+            if (
+                self.trailPath.contains(e.pos().toPointF())
+                and self.underMouse()
+            ):
                 if (
                     not self.slide_animation.state
                     == self.slide_animation.State.Running
