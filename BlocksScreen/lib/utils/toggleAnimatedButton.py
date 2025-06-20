@@ -1,5 +1,5 @@
 import enum
-
+import sys
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 
@@ -15,20 +15,34 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
         self.setAttribute(
             QtCore.Qt.WidgetAttribute.WA_TranslucentBackground, True
         )
+
         self.setMaximumHeight(80)
         self.setMouseTracking(True)
-        self._handle_position = float(
-            (self.contentsRect().toRectF().normalized().width() * 0.20) // 2
-        )
+
         self.handle_radius = (
             self.contentsRect().toRectF().normalized().height() * 0.80
         ) // 2
+        self._handle_ONPosition = (
+            self.contentsRect().toRectF().normalized().height() * 0.20
+        ) // 2
+        self._handle_OFFPosition = (
+            self.contentsRect().width()
+            - self._handle_ONPosition
+            - self.handle_radius * 2
+        )
 
         self.icon_pixmap: QtGui.QPixmap = QtGui.QPixmap()
         self._backgroundColor: QtGui.QColor = QtGui.QColor(223, 223, 223)
         self._handleColor: QtGui.QColor = QtGui.QColor(255, 100, 10)
         self._state = ToggleAnimatedButton.State.OFF
         self._animation_speed: int = 250
+
+        self._handle_position = (
+            self._handle_ONPosition
+            if self.state == ToggleAnimatedButton.State.OFF
+            else self._handle_OFFPosition
+        )
+
         self.slide_animation = QtCore.QPropertyAnimation(
             self, b"handle_position"
         )
@@ -38,6 +52,20 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
             QtCore.QEasingCurve().Type.InOutQuart
         )
         self.clicked.connect(self.setup_animation)
+
+    def resizeEvent(self, a0: QtGui.QResizeEvent) -> None:
+        self.handle_radius = (
+            self.contentsRect().toRectF().normalized().height() * 0.80
+        ) // 2
+        self._handle_ONPosition = (
+            self.contentsRect().toRectF().normalized().height() * 0.20
+        ) // 2
+        self._handle_OFFPosition = (
+            self.contentsRect().width()
+            - self._handle_ONPosition
+            - self.handle_radius * 2
+        )
+        return super().resizeEvent(a0)
 
     def sizeHint(self) -> QtCore.QSize:
         return QtCore.QSize(80, 40)
@@ -105,22 +133,11 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
             yRadius,
             QtCore.Qt.SizeMode.AbsoluteSize,
         )
-        self.handle_radius = (
-            _rect.toRectF().normalized().height() * 0.80
-        ) // 2
         self._handle_position = (
-            int(
-                (self.contentsRect().toRectF().normalized().height() * 0.20)
-                // 2
-            )
+            self._handle_ONPosition
             if self.state == ToggleAnimatedButton.State.OFF
-            else int(
-                self.contentsRect().width()
-                - self._handle_position
-                - self.handle_radius * 2
-            )
+            else self._handle_OFFPosition
         )
-
         self.handle_ellipseRect = QtCore.QRectF(
             self._handle_position,
             ((_rect.toRectF().normalized().height() * 0.20) // 2),
@@ -136,16 +153,9 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
     @QtCore.pyqtSlot(name="clicked")
     def setup_animation(self) -> None:
         self.slide_animation.setEndValue(
-            int(
-                (self.contentsRect().toRectF().normalized().height() * 0.20)
-                // 2
-            )
+            self._handle_ONPosition
             if self.state == ToggleAnimatedButton.State.OFF
-            else int(
-                self.contentsRect().width()
-                - self._handle_position
-                - self.handle_radius * 2
-            ),
+            else self._handle_OFFPosition
         )
         self.slide_animation.start()
 
@@ -175,7 +185,7 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
             else self.backgroundColor
         )
         self.handlePath: QtGui.QPainterPath = QtGui.QPainterPath()
-
+        print(self.handle_position)
         self.handle_ellipseRect = QtCore.QRectF(
             self._handle_position,
             ((_rect.toRectF().normalized().height() * 0.20) // 2),
@@ -219,3 +229,27 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
                 _icon_scaled.rect().toRectF(),  # Entire source (scaled) pixmap
             )
         painter.end()
+
+
+class MainWindow(QtWidgets.QMainWindow):
+    def __init__(
+        self,
+    ) -> None:
+        super().__init__()
+        self.setGeometry(QtCore.QRect(0, 0, 720, 410))
+        self.slider = ToggleAnimatedButton(self)
+        self.slider.setMinimumSize(QtCore.QSize(200, 80))
+        self.slider.setMaximumSize(QtCore.QSize(200, 80))
+        center_x = (self.width() - self.slider.width()) // 2
+        center_y = (self.height() - self.slider.height()) // 2
+
+        self.slider.move(QtCore.QPoint(center_x, center_y))
+
+        self.slider.state = ToggleAnimatedButton.State.ON
+
+
+if __name__ == "__main__":
+    app = QtWidgets.QApplication([])
+    main = MainWindow()
+    main.show()
+    sys.exit(app.exec())
