@@ -1,6 +1,5 @@
 import enum
 from collections import deque
-import typing
 from typing import Deque
 from PyQt6 import QtCore, QtGui, QtWidgets
 from lib.utils.blocks_label import BlocksLabel
