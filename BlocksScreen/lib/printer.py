@@ -525,7 +525,7 @@ class Printer(QtCore.QObject):
                 fan_name, "rpm", value.get("rpm")
             )
 
-    def _controller_fan_object_updated(
+    def _controller_fan_object_updated(  
         self, value: dict, fan_name: str = ""
     ) -> None:
         _names = ["controller_fan", fan_name]
