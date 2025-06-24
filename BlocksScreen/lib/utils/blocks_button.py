@@ -29,6 +29,11 @@ class BlocksCustomButton(QtWidgets.QPushButton):
     def name(self):
         return self._name
 
+    @name.setter
+    def name(self, new_name) -> None:
+        self._name = new_name
+        self.setObjectName(new_name)
+
     def text(self) -> str | None:
         return self._text
 
@@ -123,8 +128,6 @@ class BlocksCustomButton(QtWidgets.QPushButton):
         _icon_rect = QtCore.QRectF(
             _parent_rect.left() * 2.8,
             _parent_rect.top() * 2.8,
-            # _parent_rect.width() * 0.75,
-            # _parent_rect.height() * 0.75,
             _parent_rect.width() * 0.80,
             _parent_rect.height() * 0.80,
         )
@@ -153,8 +156,12 @@ class BlocksCustomButton(QtWidgets.QPushButton):
         )
 
         if self.text():
-            _start_text_position = int(self.button_ellipse.right())
-            _rect.setLeft(_start_text_position + margin)
+            _start_text_position = int(self.button_ellipse.width())
+            _text_rect = _rect
+            _text_rect.setLeft(_start_text_position + margin)
+            _text_rect.setWidth(
+                self.width() - int(self.button_ellipse.width())
+            )
             _pen = painter.pen()
             _pen.setStyle(QtCore.Qt.PenStyle.SolidLine)
             _pen.setWidth(1)
@@ -162,8 +169,9 @@ class BlocksCustomButton(QtWidgets.QPushButton):
             painter.setPen(_pen)
 
             painter.drawText(
-                _rect,
+                _text_rect,
                 QtCore.Qt.TextFlag.TextShowMnemonic
+                # | QtCore.Qt.AlignmentFlag.AlignHCenter
                 | QtCore.Qt.AlignmentFlag.AlignLeft
                 | QtCore.Qt.AlignmentFlag.AlignVCenter,
                 str(self.text()),
@@ -178,3 +186,23 @@ class BlocksCustomButton(QtWidgets.QPushButton):
         elif name == "text_color":
             self.text_color = QtGui.QColor(value)
         return super().setProperty(name, value)
+
+    def handleTouchBegin(self, e: QtCore.QEvent): ...
+    def handleTouchUpdate(self, e: QtCore.QEvent): ...
+    def handleTouchEnd(self, e: QtCore.QEvent): ...
+    def handleTouchCancel(self, e: QtCore.QEvent): ...
+
+    def event(self, e: QtCore.QEvent) -> bool:
+        if e.type() == QtCore.QEvent.Type.TouchBegin:
+            self.handleTouchBegin(e)
+            return True
+        elif e.type() == QtCore.QEvent.Type.TouchUpdate:
+            self.handleTouchUpdate(e)
+            return True
+        elif e.type() == QtCore.QEvent.Type.TouchEnd:
+            self.handleTouchEnd(e)
+            return True
+        elif e.type() == QtCore.QEvent.Type.TouchCancel:
+            self.handleTouchCancel(e)
+            return True
+        return super().event(e)
