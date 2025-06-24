@@ -183,9 +183,19 @@ class PrintTab(QtWidgets.QStackedWidget):
             self.tune_page.on_gcode_move_update
         )
         self.tune_page.run_gcode.connect(self.ws.api.run_gcode)
-        self.tune_page.request_sliderPage.connect(self.on_slidePage_request)
+        self.tune_page.request_sliderPage[str, int, "PyQt_PyObject"].connect(
+            self.on_slidePage_request
+        )
+        self.tune_page.request_sliderPage[
+            str, int, "PyQt_PyObject", int, int
+        ].connect(self.on_slidePage_request)
         self.tune_page.request_numpad[
             str, float, "PyQt_PyObject", int, int
+        ].connect(self.on_numpad_request)
+        self.tune_page.request_numpad[
+            str,
+            float,
+            "PyQt_PyObject",
         ].connect(self.on_numpad_request)
         self.tune_page.request_bbpPage.connect(
             lambda: self.change_page(self.indexOf(self.babystepPage))
@@ -226,7 +236,6 @@ class PrintTab(QtWidgets.QStackedWidget):
         min_value: int = 0,
         max_value: int = 100,
     ) -> None:
-        # self.numpadPage.value_selected.disconnect()
         self.numpadPage.value_selected.connect(callback)
         self.numpadPage.set_name(name)
         self.numpadPage.set_value(current_value)
@@ -249,9 +258,9 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.sliderPage.value_selected.connect(callback)
         self.sliderPage.set_name(name)
         self.sliderPage.set_slider_position(current_value)
+        self.sliderPage.min_value = min_value
+        self.sliderPage.max_value = max_value
         self.change_page(self.indexOf(self.sliderPage))
-        self.min_value = min_value
-        self.max_value = max_value
 
     def paintEvent(self, a0: QtGui.QPaintEvent) -> None:
         """
