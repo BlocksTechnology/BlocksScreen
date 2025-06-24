@@ -14,8 +14,8 @@ from PyQt6.QtWidgets import QStackedWidget, QWidget
 class FilamentTab(QStackedWidget):
     request_filament_change_page = pyqtSignal(name="filament_change_page")
     request_filament_load = pyqtSignal(name="filament_load_t1")
-    request_back_button_pressed = pyqtSignal(
-        name="request_back_button_pressed"
+    request_back = pyqtSignal(
+        name="request_back"
     )
     request_change_page = pyqtSignal(int, int, name="request_change_page")
     request_toolhead_count = pyqtSignal(int, name="toolhead_number_received")
@@ -117,7 +117,7 @@ class FilamentTab(QStackedWidget):
         self.request_change_page.emit(1, index)
 
     def back_button(self):
-        self.request_back_button_pressed.emit()
+        self.request_back.emit()
 
     def sizeHint(self) -> QSize:
         return super().sizeHint()

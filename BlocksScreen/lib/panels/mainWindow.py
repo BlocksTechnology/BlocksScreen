@@ -37,7 +37,7 @@ from lib.ui.resources.top_bar_resources_rc import *
 from PyQt6.QtCore import QEvent, QSize, pyqtSignal, pyqtSlot
 from PyQt6.QtGui import QCloseEvent, QPaintEvent
 from PyQt6.QtWidgets import QApplication, QMainWindow, QStackedWidget
-from lib.utils.ui import CustomNumpad
+# from lib.panels.widgets.numpadPage import CustomNumpad
 
 _logger = logging.getLogger(name="logs/BlocksScreen.log")
 
@@ -71,9 +71,9 @@ class MainWindow(QMainWindow):
         self.file_data = Files(self, self.ws)
         self.index_stack = deque(maxlen=4)
         self.printer = Printer(self, self.ws)
-        self.numpad_object = CustomNumpad(self)
-        self.start_window = ConnectionPage(self, self.ws)
-        self.installEventFilter(self.start_window)
+        # self.numpad_object = CustomNumpad(self)
+        self.conn_window = ConnectionPage(self, self.ws)
+        self.installEventFilter(self.conn_window)
         self.printPanel = PrintTab(
             self.ui.printTab, self.file_data, self.ws, self.printer
         )
@@ -88,36 +88,28 @@ class MainWindow(QMainWindow):
 
         self.bo_ws_startup.connect(slot=self.bo_start_websocket_connection)
         self.ws.connecting_signal.connect(
-            slot=self.start_window.on_websocket_connecting
+            slot=self.conn_window.on_websocket_connecting
         )
         self.ws.connected_signal.connect(
-            slot=self.start_window.on_websocket_connection_achieved
+            slot=self.conn_window.on_websocket_connection_achieved
         )
         self.ws.connection_lost.connect(
-            slot=self.start_window.on_websocket_connection_lost
+            slot=self.conn_window.on_websocket_connection_lost
         )
 
-        self.printPanel.request_back_button_pressed.connect(
-            slot=self.global_back_button_pressed
-        )
+        self.printPanel.request_back.connect(slot=self.global_back)
         self.printPanel.request_change_page.connect(
             slot=self.global_change_page
         )
-        self.filamentPanel.request_back_button_pressed.connect(
-            slot=self.global_back_button_pressed
-        )
+        self.filamentPanel.request_back.connect(slot=self.global_back)
         self.filamentPanel.request_change_page.connect(
             slot=self.global_change_page
         )
-        self.controlPanel.request_back_button.connect(
-            slot=self.global_back_button_pressed
-        )
+        self.controlPanel.request_back_button.connect(slot=self.global_back)
         self.controlPanel.request_change_page.connect(
             slot=self.global_change_page
         )
-        self.utilitiesPanel.request_back_button_pressed.connect(
-            slot=self.global_back_button_pressed
-        )
+        self.utilitiesPanel.request_back.connect(slot=self.global_back)
         self.utilitiesPanel.request_change_page.connect(
             slot=self.global_change_page
         )
@@ -137,16 +129,16 @@ class MainWindow(QMainWindow):
         self.ws.connected_signal.connect(
             slot=self.file_data.request_file_list.emit
         )
-        self.start_window.retry_connection_clicked.connect(
+        self.conn_window.retry_connection_clicked.connect(
             slot=self.ws.retry_wb_conn
         )
-        self.start_window.firmware_restart_clicked.connect(
+        self.conn_window.firmware_restart_clicked.connect(
             slot=self.ws.api.firmware_restart
         )
-        self.start_window.restart_klipper_clicked.connect(
+        self.conn_window.restart_klipper_clicked.connect(
             slot=self.mc.restart_klipper_service
         )
-        self.start_window.reboot_clicked.connect(slot=self.mc.machine_restart)
+        self.conn_window.reboot_clicked.connect(slot=self.mc.machine_restart)
         self.printer_object_report_signal.connect(
             self.printer.on_object_report_received
         )
@@ -159,24 +151,24 @@ class MainWindow(QMainWindow):
         self.ui.main_content_widget.currentChanged.connect(
             slot=self.reset_tab_indexes
         )
-        self.call_numpad_signal.connect(self.numpad_object.call_numpad)
-        self.numpad_object.request_change_page.connect(self.global_change_page)
-        self.controlPanel.request_numpad_signal.connect(
-            partial(self.call_numpad_signal.emit)
-        )
-        self.printPanel.request_numpad_signal.connect(
-            partial(self.call_numpad_signal.emit)
-        )
+        # self.call_numpad_signal.connect(self.numpad_object.call_numpad)
+        # self.numpad_object.request_change_page.connect(self.global_change_page)
+        # self.controlPanel.request_numpad_signal.connect(
+        # partial(self.call_numpad_signal.emit)
+        # )
+        # self.printPanel.request_numpad_signal.connect(
+        # pkartial(self.call_numpad_signal.emit)
+        # )
 
-        self.printPanel.request_block_manual_tab_change.connect(
-            self.disable_tab_bar
-        )
-        self.printPanel.request_activate_manual_tab_change.connect(
-            self.enable_tab_bar
-        )
+        # self.printPanel.request_block_manual_tab_change.connect(
+        # self.disable_tab_bar
+        # )
+        # self.printPanel.request_activate_manual_tab_change.connect(
+        # self.enable_tab_bar
+        # )
 
         self.call_network_panel.connect(self.networkPanel.call_network_panel)
-        self.start_window.wifi_button_clicked.connect(
+        self.conn_window.wifi_button_clicked.connect(
             self.call_network_panel.emit
         )
         self.ui.wifi_button.clicked.connect(self.call_network_panel.emit)
@@ -300,8 +292,8 @@ class MainWindow(QMainWindow):
             f"Requested page change -> Tab index :{requested_page[0]}, pane panel index : {requested_page[1]}"
         )
 
-    @pyqtSlot(name="request_back_button_pressed")
-    def global_back_button_pressed(self) -> None:
+    @pyqtSlot(name="request_back")
+    def global_back(self) -> None:
         """Requests to go back a page globally"""
         if not len(self.index_stack):
             _logger.debug("Index stack is empty cannot got further back.")
@@ -487,9 +479,9 @@ class MainWindow(QMainWindow):
                 elif _gcode_msg_type == "//":
                     _msg_type = Popup.MessageType.INFO
 
-                self.popup.new_message(
-                    message_type=_msg_type, message=str(_message)
-                )
+                # self.popup.new_message(
+                #     message_type=_msg_type, message=str(_message)
+                # )
 
         elif "error" in _method:
             self.handle_error_response[list].emit([_data, _metadata])
