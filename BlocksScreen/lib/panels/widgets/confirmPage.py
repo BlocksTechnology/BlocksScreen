@@ -1,12 +1,95 @@
 from PyQt6 import QtCore, QtGui, QtWidgets
-from utils.blocks_button import BlocksCustomButton
-from utils.blocks_label import BlocksLabel
+import typing
+
+from matplotlib.image import thumbnail
+from lib.utils.blocks_button import BlocksCustomButton
+from lib.utils.blocks_label import BlocksLabel
 
 
 class ConfirmWidget(QtWidgets.QWidget):
+    request_back: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        name="request_back"
+    )
+
+    on_accept: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        str, name="on_accept"
+    )
+    on_reject: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        name="on_reject"
+    )
+
     def __init__(self, parent) -> None:
         super().__init__(parent)
         self.setupUI()
+        self.setMouseTracking(True)
+        self.setAttribute(QtCore.Qt.WidgetAttribute.WA_AcceptTouchEvents, True)
+        self.thumbnail: QtGui.QImage = QtGui.QImage()
+        self.confirm_button.clicked.connect(
+            lambda: self.on_accept.emit(str(self.cf_file_name._text))
+        )
+        self.reject_button.clicked.connect(self.on_reject.emit)
+
+    @QtCore.pyqtSlot(str, dict, name="on_show_widget")
+    def on_show_widget(self, text: str, filedata: dict | None = None) -> None:
+        self.cf_file_name.setText(str(text))
+        if not filedata:
+            return
+        _thumbnails = filedata.get("thumbnail_images")
+
+        if _thumbnails:
+            _biggest_thumbnail = _thumbnails[len(_thumbnails) - 1]
+            self.thumbnail = QtGui.QImage(_biggest_thumbnail)
+
+        _total_filament = filedata.get("filament_total")
+        _estimated_time = filedata.get("estimated_time")
+        self.cf_info.setText(
+            "Total Filament:"
+            + str(_total_filament)
+            + "\n"
+            + "Slicer time: "
+            + str(_estimated_time)
+        )
+        self.repaint()
+
+    def paintEvent(self, a0: QtGui.QPaintEvent) -> None:
+        _scene = QtWidgets.QGraphicsScene()
+        if not self.thumbnail.isNull():
+            _graphics_rect = self.cf_thumbnail.rect().toRectF()
+            _image_rect = self.thumbnail.rect()
+
+            scaled_width = _image_rect.width()
+            scaled_height = _image_rect.height()
+            adjusted_x = (_graphics_rect.width() - scaled_width) // 2.0
+            adjusted_y = (_graphics_rect.height() - scaled_height) // 2.0
+
+            adjusted_rect = QtCore.QRectF(
+                _image_rect.x() + adjusted_x,
+                _image_rect.y() + adjusted_y,
+                scaled_width,
+                scaled_height,
+            )
+            _scene.setSceneRect(adjusted_rect)
+            _item_scaled = QtWidgets.QGraphicsPixmapItem(
+                QtGui.QPixmap.fromImage(self.thumbnail).scaled(
+                    int(scaled_width),
+                    int(scaled_height),
+                    QtCore.Qt.AspectRatioMode.KeepAspectRatio,
+                    QtCore.Qt.TransformationMode.SmoothTransformation,
+                )
+            )
+            _scene.addItem(_item_scaled)
+            self.cf_thumbnail.setScene(_scene)
+
+        else:
+            self.cf_thumbnail.setScene(_scene)
+
+    def showEvent(self, a0: QtGui.QShowEvent) -> None:
+        if not self.thumbnail:
+            self.cf_thumbnail.close()
+        return super().showEvent(a0)
+
+    def hideEvent(self, a0: QtGui.QHideEvent) -> None:
+        return super().hideEvent(a0)
 
     def setupUI(self) -> None:
         sizePolicy = QtWidgets.QSizePolicy(
@@ -53,10 +136,10 @@ class ConfirmWidget(QtWidgets.QWidget):
         )
         self.cf_info = QtWidgets.QLabel(parent=self)
         self.cf_info.setEnabled(True)
-        self.cf_info.setMinimumSize(QtCore.QSize(230, 60))
+        self.cf_info.setMinimumSize(QtCore.QSize(200, 60))
         self.cf_info.setMaximumSize(QtCore.QSize(250, 60))
         font = QtGui.QFont()
-        font.setFamily("Montserrat")
+        font.setFamily("Momcake")
         font.setPointSize(14)
         self.cf_info.setFont(font)
         self.cf_info.setStyleSheet("background: transparent; color: white;")
@@ -74,7 +157,7 @@ class ConfirmWidget(QtWidgets.QWidget):
         self.cf_file_name.setMinimumSize(QtCore.QSize(250, 80))
         self.cf_file_name.setMaximumSize(QtCore.QSize(250, 80))
         font = QtGui.QFont()
-        font.setFamily("Montserrat")
+        font.setFamily("Momcake")
         font.setPointSize(14)
         self.cf_file_name.setFont(font)
         self.cf_file_name.setStyleSheet(
@@ -93,37 +176,37 @@ class ConfirmWidget(QtWidgets.QWidget):
         self.cf_confirm_layout.setContentsMargins(0, 0, 0, 0)
         self.cf_confirm_layout.setSpacing(2)
         self.cf_confirm_layout.setObjectName("cf_confirm_layout")
-        self.confirm_yes_text_label = BlocksCustomButton(parent=self)
-        self.confirm_yes_text_label.setMinimumSize(QtCore.QSize(150, 60))
-        self.confirm_yes_text_label.setMaximumSize(QtCore.QSize(150, 60))
+        self.confirm_button = BlocksCustomButton(parent=self)
+        self.confirm_button.setMinimumSize(QtCore.QSize(200, 60))
+        self.confirm_button.setMaximumSize(QtCore.QSize(200, 60))
         font = QtGui.QFont()
-        font.setFamily("MS Shell Dlg 2")
+        font.setFamily("Momcake")
         font.setPointSize(18)
         font.setItalic(False)
         font.setStyleStrategy(QtGui.QFont.StyleStrategy.PreferAntialias)
-        self.confirm_yes_text_label.setFont(font)
-        self.confirm_yes_text_label.setMouseTracking(False)
-        self.confirm_yes_text_label.setTabletTracking(True)
-        self.confirm_yes_text_label.setContextMenuPolicy(
+        self.confirm_button.setFont(font)
+        self.confirm_button.setMouseTracking(False)
+        self.confirm_button.setTabletTracking(True)
+        self.confirm_button.setContextMenuPolicy(
             QtCore.Qt.ContextMenuPolicy.NoContextMenu
         )
-        self.confirm_yes_text_label.setLayoutDirection(
+        self.confirm_button.setLayoutDirection(
             QtCore.Qt.LayoutDirection.LeftToRight
         )
-        self.confirm_yes_text_label.setStyleSheet("")
-        self.confirm_yes_text_label.setAutoDefault(False)
-        self.confirm_yes_text_label.setFlat(True)
-        self.confirm_yes_text_label.setProperty(
+        self.confirm_button.setStyleSheet("")
+        self.confirm_button.setAutoDefault(False)
+        self.confirm_button.setFlat(True)
+        self.confirm_button.setProperty(
             "icon_pixmap", QtGui.QPixmap(":/dialog/media/btn_icons/yes.svg")
         )
-        self.confirm_yes_text_label.setObjectName("confirm_yes_text_label")
+        self.confirm_button.setObjectName("confirm_button")
         self.cf_confirm_layout.addWidget(
-            self.confirm_yes_text_label,
+            self.confirm_button,
             0,
             QtCore.Qt.AlignmentFlag.AlignHCenter
             | QtCore.Qt.AlignmentFlag.AlignVCenter,
         )
-        self.confirm_no_text_label = BlocksCustomButton(parent=self)
+        self.reject_button = BlocksCustomButton(parent=self)
         sizePolicy = QtWidgets.QSizePolicy(
             QtWidgets.QSizePolicy.Policy.Fixed,
             QtWidgets.QSizePolicy.Policy.Fixed,
@@ -131,34 +214,35 @@ class ConfirmWidget(QtWidgets.QWidget):
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(
-            self.confirm_no_text_label.sizePolicy().hasHeightForWidth()
+            self.reject_button.sizePolicy().hasHeightForWidth()
         )
-        self.confirm_no_text_label.setSizePolicy(sizePolicy)
-        self.confirm_no_text_label.setMinimumSize(QtCore.QSize(150, 60))
-        self.confirm_no_text_label.setMaximumSize(QtCore.QSize(150, 60))
+        self.reject_button.setSizePolicy(sizePolicy)
+        self.reject_button.setMinimumSize(QtCore.QSize(200, 60))
+        self.reject_button.setMaximumSize(QtCore.QSize(200, 60))
         font = QtGui.QFont()
-        font.setFamily("MS Shell Dlg 2")
+        font.setFamily("Momcake")
         font.setPointSize(18)
         font.setItalic(False)
         font.setStyleStrategy(QtGui.QFont.StyleStrategy.PreferAntialias)
-        self.confirm_no_text_label.setFont(font)
-        self.confirm_no_text_label.setMouseTracking(False)
-        self.confirm_no_text_label.setTabletTracking(True)
-        self.confirm_no_text_label.setContextMenuPolicy(
+
+        self.reject_button.setFont(font)
+        self.reject_button.setMouseTracking(False)
+        self.reject_button.setTabletTracking(True)
+        self.reject_button.setContextMenuPolicy(
             QtCore.Qt.ContextMenuPolicy.NoContextMenu
         )
-        self.confirm_no_text_label.setLayoutDirection(
+        self.reject_button.setLayoutDirection(
             QtCore.Qt.LayoutDirection.LeftToRight
         )
-        self.confirm_no_text_label.setStyleSheet("")
-        self.confirm_no_text_label.setAutoDefault(False)
-        self.confirm_no_text_label.setFlat(True)
-        self.confirm_no_text_label.setProperty(
+        self.reject_button.setStyleSheet("")
+        self.reject_button.setAutoDefault(False)
+        self.reject_button.setFlat(True)
+        self.reject_button.setProperty(
             "icon_pixmap", QtGui.QPixmap(":/dialog/media/btn_icons/no.svg")
         )
-        self.confirm_no_text_label.setObjectName("confirm_no_text_label")
+        self.reject_button.setObjectName("reject")
         self.cf_confirm_layout.addWidget(
-            self.confirm_no_text_label,
+            self.reject_button,
             0,
             QtCore.Qt.AlignmentFlag.AlignHCenter
             | QtCore.Qt.AlignmentFlag.AlignVCenter,
@@ -213,3 +297,8 @@ class ConfirmWidget(QtWidgets.QWidget):
             | QtCore.Qt.AlignmentFlag.AlignVCenter,
         )
         self.verticalLayout_4.addLayout(self.cf_content_vertical_layout)
+
+        self.confirm_title_label.setText("Print File?")
+        # self.cf_info.setText("This i sa info label")
+        self.confirm_button.setText("Accept")
+        self.reject_button.setText("Cancel")
