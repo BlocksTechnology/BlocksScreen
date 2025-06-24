@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import typing
 
 import events
 from events import ReceivedFileData
@@ -16,6 +17,10 @@ class Files(QtCore.QObject):
         [str], name="request_files_thumbnail"
     )
     request_file_download = QtCore.pyqtSignal([str, str], name="file_download")
+
+    fileinfo: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        dict, name="fileinfo"
+    )
 
     def __init__(
         self,
@@ -54,42 +59,103 @@ class Files(QtCore.QObject):
             else:
                 self.files_metadata[data["filename"]] = data
 
-    def event(self, a0: QtCore.QEvent) -> bool:
-        if a0.type() == ReceivedFileData.type():
-            if isinstance(a0, ReceivedFileData):
-                self.handle_message_received(a0.method, a0.data, a0.params)
-                return True  # Event Handled
-        return super().event(a0)
-
-    @QtCore.pyqtSlot(str, name="get_file_thumbnail")
-    def get_file_thumbnail(self, filename) -> QtGui.QImage | None:
-        if self.files_metadata is None or filename is None:
-            return None
-
-        if filename not in self.files_metadata.keys():
-            return None
-
-        metadata = self.files_metadata[filename]
-        if "thumbnails" in metadata:
-            _thumbnails = metadata.get("thumbnails")
-            if not _thumbnails:
-                return
-            if _thumbnails[2].get("relative_path"):
-                _thumb_relative_path = _thumbnails[2]["relative_path"]
-            else:
-                _thumb_relative_path = _thumbnails[1]["relative_path"]
-
-            path = os.path.join(
-                os.path.dirname(os.path.join(self.gcode_path, filename)),
-                _thumb_relative_path,
+    @QtCore.pyqtSlot(str, name="on_request_fileinfo")
+    def on_request_fileinfo(self, filename: str) -> None:
+        if not self.files_metadata or not filename:
+            return
+        _data: dict = {
+            "thumbnail_images": list,
+            "filament_total": dict,
+            "estimated_time": dict,
+            "layer_count": int,
+            "object_height": float,
+            "size": int,
+            "filament_type": str,
+            "filament_weight_total": float,
+            "layer_height": float,
+            "first_layer_height": float,
+            "first_layer_extruder_temp": float,
+            "first_layer_bed_temp": float,
+            "chamber_temp": float,
+            "filament_name": str,
+            "nozzle_diameter": float,
+            "slicer": str,
+        }
+        _file_metadata = self.files_metadata.get(str(filename))
+        print(_file_metadata)
+        if not _file_metadata:
+            return
+        _thumbnails = _file_metadata.get("thumbnails", {})
+        _thumbnail_paths = list(
+            map(
+                lambda thumbnail_path: os.path.join(
+                    os.path.dirname(os.path.join(self.gcode_path, filename)),
+                    thumbnail_path.get("relative_path", "?"),
+                ),
+                _thumbnails,
             )
-            if os.access(path, os.R_OK):  # Has access to the thumbnail
-                return QtGui.QImage(path)
-            else:  # Does not have access to the thumbnail, check if i can download the file from moonraker
-                return self.request_file_download[str, str].emit(
-                    "~/printer_data/gcodes/.thumbs", filename
+        )
+        _thumbnail_images = list(
+            map(lambda path: QtGui.QImage(path), _thumbnail_paths)
+        )
+        _data.update({"thumbnail_images": _thumbnail_images})
+
+        _data.update(
+            {"filament_total": _file_metadata.get("filament_total", "?")}
+        )
+        _data.update(
+            {"estimated_time": _file_metadata.get("estimated_time", "?")}
+        )
+        _data.update({"layer_count": _file_metadata.get("layer_count", -1.0)})
+        _data.update({"total_layer": _file_metadata.get("total_layer", -1.0)})
+        _data.update(
+            {"object_height": _file_metadata.get("object_height", -1.0)}
+        )
+        _data.update(
+            {"nozzle_diameter": _file_metadata.get("nozzle_diameter", -1.0)}
+        )
+        _data.update(
+            {"layer_height": _file_metadata.get("layer_height", -1.0)}
+        )
+        _data.update(
+            {
+                "first_layer_height": _file_metadata.get(
+                    "first_layer_height", -1.0
                 )
-        return None
+            }
+        )
+        _data.update(
+            {
+                "first_layer_extruder_temp": _file_metadata.get(
+                    "first_layer_extruder_temp", -1.0
+                )
+            }
+        )
+        _data.update(
+            {
+                "first_layer_bed_temp": _file_metadata.get(
+                    "first_layer_bed_temp", -1.0
+                )
+            }
+        )
+        _data.update(
+            {"chamber_temp": _file_metadata.get("chamber_temp", -1.0)}
+        )
+        _data.update(
+            {"filament_name": _file_metadata.get("filament_name", -1.0)}
+        )
+        _data.update(
+            {"filament_type": _file_metadata.get("filament_type", -1.0)}
+        )
+        _data.update(
+            {
+                "filament_weight_total": _file_metadata.get(
+                    "filament_weight_total", -1.0
+                )
+            }
+        )
+        _data.update({"slicer": _file_metadata.get("slicer", -1.0)})
+        self.fileinfo.emit(_data)
 
     def eventFilter(self, a0: QtCore.QObject, a1: QtCore.QEvent) -> bool:
         if a1.type() == events.KlippyDisconnected.type():
@@ -101,15 +167,9 @@ class Files(QtCore.QObject):
             return False
         return super().eventFilter(a0, a1)
 
-
-# _image = None
-#                 _item_thumbnail = _item_metadata["thumbnails"][1]["relative_path"]
-#                 # TODO: Better paths, need to do this in a better way
-#                 path = os.path.join(
-#                     os.path.dirname(
-#                         os.path.join(self.gcode_path, self._current_file_name)
-#                     ),
-#                     _item_thumbnail,
-#                 )
-#                 if os.access(path, os.R_OK): # Can access the image and the directory it resides
-#                     _image = QtGui.QImage(path)
+    def event(self, a0: QtCore.QEvent) -> bool:
+        if a0.type() == ReceivedFileData.type():
+            if isinstance(a0, ReceivedFileData):
+                self.handle_message_received(a0.method, a0.data, a0.params)
+                return True  # Event Handled
+        return super().event(a0)
