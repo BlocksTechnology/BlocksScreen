@@ -195,3 +195,51 @@ except OSError as e:
     logging.exception(f"OSError couldn't load DPMS library: {e}")
 except Exception as e:
     logging.exception(f"Unexpected exception occurred {e}")
+
+
+def convert_bytes_to_mb(self, bytes: int | float) -> float:
+    """Converts byte size to megabyte size
+
+    Args:
+        bytes (int | float): bytes
+
+    Returns:
+        mb: float that represents the number of mb
+    """
+    _relation = 2 ** (-20)
+    return bytes * _relation
+
+
+def calculate_current_layer(
+    z_position: float,
+    object_height: float,
+    layer_height: float,
+    first_layer_height: float,
+) -> int:
+    """Calculated the current printing layer given the GCODE z position received by the
+        gcode_move object update.
+        Also updates the label where the current layer should be displayed
+
+    Returns:
+        int: Current layer
+    """
+    if z_position == 0:
+        return -1
+    _current_layer = 1 + (z_position - first_layer_height) / layer_height
+
+    return int(_current_layer)
+
+
+def estimate_print_time(seconds: int) -> list:
+    """Convert time in seconds format to days, hours, minutes, seconds.
+
+    Args:
+        seconds (int): Seconds
+
+    Returns:
+        list: list that contains the converted information [days, hours, minutes, seconds]
+    """
+    num_min, seconds = divmod(seconds, 60)
+    num_hours, minutes = divmod(num_min, 60)
+    days, hours = divmod(num_hours, 24)
+    return [days, hours, minutes, seconds]
