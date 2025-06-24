@@ -26,11 +26,9 @@ class DisplayButton(QtWidgets.QPushButton):
     def name(self):
         return self._name
 
-
     def setPixmap(self, pixmap: QtGui.QPixmap) -> None:
         self.icon_pixmap = pixmap
         self.repaint()
-
 
     @property
     def button_type(self) -> str:
@@ -153,7 +151,7 @@ class DisplayButton(QtWidgets.QPushButton):
             _icon_scaled.rect().toRectF(),  # Entire source (scaled) pixmap
         )
 
-        if _rect is not None and self.text() is not None:
+        if _rect is not None and self.text():
             _ptl_rect = None
             _stl_rect = None
             _mtl = QtCore.QRectF(
@@ -183,7 +181,7 @@ class DisplayButton(QtWidgets.QPushButton):
                     QtCore.Qt.TextFlag.TextShowMnemonic
                     | QtCore.Qt.AlignmentFlag.AlignHCenter
                     | QtCore.Qt.AlignmentFlag.AlignVCenter,
-                    str(self.text()) if self.text() is not None else str("?"),
+                    str(self.text()) if self.text() else str("?"),
                 )
                 painter.drawText(
                     _stl_rect,
@@ -191,7 +189,7 @@ class DisplayButton(QtWidgets.QPushButton):
                     | QtCore.Qt.AlignmentFlag.AlignHCenter
                     | QtCore.Qt.AlignmentFlag.AlignVCenter,
                     str(self.secondary_text)
-                    if self.secondary_text is not None
+                    if self.secondary_text
                     else str("?"),
                 )
                 painter.drawText(
@@ -207,7 +205,7 @@ class DisplayButton(QtWidgets.QPushButton):
                     QtCore.Qt.TextFlag.TextShowMnemonic
                     | QtCore.Qt.AlignmentFlag.AlignHCenter
                     | QtCore.Qt.AlignmentFlag.AlignVCenter,
-                    str(self.text()) if self.text() is not None else str("?"),
+                    str(self.text()) if self.text() else str("?"),
                 )
                 painter.setPen(QtCore.Qt.PenStyle.NoPen)
         painter.end()
