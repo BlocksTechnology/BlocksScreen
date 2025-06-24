@@ -147,14 +147,19 @@ class TuneWidget(QtWidgets.QWidget):
                         }
                     }
                 )
-                _new_display_button.clicked.connect(
-                    partial(
-                        self.request_sliderPage.emit,
-                        str(name),
-                        self.tune_display_buttons.get(name).get("speed", 0),  # type: ignore
-                        self.on_slider_change,
+                if name in ("fan", "fan_generic"):
+                    _new_display_button.clicked.connect(
+                        partial(
+                            self.request_sliderPage.emit,
+                            str(name),
+                            self.tune_display_buttons.get(name).get(  # type:ignore
+                                "speed", 0
+                            ),
+                            self.on_slider_change,
+                        )
                     )
-                )
+                else:
+                    _new_display_button.setDisabled(True)
                 self.tune_display_buttons_layout.addWidget(_new_display_button)
 
             _display_button = self.tune_display_buttons.get(name)
