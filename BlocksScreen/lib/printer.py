@@ -21,8 +21,6 @@ class Printer(QtCore.QObject):
         int, name="toolhead_number_received"
     )
 
-    # available_objects = pyqtSignal(name="available_objects")
-
     extruder_update = QtCore.pyqtSignal(
         str, str, float, name="extruder_update"
     )
@@ -86,10 +84,6 @@ class Printer(QtCore.QObject):
     configfile_update: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         dict, name="configfile_update"
     )
-
-    # object_config: typing.ClassVar[QtCore.pyqtSignal] = pyqtSignal(
-    #     [list, list], [str, dict], name="object_config"
-    # )
 
     config_subscription: typing.ClassVar[QtCore.pyqtSignal] = (
         QtCore.pyqtSignal(
@@ -514,18 +508,18 @@ class Printer(QtCore.QObject):
     def _fan_generic_object_updated(
         self, value: dict, fan_name: str = ""
     ) -> None:
-        print("Received fan generic")
-
+        _names = ["fan_generic", fan_name]
+        object_name = " ".join(_names)
         if "speed" in value.keys():
             self.fan_update[str, str, float].emit(
-                fan_name, "speed", value.get("speed")
+                object_name, "speed", value.get("speed")
             )
         if "rpm" in value.keys():
             self.fan_update[str, str, int].emit(
-                fan_name, "rpm", value.get("rpm")
+                object_name, "rpm", value.get("rpm")
             )
 
-    def _controller_fan_object_updated(  
+    def _controller_fan_object_updated(
         self, value: dict, fan_name: str = ""
     ) -> None:
         _names = ["controller_fan", fan_name]
@@ -543,6 +537,8 @@ class Printer(QtCore.QObject):
         self, value: dict, fan_name: str = ""
     ) -> None:
         # Associated with a heater, on when heater is active
+        _names = ["heater_fan", fan_name]
+        object_name = " ".join(_names)
         ...
         # _names = ["heater_fan", fan_name]
         # object_name = " ".join(_names)
