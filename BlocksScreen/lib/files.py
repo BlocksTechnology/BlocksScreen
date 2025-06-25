@@ -174,5 +174,5 @@ class Files(QtCore.QObject):
         if a0.type() == ReceivedFileData.type():
             if isinstance(a0, ReceivedFileData):
                 self.handle_message_received(a0.method, a0.data, a0.params)
-                return True  # Event Handled
+                return True
         return super().event(a0)

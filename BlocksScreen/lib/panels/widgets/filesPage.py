@@ -29,25 +29,25 @@ class FilesPage(QtWidgets.QWidget):
         self.listWidget.itemClicked.connect(self.fileItemClicked)
         self.ReloadButton.clicked.connect(lambda: self.reload_list)
 
+    def showEvent(self, a0: QtGui.QShowEvent) -> None:
+        self.add_file_entries()
+        return super().showEvent(a0)
+
     @QtCore.pyqtSlot(dict, name="on_fileinfo")
     def on_fileinfo(self, filedata: dict) -> None:
         if self._current_file_name:
             self.file_selected.emit(str(self._current_file_name), filedata)
 
-    def showEvent(self, a0: QtGui.QShowEvent) -> None:
-        self.add_file_entries()
-        return super().showEvent(a0)
-
     @QtCore.pyqtSlot(name="reload_list")
     def reload_list(self) -> None:
         """Reload files list"""
         self.request_file_list_refresh.emit()
-        self.add_file_entries()
 
     @QtCore.pyqtSlot(list, name="on_file_list")
     def on_file_list(self, file_list: list) -> None:
         self.file_list.clear()
         self.file_list = file_list
+        self.add_file_entries()
 
     @QtCore.pyqtSlot(QtWidgets.QListWidgetItem, name="file_item_clicked")
     def fileItemClicked(self, item: QtWidgets.QListWidgetItem) -> None:
