@@ -6,8 +6,8 @@ class BlocksSlider(QtWidgets.QSlider):
         super().__init__(parent)
         self.highlight_color = "#2AC9F9"
         self.gradient_pos = QtCore.QPointF(0.0, 0.0)
-        self.setMinimumSize(300, 100)
-        self.setMaximumSize(400, 100)
+        self.setMinimumSize(300, 130)
+        self.setMaximumSize(400, 130)
         self.setMouseTracking(True)
         self.setTracking(True)
         self.setOrientation(QtCore.Qt.Orientation.Horizontal)
@@ -16,12 +16,12 @@ class BlocksSlider(QtWidgets.QSlider):
         self.setMaximum(100)
 
     def setMinimum(self, a0: int) -> None:
+        super().setMinimum(a0)
         self.update()
-        return super().setMinimum(a0)
 
     def setMaximum(self, a0: int) -> None:
+        super().setMaximum(a0)
         self.update()
-        return super().setMaximum(a0)
 
     def setOrientation(self, a0: QtCore.Qt.Orientation) -> None:
         return super().setOrientation(a0)
@@ -41,10 +41,6 @@ class BlocksSlider(QtWidgets.QSlider):
         if self.isSliderDown():
             self.setSliderDown(False)
         return super().mouseReleaseEvent(ev)
-
-    def setSliderPosition(self, a0: int) -> None:
-        self.update()
-        return super().setSliderPosition(a0)
 
     def mouseMoveEvent(self, ev: QtGui.QMouseEvent) -> None:
         """Handle mouse move events"""
@@ -111,9 +107,7 @@ class BlocksSlider(QtWidgets.QSlider):
             QtWidgets.QStyle.SubControl.SC_SliderGroove,
             self,
         )
-
-        self._groove_rect.setSize(QtCore.QSize(self.width() - 25, 30))
-
+        self._groove_rect.setSize(QtCore.QSize(self.width() - 60, 30))
         self._handle_rect = _style.subControlRect(
             QtWidgets.QStyle.ComplexControl.CC_Slider,
             opt,
@@ -136,10 +130,10 @@ class BlocksSlider(QtWidgets.QSlider):
         #     # give a default color for the track
         #     ...
         _groove_x = (self.width() - self._groove_rect.width()) // 2
-        _groove_y = (self.height() - self._groove_rect.height()) // 2
+        _groove_y = ((self.height() - self._groove_rect.height()) // 2) - 10
 
         self._groove_rect.moveTo(QtCore.QPoint(_groove_x, _groove_y))
-        _handle_y = (self.height() - self._handle_rect.height()) // 2
+        _handle_y = (self.height() - self._handle_rect.height()) // 2 - 10
         self._handle_rect.moveTop(_handle_y)
 
         _handle_color = (
@@ -197,9 +191,11 @@ class BlocksSlider(QtWidgets.QSlider):
             QtWidgets.QStyle.SubControl.SC_SliderTickmarks,
             self,
         )
-        tick_interval = self.tickInterval() or self.singleStep()
         min_v, max_v = self.minimum(), self.maximum()
         painter.setPen(QtGui.QColor("#888888"))
+        font = QtGui.QFont()
+        font.setPointSize(16)
+        painter.setFont(font)
         fm = QtGui.QFontMetrics(painter.font())
         label_offset = 4
 
@@ -217,7 +213,8 @@ class BlocksSlider(QtWidgets.QSlider):
             )
             y1 = self._groove_rect.bottom()
             y2 = y1 + 15  # tick length
-            label = str(v)
+            label = str(v) + "%"
+
             text_w = fm.horizontalAdvance(label)
             text_h = fm.ascent()
             text_x = x - text_w // 2

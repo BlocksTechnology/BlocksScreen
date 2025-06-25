@@ -40,7 +40,8 @@ class SliderPage(QtWidgets.QWidget):
         self.back_button.clicked.connect(self.request_back.emit)
         self.back_button.clicked.connect(self.value_selected.disconnect)
 
-        self.slider.sliderReleased.connect(self.on_slider_value_change)
+        self.slider.valueChanged.connect(self.on_slider_value_change)
+
         self.increase_button.pressed.connect(
             lambda: (
                 self.slider.setSliderPosition(self.slider.sliderPosition() + 5)
@@ -55,9 +56,12 @@ class SliderPage(QtWidgets.QWidget):
         )
         self.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
 
-    @QtCore.pyqtSlot(name="sliderReleased")
-    def on_slider_value_change(self) -> None:
+    @QtCore.pyqtSlot(int, name="sliderReleased")
+    def on_slider_value_change(self, value) -> None:
         """Handles slider position changes"""
+
+        # self.value_selected.emit(self.name)
+
         ...
 
     def set_name(self, name: str) -> None:
@@ -70,10 +74,14 @@ class SliderPage(QtWidgets.QWidget):
         """Set slider position from value, updates the widget"""
         if not isinstance(value, int | float):
             return
-
         self.slider.setSliderPosition(int(round(value)))
         self.update()
-        self.repaint()
+
+    def setMinimum(self, value: int) -> None:
+        self.slider.setMinimum(value)
+
+    def setMaximum(self, value: int) -> None:
+        self.slider.setMaximum(value)
 
     def paintEvent(self, a0: QtGui.QPaintEvent) -> None:
         """Custom painting for the widget"""
@@ -82,8 +90,11 @@ class SliderPage(QtWidgets.QWidget):
         painter.setRenderHint(painter.RenderHint.LosslessImageRendering)
         painter.setRenderHint(painter.RenderHint.TextAntialiasing)
         painter.drawPixmap(self.rect(), self.background, self.rect())
-
+        self.current_value_label.setText(str(self.slider.value()) + " " + "%")
         if "speed" in self.name.lower():
+            # REFACTOR: Change this, so it's not hardcoded to be with objects named "speed. "
+            # Range should increase however if a flag is set, if the maximum is above 100
+            # then increase the range of the slider after it is set to the maximum
             if (
                 self.slider.maximum() <= self.max_value
                 and self.slider.sliderPosition() + 10 >= self.slider.maximum()
@@ -154,10 +165,7 @@ class SliderPage(QtWidgets.QWidget):
         self.back_button.has_text = False
         self.back_button.setMinimumSize(QtCore.QSize(60, 60))
         self.back_button.setMaximumSize(QtCore.QSize(60, 60))
-
-        # self.main_verticalLayout_1.addWidget(
         self.header_horizontalLayout.addWidget(
-            # self.object_name_label,
             self.object_name_label,
             0,
             QtCore.Qt.AlignmentFlag.AlignHCenter
@@ -187,9 +195,7 @@ class SliderPage(QtWidgets.QWidget):
             QtCore.Qt.AlignmentFlag.AlignHCenter
             | QtCore.Qt.AlignmentFlag.AlignVCenter
         )
-
         self.main_verticalLayout_1.addWidget(
-            # self.header_horizontalLayout.addWidget(
             self.current_value_label,
             0,
             QtCore.Qt.AlignmentFlag.AlignHCenter
