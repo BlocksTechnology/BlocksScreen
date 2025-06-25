@@ -41,7 +41,6 @@ class JobStatusWidget(QtWidgets.QWidget):
     _current_file_name: str = ""
     file_metadata: dict = {}
     total_layers = "?"
-    file_metadata: dict = {}
 
     def __init__(self, parent) -> None:
         super().__init__(parent)
@@ -106,10 +105,7 @@ class JobStatusWidget(QtWidgets.QWidget):
                 self._current_file_name = value
                 if self.js_file_name_label.text().lower() != value.lower():
                     self.js_file_name_label.setText(self._current_file_name)
-                    print(value)
-                    self.request_file_info.emit(
-                        value
-                    )  # Request file metadata (or file info whatever)
+                    self.request_file_info.emit(value)  # Request file metadata
             if "state" in field:
                 if value.lower() == "printing" or value == "paused":
                     self.request_query_print_stats.emit(
@@ -129,19 +125,19 @@ class JobStatusWidget(QtWidgets.QWidget):
             self._internal_print_status == "printing"
             or self._internal_print_status == "paused"
         ):
-            if not self.file_metadata:
-                return
             self.layer_display_button.secondary_text = (  # type:ignore
                 self.file_metadata.get("layer_count", "?")
             )
+            if not self.file_metadata:
+                return
             if isinstance(value, dict):
                 if "total_layer" in value.keys():
                     # Only available if SET_PRINT_STATS_INFO TOTAL_LAYER=<value>
                     # gcode command is ran
                     if value["total_layer"] is not None:
-                        _total_layers = value["total_layer"]
+                        self.total_layers = value.get("total_layer", "?")
                         self.layer_display_button.secondary_text = (  # type:ignore
-                            str(_total_layers)
+                            str(self.total_layers)
                         )
                 if "current_layer" in value.keys():
                     # Only available if SET_PRINT_STATS_INFO CURRENT_LAYER=<value>
@@ -546,6 +542,7 @@ class JobStatusWidget(QtWidgets.QWidget):
         self.job_stats_display_layout = QtWidgets.QHBoxLayout()
         self.job_stats_display_layout.setObjectName("job_stats_display_layout")
         self.layer_display_button = DisplayButton(parent=self)
+        self.layer_display_button.button_type = "display_secondary"
         self.layer_display_button.setEnabled(False)
         sizePolicy = QtWidgets.QSizePolicy(
             QtWidgets.QSizePolicy.Policy.MinimumExpanding,
@@ -608,7 +605,7 @@ class JobStatusWidget(QtWidgets.QWidget):
         self.job_status_content_layout.setStretch(1, 1)
         self.job_status_content_layout.setStretch(2, 1)
         self.verticalLayout_3.addLayout(self.job_status_content_layout)
-        
+
         self.setLayout(self.verticalLayout_3)
         self.tune_menu_btn.setText("Tune")
         self.stop_printing_btn.setText("Cancel")
