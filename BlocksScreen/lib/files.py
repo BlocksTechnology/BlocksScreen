@@ -17,7 +17,9 @@ class Files(QtCore.QObject):
         [str], name="request_files_thumbnail"
     )
     request_file_download = QtCore.pyqtSignal([str, str], name="file_download")
-
+    on_file_list: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        list, name="on_file_list"
+    )
     fileinfo: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         dict, name="fileinfo"
     )
@@ -45,7 +47,7 @@ class Files(QtCore.QObject):
     def file_list(self):
         return self.files
 
-    def handle_message_received(self, method, data, params):
+    def handle_message_received(self, method: str, data, params: dict) -> None:
         if "server.files.list" in method:
             self.files.clear()
             self.files = data
@@ -53,6 +55,7 @@ class Files(QtCore.QObject):
                 self.request_file_metadata.emit(item["path"])
                 for item in self.files
             ]
+            self.on_file_list.emit(self.files)
         elif "server.files.metadata" in method:
             if data["filename"] in self.files_metadata.keys():
                 self.files_metadata.update({data["filename"]: data})

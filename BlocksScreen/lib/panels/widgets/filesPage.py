@@ -5,8 +5,8 @@ from lib.utils.icon_button import IconButton
 
 
 class FilesPage(QtWidgets.QWidget):
-    request_back: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
-        name="request_back"
+    request_back_page: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        name="request_back_page"
     )
     file_selected: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         str, dict, name="file_selected"
@@ -17,35 +17,37 @@ class FilesPage(QtWidgets.QWidget):
     request_file_list_refresh: typing.ClassVar[QtCore.pyqtSignal] = (
         QtCore.pyqtSignal(name="request_file_list_refresh")
     )
-    _current_file_name = ""
+    _current_file_name: str = ""
+    file_list: list = []
 
-    def __init__(self, parent, files) -> None:
+    def __init__(self, parent) -> None:
         super().__init__(parent)
         self.setupUI()
-        self.file_data = files
+
         self.setMouseTracking(True)
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_AcceptTouchEvents, True)
         self.listWidget.itemClicked.connect(self.fileItemClicked)
-        self.ReloadButton.clicked.connect(lambda: self.on_reload_list)
-        self.request_file_info.connect(self.file_data.on_request_fileinfo)
-        self.file_data.fileinfo.connect(self.on_fileinfo)
+        self.ReloadButton.clicked.connect(lambda: self.reload_list)
 
     @QtCore.pyqtSlot(dict, name="on_fileinfo")
     def on_fileinfo(self, filedata: dict) -> None:
-        if (
-            self._current_file_name
-        ):  # If i don't have this, it'll break the gui
+        if self._current_file_name:
             self.file_selected.emit(str(self._current_file_name), filedata)
 
     def showEvent(self, a0: QtGui.QShowEvent) -> None:
         self.add_file_entries()
         return super().showEvent(a0)
 
-    @QtCore.pyqtSlot(name="on_reload_list")
-    def on_reload_list(self) -> None:
+    @QtCore.pyqtSlot(name="reload_list")
+    def reload_list(self) -> None:
         """Reload files list"""
-        self.file_data.request_file_list.emit()
+        self.request_file_list_refresh.emit()
         self.add_file_entries()
+
+    @QtCore.pyqtSlot(list, name="on_file_list")
+    def on_file_list(self, file_list: list) -> None:
+        self.file_list.clear()
+        self.file_list = file_list
 
     @QtCore.pyqtSlot(QtWidgets.QListWidgetItem, name="file_item_clicked")
     def fileItemClicked(self, item: QtWidgets.QListWidgetItem) -> None:
@@ -84,7 +86,7 @@ class FilesPage(QtWidgets.QWidget):
             _item.setFlags(~QtCore.Qt.ItemFlag.ItemIsEditable)
             return _item, _item_widget
 
-        for item in self.file_data.file_list:
+        for item in self.file_list:
             # TODO: Add a file icon before the name
             _item, _item_widget = _add_entry()
             self.listWidget.addItem(_item)

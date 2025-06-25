@@ -19,7 +19,7 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 
 
 class PrintTab(QtWidgets.QStackedWidget):
-    """PrintTab -> QStackedWidget UI panel that has the following panels:
+    """QStackedWidget that contains the following widget panels:
 
     - Main page: Simple page with a message field and a button to start a print;
     - File list page: A file list where displayed files are selectable to be printed;
@@ -28,8 +28,6 @@ class PrintTab(QtWidgets.QStackedWidget):
     - Tune page: Accessible only from the print page;
     - Babystep page: Control the z_offset during a ongoing print;
     - Change page: A page that permits changing the filament, stops the print -> change the filament -> resume the print;
-
-    On the tune page, the user can additionally change the temperature/speed of the extruder(s), heated bed, fan(s) and the print velocity
 
     Args:
         QStackedWidget (QStackedWidget): This class is inherited from QStackedWidget from Qt6
@@ -46,8 +44,8 @@ class PrintTab(QtWidgets.QStackedWidget):
         QtCore.pyqtSignal(dict, name="request_query_print_stats")
     )
 
-    request_back: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
-        name="request_back"
+    request_back_page: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        name="request_back_page"
     )
     request_change_page: typing.ClassVar[QtCore.pyqtSignal] = (
         QtCore.pyqtSignal(int, int, name="request_change_page")
@@ -89,7 +87,7 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.addWidget(self.numpadPage)
 
         self.file_data: Files = file_data
-        self.filesPage_widget = FilesPage(self, self.file_data)
+        self.filesPage_widget = FilesPage(self)
         self.addWidget(self.filesPage_widget)
 
         self.confirmPage_widget = ConfirmWidget(self)
@@ -102,6 +100,15 @@ class PrintTab(QtWidgets.QStackedWidget):
             lambda: self.change_page(self.indexOf(self.confirmPage_widget))
         )
         self.filesPage_widget.back_btn.clicked.connect(self.back_button)
+        self.filesPage_widget.request_file_info.connect(
+            self.file_data.on_request_fileinfo
+        )
+        self.file_data.fileinfo.connect(self.filesPage_widget.on_fileinfo)
+        self.filesPage_widget.request_file_list_refresh.connect(
+            self.file_data.request_file_list
+        )
+        self.file_data.on_file_list.connect(self.filesPage_widget.on_file_list)
+
         self.jobStatusPage_widget = JobStatusWidget(self)
         self.addWidget(self.jobStatusPage_widget)
 
@@ -167,7 +174,7 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.jobStatusPage_widget.tune_clicked.connect(
             lambda: self.change_page(self.indexOf(self.tune_page))
         )
-        self.tune_page.request_back.connect(self.back_button)
+        self.tune_page.request_back_page.connect(self.back_button)
         self.printer.extruder_update.connect(
             self.tune_page.on_extruder_temperature_change
         )
@@ -259,8 +266,8 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.sliderPage.value_selected.connect(callback)
         self.sliderPage.set_name(name)
         self.sliderPage.set_slider_position(current_value)
-        self.sliderPage.min_value = min_value
-        self.sliderPage.max_value = max_value
+        self.sliderPage.setMinimum(min_value)
+        self.sliderPage.setMaximum(max_value)
         self.change_page(self.indexOf(self.sliderPage))
 
     def paintEvent(self, a0: QtGui.QPaintEvent) -> None:
@@ -303,6 +310,6 @@ class PrintTab(QtWidgets.QStackedWidget):
 
     def back_button(self) -> None:
         """Goes back to the previous page"""
-        self.request_back.emit()
+        self.request_back_page.emit()
 
     def setupUI(self) -> None: ...
