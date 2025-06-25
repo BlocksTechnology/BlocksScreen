@@ -109,7 +109,6 @@ class SliderPage(QtWidgets.QWidget):
         """Setup the components for the widget"""
         self.setMinimumSize(QtCore.QSize(700, 410))
         self.setMaximumSize(QtCore.QSize(720, 420))
-
         sizePolicy = QtWidgets.QSizePolicy(
             QtWidgets.QSizePolicy.Policy.MinimumExpanding,
             QtWidgets.QSizePolicy.Policy.MinimumExpanding,
@@ -123,7 +122,7 @@ class SliderPage(QtWidgets.QWidget):
         self.setAutoFillBackground(False)
         self.setBackgroundRole(QtGui.QPalette.ColorRole.Window)
 
-        self.main_verticalLayout_1 = QtWidgets.QVBoxLayout(self)
+        self.main_verticalLayout_1 = QtWidgets.QVBoxLayout()
         self.main_verticalLayout_1.setSizeConstraint(
             QtWidgets.QLayout.SizeConstraint.SetDefaultConstraint
         )
@@ -131,12 +130,7 @@ class SliderPage(QtWidgets.QWidget):
         self.main_verticalLayout_1.setSpacing(6)
         self.main_verticalLayout_1.setObjectName("main_verticalLayout_1")
 
-        self.header_horizontalLayoutWidget = QtWidgets.QWidget(self)
-        self.header_horizontalLayoutWidget.setMinimumHeight(80)
-        self.header_horizontalLayoutWidget.setMaximumHeight(80)
-        self.header_horizontalLayout = QtWidgets.QHBoxLayout(
-            self.header_horizontalLayoutWidget
-        )
+        self.header_horizontalLayout = QtWidgets.QHBoxLayout()
 
         palette = QtGui.QPalette()
         palette.setColor(
@@ -146,19 +140,17 @@ class SliderPage(QtWidgets.QWidget):
         font = QtGui.QFont()
         font.setBold(True)
         font.setPointSize(22)
-        self.object_name_label = QtWidgets.QLabel(
-            self.header_horizontalLayoutWidget
-        )
+        self.object_name_label = QtWidgets.QLabel(self)
         self.object_name_label.setFont(font)
         self.object_name_label.setPalette(palette)
-        self.object_name_label.setMinimumSize(QtCore.QSize(self.width(), 80))
-        self.object_name_label.setMaximumSize(QtCore.QSize(self.width(), 80))
+        self.object_name_label.setMinimumSize(QtCore.QSize(self.width(), 60))
+        self.object_name_label.setMaximumSize(QtCore.QSize(self.width()- 60, 60))
         self.object_name_label.setAlignment(
             QtCore.Qt.AlignmentFlag.AlignHCenter
             | QtCore.Qt.AlignmentFlag.AlignVCenter
         )
 
-        self.back_button = IconButton(self.header_horizontalLayoutWidget)
+        self.back_button = IconButton(self)
         self.back_button.setPixmap(
             QtGui.QPixmap(":ui/media/btn_icons/back.svg")
         )
@@ -168,55 +160,49 @@ class SliderPage(QtWidgets.QWidget):
         self.header_horizontalLayout.addWidget(
             self.object_name_label,
             0,
-            QtCore.Qt.AlignmentFlag.AlignHCenter
-            | QtCore.Qt.AlignmentFlag.AlignVCenter,
         )
         self.header_horizontalLayout.addWidget(
             self.back_button,
             0,
-            QtCore.Qt.AlignmentFlag.AlignHCenter
-            | QtCore.Qt.AlignmentFlag.AlignVCenter,
-        )
-        self.main_verticalLayout_1.addWidget(
-            self.header_horizontalLayoutWidget,
-            0,
-            QtCore.Qt.AlignmentFlag.AlignHCenter
-            | QtCore.Qt.AlignmentFlag.AlignVCenter,
+            # QtCore.Qt.AlignmentFlag.AlignHCenter
+            # | QtCore.Qt.AlignmentFlag.AlignVCenter,
         )
 
+        self.main_verticalLayout_1.addLayout(self.header_horizontalLayout)
+
+        self.middle_content_layout = QtWidgets.QHBoxLayout()
         self.current_value_label = QtWidgets.QLabel(self)
         self.current_value_label.setFont(font)
         self.current_value_label.setPalette(palette)
         self.current_value_label.setMinimumSize(QtCore.QSize(self.width(), 80))
         self.current_value_label.setMaximumSize(
-            QtCore.QSize(self.width(), 200)
+            QtCore.QSize(self.width(), 300)
         )
         self.current_value_label.setAlignment(
             QtCore.Qt.AlignmentFlag.AlignHCenter
             | QtCore.Qt.AlignmentFlag.AlignVCenter
         )
-        self.main_verticalLayout_1.addWidget(
+        self.middle_content_layout.addWidget(
             self.current_value_label,
-            0,
-            QtCore.Qt.AlignmentFlag.AlignHCenter
-            | QtCore.Qt.AlignmentFlag.AlignVCenter,
+            1,
         )
-        self.horizontalLayout_1 = QtWidgets.QHBoxLayout()
+        self.middle_content_layout.setStretch(0, 1)
+        self.main_verticalLayout_1.addLayout(self.middle_content_layout)
+
+        self.slider_layout = QtWidgets.QHBoxLayout()
         self.decrease_button = IconButton(self)
         self.decrease_button.setMinimumSize(QtCore.QSize(80, 80))
         self.decrease_button.setMaximumSize(QtCore.QSize(80, 80))
         self.decrease_button.setProperty(
             name="icon_pixmap", value=self.decrease_button_icon
         )
-        self.horizontalLayout_1.addWidget(
+        self.slider_layout.addWidget(
             self.decrease_button,
             0,
-            QtCore.Qt.AlignmentFlag.AlignVCenter
-            | QtCore.Qt.AlignmentFlag.AlignHCenter,
         )
         self.slider = BlocksSlider(self)
         self.slider.setMinimumSize(QtCore.QSize(self.width() - 100 * 2, 100))
-        self.horizontalLayout_1.addWidget(
+        self.slider_layout.addWidget(
             self.slider,
             0,
             QtCore.Qt.AlignmentFlag.AlignVCenter
@@ -229,10 +215,9 @@ class SliderPage(QtWidgets.QWidget):
         self.increase_button.setMinimumSize(QtCore.QSize(80, 80))
         self.increase_button.setMaximumSize(QtCore.QSize(80, 80))
 
-        self.horizontalLayout_1.addWidget(
+        self.slider_layout.addWidget(
             self.increase_button,
             0,
-            QtCore.Qt.AlignmentFlag.AlignVCenter
-            | QtCore.Qt.AlignmentFlag.AlignHCenter,
         )
-        self.main_verticalLayout_1.addLayout(self.horizontalLayout_1)
+        self.main_verticalLayout_1.addLayout(self.slider_layout)
+        self.setLayout(self.main_verticalLayout_1)
