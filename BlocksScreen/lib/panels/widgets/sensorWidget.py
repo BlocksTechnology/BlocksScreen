@@ -46,7 +46,9 @@ class SensorWidget(QtWidgets.QWidget):
         )
         self._icon_label = None
         self._text_label = None
-        self._text: str = str(self.sensor_type.name) + ' Sensor ' + str(self.name)
+        self._text: str = (
+            str(self.sensor_type.name) + " Sensor " + str(self.name)
+        )
         self._item_rect: QtCore.QRect = QtCore.QRect()
         self.icon_pixmap_fp: QtGui.QPixmap = QtGui.QPixmap(
             ":/filament_related/media/btn_icons/filament_sensor_turn_on.svg"
@@ -118,7 +120,10 @@ class SensorWidget(QtWidgets.QWidget):
             _color = QtGui.QColor(204, 50, 50, 100)
         _brush = QtGui.QBrush()
         _brush.setColor(_color)
+
         _brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
+        pen = style_painter.pen()
+        pen.setStyle(QtCore.Qt.PenStyle.NoPen)
         if self._icon_label:
             self._icon_label.setPixmap(
                 self.icon_pixmap_fp
@@ -126,13 +131,15 @@ class SensorWidget(QtWidgets.QWidget):
                 else self.icon_pixmap_fnp
             )
 
-        style_painter.setBrush(_brush)
-        style_painter.drawRoundedRect(
+        background_rect = QtGui.QPainterPath()
+        background_rect.addRoundedRect(
             self.contentsRect().toRectF(),
             15,
             15,
             QtCore.Qt.SizeMode.AbsoluteSize,
         )
+        style_painter.setBrush(_brush)
+        style_painter.fillPath(background_rect, _brush)
         style_painter.end()
 
     @property
