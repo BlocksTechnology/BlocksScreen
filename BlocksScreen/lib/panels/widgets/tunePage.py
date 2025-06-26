@@ -8,8 +8,8 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 
 
 class TuneWidget(QtWidgets.QWidget):
-    request_back: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
-        name="request_back"
+    request_back_page: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        name="request_back_page"
     )
 
     request_sensorsPage: typing.ClassVar[QtCore.pyqtSignal] = (
@@ -43,7 +43,7 @@ class TuneWidget(QtWidgets.QWidget):
         self.setupUI()
         self.sensors_menu_btn.clicked.connect(self.request_sensorsPage.emit)
         self.tune_babystep_menu_btn.clicked.connect(self.request_bbpPage.emit)
-        self.tune_back_btn.clicked.connect(self.request_back)
+        self.tune_back_btn.clicked.connect(self.request_back_page)
         self.bed_display.clicked.connect(
             lambda: print(self.bed_display.text())
         )
@@ -86,18 +86,20 @@ class TuneWidget(QtWidgets.QWidget):
         self.run_gcode.emit(
             f"SET_HEATER_TEMPERATURE HEATER={name} TARGET={new_value}"
         )
+        print(f"SET_HEATER_TEMPERATURE HEATER={name} TARGET={new_value}")
 
     @QtCore.pyqtSlot(str, int, name="on_slider_change")
     def on_slider_change(self, name: str, new_value: int) -> None:
         if "speed" in name.lower():
             self.speed_factor_override = new_value / 100
-            print(self.speed_factor_override)
             self.run_gcode.emit(f"M220 S{new_value}")
+            print(f"M220 S{new_value}")
 
         if "fan" in name.lower():
             self.run_gcode.emit(
                 f"SET_FAN_SPEED FAN={name} SPEED={float(new_value / 100.0)}"
             )  # Between 0.0 and 1.0
+            print(f"SET_FAN_SPEED FAN={name} SPEED={float(new_value / 100.0)}")
 
     @QtCore.pyqtSlot(str, str, float, name="on_fan_update")
     @QtCore.pyqtSlot(str, str, int, name="on_fan_update")
@@ -115,7 +117,6 @@ class TuneWidget(QtWidgets.QWidget):
             if not self.tune_display_buttons.get(name, None):
                 _new_display_button = self.create_display_button(name)
                 _new_display_button.setParent(self)
-                _new_display_button.setMaximumSize(QtCore.QSize(150, 80))
                 if "blower" in name:
                     _new_display_button.icon_pixmap = QtGui.QPixmap(
                         ":/temperature_related/media/btn_icons/blower.svg"
@@ -167,7 +168,7 @@ class TuneWidget(QtWidgets.QWidget):
         """
         display_button = DisplayButton()
         display_button.setObjectName(str(name + "_display"))
-        display_button.setMinimumSize(QtCore.QSize(150, 60))
+        display_button.setMinimumSize(QtCore.QSize(150, 50))
         display_button.setMaximumSize(QtCore.QSize(150, 80))
         font = QtGui.QFont()
         font.setPointSize(16)
@@ -222,38 +223,34 @@ class TuneWidget(QtWidgets.QWidget):
 
     def setupUI(self) -> None:
         sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.Expanding,
-            QtWidgets.QSizePolicy.Policy.Expanding,
+            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
+            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
         )
         sizePolicy.setHorizontalStretch(1)
-        sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(self.sizePolicy().hasHeightForWidth())
+        sizePolicy.setVerticalStretch(1)
         self.setSizePolicy(sizePolicy)
         self.setMinimumSize(QtCore.QSize(710, 400))
         self.setMaximumSize(QtCore.QSize(720, 420))
         self.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
-        self.setStyleSheet(
-            "#BlocksPushButton{\n    font-color: rgb(255,255,255,255);\n}"
-        )
         self.tune_content = QtWidgets.QVBoxLayout(self)
+        self.tune_content.setContentsMargins(2, 0, 0, 0)
         self.tune_content.setObjectName("tune_content")
-
         self.tune_header = QtWidgets.QHBoxLayout()
-        self.tune_header.setSpacing(5)
         self.tune_header.setObjectName("tune_header")
-
         self.tune_title_label = QtWidgets.QLabel(parent=self)
-        self.tune_title_label.setMinimumSize(QtCore.QSize(0, 60))
-        self.tune_title_label.setMaximumSize(QtCore.QSize(16777215, 60))
+        self.tune_title_label.setMinimumSize(QtCore.QSize(0, 30))
+        self.tune_title_label.setMaximumSize(QtCore.QSize(16777215, 30))
         font = QtGui.QFont()
         font.setFamily("Momcake-Bold")
+
         font.setPointSize(22)
+        palette = self.tune_title_label.palette()
+        palette.setColor(palette.ColorRole.WindowText, QtGui.QColor("#FFFFFF"))
+
         self.tune_title_label.setFont(font)
+        self.tune_title_label.setPalette(palette)
         self.tune_title_label.setLayoutDirection(
             QtCore.Qt.LayoutDirection.RightToLeft
-        )
-        self.tune_title_label.setStyleSheet(
-            "background: transparent; color: white;"
         )
         self.tune_title_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self.tune_title_label.setObjectName("tune_title_label")
@@ -262,32 +259,24 @@ class TuneWidget(QtWidgets.QWidget):
             0,
         )
         self.tune_back_btn = IconButton(parent=self)
+        self.tune_back_btn.setObjectName("tune_back_btn")
         self.tune_back_btn.setMinimumSize(QtCore.QSize(60, 60))
         self.tune_back_btn.setMaximumSize(QtCore.QSize(60, 60))
         self.tune_back_btn.setFlat(True)
-        self.tune_back_btn.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/back.svg")
+        self.tune_back_btn.setPixmap(
+            QtGui.QPixmap(":/ui/media/btn_icons/back.svg")
         )
-        self.tune_back_btn.setObjectName("tune_back_btn")
         self.tune_header.addWidget(
             self.tune_back_btn,
             0,
         )
-
-        self.tune_content.addLayout(self.tune_header)
+        self.tune_content.addLayout(self.tune_header, 0)
         self.tune_menu_buttons = QtWidgets.QHBoxLayout()
         self.tune_menu_buttons.setObjectName("tune_menu_buttons")
         self.tune_babystep_menu_btn = BlocksCustomButton(parent=self)
         self.tune_babystep_menu_btn.setMinimumSize(QtCore.QSize(200, 60))
         self.tune_babystep_menu_btn.setMaximumSize(QtCore.QSize(250, 60))
-        font = QtGui.QFont()
-        font.setFamily("Momcake-Bold")
         font.setPointSize(18)
-        font.setStyleStrategy(QtGui.QFont.StyleStrategy.PreferAntialias)
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-        )
         sizePolicy.setHorizontalStretch(1)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(
@@ -305,9 +294,8 @@ class TuneWidget(QtWidgets.QWidget):
         )
         self.tune_babystep_menu_btn.setAutoDefault(False)
         self.tune_babystep_menu_btn.setFlat(True)
-        self.tune_babystep_menu_btn.setProperty(
-            "icon_pixmap",
-            QtGui.QPixmap(":/z_levelling/media/btn_icons/baby_step_icon.svg"),
+        self.tune_babystep_menu_btn.setPixmap(
+            QtGui.QPixmap(":/z_levelling/media/btn_icons/baby_step_icon.svg")
         )
         self.tune_babystep_menu_btn.setObjectName("tune_babystep_menu_btn")
         self.tune_menu_buttons.addWidget(
@@ -317,14 +305,8 @@ class TuneWidget(QtWidgets.QWidget):
         self.tune_change_filament_btn = BlocksCustomButton(parent=self)
         self.tune_change_filament_btn.setMinimumSize(QtCore.QSize(200, 60))
         self.tune_change_filament_btn.setMaximumSize(QtCore.QSize(250, 60))
-        font = QtGui.QFont()
-        font.setFamily("Momcake-Bold")
-        font.setPointSize(18)
         font.setStyleStrategy(QtGui.QFont.StyleStrategy.PreferAntialias)
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-        )
+
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(1)
         sizePolicy.setHeightForWidth(
@@ -339,11 +321,10 @@ class TuneWidget(QtWidgets.QWidget):
         )
         self.tune_change_filament_btn.setAutoDefault(False)
         self.tune_change_filament_btn.setFlat(True)
-        self.tune_change_filament_btn.setProperty(
-            "icon_pixmap",
+        self.tune_change_filament_btn.setPixmap(
             QtGui.QPixmap(
                 ":/filament_related/media/btn_icons/change_filament.svg"
-            ),
+            )
         )
         self.tune_change_filament_btn.setObjectName("tune_change_filament_btn")
         self.tune_menu_buttons.addWidget(
@@ -351,10 +332,6 @@ class TuneWidget(QtWidgets.QWidget):
             0,
         )
         self.sensors_menu_btn = IconButton(parent=self)
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.Fixed,
-            QtWidgets.QSizePolicy.Policy.Fixed,
-        )
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(
@@ -373,58 +350,45 @@ class TuneWidget(QtWidgets.QWidget):
         )
         self.sensors_menu_btn.setAutoDefault(False)
         self.sensors_menu_btn.setFlat(True)
-        self.sensors_menu_btn.setProperty(
-            "icon_pixmap",
+        self.sensors_menu_btn.setPixmap(
             QtGui.QPixmap(
                 ":/filament_related/media/btn_icons/filament_sensor.svg"
-            ),
+            )
         )
         self.sensors_menu_btn.setObjectName("sensors_menu_btn")
         self.tune_menu_buttons.addWidget(self.sensors_menu_btn)
-        self.tune_content.addLayout(self.tune_menu_buttons)
-
-        # vertical layout with horizontal
-
+        self.tune_content.addLayout(self.tune_menu_buttons, 0)
         self.tune_display_horizontal_parent_layout = QtWidgets.QHBoxLayout()
-        self.tune_display_horizontal_parent_layout.setStretch(0, 1)
-        self.tune_display_horizontal_parent_layout.setStretch(1, 1)
-        self.tune_display_horizontal_parent_layout.setStretch(1, 1)
-        self.tune_display_horizontal_parent_layout.addSpacing(1)
         self.tune_display_horizontal_parent_layout.setContentsMargins(
-            2, 2, 2, 2
+            2, 0, 2, 2
         )
-        self.tune_display_horizontal_parent_layout.setSpacing(5)
         self.tune_display_horizontal_parent_layout.setObjectName(
             "tune_display_horizontal_parent_layout"
         )
-
         self.tune_display_vertical_child_layout_1 = QtWidgets.QVBoxLayout()
         self.tune_display_vertical_child_layout_1.setContentsMargins(
-            2, 2, 2, 2
+            2, 0, 2, 2
         )
-        self.tune_display_vertical_child_layout_1.setSpacing(10)
+        self.tune_display_vertical_child_layout_1.setSpacing(5)
         self.tune_display_vertical_child_layout_1.setObjectName(
             "tune_display_vertical_parent_layout"
         )
-
         self.tune_display_vertical_child_layout_2 = QtWidgets.QVBoxLayout()
         self.tune_display_vertical_child_layout_2.setContentsMargins(
-            2, 2, 2, 2
+            2, 0, 2, 2
         )
-        self.tune_display_vertical_child_layout_2.setSpacing(10)
+        self.tune_display_vertical_child_layout_2.setSpacing(5)
         self.tune_display_vertical_child_layout_2.setObjectName(
             "tune_display_vertical_parent_layout_2"
         )
-
         self.tune_display_vertical_child_layout_3 = QtWidgets.QVBoxLayout()
         self.tune_display_vertical_child_layout_3.setContentsMargins(
-            2, 2, 2, 2
+            2, 0, 2, 2
         )
-        self.tune_display_vertical_child_layout_3.setSpacing(10)
+        self.tune_display_vertical_child_layout_3.setSpacing(5)
         self.tune_display_vertical_child_layout_3.setObjectName(
             "tune_display_vertical_parent_layout_3"
         )
-
         self.tune_display_horizontal_parent_layout.addLayout(
             self.tune_display_vertical_child_layout_1
         )
@@ -434,55 +398,44 @@ class TuneWidget(QtWidgets.QWidget):
         self.tune_display_horizontal_parent_layout.addLayout(
             self.tune_display_vertical_child_layout_3
         )
-        self.bed_display = DisplayButton(parent=self)
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.Expanding,
-            QtWidgets.QSizePolicy.Policy.Expanding,
+        self.tune_display_horizontal_parent_layout.setSpacing(0)
+        self.tune_display_horizontal_parent_layout.setContentsMargins(
+            0, 0, 0, 0
         )
+        self.bed_display = DisplayButton(parent=self)
         sizePolicy.setHorizontalStretch(1)
         sizePolicy.setVerticalStretch(1)
         sizePolicy.setHeightForWidth(
             self.bed_display.sizePolicy().hasHeightForWidth()
         )
         self.bed_display.setSizePolicy(sizePolicy)
-        self.bed_display.setMinimumSize(QtCore.QSize(150, 80))
+        self.bed_display.setMinimumSize(QtCore.QSize(150, 50))
         self.bed_display.setMaximumSize(QtCore.QSize(150, 80))
-        font = QtGui.QFont()
         font.setPointSize(16)
         self.bed_display.setFont(font)
         self.bed_display.setText("")
         self.bed_display.setFlat(True)
-        self.bed_display.setProperty(
-            "icon_pixmap",
+        self.bed_display.setPixmap(
             QtGui.QPixmap(
                 ":/temperature_related/media/btn_icons/temperature_plate.svg"
-            ),
+            )
         )
         self.bed_display.setObjectName("bed_display")
         self.tune_display_vertical_child_layout_1.addWidget(self.bed_display)
         self.extruder_display = DisplayButton(parent=self)
-        font = QtGui.QFont()
-        font.setPointSize(16)
         self.extruder_display.setFont(font)
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-        )
-        sizePolicy.setHorizontalStretch(0)
-        sizePolicy.setVerticalStretch(1)
         sizePolicy.setHeightForWidth(
             self.extruder_display.sizePolicy().hasHeightForWidth()
         )
         self.extruder_display.setSizePolicy(sizePolicy)
-        self.extruder_display.setMinimumSize(QtCore.QSize(150, 80))
+        self.extruder_display.setMinimumSize(QtCore.QSize(150, 50))
         self.extruder_display.setMaximumSize(QtCore.QSize(150, 80))
         self.extruder_display.setText("")
         self.extruder_display.setFlat(True)
-        self.extruder_display.setProperty(
-            "icon_pixmap",
+        self.extruder_display.setPixmap(
             QtGui.QPixmap(
                 ":/temperature_related/media/btn_icons/temperature.svg"
-            ),
+            )
         )
         self.extruder_display.setObjectName("extruder_display")
         self.tune_display_vertical_child_layout_1.addWidget(
@@ -490,38 +443,31 @@ class TuneWidget(QtWidgets.QWidget):
         )
         self.speed_display = DisplayButton(parent=self)
         self.speed_display.setFont(font)
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-        )
-        sizePolicy.setHorizontalStretch(0)
-        sizePolicy.setVerticalStretch(1)
         sizePolicy.setHeightForWidth(
             self.speed_display.sizePolicy().hasHeightForWidth()
         )
         self.speed_display.setSizePolicy(sizePolicy)
-        self.speed_display.setMinimumSize(QtCore.QSize(150, 80))
+        self.speed_display.setMinimumSize(QtCore.QSize(150, 50))
         self.speed_display.setMaximumSize(QtCore.QSize(150, 80))
-        font = QtGui.QFont()
-        font.setStyleStrategy(QtGui.QFont.StyleStrategy.PreferAntialias)
-        font.setPointSize(16)
         self.speed_display.setFont(font)
-        self.speed_display.setText("")
         self.speed_display.setFlat(True)
-        self.speed_display.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/motion/media/btn_icons/speed.svg")
+        self.speed_display.setPixmap(
+            QtGui.QPixmap(":/motion/media/btn_icons/speed.svg")
         )
         self.speed_display.setObjectName("speed_display")
         self.tune_display_vertical_child_layout_3.addWidget(self.speed_display)
-        self.tune_content.addLayout(self.tune_display_horizontal_parent_layout)
-
+        self.tune_content.addLayout(
+            self.tune_display_horizontal_parent_layout, 1
+        )
+        self.tune_display_horizontal_parent_layout.setStretch(0, 0)
+        self.tune_display_horizontal_parent_layout.setStretch(1, 0)
+        self.tune_display_horizontal_parent_layout.setStretch(2, 1)
         self.tune_content.setStretch(0, 0)
         self.tune_content.setStretch(1, 0)
-        self.tune_content.setStretch(2, 1)
-
-        self.tune_content.setSpacing(10)
+        self.tune_content.setStretch(2, 2)
+        self.tune_content.setContentsMargins(2, 0, 2, 0)
         self.setLayout(self.tune_content)
-
+        self.setContentsMargins(2, 2, 2, 2)
         self.retranslateUI()
 
     def retranslateUI(self):
