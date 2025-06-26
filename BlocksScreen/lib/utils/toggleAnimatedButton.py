@@ -1,4 +1,5 @@
 import enum
+import typing
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 
@@ -6,6 +7,10 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
     class State(enum.Enum):
         ON = True
         OFF = False
+
+    stateChange: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        State, name="stateChange"
+    )
 
     def __init__(self, parent) -> None:
         super().__init__(parent)
@@ -86,6 +91,7 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
     def state(self, new_state: State) -> None:
         self._state = new_state
         if self.isVisible():
+            self.stateChange.emit(self._state)
             self.setup_animation()
 
         self.update()
@@ -147,7 +153,8 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
 
     def setPixmap(self, pixmap: QtGui.QPixmap) -> None:
         self.icon_pixmap = pixmap
-        self.repaint()
+        # self.repaint()
+        self.update()
 
     @QtCore.pyqtSlot(name="clicked")
     def setup_animation(self) -> None:
@@ -172,6 +179,7 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
                     self._state = ToggleAnimatedButton.State(
                         not self._state.value
                     )
+                    self.stateChange.emit(self._state)
                     super().mousePressEvent(e)
         e.ignore()
 
@@ -203,6 +211,7 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
         painter.fillPath(self.trailPath, bg_color)
         painter.fillPath(self.handlePath, self.handleColor)
         if not self.icon_pixmap.isNull():
+            painter.setBackgroundMode(QtCore.Qt.BGMode.TransparentMode)
             _icon_rect = QtCore.QRectF(
                 self.handle_ellipseRect.left() * 2.8,
                 self.handle_ellipseRect.top() * 2.8,
