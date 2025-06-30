@@ -77,7 +77,7 @@ class TuneWidget(QtWidgets.QWidget):
                 int(self.speed_factor_override * 100),
                 self.on_slider_change,
                 10,
-                500,
+                300,
             )
         )
 
@@ -129,19 +129,26 @@ class TuneWidget(QtWidgets.QWidget):
                     {
                         name: {
                             "display_button": _new_display_button,
-                            "speed": -1,
+                            "speed": 0,
                         }
                     }
                 )
                 if name in ("fan", "fan_generic"):
                     _new_display_button.clicked.connect(
-                        partial(
-                            self.request_sliderPage.emit,
+                        lambda: self.request_sliderPage[
+                            str, int, "PyQt_PyObject", int, int
+                        ].emit(
                             str(name),
-                            self.tune_display_buttons.get(name).get(  # type:ignore
-                                "speed", 0
+                            int(
+                                round(
+                                    self.tune_display_buttons.get(name).get(  # type:ignore
+                                        "speed", 0
+                                    )
+                                )
                             ),
                             self.on_slider_change,
+                            0,
+                            100,
                         )
                     )
                 else:
@@ -152,9 +159,9 @@ class TuneWidget(QtWidgets.QWidget):
             _display_button = self.tune_display_buttons.get(name)
             if not _display_button:
                 return
-            _display_button.update({"speed": f"{new_value * 100:.0f}"})
+            _display_button.update({"speed": int(round(new_value * 100))})
             _display_button.get("display_button").setText(
-                f"{new_value * 100:.0f}"
+                f"{new_value * 100:.0f}%"
             )
 
     def create_display_button(self, name: str) -> DisplayButton:

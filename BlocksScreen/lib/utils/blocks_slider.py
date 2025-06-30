@@ -98,7 +98,7 @@ class BlocksSlider(QtWidgets.QSlider):
         # Clip the opt rect inside, so the handle and
         # groove doesn't exceed the limits
         opt.rect = opt.rect.adjusted(
-            12, 10, -18, 20
+            30, 10, -35, 20
         )  # This is a bit hardcoded
 
         self._groove_rect = _style.subControlRect(
@@ -116,19 +116,7 @@ class BlocksSlider(QtWidgets.QSlider):
         )
 
         self._handle_rect.setSize(QtCore.QSize(20, 50))
-        # self.style().subControlRect(
-        #     QtWidgets.QStyle.ComplexControl.CC_Slider, opt, QtWidgets.QStyle.SubControl.SC_SliderGroove or QtWidgets.QStyle.SubControl.SC_SliderHandle
-        # )
 
-        # if opt.state & QtWidgets.QStyle.StateFlag.State_Sunken:
-        #     # give the track a color
-        #     ...
-        # elif opt.state & QtWidgets.QStyle.StateFlag.State_MouseOver:
-        #     # Give another color when the mouse is over the track
-        #     ...
-        # else:
-        #     # give a default color for the track
-        #     ...
         _groove_x = (self.width() - self._groove_rect.width()) // 2
         _groove_y = ((self.height() - self._groove_rect.height()) // 2) - 10
 
