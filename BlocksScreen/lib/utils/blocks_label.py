@@ -34,7 +34,7 @@ class BlocksLabel(QtWidgets.QLabel):
 
     def setPixmap(self, a0: QtGui.QPixmap) -> None:
         self.icon_pixmap = a0
-        self.repaint()
+        self.update()
 
     def setText(self, text: str) -> None:
         self._text = text
