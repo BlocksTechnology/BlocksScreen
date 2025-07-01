@@ -20,9 +20,7 @@ class SliderPage(QtWidgets.QWidget):
 
     def __init__(self, parent) -> None:
         super().__init__(parent)
-
         self.name: str = ""
-
         self.increase_button_icon = QtGui.QPixmap(
             ":/arrow_icons/media/btn_icons/right_arrow.svg"
         )
@@ -40,7 +38,6 @@ class SliderPage(QtWidgets.QWidget):
         self.back_button.clicked.connect(self.request_back.emit)
         self.back_button.clicked.connect(self.value_selected.disconnect)
         self.slider.valueChanged.connect(self.on_slider_value_change)
-
         self.increase_button.pressed.connect(
             lambda: (
                 self.slider.setSliderPosition(self.slider.sliderPosition() + 5)
@@ -61,17 +58,15 @@ class SliderPage(QtWidgets.QWidget):
     def set_name(self, name: str) -> None:
         """Sets the header name for the page"""
         self.name = name
-        self.update()
 
     def set_slider_position(self, value: int) -> None:
         """Set slider position from value, updates the widget"""
         self.slider.setSliderPosition(int(value))
-        self.update()
 
-    def setMinimum(self, value: int) -> None:
+    def set_slider_minimum(self, value: int) -> None:
         self.slider.setMinimum(value)
 
-    def setMaximum(self, value: int) -> None:
+    def set_slider_maximum(self, value: int) -> None:
         self.slider.setMaximum(value)
 
     def paintEvent(self, a0: QtGui.QPaintEvent) -> None:
@@ -82,6 +77,7 @@ class SliderPage(QtWidgets.QWidget):
         painter.setRenderHint(painter.RenderHint.TextAntialiasing)
         painter.drawPixmap(self.rect(), self.background, self.rect())
         self.current_value_label.setText(str(self.slider.value()) + " " + "%")
+        self.object_name_label.setText(str(self.name))
         # if "speed" in self.name.lower():
         #     # REFACTOR: Change this, so it's not hardcoded to be with objects named "speed. "
         #     # Range should increase however if a flag is set, if the maximum is above 100
@@ -177,7 +173,6 @@ class SliderPage(QtWidgets.QWidget):
         )
         self.middle_content_layout.setStretch(0, 1)
         self.main_verticalLayout_1.addLayout(self.middle_content_layout)
-
         self.slider_layout = QtWidgets.QHBoxLayout()
         self.decrease_button = IconButton(self)
         self.decrease_button.setMinimumSize(QtCore.QSize(80, 80))
