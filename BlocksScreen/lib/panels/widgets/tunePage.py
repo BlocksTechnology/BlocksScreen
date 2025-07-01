@@ -1,10 +1,10 @@
 import typing
-from functools import partial
 
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.display_button import DisplayButton
 from lib.utils.icon_button import IconButton
 from PyQt6 import QtCore, QtGui, QtWidgets
+from helper_methods import normalize
 
 
 class TuneWidget(QtWidgets.QWidget):
@@ -86,7 +86,6 @@ class TuneWidget(QtWidgets.QWidget):
         self.run_gcode.emit(
             f"SET_HEATER_TEMPERATURE HEATER={name} TARGET={new_value}"
         )
-        print(f"SET_HEATER_TEMPERATURE HEATER={name} TARGET={new_value}")
 
     @QtCore.pyqtSlot(str, int, name="on_slider_change")
     def on_slider_change(self, name: str, new_value: int) -> None:
@@ -95,9 +94,14 @@ class TuneWidget(QtWidgets.QWidget):
             self.run_gcode.emit(f"M220 S{new_value}")
 
         if "fan" in name.lower():
-            self.run_gcode.emit(
-                f"SET_FAN_SPEED FAN={name} SPEED={float(new_value / 100.0)}"
-            )  # Between 0.0 and 1.0
+            if name.lower() == "fan":
+                self.run_gcode.emit(
+                    f"M106 S{int(round((normalize(float(new_value / 100), 0.0, 1.0, 0, 255))))}"
+                )
+            else:
+                self.run_gcode.emit(
+                    f"SET_FAN_SPEED FAN={name} SPEED={float(new_value / 100.00)}"
+                )  # Between 0.0 and 1.0
 
     @QtCore.pyqtSlot(str, str, float, name="on_fan_update")
     @QtCore.pyqtSlot(str, str, int, name="on_fan_update")
