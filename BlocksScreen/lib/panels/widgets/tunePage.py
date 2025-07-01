@@ -93,13 +93,11 @@ class TuneWidget(QtWidgets.QWidget):
         if "speed" in name.lower():
             self.speed_factor_override = new_value / 100
             self.run_gcode.emit(f"M220 S{new_value}")
-            print(f"M220 S{new_value}")
 
         if "fan" in name.lower():
             self.run_gcode.emit(
                 f"SET_FAN_SPEED FAN={name} SPEED={float(new_value / 100.0)}"
             )  # Between 0.0 and 1.0
-            print(f"SET_FAN_SPEED FAN={name} SPEED={float(new_value / 100.0)}")
 
     @QtCore.pyqtSlot(str, str, float, name="on_fan_update")
     @QtCore.pyqtSlot(str, str, int, name="on_fan_update")

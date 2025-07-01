@@ -1,27 +1,35 @@
+import typing
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 
 class BlocksSlider(QtWidgets.QSlider):
+    valueChanged: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        int, name="valueChanged"
+    )
+
     def __init__(self, parent) -> None:
         super().__init__(parent)
+        self.setAttribute(QtCore.Qt.WidgetAttribute.WA_AcceptTouchEvents, True)
         self.highlight_color = "#2AC9F9"
         self.gradient_pos = QtCore.QPointF(0.0, 0.0)
         self.setMinimumSize(300, 130)
         self.setMaximumSize(400, 130)
+
         self.setMouseTracking(True)
         self.setTracking(True)
+        self.setTabletTracking(True)
+
         self.setOrientation(QtCore.Qt.Orientation.Horizontal)
-        self.setTickInterval(20)
         self.setMinimum(0)
         self.setMaximum(100)
 
     def setMinimum(self, a0: int) -> None:
         super().setMinimum(a0)
-        self.update()
+        return self.update()
 
     def setMaximum(self, a0: int) -> None:
         super().setMaximum(a0)
-        self.update()
+        return self.update()
 
     def setOrientation(self, a0: QtCore.Qt.Orientation) -> None:
         return super().setOrientation(a0)
@@ -33,26 +41,21 @@ class BlocksSlider(QtWidgets.QSlider):
         ):
             self.setSliderDown(True)
             ev.accept()
-        else:
-            return super().mousePressEvent(ev)
 
     def mouseReleaseEvent(self, ev: QtGui.QMouseEvent) -> None:
         """Handle mouse release events"""
         if self.isSliderDown():
             self.setSliderDown(False)
-        return super().mouseReleaseEvent(ev)
+            self.valueChanged.emit(self.value())
+            ev.accept()
 
     def mouseMoveEvent(self, ev: QtGui.QMouseEvent) -> None:
         """Handle mouse move events"""
-        opt = QtWidgets.QStyleOptionSlider()
-        self.initStyleOption(opt)
         if self.isSliderDown():
             self._set_slider_pos(ev.position().toPoint().toPointF())
             self.gradient_pos = ev.position().toPoint().toPointF()
             self.update()
             ev.accept()
-        else:
-            return super().mouseMoveEvent(ev)
 
     def hit_test(self, pos: QtCore.QPointF) -> bool:
         """Hit test to allow dragging larger handle area
@@ -70,6 +73,7 @@ class BlocksSlider(QtWidgets.QSlider):
     def _set_slider_pos(self, pos: QtCore.QPointF):
         min_val = self.minimum()
         max_val = self.maximum()
+
         if self.orientation() == QtCore.Qt.Orientation.Horizontal:
             slider_length = self._groove_rect.width()
             slider_start = self._groove_rect.x()
@@ -86,9 +90,13 @@ class BlocksSlider(QtWidgets.QSlider):
                 min_val
                 + (max_val - min_val) * (pos_y - slider_start) / slider_length
             )
-        self.setSliderPosition(int(round(new_val)))
         self.setValue(int(round(new_val)))
         self.update()
+
+    def setSliderPosition(self, value) -> None:
+        if self.isVisible():
+            self.valueChanged.emit(value)
+        super().setSliderPosition(value)
 
     def paintEvent(self, ev: QtGui.QPaintEvent) -> None:
         opt = QtWidgets.QStyleOptionSlider()
@@ -202,7 +210,6 @@ class BlocksSlider(QtWidgets.QSlider):
             y1 = self._groove_rect.bottom()
             y2 = y1 + 15  # tick length
             label = str(v) + "%"
-
             text_w = fm.horizontalAdvance(label)
             text_h = fm.ascent()
             text_x = x - text_w // 2
