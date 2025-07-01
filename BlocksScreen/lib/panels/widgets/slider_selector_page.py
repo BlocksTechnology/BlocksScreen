@@ -40,18 +40,15 @@ class SliderPage(QtWidgets.QWidget):
         self.back_button.clicked.connect(self.request_back.emit)
         self.back_button.clicked.connect(self.value_selected.disconnect)
         self.slider.valueChanged.connect(self.on_slider_value_change)
-        # self.slider.valueSelected.connect(self.on_slider_value_change)
 
         self.increase_button.pressed.connect(
             lambda: (
                 self.slider.setSliderPosition(self.slider.sliderPosition() + 5)
-                and self.on_slider_value_change()
             )
         )
         self.decrease_button.pressed.connect(
             lambda: (
                 self.slider.setSliderPosition(self.slider.sliderPosition() - 5)
-                and self.on_slider_value_change()
             )
         )
         self.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
@@ -60,7 +57,6 @@ class SliderPage(QtWidgets.QWidget):
     def on_slider_value_change(self, value) -> None:
         """Handles slider position changes"""
         self.value_selected.emit(self.name, value)
-        print(f"Value changeddd = {value}")
 
     def set_name(self, name: str) -> None:
         """Sets the header name for the page"""
