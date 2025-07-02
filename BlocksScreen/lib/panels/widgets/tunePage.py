@@ -25,8 +25,8 @@ class TuneWidget(QtWidgets.QWidget):
         name="request_sliderPage",
     )
     request_numpad: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
-        [str, float, "PyQt_PyObject"],
-        [str, float, "PyQt_PyObject", int, int],
+        [str, int, "PyQt_PyObject"],
+        [str, int, "PyQt_PyObject", int, int],
         name="request_numpad",
     )
     run_gcode: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
@@ -49,24 +49,24 @@ class TuneWidget(QtWidgets.QWidget):
         )
         self.bed_display.clicked.connect(
             lambda: self.request_numpad[
-                str, float, "PyQt_PyObject", int, int
+                str, int, "PyQt_PyObject", int, int
             ].emit(
                 "Bed",
-                self.bed_target,
+                int(round(self.bed_target)),
                 self.on_numpad_change,
                 0,
-                120,
+                120, # TODO: Get this value from printer objects
             )
         )
         self.extruder_display.clicked.connect(
             lambda: self.request_numpad[
-                str, float, "PyQt_PyObject", int, int
+                str, int, "PyQt_PyObject", int, int
             ].emit(
                 "Extruder",
-                self.extruder_target,
+                int(round(self.extruder_target)),
                 self.on_numpad_change,
                 0,
-                300,
+                300, # TODO: Get this value from printer objects
             )
         )
         self.speed_display.clicked.connect(
@@ -83,9 +83,10 @@ class TuneWidget(QtWidgets.QWidget):
 
     @QtCore.pyqtSlot(str, int, name="on_numpad_change")
     def on_numpad_change(self, name: str, new_value: int) -> None:
-        self.run_gcode.emit(
-            f"SET_HEATER_TEMPERATURE HEATER={name} TARGET={new_value}"
-        )
+        # self.run_gcode.emit(
+        #     f"SET_HEATER_TEMPERATURE HEATER={name} TARGET={new_value}"
+        # )
+        print(f"SET_HEATER_TEMPERATURE HEATER={name} TARGET={new_value}")
 
     @QtCore.pyqtSlot(str, int, name="on_slider_change")
     def on_slider_change(self, name: str, new_value: int) -> None:
@@ -97,11 +98,11 @@ class TuneWidget(QtWidgets.QWidget):
             if name.lower() == "fan":
                 self.run_gcode.emit(
                     f"M106 S{int(round((normalize(float(new_value / 100), 0.0, 1.0, 0, 255))))}"
-                )
+                )  # [0, 255] Range
             else:
                 self.run_gcode.emit(
                     f"SET_FAN_SPEED FAN={name} SPEED={float(new_value / 100.00)}"
-                )  # Between 0.0 and 1.0
+                )  # [0.0, 1.0] Range
 
     @QtCore.pyqtSlot(str, str, float, name="on_fan_update")
     @QtCore.pyqtSlot(str, str, int, name="on_fan_update")

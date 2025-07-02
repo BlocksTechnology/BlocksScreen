@@ -198,15 +198,18 @@ class PrintTab(QtWidgets.QStackedWidget):
             str, int, "PyQt_PyObject", int, int
         ].connect(self.on_slidePage_request)
         self.tune_page.request_numpad[
-            str, float, "PyQt_PyObject", int, int
+            str, int, "PyQt_PyObject", int, int
         ].connect(self.on_numpad_request)
         self.tune_page.request_numpad[
             str,
-            float,
+            int,
             "PyQt_PyObject",
         ].connect(self.on_numpad_request)
         self.tune_page.request_bbpPage.connect(
             lambda: self.change_page(self.indexOf(self.babystepPage))
+        )
+        self.tune_page.request_sensorsPage.connect(
+            lambda: self.change_page(self.indexOf(self.sensorsPanel))
         )
 
         self.sensorsPanel = SensorsWindow(self)
@@ -215,9 +218,7 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.printer.request_object_subscription_signal.connect(
             self.sensorsPanel.handle_available_fil_sensors
         )
-        self.sensorsPanel.panel.fs_back_button.clicked.connect(
-            self.back_button
-        )
+        self.sensorsPanel.request_back.connect(self.back_button)
         self.sensorsPanel.run_gcode_signal.connect(self.ws.api.run_gcode)
 
         self.printer.filament_motion_sensor_update.connect(
@@ -232,9 +233,9 @@ class PrintTab(QtWidgets.QStackedWidget):
 
         self.run_gcode_signal.connect(self.ws.api.run_gcode)
 
-    @QtCore.pyqtSlot(str, float, "PyQt_PyObject", name="on_numpad_request")
+    @QtCore.pyqtSlot(str, int, "PyQt_PyObject", name="on_numpad_request")
     @QtCore.pyqtSlot(
-        str, float, "PyQt_PyObject", int, int, name="on_numpad_request"
+        str, int, "PyQt_PyObject", int, int, name="on_numpad_request"
     )
     def on_numpad_request(
         self,
@@ -265,9 +266,9 @@ class PrintTab(QtWidgets.QStackedWidget):
     ) -> None:
         self.sliderPage.value_selected.connect(callback)
         self.sliderPage.set_name(name)
-        self.sliderPage.set_slider_position(current_value)
-        self.sliderPage.setMinimum(min_value)
-        self.sliderPage.setMaximum(max_value)
+        self.sliderPage.set_slider_position(int(current_value))
+        self.sliderPage.set_slider_minimum(min_value)
+        self.sliderPage.set_slider_maximum(max_value)
         self.change_page(self.indexOf(self.sliderPage))
 
     def paintEvent(self, a0: QtGui.QPaintEvent) -> None:
