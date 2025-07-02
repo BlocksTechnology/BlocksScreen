@@ -1,7 +1,8 @@
 from functools import partial
-from PyQt6 import QtCore, QtGui, QtWidgets
+
 from lib.utils.icon_button import IconButton
 from lib.utils.numpad_button import NumpadButton
+from PyQt6 import QtCore, QtGui, QtWidgets
 
 
 class CustomNumpad(QtWidgets.QWidget):
@@ -15,84 +16,53 @@ class CustomNumpad(QtWidgets.QWidget):
         parent,
     ) -> None:
         super().__init__(parent)
-
         self.setupUI()
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_AcceptTouchEvents, True)
         self.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
-
-        self.current_value: int = 0
+        self.current_value: str = "0"
         self.name: str = ""
         self.min_value: int = 0
         self.max_value: int = 100
-
-        self.numpad_0.clicked.connect(partial(self.value_inserted, 0))
-        self.numpad_1.clicked.connect(partial(self.value_inserted, 1))
-        self.numpad_2.clicked.connect(partial(self.value_inserted, 2))
-        self.numpad_3.clicked.connect(partial(self.value_inserted, 3))
-        self.numpad_4.clicked.connect(partial(self.value_inserted, 4))
-        self.numpad_5.clicked.connect(partial(self.value_inserted, 5))
-        self.numpad_6.clicked.connect(partial(self.value_inserted, 6))
-        self.numpad_7.clicked.connect(partial(self.value_inserted, 7))
-        self.numpad_8.clicked.connect(partial(self.value_inserted, 8))
-        self.numpad_9.clicked.connect(partial(self.value_inserted, 9))
-
-        self.numpad_enter.clicked.connect(
-            partial(self.value_inserted, "enter")
-        )
+        self.numpad_0.clicked.connect(lambda: self.value_inserted("0"))
+        self.numpad_1.clicked.connect(lambda: self.value_inserted("1"))
+        self.numpad_2.clicked.connect(lambda: self.value_inserted("2"))
+        self.numpad_3.clicked.connect(lambda: self.value_inserted("3"))
+        self.numpad_4.clicked.connect(lambda: self.value_inserted("4"))
+        self.numpad_5.clicked.connect(lambda: self.value_inserted("5"))
+        self.numpad_6.clicked.connect(lambda: self.value_inserted("6"))
+        self.numpad_7.clicked.connect(lambda: self.value_inserted("7"))
+        self.numpad_8.clicked.connect(lambda: self.value_inserted("8"))
+        self.numpad_9.clicked.connect(lambda: self.value_inserted("9"))
+        self.numpad_enter.clicked.connect(lambda: self.value_inserted("enter"))
         self.numpad_enter.clicked.connect(self.value_selected.disconnect)
-        self.numpad_clear.clicked.connect(
-            partial(self.value_inserted, "clear")
-        )
+        self.numpad_clear.clicked.connect(lambda: self.value_inserted("clear"))
         self.numpad_back_btn.clicked.connect(self.back_button)
 
-    def value_inserted(self, value: int | str) -> None:
-        if isinstance(value, int):
-            self.current_value = self.current_value + value
-            self.inserted_value.setText(str(self.current_value))
-        elif isinstance(value, str):
-            if "enter" in value and str(self.current_value).isnumeric():
-                self.value_selected[str, int].emit(
-                    self.name, int(self.current_value)
-                )
-                self.request_back.emit()
+    def value_inserted(self, value: str) -> None:
+        """Handle number insertion on the numpad
 
-            elif "clear" in value:
-                self.current_value = int(
-                    str(self.current_value)[: len(str(self.current_value)) - 1]
-                )
-                self.inserted_value.setText(str(self.current_value))
+        Args:
+            value (int | str): value
+        """
+        if value.isnumeric():
+            self.current_value = str(self.current_value) + str(value)
+            self.inserted_value.setText(str(self.current_value))
+
+        if "enter" in value and str(self.current_value).isnumeric():
+            self.value_selected[str, int].emit(
+                self.name, int(self.current_value)
+            )
+            self.request_back.emit()
+
+        elif "clear" in value:
+            self.current_value = self.current_value[
+                : len(self.current_value) - 1
+            ]
+
+            self.inserted_value.setText(str(self.current_value))
 
     def back_button(self):
-        """Controls what the numpad page does when the back button is pressed."""
         self.request_back.emit()
-
-    @QtCore.pyqtSlot(
-        int,
-        str,
-        str,
-        "PyQt_PyObject",
-        QtWidgets.QStackedWidget,
-        name="call_numpad",
-    )
-    def call_numpad(
-        self,
-        global_panel_index: int,
-        printer_object: str,
-        current_temperature: str,
-        callback_slot,
-        caller: QtWidgets.QStackedWidget,
-    ) -> None:
-        self.caller_panel = caller
-
-        if callable(callback_slot):
-            self.slot_method = callback_slot
-            if "fan" in printer_object:
-                self.value_selected[str, float].connect(callback_slot)  # type: ignore
-            else:
-                self.value_selected[str, int].connect(callback_slot)  # type: ignore
-
-        # * Reset the displayed temperature
-        self.inserted_value.setText(current_temperature)
 
     def set_name(self, name: str) -> None:
         """Sets the header name for the page"""
@@ -101,7 +71,7 @@ class CustomNumpad(QtWidgets.QWidget):
         self.update()
 
     def set_value(self, value: int) -> None:
-        self.current_value = value
+        self.current_value = str(value)
         self.inserted_value.setText(str(value))
 
     def set_min_value(self, min_value: int) -> None:
@@ -154,10 +124,11 @@ class CustomNumpad(QtWidgets.QWidget):
         font = QtGui.QFont()
         font.setPointSize(25)
         self.numpad_title.setFont(font)
-        self.numpad_title.setStyleSheet(
-            "background: transparent;\n"
-            "                                                                color: white;"
-        )
+        self.numpad_title.setAutoFillBackground(False)
+        palette = QtGui.QPalette()
+        palette.setColor(palette.ColorRole.Window, QtGui.QColor("#FFFFFF00"))
+        palette.setColor(palette.ColorRole.WindowText, QtGui.QColor("#FFFFFF"))
+        self.numpad_title.setPalette(palette)
         self.numpad_title.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self.numpad_title.setObjectName("numpad_title")
         self.gridLayout.addWidget(self.numpad_title, 0, 0, 1, 1)
@@ -198,14 +169,11 @@ class CustomNumpad(QtWidgets.QWidget):
         self.inserted_value.setMinimumSize(QtCore.QSize(500, 0))
         self.inserted_value.setMaximumSize(QtCore.QSize(16777215, 50))
         font = QtGui.QFont()
-        font.setFamily("Modern")
-        font.setPointSize(18)
+        font.setFamily("Momcake-Bold")
+        font.setPointSize(20)
         self.inserted_value.setFont(font)
         self.inserted_value.setAutoFillBackground(False)
-        self.inserted_value.setStyleSheet(
-            "color: white;\n"
-            "                                                        "
-        )
+        self.inserted_value.setPalette(palette)
         self.inserted_value.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
         self.inserted_value.setFrameShadow(QtWidgets.QFrame.Shadow.Sunken)
         self.inserted_value.setLineWidth(0)
@@ -253,7 +221,7 @@ class CustomNumpad(QtWidgets.QWidget):
         self.numpad_6.setSizePolicy(sizePolicy)
         self.numpad_6.setMinimumSize(QtCore.QSize(150, 63))
         font = QtGui.QFont()
-        font.setFamily("Modern")
+        font.setFamily("Momcake-Bold")
         font.setPointSize(29)
         font.setBold(False)
         font.setItalic(False)
@@ -282,7 +250,7 @@ class CustomNumpad(QtWidgets.QWidget):
         self.numpad_9.setSizePolicy(sizePolicy)
         self.numpad_9.setMinimumSize(QtCore.QSize(150, 63))
         font = QtGui.QFont()
-        font.setFamily("Modern")
+        font.setFamily("Momcake-Bold")
         font.setPointSize(29)
         font.setBold(False)
         font.setItalic(False)
@@ -312,7 +280,7 @@ class CustomNumpad(QtWidgets.QWidget):
         self.numpad_8.setMinimumSize(QtCore.QSize(150, 63))
         self.numpad_8.setMaximumSize(QtCore.QSize(150, 16777215))
         font = QtGui.QFont()
-        font.setFamily("Modern")
+        font.setFamily("Momcake-Bold")
         font.setPointSize(29)
         font.setBold(False)
         font.setItalic(False)
@@ -342,7 +310,7 @@ class CustomNumpad(QtWidgets.QWidget):
         self.numpad_2.setMinimumSize(QtCore.QSize(150, 63))
         self.numpad_2.setMaximumSize(QtCore.QSize(150, 16777215))
         font = QtGui.QFont()
-        font.setFamily("Modern")
+        font.setFamily("Momcake-Bold")
         font.setPointSize(29)
         font.setBold(False)
         font.setItalic(False)
@@ -372,7 +340,7 @@ class CustomNumpad(QtWidgets.QWidget):
         self.numpad_0.setMinimumSize(QtCore.QSize(150, 63))
         self.numpad_0.setMaximumSize(QtCore.QSize(150, 16777215))
         font = QtGui.QFont()
-        font.setFamily("Modern")
+        font.setFamily("Momcake-Bold")
         font.setPointSize(29)
         font.setBold(False)
         font.setItalic(False)
@@ -401,7 +369,7 @@ class CustomNumpad(QtWidgets.QWidget):
         self.numpad_3.setSizePolicy(sizePolicy)
         self.numpad_3.setMinimumSize(QtCore.QSize(150, 63))
         font = QtGui.QFont()
-        font.setFamily("Modern")
+        font.setFamily("Momcake-Bold")
         font.setPointSize(29)
         font.setBold(False)
         font.setItalic(False)
@@ -430,7 +398,7 @@ class CustomNumpad(QtWidgets.QWidget):
         self.numpad_4.setSizePolicy(sizePolicy)
         self.numpad_4.setMinimumSize(QtCore.QSize(150, 63))
         font = QtGui.QFont()
-        font.setFamily("Modern")
+        font.setFamily("Momcake-Bold")
         font.setPointSize(29)
         font.setBold(False)
         font.setItalic(False)
@@ -460,7 +428,7 @@ class CustomNumpad(QtWidgets.QWidget):
         self.numpad_5.setMinimumSize(QtCore.QSize(150, 63))
         self.numpad_5.setMaximumSize(QtCore.QSize(150, 16777215))
         font = QtGui.QFont()
-        font.setFamily("Modern")
+        font.setFamily("Momcake-Bold")
         font.setPointSize(29)
         font.setBold(False)
         font.setItalic(False)
@@ -489,7 +457,7 @@ class CustomNumpad(QtWidgets.QWidget):
         self.numpad_1.setSizePolicy(sizePolicy)
         self.numpad_1.setMinimumSize(QtCore.QSize(150, 63))
         font = QtGui.QFont()
-        font.setFamily("Modern")
+        font.setFamily("Momcake-Bold")
         font.setPointSize(29)
         font.setBold(False)
         font.setItalic(False)
@@ -546,7 +514,7 @@ class CustomNumpad(QtWidgets.QWidget):
         self.numpad_7.setSizePolicy(sizePolicy)
         self.numpad_7.setMinimumSize(QtCore.QSize(150, 63))
         font = QtGui.QFont()
-        font.setFamily("Modern")
+        font.setFamily("Momcake-Bold")
         font.setPointSize(29)
         font.setBold(False)
         font.setItalic(False)
