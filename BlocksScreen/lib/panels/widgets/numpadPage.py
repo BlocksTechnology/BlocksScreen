@@ -1,5 +1,7 @@
 from functools import partial
 
+import qt6_applications
+
 from lib.utils.icon_button import IconButton
 from lib.utils.numpad_button import NumpadButton
 from PyQt6 import QtCore, QtGui, QtWidgets
@@ -17,8 +19,7 @@ class CustomNumpad(QtWidgets.QWidget):
     ) -> None:
         super().__init__(parent)
         self.setupUI()
-        self.setAttribute(QtCore.Qt.WidgetAttribute.WA_AcceptTouchEvents, True)
-        self.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
+
         self.current_value: str = "0"
         self.name: str = ""
         self.min_value: int = 0
@@ -44,9 +45,10 @@ class CustomNumpad(QtWidgets.QWidget):
         Args:
             value (int | str): value
         """
-        if value.isnumeric():
-            self.current_value = str(self.current_value) + str(value)
-            self.inserted_value.setText(str(self.current_value))
+        if self.min_value <= int(float(self.current_value)) <= self.max_value:
+            if value.isnumeric():
+                self.current_value = str(self.current_value) + str(value)
+                self.inserted_value.setText(str(self.current_value))
 
         if "enter" in value and str(self.current_value).isnumeric():
             self.value_selected[str, int].emit(
@@ -100,40 +102,52 @@ class CustomNumpad(QtWidgets.QWidget):
         #         pass
 
     def setupUI(self) -> None:
-        self.setObjectName("customNumpad")
-        self.setEnabled(True)
-        self.resize(710, 410)
+        self.setAttribute(QtCore.Qt.WidgetAttribute.WA_AcceptTouchEvents, True)
+        self.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
         sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.Preferred,
-            QtWidgets.QSizePolicy.Policy.Preferred,
+            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
+            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
         )
-        sizePolicy.setHorizontalStretch(0)
-        sizePolicy.setVerticalStretch(0)
+        sizePolicy.setHorizontalStretch(1)
+        sizePolicy.setVerticalStretch(1)
+        self.setSizePolicy(sizePolicy)
         sizePolicy.setHeightForWidth(self.sizePolicy().hasHeightForWidth())
         self.setSizePolicy(sizePolicy)
-        self.layoutWidget = QtWidgets.QWidget(parent=self)
-        self.layoutWidget.setGeometry(QtCore.QRect(9, 9, 691, 62))
-        self.layoutWidget.setObjectName("layoutWidget")
-        self.gridLayout = QtWidgets.QGridLayout(self.layoutWidget)
-        self.gridLayout.setSizeConstraint(
-            QtWidgets.QLayout.SizeConstraint.SetMaximumSize
-        )
-        self.gridLayout.setContentsMargins(0, 0, 0, 0)
-        self.gridLayout.setObjectName("gridLayout")
-        self.numpad_title = QtWidgets.QLabel(parent=self.layoutWidget)
+        self.setObjectName("blocks_numpad")
+        self.setMinimumSize(QtCore.QSize(710, 400))
+        self.setMaximumSize(QtCore.QSize(720, 420))
+
+        self.main_content_layout = QtWidgets.QVBoxLayout()
+        # self.main_content_layout.setAlignment(
+        #     QtCore.Qt.AlignmentFlag.AlignHCenter
+        #     | QtCore.Qt.AlignmentFlag.AlignVCenter
+        # )
+        self.main_content_layout.setObjectName("main_content_layout")
+        self.main_content_layout.setContentsMargins(0, 0, 0, 0)
+        self.main_content_layout.setSpacing(3)
+        self.header_layout = QtWidgets.QHBoxLayout()
+        self.header_layout.setContentsMargins(0, 0, 0, 0)
+        self.header_layout.setObjectName("header_layout")
+        self.numpad_title = QtWidgets.QLabel(self)
         font = QtGui.QFont()
-        font.setPointSize(25)
+        font.setPointSize(22)
         self.numpad_title.setFont(font)
         self.numpad_title.setAutoFillBackground(False)
         palette = QtGui.QPalette()
         palette.setColor(palette.ColorRole.Window, QtGui.QColor("#FFFFFF00"))
         palette.setColor(palette.ColorRole.WindowText, QtGui.QColor("#FFFFFF"))
         self.numpad_title.setPalette(palette)
-        self.numpad_title.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self.numpad_title.setObjectName("numpad_title")
-        self.gridLayout.addWidget(self.numpad_title, 0, 0, 1, 1)
-        self.numpad_back_btn = IconButton(parent=self.layoutWidget)
-        self.numpad_back_btn.setEnabled(True)
+        # self.numpad_title.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.header_layout.addWidget(
+            self.numpad_title,
+            1,
+            # QtCore.Qt.AlignmentFlag.AlignCenter
+            QtCore.Qt.AlignmentFlag.AlignHCenter
+            | QtCore.Qt.AlignmentFlag.AlignVCenter,
+        )
+
+        self.numpad_back_btn = IconButton(self)
         sizePolicy = QtWidgets.QSizePolicy(
             QtWidgets.QSizePolicy.Policy.MinimumExpanding,
             QtWidgets.QSizePolicy.Policy.MinimumExpanding,
@@ -146,28 +160,23 @@ class CustomNumpad(QtWidgets.QWidget):
         self.numpad_back_btn.setSizePolicy(sizePolicy)
         self.numpad_back_btn.setMinimumSize(QtCore.QSize(60, 60))
         self.numpad_back_btn.setMaximumSize(QtCore.QSize(60, 60))
-        self.numpad_back_btn.setStyleSheet("")
-        self.numpad_back_btn.setText("")
-        self.numpad_back_btn.setIconSize(QtCore.QSize(16, 16))
-        self.numpad_back_btn.setCheckable(False)
-        self.numpad_back_btn.setChecked(False)
-        self.numpad_back_btn.setFlat(True)
-        self.numpad_back_btn.setProperty(
-            "icon_pixmap",
-            QtGui.QPixmap(":/ui/media/btn_icons/back.svg"),
+        self.numpad_back_btn.setPixmap(
+            QtGui.QPixmap(":ui/media/btn_icons/back.svg")
         )
         self.numpad_back_btn.setObjectName("numpad_back_btn")
-        self.gridLayout.addWidget(self.numpad_back_btn, 0, 1, 1, 1)
-        self.gridLayout.setColumnStretch(0, 2)
-        self.layoutWidget1 = QtWidgets.QWidget(parent=self)
-        self.layoutWidget1.setGeometry(QtCore.QRect(9, 72, 691, 61))
-        self.layoutWidget1.setObjectName("layoutWidget1")
-        self.verticalLayout_2 = QtWidgets.QVBoxLayout(self.layoutWidget1)
-        self.verticalLayout_2.setContentsMargins(0, 0, 0, 0)
-        self.verticalLayout_2.setObjectName("verticalLayout_2")
-        self.inserted_value = QtWidgets.QLabel(parent=self.layoutWidget1)
-        self.inserted_value.setMinimumSize(QtCore.QSize(500, 0))
-        self.inserted_value.setMaximumSize(QtCore.QSize(16777215, 50))
+        self.header_layout.addWidget(
+            self.numpad_back_btn,
+            1,
+            QtCore.Qt.AlignmentFlag.AlignVCenter,
+        )
+        self.numpad_back_btn.rect().setX(self.numpad_back_btn.rect().x() + 60)
+
+        self.main_content_layout.addLayout(self.header_layout, 1)
+
+        self.inserted_value = QtWidgets.QLabel(self)
+        self.inserted_value.setMinimumSize(QtCore.QSize(500, 30))
+        self.inserted_value.setMaximumSize(QtCore.QSize(16777215, 40))
+        self.inserted_value.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         font = QtGui.QFont()
         font.setFamily("Momcake-Bold")
         font.setPointSize(20)
@@ -176,386 +185,199 @@ class CustomNumpad(QtWidgets.QWidget):
         self.inserted_value.setPalette(palette)
         self.inserted_value.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
         self.inserted_value.setFrameShadow(QtWidgets.QFrame.Shadow.Sunken)
-        self.inserted_value.setLineWidth(0)
-        self.inserted_value.setScaledContents(False)
-        self.inserted_value.setAlignment(
-            QtCore.Qt.AlignmentFlag.AlignBottom
-            | QtCore.Qt.AlignmentFlag.AlignHCenter
-        )
-        self.inserted_value.setIndent(0)
-        self.inserted_value.setTextInteractionFlags(
-            QtCore.Qt.TextInteractionFlag.LinksAccessibleByMouse
-        )
         self.inserted_value.setObjectName("inserted_value")
-        self.verticalLayout_2.addWidget(
-            self.inserted_value,
-            0,
-            QtCore.Qt.AlignmentFlag.AlignHCenter
-            | QtCore.Qt.AlignmentFlag.AlignBottom,
+        self.main_content_layout.addWidget(
+            self.inserted_value  #
         )
-        self.line = QtWidgets.QFrame(parent=self.layoutWidget1)
+
+        self.line = QtWidgets.QFrame(self)
         self.line.setFrameShape(QtWidgets.QFrame.Shape.HLine)
         self.line.setFrameShadow(QtWidgets.QFrame.Shadow.Sunken)
         self.line.setObjectName("line")
-        self.verticalLayout_2.addWidget(self.line)
-        self.gridLayoutWidget = QtWidgets.QWidget(parent=self)
-        self.gridLayoutWidget.setGeometry(QtCore.QRect(120, 141, 464, 261))
-        self.gridLayoutWidget.setObjectName("gridLayoutWidget")
-        self.gridLayout_2 = QtWidgets.QGridLayout(self.gridLayoutWidget)
-        self.gridLayout_2.setSizeConstraint(
-            QtWidgets.QLayout.SizeConstraint.SetMaximumSize
-        )
-        self.gridLayout_2.setContentsMargins(0, 0, 0, 0)
-        self.gridLayout_2.setSpacing(6)
-        self.gridLayout_2.setObjectName("gridLayout_2")
-        self.numpad_6 = NumpadButton(parent=self.gridLayoutWidget)
+        self.main_content_layout.addWidget(self.line, 1)
+
+        self.button_grid_layout = QtWidgets.QGridLayout()
+        self.button_grid_layout.setContentsMargins(0, 0, 0, 0)
+        self.button_grid_layout.setObjectName("button_grid_layout")
+        self.button_grid_layout.setSpacing(6)
         sizePolicy = QtWidgets.QSizePolicy(
             QtWidgets.QSizePolicy.Policy.Fixed,
             QtWidgets.QSizePolicy.Policy.Fixed,
         )
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(
-            self.numpad_6.sizePolicy().hasHeightForWidth()
-        )
-        self.numpad_6.setSizePolicy(sizePolicy)
-        self.numpad_6.setMinimumSize(QtCore.QSize(150, 63))
         font = QtGui.QFont()
         font.setFamily("Momcake-Bold")
-        font.setPointSize(29)
-        font.setBold(False)
-        font.setItalic(False)
-        font.setUnderline(False)
-        font.setWeight(50)
-        font.setStrikeOut(False)
+        font.setPointSize(28)
         font.setStyleStrategy(QtGui.QFont.StyleStrategy.PreferDefault)
-        self.numpad_6.setFont(font)
-        self.numpad_6.setTabletTracking(False)
-        self.numpad_6.setLayoutDirection(QtCore.Qt.LayoutDirection.RightToLeft)
-        self.numpad_6.setFlat(True)
-        self.numpad_6.setObjectName("numpad_6")
-        self.gridLayout_2.addWidget(
-            self.numpad_6, 1, 2, 1, 1, QtCore.Qt.AlignmentFlag.AlignRight
-        )
-        self.numpad_9 = NumpadButton(parent=self.gridLayoutWidget)
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.Fixed,
-            QtWidgets.QSizePolicy.Policy.Fixed,
-        )
-        sizePolicy.setHorizontalStretch(0)
-        sizePolicy.setVerticalStretch(0)
+        self.numpad_9 = NumpadButton(self)
         sizePolicy.setHeightForWidth(
             self.numpad_9.sizePolicy().hasHeightForWidth()
         )
         self.numpad_9.setSizePolicy(sizePolicy)
-        self.numpad_9.setMinimumSize(QtCore.QSize(150, 63))
-        font = QtGui.QFont()
-        font.setFamily("Momcake-Bold")
-        font.setPointSize(29)
-        font.setBold(False)
-        font.setItalic(False)
-        font.setUnderline(False)
-        font.setWeight(50)
-        font.setStrikeOut(False)
-        font.setStyleStrategy(QtGui.QFont.StyleStrategy.PreferDefault)
+        self.numpad_9.setMinimumSize(QtCore.QSize(150, 60))
         self.numpad_9.setFont(font)
-        self.numpad_9.setTabletTracking(False)
         self.numpad_9.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
         self.numpad_9.setFlat(True)
         self.numpad_9.setObjectName("numpad_9")
-        self.gridLayout_2.addWidget(
+        self.button_grid_layout.addWidget(
             self.numpad_9, 0, 2, 1, 1, QtCore.Qt.AlignmentFlag.AlignLeft
         )
-        self.numpad_8 = NumpadButton(parent=self.gridLayoutWidget)
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.Fixed,
-            QtWidgets.QSizePolicy.Policy.Fixed,
-        )
-        sizePolicy.setHorizontalStretch(0)
-        sizePolicy.setVerticalStretch(0)
+        self.numpad_8 = NumpadButton(parent=self)
         sizePolicy.setHeightForWidth(
             self.numpad_8.sizePolicy().hasHeightForWidth()
         )
         self.numpad_8.setSizePolicy(sizePolicy)
-        self.numpad_8.setMinimumSize(QtCore.QSize(150, 63))
-        self.numpad_8.setMaximumSize(QtCore.QSize(150, 16777215))
-        font = QtGui.QFont()
-        font.setFamily("Momcake-Bold")
-        font.setPointSize(29)
-        font.setBold(False)
-        font.setItalic(False)
-        font.setUnderline(False)
-        font.setWeight(50)
-        font.setStrikeOut(False)
-        font.setStyleStrategy(QtGui.QFont.StyleStrategy.PreferDefault)
+        self.numpad_8.setMinimumSize(QtCore.QSize(150, 60))
         self.numpad_8.setFont(font)
-        self.numpad_8.setTabletTracking(False)
         self.numpad_8.setLayoutDirection(QtCore.Qt.LayoutDirection.RightToLeft)
         self.numpad_8.setFlat(True)
         self.numpad_8.setObjectName("numpad_8")
-        self.gridLayout_2.addWidget(
+        self.button_grid_layout.addWidget(
             self.numpad_8, 0, 1, 1, 1, QtCore.Qt.AlignmentFlag.AlignHCenter
         )
-        self.numpad_2 = NumpadButton(parent=self.gridLayoutWidget)
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.Fixed,
-            QtWidgets.QSizePolicy.Policy.Fixed,
-        )
-        sizePolicy.setHorizontalStretch(0)
-        sizePolicy.setVerticalStretch(0)
+        self.numpad_7 = NumpadButton(self)
         sizePolicy.setHeightForWidth(
-            self.numpad_2.sizePolicy().hasHeightForWidth()
+            self.numpad_7.sizePolicy().hasHeightForWidth()
         )
-        self.numpad_2.setSizePolicy(sizePolicy)
-        self.numpad_2.setMinimumSize(QtCore.QSize(150, 63))
-        self.numpad_2.setMaximumSize(QtCore.QSize(150, 16777215))
-        font = QtGui.QFont()
-        font.setFamily("Momcake-Bold")
-        font.setPointSize(29)
-        font.setBold(False)
-        font.setItalic(False)
-        font.setUnderline(False)
-        font.setWeight(50)
-        font.setStrikeOut(False)
-        font.setStyleStrategy(QtGui.QFont.StyleStrategy.PreferDefault)
-        self.numpad_2.setFont(font)
-        self.numpad_2.setTabletTracking(False)
-        self.numpad_2.setLayoutDirection(QtCore.Qt.LayoutDirection.RightToLeft)
-        self.numpad_2.setFlat(True)
-        self.numpad_2.setObjectName("numpad_2")
-        self.gridLayout_2.addWidget(
-            self.numpad_2, 2, 1, 1, 1, QtCore.Qt.AlignmentFlag.AlignHCenter
+        self.numpad_7.setSizePolicy(sizePolicy)
+        self.numpad_7.setMinimumSize(QtCore.QSize(150, 60))
+        self.numpad_7.setFont(font)
+        self.numpad_7.setLayoutDirection(QtCore.Qt.LayoutDirection.RightToLeft)
+        self.numpad_7.setFlat(True)
+        self.numpad_7.setObjectName("numpad_7")
+        self.button_grid_layout.addWidget(
+            self.numpad_7, 0, 0, 1, 1, QtCore.Qt.AlignmentFlag.AlignLeft
         )
-        self.numpad_0 = NumpadButton(parent=self.gridLayoutWidget)
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.Fixed,
-            QtWidgets.QSizePolicy.Policy.Fixed,
-        )
-        sizePolicy.setHorizontalStretch(0)
-        sizePolicy.setVerticalStretch(0)
+        self.numpad_6 = NumpadButton(self)
         sizePolicy.setHeightForWidth(
-            self.numpad_0.sizePolicy().hasHeightForWidth()
+            self.numpad_6.sizePolicy().hasHeightForWidth()
         )
-        self.numpad_0.setSizePolicy(sizePolicy)
-        self.numpad_0.setMinimumSize(QtCore.QSize(150, 63))
-        self.numpad_0.setMaximumSize(QtCore.QSize(150, 16777215))
-        font = QtGui.QFont()
-        font.setFamily("Momcake-Bold")
-        font.setPointSize(29)
-        font.setBold(False)
-        font.setItalic(False)
-        font.setUnderline(False)
-        font.setWeight(50)
-        font.setStrikeOut(False)
-        font.setStyleStrategy(QtGui.QFont.StyleStrategy.PreferDefault)
-        self.numpad_0.setFont(font)
-        self.numpad_0.setTabletTracking(False)
-        self.numpad_0.setLayoutDirection(QtCore.Qt.LayoutDirection.RightToLeft)
-        self.numpad_0.setFlat(True)
-        self.numpad_0.setObjectName("numpad_0")
-        self.gridLayout_2.addWidget(
-            self.numpad_0, 3, 1, 1, 1, QtCore.Qt.AlignmentFlag.AlignHCenter
+        self.numpad_6.setSizePolicy(sizePolicy)
+        self.numpad_6.setMinimumSize(QtCore.QSize(150, 60))
+        self.numpad_6.setFont(font)
+        self.numpad_6.setLayoutDirection(QtCore.Qt.LayoutDirection.RightToLeft)
+        self.numpad_6.setFlat(True)
+        self.numpad_6.setObjectName("numpad_6")
+
+        self.button_grid_layout.addWidget(
+            self.numpad_6, 1, 2, 1, 1, QtCore.Qt.AlignmentFlag.AlignRight
         )
-        self.numpad_3 = NumpadButton(parent=self.gridLayoutWidget)
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.Fixed,
-            QtWidgets.QSizePolicy.Policy.Fixed,
-        )
-        sizePolicy.setHorizontalStretch(0)
-        sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(
-            self.numpad_3.sizePolicy().hasHeightForWidth()
-        )
-        self.numpad_3.setSizePolicy(sizePolicy)
-        self.numpad_3.setMinimumSize(QtCore.QSize(150, 63))
-        font = QtGui.QFont()
-        font.setFamily("Momcake-Bold")
-        font.setPointSize(29)
-        font.setBold(False)
-        font.setItalic(False)
-        font.setUnderline(False)
-        font.setWeight(50)
-        font.setStrikeOut(False)
-        font.setStyleStrategy(QtGui.QFont.StyleStrategy.PreferDefault)
-        self.numpad_3.setFont(font)
-        self.numpad_3.setTabletTracking(False)
-        self.numpad_3.setLayoutDirection(QtCore.Qt.LayoutDirection.RightToLeft)
-        self.numpad_3.setFlat(True)
-        self.numpad_3.setObjectName("numpad_3")
-        self.gridLayout_2.addWidget(
-            self.numpad_3, 2, 2, 1, 1, QtCore.Qt.AlignmentFlag.AlignRight
-        )
-        self.numpad_4 = NumpadButton(parent=self.gridLayoutWidget)
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.Fixed,
-            QtWidgets.QSizePolicy.Policy.Fixed,
-        )
-        sizePolicy.setHorizontalStretch(0)
-        sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(
-            self.numpad_4.sizePolicy().hasHeightForWidth()
-        )
-        self.numpad_4.setSizePolicy(sizePolicy)
-        self.numpad_4.setMinimumSize(QtCore.QSize(150, 63))
-        font = QtGui.QFont()
-        font.setFamily("Momcake-Bold")
-        font.setPointSize(29)
-        font.setBold(False)
-        font.setItalic(False)
-        font.setUnderline(False)
-        font.setWeight(50)
-        font.setStrikeOut(False)
-        font.setStyleStrategy(QtGui.QFont.StyleStrategy.PreferDefault)
-        self.numpad_4.setFont(font)
-        self.numpad_4.setTabletTracking(False)
-        self.numpad_4.setLayoutDirection(QtCore.Qt.LayoutDirection.RightToLeft)
-        self.numpad_4.setFlat(True)
-        self.numpad_4.setObjectName("numpad_4")
-        self.gridLayout_2.addWidget(
-            self.numpad_4, 1, 0, 1, 1, QtCore.Qt.AlignmentFlag.AlignRight
-        )
-        self.numpad_5 = NumpadButton(parent=self.gridLayoutWidget)
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.Fixed,
-            QtWidgets.QSizePolicy.Policy.Fixed,
-        )
-        sizePolicy.setHorizontalStretch(0)
-        sizePolicy.setVerticalStretch(0)
+        self.numpad_5 = NumpadButton(self)
         sizePolicy.setHeightForWidth(
             self.numpad_5.sizePolicy().hasHeightForWidth()
         )
         self.numpad_5.setSizePolicy(sizePolicy)
-        self.numpad_5.setMinimumSize(QtCore.QSize(150, 63))
-        self.numpad_5.setMaximumSize(QtCore.QSize(150, 16777215))
-        font = QtGui.QFont()
-        font.setFamily("Momcake-Bold")
-        font.setPointSize(29)
-        font.setBold(False)
-        font.setItalic(False)
-        font.setUnderline(False)
-        font.setWeight(50)
-        font.setStrikeOut(False)
-        font.setStyleStrategy(QtGui.QFont.StyleStrategy.PreferDefault)
+        self.numpad_5.setMinimumSize(QtCore.QSize(150, 60))
         self.numpad_5.setFont(font)
-        self.numpad_5.setTabletTracking(False)
-        self.numpad_5.setLayoutDirection(QtCore.Qt.LayoutDirection.RightToLeft)
         self.numpad_5.setFlat(True)
         self.numpad_5.setObjectName("numpad_5")
-        self.gridLayout_2.addWidget(
+        self.button_grid_layout.addWidget(
             self.numpad_5, 1, 1, 1, 1, QtCore.Qt.AlignmentFlag.AlignHCenter
         )
-        self.numpad_1 = NumpadButton(parent=self.gridLayoutWidget)
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.Fixed,
-            QtWidgets.QSizePolicy.Policy.Fixed,
+        self.numpad_4 = NumpadButton(self)
+        sizePolicy.setHeightForWidth(
+            self.numpad_4.sizePolicy().hasHeightForWidth()
         )
-        sizePolicy.setHorizontalStretch(0)
-        sizePolicy.setVerticalStretch(0)
+        self.numpad_4.setSizePolicy(sizePolicy)
+        self.numpad_4.setMinimumSize(QtCore.QSize(150, 60))
+        self.numpad_4.setFont(font)
+        self.numpad_4.setLayoutDirection(QtCore.Qt.LayoutDirection.RightToLeft)
+        self.numpad_4.setFlat(True)
+        self.numpad_4.setObjectName("numpad_4")
+        self.button_grid_layout.addWidget(
+            self.numpad_4, 1, 0, 1, 1, QtCore.Qt.AlignmentFlag.AlignLeft
+        )
+        self.numpad_3 = NumpadButton(parent=self)
+        sizePolicy.setHeightForWidth(
+            self.numpad_3.sizePolicy().hasHeightForWidth()
+        )
+        self.numpad_3.setSizePolicy(sizePolicy)
+        self.numpad_3.setMinimumSize(QtCore.QSize(150, 60))
+        self.numpad_3.setFont(font)
+        self.numpad_3.setLayoutDirection(QtCore.Qt.LayoutDirection.RightToLeft)
+        self.numpad_3.setFlat(True)
+        self.numpad_3.setObjectName("numpad_3")
+        self.button_grid_layout.addWidget(
+            self.numpad_3, 2, 2, 1, 1, QtCore.Qt.AlignmentFlag.AlignRight
+        )
+        self.numpad_2 = NumpadButton(self)
+        sizePolicy.setHeightForWidth(
+            self.numpad_2.sizePolicy().hasHeightForWidth()
+        )
+        self.numpad_2.setSizePolicy(sizePolicy)
+        self.numpad_2.setMinimumSize(QtCore.QSize(150, 60))
+        self.numpad_2.setFont(font)
+        self.numpad_2.setLayoutDirection(QtCore.Qt.LayoutDirection.RightToLeft)
+        self.numpad_2.setFlat(True)
+        self.numpad_2.setObjectName("numpad_2")
+        self.button_grid_layout.addWidget(
+            self.numpad_2, 2, 1, 1, 1, QtCore.Qt.AlignmentFlag.AlignCenter
+        )
+        self.numpad_1 = NumpadButton(parent=self)
         sizePolicy.setHeightForWidth(
             self.numpad_1.sizePolicy().hasHeightForWidth()
         )
         self.numpad_1.setSizePolicy(sizePolicy)
-        self.numpad_1.setMinimumSize(QtCore.QSize(150, 63))
-        font = QtGui.QFont()
-        font.setFamily("Momcake-Bold")
-        font.setPointSize(29)
-        font.setBold(False)
-        font.setItalic(False)
-        font.setUnderline(False)
-        font.setWeight(50)
-        font.setStrikeOut(False)
-        font.setStyleStrategy(QtGui.QFont.StyleStrategy.PreferDefault)
+        self.numpad_1.setMinimumSize(QtCore.QSize(150, 60))
         self.numpad_1.setFont(font)
-        self.numpad_1.setTabletTracking(False)
         self.numpad_1.setLayoutDirection(QtCore.Qt.LayoutDirection.RightToLeft)
         self.numpad_1.setFlat(True)
         self.numpad_1.setObjectName("numpad_1")
-        self.gridLayout_2.addWidget(
-            self.numpad_1, 2, 0, 1, 1, QtCore.Qt.AlignmentFlag.AlignRight
+        self.button_grid_layout.addWidget(
+            self.numpad_1, 2, 0, 1, 1, QtCore.Qt.AlignmentFlag.AlignLeft
         )
-        self.numpad_enter = IconButton(parent=self.gridLayoutWidget)
+        self.numpad_0 = NumpadButton(parent=self)
+        sizePolicy.setHeightForWidth(
+            self.numpad_0.sizePolicy().hasHeightForWidth()
+        )
+        self.numpad_0.setSizePolicy(sizePolicy)
+        self.numpad_0.setMinimumSize(QtCore.QSize(150, 60))
+        self.numpad_0.setFont(font)
+        self.numpad_0.setLayoutDirection(QtCore.Qt.LayoutDirection.RightToLeft)
+        self.numpad_0.setFlat(True)
+        self.numpad_0.setObjectName("numpad_0")
+        self.button_grid_layout.addWidget(
+            self.numpad_0, 3, 1, 1, 1, QtCore.Qt.AlignmentFlag.AlignHCenter
+        )
+        self.numpad_enter = IconButton(parent=self)
         self.numpad_enter.setEnabled(True)
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-        )
-        sizePolicy.setHorizontalStretch(1)
-        sizePolicy.setVerticalStretch(1)
         sizePolicy.setHeightForWidth(
             self.numpad_enter.sizePolicy().hasHeightForWidth()
         )
         self.numpad_enter.setSizePolicy(sizePolicy)
         self.numpad_enter.setMinimumSize(QtCore.QSize(60, 60))
-        self.numpad_enter.setMaximumSize(QtCore.QSize(60, 60))
-        self.numpad_enter.setStyleSheet("")
-        self.numpad_enter.setText("")
-        self.numpad_enter.setIconSize(QtCore.QSize(16, 16))
-        self.numpad_enter.setCheckable(False)
-        self.numpad_enter.setChecked(False)
         self.numpad_enter.setFlat(True)
-        self.numpad_enter.setProperty(
-            "icon_pixmap",
-            QtGui.QPixmap(":/dialog/media/btn_icons/yes.svg"),
+        self.numpad_enter.setPixmap(
+            QtGui.QPixmap(":/dialog/media/btn_icons/yes.svg")
         )
         self.numpad_enter.setObjectName("numpad_enter")
-        self.gridLayout_2.addWidget(
-            self.numpad_enter, 3, 0, 1, 1, QtCore.Qt.AlignmentFlag.AlignHCenter
+        self.button_grid_layout.addWidget(
+            self.numpad_enter, 3, 0, 1, 1, QtCore.Qt.AlignmentFlag.AlignCenter
         )
-        self.numpad_7 = NumpadButton(parent=self.gridLayoutWidget)
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.Fixed,
-            QtWidgets.QSizePolicy.Policy.Fixed,
-        )
-        sizePolicy.setHorizontalStretch(0)
-        sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(
-            self.numpad_7.sizePolicy().hasHeightForWidth()
-        )
-        self.numpad_7.setSizePolicy(sizePolicy)
-        self.numpad_7.setMinimumSize(QtCore.QSize(150, 63))
-        font = QtGui.QFont()
-        font.setFamily("Momcake-Bold")
-        font.setPointSize(29)
-        font.setBold(False)
-        font.setItalic(False)
-        font.setUnderline(False)
-        font.setWeight(50)
-        font.setStrikeOut(False)
-        font.setStyleStrategy(QtGui.QFont.StyleStrategy.PreferDefault)
-        self.numpad_7.setFont(font)
-        self.numpad_7.setTabletTracking(False)
-        self.numpad_7.setLayoutDirection(QtCore.Qt.LayoutDirection.RightToLeft)
-        self.numpad_7.setFlat(True)
-        self.numpad_7.setObjectName("numpad_7")
-        self.gridLayout_2.addWidget(self.numpad_7, 0, 0, 1, 1)
-        self.numpad_clear = IconButton(parent=self.gridLayoutWidget)
-        self.numpad_clear.setEnabled(True)
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-        )
-        sizePolicy.setHorizontalStretch(1)
-        sizePolicy.setVerticalStretch(1)
+        self.numpad_clear = IconButton(parent=self)
         sizePolicy.setHeightForWidth(
             self.numpad_clear.sizePolicy().hasHeightForWidth()
         )
         self.numpad_clear.setSizePolicy(sizePolicy)
         self.numpad_clear.setMinimumSize(QtCore.QSize(60, 60))
-        self.numpad_clear.setMaximumSize(QtCore.QSize(60, 60))
-        self.numpad_clear.setStyleSheet("")
-        self.numpad_clear.setText("")
-        self.numpad_clear.setIconSize(QtCore.QSize(16, 16))
-        self.numpad_clear.setCheckable(False)
-        self.numpad_clear.setChecked(False)
         self.numpad_clear.setFlat(True)
-        self.numpad_clear.setProperty(
-            "icon_pixmap",
-            QtGui.QPixmap(":/dialog/media/btn_icons/no.svg"),
+        self.numpad_clear.setPixmap(
+            QtGui.QPixmap(":/dialog/media/btn_icons/no.svg")
         )
         self.numpad_clear.setObjectName("numpad_clear")
-        self.gridLayout_2.addWidget(
-            self.numpad_clear, 3, 2, 1, 1, QtCore.Qt.AlignmentFlag.AlignHCenter
+        self.button_grid_layout.addWidget(
+            self.numpad_clear, 3, 2, 1, 1, QtCore.Qt.AlignmentFlag.AlignCenter
         )
+        self.button_grid_layout.setAlignment(
+            QtCore.Qt.AlignmentFlag.AlignCenter
+        )
+        self.main_content_layout.addLayout(self.button_grid_layout)
+
+        self.main_content_layout.setAlignment(
+            QtCore.Qt.AlignmentFlag.AlignCenter
+        )
+        self.setLayout(self.main_content_layout)
 
         self.retranslateUI()
         QtCore.QMetaObject.connectSlotsByName(self)
