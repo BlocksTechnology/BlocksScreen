@@ -1,7 +1,9 @@
 from __future__ import annotations
+import typing
 import logging
 from functools import partial
 
+from lib.panels.widgets.numpadPage import CustomNumpad
 from lib.printer import Printer
 from lib.moonrakerComm import MoonWebSocket
 from lib.panels.widgets.probeHelperPage import ProbeHelper
@@ -28,6 +30,12 @@ class ControlTab(QtWidgets.QStackedWidget):
     )
 
     run_gcode_signal = pyqtSignal(str, name="run_gcode")
+
+    request_numpad: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        [str, int, "PyQt_PyObject"],
+        [str, int, "PyQt_PyObject", int, int],
+        name="request_numpad",
+    )
 
     def __init__(
         self,
@@ -237,34 +245,73 @@ class ControlTab(QtWidgets.QStackedWidget):
 
         self.run_gcode_signal.connect(self.ws.api.run_gcode)
         # @ object temperature change clicked
+        self.numpadPage = CustomNumpad(self)
+        self.numpadPage.request_back.connect(self.request_back_button)
+        self.addWidget(self.numpadPage)
 
         self.panel.extruder_temp_display.clicked.connect(
-            partial(
-                self.request_numpad_signal.emit,
-                2,
-                "extruder",
-                str(self.panel.extruder_temp_display.text()),
-                self.handle_numpad_change,
-                self,
+            lambda: self.request_numpad[
+                str, int, "PyQt_PyObject", int, int
+            ].emit(
+                "Extruder Temperature",
+                int(
+                    round(
+                        float(self.panel.extruder_temp_display.secondary_text)
+                    )
+                ),
+                self.on_numpad_change,
+                0,
+                300,  # TODO: Get this value from printer objects
             )
         )
 
         self.panel.bed_temp_display.clicked.connect(
-            partial(
-                self.request_numpad_signal.emit,
-                2,
-                "heater_bed",
-                str(self.panel.bed_temp_display.text()),
-                self.handle_numpad_change,
-                self,
+            lambda: self.request_numpad[
+                str, int, "PyQt_PyObject", int, int
+            ].emit(
+                "Bed Temperature",
+                int(round(float(self.panel.bed_temp_display.secondary_text))),
+                self.on_numpad_change,
+                0,
+                300,  # TODO: Get this value from printer objects
             )
         )
+        self.request_numpad[str, int, "PyQt_PyObject", int, int].connect(
+            self.on_numpad_request
+        )
+
         self.panel.cooldown_btn.clicked.connect(
             lambda: self.run_gcode_signal.emit(
                 "SET_HEATER_TEMPERATURE HEATER=heater_bed TARGET=0\n\
                 SET_HEATER_TEMPERATURE HEATER=extruder TARGET=0"
             )
         )
+
+    @QtCore.pyqtSlot(str, int, "PyQt_PyObject", name="on_numpad_request")
+    @QtCore.pyqtSlot(
+        str, int, "PyQt_PyObject", int, int, name="on_numpad_request"
+    )
+    def on_numpad_request(
+        self,
+        name: str,
+        current_value: int,
+        callback,
+        min_value: int = 0,
+        max_value: int = 100,
+    ) -> None:
+        self.numpadPage.value_selected.connect(callback)
+        self.numpadPage.set_name(name)
+        self.numpadPage.set_value(current_value)
+        self.numpadPage.set_min_value(min_value)
+        self.numpadPage.set_max_value(max_value)
+        self.change_page(self.indexOf(self.numpadPage))
+
+    @QtCore.pyqtSlot(str, int, name="on_numpad_change")
+    def on_numpad_change(self, name: str, new_value: int) -> None:
+        # self.run_gcode.emit(
+        #     f"SET_HEATER_TEMPERATURE HEATER={name} TARGET={new_value}"
+        # )
+        print(f"SET_HEATER_TEMPERATURE HEATER={name} TARGET={new_value}")
 
     def change_page(self, index):
         self.request_change_page.emit(2, index)
@@ -274,7 +321,6 @@ class ControlTab(QtWidgets.QStackedWidget):
 
     def back_button(self):
         self.request_back_button.emit()
-        logging.debug("[ControlTabPanel] back button pressed")
 
     def register_timed_callback(self, time, callback) -> None:
         _timer = QtCore.QTimer()
