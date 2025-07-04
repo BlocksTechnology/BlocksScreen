@@ -1,9 +1,7 @@
-from functools import partial
-
-import qt6_applications
-
 from lib.utils.icon_button import IconButton
+from lib.utils.blocks_label import BlocksLabel
 from lib.utils.numpad_button import NumpadButton
+
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 
@@ -19,7 +17,6 @@ class CustomNumpad(QtWidgets.QWidget):
     ) -> None:
         super().__init__(parent)
         self.setupUI()
-
         self.current_value: str = "0"
         self.name: str = ""
         self.min_value: int = 0
@@ -45,23 +42,52 @@ class CustomNumpad(QtWidgets.QWidget):
         Args:
             value (int | str): value
         """
-        if self.min_value <= int(float(self.current_value)) <= self.max_value:
-            if value.isnumeric():
-                self.current_value = str(self.current_value) + str(value)
-                self.inserted_value.setText(str(self.current_value))
 
-        if "enter" in value and str(self.current_value).isnumeric():
-            self.value_selected[str, int].emit(
-                self.name, int(self.current_value)
-            )
-            self.request_back.emit()
+        if (
+            len(self.current_value) >= 1
+            and self.min_value
+            < int(round(float(self.current_value)))
+            < self.max_value
+        ):
+            self.limit_hit = False
+        else:
+            self.limit_hit = True
+
+        # if not self.limit_hit:
+        if value.isnumeric():
+            if self.current_value == "0":
+                self.current_value = str(value)
+            else:
+                self.current_value = str(self.current_value) + str(value)
+            # self.inserted_value.setPlaceholderText(str(self.current_value))
+            self.inserted_value.clear()
+            self.inserted_value.setText(str(self.current_value))
+
+        if "enter" in value and self.current_value.isnumeric():
+            if len(self.current_value) == 0:
+                self.current_value = "0"
+
+            if (
+                self.min_value
+                <= round(int(self.current_value))
+                <= self.max_value
+            ):
+                self.value_selected[str, int].emit(
+                    self.name, round(int(self.current_value))
+                )
+                self.request_back.emit()
 
         elif "clear" in value:
-            self.current_value = self.current_value[
-                : len(self.current_value) - 1
-            ]
-
-            self.inserted_value.setText(str(self.current_value))
+            if len(self.current_value) >= 1:
+                self.current_value = self.current_value[
+                    : len(self.current_value) - 1
+                ]
+                self.inserted_value.clear()
+                self.inserted_value.setText(str(self.current_value))
+            if len(self.current_value) == 0:
+                self.current_value = "0"
+                self.inserted_value.clear()
+                self.inserted_value.setText(self.current_value)
 
     def back_button(self):
         self.request_back.emit()
@@ -90,18 +116,11 @@ class CustomNumpad(QtWidgets.QWidget):
             a0 (QtGui.QPaintEvent | None): The event for repainting
 
         """
-        # if self.current_object is not None:
-        # self.value_name.setText(self.current_object)
-        # self.numpad_title.setText(self.current_object)
-
-        # if self.isVisible():
-        #     if (
-        #         self.current_object is not None
-        #         and "fan" in self.current_object
-        #     ):
-        #         pass
+        ...
 
     def setupUI(self) -> None:
+        self.setCursor(QtGui.QCursor(QtCore.Qt.CursorShape.BlankCursor))
+
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_AcceptTouchEvents, True)
         self.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
         sizePolicy = QtWidgets.QSizePolicy(
@@ -115,34 +134,31 @@ class CustomNumpad(QtWidgets.QWidget):
         self.setSizePolicy(sizePolicy)
         self.setObjectName("blocks_numpad")
         self.setMinimumSize(QtCore.QSize(710, 400))
-        self.setMaximumSize(QtCore.QSize(720, 420))
-
+        self.setMaximumSize(QtCore.QSize(800, 480))
         self.main_content_layout = QtWidgets.QVBoxLayout()
-        # self.main_content_layout.setAlignment(
-        #     QtCore.Qt.AlignmentFlag.AlignHCenter
-        #     | QtCore.Qt.AlignmentFlag.AlignVCenter
-        # )
         self.main_content_layout.setObjectName("main_content_layout")
         self.main_content_layout.setContentsMargins(0, 0, 0, 0)
         self.main_content_layout.setSpacing(3)
         self.header_layout = QtWidgets.QHBoxLayout()
+
         self.header_layout.setContentsMargins(0, 0, 0, 0)
         self.header_layout.setObjectName("header_layout")
-        self.numpad_title = QtWidgets.QLabel(self)
+        self.numpad_title = BlocksLabel(self)
+        self.numpad_title.setMinimumSize(QtCore.QSize(500, 60))
+        self.numpad_title.setMaximumSize(QtCore.QSize(16777215, 60))
         font = QtGui.QFont()
         font.setPointSize(22)
         self.numpad_title.setFont(font)
         self.numpad_title.setAutoFillBackground(False)
+        self.numpad_title.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         palette = QtGui.QPalette()
         palette.setColor(palette.ColorRole.Window, QtGui.QColor("#FFFFFF00"))
         palette.setColor(palette.ColorRole.WindowText, QtGui.QColor("#FFFFFF"))
         self.numpad_title.setPalette(palette)
         self.numpad_title.setObjectName("numpad_title")
-        # self.numpad_title.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self.header_layout.addWidget(
             self.numpad_title,
-            1,
-            # QtCore.Qt.AlignmentFlag.AlignCenter
+            0,
             QtCore.Qt.AlignmentFlag.AlignHCenter
             | QtCore.Qt.AlignmentFlag.AlignVCenter,
         )
@@ -171,25 +187,49 @@ class CustomNumpad(QtWidgets.QWidget):
         )
         self.numpad_back_btn.rect().setX(self.numpad_back_btn.rect().x() + 60)
 
+        self.header_layout.setStretch(0, 1)
+        self.header_layout.setStretch(1, 0)
         self.main_content_layout.addLayout(self.header_layout, 1)
-
-        self.inserted_value = QtWidgets.QLabel(self)
+        self.inserted_value = BlocksLabel(self)
         self.inserted_value.setMinimumSize(QtCore.QSize(500, 30))
         self.inserted_value.setMaximumSize(QtCore.QSize(16777215, 40))
         self.inserted_value.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.inserted_value.setAttribute(
+            QtCore.Qt.WidgetAttribute.WA_TranslucentBackground, True
+        )
+        self.inserted_value.setTextInteractionFlags(
+            QtCore.Qt.TextInteractionFlag.NoTextInteraction
+        )
         font = QtGui.QFont()
         font.setFamily("Momcake-Bold")
         font.setPointSize(20)
         self.inserted_value.setFont(font)
-        self.inserted_value.setAutoFillBackground(False)
-        self.inserted_value.setPalette(palette)
-        self.inserted_value.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
-        self.inserted_value.setFrameShadow(QtWidgets.QFrame.Shadow.Sunken)
-        self.inserted_value.setObjectName("inserted_value")
-        self.main_content_layout.addWidget(
-            self.inserted_value  #
+        palette = self.inserted_value.palette()
+        palette.setColor(
+            palette.ColorGroup.All,
+            palette.ColorRole.Window,
+            QtGui.QColor("#FFFFFF00"),
         )
+        palette.setColor(
+            palette.ColorGroup.All,
+            palette.ColorRole.WindowText,
+            QtGui.QColor("#FFFFFFFF"),
+        )
+        self.inserted_value.setBackgroundRole(palette.ColorRole.Window)
+        self.inserted_value.setPalette(palette)
+        self.inserted_value.setAcceptDrops(False)
 
+        self.inserted_value.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
+        self.inserted_value.setObjectName("inserted_value")
+
+        self.main_content_layout.addWidget(
+            self.inserted_value,
+            0,
+            QtCore.Qt.AlignmentFlag.AlignHCenter
+            | QtCore.Qt.AlignmentFlag.AlignVCenter,  #
+        )
+        self.inserted_value.setBackgroundRole(QtGui.QPalette.ColorRole.Window)
+        self.setBackgroundRole(QtGui.QPalette.ColorRole.Window)
         self.line = QtWidgets.QFrame(self)
         self.line.setFrameShape(QtWidgets.QFrame.Shape.HLine)
         self.line.setFrameShadow(QtWidgets.QFrame.Shadow.Sunken)
@@ -391,7 +431,6 @@ class CustomNumpad(QtWidgets.QWidget):
         self.numpad_back_btn.setProperty(
             "button_type", _translate("customNumpad", "icon")
         )
-        self.inserted_value.setText(_translate("customNumpad", "TextLabel"))
         self.numpad_6.setText(_translate("customNumpad", "6"))
         self.numpad_6.setProperty(
             "position", _translate("customNumpad", "right")
