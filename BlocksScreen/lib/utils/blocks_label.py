@@ -27,8 +27,7 @@ class BlocksLabel(QtWidgets.QLabel):
             QtWidgets.QSizePolicy.Policy.MinimumExpanding,
         )
 
-        self._glow_color: QtGui.QColor = QtGui.QColor("#E9575700")
-
+        self._glow_color: QtGui.QColor = QtGui.QColor("#E95757")
         self._animation_speed: int = 300
         self.glow_animation = QtCore.QPropertyAnimation(self, b"glow_color")
         self.glow_animation.setEasingCurve(
@@ -102,63 +101,53 @@ class BlocksLabel(QtWidgets.QLabel):
         self.glow_animation.setDuration(self.animation_speed)
         start_color = QtGui.QColor("#E9575700")
         self.glow_animation.setStartValue(start_color)
-        end_color = QtGui.QColor("#E95757")
+        end_color = QtGui.QColor(self.glow_color)
         self.glow_animation.setEndValue(end_color)
         self.glow_animation.setDirection(
             QtCore.QPropertyAnimation.Direction.Forward
         )
         self.glow_animation.setLoopCount(-1)
         self.glow_animation.finished.connect(self.change_glow_direction)
-        # self.glow_animation.finished.connect(self.start_glow_animation)
+        self.glow_animation.finished.connect(self.repaint)
         self.glow_animation.start()
 
     @QtCore.pyqtSlot(name="change_glow_direction")
     def change_glow_direction(self) -> None:
-        if (
-            self.glow_animation.direction()
-            == QtCore.QPropertyAnimation.Direction.Forward
-        ):
-            self.glow_animation.setDirection(
-                QtCore.QPropertyAnimation.Direction.Backward
-            )
-        else:
-            self.glow_animation.setDirection(
-                QtCore.QPropertyAnimation.Direction.Forward
-            )
-
-        print("changing direction")
+        return self.glow_animation.setDirection(
+            self.glow_animation.Direction.Backward
+            if self.glow_animation.direction()
+            == self.glow_animation.Direction.Forward
+            else self.glow_animation.Direction.Backward
+        )
 
     def update_text_metrics(self) -> None:
         font_metrics = self.fontMetrics()
         self.text_width = font_metrics.horizontalAdvance(self._text)
         self.label_width = self.contentsRect().width()
-
         if self.text_width > self.label_width:
-            self.start_scrolling()
+            self.start_scroll()
         else:
-            self.stop_scrolling()
+            self.stop_scroll()
             self.scroll_pos = 0
 
         self.repaint()
 
-    def start_scrolling(self) -> None:
+    def start_scroll(self) -> None:
         if not self.timer.isActive():
             self.scroll_pos = 0
             self.timer.start(self.scroll_animation_speed)
 
-    def stop_scrolling(self) -> None:
+    def stop_scroll(self) -> None:
         if self.timer.isActive():
             self.timer.stop()
 
-    def _scroll_text(self):
+    def _scroll_text(self) -> None:
         if self.paused:
             return
-
         p_to_m = int(
             self.scroll_speed * (self.scroll_animation_speed / 1000.0)
         )
         self.scroll_pos -= p_to_m
-
         if abs(self.scroll_pos) >= self.text_width:
             self.scroll_pos = self.label_width
 
@@ -166,12 +155,18 @@ class BlocksLabel(QtWidgets.QLabel):
 
     def paintEvent(self, a0: QtGui.QPaintEvent) -> None:
         qp = QtWidgets.QStylePainter(self)
+        opt = QtWidgets.QStyleOption()
+        opt.initFrom(self)
+
         qp.setRenderHint(qp.RenderHint.Antialiasing, True)
         qp.setRenderHint(qp.RenderHint.SmoothPixmapTransform, True)
         qp.setRenderHint(qp.RenderHint.LosslessImageRendering, True)
         _rect = self.rect()
         _style = self.style()
 
+        icon_margin = _style.pixelMetric(
+            _style.PixelMetric.PM_HeaderMargin, opt, self
+        )
         if not _style or _rect.isNull():
             return
 
@@ -179,7 +174,12 @@ class BlocksLabel(QtWidgets.QLabel):
             qp.setCompositionMode(
                 qp.CompositionMode.CompositionMode_SourceOver
             )
-            _icon_rect = QtCore.QRectF(0.0, 0.0, self.width(), self.height())
+            _icon_rect = QtCore.QRectF(
+                0.0 + icon_margin,
+                0.0 + icon_margin,
+                self.width() - icon_margin,
+                self.height() - icon_margin,
+            )
             _icon_scaled = self.icon_pixmap.scaled(
                 _icon_rect.size().toSize(),
                 QtCore.Qt.AspectRatioMode.KeepAspectRatio,
@@ -187,11 +187,11 @@ class BlocksLabel(QtWidgets.QLabel):
             )
             scaled_width = _icon_scaled.width()
             scaled_height = _icon_scaled.height()
-            adjusted_x = (_icon_rect.width() - scaled_width) / 2.0
-            adjusted_y = (_icon_rect.height() - scaled_height) / 2.0
+            adjusted_x = (_icon_rect.width() - scaled_width) // 2.0
+            adjusted_y = (_icon_rect.height() - scaled_height) // 2.0
             adjusted_icon_rect = QtCore.QRectF(
-                _icon_rect.x() + adjusted_x,
-                _icon_rect.y() + adjusted_y,
+                (_icon_rect.x() + adjusted_x) // 2,
+                (_icon_rect.y() + adjusted_y) // 2,
                 scaled_width,
                 scaled_height,
             )
@@ -199,25 +199,37 @@ class BlocksLabel(QtWidgets.QLabel):
                 adjusted_icon_rect, _icon_scaled, _icon_scaled.rect().toRectF()
             )
 
+        big_rect = QtGui.QPainterPath()
+        rect = self.contentsRect().toRectF()
+        big_rect.addRoundedRect(
+            rect, 10.0, 10.0, QtCore.Qt.SizeMode.AbsoluteSize
+        )
+        mini_rect = QtCore.QRectF(
+            (rect.width() - rect.width() * 0.99) // 2,
+            (rect.height() - rect.height() * 0.85) // 2,
+            rect.width() * 0.99,
+            rect.height() * 0.85,
+        )
+        mini_path = QtGui.QPainterPath()
+        mini_path.addRoundedRect(
+            mini_rect, 10.0, 10.0, QtCore.Qt.SizeMode.AbsoluteSize
+        )
+        subtracted = big_rect.subtracted(mini_path)
+
         if self.glow_animation.state() == self.glow_animation.State.Running:
-            big_rect = QtGui.QPainterPath()
-            rect = self.contentsRect().toRectF()
-            big_rect.addRoundedRect(
-                rect, 10.0, 10.0, QtCore.Qt.SizeMode.AbsoluteSize
+            qp.setCompositionMode(
+                qp.CompositionMode.CompositionMode_SourceAtop
             )
-            mini_rect = QtCore.QRectF(
-                (rect.width() - rect.width() * 0.99) // 2,
-                (rect.height() - rect.height() * 0.85) // 2,
-                rect.width() * 0.99,
-                rect.height() * 0.85,
-            )
-            mini_path = QtGui.QPainterPath()
-            mini_path.addRoundedRect(
-                mini_rect, 10.0, 10.0, QtCore.Qt.SizeMode.AbsoluteSize
-            )
-            subtracted = big_rect.subtracted(mini_path)
             subtracted.setFillRule(QtCore.Qt.FillRule.OddEvenFill)
             qp.fillPath(subtracted, self.glow_color)
+        # elif self.glow_animation.state() == self.glow_animation.finished:
+
+        #     self.repaint()
+        # qp.setCompositionMode(
+        #     qp.CompositionMode.CompositionMode_SourceOver
+        # )
+        # qp.fillPath(subtracted, QtGui.QColor("#00000000"))
+        # qp.restore()
 
         if self.text:
             qp.setCompositionMode(
