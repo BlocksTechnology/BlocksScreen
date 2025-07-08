@@ -7,9 +7,11 @@ class BlocksLabel(QtWidgets.QLabel):
         if parent is not None:
             super(BlocksLabel, self).__init__(parent, *args, **kwargs)
 
+        self.setAttribute(QtCore.Qt.WidgetAttribute.WA_AcceptTouchEvents, True)
         self.icon_pixmap: typing.Optional[QtGui.QPixmap] = None
         self._text: str = ""
         self._background_color: typing.Optional[QtGui.QColor] = None
+        self._border_color: typing.Optional[QtGui.QColor] = None
         self._rounded: bool = False
         self._marquee: bool = False
         self.timer: QtCore.QTimer = QtCore.QTimer()
@@ -18,15 +20,21 @@ class BlocksLabel(QtWidgets.QLabel):
         self.paused = False
         self.scroll_speed = 20
         self.scroll_animation_speed = 50
-
         self.setMouseTracking(True)
+        self.setTabletTracking(True)
         self.setSizePolicy(
             QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-            QtWidgets.QSizePolicy.Policy.Fixed,
+            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
         )
 
-    def parent(self) -> QtCore.QObject:
-        return super().parent()
+        self._glow_color: QtGui.QColor = QtGui.QColor("#E9575700")
+
+        self._animation_speed: int = 300
+        self.glow_animation = QtCore.QPropertyAnimation(self, b"glow_color")
+        self.glow_animation.setEasingCurve(
+            QtCore.QEasingCurve().Type.InOutQuart
+        )
+        self.glow_animation.setDuration(self.animation_speed)
 
     def resizeEvent(self, a0: QtGui.QResizeEvent) -> None:
         self.update_text_metrics()
@@ -47,7 +55,14 @@ class BlocksLabel(QtWidgets.QLabel):
     @background_color.setter
     def background_color(self, color: QtGui.QColor) -> None:
         self._background_color = color
-        self.update()
+
+    @property
+    def border_color(self) -> typing.Optional[QtGui.QColor]:
+        return self._border_color
+
+    @border_color.setter
+    def border_color(self, color: QtGui.QColor) -> None:
+        self._border_color = color
 
     @property
     def rounded(self) -> bool:
@@ -65,19 +80,53 @@ class BlocksLabel(QtWidgets.QLabel):
     def marquee(self, activate) -> None:
         self._marquee = activate
 
-    # TODO: Add rounded object according to the size, calculate the edge pixels radius according to the label size
-    def construct_animation(self) -> None:
-        self.setAlignment(
-            QtCore.Qt.AlignmentFlag.AlignHCenter
-            | QtCore.Qt.AlignmentFlag.AlignVCenter
+    @QtCore.pyqtProperty(int)
+    def animation_speed(self) -> int:
+        return self._animation_speed
+
+    @animation_speed.setter
+    def animation_speed(self, new_speed: int) -> None:
+        self._animation_speed = new_speed
+
+    @QtCore.pyqtProperty(QtGui.QColor)
+    def glow_color(self) -> QtGui.QColor:
+        return self._glow_color
+
+    @glow_color.setter
+    def glow_color(self, color: QtGui.QColor) -> None:
+        self._glow_color = color
+        self.repaint()
+
+    @QtCore.pyqtSlot(name="start_glow_animation")
+    def start_glow_animation(self) -> None:
+        self.glow_animation.setDuration(self.animation_speed)
+        start_color = QtGui.QColor("#E9575700")
+        self.glow_animation.setStartValue(start_color)
+        end_color = QtGui.QColor("#E95757")
+        self.glow_animation.setEndValue(end_color)
+        self.glow_animation.setDirection(
+            QtCore.QPropertyAnimation.Direction.Forward
         )
+        self.glow_animation.setLoopCount(-1)
+        self.glow_animation.finished.connect(self.change_glow_direction)
+        # self.glow_animation.finished.connect(self.start_glow_animation)
+        self.glow_animation.start()
 
-        self.animation = QtCore.QPropertyAnimation(self, b"borderColor")  # type: ignore
-        self.animation.setDuration(2000)
-        self.animation.setLoopCount(-1)
+    @QtCore.pyqtSlot(name="change_glow_direction")
+    def change_glow_direction(self) -> None:
+        if (
+            self.glow_animation.direction()
+            == QtCore.QPropertyAnimation.Direction.Forward
+        ):
+            self.glow_animation.setDirection(
+                QtCore.QPropertyAnimation.Direction.Backward
+            )
+        else:
+            self.glow_animation.setDirection(
+                QtCore.QPropertyAnimation.Direction.Forward
+            )
 
-        self.animation.setStartValue(QtGui.QColor("red"))
-        self.animation.start()
+        print("changing direction")
 
     def update_text_metrics(self) -> None:
         font_metrics = self.fontMetrics()
@@ -120,15 +169,13 @@ class BlocksLabel(QtWidgets.QLabel):
         qp.setRenderHint(qp.RenderHint.Antialiasing, True)
         qp.setRenderHint(qp.RenderHint.SmoothPixmapTransform, True)
         qp.setRenderHint(qp.RenderHint.LosslessImageRendering, True)
-        # opt = QtWidgets.QStylePainter(self)
-
         _rect = self.rect()
         _style = self.style()
 
-        if _style is None or _rect is None:
+        if not _style or _rect.isNull():
             return
 
-        if self.icon_pixmap is not None:
+        if self.icon_pixmap:
             qp.setCompositionMode(
                 qp.CompositionMode.CompositionMode_SourceOver
             )
@@ -151,55 +198,37 @@ class BlocksLabel(QtWidgets.QLabel):
             qp.drawPixmap(
                 adjusted_icon_rect, _icon_scaled, _icon_scaled.rect().toRectF()
             )
-        # TODO : Feature Request, add text onto the label, formatted according to the icon,
-        #  Add "above" "bellow", "right", "left" this indicates where the text should be drawn
 
-        if self._background_color is not None:
-            # Rounded background edges
-            path = QtGui.QPainterPath()
-            path.addRoundedRect(
-                self.rect().toRectF(),
-                10.0,
-                10.0,
-                QtCore.Qt.SizeMode.AbsoluteSize,
+        if self.glow_animation.state() == self.glow_animation.State.Running:
+            big_rect = QtGui.QPainterPath()
+            rect = self.contentsRect().toRectF()
+            big_rect.addRoundedRect(
+                rect, 10.0, 10.0, QtCore.Qt.SizeMode.AbsoluteSize
             )
-            mask = QtGui.QRegion(path.toFillPolygon().toPolygon())
-            self.setMask(mask)
-
-            painter = QtGui.QPainter()
-            painter.begin(self)
-            painter.setRenderHint(painter.RenderHint.Antialiasing)
-            painter.setRenderHint(painter.RenderHint.SmoothPixmapTransform)
-            painter.fillPath(path, self._background_color)
-            painter.end()
-
-            # qp.setCompositionMode(qp.CompositionMode.CompositionMode_SourceIn)
-
-            # _brush = QtGui.QBrush()
-            # _brush.setColor(self._background_color)
-            # _brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-            # qp.setBrush(_brush)
-            # if self._rounded:
-            #     qp.drawRoundedRect(
-            #         self.rect(), 15, 15, QtCore.Qt.SizeMode.AbsoluteSize
-            #     )
-            # else:
-            #     qp.drawRect(self.rect())
-        # qp.restore()
+            mini_rect = QtCore.QRectF(
+                (rect.width() - rect.width() * 0.99) // 2,
+                (rect.height() - rect.height() * 0.85) // 2,
+                rect.width() * 0.99,
+                rect.height() * 0.85,
+            )
+            mini_path = QtGui.QPainterPath()
+            mini_path.addRoundedRect(
+                mini_rect, 10.0, 10.0, QtCore.Qt.SizeMode.AbsoluteSize
+            )
+            subtracted = big_rect.subtracted(mini_path)
+            subtracted.setFillRule(QtCore.Qt.FillRule.OddEvenFill)
+            qp.fillPath(subtracted, self.glow_color)
 
         if self.text:
+            qp.setCompositionMode(
+                qp.CompositionMode.CompositionMode_SourceOver
+            )
             text_rect = self.contentsRect()
             text_rect.translate(int(self.scroll_pos), 0)
             text_option = QtGui.QTextOption(self.alignment())
             text_option.setWrapMode(QtGui.QTextOption.WrapMode.NoWrap)
-            text_option.setAlignment(
-                QtCore.Qt.AlignmentFlag.AlignLeft
-                | QtCore.Qt.AlignmentFlag.AlignVCenter
-            )
-            painter = QtGui.QPainter(self)
-            text_rect.setWidth(self.text_width)
-
-            painter.drawText(
+            # text_rect.setWidth(self.text_width)
+            qp.drawText(
                 text_rect.toRectF(),
                 self._text,
                 text_option,
@@ -215,10 +244,9 @@ class BlocksLabel(QtWidgets.QLabel):
                     ),
                     0,
                 )
-                painter.drawText(
+                qp.drawText(
                     second_text_rect.toRectF(), self._text, text_option
                 )
-            painter.end()
         qp.end()
 
     def setProperty(self, name: str, value: typing.Any) -> bool:
