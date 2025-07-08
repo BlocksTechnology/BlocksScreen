@@ -10,6 +10,7 @@ class CustomNumpad(QtWidgets.QWidget):
 
     value_selected = QtCore.pyqtSignal(str, int, name="value_selected")
     request_back = QtCore.pyqtSignal(name="request_back")
+    start_glow_animation = QtCore.pyqtSignal(name="start_glow_animation")
 
     def __init__(
         self,
@@ -21,6 +22,7 @@ class CustomNumpad(QtWidgets.QWidget):
         self.name: str = ""
         self.min_value: int = 0
         self.max_value: int = 100
+        self.limit_hit: bool = False
         self.numpad_0.clicked.connect(lambda: self.value_inserted("0"))
         self.numpad_1.clicked.connect(lambda: self.value_inserted("1"))
         self.numpad_2.clicked.connect(lambda: self.value_inserted("2"))
@@ -35,6 +37,9 @@ class CustomNumpad(QtWidgets.QWidget):
         self.numpad_enter.clicked.connect(self.value_selected.disconnect)
         self.numpad_clear.clicked.connect(lambda: self.value_inserted("clear"))
         self.numpad_back_btn.clicked.connect(self.back_button)
+        self.start_glow_animation.connect(
+            self.inserted_value.start_glow_animation
+        )
 
     def value_inserted(self, value: str) -> None:
         """Handle number insertion on the numpad
@@ -44,24 +49,24 @@ class CustomNumpad(QtWidgets.QWidget):
         """
 
         if (
-            len(self.current_value) >= 1
-            and self.min_value
-            < int(round(float(self.current_value)))
-            < self.max_value
+            value.isnumeric()
+            and (
+                self.min_value
+                <= round(int(self.current_value))
+                <= self.max_value
+            )
+            and int(str(self.current_value) + str(value)) <= self.max_value
         ):
             self.limit_hit = False
-        else:
-            self.limit_hit = True
-
-        # if not self.limit_hit:
-        if value.isnumeric():
             if self.current_value == "0":
                 self.current_value = str(value)
             else:
                 self.current_value = str(self.current_value) + str(value)
-            # self.inserted_value.setPlaceholderText(str(self.current_value))
             self.inserted_value.clear()
             self.inserted_value.setText(str(self.current_value))
+        else:
+            self.start_glow_animation.emit()
+            self.limit_hit = True
 
         if "enter" in value and self.current_value.isnumeric():
             if len(self.current_value) == 0:
@@ -88,6 +93,9 @@ class CustomNumpad(QtWidgets.QWidget):
                 self.current_value = "0"
                 self.inserted_value.clear()
                 self.inserted_value.setText(self.current_value)
+
+            self.inserted_value.glow_animation.stop()
+            self.limit_hit = False
 
     def back_button(self):
         self.request_back.emit()
@@ -116,7 +124,12 @@ class CustomNumpad(QtWidgets.QWidget):
             a0 (QtGui.QPaintEvent | None): The event for repainting
 
         """
-        ...
+        if self.limit_hit:
+            # Start glowing red animation
+            ...
+
+        painter = QtGui.QPainter(self)
+        painter.end()
 
     def setupUI(self) -> None:
         self.setCursor(QtGui.QCursor(QtCore.Qt.CursorShape.BlankCursor))
