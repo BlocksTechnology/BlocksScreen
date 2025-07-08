@@ -1,9 +1,8 @@
 import enum
-import typing
 
-from PyQt6 import QtCore, QtGui, QtWidgets
 from lib.utils.blocks_label import BlocksLabel
 from lib.utils.toggleAnimatedButton import ToggleAnimatedButton
+from PyQt6 import QtCore, QtGui, QtWidgets
 
 
 class SensorWidget(QtWidgets.QWidget):
@@ -37,7 +36,7 @@ class SensorWidget(QtWidgets.QWidget):
         self.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
 
         self._sensor_type: SensorWidget.SensorType = self.SensorType.SWITCH
-        self._flags: SensorWidget.SensorFlags = self.SensorFlags.DISPLAY
+        self._flags: SensorWidget.SensorFlags = self.SensorFlags.CLICKABLE
         self.filament_state: SensorWidget.FilamentState = (
             SensorWidget.FilamentState.MISSING
         )
@@ -47,7 +46,7 @@ class SensorWidget(QtWidgets.QWidget):
         self._icon_label = None
         self._text_label = None
         self._text: str = (
-            str(self.sensor_type.name) + " Sensor " + str(self.name)
+            str(self.sensor_type.name) + " Sensor: " + str(self.name)
         )
         self._item_rect: QtCore.QRect = QtCore.QRect()
         self.icon_pixmap_fp: QtGui.QPixmap = QtGui.QPixmap(
@@ -130,7 +129,6 @@ class SensorWidget(QtWidgets.QWidget):
                 if self.filament_state == self.FilamentState.PRESENT
                 else self.icon_pixmap_fnp
             )
-
         background_rect = QtGui.QPainterPath()
         background_rect.addRoundedRect(
             self.contentsRect().toRectF(),
@@ -158,7 +156,6 @@ class SensorWidget(QtWidgets.QWidget):
         size_policy = QtWidgets.QSizePolicy(_policy, _policy)
         size_policy.setHeightForWidth(self.sizePolicy().hasHeightForWidth())
         self.setSizePolicy(size_policy)
-
         self.sensor_horizontal_layout = QtWidgets.QHBoxLayout()
         self.sensor_horizontal_layout.setGeometry(QtCore.QRect(0, 0, 640, 60))
         self.sensor_horizontal_layout.setObjectName("sensorHorizontalLayout")
@@ -196,4 +193,3 @@ class SensorWidget(QtWidgets.QWidget):
         self.toggle_button.setMaximumWidth(100)
         self.sensor_horizontal_layout.addWidget(self.toggle_button)
         self.setLayout(self.sensor_horizontal_layout)
-        self.update()
