@@ -185,9 +185,19 @@ class BlocksCustomButton(QtWidgets.QPushButton):
             self._name = name
         elif name == "text_color":
             self.text_color = QtGui.QColor(value)
-        return super().setProperty(name, value)
+        # return super().setProperty(name, value)
 
-    def handleTouchBegin(self, e: QtCore.QEvent): ...
+    def handleTouchBegin(self, e: QtCore.QEvent):
+        ...
+        # if not self.button_background:
+        #     if self.button_background.contains(e.pos()):  # type: ignore
+        #         # super().mousePressEvent(e)
+        #         self.mousePressEvent(e)  # type: ignore
+        #         return
+        #     else:
+        #         e.ignore()
+        #         return
+
     def handleTouchUpdate(self, e: QtCore.QEvent): ...
     def handleTouchEnd(self, e: QtCore.QEvent): ...
     def handleTouchCancel(self, e: QtCore.QEvent): ...
@@ -195,14 +205,14 @@ class BlocksCustomButton(QtWidgets.QPushButton):
     def event(self, e: QtCore.QEvent) -> bool:
         if e.type() == QtCore.QEvent.Type.TouchBegin:
             self.handleTouchBegin(e)
-            return True
+            return False
         elif e.type() == QtCore.QEvent.Type.TouchUpdate:
             self.handleTouchUpdate(e)
-            return True
+            return False
         elif e.type() == QtCore.QEvent.Type.TouchEnd:
             self.handleTouchEnd(e)
-            return True
+            return False
         elif e.type() == QtCore.QEvent.Type.TouchCancel:
             self.handleTouchCancel(e)
-            return True
+            return False
         return super().event(e)
