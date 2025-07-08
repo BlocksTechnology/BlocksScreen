@@ -1,16 +1,11 @@
-from PyQt6 import QtCore, QtGui, QtWidgets
 import typing
 
-from matplotlib.image import thumbnail
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_label import BlocksLabel
+from PyQt6 import QtCore, QtGui, QtWidgets
 
 
 class ConfirmWidget(QtWidgets.QWidget):
-    request_back: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
-        name="request_back"
-    )
-
     on_accept: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         str, name="on_accept"
     )
@@ -299,6 +294,5 @@ class ConfirmWidget(QtWidgets.QWidget):
         self.verticalLayout_4.addLayout(self.cf_content_vertical_layout)
 
         self.confirm_title_label.setText("Print File?")
-        # self.cf_info.setText("This i sa info label")
         self.confirm_button.setText("Accept")
         self.reject_button.setText("Cancel")
