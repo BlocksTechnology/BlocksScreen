@@ -308,10 +308,14 @@ class ControlTab(QtWidgets.QStackedWidget):
 
     @QtCore.pyqtSlot(str, int, name="on_numpad_change")
     def on_numpad_change(self, name: str, new_value: int) -> None:
-        # self.run_gcode.emit(
-        #     f"SET_HEATER_TEMPERATURE HEATER={name} TARGET={new_value}"
-        # )
-        print(f"SET_HEATER_TEMPERATURE HEATER={name} TARGET={new_value}")
+        if "bed" in name.lower():
+            name = "heater_bed"
+        elif "extruder" in name.lower():
+            name = "extruder"
+        self.run_gcode_signal.emit(
+            f"SET_HEATER_TEMPERATURE HEATER={name} TARGET={new_value}"
+        )
+        # print(f"SET_HEATER_TEMPERATURE HEATER={name} TARGET={new_value}")
 
     def change_page(self, index):
         self.request_change_page.emit(2, index)

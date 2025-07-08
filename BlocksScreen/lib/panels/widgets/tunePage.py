@@ -55,7 +55,7 @@ class TuneWidget(QtWidgets.QWidget):
                 int(round(self.bed_target)),
                 self.on_numpad_change,
                 0,
-                120, # TODO: Get this value from printer objects
+                120,  # TODO: Get this value from printer objects
             )
         )
         self.extruder_display.clicked.connect(
@@ -66,7 +66,7 @@ class TuneWidget(QtWidgets.QWidget):
                 int(round(self.extruder_target)),
                 self.on_numpad_change,
                 0,
-                300, # TODO: Get this value from printer objects
+                300,  # TODO: Get this value from printer objects
             )
         )
         self.speed_display.clicked.connect(
@@ -83,10 +83,13 @@ class TuneWidget(QtWidgets.QWidget):
 
     @QtCore.pyqtSlot(str, int, name="on_numpad_change")
     def on_numpad_change(self, name: str, new_value: int) -> None:
-        # self.run_gcode.emit(
-        #     f"SET_HEATER_TEMPERATURE HEATER={name} TARGET={new_value}"
-        # )
-        print(f"SET_HEATER_TEMPERATURE HEATER={name} TARGET={new_value}")
+        if "bed" in name.lower():
+            name = "heater_bed"
+        elif "extruder" in name.lower():
+            name = "extruder"
+        self.run_gcode.emit(
+            f"SET_HEATER_TEMPERATURE HEATER={name} TARGET={new_value}"
+        )
 
     @QtCore.pyqtSlot(str, int, name="on_slider_change")
     def on_slider_change(self, name: str, new_value: int) -> None:
