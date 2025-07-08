@@ -3,6 +3,7 @@ import typing
 from collections import deque
 from functools import partial
 
+from lib.panels.widgets.numpadPage import CustomNumpad
 import events
 from events import (
     KlippyDisconnected,
@@ -34,30 +35,42 @@ from lib.ui.resources.system_resources_rc import *
 from lib.ui.resources.top_bar_resources_rc import *
 
 # * PyQt6 imports
-from PyQt6.QtCore import QEvent, QSize, pyqtSignal, pyqtSlot
-from PyQt6.QtGui import QCloseEvent, QPaintEvent
-from PyQt6.QtWidgets import QApplication, QMainWindow, QStackedWidget
-# from lib.panels.widgets.numpadPage import CustomNumpad
+from PyQt6 import QtCore, QtGui, QtWidgets
 
 _logger = logging.getLogger(name="logs/BlocksScreen.log")
 
 
-class MainWindow(QMainWindow):
-    bo_ws_startup = pyqtSignal(name="bo_start_websocket_connection")
-    printer_state_signal = pyqtSignal(str, name="printer_state")
-    query_object_list = pyqtSignal(list, name="query_object_list")
-    printer_object_report_signal = pyqtSignal(
+class MainWindow(QtWidgets.QMainWindow):
+    bo_ws_startup = QtCore.pyqtSignal(name="bo_start_websocket_connection")
+    printer_state_signal = QtCore.pyqtSignal(str, name="printer_state")
+    query_object_list = QtCore.pyqtSignal(list, name="query_object_list")
+    printer_object_report_signal = QtCore.pyqtSignal(
         list, name="handle_report_received"
     )
 
-    gcode_response = pyqtSignal(list, name="gcode_response")
-    handle_error_response = pyqtSignal(list, name="handle_error_response")
-
-    call_numpad_signal = pyqtSignal(
-        int, str, str, "PyQt_PyObject", QStackedWidget, name="call_numpad"
+    gcode_response = QtCore.pyqtSignal(list, name="gcode_response")
+    handle_error_response = QtCore.pyqtSignal(
+        list, name="handle_error_response"
     )
-    call_network_panel = pyqtSignal(name="visibilityChange_networkPanel")
+
+    call_numpad_signal = QtCore.pyqtSignal(
+        int,
+        str,
+        str,
+        "PyQt_PyObject",
+        QtWidgets.QStackedWidget,
+        name="call_numpad",
+    )
+    call_network_panel = QtCore.pyqtSignal(
+        name="visibilityChange_networkPanel"
+    )
     objects_subscriptions: dict = {}
+
+    request_numpad: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        [str, int, "PyQt_PyObject"],
+        [str, int, "PyQt_PyObject", int, int],
+        name="request_numpad",
+    )
 
     def __init__(self):
         super(MainWindow, self).__init__()
@@ -71,8 +84,8 @@ class MainWindow(QMainWindow):
         self.file_data = Files(self, self.ws)
         self.index_stack = deque(maxlen=4)
         self.printer = Printer(self, self.ws)
-        # self.numpad_object = CustomNumpad(self)
         self.conn_window = ConnectionPage(self, self.ws)
+
         self.installEventFilter(self.conn_window)
         self.printPanel = PrintTab(
             self.ui.printTab, self.file_data, self.ws, self.printer
@@ -88,16 +101,16 @@ class MainWindow(QMainWindow):
 
         self.bo_ws_startup.connect(slot=self.bo_start_websocket_connection)
         self.ws.connecting_signal.connect(
-            slot=self.conn_window.on_websocket_connecting
+            self.conn_window.on_websocket_connecting
         )
         self.ws.connected_signal.connect(
-            slot=self.conn_window.on_websocket_connection_achieved
+            self.conn_window.on_websocket_connection_achieved
         )
         self.ws.connection_lost.connect(
-            slot=self.conn_window.on_websocket_connection_lost
+            self.conn_window.on_websocket_connection_lost
         )
 
-        self.printPanel.request_back.connect(slot=self.global_back)
+        self.printPanel.request_back_page.connect(slot=self.global_back)
         self.printPanel.request_change_page.connect(
             slot=self.global_change_page
         )
@@ -144,10 +157,8 @@ class MainWindow(QMainWindow):
         )
         self.gcode_response.connect(self.printer.gcode_response)
         self.query_object_list.connect(self.printer.on_object_list)
-        self.printer.extruder_update.connect(self.extruder_temperature_change)
-        self.printer.heater_bed_update.connect(
-            self.heater_bed_temperature_change
-        )
+        self.printer.extruder_update.connect(self.on_extruder_update)
+        self.printer.heater_bed_update.connect(self.on_heater_bed_update)
         self.ui.main_content_widget.currentChanged.connect(
             slot=self.reset_tab_indexes
         )
@@ -178,9 +189,12 @@ class MainWindow(QMainWindow):
             self.controlPanel.probe_helper_page.handle_error_response
         )
 
+        self.ui.extruder_temp_display.display_format = "upper_downer"
+        self.ui.bed_temp_display.display_format = "upper_downer"
+
         self.reset_tab_indexes()
 
-    @pyqtSlot(name="enable_tab_bar")
+    @QtCore.pyqtSlot(name="enable_tab_bar")
     def enable_tab_bar(self) -> None:
         """Enables the tab bar"""
         if (
@@ -196,7 +210,7 @@ class MainWindow(QMainWindow):
             self.ui.main_content_widget.setTabEnabled(4, True)
             self.ui.header_main_layout.setEnabled(True)
 
-    @pyqtSlot(name="disable_tab_bar")
+    @QtCore.pyqtSlot(name="disable_tab_bar")
     def disable_tab_bar(self) -> bool:
         """Disables the tab bar so to not change the tab.
 
@@ -261,7 +275,7 @@ class MainWindow(QMainWindow):
             case 3:
                 self.utilitiesPanel.setCurrentIndex(panel_index)
 
-    @pyqtSlot(int, int, name="request_change_page")
+    @QtCore.pyqtSlot(int, int, name="request_change_page")
     def global_change_page(self, tab_index: int, panel_index: int) -> None:
         """Changes panels pages globally
 
@@ -292,7 +306,7 @@ class MainWindow(QMainWindow):
             f"Requested page change -> Tab index :{requested_page[0]}, pane panel index : {requested_page[1]}"
         )
 
-    @pyqtSlot(name="request_back")
+    @QtCore.pyqtSlot(name="request_back")
     def global_back(self) -> None:
         """Requests to go back a page globally"""
         if not len(self.index_stack):
@@ -303,13 +317,13 @@ class MainWindow(QMainWindow):
         self.index_stack.pop()  # Remove the last position.
         _logger.debug("Successfully went back a page.")
 
-    @pyqtSlot(name="bo_start_websocket_connection")
+    @QtCore.pyqtSlot(name="bo_start_websocket_connection")
     def bo_start_websocket_connection(self) -> None:
         """Starts the Websocket connection with moonraker"""
         self.ws.start()
         self.ws.try_connection()
 
-    def event(self, event: QEvent) -> bool:
+    def event(self, event: QtCore.QEvent) -> bool:
         """Receives PyQt Events, reimplemented method from the QEvent class"""
         if event.type() == WebSocketMessageReceived.type():
             if isinstance(event, WebSocketMessageReceived):
@@ -360,10 +374,12 @@ class MainWindow(QMainWindow):
         if "server.file" in _method:
             file_data_event = ReceivedFileData(_data, _method, _metadata)
             try:
-                QApplication.postEvent(self.file_data, file_data_event)
+                QtWidgets.QApplication.postEvent(
+                    self.file_data, file_data_event
+                )
             except Exception as e:
                 _logger.error(
-                    f"Error emitting event for file related information \
+                    f"Error posting event for file related information \
                         received from websocket | error message received: {e}"
                 )
         elif "machine" in _method:
@@ -427,8 +443,8 @@ class MainWindow(QMainWindow):
                             _event = _klippy_event_callback(
                                 data=f"Moonraker reported klippy is {_state_call}"
                             )
-                            instance = QApplication.instance()
-                            if not isinstance(_event, QEvent):
+                            instance = QtWidgets.QApplication.instance()
+                            if not isinstance(_event, QtCore.QEvent):
                                 return
                             if instance:
                                 _logger.info(
@@ -451,7 +467,7 @@ class MainWindow(QMainWindow):
                     _file_change_list[0].get("item").get("path")
                 )  # TODO : NOTIFY_FILELIST_CHANGED, I DON'T KNOW IF I REALLY WANT TO SEND NOTIFICATIONS ON FILE CHANGES.
             ...
-            self.file_data.request_file_list.emit()
+            # self.file_data.request_file_list.emit()
 
         elif "notify_update_response" in _method:
             ...
@@ -502,8 +518,8 @@ class MainWindow(QMainWindow):
             _object_report = _data["params"]
             self.printer_object_report_signal[list].emit(_object_report)
 
-    @pyqtSlot(str, str, float, name="extruder_update")
-    def extruder_temperature_change(
+    @QtCore.pyqtSlot(str, str, float, name="on_extruder_update")
+    def on_extruder_update(
         self, extruder_name: str, field: str, new_value: float
     ) -> None:
         # TODO: Add the text dynamically considering the amount of extruders
@@ -513,11 +529,11 @@ class MainWindow(QMainWindow):
                 ...
             elif field == "target":
                 self.ui.extruder_temp_display.secondary_text = (
-                    f"{new_value:.1f}"
+                    f"{round(int(new_value)):.0f}"
                 )
 
-    @pyqtSlot(str, str, float, name="heater_bed_update")
-    def heater_bed_temperature_change(
+    @QtCore.pyqtSlot(str, str, float, name="on_heater_bed_update")
+    def on_heater_bed_update(
         self, name: str, field: str, new_value: float
     ) -> None:
         # TODO: Add the text dynamically considering the amount of extruders
@@ -525,26 +541,26 @@ class MainWindow(QMainWindow):
             self.ui.bed_temp_display.setText(f"{new_value:.1f}")
 
         elif field == "target":
-            self.ui.bed_temp_display.secondary_text = f"{new_value:.1f}"
+            self.ui.bed_temp_display.secondary_text = f"{round(int(new_value)):.0f}"
 
-    def paintEvent(self, a0: QPaintEvent | None) -> None:
+    def paintEvent(self, a0: QtGui.QPaintEvent | None) -> None:
         # TODO: If tab bar is disabled gray it out
         self.updateGeometry()
         if a0 is None:
             return  # TEST: Maybe this return fucks up the app
         return super().paintEvent(a0)
 
-    @pyqtSlot(str, name="set_header_filament_type")
+    @QtCore.pyqtSlot(str, name="set_header_filament_type")
     def set_header_filament_type(self, type: str):
         self.ui.filament_type_icon.setText(f"{type}")
         self.ui.filament_type_icon.update()
 
-    @pyqtSlot(str, name="set_header_nozzle_diameter")
+    @QtCore.pyqtSlot(str, name="set_header_nozzle_diameter")
     def set_header_nozzle_diameter(self, diam: str):
         self.ui.nozzle_size_icon.setText(f"{diam}mm")
         self.ui.nozzle_size_icon.update()
 
-    def closeEvent(self, a0: typing.Optional[QCloseEvent]) -> None:
+    def closeEvent(self, a0: typing.Optional[QtGui.QCloseEvent]) -> None:
         _loggers = [
             logging.getLogger(name) for name in logging.root.manager.loggerDict
         ]  # Get available logger handlers
@@ -557,10 +573,10 @@ class MainWindow(QMainWindow):
         self.close()
         if a0 is None:
             return  # TEST Maybe this return fucks up the app
-        QMainWindow.closeEvent(self, a0)
+        QtWidgets.QMainWindow.closeEvent(self, a0)
         super().closeEvent(a0)
 
-    def sizeHint(self) -> QSize:
+    def sizeHint(self) -> QtCore.QSize:
         self.adjustSize()
 
         return super().sizeHint()
