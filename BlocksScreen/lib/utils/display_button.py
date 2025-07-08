@@ -19,6 +19,9 @@ class DisplayButton(QtWidgets.QPushButton):
         self._text: str = ""
         self._secondary_text: str = ""
         self._name: str = ""
+        self.display_format: typing.Literal["normal", "upper_downer"] = (
+            "normal"
+        )
         self.text_color: QtGui.QColor = QtGui.QColor(0, 0, 0)
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_AcceptTouchEvents, True)
 
@@ -43,14 +46,14 @@ class DisplayButton(QtWidgets.QPushButton):
     def text(self) -> str:
         return self._text
 
-    @property
-    def secondary_text(self) -> str:
-        return self._secondary_text
-
     def setText(self, text: str) -> None:
         self._text = text
         self.update()
         super().setText(text)
+
+    @property
+    def secondary_text(self) -> str:
+        return self._secondary_text
 
     @secondary_text.setter
     def secondary_text(self, text: str) -> None:
@@ -161,44 +164,87 @@ class DisplayButton(QtWidgets.QPushButton):
                 _rect.height(),
             )
             if "secondary" in self._button_type:
-                _ptl_rect = QtCore.QRectF(
-                    int(_mtl.left()),
-                    0.0,
-                    int((_mtl.width() / 2.0) - 5),
-                    _rect.height(),
-                )
-                _mtl_rect = QtCore.QRectF(
-                    int(_ptl_rect.right()), 0.0, 10, _rect.height()
-                )
-                _stl_rect = QtCore.QRectF(
-                    int(_mtl.center().x() + 3.0),
-                    0.0,
-                    int(_mtl.width() / 2.0),
-                    _rect.height(),
-                )
-                painter.drawText(
-                    _ptl_rect,
-                    QtCore.Qt.TextFlag.TextShowMnemonic
-                    | QtCore.Qt.AlignmentFlag.AlignHCenter
-                    | QtCore.Qt.AlignmentFlag.AlignVCenter,
-                    str(self.text()) if self.text() else str("?"),
-                )
-                painter.drawText(
-                    _stl_rect,
-                    QtCore.Qt.TextFlag.TextShowMnemonic
-                    | QtCore.Qt.AlignmentFlag.AlignHCenter
-                    | QtCore.Qt.AlignmentFlag.AlignVCenter,
-                    str(self.secondary_text)
-                    if self.secondary_text
-                    else str("?"),
-                )
-                painter.drawText(
-                    _mtl_rect,
-                    QtCore.Qt.TextFlag.TextShowMnemonic
-                    | QtCore.Qt.AlignmentFlag.AlignHCenter
-                    | QtCore.Qt.AlignmentFlag.AlignVCenter,
-                    str("/"),
-                )
+                if self.display_format == "normal":
+                    _ptl_rect = QtCore.QRectF(
+                        int(_mtl.left()),
+                        0.0,
+                        int((_mtl.width() / 2.0) - 5),
+                        _rect.height(),
+                    )
+                    _mtl_rect = QtCore.QRectF(
+                        int(_ptl_rect.right()), 0.0, 10, _rect.height()
+                    )
+                    _stl_rect = QtCore.QRectF(
+                        int(_mtl.center().x() + 3.0),
+                        0.0,
+                        int(_mtl.width() / 2.0),
+                        _rect.height(),
+                    )
+                    painter.drawText(
+                        _ptl_rect,
+                        QtCore.Qt.TextFlag.TextShowMnemonic
+                        | QtCore.Qt.AlignmentFlag.AlignHCenter
+                        | QtCore.Qt.AlignmentFlag.AlignVCenter,
+                        str(self.text()) if self.text() else str("?"),
+                    )
+                    painter.drawText(
+                        _stl_rect,
+                        QtCore.Qt.TextFlag.TextShowMnemonic
+                        | QtCore.Qt.AlignmentFlag.AlignHCenter
+                        | QtCore.Qt.AlignmentFlag.AlignVCenter,
+                        str(self.secondary_text)
+                        if self.secondary_text
+                        else str("?"),
+                    )
+                    painter.drawText(
+                        _mtl_rect,
+                        QtCore.Qt.TextFlag.TextShowMnemonic
+                        | QtCore.Qt.AlignmentFlag.AlignHCenter
+                        | QtCore.Qt.AlignmentFlag.AlignVCenter,
+                        str("/"),
+                    )
+                elif self.display_format == "upper_downer":
+                    _mtl = QtCore.QRectF(
+                        int(_icon_rect.width()) + margin ,
+                        0.0,
+                        int(_rect.width() - _icon_rect.width() - margin ),
+                        _rect.height(),
+                    )
+                    _upper_rect = QtCore.QRectF(
+                        _mtl.left() + margin,
+                        _mtl.top() + margin,
+                        _mtl.width() - margin * 2,
+                        (_mtl.height() * 0.7) // 2,
+                    )
+                    _downer_rect = QtCore.QRectF(
+                        _mtl.left() + margin,
+                        (_upper_rect.bottom() + margin + 5),
+                        _mtl.width() - margin * 2,
+                        (_mtl.height() * 0.5) // 2,
+                    )
+                    font = QtGui.QFont()
+                    font.setPointSize(20)
+                    font.setFamily("Momcake-bold")
+                    painter.setFont(font)
+                    painter.setCompositionMode(painter.CompositionMode.CompositionMode_SourceAtop)
+                    painter.drawText(
+                        _upper_rect,
+                        # QtCore.Qt.AlignmentFlag.AlignCenter,
+                        QtCore.Qt.AlignmentFlag.AlignRight
+                        | QtCore.Qt.AlignmentFlag.AlignVCenter,
+                        self.text(),
+                    )
+                    font.setPointSize(15)
+                    painter.setPen(QtGui.QColor("#b6b0b0"))
+                    painter.setFont(font)
+                    
+                    painter.drawText(
+                        _downer_rect,
+                        QtCore.Qt.AlignmentFlag.AlignRight
+                        | QtCore.Qt.AlignmentFlag.AlignVCenter,
+                        self.secondary_text,
+                    )
+
             else:
                 painter.drawText(
                     _mtl,
