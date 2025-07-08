@@ -245,11 +245,8 @@ def estimate_print_time(seconds: int) -> list:
     return [days, hours, minutes, seconds]
 
 
-def normalize(value, r_min=0., r_max=1., t_min=0.0, t_max=100):
+def normalize(value, r_min=0.0, r_max=1.0, t_min=0.0, t_max=100):
     # https://stats.stackexchange.com/questions/281162/scale-a-number-between-a-range
     c1 = (value - r_min) / (r_max - r_min)
     c2 = (t_max - t_min) + t_min
     return c1 * c2
-
-
-
