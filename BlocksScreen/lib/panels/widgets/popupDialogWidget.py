@@ -37,7 +37,7 @@ class Popup(QtWidgets.QDialog):
 
         self.setupUI()
         self.setMouseTracking(True)
-        self.setAttribute(QtCore.Qt.WidgetAttribute.WA_MouseTracking, True)
+        self.setAttribute(QtCore.Qt.WidgetAttribute.WA_AcceptTouchEvents, True)
         self.setAttribute(
             QtCore.Qt.WidgetAttribute.WA_TranslucentBackground, True
         )
