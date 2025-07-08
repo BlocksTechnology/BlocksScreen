@@ -1,8 +1,8 @@
-from PyQt6 import QtGui, QtWidgets, QtCore
-from lib.utils.icon_button import IconButton
-from lib.utils.blocks_button import BlocksCustomButton
-from lib.utils.blocks_label import BlocksLabel
 import typing
+
+from lib.utils.blocks_label import BlocksLabel
+from lib.utils.icon_button import IconButton
+from PyQt6 import QtCore, QtGui, QtWidgets
 
 
 class BabystepPage(QtWidgets.QWidget):
@@ -12,32 +12,36 @@ class BabystepPage(QtWidgets.QWidget):
     run_gcode: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         str, name="run_gcode"
     )
+    _z_offset: float = 0.1
 
     def __init__(self, parent) -> None:
         super().__init__(parent)
         self.setObjectName("babystepPage")
+        self.setAttribute(QtCore.Qt.WidgetAttribute.WA_AcceptTouchEvents, True)
+        self.setAttribute(QtCore.Qt.WidgetAttribute.WA_MouseTracking, True)
+        self.setTabletTracking(True)
+        self.setMouseTracking(True)
         self.setupUI()
-        self.bbp_away_from_bed.clicked.connect(self.move_nozzle_far_to_bed)
-        self.bbp_close_to_bed.clicked.connect(self.move_nozzle_close_to_bed)
+        self.bbp_away_from_bed.clicked.connect(self.on_move_nozzle_away)
+        self.bbp_close_to_bed.clicked.connect(self.on_move_nozzle_close)
         self.babystep_back_btn.clicked.connect(self.request_back.emit)
         self.bbp_nozzle_offset_01.toggled.connect(self.handle_z_offset_change)
         self.bbp_nozzle_offset_025.toggled.connect(self.handle_z_offset_change)
         self.bbp_nozzle_offset_05.toggled.connect(self.handle_z_offset_change)
         self.bbp_nozzle_offset_1.toggled.connect(self.handle_z_offset_change)
         self.bbp_nozzle_offset_1.toggled.connect(self.handle_z_offset_change)
+        self.babystep_back_btn.clicked.connect(self.request_back)
 
-    @QtCore.pyqtSlot(name="request_nozzle_close_to_bed")
-    def move_nozzle_close_to_bed(self) -> None:
-        """Slot for babystepping the nozzle closer to the print plate,
-        by issuing a gcode command to Klipper
-        """
+    @QtCore.pyqtSlot(name="on_move_nozzle_close")
+    def on_move_nozzle_close(self) -> None:
+        """Move the nozzle closer to the print plate by the amount set in **` self._z_offset`**"""
         self.run_gcode.emit(
             f"SET_GCODE_OFFSET Z_ADJUST=-{self._z_offset} MOVE=1"  # Z_ADJUST adds the value to the existing offset
         )
 
-    @QtCore.pyqtSlot(name="request_nozzle_far_to_bed")
-    def move_nozzle_far_to_bed(self) -> None:
-        """Slot for Babystep button to get far from the bed."""
+    @QtCore.pyqtSlot(name="on_move_nozzle_away")
+    def on_move_nozzle_away(self) -> None:
+        """Slot for Babystep button to get far from the bed by **` self._z_offset`** amount"""
         self.run_gcode.emit(
             f"SET_GCODE_OFFSET Z_ADJUST=+{self._z_offset} MOVE=1"  # Z_ADJUST adds the value to the existing offset
         )
@@ -73,45 +77,43 @@ class BabystepPage(QtWidgets.QWidget):
         self.setMinimumSize(QtCore.QSize(710, 400))
         self.setMaximumSize(QtCore.QSize(720, 420))
         self.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
-
         self.verticalLayout = QtWidgets.QVBoxLayout(self)
         self.verticalLayout.setObjectName("verticalLayout")
         self.bbp_header_layout = QtWidgets.QHBoxLayout()
         self.bbp_header_layout.setObjectName("bbp_header_layout")
         self.bbp_header_title = QtWidgets.QLabel(parent=self)
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-        )
-        sizePolicy.setHorizontalStretch(0)
-        sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(
             self.bbp_header_title.sizePolicy().hasHeightForWidth()
         )
         self.bbp_header_title.setSizePolicy(sizePolicy)
         self.bbp_header_title.setMinimumSize(QtCore.QSize(200, 60))
-        self.bbp_header_title.setMaximumSize(QtCore.QSize(16777215, 16777215))
+        self.bbp_header_title.setMaximumSize(QtCore.QSize(16777215, 60))
         font = QtGui.QFont()
-        font.setPointSize(24)
+        font.setPointSize(22)
         self.bbp_header_title.setFont(font)
-        self.bbp_header_title.setStyleSheet(
-            "background: transparent; color: white;"
+        palette = QtGui.QPalette()
+        palette.setColor(
+            palette.ColorGroup.All,
+            palette.ColorRole.Window,
+            QtCore.Qt.GlobalColor.transparent,
         )
+        palette.setColor(
+            palette.ColorGroup.All,
+            palette.ColorRole.WindowText,
+            QtGui.QColor("#FFFFFF"),
+        )
+        self.bbp_header_title.setAutoFillBackground(True)
+        self.bbp_header_title.setBackgroundRole(palette.ColorRole.Window)
+        self.bbp_header_title.setPalette(palette)
+        self.bbp_header_title.setText("Babystep")
         self.bbp_header_title.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self.bbp_header_title.setObjectName("bbp_header_title")
         self.bbp_header_layout.addWidget(
             self.bbp_header_title,
             0,
-            QtCore.Qt.AlignmentFlag.AlignHCenter
-            | QtCore.Qt.AlignmentFlag.AlignVCenter,
+            QtCore.Qt.AlignmentFlag.AlignCenter,
         )
         self.babystep_back_btn = IconButton(parent=self)
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.Fixed,
-            QtWidgets.QSizePolicy.Policy.Fixed,
-        )
-        sizePolicy.setHorizontalStretch(0)
-        sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(
             self.babystep_back_btn.sizePolicy().hasHeightForWidth()
         )
@@ -120,8 +122,8 @@ class BabystepPage(QtWidgets.QWidget):
         self.babystep_back_btn.setMaximumSize(QtCore.QSize(60, 60))
         self.babystep_back_btn.setText("")
         self.babystep_back_btn.setFlat(True)
-        self.babystep_back_btn.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/back.svg")
+        self.babystep_back_btn.setPixmap(
+            QtGui.QPixmap(":/ui/media/btn_icons/back.svg")
         )
         self.babystep_back_btn.setObjectName("babystep_back_btn")
         self.bbp_header_layout.addWidget(
@@ -130,24 +132,19 @@ class BabystepPage(QtWidgets.QWidget):
             QtCore.Qt.AlignmentFlag.AlignRight
             | QtCore.Qt.AlignmentFlag.AlignVCenter,
         )
+
         self.bbp_header_layout.setStretch(0, 1)
         self.verticalLayout.addLayout(self.bbp_header_layout)
         self.horizontalLayout_2 = QtWidgets.QHBoxLayout()
         self.horizontalLayout_2.setObjectName("horizontalLayout_2")
         self.frame_2 = QtWidgets.QFrame(parent=self)
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.Fixed,
-            QtWidgets.QSizePolicy.Policy.Fixed,
-        )
-        sizePolicy.setHorizontalStretch(0)
-        sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(
             self.frame_2.sizePolicy().hasHeightForWidth()
         )
         self.frame_2.setSizePolicy(sizePolicy)
         self.frame_2.setMinimumSize(QtCore.QSize(350, 160))
         self.frame_2.setMaximumSize(QtCore.QSize(350, 160))
-        self.frame_2.setFrameShape(QtWidgets.QFrame.Shape.StyledPanel)
+        self.frame_2.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
         self.frame_2.setFrameShadow(QtWidgets.QFrame.Shadow.Raised)
         self.frame_2.setObjectName("frame_2")
         self.bbp_babystep_graphic = QtWidgets.QLabel(parent=self.frame_2)
@@ -155,7 +152,6 @@ class BabystepPage(QtWidgets.QWidget):
         self.bbp_babystep_graphic.setLayoutDirection(
             QtCore.Qt.LayoutDirection.RightToLeft
         )
-        self.bbp_babystep_graphic.setText("")
         self.bbp_babystep_graphic.setPixmap(
             QtGui.QPixmap(":/graphics/media/graphics/babystep_graphic.png")
         )
@@ -168,12 +164,6 @@ class BabystepPage(QtWidgets.QWidget):
         self.bbp_z_offset_current_value.setGeometry(
             QtCore.QRect(130, 70, 200, 60)
         )
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.Fixed,
-            QtWidgets.QSizePolicy.Policy.Fixed,
-        )
-        sizePolicy.setHorizontalStretch(0)
-        sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(
             self.bbp_z_offset_current_value.sizePolicy().hasHeightForWidth()
         )
@@ -181,7 +171,7 @@ class BabystepPage(QtWidgets.QWidget):
         self.bbp_z_offset_current_value.setMinimumSize(QtCore.QSize(150, 60))
         self.bbp_z_offset_current_value.setMaximumSize(QtCore.QSize(200, 60))
         font = QtGui.QFont()
-        font.setPointSize(13)
+        font.setPointSize(14)
         self.bbp_z_offset_current_value.setFont(font)
         self.bbp_z_offset_current_value.setStyleSheet(
             "background: transparent; color: white;"
@@ -205,13 +195,7 @@ class BabystepPage(QtWidgets.QWidget):
         self.bbp_buttons_layout = QtWidgets.QVBoxLayout()
         self.bbp_buttons_layout.setContentsMargins(5, 5, 5, 5)
         self.bbp_buttons_layout.setObjectName("bbp_buttons_layout")
-        self.bbp_away_from_bed = BlocksCustomButton(parent=self)
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.Fixed,
-            QtWidgets.QSizePolicy.Policy.Fixed,
-        )
-        sizePolicy.setHorizontalStretch(0)
-        sizePolicy.setVerticalStretch(0)
+        self.bbp_away_from_bed = IconButton(parent=self)
         sizePolicy.setHeightForWidth(
             self.bbp_away_from_bed.sizePolicy().hasHeightForWidth()
         )
@@ -219,9 +203,8 @@ class BabystepPage(QtWidgets.QWidget):
         self.bbp_away_from_bed.setMinimumSize(QtCore.QSize(80, 80))
         self.bbp_away_from_bed.setMaximumSize(QtCore.QSize(80, 80))
         self.bbp_away_from_bed.setFlat(True)
-        self.bbp_away_from_bed.setProperty(
-            "icon_pixmap",
-            QtGui.QPixmap(":/arrow_icons/media/btn_icons/up_arrow.svg"),
+        self.bbp_away_from_bed.setPixmap(
+            QtGui.QPixmap(":/arrow_icons/media/btn_icons/up_arrow.svg")
         )
         self.bbp_away_from_bed.setObjectName("bbp_away_from_bed")
         self.bbp_option_button_group = QtWidgets.QButtonGroup(self)
@@ -230,13 +213,7 @@ class BabystepPage(QtWidgets.QWidget):
         self.bbp_buttons_layout.addWidget(
             self.bbp_away_from_bed, 0, QtCore.Qt.AlignmentFlag.AlignRight
         )
-        self.bbp_close_to_bed = BlocksCustomButton(parent=self)
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.Fixed,
-            QtWidgets.QSizePolicy.Policy.Fixed,
-        )
-        sizePolicy.setHorizontalStretch(0)
-        sizePolicy.setVerticalStretch(0)
+        self.bbp_close_to_bed = IconButton(parent=self)
         sizePolicy.setHeightForWidth(
             self.bbp_close_to_bed.sizePolicy().hasHeightForWidth()
         )
@@ -244,9 +221,8 @@ class BabystepPage(QtWidgets.QWidget):
         self.bbp_close_to_bed.setMinimumSize(QtCore.QSize(80, 80))
         self.bbp_close_to_bed.setMaximumSize(QtCore.QSize(80, 80))
         self.bbp_close_to_bed.setFlat(True)
-        self.bbp_close_to_bed.setProperty(
-            "icon_pixmap",
-            QtGui.QPixmap(":/arrow_icons/media/btn_icons/down_arrow.svg"),
+        self.bbp_close_to_bed.setPixmap(
+            QtGui.QPixmap(":/arrow_icons/media/btn_icons/down_arrow.svg")
         )
         self.bbp_close_to_bed.setObjectName("bbp_close_to_bed")
         self.bbp_option_button_group.addButton(self.bbp_close_to_bed)
@@ -258,12 +234,17 @@ class BabystepPage(QtWidgets.QWidget):
         self.horizontalLayout_2.addLayout(self.bbp_buttons_layout)
         self.horizontalLayout_2.setStretch(0, 1)
         self.verticalLayout.addLayout(self.horizontalLayout_2)
+
+        self.bbp_offset_steps_buttons_group_box = QtWidgets.QGroupBox()
+
         self.bbp_offset_steps_buttons = QtWidgets.QHBoxLayout()
+
         self.bbp_offset_steps_buttons.setContentsMargins(9, 9, 9, 9)
         self.bbp_offset_steps_buttons.setObjectName("bbp_offset_steps_buttons")
         self.bbp_nozzle_offset_01 = QtWidgets.QPushButton(parent=self)
         self.bbp_nozzle_offset_01.setMinimumSize(QtCore.QSize(60, 60))
         self.bbp_nozzle_offset_01.setMaximumSize(QtCore.QSize(100, 80))
+        self.bbp_nozzle_offset_01.setText("0.01")
         palette = QtGui.QPalette()
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
@@ -331,6 +312,7 @@ class BabystepPage(QtWidgets.QWidget):
         self.bbp_nozzle_offset_025 = QtWidgets.QPushButton(parent=self)
         self.bbp_nozzle_offset_025.setMinimumSize(QtCore.QSize(60, 60))
         self.bbp_nozzle_offset_025.setMaximumSize(QtCore.QSize(100, 80))
+        self.bbp_nozzle_offset_025.setText("0.025")
         palette = QtGui.QPalette()
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
@@ -394,6 +376,7 @@ class BabystepPage(QtWidgets.QWidget):
         self.bbp_nozzle_offset_05 = QtWidgets.QPushButton(parent=self)
         self.bbp_nozzle_offset_05.setMinimumSize(QtCore.QSize(60, 60))
         self.bbp_nozzle_offset_05.setMaximumSize(QtCore.QSize(100, 80))
+        self.bbp_nozzle_offset_05.setText("0.05")
         palette = QtGui.QPalette()
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
@@ -457,6 +440,8 @@ class BabystepPage(QtWidgets.QWidget):
         self.bbp_nozzle_offset_1 = QtWidgets.QPushButton(parent=self)
         self.bbp_nozzle_offset_1.setMinimumSize(QtCore.QSize(60, 60))
         self.bbp_nozzle_offset_1.setMaximumSize(QtCore.QSize(100, 80))
+        self.bbp_nozzle_offset_1.setText("0.1")
+
         palette = QtGui.QPalette()
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
@@ -509,9 +494,21 @@ class BabystepPage(QtWidgets.QWidget):
         self.bbp_nozzle_offset_1.setFlat(True)
         self.bbp_nozzle_offset_1.setProperty("button_type", "")
         self.bbp_nozzle_offset_1.setObjectName("bbp_nozzle_offset_1")
+
+        self.bbp_offset_steps_buttons.addWidget(self.bbp_nozzle_offset_1)
         self.bbp_offset_value_selector_group.addButton(
             self.bbp_nozzle_offset_1
         )
-        self.bbp_offset_steps_buttons.addWidget(self.bbp_nozzle_offset_1)
-        self.verticalLayout.addLayout(self.bbp_offset_steps_buttons)
+        self.bbp_offset_steps_buttons_group_box.setLayout(
+            self.bbp_offset_steps_buttons
+        )
+        self.bbp_offset_steps_buttons_group_box.setPalette(palette)
+        
+        font.setPointSize(14)
+        self.bbp_offset_steps_buttons_group_box.setFont(font)
+        self.bbp_offset_steps_buttons_group_box.setFlat(True)
+        self.bbp_offset_steps_buttons_group_box.setTitle("Move length (mm)")
+        self.bbp_offset_steps_buttons_group_box.adjustSize()
+        self.verticalLayout.addWidget(self.bbp_offset_steps_buttons_group_box)
         self.verticalLayout.setStretch(1, 1)
+        self.setLayout(self.verticalLayout)
