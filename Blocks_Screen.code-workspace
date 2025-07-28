@@ -1,0 +1,55 @@
+{
+	"folders": [
+		{
+			"path": "."
+		}
+	],
+	"settings": {
+		"autoDocstring.docstringFormat": "google",
+		"workbench.colorCustomizations": {
+			"activityBar.activeBackground": "#325665",
+			"activityBar.background": "#325665",
+			"activityBar.foreground": "#e7e7e7",
+			"activityBar.inactiveForeground": "#e7e7e799",
+			"activityBarBadge.background": "#b56a9f",
+			"activityBarBadge.foreground": "#15202b",
+			"commandCenter.border": "#e7e7e799",
+			"sash.hoverBorder": "#325665",
+			"statusBar.background": "#213943",
+			"statusBar.foreground": "#e7e7e7",
+			"statusBarItem.hoverBackground": "#325665",
+			"statusBarItem.remoteBackground": "#213943",
+			"statusBarItem.remoteForeground": "#e7e7e7",
+			"titleBar.activeBackground": "#213943",
+			"titleBar.activeForeground": "#e7e7e7",
+			"titleBar.inactiveBackground": "#21394399",
+			"titleBar.inactiveForeground": "#e7e7e799"
+		},
+		"peacock.remoteColor": "#213943",
+		"todo-tree.tree.scanMode": "workspace",
+		"todo-tree.tree.showCountsInTree": true,
+		"todo-tree.tree.showBadges": true,
+		"vsintellicode.python.completionsEnabled": true,
+		"cSpell.words": [
+			"ENDSTOP",
+			"logoblocks",
+			"Momcake",
+			"Pixmap",
+			"qtobject",
+			"rescanning",
+			"TESTZ",
+			"topbar"
+		],
+		"[python]": {	
+			"editor.wordBasedSuggestions": "allDocuments", 
+			"editor.defaultFormatter": "charliermarsh.ruff"
+		},
+		"ruff.lineLength": 79,
+		"ruff.organizeImports": true,
+		"breadcrumbs.showStrings": true,
+		"python.analysis.autoSearchPaths": true, 
+		"python.analysis.autoImportCompletions": true,
+		"editor.codeLensFontSize": 0,
+		"editor.inlayHints.fontFamily": "Source Code Pro",
+	}
+}

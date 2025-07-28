@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=BlocksScreen 
+GenericName=Touch Screen GUI for klipper based on KlipperScreen Project! For Blockstech printers.
+Icon=BlocksScreen 
+Exec=sh -c "$HOME/.BlocksScreen-env/bin/python3.11 $HOME/Blocks_Screen/BlocksScreen/BlocksScreen.py
+Terminal=false 
+Type=Application 
+Categories=Graphics;3DGraphics;Engineering
+Keywords=3D; Printing
+StartupNotify=False
+StartupWMClass=blocks-screen

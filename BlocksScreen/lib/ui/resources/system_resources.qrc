@@ -1,0 +1,9 @@
+<RCC>
+  <qresource prefix="system_icons">
+
+
+    <file>media/btn_icons/restart_klipper.svg</file>
+
+
+  </qresource>
+</RCC>
