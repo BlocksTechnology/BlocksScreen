@@ -1,3 +1,4 @@
+import logging
 import math
 import typing
 
@@ -5,6 +6,8 @@ from helper_methods import calculate_current_layer, estimate_print_time
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_label import BlocksLabel
 from lib.utils.display_button import DisplayButton
+import events
+
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 
@@ -65,6 +68,22 @@ class JobStatusWidget(QtWidgets.QWidget):
         )  # Request file metadata (or file info whatever)
 
         self.print_start.emit(file)
+        print_start_event = events.PrintStart(
+            self._current_file_name, self.file_metadata
+        )
+        try:
+            instance = QtWidgets.QApplication.instance()
+            if instance:
+                print(self.window().objectName())
+                instance.postEvent(self.window(), print_start_event)
+            else:
+                raise TypeError(
+                    "QApplication.instance expected non None value"
+                )
+        except Exception as e:
+            logging.info(
+                f"Unexpected error while posting print job start event: {e}"
+            )
 
     @QtCore.pyqtSlot(dict, name="on_fileinfo")
     def on_fileinfo(self, fileinfo: dict) -> None:
@@ -117,12 +136,53 @@ class JobStatusWidget(QtWidgets.QWidget):
                         {"print_stats": ["filename"]}
                     )
                     self.show_request.emit()
+                    print_start_event = events.PrintStart(
+                        self._current_file_name, self.file_metadata
+                    )
+                    try:
+                        instance = QtWidgets.QApplication.instance()
+                        if instance:
+                            print(self.window().objectName())
+                            instance.postEvent(
+                                self.window(), print_start_event
+                            )
+                        else:
+                            raise TypeError(
+                                "QApplication.instance expected non None value"
+                            )
+                    except Exception as e:
+                        logging.info(
+                            f"Unexpected error while posting print job start event: {e}"
+                        )
                 elif value in ("cancelled", "complete", "error", "standby"):
                     self._current_file_name = ""
                     self._internal_print_status = ""
                     self.total_layers = "?"
                     self.file_metadata.clear()
                     self.hide_request.emit()
+
+                    if hasattr(events, str("Print" + value.capitalize())):
+                        event_obj = getattr(
+                            events, str("Print" + value.capitalize())
+                        )
+                        event = event_obj(self._current_file_name)
+                        try:
+                            instance = QtWidgets.QApplication.instance()
+                            if instance:
+                                print(self.window().objectName())
+                                instance.postEvent(self.window(), event)
+                            else:
+                                raise TypeError(
+                                    "QApplication.instance expected non None value"
+                                )
+                        except Exception as e:
+                            logging.info(
+                                f"Unexpected error while posting print job start event: {e}"
+                            )
+                    else:
+                        print(
+                            f"No event with that nameeee {str('Print' + value.capitalize())}"
+                        )
                     return
                 self._internal_print_status = value
 
