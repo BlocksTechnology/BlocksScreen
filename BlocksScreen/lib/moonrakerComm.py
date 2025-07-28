@@ -168,7 +168,7 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
             )
             return False
         # _url = f"ws://192.168.1.100:7125/websocket?token={_oneshot_token}"
-        _url = f"ws://192.168.1.109:7125/websocket?token={_oneshot_token}"
+        _url = f"ws://192.168.1.68:7125/websocket?token={_oneshot_token}"
         self.ws = websocket.WebSocketApp(
             _url,
             on_open=self.on_open,
@@ -303,8 +303,8 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
                     # request server.info in 2 seconds
                     if not self.query_klippy_status_timer.running:
                         self.query_klippy_status_timer.startTimer()
-                elif response["result"]["klippy_state"] == "disconnected": 
-                    if not self.query_klippy_status_timer.running: 
+                elif response["result"]["klippy_state"] == "disconnected":
+                    if not self.query_klippy_status_timer.running:
                         self.query_klippy_status_timer.startTimer()
                 self.klippy_connected_signal.emit(
                     response["result"]["klippy_connected"]
@@ -332,7 +332,7 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
             ):  # Checkout for notify_klippy_disconnect
                 self.evaluate_klippy_status()
 
-            message_event = WebSocketMessageReceived( # mainly used to pass websocket notifications 
+            message_event = WebSocketMessageReceived(  # mainly used to pass websocket notifications
                 method=str(response["method"]),
                 data=response,
                 metadata=None,

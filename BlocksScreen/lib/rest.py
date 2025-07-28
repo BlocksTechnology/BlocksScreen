@@ -21,7 +21,7 @@ import tornado.websocket
 
 
 class WebSocketClient(tornado.websocket.WebSocketClientConnection):
-    url = "ws://192.168.1.165:7125"
+    url = "ws://192.168.1.68:7125"
     port = 7125
 
     def __init__(self) -> None:

@@ -26,7 +26,9 @@ class MoonAPI(QtCore.QObject):
     # TODO: Callbacks for each method
     # TODO: Finish the pyqt slots for needed requests on the API
 
-    def __init__(self, parent: typing.Optional["QObject"], ws: typing.MoonWebSocket):
+    def __init__(
+        self, parent: typing.Optional["QObject"], ws: typing.MoonWebSocket
+    ):
         super(MoonAPI, self).__init__(parent)
         self._ws: MoonWebSocket = ws
 
@@ -174,7 +176,8 @@ class MoonAPI(QtCore.QObject):
 
     def get_cabus_devices(self, interface: str = "can0"):
         return self._ws.send_request(
-            method="machine.peripherals.canbus", params={"interface": interface}
+            method="machine.peripherals.canbus",
+            params={"interface": interface},
         )
 
     @pyqtSlot(name="api_request_file_list")
@@ -227,7 +230,9 @@ class MoonAPI(QtCore.QObject):
         if not isinstance(filename, str) or not isinstance(root, str):
             return False
 
-        return self._ws._moonRest.get_request(f"/server/files/{root}/{filename}")
+        return self._ws._moonRest.get_request(
+            f"/server/files/{root}/{filename}"
+        )
 
     # def upload_file(self, ) # TODO: Maybe this is not necessary but either way do it
 
@@ -268,7 +273,8 @@ class MoonAPI(QtCore.QObject):
         ):
             return False
         return self._ws.send_request(
-            method="server.files.move", params={"source": source_dir, "dest": dest_dir}
+            method="server.files.move",
+            params={"source": source_dir, "dest": dest_dir},
         )
 
     def copy_file(self, source_dir: str, dest_dir: str):
@@ -280,7 +286,8 @@ class MoonAPI(QtCore.QObject):
         ):
             return False
         return self._ws.send_request(
-            method="server.files.copy", params={"source": source_dir, "dest": dest_dir}
+            method="server.files.copy",
+            params={"source": source_dir, "dest": dest_dir},
         )
 
     def zip_archive(self, items: list):
@@ -313,14 +320,21 @@ class MoonAPI(QtCore.QObject):
         return self._ws.send_request(method="server.announcements.feeds")
 
     def post_announcement_feed(self, announcement_name: str):
-        if isinstance(announcement_name, str) is False or announcement_name is None:
+        if (
+            isinstance(announcement_name, str) is False
+            or announcement_name is None
+        ):
             return False
         return self._ws.send_request(
-            method="server.announcements.post_feed", params={"name": announcement_name}
+            method="server.announcements.post_feed",
+            params={"name": announcement_name},
         )
 
     def delete_announcement_feed(self, announcement_name: str):
-        if isinstance(announcement_name, str) is False or announcement_name is None:
+        if (
+            isinstance(announcement_name, str) is False
+            or announcement_name is None
+        ):
             return False
         return self._ws.send_request(
             method="server.announcements.delete_feed",
@@ -341,7 +355,9 @@ class MoonAPI(QtCore.QObject):
 
     # TODO: Can create a class that irs a URL type like i've done before to validate the links
     # TODO: There are more options in this section, alot more options, later see if it's worth to implement or not
-    def add_update_webcam(self, cam_name: str, snapshot_url: str, stream_url: str):
+    def add_update_webcam(
+        self, cam_name: str, snapshot_url: str, stream_url: str
+    ):
         if (
             isinstance(cam_name, str) is False
             or isinstance(snapshot_url, str) is False
@@ -370,7 +386,9 @@ class MoonAPI(QtCore.QObject):
     def test_webcam(self, uid: str):
         if isinstance(uid, str) is False or uid is None:
             return False
-        return self._ws.send_request(method="server.webcams.test", params={"uid": uid})
+        return self._ws.send_request(
+            method="server.webcams.test", params={"uid": uid}
+        )
 
     def list_notifiers(self):
         return self._ws.send_request(method="server.notifiers.list")
@@ -410,7 +428,8 @@ class MoonAPI(QtCore.QObject):
         if isinstance(name, str) is False or name is None:
             return False
         return self._ws.send_request(
-            method="machine.update.recover", params={"name": name, "hard": hard}
+            method="machine.update.recover",
+            params={"name": name, "hard": hard},
         )
 
     def rollback_update(self, name: str):
