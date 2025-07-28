@@ -136,16 +136,27 @@ class JobStatusWidget(QtWidgets.QWidget):
                         {"print_stats": ["filename"]}
                     )
                     self.show_request.emit()
-                    print_start_event = events.PrintStart(
+                    value = "start"  # This is for event compatibility
+
+                elif value in ("cancelled", "complete", "error", "standby"):
+                    self._current_file_name = ""
+                    self._internal_print_status = ""
+                    self.total_layers = "?"
+                    self.file_metadata.clear()
+                    self.hide_request.emit()
+                    return
+
+                if hasattr(events, str("Print" + value.capitalize())):
+                    event_obj = getattr(
+                        events, str("Print" + value.capitalize())
+                    )
+                    event = event_obj(
                         self._current_file_name, self.file_metadata
                     )
                     try:
                         instance = QtWidgets.QApplication.instance()
                         if instance:
-                            print(self.window().objectName())
-                            instance.postEvent(
-                                self.window(), print_start_event
-                            )
+                            instance.postEvent(self.window(), event)
                         else:
                             raise TypeError(
                                 "QApplication.instance expected non None value"
@@ -154,36 +165,6 @@ class JobStatusWidget(QtWidgets.QWidget):
                         logging.info(
                             f"Unexpected error while posting print job start event: {e}"
                         )
-                elif value in ("cancelled", "complete", "error", "standby"):
-                    self._current_file_name = ""
-                    self._internal_print_status = ""
-                    self.total_layers = "?"
-                    self.file_metadata.clear()
-                    self.hide_request.emit()
-
-                    if hasattr(events, str("Print" + value.capitalize())):
-                        event_obj = getattr(
-                            events, str("Print" + value.capitalize())
-                        )
-                        event = event_obj(self._current_file_name)
-                        try:
-                            instance = QtWidgets.QApplication.instance()
-                            if instance:
-                                print(self.window().objectName())
-                                instance.postEvent(self.window(), event)
-                            else:
-                                raise TypeError(
-                                    "QApplication.instance expected non None value"
-                                )
-                        except Exception as e:
-                            logging.info(
-                                f"Unexpected error while posting print job start event: {e}"
-                            )
-                    else:
-                        print(
-                            f"No event with that nameeee {str('Print' + value.capitalize())}"
-                        )
-                    return
                 self._internal_print_status = value
 
         if self.isVisible() and (
