@@ -126,18 +126,14 @@ class PrintTab(QtWidgets.QStackedWidget):
         )
         self.file_data.fileinfo.connect(self.jobStatusPage_widget.on_fileinfo)
 
-        self.jobStatusPage_widget.request_print_start.connect(
-            self.ws.api.start_print
-        )
-        self.jobStatusPage_widget.request_print_cancel.connect(
+        self.jobStatusPage_widget.print_start.connect(self.ws.api.start_print)
+        self.jobStatusPage_widget.print_cancel.connect(
             self.ws.api.cancel_print
         )
-        self.jobStatusPage_widget.request_print_resume.connect(
+        self.jobStatusPage_widget.print_resume.connect(
             self.ws.api.resume_print
         )
-        self.jobStatusPage_widget.request_print_pause.connect(
-            self.ws.api.pause_print
-        )
+        self.jobStatusPage_widget.print_pause.connect(self.ws.api.pause_print)
         self.jobStatusPage_widget.request_query_print_stats.connect(
             self.ws.api.object_query
         )
