@@ -126,9 +126,9 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.file_data.fileinfo.connect(self.jobStatusPage_widget.on_fileinfo)
 
         self.jobStatusPage_widget.print_start.connect(self.ws.api.start_print)
-        
+
         # self.jobStatusPage_widget.print_start.connect()
-        
+
         self.jobStatusPage_widget.print_cancel.connect(
             self.ws.api.cancel_print
         )
@@ -231,7 +231,7 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.panel.main_print_btn.clicked.connect(
             partial(self.change_page, self.indexOf(self.filesPage_widget))
         )
-        self.babystepPage.run_gcode_signal.connect(self.ws.api.run_gcode)
+        self.babystepPage.run_gcode.connect(self.ws.api.run_gcode)
 
         self.run_gcode_signal.connect(self.ws.api.run_gcode)
 
