@@ -32,7 +32,7 @@
    <string>StackedWidget</string>
   </property>
   <property name="currentIndex">
-   <number>3</number>
+   <number>2</number>
   </property>
   <widget class="QWidget" name="control_page">
    <property name="sizePolicy">
@@ -554,7 +554,7 @@ Settings</string>
         <string>icon</string>
        </property>
        <property name="icon_pixmap" stdset="0">
-        <pixmap resource="resources/button_resources.qrc">:/button_borders/media/btn_icons/back.svg</pixmap>
+        <pixmap>:/button_borders/media/btn_icons/back.svg</pixmap>
        </property>
       </widget>
      </item>
@@ -901,7 +901,7 @@ Steppers</string>
         <string>icon</string>
        </property>
        <property name="icon_pixmap" stdset="0">
-        <pixmap resource="resources/button_resources.qrc">:/button_borders/media/btn_icons/back.svg</pixmap>
+        <pixmap>:/button_borders/media/btn_icons/back.svg</pixmap>
        </property>
       </widget>
      </item>
@@ -913,7 +913,7 @@ Steppers</string>
       <x>20</x>
       <y>80</y>
       <width>671</width>
-      <height>328</height>
+      <height>330</height>
      </rect>
     </property>
     <layout class="QVBoxLayout" name="exp_vertical_content_layout" stretch="0,0,1">
@@ -2721,7 +2721,7 @@ Steppers</string>
         <string>icon</string>
        </property>
        <property name="icon_pixmap" stdset="0">
-        <pixmap resource="resources/button_resources.qrc">:/button_borders/media/btn_icons/back.svg</pixmap>
+        <pixmap>:/button_borders/media/btn_icons/back.svg</pixmap>
        </property>
       </widget>
      </item>
@@ -3417,7 +3417,7 @@ Steppers</string>
        <x>0</x>
        <y>30</y>
        <width>291</width>
-       <height>61</height>
+       <height>62</height>
       </rect>
      </property>
      <layout class="QHBoxLayout" name="mva_length_intervals_layout">
@@ -4488,7 +4488,7 @@ Steppers</string>
         <string>icon</string>
        </property>
        <property name="icon_pixmap" stdset="0">
-        <pixmap resource="resources/button_resources.qrc">:/button_borders/media/btn_icons/back.svg</pixmap>
+        <pixmap>:/button_borders/media/btn_icons/back.svg</pixmap>
        </property>
       </widget>
      </item>
@@ -5074,7 +5074,7 @@ Steppers</string>
         <bool>true</bool>
        </property>
        <property name="icon_pixmap" stdset="0">
-        <pixmap resource="resources/button_resources.qrc">:/button_borders/media/btn_icons/back.svg</pixmap>
+        <pixmap>:/button_borders/media/btn_icons/back.svg</pixmap>
        </property>
        <property name="button_type" stdset="0">
         <string>icon</string>
@@ -5089,7 +5089,7 @@ Steppers</string>
       <x>600</x>
       <y>110</y>
       <width>90</width>
-      <height>176</height>
+      <height>177</height>
      </rect>
     </property>
     <layout class="QVBoxLayout" name="z_adjust_move_buttons_layout">
@@ -5506,13 +5506,13 @@ Steppers</string>
         <string>menu_btn</string>
        </property>
        <property name="borderLeftPixmap" stdset="0">
-        <pixmap resource="resources/button_resources.qrc">:/button_borders/media/buttons/btn_part1.svg</pixmap>
+        <pixmap>:/button_borders/media/buttons/btn_part1.svg</pixmap>
        </property>
        <property name="borderCenterPixmap" stdset="0">
-        <pixmap resource="resources/button_resources.qrc">:/button_borders/media/buttons/btn_part2.svg</pixmap>
+        <pixmap>:/button_borders/media/buttons/btn_part2.svg</pixmap>
        </property>
        <property name="borderRightPixmap" stdset="0">
-        <pixmap resource="resources/button_resources.qrc">:/button_borders/media/buttons/btn_part3.svg</pixmap>
+        <pixmap>:/button_borders/media/buttons/btn_part3.svg</pixmap>
        </property>
        <property name="button_type" stdset="0">
         <string>icon</string>
@@ -5536,16 +5536,6 @@ Steppers</string>
  </widget>
  <customwidgets>
   <customwidget>
-   <class>BlocksCustomButton</class>
-   <extends>QPushButton</extends>
-   <header location="global">lib.utils.blocks_button</header>
-  </customwidget>
-  <customwidget>
-   <class>BlocksLabel</class>
-   <extends>QLabel</extends>
-   <header location="global">lib.utils.blocks_label</header>
-  </customwidget>
-  <customwidget>
    <class>IconButton</class>
    <extends>QPushButton</extends>
    <header location="global">lib.utils.icon_button</header>
@@ -5554,6 +5544,16 @@ Steppers</string>
    <class>DisplayButton</class>
    <extends>QPushButton</extends>
    <header location="global">lib.utils.display_button</header>
+  </customwidget>
+  <customwidget>
+   <class>BlocksCustomButton</class>
+   <extends>QPushButton</extends>
+   <header location="global">lib.utils.blocks_button</header>
+  </customwidget>
+  <customwidget>
+   <class>BlocksLabel</class>
+   <extends>QLabel</extends>
+   <header location="global">lib.utils.blocks_label</header>
   </customwidget>
  </customwidgets>
  <resources>
@@ -5571,8 +5571,8 @@ Steppers</string>
  <connections/>
  <buttongroups>
   <buttongroup name="axis_select_speed_group"/>
+  <buttongroup name="axis_select_length_group"/>
   <buttongroup name="extrude_select_length_group"/>
   <buttongroup name="extrude_select_feedrate_group"/>
-  <buttongroup name="axis_select_length_group"/>
  </buttongroups>
 </ui>

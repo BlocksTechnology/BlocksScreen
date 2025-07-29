@@ -188,6 +188,9 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.printer.gcode_move_update[str, float].connect(
             self.tune_page.on_gcode_move_update
         )
+        self.printer.gcode_move_update[str, list].connect(
+            self.babystepPage.on_gcode_move_update
+        )
         self.tune_page.run_gcode.connect(self.ws.api.run_gcode)
         self.tune_page.request_sliderPage[str, int, "PyQt_PyObject"].connect(
             self.on_slidePage_request
@@ -228,6 +231,7 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.panel.main_print_btn.clicked.connect(
             partial(self.change_page, self.indexOf(self.filesPage_widget))
         )
+        self.babystepPage.run_gcode_signal.connect(self.ws.api.run_gcode)
 
         self.run_gcode_signal.connect(self.ws.api.run_gcode)
 

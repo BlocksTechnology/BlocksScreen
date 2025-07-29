@@ -378,7 +378,7 @@ class Ui_controlStackedWidget(object):
         self.exp_back_btn.setObjectName("exp_back_btn")
         self.exp_header_layout.addWidget(self.exp_back_btn)
         self.verticalLayoutWidget_5 = QtWidgets.QWidget(parent=self.extrude_page)
-        self.verticalLayoutWidget_5.setGeometry(QtCore.QRect(20, 80, 671, 328))
+        self.verticalLayoutWidget_5.setGeometry(QtCore.QRect(20, 80, 671, 330))
         self.verticalLayoutWidget_5.setObjectName("verticalLayoutWidget_5")
         self.exp_vertical_content_layout = QtWidgets.QVBoxLayout(self.verticalLayoutWidget_5)
         self.exp_vertical_content_layout.setContentsMargins(5, 5, 5, 5)
@@ -1270,7 +1270,7 @@ class Ui_controlStackedWidget(object):
         self.mva_length_group_box.setFlat(True)
         self.mva_length_group_box.setObjectName("mva_length_group_box")
         self.horizontalLayoutWidget_5 = QtWidgets.QWidget(parent=self.mva_length_group_box)
-        self.horizontalLayoutWidget_5.setGeometry(QtCore.QRect(0, 30, 291, 61))
+        self.horizontalLayoutWidget_5.setGeometry(QtCore.QRect(0, 30, 291, 62))
         self.horizontalLayoutWidget_5.setObjectName("horizontalLayoutWidget_5")
         self.mva_length_intervals_layout = QtWidgets.QHBoxLayout(self.horizontalLayoutWidget_5)
         self.mva_length_intervals_layout.setContentsMargins(0, 0, 0, 0)
@@ -1868,7 +1868,7 @@ class Ui_controlStackedWidget(object):
         self.z_adjust_back_button.setObjectName("z_adjust_back_button")
         self.z_adjustment_header_layout.addWidget(self.z_adjust_back_button)
         self.verticalLayoutWidget_8 = QtWidgets.QWidget(parent=self.z_adjustment_page)
-        self.verticalLayoutWidget_8.setGeometry(QtCore.QRect(600, 110, 90, 176))
+        self.verticalLayoutWidget_8.setGeometry(QtCore.QRect(600, 110, 90, 177))
         self.verticalLayoutWidget_8.setObjectName("verticalLayoutWidget_8")
         self.z_adjust_move_buttons_layout = QtWidgets.QVBoxLayout(self.verticalLayoutWidget_8)
         self.z_adjust_move_buttons_layout.setContentsMargins(5, 5, 5, 5)
@@ -2035,7 +2035,7 @@ class Ui_controlStackedWidget(object):
         controlStackedWidget.addWidget(self.printer_settings_page)
 
         self.retranslateUi(controlStackedWidget)
-        controlStackedWidget.setCurrentIndex(3)
+        controlStackedWidget.setCurrentIndex(2)
         QtCore.QMetaObject.connectSlotsByName(controlStackedWidget)
 
     def retranslateUi(self, controlStackedWidget):
