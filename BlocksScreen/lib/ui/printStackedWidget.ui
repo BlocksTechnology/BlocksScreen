@@ -418,7 +418,7 @@ color: #ffffff;
      </layout>
     </item>
    </layout>
-  </widget>
+  </widget> -->
   <widget class="QWidget" name="confirm_page">
    <property name="sizePolicy">
     <sizepolicy hsizetype="MinimumExpanding" vsizetype="MinimumExpanding">
@@ -765,7 +765,7 @@ background-color: transparent;
      </layout>
     </item>
    </layout>
-  </widget>
+  </widget> -->
   <widget class="QWidget" name="job_status_page">
    <property name="sizePolicy">
     <sizepolicy hsizetype="MinimumExpanding" vsizetype="MinimumExpanding">
@@ -1308,7 +1308,7 @@ background-color: transparent;
      </layout>
     </item>
    </layout>
-  </widget>
+  </widget> 
   <widget class="QWidget" name="tune_page">
    <property name="sizePolicy">
     <sizepolicy hsizetype="MinimumExpanding" vsizetype="MinimumExpanding">

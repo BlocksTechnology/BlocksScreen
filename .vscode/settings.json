@@ -26,15 +26,25 @@
     },
     "peacock.remoteColor": "#c2fb90",
     "cSpell.words": [
+        "babystepping",
         "bltouch",
+        "decel",
+        "DPMS",
         "ENDSTOP",
+        "Frameless",
         "gcode",
         "klippy",
         "metascan",
+        "Momcake",
+        "mooncake",
+        "printcore",
         "qtobject",
         "Reimplementation",
         "sdbus",
+        "setdefaulttimeout",
         "TESTZ",
+        "Tickmarks",
+        "topbar",
         "unextrude"
     ],
     "todo-tree.tree.scanMode": "workspace",
@@ -51,5 +61,5 @@
     "workbench.list.fastScrollSensitivity": 10,
     "terminal.integrated.fastScrollSensitivity": 10,
     "workbench.list.mouseWheelScrollSensitivity": 2,
-    
+    "editor.lineHeight": 48    
 }
