@@ -168,7 +168,7 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
             )
             return False
         # _url = f"ws://192.168.1.100:7125/websocket?token={_oneshot_token}"
-        _url = f"ws://192.168.1.68:7125/websocket?token={_oneshot_token}"
+        _url = f"ws://localhost:7125/websocket?token={_oneshot_token}"
         self.ws = websocket.WebSocketApp(
             _url,
             on_open=self.on_open,

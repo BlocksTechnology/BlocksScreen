@@ -10,7 +10,7 @@ class BabystepPage(QtWidgets.QWidget):
     request_back: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         name="request_back"
     )
-    run_gcode_signal: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+    run_gcode: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         str, name="run_gcode"
     )
 
@@ -38,7 +38,7 @@ class BabystepPage(QtWidgets.QWidget):
     @QtCore.pyqtSlot(name="on_move_nozzle_close")
     def on_move_nozzle_close(self) -> None:
         """Move the nozzle closer to the print plate by the amount set in **` self._z_offset`**"""
-        self.run_gcode_signal.emit(
+        self.run_gcode.emit(
             f"SET_GCODE_OFFSET Z_ADJUST=-{self._z_offset}"  # Z_ADJUST adds the value to the existing offset
         )
 
@@ -46,7 +46,7 @@ class BabystepPage(QtWidgets.QWidget):
     def on_move_nozzle_away(self) -> None:
         """Slot for Babystep button to get far from the bed by **` self._z_offset`** amount"""
         print("Moving nozzle away from bed by:", self._z_offset, "a")
-        self.run_gcode_signal.emit(
+        self.run_gcode.emit(
             f"SET_GCODE_OFFSET Z_ADJUST=+{self._z_offset}"  # Z_ADJUST adds the value to the existing offset
         )
 
