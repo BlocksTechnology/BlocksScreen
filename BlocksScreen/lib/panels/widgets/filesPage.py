@@ -27,7 +27,8 @@ class FilesPage(QtWidgets.QWidget):
         self.setMouseTracking(True)
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_AcceptTouchEvents, True)
         self.listWidget.itemClicked.connect(self.fileItemClicked)
-        self.ReloadButton.clicked.connect(lambda: self.reload_list)
+        self.ReloadButton.clicked.connect(lambda: self.reload_list())
+        
 
     def showEvent(self, a0: QtGui.QShowEvent) -> None:
         self.add_file_entries()
@@ -41,12 +42,14 @@ class FilesPage(QtWidgets.QWidget):
     @QtCore.pyqtSlot(name="reload_list")
     def reload_list(self) -> None:
         """Reload files list"""
+        
         self.request_file_list_refresh.emit()
 
     @QtCore.pyqtSlot(list, name="on_file_list")
     def on_file_list(self, file_list: list) -> None:
         self.file_list.clear()
         self.file_list = file_list
+        print("here")
         self.add_file_entries()
 
     @QtCore.pyqtSlot(QtWidgets.QListWidgetItem, name="file_item_clicked")
