@@ -39,6 +39,8 @@ class FilesPage(QtWidgets.QWidget):
         self.scrollbar.valueChanged.connect(
             lambda value: self.listWidget.verticalScrollBar().setValue(value)
         )
+        self.listWidget.itemClicked.connect(self.fileItemClicked)
+        
 
     def showEvent(self, a0: QtGui.QShowEvent) -> None:
         self.add_file_entries()
