@@ -1,11 +1,14 @@
 # Config file helper
 #
+# Copyright (C) 2020 Eric Callahan <arksine.code@gmail.com> 
 # Copyright (C) 2025 Hugo Costa <h.costa@blockstec.com>
 #
-# Based on the work of Eric Callahan <arksine.code@gmail.com>
+# Based on the work of Eric Callahan:
 # https://github.com/Arksine/moonraker/blob/master/moonraker/confighelper.py
 #
-# This file may be distributed under the terms of GNU GPLv3 license
+# This file is distributed under the terms of the GNU General Public License v3.
+# See https://www.gnu.org/licenses/gpl-3.0.html for details.
+
 from __future__ import annotations
 import configparser
 import enum
@@ -172,4 +175,3 @@ def get_configparser() -> BlocksScreenConfig:
         else fallback
     )
     return BlocksScreenConfig(configfile=configfile, section="server")
-
