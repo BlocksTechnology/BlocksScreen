@@ -109,7 +109,8 @@ class SdbusNetworkManager(QObject):
         """
 
         return [
-            NetworkDeviceGeneric(device).interface for device in self.nm.get_devices()
+            NetworkDeviceGeneric(device).interface
+            for device in self.nm.get_devices()
         ]
 
     def wifi_enabled(self) -> bool:
@@ -214,15 +215,22 @@ class SdbusNetworkManager(QObject):
             # TODO: Logging
             print("There is no NetworkManager connection. No IP Address")
             return None
-        _device_ip4_conf_path = ActiveConnection(self.nm.primary_connection).ip4_config
+        _device_ip4_conf_path = ActiveConnection(
+            self.nm.primary_connection
+        ).ip4_config
         if _device_ip4_conf_path == "/":
             # NetworkManager reports that there is no ipv4 config for the interface, probably there is no connection at this time.
-            logging.info("NetworkManager reports no IP configuration for the interface")
+            logging.info(
+                "NetworkManager reports no IP configuration for the interface"
+            )
             # TODO: Logging
             return None
 
         ip4_conf = IPv4Config(_device_ip4_conf_path)
-        _addrs = [address_data["address"][1] for address_data in ip4_conf.address_data]
+        _addrs = [
+            address_data["address"][1]
+            for address_data in ip4_conf.address_data
+        ]
         return _addrs
 
     def get_primary_interface(
@@ -255,7 +263,10 @@ class SdbusNetworkManager(QObject):
 
     def rescan_networks(self) -> None:
         """rescan_networks Scan for available networks."""
-        if self.primary_wifi_interface == "/" or self.primary_wifi_interface is None:
+        if (
+            self.primary_wifi_interface == "/"
+            or self.primary_wifi_interface is None
+        ):
             return
         try:
             self.primary_wifi_interface.request_scan({})
@@ -270,12 +281,18 @@ class SdbusNetworkManager(QObject):
         - Implemented with map built-in python method instead of for loops. Don't know the performance difference, but tried to not use for loops in these methods just to try.
         """
         # This will only work on wifi, because we can scan networks
-        if self.primary_wifi_interface == "/" or self.primary_wifi_interface is None:
+        if (
+            self.primary_wifi_interface == "/"
+            or self.primary_wifi_interface is None
+        ):
             return {"error": "No primary interface found"}
 
         # Make sure we scan for networks first
         if self.rescan_networks():
-            if self.primary_wifi_interface.device_type == enums.DeviceType.WIFI:
+            if (
+                self.primary_wifi_interface.device_type
+                == enums.DeviceType.WIFI
+            ):
                 # Get information about all scanned networks.
                 _aps: typing.List[AccessPoint] = list(
                     map(
@@ -348,12 +365,18 @@ class SdbusNetworkManager(QObject):
         if self.nm is None:
             return [{"error": "No network manager"}]
 
-        _connections: typing.List[str] = NetworkManagerSettings().list_connections()
+        _connections: typing.List[str] = (
+            NetworkManagerSettings().list_connections()
+        )
 
-        _network_settings: typing.List[NetworkManagerConnectionProperties] = list(
-            map(
-                lambda _settings: NetworkConnectionSettings(_settings).get_settings(),
-                iter(_connections),
+        _network_settings: typing.List[NetworkManagerConnectionProperties] = (
+            list(
+                map(
+                    lambda _settings: NetworkConnectionSettings(
+                        _settings
+                    ).get_settings(),
+                    iter(_connections),
+                )
             )
         )
 
@@ -364,10 +387,12 @@ class SdbusNetworkManager(QObject):
                     map(
                         lambda network_properties: (
                             {
-                                "SSID": network_properties["802-11-wireless"]["ssid"][
-                                    1
-                                ].decode(),
-                                "UUID": network_properties["connection"]["uuid"][1],
+                                "SSID": network_properties["802-11-wireless"][
+                                    "ssid"
+                                ][1].decode(),
+                                "UUID": network_properties["connection"][
+                                    "uuid"
+                                ][1],
                                 # "CONNECTION_PATH": connection
                             }
                             if network_properties["connection"]["type"][1]
@@ -403,9 +428,9 @@ class SdbusNetworkManager(QObject):
                     {
                         "SSID": conn["802-11-wireless"]["ssid"][1].decode(),
                         "UUID": conn["connection"]["uuid"][1],
-                        "SECURITY_TYPE": conn["802-11-wireless-security"]["key_mgmt"][
-                            1
-                        ].decode(),
+                        "SECURITY_TYPE": conn["802-11-wireless-security"][
+                            "key_mgmt"
+                        ][1].decode(),
                         "CONNECTION_PATH": connection,
                     }
                 )
@@ -437,7 +462,9 @@ class SdbusNetworkManager(QObject):
         Returns:
             bool: True if the network is known otherwise False
         """
-        return any(net["SSID"] == ssid for net in self.get_saved_networks_with_for())
+        return any(
+            net["SSID"] == ssid for net in self.get_saved_networks_with_for()
+        )
 
     def add_wifi_network(self, ssid: str, psk: str) -> typing.Dict:
         """Add and Save a network to the device.
@@ -455,7 +482,10 @@ class SdbusNetworkManager(QObject):
             On the returned dictionary a key value "error" can appear if an error occurred, the value will say what the error was.
             "exception"
         """
-        if self.primary_wifi_interface is None or self.primary_wifi_interface == "/":
+        if (
+            self.primary_wifi_interface is None
+            or self.primary_wifi_interface == "/"
+        ):
             return {"status": "error", "msg": "No Available interface"}
 
         # Connections with the same if result in failure, so get ids first.
@@ -480,7 +510,10 @@ class SdbusNetworkManager(QObject):
                     "id": ("s", ssid),
                     "uuid": ("s", str(uuid4())),
                     "type": ("s", "802-11-wireless"),
-                    "interface-name": ("s", self.primary_wifi_interface.interface),
+                    "interface-name": (
+                        "s",
+                        self.primary_wifi_interface.interface,
+                    ),
                     "autoconnect": ("b", bool(True)),
                 },
                 "802-11-wireless": {
@@ -526,18 +559,20 @@ class SdbusNetworkManager(QObject):
                         "wep-key0": ("s", psk),
                         "auth-alg": ("s", "shared"),
                     }
-                elif (WpaSecurityFlags.P2P_TKIP or WpaSecurityFlags.BROADCAST_TKIP) in (
-                    _security_types[1] or _security_types[2]
-                ):
+                elif (
+                    WpaSecurityFlags.P2P_TKIP
+                    or WpaSecurityFlags.BROADCAST_TKIP
+                ) in (_security_types[1] or _security_types[2]):
                     # * TKip
                     # raise NotImplementedError
                     return {
                         "status": "error",
                         "msg": "Security type P2P_TKIP OR BRADCAST_TKIP not supported",
                     }
-                elif (WpaSecurityFlags.P2P_CCMP or WpaSecurityFlags.BROADCAST_CCMP) in (
-                    _security_types[1] or _security_types[2]
-                ):
+                elif (
+                    WpaSecurityFlags.P2P_CCMP
+                    or WpaSecurityFlags.BROADCAST_CCMP
+                ) in (_security_types[1] or _security_types[2]):
                     # * AES/CCMP WPA2
                     properties["802-11-wireless-security"] = {
                         "key-mgmt": ("s", "wpa-psk"),
@@ -608,7 +643,10 @@ class SdbusNetworkManager(QObject):
 
                 try:
                     NetworkManagerSettings().add_connection(properties)
-                    return {"status": "success", "msg": "Network added successfully"}
+                    return {
+                        "status": "success",
+                        "msg": "Network added successfully",
+                    }
                 except NmConnectionFailedError as e:
                     return {
                         "status": "exception",
@@ -638,7 +676,10 @@ class SdbusNetworkManager(QObject):
             - True -> wifi interface is not and can perform the disconnection
             - False -> Wifi interface is none and the disconnect command is not run.
         """
-        if self.primary_wifi_interface == "/" or self.primary_wifi_interface is None:
+        if (
+            self.primary_wifi_interface == "/"
+            or self.primary_wifi_interface is None
+        ):
             return False
         self.primary_wifi_interface.disconnect()
         return True
@@ -659,9 +700,7 @@ class SdbusNetworkManager(QObject):
         _connection_path = None
         _saved_networks = self.get_saved_networks_with_for()
         if len(_saved_networks) == 0 or _saved_networks is None:
-            return (
-                "There are no saved networks, must add a new network connection first."
-            )
+            return "There are no saved networks, must add a new network connection first."
 
         # *Get the connection path by ssid
         for saved_network in _saved_networks:
@@ -712,12 +751,18 @@ class SdbusNetworkManager(QObject):
             return {"error": "ssid argument must be of type string"}
         if self.nm is None:
             return {"error": "No Network Manager instance available"}
-        if self.primary_wifi_interface == "/" or self.primary_wifi_interface is None:
+        if (
+            self.primary_wifi_interface == "/"
+            or self.primary_wifi_interface is None
+        ):
             return {"error": "No wifi interface"}
 
         _signal: int = 0
         if self.rescan_networks():
-            if self.primary_wifi_interface.device_type == enums.DeviceType.WIFI:
+            if (
+                self.primary_wifi_interface.device_type
+                == enums.DeviceType.WIFI
+            ):
                 # Get information on scanned networks:
                 _aps: typing.List[AccessPoint] = list(
                     map(
@@ -836,7 +881,9 @@ class SdbusNetworkManager(QObject):
             NetworkManagerSettings().add_connection(properties)
             return {"status": "success"}
         except Exception as e:
-            logging.debug(f"Error occurred while adding a hotspot connection: {e.args}")
+            logging.debug(
+                f"Error occurred while adding a hotspot connection: {e.args}"
+            )
             return {"status": "error, exception"}
 
     def delete_old_hotspot_connection(self) -> None:
@@ -881,11 +928,17 @@ class SdbusNetworkManager(QObject):
                 if ssid == self.hotspot_ssid:
                     self.hotspot_ssid = new_ssid
                 properties["connection"]["id"] = ("s", str(new_ssid))
-                properties["802-11-wireless"]["ssid"] = ("ay", new_ssid.encode("utf-8"))
+                properties["802-11-wireless"]["ssid"] = (
+                    "ay",
+                    new_ssid.encode("utf-8"),
+                )
             if password is not None:
                 if ssid == self.hotspot_ssid:
                     self.hotspot_password = password
-                properties["802-11-wireless-security"]["psk"] = ("s", str(password))
+                properties["802-11-wireless-security"]["psk"] = (
+                    "s",
+                    str(password),
+                )
 
             con_settings.update(properties)
 
@@ -1031,26 +1084,100 @@ class SdbusNetworkManagerDummy:
         - Implemented with map built-in python method instead of for loops. Don't know the performance difference, but tried to not use for loops in these methods just to try.
         """
         # This will only work on wifi, because we can scan networks
-        return [
-            {
-                "ssid": "BLOCKS",
-                "security": "wpa",
-                "frequency": 344,
-                "channel": 2,
-                "signal_level": "-12",
-                "max_bitrate": "1222",
-                "BSSID": "12:312:je:22",
-            },
-            {
-                "ssid": "MEO",
-                "security": "wpa",
-                "frequency": 344,
-                "channel": 2,
-                "signal_level": "-12",
-                "max_bitrate": "1222",
-                "BSSID": "12:312:je:22",
-            },
-        ]
+        return (
+            [
+                {
+                    "ssid": "BLOCKS",
+                    "security": "wpa",
+                    "frequency": 344,
+                    "channel": 2,
+                    "signal_level": "-12",
+                    "max_bitrate": "1222",
+                    "BSSID": "12:312:je:22",
+                },
+                {
+                    "ssid": "MEO",
+                    "security": "wpa",
+                    "frequency": 344,
+                    "channel": 2,
+                    "signal_level": "-12",
+                    "max_bitrate": "1222",
+                    "BSSID": "12:312:je:22",
+                },
+                {
+                    "ssid": "SkyNet",
+                    "security": "wpa2",
+                    "frequency": 5180,
+                    "channel": 36,
+                    "signal_level": "-45",
+                    "max_bitrate": "867",
+                    "BSSID": "a2:3f:5d:8c:01:aa",
+                },
+                {
+                    "ssid": "CoffeeShop_WiFi",
+                    "security": "open",
+                    "frequency": 2412,
+                    "channel": 1,
+                    "signal_level": "-68",
+                    "max_bitrate": "144",
+                    "BSSID": "bc:85:56:de:12:39",
+                },
+                {
+                    "ssid": "HomeNetwork5G",
+                    "security": "wpa3",
+                    "frequency": 5745,
+                    "channel": 149,
+                    "signal_level": "-38",
+                    "max_bitrate": "1300",
+                    "BSSID": "e3:55:76:9a:cd:ef",
+                },
+                {
+                    "ssid": "PublicLibraryNet",
+                    "security": "wpa2",
+                    "frequency": 2437,
+                    "channel": 6,
+                    "signal_level": "-72",
+                    "max_bitrate": "300",
+                    "BSSID": "00:1a:2b:3c:4d:5e",
+                },
+                {
+                    "ssid": "Device_AP_8934",
+                    "security": "open",
+                    "frequency": 2462,
+                    "channel": 11,
+                    "signal_level": "-80",
+                    "max_bitrate": "54",
+                    "BSSID": "de:ad:be:ef:00:99",
+                },
+                {
+                    "ssid": "IoT_Network",
+                    "security": "wpa2",
+                    "frequency": 2422,
+                    "channel": 3,
+                    "signal_level": "-59",
+                    "max_bitrate": "72",
+                    "BSSID": "aa:bb:cc:dd:ee:ff",
+                },
+                {
+                    "ssid": "FastLane",
+                    "security": "wpa3",
+                    "frequency": 5200,
+                    "channel": 40,
+                    "signal_level": "-33",
+                    "max_bitrate": "2400",
+                    "BSSID": "11:22:33:44:55:66",
+                },
+                {
+                    "ssid": "GUEST1234",
+                    "security": "wpa",
+                    "frequency": 2462,
+                    "channel": 11,
+                    "signal_level": "-50",
+                    "max_bitrate": "600",
+                    "BSSID": "77:88:99:aa:bb:cc",
+                },
+            ],
+        )
 
     def get_security_type(self, ap: AccessPoint) -> typing.Tuple:
         """get_security_type Get the security type from a network AccessPoint
@@ -1080,14 +1207,12 @@ class SdbusNetworkManagerDummy:
         I admit that this implementation is way to complicated, I don't even think it's great on memory and time, but i didn't use for loops so mission achieved.
         """
         return [
-            {
-                "SSID": "BLOCKS",
-                "UUID": "OOAISUDFOASODFJ",
-            },
-            {
-                "SSID": "PrinterHotspot",
-                "UUID": "OOAISUDFOASODFJ",
-            },
+            {"SSID": "BLOCKS", "UUID": "OOAISUDFOASODFJ"},
+            {"SSID": "PrinterHotspot", "UUID": "OOAISUDFOASODFJ"},
+            {"SSID": "SkyNet", "UUID": "91UJDKSLA9321KJD"},
+            {"SSID": "PublicLibraryNet", "UUID": "LKSJDOIQWEUR9283"},
+            {"SSID": "FastLane", "UUID": "UQWEIJASD8237AJD"},
+            {"SSID": "GUEST1234", "UUID": "1287JDKALQWEIJSN"},
         ]
 
     def get_saved_networks_with_for(self):
@@ -1101,14 +1226,12 @@ class SdbusNetworkManagerDummy:
         https://github.com/KlipperScreen/KlipperScreen/blob/master/ks_includes/sdbus_nm.py Alfredo Monclues (alfrix) 2024
         """
         return [
-            {
-                "SSID": "BLOCKS",
-                "UUID": "OOAISUDFOASODFJ",
-            },
-            {
-                "SSID": "PrinterHotspot",
-                "UUID": "OOAISUDFOASODFJ",
-            },
+            {"SSID": "BLOCKS", "UUID": "OOAISUDFOASODFJ"},
+            {"SSID": "PrinterHotspot", "UUID": "OOAISUDFOASODFJ"},
+            {"SSID": "SkyNet", "UUID": "91UJDKSLA9321KJD"},
+            {"SSID": "PublicLibraryNet", "UUID": "LKSJDOIQWEUR9283"},
+            {"SSID": "FastLane", "UUID": "UQWEIJASD8237AJD"},
+            {"SSID": "GUEST1234", "UUID": "1287JDKALQWEIJSN"},
         ]
 
     def get_saved_ssid_names(self) -> typing.List[str]:
@@ -1117,7 +1240,14 @@ class SdbusNetworkManagerDummy:
         Returns:
             typing.List[str]: List that contains the names of the saved ssid network names
         """
-        return ["BLOCKS"]
+        return [
+            "BLOCKS",
+            "PrinterHotspot",
+            "SkyNet",
+            "PublicLibraryNet",
+            "FastLane",
+            "GUEST1234",
+        ]
 
     def is_known(self, ssid: str):
         """Whether or not a network is known
@@ -1221,7 +1351,9 @@ class SdbusNetworkManagerDummy:
         """
         print(f"Deleted network {ssid}")
 
-    def create_hotspot(self, ssid: str = "PrinterHotspot", password: str = "123456789"):
+    def create_hotspot(
+        self, ssid: str = "PrinterHotspot", password: str = "123456789"
+    ):
         print(f"Created hotspot {ssid}, {password}")
 
     def delete_old_hotspot_connection(self) -> None:
