@@ -971,6 +971,9 @@ class SdbusNetworkManagerDummy:
         self.primary_wired_interface = "path/wireddDummy"
         self.wireless_active: bool = True
 
+    def get_current_ssid(self) -> str:
+        return "Blocks"
+
     def get_available_interfaces(self) -> typing.List[str]:
         """get_available_interfaces Gets the names of all available interfaces
 
@@ -985,7 +988,6 @@ class SdbusNetworkManagerDummy:
         Returns:
             bool: True if device is enabled | False if not
         """
-        print(self.wireless_active)
         return self.wireless_active
 
     def toggle_wifi(self, toggle: bool):
@@ -1208,11 +1210,6 @@ class SdbusNetworkManagerDummy:
         """
         return [
             {"SSID": "BLOCKS", "UUID": "OOAISUDFOASODFJ"},
-            {"SSID": "PrinterHotspot", "UUID": "OOAISUDFOASODFJ"},
-            {"SSID": "SkyNet", "UUID": "91UJDKSLA9321KJD"},
-            {"SSID": "PublicLibraryNet", "UUID": "LKSJDOIQWEUR9283"},
-            {"SSID": "FastLane", "UUID": "UQWEIJASD8237AJD"},
-            {"SSID": "GUEST1234", "UUID": "1287JDKALQWEIJSN"},
         ]
 
     def get_saved_networks_with_for(self):
@@ -1227,11 +1224,6 @@ class SdbusNetworkManagerDummy:
         """
         return [
             {"SSID": "BLOCKS", "UUID": "OOAISUDFOASODFJ"},
-            {"SSID": "PrinterHotspot", "UUID": "OOAISUDFOASODFJ"},
-            {"SSID": "SkyNet", "UUID": "91UJDKSLA9321KJD"},
-            {"SSID": "PublicLibraryNet", "UUID": "LKSJDOIQWEUR9283"},
-            {"SSID": "FastLane", "UUID": "UQWEIJASD8237AJD"},
-            {"SSID": "GUEST1234", "UUID": "1287JDKALQWEIJSN"},
         ]
 
     def get_saved_ssid_names(self) -> typing.List[str]:
@@ -1360,7 +1352,8 @@ class SdbusNetworkManagerDummy:
         print("Deleted old hotspot ")
 
     def get_hotspot_ssid(self):
-        print("Get hostpot ssid")
+        print(self.hotspot_ssid)
+        return self.hotspot_ssid
 
     def set_hotspot_ssid(self, ssid: str) -> None:
         print(f"Set hotspot ssid {ssid}")

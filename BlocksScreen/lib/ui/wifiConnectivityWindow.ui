@@ -40,10 +40,10 @@
    <widget class="BlocksCustomFrame" name="network_list_table_frame">
     <property name="geometry">
      <rect>
-      <x>10</x>
+      <x>-10</x>
       <y>90</y>
-      <width>361</width>
-      <height>361</height>
+      <width>381</width>
+      <height>401</height>
      </rect>
     </property>
     <property name="sizePolicy">
@@ -55,8 +55,8 @@
     <widget class="BlocksCustomFrame" name="stregth_frame">
      <property name="geometry">
       <rect>
-       <x>190</x>
-       <y>230</y>
+       <x>210</x>
+       <y>200</y>
        <width>161</width>
        <height>121</height>
       </rect>
@@ -194,8 +194,8 @@ Type</string>
     <widget class="BlocksCustomFrame" name="signal_frame">
      <property name="geometry">
       <rect>
-       <x>10</x>
-       <y>230</y>
+       <x>30</x>
+       <y>200</y>
        <width>161</width>
        <height>121</height>
       </rect>
@@ -333,8 +333,8 @@ Strength</string>
     <widget class="BlocksCustomFrame" name="ip_frame">
      <property name="geometry">
       <rect>
-       <x>10</x>
-       <y>140</y>
+       <x>30</x>
+       <y>110</y>
        <width>341</width>
        <height>71</height>
       </rect>
@@ -369,75 +369,46 @@ Strength</string>
        <set>Qt::AlignCenter</set>
       </property>
      </widget>
-    </widget>
-    <widget class="BlocksCustomButton" name="call_hotspot_button">
-     <property name="geometry">
-      <rect>
-       <x>100</x>
-       <y>230</y>
-       <width>160</width>
-       <height>50</height>
-      </rect>
-     </property>
-     <property name="minimumSize">
-      <size>
-       <width>160</width>
-       <height>50</height>
-      </size>
-     </property>
-     <property name="maximumSize">
-      <size>
-       <width>160</width>
-       <height>50</height>
-      </size>
-     </property>
-     <property name="font">
-      <font>
-       <family>MS Shell Dlg 2</family>
-       <pointsize>14</pointsize>
-       <italic>false</italic>
-       <stylestrategy>PreferAntialias</stylestrategy>
-      </font>
-     </property>
-     <property name="mouseTracking">
-      <bool>false</bool>
-     </property>
-     <property name="tabletTracking">
-      <bool>true</bool>
-     </property>
-     <property name="contextMenuPolicy">
-      <enum>Qt::NoContextMenu</enum>
-     </property>
-     <property name="layoutDirection">
-      <enum>Qt::LeftToRight</enum>
-     </property>
-     <property name="styleSheet">
-      <string notr="true"/>
-     </property>
-     <property name="text">
-      <string>Hotspot </string>
-     </property>
-     <property name="autoDefault">
-      <bool>false</bool>
-     </property>
-     <property name="flat">
-      <bool>true</bool>
-     </property>
-     <property name="class" stdset="0">
-      <string>menu_btn</string>
-     </property>
-     <property name="button_type" stdset="0">
-      <string>normal</string>
-     </property>
-     <property name="icon_pixmap" stdset="0">
-      <pixmap>:/network/media/btn_icons/hotspot.svg</pixmap>
-     </property>
+     <widget class="QLabel" name="label_2">
+      <property name="geometry">
+       <rect>
+        <x>-10</x>
+        <y>-50</y>
+        <width>361</width>
+        <height>181</height>
+       </rect>
+      </property>
+      <property name="font">
+       <font>
+        <pointsize>17</pointsize>
+       </font>
+      </property>
+      <property name="styleSheet">
+       <string notr="true">color: white</string>
+      </property>
+      <property name="text">
+       <string>No network connection.
+
+Try connecting to Wi-Fi 
+or turn on the hotspot
+using the buttons on the side.</string>
+      </property>
+      <property name="textFormat">
+       <enum>Qt::PlainText</enum>
+      </property>
+      <property name="scaledContents">
+       <bool>false</bool>
+      </property>
+      <property name="alignment">
+       <set>Qt::AlignCenter</set>
+      </property>
+     </widget>
     </widget>
     <widget class="Line" name="line">
      <property name="geometry">
       <rect>
-       <x>20</x>
-       <y>90</y>
+       <x>40</x>
+       <y>60</y>
        <width>321</width>
        <height>20</height>
       </rect>
@@ -449,8 +420,8 @@ Strength</string>
     <widget class="QLabel" name="netlist_ssuid">
      <property name="geometry">
       <rect>
-       <x>30</x>
-       <y>60</y>
+       <x>50</x>
+       <y>30</y>
        <width>301</width>
        <height>41</height>
       </rect>
@@ -465,39 +436,6 @@ Strength</string>
      </property>
      <property name="text">
       <string>TextLabel</string>
-     </property>
-     <property name="scaledContents">
-      <bool>false</bool>
-     </property>
-     <property name="alignment">
-      <set>Qt::AlignCenter</set>
-     </property>
-    </widget>
-    <widget class="QLabel" name="label_2">
-     <property name="geometry">
-      <rect>
-       <x>30</x>
-       <y>60</y>
-       <width>301</width>
-       <height>181</height>
-      </rect>
-     </property>
-     <property name="font">
-      <font>
-       <pointsize>12</pointsize>
-      </font>
-     </property>
-     <property name="styleSheet">
-      <string notr="true">color: white</string>
-     </property>
-     <property name="text">
-      <string>No network connection.
-Try connecting to a Wi-Fi network,
-or turn on 
-the hotspot using the button below.</string>
-     </property>
-     <property name="textFormat">
-      <enum>Qt::PlainText</enum>
      </property>
      <property name="scaledContents">
       <bool>false</bool>
@@ -644,7 +582,7 @@ the hotspot using the button below.</string>
       <string>icon</string>
      </property>
      <property name="icon_pixmap" stdset="0">
-      <pixmap>:/ui/media/btn_icons/refresh.svg</pixmap>
+      <pixmap resource="resources/icon_resources.qrc">:/ui/media/btn_icons/refresh.svg</pixmap>
      </property>
     </widget>
     <widget class="IconButton" name="network_backButton">
@@ -681,15 +619,15 @@ the hotspot using the button below.</string>
       <string>icon</string>
      </property>
      <property name="icon_pixmap" stdset="0">
-      <pixmap>:/ui/media/btn_icons/back.svg</pixmap>
+      <pixmap resource="resources/icon_resources.qrc">:/ui/media/btn_icons/back.svg</pixmap>
      </property>
     </widget>
    </widget>
    <widget class="ToggleAnimatedButton" name="wifi_toggle_button">
     <property name="geometry">
      <rect>
-      <x>660</x>
-      <y>150</y>
+      <x>620</x>
+      <y>140</y>
       <width>111</width>
       <height>50</height>
      </rect>
@@ -739,14 +677,14 @@ the hotspot using the button below.</string>
      <string>normal</string>
     </property>
     <property name="icon_pixmap" stdset="0">
-     <pixmap>:/network/media/btn_icons/no_wifi.svg</pixmap>
+     <pixmap resource="resources/icon_resources.qrc">:/network/media/btn_icons/no_wifi.svg</pixmap>
     </property>
    </widget>
    <widget class="ListCustomButton" name="wifi_button">
     <property name="geometry">
      <rect>
       <x>390</x>
-      <y>100</y>
+      <y>90</y>
       <width>391</width>
       <height>161</height>
      </rect>
@@ -763,14 +701,14 @@ the hotspot using the button below.</string>
      </font>
     </property>
     <property name="text">
-     <string>WIFI</string>
+     <string>Wi-Fi</string>
     </property>
    </widget>
    <widget class="ListCustomButton" name="hotspot_button">
     <property name="geometry">
      <rect>
       <x>390</x>
-      <y>270</y>
+      <y>269</y>
       <width>391</width>
       <height>161</height>
      </rect>
@@ -787,8 +725,8 @@ the hotspot using the button below.</string>
    <widget class="ToggleAnimatedButton" name="Togglehot">
     <property name="geometry">
      <rect>
-      <x>660</x>
-      <y>321</y>
+      <x>620</x>
+      <y>320</y>
       <width>111</width>
       <height>51</height>
      </rect>
@@ -802,12 +740,64 @@ the hotspot using the button below.</string>
      <string>Toggle HOT</string>
     </property>
    </widget>
+   <widget class="QLabel" name="label">
+    <property name="geometry">
+     <rect>
+      <x>740</x>
+      <y>140</y>
+      <width>41</width>
+      <height>51</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">color:white;</string>
+    </property>
+    <property name="text">
+     <string/>
+    </property>
+    <property name="pixmap">
+     <pixmap resource="resources/icon_resources.qrc">:/arrow_icons/media/btn_icons/right_arrow.svg</pixmap>
+    </property>
+    <property name="scaledContents">
+     <bool>true</bool>
+    </property>
+   </widget>
+   <widget class="QLabel" name="label_3">
+    <property name="enabled">
+     <bool>true</bool>
+    </property>
+    <property name="geometry">
+     <rect>
+      <x>740</x>
+      <y>319</y>
+      <width>41</width>
+      <height>51</height>
+     </rect>
+    </property>
+    <property name="contextMenuPolicy">
+     <enum>Qt::NoContextMenu</enum>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">color:white;</string>
+    </property>
+    <property name="text">
+     <string/>
+    </property>
+    <property name="pixmap">
+     <pixmap resource="resources/icon_resources.qrc">:/arrow_icons/media/btn_icons/right_arrow.svg</pixmap>
+    </property>
+    <property name="scaledContents">
+     <bool>true</bool>
+    </property>
+   </widget>
    <zorder>network_list_table_frame</zorder>
    <zorder>window_header</zorder>
    <zorder>wifi_button</zorder>
    <zorder>wifi_toggle_button</zorder>
    <zorder>hotspot_button</zorder>
    <zorder>Togglehot</zorder>
+   <zorder>label_3</zorder>
+   <zorder>label</zorder>
   </widget>
   <widget class="QWidget" name="wifi_page">
    <widget class="BlocksCustomFrame" name="window_header_2">
@@ -910,7 +900,7 @@ the hotspot using the button below.</string>
       </font>
      </property>
      <property name="text">
-      <string>Networks</string>
+      <string>Wi-fi List</string>
      </property>
      <property name="alignment">
       <set>Qt::AlignCenter</set>
@@ -947,7 +937,7 @@ the hotspot using the button below.</string>
       <string>icon</string>
      </property>
      <property name="icon_pixmap" stdset="0">
-      <pixmap>:/ui/media/btn_icons/refresh.svg</pixmap>
+      <pixmap resource="resources/icon_resources.qrc">:/ui/media/btn_icons/refresh.svg</pixmap>
      </property>
     </widget>
     <widget class="IconButton" name="wifi_backButton">
@@ -984,7 +974,7 @@ the hotspot using the button below.</string>
       <string>icon</string>
      </property>
      <property name="icon_pixmap" stdset="0">
-      <pixmap>:/ui/media/btn_icons/back.svg</pixmap>
+      <pixmap resource="resources/icon_resources.qrc">:/ui/media/btn_icons/back.svg</pixmap>
      </property>
     </widget>
    </widget>
@@ -1321,7 +1311,7 @@ the hotspot using the button below.</string>
        <set>Qt::AlignCenter</set>
       </property>
      </widget>
-     <widget class="QLineEdit" name="add_network_password_field">
+     <widget class="BlocksCustomLinEdit" name="add_network_password_field">
       <property name="geometry">
        <rect>
         <x>120</x>
@@ -1371,7 +1361,7 @@ the hotspot using the button below.</string>
        <string>icon</string>
       </property>
       <property name="icon_pixmap" stdset="0">
-       <pixmap>:/ui/media/btn_icons/back.svg</pixmap>
+       <pixmap resource="resources/icon_resources.qrc">:/ui/media/btn_icons/back.svg</pixmap>
       </property>
      </widget>
     </widget>
@@ -1522,7 +1512,7 @@ the hotspot using the button below.</string>
       <string>icon</string>
      </property>
      <property name="icon_pixmap" stdset="0">
-      <pixmap>:/dialog/media/btn_icons/yes.svg</pixmap>
+      <pixmap resource="resources/icon_resources.qrc">:/dialog/media/btn_icons/yes.svg</pixmap>
      </property>
     </widget>
     <widget class="IconButton" name="cancel_network_validation_button">
@@ -1580,7 +1570,7 @@ the hotspot using the button below.</string>
       <string>icon</string>
      </property>
      <property name="icon_pixmap" stdset="0">
-      <pixmap>:/dialog/media/btn_icons/no.svg</pixmap>
+      <pixmap resource="resources/icon_resources.qrc">:/dialog/media/btn_icons/no.svg</pixmap>
      </property>
     </widget>
    </widget>
@@ -1718,7 +1708,7 @@ the hotspot using the button below.</string>
       <string>icon</string>
      </property>
      <property name="icon_pixmap" stdset="0">
-      <pixmap>:/ui/media/btn_icons/back.svg</pixmap>
+      <pixmap resource="resources/icon_resources.qrc">:/ui/media/btn_icons/back.svg</pixmap>
      </property>
     </widget>
    </widget>
@@ -1840,67 +1830,41 @@ Type</string>
        <set>Qt::AlignCenter</set>
       </property>
      </widget>
-     <widget class="DisplayButton" name="saved_connection_security_type_info_label">
+     <widget class="QLabel" name="saved_connection_security_type_info_label">
       <property name="geometry">
        <rect>
         <x>30</x>
-        <y>90</y>
+        <y>100</y>
         <width>151</width>
-        <height>50</height>
+        <height>61</height>
        </rect>
-      </property>
-      <property name="minimumSize">
-       <size>
-        <width>0</width>
-        <height>0</height>
-       </size>
-      </property>
-      <property name="maximumSize">
-       <size>
-        <width>16777215</width>
-        <height>50</height>
-       </size>
       </property>
       <property name="font">
        <font>
-        <family>MS Shell Dlg 2</family>
-        <pointsize>14</pointsize>
-        <italic>false</italic>
-        <stylestrategy>PreferAntialias</stylestrategy>
+        <pointsize>20</pointsize>
        </font>
       </property>
-      <property name="mouseTracking">
-       <bool>false</bool>
-      </property>
-      <property name="tabletTracking">
-       <bool>true</bool>
-      </property>
-      <property name="contextMenuPolicy">
-       <enum>Qt::NoContextMenu</enum>
-      </property>
-      <property name="layoutDirection">
-       <enum>Qt::LeftToRight</enum>
-      </property>
       <property name="styleSheet">
-       <string notr="true">color: rgb(255,255,255)</string>
+       <string notr="true">color:white</string>
       </property>
       <property name="text">
-       <string>Strength</string>
+       <string>TextLabel</string>
       </property>
-      <property name="autoDefault">
-       <bool>false</bool>
+      <property name="alignment">
+       <set>Qt::AlignCenter</set>
       </property>
-      <property name="flat">
-       <bool>true</bool>
+     </widget>
+     <widget class="Line" name="line_5">
+      <property name="geometry">
+       <rect>
+        <x>10</x>
+        <y>80</y>
+        <width>191</width>
+        <height>16</height>
+       </rect>
       </property>
-      <property name="class" stdset="0">
-       <string>menu_btn</string>
-      </property>
-      <property name="button_type" stdset="0">
-       <string>normal</string>
-      </property>
-      <property name="icon_pixmap" stdset="0">
-       <pixmap/>
+      <property name="orientation">
+       <enum>Qt::Horizontal</enum>
       </property>
      </widget>
     </widget>
@@ -2005,67 +1969,41 @@ Strength</string>
        <set>Qt::AlignCenter</set>
       </property>
      </widget>
-     <widget class="DisplayButton" name="saved_connection_signal_strength_info_frame">
+     <widget class="QLabel" name="saved_connection_signal_strength_info_frame">
       <property name="geometry">
        <rect>
         <x>30</x>
-        <y>90</y>
+        <y>100</y>
         <width>151</width>
-        <height>50</height>
+        <height>61</height>
        </rect>
-      </property>
-      <property name="minimumSize">
-       <size>
-        <width>0</width>
-        <height>0</height>
-       </size>
-      </property>
-      <property name="maximumSize">
-       <size>
-        <width>16777215</width>
-        <height>50</height>
-       </size>
       </property>
       <property name="font">
        <font>
-        <family>MS Shell Dlg 2</family>
-        <pointsize>14</pointsize>
-        <italic>false</italic>
-        <stylestrategy>PreferAntialias</stylestrategy>
+        <pointsize>20</pointsize>
        </font>
       </property>
-      <property name="mouseTracking">
-       <bool>false</bool>
-      </property>
-      <property name="tabletTracking">
-       <bool>true</bool>
-      </property>
-      <property name="contextMenuPolicy">
-       <enum>Qt::NoContextMenu</enum>
-      </property>
-      <property name="layoutDirection">
-       <enum>Qt::LeftToRight</enum>
-      </property>
       <property name="styleSheet">
-       <string notr="true">color: rgb(255,255,255)</string>
+       <string notr="true">color:white</string>
       </property>
       <property name="text">
-       <string>Strength</string>
+       <string>TextLabel</string>
       </property>
-      <property name="autoDefault">
-       <bool>false</bool>
+      <property name="alignment">
+       <set>Qt::AlignCenter</set>
       </property>
-      <property name="flat">
-       <bool>true</bool>
+     </widget>
+     <widget class="Line" name="line_4">
+      <property name="geometry">
+       <rect>
+        <x>10</x>
+        <y>80</y>
+        <width>191</width>
+        <height>16</height>
+       </rect>
       </property>
-      <property name="class" stdset="0">
-       <string>menu_btn</string>
-      </property>
-      <property name="button_type" stdset="0">
-       <string>normal</string>
-      </property>
-      <property name="icon_pixmap" stdset="0">
-       <pixmap/>
+      <property name="orientation">
+       <enum>Qt::Horizontal</enum>
       </property>
      </widget>
     </widget>
@@ -2170,7 +2108,7 @@ Password</string>
        <set>Qt::AlignCenter</set>
       </property>
      </widget>
-     <widget class="QLineEdit" name="saved_connection_change_password_field">
+     <widget class="BlocksCustomLinEdit" name="saved_connection_change_password_field">
       <property name="geometry">
        <rect>
         <x>120</x>
@@ -2220,7 +2158,7 @@ Password</string>
        <string>icon</string>
       </property>
       <property name="icon_pixmap" stdset="0">
-       <pixmap>:/ui/media/btn_icons/back.svg</pixmap>
+       <pixmap resource="resources/icon_resources.qrc">:/ui/media/btn_icons/back.svg</pixmap>
       </property>
      </widget>
     </widget>
@@ -2359,7 +2297,7 @@ Password</string>
       <string>icon</string>
      </property>
      <property name="icon_pixmap" stdset="0">
-      <pixmap>:/ui/media/btn_icons/back.svg</pixmap>
+      <pixmap resource="resources/icon_resources.qrc">:/ui/media/btn_icons/back.svg</pixmap>
      </property>
     </widget>
     <widget class="IconButton" name="saved_connection_delete_network_button">
@@ -2536,64 +2474,7 @@ Password</string>
       <string>icon</string>
      </property>
      <property name="icon_pixmap" stdset="0">
-      <pixmap>:/ui/media/btn_icons/back.svg</pixmap>
-     </property>
-    </widget>
-    <widget class="ToggleAnimatedButton" name="hotspot_toggle">
-     <property name="geometry">
-      <rect>
-       <x>700</x>
-       <y>50</y>
-       <width>91</width>
-       <height>41</height>
-      </rect>
-     </property>
-     <property name="minimumSize">
-      <size>
-       <width>0</width>
-       <height>0</height>
-      </size>
-     </property>
-     <property name="maximumSize">
-      <size>
-       <width>160</width>
-       <height>50</height>
-      </size>
-     </property>
-     <property name="font">
-      <font>
-       <family>MS Shell Dlg 2</family>
-       <pointsize>13</pointsize>
-       <italic>false</italic>
-       <stylestrategy>PreferAntialias</stylestrategy>
-      </font>
-     </property>
-     <property name="mouseTracking">
-      <bool>false</bool>
-     </property>
-     <property name="tabletTracking">
-      <bool>true</bool>
-     </property>
-     <property name="contextMenuPolicy">
-      <enum>Qt::NoContextMenu</enum>
-     </property>
-     <property name="layoutDirection">
-      <enum>Qt::LeftToRight</enum>
-     </property>
-     <property name="styleSheet">
-      <string notr="true"/>
-     </property>
-     <property name="text">
-      <string>Toggle hot</string>
-     </property>
-     <property name="class" stdset="0">
-      <string>menu_btn</string>
-     </property>
-     <property name="button_type" stdset="0">
-      <string>normal</string>
-     </property>
-     <property name="icon_pixmap" stdset="0">
-      <pixmap>:/network/media/btn_icons/no_wifi.svg</pixmap>
+      <pixmap resource="resources/icon_resources.qrc">:/ui/media/btn_icons/back.svg</pixmap>
      </property>
     </widget>
    </widget>
@@ -3076,7 +2957,7 @@ Password</string>
          <set>Qt::AlignCenter</set>
         </property>
        </widget>
-       <widget class="QLineEdit" name="hotspot_password_input_field">
+       <widget class="BlocksCustomLinEdit" name="hotspot_password_input_field">
         <property name="geometry">
          <rect>
           <x>160</x>
@@ -3110,7 +2991,7 @@ Password</string>
        <widget class="IconButton" name="hotspot_password_view_button">
         <property name="geometry">
          <rect>
-          <x>690</x>
+          <x>700</x>
           <y>10</y>
           <width>60</width>
           <height>60</height>
@@ -3141,7 +3022,7 @@ Password</string>
          <string>icon</string>
         </property>
         <property name="icon_pixmap" stdset="0">
-         <pixmap>:/ui/media/btn_icons/back.svg</pixmap>
+         <pixmap resource="resources/icon_resources.qrc">:/ui/media/btn_icons/back.svg</pixmap>
         </property>
        </widget>
       </widget>
@@ -3264,7 +3145,7 @@ Password</string>
          <set>Qt::AlignCenter</set>
         </property>
        </widget>
-       <widget class="QLineEdit" name="hotspot_name_input_field">
+       <widget class="BlocksCustomLinEdit" name="hotspot_name_input_field">
         <property name="geometry">
          <rect>
           <x>160</x>
@@ -3291,8 +3172,8 @@ Password</string>
           <height>40</height>
          </size>
         </property>
-        <property name="text">
-         <string/>
+        <property name="echoMode">
+         <enum>QLineEdit::Password</enum>
         </property>
        </widget>
       </widget>
@@ -3303,19 +3184,9 @@ Password</string>
  </widget>
  <customwidgets>
   <customwidget>
-   <class>BlocksCustomButton</class>
-   <extends>QPushButton</extends>
-   <header location="global">lib.utils.blocks_button</header>
-  </customwidget>
-  <customwidget>
    <class>IconButton</class>
    <extends>QPushButton</extends>
    <header location="global">lib.utils.icon_button</header>
-  </customwidget>
-  <customwidget>
-   <class>DisplayButton</class>
-   <extends>QPushButton</extends>
-   <header location="global">lib.utils.display_button</header>
   </customwidget>
   <customwidget>
    <class>BlocksCustomFrame</class>
@@ -3333,11 +3204,16 @@ Password</string>
    <extends>QPushButton</extends>
    <header location="global">lib.utils.list_button</header>
   </customwidget>
+  <customwidget>
+   <class>BlocksCustomLinEdit</class>
+   <extends>QLineEdit</extends>
+   <header>lib.utils.blocks_linedit</header>
+  </customwidget>
  </customwidgets>
  <resources>
   <include location="C:/Users/bendy/Downloads/bendy/bendy/Downloads/resources/background_resources.qrc"/>
   <include location="C:/Users/bendy/Downloads/bendy/bendy/Downloads/resources/button_resources.qrc"/>
-  <include location="C:/Users/bendy/Downloads/bendy/bendy/Downloads/resources/icon_resources.qrc"/>
+  <include location="resources/icon_resources.qrc"/>
   <include location="C:/Users/bendy/Downloads/bendy/bendy/Downloads/resources/top_bar_resources.qrc"/>
   <include location="C:/Users/bendy/Downloads/bendy/bendy/Downloads/resources/system_resources.qrc"/>
  </resources>

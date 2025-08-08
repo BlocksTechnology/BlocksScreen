@@ -13,114 +13,63 @@ class Ui_wifi_stacked_page(object):
     def setupUi(self, wifi_stacked_page):
         wifi_stacked_page.setObjectName("wifi_stacked_page")
         wifi_stacked_page.resize(808, 578)
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.Expanding,
-            QtWidgets.QSizePolicy.Policy.Expanding,
-        )
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Expanding)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(
-            wifi_stacked_page.sizePolicy().hasHeightForWidth()
-        )
+        sizePolicy.setHeightForWidth(wifi_stacked_page.sizePolicy().hasHeightForWidth())
         wifi_stacked_page.setSizePolicy(sizePolicy)
-        wifi_stacked_page.setStyleSheet(
-            "#wifi_stacked_page{\n"
-            "    \n"
-            "    \n"
-            "    background-image: url(:/background/media/1st_background.png);\n"
-            "}\n"
-            ""
-        )
+        wifi_stacked_page.setStyleSheet("#wifi_stacked_page{\n"
+"    \n"
+"    \n"
+"    background-image: url(:/background/media/1st_background.png);\n"
+"}\n"
+"")
         self.network_list_page = QtWidgets.QWidget()
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.Expanding,
-            QtWidgets.QSizePolicy.Policy.Expanding,
-        )
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Expanding)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(
-            self.network_list_page.sizePolicy().hasHeightForWidth()
-        )
+        sizePolicy.setHeightForWidth(self.network_list_page.sizePolicy().hasHeightForWidth())
         self.network_list_page.setSizePolicy(sizePolicy)
         self.network_list_page.setObjectName("network_list_page")
-        self.network_list_table_frame = BlocksCustomFrame(
-            parent=self.network_list_page
-        )
-        self.network_list_table_frame.setGeometry(
-            QtCore.QRect(10, 90, 361, 361)
-        )
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.Expanding,
-            QtWidgets.QSizePolicy.Policy.Expanding,
-        )
+        self.network_list_table_frame = BlocksCustomFrame(parent=self.network_list_page)
+        self.network_list_table_frame.setGeometry(QtCore.QRect(-10, 90, 381, 401))
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Expanding)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(
-            self.network_list_table_frame.sizePolicy().hasHeightForWidth()
-        )
+        sizePolicy.setHeightForWidth(self.network_list_table_frame.sizePolicy().hasHeightForWidth())
         self.network_list_table_frame.setSizePolicy(sizePolicy)
         self.network_list_table_frame.setObjectName("network_list_table_frame")
-        self.stregth_frame = BlocksCustomFrame(
-            parent=self.network_list_table_frame
-        )
-        self.stregth_frame.setGeometry(QtCore.QRect(190, 230, 161, 121))
+        self.stregth_frame = BlocksCustomFrame(parent=self.network_list_table_frame)
+        self.stregth_frame.setGeometry(QtCore.QRect(210, 200, 161, 121))
         self.stregth_frame.setFrameShape(QtWidgets.QFrame.Shape.StyledPanel)
         self.stregth_frame.setFrameShadow(QtWidgets.QFrame.Shadow.Raised)
         self.stregth_frame.setObjectName("stregth_frame")
-        self.netlist_security_label = QtWidgets.QLabel(
-            parent=self.stregth_frame
-        )
+        self.netlist_security_label = QtWidgets.QLabel(parent=self.stregth_frame)
         self.netlist_security_label.setGeometry(QtCore.QRect(20, 10, 121, 50))
         palette = QtGui.QPalette()
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Active,
-            QtGui.QPalette.ColorRole.WindowText,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.WindowText, brush)
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Active,
-            QtGui.QPalette.ColorRole.Text,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.Text, brush)
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Inactive,
-            QtGui.QPalette.ColorRole.WindowText,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.WindowText, brush)
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Inactive,
-            QtGui.QPalette.ColorRole.Text,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.Text, brush)
         brush = QtGui.QBrush(QtGui.QColor(120, 120, 120))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Disabled,
-            QtGui.QPalette.ColorRole.WindowText,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.WindowText, brush)
         brush = QtGui.QBrush(QtGui.QColor(120, 120, 120))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Disabled,
-            QtGui.QPalette.ColorRole.Text,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.Text, brush)
         self.netlist_security_label.setPalette(palette)
         font = QtGui.QFont()
         font.setPointSize(15)
         self.netlist_security_label.setFont(font)
-        self.netlist_security_label.setAlignment(
-            QtCore.Qt.AlignmentFlag.AlignCenter
-        )
+        self.netlist_security_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self.netlist_security_label.setObjectName("netlist_security_label")
         self.netlist_security = QtWidgets.QLabel(parent=self.stregth_frame)
         self.netlist_security.setGeometry(QtCore.QRect(10, 60, 141, 41))
@@ -135,67 +84,37 @@ class Ui_wifi_stacked_page(object):
         self.line_3.setFrameShape(QtWidgets.QFrame.Shape.HLine)
         self.line_3.setFrameShadow(QtWidgets.QFrame.Shadow.Sunken)
         self.line_3.setObjectName("line_3")
-        self.signal_frame = BlocksCustomFrame(
-            parent=self.network_list_table_frame
-        )
-        self.signal_frame.setGeometry(QtCore.QRect(10, 230, 161, 121))
+        self.signal_frame = BlocksCustomFrame(parent=self.network_list_table_frame)
+        self.signal_frame.setGeometry(QtCore.QRect(30, 200, 161, 121))
         self.signal_frame.setFrameShape(QtWidgets.QFrame.Shape.StyledPanel)
         self.signal_frame.setFrameShadow(QtWidgets.QFrame.Shadow.Raised)
         self.signal_frame.setObjectName("signal_frame")
-        self.netlist_strength_label = QtWidgets.QLabel(
-            parent=self.signal_frame
-        )
+        self.netlist_strength_label = QtWidgets.QLabel(parent=self.signal_frame)
         self.netlist_strength_label.setGeometry(QtCore.QRect(20, 10, 121, 50))
         palette = QtGui.QPalette()
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Active,
-            QtGui.QPalette.ColorRole.WindowText,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.WindowText, brush)
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Active,
-            QtGui.QPalette.ColorRole.Text,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.Text, brush)
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Inactive,
-            QtGui.QPalette.ColorRole.WindowText,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.WindowText, brush)
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Inactive,
-            QtGui.QPalette.ColorRole.Text,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.Text, brush)
         brush = QtGui.QBrush(QtGui.QColor(120, 120, 120))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Disabled,
-            QtGui.QPalette.ColorRole.WindowText,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.WindowText, brush)
         brush = QtGui.QBrush(QtGui.QColor(120, 120, 120))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Disabled,
-            QtGui.QPalette.ColorRole.Text,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.Text, brush)
         self.netlist_strength_label.setPalette(palette)
         font = QtGui.QFont()
         font.setPointSize(15)
         self.netlist_strength_label.setFont(font)
-        self.netlist_strength_label.setAlignment(
-            QtCore.Qt.AlignmentFlag.AlignCenter
-        )
+        self.netlist_strength_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self.netlist_strength_label.setObjectName("netlist_strength_label")
         self.netlist_strength = QtWidgets.QLabel(parent=self.signal_frame)
         self.netlist_strength.setGeometry(QtCore.QRect(10, 65, 141, 41))
@@ -211,7 +130,7 @@ class Ui_wifi_stacked_page(object):
         self.line_2.setFrameShadow(QtWidgets.QFrame.Shadow.Sunken)
         self.line_2.setObjectName("line_2")
         self.ip_frame = BlocksCustomFrame(parent=self.network_list_table_frame)
-        self.ip_frame.setGeometry(QtCore.QRect(10, 140, 341, 71))
+        self.ip_frame.setGeometry(QtCore.QRect(30, 110, 341, 71))
         self.ip_frame.setFrameShape(QtWidgets.QFrame.Shape.StyledPanel)
         self.ip_frame.setFrameShadow(QtWidgets.QFrame.Shadow.Raised)
         self.ip_frame.setObjectName("ip_frame")
@@ -223,43 +142,23 @@ class Ui_wifi_stacked_page(object):
         self.netlist_ip.setStyleSheet("color: rgb(255, 255, 255);")
         self.netlist_ip.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self.netlist_ip.setObjectName("netlist_ip")
-        self.call_hotspot_button = BlocksCustomButton(
-            parent=self.network_list_table_frame
-        )
-        self.call_hotspot_button.setGeometry(QtCore.QRect(100, 230, 160, 50))
-        self.call_hotspot_button.setMinimumSize(QtCore.QSize(160, 50))
-        self.call_hotspot_button.setMaximumSize(QtCore.QSize(160, 50))
+        self.label_2 = QtWidgets.QLabel(parent=self.ip_frame)
+        self.label_2.setGeometry(QtCore.QRect(-10, -50, 361, 181))
         font = QtGui.QFont()
-        font.setFamily("MS Shell Dlg 2")
-        font.setPointSize(14)
-        font.setItalic(False)
-        font.setStyleStrategy(QtGui.QFont.StyleStrategy.PreferAntialias)
-        self.call_hotspot_button.setFont(font)
-        self.call_hotspot_button.setMouseTracking(False)
-        self.call_hotspot_button.setTabletTracking(True)
-        self.call_hotspot_button.setContextMenuPolicy(
-            QtCore.Qt.ContextMenuPolicy.NoContextMenu
-        )
-        self.call_hotspot_button.setLayoutDirection(
-            QtCore.Qt.LayoutDirection.LeftToRight
-        )
-        self.call_hotspot_button.setStyleSheet("")
-        self.call_hotspot_button.setAutoDefault(False)
-        self.call_hotspot_button.setFlat(True)
-        self.call_hotspot_button.setProperty(
-            "icon_pixmap",
-            QtGui.QPixmap(":/network/media/btn_icons/hotspot.svg"),
-        )
-        self.call_hotspot_button.setObjectName("call_hotspot_button")
+        font.setPointSize(17)
+        self.label_2.setFont(font)
+        self.label_2.setStyleSheet("color: white")
+        self.label_2.setTextFormat(QtCore.Qt.TextFormat.PlainText)
+        self.label_2.setScaledContents(False)
+        self.label_2.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.label_2.setObjectName("label_2")
         self.line = QtWidgets.QFrame(parent=self.network_list_table_frame)
-        self.line.setGeometry(QtCore.QRect(20, 90, 321, 20))
+        self.line.setGeometry(QtCore.QRect(40, 60, 321, 20))
         self.line.setFrameShape(QtWidgets.QFrame.Shape.HLine)
         self.line.setFrameShadow(QtWidgets.QFrame.Shadow.Sunken)
         self.line.setObjectName("line")
-        self.netlist_ssuid = QtWidgets.QLabel(
-            parent=self.network_list_table_frame
-        )
-        self.netlist_ssuid.setGeometry(QtCore.QRect(30, 60, 301, 41))
+        self.netlist_ssuid = QtWidgets.QLabel(parent=self.network_list_table_frame)
+        self.netlist_ssuid.setGeometry(QtCore.QRect(50, 30, 301, 41))
         font = QtGui.QFont()
         font.setPointSize(17)
         self.netlist_ssuid.setFont(font)
@@ -267,27 +166,12 @@ class Ui_wifi_stacked_page(object):
         self.netlist_ssuid.setScaledContents(False)
         self.netlist_ssuid.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self.netlist_ssuid.setObjectName("netlist_ssuid")
-        self.label_2 = QtWidgets.QLabel(parent=self.network_list_table_frame)
-        self.label_2.setGeometry(QtCore.QRect(30, 60, 301, 181))
-        font = QtGui.QFont()
-        font.setPointSize(12)
-        self.label_2.setFont(font)
-        self.label_2.setStyleSheet("color: white")
-        self.label_2.setTextFormat(QtCore.Qt.TextFormat.PlainText)
-        self.label_2.setScaledContents(False)
-        self.label_2.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
-        self.label_2.setObjectName("label_2")
         self.window_header = BlocksCustomFrame(parent=self.network_list_page)
         self.window_header.setGeometry(QtCore.QRect(0, -20, 800, 91))
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.Expanding,
-            QtWidgets.QSizePolicy.Policy.Preferred,
-        )
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Preferred)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(
-            self.window_header.sizePolicy().hasHeightForWidth()
-        )
+        sizePolicy.setHeightForWidth(self.window_header.sizePolicy().hasHeightForWidth())
         self.window_header.setSizePolicy(sizePolicy)
         self.window_header.setFrameShape(QtWidgets.QFrame.Shape.StyledPanel)
         self.window_header.setFrameShadow(QtWidgets.QFrame.Shadow.Raised)
@@ -297,76 +181,44 @@ class Ui_wifi_stacked_page(object):
         palette = QtGui.QPalette()
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Active,
-            QtGui.QPalette.ColorRole.WindowText,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.WindowText, brush)
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Active,
-            QtGui.QPalette.ColorRole.Text,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.Text, brush)
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Inactive,
-            QtGui.QPalette.ColorRole.WindowText,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.WindowText, brush)
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Inactive,
-            QtGui.QPalette.ColorRole.Text,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.Text, brush)
         brush = QtGui.QBrush(QtGui.QColor(120, 120, 120))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Disabled,
-            QtGui.QPalette.ColorRole.WindowText,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.WindowText, brush)
         brush = QtGui.QBrush(QtGui.QColor(120, 120, 120))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Disabled,
-            QtGui.QPalette.ColorRole.Text,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.Text, brush)
         self.network_main_title.setPalette(palette)
         font = QtGui.QFont()
         font.setPointSize(20)
         self.network_main_title.setFont(font)
-        self.network_main_title.setAlignment(
-            QtCore.Qt.AlignmentFlag.AlignCenter
-        )
+        self.network_main_title.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self.network_main_title.setObjectName("network_main_title")
         self.rescan_button = IconButton(parent=self.window_header)
         self.rescan_button.setGeometry(QtCore.QRect(740, 20, 60, 60))
         self.rescan_button.setMinimumSize(QtCore.QSize(60, 60))
         self.rescan_button.setMaximumSize(QtCore.QSize(60, 60))
         self.rescan_button.setFlat(True)
-        self.rescan_button.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/refresh.svg")
-        )
+        self.rescan_button.setProperty("icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/refresh.svg"))
         self.rescan_button.setObjectName("rescan_button")
         self.network_backButton = IconButton(parent=self.window_header)
         self.network_backButton.setGeometry(QtCore.QRect(0, 20, 60, 60))
         self.network_backButton.setMinimumSize(QtCore.QSize(60, 60))
         self.network_backButton.setMaximumSize(QtCore.QSize(60, 60))
         self.network_backButton.setFlat(True)
-        self.network_backButton.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/back.svg")
-        )
+        self.network_backButton.setProperty("icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/back.svg"))
         self.network_backButton.setObjectName("network_backButton")
-        self.wifi_toggle_button = ToggleAnimatedButton(
-            parent=self.network_list_page
-        )
-        self.wifi_toggle_button.setGeometry(QtCore.QRect(660, 150, 111, 50))
+        self.wifi_toggle_button = ToggleAnimatedButton(parent=self.network_list_page)
+        self.wifi_toggle_button.setGeometry(QtCore.QRect(620, 140, 111, 50))
         self.wifi_toggle_button.setMinimumSize(QtCore.QSize(0, 0))
         self.wifi_toggle_button.setMaximumSize(QtCore.QSize(160, 50))
         font = QtGui.QFont()
@@ -377,144 +229,111 @@ class Ui_wifi_stacked_page(object):
         self.wifi_toggle_button.setFont(font)
         self.wifi_toggle_button.setMouseTracking(False)
         self.wifi_toggle_button.setTabletTracking(True)
-        self.wifi_toggle_button.setContextMenuPolicy(
-            QtCore.Qt.ContextMenuPolicy.NoContextMenu
-        )
-        self.wifi_toggle_button.setLayoutDirection(
-            QtCore.Qt.LayoutDirection.LeftToRight
-        )
+        self.wifi_toggle_button.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.NoContextMenu)
+        self.wifi_toggle_button.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
         self.wifi_toggle_button.setStyleSheet("")
-        self.wifi_toggle_button.setProperty(
-            "icon_pixmap",
-            QtGui.QPixmap(":/network/media/btn_icons/no_wifi.svg"),
-        )
+        self.wifi_toggle_button.setProperty("icon_pixmap", QtGui.QPixmap(":/network/media/btn_icons/no_wifi.svg"))
         self.wifi_toggle_button.setObjectName("wifi_toggle_button")
         self.wifi_button = ListCustomButton(parent=self.network_list_page)
-        self.wifi_button.setGeometry(QtCore.QRect(390, 100, 391, 161))
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.Fixed,
-            QtWidgets.QSizePolicy.Policy.Fixed,
-        )
+        self.wifi_button.setGeometry(QtCore.QRect(390, 90, 391, 161))
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Fixed, QtWidgets.QSizePolicy.Policy.Fixed)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(
-            self.wifi_button.sizePolicy().hasHeightForWidth()
-        )
+        sizePolicy.setHeightForWidth(self.wifi_button.sizePolicy().hasHeightForWidth())
         self.wifi_button.setSizePolicy(sizePolicy)
         font = QtGui.QFont()
         font.setPointSize(20)
         self.wifi_button.setFont(font)
         self.wifi_button.setObjectName("wifi_button")
-        self.wifi_button.setLeftFontSize(20)
         self.hotspot_button = ListCustomButton(parent=self.network_list_page)
-        self.hotspot_button.setGeometry(QtCore.QRect(390, 270, 391, 161))
+        self.hotspot_button.setGeometry(QtCore.QRect(390, 269, 391, 161))
         font = QtGui.QFont()
         font.setPointSize(20)
         self.hotspot_button.setFont(font)
         self.hotspot_button.setObjectName("hotspot_button")
-        self.hotspot_button.setLeftFontSize(20)
         self.Togglehot = ToggleAnimatedButton(parent=self.network_list_page)
-        self.Togglehot.setGeometry(QtCore.QRect(660, 321, 111, 51))
+        self.Togglehot.setGeometry(QtCore.QRect(620, 320, 111, 51))
         font = QtGui.QFont()
         font.setPointSize(13)
         self.Togglehot.setFont(font)
         self.Togglehot.setObjectName("Togglehot")
+        self.label = QtWidgets.QLabel(parent=self.network_list_page)
+        self.label.setGeometry(QtCore.QRect(740, 140, 41, 51))
+        self.label.setStyleSheet("color:white;")
+        self.label.setText("")
+        self.label.setPixmap(QtGui.QPixmap(":/arrow_icons/media/btn_icons/right_arrow.svg"))
+        self.label.setScaledContents(True)
+        self.label.setObjectName("label")
+        self.label_3 = QtWidgets.QLabel(parent=self.network_list_page)
+        self.label_3.setEnabled(True)
+        self.label_3.setGeometry(QtCore.QRect(740, 319, 41, 51))
+        self.label_3.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.NoContextMenu)
+        self.label_3.setStyleSheet("color:white;")
+        self.label_3.setText("")
+        self.label_3.setPixmap(QtGui.QPixmap(":/arrow_icons/media/btn_icons/right_arrow.svg"))
+        self.label_3.setScaledContents(True)
+        self.label_3.setObjectName("label_3")
         self.network_list_table_frame.raise_()
         self.window_header.raise_()
         self.wifi_button.raise_()
         self.wifi_toggle_button.raise_()
         self.hotspot_button.raise_()
         self.Togglehot.raise_()
+        self.label_3.raise_()
+        self.label.raise_()
         wifi_stacked_page.addWidget(self.network_list_page)
         self.wifi_page = QtWidgets.QWidget()
         self.wifi_page.setObjectName("wifi_page")
         self.window_header_2 = BlocksCustomFrame(parent=self.wifi_page)
         self.window_header_2.setGeometry(QtCore.QRect(0, -20, 800, 91))
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.Expanding,
-            QtWidgets.QSizePolicy.Policy.Preferred,
-        )
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Preferred)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(
-            self.window_header_2.sizePolicy().hasHeightForWidth()
-        )
+        sizePolicy.setHeightForWidth(self.window_header_2.sizePolicy().hasHeightForWidth())
         self.window_header_2.setSizePolicy(sizePolicy)
         self.window_header_2.setFrameShape(QtWidgets.QFrame.Shape.StyledPanel)
         self.window_header_2.setFrameShadow(QtWidgets.QFrame.Shadow.Raised)
         self.window_header_2.setObjectName("window_header_2")
-        self.network_main_title_2 = QtWidgets.QLabel(
-            parent=self.window_header_2
-        )
+        self.network_main_title_2 = QtWidgets.QLabel(parent=self.window_header_2)
         self.network_main_title_2.setGeometry(QtCore.QRect(320, 20, 161, 71))
         palette = QtGui.QPalette()
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Active,
-            QtGui.QPalette.ColorRole.WindowText,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.WindowText, brush)
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Active,
-            QtGui.QPalette.ColorRole.Text,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.Text, brush)
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Inactive,
-            QtGui.QPalette.ColorRole.WindowText,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.WindowText, brush)
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Inactive,
-            QtGui.QPalette.ColorRole.Text,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.Text, brush)
         brush = QtGui.QBrush(QtGui.QColor(120, 120, 120))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Disabled,
-            QtGui.QPalette.ColorRole.WindowText,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.WindowText, brush)
         brush = QtGui.QBrush(QtGui.QColor(120, 120, 120))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Disabled,
-            QtGui.QPalette.ColorRole.Text,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.Text, brush)
         self.network_main_title_2.setPalette(palette)
         font = QtGui.QFont()
         font.setPointSize(20)
         self.network_main_title_2.setFont(font)
-        self.network_main_title_2.setAlignment(
-            QtCore.Qt.AlignmentFlag.AlignCenter
-        )
+        self.network_main_title_2.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self.network_main_title_2.setObjectName("network_main_title_2")
         self.rescan_button_2 = IconButton(parent=self.window_header_2)
         self.rescan_button_2.setGeometry(QtCore.QRect(740, 20, 60, 60))
         self.rescan_button_2.setMinimumSize(QtCore.QSize(60, 60))
         self.rescan_button_2.setMaximumSize(QtCore.QSize(60, 60))
         self.rescan_button_2.setFlat(True)
-        self.rescan_button_2.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/refresh.svg")
-        )
+        self.rescan_button_2.setProperty("icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/refresh.svg"))
         self.rescan_button_2.setObjectName("rescan_button_2")
         self.wifi_backButton = IconButton(parent=self.window_header_2)
         self.wifi_backButton.setGeometry(QtCore.QRect(0, 20, 60, 60))
         self.wifi_backButton.setMinimumSize(QtCore.QSize(60, 60))
         self.wifi_backButton.setMaximumSize(QtCore.QSize(60, 60))
         self.wifi_backButton.setFlat(True)
-        self.wifi_backButton.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/back.svg")
-        )
+        self.wifi_backButton.setProperty("icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/back.svg"))
         self.wifi_backButton.setObjectName("wifi_backButton")
         self.frame_3 = BlocksCustomFrame(parent=self.wifi_page)
         self.frame_3.setGeometry(QtCore.QRect(0, 90, 801, 421))
@@ -526,351 +345,155 @@ class Ui_wifi_stacked_page(object):
         palette = QtGui.QPalette()
         brush = QtGui.QBrush(QtGui.QColor(0, 0, 0, 0))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Active,
-            QtGui.QPalette.ColorRole.Button,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.Button, brush)
         brush = QtGui.QBrush(QtGui.QColor(0, 0, 0))
         brush.setStyle(QtCore.Qt.BrushStyle.NoBrush)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Active,
-            QtGui.QPalette.ColorRole.Base,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.Base, brush)
         brush = QtGui.QBrush(QtGui.QColor(0, 0, 0, 0))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Active,
-            QtGui.QPalette.ColorRole.Window,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.Window, brush)
         brush = QtGui.QBrush(QtGui.QColor(0, 120, 215, 0))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Active,
-            QtGui.QPalette.ColorRole.Highlight,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.Highlight, brush)
         brush = QtGui.QBrush(QtGui.QColor(0, 0, 255, 0))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Active,
-            QtGui.QPalette.ColorRole.Link,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.Link, brush)
         brush = QtGui.QBrush(QtGui.QColor(0, 0, 0, 0))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Inactive,
-            QtGui.QPalette.ColorRole.Button,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.Button, brush)
         brush = QtGui.QBrush(QtGui.QColor(0, 0, 0))
         brush.setStyle(QtCore.Qt.BrushStyle.NoBrush)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Inactive,
-            QtGui.QPalette.ColorRole.Base,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.Base, brush)
         brush = QtGui.QBrush(QtGui.QColor(0, 0, 0, 0))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Inactive,
-            QtGui.QPalette.ColorRole.Window,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.Window, brush)
         brush = QtGui.QBrush(QtGui.QColor(0, 120, 215, 0))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Inactive,
-            QtGui.QPalette.ColorRole.Highlight,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.Highlight, brush)
         brush = QtGui.QBrush(QtGui.QColor(0, 0, 255, 0))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Inactive,
-            QtGui.QPalette.ColorRole.Link,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.Link, brush)
         brush = QtGui.QBrush(QtGui.QColor(0, 0, 0, 0))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Disabled,
-            QtGui.QPalette.ColorRole.Button,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.Button, brush)
         brush = QtGui.QBrush(QtGui.QColor(0, 0, 0))
         brush.setStyle(QtCore.Qt.BrushStyle.NoBrush)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Disabled,
-            QtGui.QPalette.ColorRole.Base,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.Base, brush)
         brush = QtGui.QBrush(QtGui.QColor(0, 0, 0, 0))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Disabled,
-            QtGui.QPalette.ColorRole.Window,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.Window, brush)
         brush = QtGui.QBrush(QtGui.QColor(0, 120, 215, 0))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Disabled,
-            QtGui.QPalette.ColorRole.Highlight,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.Highlight, brush)
         brush = QtGui.QBrush(QtGui.QColor(0, 0, 255, 0))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Disabled,
-            QtGui.QPalette.ColorRole.Link,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.Link, brush)
         self.network_list_widget.setPalette(palette)
         self.network_list_widget.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
         self.network_list_widget.setStyleSheet("background-color:transparent")
         self.network_list_widget.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
         self.network_list_widget.setFrameShadow(QtWidgets.QFrame.Shadow.Sunken)
-        self.network_list_widget.setVerticalScrollBarPolicy(
-            QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff
-        )
-        self.network_list_widget.setHorizontalScrollBarPolicy(
-            QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff
-        )
-        self.network_list_widget.setSizeAdjustPolicy(
-            QtWidgets.QAbstractScrollArea.SizeAdjustPolicy.AdjustToContents
-        )
+        self.network_list_widget.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.network_list_widget.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.network_list_widget.setSizeAdjustPolicy(QtWidgets.QAbstractScrollArea.SizeAdjustPolicy.AdjustToContents)
         self.network_list_widget.setAutoScroll(False)
         self.network_list_widget.setProperty("showDropIndicator", False)
-        self.network_list_widget.setDefaultDropAction(
-            QtCore.Qt.DropAction.IgnoreAction
-        )
+        self.network_list_widget.setDefaultDropAction(QtCore.Qt.DropAction.IgnoreAction)
         self.network_list_widget.setAlternatingRowColors(False)
-        self.network_list_widget.setSelectionMode(
-            QtWidgets.QAbstractItemView.SelectionMode.NoSelection
-        )
-        self.network_list_widget.setSelectionBehavior(
-            QtWidgets.QAbstractItemView.SelectionBehavior.SelectItems
-        )
-        self.network_list_widget.setVerticalScrollMode(
-            QtWidgets.QAbstractItemView.ScrollMode.ScrollPerPixel
-        )
-        self.network_list_widget.setHorizontalScrollMode(
-            QtWidgets.QAbstractItemView.ScrollMode.ScrollPerPixel
-        )
-        QtWidgets.QScroller.grabGesture(
-            self.network_list_widget,
-            QtWidgets.QScroller.ScrollerGestureType.TouchGesture,
-        )
-        QtWidgets.QScroller.grabGesture(
-            self.network_list_widget,
-            QtWidgets.QScroller.ScrollerGestureType.LeftMouseButtonGesture,
-        )
+        self.network_list_widget.setSelectionMode(QtWidgets.QAbstractItemView.SelectionMode.NoSelection)
+        self.network_list_widget.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectionBehavior.SelectItems)
+        self.network_list_widget.setVerticalScrollMode(QtWidgets.QAbstractItemView.ScrollMode.ScrollPerPixel)
+        self.network_list_widget.setHorizontalScrollMode(QtWidgets.QAbstractItemView.ScrollMode.ScrollPerPixel)
         self.network_list_widget.setObjectName("network_list_widget")
         wifi_stacked_page.addWidget(self.wifi_page)
         self.add_network_page = QtWidgets.QWidget()
         self.add_network_page.setObjectName("add_network_page")
-        self.add_network_page_options = BlocksCustomFrame(
-            parent=self.add_network_page
-        )
-        self.add_network_page_options.setGeometry(
-            QtCore.QRect(0, 79, 801, 481)
-        )
-        self.add_network_page_options.setFrameShape(
-            QtWidgets.QFrame.Shape.StyledPanel
-        )
-        self.add_network_page_options.setFrameShadow(
-            QtWidgets.QFrame.Shadow.Raised
-        )
+        self.add_network_page_options = BlocksCustomFrame(parent=self.add_network_page)
+        self.add_network_page_options.setGeometry(QtCore.QRect(0, 79, 801, 481))
+        self.add_network_page_options.setFrameShape(QtWidgets.QFrame.Shape.StyledPanel)
+        self.add_network_page_options.setFrameShadow(QtWidgets.QFrame.Shadow.Raised)
         self.add_network_page_options.setObjectName("add_network_page_options")
-        self.saved_connection_change_password_frame_2 = BlocksCustomFrame(
-            parent=self.add_network_page_options
-        )
-        self.saved_connection_change_password_frame_2.setGeometry(
-            QtCore.QRect(20, 70, 761, 81)
-        )
-        self.saved_connection_change_password_frame_2.setFrameShape(
-            QtWidgets.QFrame.Shape.StyledPanel
-        )
-        self.saved_connection_change_password_frame_2.setFrameShadow(
-            QtWidgets.QFrame.Shadow.Raised
-        )
-        self.saved_connection_change_password_frame_2.setObjectName(
-            "saved_connection_change_password_frame_2"
-        )
-        self.add_network_password_label = QtWidgets.QLabel(
-            parent=self.saved_connection_change_password_frame_2
-        )
-        self.add_network_password_label.setGeometry(
-            QtCore.QRect(10, 10, 100, 61)
-        )
+        self.saved_connection_change_password_frame_2 = BlocksCustomFrame(parent=self.add_network_page_options)
+        self.saved_connection_change_password_frame_2.setGeometry(QtCore.QRect(20, 70, 761, 81))
+        self.saved_connection_change_password_frame_2.setFrameShape(QtWidgets.QFrame.Shape.StyledPanel)
+        self.saved_connection_change_password_frame_2.setFrameShadow(QtWidgets.QFrame.Shadow.Raised)
+        self.saved_connection_change_password_frame_2.setObjectName("saved_connection_change_password_frame_2")
+        self.add_network_password_label = QtWidgets.QLabel(parent=self.saved_connection_change_password_frame_2)
+        self.add_network_password_label.setGeometry(QtCore.QRect(10, 10, 100, 61))
         palette = QtGui.QPalette()
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Active,
-            QtGui.QPalette.ColorRole.WindowText,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.WindowText, brush)
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Active,
-            QtGui.QPalette.ColorRole.Text,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.Text, brush)
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Inactive,
-            QtGui.QPalette.ColorRole.WindowText,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.WindowText, brush)
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Inactive,
-            QtGui.QPalette.ColorRole.Text,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.Text, brush)
         brush = QtGui.QBrush(QtGui.QColor(120, 120, 120))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Disabled,
-            QtGui.QPalette.ColorRole.WindowText,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.WindowText, brush)
         brush = QtGui.QBrush(QtGui.QColor(120, 120, 120))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Disabled,
-            QtGui.QPalette.ColorRole.Text,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.Text, brush)
         self.add_network_password_label.setPalette(palette)
         font = QtGui.QFont()
         font.setPointSize(15)
         self.add_network_password_label.setFont(font)
-        self.add_network_password_label.setAlignment(
-            QtCore.Qt.AlignmentFlag.AlignCenter
-        )
-        self.add_network_password_label.setObjectName(
-            "add_network_password_label"
-        )
-        self.add_network_password_field = QtWidgets.QLineEdit(
-            parent=self.saved_connection_change_password_frame_2
-        )
-        self.add_network_password_field.setGeometry(
-            QtCore.QRect(120, 20, 541, 41)
-        )
+        self.add_network_password_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.add_network_password_label.setObjectName("add_network_password_label")
+        self.add_network_password_field = BlocksCustomLinEdit(parent=self.saved_connection_change_password_frame_2)
+        self.add_network_password_field.setGeometry(QtCore.QRect(120, 20, 541, 41))
         self.add_network_password_field.setMinimumSize(QtCore.QSize(0, 40))
-        self.add_network_password_field.setObjectName(
-            "add_network_password_field"
-        )
-        self.add_network_password_view = IconButton(
-            parent=self.saved_connection_change_password_frame_2
-        )
-        self.add_network_password_view.setGeometry(
-            QtCore.QRect(680, 10, 60, 60)
-        )
+        self.add_network_password_field.setObjectName("add_network_password_field")
+        self.add_network_password_view = IconButton(parent=self.saved_connection_change_password_frame_2)
+        self.add_network_password_view.setGeometry(QtCore.QRect(680, 10, 60, 60))
         self.add_network_password_view.setMinimumSize(QtCore.QSize(60, 60))
         self.add_network_password_view.setMaximumSize(QtCore.QSize(60, 60))
         self.add_network_password_view.setFlat(True)
-        self.add_network_password_view.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/back.svg")
-        )
-        self.add_network_password_view.setObjectName(
-            "add_network_password_view"
-        )
-        self.add_network_message_label = QtWidgets.QLabel(
-            parent=self.add_network_page_options
-        )
-        self.add_network_message_label.setGeometry(
-            QtCore.QRect(140, 160, 511, 81)
-        )
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-            QtWidgets.QSizePolicy.Policy.Preferred,
-        )
+        self.add_network_password_view.setProperty("icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/back.svg"))
+        self.add_network_password_view.setObjectName("add_network_password_view")
+        self.add_network_message_label = QtWidgets.QLabel(parent=self.add_network_page_options)
+        self.add_network_message_label.setGeometry(QtCore.QRect(140, 160, 511, 81))
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.MinimumExpanding, QtWidgets.QSizePolicy.Policy.Preferred)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(
-            self.add_network_message_label.sizePolicy().hasHeightForWidth()
-        )
+        sizePolicy.setHeightForWidth(self.add_network_message_label.sizePolicy().hasHeightForWidth())
         self.add_network_message_label.setSizePolicy(sizePolicy)
-        self.add_network_message_label.setMaximumSize(
-            QtCore.QSize(16777215, 81)
-        )
+        self.add_network_message_label.setMaximumSize(QtCore.QSize(16777215, 81))
         palette = QtGui.QPalette()
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Active,
-            QtGui.QPalette.ColorRole.WindowText,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.WindowText, brush)
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Active,
-            QtGui.QPalette.ColorRole.Text,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.Text, brush)
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Inactive,
-            QtGui.QPalette.ColorRole.WindowText,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.WindowText, brush)
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Inactive,
-            QtGui.QPalette.ColorRole.Text,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.Text, brush)
         brush = QtGui.QBrush(QtGui.QColor(120, 120, 120))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Disabled,
-            QtGui.QPalette.ColorRole.WindowText,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.WindowText, brush)
         brush = QtGui.QBrush(QtGui.QColor(120, 120, 120))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Disabled,
-            QtGui.QPalette.ColorRole.Text,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.Text, brush)
         self.add_network_message_label.setPalette(palette)
         self.add_network_message_label.setText("")
-        self.add_network_message_label.setAlignment(
-            QtCore.Qt.AlignmentFlag.AlignCenter
-        )
-        self.add_network_message_label.setObjectName(
-            "add_network_message_label"
-        )
-        self.add_network_validation_button = IconButton(
-            parent=self.add_network_page_options
-        )
+        self.add_network_message_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.add_network_message_label.setObjectName("add_network_message_label")
+        self.add_network_validation_button = IconButton(parent=self.add_network_page_options)
         self.add_network_validation_button.setEnabled(True)
-        self.add_network_validation_button.setGeometry(
-            QtCore.QRect(510, 270, 60, 60)
-        )
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-        )
+        self.add_network_validation_button.setGeometry(QtCore.QRect(510, 270, 60, 60))
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.MinimumExpanding, QtWidgets.QSizePolicy.Policy.MinimumExpanding)
         sizePolicy.setHorizontalStretch(1)
         sizePolicy.setVerticalStretch(1)
-        sizePolicy.setHeightForWidth(
-            self.add_network_validation_button.sizePolicy().hasHeightForWidth()
-        )
+        sizePolicy.setHeightForWidth(self.add_network_validation_button.sizePolicy().hasHeightForWidth())
         self.add_network_validation_button.setSizePolicy(sizePolicy)
         self.add_network_validation_button.setMinimumSize(QtCore.QSize(60, 60))
         self.add_network_validation_button.setMaximumSize(QtCore.QSize(60, 60))
@@ -879,678 +502,293 @@ class Ui_wifi_stacked_page(object):
         self.add_network_validation_button.setCheckable(False)
         self.add_network_validation_button.setChecked(False)
         self.add_network_validation_button.setFlat(True)
-        self.add_network_validation_button.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/dialog/media/btn_icons/yes.svg")
-        )
-        self.add_network_validation_button.setObjectName(
-            "add_network_validation_button"
-        )
-        self.cancel_network_validation_button = IconButton(
-            parent=self.add_network_page_options
-        )
+        self.add_network_validation_button.setProperty("icon_pixmap", QtGui.QPixmap(":/dialog/media/btn_icons/yes.svg"))
+        self.add_network_validation_button.setObjectName("add_network_validation_button")
+        self.cancel_network_validation_button = IconButton(parent=self.add_network_page_options)
         self.cancel_network_validation_button.setEnabled(True)
-        self.cancel_network_validation_button.setGeometry(
-            QtCore.QRect(220, 270, 60, 60)
-        )
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-        )
+        self.cancel_network_validation_button.setGeometry(QtCore.QRect(220, 270, 60, 60))
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.MinimumExpanding, QtWidgets.QSizePolicy.Policy.MinimumExpanding)
         sizePolicy.setHorizontalStretch(1)
         sizePolicy.setVerticalStretch(1)
-        sizePolicy.setHeightForWidth(
-            self.cancel_network_validation_button.sizePolicy().hasHeightForWidth()
-        )
+        sizePolicy.setHeightForWidth(self.cancel_network_validation_button.sizePolicy().hasHeightForWidth())
         self.cancel_network_validation_button.setSizePolicy(sizePolicy)
-        self.cancel_network_validation_button.setMinimumSize(
-            QtCore.QSize(60, 60)
-        )
-        self.cancel_network_validation_button.setMaximumSize(
-            QtCore.QSize(60, 60)
-        )
+        self.cancel_network_validation_button.setMinimumSize(QtCore.QSize(60, 60))
+        self.cancel_network_validation_button.setMaximumSize(QtCore.QSize(60, 60))
         self.cancel_network_validation_button.setStyleSheet("")
         self.cancel_network_validation_button.setIconSize(QtCore.QSize(16, 16))
         self.cancel_network_validation_button.setCheckable(False)
         self.cancel_network_validation_button.setChecked(False)
         self.cancel_network_validation_button.setFlat(True)
-        self.cancel_network_validation_button.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/dialog/media/btn_icons/no.svg")
-        )
-        self.cancel_network_validation_button.setObjectName(
-            "cancel_network_validation_button"
-        )
-        self.add_network_page_header = BlocksCustomFrame(
-            parent=self.add_network_page
-        )
+        self.cancel_network_validation_button.setProperty("icon_pixmap", QtGui.QPixmap(":/dialog/media/btn_icons/no.svg"))
+        self.cancel_network_validation_button.setObjectName("cancel_network_validation_button")
+        self.add_network_page_header = BlocksCustomFrame(parent=self.add_network_page)
         self.add_network_page_header.setGeometry(QtCore.QRect(0, -21, 800, 91))
-        self.add_network_page_header.setFrameShape(
-            QtWidgets.QFrame.Shape.StyledPanel
-        )
-        self.add_network_page_header.setFrameShadow(
-            QtWidgets.QFrame.Shadow.Raised
-        )
+        self.add_network_page_header.setFrameShape(QtWidgets.QFrame.Shape.StyledPanel)
+        self.add_network_page_header.setFrameShadow(QtWidgets.QFrame.Shadow.Raised)
         self.add_network_page_header.setObjectName("add_network_page_header")
-        self.add_network_network_label = QtWidgets.QLabel(
-            parent=self.add_network_page_header
-        )
-        self.add_network_network_label.setGeometry(
-            QtCore.QRect(50, 20, 681, 71)
-        )
+        self.add_network_network_label = QtWidgets.QLabel(parent=self.add_network_page_header)
+        self.add_network_network_label.setGeometry(QtCore.QRect(50, 20, 681, 71))
         palette = QtGui.QPalette()
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Active,
-            QtGui.QPalette.ColorRole.WindowText,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.WindowText, brush)
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Active,
-            QtGui.QPalette.ColorRole.Text,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.Text, brush)
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Inactive,
-            QtGui.QPalette.ColorRole.WindowText,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.WindowText, brush)
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Inactive,
-            QtGui.QPalette.ColorRole.Text,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.Text, brush)
         brush = QtGui.QBrush(QtGui.QColor(120, 120, 120))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Disabled,
-            QtGui.QPalette.ColorRole.WindowText,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.WindowText, brush)
         brush = QtGui.QBrush(QtGui.QColor(120, 120, 120))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Disabled,
-            QtGui.QPalette.ColorRole.Text,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.Text, brush)
         self.add_network_network_label.setPalette(palette)
         font = QtGui.QFont()
         font.setPointSize(20)
         self.add_network_network_label.setFont(font)
-        self.add_network_network_label.setAlignment(
-            QtCore.Qt.AlignmentFlag.AlignCenter
-        )
-        self.add_network_network_label.setObjectName(
-            "add_network_network_label"
-        )
-        self.add_network_page_backButton = IconButton(
-            parent=self.add_network_page_header
-        )
-        self.add_network_page_backButton.setGeometry(
-            QtCore.QRect(0, 20, 60, 60)
-        )
+        self.add_network_network_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.add_network_network_label.setObjectName("add_network_network_label")
+        self.add_network_page_backButton = IconButton(parent=self.add_network_page_header)
+        self.add_network_page_backButton.setGeometry(QtCore.QRect(0, 20, 60, 60))
         self.add_network_page_backButton.setMinimumSize(QtCore.QSize(60, 60))
         self.add_network_page_backButton.setMaximumSize(QtCore.QSize(60, 60))
         self.add_network_page_backButton.setFlat(True)
-        self.add_network_page_backButton.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/back.svg")
-        )
-        self.add_network_page_backButton.setObjectName(
-            "add_network_page_backButton"
-        )
+        self.add_network_page_backButton.setProperty("icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/back.svg"))
+        self.add_network_page_backButton.setObjectName("add_network_page_backButton")
         wifi_stacked_page.addWidget(self.add_network_page)
         self.saved_connection_page = QtWidgets.QWidget()
         self.saved_connection_page.setObjectName("saved_connection_page")
-        self.network_properties = BlocksCustomFrame(
-            parent=self.saved_connection_page
-        )
+        self.network_properties = BlocksCustomFrame(parent=self.saved_connection_page)
         self.network_properties.setGeometry(QtCore.QRect(-1, 79, 801, 411))
-        self.network_properties.setFrameShape(
-            QtWidgets.QFrame.Shape.StyledPanel
-        )
+        self.network_properties.setFrameShape(QtWidgets.QFrame.Shape.StyledPanel)
         self.network_properties.setFrameShadow(QtWidgets.QFrame.Shadow.Raised)
         self.network_properties.setObjectName("network_properties")
-        self.saved_connection_security_type_frame = BlocksCustomFrame(
-            parent=self.network_properties
-        )
-        self.saved_connection_security_type_frame.setGeometry(
-            QtCore.QRect(470, 180, 211, 181)
-        )
-        self.saved_connection_security_type_frame.setFrameShape(
-            QtWidgets.QFrame.Shape.StyledPanel
-        )
-        self.saved_connection_security_type_frame.setFrameShadow(
-            QtWidgets.QFrame.Shadow.Raised
-        )
-        self.saved_connection_security_type_frame.setObjectName(
-            "saved_connection_security_type_frame"
-        )
-        self.saved_connection_security_type_label = QtWidgets.QLabel(
-            parent=self.saved_connection_security_type_frame
-        )
-        self.saved_connection_security_type_label.setGeometry(
-            QtCore.QRect(49, 30, 111, 50)
-        )
+        self.saved_connection_security_type_frame = BlocksCustomFrame(parent=self.network_properties)
+        self.saved_connection_security_type_frame.setGeometry(QtCore.QRect(470, 180, 211, 181))
+        self.saved_connection_security_type_frame.setFrameShape(QtWidgets.QFrame.Shape.StyledPanel)
+        self.saved_connection_security_type_frame.setFrameShadow(QtWidgets.QFrame.Shadow.Raised)
+        self.saved_connection_security_type_frame.setObjectName("saved_connection_security_type_frame")
+        self.saved_connection_security_type_label = QtWidgets.QLabel(parent=self.saved_connection_security_type_frame)
+        self.saved_connection_security_type_label.setGeometry(QtCore.QRect(49, 30, 111, 50))
         palette = QtGui.QPalette()
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Active,
-            QtGui.QPalette.ColorRole.WindowText,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.WindowText, brush)
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Active,
-            QtGui.QPalette.ColorRole.Text,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.Text, brush)
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Inactive,
-            QtGui.QPalette.ColorRole.WindowText,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.WindowText, brush)
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Inactive,
-            QtGui.QPalette.ColorRole.Text,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.Text, brush)
         brush = QtGui.QBrush(QtGui.QColor(120, 120, 120))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Disabled,
-            QtGui.QPalette.ColorRole.WindowText,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.WindowText, brush)
         brush = QtGui.QBrush(QtGui.QColor(120, 120, 120))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Disabled,
-            QtGui.QPalette.ColorRole.Text,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.Text, brush)
         self.saved_connection_security_type_label.setPalette(palette)
         font = QtGui.QFont()
         font.setPointSize(15)
         self.saved_connection_security_type_label.setFont(font)
-        self.saved_connection_security_type_label.setAlignment(
-            QtCore.Qt.AlignmentFlag.AlignCenter
-        )
-        self.saved_connection_security_type_label.setObjectName(
-            "saved_connection_security_type_label"
-        )
-        self.saved_connection_security_type_info_label = DisplayButton(
-            parent=self.saved_connection_security_type_frame
-        )
-        self.saved_connection_security_type_info_label.setGeometry(
-            QtCore.QRect(30, 90, 151, 50)
-        )
-        self.saved_connection_security_type_info_label.setMinimumSize(
-            QtCore.QSize(0, 0)
-        )
-        self.saved_connection_security_type_info_label.setMaximumSize(
-            QtCore.QSize(16777215, 50)
-        )
+        self.saved_connection_security_type_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.saved_connection_security_type_label.setObjectName("saved_connection_security_type_label")
+        self.saved_connection_security_type_info_label = QtWidgets.QLabel(parent=self.saved_connection_security_type_frame)
+        self.saved_connection_security_type_info_label.setGeometry(QtCore.QRect(30, 100, 151, 61))
         font = QtGui.QFont()
-        font.setFamily("MS Shell Dlg 2")
-        font.setPointSize(14)
-        font.setItalic(False)
-        font.setStyleStrategy(QtGui.QFont.StyleStrategy.PreferAntialias)
+        font.setPointSize(20)
         self.saved_connection_security_type_info_label.setFont(font)
-        self.saved_connection_security_type_info_label.setMouseTracking(False)
-        self.saved_connection_security_type_info_label.setTabletTracking(True)
-        self.saved_connection_security_type_info_label.setContextMenuPolicy(
-            QtCore.Qt.ContextMenuPolicy.NoContextMenu
-        )
-        self.saved_connection_security_type_info_label.setLayoutDirection(
-            QtCore.Qt.LayoutDirection.LeftToRight
-        )
-        self.saved_connection_security_type_info_label.setStyleSheet(
-            "color: rgb(255,255,255)"
-        )
-        self.saved_connection_security_type_info_label.setAutoDefault(False)
-        self.saved_connection_security_type_info_label.setFlat(True)
-        self.saved_connection_security_type_info_label.setObjectName(
-            "saved_connection_security_type_info_label"
-        )
-        self.saved_connection_signal_strength_frame = BlocksCustomFrame(
-            parent=self.network_properties
-        )
-        self.saved_connection_signal_strength_frame.setGeometry(
-            QtCore.QRect(140, 180, 211, 181)
-        )
-        self.saved_connection_signal_strength_frame.setFrameShape(
-            QtWidgets.QFrame.Shape.StyledPanel
-        )
-        self.saved_connection_signal_strength_frame.setFrameShadow(
-            QtWidgets.QFrame.Shadow.Raised
-        )
-        self.saved_connection_signal_strength_frame.setObjectName(
-            "saved_connection_signal_strength_frame"
-        )
-        self.sabed_connection_signal_strength_label = QtWidgets.QLabel(
-            parent=self.saved_connection_signal_strength_frame
-        )
-        self.sabed_connection_signal_strength_label.setGeometry(
-            QtCore.QRect(50, 30, 111, 50)
-        )
+        self.saved_connection_security_type_info_label.setStyleSheet("color:white")
+        self.saved_connection_security_type_info_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.saved_connection_security_type_info_label.setObjectName("saved_connection_security_type_info_label")
+        self.line_5 = QtWidgets.QFrame(parent=self.saved_connection_security_type_frame)
+        self.line_5.setGeometry(QtCore.QRect(10, 80, 191, 16))
+        self.line_5.setFrameShape(QtWidgets.QFrame.Shape.HLine)
+        self.line_5.setFrameShadow(QtWidgets.QFrame.Shadow.Sunken)
+        self.line_5.setObjectName("line_5")
+        self.saved_connection_signal_strength_frame = BlocksCustomFrame(parent=self.network_properties)
+        self.saved_connection_signal_strength_frame.setGeometry(QtCore.QRect(140, 180, 211, 181))
+        self.saved_connection_signal_strength_frame.setFrameShape(QtWidgets.QFrame.Shape.StyledPanel)
+        self.saved_connection_signal_strength_frame.setFrameShadow(QtWidgets.QFrame.Shadow.Raised)
+        self.saved_connection_signal_strength_frame.setObjectName("saved_connection_signal_strength_frame")
+        self.sabed_connection_signal_strength_label = QtWidgets.QLabel(parent=self.saved_connection_signal_strength_frame)
+        self.sabed_connection_signal_strength_label.setGeometry(QtCore.QRect(50, 30, 111, 50))
         palette = QtGui.QPalette()
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Active,
-            QtGui.QPalette.ColorRole.WindowText,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.WindowText, brush)
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Active,
-            QtGui.QPalette.ColorRole.Text,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.Text, brush)
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Inactive,
-            QtGui.QPalette.ColorRole.WindowText,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.WindowText, brush)
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Inactive,
-            QtGui.QPalette.ColorRole.Text,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.Text, brush)
         brush = QtGui.QBrush(QtGui.QColor(120, 120, 120))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Disabled,
-            QtGui.QPalette.ColorRole.WindowText,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.WindowText, brush)
         brush = QtGui.QBrush(QtGui.QColor(120, 120, 120))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Disabled,
-            QtGui.QPalette.ColorRole.Text,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.Text, brush)
         self.sabed_connection_signal_strength_label.setPalette(palette)
         font = QtGui.QFont()
         font.setPointSize(15)
         self.sabed_connection_signal_strength_label.setFont(font)
-        self.sabed_connection_signal_strength_label.setAlignment(
-            QtCore.Qt.AlignmentFlag.AlignCenter
-        )
-        self.sabed_connection_signal_strength_label.setObjectName(
-            "sabed_connection_signal_strength_label"
-        )
-        self.saved_connection_signal_strength_info_frame = DisplayButton(
-            parent=self.saved_connection_signal_strength_frame
-        )
-        self.saved_connection_signal_strength_info_frame.setGeometry(
-            QtCore.QRect(30, 90, 151, 50)
-        )
-        self.saved_connection_signal_strength_info_frame.setMinimumSize(
-            QtCore.QSize(0, 0)
-        )
-        self.saved_connection_signal_strength_info_frame.setMaximumSize(
-            QtCore.QSize(16777215, 50)
-        )
+        self.sabed_connection_signal_strength_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.sabed_connection_signal_strength_label.setObjectName("sabed_connection_signal_strength_label")
+        self.saved_connection_signal_strength_info_frame = QtWidgets.QLabel(parent=self.saved_connection_signal_strength_frame)
+        self.saved_connection_signal_strength_info_frame.setGeometry(QtCore.QRect(30, 100, 151, 61))
         font = QtGui.QFont()
-        font.setFamily("MS Shell Dlg 2")
-        font.setPointSize(14)
-        font.setItalic(False)
-        font.setStyleStrategy(QtGui.QFont.StyleStrategy.PreferAntialias)
+        font.setPointSize(20)
         self.saved_connection_signal_strength_info_frame.setFont(font)
-        self.saved_connection_signal_strength_info_frame.setMouseTracking(
-            False
-        )
-        self.saved_connection_signal_strength_info_frame.setTabletTracking(
-            True
-        )
-        self.saved_connection_signal_strength_info_frame.setContextMenuPolicy(
-            QtCore.Qt.ContextMenuPolicy.NoContextMenu
-        )
-        self.saved_connection_signal_strength_info_frame.setLayoutDirection(
-            QtCore.Qt.LayoutDirection.LeftToRight
-        )
-        self.saved_connection_signal_strength_info_frame.setStyleSheet(
-            "color: rgb(255,255,255)"
-        )
-        self.saved_connection_signal_strength_info_frame.setAutoDefault(False)
-        self.saved_connection_signal_strength_info_frame.setFlat(True)
-        self.saved_connection_signal_strength_info_frame.setObjectName(
-            "saved_connection_signal_strength_info_frame"
-        )
-        self.saved_connection_change_password_frame = BlocksCustomFrame(
-            parent=self.network_properties
-        )
-        self.saved_connection_change_password_frame.setGeometry(
-            QtCore.QRect(20, 70, 761, 81)
-        )
-        self.saved_connection_change_password_frame.setFrameShape(
-            QtWidgets.QFrame.Shape.StyledPanel
-        )
-        self.saved_connection_change_password_frame.setFrameShadow(
-            QtWidgets.QFrame.Shadow.Raised
-        )
-        self.saved_connection_change_password_frame.setObjectName(
-            "saved_connection_change_password_frame"
-        )
-        self.saved_connection_change_password_label = QtWidgets.QLabel(
-            parent=self.saved_connection_change_password_frame
-        )
-        self.saved_connection_change_password_label.setGeometry(
-            QtCore.QRect(10, 10, 100, 61)
-        )
+        self.saved_connection_signal_strength_info_frame.setStyleSheet("color:white")
+        self.saved_connection_signal_strength_info_frame.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.saved_connection_signal_strength_info_frame.setObjectName("saved_connection_signal_strength_info_frame")
+        self.line_4 = QtWidgets.QFrame(parent=self.saved_connection_signal_strength_frame)
+        self.line_4.setGeometry(QtCore.QRect(10, 80, 191, 16))
+        self.line_4.setFrameShape(QtWidgets.QFrame.Shape.HLine)
+        self.line_4.setFrameShadow(QtWidgets.QFrame.Shadow.Sunken)
+        self.line_4.setObjectName("line_4")
+        self.saved_connection_change_password_frame = BlocksCustomFrame(parent=self.network_properties)
+        self.saved_connection_change_password_frame.setGeometry(QtCore.QRect(20, 70, 761, 81))
+        self.saved_connection_change_password_frame.setFrameShape(QtWidgets.QFrame.Shape.StyledPanel)
+        self.saved_connection_change_password_frame.setFrameShadow(QtWidgets.QFrame.Shadow.Raised)
+        self.saved_connection_change_password_frame.setObjectName("saved_connection_change_password_frame")
+        self.saved_connection_change_password_label = QtWidgets.QLabel(parent=self.saved_connection_change_password_frame)
+        self.saved_connection_change_password_label.setGeometry(QtCore.QRect(10, 10, 100, 61))
         palette = QtGui.QPalette()
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Active,
-            QtGui.QPalette.ColorRole.WindowText,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.WindowText, brush)
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Active,
-            QtGui.QPalette.ColorRole.Text,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.Text, brush)
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Inactive,
-            QtGui.QPalette.ColorRole.WindowText,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.WindowText, brush)
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Inactive,
-            QtGui.QPalette.ColorRole.Text,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.Text, brush)
         brush = QtGui.QBrush(QtGui.QColor(120, 120, 120))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Disabled,
-            QtGui.QPalette.ColorRole.WindowText,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.WindowText, brush)
         brush = QtGui.QBrush(QtGui.QColor(120, 120, 120))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Disabled,
-            QtGui.QPalette.ColorRole.Text,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.Text, brush)
         self.saved_connection_change_password_label.setPalette(palette)
         font = QtGui.QFont()
         font.setPointSize(15)
         self.saved_connection_change_password_label.setFont(font)
-        self.saved_connection_change_password_label.setAlignment(
-            QtCore.Qt.AlignmentFlag.AlignCenter
-        )
-        self.saved_connection_change_password_label.setObjectName(
-            "saved_connection_change_password_label"
-        )
-        self.saved_connection_change_password_field = QtWidgets.QLineEdit(
-            parent=self.saved_connection_change_password_frame
-        )
-        self.saved_connection_change_password_field.setGeometry(
-            QtCore.QRect(120, 20, 541, 41)
-        )
-        self.saved_connection_change_password_field.setMinimumSize(
-            QtCore.QSize(0, 40)
-        )
-        self.saved_connection_change_password_field.setObjectName(
-            "saved_connection_change_password_field"
-        )
-        self.saved_connection_change_password_view = IconButton(
-            parent=self.saved_connection_change_password_frame
-        )
-        self.saved_connection_change_password_view.setGeometry(
-            QtCore.QRect(680, 10, 60, 60)
-        )
-        self.saved_connection_change_password_view.setMinimumSize(
-            QtCore.QSize(60, 60)
-        )
-        self.saved_connection_change_password_view.setMaximumSize(
-            QtCore.QSize(60, 60)
-        )
+        self.saved_connection_change_password_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.saved_connection_change_password_label.setObjectName("saved_connection_change_password_label")
+        self.saved_connection_change_password_field = BlocksCustomLinEdit(parent=self.saved_connection_change_password_frame)
+        self.saved_connection_change_password_field.setGeometry(QtCore.QRect(120, 20, 541, 41))
+        self.saved_connection_change_password_field.setMinimumSize(QtCore.QSize(0, 40))
+        self.saved_connection_change_password_field.setObjectName("saved_connection_change_password_field")
+        self.saved_connection_change_password_view = IconButton(parent=self.saved_connection_change_password_frame)
+        self.saved_connection_change_password_view.setGeometry(QtCore.QRect(680, 10, 60, 60))
+        self.saved_connection_change_password_view.setMinimumSize(QtCore.QSize(60, 60))
+        self.saved_connection_change_password_view.setMaximumSize(QtCore.QSize(60, 60))
         self.saved_connection_change_password_view.setFlat(True)
-        self.saved_connection_change_password_view.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/back.svg")
-        )
-        self.saved_connection_change_password_view.setObjectName(
-            "saved_connection_change_password_view"
-        )
-        self.saved_connection_page_header = BlocksCustomFrame(
-            parent=self.saved_connection_page
-        )
-        self.saved_connection_page_header.setGeometry(
-            QtCore.QRect(0, -21, 800, 91)
-        )
-        self.saved_connection_page_header.setFrameShape(
-            QtWidgets.QFrame.Shape.StyledPanel
-        )
-        self.saved_connection_page_header.setFrameShadow(
-            QtWidgets.QFrame.Shadow.Raised
-        )
-        self.saved_connection_page_header.setObjectName(
-            "saved_connection_page_header"
-        )
-        self.saved_connection_network_name = QtWidgets.QLabel(
-            parent=self.saved_connection_page_header
-        )
-        self.saved_connection_network_name.setGeometry(
-            QtCore.QRect(70, 20, 651, 71)
-        )
+        self.saved_connection_change_password_view.setProperty("icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/back.svg"))
+        self.saved_connection_change_password_view.setObjectName("saved_connection_change_password_view")
+        self.saved_connection_page_header = BlocksCustomFrame(parent=self.saved_connection_page)
+        self.saved_connection_page_header.setGeometry(QtCore.QRect(0, -21, 800, 91))
+        self.saved_connection_page_header.setFrameShape(QtWidgets.QFrame.Shape.StyledPanel)
+        self.saved_connection_page_header.setFrameShadow(QtWidgets.QFrame.Shadow.Raised)
+        self.saved_connection_page_header.setObjectName("saved_connection_page_header")
+        self.saved_connection_network_name = QtWidgets.QLabel(parent=self.saved_connection_page_header)
+        self.saved_connection_network_name.setGeometry(QtCore.QRect(70, 20, 651, 71))
         palette = QtGui.QPalette()
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Active,
-            QtGui.QPalette.ColorRole.WindowText,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.WindowText, brush)
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Active,
-            QtGui.QPalette.ColorRole.Text,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.Text, brush)
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Inactive,
-            QtGui.QPalette.ColorRole.WindowText,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.WindowText, brush)
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Inactive,
-            QtGui.QPalette.ColorRole.Text,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.Text, brush)
         brush = QtGui.QBrush(QtGui.QColor(120, 120, 120))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Disabled,
-            QtGui.QPalette.ColorRole.WindowText,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.WindowText, brush)
         brush = QtGui.QBrush(QtGui.QColor(120, 120, 120))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Disabled,
-            QtGui.QPalette.ColorRole.Text,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.Text, brush)
         self.saved_connection_network_name.setPalette(palette)
         font = QtGui.QFont()
         font.setPointSize(20)
         self.saved_connection_network_name.setFont(font)
-        self.saved_connection_network_name.setAlignment(
-            QtCore.Qt.AlignmentFlag.AlignCenter
-        )
-        self.saved_connection_network_name.setObjectName(
-            "saved_connection_network_name"
-        )
-        self.saved_connection_back_button = IconButton(
-            parent=self.saved_connection_page_header
-        )
-        self.saved_connection_back_button.setGeometry(
-            QtCore.QRect(0, 20, 60, 60)
-        )
+        self.saved_connection_network_name.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.saved_connection_network_name.setObjectName("saved_connection_network_name")
+        self.saved_connection_back_button = IconButton(parent=self.saved_connection_page_header)
+        self.saved_connection_back_button.setGeometry(QtCore.QRect(0, 20, 60, 60))
         self.saved_connection_back_button.setMinimumSize(QtCore.QSize(60, 60))
         self.saved_connection_back_button.setMaximumSize(QtCore.QSize(60, 60))
         self.saved_connection_back_button.setFlat(True)
-        self.saved_connection_back_button.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/back.svg")
-        )
-        self.saved_connection_back_button.setObjectName(
-            "saved_connection_back_button"
-        )
-        self.saved_connection_delete_network_button = IconButton(
-            parent=self.saved_connection_page_header
-        )
-        self.saved_connection_delete_network_button.setGeometry(
-            QtCore.QRect(730, 20, 60, 60)
-        )
-        self.saved_connection_delete_network_button.setMinimumSize(
-            QtCore.QSize(60, 60)
-        )
-        self.saved_connection_delete_network_button.setMaximumSize(
-            QtCore.QSize(60, 60)
-        )
+        self.saved_connection_back_button.setProperty("icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/back.svg"))
+        self.saved_connection_back_button.setObjectName("saved_connection_back_button")
+        self.saved_connection_delete_network_button = IconButton(parent=self.saved_connection_page_header)
+        self.saved_connection_delete_network_button.setGeometry(QtCore.QRect(730, 20, 60, 60))
+        self.saved_connection_delete_network_button.setMinimumSize(QtCore.QSize(60, 60))
+        self.saved_connection_delete_network_button.setMaximumSize(QtCore.QSize(60, 60))
         self.saved_connection_delete_network_button.setFlat(True)
-        self.saved_connection_delete_network_button.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/indf_svg.svg")
-        )
-        self.saved_connection_delete_network_button.setObjectName(
-            "saved_connection_delete_network_button"
-        )
+        self.saved_connection_delete_network_button.setProperty("icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/indf_svg.svg"))
+        self.saved_connection_delete_network_button.setObjectName("saved_connection_delete_network_button")
         wifi_stacked_page.addWidget(self.saved_connection_page)
         self.hotspot_page = QtWidgets.QWidget()
         self.hotspot_page.setObjectName("hotspot_page")
         self.hotspot_header_frame = BlocksCustomFrame(parent=self.hotspot_page)
         self.hotspot_header_frame.setGeometry(QtCore.QRect(0, -30, 800, 101))
-        self.hotspot_header_frame.setFrameShape(
-            QtWidgets.QFrame.Shape.StyledPanel
-        )
-        self.hotspot_header_frame.setFrameShadow(
-            QtWidgets.QFrame.Shadow.Raised
-        )
+        self.hotspot_header_frame.setFrameShape(QtWidgets.QFrame.Shape.StyledPanel)
+        self.hotspot_header_frame.setFrameShadow(QtWidgets.QFrame.Shadow.Raised)
         self.hotspot_header_frame.setObjectName("hotspot_header_frame")
-        self.hotspot_header_title = QtWidgets.QLabel(
-            parent=self.hotspot_header_frame
-        )
+        self.hotspot_header_title = QtWidgets.QLabel(parent=self.hotspot_header_frame)
         self.hotspot_header_title.setGeometry(QtCore.QRect(320, 30, 171, 71))
         palette = QtGui.QPalette()
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Active,
-            QtGui.QPalette.ColorRole.WindowText,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.WindowText, brush)
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Active,
-            QtGui.QPalette.ColorRole.Text,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.Text, brush)
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Inactive,
-            QtGui.QPalette.ColorRole.WindowText,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.WindowText, brush)
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Inactive,
-            QtGui.QPalette.ColorRole.Text,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.Text, brush)
         brush = QtGui.QBrush(QtGui.QColor(120, 120, 120))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Disabled,
-            QtGui.QPalette.ColorRole.WindowText,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.WindowText, brush)
         brush = QtGui.QBrush(QtGui.QColor(120, 120, 120))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Disabled,
-            QtGui.QPalette.ColorRole.Text,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.Text, brush)
         self.hotspot_header_title.setPalette(palette)
         font = QtGui.QFont()
         font.setPointSize(20)
         self.hotspot_header_title.setFont(font)
-        self.hotspot_header_title.setAlignment(
-            QtCore.Qt.AlignmentFlag.AlignCenter
-        )
+        self.hotspot_header_title.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self.hotspot_header_title.setObjectName("hotspot_header_title")
         self.hotspot_back_button = IconButton(parent=self.hotspot_header_frame)
         self.hotspot_back_button.setGeometry(QtCore.QRect(0, 30, 60, 60))
         self.hotspot_back_button.setMinimumSize(QtCore.QSize(60, 60))
         self.hotspot_back_button.setMaximumSize(QtCore.QSize(60, 60))
         self.hotspot_back_button.setFlat(True)
-        self.hotspot_back_button.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/back.svg")
-        )
+        self.hotspot_back_button.setProperty("icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/back.svg"))
         self.hotspot_back_button.setObjectName("hotspot_back_button")
-        self.hotspot_toggle = ToggleAnimatedButton(
-            parent=self.hotspot_header_frame
-        )
-        self.hotspot_toggle.setGeometry(QtCore.QRect(700, 50, 91, 41))
-        self.hotspot_toggle.setMinimumSize(QtCore.QSize(0, 0))
-        self.hotspot_toggle.setMaximumSize(QtCore.QSize(160, 50))
-        font = QtGui.QFont()
-        font.setFamily("MS Shell Dlg 2")
-        font.setPointSize(13)
-        font.setItalic(False)
-        font.setStyleStrategy(QtGui.QFont.StyleStrategy.PreferAntialias)
-        self.hotspot_toggle.setFont(font)
-        self.hotspot_toggle.setMouseTracking(False)
-        self.hotspot_toggle.setTabletTracking(True)
-        self.hotspot_toggle.setContextMenuPolicy(
-            QtCore.Qt.ContextMenuPolicy.NoContextMenu
-        )
-        self.hotspot_toggle.setLayoutDirection(
-            QtCore.Qt.LayoutDirection.LeftToRight
-        )
-        self.hotspot_toggle.setStyleSheet("")
-        self.hotspot_toggle.setProperty(
-            "icon_pixmap",
-            QtGui.QPixmap(":/network/media/btn_icons/no_wifi.svg"),
-        )
-        self.hotspot_toggle.setObjectName("hotspot_toggle")
         self.gridLayoutWidget = QtWidgets.QWidget(parent=self.hotspot_page)
         self.gridLayoutWidget.setGeometry(QtCore.QRect(10, 80, 781, 371))
         self.gridLayoutWidget.setObjectName("gridLayoutWidget")
@@ -1562,392 +800,176 @@ class Ui_wifi_stacked_page(object):
         self.frame_2.setFrameShape(QtWidgets.QFrame.Shape.StyledPanel)
         self.frame_2.setFrameShadow(QtWidgets.QFrame.Shadow.Raised)
         self.frame_2.setObjectName("frame_2")
-        self.hotspot_info_password_label = QtWidgets.QLabel(
-            parent=self.frame_2
-        )
-        self.hotspot_info_password_label.setGeometry(
-            QtCore.QRect(10, 30, 150, 21)
-        )
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.Preferred,
-            QtWidgets.QSizePolicy.Policy.Maximum,
-        )
+        self.hotspot_info_password_label = QtWidgets.QLabel(parent=self.frame_2)
+        self.hotspot_info_password_label.setGeometry(QtCore.QRect(10, 30, 150, 21))
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Preferred, QtWidgets.QSizePolicy.Policy.Maximum)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(
-            self.hotspot_info_password_label.sizePolicy().hasHeightForWidth()
-        )
+        sizePolicy.setHeightForWidth(self.hotspot_info_password_label.sizePolicy().hasHeightForWidth())
         self.hotspot_info_password_label.setSizePolicy(sizePolicy)
         self.hotspot_info_password_label.setMinimumSize(QtCore.QSize(0, 0))
-        self.hotspot_info_password_label.setMaximumSize(
-            QtCore.QSize(150, 16777215)
-        )
+        self.hotspot_info_password_label.setMaximumSize(QtCore.QSize(150, 16777215))
         palette = QtGui.QPalette()
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Active,
-            QtGui.QPalette.ColorRole.WindowText,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.WindowText, brush)
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Active,
-            QtGui.QPalette.ColorRole.Button,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.Button, brush)
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Active,
-            QtGui.QPalette.ColorRole.Light,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.Light, brush)
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Active,
-            QtGui.QPalette.ColorRole.Midlight,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.Midlight, brush)
         brush = QtGui.QBrush(QtGui.QColor(127, 127, 127))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Active,
-            QtGui.QPalette.ColorRole.Dark,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.Dark, brush)
         brush = QtGui.QBrush(QtGui.QColor(170, 170, 170))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Active,
-            QtGui.QPalette.ColorRole.Mid,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.Mid, brush)
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Active,
-            QtGui.QPalette.ColorRole.Text,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.Text, brush)
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Active,
-            QtGui.QPalette.ColorRole.BrightText,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.BrightText, brush)
         brush = QtGui.QBrush(QtGui.QColor(0, 0, 0))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Active,
-            QtGui.QPalette.ColorRole.ButtonText,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.ButtonText, brush)
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Active,
-            QtGui.QPalette.ColorRole.Base,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.Base, brush)
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Active,
-            QtGui.QPalette.ColorRole.Window,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.Window, brush)
         brush = QtGui.QBrush(QtGui.QColor(0, 0, 0))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Active,
-            QtGui.QPalette.ColorRole.Shadow,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.Shadow, brush)
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Active,
-            QtGui.QPalette.ColorRole.AlternateBase,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.AlternateBase, brush)
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 220))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Active,
-            QtGui.QPalette.ColorRole.ToolTipBase,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.ToolTipBase, brush)
         brush = QtGui.QBrush(QtGui.QColor(0, 0, 0))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Active,
-            QtGui.QPalette.ColorRole.ToolTipText,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.ToolTipText, brush)
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Inactive,
-            QtGui.QPalette.ColorRole.WindowText,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.WindowText, brush)
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Inactive,
-            QtGui.QPalette.ColorRole.Button,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.Button, brush)
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Inactive,
-            QtGui.QPalette.ColorRole.Light,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.Light, brush)
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Inactive,
-            QtGui.QPalette.ColorRole.Midlight,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.Midlight, brush)
         brush = QtGui.QBrush(QtGui.QColor(127, 127, 127))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Inactive,
-            QtGui.QPalette.ColorRole.Dark,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.Dark, brush)
         brush = QtGui.QBrush(QtGui.QColor(170, 170, 170))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Inactive,
-            QtGui.QPalette.ColorRole.Mid,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.Mid, brush)
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Inactive,
-            QtGui.QPalette.ColorRole.Text,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.Text, brush)
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Inactive,
-            QtGui.QPalette.ColorRole.BrightText,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.BrightText, brush)
         brush = QtGui.QBrush(QtGui.QColor(0, 0, 0))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Inactive,
-            QtGui.QPalette.ColorRole.ButtonText,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.ButtonText, brush)
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Inactive,
-            QtGui.QPalette.ColorRole.Base,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.Base, brush)
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Inactive,
-            QtGui.QPalette.ColorRole.Window,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.Window, brush)
         brush = QtGui.QBrush(QtGui.QColor(0, 0, 0))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Inactive,
-            QtGui.QPalette.ColorRole.Shadow,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.Shadow, brush)
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Inactive,
-            QtGui.QPalette.ColorRole.AlternateBase,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.AlternateBase, brush)
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 220))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Inactive,
-            QtGui.QPalette.ColorRole.ToolTipBase,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.ToolTipBase, brush)
         brush = QtGui.QBrush(QtGui.QColor(0, 0, 0))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Inactive,
-            QtGui.QPalette.ColorRole.ToolTipText,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.ToolTipText, brush)
         brush = QtGui.QBrush(QtGui.QColor(127, 127, 127))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Disabled,
-            QtGui.QPalette.ColorRole.WindowText,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.WindowText, brush)
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Disabled,
-            QtGui.QPalette.ColorRole.Button,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.Button, brush)
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Disabled,
-            QtGui.QPalette.ColorRole.Light,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.Light, brush)
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Disabled,
-            QtGui.QPalette.ColorRole.Midlight,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.Midlight, brush)
         brush = QtGui.QBrush(QtGui.QColor(127, 127, 127))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Disabled,
-            QtGui.QPalette.ColorRole.Dark,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.Dark, brush)
         brush = QtGui.QBrush(QtGui.QColor(170, 170, 170))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Disabled,
-            QtGui.QPalette.ColorRole.Mid,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.Mid, brush)
         brush = QtGui.QBrush(QtGui.QColor(127, 127, 127))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Disabled,
-            QtGui.QPalette.ColorRole.Text,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.Text, brush)
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Disabled,
-            QtGui.QPalette.ColorRole.BrightText,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.BrightText, brush)
         brush = QtGui.QBrush(QtGui.QColor(127, 127, 127))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Disabled,
-            QtGui.QPalette.ColorRole.ButtonText,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.ButtonText, brush)
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Disabled,
-            QtGui.QPalette.ColorRole.Base,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.Base, brush)
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Disabled,
-            QtGui.QPalette.ColorRole.Window,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.Window, brush)
         brush = QtGui.QBrush(QtGui.QColor(0, 0, 0))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Disabled,
-            QtGui.QPalette.ColorRole.Shadow,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.Shadow, brush)
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Disabled,
-            QtGui.QPalette.ColorRole.AlternateBase,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.AlternateBase, brush)
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 220))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Disabled,
-            QtGui.QPalette.ColorRole.ToolTipBase,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.ToolTipBase, brush)
         brush = QtGui.QBrush(QtGui.QColor(0, 0, 0))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Disabled,
-            QtGui.QPalette.ColorRole.ToolTipText,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.ToolTipText, brush)
         self.hotspot_info_password_label.setPalette(palette)
         font = QtGui.QFont()
         font.setFamily("Momcake")
         font.setPointSize(10)
         self.hotspot_info_password_label.setFont(font)
-        self.hotspot_info_password_label.setAlignment(
-            QtCore.Qt.AlignmentFlag.AlignCenter
-        )
-        self.hotspot_info_password_label.setObjectName(
-            "hotspot_info_password_label"
-        )
-        self.hotspot_password_input_field = QtWidgets.QLineEdit(
-            parent=self.frame_2
-        )
-        self.hotspot_password_input_field.setGeometry(
-            QtCore.QRect(160, 20, 521, 40)
-        )
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.Expanding,
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-        )
+        self.hotspot_info_password_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.hotspot_info_password_label.setObjectName("hotspot_info_password_label")
+        self.hotspot_password_input_field = BlocksCustomLinEdit(parent=self.frame_2)
+        self.hotspot_password_input_field.setGeometry(QtCore.QRect(160, 20, 521, 40))
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.MinimumExpanding)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(
-            self.hotspot_password_input_field.sizePolicy().hasHeightForWidth()
-        )
+        sizePolicy.setHeightForWidth(self.hotspot_password_input_field.sizePolicy().hasHeightForWidth())
         self.hotspot_password_input_field.setSizePolicy(sizePolicy)
         self.hotspot_password_input_field.setMinimumSize(QtCore.QSize(120, 40))
-        self.hotspot_password_input_field.setMaximumSize(
-            QtCore.QSize(16777215, 40)
-        )
-        self.hotspot_password_input_field.setEchoMode(
-            QtWidgets.QLineEdit.EchoMode.Password
-        )
-        self.hotspot_password_input_field.setObjectName(
-            "hotspot_password_input_field"
-        )
+        self.hotspot_password_input_field.setMaximumSize(QtCore.QSize(16777215, 40))
+        self.hotspot_password_input_field.setEchoMode(QtWidgets.QLineEdit.EchoMode.Password)
+        self.hotspot_password_input_field.setObjectName("hotspot_password_input_field")
         self.hotspot_password_view_button = IconButton(parent=self.frame_2)
-        self.hotspot_password_view_button.setGeometry(
-            QtCore.QRect(690, 10, 60, 60)
-        )
+        self.hotspot_password_view_button.setGeometry(QtCore.QRect(700, 10, 60, 60))
         self.hotspot_password_view_button.setMinimumSize(QtCore.QSize(60, 60))
         self.hotspot_password_view_button.setMaximumSize(QtCore.QSize(60, 60))
         self.hotspot_password_view_button.setFlat(True)
-        self.hotspot_password_view_button.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/back.svg")
-        )
-        self.hotspot_password_view_button.setObjectName(
-            "hotspot_password_view_button"
-        )
+        self.hotspot_password_view_button.setProperty("icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/back.svg"))
+        self.hotspot_password_view_button.setObjectName("hotspot_password_view_button")
         self.gridLayout.addWidget(self.frame_2, 1, 0, 1, 2)
         self.frame = BlocksCustomFrame(parent=self.gridLayoutWidget)
         self.frame.setMaximumSize(QtCore.QSize(16777215, 81))
@@ -1956,91 +978,49 @@ class Ui_wifi_stacked_page(object):
         self.frame.setObjectName("frame")
         self.hotspot_info_name_label = QtWidgets.QLabel(parent=self.frame)
         self.hotspot_info_name_label.setGeometry(QtCore.QRect(10, 30, 150, 21))
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.Preferred,
-            QtWidgets.QSizePolicy.Policy.Maximum,
-        )
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Preferred, QtWidgets.QSizePolicy.Policy.Maximum)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(
-            self.hotspot_info_name_label.sizePolicy().hasHeightForWidth()
-        )
+        sizePolicy.setHeightForWidth(self.hotspot_info_name_label.sizePolicy().hasHeightForWidth())
         self.hotspot_info_name_label.setSizePolicy(sizePolicy)
         self.hotspot_info_name_label.setMinimumSize(QtCore.QSize(0, 0))
-        self.hotspot_info_name_label.setMaximumSize(
-            QtCore.QSize(150, 16777215)
-        )
+        self.hotspot_info_name_label.setMaximumSize(QtCore.QSize(150, 16777215))
         palette = QtGui.QPalette()
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Active,
-            QtGui.QPalette.ColorRole.WindowText,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.WindowText, brush)
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Active,
-            QtGui.QPalette.ColorRole.Text,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.Text, brush)
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Inactive,
-            QtGui.QPalette.ColorRole.WindowText,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.WindowText, brush)
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Inactive,
-            QtGui.QPalette.ColorRole.Text,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.Text, brush)
         brush = QtGui.QBrush(QtGui.QColor(120, 120, 120))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Disabled,
-            QtGui.QPalette.ColorRole.WindowText,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.WindowText, brush)
         brush = QtGui.QBrush(QtGui.QColor(120, 120, 120))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Disabled,
-            QtGui.QPalette.ColorRole.Text,
-            brush,
-        )
+        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.Text, brush)
         self.hotspot_info_name_label.setPalette(palette)
         font = QtGui.QFont()
         font.setFamily("Momcake")
         font.setPointSize(10)
         self.hotspot_info_name_label.setFont(font)
-        self.hotspot_info_name_label.setAlignment(
-            QtCore.Qt.AlignmentFlag.AlignCenter
-        )
+        self.hotspot_info_name_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self.hotspot_info_name_label.setObjectName("hotspot_info_name_label")
-        self.hotspot_name_input_field = QtWidgets.QLineEdit(parent=self.frame)
-        self.hotspot_name_input_field.setGeometry(
-            QtCore.QRect(160, 20, 521, 40)
-        )
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.Expanding,
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-        )
+        self.hotspot_name_input_field = BlocksCustomLinEdit(parent=self.frame)
+        self.hotspot_name_input_field.setGeometry(QtCore.QRect(160, 20, 521, 40))
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.MinimumExpanding)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(
-            self.hotspot_name_input_field.sizePolicy().hasHeightForWidth()
-        )
+        sizePolicy.setHeightForWidth(self.hotspot_name_input_field.sizePolicy().hasHeightForWidth())
         self.hotspot_name_input_field.setSizePolicy(sizePolicy)
         self.hotspot_name_input_field.setMinimumSize(QtCore.QSize(120, 40))
-        self.hotspot_name_input_field.setMaximumSize(
-            QtCore.QSize(16777215, 40)
-        )
-        self.hotspot_name_input_field.setText("")
+        self.hotspot_name_input_field.setMaximumSize(QtCore.QSize(16777215, 40))
+        self.hotspot_name_input_field.setEchoMode(QtWidgets.QLineEdit.EchoMode.Password)
         self.hotspot_name_input_field.setObjectName("hotspot_name_input_field")
         self.gridLayout.addWidget(self.frame, 0, 0, 1, 2)
         wifi_stacked_page.addWidget(self.hotspot_page)
@@ -2051,219 +1031,79 @@ class Ui_wifi_stacked_page(object):
 
     def retranslateUi(self, wifi_stacked_page):
         _translate = QtCore.QCoreApplication.translate
-        wifi_stacked_page.setWindowTitle(
-            _translate("wifi_stacked_page", "StackedWidget")
-        )
-        self.netlist_security_label.setText(
-            _translate("wifi_stacked_page", "Security\nType")
-        )
-        self.netlist_security.setText(
-            _translate("wifi_stacked_page", "TextLabel")
-        )
-        self.netlist_strength_label.setText(
-            _translate("wifi_stacked_page", "Signal\nStrength")
-        )
-        self.netlist_strength.setText(
-            _translate("wifi_stacked_page", "TextLabel")
-        )
+        wifi_stacked_page.setWindowTitle(_translate("wifi_stacked_page", "StackedWidget"))
+        self.netlist_security_label.setText(_translate("wifi_stacked_page", "Security\n"
+"Type"))
+        self.netlist_security.setText(_translate("wifi_stacked_page", "TextLabel"))
+        self.netlist_strength_label.setText(_translate("wifi_stacked_page", "Signal\n"
+"Strength"))
+        self.netlist_strength.setText(_translate("wifi_stacked_page", "TextLabel"))
         self.netlist_ip.setText(_translate("wifi_stacked_page", "TextLabel"))
-        self.call_hotspot_button.setText(
-            _translate("wifi_stacked_page", "Hotspot ")
-        )
-        self.call_hotspot_button.setProperty(
-            "class", _translate("wifi_stacked_page", "menu_btn")
-        )
-        self.call_hotspot_button.setProperty(
-            "button_type", _translate("wifi_stacked_page", "normal")
-        )
-        self.netlist_ssuid.setText(
-            _translate("wifi_stacked_page", "TextLabel")
-        )
-        self.label_2.setText(
-            _translate(
-                "wifi_stacked_page",
-                "No network connection.\n"
-                "Try connecting to a Wi-Fi network,\n"
-                "or turn on \n"
-                "the hotspot using the button below.",
-            )
-        )
-        self.network_main_title.setText(
-            _translate("wifi_stacked_page", "Networks")
-        )
+        self.label_2.setText(_translate("wifi_stacked_page", "No network connection.\n"
+"\n"
+"Try connecting to Wi-Fi \n"
+"or turn on the hotspot\n"
+"using the buttons on the side."))
+        self.netlist_ssuid.setText(_translate("wifi_stacked_page", "TextLabel"))
+        self.network_main_title.setText(_translate("wifi_stacked_page", "Networks"))
         self.rescan_button.setText(_translate("wifi_stacked_page", "Reload"))
-        self.rescan_button.setProperty(
-            "button_type", _translate("wifi_stacked_page", "icon")
-        )
-        self.network_backButton.setText(
-            _translate("wifi_stacked_page", "Back")
-        )
-        self.network_backButton.setProperty(
-            "class", _translate("wifi_stacked_page", "back_btn")
-        )
-        self.network_backButton.setProperty(
-            "button_type", _translate("wifi_stacked_page", "icon")
-        )
-        self.wifi_toggle_button.setText(
-            _translate("wifi_stacked_page", "Toggle wifi")
-        )
-        self.wifi_toggle_button.setProperty(
-            "class", _translate("wifi_stacked_page", "menu_btn")
-        )
-        self.wifi_toggle_button.setProperty(
-            "button_type", _translate("wifi_stacked_page", "normal")
-        )
-        self.wifi_button.setText(_translate("wifi_stacked_page", "WIFI"))
+        self.rescan_button.setProperty("button_type", _translate("wifi_stacked_page", "icon"))
+        self.network_backButton.setText(_translate("wifi_stacked_page", "Back"))
+        self.network_backButton.setProperty("class", _translate("wifi_stacked_page", "back_btn"))
+        self.network_backButton.setProperty("button_type", _translate("wifi_stacked_page", "icon"))
+        self.wifi_toggle_button.setText(_translate("wifi_stacked_page", "Toggle wifi"))
+        self.wifi_toggle_button.setProperty("class", _translate("wifi_stacked_page", "menu_btn"))
+        self.wifi_toggle_button.setProperty("button_type", _translate("wifi_stacked_page", "normal"))
+        self.wifi_button.setText(_translate("wifi_stacked_page", "Wi-Fi"))
         self.hotspot_button.setText(_translate("wifi_stacked_page", "Hotspot"))
         self.Togglehot.setText(_translate("wifi_stacked_page", "Toggle HOT"))
-        self.network_main_title_2.setText(
-            _translate("wifi_stacked_page", "Networks")
-        )
+        self.network_main_title_2.setText(_translate("wifi_stacked_page", "Wi-fi List"))
         self.rescan_button_2.setText(_translate("wifi_stacked_page", "Reload"))
-        self.rescan_button_2.setProperty(
-            "button_type", _translate("wifi_stacked_page", "icon")
-        )
+        self.rescan_button_2.setProperty("button_type", _translate("wifi_stacked_page", "icon"))
         self.wifi_backButton.setText(_translate("wifi_stacked_page", "Back"))
-        self.wifi_backButton.setProperty(
-            "class", _translate("wifi_stacked_page", "back_btn")
-        )
-        self.wifi_backButton.setProperty(
-            "button_type", _translate("wifi_stacked_page", "icon")
-        )
-        self.add_network_password_label.setText(
-            _translate("wifi_stacked_page", "Password")
-        )
-        self.add_network_password_view.setText(
-            _translate("wifi_stacked_page", "View")
-        )
-        self.add_network_password_view.setProperty(
-            "class", _translate("wifi_stacked_page", "back_btn")
-        )
-        self.add_network_password_view.setProperty(
-            "button_type", _translate("wifi_stacked_page", "icon")
-        )
-        self.add_network_validation_button.setText(
-            _translate("wifi_stacked_page", "a")
-        )
-        self.add_network_validation_button.setProperty(
-            "button_type", _translate("wifi_stacked_page", "icon")
-        )
-        self.cancel_network_validation_button.setText(
-            _translate("wifi_stacked_page", "a")
-        )
-        self.cancel_network_validation_button.setProperty(
-            "button_type", _translate("wifi_stacked_page", "icon")
-        )
-        self.add_network_network_label.setText(
-            _translate("wifi_stacked_page", "NetworkName")
-        )
-        self.add_network_page_backButton.setText(
-            _translate("wifi_stacked_page", "Back")
-        )
-        self.add_network_page_backButton.setProperty(
-            "class", _translate("wifi_stacked_page", "back_btn")
-        )
-        self.add_network_page_backButton.setProperty(
-            "button_type", _translate("wifi_stacked_page", "icon")
-        )
-        self.saved_connection_security_type_label.setText(
-            _translate("wifi_stacked_page", "Security\nType")
-        )
-        self.saved_connection_security_type_info_label.setText(
-            _translate("wifi_stacked_page", "Strength")
-        )
-        self.saved_connection_security_type_info_label.setProperty(
-            "class", _translate("wifi_stacked_page", "menu_btn")
-        )
-        self.saved_connection_security_type_info_label.setProperty(
-            "button_type", _translate("wifi_stacked_page", "normal")
-        )
-        self.sabed_connection_signal_strength_label.setText(
-            _translate("wifi_stacked_page", "Signal\nStrength")
-        )
-        self.saved_connection_signal_strength_info_frame.setText(
-            _translate("wifi_stacked_page", "Strength")
-        )
-        self.saved_connection_signal_strength_info_frame.setProperty(
-            "class", _translate("wifi_stacked_page", "menu_btn")
-        )
-        self.saved_connection_signal_strength_info_frame.setProperty(
-            "button_type", _translate("wifi_stacked_page", "normal")
-        )
-        self.saved_connection_change_password_label.setText(
-            _translate("wifi_stacked_page", "Change\nPassword")
-        )
-        self.saved_connection_change_password_view.setText(
-            _translate("wifi_stacked_page", "View")
-        )
-        self.saved_connection_change_password_view.setProperty(
-            "class", _translate("wifi_stacked_page", "back_btn")
-        )
-        self.saved_connection_change_password_view.setProperty(
-            "button_type", _translate("wifi_stacked_page", "icon")
-        )
-        self.saved_connection_network_name.setText(
-            _translate("wifi_stacked_page", "SSID")
-        )
-        self.saved_connection_back_button.setText(
-            _translate("wifi_stacked_page", "Back")
-        )
-        self.saved_connection_back_button.setProperty(
-            "class", _translate("wifi_stacked_page", "back_btn")
-        )
-        self.saved_connection_back_button.setProperty(
-            "button_type", _translate("wifi_stacked_page", "icon")
-        )
-        self.saved_connection_delete_network_button.setText(
-            _translate("wifi_stacked_page", "Delete")
-        )
-        self.saved_connection_delete_network_button.setProperty(
-            "class", _translate("wifi_stacked_page", "back_btn")
-        )
-        self.saved_connection_delete_network_button.setProperty(
-            "button_type", _translate("wifi_stacked_page", "icon")
-        )
-        self.hotspot_header_title.setText(
-            _translate("wifi_stacked_page", "Hotspot")
-        )
-        self.hotspot_back_button.setText(
-            _translate("wifi_stacked_page", "Back")
-        )
-        self.hotspot_back_button.setProperty(
-            "class", _translate("wifi_stacked_page", "back_btn")
-        )
-        self.hotspot_back_button.setProperty(
-            "button_type", _translate("wifi_stacked_page", "icon")
-        )
-        self.hotspot_toggle.setText(
-            _translate("wifi_stacked_page", "Toggle hot")
-        )
-        self.hotspot_toggle.setProperty(
-            "class", _translate("wifi_stacked_page", "menu_btn")
-        )
-        self.hotspot_toggle.setProperty(
-            "button_type", _translate("wifi_stacked_page", "normal")
-        )
-        self.hotspot_info_password_label.setText(
-            _translate("wifi_stacked_page", "Hotspot Password:")
-        )
-        self.hotspot_password_view_button.setText(
-            _translate("wifi_stacked_page", "View")
-        )
-        self.hotspot_password_view_button.setProperty(
-            "class", _translate("wifi_stacked_page", "back_btn")
-        )
-        self.hotspot_password_view_button.setProperty(
-            "button_type", _translate("wifi_stacked_page", "icon")
-        )
-        self.hotspot_info_name_label.setText(
-            _translate("wifi_stacked_page", "Hotspot Name: ")
-        )
-
-
-from lib.utils.blocks_button import BlocksCustomButton
+        self.wifi_backButton.setProperty("class", _translate("wifi_stacked_page", "back_btn"))
+        self.wifi_backButton.setProperty("button_type", _translate("wifi_stacked_page", "icon"))
+        self.add_network_password_label.setText(_translate("wifi_stacked_page", "Password"))
+        self.add_network_password_view.setText(_translate("wifi_stacked_page", "View"))
+        self.add_network_password_view.setProperty("class", _translate("wifi_stacked_page", "back_btn"))
+        self.add_network_password_view.setProperty("button_type", _translate("wifi_stacked_page", "icon"))
+        self.add_network_validation_button.setText(_translate("wifi_stacked_page", "a"))
+        self.add_network_validation_button.setProperty("button_type", _translate("wifi_stacked_page", "icon"))
+        self.cancel_network_validation_button.setText(_translate("wifi_stacked_page", "a"))
+        self.cancel_network_validation_button.setProperty("button_type", _translate("wifi_stacked_page", "icon"))
+        self.add_network_network_label.setText(_translate("wifi_stacked_page", "NetworkName"))
+        self.add_network_page_backButton.setText(_translate("wifi_stacked_page", "Back"))
+        self.add_network_page_backButton.setProperty("class", _translate("wifi_stacked_page", "back_btn"))
+        self.add_network_page_backButton.setProperty("button_type", _translate("wifi_stacked_page", "icon"))
+        self.saved_connection_security_type_label.setText(_translate("wifi_stacked_page", "Security\n"
+"Type"))
+        self.saved_connection_security_type_info_label.setText(_translate("wifi_stacked_page", "TextLabel"))
+        self.sabed_connection_signal_strength_label.setText(_translate("wifi_stacked_page", "Signal\n"
+"Strength"))
+        self.saved_connection_signal_strength_info_frame.setText(_translate("wifi_stacked_page", "TextLabel"))
+        self.saved_connection_change_password_label.setText(_translate("wifi_stacked_page", "Change\n"
+"Password"))
+        self.saved_connection_change_password_view.setText(_translate("wifi_stacked_page", "View"))
+        self.saved_connection_change_password_view.setProperty("class", _translate("wifi_stacked_page", "back_btn"))
+        self.saved_connection_change_password_view.setProperty("button_type", _translate("wifi_stacked_page", "icon"))
+        self.saved_connection_network_name.setText(_translate("wifi_stacked_page", "SSID"))
+        self.saved_connection_back_button.setText(_translate("wifi_stacked_page", "Back"))
+        self.saved_connection_back_button.setProperty("class", _translate("wifi_stacked_page", "back_btn"))
+        self.saved_connection_back_button.setProperty("button_type", _translate("wifi_stacked_page", "icon"))
+        self.saved_connection_delete_network_button.setText(_translate("wifi_stacked_page", "Delete"))
+        self.saved_connection_delete_network_button.setProperty("class", _translate("wifi_stacked_page", "back_btn"))
+        self.saved_connection_delete_network_button.setProperty("button_type", _translate("wifi_stacked_page", "icon"))
+        self.hotspot_header_title.setText(_translate("wifi_stacked_page", "Hotspot"))
+        self.hotspot_back_button.setText(_translate("wifi_stacked_page", "Back"))
+        self.hotspot_back_button.setProperty("class", _translate("wifi_stacked_page", "back_btn"))
+        self.hotspot_back_button.setProperty("button_type", _translate("wifi_stacked_page", "icon"))
+        self.hotspot_info_password_label.setText(_translate("wifi_stacked_page", "Hotspot Password:"))
+        self.hotspot_password_view_button.setText(_translate("wifi_stacked_page", "View"))
+        self.hotspot_password_view_button.setProperty("class", _translate("wifi_stacked_page", "back_btn"))
+        self.hotspot_password_view_button.setProperty("button_type", _translate("wifi_stacked_page", "icon"))
+        self.hotspot_info_name_label.setText(_translate("wifi_stacked_page", "Hotspot Name: "))
 from lib.utils.blocks_frame import BlocksCustomFrame
-from lib.utils.display_button import DisplayButton
+from lib.utils.blocks_linedit import BlocksCustomLinEdit
 from lib.utils.icon_button import IconButton
 from lib.utils.list_button import ListCustomButton
 from lib.utils.toggleAnimatedButton import ToggleAnimatedButton
