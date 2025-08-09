@@ -1,6 +1,6 @@
 # Config file helper
 #
-# Copyright (C) 2020 Eric Callahan <arksine.code@gmail.com> 
+# Copyright (C) 2020 Eric Callahan <arksine.code@gmail.com>
 # Copyright (C) 2025 Hugo Costa <h.costa@blockstec.com>
 #
 # Based on the work of Eric Callahan:
@@ -16,7 +16,6 @@ import os
 import pathlib
 import re
 import typing
-
 from helper_methods import check_file_on_path
 
 HOME_DIR = os.path.expanduser("~/")
@@ -25,30 +24,29 @@ DEFAULT_CONFIGFILE_PATH = pathlib.Path(HOME_DIR, "printer_data", "config")
 FALLBACK_CONFIGFILE_PATH = pathlib.Path(WORKING_DIR)
 
 T = typing.TypeVar("T")
-
-error = configparser.Error
-parsing_error = configparser.ParsingError
-no_option_error = configparser.NoOptionError
-no_section_error = configparser.NoSectionError
-alien_error = configparser.ParsingError
+indentation_size = 4
 
 
 class Sentinel(enum.Enum):
-    # Add Sentinel because `None` can
-    # actually be a valid value for an option
     MISSING = object
 
 
 class BlocksScreenConfig:
+    config = configparser.ConfigParser(
+        allow_no_value=True,
+        interpolation=configparser.ExtendedInterpolation(),
+        delimiters=(":"),
+        # inline_comment_prefixes=("#"),
+        comment_prefixes=("#", "#~#"),
+        empty_lines_in_values=True,
+    )
+
     def __init__(
         self, configfile: typing.Union[str, pathlib.Path], section: str
     ) -> None:
-        self.config = configparser.ConfigParser(
-            allow_no_value=True, interpolation=None
-        )
         self.configfile = pathlib.Path(configfile)
         self.section = section
-        self.load_config()
+        self.raw_config: typing.List[str] = []
 
     def __getitem__(self, key: str) -> BlocksScreenConfig:
         return self.get_section(key)
@@ -56,16 +54,16 @@ class BlocksScreenConfig:
     def __contains__(self, key):
         return key in self.config
 
-    def __repr__(self) -> str:
-        return f"Configuration for the {self.section} section"
+    def sections(self) -> typing.List[str]:
+        return self.config.sections()
 
-    # def __dir__(self) -> configparser.Iterable[str]:
-    #     return
     def get_section(
         self, section: str, fallback: typing.Optional[T] = None
     ) -> BlocksScreenConfig:
         if not self.config.has_section(section):
-            raise no_section_error(f"No section with name: {section}")
+            raise configparser.NoSectionError(
+                f"No section with name: {section}"
+            )
         return BlocksScreenConfig(self.configfile, section)
 
     def get_options(self) -> list:
@@ -118,24 +116,27 @@ class BlocksScreenConfig:
 
     def load_config(self):
         try:
+            self.raw_config.clear()
             self.config.clear()  # Reset the configparser
-            f = self._parse_file()
-            if f is not None:
-                self.config.read_file(f)
-        except (configparser.DuplicateSectionError, configparser.Error):
-            return
 
-    def _parse_file(self):
+            self.raw_config = self._parse_file()
+            if self.raw_config:
+                self.config.read_file(self.raw_config)
+        except Exception as e:
+            raise configparser.Error(f"Error loading configuration file: {e}")
+
+    def _parse_file(self) -> typing.List[str]:
         buffer = []
-        sections = []
-        options = []
+        dict_buff: typing.Dict = {}
+        curr_sec: typing.Union[Sentinel, str] = Sentinel.MISSING
         try:
             f = self.configfile.read_text(encoding="utf-8")
+
             for line in f.splitlines():
                 line = line.strip()
                 if not line:
                     continue
-                line.expandtabs(4)
+                line.expandtabs(indentation_size)
                 re_match = re.search(r"\s*#\s*(.*)(\s*)", line)
                 if re_match:
                     line = line[: re_match.start()]
@@ -143,35 +144,31 @@ class BlocksScreenConfig:
                         continue
                 # remove leading and trailing white spaces
                 line = re.sub(r"\s*([:=])\s*", r"\1", line)
-                # find beginning of sections
+                line = re.sub(r"=", ":", line)
+                # find the beginning of sections
                 section_match = re.compile(r"[^\s]*\[([^]]+)\]")
                 match_sec = re.match(section_match, line)  #
                 if match_sec:
-                    if line not in sections:
-                        sections.append(line)
+                    sec_name = re.sub(r"[\[*\]]", r"", line)
+                    if sec_name not in dict_buff.keys():
+                        dict_buff.update({sec_name: {}})
+                        curr_sec = sec_name
                     else:
-                        continue  # Ignore duplicate sections
-                option_match = re.compile(r"[:=]")
-                match_opt = re.split(option_match, line)[0]
+                        continue
+                option_match = re.compile(r"^(?:\w+)([:*])(?:.*)")
+                match_opt = re.match(option_match, line)
                 if match_opt:
-                    if match_opt not in options:
-                        options.append(match_opt)
+                    option_name, value = line.split(":", maxsplit=1)
+                    if option_name not in dict_buff.get(curr_sec, {}).keys():
+                        if curr_sec in dict_buff.keys():
+                            section: dict = dict_buff.get(curr_sec, {})
+                            section.update({option_name: value})
+                            dict_buff.update({curr_sec: section})
                     else:
-                        continue  # Ignore duplicate options
+                        continue
                 buffer.append(line)
             return buffer
         except Exception as e:
-            raise error(
+            raise configparser.Error(
                 f"Unexpected error while parsing configuration file: {e}"
             )
-
-
-def get_configparser() -> BlocksScreenConfig:
-    wanted_target = os.path.join(DEFAULT_CONFIGFILE_PATH, "BlocksScreen.cfg")
-    fallback = os.path.join(WORKING_DIR, "BlocksScreen.cfg")
-    configfile = (
-        wanted_target
-        if check_file_on_path(DEFAULT_CONFIGFILE_PATH, "BlocksScreen.cfg")
-        else fallback
-    )
-    return BlocksScreenConfig(configfile=configfile, section="server")
