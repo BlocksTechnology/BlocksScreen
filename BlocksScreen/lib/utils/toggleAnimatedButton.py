@@ -93,7 +93,6 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
         if self.isVisible():
             self.stateChange.emit(self._state)
             self.setup_animation()
-
         self.update()
 
     @QtCore.pyqtProperty(float)
@@ -158,7 +157,10 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
 
     @QtCore.pyqtSlot(name="clicked")
     def setup_animation(self) -> None:
-        if self.underMouse():
+        if (
+            not self.slide_animation.state
+            == self.slide_animation.State.Running
+        ):
             self.slide_animation.setEndValue(
                 self._handle_ONPosition
                 if self.state == ToggleAnimatedButton.State.OFF
