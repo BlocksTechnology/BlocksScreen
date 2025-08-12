@@ -28,7 +28,7 @@
 </string>
   </property>
   <property name="currentIndex">
-   <number>0</number>
+   <number>1</number>
   </property>
   <widget class="QWidget" name="network_list_page">
    <property name="sizePolicy">
@@ -551,40 +551,6 @@ using the buttons on the side.</string>
       <set>Qt::AlignCenter</set>
      </property>
     </widget>
-    <widget class="IconButton" name="rescan_button">
-     <property name="geometry">
-      <rect>
-       <x>740</x>
-       <y>20</y>
-       <width>60</width>
-       <height>60</height>
-      </rect>
-     </property>
-     <property name="minimumSize">
-      <size>
-       <width>60</width>
-       <height>60</height>
-      </size>
-     </property>
-     <property name="maximumSize">
-      <size>
-       <width>60</width>
-       <height>60</height>
-      </size>
-     </property>
-     <property name="text">
-      <string>Reload</string>
-     </property>
-     <property name="flat">
-      <bool>true</bool>
-     </property>
-     <property name="button_type" stdset="0">
-      <string>icon</string>
-     </property>
-     <property name="icon_pixmap" stdset="0">
-      <pixmap resource="resources/icon_resources.qrc">:/ui/media/btn_icons/refresh.svg</pixmap>
-     </property>
-    </widget>
     <widget class="IconButton" name="network_backButton">
      <property name="geometry">
       <rect>
@@ -623,7 +589,7 @@ using the buttons on the side.</string>
      </property>
     </widget>
    </widget>
-   <widget class="ToggleAnimatedButton" name="wifi_toggle_button">
+   <widget class="ToggleAnimatedButton" name="Togglewifi">
     <property name="geometry">
      <rect>
       <x>620</x>
@@ -793,7 +759,7 @@ using the buttons on the side.</string>
    <zorder>network_list_table_frame</zorder>
    <zorder>window_header</zorder>
    <zorder>wifi_button</zorder>
-   <zorder>wifi_toggle_button</zorder>
+   <zorder>Togglewifi</zorder>
    <zorder>hotspot_button</zorder>
    <zorder>Togglehot</zorder>
    <zorder>label_3</zorder>
@@ -906,7 +872,7 @@ using the buttons on the side.</string>
       <set>Qt::AlignCenter</set>
      </property>
     </widget>
-    <widget class="IconButton" name="rescan_button_2">
+    <widget class="IconButton" name="rescan_button">
      <property name="geometry">
       <rect>
        <x>740</x>

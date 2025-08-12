@@ -15,6 +15,7 @@ from lib.utils.list_button import ListCustomButton
 
 from lib.utils.toggleAnimatedButton import ToggleAnimatedButton
 
+from lib.panels.widgets.popupDialogWidget import Popup
 import subprocess
 
 # TEST: Network saving, Adding new Network connections, Toggle on and off hotspot, etc....
@@ -42,6 +43,8 @@ class NetworkControlWindow(QStackedWidget):
         self.background: QtGui.QPixmap | None = None
         self.panel = Ui_wifi_stacked_page()
         self.panel.setupUi(self)
+        self.popup = Popup(self)
+
         self.panel.network_list_widget.setLayoutDirection(
             Qt.LayoutDirection.LeftToRight
         )
@@ -116,19 +119,21 @@ class NetworkControlWindow(QStackedWidget):
             self.panel.label_2.hide()
 
         if self.sdbus_network.wifi_enabled():
-            self.panel.wifi_toggle_button.state = ToggleAnimatedButton.State.ON
+            self.panel.Togglewifi.state = ToggleAnimatedButton.State.ON
             self.panel.Togglehot.state = ToggleAnimatedButton.State.OFF
         else:
-            self.panel.wifi_toggle_button.state = (
-                ToggleAnimatedButton.State.OFF
-            )
+            self.panel.Togglewifi.state = ToggleAnimatedButton.State.OFF
 
         self.panel.wifi_backButton.clicked.connect(
             partial(self.setCurrentIndex, 0)
         )
 
-        self.panel.wifi_toggle_button.clicked.connect(self.wifihotspot_handler)
-        self.panel.Togglehot.clicked.connect(self.wifihotspot_handler)
+        self.panel.Togglewifi.clicked.connect(
+            lambda: self.wifihotspot_handler("wifi")
+        )
+        self.panel.Togglehot.clicked.connect(
+            lambda: self.wifihotspot_handler("hotspot")
+        )
 
         # * Network List
         self.panel.network_list_widget.itemClicked.connect(
@@ -141,12 +146,7 @@ class NetworkControlWindow(QStackedWidget):
         self.panel.rescan_button.clicked.connect(
             self.add_ssid_network_entry
         )  # To Update the network list
-        self.panel.wifi_toggle_button.clicked.connect(
-            partial(
-                self.sdbus_network.toggle_wifi,
-                toggle=not bool(self.sdbus_network.wifi_enabled()),
-            )
-        )  # Turn off if enabled/Turn on if disabled
+
         self.request_network_scan.connect(self.rescan_networks)
         # * Add Network page widget
         self.panel.add_network_validation_button.clicked.connect(
@@ -174,8 +174,7 @@ class NetworkControlWindow(QStackedWidget):
         )  # Back button on this page always leads to the network list page
         self.delete_network_signal.connect(self.delete_network)
         self.panel.saved_connection_change_password_field.returnPressed.connect(
-            partial(
-                self.sdbus_network.update_connection_settings,
+            lambda: self.update_network(
                 ssid=self.panel.saved_connection_network_name.text(),
                 password=self.panel.saved_connection_change_password_field.text(),
                 new_ssid=None,
@@ -201,21 +200,21 @@ class NetworkControlWindow(QStackedWidget):
         )
 
         self.panel.hotspot_name_input_field.returnPressed.connect(
-            partial(
-                self.sdbus_network.update_connection_settings,
+            lambda: self.update_network(
                 ssid=self.sdbus_network.hotspot_ssid,
                 password=None,
                 new_ssid=self.panel.hotspot_name_input_field.text(),
             )
-        )  # Automatically create a new hotspot connection when a new hotspot name is inserted and enter is pressed
+        )
+        # Automatically create a new hotspot connection when a new hotspot name is inserted and enter is pressed
         self.panel.hotspot_password_input_field.returnPressed.connect(
-            partial(
-                self.sdbus_network.update_connection_settings,
+            lambda: self.update_network(
                 ssid=self.sdbus_network.hotspot_ssid,
                 password=self.panel.hotspot_password_input_field.text(),
                 new_ssid=None,
             )
         )
+
         self.panel.hotspot_password_input_field.setHidden(True)
 
         self.panel.hotspot_password_view_button.pressed.connect(
@@ -239,13 +238,37 @@ class NetworkControlWindow(QStackedWidget):
 
         self.hide()
 
-    def wifihotspot_handler(self):
-        """Set the wifi toggle button to ON or OFF depending on the current state"""
-        if self.sdbus_network.wifi_enabled():
-            self.panel.Togglehot.state = ToggleAnimatedButton.State.OFF
-            self.sdbus_network.toggle_hotspot(False)
-        else:
-            return
+    def wifihotspot_handler(self, source: str):
+        """Toggle Wi-Fi and Hotspot so only one is active at a time."""
+
+        wifi_enabled = self.sdbus_network.wifi_enabled()
+        hotspot_enabled = self.sdbus_network.hotspot_enabled()
+
+        if source == "wifi":
+            self.sdbus_network.toggle_wifi(not wifi_enabled)
+            if not wifi_enabled and hotspot_enabled:
+                self.sdbus_network.toggle_hotspot(False)
+
+        elif source == "hotspot":
+            self.sdbus_network.toggle_hotspot(not hotspot_enabled)
+            if not hotspot_enabled and wifi_enabled:
+                self.sdbus_network.toggle_wifi(False)
+
+        # Refresh states after changes
+        wifi_enabled = self.sdbus_network.wifi_enabled()
+        hotspot_enabled = self.sdbus_network.hotspot_enabled()
+
+        # Update UI states
+        self.panel.Togglewifi.state = (
+            ToggleAnimatedButton.State.ON
+            if wifi_enabled
+            else ToggleAnimatedButton.State.OFF
+        )
+        self.panel.Togglehot.state = (
+            ToggleAnimatedButton.State.ON
+            if hotspot_enabled
+            else ToggleAnimatedButton.State.OFF
+        )
 
     @pyqtSlot(str, name="delete_network")
     def delete_network(self, ssid: str) -> None:
@@ -289,7 +312,8 @@ class NetworkControlWindow(QStackedWidget):
         _add_network_result: typing.Dict = self.sdbus_network.add_wifi_network(
             ssid=self.panel.add_network_network_label.text(), psk=_network_psk
         )  # Add the network connection
-        # Send a signal with the result of adding a new network
+        # Send a signal with the result of adding a new networkx
+
         if any(
             word in _add_network_result["status"]
             for word in ("error", "exception", "failure")
@@ -297,8 +321,20 @@ class NetworkControlWindow(QStackedWidget):
             self.new_connection_result[str].emit(
                 str(_add_network_result["msg"])
             )
+            self.popup.new_message(
+                message_type=Popup.MessageType.ERROR,
+                message=f"Could not connect to '{self.panel.add_network_network_label.text()}'\n Please check your password or try again later.",
+            )
+
         else:
-            self.new_connection_result.emit()
+            self.new_connection_result[str].emit(
+                str(_add_network_result["msg"])
+            )
+            self.popup.new_message(
+                message_type=Popup.MessageType.INFO,
+                message=f"Connected to '{self.panel.add_network_network_label.text()}' successfully",
+            )
+            self.setCurrentIndex(0)
 
     @pyqtSlot(QListWidgetItem, name="ssid_item_clicked")
     def ssid_item_clicked(self, item: QListWidgetItem) -> None:
@@ -327,6 +363,38 @@ class NetworkControlWindow(QStackedWidget):
                 self.panel.add_network_network_label.setText(
                     str(_current_ssid_name)
                 )  # Add the network name to the title
+
+    def update_network(
+        self, ssid: str, password: str | None, new_ssid: str | None
+    ) -> None:
+        _update_network_result: typing.Dict = (
+            self.sdbus_network.update_connection_settings(
+                ssid=ssid,
+                password=password,
+                new_ssid=new_ssid,
+            )
+        )
+
+        if any(
+            word in _update_network_result["status"]
+            for word in ("error", "exception", "failure")
+        ):
+            self.new_connection_result[str].emit(
+                str(_update_network_result["msg"])
+            )
+            self.popup.new_message(
+                message_type=Popup.MessageType.ERROR,
+                message=f"Could not update the settings for '{ssid}'.",
+            )
+
+        else:
+            self.new_connection_result[str].emit(
+                str(_update_network_result["msg"])
+            )
+            self.popup.new_message(
+                message_type=Popup.MessageType.INFO,
+                message=f"Network settings for '{ssid}' updated successfully.",
+            )
 
     def eventFilter(self, obj, event):
         if (
@@ -468,6 +536,7 @@ class NetworkControlWindow(QStackedWidget):
         if ssid in self.sdbus_network.get_saved_ssid_names():
             self.setCurrentIndex(3)
             self.panel.saved_connection_network_name.setText(str(ssid))
+
         else:
             self.setCurrentIndex(2)
             self.panel.add_network_network_label.setText(str(ssid))

@@ -26,6 +26,8 @@ from sdbus_block.networkmanager.exceptions import (
     NmConnectionPropertyNotFoundError,
 )
 
+import random
+
 # TODO: Add Logging, separate logger in this case so i can structure it better
 # TODO: Remove the statically attributed variables
 
@@ -1017,7 +1019,7 @@ class SdbusNetworkManagerDummy:
             ValueError: If the toggle argument is not a Boolean.
         """
         # TODO: toggle Hotspot, function to activate or deactivate the device hotspot
-        self.hotspot_active = not self.hotspot_active
+        self.hotspot_active = toggle
 
     def hotspot_enabled(self) -> typing.Optional["bool"]:
         """Returns a boolean indicating whether the device hotspot is on or not .
@@ -1026,6 +1028,7 @@ class SdbusNetworkManagerDummy:
             bool: True if Hotspot is activated, False otherwise.
         """
         # TODO: Hotspot enbaled or not
+
         return self.hotspot_active
 
     def get_wired_interfaces(self) -> typing.List:
@@ -1267,9 +1270,9 @@ class SdbusNetworkManagerDummy:
 
             On the returned dictionary a key value "error" can appear if an error occurred, the value will say what the error was.
         """
-        print(ssid)
+        print("added network", ssid)
         print(psk)
-        return {"status": "error", "msg": "dummy"}
+        return {"status": "asdas", "msg": "dummy"}
 
     def disconnect_network(self):
         """disconnect_network Disconnect the wireless device and prevent it from reconnecting.
@@ -1314,7 +1317,7 @@ class SdbusNetworkManagerDummy:
                                 In the case we are able to scan
                                 The method returns the signal strength in %
         """
-        return 14
+        return random.randint(1, 100)
 
     def connect_network(self, ssid: str):
         """Connect to a saved network given an ssid
@@ -1372,4 +1375,6 @@ class SdbusNetworkManagerDummy:
         Returns:
             typing.Dict: status dictionary with possible keys "error" and "status"
         """
+        print(new_ssid)
         print(f"Updated a network connection {ssid} | {password} | {new_ssid}")
+        return {"status": "AUGH", "msg": "dummy"}
