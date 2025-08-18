@@ -11,7 +11,10 @@
 
 from __future__ import annotations
 import configparser
+from copy import deepcopy
 import enum
+import io
+import logging
 import os
 import pathlib
 import re
@@ -34,11 +37,11 @@ class Sentinel(enum.Enum):
 class BlocksScreenConfig:
     config = configparser.ConfigParser(
         allow_no_value=True,
-        interpolation=configparser.ExtendedInterpolation(),
-        delimiters=(":"),
+        # interpolation=configparser.ExtendedInterpolation(),
+        # delimiters=(":"),
         # inline_comment_prefixes=("#"),
-        comment_prefixes=("#", "#~#"),
-        empty_lines_in_values=True,
+        # comment_prefixes=("#", "#~#"),
+        # empty_lines_in_values=True,
     )
 
     def __init__(
@@ -47,6 +50,7 @@ class BlocksScreenConfig:
         self.configfile = pathlib.Path(configfile)
         self.section = section
         self.raw_config: typing.List[str] = []
+        self.raw_dict_config: typing.Dict = {}
 
     def __getitem__(self, key: str) -> BlocksScreenConfig:
         return self.get_section(key)
@@ -114,18 +118,100 @@ class BlocksScreenConfig:
             section=self.section, option=option, fallback=default
         )
 
+    def _find_section_index(self, section: str) -> typing.Union[Sentinel, int]:
+        if not self.raw_config:
+            raise configparser.Error("No configuration found")
+        try:
+            return self.raw_config.index("[" + section + "]")
+        except ValueError as e:
+            raise configparser.Error(
+                f"Section {section} does not exist, traceback: Error on line {e.__traceback__.tb_lineno} raised {e.__class__.__name__}: {e}"
+            )
+
+    def _find_section_limits(self, section: str) -> typing.Tuple:
+        try:
+            if not self.raw_config:
+                raise configparser.Error("No configuration found")
+            section_start = self._find_section_index(section)
+            buffer = self.raw_config[section_start:]
+            section_end = buffer.index("")
+            return (section_start, section_end)
+        except configparser.Error as e:
+            raise configparser.Error(
+                f"Error finding section {section} limits on local tracking, callstack: {e}"
+            )
+
+    def _find_option_index(
+        self, section: str, option: str
+    ) -> typing.Union[Sentinel, int, None]:
+        if not self.raw_config:
+            raise configparser.Error("No configuration found")
+        try:
+            start, end = self._find_section_limits(section)
+            section_buffer = self.raw_config[start:][:end]
+            for index in range(len(section_buffer)):
+                if option in section_buffer[index]:
+                    return start + index
+            raise configparser.Error(
+                f"Cannot find {option} in section {section}"
+            )
+        except configparser.Error as e:
+            raise configparser.Error(
+                f"Unable to find {option} option in {section} section, callstack: {e}"
+            )
+
+    def add_section(self, section: str) -> None:
+        try:
+            if not self.raw_config or not self.raw_dict_config:
+                raise configparser.Error("No Configuration found")
+
+            sec_string = f"[{section}]"
+            if sec_string in self.raw_config:
+                raise configparser.DuplicateSectionError(
+                    f"Section {sec_string} already exists"
+                )
+            config = self.raw_config
+            config.extend(["", sec_string])
+            updated_config = "\n".join(config)
+            self.raw_config = updated_config.splitlines()
+            self.config.add_section(section)
+        except configparser.DuplicateSectionError:
+            logging.error(f"Section {section} already exists")
+        except configparser.Error:
+            logging.error(f"Unable to add {section} section to configuration")
+
+    def add_option(
+        self,
+        section: str,
+        option: str,
+        value: typing.Union[str, None] = None,
+    ) -> None:
+        try:
+            _, section_end = self._find_section_limits(section)
+            config = self.raw_config.copy()
+            opt_string = f"{option}: {value}"
+            config.insert(section_end + 1, opt_string)
+            updated_config = "\n".join(config)
+            self.raw_config = updated_config.splitlines()
+            self.config.set(section, option, value)
+        except configparser.DuplicateOptionError:
+            logging.error(f"Option {option} already present on {section}")
+        except configparser.Error:
+            logging.error(
+                f"Unable to add {option} option to section {section}."
+            )
+
     def load_config(self):
         try:
             self.raw_config.clear()
-            self.config.clear()  # Reset the configparser
-
-            self.raw_config = self._parse_file()
+            self.config.clear()  # Reset configparser
+            self.raw_config, self.raw_dict_config = self._parse_file()
             if self.raw_config:
                 self.config.read_file(self.raw_config)
         except Exception as e:
             raise configparser.Error(f"Error loading configuration file: {e}")
 
-    def _parse_file(self) -> typing.List[str]:
+    def _parse_file(self) -> typing.Tuple[typing.List[str], typing.Dict]:
         buffer = []
         dict_buff: typing.Dict = {}
         curr_sec: typing.Union[Sentinel, str] = Sentinel.MISSING
@@ -144,13 +230,16 @@ class BlocksScreenConfig:
                         continue
                 # remove leading and trailing white spaces
                 line = re.sub(r"\s*([:=])\s*", r"\1", line)
-                line = re.sub(r"=", ":", line)
+                line = re.sub(r"=", r":", line)
                 # find the beginning of sections
                 section_match = re.compile(r"[^\s]*\[([^]]+)\]")
                 match_sec = re.match(section_match, line)  #
                 if match_sec:
                     sec_name = re.sub(r"[\[*\]]", r"", line)
                     if sec_name not in dict_buff.keys():
+                        buffer.extend(
+                            [""]
+                        )  # REFACTOR: Just add some line separation between sections
                         dict_buff.update({sec_name: {}})
                         curr_sec = sec_name
                     else:
@@ -167,8 +256,20 @@ class BlocksScreenConfig:
                     else:
                         continue
                 buffer.append(line)
-            return buffer
+            return buffer, dict_buff
+
         except Exception as e:
             raise configparser.Error(
                 f"Unexpected error while parsing configuration file: {e}"
             )
+
+
+def get_configparser() -> BlocksScreenConfig:
+    wanted_target = os.path.join(DEFAULT_CONFIGFILE_PATH, "BlocksScreen.cfg")
+    fallback = os.path.join(WORKING_DIR, "BlocksScreen.cfg")
+    configfile = (
+        wanted_target
+        if check_file_on_path(DEFAULT_CONFIGFILE_PATH, "BlocksScreen.cfg")
+        else fallback
+    )
+    return BlocksScreenConfig(configfile=configfile, section="server")
