@@ -14,8 +14,6 @@ class BabystepPage(QtWidgets.QWidget):
         str, name="run_gcode"
     )
 
-    _z_offset: float = 0.1
-
     def __init__(self, parent) -> None:
         super().__init__(parent)
         self.setObjectName("babystepPage")
@@ -24,6 +22,8 @@ class BabystepPage(QtWidgets.QWidget):
         self.setTabletTracking(True)
         self.setMouseTracking(True)
 
+        self._z_offset = 0.1
+
         self.setupUI()
         self.bbp_away_from_bed.clicked.connect(self.on_move_nozzle_away)
         self.bbp_close_to_bed.clicked.connect(self.on_move_nozzle_close)
@@ -31,7 +31,6 @@ class BabystepPage(QtWidgets.QWidget):
         self.bbp_nozzle_offset_01.toggled.connect(self.handle_z_offset_change)
         self.bbp_nozzle_offset_025.toggled.connect(self.handle_z_offset_change)
         self.bbp_nozzle_offset_05.toggled.connect(self.handle_z_offset_change)
-        self.bbp_nozzle_offset_1.toggled.connect(self.handle_z_offset_change)
         self.bbp_nozzle_offset_1.toggled.connect(self.handle_z_offset_change)
         self.babystep_back_btn.clicked.connect(self.request_back)
 
@@ -45,7 +44,6 @@ class BabystepPage(QtWidgets.QWidget):
     @QtCore.pyqtSlot(name="on_move_nozzle_away")
     def on_move_nozzle_away(self) -> None:
         """Slot for Babystep button to get far from the bed by **` self._z_offset`** amount"""
-        print("Moving nozzle away from bed by:", self._z_offset, "a")
         self.run_gcode_signal.emit(
             f"SET_GCODE_OFFSET Z_ADJUST=+{self._z_offset}"  # Z_ADJUST adds the value to the existing offset
         )
@@ -64,17 +62,19 @@ class BabystepPage(QtWidgets.QWidget):
         _possible_z_values: typing.List = [0.01, 0.025, 0.05, 0.1]
         _sender: QtCore.QObject | None = self.sender()
         if self._z_offset == float(_sender.text()[:-3]):
+            print(_sender.text()[:-3], "is already set")
             return
         self._z_offset = float(_sender.text()[:-3])
+        print(_sender.text()[:-3], "is now set")
 
     def on_gcode_move_update(self, name: str, value: list) -> None:
         if not value:
             return
 
         if name == "homing_origin":
-            self._z_offset = value[2]
+            self._z_offset_text = value[2]
             self.bbp_z_offset_current_value.setText(
-                f"Z: {self._z_offset:.3f}mm"
+                f"Z: {self._z_offset_text:.3f}mm"
             )
 
     def setupUI(self):
