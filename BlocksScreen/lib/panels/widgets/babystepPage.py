@@ -32,7 +32,6 @@ class BabystepPage(QtWidgets.QWidget):
         self.bbp_nozzle_offset_025.toggled.connect(self.handle_z_offset_change)
         self.bbp_nozzle_offset_05.toggled.connect(self.handle_z_offset_change)
         self.bbp_nozzle_offset_1.toggled.connect(self.handle_z_offset_change)
-        self.babystep_back_btn.clicked.connect(self.request_back)
 
     @QtCore.pyqtSlot(name="on_move_nozzle_close")
     def on_move_nozzle_close(self) -> None:
@@ -74,6 +73,10 @@ class BabystepPage(QtWidgets.QWidget):
         if name == "homing_origin":
             self._z_offset_text = value[2]
             self.bbp_z_offset_current_value.setText(
+                f"Z: {self._z_offset_text:.3f}mm"
+            )
+        if self.bbp_z_offset_title_label.text() == "smth":
+            self.bbp_z_offset_title_label.setText(
                 f"Z: {self._z_offset_text:.3f}mm"
             )
 
@@ -334,6 +337,29 @@ class BabystepPage(QtWidgets.QWidget):
             QtCore.Qt.AlignmentFlag.AlignCenter
         )
         self.bbp_babystep_graphic.setObjectName("bbp_babystep_graphic")
+
+        # === NEW LABEL ADDED HERE ===
+        # This is the title label that appears above the red value box.
+        self.bbp_z_offset_title_label = QtWidgets.QLabel(parent=self)
+        # Position it just above the red box. Red box is at y=70, so y=40 is appropriate.
+        self.bbp_z_offset_title_label.setGeometry(
+            QtCore.QRect(100, 40, 200, 30)
+        )
+        font = QtGui.QFont()
+        font.setPointSize(12)
+
+        self.bbp_z_offset_title_label.setFont(font)
+        # Set color to white to be visible on the dark background
+        self.bbp_z_offset_title_label.setStyleSheet(
+            "color: gray; background: transparent;"
+        )
+        self.bbp_z_offset_title_label.setText("Z-Offset")
+        self.bbp_z_offset_title_label.setObjectName("bbp_z_offset_title_label")
+        self.bbp_z_offset_title_label.setText("smth")
+        self.bbp_z_offset_title_label.setGeometry(420, 270, 200, 30)
+
+        # === END OF NEW LABEL ===
+
         self.bbp_z_offset_current_value = BlocksLabel(parent=self.frame_2)
         self.bbp_z_offset_current_value.setGeometry(
             QtCore.QRect(100, 70, 200, 60)
