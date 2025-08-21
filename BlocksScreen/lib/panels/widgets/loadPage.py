@@ -1,20 +1,26 @@
 from ast import main
 
 import sys
+from typing import Self
 
 from PyQt6 import QtCore, QtGui, QtWidgets
 import enum
 
 
 class LoadScreen(QtWidgets.QDialog):
+    class AnimationGIF(enum.Enum):
+        # TODO: THERE ISNT ANY GIFS IN LOADSCREEN PLEASE REMEMBER THIS IM WARNING
+        # TODO : add more types into LoadScreen
+
+        DEFAULT = None
+        PLACEHOLDER = ""
+
     def __init__(
-        self,
-        parent: QtWidgets.QWidget,
-        gif: QtGui.QMovie = None,
+        self, parent: QtWidgets.QWidget, type: "LoadScreen.AnimationGIF"
     ) -> None:
         super().__init__(parent)
 
-        self.gifs = gif
+        self.type = type
         self._angle = 0
         self._span_angle = 90.0
         self._is_span_growing = True
@@ -25,23 +31,36 @@ class LoadScreen(QtWidgets.QDialog):
         self.setStyleSheet(
             "background-image: url(:/background/media/1st_background.png);"
         )
-        self.setupUI()
-
-        # Handle the GIF logic
-        if self.gifs is not None:
-            self.gifshow.setMovie(self.gifs)
-            self.gifs.start()
 
         self.setWindowFlags(
             QtCore.Qt.WindowType.Popup
             | QtCore.Qt.WindowType.FramelessWindowHint
         )
 
+        self.setupUI()
+
+        config = parent.get_config()
+        print(f"Config: {config}")
+        try:
+            if config is not None:
+                loading_config = config["loading"]
+                animation = loading_config.get(
+                    str(self.type.name), self.type.value
+                )
+        except KeyError:
+            self.type = LoadScreen.AnimationGIF.DEFAULT
+
         self.timer = QtCore.QTimer(self)
         self.timer.timeout.connect(self._update_animation)
 
+        if self.type != LoadScreen.AnimationGIF.PLACEHOLDER:
+            print("IM HERE CALRAHO NEM SEI COM O QUE ISTO NAO TA A TRABALHAR ")
+            self.movie = QtGui.QMovie(animation)  # Create QMovie object
+            self.gifshow.setMovie(self.movie)  # Set QMovie to QLabel
+            self.movie.start()  # Start the QMovie
+
         # Only start the animation timer if no GIF is provided
-        if self.gifs is None:
+        if self.type == LoadScreen.AnimationGIF.DEFAULT:
             self.timer.start(16)
 
         self.repaint()
@@ -69,8 +88,8 @@ class LoadScreen(QtWidgets.QDialog):
         self.label.setText("Loading...")
         self._angle = 0
         # Stop the GIF animation if it was started
-        if self.gifs is not None:
-            self.gifs.stop()
+        if self.type != LoadScreen.AnimationGIF.DEFAULT:
+            self.gifshow.movie().stop()
         return super().close()
 
     def _update_animation(self) -> None:
@@ -105,7 +124,7 @@ class LoadScreen(QtWidgets.QDialog):
     def paintEvent(self, a0: QtGui.QPaintEvent) -> None:
         painter = QtGui.QPainter(self)
         # loading circle draw
-        if self.gifs is None:
+        if self.type == LoadScreen.AnimationGIF.DEFAULT:
             painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing, True)
             painter.setRenderHint(
                 QtGui.QPainter.RenderHint.LosslessImageRendering, True
@@ -155,7 +174,7 @@ class LoadScreen(QtWidgets.QDialog):
     def show(self) -> None:
         self.geometry_calc()
         # Start the animation timer only if no GIF is present
-        if self.gifs is None:
+        if self.type == LoadScreen.AnimationGIF.DEFAULT:
             self.timer.start()
         self.repaint()
         return super().show()
