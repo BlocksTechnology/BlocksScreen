@@ -11,9 +11,7 @@
 
 from __future__ import annotations
 import configparser
-from copy import deepcopy
 import enum
-import io
 import logging
 import os
 import pathlib
@@ -118,67 +116,64 @@ class BlocksScreenConfig:
             section=self.section, option=option, fallback=default
         )
 
-    def _find_section_index(self, section: str) -> typing.Union[Sentinel, int]:
-        if not self.raw_config:
-            raise configparser.Error("No configuration found")
+    def _find_section_index(self, section: str) -> int:
         try:
             return self.raw_config.index("[" + section + "]")
         except ValueError as e:
             raise configparser.Error(
-                f"Section {section} does not exist, traceback: Error on line {e.__traceback__.tb_lineno} raised {e.__class__.__name__}: {e}"
+                f'Section "{section}" does not exist: {e}'
             )
 
     def _find_section_limits(self, section: str) -> typing.Tuple:
         try:
-            if not self.raw_config:
-                raise configparser.Error("No configuration found")
             section_start = self._find_section_index(section)
             buffer = self.raw_config[section_start:]
             section_end = buffer.index("")
-            return (section_start, section_end)
+            return (section_start, int(section_end + section_start))
         except configparser.Error as e:
             raise configparser.Error(
-                f"Error finding section {section} limits on local tracking, callstack: {e}"
+                f'Error while finding section "{section}" limits on local tracking: {e}'
             )
 
     def _find_option_index(
         self, section: str, option: str
     ) -> typing.Union[Sentinel, int, None]:
-        if not self.raw_config:
-            raise configparser.Error("No configuration found")
         try:
             start, end = self._find_section_limits(section)
             section_buffer = self.raw_config[start:][:end]
             for index in range(len(section_buffer)):
-                if option in section_buffer[index]:
+                if "[" + option + "]" in section_buffer[index]:
                     return start + index
             raise configparser.Error(
-                f"Cannot find {option} in section {section}"
+                f'Cannot find option "{option}" in section "{section}"'
             )
         except configparser.Error as e:
             raise configparser.Error(
-                f"Unable to find {option} option in {section} section, callstack: {e}"
+                f'Unable to find option "{option}" in section "{section}":  {e}'
             )
 
     def add_section(self, section: str) -> None:
         try:
-            if not self.raw_config or not self.raw_dict_config:
-                raise configparser.Error("No Configuration found")
-
             sec_string = f"[{section}]"
             if sec_string in self.raw_config:
                 raise configparser.DuplicateSectionError(
-                    f"Section {sec_string} already exists"
+                    f'Section "{sec_string}" already exists'
                 )
             config = self.raw_config
-            config.extend(["", sec_string])
+            if config and config[-1].strip() != "":
+                config.append("")
+            config.extend([sec_string, ""])
             updated_config = "\n".join(config)
             self.raw_config = updated_config.splitlines()
+            if self.raw_config[-1] != "":
+                self.raw_config.append("")
             self.config.add_section(section)
-        except configparser.DuplicateSectionError:
-            logging.error(f"Section {section} already exists")
-        except configparser.Error:
-            logging.error(f"Unable to add {section} section to configuration")
+        except configparser.DuplicateSectionError as e:
+            logging.error(f'Section "{section}" already exists. {e}')
+        except configparser.Error as e:
+            logging.error(
+                f'Unable to add "{section}" section to configuration: {e}'
+            )
 
     def add_option(
         self,
@@ -187,19 +182,29 @@ class BlocksScreenConfig:
         value: typing.Union[str, None] = None,
     ) -> None:
         try:
-            _, section_end = self._find_section_limits(section)
+            section_start, section_end = self._find_section_limits(section)
             config = self.raw_config.copy()
             opt_string = f"{option}: {value}"
-            config.insert(section_end + 1, opt_string)
+            print(section_end)
+            config.insert(section_end, opt_string)
             updated_config = "\n".join(config)
             self.raw_config = updated_config.splitlines()
+            if self.raw_config[-1] != "":
+                self.raw_config.append("")
+
             self.config.set(section, option, value)
-        except configparser.DuplicateOptionError:
-            logging.error(f"Option {option} already present on {section}")
-        except configparser.Error:
+        except configparser.DuplicateOptionError as e:
+            logging.error(f"Option {option} already present on {section}: {e}")
+        except configparser.Error as e:
             logging.error(
-                f"Unable to add {option} option to section {section}."
+                f'Unable to add "{option}" option to section "{section}": {e} '
             )
+
+    def save_configuration(self) -> None:
+        try:
+            ...
+        except Exception as e:
+            ...
 
     def load_config(self):
         try:
@@ -256,6 +261,8 @@ class BlocksScreenConfig:
                     else:
                         continue
                 buffer.append(line)
+            if buffer[-1] != "":
+                buffer.append("")
             return buffer, dict_buff
 
         except Exception as e:
@@ -273,3 +280,4 @@ def get_configparser() -> BlocksScreenConfig:
         else fallback
     )
     return BlocksScreenConfig(configfile=configfile, section="server")
+
