@@ -36,8 +36,8 @@ class NetworkManagerRescanError(Exception):
         self.error = error
 
 
-class SdbusNetworkManager:
-    # class SdbusNetworkManager(QObject):
+# class SdbusNetworkManager:
+class SdbusNetworkManager(QObject):
     """Class that controls the linux NetworkManager tool using the sdbus library.
 
     - Check and get available interfaces..
@@ -48,8 +48,8 @@ class SdbusNetworkManager:
     - Prefer wired connection over wireless if available.
     """
 
-    # def __init__(self, parent: typing.Optional["QObject"]):
-    def __init__(self):
+    def __init__(self, parent: typing.Optional["QObject"]):
+    # def __init__(self):
         super(SdbusNetworkManager, self).__init__()
         self.system_dbus = sdbus.sd_bus_open_system()
         if not self.system_dbus:
@@ -1372,13 +1372,3 @@ class SdbusNetworkManagerDummy:
         print(f"Updated a network connection {ssid} | {password} | {new_ssid}")
         return {"status": "AUGH", "msg": "dummy"}
 
-
-if __name__ == "__main__":
-    nmcli = SdbusNetworkManager()
-    print("fuck")
-
-    nmcli.rescan_networks()
-    print(nmcli.get_current_ip_addr())
-    print(nmcli.get_current_ssid())
-    print("\n")
-    print(nmcli.get_available_networks())
