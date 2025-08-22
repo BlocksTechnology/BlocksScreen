@@ -10,13 +10,17 @@
 # See https://www.gnu.org/licenses/gpl-3.0.html for details.
 
 from __future__ import annotations
+
 import configparser
 import enum
+import io
 import logging
 import os
 import pathlib
 import re
+import threading
 import typing
+
 from helper_methods import check_file_on_path
 
 HOME_DIR = os.path.expanduser("~/")
@@ -42,6 +46,8 @@ class BlocksScreenConfig:
         # empty_lines_in_values=True,
     )
 
+    update_pending: bool = False
+
     def __init__(
         self, configfile: typing.Union[str, pathlib.Path], section: str
     ) -> None:
@@ -49,6 +55,7 @@ class BlocksScreenConfig:
         self.section = section
         self.raw_config: typing.List[str] = []
         self.raw_dict_config: typing.Dict = {}
+        self.file_lock = threading.Lock()  # Thread safety for future work
 
     def __getitem__(self, key: str) -> BlocksScreenConfig:
         return self.get_section(key)
@@ -154,20 +161,22 @@ class BlocksScreenConfig:
 
     def add_section(self, section: str) -> None:
         try:
-            sec_string = f"[{section}]"
-            if sec_string in self.raw_config:
-                raise configparser.DuplicateSectionError(
-                    f'Section "{sec_string}" already exists'
-                )
-            config = self.raw_config
-            if config and config[-1].strip() != "":
-                config.append("")
-            config.extend([sec_string, ""])
-            updated_config = "\n".join(config)
-            self.raw_config = updated_config.splitlines()
-            if self.raw_config[-1] != "":
-                self.raw_config.append("")
-            self.config.add_section(section)
+            with self.file_lock:
+                sec_string = f"[{section}]"
+                if sec_string in self.raw_config:
+                    raise configparser.DuplicateSectionError(
+                        f'Section "{sec_string}" already exists'
+                    )
+                config = self.raw_config
+                if config and config[-1].strip() != "":
+                    config.append("")
+                config.extend([sec_string, ""])
+                updated_config = "\n".join(config)
+                self.raw_config = updated_config.splitlines()
+                if self.raw_config[-1] != "":
+                    self.raw_config.append("")
+                self.config.add_section(section)
+                self.update_pending = True
         except configparser.DuplicateSectionError as e:
             logging.error(f'Section "{section}" already exists. {e}')
         except configparser.Error as e:
@@ -182,17 +191,17 @@ class BlocksScreenConfig:
         value: typing.Union[str, None] = None,
     ) -> None:
         try:
-            section_start, section_end = self._find_section_limits(section)
-            config = self.raw_config.copy()
-            opt_string = f"{option}: {value}"
-            print(section_end)
-            config.insert(section_end, opt_string)
-            updated_config = "\n".join(config)
-            self.raw_config = updated_config.splitlines()
-            if self.raw_config[-1] != "":
-                self.raw_config.append("")
-
-            self.config.set(section, option, value)
+            with self.file_lock:
+                section_start, section_end = self._find_section_limits(section)
+                config = self.raw_config.copy()
+                opt_string = f"{option}: {value}"
+                config.insert(section_end, opt_string)
+                updated_config = "\n".join(config)
+                self.raw_config = updated_config.splitlines()
+                if self.raw_config[-1] != "":
+                    self.raw_config.append("")
+                self.config.set(section, option, value)
+                self.update_pending = True
         except configparser.DuplicateOptionError as e:
             logging.error(f"Option {option} already present on {section}: {e}")
         except configparser.Error as e:
@@ -202,9 +211,28 @@ class BlocksScreenConfig:
 
     def save_configuration(self) -> None:
         try:
-            ...
+            if not self.update_pending:
+                return
+            with self.file_lock:
+                self.configfile.write_text(
+                    "\n".join(self.raw_config), encoding="utf-8"
+                )
+                sio = io.StringIO()
+                sio.writelines(self.raw_config)
+                self.config.write(sio)
+                sio.close()
         except Exception as e:
-            ...
+            logging.error(
+                f"ERROR: Unable to save new configuration, something went wrong while saving updated configuration. {e}"
+            )
+        finally:
+            self.update_pending = False
+
+    def _do_save(self, data) -> bool:
+        try:
+            return True
+        except Exception as e:
+            return False
 
     def load_config(self):
         try:
@@ -221,8 +249,8 @@ class BlocksScreenConfig:
         dict_buff: typing.Dict = {}
         curr_sec: typing.Union[Sentinel, str] = Sentinel.MISSING
         try:
+            self.file_lock.acquire(blocking=False)
             f = self.configfile.read_text(encoding="utf-8")
-
             for line in f.splitlines():
                 line = line.strip()
                 if not line:
@@ -264,11 +292,12 @@ class BlocksScreenConfig:
             if buffer[-1] != "":
                 buffer.append("")
             return buffer, dict_buff
-
         except Exception as e:
             raise configparser.Error(
                 f"Unexpected error while parsing configuration file: {e}"
             )
+        finally:
+            self.file_lock.release()
 
 
 def get_configparser() -> BlocksScreenConfig:
