@@ -1,4 +1,5 @@
 import logging
+import random
 import typing
 from uuid import uuid4
 
@@ -26,11 +27,6 @@ from sdbus_block.networkmanager.exceptions import (
     NmConnectionPropertyNotFoundError,
 )
 
-import random
-
-# TODO: Add Logging, separate logger in this case so i can structure it better
-# TODO: Remove the statically attributed variables
-
 
 class NetworkManagerRescanError(Exception):
     """Exception raised when rescanning the network fails."""
@@ -40,7 +36,8 @@ class NetworkManagerRescanError(Exception):
         self.error = error
 
 
-class SdbusNetworkManager(QObject):
+class SdbusNetworkManager:
+    # class SdbusNetworkManager(QObject):
     """Class that controls the linux NetworkManager tool using the sdbus library.
 
     - Check and get available interfaces..
@@ -51,32 +48,25 @@ class SdbusNetworkManager(QObject):
     - Prefer wired connection over wireless if available.
     """
 
-    def __init__(self, parent: typing.Optional["QObject"]):
+    # def __init__(self, parent: typing.Optional["QObject"]):
+    def __init__(self):
         super(SdbusNetworkManager, self).__init__()
-
         self.system_dbus = sdbus.sd_bus_open_system()
-
-        if self.system_dbus is None:
+        if not self.system_dbus:
             return
-
         self.known_networks = []
-
         self.saved_networks_ssids: typing.List
         self.hotspot_ssid: str = "PrinterHotspot"
         self.hotspot_password: str = "123456789"
-        # * Test the networkmanager
         sdbus.set_default_bus(self.system_dbus)
-
         try:
             self.nm = NetworkManager()
         except Exception as e:
             logging.debug(
                 f"Exception occurred when getting NetworkManager, exception message: {e}"
             )
-
         self.available_wired_interfaces = self.get_wired_interfaces()
         self.available_wireless_interfaces = self.get_wireless_interfaces()
-
         self.primary_wifi_interface: NetworkDeviceWireless | None = (
             self.get_wireless_interfaces()[0]
             if len(self.get_wireless_interfaces()) > 0
@@ -206,38 +196,42 @@ class SdbusNetworkManager(QObject):
             )
         )
 
-    def get_current_ip_addr(self) -> typing.List[str] | None:
+    def get_current_ssid(self) -> typing.Union[str, None]:
+        if self.nm.primary_connection == "/":
+            return
+        try:
+            return ActiveConnection(self.nm.primary_connection).id
+        except Exception as e:
+            logging.info(f"Unexpected error occurred: {e}")
+
+    def get_current_ip_addr(self) -> typing.Union[typing.List[str], None]:
         """get_current_ip_addr Gets the current connection ip address.
 
         Returns:
             str: A string containing the current ip address
         """
-
         if self.nm.primary_connection == "/":
-            # TODO: Logging
-            print("There is no NetworkManager connection. No IP Address")
-            return None
+            logging.info("There is no NetworkManager active connection.")
+            return
         _device_ip4_conf_path = ActiveConnection(
             self.nm.primary_connection
         ).ip4_config
         if _device_ip4_conf_path == "/":
-            # NetworkManager reports that there is no ipv4 config for the interface, probably there is no connection at this time.
             logging.info(
                 "NetworkManager reports no IP configuration for the interface"
             )
-            # TODO: Logging
-            return None
-
+            return
         ip4_conf = IPv4Config(_device_ip4_conf_path)
-        _addrs = [
+        return [
             address_data["address"][1]
             for address_data in ip4_conf.address_data
         ]
-        return _addrs
 
     def get_primary_interface(
         self,
-    ) -> NetworkDeviceWired | NetworkDeviceWireless | typing.Tuple | str:
+    ) -> typing.Union[
+        NetworkDeviceWired, NetworkDeviceWireless, typing.Tuple, str
+    ]:
         """get_primary_interface Return the primary interface,
             If a there is a connection, returns the interface that is being currently used.
 
@@ -263,17 +257,18 @@ class SdbusNetworkManager(QObject):
             self.nm.primary_connection_type,
         )
 
-    def rescan_networks(self) -> None:
+    def rescan_networks(self) -> bool:
         """rescan_networks Scan for available networks."""
         if (
             self.primary_wifi_interface == "/"
-            or self.primary_wifi_interface is None
+            or not self.primary_wifi_interface
         ):
-            return
+            return False
         try:
             self.primary_wifi_interface.request_scan({})
-        except Exception as e:
-            raise NetworkManagerRescanError(f"Network rescan failed: {e}")
+            return True
+        except Exception:
+            raise NetworkManagerRescanError("Network scan failed")
 
     def get_available_networks(self) -> typing.Dict:
         """get_available_networks Scan for networks, get the information about each network.
@@ -282,20 +277,17 @@ class SdbusNetworkManager(QObject):
             typing.List[dict] | None: A list that contains the information about every available found networks. None if nothing is found or the scan failed.
         - Implemented with map built-in python method instead of for loops. Don't know the performance difference, but tried to not use for loops in these methods just to try.
         """
-        # This will only work on wifi, because we can scan networks
         if (
             self.primary_wifi_interface == "/"
-            or self.primary_wifi_interface is None
+            or not self.primary_wifi_interface
         ):
             return {"error": "No primary interface found"}
 
-        # Make sure we scan for networks first
         if self.rescan_networks():
             if (
                 self.primary_wifi_interface.device_type
                 == enums.DeviceType.WIFI
             ):
-                # Get information about all scanned networks.
                 _aps: typing.List[AccessPoint] = list(
                     map(
                         lambda ap_path: AccessPoint(ap_path),
@@ -318,6 +310,7 @@ class SdbusNetworkManager(QObject):
                         _aps,
                     )
                 )
+
                 return _info_networks
         return {"error": "No available networks"}
 
@@ -336,8 +329,8 @@ class SdbusNetworkManager(QObject):
         Check: For more information about the flags
             :py:class:`WpaSecurityFlags` and `ÀccessPointCapabilities` from :py:module:`python-sdbus-networkmanager.enums`
         """
-        if ap is None:
-            return None
+        if not ap:
+            return
 
         _sec_rsn: typing.List[WpaSecurityFlags] = list(
             map(lambda sec: sec, list(WpaSecurityFlags(ap.rsn_flags)))
@@ -364,7 +357,7 @@ class SdbusNetworkManager(QObject):
 
         I admit that this implementation is way to complicated, I don't even think it's great on memory and time, but i didn't use for loops so mission achieved.
         """
-        if self.nm is None:
+        if not self.nm:
             return [{"error": "No network manager"}]
 
         _connections: typing.List[str] = (
@@ -419,7 +412,7 @@ class SdbusNetworkManager(QObject):
         This implementation is equal to the klipper screen implementation, this one uses for loops and is simpler.
         https://github.com/KlipperScreen/KlipperScreen/blob/master/ks_includes/sdbus_nm.py Alfredo Monclues (alfrix) 2024
         """
-        if self.nm is None:
+        if not self.nm:
             return []
         known_networks = []
         for connection in NetworkManagerSettings().list_connections():
@@ -485,7 +478,7 @@ class SdbusNetworkManager(QObject):
             "exception"
         """
         if (
-            self.primary_wifi_interface is None
+            not self.primary_wifi_interface
             or self.primary_wifi_interface == "/"
         ):
             return {"status": "error", "msg": "No Available interface"}
@@ -1378,3 +1371,14 @@ class SdbusNetworkManagerDummy:
         print(new_ssid)
         print(f"Updated a network connection {ssid} | {password} | {new_ssid}")
         return {"status": "AUGH", "msg": "dummy"}
+
+
+if __name__ == "__main__":
+    nmcli = SdbusNetworkManager()
+    print("fuck")
+
+    nmcli.rescan_networks()
+    print(nmcli.get_current_ip_addr())
+    print(nmcli.get_current_ssid())
+    print("\n")
+    print(nmcli.get_available_networks())
