@@ -37,6 +37,11 @@ class ConfirmWidget(QtWidgets.QWidget):
 
         _total_filament = filedata.get("filament_total")
         _estimated_time = filedata.get("estimated_time")
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+=======
+>>>>>>> ae09c93 (BUG FIX: centered thumbnail position)
 
         if isinstance(_estimated_time, str):
             seconds = 0
@@ -45,11 +50,16 @@ class ConfirmWidget(QtWidgets.QWidget):
 
         _estimated_time = self.estimate_print_time(seconds)
 
+<<<<<<< HEAD
+=======
+>>>>>>> 1a620a0 (BUG FIX: centered thumbnail position)
+>>>>>>> ae09c93 (BUG FIX: centered thumbnail position)
         self.cf_info.setText(
             "Total Filament:"
             + str(_total_filament)
             + "\n"
             + "Slicer time: "
+<<<<<<< HEAD
             + str(_estimated_time[0])
             + " days "
             + str(_estimated_time[1])
@@ -61,6 +71,25 @@ class ConfirmWidget(QtWidgets.QWidget):
         )
         self.repaint()
 
+=======
+<<<<<<< HEAD
+            + str(_estimated_time)
+        )
+        self.repaint()
+
+=======
+            + str(_estimated_time[0])
+            + " days "
+            + str(_estimated_time[1])
+            + " hours "
+            + str(_estimated_time[2])
+            + " minutes "
+            + str(_estimated_time[3])
+            + " seconds"
+        )
+        self.repaint()
+
+>>>>>>> ae09c93 (BUG FIX: centered thumbnail position)
     def estimate_print_time(self, seconds: int) -> list:
         """Convert time in seconds format to days, hours, minutes, seconds.
 
@@ -75,6 +104,10 @@ class ConfirmWidget(QtWidgets.QWidget):
         days, hours = divmod(num_hours, 24)
         return [days, hours, minutes, seconds]
 
+<<<<<<< HEAD
+=======
+>>>>>>> 1a620a0 (BUG FIX: centered thumbnail position)
+>>>>>>> ae09c93 (BUG FIX: centered thumbnail position)
     def paintEvent(self, a0: QtGui.QPaintEvent) -> None:
         _scene = QtWidgets.QGraphicsScene()
         if not self.thumbnail.isNull():
@@ -317,7 +350,15 @@ class ConfirmWidget(QtWidgets.QWidget):
         self.cf_content_vertical_layout.addWidget(
             self.cf_thumbnail,
             0,
+<<<<<<< HEAD
             QtCore.Qt.AlignmentFlag.AlignRight
+=======
+<<<<<<< HEAD
+            QtCore.Qt.AlignmentFlag.AlignHCenter
+=======
+            QtCore.Qt.AlignmentFlag.AlignRight
+>>>>>>> 1a620a0 (BUG FIX: centered thumbnail position)
+>>>>>>> ae09c93 (BUG FIX: centered thumbnail position)
             | QtCore.Qt.AlignmentFlag.AlignVCenter,
         )
         self.verticalLayout_4.addLayout(self.cf_content_vertical_layout)
