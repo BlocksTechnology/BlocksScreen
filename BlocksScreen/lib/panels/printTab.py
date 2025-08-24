@@ -233,7 +233,7 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.panel.main_print_btn.clicked.connect(
             partial(self.change_page, self.indexOf(self.filesPage_widget))
         )
-        self.babystepPage.run_gcode_signal.connect(self.ws.api.run_gcode)
+        self.babystepPage.run_gcode.connect(self.ws.api.run_gcode)
 
         self.run_gcode_signal.connect(self.ws.api.run_gcode)
 
