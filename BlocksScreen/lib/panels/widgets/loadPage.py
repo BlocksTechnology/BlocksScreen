@@ -1,15 +1,12 @@
-from ast import main
-
-import sys
-from typing import Self
+import enum
 
 from PyQt6 import QtCore, QtGui, QtWidgets
-import enum
 
 
 class LoadScreen(QtWidgets.QDialog):
     class AnimationGIF(enum.Enum):
-        # TODO: THERE ISNT ANY GIFS IN LOADSCREEN PLEASE REMEMBER THIS IM WARNING
+        # [x]: WATHERE ARE NO GIFS IN LOADSCREEN PLEASE REMEMBER THIS IM WARNING
+
         # TODO : add more types into LoadScreen
 
         DEFAULT = None
@@ -40,7 +37,6 @@ class LoadScreen(QtWidgets.QDialog):
         self.setupUI()
 
         config = parent.get_config()
-        print(f"Config: {config}")
         try:
             if config is not None:
                 loading_config = config["loading"]
@@ -54,7 +50,6 @@ class LoadScreen(QtWidgets.QDialog):
         self.timer.timeout.connect(self._update_animation)
 
         if self.type != LoadScreen.AnimationGIF.PLACEHOLDER:
-            print("IM HERE CALRAHO NEM SEI COM O QUE ISTO NAO TA A TRABALHAR ")
             self.movie = QtGui.QMovie(animation)  # Create QMovie object
             self.gifshow.setMovie(self.movie)  # Set QMovie to QLabel
             self.movie.start()  # Start the QMovie
