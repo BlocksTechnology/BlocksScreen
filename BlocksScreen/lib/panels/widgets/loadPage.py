@@ -13,7 +13,7 @@ class LoadScreen(QtWidgets.QDialog):
         PLACEHOLDER = ""
 
     def __init__(
-        self, parent: QtWidgets.QWidget, type: "LoadScreen.AnimationGIF"
+        self, parent: QtWidgets.QWidget, type: AnimationGIF = AnimationGIF.DEFAULT
     ) -> None:
         super().__init__(parent)
 
