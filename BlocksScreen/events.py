@@ -48,7 +48,9 @@ class WebSocketMessageReceived(QEvent):
 
     @staticmethod
     def type() -> QEvent.Type:
-        return QEvent.Type(WebSocketMessageReceived.WebsocketMessageReceivedEvent)
+        return QEvent.Type(
+            WebSocketMessageReceived.WebsocketMessageReceivedEvent
+        )
 
 
 class WebSocketOpen(QEvent):
@@ -81,7 +83,9 @@ class WebSocketError(QEvent):
     WebsocketErrorEvent = QEvent.Type(QEvent.registerEventType())
 
     def __init__(self, data, *args, **kwargs):
-        super(WebSocketError, self).__init__(WebSocketError.WebsocketErrorEvent)
+        super(WebSocketError, self).__init__(
+            WebSocketError.WebsocketErrorEvent
+        )
         self.data = data
         self.args = args
         self.kwargs = kwargs
@@ -124,7 +128,9 @@ class WebSocketClose(QEvent):
     WebsocketCloseEvent = QEvent.Type(QEvent.registerEventType())
 
     def __init__(self, data, *args, **kwargs):
-        super(WebSocketClose, self).__init__(WebSocketClose.WebsocketCloseEvent)
+        super(WebSocketClose, self).__init__(
+            WebSocketClose.WebsocketCloseEvent
+        )
         self.data = data
         self.args = args
         self.kwargs = kwargs
@@ -145,7 +151,9 @@ class KlippyShutdown(QEvent):
 
     def __init__(self, data, *args, **kwargs):
         QEvent.__instancecheck__(self)
-        super(KlippyShutdown, self).__init__(KlippyShutdown.KlippyShutdownEvent)
+        super(KlippyShutdown, self).__init__(
+            KlippyShutdown.KlippyShutdownEvent
+        )
         self.data = data
         self.args = args
         self.kwargs = kwargs
@@ -236,7 +244,9 @@ class ReceivedFileData(QEvent):
     def __init__(
         self, data, method, params, /, *args, **kwargs
     ):  # Positional-only arguments "data", "method", "params", these need to be inserted in order or it wont work
-        super(ReceivedFileData, self).__init__(ReceivedFileData.ReceivedFileDataEvent)
+        super(ReceivedFileData, self).__init__(
+            ReceivedFileData.ReceivedFileDataEvent
+        )
         self.data = data
         self.method = method
         self.params = params
@@ -249,18 +259,19 @@ class ReceivedFileData(QEvent):
 
 
 class PrintStart(QEvent):
-    """Print start event
+    """Print Job Start event
 
     Args:
-        data (any): Data or message to pass onto the event
+        filename(any): Name of the file currently printing
+        **kwargs(dict): File's metadata
     """
 
     PrintStartEvent = QEvent.Type(QEvent.registerEventType())
 
-    def __init__(self, data, *args, **kwargs):
+    def __init__(self, filename, *args, **kwargs):
         super(PrintStart, self).__init__(PrintStart.PrintStartEvent)
-        self.data = data
-        self.args = args
+        self.file = filename
+        self.file_metadata = kwargs
         self.kwargs = kwargs
 
     @staticmethod
@@ -340,7 +351,9 @@ class PrintCancelled(QEvent):
     PrintCancelledEvent = QEvent.Type(QEvent.registerEventType())
 
     def __init__(self, data, *args, **kwargs):
-        super(PrintCancelled, self).__init__(PrintCancelled.PrintCancelledEvent)
+        super(PrintCancelled, self).__init__(
+            PrintCancelled.PrintCancelledEvent
+        )
 
         self.data = data
         self.args = args
@@ -401,7 +414,9 @@ class NetworkDeleted(QEvent):
     NetworkDeletedEvent = QEvent.Type(QEvent.registerEventType())
 
     def __init__(self, data, *args, **kwargs):
-        super(NetworkDeleted, self).__init__(NetworkDeleted.NetworkDeletedEvent)
+        super(NetworkDeleted, self).__init__(
+            NetworkDeleted.NetworkDeletedEvent
+        )
         self.data = data
         self.args = args
         self.kwargs = kwargs

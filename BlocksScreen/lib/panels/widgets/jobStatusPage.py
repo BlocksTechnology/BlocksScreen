@@ -1,3 +1,4 @@
+import logging
 import math
 import typing
 
@@ -5,21 +6,23 @@ from helper_methods import calculate_current_layer, estimate_print_time
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_label import BlocksLabel
 from lib.utils.display_button import DisplayButton
+import events
+
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 
 class JobStatusWidget(QtWidgets.QWidget):
-    request_print_start: typing.ClassVar[QtCore.pyqtSignal] = (
-        QtCore.pyqtSignal(str, name="start_print")
+    print_start: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        str, name="print_start"
     )
-    request_print_pause: typing.ClassVar[QtCore.pyqtSignal] = (
-        QtCore.pyqtSignal(str, name="pause_print")
+    print_pause: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        name="print_pause"
     )
-    request_print_resume: typing.ClassVar[QtCore.pyqtSignal] = (
-        QtCore.pyqtSignal(str, name="resume_print")
+    print_resume: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        name="print_resume"
     )
-    request_print_cancel: typing.ClassVar[QtCore.pyqtSignal] = (
-        QtCore.pyqtSignal(str, name="cancel_print")
+    print_cancel: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        name="print_cancel"
     )
     tune_clicked: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         name="tune_clicked"
@@ -47,6 +50,9 @@ class JobStatusWidget(QtWidgets.QWidget):
         self.setupUI()
         self.tune_menu_btn.clicked.connect(self.tune_clicked.emit)
         self.pause_printing_btn.clicked.connect(self.pause_resume_print)
+        self.stop_printing_btn.clicked.connect(
+            lambda: self.print_cancel.emit()
+        )
 
     @QtCore.pyqtSlot(str, name="on_print_start")
     def on_print_start(self, file: str) -> None:
@@ -60,7 +66,24 @@ class JobStatusWidget(QtWidgets.QWidget):
         self.request_file_info.emit(
             file
         )  # Request file metadata (or file info whatever)
-        self.request_print_start.emit(file)
+
+        self.print_start.emit(file)
+        print_start_event = events.PrintStart(
+            self._current_file_name, self.file_metadata
+        )
+        try:
+            instance = QtWidgets.QApplication.instance()
+            if instance:
+                print(self.window().objectName())
+                instance.postEvent(self.window(), print_start_event)
+            else:
+                raise TypeError(
+                    "QApplication.instance expected non None value"
+                )
+        except Exception as e:
+            logging.info(
+                f"Unexpected error while posting print job start event: {e}"
+            )
 
     @QtCore.pyqtSlot(dict, name="on_fileinfo")
     def on_fileinfo(self, fileinfo: dict) -> None:
@@ -71,20 +94,20 @@ class JobStatusWidget(QtWidgets.QWidget):
 
     @QtCore.pyqtSlot(name="pause_resume_print")
     def pause_resume_print(self) -> None:
-        """Handles what signal to emit to the printer when a printing job is ongoing"""
+        """Handle pause/resume button clicks"""
         if self._internal_print_status == "printing":
-            self.request_print_pause.emit()
+            self.print_pause.emit()
             self._internal_print_status = "paused"
+            self.pause_printing_btn.setText("Resume")
+            self.pause_printing_btn.setPixmap(
+                QtGui.QPixmap(":/ui/media/btn_icons/play.svg")
+            )
+        elif self._internal_print_status == "paused":
+            self.print_resume.emit()
+            self._internal_print_status = "printing"
             self.pause_printing_btn.setText("Pause")
             self.pause_printing_btn.setPixmap(
                 QtGui.QPixmap(":/ui/media/btn_icons/pause.svg")
-            )
-        elif self._internal_print_status == "paused":
-            self.request_print_resume.emit()
-            self._internal_print_status = "printing"
-            self.pause_printing_btn.setText("Resume")
-            self.pause_printing_btn.setPixmap(
-                QtGui.QPixmap(":/ui/media/btn_icons/resume.svg")
             )
 
     @QtCore.pyqtSlot(str, dict, name="on_print_stats_update")
@@ -100,6 +123,7 @@ class JobStatusWidget(QtWidgets.QWidget):
             field (str): The name of the updated field.
             value (dict | float | str): The value for the field.
         """
+
         if isinstance(value, str):
             if "filename" in field:
                 self._current_file_name = value
@@ -111,7 +135,9 @@ class JobStatusWidget(QtWidgets.QWidget):
                     self.request_query_print_stats.emit(
                         {"print_stats": ["filename"]}
                     )
-                    self.show_request.emit()  # Only request the page to be shown when the printer is actually printing
+                    self.show_request.emit()
+                    value = "start"  # This is for event compatibility
+
                 elif value in ("cancelled", "complete", "error", "standby"):
                     self._current_file_name = ""
                     self._internal_print_status = ""
@@ -119,6 +145,26 @@ class JobStatusWidget(QtWidgets.QWidget):
                     self.file_metadata.clear()
                     self.hide_request.emit()
                     return
+
+                if hasattr(events, str("Print" + value.capitalize())):
+                    event_obj = getattr(
+                        events, str("Print" + value.capitalize())
+                    )
+                    event = event_obj(
+                        self._current_file_name, self.file_metadata
+                    )
+                    try:
+                        instance = QtWidgets.QApplication.instance()
+                        if instance:
+                            instance.postEvent(self.window(), event)
+                        else:
+                            raise TypeError(
+                                "QApplication.instance expected non None value"
+                            )
+                    except Exception as e:
+                        logging.info(
+                            f"Unexpected error while posting print job start event: {e}"
+                        )
                 self._internal_print_status = value
 
         if self.isVisible() and (

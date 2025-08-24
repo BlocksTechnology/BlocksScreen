@@ -1,5 +1,5 @@
 import logging
-import os
+# import os
 import sys
 import typing
 
@@ -9,20 +9,28 @@ from lib.panels.mainWindow import MainWindow
 from PyQt6 import QtCore, QtGui, QtWidgets
 from screensaver import ScreenSaver
 
-os.environ["QT_AUTO_SCREEN_SCALE_FACTOR"] = "1.0"
-os.environ["QT_SCALE_FACTOR"] = "1.0"
-os.environ["QT_DEVICE_PIXEL_RATIO"] = "1.0"
-os.environ["QT_QPA_PLATFORM"] = "xcb"
-os.environ["QT_STYLE_OVERRIDE"] = "fusion"
+# os.environ["QT_AUTO_SCREEN_SCALE_FACTOR"] = "1.0"
+# os.environ["QT_SCALE_FACTOR"] = "1.0"
+# os.environ["QT_DEVICE_PIXEL_RATIO"] = "1.0"
+# os.environ["QT_QPA_PLATFORM"] = "xcb"
+# os.environ["QT_STYLE_OVERRIDE"] = "fusion"
 
 
 _logger = logging.getLogger(name="logs/BlocksScreen.log")
 
-QtGui.QGuiApplication.setHighDpiScaleFactorRoundingPolicy(  # type: ignore
-    QtCore.Qt.HighDpiScaleFactorRoundingPolicy.Ceil
+# QtGui.QGuiApplication.setHighDpiScaleFactorRoundingPolicy(  # type: ignore
+#     QtCore.Qt.HighDpiScaleFactorRoundingPolicy.Ceil
+# )
+# QtGui.QGuiApplication.setLayoutDirection(  # type: ignore
+#     QtCore.Qt.LayoutDirection.LayoutDirectionAuto
+# )
+QtGui.QGuiApplication.setAttribute(
+    QtCore.Qt.ApplicationAttribute.AA_SynthesizeMouseForUnhandledTouchEvents,
+    True,
 )
-QtGui.QGuiApplication.setLayoutDirection(  # type: ignore
-    QtCore.Qt.LayoutDirection.LayoutDirectionAuto
+QtGui.QGuiApplication.setAttribute(
+    QtCore.Qt.ApplicationAttribute.AA_SynthesizeTouchForUnhandledMouseEvents,
+    True,
 )
 
 RED = "\033[31m"
@@ -57,19 +65,18 @@ def run():
     setup_app_loggers()
     BlocksScreen = QtWidgets.QApplication([])
     main_window = MainWindow()
-    show_splash(main_window)
+    # show_splash(main_window)
     BlocksScreen.setApplicationName("BlocksScreen")
     BlocksScreen.setApplicationDisplayName("BlocksScreen")
     BlocksScreen.setDesktopFileName("BlocksScreen")
-    BlocksScreen.setHighDpiScaleFactorRoundingPolicy(
-        QtCore.Qt.HighDpiScaleFactorRoundingPolicy.Round
-    )
+    # BlocksScreen.setHighDpiScaleFactorRoundingPolicy(
+    #     QtCore.Qt.HighDpiScaleFactorRoundingPolicy.Round
+    # )
     screensaver = ScreenSaver()
     BlocksScreen.processEvents()
     # main_window.setScreen(BlocksScreen.screens()[0])
 
     # main_window.showFullScreen()
-    # main_window.show()
     main_window.show()
     main_window.bo_ws_startup.emit()
     sys.exit(BlocksScreen.exec())
