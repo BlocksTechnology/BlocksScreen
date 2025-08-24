@@ -6,6 +6,7 @@ from helper_methods import calculate_current_layer, estimate_print_time
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_label import BlocksLabel
 from lib.utils.display_button import DisplayButton
+from lib.panels.widgets import dialogPage
 import events
 
 from PyQt6 import QtCore, QtGui, QtWidgets
@@ -47,12 +48,31 @@ class JobStatusWidget(QtWidgets.QWidget):
 
     def __init__(self, parent) -> None:
         super().__init__(parent)
+
+        self.canceldialog = dialogPage.DialogPage(self)
+
         self.setupUI()
         self.tune_menu_btn.clicked.connect(self.tune_clicked.emit)
         self.pause_printing_btn.clicked.connect(self.pause_resume_print)
-        self.stop_printing_btn.clicked.connect(
-            lambda: self.print_cancel.emit()
+        self.stop_printing_btn.clicked.connect(self.handleCancel)
+
+    def handleCancel(self) -> None:
+        """Handle the cancel print job dialog"""
+        self.canceldialog.set_message(
+            "Are you sure you \n want to cancel \n this print job?"
         )
+        self.canceldialog.button_clicked.connect(self.on_dialog_button_clicked)
+        self.canceldialog.show()
+
+    def on_dialog_button_clicked(self, button_name: str) -> None:
+        """Handle dialog button clicks"""
+        if button_name == "Confirm":
+            print(
+                "Confirm button clicked MY GD HELPO ME IDK WHAT AM I DOING I MISS MY WIFI OH GOD HE IS HERE M-MY , NOOOOOOOOOOooOooOO..."
+            )
+            self.print_cancel.emit()  # Emit the print_cancel signal
+        elif button_name == "Cancel":
+            print("Cancel button clicked")
 
     @QtCore.pyqtSlot(str, name="on_print_start")
     def on_print_start(self, file: str) -> None:
