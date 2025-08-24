@@ -1,6 +1,3 @@
-from ast import main
-
-
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 
