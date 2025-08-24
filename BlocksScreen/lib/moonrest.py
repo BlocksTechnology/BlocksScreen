@@ -28,7 +28,6 @@ class MoonRest:
     timeout = 3
     # TODO: The ip and port need to come from a configfile
 
-
     def __init__(self, ip="localhost", port="7125", api_key=False):
         self._ip = ip
         self._port = port
