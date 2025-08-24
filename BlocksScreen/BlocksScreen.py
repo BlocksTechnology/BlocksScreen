@@ -1,6 +1,3 @@
-from importupdate import update_imports
-
-update_imports("BlocksScreen/lib/ui/resources")
 
 import logging
 import os
