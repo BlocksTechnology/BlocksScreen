@@ -14,6 +14,8 @@ class BabystepPage(QtWidgets.QWidget):
         str, name="run_gcode"
     )
 
+    _z_offset: float = 0.1
+
     def __init__(self, parent) -> None:
         super().__init__(parent)
         self.setObjectName("babystepPage")
@@ -21,8 +23,6 @@ class BabystepPage(QtWidgets.QWidget):
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_MouseTracking, True)
         self.setTabletTracking(True)
         self.setMouseTracking(True)
-
-        self._z_offset = 0.1
 
         self.setupUI()
         self.bbp_away_from_bed.clicked.connect(self.on_move_nozzle_away)
@@ -43,6 +43,7 @@ class BabystepPage(QtWidgets.QWidget):
     @QtCore.pyqtSlot(name="on_move_nozzle_away")
     def on_move_nozzle_away(self) -> None:
         """Slot for Babystep button to get far from the bed by **` self._z_offset`** amount"""
+        print("Moving nozzle away from bed by:", self._z_offset, "a")
         self.run_gcode.emit(
             f"SET_GCODE_OFFSET Z_ADJUST=+{self._z_offset}"  # Z_ADJUST adds the value to the existing offset
         )

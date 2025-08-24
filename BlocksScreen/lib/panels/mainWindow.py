@@ -3,24 +3,18 @@ import typing
 from collections import deque
 from functools import partial
 
-from lib.panels.widgets.numpadPage import CustomNumpad
 import events
-from events import (
-    KlippyDisconnected,
-    ReceivedFileData,
-    WebSocketMessageReceived,
-)
 from lib.files import Files
 from lib.machine import MachineControl
-from lib.printer import Printer
 from lib.moonrakerComm import MoonWebSocket
-from lib.panels.widgets.connectionPage import ConnectionPage
 from lib.panels.controlTab import ControlTab
 from lib.panels.filamentTab import FilamentTab
 from lib.panels.networkWindow import NetworkControlWindow
-from lib.panels.widgets.popupDialogWidget import Popup
 from lib.panels.printTab import PrintTab
 from lib.panels.utilitiesTab import UtilitiesTab
+from lib.panels.widgets.connectionPage import ConnectionPage
+from lib.panels.widgets.popupDialogWidget import Popup
+from lib.printer import Printer
 
 # * UI
 from lib.ui.mainWindow_ui import Ui_MainWindow  # With header
@@ -47,29 +41,13 @@ class MainWindow(QtWidgets.QMainWindow):
     printer_object_report_signal = QtCore.pyqtSignal(
         list, name="handle_report_received"
     )
-
     gcode_response = QtCore.pyqtSignal(list, name="gcode_response")
     handle_error_response = QtCore.pyqtSignal(
         list, name="handle_error_response"
     )
 
-    call_numpad_signal = QtCore.pyqtSignal(
-        int,
-        str,
-        str,
-        "PyQt_PyObject",
-        QtWidgets.QStackedWidget,
-        name="call_numpad",
-    )
     call_network_panel = QtCore.pyqtSignal(
         name="visibilityChange_networkPanel"
-    )
-    objects_subscriptions: dict = {}
-
-    request_numpad: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
-        [str, int, "PyQt_PyObject"],
-        [str, int, "PyQt_PyObject", int, int],
-        name="request_numpad",
     )
 
     def __init__(self):
@@ -87,6 +65,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.conn_window = ConnectionPage(self, self.ws)
 
         self.installEventFilter(self.conn_window)
+
         self.printPanel = PrintTab(
             self.ui.printTab, self.file_data, self.ws, self.printer
         )
@@ -162,14 +141,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui.main_content_widget.currentChanged.connect(
             slot=self.reset_tab_indexes
         )
-        # self.call_numpad_signal.connect(self.numpad_object.call_numpad)
-        # self.numpad_object.request_change_page.connect(self.global_change_page)
-        # self.controlPanel.request_numpad_signal.connect(
-        # partial(self.call_numpad_signal.emit)
-        # )
-        # self.printPanel.request_numpad_signal.connect(
-        # pkartial(self.call_numpad_signal.emit)
-        # )
 
         # self.printPanel.request_block_manual_tab_change.connect(
         # self.disable_tab_bar
@@ -194,7 +165,6 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.reset_tab_indexes()
 
-    @QtCore.pyqtSlot(name="enable_tab_bar")
     def enable_tab_bar(self) -> None:
         """Enables the tab bar"""
         if (
@@ -210,7 +180,6 @@ class MainWindow(QtWidgets.QMainWindow):
             self.ui.main_content_widget.setTabEnabled(4, True)
             self.ui.header_main_layout.setEnabled(True)
 
-    @QtCore.pyqtSlot(name="disable_tab_bar")
     def disable_tab_bar(self) -> bool:
         """Disables the tab bar so to not change the tab.
 
@@ -323,30 +292,15 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ws.start()
         self.ws.try_connection()
 
-    def event(self, event: QtCore.QEvent) -> bool:
-        """Receives PyQt Events, reimplemented method from the QEvent class"""
-        if event.type() == WebSocketMessageReceived.type():
-            if isinstance(event, WebSocketMessageReceived):
-                self.messageReceivedEvent(event)
-                return True
-            return False
-        return super().event(event)
-
-    # def eventFilter(self, a0: QObject, a1: QEvent) -> bool:
-    #     if a1.type() == WebSocketMessageReceived.type():
-    #         if isinstance(a1, WebSocketMessageReceived):
-    #             self.messageReceivedEvent(a1)
-    #             return True # filter out the event
-    #         return False
-    #     return super().eventFilter(a0, a1)
-
-    def messageReceivedEvent(self, event: WebSocketMessageReceived) -> None:
+    def messageReceivedEvent(
+        self, event: events.WebSocketMessageReceived
+    ) -> None:
         """Helper method that handles the event messages
         received from the websocket
 
 
         Args:
-            event (WebSocketMessageReceivedEvent): The message event with all its contents
+            event (events.WebSocketMessageReceivedEvent): The message event with all its contents
 
 
         Raises:
@@ -372,7 +326,9 @@ class MainWindow(QtWidgets.QMainWindow):
             )
 
         if "server.file" in _method:
-            file_data_event = ReceivedFileData(_data, _method, _metadata)
+            file_data_event = events.ReceivedFileData(
+                _data, _method, _metadata
+            )
             try:
                 QtWidgets.QApplication.postEvent(
                     self.file_data, file_data_event
@@ -541,7 +497,9 @@ class MainWindow(QtWidgets.QMainWindow):
             self.ui.bed_temp_display.setText(f"{new_value:.1f}")
 
         elif field == "target":
-            self.ui.bed_temp_display.secondary_text = f"{round(int(new_value)):.0f}"
+            self.ui.bed_temp_display.secondary_text = (
+                f"{round(int(new_value)):.0f}"
+            )
 
     def paintEvent(self, a0: QtGui.QPaintEvent | None) -> None:
         # TODO: If tab bar is disabled gray it out
@@ -576,7 +534,27 @@ class MainWindow(QtWidgets.QMainWindow):
         QtWidgets.QMainWindow.closeEvent(self, a0)
         super().closeEvent(a0)
 
+    def event(self, event: QtCore.QEvent) -> bool:
+        """Receives PyQt Events, reimplemented method from the QEvent class"""
+        if event.type() == events.WebSocketMessageReceived.type():
+            if isinstance(event, events.WebSocketMessageReceived):
+                self.messageReceivedEvent(event)
+                return True
+            return False
+        elif event.type() == events.PrintStart.type():
+            self.disable_tab_bar()
+            return False
+
+        elif (
+            event.type() == events.PrintError.type()
+            or event.type() == events.PrintComplete.type()
+            or event.type() == events.PrintCancelled.type()
+        ):
+            self.enable_tab_bar()
+            return False
+
+        return super().event(event)
+
     def sizeHint(self) -> QtCore.QSize:
         self.adjustSize()
-
         return super().sizeHint()

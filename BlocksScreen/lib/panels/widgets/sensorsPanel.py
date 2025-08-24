@@ -5,7 +5,6 @@ from lib.utils.icon_button import IconButton
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 
-# TODO: Add buttons that toggle on and of the available printer sensors
 class SensorsWindow(QtWidgets.QWidget):
     run_gcode_signal: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         str, name="run_gcode"
@@ -23,11 +22,13 @@ class SensorsWindow(QtWidgets.QWidget):
     def __init__(self, parent):
         super(SensorsWindow, self).__init__(parent)
         self.setupUi()
-        self.setAttribute(QtCore.Qt.WidgetAttribute.WA_TranslucentBackground)
-        self.setWindowFlags(
-            self.windowFlags() | QtCore.Qt.WindowType.FramelessWindowHint
+        self.setAttribute(
+            QtCore.Qt.WidgetAttribute.WA_TranslucentBackground, True
         )
+        self.setAttribute(QtCore.Qt.WidgetAttribute.WA_AcceptTouchEvents, True)
+        self.setTabletTracking(True)
         self.fs_sensors_list.itemClicked.connect(self.handle_sensor_clicked)
+        self.fs_sensors_list.itemClicked
         self.fs_back_button.clicked.connect(self.request_back)
 
     @QtCore.pyqtSlot(dict, name="handle_available_fil_sensors")
@@ -56,6 +57,7 @@ class SensorsWindow(QtWidgets.QWidget):
     def handle_fil_state_change(
         self, sensor_name: str, parameter: str, value: bool
     ) -> None:
+        print("on handle fil state")
         if sensor_name in self.sensor_list:
             state = SensorWidget.FilamentState(value)
             _split = sensor_name.split(" ")
@@ -68,13 +70,18 @@ class SensorsWindow(QtWidgets.QWidget):
                 if isinstance(_item, SensorWidget) and hasattr(
                     _item, "change_fil_sensor_state"
                 ):
-                    self.change_fil_sensor_state.connect(
-                        _item.change_fil_sensor_state
+                    _item.change_fil_sensor_state(
+                        SensorWidget.FilamentState.PRESENT
                     )
-                    self.change_fil_sensor_state.emit(state)
-                    self.change_fil_sensor_state.disconnect()
                     _item.repaint()
-
+            elif parameter == "filament_missing":
+                if isinstance(_item, SensorWidget) and hasattr(
+                    _item, "change_fil_sensor_state"
+                ):
+                    _item.change_fil_sensor_state(
+                        SensorWidget.FilamentState.MISSING
+                    )
+                    _item.repaint()
             elif parameter == "enabled":
                 if _item and isinstance(_item, SensorWidget):
                     self.run_gcode_signal.emit(
@@ -84,7 +91,8 @@ class SensorsWindow(QtWidgets.QWidget):
     @QtCore.pyqtSlot(QtWidgets.QListWidgetItem, name="handle_sensor_clicked")
     def handle_sensor_clicked(self, sensor: QtWidgets.QListWidgetItem) -> None:
         _item = self.fs_sensors_list.itemWidget(sensor)
-
+        # FIXME: This is just not working
+        _item.toggle_button.state = ~_item.toggle_button.state
         if _item and isinstance(_item, SensorWidget):
             self.run_gcode_signal.emit(_item.toggle_sensor_gcode_command)
 
@@ -99,6 +107,9 @@ class SensorsWindow(QtWidgets.QWidget):
         _list_item.setFlags(~QtCore.Qt.ItemFlag.ItemIsEditable)
         _list_item.setSizeHint(
             QtCore.QSize(self.fs_sensors_list.contentsRect().width(), 80)
+        )
+        _item_widget.toggle_button.stateChange.connect(
+            lambda: self.fs_sensors_list.itemClicked.emit(_item_widget)
         )
 
         self.fs_sensors_list.setItemWidget(_list_item, _item_widget)
@@ -176,7 +187,6 @@ class SensorsWindow(QtWidgets.QWidget):
             QtCore.Qt.LayoutDirection.LeftToRight
         )
         self.fs_sensors_list.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
-        self.fs_sensors_list.setAutoFillBackground(False)
         self.fs_sensors_list.setObjectName("fs_sensors_list")
         self.fs_sensors_list.setViewMode(
             self.fs_sensors_list.ViewMode.ListMode
@@ -185,15 +195,7 @@ class SensorsWindow(QtWidgets.QWidget):
             QtCore.Qt.AlignmentFlag.AlignHCenter
             | QtCore.Qt.AlignmentFlag.AlignVCenter
         )
-        self.fs_sensors_list.setMovement(self.fs_sensors_list.Movement.Static)
         self.fs_sensors_list.setFlow(self.fs_sensors_list.Flow.TopToBottom)
-        self.fs_sensors_list.setAttribute(
-            QtCore.Qt.WidgetAttribute.WA_TranslucentBackground, True
-        )
-        self.fs_sensors_list.setWindowFlags(
-            self.fs_sensors_list.windowFlags()
-            | QtCore.Qt.WindowType.FramelessWindowHint
-        )
         self.fs_sensors_list.setFrameStyle(0)
         palette = self.fs_sensors_list.palette()
         palette.setColor(
@@ -212,7 +214,6 @@ class SensorsWindow(QtWidgets.QWidget):
             | QtCore.Qt.AlignmentFlag.AlignVCenter,
         )
         self.content_vertical_layout.addSpacing(5)
-
         self.setLayout(self.content_vertical_layout)
         self.retranslateUi()
 
