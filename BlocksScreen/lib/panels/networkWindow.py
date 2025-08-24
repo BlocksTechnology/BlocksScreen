@@ -1,13 +1,22 @@
+from ast import Return
 import typing
 from functools import partial
 
 from PyQt6 import QtCore, QtGui, QtWidgets
-from PyQt6.QtCore import Qt, pyqtSignal, pyqtSlot
+from PyQt6.QtCore import Qt, pyqtSignal, pyqtSlot, QEvent
 from PyQt6.QtGui import QPaintEvent
 from PyQt6.QtWidgets import QListWidgetItem, QStackedWidget, QWidget
 
+# from BlocksScreen.lib.network import SdbusNetworkManager
 from lib.ui.wifiConnectivityWindow_ui import Ui_wifi_stacked_page
 from lib.network import SdbusNetworkManagerDummy
+
+from lib.utils.list_button import ListCustomButton
+
+from lib.utils.toggleAnimatedButton import ToggleAnimatedButton
+
+from lib.panels.widgets.popupDialogWidget import Popup
+import subprocess
 
 # TEST: Network saving, Adding new Network connections, Toggle on and off hotspot, etc....
 # TODO: Complete this panel
@@ -28,40 +37,123 @@ class NetworkControlWindow(QStackedWidget):
         name="new_connection_result",
     )
 
-    request_signal_strength = pyqtSignal(str, name="network_signal_strength")
-
     def __init__(self, parent: QWidget, /) -> None:
         super(NetworkControlWindow, self).__init__(parent)
+
         self.background: QtGui.QPixmap | None = None
         self.panel = Ui_wifi_stacked_page()
         self.panel.setupUi(self)
+        self.popup = Popup(self)
+
         self.panel.network_list_widget.setLayoutDirection(
             Qt.LayoutDirection.LeftToRight
         )
         # * Instantiate the network control class sdbus
         self.sdbus_network = SdbusNetworkManagerDummy()
         self.current_ip_address: typing.List | None = []
+
+        # * i reelly dont know where to put this, so ya
+
+        current_ssuid = self.sdbus_network.get_current_ssid()
+
+        self.panel.netlist_ip.setText(
+            str(self.sdbus_network.get_current_ip_addr())
+        )
+        self.panel.netlist_ssuid.setText(current_ssuid)
+
+        self.panel.netlist_security.setText(
+            str(
+                self.sdbus_network.get_security_type_by_ssid(current_ssuid)
+            ).upper()
+        )
+        self.panel.netlist_strength.setText(
+            str(
+                self.sdbus_network.get_connection_signal_by_ssid(current_ssuid)
+            )
+            + "%"
+        )
+
+        self.panel.wifi_button.setLeftFontSize(20)
+        self.panel.hotspot_button.setLeftFontSize(20)
+
+        self.panel.wifi_button.clicked.connect(
+            partial(self.setCurrentIndex, 1)
+        )
+
+        self.panel.hotspot_button.clicked.connect(
+            partial(self.setCurrentIndex, 4)
+        )
+
+        text = self.sdbus_network.get_current_ip_addr()
+        if text is None:
+            text = "No IP Address"
+        self.panel.netlist_ip.setProperty("text_color", "white")
+        self.panel.netlist_ip.setText(
+            f"IP: {text[0]}"
+        )  # Set the current ip address on the network list page
+
+        self.panel.hotspot_password_input_field.installEventFilter(self)
+
+        QtWidgets.QScroller.grabGesture(
+            self.panel.network_list_widget,
+            QtWidgets.QScroller.ScrollerGestureType.TouchGesture,
+        )
+        QtWidgets.QScroller.grabGesture(
+            self.panel.network_list_widget,
+            QtWidgets.QScroller.ScrollerGestureType.LeftMouseButtonGesture,
+        )
+
+        self.networkdead = False
+        if self.networkdead:
+            self.panel.line.hide()
+            self.panel.netlist_ssuid.hide()
+            self.panel.ip_frame.hide()
+            self.panel.stregth_frame.hide()
+            self.panel.signal_frame.hide()
+        else:
+            self.panel.line.show()
+            self.panel.netlist_ssuid.show()
+            self.panel.ip_frame.show()
+            self.panel.stregth_frame.show()
+            self.panel.signal_frame.show()
+            self.panel.label_2.hide()
+
+        if self.sdbus_network.wifi_enabled():
+            self.panel.Togglewifi.state = ToggleAnimatedButton.State.ON
+            self.panel.Togglehot.state = ToggleAnimatedButton.State.OFF
+        else:
+            self.panel.Togglewifi.state = ToggleAnimatedButton.State.OFF
+
+        self.panel.wifi_backButton.clicked.connect(
+            partial(self.setCurrentIndex, 0)
+        )
+
+        self.panel.Togglewifi.clicked.connect(
+            lambda: self.wifihotspot_handler("wifi")
+        )
+        self.panel.Togglehot.clicked.connect(
+            lambda: self.wifihotspot_handler("hotspot")
+        )
+
         # * Network List
-        self.panel.network_list_widget.itemClicked.connect(self.ssid_item_clicked)
-        self.panel.wifi_backButton.clicked.connect(self.hide)
-        self.panel.rescan_button.clicked.connect(self.sdbus_network.rescan_networks)
+        self.panel.network_list_widget.itemClicked.connect(
+            self.ssid_item_clicked
+        )
+        self.panel.network_backButton.clicked.connect(self.hide)
+        self.panel.rescan_button.clicked.connect(
+            self.sdbus_network.rescan_networks
+        )
         self.panel.rescan_button.clicked.connect(
             self.add_ssid_network_entry
         )  # To Update the network list
-        self.panel.wifi_toggle_button.clicked.connect(
-            partial(
-                self.sdbus_network.toggle_wifi,
-                toggle=not bool(self.sdbus_network.wifi_enabled()),
-            )
-        )  # Turn off if enabled/Turn on if disabled
+
         self.request_network_scan.connect(self.rescan_networks)
-        self.panel.call_hotspot_button.clicked.connect(
-            partial(self.setCurrentIndex, 3)
-        )  # Go to hotspot settings page
         # * Add Network page widget
-        self.panel.add_network_validation_button.clicked.connect(self.add_network)
+        self.panel.add_network_validation_button.clicked.connect(
+            self.add_network
+        )
         self.panel.add_network_page_backButton.clicked.connect(
-            partial(self.setCurrentIndex, 0)
+            partial(self.setCurrentIndex, 1)
         )
         self.panel.add_network_password_view.pressed.connect(
             partial(
@@ -78,12 +170,11 @@ class NetworkControlWindow(QStackedWidget):
 
         # * Saved Connection page widget
         self.panel.saved_connection_back_button.clicked.connect(
-            partial(self.setCurrentIndex, 0)
+            partial(self.setCurrentIndex, 1)
         )  # Back button on this page always leads to the network list page
         self.delete_network_signal.connect(self.delete_network)
         self.panel.saved_connection_change_password_field.returnPressed.connect(
-            partial(
-                self.sdbus_network.update_connection_settings,
+            lambda: self.update_network(
                 ssid=self.panel.saved_connection_network_name.text(),
                 password=self.panel.saved_connection_change_password_field.text(),
                 new_ssid=None,
@@ -95,7 +186,7 @@ class NetworkControlWindow(QStackedWidget):
                 QtWidgets.QLineEdit.EchoMode.Normal,
             )
         )
-        self.panel.saved_connection_change_password_view.pressed.connect(
+        self.panel.saved_connection_change_password_view.released.connect(
             partial(
                 self.panel.saved_connection_change_password_field.setEchoMode,
                 QtWidgets.QLineEdit.EchoMode.Password,
@@ -103,45 +194,81 @@ class NetworkControlWindow(QStackedWidget):
         )
 
         # * Hotspot page
-        self.panel.hotspot_toggle.clicked.connect(self.sdbus_network.toggle_hotspot)
-        self.panel.hotspot_back_button.clicked.connect(partial(self.setCurrentIndex, 0))
+
+        self.panel.hotspot_back_button.clicked.connect(
+            partial(self.setCurrentIndex, 0)
+        )
 
         self.panel.hotspot_name_input_field.returnPressed.connect(
-            partial(
-                self.sdbus_network.update_connection_settings,
+            lambda: self.update_network(
                 ssid=self.sdbus_network.hotspot_ssid,
                 password=None,
                 new_ssid=self.panel.hotspot_name_input_field.text(),
             )
-        )  # Automatically create a new hotspot connection when a new hotspot name is inserted and enter is pressed
+        )
+        # Automatically create a new hotspot connection when a new hotspot name is inserted and enter is pressed
         self.panel.hotspot_password_input_field.returnPressed.connect(
-            partial(
-                self.sdbus_network.update_connection_settings,
+            lambda: self.update_network(
                 ssid=self.sdbus_network.hotspot_ssid,
                 password=self.panel.hotspot_password_input_field.text(),
                 new_ssid=None,
             )
         )
+
+        self.panel.hotspot_password_input_field.setHidden(True)
+
         self.panel.hotspot_password_view_button.pressed.connect(
-            partial(
-                self.panel.hotspot_password_input_field.setEchoMode,
-                QtWidgets.QLineEdit.EchoMode.Normal,
-            )
+            partial(self.panel.hotspot_password_input_field.setHidden, False)
         )
         self.panel.hotspot_password_view_button.released.connect(
-            partial(
-                self.panel.hotspot_password_input_field.setEchoMode,
-                QtWidgets.QLineEdit.EchoMode.Password,
-            )
+            partial(self.panel.hotspot_password_input_field.setHidden, True)
         )
+
+        self.panel.hotspot_name_input_field.setText(
+            str(self.sdbus_network.get_hotspot_ssid())
+        )
+        self.panel.hotspot_password_input_field.setText(
+            str(self.sdbus_network.hotspot_password)
+        )
+
         self.new_connection_result.connect(self.process_new_connection_result)
 
-        # * Set ip address boxes with the corresponding ip
-        self.new_ip_signal.connect(partial(self.panel.hotspot_info_ip_field.setText))
         # * request a initial network scan
         self.request_network_scan.emit()
 
         self.hide()
+
+    def wifihotspot_handler(self, source: str):
+        """Toggle Wi-Fi and Hotspot so only one is active at a time."""
+
+        wifi_enabled = self.sdbus_network.wifi_enabled()
+        hotspot_enabled = self.sdbus_network.hotspot_enabled()
+
+        if source == "wifi":
+            self.sdbus_network.toggle_wifi(not wifi_enabled)
+            if not wifi_enabled and hotspot_enabled:
+                self.sdbus_network.toggle_hotspot(False)
+
+        elif source == "hotspot":
+            self.sdbus_network.toggle_hotspot(not hotspot_enabled)
+            if not hotspot_enabled and wifi_enabled:
+                self.sdbus_network.toggle_wifi(False)
+
+        # Refresh states after changes
+        wifi_enabled = self.sdbus_network.wifi_enabled()
+        hotspot_enabled = self.sdbus_network.hotspot_enabled()
+
+        # Update UI states
+        self.panel.Togglewifi.state = (
+            ToggleAnimatedButton.State.ON
+            if wifi_enabled
+            else ToggleAnimatedButton.State.OFF
+        )
+        self.panel.Togglehot.state = (
+            ToggleAnimatedButton.State.ON
+            if hotspot_enabled
+            else ToggleAnimatedButton.State.OFF
+        )
 
     @pyqtSlot(str, name="delete_network")
     def delete_network(self, ssid: str) -> None:
@@ -178,18 +305,36 @@ class NetworkControlWindow(QStackedWidget):
         """
         # Check if a password was inserted
 
-        if self.panel.add_network_password_field.text() is None:
+        if not self.panel.add_network_password_field.text():
             return
         _network_psk = self.panel.add_network_password_field.text()
 
         _add_network_result: typing.Dict = self.sdbus_network.add_wifi_network(
             ssid=self.panel.add_network_network_label.text(), psk=_network_psk
         )  # Add the network connection
-        # Send a signal with the result of adding a new network
-        if ("error" or "exception" or "failure") in _add_network_result["status"]:
-            self.new_connection_result[str].emit(str(_add_network_result["msg"]))
+        # Send a signal with the result of adding a new networkx
+
+        if any(
+            word in _add_network_result["status"]
+            for word in ("error", "exception", "failure")
+        ):
+            self.new_connection_result[str].emit(
+                str(_add_network_result["msg"])
+            )
+            self.popup.new_message(
+                message_type=Popup.MessageType.ERROR,
+                message=f"Could not connect to '{self.panel.add_network_network_label.text()}'\n Please check your password or try again later.",
+            )
+
         else:
-            self.new_connection_result.emit()
+            self.new_connection_result[str].emit(
+                str(_add_network_result["msg"])
+            )
+            self.popup.new_message(
+                message_type=Popup.MessageType.INFO,
+                message=f"Connected to '{self.panel.add_network_network_label.text()}' successfully",
+            )
+            self.setCurrentIndex(0)
 
     @pyqtSlot(QListWidgetItem, name="ssid_item_clicked")
     def ssid_item_clicked(self, item: QListWidgetItem) -> None:
@@ -198,10 +343,14 @@ class NetworkControlWindow(QStackedWidget):
         Args:
             item (QListWidgetItem): The list entry that was clicked
         """
-        _current_item: QWidget | None = self.panel.network_list_widget.itemWidget(item)
+        _current_item: QWidget | None = (
+            self.panel.network_list_widget.itemWidget(item)
+        )
 
         if _current_item is not None:
-            _current_ssid_name = _current_item.findChild(QtWidgets.QLabel).text()
+            _current_ssid_name = _current_item.findChild(
+                QtWidgets.QLabel
+            ).text()
             if (
                 _current_ssid_name in self.sdbus_network.get_saved_ssid_names()
             ):  # Network already saved go to the information page
@@ -215,67 +364,182 @@ class NetworkControlWindow(QStackedWidget):
                     str(_current_ssid_name)
                 )  # Add the network name to the title
 
+    def update_network(
+        self, ssid: str, password: str | None, new_ssid: str | None
+    ) -> None:
+        _update_network_result: typing.Dict = (
+            self.sdbus_network.update_connection_settings(
+                ssid=ssid,
+                password=password,
+                new_ssid=new_ssid,
+            )
+        )
+
+        if any(
+            word in _update_network_result["status"]
+            for word in ("error", "exception", "failure")
+        ):
+            self.new_connection_result[str].emit(
+                str(_update_network_result["msg"])
+            )
+            self.popup.new_message(
+                message_type=Popup.MessageType.ERROR,
+                message=f"Could not update the settings for '{ssid}'.",
+            )
+
+        else:
+            self.new_connection_result[str].emit(
+                str(_update_network_result["msg"])
+            )
+            self.popup.new_message(
+                message_type=Popup.MessageType.INFO,
+                message=f"Network settings for '{ssid}' updated successfully.",
+            )
+
+    def eventFilter(self, obj, event):
+        if (
+            obj == self.panel.hotspot_password_input_field
+            and event.type() == QEvent.Type.MouseButtonPress
+        ):
+            self.panel.hotspot_password_input_field.setFocus()
+            # subprocess.Popen(["onboard"])  # Open the virtual keyboard
+        return super().eventFilter(obj, event)
+
     def add_ssid_network_entry(self) -> None:
-        """Add scanned networks entries to listWidget"""
-        index = 0
+        """Add scanned networks: saved go to network_list_widget, unsaved to network_list_widget_."""
         self.panel.network_list_widget.clear()
-        for item in self.sdbus_network.get_available_networks():
-            if not isinstance(item, dict):
+        self.panel.network_list_widget.setSpacing(35)
+
+        saved_ssids = set(self.sdbus_network.get_saved_ssid_names())
+
+        networks = []
+
+        available_networks = self.sdbus_network.get_available_networks()[
+            0
+        ]  # unpack tuple
+        for item in available_networks:
+            if not isinstance(item, dict) or "ssid" not in item:
                 continue
-            if (
-                "ssid" in item.keys() and item is not None
-            ):  # REFACTOR: Can be better implemented
-                results = self.configure_network_entry(str(item["ssid"]))
-                # _item, _item_widget = self.configure_network_entry(str(item["ssid"]))
-                if results is not None and isinstance(results, tuple):
-                    _item, _item_widget = results
-                    if (_item and _item_widget) is not None:
-                        self.panel.network_list_widget.addItem(_item)
-                        self.panel.network_list_widget.setItemWidget(
-                            _item, _item_widget
-                        )
-                        index += 1
 
-    @staticmethod
-    def configure_network_entry(
+            ssid = str(item["ssid"])
+            signal = self.sdbus_network.get_connection_signal_by_ssid(ssid)
+            try:
+                signal_value = int(signal)
+            except (ValueError, TypeError):
+                signal_value = 0
+
+            is_saved = ssid in saved_ssids
+
+            networks.append(
+                {"ssid": ssid, "signal": signal_value, "is_saved": is_saved}
+            )
+
+        saved_networks = sorted(
+            [n for n in networks if n["is_saved"]], key=lambda x: -x["signal"]
+        )
+        unsaved_networks = sorted(
+            [n for n in networks if not n["is_saved"]],
+            key=lambda x: -x["signal"],
+        )
+
+        # ---- Add Saved Networks ----
+        for net in saved_networks:
+            self._add_network_button(
+                ssid=net["ssid"],
+                signal=net["signal"],
+                right_text="Saved",
+                target_widget=self.panel.network_list_widget,
+            )
+
+        # ---- Separator Between Saved and Unsaved ----
+        if saved_networks and unsaved_networks:
+            separator_item = QtWidgets.QListWidgetItem()
+            separator_widget = QtWidgets.QLabel()
+            separator_widget.setStyleSheet(
+                "background-color: gray; margin: 1px 1px; min-height: 1px; max-height: 1px;"
+            )
+            separator_item.setSizeHint(
+                QtCore.QSize(0, 2)
+            )  # Total vertical space: 2px
+            self.panel.network_list_widget.addItem(separator_item)
+            self.panel.network_list_widget.setItemWidget(
+                separator_item, separator_widget
+            )
+
+        # ---- Add Unsaved Networks ----
+        for net in unsaved_networks:
+            self._add_network_button(
+                ssid=net["ssid"],
+                signal=net["signal"],
+                right_text="Protected",
+                target_widget=self.panel.network_list_widget,
+            )
+
+        # Add a dummy blank space at the end if there are any unsaved networks
+        if unsaved_networks:
+            spacer_item = QtWidgets.QListWidgetItem()
+            spacer_widget = QtWidgets.QWidget()
+            spacer_widget.setFixedHeight(10)  # Adjust height as needed
+            spacer_item.setSizeHint(spacer_widget.sizeHint())
+            self.panel.network_list_widget.addItem(spacer_item)
+
+        self.panel.network_list_widget.setItemWidget(
+            spacer_item, spacer_widget
+        )
+
+    def _add_network_button(
+        self,
         ssid: str,
-    ) -> typing.Tuple[QtWidgets.QListWidgetItem, QWidget] | None:
-        """Creates a QListWidgetItem to be inserted on the QListWidget with a network information.
+        signal: int,
+        right_text: str,
+        target_widget: QtWidgets.QListWidget,
+    ):
+        """Helper to create and insert a network button into the given list widget."""
+        if signal >= 70:
+            wifi_pixmap = QtGui.QPixmap(
+                ":/network/media/btn_icons/4bar_wifi.svg"
+            )
+        elif signal >= 40:
+            wifi_pixmap = QtGui.QPixmap(
+                ":/network/media/btn_icons/3bar_wifi.svg"
+            )
+        elif signal >= 20:
+            wifi_pixmap = QtGui.QPixmap(
+                ":/network/media/btn_icons/2bar_wifi.svg"
+            )
+        else:
+            wifi_pixmap = QtGui.QPixmap(
+                ":/network/media/btn_icons/1bar_wifi.svg"
+            )
 
-        Args:
-            ssid (str): String with the ssid of the network
+        button = ListCustomButton(parent=target_widget)
+        button.setText(ssid)
+        button.setRightText(right_text)
+        button.setPixmap(
+            QtGui.QPixmap(":/arrow_icons/media/btn_icons/right_arrow.svg")
+        )
+        button.setSecondPixmap(wifi_pixmap)
+        button.setFixedHeight(80)
+        button.setLeftFontSize(17)
+        button.setRightFontSize(12)
 
-        Returns:
-            typing.Tuple[QtWidgets.QListWidgetItem, QWidget] | None: None if the argument is invalid, not a string
-        """
-        if not isinstance(ssid, str):
-            return None
-        # REFACTOR: this code is pretty bad
-        _list_item = QtWidgets.QListWidgetItem()
-        _list_item_widget = QWidget()
-        _item_layout = QtWidgets.QHBoxLayout()
-        _item_text = QtWidgets.QLabel()
-        _item_button = QtWidgets.QPushButton()
+        button.clicked.connect(
+            lambda checked, s=ssid: self.handle_button_click(s)
+        )
 
-        _item_button.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
-        # _item_button.setStyleSheet("QPushButton{background:Transparent;}")
+        item = QtWidgets.QListWidgetItem()
+        item.setSizeHint(button.sizeHint())
+        target_widget.addItem(item)
+        target_widget.setItemWidget(item, button)
 
-        _item_text.setText(str(ssid))
-        _item_layout.addWidget(_item_text)
-        _item_layout.addWidget(_item_button)
-        _list_item_widget.setLayout(_item_layout)
-        _list_item.setSizeHint(_list_item_widget.sizeHint())
-        _item_button.setText(">")
-        _size = _list_item_widget.geometry()
-        _button_size = QtCore.QSize(50, 30)
-        _item_button.setFixedSize(_button_size)
-        _item_button.setBackgroundRole(QtGui.QPalette.ColorRole.Highlight)
+    def handle_button_click(self, ssid: str):
+        if ssid in self.sdbus_network.get_saved_ssid_names():
+            self.setCurrentIndex(3)
+            self.panel.saved_connection_network_name.setText(str(ssid))
 
-        _list_item.setFlags(
-            ~Qt.ItemFlag.ItemIsEditable
-        )  # ~ is for making the item not editable
-
-        return _list_item, _list_item_widget
+        else:
+            self.setCurrentIndex(2)
+            self.panel.add_network_network_label.setText(str(ssid))
 
     ####################################################################################
     # *     Reimplemented methods from parent class | Page index control methods     * #
@@ -320,15 +584,15 @@ class NetworkControlWindow(QStackedWidget):
             return
 
         _cur = self.currentIndex()
-        if index == 0:  # Main page
+        if index == 1:  # Main page
             self.panel.network_list_widget.clear()
             self.add_ssid_network_entry()  # Add network entries to the list
-        elif index == 1:  # Add network page
+        elif index == 2:  # Add network page
             self.panel.add_network_password_field.clear()
             self.panel.add_network_password_field.setPlaceholderText(
                 "Insert password here, press enter when finished."
             )
-        elif index == 2:  # Network information page
+        elif index == 3:  # Network information page
             self.panel.saved_connection_change_password_field.clear()
             self.panel.saved_connection_change_password_field.setPlaceholderText(
                 "Change network password"
@@ -343,10 +607,6 @@ class NetworkControlWindow(QStackedWidget):
             self.panel.saved_connection_signal_strength_info_frame.setText(
                 f"{self.sdbus_network.get_connection_signal_by_ssid(self.panel.saved_connection_network_name.text())}%"
             )
-
-        elif index == 3:  # Hotspot settings page
-            self.panel.hotspot_info_ip_field.clear()
-            self.panel.hotspot_name_input_field.clear()
 
         self.update()
         return super().setCurrentIndex(index)
@@ -386,7 +646,7 @@ class NetworkControlWindow(QStackedWidget):
 
         self.panel.network_list_widget.clear()
         self.setCurrentIndex(0)
-        _parent_size= self.parent().size() 
+        _parent_size = self.parent().size()
         self.setGeometry(0, 0, _parent_size.width(), _parent_size.height())
         self.updateGeometry()
         self.update()
