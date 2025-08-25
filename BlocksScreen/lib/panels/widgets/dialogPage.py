@@ -20,36 +20,38 @@ class DialogPage(QtWidgets.QDialog):
             QtCore.Qt.WidgetAttribute.WA_TranslucentBackground, True
         )  # Make background transparent
 
+        app_instance = QtWidgets.QApplication.instance()
+        self.main_window = (
+            app_instance.activeWindow() if app_instance else None
+        )
+        if self.main_window is None and app_instance:
+            for widget in app_instance.allWidgets():
+                if isinstance(widget, QtWidgets.QMainWindow):
+                    self.main_window = widget
+
+        offset = 0.7
+        self.testwidth = int(self.main_window.width() * offset)
+        self.testheight = int(self.main_window.height() * offset)
+
         self.setupUI()
-        self.repaint()
 
     def set_message(self, message: str) -> None:
         self.label.setText(message)
 
     def geometry_calc(self) -> None:
-        app_instance = QtWidgets.QApplication.instance()
-        main_window = app_instance.activeWindow() if app_instance else None
-        if main_window is None and app_instance:
-            for widget in app_instance.allWidgets():
-                if isinstance(widget, QtWidgets.QMainWindow):
-                    main_window = widget
-
-        x_offset = 0.7
-        y_offset = 0.7
-
-        width = int(main_window.width() * x_offset)
-        height = int(main_window.height() * y_offset)
-        self.testwidth = width
-        self.testheight = height
-        x = int(main_window.geometry().x() + (main_window.width() - width) / 2)
-        y = int(
-            main_window.geometry().y() + (main_window.height() - height) / 2
+        x = int(
+            self.main_window.geometry().x()
+            + (self.main_window.width() - self.testwidth) / 2
         )
 
-        self.setGeometry(x, y, width, height)
+        y = int(
+            self.main_window.geometry().y()
+            + (self.main_window.height() - self.testheight) / 2
+        )
+
+        self.setGeometry(x, y, self.testwidth, self.testheight)
 
     def paintEvent(self, event: QtGui.QPaintEvent) -> None:
-        self.geometry_calc()
         painter = QtGui.QPainter(self)
         painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing, True)
 
