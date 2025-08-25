@@ -167,7 +167,6 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
                 f"Unexpected error occurred when trying to acquire oneshot token: {e}"
             )
             return False
-
         _url = f"ws://localhost:7125/websocket?token={_oneshot_token}"
         self.ws = websocket.WebSocketApp(
             _url,

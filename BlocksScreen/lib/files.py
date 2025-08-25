@@ -85,7 +85,6 @@ class Files(QtCore.QObject):
             "slicer": str,
         }
         _file_metadata = self.files_metadata.get(str(filename))
-        print(_file_metadata)
         if not _file_metadata:
             return
         _thumbnails = _file_metadata.get("thumbnails", {})

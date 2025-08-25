@@ -37,14 +37,43 @@ class ConfirmWidget(QtWidgets.QWidget):
 
         _total_filament = filedata.get("filament_total")
         _estimated_time = filedata.get("estimated_time")
+
+        if isinstance(_estimated_time, str):
+            seconds = 0
+        else:
+            seconds = _estimated_time
+
+        _estimated_time = self.estimate_print_time(seconds)
+
+
         self.cf_info.setText(
             "Total Filament:"
             + str(_total_filament)
             + "\n"
             + "Slicer time: "
-            + str(_estimated_time)
+            + str(_estimated_time[0])
+            + " days "
+            + str(_estimated_time[1])
+            + " hours "
+            + str(_estimated_time[2])
+            + " minutes "
+            + str(_estimated_time[3])
+            + " seconds"
         )
         self.repaint()
+    def estimate_print_time(self, seconds: int) -> list:
+        """Convert time in seconds format to days, hours, minutes, seconds.
+
+        Args:
+            seconds (int): Seconds
+
+        Returns:
+            list: list that contains the converted information [days, hours, minutes, seconds]
+        """
+        num_min, seconds = divmod(seconds, 60)
+        num_hours, minutes = divmod(num_min, 60)
+        days, hours = divmod(num_hours, 24)
+        return [days, hours, minutes, seconds]
 
     def paintEvent(self, a0: QtGui.QPaintEvent) -> None:
         _scene = QtWidgets.QGraphicsScene()
@@ -288,7 +317,7 @@ class ConfirmWidget(QtWidgets.QWidget):
         self.cf_content_vertical_layout.addWidget(
             self.cf_thumbnail,
             0,
-            QtCore.Qt.AlignmentFlag.AlignHCenter
+            QtCore.Qt.AlignmentFlag.AlignRight
             | QtCore.Qt.AlignmentFlag.AlignVCenter,
         )
         self.verticalLayout_4.addLayout(self.cf_content_vertical_layout)
