@@ -1,4 +1,5 @@
 from PyQt6 import QtCore, QtGui, QtWidgets
+from lib.utils.blocks_button import BlocksCustomButton
 
 
 class DialogPage(QtWidgets.QDialog):
@@ -58,14 +59,23 @@ class DialogPage(QtWidgets.QDialog):
         rect = self.rect()
         radius = 20  # Adjust the radius for rounded corners
 
-        # Set background color
-        painter.setBrush(
-            QtGui.QBrush(QtGui.QColor(63, 63, 63))
-        )  # Semi-transparent dark gray
+        # Convert the QPoint returned by rect.center() to a QPointF
+        center_f = QtCore.QPointF(rect.center())
+
+        # Create a radial gradient
+        gradient = QtGui.QRadialGradient(
+            center_f, max(rect.width(), rect.height())
+        )
+        gradient.setColorAt(
+            0.0, QtGui.QColor(50, 50, 50)
+        )  # Light gray in the center
+        gradient.setColorAt(1.0, QtGui.QColor(0, 0, 0))  # Black on the outside
+
+        painter.setBrush(QtGui.QBrush(gradient))
 
         # Set border color and width
         border_color = QtGui.QColor(128, 128, 128)  # Gray color
-        border_width = 5  # Reduced border thickness
+        border_width = 1  # Reduced border thickness
 
         pen = QtGui.QPen()
         pen.setCapStyle(QtCore.Qt.PenCapStyle.RoundCap)
@@ -104,12 +114,12 @@ class DialogPage(QtWidgets.QDialog):
 
         # Adjust button positions on resize
         self.confirm_button.setGeometry(
-            int(0), self.height() - 70, int(self.width() / 2), 70
+            int(15), self.height() - 110, int(self.width() / 2) - 40, 70
         )
         self.cancel_button.setGeometry(
-            int(self.width() / 2),
-            self.height() - 70,
-            int(self.width() / 2),
+            int(self.width() / 2) + 15,
+            self.height() - 110,
+            int(self.width() / 2) - 40,
             70,
         )
 
@@ -127,44 +137,23 @@ class DialogPage(QtWidgets.QDialog):
         self.label.setWordWrap(True)
 
         # Create Confirm and Cancel buttons
-        self.confirm_button = QtWidgets.QPushButton("Confirm", self)
-        self.cancel_button = QtWidgets.QPushButton("Cancel", self)
+        self.confirm_button = BlocksCustomButton(self)
+        self.cancel_button = BlocksCustomButton(self)
+
+        self.confirm_button.setText("Confirm")
+        self.cancel_button.setText("Cancel")
 
         # Set button styles
         button_font = QtGui.QFont()
-        button_font.setPointSize(14)
+        button_font.setPointSize(20)
         self.confirm_button.setFont(button_font)
         self.cancel_button.setFont(button_font)
 
-        # Apply styles for rounded corners
-        self.confirm_button.setStyleSheet(
-            """
-            background-color: #4CAF50;
-            color: white;
-            border: none;
-            border-bottom-left-radius: 20px;
-            padding: 10px;
-            """
+        self.confirm_button.setPixmap(
+            QtGui.QPixmap(":/dialog/media/btn_icons/yes.svg")
         )
-        self.cancel_button.setStyleSheet(
-            """
-            background-color: #F44336;
-            color: white;
-            border: none;
-            border-bottom-right-radius: 20px;
-            padding: 10px;
-            """
-        )
-
-        # Position buttons
-        self.confirm_button.setGeometry(
-            int(0), self.height() - 70, int(self.width() / 2), 70
-        )
-        self.cancel_button.setGeometry(
-            int(self.width() / 2),
-            self.height() - 70,
-            int(self.width() / 2),
-            70,
+        self.cancel_button.setPixmap(
+            QtGui.QPixmap(":/dialog/media/btn_icons/no.svg")
         )
 
         # Connect button signals
