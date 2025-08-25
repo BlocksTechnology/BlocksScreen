@@ -73,14 +73,6 @@ class DialogPage(QtWidgets.QDialog):
 
         painter.setBrush(QtGui.QBrush(gradient))
 
-        # Set border color and width
-        border_color = QtGui.QColor(128, 128, 128)  # Gray color
-        border_width = 1  # Reduced border thickness
-
-        pen = QtGui.QPen()
-        pen.setCapStyle(QtCore.Qt.PenCapStyle.RoundCap)
-        painter.setPen(QtGui.QPen(border_color, border_width))
-
         painter.drawRoundedRect(rect, radius, radius)
 
         painter.end()
