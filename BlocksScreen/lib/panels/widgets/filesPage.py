@@ -120,7 +120,7 @@ class FilesPage(QtWidgets.QWidget):
         )
 
         for item in sorted_list:
-            self.button = ListCustomButton(self)
+            self.button = ListCustomButton()
             self.button.setText(str(item["path"][:-6]))
             self.request_file_info.emit(item["path"])
 
