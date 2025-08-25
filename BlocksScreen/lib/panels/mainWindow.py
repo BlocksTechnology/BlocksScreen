@@ -3,6 +3,7 @@ import typing
 from collections import deque
 from functools import partial
 
+from configfile import BlocksScreenConfig
 import events
 from lib.files import Files
 from lib.machine import MachineControl
@@ -15,20 +16,15 @@ from lib.panels.utilitiesTab import UtilitiesTab
 from lib.panels.widgets.connectionPage import ConnectionPage
 from lib.panels.widgets.popupDialogWidget import Popup
 from lib.printer import Printer
-
-# * UI
 from lib.ui.mainWindow_ui import Ui_MainWindow  # With header
 
 # from lib.ui.mainWindow_v2_ui import Ui_MainWindow # No header
-# * Resources
 from lib.ui.resources.background_resources_rc import *
 from lib.ui.resources.graphic_resources_rc import *
 from lib.ui.resources.icon_resources_rc import *
 from lib.ui.resources.main_menu_resources_rc import *
 from lib.ui.resources.system_resources_rc import *
 from lib.ui.resources.top_bar_resources_rc import *
-
-# * PyQt6 imports
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 _logger = logging.getLogger(name="logs/BlocksScreen.log")
@@ -50,11 +46,18 @@ class MainWindow(QtWidgets.QMainWindow):
         name="visibilityChange_networkPanel"
     )
 
-    def __init__(self):
+    def __init__(self, config):
         super(MainWindow, self).__init__()
+        
+        self.config: BlocksScreenConfig = config
+        
+        
+        if not self.config.has_section("server"): 
+            
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
-        # @ Force main panel to be displayed on startup
+        
+
         self.ui.main_content_widget.setCurrentIndex(0)
         self.popup = Popup(self)
         self.ws = MoonWebSocket(self)

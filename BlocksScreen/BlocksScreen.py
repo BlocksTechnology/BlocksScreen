@@ -4,6 +4,7 @@ import logging
 import sys
 import typing
 
+from configfile import BlocksScreenConfig, get_configparser
 import helper_methods as helper_methods
 import logger
 from lib.panels.mainWindow import MainWindow
@@ -65,7 +66,8 @@ def run():
     print(f"{RED} STARTING BLOCKS SCREEN {RESET}")
     setup_app_loggers()
     BlocksScreen = QtWidgets.QApplication([])
-    main_window = MainWindow()
+    config = get_configparser()    
+    main_window = MainWindow(config)
     # show_splash(main_window)
     BlocksScreen.setApplicationName("BlocksScreen")
     BlocksScreen.setApplicationDisplayName("BlocksScreen")
@@ -79,6 +81,9 @@ def run():
 
     # main_window.showFullScreen()
     main_window.show()
+    
+    if not config.has_section("server"): 
+        main_window.
     main_window.bo_ws_startup.emit()
     sys.exit(BlocksScreen.exec())
 

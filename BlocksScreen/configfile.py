@@ -300,7 +300,7 @@ class BlocksScreenConfig:
             self.file_lock.release()
 
 
-def get_configparser() -> BlocksScreenConfig:
+def get_configparser() -> typing.Union[BlocksScreenConfig, None]:
     wanted_target = os.path.join(DEFAULT_CONFIGFILE_PATH, "BlocksScreen.cfg")
     fallback = os.path.join(WORKING_DIR, "BlocksScreen.cfg")
     configfile = (
@@ -308,5 +308,10 @@ def get_configparser() -> BlocksScreenConfig:
         if check_file_on_path(DEFAULT_CONFIGFILE_PATH, "BlocksScreen.cfg")
         else fallback
     )
+    config_object = BlocksScreenConfig(configfile=configfile, section="server")
+    
+    if not config_object.has_section("server"):
+        # The crucial section does not exist, can only show an error message that it cannot achieve a connection
+        return Con
     return BlocksScreenConfig(configfile=configfile, section="server")
 
