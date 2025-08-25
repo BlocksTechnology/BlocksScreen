@@ -317,15 +317,7 @@ class ConfirmWidget(QtWidgets.QWidget):
         self.cf_content_vertical_layout.addWidget(
             self.cf_thumbnail,
             0,
-<<<<<<< HEAD
             QtCore.Qt.AlignmentFlag.AlignRight
-=======
-<<<<<<< HEAD
-            QtCore.Qt.AlignmentFlag.AlignHCenter
-=======
-            QtCore.Qt.AlignmentFlag.AlignRight
->>>>>>> 1a620a0 (BUG FIX: centered thumbnail position)
->>>>>>> ae09c93 (BUG FIX: centered thumbnail position)
             | QtCore.Qt.AlignmentFlag.AlignVCenter,
         )
         self.verticalLayout_4.addLayout(self.cf_content_vertical_layout)
