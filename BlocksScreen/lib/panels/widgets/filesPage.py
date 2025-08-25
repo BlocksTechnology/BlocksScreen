@@ -31,6 +31,7 @@ class FilesPage(QtWidgets.QWidget):
 
         self.ReloadButton.clicked.connect(lambda: self.reload_list())
         self.listWidget.itemClicked.connect(self.fileItemClicked)
+
         self.listWidget.verticalScrollBar().valueChanged.connect(
             self.handlescrollbar
         )
