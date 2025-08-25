@@ -1,7 +1,10 @@
+from functools import partial
 from PyQt6 import QtCore, QtGui, QtWidgets
 import typing
 
 from lib.utils.icon_button import IconButton
+from lib.utils.list_button import ListCustomButton
+from lib.utils.blocks_Scrollbar import CustomScrollBar
 
 
 class FilesPage(QtWidgets.QWidget):
@@ -23,20 +26,62 @@ class FilesPage(QtWidgets.QWidget):
     def __init__(self, parent) -> None:
         super().__init__(parent)
         self.setupUI()
-
         self.setMouseTracking(True)
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_AcceptTouchEvents, True)
-        self.listWidget.itemClicked.connect(self.fileItemClicked)
-        self.ReloadButton.clicked.connect(lambda: self.reload_list)
+
+        self.ReloadButton.clicked.connect(lambda: self.reload_list())
+
+        self.listWidget.verticalScrollBar().valueChanged.connect(
+            self.handlescrollbar
+        )
+        self.scrollbar.valueChanged.connect(self.handlescrollbar)
+
+        self.scrollbar.valueChanged.connect(
+            lambda value: self.listWidget.verticalScrollBar().setValue(value)
+        )
 
     def showEvent(self, a0: QtGui.QShowEvent) -> None:
         self.add_file_entries()
         return super().showEvent(a0)
 
+    def estimate_print_time(self, seconds: int) -> list:
+        num_min, seconds = divmod(seconds, 60)
+        num_hours, minutes = divmod(num_min, 60)
+        days, hours = divmod(num_hours, 24)
+        return [days, hours, minutes, seconds]
+
     @QtCore.pyqtSlot(dict, name="on_fileinfo")
     def on_fileinfo(self, filedata: dict) -> None:
-        if self._current_file_name:
-            self.file_selected.emit(str(self._current_file_name), filedata)
+        if self.buttons:
+            estimated_time = filedata.get("estimated_time", 0)
+            seconds = (
+                int(estimated_time)
+                if isinstance(estimated_time, (int, float))
+                else 0
+            )
+
+            filament_type = (
+                filedata.get("filament_type", "Unknown filament")
+                if filedata.get("filament_type", "Unknown filament") != -1.0
+                else "Unknown filament"
+            )
+            time_str = ""
+            days, hours, minutes, _ = self.estimate_print_time(seconds)
+            if seconds <= 0:
+                time_str = "No time estimated"
+            elif seconds < 60:
+                time_str = "less than 1 minute"
+            else:
+                if days > 0:
+                    time_str = f"{days}d {hours}h {minutes}m"
+                elif hours > 0:
+                    time_str = f"{hours}h {minutes}m"
+                else:
+                    time_str = f"{minutes}m"
+
+            self.button.setRightText(f"{filament_type} - {time_str}")
+            return
+        self.file_selected.emit(str(self._current_file_name), filedata)
 
     @QtCore.pyqtSlot(name="reload_list")
     def reload_list(self) -> None:
@@ -50,48 +95,78 @@ class FilesPage(QtWidgets.QWidget):
         self.add_file_entries()
 
     @QtCore.pyqtSlot(QtWidgets.QListWidgetItem, name="file_item_clicked")
-    def fileItemClicked(self, item: QtWidgets.QListWidgetItem) -> None:
+    def fileItemClicked(self, item: str) -> None:
         """Slot for List Item clicked
 
         Args:
             item (QListWidgetItem): Clicked item
         """
         # * Get the filename from the list item pressed
-        _current_item: QtWidgets.QWidget = self.listWidget.itemWidget(item)
-        if _current_item is not None:
-            self._current_file_name = _current_item.findChild(
-                QtWidgets.QLabel
-            ).text()  # type: ignore
+        if item is not None:
+            self._current_file_name = item
             if self._current_file_name:
                 self.request_file_info.emit(self._current_file_name)
 
     def add_file_entries(self) -> None:
         """Inserts the currently available gcode files on the QListWidget"""
         self.listWidget.clear()
+
+        self.listWidget.setSpacing(35)
         index = 0
+        self.buttons = True
 
-        def _add_entry():
-            _item = QtWidgets.QListWidgetItem()
-            _item_widget = QtWidgets.QWidget()
-            _item_layout = QtWidgets.QHBoxLayout()
-            _item_text = QtWidgets.QLabel()
-            _item_text.setText(str(item["path"]))
-            _item_text.setAlignment(
-                QtCore.Qt.AlignmentFlag.AlignLeft
-                & QtCore.Qt.AlignmentFlag.AlignVCenter
+        sorted_list = sorted(
+            self.file_list, key=lambda x: x["modified"], reverse=True
+        )
+
+        for item in sorted_list:
+            self.button = ListCustomButton()
+            self.button.setText(str(item["path"][:-6]))
+            self.request_file_info.emit(item["path"])
+
+            self.button.setPixmap(
+                QtGui.QPixmap(":/arrow_icons/media/btn_icons/right_arrow.svg")
             )
-            _item_layout.addWidget(_item_text)
-            _item_widget.setLayout(_item_layout)
-            _item.setSizeHint(_item_widget.sizeHint())
-            _item.setFlags(~QtCore.Qt.ItemFlag.ItemIsEditable)
-            return _item, _item_widget
+            self.button.setFixedSize(600, 80)
+            self.button.setLeftFontSize(17)
+            self.button.setRightFontSize(12)
 
-        for item in self.file_list:
-            # TODO: Add a file icon before the name
-            _item, _item_widget = _add_entry()
-            self.listWidget.addItem(_item)
-            self.listWidget.setItemWidget(_item, _item_widget)
+            list_item = QtWidgets.QListWidgetItem()
+            list_item.setSizeHint(self.button.sizeHint())
+
+            self.listWidget.addItem(list_item)
+            self.listWidget.setItemWidget(list_item, self.button)
+
+            namefile = str(item["path"])
+            self.button.clicked.connect(
+                partial(self.fileItemClicked, namefile)
+            )
             index += 1
+
+        self.buttons = False
+
+        spacer_item = QtWidgets.QListWidgetItem()
+        spacer_widget = QtWidgets.QWidget()
+        spacer_widget.setFixedHeight(10)
+        spacer_item.setSizeHint(spacer_widget.sizeHint())
+        self.listWidget.addItem(spacer_item)
+
+        self.scrollbar.setMinimum(
+            self.listWidget.verticalScrollBar().minimum()
+        )
+        self.scrollbar.setMaximum(
+            self.listWidget.verticalScrollBar().maximum()
+        )
+        self.scrollbar.setPageStep(
+            self.listWidget.verticalScrollBar().pageStep()
+        )
+
+    def handlescrollbar(self, value):
+        # Block signals to avoid recursion
+
+        self.scrollbar.blockSignals(True)
+        self.scrollbar.setValue(value)
+        self.scrollbar.blockSignals(False)
 
     def setupUI(self):
         sizePolicy = QtWidgets.QSizePolicy(
@@ -145,88 +220,58 @@ class FilesPage(QtWidgets.QWidget):
         self.line.setFrameShadow(QtWidgets.QFrame.Shadow.Sunken)
         self.line.setObjectName("line")
         self.verticalLayout_5.addWidget(self.line)
-        self.fp_content_layout = QtWidgets.QVBoxLayout()
-        self.fp_content_layout.setContentsMargins(5, 5, 5, 5)
+        self.fp_content_layout = QtWidgets.QHBoxLayout()
+        self.fp_content_layout.setContentsMargins(0, 0, 0, 0)
         self.fp_content_layout.setObjectName("fp_content_layout")
         self.listWidget = QtWidgets.QListWidget(parent=self)
-        palette = QtGui.QPalette()
-        brush = QtGui.QBrush(QtGui.QColor(0, 0, 0, 0))
-        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Active,
-            QtGui.QPalette.ColorRole.Button,
-            brush,
+        self.listWidget.setProperty("showDropIndicator", False)
+        self.listWidget.setProperty("selectionMode", "NoSelection")
+        self.listWidget.setStyleSheet("background: transparent;")
+        self.listWidget.setDefaultDropAction(QtCore.Qt.DropAction.IgnoreAction)
+        self.listWidget.setUniformItemSizes(True)
+        self.listWidget.setObjectName("listWidget")
+        self.listWidget.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
+        self.listWidget.setDefaultDropAction(QtCore.Qt.DropAction.IgnoreAction)
+        self.listWidget.setSelectionBehavior(
+            QtWidgets.QAbstractItemView.SelectionBehavior.SelectItems
         )
-        brush = QtGui.QBrush(QtGui.QColor(0, 0, 0))
-        brush.setStyle(QtCore.Qt.BrushStyle.NoBrush)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Active,
-            QtGui.QPalette.ColorRole.Base,
-            brush,
+        self.listWidget.setVerticalScrollMode(
+            QtWidgets.QAbstractItemView.ScrollMode.ScrollPerPixel
         )
-        brush = QtGui.QBrush(QtGui.QColor(0, 0, 0, 0))
-        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Active,
-            QtGui.QPalette.ColorRole.Window,
-            brush,
+        self.listWidget.setVerticalScrollBarPolicy(
+            QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff
         )
-        brush = QtGui.QBrush(QtGui.QColor(0, 0, 0, 0))
-        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Inactive,
-            QtGui.QPalette.ColorRole.Button,
-            brush,
+        QtWidgets.QScroller.grabGesture(
+            self.listWidget,
+            QtWidgets.QScroller.ScrollerGestureType.TouchGesture,
         )
-        brush = QtGui.QBrush(QtGui.QColor(0, 0, 0))
-        brush.setStyle(QtCore.Qt.BrushStyle.NoBrush)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Inactive,
-            QtGui.QPalette.ColorRole.Base,
-            brush,
-        )
-        brush = QtGui.QBrush(QtGui.QColor(0, 0, 0, 0))
-        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Inactive,
-            QtGui.QPalette.ColorRole.Window,
-            brush,
-        )
-        brush = QtGui.QBrush(QtGui.QColor(0, 0, 0, 0))
-        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Disabled,
-            QtGui.QPalette.ColorRole.Button,
-            brush,
-        )
-        brush = QtGui.QBrush(QtGui.QColor(0, 0, 0))
-        brush.setStyle(QtCore.Qt.BrushStyle.NoBrush)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Disabled,
-            QtGui.QPalette.ColorRole.Base,
-            brush,
-        )
-        brush = QtGui.QBrush(QtGui.QColor(0, 0, 0, 0))
-        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Disabled,
-            QtGui.QPalette.ColorRole.Window,
-            brush,
-        )
-        self.listWidget.setPalette(palette)
-        self.listWidget.setStyleSheet(
-            "QListWidget{background-color: transparent;}\n"
-            "\n"
-            "QLabel{\n"
-            "color: #ffffff;\n"
-            "}"
+        QtWidgets.QScroller.grabGesture(
+            self.listWidget,
+            QtWidgets.QScroller.ScrollerGestureType.LeftMouseButtonGesture,
         )
         self.listWidget.setEditTriggers(
             QtWidgets.QAbstractItemView.EditTrigger.NoEditTriggers
         )
-        self.listWidget.setProperty("showDropIndicator", False)
-        self.listWidget.setDefaultDropAction(QtCore.Qt.DropAction.IgnoreAction)
-        self.listWidget.setUniformItemSizes(True)
-        self.listWidget.setObjectName("listWidget")
+
+        scroller_instance = QtWidgets.QScroller.scroller(self.listWidget)
+        scroller_props = scroller_instance.scrollerProperties()
+        scroller_props.setScrollMetric(
+            QtWidgets.QScrollerProperties.ScrollMetric.DragVelocitySmoothingFactor,
+            0.05,  # Lower = more responsive
+        )
+        scroller_props.setScrollMetric(
+            QtWidgets.QScrollerProperties.ScrollMetric.DecelerationFactor,
+            0.4,  # higher = less inertia
+        )
+        QtWidgets.QScroller.scroller(self.listWidget).setScrollerProperties(
+            scroller_props
+        )
+
         self.fp_content_layout.addWidget(self.listWidget)
+        self.scrollbar = CustomScrollBar()
+        self.fp_content_layout.addWidget(self.scrollbar)
         self.verticalLayout_5.addLayout(self.fp_content_layout)
+        self.scrollbar.setAttribute(
+            QtCore.Qt.WidgetAttribute.WA_TransparentForMouseEvents, True
+        )
+        self.scroller = QtWidgets.QScroller.scroller(self.listWidget)
