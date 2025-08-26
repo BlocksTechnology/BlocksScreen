@@ -35,7 +35,7 @@
    <string>StackedWidget</string>
   </property>
   <property name="currentIndex">
-   <number>2</number>
+   <number>0</number>
   </property>
   <property name="backgroundPixmap" stdset="0">
    <pixmap>:/background/media/graphics/scroll_list_window.svg</pixmap>
@@ -62,9 +62,9 @@
    <widget class="BlocksCustomButton" name="main_print_btn">
     <property name="geometry">
      <rect>
-      <x>260</x>
-      <y>100</y>
-      <width>200</width>
+      <x>230</x>
+      <y>120</y>
+      <width>250</width>
       <height>80</height>
      </rect>
     </property>
@@ -76,13 +76,13 @@
     </property>
     <property name="minimumSize">
      <size>
-      <width>200</width>
+      <width>250</width>
       <height>80</height>
      </size>
     </property>
     <property name="maximumSize">
      <size>
-      <width>200</width>
+      <width>250</width>
       <height>80</height>
      </size>
     </property>
@@ -131,7 +131,7 @@
     </property>
     <property name="geometry">
      <rect>
-      <x>120</x>
+      <x>105</x>
       <y>180</y>
       <width>500</width>
       <height>200</height>
@@ -418,7 +418,7 @@ color: #ffffff;
      </layout>
     </item>
    </layout>
-  </widget> -->
+  </widget>
   <widget class="QWidget" name="confirm_page">
    <property name="sizePolicy">
     <sizepolicy hsizetype="MinimumExpanding" vsizetype="MinimumExpanding">
@@ -585,14 +585,14 @@ color: #ffffff;
            <widget class="BlocksCustomButton" name="confirm_yes_text_label">
             <property name="minimumSize">
              <size>
-              <width>150</width>
-              <height>60</height>
+              <width>200</width>
+              <height>100</height>
              </size>
             </property>
             <property name="maximumSize">
              <size>
-              <width>150</width>
-              <height>60</height>
+              <width>200</width>
+              <height>100</height>
              </size>
             </property>
             <property name="font">
@@ -648,14 +648,14 @@ color: #ffffff;
             </property>
             <property name="minimumSize">
              <size>
-              <width>150</width>
-              <height>60</height>
+              <width>200</width>
+              <height>100</height>
              </size>
             </property>
             <property name="maximumSize">
              <size>
-              <width>150</width>
-              <height>60</height>
+              <width>200</width>
+              <height>100</height>
              </size>
             </property>
             <property name="font">
@@ -765,7 +765,7 @@ background-color: transparent;
      </layout>
     </item>
    </layout>
-  </widget> -->
+  </widget>
   <widget class="QWidget" name="job_status_page">
    <property name="sizePolicy">
     <sizepolicy hsizetype="MinimumExpanding" vsizetype="MinimumExpanding">
@@ -964,13 +964,13 @@ background-color: transparent;
            <property name="minimumSize">
             <size>
              <width>200</width>
-             <height>60</height>
+             <height>70</height>
             </size>
            </property>
            <property name="maximumSize">
             <size>
              <width>16777215</width>
-             <height>80</height>
+             <height>70</height>
             </size>
            </property>
            <property name="font">
@@ -1027,13 +1027,13 @@ background-color: transparent;
            <property name="minimumSize">
             <size>
              <width>200</width>
-             <height>60</height>
+             <height>70</height>
             </size>
            </property>
            <property name="maximumSize">
             <size>
              <width>16777215</width>
-             <height>80</height>
+             <height>70</height>
             </size>
            </property>
            <property name="font">
@@ -1090,13 +1090,13 @@ background-color: transparent;
            <property name="minimumSize">
             <size>
              <width>200</width>
-             <height>60</height>
+             <height>70</height>
             </size>
            </property>
            <property name="maximumSize">
             <size>
              <width>16777215</width>
-             <height>80</height>
+             <height>70</height>
             </size>
            </property>
            <property name="font">
@@ -1308,7 +1308,7 @@ background-color: transparent;
      </layout>
     </item>
    </layout>
-  </widget> 
+  </widget>
   <widget class="QWidget" name="tune_page">
    <property name="sizePolicy">
     <sizepolicy hsizetype="MinimumExpanding" vsizetype="MinimumExpanding">
@@ -1425,13 +1425,13 @@ background-color: transparent;
         <property name="minimumSize">
          <size>
           <width>200</width>
-          <height>60</height>
+          <height>70</height>
          </size>
         </property>
         <property name="maximumSize">
          <size>
           <width>200</width>
-          <height>60</height>
+          <height>70</height>
          </size>
         </property>
         <property name="font">
@@ -1482,13 +1482,13 @@ background-color: transparent;
         <property name="minimumSize">
          <size>
           <width>200</width>
-          <height>60</height>
+          <height>70</height>
          </size>
         </property>
         <property name="maximumSize">
          <size>
           <width>200</width>
-          <height>60</height>
+          <height>70</height>
          </size>
         </property>
         <property name="font">
@@ -2636,19 +2636,19 @@ Change</string>
  </widget>
  <customwidgets>
   <customwidget>
+   <class>BlocksCustomButton</class>
+   <extends>QPushButton</extends>
+   <header location="global">lib.utils.blocks_button</header>
+  </customwidget>
+  <customwidget>
    <class>IconButton</class>
    <extends>QPushButton</extends>
-   <header location="global">lib.utils.icon_button</header>
+   <header location="global">lib.utils.iconButton</header>
   </customwidget>
   <customwidget>
    <class>DisplayButton</class>
    <extends>QPushButton</extends>
    <header location="global">lib.utils.display_button</header>
-  </customwidget>
-  <customwidget>
-   <class>BlocksCustomButton</class>
-   <extends>QPushButton</extends>
-   <header location="global">lib.utils.blocks_button</header>
   </customwidget>
   <customwidget>
    <class>BlocksLabel</class>
@@ -2665,7 +2665,7 @@ Change</string>
  </resources>
  <connections/>
  <buttongroups>
-  <buttongroup name="bbp_offset_value_selector_group"/>
   <buttongroup name="bbp_option_button_group"/>
+  <buttongroup name="bbp_offset_value_selector_group"/>
  </buttongroups>
 </ui>

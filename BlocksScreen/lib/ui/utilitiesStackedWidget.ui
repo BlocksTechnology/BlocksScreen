@@ -14,416 +14,454 @@
    <string>StackedWidget</string>
   </property>
   <property name="currentIndex">
-   <number>3</number>
+   <number>0</number>
   </property>
   <widget class="QWidget" name="utilities_page">
-   <widget class="BlocksCustomButton" name="utilities_axes_maintenance_btn">
+   <widget class="QWidget" name="gridLayoutWidget">
     <property name="geometry">
      <rect>
-      <x>50</x>
-      <y>280</y>
-      <width>301</width>
-      <height>71</height>
+      <x>10</x>
+      <y>90</y>
+      <width>691</width>
+      <height>311</height>
      </rect>
     </property>
-    <property name="minimumSize">
-     <size>
-      <width>10</width>
-      <height>10</height>
-     </size>
-    </property>
-    <property name="font">
-     <font>
-      <family>Momcake</family>
-      <pointsize>20</pointsize>
-      <italic>false</italic>
-      <stylestrategy>PreferAntialias</stylestrategy>
-     </font>
-    </property>
-    <property name="mouseTracking">
-     <bool>false</bool>
-    </property>
-    <property name="tabletTracking">
-     <bool>true</bool>
-    </property>
-    <property name="contextMenuPolicy">
-     <enum>Qt::NoContextMenu</enum>
-    </property>
-    <property name="layoutDirection">
-     <enum>Qt::LeftToRight</enum>
-    </property>
-    <property name="styleSheet">
-     <string notr="true"/>
-    </property>
-    <property name="text">
-     <string>AXES
-MAINTENANCE</string>
-    </property>
-    <property name="autoDefault">
-     <bool>false</bool>
-    </property>
-    <property name="flat">
-     <bool>true</bool>
-    </property>
-    <property name="class" stdset="0">
-     <string>menu_btn</string>
-    </property>
-    <property name="borderLeftPixmap" stdset="0">
-     <pixmap resource="resources/button_resources.qrc">:/button_borders/media/buttons/btn_part1.svg</pixmap>
-    </property>
-    <property name="borderCenterPixmap" stdset="0">
-     <pixmap resource="resources/button_resources.qrc">:/button_borders/media/buttons/btn_part2.svg</pixmap>
-    </property>
-    <property name="borderRightPixmap" stdset="0">
-     <pixmap resource="resources/button_resources.qrc">:/button_borders/media/buttons/btn_part3.svg</pixmap>
-    </property>
-    <property name="button_type" stdset="0">
-     <string>normal</string>
-    </property>
-   </widget>
-   <widget class="BlocksCustomButton" name="utilities_routine_check_btn">
-    <property name="geometry">
-     <rect>
-      <x>50</x>
-      <y>190</y>
-      <width>301</width>
-      <height>71</height>
-     </rect>
-    </property>
-    <property name="minimumSize">
-     <size>
-      <width>10</width>
-      <height>10</height>
-     </size>
-    </property>
-    <property name="font">
-     <font>
-      <family>Momcake</family>
-      <pointsize>20</pointsize>
-      <italic>false</italic>
-      <stylestrategy>PreferAntialias</stylestrategy>
-     </font>
-    </property>
-    <property name="mouseTracking">
-     <bool>false</bool>
-    </property>
-    <property name="tabletTracking">
-     <bool>true</bool>
-    </property>
-    <property name="contextMenuPolicy">
-     <enum>Qt::NoContextMenu</enum>
-    </property>
-    <property name="layoutDirection">
-     <enum>Qt::LeftToRight</enum>
-    </property>
-    <property name="styleSheet">
-     <string notr="true"/>
-    </property>
-    <property name="text">
-     <string>ROUTINE
+    <layout class="QGridLayout" name="gridLayout">
+     <item row="2" column="0">
+      <widget class="BlocksCustomButton" name="utilities_axes_maintenance_btn">
+       <property name="minimumSize">
+        <size>
+         <width>250</width>
+         <height>80</height>
+        </size>
+       </property>
+       <property name="maximumSize">
+        <size>
+         <width>250</width>
+         <height>80</height>
+        </size>
+       </property>
+       <property name="font">
+        <font>
+         <family>Momcake</family>
+         <pointsize>20</pointsize>
+         <italic>false</italic>
+         <stylestrategy>PreferAntialias</stylestrategy>
+        </font>
+       </property>
+       <property name="mouseTracking">
+        <bool>false</bool>
+       </property>
+       <property name="tabletTracking">
+        <bool>true</bool>
+       </property>
+       <property name="contextMenuPolicy">
+        <enum>Qt::NoContextMenu</enum>
+       </property>
+       <property name="layoutDirection">
+        <enum>Qt::LeftToRight</enum>
+       </property>
+       <property name="styleSheet">
+        <string notr="true"/>
+       </property>
+       <property name="text">
+        <string>AXES
+MAINT.</string>
+       </property>
+       <property name="autoDefault">
+        <bool>false</bool>
+       </property>
+       <property name="flat">
+        <bool>true</bool>
+       </property>
+       <property name="class" stdset="0">
+        <string>menu_btn</string>
+       </property>
+       <property name="borderLeftPixmap" stdset="0">
+        <pixmap>:/button_borders/media/buttons/btn_part1.svg</pixmap>
+       </property>
+       <property name="borderCenterPixmap" stdset="0">
+        <pixmap>:/button_borders/media/buttons/btn_part2.svg</pixmap>
+       </property>
+       <property name="borderRightPixmap" stdset="0">
+        <pixmap>:/button_borders/media/buttons/btn_part3.svg</pixmap>
+       </property>
+       <property name="button_type" stdset="0">
+        <string>normal</string>
+       </property>
+      </widget>
+     </item>
+     <item row="1" column="1">
+      <widget class="BlocksCustomButton" name="utilities_lcd_settings_btn">
+       <property name="minimumSize">
+        <size>
+         <width>250</width>
+         <height>80</height>
+        </size>
+       </property>
+       <property name="maximumSize">
+        <size>
+         <width>250</width>
+         <height>80</height>
+        </size>
+       </property>
+       <property name="font">
+        <font>
+         <family>Momcake</family>
+         <pointsize>20</pointsize>
+         <italic>false</italic>
+         <stylestrategy>PreferAntialias</stylestrategy>
+        </font>
+       </property>
+       <property name="mouseTracking">
+        <bool>false</bool>
+       </property>
+       <property name="tabletTracking">
+        <bool>true</bool>
+       </property>
+       <property name="contextMenuPolicy">
+        <enum>Qt::NoContextMenu</enum>
+       </property>
+       <property name="layoutDirection">
+        <enum>Qt::LeftToRight</enum>
+       </property>
+       <property name="styleSheet">
+        <string notr="true"/>
+       </property>
+       <property name="text">
+        <string>LCD
+SETTINGS</string>
+       </property>
+       <property name="autoDefault">
+        <bool>false</bool>
+       </property>
+       <property name="flat">
+        <bool>true</bool>
+       </property>
+       <property name="class" stdset="0">
+        <string>menu_btn</string>
+       </property>
+       <property name="borderLeftPixmap" stdset="0">
+        <pixmap>:/button_borders/media/buttons/btn_part1.svg</pixmap>
+       </property>
+       <property name="borderCenterPixmap" stdset="0">
+        <pixmap>:/button_borders/media/buttons/btn_part2.svg</pixmap>
+       </property>
+       <property name="borderRightPixmap" stdset="0">
+        <pixmap>:/button_borders/media/buttons/btn_part3.svg</pixmap>
+       </property>
+       <property name="button_type" stdset="0">
+        <string>normal</string>
+       </property>
+      </widget>
+     </item>
+     <item row="0" column="0">
+      <widget class="BlocksCustomButton" name="utilities_info_btn">
+       <property name="minimumSize">
+        <size>
+         <width>250</width>
+         <height>80</height>
+        </size>
+       </property>
+       <property name="maximumSize">
+        <size>
+         <width>250</width>
+         <height>80</height>
+        </size>
+       </property>
+       <property name="font">
+        <font>
+         <family>Momcake</family>
+         <pointsize>20</pointsize>
+         <italic>false</italic>
+         <stylestrategy>PreferAntialias</stylestrategy>
+        </font>
+       </property>
+       <property name="mouseTracking">
+        <bool>false</bool>
+       </property>
+       <property name="tabletTracking">
+        <bool>true</bool>
+       </property>
+       <property name="contextMenuPolicy">
+        <enum>Qt::NoContextMenu</enum>
+       </property>
+       <property name="layoutDirection">
+        <enum>Qt::LeftToRight</enum>
+       </property>
+       <property name="styleSheet">
+        <string notr="true"/>
+       </property>
+       <property name="text">
+        <string>INFO</string>
+       </property>
+       <property name="autoDefault">
+        <bool>false</bool>
+       </property>
+       <property name="flat">
+        <bool>true</bool>
+       </property>
+       <property name="class" stdset="0">
+        <string>menu_btn</string>
+       </property>
+       <property name="borderLeftPixmap" stdset="0">
+        <pixmap>:/button_borders/media/buttons/btn_part1.svg</pixmap>
+       </property>
+       <property name="borderCenterPixmap" stdset="0">
+        <pixmap>:/button_borders/media/buttons/btn_part2.svg</pixmap>
+       </property>
+       <property name="borderRightPixmap" stdset="0">
+        <pixmap>:/button_borders/media/buttons/btn_part3.svg</pixmap>
+       </property>
+       <property name="button_type" stdset="0">
+        <string>normal</string>
+       </property>
+      </widget>
+     </item>
+     <item row="0" column="1">
+      <widget class="BlocksCustomButton" name="utilities_leds_btn">
+       <property name="minimumSize">
+        <size>
+         <width>250</width>
+         <height>80</height>
+        </size>
+       </property>
+       <property name="maximumSize">
+        <size>
+         <width>250</width>
+         <height>80</height>
+        </size>
+       </property>
+       <property name="font">
+        <font>
+         <family>Momcake</family>
+         <pointsize>20</pointsize>
+         <italic>false</italic>
+         <stylestrategy>PreferAntialias</stylestrategy>
+        </font>
+       </property>
+       <property name="mouseTracking">
+        <bool>false</bool>
+       </property>
+       <property name="tabletTracking">
+        <bool>true</bool>
+       </property>
+       <property name="contextMenuPolicy">
+        <enum>Qt::NoContextMenu</enum>
+       </property>
+       <property name="layoutDirection">
+        <enum>Qt::LeftToRight</enum>
+       </property>
+       <property name="styleSheet">
+        <string notr="true"/>
+       </property>
+       <property name="text">
+        <string>LEDs</string>
+       </property>
+       <property name="autoDefault">
+        <bool>false</bool>
+       </property>
+       <property name="flat">
+        <bool>true</bool>
+       </property>
+       <property name="class" stdset="0">
+        <string>menu_btn</string>
+       </property>
+       <property name="borderLeftPixmap" stdset="0">
+        <pixmap>:/button_borders/media/buttons/btn_part1.svg</pixmap>
+       </property>
+       <property name="borderCenterPixmap" stdset="0">
+        <pixmap>:/button_borders/media/buttons/btn_part2.svg</pixmap>
+       </property>
+       <property name="borderRightPixmap" stdset="0">
+        <pixmap>:/button_borders/media/buttons/btn_part3.svg</pixmap>
+       </property>
+       <property name="button_type" stdset="0">
+        <string>normal</string>
+       </property>
+      </widget>
+     </item>
+     <item row="2" column="1">
+      <widget class="BlocksCustomButton" name="utilities_factory_reset_btn">
+       <property name="minimumSize">
+        <size>
+         <width>250</width>
+         <height>80</height>
+        </size>
+       </property>
+       <property name="maximumSize">
+        <size>
+         <width>250</width>
+         <height>80</height>
+        </size>
+       </property>
+       <property name="font">
+        <font>
+         <family>Momcake</family>
+         <pointsize>20</pointsize>
+         <italic>false</italic>
+         <stylestrategy>PreferAntialias</stylestrategy>
+        </font>
+       </property>
+       <property name="mouseTracking">
+        <bool>false</bool>
+       </property>
+       <property name="tabletTracking">
+        <bool>true</bool>
+       </property>
+       <property name="contextMenuPolicy">
+        <enum>Qt::NoContextMenu</enum>
+       </property>
+       <property name="layoutDirection">
+        <enum>Qt::LeftToRight</enum>
+       </property>
+       <property name="styleSheet">
+        <string notr="true"/>
+       </property>
+       <property name="text">
+        <string>FACTORY
+RESET</string>
+       </property>
+       <property name="autoDefault">
+        <bool>false</bool>
+       </property>
+       <property name="flat">
+        <bool>true</bool>
+       </property>
+       <property name="class" stdset="0">
+        <string>menu_btn</string>
+       </property>
+       <property name="borderLeftPixmap" stdset="0">
+        <pixmap>:/button_borders/media/buttons/btn_part1.svg</pixmap>
+       </property>
+       <property name="borderCenterPixmap" stdset="0">
+        <pixmap>:/button_borders/media/buttons/btn_part2.svg</pixmap>
+       </property>
+       <property name="borderRightPixmap" stdset="0">
+        <pixmap>:/button_borders/media/buttons/btn_part3.svg</pixmap>
+       </property>
+       <property name="button_type" stdset="0">
+        <string>normal</string>
+       </property>
+      </widget>
+     </item>
+     <item row="1" column="0">
+      <widget class="BlocksCustomButton" name="utilities_routine_check_btn">
+       <property name="minimumSize">
+        <size>
+         <width>250</width>
+         <height>80</height>
+        </size>
+       </property>
+       <property name="maximumSize">
+        <size>
+         <width>250</width>
+         <height>80</height>
+        </size>
+       </property>
+       <property name="font">
+        <font>
+         <family>Momcake</family>
+         <pointsize>20</pointsize>
+         <italic>false</italic>
+         <stylestrategy>PreferAntialias</stylestrategy>
+        </font>
+       </property>
+       <property name="mouseTracking">
+        <bool>false</bool>
+       </property>
+       <property name="tabletTracking">
+        <bool>true</bool>
+       </property>
+       <property name="contextMenuPolicy">
+        <enum>Qt::NoContextMenu</enum>
+       </property>
+       <property name="layoutDirection">
+        <enum>Qt::LeftToRight</enum>
+       </property>
+       <property name="styleSheet">
+        <string notr="true"/>
+       </property>
+       <property name="text">
+        <string>ROUTINE
 CHECK</string>
-    </property>
-    <property name="autoDefault">
-     <bool>false</bool>
-    </property>
-    <property name="flat">
-     <bool>true</bool>
-    </property>
-    <property name="class" stdset="0">
-     <string>menu_btn</string>
-    </property>
-    <property name="borderLeftPixmap" stdset="0">
-     <pixmap resource="resources/button_resources.qrc">:/button_borders/media/buttons/btn_part1.svg</pixmap>
-    </property>
-    <property name="borderCenterPixmap" stdset="0">
-     <pixmap resource="resources/button_resources.qrc">:/button_borders/media/buttons/btn_part2.svg</pixmap>
-    </property>
-    <property name="borderRightPixmap" stdset="0">
-     <pixmap resource="resources/button_resources.qrc">:/button_borders/media/buttons/btn_part3.svg</pixmap>
-    </property>
-    <property name="button_type" stdset="0">
-     <string>normal</string>
-    </property>
+       </property>
+       <property name="autoDefault">
+        <bool>false</bool>
+       </property>
+       <property name="flat">
+        <bool>true</bool>
+       </property>
+       <property name="class" stdset="0">
+        <string>menu_btn</string>
+       </property>
+       <property name="borderLeftPixmap" stdset="0">
+        <pixmap>:/button_borders/media/buttons/btn_part1.svg</pixmap>
+       </property>
+       <property name="borderCenterPixmap" stdset="0">
+        <pixmap>:/button_borders/media/buttons/btn_part2.svg</pixmap>
+       </property>
+       <property name="borderRightPixmap" stdset="0">
+        <pixmap>:/button_borders/media/buttons/btn_part3.svg</pixmap>
+       </property>
+       <property name="button_type" stdset="0">
+        <string>normal</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
    </widget>
-   <widget class="BlocksCustomButton" name="utilities_info_btn">
+   <widget class="QWidget" name="horizontalLayoutWidget">
     <property name="geometry">
      <rect>
-      <x>50</x>
-      <y>100</y>
-      <width>301</width>
+      <x>10</x>
+      <y>10</y>
+      <width>691</width>
       <height>71</height>
      </rect>
     </property>
-    <property name="minimumSize">
-     <size>
-      <width>10</width>
-      <height>10</height>
-     </size>
-    </property>
-    <property name="font">
-     <font>
-      <family>Momcake</family>
-      <pointsize>20</pointsize>
-      <italic>false</italic>
-      <stylestrategy>PreferAntialias</stylestrategy>
-     </font>
-    </property>
-    <property name="mouseTracking">
-     <bool>false</bool>
-    </property>
-    <property name="tabletTracking">
-     <bool>true</bool>
-    </property>
-    <property name="contextMenuPolicy">
-     <enum>Qt::NoContextMenu</enum>
-    </property>
-    <property name="layoutDirection">
-     <enum>Qt::LeftToRight</enum>
-    </property>
-    <property name="styleSheet">
-     <string notr="true"/>
-    </property>
-    <property name="text">
-     <string>INFO</string>
-    </property>
-    <property name="autoDefault">
-     <bool>false</bool>
-    </property>
-    <property name="flat">
-     <bool>true</bool>
-    </property>
-    <property name="class" stdset="0">
-     <string>menu_btn</string>
-    </property>
-    <property name="borderLeftPixmap" stdset="0">
-     <pixmap resource="resources/button_resources.qrc">:/button_borders/media/buttons/btn_part1.svg</pixmap>
-    </property>
-    <property name="borderCenterPixmap" stdset="0">
-     <pixmap resource="resources/button_resources.qrc">:/button_borders/media/buttons/btn_part2.svg</pixmap>
-    </property>
-    <property name="borderRightPixmap" stdset="0">
-     <pixmap resource="resources/button_resources.qrc">:/button_borders/media/buttons/btn_part3.svg</pixmap>
-    </property>
-    <property name="button_type" stdset="0">
-     <string>normal</string>
-    </property>
-   </widget>
-   <widget class="BlocksCustomButton" name="utilities_factory_reset_btn">
-    <property name="geometry">
-     <rect>
-      <x>360</x>
-      <y>280</y>
-      <width>301</width>
-      <height>71</height>
-     </rect>
-    </property>
-    <property name="minimumSize">
-     <size>
-      <width>10</width>
-      <height>10</height>
-     </size>
-    </property>
-    <property name="font">
-     <font>
-      <family>Momcake</family>
-      <pointsize>20</pointsize>
-      <italic>false</italic>
-      <stylestrategy>PreferAntialias</stylestrategy>
-     </font>
-    </property>
-    <property name="mouseTracking">
-     <bool>false</bool>
-    </property>
-    <property name="tabletTracking">
-     <bool>true</bool>
-    </property>
-    <property name="contextMenuPolicy">
-     <enum>Qt::NoContextMenu</enum>
-    </property>
-    <property name="layoutDirection">
-     <enum>Qt::LeftToRight</enum>
-    </property>
-    <property name="styleSheet">
-     <string notr="true"/>
-    </property>
-    <property name="text">
-     <string>FACTORY RESET</string>
-    </property>
-    <property name="autoDefault">
-     <bool>false</bool>
-    </property>
-    <property name="flat">
-     <bool>true</bool>
-    </property>
-    <property name="class" stdset="0">
-     <string>menu_btn</string>
-    </property>
-    <property name="borderLeftPixmap" stdset="0">
-     <pixmap resource="resources/button_resources.qrc">:/button_borders/media/buttons/btn_part1.svg</pixmap>
-    </property>
-    <property name="borderCenterPixmap" stdset="0">
-     <pixmap resource="resources/button_resources.qrc">:/button_borders/media/buttons/btn_part2.svg</pixmap>
-    </property>
-    <property name="borderRightPixmap" stdset="0">
-     <pixmap resource="resources/button_resources.qrc">:/button_borders/media/buttons/btn_part3.svg</pixmap>
-    </property>
-    <property name="button_type" stdset="0">
-     <string>normal</string>
-    </property>
-   </widget>
-   <widget class="QLabel" name="utilities_title_label">
-    <property name="geometry">
-     <rect>
-      <x>220</x>
-      <y>30</y>
-      <width>271</width>
-      <height>61</height>
-     </rect>
-    </property>
-    <property name="font">
-     <font>
-      <family>Momcake</family>
-      <pointsize>24</pointsize>
-     </font>
-    </property>
-    <property name="styleSheet">
-     <string notr="true">background: transparent; color: white;</string>
-    </property>
-    <property name="text">
-     <string>UTILITIES</string>
-    </property>
-    <property name="alignment">
-     <set>Qt::AlignCenter</set>
-    </property>
-    <property name="class" stdset="0">
-     <string>title_text</string>
-    </property>
-   </widget>
-   <widget class="BlocksCustomButton" name="utilities_lcd_settings_btn">
-    <property name="geometry">
-     <rect>
-      <x>360</x>
-      <y>190</y>
-      <width>301</width>
-      <height>71</height>
-     </rect>
-    </property>
-    <property name="minimumSize">
-     <size>
-      <width>10</width>
-      <height>10</height>
-     </size>
-    </property>
-    <property name="font">
-     <font>
-      <family>Momcake</family>
-      <pointsize>20</pointsize>
-      <italic>false</italic>
-      <stylestrategy>PreferAntialias</stylestrategy>
-     </font>
-    </property>
-    <property name="mouseTracking">
-     <bool>false</bool>
-    </property>
-    <property name="tabletTracking">
-     <bool>true</bool>
-    </property>
-    <property name="contextMenuPolicy">
-     <enum>Qt::NoContextMenu</enum>
-    </property>
-    <property name="layoutDirection">
-     <enum>Qt::LeftToRight</enum>
-    </property>
-    <property name="styleSheet">
-     <string notr="true"/>
-    </property>
-    <property name="text">
-     <string>LCD SETTINGS</string>
-    </property>
-    <property name="autoDefault">
-     <bool>false</bool>
-    </property>
-    <property name="flat">
-     <bool>true</bool>
-    </property>
-    <property name="class" stdset="0">
-     <string>menu_btn</string>
-    </property>
-    <property name="borderLeftPixmap" stdset="0">
-     <pixmap resource="resources/button_resources.qrc">:/button_borders/media/buttons/btn_part1.svg</pixmap>
-    </property>
-    <property name="borderCenterPixmap" stdset="0">
-     <pixmap resource="resources/button_resources.qrc">:/button_borders/media/buttons/btn_part2.svg</pixmap>
-    </property>
-    <property name="borderRightPixmap" stdset="0">
-     <pixmap resource="resources/button_resources.qrc">:/button_borders/media/buttons/btn_part3.svg</pixmap>
-    </property>
-    <property name="button_type" stdset="0">
-     <string>normal</string>
-    </property>
-   </widget>
-   <widget class="BlocksCustomButton" name="utilities_leds_btn">
-    <property name="geometry">
-     <rect>
-      <x>360</x>
-      <y>100</y>
-      <width>301</width>
-      <height>71</height>
-     </rect>
-    </property>
-    <property name="minimumSize">
-     <size>
-      <width>10</width>
-      <height>10</height>
-     </size>
-    </property>
-    <property name="font">
-     <font>
-      <family>Momcake</family>
-      <pointsize>20</pointsize>
-      <italic>false</italic>
-      <stylestrategy>PreferAntialias</stylestrategy>
-     </font>
-    </property>
-    <property name="mouseTracking">
-     <bool>false</bool>
-    </property>
-    <property name="tabletTracking">
-     <bool>true</bool>
-    </property>
-    <property name="contextMenuPolicy">
-     <enum>Qt::NoContextMenu</enum>
-    </property>
-    <property name="layoutDirection">
-     <enum>Qt::LeftToRight</enum>
-    </property>
-    <property name="styleSheet">
-     <string notr="true"/>
-    </property>
-    <property name="text">
-     <string>LEDs</string>
-    </property>
-    <property name="autoDefault">
-     <bool>false</bool>
-    </property>
-    <property name="flat">
-     <bool>true</bool>
-    </property>
-    <property name="class" stdset="0">
-     <string>menu_btn</string>
-    </property>
-    <property name="borderLeftPixmap" stdset="0">
-     <pixmap resource="resources/button_resources.qrc">:/button_borders/media/buttons/btn_part1.svg</pixmap>
-    </property>
-    <property name="borderCenterPixmap" stdset="0">
-     <pixmap resource="resources/button_resources.qrc">:/button_borders/media/buttons/btn_part2.svg</pixmap>
-    </property>
-    <property name="borderRightPixmap" stdset="0">
-     <pixmap resource="resources/button_resources.qrc">:/button_borders/media/buttons/btn_part3.svg</pixmap>
-    </property>
-    <property name="button_type" stdset="0">
-     <string>normal</string>
-    </property>
+    <layout class="QHBoxLayout" name="utilities_header">
+     <item>
+      <widget class="QLabel" name="header_title">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="MinimumExpanding" vsizetype="Fixed">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="minimumSize">
+        <size>
+         <width>300</width>
+         <height>60</height>
+        </size>
+       </property>
+       <property name="maximumSize">
+        <size>
+         <width>16777215</width>
+         <height>60</height>
+        </size>
+       </property>
+       <property name="font">
+        <font>
+         <family>Momcake</family>
+         <pointsize>24</pointsize>
+        </font>
+       </property>
+       <property name="styleSheet">
+        <string notr="true">background: transparent; color: white;</string>
+       </property>
+       <property name="text">
+        <string>Utilities</string>
+       </property>
+       <property name="alignment">
+        <set>Qt::AlignCenter</set>
+       </property>
+       <property name="class" stdset="0">
+        <string>title_text</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
    </widget>
   </widget>
   <widget class="QWidget" name="info_page">
@@ -534,13 +572,13 @@ CHECK</string>
      <string>menu_btn</string>
     </property>
     <property name="borderLeftPixmap" stdset="0">
-     <pixmap resource="resources/button_resources.qrc">:/button_borders/media/buttons/btn_part1.svg</pixmap>
+     <pixmap>:/button_borders/media/buttons/btn_part1.svg</pixmap>
     </property>
     <property name="borderCenterPixmap" stdset="0">
-     <pixmap resource="resources/button_resources.qrc">:/button_borders/media/buttons/btn_part2.svg</pixmap>
+     <pixmap>:/button_borders/media/buttons/btn_part2.svg</pixmap>
     </property>
     <property name="borderRightPixmap" stdset="0">
-     <pixmap resource="resources/button_resources.qrc">:/button_borders/media/buttons/btn_part3.svg</pixmap>
+     <pixmap>:/button_borders/media/buttons/btn_part3.svg</pixmap>
     </property>
     <property name="button_type" stdset="0">
      <string>icon</string>
@@ -679,13 +717,13 @@ CHECK</string>
      <string>menu_btn</string>
     </property>
     <property name="borderLeftPixmap" stdset="0">
-     <pixmap resource="resources/button_resources.qrc">:/button_borders/media/buttons/btn_part1.svg</pixmap>
+     <pixmap>:/button_borders/media/buttons/btn_part1.svg</pixmap>
     </property>
     <property name="borderCenterPixmap" stdset="0">
-     <pixmap resource="resources/button_resources.qrc">:/button_borders/media/buttons/btn_part2.svg</pixmap>
+     <pixmap>:/button_borders/media/buttons/btn_part2.svg</pixmap>
     </property>
     <property name="borderRightPixmap" stdset="0">
-     <pixmap resource="resources/button_resources.qrc">:/button_borders/media/buttons/btn_part3.svg</pixmap>
+     <pixmap>:/button_borders/media/buttons/btn_part3.svg</pixmap>
     </property>
     <property name="button_type" stdset="0">
      <string>icon</string>
@@ -742,13 +780,13 @@ CHECK</string>
      <string>menu_btn</string>
     </property>
     <property name="borderLeftPixmap" stdset="0">
-     <pixmap resource="resources/button_resources.qrc">:/button_borders/media/buttons/btn_part1.svg</pixmap>
+     <pixmap>:/button_borders/media/buttons/btn_part1.svg</pixmap>
     </property>
     <property name="borderCenterPixmap" stdset="0">
-     <pixmap resource="resources/button_resources.qrc">:/button_borders/media/buttons/btn_part2.svg</pixmap>
+     <pixmap>:/button_borders/media/buttons/btn_part2.svg</pixmap>
     </property>
     <property name="borderRightPixmap" stdset="0">
-     <pixmap resource="resources/button_resources.qrc">:/button_borders/media/buttons/btn_part3.svg</pixmap>
+     <pixmap>:/button_borders/media/buttons/btn_part3.svg</pixmap>
     </property>
     <property name="button_type" stdset="0">
      <string>normal</string>
@@ -805,13 +843,13 @@ CHECK</string>
      <string>menu_btn</string>
     </property>
     <property name="borderLeftPixmap" stdset="0">
-     <pixmap resource="resources/button_resources.qrc">:/button_borders/media/buttons/btn_part1.svg</pixmap>
+     <pixmap>:/button_borders/media/buttons/btn_part1.svg</pixmap>
     </property>
     <property name="borderCenterPixmap" stdset="0">
-     <pixmap resource="resources/button_resources.qrc">:/button_borders/media/buttons/btn_part2.svg</pixmap>
+     <pixmap>:/button_borders/media/buttons/btn_part2.svg</pixmap>
     </property>
     <property name="borderRightPixmap" stdset="0">
-     <pixmap resource="resources/button_resources.qrc">:/button_borders/media/buttons/btn_part3.svg</pixmap>
+     <pixmap>:/button_borders/media/buttons/btn_part3.svg</pixmap>
     </property>
     <property name="button_type" stdset="0">
      <string>normal</string>
@@ -998,13 +1036,13 @@ CHECK</string>
      <string>menu_btn</string>
     </property>
     <property name="borderLeftPixmap" stdset="0">
-     <pixmap resource="resources/button_resources.qrc">:/button_borders/media/buttons/btn_part1.svg</pixmap>
+     <pixmap>:/button_borders/media/buttons/btn_part1.svg</pixmap>
     </property>
     <property name="borderCenterPixmap" stdset="0">
-     <pixmap resource="resources/button_resources.qrc">:/button_borders/media/buttons/btn_part2.svg</pixmap>
+     <pixmap>:/button_borders/media/buttons/btn_part2.svg</pixmap>
     </property>
     <property name="borderRightPixmap" stdset="0">
-     <pixmap resource="resources/button_resources.qrc">:/button_borders/media/buttons/btn_part3.svg</pixmap>
+     <pixmap>:/button_borders/media/buttons/btn_part3.svg</pixmap>
     </property>
     <property name="button_type" stdset="0">
      <string>icon</string>

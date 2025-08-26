@@ -194,14 +194,14 @@
          </property>
          <property name="minimumSize">
           <size>
-           <width>120</width>
-           <height>60</height>
+           <width>250</width>
+           <height>80</height>
           </size>
          </property>
          <property name="maximumSize">
           <size>
-           <width>220</width>
-           <height>70</height>
+           <width>250</width>
+           <height>80</height>
           </size>
          </property>
          <property name="font">
@@ -257,14 +257,14 @@
          </property>
          <property name="minimumSize">
           <size>
-           <width>120</width>
-           <height>60</height>
+           <width>250</width>
+           <height>80</height>
           </size>
          </property>
          <property name="maximumSize">
           <size>
-           <width>220</width>
-           <height>70</height>
+           <width>250</width>
+           <height>80</height>
           </size>
          </property>
          <property name="font">
@@ -379,7 +379,7 @@
       </widget>
      </item>
      <item>
-      <widget class="BlocksCustomButton" name="load_header_back_button">
+      <widget class="IconButton" name="load_header_back_button">
        <property name="sizePolicy">
         <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
          <horstretch>0</horstretch>
@@ -447,9 +447,9 @@
     <property name="geometry">
      <rect>
       <x>10</x>
-      <y>90</y>
+      <y>80</y>
       <width>691</width>
-      <height>221</height>
+      <height>264</height>
      </rect>
     </property>
     <layout class="QGridLayout" name="load_page_content_layout">
@@ -479,13 +479,13 @@
        <property name="minimumSize">
         <size>
          <width>200</width>
-         <height>60</height>
+         <height>80</height>
         </size>
        </property>
        <property name="maximumSize">
         <size>
-         <width>250</width>
-         <height>60</height>
+         <width>200</width>
+         <height>80</height>
         </size>
        </property>
        <property name="font">
@@ -542,13 +542,13 @@
        <property name="minimumSize">
         <size>
          <width>200</width>
-         <height>60</height>
+         <height>80</height>
         </size>
        </property>
        <property name="maximumSize">
         <size>
-         <width>250</width>
-         <height>60</height>
+         <width>200</width>
+         <height>80</height>
         </size>
        </property>
        <property name="font">
@@ -605,13 +605,13 @@
        <property name="minimumSize">
         <size>
          <width>200</width>
-         <height>60</height>
+         <height>80</height>
         </size>
        </property>
        <property name="maximumSize">
         <size>
-         <width>250</width>
-         <height>60</height>
+         <width>200</width>
+         <height>80</height>
         </size>
        </property>
        <property name="font">
@@ -668,13 +668,13 @@
        <property name="minimumSize">
         <size>
          <width>200</width>
-         <height>60</height>
+         <height>80</height>
         </size>
        </property>
        <property name="maximumSize">
         <size>
-         <width>250</width>
-         <height>60</height>
+         <width>200</width>
+         <height>80</height>
         </size>
        </property>
        <property name="font">
@@ -731,13 +731,13 @@
        <property name="minimumSize">
         <size>
          <width>200</width>
-         <height>60</height>
+         <height>80</height>
         </size>
        </property>
        <property name="maximumSize">
         <size>
-         <width>250</width>
-         <height>60</height>
+         <width>200</width>
+         <height>80</height>
         </size>
        </property>
        <property name="font">
@@ -794,13 +794,13 @@
        <property name="minimumSize">
         <size>
          <width>200</width>
-         <height>60</height>
+         <height>80</height>
         </size>
        </property>
        <property name="maximumSize">
         <size>
-         <width>250</width>
-         <height>60</height>
+         <width>200</width>
+         <height>80</height>
         </size>
        </property>
        <property name="font">
@@ -852,9 +852,9 @@
     <property name="geometry">
      <rect>
       <x>10</x>
-      <y>320</y>
+      <y>341</y>
       <width>691</width>
-      <height>71</height>
+      <height>51</height>
      </rect>
     </property>
     <layout class="QHBoxLayout" name="load_page_footer_layout">
@@ -869,7 +869,7 @@
        <property name="minimumSize">
         <size>
          <width>200</width>
-         <height>60</height>
+         <height>70</height>
         </size>
        </property>
        <property name="maximumSize">
@@ -913,15 +913,6 @@ Filament</string>
        </property>
        <property name="class" stdset="0">
         <string>menu_btn</string>
-       </property>
-       <property name="borderLeftPixmap" stdset="0">
-        <pixmap resource="resources/button_resources.qrc">:/button_borders/media/buttons/btn_part1.svg</pixmap>
-       </property>
-       <property name="borderCenterPixmap" stdset="0">
-        <pixmap resource="resources/button_resources.qrc">:/button_borders/media/buttons/btn_part2.svg</pixmap>
-       </property>
-       <property name="borderRightPixmap" stdset="0">
-        <pixmap resource="resources/button_resources.qrc">:/button_borders/media/buttons/btn_part3.svg</pixmap>
        </property>
        <property name="button_type" stdset="0">
         <string>normal</string>
@@ -1001,7 +992,7 @@ Filament</string>
       </widget>
      </item>
      <item alignment="Qt::AlignRight|Qt::AlignVCenter">
-      <widget class="BlocksCustomButton" name="custom_filament_header_back_btn">
+      <widget class="IconButton" name="custom_filament_header_back_btn">
        <property name="sizePolicy">
         <sizepolicy hsizetype="MinimumExpanding" vsizetype="MinimumExpanding">
          <horstretch>0</horstretch>
@@ -1055,11 +1046,8 @@ Filament</string>
        <property name="class" stdset="0">
         <string>menu_btn</string>
        </property>
-       <property name="button_type" stdset="0">
-        <string>icon</string>
-       </property>
        <property name="icon_pixmap" stdset="0">
-        <pixmap resource="resources/button_resources.qrc">:/button_borders/media/btn_icons/back.svg</pixmap>
+        <pixmap>:/button_borders/media/btn_icons/back.svg</pixmap>
        </property>
       </widget>
      </item>
@@ -1071,7 +1059,7 @@ Filament</string>
       <x>10</x>
       <y>120</y>
       <width>691</width>
-      <height>222</height>
+      <height>234</height>
      </rect>
     </property>
     <layout class="QVBoxLayout" name="cfil_page_content_layout" stretch="0,0,1">
@@ -1274,13 +1262,13 @@ Filament</string>
        <property name="minimumSize">
         <size>
          <width>200</width>
-         <height>60</height>
+         <height>70</height>
         </size>
        </property>
        <property name="maximumSize">
         <size>
          <width>200</width>
-         <height>60</height>
+         <height>70</height>
         </size>
        </property>
        <property name="font">
@@ -1318,15 +1306,6 @@ Filament</string>
        <property name="class" stdset="0">
         <string>menu_btn</string>
        </property>
-       <property name="borderLeftPixmap" stdset="0">
-        <pixmap resource="resources/button_resources.qrc">:/button_borders/media/buttons/btn_part1.svg</pixmap>
-       </property>
-       <property name="borderCenterPixmap" stdset="0">
-        <pixmap resource="resources/button_resources.qrc">:/button_borders/media/buttons/btn_part2.svg</pixmap>
-       </property>
-       <property name="borderRightPixmap" stdset="0">
-        <pixmap resource="resources/button_resources.qrc">:/button_borders/media/buttons/btn_part3.svg</pixmap>
-       </property>
        <property name="button_type" stdset="0">
         <string>normal</string>
        </property>
@@ -1341,6 +1320,11 @@ Filament</string>
    <class>BlocksCustomButton</class>
    <extends>QPushButton</extends>
    <header location="global">lib.utils.blocks_button</header>
+  </customwidget>
+  <customwidget>
+   <class>IconButton</class>
+   <extends>QPushButton</extends>
+   <header location="global">lib.utils.iconButton</header>
   </customwidget>
  </customwidgets>
  <resources>
