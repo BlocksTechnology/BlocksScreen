@@ -9,7 +9,6 @@ from PyQt6.QtWidgets import QFrame
 
 
 class ConnectionPage(QFrame):
-    # @ Signals
     text_updated = pyqtSignal(int, name="connection_text_updated")
     retry_connection_clicked = pyqtSignal(name="retry_connection_clicked")
     wifi_button_clicked = pyqtSignal(name="call_network_page")

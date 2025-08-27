@@ -1,5 +1,4 @@
 import logging
-from typing import Type
 
 import requests
 from requests import Request, Response
@@ -26,17 +25,17 @@ class MoonRest:
     """
 
     timeout = 3
-    # TODO: The ip and port need to come from a configfile
 
-    def __init__(self, ip="localhost", port="7125", api_key=False):
-        self._ip = ip
+    def __init__(
+        self, host: str = "localhost", port: int = 7125, api_key=False
+    ):
+        self._host = host
         self._port = port
         self._api_key = api_key
 
     @property
     def build_endpoint(self):
-        # TODO: Need to also account for if the port is https
-        return f"http://{self._ip}:{self._port}"
+        return f"http://{self._host}:{self._port}"
 
     def get_oneshot_token(self):
         """Requests Moonraker API for a oneshot token to be used on
@@ -130,14 +129,3 @@ class MoonRest:
 
         except Exception as e:
             logging.info(f"Unexpected error while sending HTTP request: {e}")
-
-    # Blocking HTTP Client
-    # class MoonRestClientBlocking(tornado.httpclient.HTTPClient):
-    ...
-
-    # def __init__(self, async_client_class: AsyncHTTPClient | None = None, **kwargs: logging.Any) -> None:
-    #     super(MoonRestClientBlocking, self).__init__(async_client_class, **kwargs)
-
-
-# ASYNC HTTP Client
-# class MoonRestClientNonBlocking(tornado.httpclient.AsyncHTTPClient): ...

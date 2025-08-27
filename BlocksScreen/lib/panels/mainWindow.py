@@ -3,8 +3,8 @@ import typing
 from collections import deque
 from functools import partial
 
-from configfile import BlocksScreenConfig
 import events
+from configfile import BlocksScreenConfig, get_configparser
 from lib.files import Files
 from lib.machine import MachineControl
 from lib.moonrakerComm import MoonWebSocket
@@ -26,6 +26,7 @@ from lib.ui.resources.main_menu_resources_rc import *
 from lib.ui.resources.system_resources_rc import *
 from lib.ui.resources.top_bar_resources_rc import *
 from PyQt6 import QtCore, QtGui, QtWidgets
+from screensaver import ScreenSaver
 
 _logger = logging.getLogger(name="logs/BlocksScreen.log")
 
@@ -41,22 +42,17 @@ class MainWindow(QtWidgets.QMainWindow):
     handle_error_response = QtCore.pyqtSignal(
         list, name="handle_error_response"
     )
-
     call_network_panel = QtCore.pyqtSignal(
         name="visibilityChange_networkPanel"
     )
 
-    def __init__(self, config):
+    def __init__(self):
         super(MainWindow, self).__init__()
-        
-        self.config: BlocksScreenConfig = config
-        
-        
-        if not self.config.has_section("server"): 
-            
+        self.config: BlocksScreenConfig = get_configparser()
+
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
-        
+        self.screensaver = ScreenSaver(self)
 
         self.ui.main_content_widget.setCurrentIndex(0)
         self.popup = Popup(self)
@@ -66,9 +62,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.index_stack = deque(maxlen=4)
         self.printer = Printer(self, self.ws)
         self.conn_window = ConnectionPage(self, self.ws)
-
         self.installEventFilter(self.conn_window)
-
         self.printPanel = PrintTab(
             self.ui.printTab, self.file_data, self.ws, self.printer
         )
@@ -144,27 +138,27 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui.main_content_widget.currentChanged.connect(
             slot=self.reset_tab_indexes
         )
-
         # self.printPanel.request_block_manual_tab_change.connect(
         # self.disable_tab_bar
         # )
         # self.printPanel.request_activate_manual_tab_change.connect(
         # self.enable_tab_bar
         # )
-
         self.call_network_panel.connect(self.networkPanel.call_network_panel)
         self.conn_window.wifi_button_clicked.connect(
             self.call_network_panel.emit
         )
         self.ui.wifi_button.clicked.connect(self.call_network_panel.emit)
-
-        ##### handle error response for probe helper page
         self.handle_error_response.connect(
             self.controlPanel.probe_helper_page.handle_error_response
         )
 
         self.ui.extruder_temp_display.display_format = "upper_downer"
         self.ui.bed_temp_display.display_format = "upper_downer"
+
+        if self.config.has_section("server"):
+            # @ Start websocket connection with moonraker
+            self.bo_ws_startup.emit()
 
         self.reset_tab_indexes()
 

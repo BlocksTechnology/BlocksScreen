@@ -12,8 +12,8 @@ from events import (
     WebSocketOpen,
 )
 from lib.moonrest import MoonRest
-from PyQt6 import QtCore, QtWidgets
 from lib.utils.RepeatedTimer import RepeatedTimer
+from PyQt6 import QtCore, QtWidgets
 
 _logger = logging.getLogger(name="logs/BlocksScreen.log")
 
@@ -65,7 +65,6 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
     max_retries = 3
     timeout = 3
 
-    # @ Signals
     connecting_signal = QtCore.pyqtSignal(
         [int], [str], name="websocket_connecting"
     )
@@ -82,19 +81,18 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
     )
 
     def __init__(self, parent: QtCore.QObject) -> None:
-        super().__init__(parent=parent)
+        super().__init__(parent)
         self.daemon = True
 
-        # * This information should be in a  configuration file
-        # self.host: str | None = None
-        # self.port: int | None = None
+        self._host = parent.config.get("host", parser=str, default="localhost")
+        self._port = parent.config.get("port", parser=int, default=7125)
 
         self.ws: websocket.WebSocketApp | None = None
         self._callback = None
         self._wst = None
         self._request_id = 0
         self.request_table = {}
-        self._moonRest = MoonRest()
+        self._moonRest = MoonRest(host= self._host, port = self._port)
         self.api: MoonAPI = MoonAPI(self)
         self._retry_timer: RepeatedTimer
         websocket.setdefaulttimeout(self.timeout)
@@ -167,7 +165,10 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
                 f"Unexpected error occurred when trying to acquire oneshot token: {e}"
             )
             return False
-        _url = f"ws://localhost:7125/websocket?token={_oneshot_token}"
+
+        _url = (
+            f"ws://{self._host}:{self._port}/websocket?token={_oneshot_token}"
+        )
         self.ws = websocket.WebSocketApp(
             _url,
             on_open=self.on_open,

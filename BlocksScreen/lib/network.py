@@ -49,7 +49,6 @@ class SdbusNetworkManager(QObject):
     """
 
     def __init__(self, parent: typing.Optional["QObject"]):
-    # def __init__(self):
         super(SdbusNetworkManager, self).__init__()
         self.system_dbus = sdbus.sd_bus_open_system()
         if not self.system_dbus:
@@ -1371,4 +1370,3 @@ class SdbusNetworkManagerDummy:
         print(new_ssid)
         print(f"Updated a network connection {ssid} | {password} | {new_ssid}")
         return {"status": "AUGH", "msg": "dummy"}
-

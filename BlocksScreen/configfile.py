@@ -36,6 +36,12 @@ class Sentinel(enum.Enum):
     MISSING = object
 
 
+class ConfigError(Exception):
+    def __init__(self, msg) -> None:
+        super().__init__(msg)
+        self.msg = msg
+
+
 class BlocksScreenConfig:
     config = configparser.ConfigParser(
         allow_no_value=True,
@@ -47,6 +53,15 @@ class BlocksScreenConfig:
     )
 
     update_pending: bool = False
+
+    _instance = None
+
+    # def __new__(
+    #     cls, *args, **kwargs
+    # ) -> BlocksScreenConfig:  # Singleton pattern
+    #     if not cls._instance:
+    #         cls._instance = super(BlocksScreenConfig, cls).__new__(cls)
+    #     return cls._instance
 
     def __init__(
         self, configfile: typing.Union[str, pathlib.Path], section: str
@@ -300,7 +315,7 @@ class BlocksScreenConfig:
             self.file_lock.release()
 
 
-def get_configparser() -> typing.Union[BlocksScreenConfig, None]:
+def get_configparser() -> BlocksScreenConfig:
     wanted_target = os.path.join(DEFAULT_CONFIGFILE_PATH, "BlocksScreen.cfg")
     fallback = os.path.join(WORKING_DIR, "BlocksScreen.cfg")
     configfile = (
@@ -308,10 +323,13 @@ def get_configparser() -> typing.Union[BlocksScreenConfig, None]:
         if check_file_on_path(DEFAULT_CONFIGFILE_PATH, "BlocksScreen.cfg")
         else fallback
     )
-    config_object = BlocksScreenConfig(configfile=configfile, section="server")
-    
-    if not config_object.has_section("server"):
-        # The crucial section does not exist, can only show an error message that it cannot achieve a connection
-        return Con
+    try:
+        config_object = BlocksScreenConfig(
+            configfile=configfile, section="server"
+        )
+        config_object.load_config()
+        if not config_object.has_section("server"):
+            raise ConfigError("Section [server] is missing from configuration")
+    except ConfigError:
+        logging.error("Error loading configuration file for the application.")
     return BlocksScreenConfig(configfile=configfile, section="server")
-

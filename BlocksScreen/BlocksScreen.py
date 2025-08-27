@@ -1,31 +1,13 @@
-
 import logging
-# import os
 import sys
 import typing
 
-from configfile import BlocksScreenConfig, get_configparser
 import helper_methods as helper_methods
 import logger
 from lib.panels.mainWindow import MainWindow
 from PyQt6 import QtCore, QtGui, QtWidgets
-from screensaver import ScreenSaver
-
-# os.environ["QT_AUTO_SCREEN_SCALE_FACTOR"] = "1.0"
-# os.environ["QT_SCALE_FACTOR"] = "1.0"
-# os.environ["QT_DEVICE_PIXEL_RATIO"] = "1.0"
-# os.environ["QT_QPA_PLATFORM"] = "xcb"
-# os.environ["QT_STYLE_OVERRIDE"] = "fusion"
-
 
 _logger = logging.getLogger(name="logs/BlocksScreen.log")
-
-# QtGui.QGuiApplication.setHighDpiScaleFactorRoundingPolicy(  # type: ignore
-#     QtCore.Qt.HighDpiScaleFactorRoundingPolicy.Ceil
-# )
-# QtGui.QGuiApplication.setLayoutDirection(  # type: ignore
-#     QtCore.Qt.LayoutDirection.LayoutDirectionAuto
-# )
 QtGui.QGuiApplication.setAttribute(
     QtCore.Qt.ApplicationAttribute.AA_SynthesizeMouseForUnhandledTouchEvents,
     True,
@@ -52,7 +34,7 @@ def setup_app_loggers():
     _logger.info("============ BlocksScreen Initializing ============")
 
 
-def show_splash(window: typing.Optional["QtWidgets.QWidget"] = None):
+def show_splash(window: typing.Optional[QtWidgets.QWidget] = None):
     logo = QtGui.QPixmap(
         "Blocks_Screen/BlocksScreen/lib/ui/resources/logoblocks.png"
     )
@@ -63,28 +45,16 @@ def show_splash(window: typing.Optional["QtWidgets.QWidget"] = None):
 
 
 def run():
-    print(f"{RED} STARTING BLOCKS SCREEN {RESET}")
     setup_app_loggers()
     BlocksScreen = QtWidgets.QApplication([])
-    config = get_configparser()    
-    main_window = MainWindow(config)
-    # show_splash(main_window)
     BlocksScreen.setApplicationName("BlocksScreen")
     BlocksScreen.setApplicationDisplayName("BlocksScreen")
     BlocksScreen.setDesktopFileName("BlocksScreen")
-    # BlocksScreen.setHighDpiScaleFactorRoundingPolicy(
-    #     QtCore.Qt.HighDpiScaleFactorRoundingPolicy.Round
-    # )
-    screensaver = ScreenSaver()
-    BlocksScreen.processEvents()
-    # main_window.setScreen(BlocksScreen.screens()[0])
-
-    # main_window.showFullScreen()
-    main_window.show()
     
-    if not config.has_section("server"): 
-        main_window.
-    main_window.bo_ws_startup.emit()
+    main_window = MainWindow()
+
+    BlocksScreen.processEvents()
+    main_window.show()
     sys.exit(BlocksScreen.exec())
 
 
