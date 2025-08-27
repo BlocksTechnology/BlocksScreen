@@ -6,6 +6,7 @@ from helper_methods import calculate_current_layer, estimate_print_time
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_label import BlocksLabel
 from lib.utils.display_button import DisplayButton
+from lib.utils.blocks_progressbar import CustomProgressBar
 from lib.panels.widgets import dialogPage
 import events
 
@@ -55,6 +56,8 @@ class JobStatusWidget(QtWidgets.QWidget):
         self.tune_menu_btn.clicked.connect(self.tune_clicked.emit)
         self.pause_printing_btn.clicked.connect(self.pause_resume_print)
         self.stop_printing_btn.clicked.connect(self.handleCancel)
+
+        print("PROGRESSBARRECT", self.printing_progress_bar.rect())
 
     def handleCancel(self) -> None:
         """Handle the cancel print job dialog"""
@@ -277,9 +280,6 @@ class JobStatusWidget(QtWidgets.QWidget):
                 self.printing_progress_bar.setValue(
                     int(math.trunc(self.print_progress * 100))
                 )
-                self.progress_value_label.setText(
-                    f"{math.trunc(self.print_progress * 100)}"
-                )
 
     def setupUI(self) -> None:
         sizePolicy = QtWidgets.QSizePolicy(
@@ -293,9 +293,10 @@ class JobStatusWidget(QtWidgets.QWidget):
         self.setMinimumSize(QtCore.QSize(710, 400))
         self.setMaximumSize(QtCore.QSize(720, 420))
         self.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
-        self.verticalLayout_3 = QtWidgets.QVBoxLayout(self)
-        self.verticalLayout_3.setObjectName("verticalLayout_3")
-        self.job_status_header_layout = QtWidgets.QHBoxLayout()
+        self.widget = QtWidgets.QWidget(self)
+        self.widget.setGeometry(QtCore.QRect(11, 11, 691, 62))
+        self.widget.setObjectName("widget")
+        self.job_status_header_layout = QtWidgets.QHBoxLayout(self.widget)
         self.job_status_header_layout.setContentsMargins(1, 1, 1, 1)
         self.job_status_header_layout.setSpacing(20)
         self.job_status_header_layout.setObjectName("job_status_header_layout")
@@ -358,8 +359,10 @@ class JobStatusWidget(QtWidgets.QWidget):
         )
         self.js_file_name_label.setObjectName("js_file_name_label")
         self.job_status_header_layout.addWidget(self.js_file_name_label)
-        self.verticalLayout_3.addLayout(self.job_status_header_layout)
-        self.job_status_content_layout = QtWidgets.QVBoxLayout()
+        self.widget1 = QtWidgets.QWidget(self)
+        self.widget1.setGeometry(QtCore.QRect(10, 80, 690, 321))
+        self.widget1.setObjectName("widget1")
+        self.job_status_content_layout = QtWidgets.QVBoxLayout(self.widget1)
         self.job_status_content_layout.setSizeConstraint(
             QtWidgets.QLayout.SizeConstraint.SetMinimumSize
         )
@@ -411,8 +414,8 @@ class JobStatusWidget(QtWidgets.QWidget):
             self.pause_printing_btn.sizePolicy().hasHeightForWidth()
         )
         self.pause_printing_btn.setSizePolicy(sizePolicy)
-        self.pause_printing_btn.setMinimumSize(QtCore.QSize(200, 60))
-        self.pause_printing_btn.setMaximumSize(QtCore.QSize(16777215, 80))
+        self.pause_printing_btn.setMinimumSize(QtCore.QSize(200, 80))
+        self.pause_printing_btn.setMaximumSize(QtCore.QSize(200, 80))
         font = QtGui.QFont()
         font.setFamily("MS Shell Dlg 2")
         font.setPointSize(18)
@@ -448,8 +451,8 @@ class JobStatusWidget(QtWidgets.QWidget):
             self.stop_printing_btn.sizePolicy().hasHeightForWidth()
         )
         self.stop_printing_btn.setSizePolicy(sizePolicy)
-        self.stop_printing_btn.setMinimumSize(QtCore.QSize(200, 60))
-        self.stop_printing_btn.setMaximumSize(QtCore.QSize(16777215, 80))
+        self.stop_printing_btn.setMinimumSize(QtCore.QSize(200, 80))
+        self.stop_printing_btn.setMaximumSize(QtCore.QSize(200, 80))
         font = QtGui.QFont()
         font.setFamily("MS Shell Dlg 2")
         font.setPointSize(18)
@@ -486,7 +489,7 @@ class JobStatusWidget(QtWidgets.QWidget):
         )
         self.tune_menu_btn.setSizePolicy(sizePolicy)
         self.tune_menu_btn.setMinimumSize(QtCore.QSize(200, 60))
-        self.tune_menu_btn.setMaximumSize(QtCore.QSize(16777215, 80))
+        self.tune_menu_btn.setMaximumSize(QtCore.QSize(200, 80))
         font = QtGui.QFont()
         font.setFamily("MS Shell Dlg 2")
         font.setPointSize(18)
@@ -522,39 +525,7 @@ class JobStatusWidget(QtWidgets.QWidget):
         self.job_status_progress_layout.setObjectName(
             "job_status_progress_layout"
         )
-        self.progress_text_label = QtWidgets.QLabel(parent=self)
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.Minimum,
-            QtWidgets.QSizePolicy.Policy.Minimum,
-        )
-        sizePolicy.setHorizontalStretch(0)
-        sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(
-            self.progress_text_label.sizePolicy().hasHeightForWidth()
-        )
-        self.progress_text_label.setSizePolicy(sizePolicy)
-        font = QtGui.QFont()
-        font.setFamily("Momcake")
-        font.setPointSize(16)
-        self.progress_text_label.setFont(font)
-        self.progress_text_label.setLayoutDirection(
-            QtCore.Qt.LayoutDirection.RightToLeft
-        )
-        self.progress_text_label.setStyleSheet(
-            "background: transparent; color: white;"
-        )
-        self.progress_text_label.setAlignment(
-            QtCore.Qt.AlignmentFlag.AlignCenter
-        )
-        self.progress_text_label.setObjectName("progress_text_label")
-        self.job_status_progress_layout.addWidget(
-            self.progress_text_label,
-            0,
-            0,
-            1,
-            1,
-            QtCore.Qt.AlignmentFlag.AlignVCenter,
-        )
+
         self.progress_value_label = QtWidgets.QLabel(parent=self)
         self.progress_value_label.setEnabled(True)
         sizePolicy = QtWidgets.QSizePolicy(
@@ -578,30 +549,25 @@ class JobStatusWidget(QtWidgets.QWidget):
         self.job_status_progress_layout.addWidget(
             self.progress_value_label, 0, 1, 1, 1
         )
-        self.printing_progress_bar = QtWidgets.QProgressBar(parent=self)
+        self.printing_progress_bar = CustomProgressBar()
+        self.printing_progress_bar.setMinimumHeight(120)
+
+        self.printing_progress_bar.setObjectName("printing_progress_bar")
         sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.Expanding,
-            QtWidgets.QSizePolicy.Policy.Minimum,
+            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
+            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
         )
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(
-            self.printing_progress_bar.sizePolicy().hasHeightForWidth()
+            self.tune_menu_btn.sizePolicy().hasHeightForWidth()
         )
         self.printing_progress_bar.setSizePolicy(sizePolicy)
-        self.printing_progress_bar.setLayoutDirection(
-            QtCore.Qt.LayoutDirection.LeftToRight
-        )
-        self.printing_progress_bar.setProperty("value", 24)
-        self.printing_progress_bar.setObjectName("printing_progress_bar")
+
         self.job_status_progress_layout.addWidget(
-            self.printing_progress_bar,
-            0,
-            2,
-            1,
-            1,
-            QtCore.Qt.AlignmentFlag.AlignVCenter,
+            self.printing_progress_bar, 0, 2, 1, 1
         )
+
         self.job_status_content_layout.addLayout(
             self.job_status_progress_layout
         )
@@ -670,9 +636,6 @@ class JobStatusWidget(QtWidgets.QWidget):
         self.job_status_content_layout.setStretch(0, 1)
         self.job_status_content_layout.setStretch(1, 1)
         self.job_status_content_layout.setStretch(2, 1)
-        self.verticalLayout_3.addLayout(self.job_status_content_layout)
-
-        self.setLayout(self.verticalLayout_3)
         self.tune_menu_btn.setText("Tune")
         self.stop_printing_btn.setText("Cancel")
         self.pause_printing_btn.setText("Pause")
