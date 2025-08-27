@@ -73,9 +73,7 @@ class BabystepPage(QtWidgets.QWidget):
         print(_sender.text()[:-3], "is now set")
 
     def savevalue(self):
-        self.run_gcode.emit(
-            "SAVE_CONFIG"  # Saves LA Z OFFSET
-        )
+        self.run_gcode.emit("Z_OFFSET_APPLY_PROBE")
         self.savebutton.setVisible(False)
         self.bbp_z_offset_title_label.setText(
             self.bbp_z_offset_current_value.text()
