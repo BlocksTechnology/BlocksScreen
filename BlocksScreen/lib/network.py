@@ -644,6 +644,7 @@ class SdbusNetworkManager(QtCore.QObject):
                 try:
                     NetworkManagerSettings().add_connection(properties)
                     NetworkManagerSettings().reload_connections()
+
                     return {
                         "status": "success",
                         "msg": "Network added successfully",
@@ -945,3 +946,11 @@ class SdbusNetworkManager(QtCore.QObject):
             return {"status": "updated"}
         except Exception:
             return {"status": "error", "error": "Unexpected error"}
+
+
+if __name__ == "__main__":
+    nm = SdbusNetworkManager()
+    # print(nm.add_wifi_network("NOKIA-2719", "3facf22789"))
+    print(nm.create_hotspot())
+    print(nm.get_current_ssid())
+    print(nm.get_saved_networks_with_for())
