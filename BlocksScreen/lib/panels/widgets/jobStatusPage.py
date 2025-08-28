@@ -51,13 +51,12 @@ class JobStatusWidget(QtWidgets.QWidget):
         super().__init__(parent)
 
         self.canceldialog = dialogPage.DialogPage(self)
+        self.thumbnail: QtGui.QImage = QtGui.QImage()
 
         self.setupUI()
         self.tune_menu_btn.clicked.connect(self.tune_clicked.emit)
         self.pause_printing_btn.clicked.connect(self.pause_resume_print)
         self.stop_printing_btn.clicked.connect(self.handleCancel)
-
-        print("PROGRESSBARRECT", self.printing_progress_bar.rect())
 
     def handleCancel(self) -> None:
         """Handle the cancel print job dialog"""
@@ -114,6 +113,7 @@ class JobStatusWidget(QtWidgets.QWidget):
         self.layer_display_button.setText("?")
         self.layer_display_button.secondary_text = str(self.total_layers)
         self.file_metadata = fileinfo
+        print(fileinfo)
 
     @QtCore.pyqtSlot(name="pause_resume_print")
     def pause_resume_print(self) -> None:
@@ -148,6 +148,7 @@ class JobStatusWidget(QtWidgets.QWidget):
         """
 
         if isinstance(value, str):
+            print(f"Print status update received: {field} -> {value}")
             if "filename" in field:
                 self._current_file_name = value
                 if self.js_file_name_label.text().lower() != value.lower():
@@ -281,42 +282,113 @@ class JobStatusWidget(QtWidgets.QWidget):
                     int(math.trunc(self.print_progress * 100))
                 )
 
+    def paintEvent(self, a0: QtGui.QPaintEvent) -> None:
+        _scene = QtWidgets.QGraphicsScene()
+        if not self.thumbnail.isNull():
+            _graphics_rect = self.js_thumbnail.rect().toRectF()
+            _image_rect = self.thumbnail.rect()
+
+            scaled_width = _image_rect.width()
+            scaled_height = _image_rect.height()
+            adjusted_x = (_graphics_rect.width() - scaled_width) // 2.0
+            adjusted_y = (_graphics_rect.height() - scaled_height) // 2.0
+
+            adjusted_rect = QtCore.QRectF(
+                _image_rect.x() + adjusted_x,
+                _image_rect.y() + adjusted_y,
+                scaled_width,
+                scaled_height,
+            )
+            _scene.setSceneRect(adjusted_rect)
+            _item_scaled = QtWidgets.QGraphicsPixmapItem(
+                QtGui.QPixmap.fromImage(self.thumbnail).scaled(
+                    int(scaled_width),
+                    int(scaled_height),
+                    QtCore.Qt.AspectRatioMode.KeepAspectRatio,
+                    QtCore.Qt.TransformationMode.SmoothTransformation,
+                )
+            )
+            _scene.addItem(_item_scaled)
+            self.js_thumbnail.setScene(_scene)
+
+        else:
+            self.js_thumbnail.setScene(_scene)
+
     def setupUI(self) -> None:
         sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
+            QtWidgets.QSizePolicy.Policy.Expanding,
+            QtWidgets.QSizePolicy.Policy.Expanding,
         )
         sizePolicy.setHorizontalStretch(1)
         sizePolicy.setVerticalStretch(1)
         sizePolicy.setHeightForWidth(self.sizePolicy().hasHeightForWidth())
+        # ----------------------------------size policy
+
         self.setSizePolicy(sizePolicy)
-        self.setMinimumSize(QtCore.QSize(710, 400))
+        self.setMinimumSize(QtCore.QSize(710, 420))
         self.setMaximumSize(QtCore.QSize(720, 420))
         self.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
-        self.widget = QtWidgets.QWidget(self)
-        self.widget.setGeometry(QtCore.QRect(11, 11, 691, 62))
-        self.widget.setObjectName("widget")
-        self.job_status_header_layout = QtWidgets.QHBoxLayout(self.widget)
-        self.job_status_header_layout.setContentsMargins(1, 1, 1, 1)
+
+        # ---------------------------------Widgets
+
+        self.headerWidget = QtWidgets.QWidget(self)
+        self.headerWidget.setGeometry(QtCore.QRect(11, 11, 691, 62))
+        self.headerWidget.setObjectName("headerWidget")
+
+        self.btnWidget = QtWidgets.QWidget(self)
+        self.btnWidget.setGeometry(QtCore.QRect(10, 80, 691, 90))
+        self.btnWidget.setObjectName("btnWidget")
+
+        self.progressWidget = QtWidgets.QWidget(self)
+        self.progressWidget.setGeometry(QtCore.QRect(10, 170, 471, 241))
+        self.progressWidget.setObjectName("progressWidget")
+
+        self.contentWidget = QtWidgets.QWidget(self)
+        self.contentWidget.setGeometry(QtCore.QRect(480, 170, 221, 241))
+        self.contentWidget.setObjectName("contentWidget")
+
+        # ---------------------------------layout
+
+        self.job_status_header_layout = QtWidgets.QHBoxLayout(
+            self.headerWidget
+        )
         self.job_status_header_layout.setSpacing(20)
         self.job_status_header_layout.setObjectName("job_status_header_layout")
+
+        self.job_status_progress_layout = QtWidgets.QVBoxLayout(
+            self.progressWidget
+        )
+        self.job_status_progress_layout.setSizeConstraint(
+            QtWidgets.QLayout.SizeConstraint.SetMinimumSize
+        )
+
+        self.job_status_btn_layout = QtWidgets.QHBoxLayout(self.btnWidget)
+        self.job_status_btn_layout.setSizeConstraint(
+            QtWidgets.QLayout.SizeConstraint.SetMinimumSize
+        )
+
+        self.job_content_layout = QtWidgets.QVBoxLayout(self.contentWidget)
+        self.job_content_layout.setObjectName("job_content_layout")
+
+        self.job_status_btn_layout.setContentsMargins(5, 5, 5, 5)
+        self.job_status_btn_layout.setSpacing(5)
+        self.job_status_btn_layout.setObjectName("job_status_btn_layout")
+
+        self.job_stats_display_layout = QtWidgets.QVBoxLayout()
+        self.job_stats_display_layout.setObjectName("job_stats_display_layout")
+
+        # -----------------------------Fonts
+        font = QtGui.QFont()
+        font.setFamily("Montserrat")
+        font.setPointSize(14)
+
+        # ------------------------------Header
+
         self.js_file_name_icon = BlocksLabel(parent=self)
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-        )
-        sizePolicy.setHorizontalStretch(0)
-        sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(
-            self.js_file_name_icon.sizePolicy().hasHeightForWidth()
-        )
+
         self.js_file_name_icon.setSizePolicy(sizePolicy)
         self.js_file_name_icon.setMinimumSize(QtCore.QSize(60, 60))
         self.js_file_name_icon.setMaximumSize(QtCore.QSize(60, 60))
-        font = QtGui.QFont()
-        font.setFamily("Momcake")
-        font.setPointSize(14)
-        self.js_file_name_icon.setFont(font)
         self.js_file_name_icon.setLayoutDirection(
             QtCore.Qt.LayoutDirection.RightToLeft
         )
@@ -332,24 +404,13 @@ class JobStatusWidget(QtWidgets.QWidget):
             QtGui.QPixmap(":/files/media/btn_icons/file_icon.svg"),
         )
         self.js_file_name_icon.setObjectName("js_file_name_icon")
-        self.job_status_header_layout.addWidget(self.js_file_name_icon)
+
         self.js_file_name_label = BlocksLabel(parent=self)
         self.js_file_name_label.setEnabled(True)
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.Minimum,
-            QtWidgets.QSizePolicy.Policy.Minimum,
-        )
-        sizePolicy.setHorizontalStretch(0)
-        sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(
-            self.js_file_name_label.sizePolicy().hasHeightForWidth()
-        )
         self.js_file_name_label.setSizePolicy(sizePolicy)
         self.js_file_name_label.setMinimumSize(QtCore.QSize(200, 60))
         self.js_file_name_label.setMaximumSize(QtCore.QSize(16777215, 60))
-        font = QtGui.QFont()
-        font.setFamily("Montserrat")
-        font.setPointSize(14)
+
         self.js_file_name_label.setFont(font)
         self.js_file_name_label.setStyleSheet(
             "background: transparent; color: white;"
@@ -358,284 +419,128 @@ class JobStatusWidget(QtWidgets.QWidget):
             QtCore.Qt.AlignmentFlag.AlignCenter
         )
         self.js_file_name_label.setObjectName("js_file_name_label")
+
+        self.job_status_header_layout.addWidget(self.js_file_name_icon)
         self.job_status_header_layout.addWidget(self.js_file_name_label)
-        self.widget1 = QtWidgets.QWidget(self)
-        self.widget1.setGeometry(QtCore.QRect(10, 80, 690, 321))
-        self.widget1.setObjectName("widget1")
-        self.job_status_content_layout = QtWidgets.QVBoxLayout(self.widget1)
-        self.job_status_content_layout.setSizeConstraint(
-            QtWidgets.QLayout.SizeConstraint.SetMinimumSize
-        )
-        self.job_status_content_layout.setContentsMargins(5, 5, 5, 5)
-        self.job_status_content_layout.setSpacing(5)
-        self.job_status_content_layout.setObjectName(
-            "job_status_content_layout"
-        )
-        self.job_status_control_buttons_layout = QtWidgets.QFrame(parent=self)
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-        )
-        sizePolicy.setHorizontalStretch(0)
-        sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(
-            self.job_status_control_buttons_layout.sizePolicy().hasHeightForWidth()
-        )
-        self.job_status_control_buttons_layout.setSizePolicy(sizePolicy)
-        self.job_status_control_buttons_layout.setMinimumSize(
-            QtCore.QSize(680, 100)
-        )
-        self.job_status_control_buttons_layout.setFrameShape(
-            QtWidgets.QFrame.Shape.NoFrame
-        )
-        self.job_status_control_buttons_layout.setFrameShadow(
-            QtWidgets.QFrame.Shadow.Plain
-        )
-        self.job_status_control_buttons_layout.setLineWidth(0)
-        self.job_status_control_buttons_layout.setObjectName(
-            "job_status_control_buttons_layout"
-        )
-        self.horizontalLayout = QtWidgets.QHBoxLayout(
-            self.job_status_control_buttons_layout
-        )
-        self.horizontalLayout.setContentsMargins(0, 0, 0, 0)
-        self.horizontalLayout.setSpacing(5)
-        self.horizontalLayout.setObjectName("horizontalLayout")
-        self.pause_printing_btn = BlocksCustomButton(
-            parent=self.job_status_control_buttons_layout
-        )
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-        )
-        sizePolicy.setHorizontalStretch(0)
-        sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(
-            self.pause_printing_btn.sizePolicy().hasHeightForWidth()
-        )
+
+        # -----------------------------buttons
+
+        font.setPointSize(18)
+
+        self.pause_printing_btn = BlocksCustomButton(self)
         self.pause_printing_btn.setSizePolicy(sizePolicy)
         self.pause_printing_btn.setMinimumSize(QtCore.QSize(200, 80))
         self.pause_printing_btn.setMaximumSize(QtCore.QSize(200, 80))
-        font = QtGui.QFont()
-        font.setFamily("MS Shell Dlg 2")
-        font.setPointSize(18)
-        font.setItalic(False)
-        font.setStyleStrategy(QtGui.QFont.StyleStrategy.PreferAntialias)
         self.pause_printing_btn.setFont(font)
-        self.pause_printing_btn.setMouseTracking(False)
-        self.pause_printing_btn.setTabletTracking(True)
-        self.pause_printing_btn.setContextMenuPolicy(
-            QtCore.Qt.ContextMenuPolicy.NoContextMenu
-        )
-        self.pause_printing_btn.setLayoutDirection(
-            QtCore.Qt.LayoutDirection.LeftToRight
-        )
-        self.pause_printing_btn.setStyleSheet("")
-        self.pause_printing_btn.setAutoDefault(False)
-        self.pause_printing_btn.setFlat(True)
         self.pause_printing_btn.setProperty(
             "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/pause.svg")
         )
         self.pause_printing_btn.setObjectName("pause_printing_btn")
-        self.horizontalLayout.addWidget(self.pause_printing_btn)
-        self.stop_printing_btn = BlocksCustomButton(
-            parent=self.job_status_control_buttons_layout
-        )
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-        )
-        sizePolicy.setHorizontalStretch(0)
-        sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(
-            self.stop_printing_btn.sizePolicy().hasHeightForWidth()
-        )
+
+        self.stop_printing_btn = BlocksCustomButton(self)
         self.stop_printing_btn.setSizePolicy(sizePolicy)
         self.stop_printing_btn.setMinimumSize(QtCore.QSize(200, 80))
         self.stop_printing_btn.setMaximumSize(QtCore.QSize(200, 80))
-        font = QtGui.QFont()
-        font.setFamily("MS Shell Dlg 2")
-        font.setPointSize(18)
-        font.setItalic(False)
-        font.setStyleStrategy(QtGui.QFont.StyleStrategy.PreferAntialias)
         self.stop_printing_btn.setFont(font)
-        self.stop_printing_btn.setMouseTracking(False)
-        self.stop_printing_btn.setTabletTracking(True)
-        self.stop_printing_btn.setContextMenuPolicy(
-            QtCore.Qt.ContextMenuPolicy.NoContextMenu
-        )
-        self.stop_printing_btn.setLayoutDirection(
-            QtCore.Qt.LayoutDirection.LeftToRight
-        )
-        self.stop_printing_btn.setStyleSheet("")
-        self.stop_printing_btn.setAutoDefault(False)
-        self.stop_printing_btn.setFlat(True)
         self.stop_printing_btn.setProperty(
             "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/stop.svg")
         )
         self.stop_printing_btn.setObjectName("stop_printing_btn")
-        self.horizontalLayout.addWidget(self.stop_printing_btn)
-        self.tune_menu_btn = BlocksCustomButton(
-            parent=self.job_status_control_buttons_layout
-        )
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-        )
-        sizePolicy.setHorizontalStretch(0)
-        sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(
-            self.tune_menu_btn.sizePolicy().hasHeightForWidth()
-        )
+
+        self.tune_menu_btn = BlocksCustomButton(self)
         self.tune_menu_btn.setSizePolicy(sizePolicy)
         self.tune_menu_btn.setMinimumSize(QtCore.QSize(200, 60))
         self.tune_menu_btn.setMaximumSize(QtCore.QSize(200, 80))
-        font = QtGui.QFont()
-        font.setFamily("MS Shell Dlg 2")
-        font.setPointSize(18)
-        font.setItalic(False)
-        font.setStyleStrategy(QtGui.QFont.StyleStrategy.PreferAntialias)
         self.tune_menu_btn.setFont(font)
-        self.tune_menu_btn.setMouseTracking(False)
-        self.tune_menu_btn.setTabletTracking(True)
-        self.tune_menu_btn.setContextMenuPolicy(
-            QtCore.Qt.ContextMenuPolicy.NoContextMenu
-        )
-        self.tune_menu_btn.setLayoutDirection(
-            QtCore.Qt.LayoutDirection.LeftToRight
-        )
-        self.tune_menu_btn.setStyleSheet("")
-        self.tune_menu_btn.setAutoDefault(False)
-        self.tune_menu_btn.setFlat(True)
         self.tune_menu_btn.setProperty(
             "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/tune.svg")
         )
         self.tune_menu_btn.setObjectName("tune_menu_btn")
-        self.horizontalLayout.addWidget(self.tune_menu_btn)
-        self.horizontalLayout.setStretch(0, 1)
-        self.horizontalLayout.setStretch(1, 1)
-        self.horizontalLayout.setStretch(2, 1)
-        self.job_status_content_layout.addWidget(
-            self.job_status_control_buttons_layout,
-            0,
-            QtCore.Qt.AlignmentFlag.AlignHCenter
-            | QtCore.Qt.AlignmentFlag.AlignVCenter,
-        )
-        self.job_status_progress_layout = QtWidgets.QGridLayout()
-        self.job_status_progress_layout.setObjectName(
-            "job_status_progress_layout"
-        )
 
-        self.progress_value_label = QtWidgets.QLabel(parent=self)
-        self.progress_value_label.setEnabled(True)
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.Minimum,
-            QtWidgets.QSizePolicy.Policy.Minimum,
-        )
-        sizePolicy.setHorizontalStretch(0)
-        sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(
-            self.progress_value_label.sizePolicy().hasHeightForWidth()
-        )
-        self.progress_value_label.setSizePolicy(sizePolicy)
-        font = QtGui.QFont()
-        font.setFamily("Montserrat")
-        font.setPointSize(14)
-        self.progress_value_label.setFont(font)
-        self.progress_value_label.setStyleSheet(
-            "background: transparent; color: white;"
-        )
-        self.progress_value_label.setObjectName("progress_value_label")
-        self.job_status_progress_layout.addWidget(
-            self.progress_value_label, 0, 1, 1, 1
-        )
+        self.job_status_btn_layout.addWidget(self.pause_printing_btn)
+        self.job_status_btn_layout.addWidget(self.stop_printing_btn)
+        self.job_status_btn_layout.addWidget(self.tune_menu_btn)
+
+        self.tune_menu_btn.setText("Tune")
+        self.stop_printing_btn.setText("Cancel")
+        self.pause_printing_btn.setText("Pause")
+
+        # -----------------------------Progress bar
+
         self.printing_progress_bar = CustomProgressBar()
-        self.printing_progress_bar.setMinimumHeight(120)
+        self.printing_progress_bar.setMinimumHeight(150)
 
         self.printing_progress_bar.setObjectName("printing_progress_bar")
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-        )
-        sizePolicy.setHorizontalStretch(0)
-        sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(
-            self.tune_menu_btn.sizePolicy().hasHeightForWidth()
-        )
         self.printing_progress_bar.setSizePolicy(sizePolicy)
 
-        self.job_status_progress_layout.addWidget(
-            self.printing_progress_bar, 0, 2, 1, 1
-        )
+        self.job_status_progress_layout.addWidget(self.printing_progress_bar)
 
-        self.job_status_content_layout.addLayout(
-            self.job_status_progress_layout
+        # ------------------------------THUMBNAIL
+        self.js_thumbnail = QtWidgets.QGraphicsView(self)
+        self.js_thumbnail.setSizePolicy(sizePolicy)
+        self.js_thumbnail.setMinimumSize(QtCore.QSize(400, 300))
+        self.js_thumbnail.setStyleSheet(
+            "QGraphicsView{\nbackground-color: transparent;\n}"
         )
-        self.job_stats_display_layout = QtWidgets.QHBoxLayout()
-        self.job_stats_display_layout.setObjectName("job_stats_display_layout")
-        self.layer_display_button = DisplayButton(parent=self)
+        self.js_thumbnail.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
+        self.js_thumbnail.setFrameShadow(QtWidgets.QFrame.Shadow.Plain)
+        self.js_thumbnail.setVerticalScrollBarPolicy(
+            QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
+        self.js_thumbnail.setHorizontalScrollBarPolicy(
+            QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
+        self.js_thumbnail.setSizeAdjustPolicy(
+            QtWidgets.QAbstractScrollArea.SizeAdjustPolicy.AdjustIgnored
+        )
+        brush = QtGui.QBrush(QtGui.QColor(0, 0, 0, 0))
+        brush.setStyle(QtCore.Qt.BrushStyle.NoBrush)
+        self.js_thumbnail.setBackgroundBrush(brush)
+        self.js_thumbnail.setRenderHints(
+            QtGui.QPainter.RenderHint.Antialiasing
+            | QtGui.QPainter.RenderHint.SmoothPixmapTransform
+            | QtGui.QPainter.RenderHint.TextAntialiasing
+        )
+        self.js_thumbnail.setViewportUpdateMode(
+            QtWidgets.QGraphicsView.ViewportUpdateMode.SmartViewportUpdate
+        )
+        self.js_thumbnail.setObjectName("js_thumbnail")
+
+        # -----------------------------display buttons
+
+        self.layer_display_button = DisplayButton(self)
         self.layer_display_button.button_type = "display_secondary"
         self.layer_display_button.setEnabled(False)
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-        )
-        sizePolicy.setHorizontalStretch(0)
-        sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(
-            self.layer_display_button.sizePolicy().hasHeightForWidth()
-        )
         self.layer_display_button.setSizePolicy(sizePolicy)
-        self.layer_display_button.setMinimumSize(QtCore.QSize(150, 40))
-        self.layer_display_button.setMaximumSize(QtCore.QSize(150, 40))
-        self.layer_display_button.setText("")
-        self.layer_display_button.setCheckable(False)
-        self.layer_display_button.setFlat(True)
+        self.layer_display_button.setMinimumSize(QtCore.QSize(200, 80))
         self.layer_display_button.setProperty(
             "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/layers.svg")
         )
         self.layer_display_button.setObjectName("layer_display_button")
-        self.job_stats_display_layout.addWidget(
-            self.layer_display_button,
-            0,
-            QtCore.Qt.AlignmentFlag.AlignHCenter
-            | QtCore.Qt.AlignmentFlag.AlignVCenter,
-        )
-        self.print_time_display_button = DisplayButton(parent=self)
+
+        self.print_time_display_button = DisplayButton(self)
+        self.print_time_display_button.button_type = "display_secondary"
         self.print_time_display_button.setEnabled(False)
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-        )
-        sizePolicy.setHorizontalStretch(0)
-        sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(
-            self.print_time_display_button.sizePolicy().hasHeightForWidth()
-        )
         self.print_time_display_button.setSizePolicy(sizePolicy)
-        self.print_time_display_button.setMinimumSize(QtCore.QSize(150, 40))
-        self.print_time_display_button.setCursor(
-            QtGui.QCursor(QtCore.Qt.CursorShape.SplitHCursor)
-        )
-        self.print_time_display_button.setText("")
-        self.print_time_display_button.setCheckable(False)
-        self.print_time_display_button.setFlat(True)
+        self.print_time_display_button.setMinimumSize(QtCore.QSize(200, 80))
         self.print_time_display_button.setProperty(
             "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/time.svg")
         )
         self.print_time_display_button.setObjectName(
             "print_time_display_button"
         )
+
+        self.job_stats_display_layout.addWidget(
+            self.layer_display_button,
+            0,
+            QtCore.Qt.AlignmentFlag.AlignHCenter
+            | QtCore.Qt.AlignmentFlag.AlignVCenter,
+        )
+
         self.job_stats_display_layout.addWidget(
             self.print_time_display_button,
             0,
             QtCore.Qt.AlignmentFlag.AlignHCenter
             | QtCore.Qt.AlignmentFlag.AlignVCenter,
         )
-        self.job_status_content_layout.addLayout(self.job_stats_display_layout)
-        self.job_status_content_layout.setStretch(0, 1)
-        self.job_status_content_layout.setStretch(1, 1)
-        self.job_status_content_layout.setStretch(2, 1)
-        self.tune_menu_btn.setText("Tune")
-        self.stop_printing_btn.setText("Cancel")
-        self.pause_printing_btn.setText("Pause")
+        self.job_content_layout.addLayout(self.job_stats_display_layout)
