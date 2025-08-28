@@ -13,6 +13,7 @@ from sdbus_block.networkmanager import (
     ActiveConnection,
     IPv4Config,
     NetworkConnectionSettings,
+    NetworkManagerConnectivityState,
     NetworkDeviceGeneric,
     NetworkDeviceWired,
     NetworkDeviceWireless,
@@ -47,7 +48,10 @@ class SdbusNetworkManager(QtCore.QObject):
         self.known_networks = []
         self.saved_networks_ssids: typing.List
         self.hotspot_ssid: str = "PrinterHotspot"
-        self.hotspot_password: str = "123456789"
+        self.hotspot_password: str = hashlib.sha256(
+            "123456789".encode()
+        ).hexdigest()  # "123456789"
+
         sdbus.set_default_bus(self.system_dbus)
 
         try:
@@ -128,16 +132,25 @@ class SdbusNetworkManager(QtCore.QObject):
         if not isinstance(toggle, bool):
             raise TypeError("Correct type should be a boolean.")
 
-        # self.nm.
-        if self.nm.primary_connection == "/":
+        if not self.nm:
             return
         try:
-            # AccessPoint(self.primary_wifi_interface, self.nm)
-            ...
-            # return ActiveConnection(self.nm.primary_connection).id
+            old_ssid: typing.Union[str, None] = self.get_current_ssid()
+            if old_ssid:
+                self.disconnect_network()
+            if self.is_known(self.hotspot_ssid):
+                self.connect_network(self.hotspot_ssid)
+                self.nm.reload()
+                if self.nm.check_connectivity() == (
+                    NetworkManagerConnectivityState.FULL
+                    | NetworkManagerConnectivityState.LIMITED
+                ):
+                    logging.info(f"AP {self.hotspot_ssid} up!")
+                return
+            if old_ssid:
+                self.connect_network(old_ssid)
         except Exception as e:
-            logging.info(f"Unexpected error occurred: {e}")
-        pass
+            logging.error(f"Unexpected error occurred: {e}")
 
     def hotspot_enabled(self) -> typing.Optional["bool"]:
         """Returns a boolean indicating whether the device hotspot is on or not .
@@ -145,9 +158,8 @@ class SdbusNetworkManager(QtCore.QObject):
         Returns:
             bool: True if Hotspot is activated, False otherwise.
         """
-        # TODO: Hotspot enbaled or not
-
-        pass
+        # REFACTOR: untested for all cases 
+        return bool(self.hotspot_ssid == self.get_current_ssid())
 
     def get_wired_interfaces(self) -> typing.List[NetworkDeviceWired]:
         """get_wired_interfaces Get only the names for the available wired (Ethernet) interfaces.
@@ -190,9 +202,9 @@ class SdbusNetworkManager(QtCore.QObject):
             )
         )
 
-    def get_current_ssid(self) -> typing.Union[str, None]:
+    def get_current_ssid(self) -> str:
         if self.nm.primary_connection == "/":
-            return
+            return ""
         try:
             active_con = ActiveConnection(
                 self.nm.primary_connection
@@ -202,6 +214,7 @@ class SdbusNetworkManager(QtCore.QObject):
             return str(settings["802-11-wireless"]["ssid"][1].decode())
         except Exception as e:
             logging.info(f"Unexpected error occurred: {e}")
+            return ""
 
     def get_current_ip_addr(self) -> typing.Union[typing.List[str], None]:
         """Get the current connection ip address.
@@ -268,6 +281,8 @@ class SdbusNetworkManager(QtCore.QObject):
             return True
         except Exception:
             raise NetworkManagerRescanError("Network scan failed")
+        finally:
+            return False
 
     def get_available_networks(self) -> typing.Dict:
         """get_available_networks Scan for networks, get the information about each network.
@@ -401,7 +416,7 @@ class SdbusNetworkManager(QtCore.QObject):
 
         return _known_networks_parameters
 
-    def get_saved_networks_with_for(self) -> typing.Union[list, None]:
+    def get_saved_networks_with_for(self) -> typing.List:
         """Get a list with the names and ids of all saved networks on the device.
 
         Returns:
@@ -412,7 +427,7 @@ class SdbusNetworkManager(QtCore.QObject):
         https://github.com/KlipperScreen/KlipperScreen/blob/master/ks_includes/sdbus_nm.py Alfredo Monclues (alfrix) 2024
         """
         if not self.nm:
-            return
+            return []
         saved_networks = []
         for connection in NetworkManagerSettings().list_connections():
             saved_con = NetworkConnectionSettings(connection)
@@ -431,7 +446,7 @@ class SdbusNetworkManager(QtCore.QObject):
                 )
         return saved_networks
 
-    def get_saved_ssid_names(self) -> typing.Union[typing.List[str], None]:
+    def get_saved_ssid_names(self) -> typing.List[str]:
         """Get a list with the current saved network ssid names
 
         Returns:
@@ -439,15 +454,13 @@ class SdbusNetworkManager(QtCore.QObject):
         """
         _saved_networks = self.get_saved_networks_with_for()
         if not _saved_networks:
-            return
-        _saved_ssids: typing.List[str] = list(
+            return []
+        return list(
             map(
-                lambda saved_network: (saved_network["SSID"]),
+                lambda saved_network: (saved_network.get("SSID", None)),
                 _saved_networks,
             )
         )
-
-        return _saved_ssids
 
     def is_known(self, ssid: str) -> bool:
         """Whether or not a network is known
@@ -459,10 +472,13 @@ class SdbusNetworkManager(QtCore.QObject):
             bool: True if the network is known otherwise False
         """
         return any(
-            net["SSID"] == ssid for net in self.get_saved_networks_with_for()
+            net.get("SSID", "") == ssid
+            for net in self.get_saved_networks_with_for()
         )
 
-    def add_wifi_network(self, ssid: str, psk: str) -> typing.Dict:
+    def add_wifi_network(
+        self, ssid: str, psk: str, priority: int = 0
+    ) -> typing.Dict:
         """Add and Save a network to the device.
 
         Args:
@@ -503,6 +519,7 @@ class SdbusNetworkManager(QtCore.QObject):
                         self.primary_wifi_interface.interface,
                     ),
                     "autoconnect": ("b", bool(True)),
+                    "autoconnect-priority": ("u", priority),
                 },
                 "802-11-wireless": {
                     "mode": ("s", "infrastructure"),
@@ -627,6 +644,7 @@ class SdbusNetworkManager(QtCore.QObject):
                 try:
                     NetworkManagerSettings().add_connection(properties)
                     NetworkManagerSettings().reload_connections()
+
                     return {
                         "status": "success",
                         "msg": "Network added successfully",
@@ -653,13 +671,7 @@ class SdbusNetworkManager(QtCore.QObject):
         return {"status": "failure", "msg": "Unable to add network connection"}
 
     def disconnect_network(self) -> None:
-        """Disconnect the wireless device and prevent it from reconnecting.
-
-        Returns:
-            bool:
-            - True -> wifi interface is not and can perform the disconnection
-            - False -> Wifi interface is none and the disconnect command is not run.
-        """
+        """Disconnect the active connection"""
         if (
             self.primary_wifi_interface == "/"
             or not self.primary_wifi_interface
@@ -723,9 +735,7 @@ class SdbusNetworkManager(QtCore.QObject):
 
         return _security_type
 
-    def get_connection_signal_by_ssid(
-        self, ssid: str
-    ) -> typing.Union[typing.Dict, int]:
+    def get_connection_signal_by_ssid(self, ssid: str) -> int:
         """Get the signal strength for a ssid
 
         Args:
@@ -737,16 +747,15 @@ class SdbusNetworkManager(QtCore.QObject):
                                 The method returns the signal strength in %
         """
         if not isinstance(ssid, str):
-            return {"error": "ssid argument must be of type string"}
-        if self.nm is None:
-            return {"error": "No Network Manager instance available"}
+            return -1
+        if not self.nm:
+            return -1
         if (
             self.primary_wifi_interface == "/"
             or not self.primary_wifi_interface
         ):
-            return {"error": "No wifi interface"}
+            return -1
 
-        _signal: int = 0
         if self.rescan_networks():
             if (
                 self.primary_wifi_interface.device_type
@@ -759,12 +768,10 @@ class SdbusNetworkManager(QtCore.QObject):
                         self.primary_wifi_interface.access_points,
                     )
                 )
-
                 for ap in _aps:
                     if ap.ssid.decode("utf-8").lower() == ssid.lower():
                         return ap.strength
-
-        return 0
+        return -1
 
     def connect_network(self, ssid: str) -> str:
         """Connect to a saved network given an ssid
@@ -833,7 +840,7 @@ class SdbusNetworkManager(QtCore.QObject):
             "connection": {
                 "id": ("s", str(ssid)),
                 "uuid": ("s", str(uuid4())),
-                "type": ("s", "802-11-wireless"),
+                "type": ("s", "802-11-wireless"),  # 802-3-ethernet
                 "autoconnect": ("b", bool(True)),
                 "interface-name": ("s", "wlan0"),
             },
@@ -873,11 +880,23 @@ class SdbusNetworkManager(QtCore.QObject):
         self.hotspot_ssid = ssid
         self.create_hotspot(ssid=ssid)
 
+    def set_network_priority(self, ssid: str, priority: str) -> None:
+        if not self.nm:
+            return
+        ...
+        # Get Networks by ssid
+        # con_settings = NetworkConnectionSettings(a connection path for the connection with the specified ssid)
+        # properties = con_settings.get_settings()
+        # profile = con_settings.get_profile()
+        # properties["connection"]["autoconnect-priority"] = ("u", priority)
+        # con_settings.update(properties)
+
     def update_connection_settings(
         self,
         ssid: typing.Optional["str"] = None,
         password: typing.Optional["str"] = None,
         new_ssid: typing.Optional["str"] = None,
+        priority: int = 0,
     ) -> typing.Dict:
         """Update the settings for a connection with a specified ssid and or a password
 
@@ -892,7 +911,6 @@ class SdbusNetworkManager(QtCore.QObject):
             return {"status": "error", "error": "No network manager"}
 
         _connection_path = self.get_connection_path_by_ssid(str(ssid))
-
         if not _connection_path:
             return {
                 "status": "error",
@@ -910,11 +928,18 @@ class SdbusNetworkManager(QtCore.QObject):
                     new_ssid.encode("utf-8"),
                 )
             if password:
+                password = hashlib.sha256(password.encode()).hexdigest()
                 if ssid == self.hotspot_ssid:
                     self.hotspot_password = password
                 properties["802-11-wireless-security"]["psk"] = (
                     "s",
                     str(password),
+                )
+
+            if priority != 0:
+                properties["connection"]["autoconnect-priority"] = (
+                    "u",
+                    priority,
                 )
 
             con_settings.update(properties)
