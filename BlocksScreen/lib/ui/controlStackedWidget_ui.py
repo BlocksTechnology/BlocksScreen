@@ -563,10 +563,12 @@ class Ui_controlStackedWidget(object):
         self.extrude_page.setMinimumSize(QtCore.QSize(710, 400))
         self.extrude_page.setMaximumSize(QtCore.QSize(720, 420))
         self.extrude_page.setObjectName("extrude_page")
+
         self.verticalLayoutWidget_5 = QtWidgets.QWidget(
             parent=self.extrude_page
         )
         self.verticalLayoutWidget_5.setGeometry(QtCore.QRect(10, 80, 691, 350))
+
         self.verticalLayoutWidget_5.setObjectName("verticalLayoutWidget_5")
         self.exp_vertical_content_layout = QtWidgets.QVBoxLayout(
             self.verticalLayoutWidget_5
@@ -776,6 +778,7 @@ class Ui_controlStackedWidget(object):
         self.line_5.setFrameShadow(QtWidgets.QFrame.Shadow.Sunken)
         self.line_5.setObjectName("line_5")
         self.exp_length_content_layout.addWidget(self.line_5)
+
         self.extrude_select_length_50_btn = QtWidgets.QPushButton(
             parent=self.layoutWidget
         )
@@ -919,6 +922,7 @@ class Ui_controlStackedWidget(object):
         self.line_6.setFrameShadow(QtWidgets.QFrame.Shadow.Sunken)
         self.line_6.setObjectName("line_6")
         self.exp_length_content_layout.addWidget(self.line_6)
+
         self.extrude_select_length_100_btn = QtWidgets.QPushButton(
             parent=self.layoutWidget
         )
@@ -926,6 +930,7 @@ class Ui_controlStackedWidget(object):
             QtWidgets.QSizePolicy.Policy.Minimum,
             QtWidgets.QSizePolicy.Policy.Expanding,
         )
+
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(
@@ -1100,6 +1105,7 @@ class Ui_controlStackedWidget(object):
         )
         self.exp_feedrate_content_layout.setContentsMargins(5, 5, 5, 5)
         self.exp_feedrate_content_layout.setSpacing(5)
+
         self.exp_feedrate_content_layout.setObjectName(
             "exp_feedrate_content_layout"
         )
@@ -1110,6 +1116,7 @@ class Ui_controlStackedWidget(object):
             QtWidgets.QSizePolicy.Policy.Minimum,
             QtWidgets.QSizePolicy.Policy.Expanding,
         )
+
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(
@@ -1253,6 +1260,7 @@ class Ui_controlStackedWidget(object):
         self.line_7.setFrameShadow(QtWidgets.QFrame.Shadow.Sunken)
         self.line_7.setObjectName("line_7")
         self.exp_feedrate_content_layout.addWidget(self.line_7)
+
         self.extrude_select_feedrate_5_btn = QtWidgets.QPushButton(
             parent=self.layoutWidget1
         )
@@ -1260,6 +1268,7 @@ class Ui_controlStackedWidget(object):
             QtWidgets.QSizePolicy.Policy.Minimum,
             QtWidgets.QSizePolicy.Policy.Expanding,
         )
+
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(
@@ -1396,6 +1405,7 @@ class Ui_controlStackedWidget(object):
         self.line_8.setFrameShadow(QtWidgets.QFrame.Shadow.Sunken)
         self.line_8.setObjectName("line_8")
         self.exp_feedrate_content_layout.addWidget(self.line_8)
+
         self.extrude_select_feedrate_10_btn = QtWidgets.QPushButton(
             parent=self.layoutWidget1
         )
@@ -1403,6 +1413,7 @@ class Ui_controlStackedWidget(object):
             QtWidgets.QSizePolicy.Policy.Minimum,
             QtWidgets.QSizePolicy.Policy.Expanding,
         )
+
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(
@@ -1864,6 +1875,7 @@ class Ui_controlStackedWidget(object):
             "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/back.svg")
         )
         self.mva_back_btn.setObjectName("mva_back_btn")
+
         self.mva_header_layout.addWidget(
             self.mva_back_btn,
             0,
@@ -1874,6 +1886,7 @@ class Ui_controlStackedWidget(object):
             parent=self.move_axis_page
         )
         self.verticalLayoutWidget.setGeometry(QtCore.QRect(400, 123, 221, 202))
+
         self.verticalLayoutWidget.setObjectName("verticalLayoutWidget")
         self.mva_xy_layout = QtWidgets.QVBoxLayout(self.verticalLayoutWidget)
         self.mva_xy_layout.setContentsMargins(0, 5, 0, 5)
@@ -2198,6 +2211,7 @@ class Ui_controlStackedWidget(object):
             QtGui.QPixmap(":/motion/media/btn_icons/home_all.svg"),
         )
         self.mva_home_all_btn.setObjectName("mva_home_all_btn")
+
         self.mva_home_axis_layout.addWidget(
             self.mva_home_all_btn, 0, QtCore.Qt.AlignmentFlag.AlignHCenter
         )
@@ -2259,6 +2273,7 @@ class Ui_controlStackedWidget(object):
         )
         self.mva_select_length_1_btn.setMinimumSize(QtCore.QSize(60, 60))
         self.mva_select_length_1_btn.setMaximumSize(QtCore.QSize(60, 60))
+
         palette = QtGui.QPalette()
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
@@ -2318,6 +2333,7 @@ class Ui_controlStackedWidget(object):
         )
         brush = QtGui.QBrush(QtGui.QColor(120, 120, 120))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
+
         palette.setBrush(
             QtGui.QPalette.ColorGroup.Disabled,
             QtGui.QPalette.ColorRole.ButtonText,
@@ -2349,6 +2365,7 @@ class Ui_controlStackedWidget(object):
         )
         self.mva_select_length_10_btn.setMinimumSize(QtCore.QSize(60, 60))
         self.mva_select_length_10_btn.setMaximumSize(QtCore.QSize(60, 60))
+
         palette = QtGui.QPalette()
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
@@ -2408,6 +2425,7 @@ class Ui_controlStackedWidget(object):
         )
         brush = QtGui.QBrush(QtGui.QColor(120, 120, 120))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
+
         palette.setBrush(
             QtGui.QPalette.ColorGroup.Disabled,
             QtGui.QPalette.ColorRole.ButtonText,
@@ -2434,6 +2452,7 @@ class Ui_controlStackedWidget(object):
         )
         self.mva_select_length_100_btn.setMinimumSize(QtCore.QSize(60, 60))
         self.mva_select_length_100_btn.setMaximumSize(QtCore.QSize(60, 60))
+
         palette = QtGui.QPalette()
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
@@ -2493,6 +2512,7 @@ class Ui_controlStackedWidget(object):
         )
         brush = QtGui.QBrush(QtGui.QColor(120, 120, 120))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
+
         palette.setBrush(
             QtGui.QPalette.ColorGroup.Disabled,
             QtGui.QPalette.ColorRole.ButtonText,
@@ -2625,6 +2645,7 @@ class Ui_controlStackedWidget(object):
         )
         self.mva_select_speed_25_btn.setMinimumSize(QtCore.QSize(60, 60))
         self.mva_select_speed_25_btn.setMaximumSize(QtCore.QSize(60, 60))
+
         palette = QtGui.QPalette()
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
@@ -2684,6 +2705,7 @@ class Ui_controlStackedWidget(object):
         )
         brush = QtGui.QBrush(QtGui.QColor(120, 120, 120))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
+
         palette.setBrush(
             QtGui.QPalette.ColorGroup.Disabled,
             QtGui.QPalette.ColorRole.ButtonText,
@@ -2715,6 +2737,7 @@ class Ui_controlStackedWidget(object):
         )
         self.mva_select_speed_50_btn.setMinimumSize(QtCore.QSize(60, 60))
         self.mva_select_speed_50_btn.setMaximumSize(QtCore.QSize(60, 60))
+
         palette = QtGui.QPalette()
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
@@ -2774,6 +2797,7 @@ class Ui_controlStackedWidget(object):
         )
         brush = QtGui.QBrush(QtGui.QColor(120, 120, 120))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
+
         palette.setBrush(
             QtGui.QPalette.ColorGroup.Disabled,
             QtGui.QPalette.ColorRole.ButtonText,
@@ -2800,6 +2824,7 @@ class Ui_controlStackedWidget(object):
         )
         self.mva_select_speed_100_btn.setMinimumSize(QtCore.QSize(60, 60))
         self.mva_select_speed_100_btn.setMaximumSize(QtCore.QSize(60, 60))
+
         palette = QtGui.QPalette()
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
@@ -2859,6 +2884,7 @@ class Ui_controlStackedWidget(object):
         )
         brush = QtGui.QBrush(QtGui.QColor(120, 120, 120))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
+
         palette.setBrush(
             QtGui.QPalette.ColorGroup.Disabled,
             QtGui.QPalette.ColorRole.ButtonText,
@@ -2887,6 +2913,7 @@ class Ui_controlStackedWidget(object):
         self.verticalLayoutWidget_2.raise_()
         self.verticalLayoutWidget_3.raise_()
         self.mva_length_group_box.raise_()
+
         controlStackedWidget.addWidget(self.move_axis_page)
         self.temperature_page = QtWidgets.QWidget()
         self.temperature_page.setMinimumSize(QtCore.QSize(710, 400))
@@ -2934,6 +2961,7 @@ class Ui_controlStackedWidget(object):
         )
         self.temp_header_title.setObjectName("temp_header_title")
         self.horizontalLayout.addWidget(self.temp_header_title)
+
         self.temp_back_button = IconButton(
             parent=self.horizontalLayoutWidget_4
         )
@@ -2941,6 +2969,7 @@ class Ui_controlStackedWidget(object):
             QtWidgets.QSizePolicy.Policy.Fixed,
             QtWidgets.QSizePolicy.Policy.Fixed,
         )
+
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(
@@ -2966,9 +2995,11 @@ class Ui_controlStackedWidget(object):
         self.temp_back_button.setStyleSheet("")
         self.temp_back_button.setAutoDefault(False)
         self.temp_back_button.setFlat(True)
+
         self.temp_back_button.setProperty(
             "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/back.svg")
         )
+
         self.temp_back_button.setObjectName("temp_back_button")
         self.horizontalLayout.addWidget(self.temp_back_button)
         self.verticalLayoutWidget_4 = QtWidgets.QWidget(
@@ -2985,6 +3016,7 @@ class Ui_controlStackedWidget(object):
         )
         self.tp_content_horizontal_layout.setContentsMargins(5, 5, 5, 5)
         self.tp_content_horizontal_layout.setSpacing(5)
+
         self.tp_content_horizontal_layout.setObjectName(
             "tp_content_horizontal_layout"
         )
@@ -2995,6 +3027,7 @@ class Ui_controlStackedWidget(object):
             QtWidgets.QSizePolicy.Policy.Minimum,
             QtWidgets.QSizePolicy.Policy.Fixed,
         )
+
         sizePolicy.setHorizontalStretch(1)
         sizePolicy.setVerticalStretch(1)
         sizePolicy.setHeightForWidth(
@@ -3012,6 +3045,7 @@ class Ui_controlStackedWidget(object):
         )
         self.extruder_temp_display.setObjectName("extruder_temp_display")
         self.tp_content_horizontal_layout.addWidget(self.extruder_temp_display)
+
         self.bed_temp_display = DisplayButton(
             parent=self.verticalLayoutWidget_4
         )
@@ -3019,6 +3053,7 @@ class Ui_controlStackedWidget(object):
             QtWidgets.QSizePolicy.Policy.MinimumExpanding,
             QtWidgets.QSizePolicy.Policy.MinimumExpanding,
         )
+
         sizePolicy.setHorizontalStretch(1)
         sizePolicy.setVerticalStretch(1)
         sizePolicy.setHeightForWidth(
@@ -3352,17 +3387,21 @@ class Ui_controlStackedWidget(object):
         )
         self.z_adjust_header_title.setObjectName("z_adjust_header_title")
         self.z_adjustment_header_layout.addWidget(self.z_adjust_header_title)
+
         self.z_adjust_back_button = BlocksCustomButton(
             parent=self.horizontalLayoutWidget_10
         )
+
         self.z_adjust_back_button.setMinimumSize(QtCore.QSize(60, 60))
         self.z_adjust_back_button.setMaximumSize(QtCore.QSize(60, 60))
         self.z_adjust_back_button.setText("")
         self.z_adjust_back_button.setFlat(True)
+
         self.z_adjust_back_button.setProperty(
             "icon_pixmap",
             QtGui.QPixmap(":/button_borders/media/btn_icons/back.svg"),
         )
+
         self.z_adjust_back_button.setObjectName("z_adjust_back_button")
         self.z_adjustment_header_layout.addWidget(self.z_adjust_back_button)
         self.verticalLayoutWidget_8 = QtWidgets.QWidget(
@@ -3580,6 +3619,7 @@ class Ui_controlStackedWidget(object):
         font.setFamily("Momcake")
         font.setPointSize(24)
         self.printer_settings_title_label.setFont(font)
+
         self.printer_settings_title_label.setStyleSheet(
             "background: transparent; color: white;"
         )
@@ -3595,6 +3635,7 @@ class Ui_controlStackedWidget(object):
         self.printer_settings_back_btn = IconButton(
             parent=self.horizontalLayoutWidget_12
         )
+
         self.printer_settings_back_btn.setMinimumSize(QtCore.QSize(60, 60))
         self.printer_settings_back_btn.setMaximumSize(QtCore.QSize(60, 60))
         font = QtGui.QFont()
@@ -3638,7 +3679,9 @@ class Ui_controlStackedWidget(object):
         controlStackedWidget.addWidget(self.printer_settings_page)
 
         self.retranslateUi(controlStackedWidget)
+
         controlStackedWidget.setCurrentIndex(4)
+
         QtCore.QMetaObject.connectSlotsByName(controlStackedWidget)
 
     def retranslateUi(self, controlStackedWidget):
@@ -3808,6 +3851,7 @@ class Ui_controlStackedWidget(object):
             "class", _translate("controlStackedWidget", "title_text")
         )
         self.mva_back_btn.setText(_translate("controlStackedWidget", "Back"))
+
         self.mva_back_btn.setProperty(
             "class", _translate("controlStackedWidget", "menu_btn")
         )
@@ -3908,6 +3952,7 @@ class Ui_controlStackedWidget(object):
         self.temperature_cooldown_btn.setProperty(
             "class", _translate("controlStackedWidget", "menu_btn")
         )
+
         self.z_adjust_icon.setText(_translate("controlStackedWidget", "Z"))
         self.z_adjust_offset_value.setText(
             _translate("controlStackedWidget", "0")
@@ -3976,4 +4021,5 @@ class Ui_controlStackedWidget(object):
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_label import BlocksLabel
 from lib.utils.display_button import DisplayButton
+from lib.utils.group_button import GroupButton
 from lib.utils.icon_button import IconButton
