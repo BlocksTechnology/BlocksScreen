@@ -3,7 +3,6 @@ import logging
 import typing
 from uuid import uuid4
 
-
 import sdbus
 
 # from PyQt6 import QtCore
@@ -47,7 +46,7 @@ class SdbusNetworkManager:
         self.system_dbus = sdbus.sd_bus_open_system()
 
         if not self.system_dbus:
-            print("No systembus ")
+            logging.error("No sdbus D-Bus found")
             return
         self.known_networks = []
         self.saved_networks_ssids: typing.List
@@ -65,7 +64,7 @@ class SdbusNetworkManager:
                 f"Exception occurred when getting NetworkManager: {e}"
             )
 
-        self.check_nm_status()
+        self.check_connectivity()
 
         self.available_wired_interfaces = self.get_wired_interfaces()
         self.available_wireless_interfaces = self.get_wireless_interfaces()
@@ -90,17 +89,17 @@ class SdbusNetworkManager:
         if self.primary_wifi_interface:
             self.rescan_networks()
 
-    def check_nm_status(self):
+    def check_nm_state(self):
         if not self.nm:
-            return False
-        print(
-            NetworkManagerConnectivityState(self.nm.check_connectivity()).name
-        )
-        print(NetworkManagerState(self.nm.state).name)
-        # if
-        ...
+            return
+        return NetworkManagerState(self.nm.state)
 
-    def can_wifi_scan(self) -> bool:
+    def check_connectivity(self):
+        if not self.nm:
+            return
+        return NetworkManagerConnectivityState(self.nm.check_connectivity())
+
+    def check_wifi_interface(self) -> bool:
         return bool(self.primary_wifi_interface)
 
     def get_available_interfaces(self) -> typing.List[str]:
@@ -896,10 +895,6 @@ class SdbusNetworkManager:
     def get_hotspot_ssid(self) -> str:
         return self.hotspot_ssid
 
-    def set_hotspot_ssid(self, ssid: str) -> None:
-        self.hotspot_ssid = ssid
-        self.create_hotspot(ssid=ssid)
-
     def set_network_priority(self, ssid: str, priority: str) -> None:
         if not self.nm:
             return
@@ -966,5 +961,3 @@ class SdbusNetworkManager:
             return {"status": "updated"}
         except Exception:
             return {"status": "error", "error": "Unexpected error"}
-
-
