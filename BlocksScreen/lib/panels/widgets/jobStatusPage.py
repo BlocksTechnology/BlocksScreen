@@ -5,6 +5,7 @@ import typing
 from helper_methods import calculate_current_layer, estimate_print_time
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_label import BlocksLabel
+from lib.utils.blocks_progressbar import CustomProgressBar
 from lib.utils.display_button import DisplayButton
 from lib.panels.widgets import dialogPage
 import events
@@ -110,7 +111,6 @@ class JobStatusWidget(QtWidgets.QWidget):
         self.smallthumb_widget.show()
         self.bigthumb_widget.hide()
 
->>>>>>> origin/main
     def handleCancel(self) -> None:
         """Handle the cancel print job dialog"""
         self.canceldialog.set_message(
@@ -124,17 +124,10 @@ class JobStatusWidget(QtWidgets.QWidget):
         if button_name == "Confirm":
             self.print_cancel.emit()  # Emit the print_cancel signal
         elif button_name == "Cancel":
-<<<<<<< HEAD
-            ...
-            
-    @QtCore.pyqtSlot(str, name="on_print_start")
-    def on_print_start(self, file: str) -> None:
-=======
             pass
 
     @QtCore.pyqtSlot(str, list, name="on_print_start")
     def on_print_start(self, file: str, thumbnail: list) -> None:
->>>>>>> origin/main
         """Start a print job, show job status page"""
         self._current_file_name = file
         self.js_file_name_label.setText(self._current_file_name)
