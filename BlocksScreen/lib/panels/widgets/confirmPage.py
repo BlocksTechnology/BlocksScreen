@@ -7,7 +7,7 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 
 class ConfirmWidget(QtWidgets.QWidget):
     on_accept: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
-        str, name="on_accept"
+        str, list, name="on_accept"
     )
     on_reject: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         name="on_reject"
@@ -20,7 +20,9 @@ class ConfirmWidget(QtWidgets.QWidget):
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_AcceptTouchEvents, True)
         self.thumbnail: QtGui.QImage = QtGui.QImage()
         self.confirm_button.clicked.connect(
-            lambda: self.on_accept.emit(str(self.cf_file_name._text))
+            lambda: self.on_accept.emit(
+                str(self.cf_file_name._text), self._thumbnails
+            )
         )
         self.reject_button.clicked.connect(self.on_reject.emit)
 
@@ -29,10 +31,10 @@ class ConfirmWidget(QtWidgets.QWidget):
         self.cf_file_name.setText(str(text))
         if not filedata:
             return
-        _thumbnails = filedata.get("thumbnail_images")
+        self._thumbnails = filedata.get("thumbnail_images")
 
-        if _thumbnails:
-            _biggest_thumbnail = _thumbnails[len(_thumbnails) - 1]
+        if self._thumbnails:
+            _biggest_thumbnail = self._thumbnails[2]
             self.thumbnail = QtGui.QImage(_biggest_thumbnail)
 
         _total_filament = filedata.get("filament_total")
@@ -44,7 +46,6 @@ class ConfirmWidget(QtWidgets.QWidget):
             seconds = _estimated_time
 
         _estimated_time = self.estimate_print_time(seconds)
-
 
         self.cf_info.setText(
             "Total Filament:"
@@ -61,6 +62,7 @@ class ConfirmWidget(QtWidgets.QWidget):
             + " seconds"
         )
         self.repaint()
+
     def estimate_print_time(self, seconds: int) -> list:
         """Convert time in seconds format to days, hours, minutes, seconds.
 
@@ -75,37 +77,40 @@ class ConfirmWidget(QtWidgets.QWidget):
         days, hours = divmod(num_hours, 24)
         return [days, hours, minutes, seconds]
 
-    def paintEvent(self, a0: QtGui.QPaintEvent) -> None:
-        _scene = QtWidgets.QGraphicsScene()
-        if not self.thumbnail.isNull():
-            _graphics_rect = self.cf_thumbnail.rect().toRectF()
-            _image_rect = self.thumbnail.rect()
+    def paintEvent(self, event: QtGui.QPaintEvent) -> None:
+        if not hasattr(self, "_scene"):
+            self._scene = QtWidgets.QGraphicsScene(self)
+            self.cf_thumbnail.setScene(self._scene)
 
-            scaled_width = _image_rect.width()
-            scaled_height = _image_rect.height()
-            adjusted_x = (_graphics_rect.width() - scaled_width) // 2.0
-            adjusted_y = (_graphics_rect.height() - scaled_height) // 2.0
-
-            adjusted_rect = QtCore.QRectF(
-                _image_rect.x() + adjusted_x,
-                _image_rect.y() + adjusted_y,
-                scaled_width,
-                scaled_height,
+        # Pick thumbnail or fallback logo
+        if self.thumbnail.isNull():
+            self.thumbnail = QtGui.QImage(
+                "BlocksScreen/lib/ui/resources/media/logoblocks400x300.png"
             )
-            _scene.setSceneRect(adjusted_rect)
-            _item_scaled = QtWidgets.QGraphicsPixmapItem(
-                QtGui.QPixmap.fromImage(self.thumbnail).scaled(
-                    int(scaled_width),
-                    int(scaled_height),
-                    QtCore.Qt.AspectRatioMode.KeepAspectRatio,
-                    QtCore.Qt.TransformationMode.SmoothTransformation,
-                )
-            )
-            _scene.addItem(_item_scaled)
-            self.cf_thumbnail.setScene(_scene)
 
+        # Scene rectangle (available display area)
+        graphics_rect = self.cf_thumbnail.rect().toRectF()
+
+        # Scale pixmap preserving aspect ratio
+        pixmap = QtGui.QPixmap.fromImage(self.thumbnail).scaled(
+            graphics_rect.size().toSize(),
+            QtCore.Qt.AspectRatioMode.KeepAspectRatio,
+            QtCore.Qt.TransformationMode.SmoothTransformation,
+        )
+
+        # Centering offsets
+        adjusted_x = (graphics_rect.width() - pixmap.width()) / 2.0
+        adjusted_y = (graphics_rect.height() - pixmap.height()) / 2.0
+
+        # Update existing pixmap item or create it once
+        if not hasattr(self, "_pixmap_item"):
+            self._pixmap_item = QtWidgets.QGraphicsPixmapItem(pixmap)
+            self._scene.addItem(self._pixmap_item)
         else:
-            self.cf_thumbnail.setScene(_scene)
+            self._pixmap_item.setPixmap(pixmap)
+
+        self._pixmap_item.setPos(adjusted_x, adjusted_y)
+        self._scene.setSceneRect(graphics_rect)
 
     def showEvent(self, a0: QtGui.QShowEvent) -> None:
         if not self.thumbnail:
@@ -275,7 +280,7 @@ class ConfirmWidget(QtWidgets.QWidget):
         self.cf_content_vertical_layout.addLayout(
             self.cf_content_horizontal_layout
         )
-        self.cf_thumbnail = QtWidgets.QGraphicsView(parent=self)
+        self.cf_thumbnail = QtWidgets.QGraphicsView(self)
         sizePolicy = QtWidgets.QSizePolicy(
             QtWidgets.QSizePolicy.Policy.Expanding,
             QtWidgets.QSizePolicy.Policy.Expanding,
