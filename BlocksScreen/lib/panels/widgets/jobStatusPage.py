@@ -6,10 +6,6 @@ from helper_methods import calculate_current_layer, estimate_print_time
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_label import BlocksLabel
 from lib.utils.display_button import DisplayButton
-<<<<<<< HEAD
-=======
-from lib.utils.blocks_progressbar import CustomProgressBar
->>>>>>> origin/main
 from lib.panels.widgets import dialogPage
 import events
 
