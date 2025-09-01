@@ -506,7 +506,7 @@ class JobStatusWidget(QtWidgets.QWidget):
         self.js_file_name_label = BlocksLabel(parent=self)
         self.js_file_name_label.setEnabled(True)
         self.js_file_name_label.setSizePolicy(sizePolicy)
-        self.js_file_name_label.setMinimumSize(QtCore.QSize(200, 60))
+        self.js_file_name_label.setMinimumSize(QtCore.QSize(200, 80))
         self.js_file_name_label.setMaximumSize(QtCore.QSize(16777215, 60))
 
         self.js_file_name_label.setFont(font)
@@ -521,7 +521,9 @@ class JobStatusWidget(QtWidgets.QWidget):
         self.job_status_header_layout.addWidget(self.js_file_name_icon)
         self.job_status_header_layout.addWidget(self.js_file_name_label)
 
+
         # -----------------------------buttons
+
 
         font.setPointSize(18)
 
@@ -539,6 +541,7 @@ class JobStatusWidget(QtWidgets.QWidget):
         self.stop_printing_btn.setSizePolicy(sizePolicy)
         self.stop_printing_btn.setMinimumSize(QtCore.QSize(200, 80))
         self.stop_printing_btn.setMaximumSize(QtCore.QSize(200, 80))
+
         self.stop_printing_btn.setFont(font)
         self.stop_printing_btn.setProperty(
             "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/stop.svg")
@@ -547,8 +550,10 @@ class JobStatusWidget(QtWidgets.QWidget):
 
         self.tune_menu_btn = BlocksCustomButton(self)
         self.tune_menu_btn.setSizePolicy(sizePolicy)
+
         self.tune_menu_btn.setMinimumSize(QtCore.QSize(200, 60))
         self.tune_menu_btn.setMaximumSize(QtCore.QSize(200, 80))
+
         self.tune_menu_btn.setFont(font)
         self.tune_menu_btn.setProperty(
             "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/tune.svg")
@@ -639,7 +644,9 @@ class JobStatusWidget(QtWidgets.QWidget):
         self.layer_display_button.button_type = "display_secondary"
         self.layer_display_button.setEnabled(False)
         self.layer_display_button.setSizePolicy(sizePolicy)
+
         self.layer_display_button.setMinimumSize(QtCore.QSize(200, 80))
+
         self.layer_display_button.setProperty(
             "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/layers.svg")
         )
@@ -649,7 +656,9 @@ class JobStatusWidget(QtWidgets.QWidget):
         self.print_time_display_button.button_type = "display_secondary"
         self.print_time_display_button.setEnabled(False)
         self.print_time_display_button.setSizePolicy(sizePolicy)
+
         self.print_time_display_button.setMinimumSize(QtCore.QSize(200, 80))
+
         self.print_time_display_button.setProperty(
             "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/time.svg")
         )
