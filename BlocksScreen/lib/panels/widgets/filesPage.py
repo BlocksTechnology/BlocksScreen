@@ -30,8 +30,6 @@ class FilesPage(QtWidgets.QWidget):
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_AcceptTouchEvents, True)
 
         self.ReloadButton.clicked.connect(lambda: self.reload_list())
-        self.listWidget.itemClicked.connect(self.fileItemClicked)
-
         self.listWidget.verticalScrollBar().valueChanged.connect(
             self.handlescrollbar
         )

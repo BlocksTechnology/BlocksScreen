@@ -49,6 +49,7 @@ class SdbusNetworkManager(QObject):
     """
 
     def __init__(self, parent: typing.Optional["QObject"]):
+    # def __init__(self):
         super(SdbusNetworkManager, self).__init__()
         self.system_dbus = sdbus.sd_bus_open_system()
         if not self.system_dbus:
