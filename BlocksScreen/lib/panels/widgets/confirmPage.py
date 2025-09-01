@@ -45,7 +45,6 @@ class ConfirmWidget(QtWidgets.QWidget):
 
         _estimated_time = self.estimate_print_time(seconds)
 
-
         self.cf_info.setText(
             "Total Filament:"
             + str(_total_filament)
@@ -61,6 +60,7 @@ class ConfirmWidget(QtWidgets.QWidget):
             + " seconds"
         )
         self.repaint()
+
     def estimate_print_time(self, seconds: int) -> list:
         """Convert time in seconds format to days, hours, minutes, seconds.
 
@@ -201,8 +201,8 @@ class ConfirmWidget(QtWidgets.QWidget):
         self.cf_confirm_layout.setSpacing(2)
         self.cf_confirm_layout.setObjectName("cf_confirm_layout")
         self.confirm_button = BlocksCustomButton(parent=self)
-        self.confirm_button.setMinimumSize(QtCore.QSize(200, 60))
-        self.confirm_button.setMaximumSize(QtCore.QSize(200, 60))
+        self.confirm_button.setMinimumSize(QtCore.QSize(250, 70))
+        self.confirm_button.setMaximumSize(QtCore.QSize(250, 70))
         font = QtGui.QFont()
         font.setFamily("Momcake")
         font.setPointSize(18)
@@ -241,8 +241,8 @@ class ConfirmWidget(QtWidgets.QWidget):
             self.reject_button.sizePolicy().hasHeightForWidth()
         )
         self.reject_button.setSizePolicy(sizePolicy)
-        self.reject_button.setMinimumSize(QtCore.QSize(200, 60))
-        self.reject_button.setMaximumSize(QtCore.QSize(200, 60))
+        self.reject_button.setMinimumSize(QtCore.QSize(250, 70))
+        self.reject_button.setMaximumSize(QtCore.QSize(250, 70))
         font = QtGui.QFont()
         font.setFamily("Momcake")
         font.setPointSize(18)

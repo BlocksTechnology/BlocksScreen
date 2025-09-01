@@ -12,34 +12,55 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 class Ui_controlStackedWidget(object):
     def setupUi(self, controlStackedWidget):
         controlStackedWidget.setObjectName("controlStackedWidget")
-        controlStackedWidget.resize(720, 410)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.MinimumExpanding, QtWidgets.QSizePolicy.Policy.MinimumExpanding)
+        controlStackedWidget.resize(710, 410)
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
+            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
+        )
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(controlStackedWidget.sizePolicy().hasHeightForWidth())
+        sizePolicy.setHeightForWidth(
+            controlStackedWidget.sizePolicy().hasHeightForWidth()
+        )
         controlStackedWidget.setSizePolicy(sizePolicy)
         controlStackedWidget.setMinimumSize(QtCore.QSize(700, 410))
         controlStackedWidget.setMaximumSize(QtCore.QSize(720, 410))
         self.control_page = QtWidgets.QWidget()
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.MinimumExpanding, QtWidgets.QSizePolicy.Policy.MinimumExpanding)
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
+            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
+        )
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(self.control_page.sizePolicy().hasHeightForWidth())
+        sizePolicy.setHeightForWidth(
+            self.control_page.sizePolicy().hasHeightForWidth()
+        )
         self.control_page.setSizePolicy(sizePolicy)
         self.control_page.setMinimumSize(QtCore.QSize(710, 400))
         self.control_page.setMaximumSize(QtCore.QSize(720, 420))
         self.control_page.setObjectName("control_page")
-        self.horizontalLayoutWidget = QtWidgets.QWidget(parent=self.control_page)
-        self.horizontalLayoutWidget.setGeometry(QtCore.QRect(10, 10, 681, 62))
+        self.horizontalLayoutWidget = QtWidgets.QWidget(
+            parent=self.control_page
+        )
+        self.horizontalLayoutWidget.setGeometry(QtCore.QRect(10, 10, 691, 71))
         self.horizontalLayoutWidget.setObjectName("horizontalLayoutWidget")
-        self.cp_header_layout = QtWidgets.QHBoxLayout(self.horizontalLayoutWidget)
+        self.cp_header_layout = QtWidgets.QHBoxLayout(
+            self.horizontalLayoutWidget
+        )
         self.cp_header_layout.setContentsMargins(0, 0, 0, 0)
         self.cp_header_layout.setObjectName("cp_header_layout")
-        self.cp_header_title = QtWidgets.QLabel(parent=self.horizontalLayoutWidget)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.MinimumExpanding, QtWidgets.QSizePolicy.Policy.Fixed)
+        self.cp_header_title = QtWidgets.QLabel(
+            parent=self.horizontalLayoutWidget
+        )
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
+            QtWidgets.QSizePolicy.Policy.Fixed,
+        )
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(self.cp_header_title.sizePolicy().hasHeightForWidth())
+        sizePolicy.setHeightForWidth(
+            self.cp_header_title.sizePolicy().hasHeightForWidth()
+        )
         self.cp_header_title.setSizePolicy(sizePolicy)
         self.cp_header_title.setMinimumSize(QtCore.QSize(300, 60))
         self.cp_header_title.setMaximumSize(QtCore.QSize(16777215, 60))
@@ -47,23 +68,31 @@ class Ui_controlStackedWidget(object):
         font.setFamily("Momcake")
         font.setPointSize(24)
         self.cp_header_title.setFont(font)
-        self.cp_header_title.setStyleSheet("background: transparent; color: white;")
+        self.cp_header_title.setStyleSheet(
+            "background: transparent; color: white;"
+        )
         self.cp_header_title.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self.cp_header_title.setObjectName("cp_header_title")
         self.cp_header_layout.addWidget(self.cp_header_title)
         self.gridLayoutWidget = QtWidgets.QWidget(parent=self.control_page)
-        self.gridLayoutWidget.setGeometry(QtCore.QRect(10, 90, 681, 301))
+        self.gridLayoutWidget.setGeometry(QtCore.QRect(10, 90, 691, 311))
         self.gridLayoutWidget.setObjectName("gridLayoutWidget")
         self.cp_content_layout = QtWidgets.QGridLayout(self.gridLayoutWidget)
         self.cp_content_layout.setContentsMargins(0, 0, 0, 0)
         self.cp_content_layout.setObjectName("cp_content_layout")
         self.cp_motion_btn = BlocksCustomButton(parent=self.gridLayoutWidget)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Fixed)
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Minimum,
+            QtWidgets.QSizePolicy.Policy.Fixed,
+        )
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(self.cp_motion_btn.sizePolicy().hasHeightForWidth())
+        sizePolicy.setHeightForWidth(
+            self.cp_motion_btn.sizePolicy().hasHeightForWidth()
+        )
         self.cp_motion_btn.setSizePolicy(sizePolicy)
-        self.cp_motion_btn.setMinimumSize(QtCore.QSize(10, 74))
+        self.cp_motion_btn.setMinimumSize(QtCore.QSize(10, 80))
+        self.cp_motion_btn.setMaximumSize(QtCore.QSize(250, 80))
         font = QtGui.QFont()
         font.setFamily("Momcake")
         font.setPointSize(20)
@@ -72,21 +101,36 @@ class Ui_controlStackedWidget(object):
         self.cp_motion_btn.setFont(font)
         self.cp_motion_btn.setMouseTracking(False)
         self.cp_motion_btn.setTabletTracking(True)
-        self.cp_motion_btn.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.NoContextMenu)
-        self.cp_motion_btn.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
+        self.cp_motion_btn.setContextMenuPolicy(
+            QtCore.Qt.ContextMenuPolicy.NoContextMenu
+        )
+        self.cp_motion_btn.setLayoutDirection(
+            QtCore.Qt.LayoutDirection.LeftToRight
+        )
         self.cp_motion_btn.setStyleSheet("")
         self.cp_motion_btn.setAutoDefault(False)
         self.cp_motion_btn.setFlat(True)
-        self.cp_motion_btn.setProperty("icon_pixmap", QtGui.QPixmap(":/motion/media/btn_icons/axis_maintenance.svg"))
+        self.cp_motion_btn.setProperty(
+            "icon_pixmap",
+            QtGui.QPixmap(":/motion/media/btn_icons/axis_maintenance.svg"),
+        )
         self.cp_motion_btn.setObjectName("cp_motion_btn")
         self.cp_content_layout.addWidget(self.cp_motion_btn, 0, 0, 1, 1)
-        self.cp_nozzles_calibration_btn = BlocksCustomButton(parent=self.gridLayoutWidget)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Fixed)
+        self.cp_nozzles_calibration_btn = BlocksCustomButton(
+            parent=self.gridLayoutWidget
+        )
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Minimum,
+            QtWidgets.QSizePolicy.Policy.Fixed,
+        )
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(self.cp_nozzles_calibration_btn.sizePolicy().hasHeightForWidth())
+        sizePolicy.setHeightForWidth(
+            self.cp_nozzles_calibration_btn.sizePolicy().hasHeightForWidth()
+        )
         self.cp_nozzles_calibration_btn.setSizePolicy(sizePolicy)
-        self.cp_nozzles_calibration_btn.setMinimumSize(QtCore.QSize(10, 74))
+        self.cp_nozzles_calibration_btn.setMinimumSize(QtCore.QSize(10, 80))
+        self.cp_nozzles_calibration_btn.setMaximumSize(QtCore.QSize(250, 80))
         font = QtGui.QFont()
         font.setFamily("Momcake")
         font.setPointSize(20)
@@ -95,21 +139,40 @@ class Ui_controlStackedWidget(object):
         self.cp_nozzles_calibration_btn.setFont(font)
         self.cp_nozzles_calibration_btn.setMouseTracking(False)
         self.cp_nozzles_calibration_btn.setTabletTracking(True)
-        self.cp_nozzles_calibration_btn.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.NoContextMenu)
-        self.cp_nozzles_calibration_btn.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
+        self.cp_nozzles_calibration_btn.setContextMenuPolicy(
+            QtCore.Qt.ContextMenuPolicy.NoContextMenu
+        )
+        self.cp_nozzles_calibration_btn.setLayoutDirection(
+            QtCore.Qt.LayoutDirection.LeftToRight
+        )
         self.cp_nozzles_calibration_btn.setStyleSheet("")
         self.cp_nozzles_calibration_btn.setAutoDefault(False)
         self.cp_nozzles_calibration_btn.setFlat(True)
-        self.cp_nozzles_calibration_btn.setProperty("icon_pixmap", QtGui.QPixmap(":/z_levelling/media/btn_icons/bed_levelling.svg"))
-        self.cp_nozzles_calibration_btn.setObjectName("cp_nozzles_calibration_btn")
-        self.cp_content_layout.addWidget(self.cp_nozzles_calibration_btn, 1, 0, 1, 1)
-        self.cp_temperature_btn = BlocksCustomButton(parent=self.gridLayoutWidget)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Fixed)
+        self.cp_nozzles_calibration_btn.setProperty(
+            "icon_pixmap",
+            QtGui.QPixmap(":/z_levelling/media/btn_icons/bed_levelling.svg"),
+        )
+        self.cp_nozzles_calibration_btn.setObjectName(
+            "cp_nozzles_calibration_btn"
+        )
+        self.cp_content_layout.addWidget(
+            self.cp_nozzles_calibration_btn, 1, 0, 1, 1
+        )
+        self.cp_temperature_btn = BlocksCustomButton(
+            parent=self.gridLayoutWidget
+        )
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Minimum,
+            QtWidgets.QSizePolicy.Policy.Fixed,
+        )
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(self.cp_temperature_btn.sizePolicy().hasHeightForWidth())
+        sizePolicy.setHeightForWidth(
+            self.cp_temperature_btn.sizePolicy().hasHeightForWidth()
+        )
         self.cp_temperature_btn.setSizePolicy(sizePolicy)
-        self.cp_temperature_btn.setMinimumSize(QtCore.QSize(10, 74))
+        self.cp_temperature_btn.setMinimumSize(QtCore.QSize(10, 80))
+        self.cp_temperature_btn.setMaximumSize(QtCore.QSize(250, 80))
         font = QtGui.QFont()
         font.setFamily("Momcake")
         font.setPointSize(20)
@@ -118,21 +181,38 @@ class Ui_controlStackedWidget(object):
         self.cp_temperature_btn.setFont(font)
         self.cp_temperature_btn.setMouseTracking(False)
         self.cp_temperature_btn.setTabletTracking(True)
-        self.cp_temperature_btn.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.NoContextMenu)
-        self.cp_temperature_btn.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
+        self.cp_temperature_btn.setContextMenuPolicy(
+            QtCore.Qt.ContextMenuPolicy.NoContextMenu
+        )
+        self.cp_temperature_btn.setLayoutDirection(
+            QtCore.Qt.LayoutDirection.LeftToRight
+        )
         self.cp_temperature_btn.setStyleSheet("")
         self.cp_temperature_btn.setAutoDefault(False)
         self.cp_temperature_btn.setFlat(True)
-        self.cp_temperature_btn.setProperty("icon_pixmap", QtGui.QPixmap(":/temperature_related/media/btn_icons/temperature.svg"))
+        self.cp_temperature_btn.setProperty(
+            "icon_pixmap",
+            QtGui.QPixmap(
+                ":/temperature_related/media/btn_icons/temperature.svg"
+            ),
+        )
         self.cp_temperature_btn.setObjectName("cp_temperature_btn")
         self.cp_content_layout.addWidget(self.cp_temperature_btn, 0, 1, 1, 1)
-        self.cp_bed_leveling_btn = BlocksCustomButton(parent=self.gridLayoutWidget)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Fixed)
+        self.cp_bed_leveling_btn = BlocksCustomButton(
+            parent=self.gridLayoutWidget
+        )
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Minimum,
+            QtWidgets.QSizePolicy.Policy.Fixed,
+        )
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(self.cp_bed_leveling_btn.sizePolicy().hasHeightForWidth())
+        sizePolicy.setHeightForWidth(
+            self.cp_bed_leveling_btn.sizePolicy().hasHeightForWidth()
+        )
         self.cp_bed_leveling_btn.setSizePolicy(sizePolicy)
-        self.cp_bed_leveling_btn.setMinimumSize(QtCore.QSize(10, 74))
+        self.cp_bed_leveling_btn.setMinimumSize(QtCore.QSize(10, 80))
+        self.cp_bed_leveling_btn.setMaximumSize(QtCore.QSize(250, 80))
         font = QtGui.QFont()
         font.setFamily("Momcake")
         font.setPointSize(20)
@@ -141,21 +221,36 @@ class Ui_controlStackedWidget(object):
         self.cp_bed_leveling_btn.setFont(font)
         self.cp_bed_leveling_btn.setMouseTracking(False)
         self.cp_bed_leveling_btn.setTabletTracking(True)
-        self.cp_bed_leveling_btn.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.NoContextMenu)
-        self.cp_bed_leveling_btn.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
+        self.cp_bed_leveling_btn.setContextMenuPolicy(
+            QtCore.Qt.ContextMenuPolicy.NoContextMenu
+        )
+        self.cp_bed_leveling_btn.setLayoutDirection(
+            QtCore.Qt.LayoutDirection.LeftToRight
+        )
         self.cp_bed_leveling_btn.setStyleSheet("")
         self.cp_bed_leveling_btn.setAutoDefault(False)
         self.cp_bed_leveling_btn.setFlat(True)
-        self.cp_bed_leveling_btn.setProperty("icon_pixmap", QtGui.QPixmap(":/z_levelling/media/btn_icons/bed_levelling.svg"))
+        self.cp_bed_leveling_btn.setProperty(
+            "icon_pixmap",
+            QtGui.QPixmap(":/z_levelling/media/btn_icons/bed_levelling.svg"),
+        )
         self.cp_bed_leveling_btn.setObjectName("cp_bed_leveling_btn")
         self.cp_content_layout.addWidget(self.cp_bed_leveling_btn, 1, 1, 1, 1)
-        self.cp_switch_print_core_btn = BlocksCustomButton(parent=self.gridLayoutWidget)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Fixed)
+        self.cp_switch_print_core_btn = BlocksCustomButton(
+            parent=self.gridLayoutWidget
+        )
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Minimum,
+            QtWidgets.QSizePolicy.Policy.Fixed,
+        )
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(self.cp_switch_print_core_btn.sizePolicy().hasHeightForWidth())
+        sizePolicy.setHeightForWidth(
+            self.cp_switch_print_core_btn.sizePolicy().hasHeightForWidth()
+        )
         self.cp_switch_print_core_btn.setSizePolicy(sizePolicy)
-        self.cp_switch_print_core_btn.setMinimumSize(QtCore.QSize(10, 74))
+        self.cp_switch_print_core_btn.setMinimumSize(QtCore.QSize(10, 80))
+        self.cp_switch_print_core_btn.setMaximumSize(QtCore.QSize(250, 80))
         font = QtGui.QFont()
         font.setFamily("Momcake")
         font.setPointSize(20)
@@ -164,21 +259,40 @@ class Ui_controlStackedWidget(object):
         self.cp_switch_print_core_btn.setFont(font)
         self.cp_switch_print_core_btn.setMouseTracking(False)
         self.cp_switch_print_core_btn.setTabletTracking(True)
-        self.cp_switch_print_core_btn.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.NoContextMenu)
-        self.cp_switch_print_core_btn.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
+        self.cp_switch_print_core_btn.setContextMenuPolicy(
+            QtCore.Qt.ContextMenuPolicy.NoContextMenu
+        )
+        self.cp_switch_print_core_btn.setLayoutDirection(
+            QtCore.Qt.LayoutDirection.LeftToRight
+        )
         self.cp_switch_print_core_btn.setStyleSheet("")
         self.cp_switch_print_core_btn.setAutoDefault(False)
         self.cp_switch_print_core_btn.setFlat(True)
-        self.cp_switch_print_core_btn.setProperty("icon_pixmap", QtGui.QPixmap(":/extruder_related/media/btn_icons/switch_print_core.svg"))
+        self.cp_switch_print_core_btn.setProperty(
+            "icon_pixmap",
+            QtGui.QPixmap(
+                ":/extruder_related/media/btn_icons/switch_print_core.svg"
+            ),
+        )
         self.cp_switch_print_core_btn.setObjectName("cp_switch_print_core_btn")
-        self.cp_content_layout.addWidget(self.cp_switch_print_core_btn, 2, 0, 1, 1)
-        self.cp_printer_settings_btn = BlocksCustomButton(parent=self.gridLayoutWidget)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Fixed)
+        self.cp_content_layout.addWidget(
+            self.cp_switch_print_core_btn, 2, 0, 1, 1
+        )
+        self.cp_printer_settings_btn = BlocksCustomButton(
+            parent=self.gridLayoutWidget
+        )
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Minimum,
+            QtWidgets.QSizePolicy.Policy.Fixed,
+        )
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(self.cp_printer_settings_btn.sizePolicy().hasHeightForWidth())
+        sizePolicy.setHeightForWidth(
+            self.cp_printer_settings_btn.sizePolicy().hasHeightForWidth()
+        )
         self.cp_printer_settings_btn.setSizePolicy(sizePolicy)
-        self.cp_printer_settings_btn.setMinimumSize(QtCore.QSize(10, 74))
+        self.cp_printer_settings_btn.setMinimumSize(QtCore.QSize(10, 80))
+        self.cp_printer_settings_btn.setMaximumSize(QtCore.QSize(250, 80))
         font = QtGui.QFont()
         font.setFamily("Momcake")
         font.setPointSize(20)
@@ -187,40 +301,71 @@ class Ui_controlStackedWidget(object):
         self.cp_printer_settings_btn.setFont(font)
         self.cp_printer_settings_btn.setMouseTracking(False)
         self.cp_printer_settings_btn.setTabletTracking(True)
-        self.cp_printer_settings_btn.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.NoContextMenu)
-        self.cp_printer_settings_btn.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
+        self.cp_printer_settings_btn.setContextMenuPolicy(
+            QtCore.Qt.ContextMenuPolicy.NoContextMenu
+        )
+        self.cp_printer_settings_btn.setLayoutDirection(
+            QtCore.Qt.LayoutDirection.LeftToRight
+        )
         self.cp_printer_settings_btn.setStyleSheet("")
         self.cp_printer_settings_btn.setAutoDefault(False)
         self.cp_printer_settings_btn.setFlat(True)
-        self.cp_printer_settings_btn.setProperty("icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/printer_settings.svg"))
+        self.cp_printer_settings_btn.setProperty(
+            "icon_pixmap",
+            QtGui.QPixmap(":/ui/media/btn_icons/printer_settings.svg"),
+        )
         self.cp_printer_settings_btn.setObjectName("cp_printer_settings_btn")
-        self.cp_content_layout.addWidget(self.cp_printer_settings_btn, 2, 1, 1, 1)
+        self.cp_content_layout.addWidget(
+            self.cp_printer_settings_btn, 2, 1, 1, 1
+        )
         controlStackedWidget.addWidget(self.control_page)
         self.motion_page = QtWidgets.QWidget()
         self.motion_page.setMinimumSize(QtCore.QSize(710, 400))
         self.motion_page.setMaximumSize(QtCore.QSize(720, 420))
         self.motion_page.setObjectName("motion_page")
-        self.horizontalLayoutWidget_2 = QtWidgets.QWidget(parent=self.motion_page)
-        self.horizontalLayoutWidget_2.setGeometry(QtCore.QRect(10, 10, 691, 80))
+        self.horizontalLayoutWidget_2 = QtWidgets.QWidget(
+            parent=self.motion_page
+        )
+        self.horizontalLayoutWidget_2.setGeometry(
+            QtCore.QRect(10, 10, 691, 80)
+        )
         self.horizontalLayoutWidget_2.setObjectName("horizontalLayoutWidget_2")
-        self.mp_header_layout = QtWidgets.QHBoxLayout(self.horizontalLayoutWidget_2)
+        self.mp_header_layout = QtWidgets.QHBoxLayout(
+            self.horizontalLayoutWidget_2
+        )
         self.mp_header_layout.setContentsMargins(0, 0, 0, 0)
         self.mp_header_layout.setObjectName("mp_header_layout")
-        self.mp_header_title = QtWidgets.QLabel(parent=self.horizontalLayoutWidget_2)
+        self.mp_header_title = QtWidgets.QLabel(
+            parent=self.horizontalLayoutWidget_2
+        )
         font = QtGui.QFont()
         font.setFamily("Momcake")
         font.setPointSize(24)
         self.mp_header_title.setFont(font)
-        self.mp_header_title.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
-        self.mp_header_title.setStyleSheet("background: transparent; color: white;")
+        self.mp_header_title.setLayoutDirection(
+            QtCore.Qt.LayoutDirection.LeftToRight
+        )
+        self.mp_header_title.setStyleSheet(
+            "background: transparent; color: white;"
+        )
         self.mp_header_title.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self.mp_header_title.setObjectName("mp_header_title")
-        self.mp_header_layout.addWidget(self.mp_header_title, 0, QtCore.Qt.AlignmentFlag.AlignHCenter|QtCore.Qt.AlignmentFlag.AlignVCenter)
+        self.mp_header_layout.addWidget(
+            self.mp_header_title,
+            0,
+            QtCore.Qt.AlignmentFlag.AlignHCenter
+            | QtCore.Qt.AlignmentFlag.AlignVCenter,
+        )
         self.mp_back_btn = IconButton(parent=self.horizontalLayoutWidget_2)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Fixed, QtWidgets.QSizePolicy.Policy.Fixed)
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Fixed,
+            QtWidgets.QSizePolicy.Policy.Fixed,
+        )
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(self.mp_back_btn.sizePolicy().hasHeightForWidth())
+        sizePolicy.setHeightForWidth(
+            self.mp_back_btn.sizePolicy().hasHeightForWidth()
+        )
         self.mp_back_btn.setSizePolicy(sizePolicy)
         self.mp_back_btn.setMinimumSize(QtCore.QSize(60, 60))
         self.mp_back_btn.setMaximumSize(QtCore.QSize(60, 60))
@@ -232,27 +377,46 @@ class Ui_controlStackedWidget(object):
         self.mp_back_btn.setFont(font)
         self.mp_back_btn.setMouseTracking(False)
         self.mp_back_btn.setTabletTracking(True)
-        self.mp_back_btn.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.NoContextMenu)
-        self.mp_back_btn.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
+        self.mp_back_btn.setContextMenuPolicy(
+            QtCore.Qt.ContextMenuPolicy.NoContextMenu
+        )
+        self.mp_back_btn.setLayoutDirection(
+            QtCore.Qt.LayoutDirection.LeftToRight
+        )
         self.mp_back_btn.setStyleSheet("")
         self.mp_back_btn.setAutoDefault(False)
         self.mp_back_btn.setFlat(True)
-        self.mp_back_btn.setProperty("icon_pixmap", QtGui.QPixmap(":/button_borders/media/btn_icons/back.svg"))
+        self.mp_back_btn.setProperty(
+            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/back.svg")
+        )
         self.mp_back_btn.setObjectName("mp_back_btn")
-        self.mp_header_layout.addWidget(self.mp_back_btn, 0, QtCore.Qt.AlignmentFlag.AlignRight|QtCore.Qt.AlignmentFlag.AlignVCenter)
+        self.mp_header_layout.addWidget(
+            self.mp_back_btn,
+            0,
+            QtCore.Qt.AlignmentFlag.AlignRight
+            | QtCore.Qt.AlignmentFlag.AlignVCenter,
+        )
         self.gridLayoutWidget_2 = QtWidgets.QWidget(parent=self.motion_page)
-        self.gridLayoutWidget_2.setGeometry(QtCore.QRect(10, 110, 691, 271))
+        self.gridLayoutWidget_2.setGeometry(QtCore.QRect(10, 110, 691, 291))
         self.gridLayoutWidget_2.setObjectName("gridLayoutWidget_2")
         self.mp_content_layout = QtWidgets.QGridLayout(self.gridLayoutWidget_2)
         self.mp_content_layout.setContentsMargins(5, 5, 5, 5)
         self.mp_content_layout.setObjectName("mp_content_layout")
-        self.motion_auto_home_btn = BlocksCustomButton(parent=self.gridLayoutWidget_2)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Fixed)
+        self.motion_auto_home_btn = BlocksCustomButton(
+            parent=self.gridLayoutWidget_2
+        )
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Minimum,
+            QtWidgets.QSizePolicy.Policy.Fixed,
+        )
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(self.motion_auto_home_btn.sizePolicy().hasHeightForWidth())
+        sizePolicy.setHeightForWidth(
+            self.motion_auto_home_btn.sizePolicy().hasHeightForWidth()
+        )
         self.motion_auto_home_btn.setSizePolicy(sizePolicy)
         self.motion_auto_home_btn.setMinimumSize(QtCore.QSize(10, 74))
+        self.motion_auto_home_btn.setMaximumSize(QtCore.QSize(250, 80))
         font = QtGui.QFont()
         font.setFamily("Momcake")
         font.setPointSize(20)
@@ -261,21 +425,36 @@ class Ui_controlStackedWidget(object):
         self.motion_auto_home_btn.setFont(font)
         self.motion_auto_home_btn.setMouseTracking(False)
         self.motion_auto_home_btn.setTabletTracking(True)
-        self.motion_auto_home_btn.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.NoContextMenu)
-        self.motion_auto_home_btn.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
+        self.motion_auto_home_btn.setContextMenuPolicy(
+            QtCore.Qt.ContextMenuPolicy.NoContextMenu
+        )
+        self.motion_auto_home_btn.setLayoutDirection(
+            QtCore.Qt.LayoutDirection.LeftToRight
+        )
         self.motion_auto_home_btn.setStyleSheet("")
         self.motion_auto_home_btn.setAutoDefault(False)
         self.motion_auto_home_btn.setFlat(True)
-        self.motion_auto_home_btn.setProperty("icon_pixmap", QtGui.QPixmap(":/motion/media/btn_icons/home_all.svg"))
+        self.motion_auto_home_btn.setProperty(
+            "icon_pixmap",
+            QtGui.QPixmap(":/motion/media/btn_icons/home_all.svg"),
+        )
         self.motion_auto_home_btn.setObjectName("motion_auto_home_btn")
         self.mp_content_layout.addWidget(self.motion_auto_home_btn, 0, 0, 1, 1)
-        self.motion_disable_steppers_btn = BlocksCustomButton(parent=self.gridLayoutWidget_2)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Fixed)
+        self.motion_disable_steppers_btn = BlocksCustomButton(
+            parent=self.gridLayoutWidget_2
+        )
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Minimum,
+            QtWidgets.QSizePolicy.Policy.Fixed,
+        )
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(self.motion_disable_steppers_btn.sizePolicy().hasHeightForWidth())
+        sizePolicy.setHeightForWidth(
+            self.motion_disable_steppers_btn.sizePolicy().hasHeightForWidth()
+        )
         self.motion_disable_steppers_btn.setSizePolicy(sizePolicy)
         self.motion_disable_steppers_btn.setMinimumSize(QtCore.QSize(10, 74))
+        self.motion_disable_steppers_btn.setMaximumSize(QtCore.QSize(250, 80))
         font = QtGui.QFont()
         font.setFamily("Momcake")
         font.setPointSize(20)
@@ -284,21 +463,40 @@ class Ui_controlStackedWidget(object):
         self.motion_disable_steppers_btn.setFont(font)
         self.motion_disable_steppers_btn.setMouseTracking(False)
         self.motion_disable_steppers_btn.setTabletTracking(True)
-        self.motion_disable_steppers_btn.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.NoContextMenu)
-        self.motion_disable_steppers_btn.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
+        self.motion_disable_steppers_btn.setContextMenuPolicy(
+            QtCore.Qt.ContextMenuPolicy.NoContextMenu
+        )
+        self.motion_disable_steppers_btn.setLayoutDirection(
+            QtCore.Qt.LayoutDirection.LeftToRight
+        )
         self.motion_disable_steppers_btn.setStyleSheet("")
         self.motion_disable_steppers_btn.setAutoDefault(False)
         self.motion_disable_steppers_btn.setFlat(True)
-        self.motion_disable_steppers_btn.setProperty("icon_pixmap", QtGui.QPixmap(":/motion/media/btn_icons/disable_steppers.svg"))
-        self.motion_disable_steppers_btn.setObjectName("motion_disable_steppers_btn")
-        self.mp_content_layout.addWidget(self.motion_disable_steppers_btn, 0, 1, 1, 1)
-        self.motion_move_axis_btn = BlocksCustomButton(parent=self.gridLayoutWidget_2)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Fixed)
+        self.motion_disable_steppers_btn.setProperty(
+            "icon_pixmap",
+            QtGui.QPixmap(":/motion/media/btn_icons/disable_steppers.svg"),
+        )
+        self.motion_disable_steppers_btn.setObjectName(
+            "motion_disable_steppers_btn"
+        )
+        self.mp_content_layout.addWidget(
+            self.motion_disable_steppers_btn, 0, 1, 1, 1
+        )
+        self.motion_move_axis_btn = BlocksCustomButton(
+            parent=self.gridLayoutWidget_2
+        )
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Minimum,
+            QtWidgets.QSizePolicy.Policy.Fixed,
+        )
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(self.motion_move_axis_btn.sizePolicy().hasHeightForWidth())
+        sizePolicy.setHeightForWidth(
+            self.motion_move_axis_btn.sizePolicy().hasHeightForWidth()
+        )
         self.motion_move_axis_btn.setSizePolicy(sizePolicy)
         self.motion_move_axis_btn.setMinimumSize(QtCore.QSize(10, 74))
+        self.motion_move_axis_btn.setMaximumSize(QtCore.QSize(250, 80))
         font = QtGui.QFont()
         font.setFamily("Momcake")
         font.setPointSize(20)
@@ -307,21 +505,36 @@ class Ui_controlStackedWidget(object):
         self.motion_move_axis_btn.setFont(font)
         self.motion_move_axis_btn.setMouseTracking(False)
         self.motion_move_axis_btn.setTabletTracking(True)
-        self.motion_move_axis_btn.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.NoContextMenu)
-        self.motion_move_axis_btn.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
+        self.motion_move_axis_btn.setContextMenuPolicy(
+            QtCore.Qt.ContextMenuPolicy.NoContextMenu
+        )
+        self.motion_move_axis_btn.setLayoutDirection(
+            QtCore.Qt.LayoutDirection.LeftToRight
+        )
         self.motion_move_axis_btn.setStyleSheet("")
         self.motion_move_axis_btn.setAutoDefault(False)
         self.motion_move_axis_btn.setFlat(True)
-        self.motion_move_axis_btn.setProperty("icon_pixmap", QtGui.QPixmap(":/motion/media/btn_icons/axis_maintenance.svg"))
+        self.motion_move_axis_btn.setProperty(
+            "icon_pixmap",
+            QtGui.QPixmap(":/motion/media/btn_icons/axis_maintenance.svg"),
+        )
         self.motion_move_axis_btn.setObjectName("motion_move_axis_btn")
         self.mp_content_layout.addWidget(self.motion_move_axis_btn, 1, 0, 1, 1)
-        self.motion_extrude_btn = BlocksCustomButton(parent=self.gridLayoutWidget_2)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Fixed)
+        self.motion_extrude_btn = BlocksCustomButton(
+            parent=self.gridLayoutWidget_2
+        )
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Minimum,
+            QtWidgets.QSizePolicy.Policy.Fixed,
+        )
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(self.motion_extrude_btn.sizePolicy().hasHeightForWidth())
+        sizePolicy.setHeightForWidth(
+            self.motion_extrude_btn.sizePolicy().hasHeightForWidth()
+        )
         self.motion_extrude_btn.setSizePolicy(sizePolicy)
         self.motion_extrude_btn.setMinimumSize(QtCore.QSize(10, 74))
+        self.motion_extrude_btn.setMaximumSize(QtCore.QSize(250, 80))
         font = QtGui.QFont()
         font.setFamily("Momcake")
         font.setPointSize(20)
@@ -330,12 +543,19 @@ class Ui_controlStackedWidget(object):
         self.motion_extrude_btn.setFont(font)
         self.motion_extrude_btn.setMouseTracking(False)
         self.motion_extrude_btn.setTabletTracking(True)
-        self.motion_extrude_btn.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.NoContextMenu)
-        self.motion_extrude_btn.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
+        self.motion_extrude_btn.setContextMenuPolicy(
+            QtCore.Qt.ContextMenuPolicy.NoContextMenu
+        )
+        self.motion_extrude_btn.setLayoutDirection(
+            QtCore.Qt.LayoutDirection.LeftToRight
+        )
         self.motion_extrude_btn.setStyleSheet("")
         self.motion_extrude_btn.setAutoDefault(False)
         self.motion_extrude_btn.setFlat(True)
-        self.motion_extrude_btn.setProperty("icon_pixmap", QtGui.QPixmap(":/extruder_related/media/btn_icons/extrude.svg"))
+        self.motion_extrude_btn.setProperty(
+            "icon_pixmap",
+            QtGui.QPixmap(":/extruder_related/media/btn_icons/extrude.svg"),
+        )
         self.motion_extrude_btn.setObjectName("motion_extrude_btn")
         self.mp_content_layout.addWidget(self.motion_extrude_btn, 1, 1, 1, 1)
         controlStackedWidget.addWidget(self.motion_page)
@@ -343,125 +563,190 @@ class Ui_controlStackedWidget(object):
         self.extrude_page.setMinimumSize(QtCore.QSize(710, 400))
         self.extrude_page.setMaximumSize(QtCore.QSize(720, 420))
         self.extrude_page.setObjectName("extrude_page")
-        self.horizontalLayoutWidget_7 = QtWidgets.QWidget(parent=self.extrude_page)
-        self.horizontalLayoutWidget_7.setGeometry(QtCore.QRect(20, 11, 671, 62))
-        self.horizontalLayoutWidget_7.setObjectName("horizontalLayoutWidget_7")
-        self.exp_header_layout = QtWidgets.QHBoxLayout(self.horizontalLayoutWidget_7)
-        self.exp_header_layout.setContentsMargins(0, 0, 0, 0)
-        self.exp_header_layout.setObjectName("exp_header_layout")
-        self.exp_title_label = QtWidgets.QLabel(parent=self.horizontalLayoutWidget_7)
-        font = QtGui.QFont()
-        font.setFamily("Momcake")
-        font.setPointSize(24)
-        self.exp_title_label.setFont(font)
-        self.exp_title_label.setStyleSheet("background: transparent; color: white;")
-        self.exp_title_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
-        self.exp_title_label.setObjectName("exp_title_label")
-        self.exp_header_layout.addWidget(self.exp_title_label)
-        self.exp_back_btn = BlocksCustomButton(parent=self.horizontalLayoutWidget_7)
-        self.exp_back_btn.setMinimumSize(QtCore.QSize(60, 60))
-        self.exp_back_btn.setMaximumSize(QtCore.QSize(60, 60))
-        font = QtGui.QFont()
-        font.setFamily("Momcake")
-        font.setPointSize(20)
-        font.setItalic(False)
-        font.setStyleStrategy(QtGui.QFont.StyleStrategy.PreferAntialias)
-        self.exp_back_btn.setFont(font)
-        self.exp_back_btn.setMouseTracking(False)
-        self.exp_back_btn.setTabletTracking(True)
-        self.exp_back_btn.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.NoContextMenu)
-        self.exp_back_btn.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
-        self.exp_back_btn.setStyleSheet("")
-        self.exp_back_btn.setAutoDefault(False)
-        self.exp_back_btn.setFlat(True)
-        self.exp_back_btn.setProperty("icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/back.svg"))
-        self.exp_back_btn.setObjectName("exp_back_btn")
-        self.exp_header_layout.addWidget(self.exp_back_btn)
-        self.verticalLayoutWidget_5 = QtWidgets.QWidget(parent=self.extrude_page)
-        self.verticalLayoutWidget_5.setGeometry(QtCore.QRect(20, 80, 671, 330))
+
+        self.verticalLayoutWidget_5 = QtWidgets.QWidget(
+            parent=self.extrude_page
+        )
+        self.verticalLayoutWidget_5.setGeometry(QtCore.QRect(10, 80, 691, 350))
+
         self.verticalLayoutWidget_5.setObjectName("verticalLayoutWidget_5")
-        self.exp_vertical_content_layout = QtWidgets.QVBoxLayout(self.verticalLayoutWidget_5)
+        self.exp_vertical_content_layout = QtWidgets.QVBoxLayout(
+            self.verticalLayoutWidget_5
+        )
         self.exp_vertical_content_layout.setContentsMargins(5, 5, 5, 5)
-        self.exp_vertical_content_layout.setObjectName("exp_vertical_content_layout")
-        self.exp_length_group_box = QtWidgets.QGroupBox(parent=self.verticalLayoutWidget_5)
+        self.exp_vertical_content_layout.setObjectName(
+            "exp_vertical_content_layout"
+        )
+        self.exp_length_group_box = QtWidgets.QGroupBox(
+            parent=self.verticalLayoutWidget_5
+        )
         self.exp_length_group_box.setMinimumSize(QtCore.QSize(0, 80))
-        self.exp_length_group_box.setMaximumSize(QtCore.QSize(16777215, 16777215))
+        self.exp_length_group_box.setMaximumSize(
+            QtCore.QSize(16777215, 16777215)
+        )
         palette = QtGui.QPalette()
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.WindowText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Active,
+            QtGui.QPalette.ColorRole.WindowText,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.WindowText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Inactive,
+            QtGui.QPalette.ColorRole.WindowText,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(120, 120, 120))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.WindowText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Disabled,
+            QtGui.QPalette.ColorRole.WindowText,
+            brush,
+        )
         self.exp_length_group_box.setPalette(palette)
         font = QtGui.QFont()
         font.setPointSize(14)
         self.exp_length_group_box.setFont(font)
-        self.exp_length_group_box.setAlignment(QtCore.Qt.AlignmentFlag.AlignLeading|QtCore.Qt.AlignmentFlag.AlignLeft|QtCore.Qt.AlignmentFlag.AlignVCenter)
+        self.exp_length_group_box.setAlignment(
+            QtCore.Qt.AlignmentFlag.AlignLeading
+            | QtCore.Qt.AlignmentFlag.AlignLeft
+            | QtCore.Qt.AlignmentFlag.AlignVCenter
+        )
         self.exp_length_group_box.setFlat(True)
         self.exp_length_group_box.setObjectName("exp_length_group_box")
         self.layoutWidget = QtWidgets.QWidget(parent=self.exp_length_group_box)
-        self.layoutWidget.setGeometry(QtCore.QRect(0, 20, 661, 61))
+        self.layoutWidget.setGeometry(QtCore.QRect(0, 20, 681, 61))
         self.layoutWidget.setObjectName("layoutWidget")
-        self.exp_length_content_layout = QtWidgets.QHBoxLayout(self.layoutWidget)
+        self.exp_length_content_layout = QtWidgets.QHBoxLayout(
+            self.layoutWidget
+        )
         self.exp_length_content_layout.setContentsMargins(5, 5, 5, 5)
         self.exp_length_content_layout.setSpacing(5)
-        self.exp_length_content_layout.setObjectName("exp_length_content_layout")
-        self.extrude_select_length_10_btn = GroupButton(parent=self.layoutWidget)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Expanding)
+        self.exp_length_content_layout.setObjectName(
+            "exp_length_content_layout"
+        )
+        self.extrude_select_length_10_btn = QtWidgets.QPushButton(
+            parent=self.layoutWidget
+        )
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Minimum,
+            QtWidgets.QSizePolicy.Policy.Expanding,
+        )
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(self.extrude_select_length_10_btn.sizePolicy().hasHeightForWidth())
+        sizePolicy.setHeightForWidth(
+            self.extrude_select_length_10_btn.sizePolicy().hasHeightForWidth()
+        )
         self.extrude_select_length_10_btn.setSizePolicy(sizePolicy)
         palette = QtGui.QPalette()
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.Button, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Active,
+            QtGui.QPalette.ColorRole.Button,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.Text, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Active,
+            QtGui.QPalette.ColorRole.Text,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.BrightText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Active,
+            QtGui.QPalette.ColorRole.BrightText,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.ButtonText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Active,
+            QtGui.QPalette.ColorRole.ButtonText,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(0, 0, 0))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.HighlightedText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Active,
+            QtGui.QPalette.ColorRole.HighlightedText,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.Button, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Inactive,
+            QtGui.QPalette.ColorRole.Button,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.Text, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Inactive,
+            QtGui.QPalette.ColorRole.Text,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.BrightText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Inactive,
+            QtGui.QPalette.ColorRole.BrightText,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.ButtonText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Inactive,
+            QtGui.QPalette.ColorRole.ButtonText,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(0, 0, 0))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.HighlightedText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Inactive,
+            QtGui.QPalette.ColorRole.HighlightedText,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.Button, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Disabled,
+            QtGui.QPalette.ColorRole.Button,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(120, 120, 120))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.Text, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Disabled,
+            QtGui.QPalette.ColorRole.Text,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.BrightText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Disabled,
+            QtGui.QPalette.ColorRole.BrightText,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(120, 120, 120))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.ButtonText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Disabled,
+            QtGui.QPalette.ColorRole.ButtonText,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(0, 0, 0))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.HighlightedText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Disabled,
+            QtGui.QPalette.ColorRole.HighlightedText,
+            brush,
+        )
         self.extrude_select_length_10_btn.setPalette(palette)
         font = QtGui.QFont()
         font.setPointSize(16)
@@ -473,68 +758,146 @@ class Ui_controlStackedWidget(object):
         self.extrude_select_length_10_btn.setAutoRepeat(False)
         self.extrude_select_length_10_btn.setAutoExclusive(False)
         self.extrude_select_length_10_btn.setFlat(True)
-        self.extrude_select_length_10_btn.setObjectName("extrude_select_length_10_btn")
-        self.extrude_select_length_group = QtWidgets.QButtonGroup(controlStackedWidget)
-        self.extrude_select_length_group.setObjectName("extrude_select_length_group")
-        self.extrude_select_length_group.addButton(self.extrude_select_length_10_btn)
-        self.exp_length_content_layout.addWidget(self.extrude_select_length_10_btn)
+        self.extrude_select_length_10_btn.setObjectName(
+            "extrude_select_length_10_btn"
+        )
+        self.extrude_select_length_group = QtWidgets.QButtonGroup(
+            controlStackedWidget
+        )
+        self.extrude_select_length_group.setObjectName(
+            "extrude_select_length_group"
+        )
+        self.extrude_select_length_group.addButton(
+            self.extrude_select_length_10_btn
+        )
+        self.exp_length_content_layout.addWidget(
+            self.extrude_select_length_10_btn
+        )
         self.line_5 = QtWidgets.QFrame(parent=self.layoutWidget)
         self.line_5.setFrameShape(QtWidgets.QFrame.Shape.VLine)
         self.line_5.setFrameShadow(QtWidgets.QFrame.Shadow.Sunken)
         self.line_5.setObjectName("line_5")
         self.exp_length_content_layout.addWidget(self.line_5)
-        self.extrude_select_length_50_btn = GroupButton(parent=self.layoutWidget)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Expanding)
+
+        self.extrude_select_length_50_btn = QtWidgets.QPushButton(
+            parent=self.layoutWidget
+        )
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Minimum,
+            QtWidgets.QSizePolicy.Policy.Expanding,
+        )
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(self.extrude_select_length_50_btn.sizePolicy().hasHeightForWidth())
+        sizePolicy.setHeightForWidth(
+            self.extrude_select_length_50_btn.sizePolicy().hasHeightForWidth()
+        )
         self.extrude_select_length_50_btn.setSizePolicy(sizePolicy)
         palette = QtGui.QPalette()
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.Button, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Active,
+            QtGui.QPalette.ColorRole.Button,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.Text, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Active,
+            QtGui.QPalette.ColorRole.Text,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.BrightText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Active,
+            QtGui.QPalette.ColorRole.BrightText,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.ButtonText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Active,
+            QtGui.QPalette.ColorRole.ButtonText,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(0, 0, 0))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.HighlightedText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Active,
+            QtGui.QPalette.ColorRole.HighlightedText,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.Button, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Inactive,
+            QtGui.QPalette.ColorRole.Button,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.Text, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Inactive,
+            QtGui.QPalette.ColorRole.Text,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.BrightText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Inactive,
+            QtGui.QPalette.ColorRole.BrightText,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.ButtonText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Inactive,
+            QtGui.QPalette.ColorRole.ButtonText,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(0, 0, 0))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.HighlightedText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Inactive,
+            QtGui.QPalette.ColorRole.HighlightedText,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.Button, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Disabled,
+            QtGui.QPalette.ColorRole.Button,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(120, 120, 120))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.Text, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Disabled,
+            QtGui.QPalette.ColorRole.Text,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.BrightText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Disabled,
+            QtGui.QPalette.ColorRole.BrightText,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(120, 120, 120))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.ButtonText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Disabled,
+            QtGui.QPalette.ColorRole.ButtonText,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(0, 0, 0))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.HighlightedText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Disabled,
+            QtGui.QPalette.ColorRole.HighlightedText,
+            brush,
+        )
         self.extrude_select_length_50_btn.setPalette(palette)
         font = QtGui.QFont()
         font.setPointSize(16)
@@ -545,66 +908,141 @@ class Ui_controlStackedWidget(object):
         self.extrude_select_length_50_btn.setAutoRepeat(False)
         self.extrude_select_length_50_btn.setAutoExclusive(False)
         self.extrude_select_length_50_btn.setFlat(True)
-        self.extrude_select_length_50_btn.setObjectName("extrude_select_length_50_btn")
-        self.extrude_select_length_group.addButton(self.extrude_select_length_50_btn)
-        self.exp_length_content_layout.addWidget(self.extrude_select_length_50_btn)
+        self.extrude_select_length_50_btn.setObjectName(
+            "extrude_select_length_50_btn"
+        )
+        self.extrude_select_length_group.addButton(
+            self.extrude_select_length_50_btn
+        )
+        self.exp_length_content_layout.addWidget(
+            self.extrude_select_length_50_btn
+        )
         self.line_6 = QtWidgets.QFrame(parent=self.layoutWidget)
         self.line_6.setFrameShape(QtWidgets.QFrame.Shape.VLine)
         self.line_6.setFrameShadow(QtWidgets.QFrame.Shadow.Sunken)
         self.line_6.setObjectName("line_6")
         self.exp_length_content_layout.addWidget(self.line_6)
-        self.extrude_select_length_100_btn = GroupButton(parent=self.layoutWidget)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Expanding)
+
+        self.extrude_select_length_100_btn = QtWidgets.QPushButton(
+            parent=self.layoutWidget
+        )
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Minimum,
+            QtWidgets.QSizePolicy.Policy.Expanding,
+        )
+
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(self.extrude_select_length_100_btn.sizePolicy().hasHeightForWidth())
+        sizePolicy.setHeightForWidth(
+            self.extrude_select_length_100_btn.sizePolicy().hasHeightForWidth()
+        )
         self.extrude_select_length_100_btn.setSizePolicy(sizePolicy)
         palette = QtGui.QPalette()
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.Button, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Active,
+            QtGui.QPalette.ColorRole.Button,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.Text, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Active,
+            QtGui.QPalette.ColorRole.Text,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.BrightText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Active,
+            QtGui.QPalette.ColorRole.BrightText,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.ButtonText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Active,
+            QtGui.QPalette.ColorRole.ButtonText,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(0, 0, 0))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.HighlightedText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Active,
+            QtGui.QPalette.ColorRole.HighlightedText,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.Button, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Inactive,
+            QtGui.QPalette.ColorRole.Button,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.Text, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Inactive,
+            QtGui.QPalette.ColorRole.Text,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.BrightText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Inactive,
+            QtGui.QPalette.ColorRole.BrightText,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.ButtonText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Inactive,
+            QtGui.QPalette.ColorRole.ButtonText,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(0, 0, 0))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.HighlightedText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Inactive,
+            QtGui.QPalette.ColorRole.HighlightedText,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.Button, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Disabled,
+            QtGui.QPalette.ColorRole.Button,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(120, 120, 120))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.Text, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Disabled,
+            QtGui.QPalette.ColorRole.Text,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.BrightText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Disabled,
+            QtGui.QPalette.ColorRole.BrightText,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(120, 120, 120))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.ButtonText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Disabled,
+            QtGui.QPalette.ColorRole.ButtonText,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(0, 0, 0))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.HighlightedText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Disabled,
+            QtGui.QPalette.ColorRole.HighlightedText,
+            brush,
+        )
         self.extrude_select_length_100_btn.setPalette(palette)
         font = QtGui.QFont()
         font.setPointSize(16)
@@ -615,87 +1053,182 @@ class Ui_controlStackedWidget(object):
         self.extrude_select_length_100_btn.setAutoRepeat(False)
         self.extrude_select_length_100_btn.setAutoExclusive(False)
         self.extrude_select_length_100_btn.setFlat(True)
-        self.extrude_select_length_100_btn.setObjectName("extrude_select_length_100_btn")
-        self.extrude_select_length_group.addButton(self.extrude_select_length_100_btn)
-        self.exp_length_content_layout.addWidget(self.extrude_select_length_100_btn)
+        self.extrude_select_length_100_btn.setObjectName(
+            "extrude_select_length_100_btn"
+        )
+        self.extrude_select_length_group.addButton(
+            self.extrude_select_length_100_btn
+        )
+        self.exp_length_content_layout.addWidget(
+            self.extrude_select_length_100_btn
+        )
         self.exp_vertical_content_layout.addWidget(self.exp_length_group_box)
-        self.exp_feedrate_group_box = QtWidgets.QGroupBox(parent=self.verticalLayoutWidget_5)
+        self.exp_feedrate_group_box = QtWidgets.QGroupBox(
+            parent=self.verticalLayoutWidget_5
+        )
         self.exp_feedrate_group_box.setMinimumSize(QtCore.QSize(0, 80))
         palette = QtGui.QPalette()
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.WindowText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Active,
+            QtGui.QPalette.ColorRole.WindowText,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.WindowText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Inactive,
+            QtGui.QPalette.ColorRole.WindowText,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(120, 120, 120))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.WindowText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Disabled,
+            QtGui.QPalette.ColorRole.WindowText,
+            brush,
+        )
         self.exp_feedrate_group_box.setPalette(palette)
         font = QtGui.QFont()
         font.setPointSize(14)
         self.exp_feedrate_group_box.setFont(font)
         self.exp_feedrate_group_box.setFlat(True)
         self.exp_feedrate_group_box.setObjectName("exp_feedrate_group_box")
-        self.layoutWidget1 = QtWidgets.QWidget(parent=self.exp_feedrate_group_box)
-        self.layoutWidget1.setGeometry(QtCore.QRect(0, 19, 661, 61))
+        self.layoutWidget1 = QtWidgets.QWidget(
+            parent=self.exp_feedrate_group_box
+        )
+        self.layoutWidget1.setGeometry(QtCore.QRect(0, 19, 681, 61))
         self.layoutWidget1.setObjectName("layoutWidget1")
-        self.exp_feedrate_content_layout = QtWidgets.QHBoxLayout(self.layoutWidget1)
+        self.exp_feedrate_content_layout = QtWidgets.QHBoxLayout(
+            self.layoutWidget1
+        )
         self.exp_feedrate_content_layout.setContentsMargins(5, 5, 5, 5)
         self.exp_feedrate_content_layout.setSpacing(5)
-        self.exp_feedrate_content_layout.setObjectName("exp_feedrate_content_layout")
-        self.extrude_select_feedrate_2_btn = GroupButton(parent=self.layoutWidget1)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Expanding)
+
+        self.exp_feedrate_content_layout.setObjectName(
+            "exp_feedrate_content_layout"
+        )
+        self.extrude_select_feedrate_2_btn = QtWidgets.QPushButton(
+            parent=self.layoutWidget1
+        )
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Minimum,
+            QtWidgets.QSizePolicy.Policy.Expanding,
+        )
+
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(self.extrude_select_feedrate_2_btn.sizePolicy().hasHeightForWidth())
+        sizePolicy.setHeightForWidth(
+            self.extrude_select_feedrate_2_btn.sizePolicy().hasHeightForWidth()
+        )
         self.extrude_select_feedrate_2_btn.setSizePolicy(sizePolicy)
         palette = QtGui.QPalette()
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.Button, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Active,
+            QtGui.QPalette.ColorRole.Button,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.Text, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Active,
+            QtGui.QPalette.ColorRole.Text,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.BrightText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Active,
+            QtGui.QPalette.ColorRole.BrightText,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.ButtonText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Active,
+            QtGui.QPalette.ColorRole.ButtonText,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(0, 0, 0))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.HighlightedText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Active,
+            QtGui.QPalette.ColorRole.HighlightedText,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.Button, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Inactive,
+            QtGui.QPalette.ColorRole.Button,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.Text, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Inactive,
+            QtGui.QPalette.ColorRole.Text,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.BrightText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Inactive,
+            QtGui.QPalette.ColorRole.BrightText,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.ButtonText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Inactive,
+            QtGui.QPalette.ColorRole.ButtonText,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(0, 0, 0))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.HighlightedText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Inactive,
+            QtGui.QPalette.ColorRole.HighlightedText,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.Button, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Disabled,
+            QtGui.QPalette.ColorRole.Button,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(120, 120, 120))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.Text, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Disabled,
+            QtGui.QPalette.ColorRole.Text,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.BrightText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Disabled,
+            QtGui.QPalette.ColorRole.BrightText,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(120, 120, 120))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.ButtonText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Disabled,
+            QtGui.QPalette.ColorRole.ButtonText,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(0, 0, 0))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.HighlightedText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Disabled,
+            QtGui.QPalette.ColorRole.HighlightedText,
+            brush,
+        )
         self.extrude_select_feedrate_2_btn.setPalette(palette)
         font = QtGui.QFont()
         font.setPointSize(16)
@@ -707,68 +1240,147 @@ class Ui_controlStackedWidget(object):
         self.extrude_select_feedrate_2_btn.setAutoRepeat(False)
         self.extrude_select_feedrate_2_btn.setAutoExclusive(False)
         self.extrude_select_feedrate_2_btn.setFlat(True)
-        self.extrude_select_feedrate_2_btn.setObjectName("extrude_select_feedrate_2_btn")
-        self.extrude_select_feedrate_group = QtWidgets.QButtonGroup(controlStackedWidget)
-        self.extrude_select_feedrate_group.setObjectName("extrude_select_feedrate_group")
-        self.extrude_select_feedrate_group.addButton(self.extrude_select_feedrate_2_btn)
-        self.exp_feedrate_content_layout.addWidget(self.extrude_select_feedrate_2_btn)
+        self.extrude_select_feedrate_2_btn.setObjectName(
+            "extrude_select_feedrate_2_btn"
+        )
+        self.extrude_select_feedrate_group = QtWidgets.QButtonGroup(
+            controlStackedWidget
+        )
+        self.extrude_select_feedrate_group.setObjectName(
+            "extrude_select_feedrate_group"
+        )
+        self.extrude_select_feedrate_group.addButton(
+            self.extrude_select_feedrate_2_btn
+        )
+        self.exp_feedrate_content_layout.addWidget(
+            self.extrude_select_feedrate_2_btn
+        )
         self.line_7 = QtWidgets.QFrame(parent=self.layoutWidget1)
         self.line_7.setFrameShape(QtWidgets.QFrame.Shape.VLine)
         self.line_7.setFrameShadow(QtWidgets.QFrame.Shadow.Sunken)
         self.line_7.setObjectName("line_7")
         self.exp_feedrate_content_layout.addWidget(self.line_7)
-        self.extrude_select_feedrate_5_btn = GroupButton(parent=self.layoutWidget1)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Expanding)
+
+        self.extrude_select_feedrate_5_btn = QtWidgets.QPushButton(
+            parent=self.layoutWidget1
+        )
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Minimum,
+            QtWidgets.QSizePolicy.Policy.Expanding,
+        )
+
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(self.extrude_select_feedrate_5_btn.sizePolicy().hasHeightForWidth())
+        sizePolicy.setHeightForWidth(
+            self.extrude_select_feedrate_5_btn.sizePolicy().hasHeightForWidth()
+        )
         self.extrude_select_feedrate_5_btn.setSizePolicy(sizePolicy)
         palette = QtGui.QPalette()
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.Button, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Active,
+            QtGui.QPalette.ColorRole.Button,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.Text, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Active,
+            QtGui.QPalette.ColorRole.Text,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.BrightText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Active,
+            QtGui.QPalette.ColorRole.BrightText,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.ButtonText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Active,
+            QtGui.QPalette.ColorRole.ButtonText,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(0, 0, 0))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.HighlightedText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Active,
+            QtGui.QPalette.ColorRole.HighlightedText,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.Button, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Inactive,
+            QtGui.QPalette.ColorRole.Button,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.Text, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Inactive,
+            QtGui.QPalette.ColorRole.Text,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.BrightText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Inactive,
+            QtGui.QPalette.ColorRole.BrightText,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.ButtonText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Inactive,
+            QtGui.QPalette.ColorRole.ButtonText,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(0, 0, 0))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.HighlightedText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Inactive,
+            QtGui.QPalette.ColorRole.HighlightedText,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.Button, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Disabled,
+            QtGui.QPalette.ColorRole.Button,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(120, 120, 120))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.Text, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Disabled,
+            QtGui.QPalette.ColorRole.Text,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.BrightText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Disabled,
+            QtGui.QPalette.ColorRole.BrightText,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(120, 120, 120))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.ButtonText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Disabled,
+            QtGui.QPalette.ColorRole.ButtonText,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(0, 0, 0))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.HighlightedText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Disabled,
+            QtGui.QPalette.ColorRole.HighlightedText,
+            brush,
+        )
         self.extrude_select_feedrate_5_btn.setPalette(palette)
         font = QtGui.QFont()
         font.setPointSize(16)
@@ -779,66 +1391,141 @@ class Ui_controlStackedWidget(object):
         self.extrude_select_feedrate_5_btn.setAutoRepeat(False)
         self.extrude_select_feedrate_5_btn.setAutoExclusive(False)
         self.extrude_select_feedrate_5_btn.setFlat(True)
-        self.extrude_select_feedrate_5_btn.setObjectName("extrude_select_feedrate_5_btn")
-        self.extrude_select_feedrate_group.addButton(self.extrude_select_feedrate_5_btn)
-        self.exp_feedrate_content_layout.addWidget(self.extrude_select_feedrate_5_btn)
+        self.extrude_select_feedrate_5_btn.setObjectName(
+            "extrude_select_feedrate_5_btn"
+        )
+        self.extrude_select_feedrate_group.addButton(
+            self.extrude_select_feedrate_5_btn
+        )
+        self.exp_feedrate_content_layout.addWidget(
+            self.extrude_select_feedrate_5_btn
+        )
         self.line_8 = QtWidgets.QFrame(parent=self.layoutWidget1)
         self.line_8.setFrameShape(QtWidgets.QFrame.Shape.VLine)
         self.line_8.setFrameShadow(QtWidgets.QFrame.Shadow.Sunken)
         self.line_8.setObjectName("line_8")
         self.exp_feedrate_content_layout.addWidget(self.line_8)
-        self.extrude_select_feedrate_10_btn = GroupButton(parent=self.layoutWidget1)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Expanding)
+
+        self.extrude_select_feedrate_10_btn = QtWidgets.QPushButton(
+            parent=self.layoutWidget1
+        )
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Minimum,
+            QtWidgets.QSizePolicy.Policy.Expanding,
+        )
+
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(self.extrude_select_feedrate_10_btn.sizePolicy().hasHeightForWidth())
+        sizePolicy.setHeightForWidth(
+            self.extrude_select_feedrate_10_btn.sizePolicy().hasHeightForWidth()
+        )
         self.extrude_select_feedrate_10_btn.setSizePolicy(sizePolicy)
         palette = QtGui.QPalette()
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.Button, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Active,
+            QtGui.QPalette.ColorRole.Button,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.Text, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Active,
+            QtGui.QPalette.ColorRole.Text,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.BrightText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Active,
+            QtGui.QPalette.ColorRole.BrightText,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.ButtonText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Active,
+            QtGui.QPalette.ColorRole.ButtonText,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(0, 0, 0))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.HighlightedText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Active,
+            QtGui.QPalette.ColorRole.HighlightedText,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.Button, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Inactive,
+            QtGui.QPalette.ColorRole.Button,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.Text, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Inactive,
+            QtGui.QPalette.ColorRole.Text,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.BrightText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Inactive,
+            QtGui.QPalette.ColorRole.BrightText,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.ButtonText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Inactive,
+            QtGui.QPalette.ColorRole.ButtonText,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(0, 0, 0))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.HighlightedText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Inactive,
+            QtGui.QPalette.ColorRole.HighlightedText,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.Button, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Disabled,
+            QtGui.QPalette.ColorRole.Button,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(120, 120, 120))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.Text, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Disabled,
+            QtGui.QPalette.ColorRole.Text,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.BrightText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Disabled,
+            QtGui.QPalette.ColorRole.BrightText,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(120, 120, 120))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.ButtonText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Disabled,
+            QtGui.QPalette.ColorRole.ButtonText,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(0, 0, 0))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.HighlightedText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Disabled,
+            QtGui.QPalette.ColorRole.HighlightedText,
+            brush,
+        )
         self.extrude_select_feedrate_10_btn.setPalette(palette)
         font = QtGui.QFont()
         font.setPointSize(16)
@@ -849,24 +1536,40 @@ class Ui_controlStackedWidget(object):
         self.extrude_select_feedrate_10_btn.setAutoRepeat(False)
         self.extrude_select_feedrate_10_btn.setAutoExclusive(False)
         self.extrude_select_feedrate_10_btn.setFlat(True)
-        self.extrude_select_feedrate_10_btn.setObjectName("extrude_select_feedrate_10_btn")
-        self.extrude_select_feedrate_group.addButton(self.extrude_select_feedrate_10_btn)
-        self.exp_feedrate_content_layout.addWidget(self.extrude_select_feedrate_10_btn)
+        self.extrude_select_feedrate_10_btn.setObjectName(
+            "extrude_select_feedrate_10_btn"
+        )
+        self.extrude_select_feedrate_group.addButton(
+            self.extrude_select_feedrate_10_btn
+        )
+        self.exp_feedrate_content_layout.addWidget(
+            self.extrude_select_feedrate_10_btn
+        )
         self.exp_vertical_content_layout.addWidget(self.exp_feedrate_group_box)
         self.exp_movement_content_layout = QtWidgets.QVBoxLayout()
         self.exp_movement_content_layout.setContentsMargins(-1, 5, -1, -1)
         self.exp_movement_content_layout.setSpacing(0)
-        self.exp_movement_content_layout.setObjectName("exp_movement_content_layout")
+        self.exp_movement_content_layout.setObjectName(
+            "exp_movement_content_layout"
+        )
         self.exp_buttons_layout = QtWidgets.QHBoxLayout()
         self.exp_buttons_layout.setContentsMargins(5, 5, 5, 5)
         self.exp_buttons_layout.setObjectName("exp_buttons_layout")
-        self.exp_unextrude_btn = BlocksCustomButton(parent=self.verticalLayoutWidget_5)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.MinimumExpanding)
+        self.exp_unextrude_btn = BlocksCustomButton(
+            parent=self.verticalLayoutWidget_5
+        )
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Minimum,
+            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
+        )
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(self.exp_unextrude_btn.sizePolicy().hasHeightForWidth())
+        sizePolicy.setHeightForWidth(
+            self.exp_unextrude_btn.sizePolicy().hasHeightForWidth()
+        )
         self.exp_unextrude_btn.setSizePolicy(sizePolicy)
-        self.exp_unextrude_btn.setMinimumSize(QtCore.QSize(10, 0))
+        self.exp_unextrude_btn.setMinimumSize(QtCore.QSize(250, 80))
+        self.exp_unextrude_btn.setMaximumSize(QtCore.QSize(250, 80))
         font = QtGui.QFont()
         font.setFamily("Momcake")
         font.setPointSize(20)
@@ -875,15 +1578,24 @@ class Ui_controlStackedWidget(object):
         self.exp_unextrude_btn.setFont(font)
         self.exp_unextrude_btn.setMouseTracking(False)
         self.exp_unextrude_btn.setTabletTracking(True)
-        self.exp_unextrude_btn.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.NoContextMenu)
-        self.exp_unextrude_btn.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
+        self.exp_unextrude_btn.setContextMenuPolicy(
+            QtCore.Qt.ContextMenuPolicy.NoContextMenu
+        )
+        self.exp_unextrude_btn.setLayoutDirection(
+            QtCore.Qt.LayoutDirection.LeftToRight
+        )
         self.exp_unextrude_btn.setStyleSheet("")
         self.exp_unextrude_btn.setAutoDefault(False)
         self.exp_unextrude_btn.setFlat(True)
-        self.exp_unextrude_btn.setProperty("icon_pixmap", QtGui.QPixmap(":/extruder_related/media/btn_icons/extrude.svg"))
+        self.exp_unextrude_btn.setProperty(
+            "icon_pixmap",
+            QtGui.QPixmap(":/extruder_related/media/btn_icons/extrude.svg"),
+        )
         self.exp_unextrude_btn.setObjectName("exp_unextrude_btn")
         self.exp_buttons_layout.addWidget(self.exp_unextrude_btn)
-        self.exp_nozzle_icon_label = BlocksLabel(parent=self.verticalLayoutWidget_5)
+        self.exp_nozzle_icon_label = BlocksLabel(
+            parent=self.verticalLayoutWidget_5
+        )
         self.exp_nozzle_icon_label.setMinimumSize(QtCore.QSize(60, 60))
         self.exp_nozzle_icon_label.setMaximumSize(QtCore.QSize(60, 60))
         font = QtGui.QFont()
@@ -892,17 +1604,30 @@ class Ui_controlStackedWidget(object):
         self.exp_nozzle_icon_label.setFont(font)
         self.exp_nozzle_icon_label.setStyleSheet("")
         self.exp_nozzle_icon_label.setText("")
-        self.exp_nozzle_icon_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
-        self.exp_nozzle_icon_label.setProperty("icon_pixmap", QtGui.QPixmap(":/extruder_related/media/btn_icons/nozzle.svg"))
+        self.exp_nozzle_icon_label.setAlignment(
+            QtCore.Qt.AlignmentFlag.AlignCenter
+        )
+        self.exp_nozzle_icon_label.setProperty(
+            "icon_pixmap",
+            QtGui.QPixmap(":/extruder_related/media/btn_icons/nozzle.svg"),
+        )
         self.exp_nozzle_icon_label.setObjectName("exp_nozzle_icon_label")
         self.exp_buttons_layout.addWidget(self.exp_nozzle_icon_label)
-        self.exp_extrude_btn = BlocksCustomButton(parent=self.verticalLayoutWidget_5)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.MinimumExpanding)
+        self.exp_extrude_btn = BlocksCustomButton(
+            parent=self.verticalLayoutWidget_5
+        )
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Minimum,
+            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
+        )
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(self.exp_extrude_btn.sizePolicy().hasHeightForWidth())
+        sizePolicy.setHeightForWidth(
+            self.exp_extrude_btn.sizePolicy().hasHeightForWidth()
+        )
         self.exp_extrude_btn.setSizePolicy(sizePolicy)
-        self.exp_extrude_btn.setMinimumSize(QtCore.QSize(10, 0))
+        self.exp_extrude_btn.setMinimumSize(QtCore.QSize(250, 80))
+        self.exp_extrude_btn.setMaximumSize(QtCore.QSize(250, 80))
         font = QtGui.QFont()
         font.setFamily("Momcake")
         font.setPointSize(20)
@@ -911,33 +1636,113 @@ class Ui_controlStackedWidget(object):
         self.exp_extrude_btn.setFont(font)
         self.exp_extrude_btn.setMouseTracking(False)
         self.exp_extrude_btn.setTabletTracking(True)
-        self.exp_extrude_btn.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.NoContextMenu)
-        self.exp_extrude_btn.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
+        self.exp_extrude_btn.setContextMenuPolicy(
+            QtCore.Qt.ContextMenuPolicy.NoContextMenu
+        )
+        self.exp_extrude_btn.setLayoutDirection(
+            QtCore.Qt.LayoutDirection.LeftToRight
+        )
         self.exp_extrude_btn.setStyleSheet("")
         self.exp_extrude_btn.setAutoDefault(False)
         self.exp_extrude_btn.setFlat(True)
-        self.exp_extrude_btn.setProperty("icon_pixmap", QtGui.QPixmap(":/extruder_related/media/btn_icons/extrude.svg"))
+        self.exp_extrude_btn.setProperty(
+            "icon_pixmap",
+            QtGui.QPixmap(":/extruder_related/media/btn_icons/extrude.svg"),
+        )
         self.exp_extrude_btn.setObjectName("exp_extrude_btn")
         self.exp_buttons_layout.addWidget(self.exp_extrude_btn)
         self.exp_movement_content_layout.addLayout(self.exp_buttons_layout)
         self.exp_info_layout = QtWidgets.QHBoxLayout()
         self.exp_info_layout.setContentsMargins(5, 5, 5, 5)
         self.exp_info_layout.setObjectName("exp_info_layout")
-        self.exp_info_label = QtWidgets.QLabel(parent=self.verticalLayoutWidget_5)
+        self.exp_info_label = QtWidgets.QLabel(
+            parent=self.verticalLayoutWidget_5
+        )
         self.exp_info_label.setEnabled(True)
-        self.exp_info_label.setMinimumSize(QtCore.QSize(0, 60))
+        self.exp_info_label.setMinimumSize(QtCore.QSize(0, 0))
         font = QtGui.QFont()
         font.setFamily("Montserrat")
         font.setPointSize(14)
         self.exp_info_label.setFont(font)
-        self.exp_info_label.setStyleSheet("background: transparent; color: white;")
+        self.exp_info_label.setStyleSheet(
+            "background: transparent; color: white;"
+        )
         self.exp_info_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self.exp_info_label.setObjectName("exp_info_label")
         self.exp_info_layout.addWidget(self.exp_info_label)
         self.exp_movement_content_layout.addLayout(self.exp_info_layout)
         self.exp_movement_content_layout.setStretch(1, 1)
-        self.exp_vertical_content_layout.addLayout(self.exp_movement_content_layout)
+        self.exp_vertical_content_layout.addLayout(
+            self.exp_movement_content_layout
+        )
         self.exp_vertical_content_layout.setStretch(2, 1)
+        self.horizontalLayoutWidget_8 = QtWidgets.QWidget(
+            parent=self.extrude_page
+        )
+        self.horizontalLayoutWidget_8.setGeometry(
+            QtCore.QRect(10, 10, 691, 81)
+        )
+        self.horizontalLayoutWidget_8.setObjectName("horizontalLayoutWidget_8")
+        self.exp_header_layout = QtWidgets.QHBoxLayout(
+            self.horizontalLayoutWidget_8
+        )
+        self.exp_header_layout.setContentsMargins(0, 0, 0, 0)
+        self.exp_header_layout.setObjectName("exp_header_layout")
+        self.exp_title_label = QtWidgets.QLabel(
+            parent=self.horizontalLayoutWidget_8
+        )
+        self.exp_title_label.setMinimumSize(QtCore.QSize(300, 60))
+        self.exp_title_label.setMaximumSize(QtCore.QSize(16777215, 60))
+        font = QtGui.QFont()
+        font.setFamily("Momcake")
+        font.setPointSize(24)
+        self.exp_title_label.setFont(font)
+        self.exp_title_label.setStyleSheet(
+            "background: transparent; color: white;"
+        )
+        self.exp_title_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.exp_title_label.setObjectName("exp_title_label")
+        self.exp_header_layout.addWidget(self.exp_title_label)
+        self.exp_back_btn = IconButton(parent=self.horizontalLayoutWidget_8)
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Fixed,
+            QtWidgets.QSizePolicy.Policy.Fixed,
+        )
+        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setVerticalStretch(0)
+        sizePolicy.setHeightForWidth(
+            self.exp_back_btn.sizePolicy().hasHeightForWidth()
+        )
+        self.exp_back_btn.setSizePolicy(sizePolicy)
+        self.exp_back_btn.setMinimumSize(QtCore.QSize(60, 60))
+        self.exp_back_btn.setMaximumSize(QtCore.QSize(60, 60))
+        font = QtGui.QFont()
+        font.setFamily("Momcake")
+        font.setPointSize(20)
+        font.setItalic(False)
+        font.setStyleStrategy(QtGui.QFont.StyleStrategy.PreferAntialias)
+        self.exp_back_btn.setFont(font)
+        self.exp_back_btn.setMouseTracking(False)
+        self.exp_back_btn.setTabletTracking(True)
+        self.exp_back_btn.setContextMenuPolicy(
+            QtCore.Qt.ContextMenuPolicy.NoContextMenu
+        )
+        self.exp_back_btn.setLayoutDirection(
+            QtCore.Qt.LayoutDirection.LeftToRight
+        )
+        self.exp_back_btn.setStyleSheet("")
+        self.exp_back_btn.setAutoDefault(False)
+        self.exp_back_btn.setFlat(True)
+        self.exp_back_btn.setProperty(
+            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/back.svg")
+        )
+        self.exp_back_btn.setObjectName("exp_back_btn")
+        self.exp_header_layout.addWidget(
+            self.exp_back_btn,
+            0,
+            QtCore.Qt.AlignmentFlag.AlignRight
+            | QtCore.Qt.AlignmentFlag.AlignVCenter,
+        )
         controlStackedWidget.addWidget(self.extrude_page)
         self.move_axis_page = QtWidgets.QWidget()
         self.move_axis_page.setMinimumSize(QtCore.QSize(710, 400))
@@ -950,7 +1755,9 @@ class Ui_controlStackedWidget(object):
         font.setFamily("Montserrat")
         font.setPointSize(14)
         self.mva_x_label.setFont(font)
-        self.mva_x_label.setStyleSheet("background: transparent; color: white;")
+        self.mva_x_label.setStyleSheet(
+            "background: transparent; color: white;"
+        )
         self.mva_x_label.setObjectName("mva_x_label")
         self.mva_y_label = QtWidgets.QLabel(parent=self.move_axis_page)
         self.mva_y_label.setEnabled(True)
@@ -959,7 +1766,9 @@ class Ui_controlStackedWidget(object):
         font.setFamily("Montserrat")
         font.setPointSize(14)
         self.mva_y_label.setFont(font)
-        self.mva_y_label.setStyleSheet("background: transparent; color: white;")
+        self.mva_y_label.setStyleSheet(
+            "background: transparent; color: white;"
+        )
         self.mva_y_label.setObjectName("mva_y_label")
         self.mva_z_label = QtWidgets.QLabel(parent=self.move_axis_page)
         self.mva_z_label.setEnabled(True)
@@ -968,7 +1777,9 @@ class Ui_controlStackedWidget(object):
         font.setFamily("Montserrat")
         font.setPointSize(14)
         self.mva_z_label.setFont(font)
-        self.mva_z_label.setStyleSheet("background: transparent; color: white;")
+        self.mva_z_label.setStyleSheet(
+            "background: transparent; color: white;"
+        )
         self.mva_z_label.setObjectName("mva_z_label")
         self.mva_z_value_label = QtWidgets.QLabel(parent=self.move_axis_page)
         self.mva_z_value_label.setEnabled(True)
@@ -977,7 +1788,9 @@ class Ui_controlStackedWidget(object):
         font.setFamily("Montserrat")
         font.setPointSize(14)
         self.mva_z_value_label.setFont(font)
-        self.mva_z_value_label.setStyleSheet("background: transparent; color: white;")
+        self.mva_z_value_label.setStyleSheet(
+            "background: transparent; color: white;"
+        )
         self.mva_z_value_label.setObjectName("mva_z_value_label")
         self.mva_y_value_label = QtWidgets.QLabel(parent=self.move_axis_page)
         self.mva_y_value_label.setEnabled(True)
@@ -986,7 +1799,9 @@ class Ui_controlStackedWidget(object):
         font.setFamily("Montserrat")
         font.setPointSize(14)
         self.mva_y_value_label.setFont(font)
-        self.mva_y_value_label.setStyleSheet("background: transparent; color: white;")
+        self.mva_y_value_label.setStyleSheet(
+            "background: transparent; color: white;"
+        )
         self.mva_y_value_label.setObjectName("mva_y_value_label")
         self.mva_x_value_label = QtWidgets.QLabel(parent=self.move_axis_page)
         self.mva_x_value_label.setEnabled(True)
@@ -995,30 +1810,47 @@ class Ui_controlStackedWidget(object):
         font.setFamily("Montserrat")
         font.setPointSize(14)
         self.mva_x_value_label.setFont(font)
-        self.mva_x_value_label.setStyleSheet("background: transparent; color: white;")
+        self.mva_x_value_label.setStyleSheet(
+            "background: transparent; color: white;"
+        )
         self.mva_x_value_label.setObjectName("mva_x_value_label")
-        self.horizontalLayoutWidget_3 = QtWidgets.QWidget(parent=self.move_axis_page)
-        self.horizontalLayoutWidget_3.setGeometry(QtCore.QRect(10, 10, 701, 71))
+        self.horizontalLayoutWidget_3 = QtWidgets.QWidget(
+            parent=self.move_axis_page
+        )
+        self.horizontalLayoutWidget_3.setGeometry(
+            QtCore.QRect(10, 10, 691, 81)
+        )
         self.horizontalLayoutWidget_3.setObjectName("horizontalLayoutWidget_3")
-        self.mva_header_layout = QtWidgets.QHBoxLayout(self.horizontalLayoutWidget_3)
+        self.mva_header_layout = QtWidgets.QHBoxLayout(
+            self.horizontalLayoutWidget_3
+        )
         self.mva_header_layout.setContentsMargins(0, 0, 0, 0)
         self.mva_header_layout.setObjectName("mva_header_layout")
-        self.mva_title_label = QtWidgets.QLabel(parent=self.horizontalLayoutWidget_3)
+        self.mva_title_label = QtWidgets.QLabel(
+            parent=self.horizontalLayoutWidget_3
+        )
         self.mva_title_label.setMinimumSize(QtCore.QSize(300, 60))
         self.mva_title_label.setMaximumSize(QtCore.QSize(16777215, 60))
         font = QtGui.QFont()
         font.setFamily("Momcake")
         font.setPointSize(24)
         self.mva_title_label.setFont(font)
-        self.mva_title_label.setStyleSheet("background: transparent; color: white;")
+        self.mva_title_label.setStyleSheet(
+            "background: transparent; color: white;"
+        )
         self.mva_title_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self.mva_title_label.setObjectName("mva_title_label")
         self.mva_header_layout.addWidget(self.mva_title_label)
         self.mva_back_btn = IconButton(parent=self.horizontalLayoutWidget_3)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Fixed, QtWidgets.QSizePolicy.Policy.Fixed)
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Fixed,
+            QtWidgets.QSizePolicy.Policy.Fixed,
+        )
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(self.mva_back_btn.sizePolicy().hasHeightForWidth())
+        sizePolicy.setHeightForWidth(
+            self.mva_back_btn.sizePolicy().hasHeightForWidth()
+        )
         self.mva_back_btn.setSizePolicy(sizePolicy)
         self.mva_back_btn.setMinimumSize(QtCore.QSize(60, 60))
         self.mva_back_btn.setMaximumSize(QtCore.QSize(60, 60))
@@ -1030,16 +1862,31 @@ class Ui_controlStackedWidget(object):
         self.mva_back_btn.setFont(font)
         self.mva_back_btn.setMouseTracking(False)
         self.mva_back_btn.setTabletTracking(True)
-        self.mva_back_btn.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.NoContextMenu)
-        self.mva_back_btn.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
+        self.mva_back_btn.setContextMenuPolicy(
+            QtCore.Qt.ContextMenuPolicy.NoContextMenu
+        )
+        self.mva_back_btn.setLayoutDirection(
+            QtCore.Qt.LayoutDirection.LeftToRight
+        )
         self.mva_back_btn.setStyleSheet("")
         self.mva_back_btn.setAutoDefault(False)
         self.mva_back_btn.setFlat(True)
-        self.mva_back_btn.setProperty("icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/back.svg"))
+        self.mva_back_btn.setProperty(
+            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/back.svg")
+        )
         self.mva_back_btn.setObjectName("mva_back_btn")
-        self.mva_header_layout.addWidget(self.mva_back_btn, 0, QtCore.Qt.AlignmentFlag.AlignRight|QtCore.Qt.AlignmentFlag.AlignVCenter)
-        self.verticalLayoutWidget = QtWidgets.QWidget(parent=self.move_axis_page)
-        self.verticalLayoutWidget.setGeometry(QtCore.QRect(410, 123, 211, 202))
+
+        self.mva_header_layout.addWidget(
+            self.mva_back_btn,
+            0,
+            QtCore.Qt.AlignmentFlag.AlignRight
+            | QtCore.Qt.AlignmentFlag.AlignVCenter,
+        )
+        self.verticalLayoutWidget = QtWidgets.QWidget(
+            parent=self.move_axis_page
+        )
+        self.verticalLayoutWidget.setGeometry(QtCore.QRect(400, 123, 221, 202))
+
         self.verticalLayoutWidget.setObjectName("verticalLayoutWidget")
         self.mva_xy_layout = QtWidgets.QVBoxLayout(self.verticalLayoutWidget)
         self.mva_xy_layout.setContentsMargins(0, 5, 0, 5)
@@ -1047,10 +1894,15 @@ class Ui_controlStackedWidget(object):
         self.mva_xy_layout.setObjectName("mva_xy_layout")
         self.mva_up_btn = IconButton(parent=self.verticalLayoutWidget)
         self.mva_up_btn.setEnabled(True)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.MinimumExpanding, QtWidgets.QSizePolicy.Policy.MinimumExpanding)
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
+            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
+        )
         sizePolicy.setHorizontalStretch(1)
         sizePolicy.setVerticalStretch(1)
-        sizePolicy.setHeightForWidth(self.mva_up_btn.sizePolicy().hasHeightForWidth())
+        sizePolicy.setHeightForWidth(
+            self.mva_up_btn.sizePolicy().hasHeightForWidth()
+        )
         self.mva_up_btn.setSizePolicy(sizePolicy)
         self.mva_up_btn.setMinimumSize(QtCore.QSize(60, 60))
         self.mva_up_btn.setMaximumSize(QtCore.QSize(60, 60))
@@ -1060,18 +1912,28 @@ class Ui_controlStackedWidget(object):
         self.mva_up_btn.setCheckable(False)
         self.mva_up_btn.setChecked(False)
         self.mva_up_btn.setFlat(True)
-        self.mva_up_btn.setProperty("icon_pixmap", QtGui.QPixmap(":/arrow_icons/media/btn_icons/up_arrow.svg"))
+        self.mva_up_btn.setProperty(
+            "icon_pixmap",
+            QtGui.QPixmap(":/arrow_icons/media/btn_icons/up_arrow.svg"),
+        )
         self.mva_up_btn.setObjectName("mva_up_btn")
-        self.mva_xy_layout.addWidget(self.mva_up_btn, 0, QtCore.Qt.AlignmentFlag.AlignHCenter)
+        self.mva_xy_layout.addWidget(
+            self.mva_up_btn, 0, QtCore.Qt.AlignmentFlag.AlignHCenter
+        )
         self.mva_y_layout = QtWidgets.QHBoxLayout()
         self.mva_y_layout.setSpacing(5)
         self.mva_y_layout.setObjectName("mva_y_layout")
         self.mva_left_btn = IconButton(parent=self.verticalLayoutWidget)
         self.mva_left_btn.setEnabled(True)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.MinimumExpanding, QtWidgets.QSizePolicy.Policy.MinimumExpanding)
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
+            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
+        )
         sizePolicy.setHorizontalStretch(1)
         sizePolicy.setVerticalStretch(1)
-        sizePolicy.setHeightForWidth(self.mva_left_btn.sizePolicy().hasHeightForWidth())
+        sizePolicy.setHeightForWidth(
+            self.mva_left_btn.sizePolicy().hasHeightForWidth()
+        )
         self.mva_left_btn.setSizePolicy(sizePolicy)
         self.mva_left_btn.setMinimumSize(QtCore.QSize(60, 60))
         self.mva_left_btn.setMaximumSize(QtCore.QSize(60, 60))
@@ -1081,22 +1943,43 @@ class Ui_controlStackedWidget(object):
         self.mva_left_btn.setCheckable(False)
         self.mva_left_btn.setChecked(False)
         self.mva_left_btn.setFlat(True)
-        self.mva_left_btn.setProperty("icon_pixmap", QtGui.QPixmap(":/arrow_icons/media/btn_icons/left_arrow.svg"))
+        self.mva_left_btn.setProperty(
+            "icon_pixmap",
+            QtGui.QPixmap(":/arrow_icons/media/btn_icons/left_arrow.svg"),
+        )
         self.mva_left_btn.setObjectName("mva_left_btn")
-        self.mva_y_layout.addWidget(self.mva_left_btn, 0, QtCore.Qt.AlignmentFlag.AlignLeft|QtCore.Qt.AlignmentFlag.AlignVCenter)
+        self.mva_y_layout.addWidget(
+            self.mva_left_btn,
+            0,
+            QtCore.Qt.AlignmentFlag.AlignLeft
+            | QtCore.Qt.AlignmentFlag.AlignVCenter,
+        )
         self.mva_middle = BlocksLabel(parent=self.verticalLayoutWidget)
         self.mva_middle.setMinimumSize(QtCore.QSize(60, 60))
         self.mva_middle.setMaximumSize(QtCore.QSize(60, 60))
         self.mva_middle.setText("")
-        self.mva_middle.setProperty("icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/center_arrows.svg"))
+        self.mva_middle.setProperty(
+            "icon_pixmap",
+            QtGui.QPixmap(":/ui/media/btn_icons/center_arrows.svg"),
+        )
         self.mva_middle.setObjectName("mva_middle")
-        self.mva_y_layout.addWidget(self.mva_middle, 0, QtCore.Qt.AlignmentFlag.AlignHCenter|QtCore.Qt.AlignmentFlag.AlignVCenter)
+        self.mva_y_layout.addWidget(
+            self.mva_middle,
+            0,
+            QtCore.Qt.AlignmentFlag.AlignHCenter
+            | QtCore.Qt.AlignmentFlag.AlignVCenter,
+        )
         self.mva_right_btn = IconButton(parent=self.verticalLayoutWidget)
         self.mva_right_btn.setEnabled(True)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.MinimumExpanding, QtWidgets.QSizePolicy.Policy.MinimumExpanding)
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
+            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
+        )
         sizePolicy.setHorizontalStretch(1)
         sizePolicy.setVerticalStretch(1)
-        sizePolicy.setHeightForWidth(self.mva_right_btn.sizePolicy().hasHeightForWidth())
+        sizePolicy.setHeightForWidth(
+            self.mva_right_btn.sizePolicy().hasHeightForWidth()
+        )
         self.mva_right_btn.setSizePolicy(sizePolicy)
         self.mva_right_btn.setMinimumSize(QtCore.QSize(60, 60))
         self.mva_right_btn.setMaximumSize(QtCore.QSize(60, 60))
@@ -1106,16 +1989,29 @@ class Ui_controlStackedWidget(object):
         self.mva_right_btn.setCheckable(False)
         self.mva_right_btn.setChecked(False)
         self.mva_right_btn.setFlat(True)
-        self.mva_right_btn.setProperty("icon_pixmap", QtGui.QPixmap(":/arrow_icons/media/btn_icons/right_arrow.svg"))
+        self.mva_right_btn.setProperty(
+            "icon_pixmap",
+            QtGui.QPixmap(":/arrow_icons/media/btn_icons/right_arrow.svg"),
+        )
         self.mva_right_btn.setObjectName("mva_right_btn")
-        self.mva_y_layout.addWidget(self.mva_right_btn, 0, QtCore.Qt.AlignmentFlag.AlignRight|QtCore.Qt.AlignmentFlag.AlignVCenter)
+        self.mva_y_layout.addWidget(
+            self.mva_right_btn,
+            0,
+            QtCore.Qt.AlignmentFlag.AlignRight
+            | QtCore.Qt.AlignmentFlag.AlignVCenter,
+        )
         self.mva_xy_layout.addLayout(self.mva_y_layout)
         self.mva_down_btn = IconButton(parent=self.verticalLayoutWidget)
         self.mva_down_btn.setEnabled(True)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.MinimumExpanding, QtWidgets.QSizePolicy.Policy.MinimumExpanding)
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
+            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
+        )
         sizePolicy.setHorizontalStretch(1)
         sizePolicy.setVerticalStretch(1)
-        sizePolicy.setHeightForWidth(self.mva_down_btn.sizePolicy().hasHeightForWidth())
+        sizePolicy.setHeightForWidth(
+            self.mva_down_btn.sizePolicy().hasHeightForWidth()
+        )
         self.mva_down_btn.setSizePolicy(sizePolicy)
         self.mva_down_btn.setMinimumSize(QtCore.QSize(60, 60))
         self.mva_down_btn.setMaximumSize(QtCore.QSize(60, 60))
@@ -1125,21 +2021,35 @@ class Ui_controlStackedWidget(object):
         self.mva_down_btn.setCheckable(False)
         self.mva_down_btn.setChecked(False)
         self.mva_down_btn.setFlat(True)
-        self.mva_down_btn.setProperty("icon_pixmap", QtGui.QPixmap(":/arrow_icons/media/btn_icons/down_arrow.svg"))
+        self.mva_down_btn.setProperty(
+            "icon_pixmap",
+            QtGui.QPixmap(":/arrow_icons/media/btn_icons/down_arrow.svg"),
+        )
         self.mva_down_btn.setObjectName("mva_down_btn")
-        self.mva_xy_layout.addWidget(self.mva_down_btn, 0, QtCore.Qt.AlignmentFlag.AlignHCenter)
-        self.verticalLayoutWidget_2 = QtWidgets.QWidget(parent=self.move_axis_page)
-        self.verticalLayoutWidget_2.setGeometry(QtCore.QRect(630, 130, 81, 191))
+        self.mva_xy_layout.addWidget(
+            self.mva_down_btn, 0, QtCore.Qt.AlignmentFlag.AlignHCenter
+        )
+        self.verticalLayoutWidget_2 = QtWidgets.QWidget(
+            parent=self.move_axis_page
+        )
+        self.verticalLayoutWidget_2.setGeometry(
+            QtCore.QRect(630, 130, 71, 191)
+        )
         self.verticalLayoutWidget_2.setObjectName("verticalLayoutWidget_2")
         self.mva_z_layout = QtWidgets.QVBoxLayout(self.verticalLayoutWidget_2)
         self.mva_z_layout.setContentsMargins(0, 0, 0, 0)
         self.mva_z_layout.setObjectName("mva_z_layout")
         self.mva_z_up = IconButton(parent=self.verticalLayoutWidget_2)
         self.mva_z_up.setEnabled(True)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.MinimumExpanding, QtWidgets.QSizePolicy.Policy.MinimumExpanding)
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
+            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
+        )
         sizePolicy.setHorizontalStretch(1)
         sizePolicy.setVerticalStretch(1)
-        sizePolicy.setHeightForWidth(self.mva_z_up.sizePolicy().hasHeightForWidth())
+        sizePolicy.setHeightForWidth(
+            self.mva_z_up.sizePolicy().hasHeightForWidth()
+        )
         self.mva_z_up.setSizePolicy(sizePolicy)
         self.mva_z_up.setMinimumSize(QtCore.QSize(60, 60))
         self.mva_z_up.setMaximumSize(QtCore.QSize(60, 60))
@@ -1149,15 +2059,25 @@ class Ui_controlStackedWidget(object):
         self.mva_z_up.setCheckable(False)
         self.mva_z_up.setChecked(False)
         self.mva_z_up.setFlat(True)
-        self.mva_z_up.setProperty("icon_pixmap", QtGui.QPixmap(":/arrow_icons/media/btn_icons/up_arrow.svg"))
+        self.mva_z_up.setProperty(
+            "icon_pixmap",
+            QtGui.QPixmap(":/arrow_icons/media/btn_icons/up_arrow.svg"),
+        )
         self.mva_z_up.setObjectName("mva_z_up")
-        self.mva_z_layout.addWidget(self.mva_z_up, 0, QtCore.Qt.AlignmentFlag.AlignHCenter)
+        self.mva_z_layout.addWidget(
+            self.mva_z_up, 0, QtCore.Qt.AlignmentFlag.AlignHCenter
+        )
         self.mva_z_down = IconButton(parent=self.verticalLayoutWidget_2)
         self.mva_z_down.setEnabled(True)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.MinimumExpanding, QtWidgets.QSizePolicy.Policy.MinimumExpanding)
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
+            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
+        )
         sizePolicy.setHorizontalStretch(1)
         sizePolicy.setVerticalStretch(1)
-        sizePolicy.setHeightForWidth(self.mva_z_down.sizePolicy().hasHeightForWidth())
+        sizePolicy.setHeightForWidth(
+            self.mva_z_down.sizePolicy().hasHeightForWidth()
+        )
         self.mva_z_down.setSizePolicy(sizePolicy)
         self.mva_z_down.setMinimumSize(QtCore.QSize(60, 60))
         self.mva_z_down.setMaximumSize(QtCore.QSize(60, 60))
@@ -1167,21 +2087,35 @@ class Ui_controlStackedWidget(object):
         self.mva_z_down.setCheckable(False)
         self.mva_z_down.setChecked(False)
         self.mva_z_down.setFlat(True)
-        self.mva_z_down.setProperty("icon_pixmap", QtGui.QPixmap(":/arrow_icons/media/btn_icons/down_arrow.svg"))
+        self.mva_z_down.setProperty(
+            "icon_pixmap",
+            QtGui.QPixmap(":/arrow_icons/media/btn_icons/down_arrow.svg"),
+        )
         self.mva_z_down.setObjectName("mva_z_down")
-        self.mva_z_layout.addWidget(self.mva_z_down, 0, QtCore.Qt.AlignmentFlag.AlignHCenter)
-        self.verticalLayoutWidget_3 = QtWidgets.QWidget(parent=self.move_axis_page)
+        self.mva_z_layout.addWidget(
+            self.mva_z_down, 0, QtCore.Qt.AlignmentFlag.AlignHCenter
+        )
+        self.verticalLayoutWidget_3 = QtWidgets.QWidget(
+            parent=self.move_axis_page
+        )
         self.verticalLayoutWidget_3.setGeometry(QtCore.QRect(10, 90, 81, 301))
         self.verticalLayoutWidget_3.setObjectName("verticalLayoutWidget_3")
-        self.mva_home_axis_layout = QtWidgets.QVBoxLayout(self.verticalLayoutWidget_3)
+        self.mva_home_axis_layout = QtWidgets.QVBoxLayout(
+            self.verticalLayoutWidget_3
+        )
         self.mva_home_axis_layout.setContentsMargins(5, 5, 5, 5)
         self.mva_home_axis_layout.setObjectName("mva_home_axis_layout")
         self.mva_home_x_btn = IconButton(parent=self.verticalLayoutWidget_3)
         self.mva_home_x_btn.setEnabled(True)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.MinimumExpanding, QtWidgets.QSizePolicy.Policy.MinimumExpanding)
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
+            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
+        )
         sizePolicy.setHorizontalStretch(1)
         sizePolicy.setVerticalStretch(1)
-        sizePolicy.setHeightForWidth(self.mva_home_x_btn.sizePolicy().hasHeightForWidth())
+        sizePolicy.setHeightForWidth(
+            self.mva_home_x_btn.sizePolicy().hasHeightForWidth()
+        )
         self.mva_home_x_btn.setSizePolicy(sizePolicy)
         self.mva_home_x_btn.setMinimumSize(QtCore.QSize(60, 60))
         self.mva_home_x_btn.setMaximumSize(QtCore.QSize(60, 60))
@@ -1191,15 +2125,24 @@ class Ui_controlStackedWidget(object):
         self.mva_home_x_btn.setCheckable(False)
         self.mva_home_x_btn.setChecked(False)
         self.mva_home_x_btn.setFlat(True)
-        self.mva_home_x_btn.setProperty("icon_pixmap", QtGui.QPixmap(":/motion/media/btn_icons/home_x.svg"))
+        self.mva_home_x_btn.setProperty(
+            "icon_pixmap", QtGui.QPixmap(":/motion/media/btn_icons/home_x.svg")
+        )
         self.mva_home_x_btn.setObjectName("mva_home_x_btn")
-        self.mva_home_axis_layout.addWidget(self.mva_home_x_btn, 0, QtCore.Qt.AlignmentFlag.AlignHCenter)
+        self.mva_home_axis_layout.addWidget(
+            self.mva_home_x_btn, 0, QtCore.Qt.AlignmentFlag.AlignHCenter
+        )
         self.mva_home_y_btn = IconButton(parent=self.verticalLayoutWidget_3)
         self.mva_home_y_btn.setEnabled(True)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.MinimumExpanding, QtWidgets.QSizePolicy.Policy.MinimumExpanding)
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
+            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
+        )
         sizePolicy.setHorizontalStretch(1)
         sizePolicy.setVerticalStretch(1)
-        sizePolicy.setHeightForWidth(self.mva_home_y_btn.sizePolicy().hasHeightForWidth())
+        sizePolicy.setHeightForWidth(
+            self.mva_home_y_btn.sizePolicy().hasHeightForWidth()
+        )
         self.mva_home_y_btn.setSizePolicy(sizePolicy)
         self.mva_home_y_btn.setMinimumSize(QtCore.QSize(60, 60))
         self.mva_home_y_btn.setMaximumSize(QtCore.QSize(60, 60))
@@ -1209,15 +2152,24 @@ class Ui_controlStackedWidget(object):
         self.mva_home_y_btn.setCheckable(False)
         self.mva_home_y_btn.setChecked(False)
         self.mva_home_y_btn.setFlat(True)
-        self.mva_home_y_btn.setProperty("icon_pixmap", QtGui.QPixmap(":/motion/media/btn_icons/home_y.svg"))
+        self.mva_home_y_btn.setProperty(
+            "icon_pixmap", QtGui.QPixmap(":/motion/media/btn_icons/home_y.svg")
+        )
         self.mva_home_y_btn.setObjectName("mva_home_y_btn")
-        self.mva_home_axis_layout.addWidget(self.mva_home_y_btn, 0, QtCore.Qt.AlignmentFlag.AlignHCenter)
+        self.mva_home_axis_layout.addWidget(
+            self.mva_home_y_btn, 0, QtCore.Qt.AlignmentFlag.AlignHCenter
+        )
         self.mva_home_z_btn = IconButton(parent=self.verticalLayoutWidget_3)
         self.mva_home_z_btn.setEnabled(True)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.MinimumExpanding, QtWidgets.QSizePolicy.Policy.MinimumExpanding)
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
+            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
+        )
         sizePolicy.setHorizontalStretch(1)
         sizePolicy.setVerticalStretch(1)
-        sizePolicy.setHeightForWidth(self.mva_home_z_btn.sizePolicy().hasHeightForWidth())
+        sizePolicy.setHeightForWidth(
+            self.mva_home_z_btn.sizePolicy().hasHeightForWidth()
+        )
         self.mva_home_z_btn.setSizePolicy(sizePolicy)
         self.mva_home_z_btn.setMinimumSize(QtCore.QSize(60, 60))
         self.mva_home_z_btn.setMaximumSize(QtCore.QSize(60, 60))
@@ -1227,15 +2179,24 @@ class Ui_controlStackedWidget(object):
         self.mva_home_z_btn.setCheckable(False)
         self.mva_home_z_btn.setChecked(False)
         self.mva_home_z_btn.setFlat(True)
-        self.mva_home_z_btn.setProperty("icon_pixmap", QtGui.QPixmap(":/motion/media/btn_icons/home_z.svg"))
+        self.mva_home_z_btn.setProperty(
+            "icon_pixmap", QtGui.QPixmap(":/motion/media/btn_icons/home_z.svg")
+        )
         self.mva_home_z_btn.setObjectName("mva_home_z_btn")
-        self.mva_home_axis_layout.addWidget(self.mva_home_z_btn, 0, QtCore.Qt.AlignmentFlag.AlignHCenter)
+        self.mva_home_axis_layout.addWidget(
+            self.mva_home_z_btn, 0, QtCore.Qt.AlignmentFlag.AlignHCenter
+        )
         self.mva_home_all_btn = IconButton(parent=self.verticalLayoutWidget_3)
         self.mva_home_all_btn.setEnabled(True)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.MinimumExpanding, QtWidgets.QSizePolicy.Policy.MinimumExpanding)
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
+            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
+        )
         sizePolicy.setHorizontalStretch(1)
         sizePolicy.setVerticalStretch(1)
-        sizePolicy.setHeightForWidth(self.mva_home_all_btn.sizePolicy().hasHeightForWidth())
+        sizePolicy.setHeightForWidth(
+            self.mva_home_all_btn.sizePolicy().hasHeightForWidth()
+        )
         self.mva_home_all_btn.setSizePolicy(sizePolicy)
         self.mva_home_all_btn.setMinimumSize(QtCore.QSize(60, 60))
         self.mva_home_all_btn.setMaximumSize(QtCore.QSize(60, 60))
@@ -1245,171 +2206,139 @@ class Ui_controlStackedWidget(object):
         self.mva_home_all_btn.setCheckable(False)
         self.mva_home_all_btn.setChecked(False)
         self.mva_home_all_btn.setFlat(True)
-        self.mva_home_all_btn.setProperty("icon_pixmap", QtGui.QPixmap(":/motion/media/btn_icons/home_all.svg"))
+        self.mva_home_all_btn.setProperty(
+            "icon_pixmap",
+            QtGui.QPixmap(":/motion/media/btn_icons/home_all.svg"),
+        )
         self.mva_home_all_btn.setObjectName("mva_home_all_btn")
-        self.mva_home_axis_layout.addWidget(self.mva_home_all_btn, 0, QtCore.Qt.AlignmentFlag.AlignHCenter)
-        self.mva_select_speed_25_btn = GroupButton(parent=self.move_axis_page)
-        self.mva_select_speed_25_btn.setGeometry(QtCore.QRect(96, 240, 100, 100))
-        self.mva_select_speed_25_btn.setMinimumSize(QtCore.QSize(60, 60))
-        self.mva_select_speed_25_btn.setMaximumSize(QtCore.QSize(100, 100))
+
+        self.mva_home_axis_layout.addWidget(
+            self.mva_home_all_btn, 0, QtCore.Qt.AlignmentFlag.AlignHCenter
+        )
+        self.mva_length_group_box = QtWidgets.QGroupBox(
+            parent=self.move_axis_page
+        )
+        self.mva_length_group_box.setGeometry(QtCore.QRect(100, 120, 291, 101))
+        self.mva_length_group_box.setMinimumSize(QtCore.QSize(180, 60))
+        self.mva_length_group_box.setMaximumSize(
+            QtCore.QSize(16777215, 16777215)
+        )
         palette = QtGui.QPalette()
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.WindowText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Active,
+            QtGui.QPalette.ColorRole.WindowText,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.Text, brush)
-        brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
-        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.ButtonText, brush)
-        brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
-        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.WindowText, brush)
-        brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
-        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.Text, brush)
-        brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
-        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.ButtonText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Inactive,
+            QtGui.QPalette.ColorRole.WindowText,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(120, 120, 120))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.WindowText, brush)
-        brush = QtGui.QBrush(QtGui.QColor(120, 120, 120))
-        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.Text, brush)
-        brush = QtGui.QBrush(QtGui.QColor(120, 120, 120))
-        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.ButtonText, brush)
-        self.mva_select_speed_25_btn.setPalette(palette)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Disabled,
+            QtGui.QPalette.ColorRole.WindowText,
+            brush,
+        )
+        self.mva_length_group_box.setPalette(palette)
         font = QtGui.QFont()
         font.setPointSize(14)
-        self.mva_select_speed_25_btn.setFont(font)
-        self.mva_select_speed_25_btn.setCheckable(True)
-        self.mva_select_speed_25_btn.setChecked(True)
-        self.mva_select_speed_25_btn.setFlat(True)
-        self.mva_select_speed_25_btn.setObjectName("mva_select_speed_25_btn")
-        self.axis_select_speed_group = QtWidgets.QButtonGroup(controlStackedWidget)
-        self.axis_select_speed_group.setObjectName("axis_select_speed_group")
-        self.axis_select_speed_group.addButton(self.mva_select_speed_25_btn)
-        self.mva_select_speed_50_btn = GroupButton(parent=self.move_axis_page)
-        self.mva_select_speed_50_btn.setGeometry(QtCore.QRect(205, 240, 100, 100))
-        self.mva_select_speed_50_btn.setMinimumSize(QtCore.QSize(60, 60))
-        self.mva_select_speed_50_btn.setMaximumSize(QtCore.QSize(100, 100))
-        palette = QtGui.QPalette()
-        brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
-        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.WindowText, brush)
-        brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
-        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.Text, brush)
-        brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
-        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.ButtonText, brush)
-        brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
-        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.WindowText, brush)
-        brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
-        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.Text, brush)
-        brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
-        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.ButtonText, brush)
-        brush = QtGui.QBrush(QtGui.QColor(120, 120, 120))
-        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.WindowText, brush)
-        brush = QtGui.QBrush(QtGui.QColor(120, 120, 120))
-        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.Text, brush)
-        brush = QtGui.QBrush(QtGui.QColor(120, 120, 120))
-        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.ButtonText, brush)
-        self.mva_select_speed_50_btn.setPalette(palette)
-        font = QtGui.QFont()
-        font.setPointSize(14)
-        self.mva_select_speed_50_btn.setFont(font)
-        self.mva_select_speed_50_btn.setCheckable(True)
-        self.mva_select_speed_50_btn.setFlat(False)
-        self.mva_select_speed_50_btn.setObjectName("mva_select_speed_50_btn")
-        self.axis_select_speed_group.addButton(self.mva_select_speed_50_btn)
-        self.mva_select_speed_100_btn = GroupButton(parent=self.move_axis_page)
-        self.mva_select_speed_100_btn.setGeometry(QtCore.QRect(315, 240, 100, 100))
-        self.mva_select_speed_100_btn.setMinimumSize(QtCore.QSize(60, 60))
-        self.mva_select_speed_100_btn.setMaximumSize(QtCore.QSize(100, 100))
-        palette = QtGui.QPalette()
-        brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
-        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.WindowText, brush)
-        brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
-        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.Text, brush)
-        brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
-        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.ButtonText, brush)
-        brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
-        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.WindowText, brush)
-        brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
-        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.Text, brush)
-        brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
-        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.ButtonText, brush)
-        brush = QtGui.QBrush(QtGui.QColor(120, 120, 120))
-        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.WindowText, brush)
-        brush = QtGui.QBrush(QtGui.QColor(120, 120, 120))
-        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.Text, brush)
-        brush = QtGui.QBrush(QtGui.QColor(120, 120, 120))
-        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.ButtonText, brush)
-        self.mva_select_speed_100_btn.setPalette(palette)
-        font = QtGui.QFont()
-        font.setPointSize(14)
-        self.mva_select_speed_100_btn.setFont(font)
-        self.mva_select_speed_100_btn.setCheckable(True)
-        self.mva_select_speed_100_btn.setFlat(False)
-        self.mva_select_speed_100_btn.setObjectName("mva_select_speed_100_btn")
-        self.axis_select_speed_group.addButton(self.mva_select_speed_100_btn)
-        self.label = QtWidgets.QLabel(parent=self.move_axis_page)
-        self.label.setGeometry(QtCore.QRect(109, 216, 261, 21))
-        font = QtGui.QFont()
-        font.setPointSize(14)
-        self.label.setFont(font)
-        self.label.setStyleSheet("color:white")
-        self.label.setObjectName("label")
-        self.mva_select_length_1_btn = GroupButton(parent=self.move_axis_page)
-        self.mva_select_length_1_btn.setGeometry(QtCore.QRect(96, 110, 100, 100))
+        self.mva_length_group_box.setFont(font)
+        self.mva_length_group_box.setAlignment(
+            QtCore.Qt.AlignmentFlag.AlignLeading
+            | QtCore.Qt.AlignmentFlag.AlignLeft
+            | QtCore.Qt.AlignmentFlag.AlignVCenter
+        )
+        self.mva_length_group_box.setFlat(True)
+        self.mva_length_group_box.setObjectName("mva_length_group_box")
+        self.horizontalLayoutWidget_5 = QtWidgets.QWidget(
+            parent=self.mva_length_group_box
+        )
+        self.horizontalLayoutWidget_5.setGeometry(QtCore.QRect(0, 30, 291, 62))
+        self.horizontalLayoutWidget_5.setObjectName("horizontalLayoutWidget_5")
+        self.mva_length_intervals_layout = QtWidgets.QHBoxLayout(
+            self.horizontalLayoutWidget_5
+        )
+        self.mva_length_intervals_layout.setContentsMargins(0, 0, 0, 0)
+        self.mva_length_intervals_layout.setObjectName(
+            "mva_length_intervals_layout"
+        )
+        self.mva_select_length_1_btn = QtWidgets.QPushButton(
+            parent=self.horizontalLayoutWidget_5
+        )
         self.mva_select_length_1_btn.setMinimumSize(QtCore.QSize(60, 60))
-        self.mva_select_length_1_btn.setMaximumSize(QtCore.QSize(100, 100))
+        self.mva_select_length_1_btn.setMaximumSize(QtCore.QSize(60, 60))
+
         palette = QtGui.QPalette()
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.WindowText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Active,
+            QtGui.QPalette.ColorRole.WindowText,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.Text, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Active,
+            QtGui.QPalette.ColorRole.Text,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.ButtonText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Active,
+            QtGui.QPalette.ColorRole.ButtonText,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.WindowText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Inactive,
+            QtGui.QPalette.ColorRole.WindowText,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.Text, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Inactive,
+            QtGui.QPalette.ColorRole.Text,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.ButtonText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Inactive,
+            QtGui.QPalette.ColorRole.ButtonText,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(120, 120, 120))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.WindowText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Disabled,
+            QtGui.QPalette.ColorRole.WindowText,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(120, 120, 120))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.Text, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Disabled,
+            QtGui.QPalette.ColorRole.Text,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(120, 120, 120))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.ButtonText, brush)
+
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Disabled,
+            QtGui.QPalette.ColorRole.ButtonText,
+            brush,
+        )
         self.mva_select_length_1_btn.setPalette(palette)
         font = QtGui.QFont()
         font.setPointSize(14)
@@ -1418,112 +2347,602 @@ class Ui_controlStackedWidget(object):
         self.mva_select_length_1_btn.setChecked(True)
         self.mva_select_length_1_btn.setFlat(True)
         self.mva_select_length_1_btn.setObjectName("mva_select_length_1_btn")
-        self.axis_select_length_group = QtWidgets.QButtonGroup(controlStackedWidget)
+        self.axis_select_length_group = QtWidgets.QButtonGroup(
+            controlStackedWidget
+        )
         self.axis_select_length_group.setObjectName("axis_select_length_group")
         self.axis_select_length_group.addButton(self.mva_select_length_1_btn)
-        self.mva_select_length_10_btn = GroupButton(parent=self.move_axis_page)
-        self.mva_select_length_10_btn.setGeometry(QtCore.QRect(204, 110, 100, 100))
+        self.mva_length_intervals_layout.addWidget(
+            self.mva_select_length_1_btn
+        )
+        self.line = QtWidgets.QFrame(parent=self.horizontalLayoutWidget_5)
+        self.line.setFrameShape(QtWidgets.QFrame.Shape.VLine)
+        self.line.setFrameShadow(QtWidgets.QFrame.Shadow.Sunken)
+        self.line.setObjectName("line")
+        self.mva_length_intervals_layout.addWidget(self.line)
+        self.mva_select_length_10_btn = QtWidgets.QPushButton(
+            parent=self.horizontalLayoutWidget_5
+        )
         self.mva_select_length_10_btn.setMinimumSize(QtCore.QSize(60, 60))
-        self.mva_select_length_10_btn.setMaximumSize(QtCore.QSize(100, 100))
+        self.mva_select_length_10_btn.setMaximumSize(QtCore.QSize(60, 60))
+
         palette = QtGui.QPalette()
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.WindowText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Active,
+            QtGui.QPalette.ColorRole.WindowText,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.Text, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Active,
+            QtGui.QPalette.ColorRole.Text,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.ButtonText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Active,
+            QtGui.QPalette.ColorRole.ButtonText,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.WindowText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Inactive,
+            QtGui.QPalette.ColorRole.WindowText,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.Text, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Inactive,
+            QtGui.QPalette.ColorRole.Text,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.ButtonText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Inactive,
+            QtGui.QPalette.ColorRole.ButtonText,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(120, 120, 120))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.WindowText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Disabled,
+            QtGui.QPalette.ColorRole.WindowText,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(120, 120, 120))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.Text, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Disabled,
+            QtGui.QPalette.ColorRole.Text,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(120, 120, 120))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.ButtonText, brush)
+
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Disabled,
+            QtGui.QPalette.ColorRole.ButtonText,
+            brush,
+        )
         self.mva_select_length_10_btn.setPalette(palette)
         font = QtGui.QFont()
         font.setPointSize(14)
         self.mva_select_length_10_btn.setFont(font)
         self.mva_select_length_10_btn.setCheckable(True)
-        self.mva_select_length_10_btn.setFlat(False)
+        self.mva_select_length_10_btn.setFlat(True)
         self.mva_select_length_10_btn.setObjectName("mva_select_length_10_btn")
         self.axis_select_length_group.addButton(self.mva_select_length_10_btn)
-        self.mva_select_length_100_btn = GroupButton(parent=self.move_axis_page)
-        self.mva_select_length_100_btn.setGeometry(QtCore.QRect(315, 110, 100, 100))
+        self.mva_length_intervals_layout.addWidget(
+            self.mva_select_length_10_btn
+        )
+        self.line_2 = QtWidgets.QFrame(parent=self.horizontalLayoutWidget_5)
+        self.line_2.setFrameShape(QtWidgets.QFrame.Shape.VLine)
+        self.line_2.setFrameShadow(QtWidgets.QFrame.Shadow.Sunken)
+        self.line_2.setObjectName("line_2")
+        self.mva_length_intervals_layout.addWidget(self.line_2)
+        self.mva_select_length_100_btn = QtWidgets.QPushButton(
+            parent=self.horizontalLayoutWidget_5
+        )
         self.mva_select_length_100_btn.setMinimumSize(QtCore.QSize(60, 60))
-        self.mva_select_length_100_btn.setMaximumSize(QtCore.QSize(100, 100))
+        self.mva_select_length_100_btn.setMaximumSize(QtCore.QSize(60, 60))
+
         palette = QtGui.QPalette()
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.WindowText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Active,
+            QtGui.QPalette.ColorRole.WindowText,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.Text, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Active,
+            QtGui.QPalette.ColorRole.Text,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.ButtonText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Active,
+            QtGui.QPalette.ColorRole.ButtonText,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.WindowText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Inactive,
+            QtGui.QPalette.ColorRole.WindowText,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.Text, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Inactive,
+            QtGui.QPalette.ColorRole.Text,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.ButtonText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Inactive,
+            QtGui.QPalette.ColorRole.ButtonText,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(120, 120, 120))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.WindowText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Disabled,
+            QtGui.QPalette.ColorRole.WindowText,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(120, 120, 120))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.Text, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Disabled,
+            QtGui.QPalette.ColorRole.Text,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(120, 120, 120))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.ButtonText, brush)
+
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Disabled,
+            QtGui.QPalette.ColorRole.ButtonText,
+            brush,
+        )
         self.mva_select_length_100_btn.setPalette(palette)
         font = QtGui.QFont()
         font.setPointSize(14)
         self.mva_select_length_100_btn.setFont(font)
         self.mva_select_length_100_btn.setCheckable(True)
-        self.mva_select_length_100_btn.setFlat(False)
-        self.mva_select_length_100_btn.setObjectName("mva_select_length_100_btn")
+        self.mva_select_length_100_btn.setFlat(True)
+        self.mva_select_length_100_btn.setObjectName(
+            "mva_select_length_100_btn"
+        )
         self.axis_select_length_group.addButton(self.mva_select_length_100_btn)
-        self.label_2 = QtWidgets.QLabel(parent=self.move_axis_page)
-        self.label_2.setGeometry(QtCore.QRect(109, 85, 261, 21))
+        self.mva_length_intervals_layout.addWidget(
+            self.mva_select_length_100_btn
+        )
+        self.mva_feedrate_group_box = QtWidgets.QGroupBox(
+            parent=self.move_axis_page
+        )
+        self.mva_feedrate_group_box.setGeometry(
+            QtCore.QRect(100, 230, 291, 101)
+        )
+        palette = QtGui.QPalette()
+        brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
+        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Active,
+            QtGui.QPalette.ColorRole.WindowText,
+            brush,
+        )
+        brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
+        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Active,
+            QtGui.QPalette.ColorRole.Text,
+            brush,
+        )
+        brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
+        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Active,
+            QtGui.QPalette.ColorRole.ButtonText,
+            brush,
+        )
+        brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
+        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Active,
+            QtGui.QPalette.ColorRole.ToolTipText,
+            brush,
+        )
+        brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
+        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Inactive,
+            QtGui.QPalette.ColorRole.WindowText,
+            brush,
+        )
+        brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
+        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Inactive,
+            QtGui.QPalette.ColorRole.Text,
+            brush,
+        )
+        brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
+        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Inactive,
+            QtGui.QPalette.ColorRole.ButtonText,
+            brush,
+        )
+        brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
+        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Inactive,
+            QtGui.QPalette.ColorRole.ToolTipText,
+            brush,
+        )
+        brush = QtGui.QBrush(QtGui.QColor(120, 120, 120))
+        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Disabled,
+            QtGui.QPalette.ColorRole.WindowText,
+            brush,
+        )
+        brush = QtGui.QBrush(QtGui.QColor(120, 120, 120))
+        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Disabled,
+            QtGui.QPalette.ColorRole.Text,
+            brush,
+        )
+        brush = QtGui.QBrush(QtGui.QColor(120, 120, 120))
+        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Disabled,
+            QtGui.QPalette.ColorRole.ButtonText,
+            brush,
+        )
+        brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
+        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Disabled,
+            QtGui.QPalette.ColorRole.ToolTipText,
+            brush,
+        )
+        self.mva_feedrate_group_box.setPalette(palette)
         font = QtGui.QFont()
         font.setPointSize(14)
-        self.label_2.setFont(font)
-        self.label_2.setStyleSheet("color:white")
-        self.label_2.setObjectName("label_2")
+        self.mva_feedrate_group_box.setFont(font)
+        self.mva_feedrate_group_box.setFlat(True)
+        self.mva_feedrate_group_box.setObjectName("mva_feedrate_group_box")
+        self.horizontalLayoutWidget_6 = QtWidgets.QWidget(
+            parent=self.mva_feedrate_group_box
+        )
+        self.horizontalLayoutWidget_6.setGeometry(QtCore.QRect(0, 30, 291, 62))
+        self.horizontalLayoutWidget_6.setObjectName("horizontalLayoutWidget_6")
+        self.mva_feedrate_intervals_layout = QtWidgets.QHBoxLayout(
+            self.horizontalLayoutWidget_6
+        )
+        self.mva_feedrate_intervals_layout.setContentsMargins(0, 0, 0, 0)
+        self.mva_feedrate_intervals_layout.setObjectName(
+            "mva_feedrate_intervals_layout"
+        )
+        self.mva_select_speed_25_btn = QtWidgets.QPushButton(
+            parent=self.horizontalLayoutWidget_6
+        )
+        self.mva_select_speed_25_btn.setMinimumSize(QtCore.QSize(60, 60))
+        self.mva_select_speed_25_btn.setMaximumSize(QtCore.QSize(60, 60))
+
+        palette = QtGui.QPalette()
+        brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
+        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Active,
+            QtGui.QPalette.ColorRole.WindowText,
+            brush,
+        )
+        brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
+        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Active,
+            QtGui.QPalette.ColorRole.Text,
+            brush,
+        )
+        brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
+        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Active,
+            QtGui.QPalette.ColorRole.ButtonText,
+            brush,
+        )
+        brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
+        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Inactive,
+            QtGui.QPalette.ColorRole.WindowText,
+            brush,
+        )
+        brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
+        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Inactive,
+            QtGui.QPalette.ColorRole.Text,
+            brush,
+        )
+        brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
+        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Inactive,
+            QtGui.QPalette.ColorRole.ButtonText,
+            brush,
+        )
+        brush = QtGui.QBrush(QtGui.QColor(120, 120, 120))
+        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Disabled,
+            QtGui.QPalette.ColorRole.WindowText,
+            brush,
+        )
+        brush = QtGui.QBrush(QtGui.QColor(120, 120, 120))
+        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Disabled,
+            QtGui.QPalette.ColorRole.Text,
+            brush,
+        )
+        brush = QtGui.QBrush(QtGui.QColor(120, 120, 120))
+        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
+
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Disabled,
+            QtGui.QPalette.ColorRole.ButtonText,
+            brush,
+        )
+        self.mva_select_speed_25_btn.setPalette(palette)
+        font = QtGui.QFont()
+        font.setPointSize(14)
+        self.mva_select_speed_25_btn.setFont(font)
+        self.mva_select_speed_25_btn.setCheckable(True)
+        self.mva_select_speed_25_btn.setChecked(True)
+        self.mva_select_speed_25_btn.setFlat(True)
+        self.mva_select_speed_25_btn.setObjectName("mva_select_speed_25_btn")
+        self.axis_select_speed_group = QtWidgets.QButtonGroup(
+            controlStackedWidget
+        )
+        self.axis_select_speed_group.setObjectName("axis_select_speed_group")
+        self.axis_select_speed_group.addButton(self.mva_select_speed_25_btn)
+        self.mva_feedrate_intervals_layout.addWidget(
+            self.mva_select_speed_25_btn
+        )
+        self.line_3 = QtWidgets.QFrame(parent=self.horizontalLayoutWidget_6)
+        self.line_3.setFrameShape(QtWidgets.QFrame.Shape.VLine)
+        self.line_3.setFrameShadow(QtWidgets.QFrame.Shadow.Sunken)
+        self.line_3.setObjectName("line_3")
+        self.mva_feedrate_intervals_layout.addWidget(self.line_3)
+        self.mva_select_speed_50_btn = QtWidgets.QPushButton(
+            parent=self.horizontalLayoutWidget_6
+        )
+        self.mva_select_speed_50_btn.setMinimumSize(QtCore.QSize(60, 60))
+        self.mva_select_speed_50_btn.setMaximumSize(QtCore.QSize(60, 60))
+
+        palette = QtGui.QPalette()
+        brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
+        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Active,
+            QtGui.QPalette.ColorRole.WindowText,
+            brush,
+        )
+        brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
+        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Active,
+            QtGui.QPalette.ColorRole.Text,
+            brush,
+        )
+        brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
+        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Active,
+            QtGui.QPalette.ColorRole.ButtonText,
+            brush,
+        )
+        brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
+        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Inactive,
+            QtGui.QPalette.ColorRole.WindowText,
+            brush,
+        )
+        brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
+        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Inactive,
+            QtGui.QPalette.ColorRole.Text,
+            brush,
+        )
+        brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
+        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Inactive,
+            QtGui.QPalette.ColorRole.ButtonText,
+            brush,
+        )
+        brush = QtGui.QBrush(QtGui.QColor(120, 120, 120))
+        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Disabled,
+            QtGui.QPalette.ColorRole.WindowText,
+            brush,
+        )
+        brush = QtGui.QBrush(QtGui.QColor(120, 120, 120))
+        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Disabled,
+            QtGui.QPalette.ColorRole.Text,
+            brush,
+        )
+        brush = QtGui.QBrush(QtGui.QColor(120, 120, 120))
+        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
+
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Disabled,
+            QtGui.QPalette.ColorRole.ButtonText,
+            brush,
+        )
+        self.mva_select_speed_50_btn.setPalette(palette)
+        font = QtGui.QFont()
+        font.setPointSize(14)
+        self.mva_select_speed_50_btn.setFont(font)
+        self.mva_select_speed_50_btn.setCheckable(True)
+        self.mva_select_speed_50_btn.setFlat(True)
+        self.mva_select_speed_50_btn.setObjectName("mva_select_speed_50_btn")
+        self.axis_select_speed_group.addButton(self.mva_select_speed_50_btn)
+        self.mva_feedrate_intervals_layout.addWidget(
+            self.mva_select_speed_50_btn
+        )
+        self.line_4 = QtWidgets.QFrame(parent=self.horizontalLayoutWidget_6)
+        self.line_4.setFrameShape(QtWidgets.QFrame.Shape.VLine)
+        self.line_4.setFrameShadow(QtWidgets.QFrame.Shadow.Sunken)
+        self.line_4.setObjectName("line_4")
+        self.mva_feedrate_intervals_layout.addWidget(self.line_4)
+        self.mva_select_speed_100_btn = QtWidgets.QPushButton(
+            parent=self.horizontalLayoutWidget_6
+        )
+        self.mva_select_speed_100_btn.setMinimumSize(QtCore.QSize(60, 60))
+        self.mva_select_speed_100_btn.setMaximumSize(QtCore.QSize(60, 60))
+
+        palette = QtGui.QPalette()
+        brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
+        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Active,
+            QtGui.QPalette.ColorRole.WindowText,
+            brush,
+        )
+        brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
+        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Active,
+            QtGui.QPalette.ColorRole.Text,
+            brush,
+        )
+        brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
+        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Active,
+            QtGui.QPalette.ColorRole.ButtonText,
+            brush,
+        )
+        brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
+        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Inactive,
+            QtGui.QPalette.ColorRole.WindowText,
+            brush,
+        )
+        brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
+        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Inactive,
+            QtGui.QPalette.ColorRole.Text,
+            brush,
+        )
+        brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
+        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Inactive,
+            QtGui.QPalette.ColorRole.ButtonText,
+            brush,
+        )
+        brush = QtGui.QBrush(QtGui.QColor(120, 120, 120))
+        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Disabled,
+            QtGui.QPalette.ColorRole.WindowText,
+            brush,
+        )
+        brush = QtGui.QBrush(QtGui.QColor(120, 120, 120))
+        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Disabled,
+            QtGui.QPalette.ColorRole.Text,
+            brush,
+        )
+        brush = QtGui.QBrush(QtGui.QColor(120, 120, 120))
+        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
+
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Disabled,
+            QtGui.QPalette.ColorRole.ButtonText,
+            brush,
+        )
+        self.mva_select_speed_100_btn.setPalette(palette)
+        font = QtGui.QFont()
+        font.setPointSize(14)
+        self.mva_select_speed_100_btn.setFont(font)
+        self.mva_select_speed_100_btn.setCheckable(True)
+        self.mva_select_speed_100_btn.setFlat(True)
+        self.mva_select_speed_100_btn.setObjectName("mva_select_speed_100_btn")
+        self.axis_select_speed_group.addButton(self.mva_select_speed_100_btn)
+        self.mva_feedrate_intervals_layout.addWidget(
+            self.mva_select_speed_100_btn
+        )
+        self.mva_feedrate_group_box.raise_()
+        self.mva_x_label.raise_()
+        self.mva_y_label.raise_()
+        self.mva_z_label.raise_()
+        self.mva_z_value_label.raise_()
+        self.mva_y_value_label.raise_()
+        self.mva_x_value_label.raise_()
+        self.horizontalLayoutWidget_3.raise_()
+        self.verticalLayoutWidget.raise_()
+        self.verticalLayoutWidget_2.raise_()
+        self.verticalLayoutWidget_3.raise_()
+        self.mva_length_group_box.raise_()
+
         controlStackedWidget.addWidget(self.move_axis_page)
         self.temperature_page = QtWidgets.QWidget()
         self.temperature_page.setMinimumSize(QtCore.QSize(710, 400))
         self.temperature_page.setMaximumSize(QtCore.QSize(720, 420))
         self.temperature_page.setObjectName("temperature_page")
-        self.horizontalLayoutWidget_4 = QtWidgets.QWidget(parent=self.temperature_page)
-        self.horizontalLayoutWidget_4.setGeometry(QtCore.QRect(20, 10, 671, 71))
+        self.horizontalLayoutWidget_4 = QtWidgets.QWidget(
+            parent=self.temperature_page
+        )
+        self.horizontalLayoutWidget_4.setGeometry(
+            QtCore.QRect(10, 10, 691, 81)
+        )
         self.horizontalLayoutWidget_4.setObjectName("horizontalLayoutWidget_4")
-        self.horizontalLayout = QtWidgets.QHBoxLayout(self.horizontalLayoutWidget_4)
+        self.horizontalLayout = QtWidgets.QHBoxLayout(
+            self.horizontalLayoutWidget_4
+        )
         self.horizontalLayout.setContentsMargins(0, 0, 0, 0)
         self.horizontalLayout.setObjectName("horizontalLayout")
-        self.temp_header_title = QtWidgets.QLabel(parent=self.horizontalLayoutWidget_4)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.MinimumExpanding, QtWidgets.QSizePolicy.Policy.MinimumExpanding)
+        self.temp_header_title = QtWidgets.QLabel(
+            parent=self.horizontalLayoutWidget_4
+        )
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
+            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
+        )
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(self.temp_header_title.sizePolicy().hasHeightForWidth())
+        sizePolicy.setHeightForWidth(
+            self.temp_header_title.sizePolicy().hasHeightForWidth()
+        )
         self.temp_header_title.setSizePolicy(sizePolicy)
         self.temp_header_title.setMinimumSize(QtCore.QSize(300, 60))
         self.temp_header_title.setMaximumSize(QtCore.QSize(16777215, 60))
@@ -1531,16 +2950,31 @@ class Ui_controlStackedWidget(object):
         font.setFamily("Momcake")
         font.setPointSize(24)
         self.temp_header_title.setFont(font)
-        self.temp_header_title.setLayoutDirection(QtCore.Qt.LayoutDirection.RightToLeft)
-        self.temp_header_title.setStyleSheet("background: transparent; color: white;")
-        self.temp_header_title.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.temp_header_title.setLayoutDirection(
+            QtCore.Qt.LayoutDirection.RightToLeft
+        )
+        self.temp_header_title.setStyleSheet(
+            "background: transparent; color: white;"
+        )
+        self.temp_header_title.setAlignment(
+            QtCore.Qt.AlignmentFlag.AlignCenter
+        )
         self.temp_header_title.setObjectName("temp_header_title")
         self.horizontalLayout.addWidget(self.temp_header_title)
-        self.temp_back_button = BlocksCustomButton(parent=self.horizontalLayoutWidget_4)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Fixed, QtWidgets.QSizePolicy.Policy.Fixed)
+
+        self.temp_back_button = IconButton(
+            parent=self.horizontalLayoutWidget_4
+        )
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Fixed,
+            QtWidgets.QSizePolicy.Policy.Fixed,
+        )
+
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(self.temp_back_button.sizePolicy().hasHeightForWidth())
+        sizePolicy.setHeightForWidth(
+            self.temp_back_button.sizePolicy().hasHeightForWidth()
+        )
         self.temp_back_button.setSizePolicy(sizePolicy)
         self.temp_back_button.setMinimumSize(QtCore.QSize(60, 60))
         self.temp_back_button.setMaximumSize(QtCore.QSize(60, 60))
@@ -1552,136 +2986,282 @@ class Ui_controlStackedWidget(object):
         self.temp_back_button.setFont(font)
         self.temp_back_button.setMouseTracking(False)
         self.temp_back_button.setTabletTracking(True)
-        self.temp_back_button.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.NoContextMenu)
-        self.temp_back_button.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
+        self.temp_back_button.setContextMenuPolicy(
+            QtCore.Qt.ContextMenuPolicy.NoContextMenu
+        )
+        self.temp_back_button.setLayoutDirection(
+            QtCore.Qt.LayoutDirection.LeftToRight
+        )
         self.temp_back_button.setStyleSheet("")
         self.temp_back_button.setAutoDefault(False)
         self.temp_back_button.setFlat(True)
-        self.temp_back_button.setProperty("icon_pixmap", QtGui.QPixmap(":/button_borders/media/btn_icons/back.svg"))
+
+        self.temp_back_button.setProperty(
+            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/back.svg")
+        )
+
         self.temp_back_button.setObjectName("temp_back_button")
         self.horizontalLayout.addWidget(self.temp_back_button)
-        self.verticalLayoutWidget_4 = QtWidgets.QWidget(parent=self.temperature_page)
-        self.verticalLayoutWidget_4.setGeometry(QtCore.QRect(20, 100, 671, 291))
+        self.verticalLayoutWidget_4 = QtWidgets.QWidget(
+            parent=self.temperature_page
+        )
+        self.verticalLayoutWidget_4.setGeometry(QtCore.QRect(10, 90, 691, 301))
         self.verticalLayoutWidget_4.setObjectName("verticalLayoutWidget_4")
         self.gridLayout = QtWidgets.QGridLayout(self.verticalLayoutWidget_4)
         self.gridLayout.setContentsMargins(5, 5, 5, 5)
         self.gridLayout.setObjectName("gridLayout")
         self.tp_content_horizontal_layout = QtWidgets.QHBoxLayout()
-        self.tp_content_horizontal_layout.setSizeConstraint(QtWidgets.QLayout.SizeConstraint.SetMinimumSize)
+        self.tp_content_horizontal_layout.setSizeConstraint(
+            QtWidgets.QLayout.SizeConstraint.SetMinimumSize
+        )
         self.tp_content_horizontal_layout.setContentsMargins(5, 5, 5, 5)
         self.tp_content_horizontal_layout.setSpacing(5)
-        self.tp_content_horizontal_layout.setObjectName("tp_content_horizontal_layout")
-        self.extruder_temp_display = DisplayButton(parent=self.verticalLayoutWidget_4)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Fixed)
+
+        self.tp_content_horizontal_layout.setObjectName(
+            "tp_content_horizontal_layout"
+        )
+        self.extruder_temp_display = DisplayButton(
+            parent=self.verticalLayoutWidget_4
+        )
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Minimum,
+            QtWidgets.QSizePolicy.Policy.Fixed,
+        )
+
         sizePolicy.setHorizontalStretch(1)
         sizePolicy.setVerticalStretch(1)
-        sizePolicy.setHeightForWidth(self.extruder_temp_display.sizePolicy().hasHeightForWidth())
+        sizePolicy.setHeightForWidth(
+            self.extruder_temp_display.sizePolicy().hasHeightForWidth()
+        )
         self.extruder_temp_display.setSizePolicy(sizePolicy)
         self.extruder_temp_display.setMinimumSize(QtCore.QSize(200, 60))
         self.extruder_temp_display.setMaximumSize(QtCore.QSize(120, 60))
         self.extruder_temp_display.setAutoFillBackground(False)
         self.extruder_temp_display.setText("")
         self.extruder_temp_display.setFlat(True)
-        self.extruder_temp_display.setProperty("icon_pixmap", QtGui.QPixmap(":/extruder_related/media/btn_icons/nozzle.svg"))
+        self.extruder_temp_display.setProperty(
+            "icon_pixmap",
+            QtGui.QPixmap(":/extruder_related/media/btn_icons/nozzle.svg"),
+        )
         self.extruder_temp_display.setObjectName("extruder_temp_display")
         self.tp_content_horizontal_layout.addWidget(self.extruder_temp_display)
-        self.bed_temp_display = DisplayButton(parent=self.verticalLayoutWidget_4)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.MinimumExpanding, QtWidgets.QSizePolicy.Policy.MinimumExpanding)
+
+        self.bed_temp_display = DisplayButton(
+            parent=self.verticalLayoutWidget_4
+        )
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
+            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
+        )
+
         sizePolicy.setHorizontalStretch(1)
         sizePolicy.setVerticalStretch(1)
-        sizePolicy.setHeightForWidth(self.bed_temp_display.sizePolicy().hasHeightForWidth())
+        sizePolicy.setHeightForWidth(
+            self.bed_temp_display.sizePolicy().hasHeightForWidth()
+        )
         self.bed_temp_display.setSizePolicy(sizePolicy)
         self.bed_temp_display.setMinimumSize(QtCore.QSize(200, 60))
         self.bed_temp_display.setMaximumSize(QtCore.QSize(120, 60))
         palette = QtGui.QPalette()
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.WindowText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Active,
+            QtGui.QPalette.ColorRole.WindowText,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(50, 50, 50))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.Button, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Active,
+            QtGui.QPalette.ColorRole.Button,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.Text, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Active,
+            QtGui.QPalette.ColorRole.Text,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.ButtonText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Active,
+            QtGui.QPalette.ColorRole.ButtonText,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(50, 50, 50))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.Base, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Active,
+            QtGui.QPalette.ColorRole.Base,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(50, 50, 50))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.Window, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Active,
+            QtGui.QPalette.ColorRole.Window,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(60, 60, 60))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.Highlight, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Active,
+            QtGui.QPalette.ColorRole.Highlight,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(60, 60, 60))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.HighlightedText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Active,
+            QtGui.QPalette.ColorRole.HighlightedText,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.WindowText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Inactive,
+            QtGui.QPalette.ColorRole.WindowText,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(50, 50, 50))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.Button, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Inactive,
+            QtGui.QPalette.ColorRole.Button,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.Text, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Inactive,
+            QtGui.QPalette.ColorRole.Text,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.ButtonText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Inactive,
+            QtGui.QPalette.ColorRole.ButtonText,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(50, 50, 50))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.Base, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Inactive,
+            QtGui.QPalette.ColorRole.Base,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(50, 50, 50))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.Window, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Inactive,
+            QtGui.QPalette.ColorRole.Window,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(60, 60, 60))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.Highlight, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Inactive,
+            QtGui.QPalette.ColorRole.Highlight,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(60, 60, 60))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Inactive, QtGui.QPalette.ColorRole.HighlightedText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Inactive,
+            QtGui.QPalette.ColorRole.HighlightedText,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.WindowText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Disabled,
+            QtGui.QPalette.ColorRole.WindowText,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(50, 50, 50))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.Button, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Disabled,
+            QtGui.QPalette.ColorRole.Button,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.Text, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Disabled,
+            QtGui.QPalette.ColorRole.Text,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.ButtonText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Disabled,
+            QtGui.QPalette.ColorRole.ButtonText,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(50, 50, 50))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.Base, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Disabled,
+            QtGui.QPalette.ColorRole.Base,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(50, 50, 50))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.Window, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Disabled,
+            QtGui.QPalette.ColorRole.Window,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(60, 60, 60))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.Highlight, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Disabled,
+            QtGui.QPalette.ColorRole.Highlight,
+            brush,
+        )
         brush = QtGui.QBrush(QtGui.QColor(60, 60, 60))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.HighlightedText, brush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Disabled,
+            QtGui.QPalette.ColorRole.HighlightedText,
+            brush,
+        )
         self.bed_temp_display.setPalette(palette)
         self.bed_temp_display.setText("")
         self.bed_temp_display.setCheckable(False)
         self.bed_temp_display.setDefault(False)
         self.bed_temp_display.setFlat(True)
-        self.bed_temp_display.setProperty("icon_pixmap", QtGui.QPixmap(":/temperature_related/media/btn_icons/temperature_plate.svg"))
+        self.bed_temp_display.setProperty(
+            "icon_pixmap",
+            QtGui.QPixmap(
+                ":/temperature_related/media/btn_icons/temperature_plate.svg"
+            ),
+        )
         self.bed_temp_display.setObjectName("bed_temp_display")
         self.tp_content_horizontal_layout.addWidget(self.bed_temp_display)
-        self.gridLayout.addLayout(self.tp_content_horizontal_layout, 0, 0, 1, 2)
-        self.cooldown_btn = BlocksCustomButton(parent=self.verticalLayoutWidget_4)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Fixed)
+        self.gridLayout.addLayout(
+            self.tp_content_horizontal_layout, 0, 0, 1, 2
+        )
+        self.cooldown_btn = BlocksCustomButton(
+            parent=self.verticalLayoutWidget_4
+        )
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Minimum,
+            QtWidgets.QSizePolicy.Policy.Fixed,
+        )
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(self.cooldown_btn.sizePolicy().hasHeightForWidth())
+        sizePolicy.setHeightForWidth(
+            self.cooldown_btn.sizePolicy().hasHeightForWidth()
+        )
         self.cooldown_btn.setSizePolicy(sizePolicy)
-        self.cooldown_btn.setMinimumSize(QtCore.QSize(10, 74))
+        self.cooldown_btn.setMinimumSize(QtCore.QSize(250, 80))
+        self.cooldown_btn.setMaximumSize(QtCore.QSize(250, 80))
         font = QtGui.QFont()
         font.setFamily("Momcake")
         font.setPointSize(20)
@@ -1690,21 +3270,38 @@ class Ui_controlStackedWidget(object):
         self.cooldown_btn.setFont(font)
         self.cooldown_btn.setMouseTracking(False)
         self.cooldown_btn.setTabletTracking(True)
-        self.cooldown_btn.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.NoContextMenu)
-        self.cooldown_btn.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
+        self.cooldown_btn.setContextMenuPolicy(
+            QtCore.Qt.ContextMenuPolicy.NoContextMenu
+        )
+        self.cooldown_btn.setLayoutDirection(
+            QtCore.Qt.LayoutDirection.LeftToRight
+        )
         self.cooldown_btn.setStyleSheet("")
         self.cooldown_btn.setAutoDefault(False)
         self.cooldown_btn.setFlat(True)
-        self.cooldown_btn.setProperty("icon_pixmap", QtGui.QPixmap(":/temperature_related/media/btn_icons/cooldown.svg"))
+        self.cooldown_btn.setProperty(
+            "icon_pixmap",
+            QtGui.QPixmap(
+                ":/temperature_related/media/btn_icons/cooldown.svg"
+            ),
+        )
         self.cooldown_btn.setObjectName("cooldown_btn")
         self.gridLayout.addWidget(self.cooldown_btn, 1, 1, 1, 1)
-        self.temperature_cooldown_btn = BlocksCustomButton(parent=self.verticalLayoutWidget_4)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Fixed)
+        self.temperature_cooldown_btn = BlocksCustomButton(
+            parent=self.verticalLayoutWidget_4
+        )
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Minimum,
+            QtWidgets.QSizePolicy.Policy.Fixed,
+        )
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(self.temperature_cooldown_btn.sizePolicy().hasHeightForWidth())
+        sizePolicy.setHeightForWidth(
+            self.temperature_cooldown_btn.sizePolicy().hasHeightForWidth()
+        )
         self.temperature_cooldown_btn.setSizePolicy(sizePolicy)
-        self.temperature_cooldown_btn.setMinimumSize(QtCore.QSize(10, 74))
+        self.temperature_cooldown_btn.setMinimumSize(QtCore.QSize(250, 80))
+        self.temperature_cooldown_btn.setMaximumSize(QtCore.QSize(250, 80))
         font = QtGui.QFont()
         font.setFamily("Momcake")
         font.setPointSize(20)
@@ -1713,12 +3310,21 @@ class Ui_controlStackedWidget(object):
         self.temperature_cooldown_btn.setFont(font)
         self.temperature_cooldown_btn.setMouseTracking(False)
         self.temperature_cooldown_btn.setTabletTracking(True)
-        self.temperature_cooldown_btn.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.NoContextMenu)
-        self.temperature_cooldown_btn.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
+        self.temperature_cooldown_btn.setContextMenuPolicy(
+            QtCore.Qt.ContextMenuPolicy.NoContextMenu
+        )
+        self.temperature_cooldown_btn.setLayoutDirection(
+            QtCore.Qt.LayoutDirection.LeftToRight
+        )
         self.temperature_cooldown_btn.setStyleSheet("")
         self.temperature_cooldown_btn.setAutoDefault(False)
         self.temperature_cooldown_btn.setFlat(True)
-        self.temperature_cooldown_btn.setProperty("icon_pixmap", QtGui.QPixmap(":/top_bar_icons/media/topbar/chamber_temp_topbar.svg"))
+        self.temperature_cooldown_btn.setProperty(
+            "icon_pixmap",
+            QtGui.QPixmap(
+                ":/top_bar_icons/media/topbar/chamber_temp_topbar.svg"
+            ),
+        )
         self.temperature_cooldown_btn.setObjectName("temperature_cooldown_btn")
         self.gridLayout.addWidget(self.temperature_cooldown_btn, 1, 0, 1, 1)
         controlStackedWidget.addWidget(self.temperature_page)
@@ -1733,46 +3339,85 @@ class Ui_controlStackedWidget(object):
         font.setFamily("Montserrat")
         font.setPointSize(14)
         self.z_adjust_icon.setFont(font)
-        self.z_adjust_icon.setStyleSheet("background: transparent; color: white;")
+        self.z_adjust_icon.setStyleSheet(
+            "background: transparent; color: white;"
+        )
         self.z_adjust_icon.setObjectName("z_adjust_icon")
-        self.z_adjust_offset_value = QtWidgets.QLabel(parent=self.z_adjustment_page)
+        self.z_adjust_offset_value = QtWidgets.QLabel(
+            parent=self.z_adjustment_page
+        )
         self.z_adjust_offset_value.setEnabled(True)
         self.z_adjust_offset_value.setGeometry(QtCore.QRect(340, 210, 31, 41))
         font = QtGui.QFont()
         font.setFamily("Montserrat")
         font.setPointSize(14)
         self.z_adjust_offset_value.setFont(font)
-        self.z_adjust_offset_value.setStyleSheet("background: transparent; color: white;")
+        self.z_adjust_offset_value.setStyleSheet(
+            "background: transparent; color: white;"
+        )
         self.z_adjust_offset_value.setObjectName("z_adjust_offset_value")
-        self.horizontalLayoutWidget_10 = QtWidgets.QWidget(parent=self.z_adjustment_page)
-        self.horizontalLayoutWidget_10.setGeometry(QtCore.QRect(10, 10, 681, 62))
-        self.horizontalLayoutWidget_10.setObjectName("horizontalLayoutWidget_10")
-        self.z_adjustment_header_layout = QtWidgets.QHBoxLayout(self.horizontalLayoutWidget_10)
+        self.horizontalLayoutWidget_10 = QtWidgets.QWidget(
+            parent=self.z_adjustment_page
+        )
+        self.horizontalLayoutWidget_10.setGeometry(
+            QtCore.QRect(10, 10, 681, 62)
+        )
+        self.horizontalLayoutWidget_10.setObjectName(
+            "horizontalLayoutWidget_10"
+        )
+        self.z_adjustment_header_layout = QtWidgets.QHBoxLayout(
+            self.horizontalLayoutWidget_10
+        )
         self.z_adjustment_header_layout.setContentsMargins(0, 0, 0, 0)
-        self.z_adjustment_header_layout.setObjectName("z_adjustment_header_layout")
-        self.z_adjust_header_title = QtWidgets.QLabel(parent=self.horizontalLayoutWidget_10)
+        self.z_adjustment_header_layout.setObjectName(
+            "z_adjustment_header_layout"
+        )
+        self.z_adjust_header_title = QtWidgets.QLabel(
+            parent=self.horizontalLayoutWidget_10
+        )
         font = QtGui.QFont()
         font.setFamily("Momcake")
         font.setPointSize(24)
         self.z_adjust_header_title.setFont(font)
-        self.z_adjust_header_title.setStyleSheet("background: transparent; color: white;")
-        self.z_adjust_header_title.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.z_adjust_header_title.setStyleSheet(
+            "background: transparent; color: white;"
+        )
+        self.z_adjust_header_title.setAlignment(
+            QtCore.Qt.AlignmentFlag.AlignCenter
+        )
         self.z_adjust_header_title.setObjectName("z_adjust_header_title")
         self.z_adjustment_header_layout.addWidget(self.z_adjust_header_title)
-        self.z_adjust_back_button = BlocksCustomButton(parent=self.horizontalLayoutWidget_10)
+
+        self.z_adjust_back_button = BlocksCustomButton(
+            parent=self.horizontalLayoutWidget_10
+        )
+
         self.z_adjust_back_button.setMinimumSize(QtCore.QSize(60, 60))
         self.z_adjust_back_button.setMaximumSize(QtCore.QSize(60, 60))
         self.z_adjust_back_button.setText("")
         self.z_adjust_back_button.setFlat(True)
-        self.z_adjust_back_button.setProperty("icon_pixmap", QtGui.QPixmap(":/button_borders/media/btn_icons/back.svg"))
+
+        self.z_adjust_back_button.setProperty(
+            "icon_pixmap",
+            QtGui.QPixmap(":/button_borders/media/btn_icons/back.svg"),
+        )
+
         self.z_adjust_back_button.setObjectName("z_adjust_back_button")
         self.z_adjustment_header_layout.addWidget(self.z_adjust_back_button)
-        self.verticalLayoutWidget_8 = QtWidgets.QWidget(parent=self.z_adjustment_page)
-        self.verticalLayoutWidget_8.setGeometry(QtCore.QRect(600, 110, 90, 177))
+        self.verticalLayoutWidget_8 = QtWidgets.QWidget(
+            parent=self.z_adjustment_page
+        )
+        self.verticalLayoutWidget_8.setGeometry(
+            QtCore.QRect(600, 110, 90, 177)
+        )
         self.verticalLayoutWidget_8.setObjectName("verticalLayoutWidget_8")
-        self.z_adjust_move_buttons_layout = QtWidgets.QVBoxLayout(self.verticalLayoutWidget_8)
+        self.z_adjust_move_buttons_layout = QtWidgets.QVBoxLayout(
+            self.verticalLayoutWidget_8
+        )
         self.z_adjust_move_buttons_layout.setContentsMargins(5, 5, 5, 5)
-        self.z_adjust_move_buttons_layout.setObjectName("z_adjust_move_buttons_layout")
+        self.z_adjust_move_buttons_layout.setObjectName(
+            "z_adjust_move_buttons_layout"
+        )
         self.z_adjust_up_btn = IconButton(parent=self.verticalLayoutWidget_8)
         self.z_adjust_up_btn.setMinimumSize(QtCore.QSize(80, 80))
         self.z_adjust_up_btn.setMaximumSize(QtCore.QSize(80, 80))
@@ -1784,14 +3429,23 @@ class Ui_controlStackedWidget(object):
         self.z_adjust_up_btn.setFont(font)
         self.z_adjust_up_btn.setMouseTracking(False)
         self.z_adjust_up_btn.setTabletTracking(True)
-        self.z_adjust_up_btn.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.NoContextMenu)
-        self.z_adjust_up_btn.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
+        self.z_adjust_up_btn.setContextMenuPolicy(
+            QtCore.Qt.ContextMenuPolicy.NoContextMenu
+        )
+        self.z_adjust_up_btn.setLayoutDirection(
+            QtCore.Qt.LayoutDirection.LeftToRight
+        )
         self.z_adjust_up_btn.setStyleSheet("")
         self.z_adjust_up_btn.setAutoDefault(False)
         self.z_adjust_up_btn.setFlat(True)
-        self.z_adjust_up_btn.setProperty("icon_pixmap", QtGui.QPixmap(":/arrow_icons/media/btn_icons/up_arrow.svg"))
+        self.z_adjust_up_btn.setProperty(
+            "icon_pixmap",
+            QtGui.QPixmap(":/arrow_icons/media/btn_icons/up_arrow.svg"),
+        )
         self.z_adjust_up_btn.setObjectName("z_adjust_up_btn")
-        self.z_adjust_move_buttons_layout.addWidget(self.z_adjust_up_btn, 0, QtCore.Qt.AlignmentFlag.AlignHCenter)
+        self.z_adjust_move_buttons_layout.addWidget(
+            self.z_adjust_up_btn, 0, QtCore.Qt.AlignmentFlag.AlignHCenter
+        )
         self.z_adjust_down_btn = IconButton(parent=self.verticalLayoutWidget_8)
         self.z_adjust_down_btn.setMinimumSize(QtCore.QSize(80, 80))
         self.z_adjust_down_btn.setMaximumSize(QtCore.QSize(80, 80))
@@ -1803,14 +3457,23 @@ class Ui_controlStackedWidget(object):
         self.z_adjust_down_btn.setFont(font)
         self.z_adjust_down_btn.setMouseTracking(False)
         self.z_adjust_down_btn.setTabletTracking(True)
-        self.z_adjust_down_btn.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.NoContextMenu)
-        self.z_adjust_down_btn.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
+        self.z_adjust_down_btn.setContextMenuPolicy(
+            QtCore.Qt.ContextMenuPolicy.NoContextMenu
+        )
+        self.z_adjust_down_btn.setLayoutDirection(
+            QtCore.Qt.LayoutDirection.LeftToRight
+        )
         self.z_adjust_down_btn.setStyleSheet("")
         self.z_adjust_down_btn.setAutoDefault(False)
         self.z_adjust_down_btn.setFlat(True)
-        self.z_adjust_down_btn.setProperty("icon_pixmap", QtGui.QPixmap(":/arrow_icons/media/btn_icons/down_arrow.svg"))
+        self.z_adjust_down_btn.setProperty(
+            "icon_pixmap",
+            QtGui.QPixmap(":/arrow_icons/media/btn_icons/down_arrow.svg"),
+        )
         self.z_adjust_down_btn.setObjectName("z_adjust_down_btn")
-        self.z_adjust_move_buttons_layout.addWidget(self.z_adjust_down_btn, 0, QtCore.Qt.AlignmentFlag.AlignHCenter)
+        self.z_adjust_move_buttons_layout.addWidget(
+            self.z_adjust_down_btn, 0, QtCore.Qt.AlignmentFlag.AlignHCenter
+        )
         self.z_adjust_title = BlocksCustomButton(parent=self.z_adjustment_page)
         self.z_adjust_title.setGeometry(QtCore.QRect(170, 80, 371, 51))
         self.z_adjust_title.setMinimumSize(QtCore.QSize(10, 10))
@@ -1822,23 +3485,42 @@ class Ui_controlStackedWidget(object):
         self.z_adjust_title.setFont(font)
         self.z_adjust_title.setMouseTracking(False)
         self.z_adjust_title.setTabletTracking(True)
-        self.z_adjust_title.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.NoContextMenu)
-        self.z_adjust_title.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
+        self.z_adjust_title.setContextMenuPolicy(
+            QtCore.Qt.ContextMenuPolicy.NoContextMenu
+        )
+        self.z_adjust_title.setLayoutDirection(
+            QtCore.Qt.LayoutDirection.LeftToRight
+        )
         self.z_adjust_title.setStyleSheet("")
         self.z_adjust_title.setAutoDefault(False)
         self.z_adjust_title.setFlat(True)
         self.z_adjust_title.setObjectName("z_adjust_title")
-        self.horizontalLayoutWidget_11 = QtWidgets.QWidget(parent=self.z_adjustment_page)
-        self.horizontalLayoutWidget_11.setGeometry(QtCore.QRect(20, 320, 671, 71))
-        self.horizontalLayoutWidget_11.setObjectName("horizontalLayoutWidget_11")
-        self.z_adjust_buttons_layout = QtWidgets.QHBoxLayout(self.horizontalLayoutWidget_11)
+        self.horizontalLayoutWidget_11 = QtWidgets.QWidget(
+            parent=self.z_adjustment_page
+        )
+        self.horizontalLayoutWidget_11.setGeometry(
+            QtCore.QRect(20, 320, 671, 71)
+        )
+        self.horizontalLayoutWidget_11.setObjectName(
+            "horizontalLayoutWidget_11"
+        )
+        self.z_adjust_buttons_layout = QtWidgets.QHBoxLayout(
+            self.horizontalLayoutWidget_11
+        )
         self.z_adjust_buttons_layout.setContentsMargins(0, 0, 0, 0)
         self.z_adjust_buttons_layout.setObjectName("z_adjust_buttons_layout")
-        self.z_adjust_confirm_btn = BlocksCustomButton(parent=self.horizontalLayoutWidget_11)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.MinimumExpanding)
+        self.z_adjust_confirm_btn = BlocksCustomButton(
+            parent=self.horizontalLayoutWidget_11
+        )
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Minimum,
+            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
+        )
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(self.z_adjust_confirm_btn.sizePolicy().hasHeightForWidth())
+        sizePolicy.setHeightForWidth(
+            self.z_adjust_confirm_btn.sizePolicy().hasHeightForWidth()
+        )
         self.z_adjust_confirm_btn.setSizePolicy(sizePolicy)
         self.z_adjust_confirm_btn.setMinimumSize(QtCore.QSize(10, 0))
         font = QtGui.QFont()
@@ -1849,19 +3531,32 @@ class Ui_controlStackedWidget(object):
         self.z_adjust_confirm_btn.setFont(font)
         self.z_adjust_confirm_btn.setMouseTracking(False)
         self.z_adjust_confirm_btn.setTabletTracking(True)
-        self.z_adjust_confirm_btn.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.NoContextMenu)
-        self.z_adjust_confirm_btn.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
+        self.z_adjust_confirm_btn.setContextMenuPolicy(
+            QtCore.Qt.ContextMenuPolicy.NoContextMenu
+        )
+        self.z_adjust_confirm_btn.setLayoutDirection(
+            QtCore.Qt.LayoutDirection.LeftToRight
+        )
         self.z_adjust_confirm_btn.setStyleSheet("")
         self.z_adjust_confirm_btn.setAutoDefault(False)
         self.z_adjust_confirm_btn.setFlat(True)
-        self.z_adjust_confirm_btn.setProperty("icon_pixmap", QtGui.QPixmap(":/dialog/media/btn_icons/yes.svg"))
+        self.z_adjust_confirm_btn.setProperty(
+            "icon_pixmap", QtGui.QPixmap(":/dialog/media/btn_icons/yes.svg")
+        )
         self.z_adjust_confirm_btn.setObjectName("z_adjust_confirm_btn")
         self.z_adjust_buttons_layout.addWidget(self.z_adjust_confirm_btn)
-        self.z_adjust_cancel_btn = BlocksCustomButton(parent=self.horizontalLayoutWidget_11)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.MinimumExpanding)
+        self.z_adjust_cancel_btn = BlocksCustomButton(
+            parent=self.horizontalLayoutWidget_11
+        )
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Minimum,
+            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
+        )
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(self.z_adjust_cancel_btn.sizePolicy().hasHeightForWidth())
+        sizePolicy.setHeightForWidth(
+            self.z_adjust_cancel_btn.sizePolicy().hasHeightForWidth()
+        )
         self.z_adjust_cancel_btn.setSizePolicy(sizePolicy)
         self.z_adjust_cancel_btn.setMinimumSize(QtCore.QSize(10, 0))
         font = QtGui.QFont()
@@ -1872,12 +3567,18 @@ class Ui_controlStackedWidget(object):
         self.z_adjust_cancel_btn.setFont(font)
         self.z_adjust_cancel_btn.setMouseTracking(False)
         self.z_adjust_cancel_btn.setTabletTracking(True)
-        self.z_adjust_cancel_btn.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.NoContextMenu)
-        self.z_adjust_cancel_btn.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
+        self.z_adjust_cancel_btn.setContextMenuPolicy(
+            QtCore.Qt.ContextMenuPolicy.NoContextMenu
+        )
+        self.z_adjust_cancel_btn.setLayoutDirection(
+            QtCore.Qt.LayoutDirection.LeftToRight
+        )
         self.z_adjust_cancel_btn.setStyleSheet("")
         self.z_adjust_cancel_btn.setAutoDefault(False)
         self.z_adjust_cancel_btn.setFlat(True)
-        self.z_adjust_cancel_btn.setProperty("icon_pixmap", QtGui.QPixmap(":/dialog/media/btn_icons/no.svg"))
+        self.z_adjust_cancel_btn.setProperty(
+            "icon_pixmap", QtGui.QPixmap(":/dialog/media/btn_icons/no.svg")
+        )
         self.z_adjust_cancel_btn.setObjectName("z_adjust_cancel_btn")
         self.z_adjust_buttons_layout.addWidget(self.z_adjust_cancel_btn)
         controlStackedWidget.addWidget(self.z_adjustment_page)
@@ -1885,27 +3586,56 @@ class Ui_controlStackedWidget(object):
         self.printer_settings_page.setMinimumSize(QtCore.QSize(710, 400))
         self.printer_settings_page.setMaximumSize(QtCore.QSize(720, 420))
         self.printer_settings_page.setObjectName("printer_settings_page")
-        self.horizontalLayoutWidget_12 = QtWidgets.QWidget(parent=self.printer_settings_page)
-        self.horizontalLayoutWidget_12.setGeometry(QtCore.QRect(20, 11, 671, 62))
-        self.horizontalLayoutWidget_12.setObjectName("horizontalLayoutWidget_12")
-        self.printer_setting_header_layout = QtWidgets.QHBoxLayout(self.horizontalLayoutWidget_12)
+        self.horizontalLayoutWidget_12 = QtWidgets.QWidget(
+            parent=self.printer_settings_page
+        )
+        self.horizontalLayoutWidget_12.setGeometry(
+            QtCore.QRect(10, 11, 691, 71)
+        )
+        self.horizontalLayoutWidget_12.setObjectName(
+            "horizontalLayoutWidget_12"
+        )
+        self.printer_setting_header_layout = QtWidgets.QHBoxLayout(
+            self.horizontalLayoutWidget_12
+        )
         self.printer_setting_header_layout.setContentsMargins(0, 0, 0, 0)
-        self.printer_setting_header_layout.setObjectName("printer_setting_header_layout")
-        self.printer_settings_title_label = QtWidgets.QLabel(parent=self.horizontalLayoutWidget_12)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Expanding)
+        self.printer_setting_header_layout.setObjectName(
+            "printer_setting_header_layout"
+        )
+        self.printer_settings_title_label = QtWidgets.QLabel(
+            parent=self.horizontalLayoutWidget_12
+        )
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Expanding,
+            QtWidgets.QSizePolicy.Policy.Expanding,
+        )
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(self.printer_settings_title_label.sizePolicy().hasHeightForWidth())
+        sizePolicy.setHeightForWidth(
+            self.printer_settings_title_label.sizePolicy().hasHeightForWidth()
+        )
         self.printer_settings_title_label.setSizePolicy(sizePolicy)
         font = QtGui.QFont()
         font.setFamily("Momcake")
         font.setPointSize(24)
         self.printer_settings_title_label.setFont(font)
-        self.printer_settings_title_label.setStyleSheet("background: transparent; color: white;")
-        self.printer_settings_title_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
-        self.printer_settings_title_label.setObjectName("printer_settings_title_label")
-        self.printer_setting_header_layout.addWidget(self.printer_settings_title_label)
-        self.printer_settings_back_btn = BlocksCustomButton(parent=self.horizontalLayoutWidget_12)
+
+        self.printer_settings_title_label.setStyleSheet(
+            "background: transparent; color: white;"
+        )
+        self.printer_settings_title_label.setAlignment(
+            QtCore.Qt.AlignmentFlag.AlignCenter
+        )
+        self.printer_settings_title_label.setObjectName(
+            "printer_settings_title_label"
+        )
+        self.printer_setting_header_layout.addWidget(
+            self.printer_settings_title_label
+        )
+        self.printer_settings_back_btn = IconButton(
+            parent=self.horizontalLayoutWidget_12
+        )
+
         self.printer_settings_back_btn.setMinimumSize(QtCore.QSize(60, 60))
         self.printer_settings_back_btn.setMaximumSize(QtCore.QSize(60, 60))
         font = QtGui.QFont()
@@ -1916,153 +3646,378 @@ class Ui_controlStackedWidget(object):
         self.printer_settings_back_btn.setFont(font)
         self.printer_settings_back_btn.setMouseTracking(False)
         self.printer_settings_back_btn.setTabletTracking(True)
-        self.printer_settings_back_btn.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.NoContextMenu)
-        self.printer_settings_back_btn.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
+        self.printer_settings_back_btn.setContextMenuPolicy(
+            QtCore.Qt.ContextMenuPolicy.NoContextMenu
+        )
+        self.printer_settings_back_btn.setLayoutDirection(
+            QtCore.Qt.LayoutDirection.LeftToRight
+        )
         self.printer_settings_back_btn.setStyleSheet("")
         self.printer_settings_back_btn.setAutoDefault(False)
         self.printer_settings_back_btn.setFlat(True)
-        self.printer_settings_back_btn.setProperty("borderLeftPixmap", QtGui.QPixmap(":/button_borders/media/buttons/btn_part1.svg"))
-        self.printer_settings_back_btn.setProperty("borderCenterPixmap", QtGui.QPixmap(":/button_borders/media/buttons/btn_part2.svg"))
-        self.printer_settings_back_btn.setProperty("borderRightPixmap", QtGui.QPixmap(":/button_borders/media/buttons/btn_part3.svg"))
-        self.printer_settings_back_btn.setObjectName("printer_settings_back_btn")
-        self.printer_setting_header_layout.addWidget(self.printer_settings_back_btn)
-        self.gridLayoutWidget_3 = QtWidgets.QWidget(parent=self.printer_settings_page)
-        self.gridLayoutWidget_3.setGeometry(QtCore.QRect(20, 90, 671, 301))
+        self.printer_settings_back_btn.setProperty(
+            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/back.svg")
+        )
+        self.printer_settings_back_btn.setObjectName(
+            "printer_settings_back_btn"
+        )
+        self.printer_setting_header_layout.addWidget(
+            self.printer_settings_back_btn
+        )
+        self.gridLayoutWidget_3 = QtWidgets.QWidget(
+            parent=self.printer_settings_page
+        )
+        self.gridLayoutWidget_3.setGeometry(QtCore.QRect(10, 90, 691, 301))
         self.gridLayoutWidget_3.setObjectName("gridLayoutWidget_3")
-        self.printer_setting_content_layout = QtWidgets.QGridLayout(self.gridLayoutWidget_3)
+        self.printer_setting_content_layout = QtWidgets.QGridLayout(
+            self.gridLayoutWidget_3
+        )
         self.printer_setting_content_layout.setContentsMargins(0, 0, 0, 0)
-        self.printer_setting_content_layout.setObjectName("printer_setting_content_layout")
+        self.printer_setting_content_layout.setObjectName(
+            "printer_setting_content_layout"
+        )
         controlStackedWidget.addWidget(self.printer_settings_page)
 
         self.retranslateUi(controlStackedWidget)
-        controlStackedWidget.setCurrentIndex(3)
+
+        controlStackedWidget.setCurrentIndex(4)
+
         QtCore.QMetaObject.connectSlotsByName(controlStackedWidget)
 
     def retranslateUi(self, controlStackedWidget):
         _translate = QtCore.QCoreApplication.translate
-        controlStackedWidget.setWindowTitle(_translate("controlStackedWidget", "StackedWidget"))
-        self.cp_header_title.setText(_translate("controlStackedWidget", "CONTROL"))
-        self.cp_header_title.setProperty("class", _translate("controlStackedWidget", "title_text"))
-        self.cp_motion_btn.setText(_translate("controlStackedWidget", "Montion\n"
-"Control"))
-        self.cp_motion_btn.setProperty("class", _translate("controlStackedWidget", "menu_btn"))
-        self.cp_nozzles_calibration_btn.setText(_translate("controlStackedWidget", "Nozzle\n"
-"Calib."))
-        self.cp_nozzles_calibration_btn.setProperty("class", _translate("controlStackedWidget", "menu_btn"))
-        self.cp_temperature_btn.setText(_translate("controlStackedWidget", "Temp.\n"
-"Control"))
-        self.cp_temperature_btn.setProperty("class", _translate("controlStackedWidget", "menu_btn"))
-        self.cp_bed_leveling_btn.setText(_translate("controlStackedWidget", "Bed Level"))
-        self.cp_bed_leveling_btn.setProperty("class", _translate("controlStackedWidget", "menu_btn"))
-        self.cp_switch_print_core_btn.setText(_translate("controlStackedWidget", "Swap\n"
-"PrintCore"))
-        self.cp_switch_print_core_btn.setProperty("class", _translate("controlStackedWidget", "menu_btn"))
-        self.cp_printer_settings_btn.setText(_translate("controlStackedWidget", "Printer\n"
-"Settings"))
-        self.cp_printer_settings_btn.setProperty("class", _translate("controlStackedWidget", "menu_btn"))
-        self.mp_header_title.setText(_translate("controlStackedWidget", "MOTION"))
-        self.mp_header_title.setProperty("class", _translate("controlStackedWidget", "title_text"))
+        controlStackedWidget.setWindowTitle(
+            _translate("controlStackedWidget", "StackedWidget")
+        )
+        self.cp_header_title.setText(
+            _translate("controlStackedWidget", "Control")
+        )
+        self.cp_header_title.setProperty(
+            "class", _translate("controlStackedWidget", "title_text")
+        )
+        self.cp_motion_btn.setText(
+            _translate("controlStackedWidget", "Montion\nControl")
+        )
+        self.cp_motion_btn.setProperty(
+            "class", _translate("controlStackedWidget", "menu_btn")
+        )
+        self.cp_nozzles_calibration_btn.setText(
+            _translate("controlStackedWidget", "Nozzle\nCalib.")
+        )
+        self.cp_nozzles_calibration_btn.setProperty(
+            "class", _translate("controlStackedWidget", "menu_btn")
+        )
+        self.cp_temperature_btn.setText(
+            _translate("controlStackedWidget", "Temp.\nControl")
+        )
+        self.cp_temperature_btn.setProperty(
+            "class", _translate("controlStackedWidget", "menu_btn")
+        )
+        self.cp_bed_leveling_btn.setText(
+            _translate("controlStackedWidget", "Bed Level")
+        )
+        self.cp_bed_leveling_btn.setProperty(
+            "class", _translate("controlStackedWidget", "menu_btn")
+        )
+        self.cp_switch_print_core_btn.setText(
+            _translate("controlStackedWidget", "Swap\nPrintCore")
+        )
+        self.cp_switch_print_core_btn.setProperty(
+            "class", _translate("controlStackedWidget", "menu_btn")
+        )
+        self.cp_printer_settings_btn.setText(
+            _translate("controlStackedWidget", "Printer\nSettings")
+        )
+        self.cp_printer_settings_btn.setProperty(
+            "class", _translate("controlStackedWidget", "menu_btn")
+        )
+        self.mp_header_title.setText(
+            _translate("controlStackedWidget", "MOTION")
+        )
+        self.mp_header_title.setProperty(
+            "class", _translate("controlStackedWidget", "title_text")
+        )
         self.mp_back_btn.setText(_translate("controlStackedWidget", "Back"))
-        self.mp_back_btn.setProperty("class", _translate("controlStackedWidget", "menu_btn"))
-        self.mp_back_btn.setProperty("button_type", _translate("controlStackedWidget", "icon"))
-        self.motion_auto_home_btn.setText(_translate("controlStackedWidget", "Auto.\n"
-"Home"))
-        self.motion_auto_home_btn.setProperty("class", _translate("controlStackedWidget", "menu_btn"))
-        self.motion_disable_steppers_btn.setText(_translate("controlStackedWidget", "Disable\n"
-"Steppers"))
-        self.motion_disable_steppers_btn.setProperty("class", _translate("controlStackedWidget", "menu_btn"))
-        self.motion_move_axis_btn.setText(_translate("controlStackedWidget", "Axis"))
-        self.motion_move_axis_btn.setProperty("class", _translate("controlStackedWidget", "menu_btn"))
-        self.motion_extrude_btn.setText(_translate("controlStackedWidget", "Extrude"))
-        self.motion_extrude_btn.setProperty("class", _translate("controlStackedWidget", "menu_btn"))
-        self.exp_title_label.setText(_translate("controlStackedWidget", "EXTRUDE"))
-        self.exp_title_label.setProperty("class", _translate("controlStackedWidget", "title_text"))
+        self.mp_back_btn.setProperty(
+            "class", _translate("controlStackedWidget", "menu_btn")
+        )
+        self.mp_back_btn.setProperty(
+            "button_type", _translate("controlStackedWidget", "icon")
+        )
+        self.motion_auto_home_btn.setText(
+            _translate("controlStackedWidget", "Auto.\nHome")
+        )
+        self.motion_auto_home_btn.setProperty(
+            "class", _translate("controlStackedWidget", "menu_btn")
+        )
+        self.motion_disable_steppers_btn.setText(
+            _translate("controlStackedWidget", "Disable\nSteppers")
+        )
+        self.motion_disable_steppers_btn.setProperty(
+            "class", _translate("controlStackedWidget", "menu_btn")
+        )
+        self.motion_move_axis_btn.setText(
+            _translate("controlStackedWidget", "Axis")
+        )
+        self.motion_move_axis_btn.setProperty(
+            "class", _translate("controlStackedWidget", "menu_btn")
+        )
+        self.motion_extrude_btn.setText(
+            _translate("controlStackedWidget", "Extrude")
+        )
+        self.motion_extrude_btn.setProperty(
+            "class", _translate("controlStackedWidget", "menu_btn")
+        )
+        self.exp_length_group_box.setTitle(
+            _translate("controlStackedWidget", "Extrude Length (mm)")
+        )
+        self.extrude_select_length_10_btn.setText(
+            _translate("controlStackedWidget", "10")
+        )
+        self.extrude_select_length_10_btn.setProperty(
+            "button_type", _translate("controlStackedWidget", "normal")
+        )
+        self.extrude_select_length_50_btn.setText(
+            _translate("controlStackedWidget", "50")
+        )
+        self.extrude_select_length_50_btn.setProperty(
+            "button_type", _translate("controlStackedWidget", "normal")
+        )
+        self.extrude_select_length_100_btn.setText(
+            _translate("controlStackedWidget", "100")
+        )
+        self.extrude_select_length_100_btn.setProperty(
+            "button_type", _translate("controlStackedWidget", "normal")
+        )
+        self.exp_feedrate_group_box.setTitle(
+            _translate("controlStackedWidget", "Extrude Feedrate (mm/s)")
+        )
+        self.extrude_select_feedrate_2_btn.setText(
+            _translate("controlStackedWidget", "2")
+        )
+        self.extrude_select_feedrate_2_btn.setProperty(
+            "button_type", _translate("controlStackedWidget", "normal")
+        )
+        self.extrude_select_feedrate_5_btn.setText(
+            _translate("controlStackedWidget", "5")
+        )
+        self.extrude_select_feedrate_5_btn.setProperty(
+            "button_type", _translate("controlStackedWidget", "normal")
+        )
+        self.extrude_select_feedrate_10_btn.setText(
+            _translate("controlStackedWidget", "10")
+        )
+        self.extrude_select_feedrate_10_btn.setProperty(
+            "button_type", _translate("controlStackedWidget", "normal")
+        )
+        self.exp_unextrude_btn.setText(
+            _translate("controlStackedWidget", "Retract")
+        )
+        self.exp_unextrude_btn.setProperty(
+            "class", _translate("controlStackedWidget", "menu_btn")
+        )
+        self.exp_extrude_btn.setText(
+            _translate("controlStackedWidget", "Extrude")
+        )
+        self.exp_extrude_btn.setProperty(
+            "class", _translate("controlStackedWidget", "menu_btn")
+        )
+        self.exp_info_label.setText(
+            _translate("controlStackedWidget", "Nozzle heating to extrude")
+        )
+        self.exp_title_label.setText(
+            _translate("controlStackedWidget", "Extrude")
+        )
+        self.exp_title_label.setProperty(
+            "class", _translate("controlStackedWidget", "title_text")
+        )
         self.exp_back_btn.setText(_translate("controlStackedWidget", "Back"))
-        self.exp_back_btn.setProperty("class", _translate("controlStackedWidget", "menu_btn"))
-        self.exp_back_btn.setProperty("button_type", _translate("controlStackedWidget", "icon"))
-        self.exp_length_group_box.setTitle(_translate("controlStackedWidget", "Extrude Length (mm)"))
-        self.extrude_select_length_10_btn.setText(_translate("controlStackedWidget", "10"))
-        self.extrude_select_length_10_btn.setProperty("button_type", _translate("controlStackedWidget", "normal"))
-        self.extrude_select_length_50_btn.setText(_translate("controlStackedWidget", "50"))
-        self.extrude_select_length_50_btn.setProperty("button_type", _translate("controlStackedWidget", "normal"))
-        self.extrude_select_length_100_btn.setText(_translate("controlStackedWidget", "100"))
-        self.extrude_select_length_100_btn.setProperty("button_type", _translate("controlStackedWidget", "normal"))
-        self.exp_feedrate_group_box.setTitle(_translate("controlStackedWidget", "Extrude Feedrate (mm/s)"))
-        self.extrude_select_feedrate_2_btn.setText(_translate("controlStackedWidget", "2"))
-        self.extrude_select_feedrate_2_btn.setProperty("button_type", _translate("controlStackedWidget", "normal"))
-        self.extrude_select_feedrate_5_btn.setText(_translate("controlStackedWidget", "5"))
-        self.extrude_select_feedrate_5_btn.setProperty("button_type", _translate("controlStackedWidget", "normal"))
-        self.extrude_select_feedrate_10_btn.setText(_translate("controlStackedWidget", "10"))
-        self.extrude_select_feedrate_10_btn.setProperty("button_type", _translate("controlStackedWidget", "normal"))
-        self.exp_unextrude_btn.setText(_translate("controlStackedWidget", "Retract"))
-        self.exp_unextrude_btn.setProperty("class", _translate("controlStackedWidget", "menu_btn"))
-        self.exp_extrude_btn.setText(_translate("controlStackedWidget", "Extrude"))
-        self.exp_extrude_btn.setProperty("class", _translate("controlStackedWidget", "menu_btn"))
-        self.exp_info_label.setText(_translate("controlStackedWidget", "Nozzle heating to extrude"))
+        self.exp_back_btn.setProperty(
+            "class", _translate("controlStackedWidget", "menu_btn")
+        )
+        self.exp_back_btn.setProperty(
+            "button_type", _translate("controlStackedWidget", "icon")
+        )
         self.mva_x_label.setText(_translate("controlStackedWidget", "X:"))
         self.mva_y_label.setText(_translate("controlStackedWidget", "Y:"))
         self.mva_z_label.setText(_translate("controlStackedWidget", "Z:"))
         self.mva_z_value_label.setText(_translate("controlStackedWidget", "0"))
         self.mva_y_value_label.setText(_translate("controlStackedWidget", "0"))
         self.mva_x_value_label.setText(_translate("controlStackedWidget", "0"))
-        self.mva_title_label.setText(_translate("controlStackedWidget", "Move Axis"))
-        self.mva_title_label.setProperty("class", _translate("controlStackedWidget", "title_text"))
+        self.mva_title_label.setText(
+            _translate("controlStackedWidget", "Move Axis")
+        )
+        self.mva_title_label.setProperty(
+            "class", _translate("controlStackedWidget", "title_text")
+        )
         self.mva_back_btn.setText(_translate("controlStackedWidget", "Back"))
-        self.mva_back_btn.setProperty("class", _translate("controlStackedWidget", "menu_btn"))
-        self.mva_back_btn.setProperty("button_type", _translate("controlStackedWidget", "icon"))
-        self.mva_up_btn.setProperty("button_type", _translate("controlStackedWidget", "icon"))
-        self.mva_left_btn.setProperty("button_type", _translate("controlStackedWidget", "icon"))
-        self.mva_right_btn.setProperty("button_type", _translate("controlStackedWidget", "icon"))
-        self.mva_down_btn.setProperty("button_type", _translate("controlStackedWidget", "icon"))
-        self.mva_z_up.setProperty("button_type", _translate("controlStackedWidget", "icon"))
-        self.mva_z_down.setProperty("button_type", _translate("controlStackedWidget", "icon"))
-        self.mva_home_x_btn.setProperty("button_type", _translate("controlStackedWidget", "icon"))
-        self.mva_home_y_btn.setProperty("button_type", _translate("controlStackedWidget", "icon"))
-        self.mva_home_z_btn.setProperty("button_type", _translate("controlStackedWidget", "icon"))
-        self.mva_home_all_btn.setProperty("button_type", _translate("controlStackedWidget", "icon"))
-        self.mva_select_speed_25_btn.setText(_translate("controlStackedWidget", "25"))
-        self.mva_select_speed_50_btn.setText(_translate("controlStackedWidget", "50"))
-        self.mva_select_speed_100_btn.setText(_translate("controlStackedWidget", "100"))
-        self.label.setText(_translate("controlStackedWidget", "Move Speed mm/s"))
-        self.mva_select_length_1_btn.setText(_translate("controlStackedWidget", "1"))
-        self.mva_select_length_10_btn.setText(_translate("controlStackedWidget", "10"))
-        self.mva_select_length_100_btn.setText(_translate("controlStackedWidget", "100"))
-        self.label_2.setText(_translate("controlStackedWidget", "Move Length mm/s"))
-        self.temp_header_title.setText(_translate("controlStackedWidget", "TEMPERATURE"))
-        self.temp_header_title.setProperty("class", _translate("controlStackedWidget", "title_text"))
-        self.temp_back_button.setText(_translate("controlStackedWidget", "Back"))
-        self.temp_back_button.setProperty("button_type", _translate("controlStackedWidget", "icon"))
-        self.extruder_temp_display.setProperty("name", _translate("controlStackedWidget", "extruder_temperature_display"))
-        self.extruder_temp_display.setProperty("button_type", _translate("controlStackedWidget", "secondary_display"))
-        self.bed_temp_display.setProperty("name", _translate("controlStackedWidget", "bed_temperature_display"))
-        self.bed_temp_display.setProperty("button_type", _translate("controlStackedWidget", "secondary_display"))
-        self.cooldown_btn.setText(_translate("controlStackedWidget", "Cooldown"))
-        self.cooldown_btn.setProperty("class", _translate("controlStackedWidget", "menu_btn"))
-        self.temperature_cooldown_btn.setText(_translate("controlStackedWidget", "HeatSoak"))
-        self.temperature_cooldown_btn.setProperty("class", _translate("controlStackedWidget", "menu_btn"))
+
+        self.mva_back_btn.setProperty(
+            "class", _translate("controlStackedWidget", "menu_btn")
+        )
+        self.mva_back_btn.setProperty(
+            "button_type", _translate("controlStackedWidget", "icon")
+        )
+        self.mva_up_btn.setProperty(
+            "button_type", _translate("controlStackedWidget", "icon")
+        )
+        self.mva_left_btn.setProperty(
+            "button_type", _translate("controlStackedWidget", "icon")
+        )
+        self.mva_right_btn.setProperty(
+            "button_type", _translate("controlStackedWidget", "icon")
+        )
+        self.mva_down_btn.setProperty(
+            "button_type", _translate("controlStackedWidget", "icon")
+        )
+        self.mva_z_up.setProperty(
+            "button_type", _translate("controlStackedWidget", "icon")
+        )
+        self.mva_z_down.setProperty(
+            "button_type", _translate("controlStackedWidget", "icon")
+        )
+        self.mva_home_x_btn.setProperty(
+            "button_type", _translate("controlStackedWidget", "icon")
+        )
+        self.mva_home_y_btn.setProperty(
+            "button_type", _translate("controlStackedWidget", "icon")
+        )
+        self.mva_home_z_btn.setProperty(
+            "button_type", _translate("controlStackedWidget", "icon")
+        )
+        self.mva_home_all_btn.setProperty(
+            "button_type", _translate("controlStackedWidget", "icon")
+        )
+        self.mva_length_group_box.setTitle(
+            _translate("controlStackedWidget", "Move Length mm/s")
+        )
+        self.mva_select_length_1_btn.setText(
+            _translate("controlStackedWidget", "1")
+        )
+        self.mva_select_length_10_btn.setText(
+            _translate("controlStackedWidget", "10")
+        )
+        self.mva_select_length_100_btn.setText(
+            _translate("controlStackedWidget", "100")
+        )
+        self.mva_feedrate_group_box.setTitle(
+            _translate("controlStackedWidget", "Move Speed mm/s")
+        )
+        self.mva_select_speed_25_btn.setText(
+            _translate("controlStackedWidget", "25")
+        )
+        self.mva_select_speed_50_btn.setText(
+            _translate("controlStackedWidget", "50")
+        )
+        self.mva_select_speed_100_btn.setText(
+            _translate("controlStackedWidget", "100")
+        )
+        self.temp_header_title.setText(
+            _translate("controlStackedWidget", "TEMPERATURE")
+        )
+        self.temp_header_title.setProperty(
+            "class", _translate("controlStackedWidget", "title_text")
+        )
+        self.temp_back_button.setText(
+            _translate("controlStackedWidget", "Back")
+        )
+        self.temp_back_button.setProperty(
+            "button_type", _translate("controlStackedWidget", "icon")
+        )
+        self.extruder_temp_display.setProperty(
+            "name",
+            _translate("controlStackedWidget", "extruder_temperature_display"),
+        )
+        self.extruder_temp_display.setProperty(
+            "button_type",
+            _translate("controlStackedWidget", "secondary_display"),
+        )
+        self.bed_temp_display.setProperty(
+            "name",
+            _translate("controlStackedWidget", "bed_temperature_display"),
+        )
+        self.bed_temp_display.setProperty(
+            "button_type",
+            _translate("controlStackedWidget", "secondary_display"),
+        )
+        self.cooldown_btn.setText(
+            _translate("controlStackedWidget", "Cooldown")
+        )
+        self.cooldown_btn.setProperty(
+            "class", _translate("controlStackedWidget", "menu_btn")
+        )
+        self.temperature_cooldown_btn.setText(
+            _translate("controlStackedWidget", "HeatSoak")
+        )
+        self.temperature_cooldown_btn.setProperty(
+            "class", _translate("controlStackedWidget", "menu_btn")
+        )
+
         self.z_adjust_icon.setText(_translate("controlStackedWidget", "Z"))
-        self.z_adjust_offset_value.setText(_translate("controlStackedWidget", "0"))
-        self.z_adjust_header_title.setText(_translate("controlStackedWidget", "Z Adjustment"))
-        self.z_adjust_header_title.setProperty("class", _translate("controlStackedWidget", "title_text"))
-        self.z_adjust_back_button.setProperty("button_type", _translate("controlStackedWidget", "icon"))
+        self.z_adjust_offset_value.setText(
+            _translate("controlStackedWidget", "0")
+        )
+        self.z_adjust_header_title.setText(
+            _translate("controlStackedWidget", "Z Adjustment")
+        )
+        self.z_adjust_header_title.setProperty(
+            "class", _translate("controlStackedWidget", "title_text")
+        )
+        self.z_adjust_back_button.setProperty(
+            "button_type", _translate("controlStackedWidget", "icon")
+        )
         self.z_adjust_up_btn.setText(_translate("controlStackedWidget", "^"))
-        self.z_adjust_up_btn.setProperty("class", _translate("controlStackedWidget", "menu_btn"))
-        self.z_adjust_up_btn.setProperty("button_type", _translate("controlStackedWidget", "icon"))
+        self.z_adjust_up_btn.setProperty(
+            "class", _translate("controlStackedWidget", "menu_btn")
+        )
+        self.z_adjust_up_btn.setProperty(
+            "button_type", _translate("controlStackedWidget", "icon")
+        )
         self.z_adjust_down_btn.setText(_translate("controlStackedWidget", "v"))
-        self.z_adjust_down_btn.setProperty("class", _translate("controlStackedWidget", "menu_btn"))
-        self.z_adjust_down_btn.setProperty("button_type", _translate("controlStackedWidget", "icon"))
-        self.z_adjust_title.setText(_translate("controlStackedWidget", "select length"))
-        self.z_adjust_title.setProperty("class", _translate("controlStackedWidget", "menu_btn"))
-        self.z_adjust_title.setProperty("button_type", _translate("controlStackedWidget", "normal"))
-        self.z_adjust_confirm_btn.setText(_translate("controlStackedWidget", "Confirm"))
-        self.z_adjust_confirm_btn.setProperty("class", _translate("controlStackedWidget", "menu_btn"))
-        self.z_adjust_cancel_btn.setText(_translate("controlStackedWidget", "Cancel"))
-        self.z_adjust_cancel_btn.setProperty("class", _translate("controlStackedWidget", "menu_btn"))
-        self.printer_settings_title_label.setText(_translate("controlStackedWidget", "PRINTER SETTINGS"))
-        self.printer_settings_title_label.setProperty("class", _translate("controlStackedWidget", "title_text"))
-        self.printer_settings_back_btn.setText(_translate("controlStackedWidget", "Back"))
-        self.printer_settings_back_btn.setProperty("class", _translate("controlStackedWidget", "menu_btn"))
-        self.printer_settings_back_btn.setProperty("button_type", _translate("controlStackedWidget", "icon"))
+        self.z_adjust_down_btn.setProperty(
+            "class", _translate("controlStackedWidget", "menu_btn")
+        )
+        self.z_adjust_down_btn.setProperty(
+            "button_type", _translate("controlStackedWidget", "icon")
+        )
+        self.z_adjust_title.setText(
+            _translate("controlStackedWidget", "select length")
+        )
+        self.z_adjust_title.setProperty(
+            "class", _translate("controlStackedWidget", "menu_btn")
+        )
+        self.z_adjust_title.setProperty(
+            "button_type", _translate("controlStackedWidget", "normal")
+        )
+        self.z_adjust_confirm_btn.setText(
+            _translate("controlStackedWidget", "Confirm")
+        )
+        self.z_adjust_confirm_btn.setProperty(
+            "class", _translate("controlStackedWidget", "menu_btn")
+        )
+        self.z_adjust_cancel_btn.setText(
+            _translate("controlStackedWidget", "Cancel")
+        )
+        self.z_adjust_cancel_btn.setProperty(
+            "class", _translate("controlStackedWidget", "menu_btn")
+        )
+        self.printer_settings_title_label.setText(
+            _translate("controlStackedWidget", "PRINTER SETTINGS")
+        )
+        self.printer_settings_title_label.setProperty(
+            "class", _translate("controlStackedWidget", "title_text")
+        )
+        self.printer_settings_back_btn.setText(
+            _translate("controlStackedWidget", "Back")
+        )
+        self.printer_settings_back_btn.setProperty(
+            "class", _translate("controlStackedWidget", "menu_btn")
+        )
+        self.printer_settings_back_btn.setProperty(
+            "button_type", _translate("controlStackedWidget", "icon")
+        )
+
+
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_label import BlocksLabel
 from lib.utils.display_button import DisplayButton

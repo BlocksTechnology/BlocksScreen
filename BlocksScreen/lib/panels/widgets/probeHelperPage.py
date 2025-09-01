@@ -445,13 +445,16 @@ class ProbeHelper(QtWidgets.QWidget):
             data (list): A list containing the gcode that originated
                     the response and the response
         """
-        # TODO: Only check for messages if we are in the tool otherwise ignore them 
+        # TODO: Only check for messages if we are in the tool otherwise ignore them
         if self.isVisible():
             if data[0].startswith("!!"):  # An error occurred
                 print(
                     f"Calibration aborted, gcode message: {data[0].strip('!! ')}"
                 )
-                if "already in a manual z probe" in data[0].strip("!! ").lower():
+                if (
+                    "already in a manual z probe"
+                    in data[0].strip("!! ").lower()
+                ):
                     self._hide_option_cards()
                     self.helper_start = True
                     self._toggle_tool_buttons(True)
@@ -564,7 +567,7 @@ class ProbeHelper(QtWidgets.QWidget):
         self.po_back_button.setFlat(True)
         self.po_back_button.setProperty(
             "icon_pixmap",
-            QtGui.QPixmap(":/button_borders/media/btn_icons/back.svg"),
+            QtGui.QPixmap(":/ui/media/btn_icons/back.svg"),
         )
         self.po_back_button.setObjectName("po_back_button")
         self.po_header_layout.addWidget(self.po_back_button)
