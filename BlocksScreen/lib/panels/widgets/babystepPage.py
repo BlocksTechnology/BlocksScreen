@@ -25,28 +25,23 @@ class BabystepPage(QtWidgets.QWidget):
         self.setMouseTracking(True)
 
         self.setupUI()
-        self.bbp_away_from_bed.clicked.connect(self.on_move_nozzle_away)
-        self.bbp_close_to_bed.clicked.connect(self.on_move_nozzle_close)
+        self.bbp_up.clicked.connect(self.on_arrow_up)
+        self.bby_down.clicked.connect(self.on_arrow_down)
         self.babystep_back_btn.clicked.connect(self.request_back.emit)
         self.bbp_nozzle_offset_01.toggled.connect(self.handle_z_offset_change)
         self.bbp_nozzle_offset_025.toggled.connect(self.handle_z_offset_change)
         self.bbp_nozzle_offset_05.toggled.connect(self.handle_z_offset_change)
         self.bbp_nozzle_offset_1.toggled.connect(self.handle_z_offset_change)
 
-    @QtCore.pyqtSlot(name="on_move_nozzle_close")
-    def on_move_nozzle_close(self) -> None:
-        """Move the nozzle closer to the print plate by the amount set in **` self._z_offset`**"""
-        self.run_gcode.emit(
-            f"SET_GCODE_OFFSET Z_ADJUST=-{self._z_offset}"  # Z_ADJUST adds the value to the existing offset
-        )
+    @QtCore.pyqtSlot(name="on_arrow_down")
+    def on_arrow_down(self) -> None:
+        """Move the bed close to the nozzle by the amount set in **` self._z_offset`**"""
+        self.run_gcode.emit(f"SET_GCODE_OFFSET Z_ADJUST=-{self._z_offset}")
 
-    @QtCore.pyqtSlot(name="on_move_nozzle_away")
-    def on_move_nozzle_away(self) -> None:
-        """Slot for Babystep button to get far from the bed by **` self._z_offset`** amount"""
-        print("Moving nozzle away from bed by:", self._z_offset, "a")
-        self.run_gcode.emit(
-            f"SET_GCODE_OFFSET Z_ADJUST=+{self._z_offset}"  # Z_ADJUST adds the value to the existing offset
-        )
+    @QtCore.pyqtSlot(name="on_arrow_up")
+    def on_arrow_up(self) -> None:
+        """Move the bed far from the nozzle by the amount set int **` self._z_offset`**"""
+        self.run_gcode.emit(f"SET_GCODE_OFFSET Z_ADJUST={self._z_offset}")
 
     @QtCore.pyqtSlot(name="handle_z_offset_change")
     def handle_z_offset_change(self) -> None:
@@ -399,41 +394,42 @@ class BabystepPage(QtWidgets.QWidget):
         self.bbp_buttons_layout = QtWidgets.QVBoxLayout()
         self.bbp_buttons_layout.setContentsMargins(5, 5, 5, 5)
         self.bbp_buttons_layout.setObjectName("bbp_buttons_layout")
-        self.bbp_away_from_bed = IconButton(parent=self)
+        self.bbp_up = IconButton(parent=self)
+        self.bbp_up = IconButton(parent=self)
         sizePolicy.setHeightForWidth(
-            self.bbp_away_from_bed.sizePolicy().hasHeightForWidth()
+            self.bbp_up.sizePolicy().hasHeightForWidth()
         )
-        self.bbp_away_from_bed.setSizePolicy(sizePolicy)
-        self.bbp_away_from_bed.setMinimumSize(QtCore.QSize(80, 80))
-        self.bbp_away_from_bed.setMaximumSize(QtCore.QSize(80, 80))
-        self.bbp_away_from_bed.setText("")
-        self.bbp_away_from_bed.setFlat(True)
-        self.bbp_away_from_bed.setPixmap(
+        self.bbp_up.setSizePolicy(sizePolicy)
+        self.bbp_up.setMinimumSize(QtCore.QSize(80, 80))
+        self.bbp_up.setMaximumSize(QtCore.QSize(80, 80))
+        self.bbp_up.setText("")
+        self.bbp_up.setFlat(True)
+        self.bbp_up.setPixmap(
             QtGui.QPixmap(":/arrow_icons/media/btn_icons/up_arrow.svg")
         )
-        self.bbp_away_from_bed.setObjectName("bbp_away_from_bed")
+        self.bbp_up.setObjectName("bbp_away_from_bed")
         self.bbp_option_button_group = QtWidgets.QButtonGroup(self)
         self.bbp_option_button_group.setObjectName("bbp_option_button_group")
-        self.bbp_option_button_group.addButton(self.bbp_away_from_bed)
+        self.bbp_option_button_group.addButton(self.bbp_up)
         self.bbp_buttons_layout.addWidget(
-            self.bbp_away_from_bed, 0, QtCore.Qt.AlignmentFlag.AlignRight
+            self.bbp_up, 0, QtCore.Qt.AlignmentFlag.AlignRight
         )
-        self.bbp_close_to_bed = IconButton(parent=self)
+        self.bby_down = IconButton(parent=self)
         sizePolicy.setHeightForWidth(
-            self.bbp_close_to_bed.sizePolicy().hasHeightForWidth()
+            self.bby_down.sizePolicy().hasHeightForWidth()
         )
-        self.bbp_close_to_bed.setSizePolicy(sizePolicy)
-        self.bbp_close_to_bed.setMinimumSize(QtCore.QSize(80, 80))
-        self.bbp_close_to_bed.setMaximumSize(QtCore.QSize(80, 80))
-        self.bbp_close_to_bed.setText("")
-        self.bbp_close_to_bed.setFlat(True)
-        self.bbp_close_to_bed.setPixmap(
+        self.bby_down.setSizePolicy(sizePolicy)
+        self.bby_down.setMinimumSize(QtCore.QSize(80, 80))
+        self.bby_down.setMaximumSize(QtCore.QSize(80, 80))
+        self.bby_down.setText("")
+        self.bby_down.setFlat(True)
+        self.bby_down.setPixmap(
             QtGui.QPixmap(":/arrow_icons/media/btn_icons/down_arrow.svg")
         )
-        self.bbp_close_to_bed.setObjectName("bbp_close_to_bed")
-        self.bbp_option_button_group.addButton(self.bbp_close_to_bed)
+        self.bby_down.setObjectName("bbp_close_to_bed")
+        self.bbp_option_button_group.addButton(self.bby_down)
         self.bbp_buttons_layout.addWidget(
-            self.bbp_close_to_bed, 0, QtCore.Qt.AlignmentFlag.AlignRight
+            self.bby_down, 0, QtCore.Qt.AlignmentFlag.AlignRight
         )
         spacerItem = QtWidgets.QSpacerItem(
             40,

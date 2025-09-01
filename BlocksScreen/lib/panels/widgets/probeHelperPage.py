@@ -1,9 +1,9 @@
 import typing
 
 from lib.panels.widgets.optionCardWidget import OptionCard
-from PyQt6 import QtCore, QtGui, QtWidgets
 from lib.utils.blocks_label import BlocksLabel
 from lib.utils.icon_button import IconButton
+from PyQt6 import QtCore, QtGui, QtWidgets
 
 
 class ProbeHelper(QtWidgets.QWidget):
@@ -88,11 +88,11 @@ class ProbeHelper(QtWidgets.QWidget):
                 new_value=float(self.distances[4])
             )
         )
-        self.mb_raise_nozzle.clicked.connect(
-            lambda: self.run_gcode_signal.emit(f"TESTZ Z={self._zhop_height}")
-        )
-        self.mb_lower_nozzle.clicked.connect(
+        self.mb_arrow_up.clicked.connect(  # Move bed closer to nozzle
             lambda: self.run_gcode_signal.emit(f"TESTZ Z=-{self._zhop_height}")
+        )
+        self.mb_arrow_down.clicked.connect(  # Move bed away from the nozzle
+            lambda: self.run_gcode_signal.emit(f"TESTZ Z={self._zhop_height}")
         )
         self.po_back_button.clicked.connect(self.request_back)
         self.accept_button.clicked.connect(self.handle_accept)
@@ -146,7 +146,6 @@ class ProbeHelper(QtWidgets.QWidget):
     def init_probe_config(self) -> None:
         if not self.z_offset_config_method:
             return
-
         if self.z_offset_config_type != "endstop":
             self.z_offsets = tuple(
                 map(
@@ -445,13 +444,16 @@ class ProbeHelper(QtWidgets.QWidget):
             data (list): A list containing the gcode that originated
                     the response and the response
         """
-        # TODO: Only check for messages if we are in the tool otherwise ignore them 
+        # TODO: Only check for messages if we are in the tool otherwise ignore them
         if self.isVisible():
             if data[0].startswith("!!"):  # An error occurred
                 print(
                     f"Calibration aborted, gcode message: {data[0].strip('!! ')}"
                 )
-                if "already in a manual z probe" in data[0].strip("!! ").lower():
+                if (
+                    "already in a manual z probe"
+                    in data[0].strip("!! ").lower()
+                ):
                     self._hide_option_cards()
                     self.helper_start = True
                     self._toggle_tool_buttons(True)
@@ -494,8 +496,8 @@ class ProbeHelper(QtWidgets.QWidget):
         self.move_option_5.setText(str(self.distances[4]))
 
     def _toggle_tool_buttons(self, state: bool) -> None:
-        self.mb_lower_nozzle.setEnabled(state)
-        self.mb_raise_nozzle.setEnabled(state)
+        self.mb_arrow_down.setEnabled(state)
+        self.mb_arrow_up.setEnabled(state)
         self.accept_button.setEnabled(state)
         self.abort_button.setEnabled(state)
         if state:
@@ -590,27 +592,27 @@ class ProbeHelper(QtWidgets.QWidget):
         self.move_buttons = QtWidgets.QVBoxLayout(self.tool_move)
         self.move_buttons.setContentsMargins(9, 9, 9, 9)
         self.move_buttons.setObjectName("move_buttons")
-        self.mb_raise_nozzle = IconButton(parent=self.tool_move)
-        self.mb_raise_nozzle.setMinimumSize(QtCore.QSize(80, 80))
-        self.mb_raise_nozzle.setMaximumSize(QtCore.QSize(80, 80))
-        self.mb_raise_nozzle.setFlat(True)
-        self.mb_raise_nozzle.setProperty(
+        self.mb_arrow_up = IconButton(parent=self.tool_move)
+        self.mb_arrow_up.setMinimumSize(QtCore.QSize(80, 80))
+        self.mb_arrow_up.setMaximumSize(QtCore.QSize(80, 80))
+        self.mb_arrow_up.setFlat(True)
+        self.mb_arrow_up.setProperty(
             "icon_pixmap",
             QtGui.QPixmap(":/arrow_icons/media/btn_icons/up_arrow.svg"),
         )
-        self.mb_raise_nozzle.setObjectName("mb_raise_nozzle")
-        self.move_buttons.addWidget(self.mb_raise_nozzle)
-        self.mb_lower_nozzle = IconButton(parent=self.tool_move)
-        self.mb_lower_nozzle.setMinimumSize(QtCore.QSize(80, 80))
-        self.mb_lower_nozzle.setMaximumSize(QtCore.QSize(80, 80))
-        self.mb_lower_nozzle.setFlat(True)
-        self.mb_lower_nozzle.setProperty(
+        self.mb_arrow_up.setObjectName("mb_raise_nozzle")
+        self.move_buttons.addWidget(self.mb_arrow_up)
+        self.mb_arrow_down = IconButton(parent=self.tool_move)
+        self.mb_arrow_down.setMinimumSize(QtCore.QSize(80, 80))
+        self.mb_arrow_down.setMaximumSize(QtCore.QSize(80, 80))
+        self.mb_arrow_down.setFlat(True)
+        self.mb_arrow_down.setProperty(
             "icon_pixmap",
             QtGui.QPixmap(":/arrow_icons/media/btn_icons/down_arrow.svg"),
         )
-        self.mb_lower_nozzle.setObjectName("mb_lower_nozzle")
+        self.mb_arrow_down.setObjectName("mb_lower_nozzle")
         self.move_buttons.addWidget(
-            self.mb_lower_nozzle,
+            self.mb_arrow_down,
             0,
             QtCore.Qt.AlignmentFlag.AlignLeft
             | QtCore.Qt.AlignmentFlag.AlignVCenter,
@@ -903,12 +905,12 @@ class ProbeHelper(QtWidgets.QWidget):
         self.po_back_button.setProperty(
             "button_type", _translate("probe_offset_page", "icon")
         )
-        self.mb_raise_nozzle.setText(_translate("probe_offset_page", "bb"))
-        self.mb_raise_nozzle.setProperty(
+        self.mb_arrow_up.setText(_translate("probe_offset_page", "bb"))
+        self.mb_arrow_up.setProperty(
             "button_type", _translate("probe_offset_page", "icon")
         )
-        self.mb_lower_nozzle.setText(_translate("probe_offset_page", "bb"))
-        self.mb_lower_nozzle.setProperty(
+        self.mb_arrow_down.setText(_translate("probe_offset_page", "bb"))
+        self.mb_arrow_down.setProperty(
             "button_type", _translate("probe_offset_page", "icon")
         )
         self.old_offset_info.setText(
