@@ -1,14 +1,6 @@
-import sys
 from PyQt6.QtCore import QRectF, Qt
 from PyQt6.QtGui import QPainter, QPen, QColor, QConicalGradient, QBrush
-from PyQt6.QtWidgets import (
-    QApplication,
-    QWidget,
-    QSlider,
-    QVBoxLayout,
-    QMainWindow,
-)
-from PyQt6 import QtCore, QtGui, QtWidgets
+from PyQt6 import QtWidgets
 
 
 class CustomProgressBar(QtWidgets.QProgressBar):
@@ -53,7 +45,7 @@ class CustomProgressBar(QtWidgets.QProgressBar):
             # Create a conical gradient for the progress arc
             gradient = QConicalGradient(arc_rect.center(), 90)
             gradient.setColorAt(0, self.bar_color)  # Start color
-            gradient.setColorAt(1, QColor(0, 255, 255))  # End color
+            gradient.setColorAt(1, QColor(224, 225, 225))  # End color
 
             # Create the pen for the progress arc and set its brush to the gradient
             progress_pen = QPen()
@@ -67,7 +59,7 @@ class CustomProgressBar(QtWidgets.QProgressBar):
             span_angle = int(self.progress_value * -360 * 16)
             painter.drawArc(arc_rect, start_angle, span_angle)
 
-    def set_progress(self, value):
+    def setValue(self, value):
         if 0.0 <= value <= 1.0:
             self.progress_value = value
             self.update()

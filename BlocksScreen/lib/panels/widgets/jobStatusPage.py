@@ -1,5 +1,4 @@
 import logging
-import math
 import typing
 
 
@@ -341,9 +340,7 @@ class JobStatusWidget(QtWidgets.QWidget):
         elif isinstance(value, float):
             if "progress" == field:
                 self.print_progress = value
-                self.printing_progress_bar.setValue(
-                    int(math.trunc(self.print_progress * 100))
-                )
+                self.printing_progress_bar.setValue(self.print_progress)
 
     def paintEvent(self, a0: QtGui.QPaintEvent) -> None:
         _scene = QtWidgets.QGraphicsScene()
