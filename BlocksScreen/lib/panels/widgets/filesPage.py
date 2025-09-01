@@ -96,7 +96,6 @@ class FilesPage(QtWidgets.QWidget):
     def on_file_list(self, file_list: list) -> None:
         self.file_list.clear()
         self.file_list = file_list
-        print("here")
         self.add_file_entries()
 
     @QtCore.pyqtSlot(QtWidgets.QListWidgetItem, name="file_item_clicked")
