@@ -30,7 +30,6 @@ class FilesPage(QtWidgets.QWidget):
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_AcceptTouchEvents, True)
 
         self.ReloadButton.clicked.connect(lambda: self.reload_list())
-
         self.listWidget.verticalScrollBar().valueChanged.connect(
             self.handlescrollbar
         )
@@ -39,6 +38,8 @@ class FilesPage(QtWidgets.QWidget):
         self.scrollbar.valueChanged.connect(
             lambda value: self.listWidget.verticalScrollBar().setValue(value)
         )
+        self.listWidget.itemClicked.connect(self.fileItemClicked)
+        
 
     def showEvent(self, a0: QtGui.QShowEvent) -> None:
         self.add_file_entries()
@@ -86,6 +87,7 @@ class FilesPage(QtWidgets.QWidget):
     @QtCore.pyqtSlot(name="reload_list")
     def reload_list(self) -> None:
         """Reload files list"""
+        
         self.request_file_list_refresh.emit()
 
     @QtCore.pyqtSlot(list, name="on_file_list")

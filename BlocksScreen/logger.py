@@ -88,9 +88,6 @@ def create_logger(
     ql = QueueListener(filename=name)
     MainLoggingHandler = QueueHandler(ql.queue, format, level)
     logger.addHandler(MainLoggingHandler)
-    
-    print(logger.handlers)
-
     return ql
 
 

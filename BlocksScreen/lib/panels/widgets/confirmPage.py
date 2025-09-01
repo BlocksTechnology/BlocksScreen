@@ -62,6 +62,7 @@ class ConfirmWidget(QtWidgets.QWidget):
             + " seconds"
         )
         self.repaint()
+    
 
     def estimate_print_time(self, seconds: int) -> list:
         """Convert time in seconds format to days, hours, minutes, seconds.

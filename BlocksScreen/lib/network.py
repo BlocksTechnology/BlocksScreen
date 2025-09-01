@@ -1371,4 +1371,3 @@ class SdbusNetworkManagerDummy:
         print(new_ssid)
         print(f"Updated a network connection {ssid} | {password} | {new_ssid}")
         return {"status": "AUGH", "msg": "dummy"}
-

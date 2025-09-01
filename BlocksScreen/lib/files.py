@@ -10,7 +10,6 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 
 
 class Files(QtCore.QObject):
-    # @ Signals
     request_file_list = QtCore.pyqtSignal(name="get_files_list")
     request_file_metadata = QtCore.pyqtSignal([str], name="get_file_metadata")
     request_files_thumbnails = QtCore.pyqtSignal(
