@@ -166,3 +166,8 @@ cython_debug/
 */*Zone.Identifier
 *:Zone.Identifier
 */*:Zone.Identifier
+
+
+# vscode related 
+.vscode/
+Blocks_Screen.code-workspace
