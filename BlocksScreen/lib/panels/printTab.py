@@ -125,7 +125,6 @@ class PrintTab(QtWidgets.QStackedWidget):
         )
         self.file_data.fileinfo.connect(self.jobStatusPage_widget.on_fileinfo)
         self.jobStatusPage_widget.print_start.connect(self.ws.api.start_print)
-        self.jobStatusPage_widget.print_pause.connect(self.ws.api.pause_print)
         self.jobStatusPage_widget.print_resume.connect(
             self.ws.api.resume_print
         )
