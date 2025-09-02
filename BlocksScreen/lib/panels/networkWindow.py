@@ -106,16 +106,10 @@ class NetworkControlWindow(QStackedWidget):
         self.networkdead = False
         if self.networkdead:
             self.panel.line.hide()
-            self.panel.netlist_ssuid.hide()
-            self.panel.ip_frame.hide()
-            self.panel.stregth_frame.hide()
-            self.panel.signal_frame.hide()
         else:
             self.panel.line.show()
             self.panel.netlist_ssuid.show()
-            self.panel.ip_frame.show()
-            self.panel.stregth_frame.show()
-            self.panel.signal_frame.show()
+
             self.panel.label_2.hide()
 
         if self.sdbus_network.wifi_enabled():
