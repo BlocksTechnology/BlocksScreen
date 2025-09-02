@@ -4,22 +4,21 @@ import typing
 from uuid import uuid4
 
 import sdbus
-
-# from PyQt6 import QtCore
+from PyQt6 import QtCore
 from sdbus_block.networkmanager import (
     AccessPoint,
     AccessPointCapabilities,
     ActiveConnection,
     IPv4Config,
     NetworkConnectionSettings,
-    NetworkManagerConnectivityState,
     NetworkDeviceGeneric,
-    NetworkManagerState,
     NetworkDeviceWired,
     NetworkDeviceWireless,
     NetworkManager,
     NetworkManagerConnectionProperties,
+    NetworkManagerConnectivityState,
     NetworkManagerSettings,
+    NetworkManagerState,
     WpaSecurityFlags,
     enums,
 )
@@ -38,10 +37,8 @@ class NetworkManagerRescanError(Exception):
         self.error = error
 
 
-# class SdbusNetworkManager(QtCore.QObject):
-class SdbusNetworkManager:
-    # def __init__(self, parent: typing.Optional[QtCore.QObject]):
-    def __init__(self):
+class SdbusNetworkManager(QtCore.QObject):
+    def __init__(self, parent: typing.Optional[QtCore.QObject]):
         super(SdbusNetworkManager, self).__init__()
         self.system_dbus = sdbus.sd_bus_open_system()
 
@@ -53,10 +50,8 @@ class SdbusNetworkManager:
         self.hotspot_ssid: str = "PrinterHotspot"
         self.hotspot_password: str = hashlib.sha256(
             "123456789".encode()
-        ).hexdigest()  # "123456789"
-
+        ).hexdigest()
         sdbus.set_default_bus(self.system_dbus)
-
         try:
             self.nm = NetworkManager()
         except Exception as e:
@@ -68,21 +63,20 @@ class SdbusNetworkManager:
 
         self.available_wired_interfaces = self.get_wired_interfaces()
         self.available_wireless_interfaces = self.get_wireless_interfaces()
-        self.primary_wifi_interface: typing.Union[
-            NetworkDeviceWireless, None
-        ] = (
-            self.get_wireless_interfaces()[0]
-            if len(self.get_wireless_interfaces()) > 0
-            else None
-        )
-        self.primary_wired_interface: typing.Union[
-            NetworkDeviceWired, None
-        ] = (
-            self.get_wired_interfaces()[0]
-            if len(self.get_wired_interfaces()) > 0
-            else None
-        )
 
+        wireless_interfaces: typing.List[NetworkDeviceWireless] = (
+            self.get_wireless_interfaces()
+        )
+        self.primary_wifi_interface: typing.Optional[NetworkDeviceWireless] = (
+            wireless_interfaces[0] if wireless_interfaces else None
+        )
+        wired_interfaces: typing.List[NetworkDeviceWired] = (
+            self.get_wired_interfaces()
+        )
+        self.primary_wired_interface: typing.Optional[NetworkDeviceWired] = (
+            wired_interfaces[0] if wired_interfaces else None
+        )
+        
         if not self.is_known(self.hotspot_ssid):
             self.create_hotspot(self.hotspot_ssid, self.hotspot_password)
 
