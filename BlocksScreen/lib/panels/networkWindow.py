@@ -16,7 +16,6 @@ from lib.utils.list_button import ListCustomButton
 from lib.utils.toggleAnimatedButton import ToggleAnimatedButton
 
 from lib.panels.widgets.popupDialogWidget import Popup
-import subprocess
 
 # TEST: Network saving, Adding new Network connections, Toggle on and off hotspot, etc....
 # TODO: Complete this panel
@@ -72,9 +71,8 @@ class NetworkControlWindow(QStackedWidget):
             )
             + "%"
         )
+        self.panel.label_2.hide()
 
-        self.panel.wifi_button.setLeftFontSize(20)
-        self.panel.hotspot_button.setLeftFontSize(20)
 
         self.panel.wifi_button.clicked.connect(
             partial(self.setCurrentIndex, 1)
@@ -83,7 +81,7 @@ class NetworkControlWindow(QStackedWidget):
         self.panel.hotspot_button.clicked.connect(
             partial(self.setCurrentIndex, 4)
         )
-
+        #region
         text = self.sdbus_network.get_current_ip_addr()
         if text is None:
             text = "No IP Address"
@@ -103,29 +101,21 @@ class NetworkControlWindow(QStackedWidget):
             QtWidgets.QScroller.ScrollerGestureType.LeftMouseButtonGesture,
         )
 
-        self.networkdead = False
-        if self.networkdead:
-            self.panel.line.hide()
-        else:
-            self.panel.line.show()
-            self.panel.netlist_ssuid.show()
-
-            self.panel.label_2.hide()
 
         if self.sdbus_network.wifi_enabled():
-            self.panel.Togglewifi.state = ToggleAnimatedButton.State.ON
-            self.panel.Togglehot.state = ToggleAnimatedButton.State.OFF
+            self.panel.wifi_button.tb.state = ToggleAnimatedButton.State.ON
+            self.panel.hotspot_button.tb.state = ToggleAnimatedButton.State.OFF
         else:
-            self.panel.Togglewifi.state = ToggleAnimatedButton.State.OFF
+            self.panel.wifi_button.tb.state = ToggleAnimatedButton.State.OFF
 
         self.panel.wifi_backButton.clicked.connect(
             partial(self.setCurrentIndex, 0)
         )
 
-        self.panel.Togglewifi.clicked.connect(
+        self.panel.wifi_button.tb.clicked.connect(
             lambda: self.wifihotspot_handler("wifi")
         )
-        self.panel.Togglehot.clicked.connect(
+        self.panel.hotspot_button.tb.clicked.connect(
             lambda: self.wifihotspot_handler("hotspot")
         )
 
@@ -229,8 +219,12 @@ class NetworkControlWindow(QStackedWidget):
 
         # * request a initial network scan
         self.request_network_scan.emit()
-
+        #endregion
         self.hide()
+
+    def test(self):
+        self.panel.wifi_button.tb.state = ToggleAnimatedButton.State.ON
+        self.repaint()
 
     def wifihotspot_handler(self, source: str):
         """Toggle Wi-Fi and Hotspot so only one is active at a time."""
@@ -253,12 +247,12 @@ class NetworkControlWindow(QStackedWidget):
         hotspot_enabled = self.sdbus_network.hotspot_enabled()
 
         # Update UI states
-        self.panel.Togglewifi.state = (
+        self.panel.wifi_button.tb.state = (
             ToggleAnimatedButton.State.ON
             if wifi_enabled
             else ToggleAnimatedButton.State.OFF
         )
-        self.panel.Togglehot.state = (
+        self.panel.hotspot_button.tb.state = (
             ToggleAnimatedButton.State.ON
             if hotspot_enabled
             else ToggleAnimatedButton.State.OFF
