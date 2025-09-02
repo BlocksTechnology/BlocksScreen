@@ -36,7 +36,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.panel.network_list_widget.setLayoutDirection(
             QtCore.Qt.LayoutDirection.LeftToRight
         )
-        self.sdbus_network = SdbusNetworkManager()
+        self.sdbus_network = SdbusNetworkManager(self)
 
         self.networkdead: bool = not self.sdbus_network.check_wifi_interface()
 
