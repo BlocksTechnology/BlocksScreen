@@ -376,7 +376,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
                 message_type=Popup.MessageType.INFO,
                 message=f"Connected to '{self.panel.add_network_network_label.text()}' successfully",
             )
-            self.setCurrentIndex(0)
+            self.setCurrentIndex(self.indexOf(self.panel.network_list_page))
 
     @QtCore.pyqtSlot(QtWidgets.QListWidgetItem, name="ssid_item_clicked")
     def ssid_item_clicked(self, item: QtWidgets.QListWidgetItem) -> None:
@@ -595,11 +595,13 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
 
     def handle_button_click(self, ssid: str):
         if ssid in self.sdbus_network.get_saved_ssid_names():
-            self.setCurrentIndex(3)
+            self.setCurrentIndex(
+                self.indexOf(self.panel.saved_connection_page)
+            )
             self.panel.saved_connection_network_name.setText(str(ssid))
 
         else:
-            self.setCurrentIndex(2)
+            self.setCurrentIndex(self.indexOf(self.panel.add_network_page))
             self.panel.add_network_network_label.setText(str(ssid))
 
     def paintEvent(self, a0: QtGui.QPaintEvent) -> None:
@@ -709,11 +711,11 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
     def call_network_panel(
         self,
     ) -> None:
-        if self.parent() is None:
+        if not self.parent():
             return
 
         self.panel.network_list_widget.clear()
-        self.setCurrentIndex(0)
+        self.setCurrentIndex(self.indexOf(self.panel.network_list_page))
         _parent_size = self.parent().size()
         self.setGeometry(0, 0, _parent_size.width(), _parent_size.height())
         self.updateGeometry()
