@@ -81,7 +81,11 @@ class NetworkControlWindow(QStackedWidget):
         self.panel.hotspot_button.clicked.connect(
             partial(self.setCurrentIndex, 4)
         )
-        #region
+        self.panel.hotspot_button.setPixmap(QtGui.QPixmap(":/network/media/btn_icons/hotspot.svg"))
+        self.panel.wifi_button.setPixmap(QtGui.QPixmap(":/network/media/btn_icons/wifi_config.svg"))
+
+
+
         text = self.sdbus_network.get_current_ip_addr()
         if text is None:
             text = "No IP Address"
@@ -219,7 +223,6 @@ class NetworkControlWindow(QStackedWidget):
 
         # * request a initial network scan
         self.request_network_scan.emit()
-        #endregion
         self.hide()
 
     def test(self):
