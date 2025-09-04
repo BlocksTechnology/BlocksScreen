@@ -39,7 +39,6 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.sdbus_network = SdbusNetworkManager()
 
         self.networkdead: bool = not self.sdbus_network.check_wifi_interface()
-        # self.evaluate_network_state()
 
         timer = QtCore.QTimer(self)
         timer.timeout.connect(self.evaluate_network_state)
@@ -206,7 +205,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         if not _wifi_inter_avail:
             self.panel.line.hide()
             self.panel.ip_frame.hide()
-            self.panel.stregth_frame.hide()
+            self.panel.strength_frame.hide()
             self.panel.signal_frame.hide()
             self.expand_infobox()
             self.panel.netlist_ssuid.setText(
@@ -228,7 +227,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             self.panel.line.show()
             self.panel.netlist_ssuid.show()
             self.panel.ip_frame.show()
-            self.panel.stregth_frame.show()
+            self.panel.strength_frame.show()
             self.panel.signal_frame.show()
             self.panel.label_2.hide()
 
