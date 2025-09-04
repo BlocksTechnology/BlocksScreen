@@ -6,7 +6,7 @@ from uuid import uuid4
 
 import sdbus
 
-from PyQt6 import QtCore
+# from PyQt6 import QtCore
 from sdbus_block.networkmanager import (
     AccessPoint,
     AccessPointCapabilities,
@@ -15,6 +15,7 @@ from sdbus_block.networkmanager import (
     NetworkConnectionSettings,
     NetworkManagerConnectivityState,
     NetworkDeviceGeneric,
+    NetworkManagerState,
     NetworkDeviceWired,
     NetworkDeviceWireless,
     NetworkManager,
@@ -38,12 +39,15 @@ class NetworkManagerRescanError(Exception):
         self.error = error
 
 
-class SdbusNetworkManager(QtCore.QObject):
-    def __init__(self, parent: typing.Optional[QtCore.QObject]):
+# class SdbusNetworkManager(QtCore.QObject):
+class SdbusNetworkManager:
+    # def __init__(self, parent: typing.Optional[QtCore.QObject]):
+    def __init__(self):
         super(SdbusNetworkManager, self).__init__()
         self.system_dbus = sdbus.sd_bus_open_system()
 
         if not self.system_dbus:
+            print("No systembus ")
             return
         self.known_networks = []
         self.saved_networks_ssids: typing.List
@@ -60,6 +64,9 @@ class SdbusNetworkManager(QtCore.QObject):
             logging.debug(
                 f"Exception occurred when getting NetworkManager: {e}"
             )
+
+        self.check_nm_status()
+
         self.available_wired_interfaces = self.get_wired_interfaces()
         self.available_wireless_interfaces = self.get_wireless_interfaces()
         self.primary_wifi_interface: typing.Union[
@@ -80,7 +87,21 @@ class SdbusNetworkManager(QtCore.QObject):
         if not self.is_known(self.hotspot_ssid):
             self.create_hotspot(self.hotspot_ssid, self.hotspot_password)
 
-        self.rescan_networks()
+        if self.primary_wifi_interface:
+            self.rescan_networks()
+
+    def check_nm_status(self):
+        if not self.nm:
+            return False
+        print(
+            NetworkManagerConnectivityState(self.nm.check_connectivity()).name
+        )
+        print(NetworkManagerState(self.nm.state).name)
+        # if
+        ...
+
+    def can_wifi_scan(self) -> bool:
+        return bool(self.primary_wifi_interface)
 
     def get_available_interfaces(self) -> typing.List[str]:
         """Gets the names of all available interfaces
@@ -158,7 +179,7 @@ class SdbusNetworkManager(QtCore.QObject):
         Returns:
             bool: True if Hotspot is activated, False otherwise.
         """
-        # REFACTOR: untested for all cases 
+        # REFACTOR: untested for all cases
         return bool(self.hotspot_ssid == self.get_current_ssid())
 
     def get_wired_interfaces(self) -> typing.List[NetworkDeviceWired]:
@@ -216,7 +237,7 @@ class SdbusNetworkManager(QtCore.QObject):
             logging.info(f"Unexpected error occurred: {e}")
             return ""
 
-    def get_current_ip_addr(self) -> typing.Union[typing.List[str], None]:
+    def get_current_ip_addr(self) -> typing.List[str]:
         """Get the current connection ip address.
 
         Returns:
@@ -224,7 +245,7 @@ class SdbusNetworkManager(QtCore.QObject):
         """
         if self.nm.primary_connection == "/":
             logging.info("There is no NetworkManager active connection.")
-            return
+            return ""
         _device_ip4_conf_path = ActiveConnection(
             self.nm.primary_connection
         ).ip4_config
@@ -232,12 +253,12 @@ class SdbusNetworkManager(QtCore.QObject):
             logging.info(
                 "NetworkManager reports no IP configuration for the interface"
             )
-            return
+            return ""
         ip4_conf = IPv4Config(_device_ip4_conf_path)
         return [
             address_data["address"][1]
             for address_data in ip4_conf.address_data
-        ]
+        ][0]
 
     def get_primary_interface(
         self,
@@ -259,7 +280,6 @@ class SdbusNetworkManager(QtCore.QObject):
                 return self.primary_wifi_interface
             elif self.primary_wired_interface:
                 return self.primary_wired_interface
-            # TODO: Add the case where it is on Access point mode.
             else:
                 return "/"
         gateway = ActiveConnection(self.nm.primary_connection).devices[0]
@@ -948,9 +968,3 @@ class SdbusNetworkManager(QtCore.QObject):
             return {"status": "error", "error": "Unexpected error"}
 
 
-if __name__ == "__main__":
-    nm = SdbusNetworkManager()
-    # print(nm.add_wifi_network("NOKIA-2719", "3facf22789"))
-    print(nm.create_hotspot())
-    print(nm.get_current_ssid())
-    print(nm.get_saved_networks_with_for())
