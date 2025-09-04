@@ -1299,3 +1299,7 @@ from lib.utils.blocks_frame import BlocksCustomFrame
 from lib.utils.blocks_linedit import BlocksCustomLinEdit
 from lib.utils.blocks_togglebutton import NetworkWidgetbuttons
 from lib.utils.icon_button import IconButton
+from lib.utils.list_button import ListCustomButton
+from lib.utils.toggleAnimatedButton import ToggleAnimatedButton
+
+

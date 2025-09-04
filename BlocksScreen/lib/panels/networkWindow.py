@@ -2,6 +2,7 @@ import typing
 from functools import partial
 
 from lib.network import SdbusNetworkManager
+# from lib.async_network_monitor import SdbusNMMonitor
 from lib.panels.widgets.popupDialogWidget import Popup
 from lib.ui.wifiConnectivityWindow_ui import Ui_wifi_stacked_page
 from lib.utils.list_button import ListCustomButton
@@ -37,7 +38,8 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             QtCore.Qt.LayoutDirection.LeftToRight
         )
         self.sdbus_network = SdbusNetworkManager(self)
-
+        # self.nm_monitor = SdbusNMMonitor()
+        
         self.networkdead: bool = not self.sdbus_network.check_wifi_interface()
 
         timer = QtCore.QTimer(self)
@@ -47,7 +49,6 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
 
         self.panel.wifi_button.setLeftFontSize(20)
         self.panel.hotspot_button.setLeftFontSize(20)
-
         self.panel.wifi_button.clicked.connect(
             partial(
                 self.setCurrentIndex,

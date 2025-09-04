@@ -76,7 +76,7 @@ class SdbusNetworkManager(QtCore.QObject):
         self.primary_wired_interface: typing.Optional[NetworkDeviceWired] = (
             wired_interfaces[0] if wired_interfaces else None
         )
-        
+
         if not self.is_known(self.hotspot_ssid):
             self.create_hotspot(self.hotspot_ssid, self.hotspot_password)
 

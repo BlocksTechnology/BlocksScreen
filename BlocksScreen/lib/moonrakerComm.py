@@ -200,8 +200,6 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
             self.ws.close()
             if self._wst.is_alive():
                 self._wst.join()
-            # self.join()
-            # self.ws.close()
             _logger.info("Websocket closed")
 
     def on_error(self, *args) -> None:
