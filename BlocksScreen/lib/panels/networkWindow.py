@@ -3,7 +3,6 @@ from functools import partial
 
 from lib.network import SdbusNetworkManager
 from lib.panels.widgets.popupDialogWidget import Popup
-
 from lib.ui.wifiConnectivityWindow_ui import Ui_wifi_stacked_page
 from lib.utils.list_button import ListCustomButton
 from lib.utils.toggleAnimatedButton import ToggleAnimatedButton
@@ -30,7 +29,6 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
 
     def __init__(self, parent: typing.Optional[QtWidgets.QWidget], /) -> None:
         super(NetworkControlWindow, self).__init__(parent)
-
         self.background: typing.Optional[QtGui.QPixmap] = None
         self.panel = Ui_wifi_stacked_page()
         self.panel.setupUi(self)
@@ -39,22 +37,14 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             QtCore.Qt.LayoutDirection.LeftToRight
         )
         self.sdbus_network = SdbusNetworkManager()
-        self.current_ip_address: typing.Union[typing.List, None] = []
-        current_ssid = self.sdbus_network.get_current_ssid()
-        self.panel.netlist_ip.setText(
-            str(self.sdbus_network.get_current_ip_addr())
-        )
-        self.panel.netlist_ssuid.setText(current_ssid)
-        sec_type = self.sdbus_network.get_security_type_by_ssid(current_ssid)
-        if not sec_type:
-            sec_type = "--"
-        self.panel.netlist_security.setText(str(sec_type).upper())
-        signal_strength = self.sdbus_network.get_connection_signal_by_ssid(
-            current_ssid
-        )
-        if signal_strength == -1:
-            signal_strength = "--"
-        self.panel.netlist_strength.setText(str(signal_strength))
+
+        self.networkdead: bool = not self.sdbus_network.check_wifi_interface()
+        # self.evaluate_network_state()
+
+        timer = QtCore.QTimer(self)
+        timer.timeout.connect(self.evaluate_network_state)
+        timer.setTimerType(QtCore.Qt.TimerType.PreciseTimer)
+        timer.start(1000)
 
         self.panel.wifi_button.setLeftFontSize(20)
         self.panel.hotspot_button.setLeftFontSize(20)
@@ -62,7 +52,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.panel.wifi_button.clicked.connect(
             partial(
                 self.setCurrentIndex,
-                self.indexOf(self.panel.network_list_page),
+                self.indexOf(self.panel.wifi_page),
             )
         )
         self.panel.hotspot_button.clicked.connect(
@@ -174,21 +164,23 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
                 self.indexOf(self.panel.network_list_page),
             )
         )
-        self.panel.hotspot_name_input_field.returnPressed.connect(
+
+        self.panel.hotspot_password_input_field.setPlaceholderText(
+            "Defaults to: 123456789"
+        )
+        self.panel.hotspot_change_confirm.clicked.connect(
             lambda: self.update_network(
-                ssid=self.sdbus_network.hotspot_ssid,
-                password=None,
+                ssid=self.sdbus_network.get_hotspot_ssid(),
+                password=self.panel.hotspot_password_input_field.text(),
                 new_ssid=self.panel.hotspot_name_input_field.text(),
             )
         )
-        # Automatically create a new hotspot connection when a new hotspot name is inserted and enter is pressed
-        self.panel.hotspot_password_input_field.returnPressed.connect(
-            lambda: self.update_network(
-                ssid=self.sdbus_network.hotspot_ssid,
-                password=self.panel.hotspot_password_input_field.text(),
-                new_ssid=None,
+        self.panel.hotspot_change_confirm.clicked.connect(  # Also goes back to the main page
+            lambda: self.setCurrentIndex(
+                self.indexOf(self.panel.network_list_page)
             )
         )
+
         self.panel.hotspot_password_input_field.setHidden(True)
         self.panel.hotspot_password_view_button.pressed.connect(
             partial(self.panel.hotspot_password_input_field.setHidden, False)
@@ -205,6 +197,77 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.new_connection_result.connect(self.process_new_connection_result)
         self.request_network_scan.emit()
         self.hide()
+
+    def evaluate_network_state(self) -> None:
+        _nm_state = self.sdbus_network.check_nm_state()
+        _nm_connectivity = self.sdbus_network.check_connectivity()
+        _wifi_inter_avail = self.sdbus_network.check_wifi_interface()
+
+        if not _wifi_inter_avail:
+            self.panel.line.hide()
+            self.panel.ip_frame.hide()
+            self.panel.stregth_frame.hide()
+            self.panel.signal_frame.hide()
+            self.expand_infobox()
+            self.panel.netlist_ssuid.setText(
+                "Wifi is currently disabled or unavailable"
+            )
+            return
+        if _nm_state in [0]:
+            self.expand_infobox()
+            self.panel.netlist_ssuid.setText(
+                "Wifi is currently disabled or unavailable"
+            )
+        elif _nm_state in [20, 30]:
+            self.expand_infobox()
+            self.panel.netlist_ssuid.setText(
+                "Wifi has no active network connection"
+            )
+        elif _nm_state in [50, 60, 70]:
+            # rescan and show information, enable buttons
+            self.panel.line.show()
+            self.panel.netlist_ssuid.show()
+            self.panel.ip_frame.show()
+            self.panel.stregth_frame.show()
+            self.panel.signal_frame.show()
+            self.panel.label_2.hide()
+
+            current_ssid = self.sdbus_network.get_current_ssid()
+            self.panel.netlist_ip.setText(
+                str(self.sdbus_network.get_current_ip_addr())
+            )
+            self.panel.netlist_ssuid.setText(current_ssid)
+            sec_type = self.sdbus_network.get_security_type_by_ssid(
+                current_ssid
+            )
+            if not sec_type:
+                sec_type = "--"
+            self.panel.netlist_security.setText(str(sec_type).upper())
+            signal_strength = self.sdbus_network.get_connection_signal_by_ssid(
+                current_ssid
+            )
+            if signal_strength == -1:
+                signal_strength = "--"
+            self.panel.netlist_strength.setText(str(signal_strength))
+
+            text = list(self.sdbus_network.get_current_ip_addr())
+            if not text:
+                text = "No IP Address"
+            self.panel.netlist_ip.setProperty("text_color", "white")
+            self.panel.netlist_ip.setText(
+                f"IP: {text}"
+            )  # Set the current ip address on the network list page
+            if self.sdbus_network.wifi_enabled():
+                self.panel.Togglewifi.state = ToggleAnimatedButton.State.ON
+                self.panel.Togglehot.state = ToggleAnimatedButton.State.OFF
+            else:
+                self.panel.Togglewifi.state = ToggleAnimatedButton.State.OFF
+
+        if _wifi_inter_avail:
+            self.panel.Togglewifi.state = ToggleAnimatedButton.State.OFF
+            self.panel.Togglehot.state = ToggleAnimatedButton.State.OFF
+            self.panel.Togglewifi.setDisabled(True)
+            self.panel.Togglehot.setDisabled(True)
 
     def expand_infobox(self) -> None:
         self.panel.netlist_ssuid.setGeometry(
@@ -406,7 +469,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         spacer_item = None
         spacer_widget = None
         networks = []
-        if self.sdbus_network.can_wifi_scan():
+        if self.sdbus_network.check_wifi_interface():
             available_networks = self.sdbus_network.get_available_networks()[
                 0
             ]  # unpack tuple
