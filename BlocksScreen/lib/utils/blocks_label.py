@@ -1,4 +1,3 @@
-import sys
 import typing
 from PyQt6 import QtWidgets, QtGui, QtCore
 
@@ -40,8 +39,6 @@ class BlocksLabel(QtWidgets.QLabel):
         )
         self.glow_animation.setDuration(self.animation_speed)
 
-        self.text_width: int = 0
-        self.label_width: int = 0
         self.total_scroll_width: float = 0.0
         self.marquee_delay = 5000
         self.loop_count = 0
@@ -260,7 +257,7 @@ class BlocksLabel(QtWidgets.QLabel):
                 qp.CompositionMode.CompositionMode_SourceOver
             )
             
-            # Create a painter path for clipping
+
             text_path = QtGui.QPainterPath()
             text_path.addRect(self.contentsRect().toRectF())
             qp.setClipPath(text_path)
@@ -278,7 +275,7 @@ class BlocksLabel(QtWidgets.QLabel):
                 )
                 qp.drawText(draw_rect, self._text, text_option)
 
-                # Draw the second text instance with spacing for a continuous loop
+
                 draw_rect2 = QtCore.QRectF(
                     self.contentsRect().x() + self.scroll_pos + self.text_width + self.marquee_spacing,
                     self.contentsRect().y(),
