@@ -2,11 +2,7 @@ from lib.utils.blocks_button import BlocksCustomButton
 
 
 from lib.ui.utilitiesStackedWidget_ui import Ui_utilitiesStackedWidget
-from PyQt6.QtCore import pyqtSignal, QTimer, Qt, pyqtSlot
-
-from PyQt6.QtWidgets import QStackedWidget
 from PyQt6 import QtGui, QtCore ,QtWidgets
-
 import csv
 from functools import partial
 from lib.moonrakerComm import MoonWebSocket
@@ -14,23 +10,23 @@ from lib.moonrakerComm import MoonWebSocket
 
 
 
-class UtilitiesTab(QStackedWidget):
-    request_back_button_pressed = pyqtSignal(
+class UtilitiesTab(QtWidgets.QStackedWidget):
+    request_back_button_pressed = QtCore.pyqtSignal(
         name="request_back_button_pressed"
     )
 
-    request_change_page = pyqtSignal(int, int, name="request_change_page")
+    request_change_page = QtCore.pyqtSignal(int, int, name="request_change_page")
 
-    request_available_objects_signal = pyqtSignal(name="get_available_objects")
+    request_available_objects_signal = QtCore.pyqtSignal(name="get_available_objects")
 
-    run_gcode_signal = pyqtSignal(str, name="run_gcode")
+    run_gcode_signal = QtCore.pyqtSignal(str, name="run_gcode")
 
-    request_numpad_signal = pyqtSignal(
+    request_numpad_signal = QtCore.pyqtSignal(
         int,
         str,
         str,
         "PyQt_PyObject",
-        QStackedWidget,
+        QtWidgets.QStackedWidget,
         name="request_numpad",
     )
 
@@ -66,7 +62,7 @@ class UtilitiesTab(QStackedWidget):
         self.index_count = 0
         self.ammount = 1
 
-        self.setLayoutDirection(Qt.LayoutDirection.LeftToRight)
+        self.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
 
 
         # self.run_gcode_signal.connect(self.ws.api.run_gcode)
@@ -556,11 +552,11 @@ class UtilitiesTab(QStackedWidget):
         self.panel.wp_title.setText(tittle)
         self.panel.wp_label.setText(label)
         self.change_page(9)
-        QTimer.singleShot(time, lambda: self.change_page(ptg))
+        QtCore.QTimer.singleShot(time, lambda: self.change_page(ptg))
 
     def change_page(self, index: int):
         if index == 10:
-            self.timer = QTimer(self)
+            self.timer = QtCore.QTimer(self)
             self.timer.timeout.connect(self.saveleds)
             self.timer.start(3000)
 
@@ -594,7 +590,7 @@ class UtilitiesTab(QStackedWidget):
                     f"SET_LED LED={self.current_object} RED={self.ledslist[1] / 255:.2f} GREEN={self.ledslist[2] / 255:.2f} BLUE={self.ledslist[3] / 255:.2f} WHITE={self.ledslist[4] / 255:.2f}"
                 )
 
-    @pyqtSlot(list, name="on_object_list")
+    @QtCore.pyqtSlot(list, name="on_object_list")
     def on_object_list(self, config: dict) -> None:
         self.cg = config
         self.leds_update()
