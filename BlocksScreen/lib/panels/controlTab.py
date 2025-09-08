@@ -232,10 +232,10 @@ class ControlTab(QtWidgets.QStackedWidget):
         self.panel.mva_left_btn.clicked.connect(
             partial(self.handle_move_axis, "X-")
         )
-        self.panel.mva_z_up.clicked.connect(
+        self.panel.mva_z_up.clicked.connect(  # Move bed closer to nozzle
             partial(self.handle_move_axis, "Z-")
         )
-        self.panel.mva_z_down.clicked.connect(
+        self.panel.mva_z_down.clicked.connect(  # Move bed away from nozzle
             partial(self.handle_move_axis, "Z")
         )
 
