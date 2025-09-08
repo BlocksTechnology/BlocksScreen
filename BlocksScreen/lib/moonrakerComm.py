@@ -35,27 +35,7 @@ class OneShotTokenError(Exception):
 
 
 class MoonWebSocket(QtCore.QObject, threading.Thread):
-    """MoonWebSocket class object for creating a websocket connection to Moonraker.
-
-    This class handles all there is to do with connecting to Moonraker to gather information.
-    Tries the to connect the the websocket, if no connection is established the class retries three times, after which it may or may not
-    successfully connect to the websocket. If not sends an event accordingly, the user may then try to connect again.
-
-
-    The class also exposes an api to use with moonraker.
-
-
-    Args:
-        QObject (QtCore.QObject): Double inheritance from QObject.
-        threading.Thread (threading.Thread): Double inheritance from threading.Thread
-
-    Raises:
-        Exception: _description_
-        Exception: _description_
-        Exception: _description_
-        Exception: _description_
-
-    """
+    """MoonWebSocket class object for creating a websocket connection to Moonraker."""
 
     QUERY_KLIPPY_TIMEOUT: int = 2
     connected = False
@@ -92,7 +72,7 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
         self._wst = None
         self._request_id = 0
         self.request_table = {}
-        self._moonRest = MoonRest(host= self._host, port = self._port)
+        self._moonRest = MoonRest(host=self._host, port=self._port)
         self.api: MoonAPI = MoonAPI(self)
         self._retry_timer: RepeatedTimer
         websocket.setdefaulttimeout(self.timeout)
@@ -290,7 +270,6 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
         )  # First argument is ws second is message
 
         response: dict = json.loads(_message)
-
         if "id" in response and response["id"] in self.request_table:
             _entry = self.request_table.pop(response["id"])
             if "server.info" in _entry[0]:
