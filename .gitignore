@@ -178,3 +178,5 @@ cython_debug/
 .vscode/
 
 Blocks_Screen.code-workspace
+*.code-workspace
+*workspace
