@@ -203,9 +203,25 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
             )
             return None
 
-    def check_connectivity(self):
+    def check_connectivity(self) -> str:
+        """Checks Network Manager Connectivity state
+
+                UNKNOWN = 0 - Network connectivity is unknown, connectivity checks are disabled.
+
+                NONE = 1    - Host is not connected to any network.
+
+                PORTAL = 2  - Internet connection is hijacked by a captive portal gateway.
+
+                LIMITED = 3 - The host is connected to a network, does not appear to be able to reach full internet.
+
+                FULL = 4    - The host is connected to a network, appears to be able to reach fill internet.
+
+
+        Returns:
+            _type_: _description_
+        """
         if not self.nm:
-            return
+            return ""
         future = asyncio.run_coroutine_threadsafe(
             self.nm.check_connectivity(), self.loop
         )
@@ -216,7 +232,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
             logging.error(
                 f"Exception while fetching Network Monitor Connectivity State: {e}"
             )
-            return None
+            return ""
 
     def check_wifi_interface(self) -> bool:
         return bool(self.primary_wifi_interface)

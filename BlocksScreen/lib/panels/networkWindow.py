@@ -1,15 +1,11 @@
 import typing
 from functools import partial
 
-from lib.network import SdbusNetworkManager
-# from lib.async_network_monitor import SdbusNMMonitor
+from lib.network import SdbusNetworkManagerAsync
 from lib.panels.widgets.popupDialogWidget import Popup
 from lib.ui.wifiConnectivityWindow_ui import Ui_wifi_stacked_page
 from lib.utils.list_button import ListCustomButton
-from lib.utils.toggleAnimatedButton import ToggleAnimatedButton
-from lib.panels.widgets.popupDialogWidget import Popup
 from PyQt6 import QtCore, QtGui, QtWidgets
-
 
 
 class NetworkControlWindow(QtWidgets.QStackedWidget):
@@ -17,9 +13,6 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
     new_ip_signal = QtCore.pyqtSignal(str, name="ip_address_change")
     get_hotspot_ssid = QtCore.pyqtSignal(str, name="hotspot_ssid_name")
     delete_network_signal = QtCore.pyqtSignal(str, name="delete_network")
-    request_signal_strength = QtCore.pyqtSignal(
-        str, name="network_signal_strength"
-    )
     new_connection_result = QtCore.pyqtSignal(
         [],
         [
@@ -37,18 +30,11 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.panel.network_list_widget.setLayoutDirection(
             QtCore.Qt.LayoutDirection.LeftToRight
         )
-        self.sdbus_network = SdbusNetworkManager(self)
-        # self.nm_monitor = SdbusNMMonitor()
-        
-        self.networkdead: bool = not self.sdbus_network.check_wifi_interface()
+        self.sdbus_network = SdbusNetworkManagerAsync(self)
+        self.network_dead: bool = not self.sdbus_network.check_wifi_interface()
 
-        timer = QtCore.QTimer(self)
-        timer.timeout.connect(self.evaluate_network_state)
-        timer.setTimerType(QtCore.Qt.TimerType.PreciseTimer)
-        timer.start(1000)
+        self.sdbus_network.nm_state_change.connect(self.evaluate_network_state)
 
-        self.panel.wifi_button.setLeftFontSize(20)
-        self.panel.hotspot_button.setLeftFontSize(20)
         self.panel.wifi_button.clicked.connect(
             partial(
                 self.setCurrentIndex,
@@ -61,15 +47,13 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             )
         )
 
-        self.panel.hotspot_button.setPixmap(QtGui.QPixmap(":/network/media/btn_icons/hotspot.svg"))
-        self.panel.wifi_button.setPixmap(QtGui.QPixmap(":/network/media/btn_icons/wifi_config.svg"))
-        text = self.sdbus_network.get_current_ip_addr()
-        if not text:
-            text = "No IP Address"
-        self.panel.netlist_ip.setProperty("text_color", "white")
-        self.panel.netlist_ip.setText(
-            f"IP: {text}"
-        )  # Set the current ip address on the network list page
+        self.panel.hotspot_button.setPixmap(
+            QtGui.QPixmap(":/network/media/btn_icons/hotspot.svg")
+        )
+        self.panel.wifi_button.setPixmap(
+            QtGui.QPixmap(":/network/media/btn_icons/wifi_config.svg")
+        )
+
         self.panel.hotspot_password_input_field.installEventFilter(self)
         QtWidgets.QScroller.grabGesture(
             self.panel.network_list_widget,
@@ -80,24 +64,11 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             QtWidgets.QScroller.ScrollerGestureType.LeftMouseButtonGesture,
         )
 
-        if self.sdbus_network.wifi_enabled():
-            self.panel.wifi_button.tb.state = ToggleAnimatedButton.State.ON
-            self.panel.hotspot_button.tb.state = ToggleAnimatedButton.State.OFF
-        else:
-
-            self.panel.wifi_button.tb.state = ToggleAnimatedButton.State.OFF
-
         self.panel.wifi_backButton.clicked.connect(
             partial(
                 self.setCurrentIndex,
                 self.indexOf(self.panel.network_list_page),
             )
-        )
-        self.panel.wifi_button.tb.clicked.connect(
-            lambda: self.wifihotspot_handler("wifi")
-        )
-        self.panel.hotspot_button.tb.clicked.connect(
-            lambda: self.wifihotspot_handler("hotspot")
         )
         self.panel.network_list_widget.itemClicked.connect(
             self.ssid_item_clicked
@@ -196,46 +167,62 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         )
         self.new_connection_result.connect(self.process_new_connection_result)
         self.request_network_scan.emit()
+        self.evaluate_network_state()
         self.hide()
 
-    def evaluate_network_state(self) -> None:
-        _nm_state = self.sdbus_network.check_nm_state()
-        _nm_connectivity = self.sdbus_network.check_connectivity()
-        _wifi_inter_avail = self.sdbus_network.check_wifi_interface()
+    @QtCore.pyqtSlot(str, name="nm-state-changed")
+    def evaluate_network_state(self, nm_state: str = "") -> None:
+        # UNKNOWN = 0           # Networking state is unknown daemon error, assume connectivity might be present, may hide network accessibility
+        # ASLEEP = 10           # networking is not enabled system is being suspended or resumed from suspend
+        # DISCONNECTED = 20     # there is no active network connection
+        # DISCONNECTING = 30    # network connections are being cleaned up
+        # CONNECTING = 40       # network connection is being started
+        # CONNECTED_LOCAL=50    # only local ipv4/ipv6 connectivity, no route to access internet
+        # CONNECTED_SITE = 60   # site-wide ipv4/ipv4 connectivity
+        # GLOBAL = 70           # Global ipv4/ipv6 internet connectivity, internet check succeeded, should display full connectivity
 
-        if not _wifi_inter_avail:
-            self.panel.line.hide()
-            self.panel.ip_frame.hide()
-            self.panel.strength_frame.hide()
-            self.panel.signal_frame.hide()
-            self.expand_infobox()
-            self.panel.netlist_ssuid.setText(
-                "Wifi is currently disabled or unavailable"
-            )
-            return
-        if _nm_state in [0]:
-            self.expand_infobox()
-            self.panel.netlist_ssuid.setText(
-                "Wifi is currently disabled or unavailable"
-            )
-        elif _nm_state in [20, 30]:
-            self.expand_infobox()
-            self.panel.netlist_ssuid.setText(
-                "Wifi has no active network connection"
-            )
-        elif _nm_state in [50, 60, 70]:
-            # rescan and show information, enable buttons
-            self.panel.line.show()
-            self.panel.netlist_ssuid.show()
-            self.panel.ip_frame.show()
-            self.panel.strength_frame.show()
-            self.panel.signal_frame.show()
-            self.panel.label_2.hide()
+        if not nm_state:
+            nm_state = self.sdbus_network.get_nm_state()
+
+        if nm_state in ("CONNECTED_LOCAL", "CONNECTED_SITE", "GLOBAL"):
+            if not self.sdbus_network.check_wifi_interface():
+                self._expand_infobox(True)
+                self.panel.mn_info_box.setText(
+                    "No wifi interface detected.\nWifi and Hotspot unavailable\nResort to Ethernet connection."
+                )
+                self.panel.mn_info_box.setAlignment(
+                    QtCore.Qt.AlignmentFlag.AlignCenter
+                )
+                self.panel.hotspot_button.setDisabled(True)
+                self.panel.wifi_button.setDisabled(True)
+                self.panel.wifi_button.toggle_button.state = (
+                    self.panel.wifi_button.toggle_button.State.OFF
+                )
+                self.panel.wifi_button.toggle_button.state = (
+                    self.panel.wifi_button.toggle_button.State.OFF
+                )
+                return
+            self._expand_infobox(False)
+
+            self.panel.hotspot_button.setDisabled(False)
+            self.panel.wifi_button.setDisabled(False)
+            if self.sdbus_network.wifi_enabled():
+                self.panel.wifi_button.toggle_button.state = (
+                    self.panel.wifi_button.toggle_button.State.ON
+                )
+            if self.sdbus_network.hotspot_enabled():
+                self.panel.wifi_button.toggle_button.state = (
+                    self.panel.wifi_button.toggle_button.State.ON
+                )
+            ipv4_addr = self.sdbus_network.get_current_ip_addr()
+            if not ipv4_addr:
+                ipv4_addr = "No IP Address"
+            self.panel.netlist_ip.setProperty("text_color", "white")
+            self.panel.netlist_ip.setText(
+                f"IP: {ipv4_addr}"
+            )  # Set the current ip address on the network list page
 
             current_ssid = self.sdbus_network.get_current_ssid()
-            self.panel.netlist_ip.setText(
-                str(self.sdbus_network.get_current_ip_addr())
-            )
             self.panel.netlist_ssuid.setText(current_ssid)
             sec_type = self.sdbus_network.get_security_type_by_ssid(
                 current_ssid
@@ -250,63 +237,42 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
                 signal_strength = "--"
             self.panel.netlist_strength.setText(str(signal_strength))
 
-            text = list(self.sdbus_network.get_current_ip_addr())
-            if not text:
-                text = "No IP Address"
-            self.panel.netlist_ip.setProperty("text_color", "white")
-            self.panel.netlist_ip.setText(
-                f"IP: {text}"
-            )  # Set the current ip address on the network list page
-            if self.sdbus_network.wifi_enabled():
-                self.panel.Togglewifi.state = ToggleAnimatedButton.State.ON
-                self.panel.Togglehot.state = ToggleAnimatedButton.State.OFF
-            else:
-                self.panel.Togglewifi.state = ToggleAnimatedButton.State.OFF
+        else:
+            self._expand_infobox(True)
+            self.panel.mn_info_box.setText(
+                "No Network connection\n Hotspot not enabled\nConnect to a network."
+            )
+            self.panel.mn_info_box.setAlignment(
+                QtCore.Qt.AlignmentFlag.AlignCenter
+            )
+            return
 
-        if _wifi_inter_avail:
-            self.panel.Togglewifi.state = ToggleAnimatedButton.State.OFF
-            self.panel.Togglehot.state = ToggleAnimatedButton.State.OFF
-            self.panel.Togglewifi.setDisabled(True)
-            self.panel.Togglehot.setDisabled(True)
+    def close(self) -> bool:
+        self.sdbus_network.close()
+        return super().close()
 
-    def expand_infobox(self) -> None:
-        self.panel.netlist_ssuid.setGeometry(
-            self.panel.network_list_table_frame.frameGeometry()
-        )
+    def _expand_infobox(self, toggle: bool = False) -> None:
+        """Expand information box on the main network panel
+
+        Args:
+            toggle (bool, optional): Expand or not (Defaults to False)
+        """
+        self.panel.netlist_ip.setVisible(not toggle)
+        self.panel.netlist_ssuid.setVisible(not toggle)
+        self.panel.mn_info_seperator.setVisible(not toggle)
+        self.panel.line_2.setVisible(not toggle)
+        self.panel.netlist_strength.setVisible(not toggle)
+        self.panel.netlist_strength_label.setVisible(not toggle)
+
+        self.panel.line_3.setVisible(not toggle)
+        self.panel.netlist_security.setVisible(not toggle)
+        self.panel.netlist_security_label.setVisible(not toggle)
         # Align text
-        self.panel.netlist_ssuid.setWordWrap(True)
-        self.panel.netlist_ssuid.setAlignment(
-            QtCore.Qt.AlignmentFlag.AlignTop
-            | QtCore.Qt.AlignmentFlag.AlignHCenter
+        self.panel.mn_info_box.setWordWrap(True)
+        self.panel.mn_info_box.setAlignment(
+            QtCore.Qt.AlignmentFlag.AlignCenter
         )
-
-    
-    def wifihotspot_handler(self, source: str):
-        """Toggle Wi-Fi and Hotspot so only one is active at a time."""
-        wifi_enabled = self.sdbus_network.wifi_enabled()
-        hotspot_enabled = self.sdbus_network.hotspot_enabled()
-        if source == "wifi":
-            self.sdbus_network.toggle_wifi(not wifi_enabled)
-            if not wifi_enabled and hotspot_enabled:
-                self.sdbus_network.toggle_hotspot(False)
-        elif source == "hotspot":
-            self.sdbus_network.toggle_hotspot(not hotspot_enabled)
-            if not hotspot_enabled and wifi_enabled:
-                self.sdbus_network.toggle_wifi(False)
-        # Refresh states after changes
-        wifi_enabled = self.sdbus_network.wifi_enabled()
-        hotspot_enabled = self.sdbus_network.hotspot_enabled()
-        # Update UI states
-        self.panel.wifi_button.tb.state = (
-            ToggleAnimatedButton.State.ON
-            if wifi_enabled
-            else ToggleAnimatedButton.State.OFF
-        )
-        self.panel.hotspot_button.tb.state = (
-            ToggleAnimatedButton.State.ON
-            if hotspot_enabled
-            else ToggleAnimatedButton.State.OFF
-        )
+        return
 
     @QtCore.pyqtSlot(str, name="delete_network")
     def delete_network(self, ssid: str) -> None:
@@ -316,10 +282,6 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
     def rescan_networks(self) -> None:
         self.sdbus_network.rescan_networks()
 
-    @QtCore.pyqtSlot(str, name="network_signal_strength")
-    def network_signal_strength(self, ssid: str):
-        _strength = self.sdbus_network.get_connection_signal_by_ssid(ssid)
-
     @QtCore.pyqtSlot(name="new_connection_result")
     @QtCore.pyqtSlot(str, name="new_connection_result")
     def process_new_connection_result(self, msg: typing.Optional[str] = None):
@@ -327,7 +289,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             self.panel.add_network_password_field.setStyleSheet(
                 "border: 2px solid red;"
             )
-            self.panel.add_network_message_label.setText(msg)
+            self.panel.add_network_network_label.setText(msg)
             self.update()
 
         else:
