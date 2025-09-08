@@ -283,7 +283,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.index_stack.pop()  # Remove the last position.
         _logger.debug("Successfully went back a page.")
 
-    @QtCore.pyqtSlot(name="bo_start_websocket_connection")
+    @QtCore.pyqtSlot(name="bo-start-websocket-connection")
     def bo_start_websocket_connection(self) -> None:
         """Starts the Websocket connection with moonraker"""
         self.ws.start()
@@ -318,9 +318,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 "No method found on message received from websocket"
             )
         if not _data:
-            raise Exception(
-                "No data found on message received from websocket."
-            )
+            return
 
         if "server.file" in _method:
             file_data_event = events.ReceivedFileData(
@@ -359,11 +357,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.printer_object_report_signal[list].emit(
                     _objects_response_list
                 )
-                # TODO: This
-                # ! Don't display chamber temperatures if there is no chamber, should do the
-                if not self.printer.has_chamber:
-                    # self.ui.chamber_temperature_frame.hide()
-                    ...
+
             if "query" in _method:
                 if isinstance(_data["status"], dict):
                     _object_report = [_data["status"]]
