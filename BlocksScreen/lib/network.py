@@ -44,7 +44,6 @@ class NetworkManagerRescanError(Exception):
 
 
 class SdbusNetworkManagerAsync(QtCore.QObject):
-    # class SdbusNetworkManagerAsync:
     nm_state_change: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         str, name="nm-state-changed"
     )
@@ -156,6 +155,12 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                 f"Exception on listener monitor produced coroutine: {e}"
             )
 
+    def get_nm_state(self) -> str:
+        future = asyncio.run_coroutine_threadsafe(
+            self.nm.state.get_async(), self.loop
+        )
+        return NetworkManagerState(future.result(timeout=2)).name
+
     async def _nm_state_listener(self) -> None:
         while self._listeners_running:
             try:
@@ -165,7 +170,8 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                     logging.debug(
                         f"Hit Network Manager State changed: {enum_state.name} ({state})"
                     )
-                    self.nm_state_change.emit(state)
+
+                    self.nm_state_change.emit(enum_state.name)
             except Exception as e:
                 logging.error(
                     f"Exception on Network Manager state listener: {e}"
@@ -1223,5 +1229,3 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
             return {"status": "updated"}
         except Exception:
             return {"status": "error", "error": "Unexpected error"}
-
-
