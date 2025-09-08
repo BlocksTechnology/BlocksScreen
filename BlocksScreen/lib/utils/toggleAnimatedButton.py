@@ -9,7 +9,7 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
         OFF = False
 
     stateChange: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
-        State, name="stateChange"
+        State, name="state-change"
     )
 
     def __init__(self, parent) -> None:
@@ -38,6 +38,8 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
         self.icon_pixmap: QtGui.QPixmap = QtGui.QPixmap()
         self._backgroundColor: QtGui.QColor = QtGui.QColor(223, 223, 223)
         self._handleColor: QtGui.QColor = QtGui.QColor(255, 100, 10)
+        self.disable_bg_color: QtGui.QColor = QtGui.QColor("#A9A9A9")
+        self.disable_handle_color: QtGui.QColor = QtGui.QColor("#666666")
         self._state = ToggleAnimatedButton.State.OFF
         self._animation_speed: int = 250
 
@@ -191,6 +193,7 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
         option.state |= QtWidgets.QStyle.StateFlag.State_Off
         option.state |= QtWidgets.QStyle.StateFlag.State_On
         option.state |= QtWidgets.QStyle.StateFlag.State_Active
+
         _rect = self.contentsRect()
         bg_color = (
             self.backgroundColor.darker(160)
@@ -210,8 +213,19 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
         painter.setRenderHint(painter.RenderHint.SmoothPixmapTransform)
         painter.setBackgroundMode(QtCore.Qt.BGMode.TransparentMode)
         painter.setRenderHint(painter.RenderHint.LosslessImageRendering)
-        painter.fillPath(self.trailPath, bg_color)
-        painter.fillPath(self.handlePath, self.handleColor)
+        
+        if not self.isEnabled(): # When disabled show it's off
+            self.state = self.State.OFF
+        
+        painter.fillPath(
+            self.trailPath,
+            bg_color if self.isEnabled() else self.disable_bg_color,
+        )
+        painter.fillPath(
+            self.handlePath,
+            self.handleColor if self.isEnabled() else self.disable_handle_color,
+        )
+
         if not self.icon_pixmap.isNull():
             painter.setBackgroundMode(QtCore.Qt.BGMode.TransparentMode)
             _icon_rect = QtCore.QRectF(
