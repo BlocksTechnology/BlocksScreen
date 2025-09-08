@@ -6,26 +6,27 @@
 	],
 	"settings": {
 		"autoDocstring.docstringFormat": "google",
+		"python.analysis.typeCheckingMode": "basic",
 		"workbench.colorCustomizations": {
-			"activityBar.activeBackground": "#9873f8",
-			"activityBar.background": "#9873f8",
-			"activityBar.foreground": "#15202b",
-			"activityBar.inactiveForeground": "#15202b99",
-			"activityBarBadge.background": "#fabca4",
+			"activityBar.activeBackground": "#325665",
+			"activityBar.background": "#325665",
+			"activityBar.foreground": "#e7e7e7",
+			"activityBar.inactiveForeground": "#e7e7e799",
+			"activityBarBadge.background": "#b56a9f",
 			"activityBarBadge.foreground": "#15202b",
 			"commandCenter.border": "#e7e7e799",
-			"sash.hoverBorder": "#9873f8",
-			"statusBar.background": "#7443f5",
+			"sash.hoverBorder": "#325665",
+			"statusBar.background": "#213943",
 			"statusBar.foreground": "#e7e7e7",
-			"statusBarItem.hoverBackground": "#9873f8",
-			"statusBarItem.remoteBackground": "#7443f5",
+			"statusBarItem.hoverBackground": "#325665",
+			"statusBarItem.remoteBackground": "#213943",
 			"statusBarItem.remoteForeground": "#e7e7e7",
-			"titleBar.activeBackground": "#7443f5",
+			"titleBar.activeBackground": "#213943",
 			"titleBar.activeForeground": "#e7e7e7",
-			"titleBar.inactiveBackground": "#7443f599",
+			"titleBar.inactiveBackground": "#21394399",
 			"titleBar.inactiveForeground": "#e7e7e799"
 		},
-		"peacock.remoteColor": "#7443f5",
+		"peacock.remoteColor": "#213943",
 		"todo-tree.tree.scanMode": "workspace",
 		"todo-tree.tree.showCountsInTree": true,
 		"todo-tree.tree.showBadges": true,
@@ -42,7 +43,7 @@
 		],
 		"[python]": {	
 			"editor.wordBasedSuggestions": "allDocuments", 
-			"editor.defaultFormatter": "charliermarsh.ruff", 
+			"editor.defaultFormatter": "charliermarsh.ruff"
 		},
 		"ruff.lineLength": 79,
 		"ruff.organizeImports": true,
@@ -52,10 +53,15 @@
 		"editor.codeLensFontSize": 0,
 		"editor.inlayHints.fontFamily": "Source Code Pro",
 		"pylint.path": [
-			"~/.venv/python",
+			"~/.env/python",
 			"-m",
 			"pylint"
-		],
+		], 
+		"editor.lineHeight": 48, 
+		"workbench.list.fastScrollSensitivity": 10,
+		"terminal.integrated.fastScrollSensitivity": 10,
+		"workbench.list.mouseWheelScrollSensitivity": 2,
 		
+
 	}
 }

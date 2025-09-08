@@ -61,6 +61,5 @@
     "workbench.list.fastScrollSensitivity": 10,
     "terminal.integrated.fastScrollSensitivity": 10,
     "workbench.list.mouseWheelScrollSensitivity": 2,
-    "editor.lineHeight": 48    ,
-    
+    "editor.lineHeight": 48    
 }
