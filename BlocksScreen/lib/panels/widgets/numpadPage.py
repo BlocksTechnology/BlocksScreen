@@ -1,5 +1,3 @@
-# lib/panels/widgets/numpadPage.py (Corrected)
-
 from lib.utils.icon_button import IconButton
 from lib.utils.blocks_label import BlocksLabel
 from lib.utils.numpad_button import NumpadButton
@@ -76,9 +74,6 @@ class CustomNumpad(QtWidgets.QWidget):
                 self.current_value = self.current_value[:-1]
             else:
                 self.current_value = "0"
-            # Reset firsttime flag if the value becomes "0" again
-            if self.current_value == "0":
-                self.firsttime = True
 
         if not (self.min_value <= int(self.current_value) <= self.max_value):
             self.start_glow_animation.emit()
@@ -188,12 +183,10 @@ class CustomNumpad(QtWidgets.QWidget):
         self.header_layout.setStretch(1, 0)
         self.main_content_layout.addLayout(self.header_layout, 1)
 
-        # Container for the inserted value and the min/max label
         self.value_and_range_layout = QtWidgets.QVBoxLayout()
         self.value_and_range_layout.setSpacing(0)
         self.value_and_range_layout.setContentsMargins(0, 0, 0, 0)
 
-        # New QLabel for displaying the min/max range, placed directly below inserted_value
         self.min_max_label = BlocksLabel(self)
         self.min_max_label.setMinimumSize(QtCore.QSize(500, 20))
         self.min_max_label.setMaximumSize(QtCore.QSize(16777215, 20))
@@ -231,7 +224,6 @@ class CustomNumpad(QtWidgets.QWidget):
         self.inserted_value.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
         self.inserted_value.setObjectName("inserted_value")
 
-        # Swapped the order to place min_max_label first
         self.value_and_range_layout.addWidget(
             self.min_max_label, 0, QtCore.Qt.AlignmentFlag.AlignCenter
         )
