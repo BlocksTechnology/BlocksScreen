@@ -1,3 +1,5 @@
+# lib/utils/blocks_label.py (Corrected)
+
 from PyQt6 import QtWidgets, QtGui, QtCore
 import typing
 
@@ -34,6 +36,9 @@ class BlocksLabel(QtWidgets.QLabel):
             QtCore.QEasingCurve().Type.InOutQuart
         )
         self.glow_animation.setDuration(self.animation_speed)
+        
+        self.glow_animation.finished.connect(self.change_glow_direction)
+        self.glow_animation.finished.connect(self.repaint)
 
     def resizeEvent(self, a0: QtGui.QResizeEvent) -> None:
         self.update_text_metrics()
@@ -99,26 +104,24 @@ class BlocksLabel(QtWidgets.QLabel):
     @QtCore.pyqtSlot(name="start_glow_animation")
     def start_glow_animation(self) -> None:
         self.glow_animation.setDuration(self.animation_speed)
-        start_color = QtGui.QColor("#E9575700")
+        start_color = QtGui.QColor("#00000000")
         self.glow_animation.setStartValue(start_color)
-        end_color = QtGui.QColor(self.glow_color)
-        self.glow_animation.setEndValue(end_color)
+        base_end_color = QtGui.QColor("#E95757")
+        self.glow_animation.setEndValue(base_end_color)
+
         self.glow_animation.setDirection(
             QtCore.QPropertyAnimation.Direction.Forward
         )
         self.glow_animation.setLoopCount(-1)
-        self.glow_animation.finished.connect(self.change_glow_direction)
-        self.glow_animation.finished.connect(self.repaint)
         self.glow_animation.start()
 
     @QtCore.pyqtSlot(name="change_glow_direction")
     def change_glow_direction(self) -> None:
-        return self.glow_animation.setDirection(
-            self.glow_animation.Direction.Backward
-            if self.glow_animation.direction()
-            == self.glow_animation.Direction.Forward
-            else self.glow_animation.Direction.Backward
-        )
+        current_direction = self.glow_animation.direction()
+        if current_direction == self.glow_animation.Direction.Forward:
+            self.glow_animation.setDirection(self.glow_animation.Direction.Backward)
+        else:
+            self.glow_animation.setDirection(self.glow_animation.Direction.Forward)
 
     def update_text_metrics(self) -> None:
         font_metrics = self.fontMetrics()
@@ -222,16 +225,9 @@ class BlocksLabel(QtWidgets.QLabel):
             )
             subtracted.setFillRule(QtCore.Qt.FillRule.OddEvenFill)
             qp.fillPath(subtracted, self.glow_color)
-        # elif self.glow_animation.state() == self.glow_animation.finished:
 
-        #     self.repaint()
-        # qp.setCompositionMode(
-        #     qp.CompositionMode.CompositionMode_SourceOver
-        # )
-        # qp.fillPath(subtracted, QtGui.QColor("#00000000"))
-        # qp.restore()
-
-        if self.text:
+        # --- THIS IS THE CORRECTED LINE ---
+        if self._text:
             qp.setCompositionMode(
                 qp.CompositionMode.CompositionMode_SourceOver
             )
@@ -239,9 +235,8 @@ class BlocksLabel(QtWidgets.QLabel):
             text_rect.translate(int(self.scroll_pos), 0)
             text_option = QtGui.QTextOption(self.alignment())
             text_option.setWrapMode(QtGui.QTextOption.WrapMode.NoWrap)
-            # text_rect.setWidth(self.text_width)
             qp.drawText(
-                text_rect.toRectF(),
+                QtCore.QRectF(text_rect),
                 self._text,
                 text_option,
             )
@@ -257,7 +252,7 @@ class BlocksLabel(QtWidgets.QLabel):
                     0,
                 )
                 qp.drawText(
-                    second_text_rect.toRectF(), self._text, text_option
+                    QtCore.QRectF(second_text_rect), self._text, text_option
                 )
         qp.end()
 
