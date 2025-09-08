@@ -1,4 +1,5 @@
 import asyncio
+import enum
 import hashlib
 import logging
 import threading
@@ -44,6 +45,11 @@ class NetworkManagerRescanError(Exception):
 
 
 class SdbusNetworkManagerAsync(QtCore.QObject):
+    class ConnectionPriority(enum.Enum):
+        HIGH = 90
+        MEDIUM = 50
+        LOW = 0
+
     nm_state_change: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         str, name="nm-state-changed"
     )
@@ -1177,16 +1183,14 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
     def get_hotspot_ssid(self) -> str:
         return self.hotspot_ssid
 
-    def set_network_priority(self, ssid: str, priority: str) -> None:
+    def set_network_priority(
+        self, ssid: str, priority: ConnectionPriority = ConnectionPriority.LOW
+    ) -> None:
         if not self.nm:
             return
-        ...
-        # Get Networks by ssid
-        # con_settings = NetworkConnectionSettings(a connection path for the connection with the specified ssid)
-        # properties = con_settings.get_settings()
-        # profile = con_settings.get_profile()
-        # properties["connection"]["autoconnect-priority"] = ("u", priority)
-        # con_settings.update(properties)
+        if not self.is_known(ssid):
+            return
+        self.update_connection_settings(ssid=ssid, priority=priority.value)
 
     def update_connection_settings(
         self,
