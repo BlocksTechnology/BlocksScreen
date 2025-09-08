@@ -26,8 +26,8 @@ class BabystepPage(QtWidgets.QWidget):
         self.setMouseTracking(True)
 
         self.setupUI()
-        self.bbp_away_from_bed.clicked.connect(self.on_move_nozzle_away)
-        self.bbp_close_to_bed.clicked.connect(self.on_move_nozzle_close)
+        self.bbp_mvup.clicked.connect(self.on_move_nozzle_close)
+        self.bbp_mvdown.clicked.connect(self.on_move_nozzle_away)
         self.babystep_back_btn.clicked.connect(self.request_back.emit)
         self.bbp_nozzle_offset_01.toggled.connect(self.handle_z_offset_change)
         self.bbp_nozzle_offset_025.toggled.connect(self.handle_z_offset_change)
@@ -425,41 +425,41 @@ class BabystepPage(QtWidgets.QWidget):
         self.bbp_buttons_layout = QtWidgets.QVBoxLayout()
         self.bbp_buttons_layout.setContentsMargins(5, 5, 5, 5)
         self.bbp_buttons_layout.setObjectName("bbp_buttons_layout")
-        self.bbp_away_from_bed = IconButton(parent=self)
+        self.bbp_mvup = IconButton(parent=self)
         sizePolicy.setHeightForWidth(
-            self.bbp_away_from_bed.sizePolicy().hasHeightForWidth()
+            self.bbp_mvup.sizePolicy().hasHeightForWidth()
         )
-        self.bbp_away_from_bed.setSizePolicy(sizePolicy)
-        self.bbp_away_from_bed.setMinimumSize(QtCore.QSize(80, 80))
-        self.bbp_away_from_bed.setMaximumSize(QtCore.QSize(80, 80))
-        self.bbp_away_from_bed.setText("")
-        self.bbp_away_from_bed.setFlat(True)
-        self.bbp_away_from_bed.setPixmap(
+        self.bbp_mvup.setSizePolicy(sizePolicy)
+        self.bbp_mvup.setMinimumSize(QtCore.QSize(80, 80))
+        self.bbp_mvup.setMaximumSize(QtCore.QSize(80, 80))
+        self.bbp_mvup.setText("")
+        self.bbp_mvup.setFlat(True)
+        self.bbp_mvup.setPixmap(
             QtGui.QPixmap(":/arrow_icons/media/btn_icons/up_arrow.svg")
         )
-        self.bbp_away_from_bed.setObjectName("bbp_away_from_bed")
+        self.bbp_mvup.setObjectName("bbp_away_from_bed")
         self.bbp_option_button_group = QtWidgets.QButtonGroup(self)
         self.bbp_option_button_group.setObjectName("bbp_option_button_group")
-        self.bbp_option_button_group.addButton(self.bbp_away_from_bed)
+        self.bbp_option_button_group.addButton(self.bbp_mvup)
         self.bbp_buttons_layout.addWidget(
-            self.bbp_away_from_bed, 0, QtCore.Qt.AlignmentFlag.AlignRight
+            self.bbp_mvup, 0, QtCore.Qt.AlignmentFlag.AlignRight
         )
-        self.bbp_close_to_bed = IconButton(parent=self)
+        self.bbp_mvdown = IconButton(parent=self)
         sizePolicy.setHeightForWidth(
-            self.bbp_close_to_bed.sizePolicy().hasHeightForWidth()
+            self.bbp_mvdown.sizePolicy().hasHeightForWidth()
         )
-        self.bbp_close_to_bed.setSizePolicy(sizePolicy)
-        self.bbp_close_to_bed.setMinimumSize(QtCore.QSize(80, 80))
-        self.bbp_close_to_bed.setMaximumSize(QtCore.QSize(80, 80))
-        self.bbp_close_to_bed.setText("")
-        self.bbp_close_to_bed.setFlat(True)
-        self.bbp_close_to_bed.setPixmap(
+        self.bbp_mvdown.setSizePolicy(sizePolicy)
+        self.bbp_mvdown.setMinimumSize(QtCore.QSize(80, 80))
+        self.bbp_mvdown.setMaximumSize(QtCore.QSize(80, 80))
+        self.bbp_mvdown.setText("")
+        self.bbp_mvdown.setFlat(True)
+        self.bbp_mvdown.setPixmap(
             QtGui.QPixmap(":/arrow_icons/media/btn_icons/down_arrow.svg")
         )
-        self.bbp_close_to_bed.setObjectName("bbp_close_to_bed")
-        self.bbp_option_button_group.addButton(self.bbp_close_to_bed)
+        self.bbp_mvdown.setObjectName("bbp_close_to_bed")
+        self.bbp_option_button_group.addButton(self.bbp_mvdown)
         self.bbp_buttons_layout.addWidget(
-            self.bbp_close_to_bed, 0, QtCore.Qt.AlignmentFlag.AlignRight
+            self.bbp_mvdown, 0, QtCore.Qt.AlignmentFlag.AlignRight
         )
         spacerItem = QtWidgets.QSpacerItem(
             40,
