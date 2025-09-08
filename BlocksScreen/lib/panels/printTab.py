@@ -252,6 +252,7 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.numpadPage.set_value(current_value)
         self.numpadPage.set_min_value(min_value)
         self.numpadPage.set_max_value(max_value)
+        self.numpadPage.firsttime = True
         self.change_page(self.indexOf(self.numpadPage))
 
     @QtCore.pyqtSlot(str, int, "PyQt_PyObject", name="on_slidePage_request")
