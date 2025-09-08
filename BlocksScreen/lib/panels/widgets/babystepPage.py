@@ -1,5 +1,6 @@
 import typing
 
+from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_label import BlocksLabel
 from lib.utils.icon_button import IconButton
 from lib.utils.group_button import GroupButton
@@ -32,16 +33,24 @@ class BabystepPage(QtWidgets.QWidget):
         self.bbp_nozzle_offset_025.toggled.connect(self.handle_z_offset_change)
         self.bbp_nozzle_offset_05.toggled.connect(self.handle_z_offset_change)
         self.bbp_nozzle_offset_1.toggled.connect(self.handle_z_offset_change)
+        self.savebutton.clicked.connect(self.savevalue)
 
-    @QtCore.pyqtSlot(name="on_arrow_down")
-    def on_arrow_down(self) -> None:
-        """Move the bed close to the nozzle by the amount set in **` self._z_offset`**"""
-        self.run_gcode.emit(f"SET_GCODE_OFFSET Z_ADJUST=-{self._z_offset}")
+    @QtCore.pyqtSlot(name="on_move_nozzle_close")
+    def on_move_nozzle_close(self) -> None:
+        """Move the nozzle closer to the print plate by the amount set in **` self._z_offset`**"""
+        self.run_gcode.emit(
+            f"SET_GCODE_OFFSET Z_ADJUST=-{self._z_offset}"  # Z_ADJUST adds the value to the existing offset
+        )
+        self.savebutton.setVisible(True)
 
-    @QtCore.pyqtSlot(name="on_arrow_up")
-    def on_arrow_up(self) -> None:
-        """Move the bed far from the nozzle by the amount set int **` self._z_offset`**"""
-        self.run_gcode.emit(f"SET_GCODE_OFFSET Z_ADJUST={self._z_offset}")
+    @QtCore.pyqtSlot(name="on_move_nozzle_away")
+    def on_move_nozzle_away(self) -> None:
+        """Slot for Babystep button to get far from the bed by **` self._z_offset`** amount"""
+        print("Moving nozzle away from bed by:", self._z_offset, "a")
+        self.run_gcode.emit(
+            f"SET_GCODE_OFFSET Z_ADJUST=+{self._z_offset}"  # Z_ADJUST adds the value to the existing offset
+        )
+        self.savebutton.setVisible(True)
 
     @QtCore.pyqtSlot(name="handle_z_offset_change")
     def handle_z_offset_change(self) -> None:
@@ -61,6 +70,15 @@ class BabystepPage(QtWidgets.QWidget):
             return
         self._z_offset = float(_sender.text()[:-3])
         print(_sender.text()[:-3], "is now set")
+
+    def savevalue(self):
+        self.run_gcode.emit("Z_OFFSET_APPLY_PROBE")
+        self.savebutton.setVisible(False)
+        self.bbp_z_offset_title_label.setText(
+            self.bbp_z_offset_current_value.text()
+        )
+
+        return
 
     def on_gcode_move_update(self, name: str, value: list) -> None:
         if not value:
@@ -127,6 +145,18 @@ class BabystepPage(QtWidgets.QWidget):
         self.bbp_header_title.setText("Babystep")
         self.bbp_header_title.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self.bbp_header_title.setObjectName("bbp_header_title")
+
+        self.savebutton = BlocksCustomButton(self)
+        self.savebutton.setGeometry(QtCore.QRect(460, 340, 200, 60))
+        self.savebutton.setText("Save?")
+        self.savebutton.setObjectName("savebutton")
+        self.savebutton.setPixmap(
+            QtGui.QPixmap(":/ui/media/btn_icons/save.svg")
+        )
+        self.savebutton.setVisible(False)
+        font = QtGui.QFont()
+        font.setPointSize(15)
+        self.savebutton.setFont(font)
 
         spacerItem = QtWidgets.QSpacerItem(
             60,

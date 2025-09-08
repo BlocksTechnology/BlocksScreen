@@ -144,7 +144,6 @@ class Printer(QtCore.QObject):
         self.available_gcode_commands.clear()
         self.available_objects.clear()
         self.configfile.clear()
-        print(self.configfile)
         self.printing = False
         self.printing_state = ""
         self.print_file_loaded = False
@@ -329,7 +328,6 @@ class Printer(QtCore.QObject):
     ####################*# Callbacks #*#####################
     @QtCore.pyqtSlot(list, name="_gcode_response")
     def _gcode_response(self, report: list) -> None:
-        print(report)
         self.gcode_response.emit(report)
 
     def _webhooks_object_updated(
@@ -767,7 +765,6 @@ class Printer(QtCore.QObject):
         if "warnings" in values.keys():
             # TODO
             ...
-        # print(values)
 
         self.configfile_update.emit(values)  # Signal config update
 
@@ -788,11 +785,9 @@ class Printer(QtCore.QObject):
 
     def _probe_object_updated(self, values: dict, name: str) -> None:
         # TODO
-        print(values)
         ...
 
     def _bltouch_object_updated(self, values: dict, name: str) -> None:
-        # print(values)
         # TODO:
         ...
 

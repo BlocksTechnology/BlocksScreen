@@ -1,6 +1,9 @@
 import ctypes
+import hashlib
+import os
 import enum
 import logging
+import pathlib
 import struct
 import typing
 
@@ -250,3 +253,60 @@ def normalize(value, r_min=0.0, r_max=1.0, t_min=0.0, t_max=100):
     c1 = (value - r_min) / (r_max - r_min)
     c2 = (t_max - t_min) + t_min
     return c1 * c2
+
+
+def check_filepath_permission(filepath, access_type: int = os.R_OK) -> bool:
+    # if not isinstance(filepath, pathlib.Path):
+    """Checks for file path access
+
+    Args:
+        filepath (str | pathlib.Path): path to file
+        access_type (int, optional): _description_. Defaults to os.R_OK.
+
+    ***
+
+    #### **Access type can be:**
+
+     - F_OK -> Checks file existence on path
+     - R_OK -> Checks if file is readable
+     - W_OK -> Checks if file is Writable
+     - X_OK -> Checks if file can be executed
+
+    ***
+    Returns:
+        bool: _description_
+    """  #     return False
+    if not os.path.isfile(filepath):
+        return False
+    return os.access(filepath, access_type)
+
+
+def check_dir_existence(
+    directory: typing.Union[str, pathlib.Path],
+) -> bool:
+    if isinstance(directory, pathlib.Path):
+        return bool(directory.is_dir())
+    return bool(os.path.isdir(directory))
+
+
+def check_file_on_path(
+    path: typing.Union[typing.LiteralString, pathlib.Path],
+    filename: typing.Union[typing.LiteralString, pathlib.Path],
+) -> bool:
+    _filepath = os.path.join(path, filename)
+    return os.path.exists(_filepath)
+
+
+def get_file_loc(filename) -> pathlib.Path:
+    ...
+
+
+# def get_hash(data) -> hashlib._Hash:
+#     hash = hashlib.sha256()
+#     hash.update(data.encode())
+#     hash.digest()
+#     return hash
+
+
+
+def digest_hash() -> None: ...

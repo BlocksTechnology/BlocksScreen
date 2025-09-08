@@ -166,3 +166,17 @@ cython_debug/
 */*Zone.Identifier
 *:Zone.Identifier
 */*:Zone.Identifier
+
+
+### VisualStudioCode ###
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+!.vscode/*.code-snippets
+.vscode/
+
+Blocks_Screen.code-workspace
+*.code-workspace
+*workspace

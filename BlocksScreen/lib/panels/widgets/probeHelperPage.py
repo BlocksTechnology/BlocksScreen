@@ -566,7 +566,7 @@ class ProbeHelper(QtWidgets.QWidget):
         self.po_back_button.setFlat(True)
         self.po_back_button.setProperty(
             "icon_pixmap",
-            QtGui.QPixmap(":/button_borders/media/btn_icons/back.svg"),
+            QtGui.QPixmap(":/ui/media/btn_icons/back.svg"),
         )
         self.po_back_button.setObjectName("po_back_button")
         self.po_header_layout.addWidget(self.po_back_button)

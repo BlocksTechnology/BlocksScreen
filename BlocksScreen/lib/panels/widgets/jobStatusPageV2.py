@@ -1,26 +1,16 @@
 import logging
+import math
 import typing
-
 
 from helper_methods import calculate_current_layer, estimate_print_time
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_label import BlocksLabel
-from lib.utils.blocks_progressbar import CustomProgressBar
 from lib.utils.display_button import DisplayButton
+from lib.utils.blocks_progressbar import CustomProgressBar
 from lib.panels.widgets import dialogPage
 import events
 
 from PyQt6 import QtCore, QtGui, QtWidgets
-
-
-class ClickableGraphicsView(QtWidgets.QGraphicsView):
-    clicked = QtCore.pyqtSignal()
-
-
-def mousePressEvent(self, event: QtGui.QMouseEvent) -> None:
-    if event.button() == QtCore.Qt.MouseButton.LeftButton:
-        self.clicked.emit()
-    super(ClickableGraphicsView, self).mousePressEvent(event)
 
 
 class JobStatusWidget(QtWidgets.QWidget):
@@ -61,55 +51,13 @@ class JobStatusWidget(QtWidgets.QWidget):
         super().__init__(parent)
 
         self.canceldialog = dialogPage.DialogPage(self)
+
         self.setupUI()
         self.tune_menu_btn.clicked.connect(self.tune_clicked.emit)
         self.pause_printing_btn.clicked.connect(self.pause_resume_print)
         self.stop_printing_btn.clicked.connect(self.handleCancel)
 
-        self.CBVSmallThumbnail.clicked.connect(self.showthumbnail)
-        self.CBVBigThumbnail.clicked.connect(self.hidethumbnail)
-
-        self.smalthumbnail = QtGui.QImage(
-            "BlocksScreen/lib/ui/resources/media/smalltest.png"
-        )
-        self.bigthumbnail = QtGui.QImage(
-            "BlocksScreen/lib/ui/resources/media/thumbnailmissing.png"
-        )
-        self.CBVSmallThumbnail.installEventFilter(self)
-        self.CBVBigThumbnail.installEventFilter(self)
-
-    def eventFilter(self, source, event):
-        if (
-            source == self.CBVSmallThumbnail
-            and event.type() == QtCore.QEvent.Type.MouseButtonPress
-        ):
-            if event.button() == QtCore.Qt.MouseButton.LeftButton:
-                self.showthumbnail()
-
-        if (
-            source == self.CBVBigThumbnail
-            and event.type() == QtCore.QEvent.Type.MouseButtonPress
-        ):
-            if event.button() == QtCore.Qt.MouseButton.LeftButton:
-                self.hidethumbnail()
-
-        return super().eventFilter(source, event)
-
-    def showthumbnail(self):
-        self.contentWidget.hide()
-        self.progressWidget.hide()
-        self.headerWidget.hide()
-        self.btnWidget.hide()
-        self.smallthumb_widget.hide()
-        self.bigthumb_widget.show()
-
-    def hidethumbnail(self):
-        self.contentWidget.show()
-        self.progressWidget.show()
-        self.headerWidget.show()
-        self.btnWidget.show()
-        self.smallthumb_widget.show()
-        self.bigthumb_widget.hide()
+        print("PROGRESSBARRECT", self.printing_progress_bar.rect())
 
     def handleCancel(self) -> None:
         """Handle the cancel print job dialog"""
@@ -122,21 +70,20 @@ class JobStatusWidget(QtWidgets.QWidget):
     def on_dialog_button_clicked(self, button_name: str) -> None:
         """Handle dialog button clicks"""
         if button_name == "Confirm":
+            print(
+                "Confirm button clicked MY GD HELPO ME IDK WHAT AM I DOING I MISS MY WIFI OH GOD HE IS HERE M-MY , NOOOOOOOOOOooOooOO..."
+            )
             self.print_cancel.emit()  # Emit the print_cancel signal
         elif button_name == "Cancel":
-            pass
+            print("Cancel button clicked")
 
-    @QtCore.pyqtSlot(str, list, name="on_print_start")
-    def on_print_start(self, file: str, thumbnail: list) -> None:
+    @QtCore.pyqtSlot(str, name="on_print_start")
+    def on_print_start(self, file: str) -> None:
         """Start a print job, show job status page"""
         self._current_file_name = file
         self.js_file_name_label.setText(self._current_file_name)
         self.layer_display_button.setText("?")
         self.print_time_display_button.setText("?")
-        print(thumbnail)
-        self.smalthumbnail = thumbnail[1]
-        self.bigthumbnail = thumbnail[1]
-
         self.printing_progress_bar.reset()
         self._internal_print_status = "printing"
         self.request_file_info.emit(
@@ -150,6 +97,7 @@ class JobStatusWidget(QtWidgets.QWidget):
         try:
             instance = QtWidgets.QApplication.instance()
             if instance:
+                print(self.window().objectName())
                 instance.postEvent(self.window(), print_start_event)
             else:
                 raise TypeError(
@@ -164,14 +112,6 @@ class JobStatusWidget(QtWidgets.QWidget):
     def on_fileinfo(self, fileinfo: dict) -> None:
         self.total_layers = str(fileinfo.get("layer_count", "?"))
         self.layer_display_button.setText("?")
-        if (
-            fileinfo["thumbnail_images"] is not None
-            and len(fileinfo["thumbnail_images"]) > 0
-        ):
-            # Assign the first thumbnail to both by default
-            self.smalthumbnail = fileinfo["thumbnail_images"][1]
-            self.bigthumbnail = fileinfo["thumbnail_images"][2]
-
         self.layer_display_button.secondary_text = str(self.total_layers)
         self.file_metadata = fileinfo
 
@@ -181,16 +121,16 @@ class JobStatusWidget(QtWidgets.QWidget):
         if self._internal_print_status == "printing":
             self.print_pause.emit()
             self._internal_print_status = "paused"
-            self.pause_printing_btn.setText("Pause")
+            self.pause_printing_btn.setText("Resume")
             self.pause_printing_btn.setPixmap(
-                QtGui.QPixmap(":/ui/media/btn_icons/pause.svg")
+                QtGui.QPixmap(":/ui/media/btn_icons/play.svg")
             )
         elif self._internal_print_status == "paused":
             self.print_resume.emit()
             self._internal_print_status = "printing"
-            self.pause_printing_btn.setText("Resume")
+            self.pause_printing_btn.setText("Pause")
             self.pause_printing_btn.setPixmap(
-                QtGui.QPixmap(":/ui/media/btn_icons/play.svg")
+                QtGui.QPixmap(":/ui/media/btn_icons/pause.svg")
             )
 
     @QtCore.pyqtSlot(str, dict, name="on_print_stats_update")
@@ -208,7 +148,6 @@ class JobStatusWidget(QtWidgets.QWidget):
         """
 
         if isinstance(value, str):
-            print(f"Print status update received: {field} -> {value}")
             if "filename" in field:
                 self._current_file_name = value
                 if self.js_file_name_label.text().lower() != value.lower():
@@ -338,64 +277,9 @@ class JobStatusWidget(QtWidgets.QWidget):
         elif isinstance(value, float):
             if "progress" == field:
                 self.print_progress = value
-                self.printing_progress_bar.setValue(self.print_progress)
-
-    def paintEvent(self, a0: QtGui.QPaintEvent) -> None:
-        _scene = QtWidgets.QGraphicsScene()
-        if not self.smalthumbnail.isNull():
-            _graphics_rect = self.CBVSmallThumbnail.rect().toRectF()
-            _image_rect = self.smalthumbnail.rect()
-
-            scaled_width = _image_rect.width()
-            scaled_height = _image_rect.height()
-            adjusted_x = (_graphics_rect.width() - scaled_width) // 2.0
-            adjusted_y = (_graphics_rect.height() - scaled_height) // 2.0
-
-            adjusted_rect = QtCore.QRectF(
-                _image_rect.x() + adjusted_x,
-                _image_rect.y() + adjusted_y,
-                scaled_width,
-                scaled_height,
-            )
-            _scene.setSceneRect(adjusted_rect)
-            _item_scaled = QtWidgets.QGraphicsPixmapItem(
-                QtGui.QPixmap.fromImage(self.smalthumbnail).scaled(
-                    int(scaled_width),
-                    int(scaled_height),
-                    QtCore.Qt.AspectRatioMode.KeepAspectRatio,
-                    QtCore.Qt.TransformationMode.SmoothTransformation,
+                self.printing_progress_bar.setValue(
+                    int(math.trunc(self.print_progress * 100))
                 )
-            )
-            _scene.addItem(_item_scaled)
-            self.CBVSmallThumbnail.setScene(_scene)
-        _scene = QtWidgets.QGraphicsScene()
-
-        if not self.bigthumbnail.isNull():
-            _graphics_rect = self.CBVBigThumbnail.rect().toRectF()
-            _image_rect = self.bigthumbnail.rect()
-
-            scaled_width = _image_rect.width()
-            scaled_height = _image_rect.height()
-            adjusted_x = (_graphics_rect.width() - scaled_width) // 2.0
-            adjusted_y = (_graphics_rect.height() - scaled_height) // 2.0
-
-            adjusted_rect = QtCore.QRectF(
-                _image_rect.x() + adjusted_x,
-                _image_rect.y() + adjusted_y,
-                scaled_width,
-                scaled_height,
-            )
-            _scene.setSceneRect(adjusted_rect)
-            _item_scaled = QtWidgets.QGraphicsPixmapItem(
-                QtGui.QPixmap.fromImage(self.bigthumbnail).scaled(
-                    int(scaled_width),
-                    int(scaled_height),
-                    QtCore.Qt.AspectRatioMode.KeepAspectRatio,
-                    QtCore.Qt.TransformationMode.SmoothTransformation,
-                )
-            )
-            _scene.addItem(_item_scaled)
-            self.CBVBigThumbnail.setScene(_scene)
 
     def setupUI(self) -> None:
         sizePolicy = QtWidgets.QSizePolicy(
@@ -413,64 +297,40 @@ class JobStatusWidget(QtWidgets.QWidget):
         self.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
 
         # ---------------------------------Widgets
-        self.bigthumb_widget = QtWidgets.QWidget(self)
-        self.bigthumb_widget.setGeometry(
-            QtCore.QRect(0, 0, self.width(), self.height())
-        )
-        self.bigthumb_widget.setObjectName("bigthumb_widget")
 
         self.headerWidget = QtWidgets.QWidget(self)
         self.headerWidget.setGeometry(QtCore.QRect(11, 11, 691, 62))
         self.headerWidget.setObjectName("headerWidget")
 
         self.btnWidget = QtWidgets.QWidget(self)
-        self.btnWidget.setGeometry(QtCore.QRect(10, 80, 691, 90))
+        self.btnWidget.setGeometry(QtCore.QRect(10, 80, 211, 331))
         self.btnWidget.setObjectName("btnWidget")
 
-        self.progressWidget = QtWidgets.QWidget(self)
-        self.progressWidget.setGeometry(QtCore.QRect(10, 170, 471, 241))
-        self.progressWidget.setObjectName("progressWidget")
-
         self.contentWidget = QtWidgets.QWidget(self)
-        self.contentWidget.setGeometry(QtCore.QRect(480, 170, 221, 241))
+        self.contentWidget.setGeometry(QtCore.QRect(229, 80, 471, 281))
         self.contentWidget.setObjectName("contentWidget")
 
-        self.smallthumb_widget = QtWidgets.QLabel(self)
-        self.smallthumb_widget.setGeometry(QtCore.QRect(10, 170, 471, 241))
-        self.smallthumb_widget.setObjectName("smallthumb_widget")
-
         # ---------------------------------layout
-
-        self.smalllayout = QtWidgets.QHBoxLayout(self.smallthumb_widget)
-
-        self.biglayout = QtWidgets.QHBoxLayout(self.bigthumb_widget)
 
         self.job_status_header_layout = QtWidgets.QHBoxLayout(
             self.headerWidget
         )
+        self.job_status_header_layout.setContentsMargins(1, 1, 1, 1)
         self.job_status_header_layout.setSpacing(20)
         self.job_status_header_layout.setObjectName("job_status_header_layout")
-
-        self.job_status_progress_layout = QtWidgets.QVBoxLayout(
-            self.progressWidget
-        )
-        self.job_status_progress_layout.setSizeConstraint(
-            QtWidgets.QLayout.SizeConstraint.SetMinimumSize
-        )
-
-        self.job_status_btn_layout = QtWidgets.QHBoxLayout(self.btnWidget)
-        self.job_status_btn_layout.setSizeConstraint(
-            QtWidgets.QLayout.SizeConstraint.SetMinimumSize
-        )
 
         self.job_content_layout = QtWidgets.QVBoxLayout(self.contentWidget)
         self.job_content_layout.setObjectName("job_content_layout")
 
+        self.job_status_btn_layout = QtWidgets.QVBoxLayout(self.btnWidget)
+        self.job_status_btn_layout.setSizeConstraint(
+            QtWidgets.QLayout.SizeConstraint.SetMinimumSize
+        )
         self.job_status_btn_layout.setContentsMargins(5, 5, 5, 5)
         self.job_status_btn_layout.setSpacing(5)
         self.job_status_btn_layout.setObjectName("job_status_btn_layout")
 
-        self.job_stats_display_layout = QtWidgets.QVBoxLayout()
+        self.job_stats_display_layout = QtWidgets.QHBoxLayout()
         self.job_stats_display_layout.setObjectName("job_stats_display_layout")
 
         # -----------------------------Fonts
@@ -504,7 +364,7 @@ class JobStatusWidget(QtWidgets.QWidget):
         self.js_file_name_label = BlocksLabel(parent=self)
         self.js_file_name_label.setEnabled(True)
         self.js_file_name_label.setSizePolicy(sizePolicy)
-        self.js_file_name_label.setMinimumSize(QtCore.QSize(200, 80))
+        self.js_file_name_label.setMinimumSize(QtCore.QSize(200, 60))
         self.js_file_name_label.setMaximumSize(QtCore.QSize(16777215, 60))
 
         self.js_file_name_label.setFont(font)
@@ -519,9 +379,7 @@ class JobStatusWidget(QtWidgets.QWidget):
         self.job_status_header_layout.addWidget(self.js_file_name_icon)
         self.job_status_header_layout.addWidget(self.js_file_name_label)
 
-
         # -----------------------------buttons
-
 
         font.setPointSize(18)
 
@@ -539,7 +397,6 @@ class JobStatusWidget(QtWidgets.QWidget):
         self.stop_printing_btn.setSizePolicy(sizePolicy)
         self.stop_printing_btn.setMinimumSize(QtCore.QSize(200, 80))
         self.stop_printing_btn.setMaximumSize(QtCore.QSize(200, 80))
-
         self.stop_printing_btn.setFont(font)
         self.stop_printing_btn.setProperty(
             "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/stop.svg")
@@ -548,10 +405,8 @@ class JobStatusWidget(QtWidgets.QWidget):
 
         self.tune_menu_btn = BlocksCustomButton(self)
         self.tune_menu_btn.setSizePolicy(sizePolicy)
-
         self.tune_menu_btn.setMinimumSize(QtCore.QSize(200, 60))
         self.tune_menu_btn.setMaximumSize(QtCore.QSize(200, 80))
-
         self.tune_menu_btn.setFont(font)
         self.tune_menu_btn.setProperty(
             "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/tune.svg")
@@ -574,67 +429,7 @@ class JobStatusWidget(QtWidgets.QWidget):
         self.printing_progress_bar.setObjectName("printing_progress_bar")
         self.printing_progress_bar.setSizePolicy(sizePolicy)
 
-        self.job_status_progress_layout.addWidget(self.printing_progress_bar)
-
-        # -----------------------------SMALL-THUMBNAIL
-
-        self.CBVSmallThumbnail = ClickableGraphicsView(self.smallthumb_widget)
-        self.CBVSmallThumbnail.setSizePolicy(sizePolicy)
-        self.CBVSmallThumbnail.setMaximumSize(QtCore.QSize(48, 48))
-        self.CBVSmallThumbnail.setStyleSheet(
-            "QGraphicsView{\nbackground-color:transparent;\n}"
-        )
-        self.CBVSmallThumbnail.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
-        self.CBVSmallThumbnail.setFrameShadow(QtWidgets.QFrame.Shadow.Plain)
-        self.CBVSmallThumbnail.setSizeAdjustPolicy(
-            QtWidgets.QAbstractScrollArea.SizeAdjustPolicy.AdjustIgnored
-        )
-        brush = QtGui.QBrush(QtGui.QColor(0, 0, 0, 0))
-        brush.setStyle(QtCore.Qt.BrushStyle.NoBrush)
-        self.CBVSmallThumbnail.setBackgroundBrush(brush)
-        self.CBVSmallThumbnail.setRenderHints(
-            QtGui.QPainter.RenderHint.Antialiasing
-            | QtGui.QPainter.RenderHint.SmoothPixmapTransform
-            | QtGui.QPainter.RenderHint.TextAntialiasing
-        )
-        self.CBVSmallThumbnail.setObjectName("CBVSmallThumbnail")
-
-        self.smalllayout.addWidget(self.CBVSmallThumbnail)
-
-        # -----------------------------Big-Thumbnail
-        self.CBVBigThumbnail = ClickableGraphicsView()
-        self.CBVBigThumbnail.setSizePolicy(sizePolicy)
-        self.CBVBigThumbnail.setMaximumSize(QtCore.QSize(300, 300))
-        self.CBVBigThumbnail.setStyleSheet(
-            "QGraphicsView{\nbackground-color:transparent;\n}"
-        )
-        # "QGraphicsView{\nbackground-color:grey;border-radius:10px;\n}" grey background
-        self.CBVBigThumbnail.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
-        self.CBVBigThumbnail.setFrameShadow(QtWidgets.QFrame.Shadow.Plain)
-        self.CBVBigThumbnail.setVerticalScrollBarPolicy(
-            QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff
-        )
-        self.CBVBigThumbnail.setHorizontalScrollBarPolicy(
-            QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff
-        )
-        self.CBVBigThumbnail.setSizeAdjustPolicy(
-            QtWidgets.QAbstractScrollArea.SizeAdjustPolicy.AdjustIgnored
-        )
-        brush = QtGui.QBrush(QtGui.QColor(0, 0, 0, 0))
-        brush.setStyle(QtCore.Qt.BrushStyle.NoBrush)
-        self.CBVBigThumbnail.setBackgroundBrush(brush)
-        self.CBVBigThumbnail.setRenderHints(
-            QtGui.QPainter.RenderHint.Antialiasing
-            | QtGui.QPainter.RenderHint.SmoothPixmapTransform
-            | QtGui.QPainter.RenderHint.TextAntialiasing
-        )
-        self.CBVBigThumbnail.setViewportUpdateMode(
-            QtWidgets.QGraphicsView.ViewportUpdateMode.SmartViewportUpdate
-        )
-
-        self.CBVBigThumbnail.setObjectName("CBVBigThumbnail")
-        self.biglayout.addWidget(self.CBVBigThumbnail)
-        self.bigthumb_widget.hide()
+        self.job_content_layout.addWidget(self.printing_progress_bar)
 
         # -----------------------------display buttons
 
@@ -642,9 +437,7 @@ class JobStatusWidget(QtWidgets.QWidget):
         self.layer_display_button.button_type = "display_secondary"
         self.layer_display_button.setEnabled(False)
         self.layer_display_button.setSizePolicy(sizePolicy)
-
-        self.layer_display_button.setMinimumSize(QtCore.QSize(200, 80))
-
+        self.layer_display_button.setMinimumSize(QtCore.QSize(150, 40))
         self.layer_display_button.setProperty(
             "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/layers.svg")
         )
@@ -654,9 +447,7 @@ class JobStatusWidget(QtWidgets.QWidget):
         self.print_time_display_button.button_type = "display_secondary"
         self.print_time_display_button.setEnabled(False)
         self.print_time_display_button.setSizePolicy(sizePolicy)
-
-        self.print_time_display_button.setMinimumSize(QtCore.QSize(200, 80))
-
+        self.print_time_display_button.setMinimumSize(QtCore.QSize(150, 40))
         self.print_time_display_button.setProperty(
             "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/time.svg")
         )

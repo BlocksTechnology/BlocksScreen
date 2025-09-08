@@ -15,13 +15,23 @@ class ScreenSaver(QtCore.QObject):
 
     touch_blocked: bool = False
 
-    def __init__(self) -> None:
+    def __init__(self, parent) -> None:
         super().__init__()
-        # Install event filters
-        QtWidgets.QApplication.instance().installEventFilter(self)
-        self.blank_timeout = (
-            self.dpms_standby_timeout if self.dpms_standby_timeout else 900000
+
+        self.screensaver_config = parent.config.get_section(
+            "screensaver", fallback=None
         )
+        if not self.screensaver_config:
+            self.blank_timeout = (
+                self.dpms_standby_timeout
+                if self.dpms_standby_timeout
+                else 900000
+            )
+        else:
+            self.blank_timeout = self.screensaver_config.getint(
+                "timeout", default=500000
+            )
+        QtWidgets.QApplication.instance().installEventFilter(self)
         self.timer.timeout.connect(self.check_dpms)
         self.timer.setInterval(self.blank_timeout)
         self.timer.start()
