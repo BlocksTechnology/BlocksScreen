@@ -2,6 +2,7 @@ import asyncio
 import enum
 import hashlib
 import logging
+from socket import LOCAL_PEERCRED
 import threading
 import typing
 from uuid import uuid4
@@ -803,17 +804,22 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
         saved_networks = self.get_saved_networks_with_for()
         return any(net.get("SSID", "") == ssid for net in saved_networks)
 
-    def add_wifi_network(
-        self, ssid: str, psk: str, priority: int = 0
+    async def _add_wifi_network(
+        self,
+        ssid: str,
+        psk: str,
+        priority: ConnectionPriority = ConnectionPriority.LOW,
     ) -> typing.Dict:
-        """Add and Save a network to the device.
+        """Add and save a new wifi network. `Asynchronous`
 
         Args:
-            ssid (str): Networks SSID
-            psk (str): Networks password
+            ssid (str): Network ssid
+            psk (str): Network password
+            priority (int, optional): Network connection priority. Defaults to ConnectionPriority.LOW.
 
         Raises:
-            NotImplementedError: Some network security types are not yet available so there is no way to connect to them.
+            NotImplementedError:
+
 
         Returns:
             typing.Dict: Dictionary with a status key that reports whether or not the connection was saved and connected.
@@ -822,33 +828,35 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
             "exception"
         """
         if not self.primary_wifi_interface:
-            return {"status": "error", "msg": "No Available interface"}
+            return {"status": "error", "msg": "No available interface"}
         if self.primary_wifi_interface == "/":
-            return {"status": "error", "msg": "No Available interface"}
+            return {"status": "error", "msg": "No vailable interface"}
 
         psk = hashlib.sha256(psk.encode()).hexdigest()
 
-        _available_networks: typing.Dict = (
-            asyncio.run_coroutine_threadsafe(
-                self._get_available_networks(), self.loop
-            )
-        ).result(timeout=2)  # This is a future
+        _available_networks = await self._get_available_networks()
 
         if "error" in _available_networks.keys():
-            return {"status": "error", "msg": "No available Networks"}
+            return {"status": "error", "msg": "No available networks"}
+
         if self.is_known(ssid):
             self.delete_network(ssid)
 
         if ssid in _available_networks.keys():
-            _wanted_network: typing.Dict = _available_networks.get(ssid, "")
-            properties: NetworkManagerConnectionProperties = {
+            target_network = _available_networks.get(ssid, {})
+            if not target_network:
+                return {"status": "error", "msg": "No available networks"}
+            target_interface = (
+                await self.primary_wifi_interface.interface.get_async()
+            )
+            _properties: NetworkManagerConnectionProperties = {
                 "connection": {
                     "id": ("s", ssid),
                     "uuid": ("s", str(uuid4())),
                     "type": ("s", "802-11-wireless"),
                     "interface-name": (
                         "s",
-                        self.primary_wifi_interface.interface,
+                        target_interface,
                     ),
                     "autoconnect": ("b", bool(True)),
                     "autoconnect-priority": ("u", priority),
@@ -860,24 +868,18 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                 "ipv4": {"method": ("s", "auto")},
                 "ipv6": {"method": ("s", "auto")},
             }
+            if "security" in target_network.keys():
+                _security_types = target_network.get("security")
+                if not _security_types:
+                    return {
+                        "status": "error",
+                        "msg": "No security type for network, stopping",
+                    }
+            if not _security_types[0]:
+                return {"status": "error", "msg": "Unknown security type"}
 
-            if "security" in _wanted_network.keys():
-                _security_types = _wanted_network["security"]
-            else:
-                return {
-                    "status": "error",
-                    "msg": "No security type for network, stopping",
-                }
-            if _security_types[0] is None:
-                return {"status": "error", "msg": "unknown_security_type"}
-
-            elif (
-                AccessPointCapabilities.PRIVACY
-                or AccessPointCapabilities.WPS
-                or AccessPointCapabilities.WPS_BUTTON
-                or AccessPointCapabilities.WPS_PIN in _security_types[0]
-            ):
-                properties["802-11-wireless"]["security"] = (
+            if not AccessPointCapabilities.NONE != _security_types[0]:
+                _properties["802-11-wireless"]["security"] = (
                     "s",
                     "802-11-wireless-security",
                 )
@@ -887,7 +889,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                     or WpaSecurityFlags.BROADCAST_WEP104
                     or WpaSecurityFlags.BROADCAST_WEP40
                 ) in (_security_types[1] or _security_types[2]):
-                    properties["802-11-wireless-security"] = {
+                    _properties["802-11-wireless-security"] = {
                         "key-mgmt": ("s", "none"),
                         "wep-key-type": ("u", 2),
                         "wep-key0": ("s", psk),
@@ -906,7 +908,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                     or WpaSecurityFlags.BROADCAST_CCMP
                 ) in (_security_types[1] or _security_types[2]):
                     # * AES/CCMP WPA2
-                    properties["802-11-wireless-security"] = {
+                    _properties["802-11-wireless-security"] = {
                         "key-mgmt": ("s", "wpa-psk"),
                         "psk": ("s", psk),
                         "pairwise": ("as", ["ccmp"]),
@@ -916,7 +918,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                     _security_types[1] or _security_types[2]
                 ):
                     # * AUTH_PSK -> WPA-PSK
-                    properties["802-11-wireless-security"] = {
+                    _properties["802-11-wireless-security"] = {
                         "key-mgmt": ("s", "wpa-psk"),
                         "psk": ("s", psk),
                     }
@@ -928,7 +930,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                     #   IEEE 802.1x standard used 8 to 64 passphrase hashed to derive
                     #   the actual key in the form of 64 hexadecimal character.
                     #
-                    properties["802-11-wireless-security"] = {
+                    _properties["802-11-wireless-security"] = {
                         "key-mgmt": ("s", "ieee802.1x"),
                         "wep-key-type": ("u", 2),
                         "wep-key0": ("s", psk),
@@ -941,7 +943,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                     # Notes:
                     #   The SAE is WPA3 so they use a passphrase of any length for authentication.
                     #
-                    properties["802-11-wireless-security"] = {
+                    _properties["802-11-wireless-security"] = {
                         "key-mgmt": ("s", "sae"),
                         "psk": ("s", psk),
                     }
@@ -949,7 +951,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                     _security_types[1] or _security_types[2]
                 ):
                     # * OWE
-                    properties["802-11-wireless-security"] = {
+                    _properties["802-11-wireless-security"] = {
                         "key-mgmt": ("s", "owe"),
                         "psk": ("s", psk),
                     }
@@ -957,21 +959,12 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                     _security_types[1] or _security_types[2]
                 ):
                     # * OWE TM
-                    # raise NotImplementedError
-                    return {
-                        "status": "error",
-                        "msg": "Security type  AUTH_OWE_TM not supported",
-                    }
-
+                    raise NotImplementedError("AUTH_OWE_TM not supported")
                 elif (WpaSecurityFlags.AUTH_EAP_SUITE_B) in (
                     _security_types[1] or _security_types[2]
                 ):
                     # * EAP SUITE B
-                    # raise NotImplementedError
-                    return {
-                        "status": "error",
-                        "msg": "Security type EAP_SUITE_B not supported",
-                    }
+                    raise NotImplementedError("EAP SUITE B Auth not supported")
 
                 try:
                     tasks = []
@@ -979,7 +972,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                         self.loop.create_task(
                             NetworkManagerSettings(
                                 bus=self.system_dbus
-                            ).add_connection(properties)
+                            ).add_connection(_properties)
                         )
                     )
                     tasks.append(
@@ -989,42 +982,63 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                             ).reload_connections()
                         )
                     )
-                    asyncio.gather(*tasks)
-                    return {
-                        "status": "success",
-                        "msg": "Network added successfully",
-                    }
-                except NmConnectionFailedError as e:
-                    return {
-                        "status": "exception",
-                        "msg": f"Exception occurred could not connect to network: {e} ",
-                    }
-                except (
-                    NmConnectionPropertyNotFoundError
-                    or NmConnectionInvalidPropertyError
-                ) as e:
-                    return {
-                        "status": "exception",
-                        "msg": f"Error configuring properties for the network, internal error  : {e}",
-                    }
-                except Exception as e:
-                    return {
-                        "status": "exception",
-                        "msg": f"Could not connect to network: {e}",
-                    }
+                    results = await asyncio.gather(*tasks)
+                    for result in results:
+                        if isinstance(result, Exception):
+                            if isinstance(result, NmConnectionFailedError):
+                                logger.error(
+                                    f"Exception caught, could not connect to network: {result}"
+                                )
+                            if isinstance(
+                                result, NmConnectionPropertyNotFoundError
+                            ):
+                                logger.error(
+                                    f"Exception caught, network properties internal error: {result}"
+                                )
 
+                            return {
+                                "status": "error",
+                                "msg": f"Caught Exception Unable to add network connection {result}",
+                            }
+                        return {"status": "success"}
+                except Exception as e:
+                    logger.error(f"Unexpected error while adding network: {e}")
         return {"status": "failure", "msg": "Unable to add network connection"}
+
+    def add_wifi_network(
+        self,
+        ssid: str,
+        psk: str,
+        priority: ConnectionPriority = ConnectionPriority.LOW,
+    ) -> typing.Dict:
+        """Add and Save a network to the device. `Synchronous`
+
+        Args:
+            ssid (str): Networks SSID
+            psk (str): Networks password
+
+        Raises:
+            NotImplementedError: Some network security types are not yet available so there is no way to connect to them.
+
+        Returns:
+            typing.Dict: Dictionary with a status key that reports whether or not the connection was saved and connected.
+
+            On the returned dictionary a key value "error" can appear if an error occurred, the value will say what the error was.
+            "exception"
+        """
+        future = asyncio.run_coroutine_threadsafe(
+            self._add_wifi_network(ssid, psk, priority), self.loop
+        )
+        return future.result(timeout=5)
 
     def disconnect_network(self) -> None:
         """Disconnect the active connection"""
-        if (
-            self.primary_wifi_interface == "/"
-            or not self.primary_wifi_interface
-        ):
+        if not self.primary_wifi_interface:
             return
-
-        asyncio.new_event_loop().run_until_complete(
-            self.primary_wifi_interface.disconnect()
+        if self.primary_wifi_interface == "/":
+            return
+        asyncio.run_coroutine_threadsafe(
+            self.primary_wifi_interface.disconnect(), self.loop
         )
 
     def get_connection_path_by_ssid(
@@ -1320,3 +1334,24 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
         except Exception:
             return {"status": "error", "error": "Unexpected error"}
 
+
+if __name__ == "__main__":
+    nm = SdbusNetworkManagerAsync()
+
+    nm.rescan_networks()
+    # print(nm.check_connectivity())
+    # print(nm.get_available_interfaces())
+    # print(nm.get_saved_networks_with_for())
+    # print(nm.get_connection_signal_by_ssid("Vodafone-FF144C"))
+    # print(nm.get_available_networks())
+    # print(nm.get_current_ip_addr())
+    # print(nm.get_current_ssid())
+
+    # print(nm)
+    # print(nm.get_current_ssid())
+    # print(nm.get_current_ip_addr())
+    # print(nm.get_available_networks())
+    # print(nm.is_known("BLOCKS"))
+    # print(nm.get_connection_signal_by_ssid("Vodafone-FF144C"))
+    # print(nm.get_connection_signal_by_ssid("BLOCKS"))
+    print(nm.get_saved_ssid_names())
