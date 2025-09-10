@@ -2,14 +2,13 @@ import asyncio
 import enum
 import hashlib
 import logging
-from socket import LOCAL_PEERCRED
 import threading
 import typing
 from uuid import uuid4
 
 import sdbus
 
-from PyQt6 import QtCore
+# from PyQt6 import QtCore
 from sdbus_async.networkmanager import (
     AccessPoint,
     AccessPointCapabilities,
@@ -50,18 +49,19 @@ class NetworkManagerRescanError(Exception):
         self.error = error
 
 
-class SdbusNetworkManagerAsync(QtCore.QObject):
+# class SdbusNetworkManagerAsync(QtCore.QObject):
+class SdbusNetworkManagerAsync:
     class ConnectionPriority(enum.Enum):
         HIGH = 90
         MEDIUM = 50
         LOW = 0
 
-    nm_state_change: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
-        str, name="nm-state-changed"
-    )
-    nm_properties_change: typing.ClassVar[QtCore.pyqtSignal] = (
-        QtCore.pyqtSignal(str, name="nm-properties-changed")
-    )
+    # nm_state_change: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+    #     str, name="nm-state-changed"
+    # )
+    # nm_properties_change: typing.ClassVar[QtCore.pyqtSignal] = (
+    #     QtCore.pyqtSignal(str, name="nm-properties-changed")
+    # )
 
     def __init__(self) -> None:
         super().__init__()
@@ -168,7 +168,8 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
             try:
                 async for state in self.nm.state_changed:
                     enum_state = NetworkManagerState(state)
-                    self.nm_state_change.emit(enum_state.name)
+                    # self.nm_state_change.emit(enum_state.name)
+                    ...
             except Exception as e:
                 logging.error(
                     f"Exception on Network Manager state listener: {e}"
@@ -179,7 +180,8 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
             try:
                 logging.debug("Listening for Network Manager state change")
                 async for properties in self.nm.properties_changed:
-                    self.nm_properties_change.emit(properties)
+                    # self.nm_properties_change.emit(properties)
+                    ...
             except Exception as e:
                 logging.error(
                     f"Exception on Network Manager state listener: {e}"
@@ -519,22 +521,27 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
         )
         return future.result(timeout=2)
 
+    async def _rescan(self)-> None: 
+        if not self.primary_wifi_interface: 
+            return 
+        if self.primary_wifi_interface == "/": 
+            return 
+        try:
+            task = self.loop.create_task(self.primary_wifi_interface.request_scan({}))
+            results = await asyncio.gather(task, return_exceptions=True)
+            for result in results: 
+                if isinstance(result, Exception): 
+                    raise NetworkManagerRescanError(f"Caught exception: {result}")
+                return 
+        except Exception as e:
+            logger.error(f"Network scan failed: {e}")
+            return 
+                    
     def rescan_networks(self) -> None:
         """Scan for available networks."""
-        if not self.primary_wifi_interface:
-            return
-        if self.primary_wifi_interface == "/":
-            return
-
-        try:
-            task = self.loop.create_task(
-                self.primary_wifi_interface.request_scan({})
-            )
-            asyncio.gather(task, return_exceptions=False)
-            return
-        except Exception:
-            raise NetworkManagerRescanError("Network scan failed")
-
+        future = asyncio.run_coroutine_threadsafe(self._rescan(), self.loop)
+        return future.result(timeout = 2)
+    
     async def _get_network_info(self, ap: AccessPoint) -> typing.Tuple:
         ssid = await ap.ssid.get_async()
         sec = await self._get_security_type(ap)
@@ -982,7 +989,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                             ).reload_connections()
                         )
                     )
-                    results = await asyncio.gather(*tasks)
+                    results = await asyncio.gather(*tasks, return_exceptions=True)
                     for result in results:
                         if isinstance(result, Exception):
                             if isinstance(result, NmConnectionFailedError):
@@ -1335,23 +1342,3 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
             return {"status": "error", "error": "Unexpected error"}
 
 
-if __name__ == "__main__":
-    nm = SdbusNetworkManagerAsync()
-
-    nm.rescan_networks()
-    # print(nm.check_connectivity())
-    # print(nm.get_available_interfaces())
-    # print(nm.get_saved_networks_with_for())
-    # print(nm.get_connection_signal_by_ssid("Vodafone-FF144C"))
-    # print(nm.get_available_networks())
-    # print(nm.get_current_ip_addr())
-    # print(nm.get_current_ssid())
-
-    # print(nm)
-    # print(nm.get_current_ssid())
-    # print(nm.get_current_ip_addr())
-    # print(nm.get_available_networks())
-    # print(nm.is_known("BLOCKS"))
-    # print(nm.get_connection_signal_by_ssid("Vodafone-FF144C"))
-    # print(nm.get_connection_signal_by_ssid("BLOCKS"))
-    print(nm.get_saved_ssid_names())
