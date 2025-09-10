@@ -8,7 +8,7 @@ from uuid import uuid4
 
 import sdbus
 
-# from PyQt6 import QtCore
+from PyQt6 import QtCore
 from sdbus_async.networkmanager import (
     AccessPoint,
     AccessPointCapabilities,
@@ -49,23 +49,20 @@ class NetworkManagerRescanError(Exception):
         self.error = error
 
 
-# class SdbusNetworkManagerAsync(QtCore.QObject):
-class SdbusNetworkManagerAsync:
+class SdbusNetworkManagerAsync(QtCore.QObject):
     class ConnectionPriority(enum.Enum):
         HIGH = 90
         MEDIUM = 50
         LOW = 0
 
-    # nm_state_change: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
-    #     str, name="nm-state-changed"
-    # )
-    # nm_properties_change: typing.ClassVar[QtCore.pyqtSignal] = (
-    #     QtCore.pyqtSignal(str, name="nm-properties-changed")
-    # )
+    nm_state_change: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        str, name="nm-state-changed"
+    )
+    nm_properties_change: typing.ClassVar[QtCore.pyqtSignal] = (
+        QtCore.pyqtSignal(str, name="nm-properties-changed")
+    )
 
-    # def __init__(self, parent) -> None:
     def __init__(self) -> None:
-        # def __init__(self) -> None:
         super().__init__()
 
         self._listeners_running: bool = False
@@ -170,8 +167,7 @@ class SdbusNetworkManagerAsync:
             try:
                 async for state in self.nm.state_changed:
                     enum_state = NetworkManagerState(state)
-                    ...
-                    # self.nm_state_change.emit(enum_state.name)
+                    self.nm_state_change.emit(enum_state.name)
             except Exception as e:
                 logging.error(
                     f"Exception on Network Manager state listener: {e}"
@@ -182,8 +178,7 @@ class SdbusNetworkManagerAsync:
             try:
                 logging.debug("Listening for Network Manager state change")
                 async for properties in self.nm.properties_changed:
-                    # self.nm_properties_change.emit(properties)
-                    ...
+                    self.nm_properties_change.emit(properties)
             except Exception as e:
                 logging.error(
                     f"Exception on Network Manager state listener: {e}"
