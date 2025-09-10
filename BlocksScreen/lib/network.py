@@ -1320,24 +1320,3 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
         except Exception:
             return {"status": "error", "error": "Unexpected error"}
 
-
-if __name__ == "__main__":
-    nm = SdbusNetworkManagerAsync()
-
-    nm.rescan_networks()
-    # print(nm.check_connectivity())
-    # print(nm.get_available_interfaces())
-    # print(nm.get_saved_networks_with_for())
-    # print(nm.get_connection_signal_by_ssid("Vodafone-FF144C"))
-    # print(nm.get_available_networks())
-    # print(nm.get_current_ip_addr())
-    # print(nm.get_current_ssid())
-
-    # print(nm)
-    # print(nm.get_current_ssid())
-    # print(nm.get_current_ip_addr())
-    # print(nm.get_available_networks())
-    # print(nm.is_known("BLOCKS"))
-    # print(nm.get_connection_signal_by_ssid("Vodafone-FF144C"))
-    # print(nm.get_connection_signal_by_ssid("BLOCKS"))
-    print(nm.get_saved_ssid_names())
