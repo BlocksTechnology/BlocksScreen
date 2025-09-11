@@ -166,7 +166,6 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                 async for state in self.nm.state_changed:
                     enum_state = NetworkManagerState(state)
                     self.nm_state_change.emit(enum_state.name)
-                    ...
             except Exception as e:
                 logging.error(
                     f"Exception on Network Manager state listener: {e}"
@@ -285,6 +284,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
         """
         if not isinstance(toggle, bool):
             raise TypeError("Toggle wifi expected boolean")
+
         asyncio.run_coroutine_threadsafe(
             self.nm.wireless_enabled.set_async(toggle), self.loop
         )
@@ -294,7 +294,16 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
             return
         if self.primary_wifi_interface == "/":
             return
-        asyncio.gather(self.loop.create_task(self.nm.enable(value)))
+        results = asyncio.gather(
+            self.loop.create_task(self.nm.enable(value)),
+            return_exceptions=True,
+        )
+        for result in results:
+            if isinstance(result, Exception):
+                logger.error(
+                    f"Exception Caught when toggling network : {result}"
+                )
+        return
 
     def disable_networking(self) -> None:
         if not (self.primary_wifi_interface and self.primary_wired_interface):
@@ -320,7 +329,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
             self._toggle_networking(True), self.loop
         )
 
-    def toggle_hotspot(self, toggle: bool) -> bool:
+    def toggle_hotspot(self, toggle: bool) -> None:
         """Activate/Deactivate device hotspot
 
         Args:
@@ -333,25 +342,25 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
             raise TypeError("Correct type should be a boolean.")
 
         if not self.nm:
-            return False
+            return
         try:
             old_ssid: typing.Union[str, None] = self.get_current_ssid()
             if old_ssid:
                 self.disconnect_network()
             if self.is_known(self.hotspot_ssid):
                 self.connect_network(self.hotspot_ssid)
-                asyncio.gather(self.nm.reload(0x0))
+                asyncio.gather(self.nm.reload(0x0), return_exceptions=False)
 
                 if self.nm.check_connectivity() == (
                     NetworkManagerConnectivityState.FULL
                     | NetworkManagerConnectivityState.LIMITED
                 ):
                     logging.debug(f"Hotspot AP {self.hotspot_ssid} up!")
-                    return True
-                return False
+
+                return
             if old_ssid:
                 self.connect_network(old_ssid)
-                return False
+                return
         except Exception as e:
             logging.error(f"Unexpected error occurred: {e}")
 
@@ -603,14 +612,12 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                 ),
                 return_exceptions=True,
             )
+            for result in results:
+                if isinstance(result, Exception):
+                    logger.error(f"Error retrieving network info : {result}")
+            return dict(results)
         except Exception as e:
             logger.error(f"Exception while gathering AP information: {e}")
-        for result in results:
-            if isinstance(result, Exception):
-                logger.error(f"Error retrieving network info : {result}")
-            else:
-                return dict(results)
-                # Do something with the successful result
         logger.debug(
             "Successfully gathered available access point information"
         )
@@ -652,7 +659,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                                 )
                                 return {}
                             else:
-                                return result
+                                return dict(result)
                     except Exception as e:
                         logger.error(
                             f"Exception Caught on gathering available networks : {e}"
@@ -746,20 +753,26 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                     map(
                         lambda network_properties: (
                             {
-                                "SSID": network_properties["802-11-wireless"][
+                                "ssid": network_properties["802-11-wireless"][
                                     "ssid"
                                 ][1].decode(),
-                                "UUID": network_properties["connection"][
+                                "uuid": network_properties["connection"][
                                     "uuid"
                                 ][1],
-                                "SECURITY_TYPE": network_properties[
+                                "signal": 0
+                                + self.get_connection_signal_by_ssid(
+                                    network_properties["802-11-wireless"][
+                                        "ssid"
+                                    ][1].decode()
+                                ),
+                                "security": network_properties[
                                     str(
                                         network_properties["802-11-wireless"][
                                             "security"
                                         ][1]
                                     )
                                 ]["key-mgmt"][1],
-                                "MODE": network_properties["802-11-wireless"][
+                                "mode": network_properties["802-11-wireless"][
                                     "mode"
                                 ],
                             }

@@ -43,7 +43,7 @@ class MainWindow(QtWidgets.QMainWindow):
         list, name="handle_error_response"
     )
     call_network_panel = QtCore.pyqtSignal(
-        name="visibilityChange_networkPanel"
+        name="call-network-panel"
     )
 
     def __init__(self):
@@ -138,13 +138,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui.main_content_widget.currentChanged.connect(
             slot=self.reset_tab_indexes
         )
-        # self.printPanel.request_block_manual_tab_change.connect(
-        # self.disable_tab_bar
-        # )
-        # self.printPanel.request_activate_manual_tab_change.connect(
-        # self.enable_tab_bar
-        # )
-        self.call_network_panel.connect(self.networkPanel.call_network_panel)
+        self.call_network_panel.connect(self.networkPanel.show_network_panel)
         self.conn_window.wifi_button_clicked.connect(
             self.call_network_panel.emit
         )

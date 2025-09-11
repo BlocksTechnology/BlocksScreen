@@ -40,9 +40,9 @@
 </string>
   </property>
   <property name="currentIndex">
-   <number>0</number>
+   <number>1</number>
   </property>
-  <widget class="QWidget" name="network_list_page">
+  <widget class="QWidget" name="main_network_page">
    <property name="sizePolicy">
     <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
      <horstretch>0</horstretch>
@@ -530,10 +530,10 @@ using the buttons on the side.</string>
     </item>
    </layout>
   </widget>
-  <widget class="QWidget" name="wifi_page">
+  <widget class="QWidget" name="network_list_page">
    <layout class="QVBoxLayout" name="verticalLayout_9">
     <item>
-     <layout class="QHBoxLayout" name="wp_header_layout">
+     <layout class="QHBoxLayout" name="nl_header_layout">
       <item>
        <widget class="IconButton" name="rescan_button">
         <property name="minimumSize">
@@ -563,7 +563,7 @@ using the buttons on the side.</string>
        </widget>
       </item>
       <item>
-       <widget class="QLabel" name="network_main_title_2">
+       <widget class="QLabel" name="network_list_title">
         <property name="palette">
          <palette>
           <active>
@@ -642,7 +642,7 @@ using the buttons on the side.</string>
        </widget>
       </item>
       <item>
-       <widget class="IconButton" name="wifi_backButton">
+       <widget class="IconButton" name="nl_back_button">
         <property name="minimumSize">
          <size>
           <width>60</width>
@@ -675,7 +675,7 @@ using the buttons on the side.</string>
      </layout>
     </item>
     <item>
-     <layout class="QVBoxLayout" name="wp_content_layout">
+     <layout class="QVBoxLayout" name="nl_content_layout">
       <item>
        <widget class="QListWidget" name="network_list_widget">
         <property name="palette">
