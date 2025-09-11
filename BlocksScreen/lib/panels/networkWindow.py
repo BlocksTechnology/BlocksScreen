@@ -169,6 +169,38 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             str(self.sdbus_network.hotspot_password)
         )
         self.new_connection_result.connect(self.process_new_connection_result)
+
+        self.panel.saved_connection_change_password_view.pressed.connect(
+            lambda: self.panel.saved_connection_change_password_view.setPixmap(
+                QtGui.QPixmap(":/ui/media/btn_icons/unsee.svg")
+            )
+        )
+        self.panel.saved_connection_change_password_view.released.connect(
+            lambda: self.panel.saved_connection_change_password_view.setPixmap(
+                QtGui.QPixmap(":/ui/media/btn_icons/see.svg")
+            )
+        )
+        self.panel.add_network_password_view.pressed.connect(
+            lambda: self.panel.saved_connection_change_password_view.setPixmap(
+                QtGui.QPixmap(":/ui/media/btn_icons/unsee.svg")
+            )
+        )
+        self.panel.add_network_password_view.released.connect(
+            lambda: self.panel.saved_connection_change_password_view.setPixmap(
+                QtGui.QPixmap(":/ui/media/btn_icons/see.svg")
+            )
+        )
+        self.panel.hotspot_password_view_button.pressed.connect(
+            lambda: self.panel.saved_connection_change_password_view.setPixmap(
+                QtGui.QPixmap(":/ui/media/btn_icons/unsee.svg")
+            )
+        )
+        self.panel.hotspot_password_view_button.released.connect(
+            lambda: self.panel.saved_connection_change_password_view.setPixmap(
+                QtGui.QPixmap(":/ui/media/btn_icons/see.svg")
+            )
+        )
+
         self.request_network_scan.emit()
         self.evaluate_network_state()
         self.hide()
