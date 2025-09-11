@@ -289,6 +289,37 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
             self.nm.wireless_enabled.set_async(toggle), self.loop
         )
 
+    async def _toggle_networking(self, value: bool = True) -> None:
+        if not self.primary_wifi_interface:
+            return
+        if self.primary_wifi_interface == "/":
+            return
+        asyncio.gather(self.loop.create_task(self.nm.enable(value)))
+
+    def disable_networking(self) -> None:
+        if not (self.primary_wifi_interface and self.primary_wired_interface):
+            return
+        if (
+            self.primary_wifi_interface == "/"
+            and self.primary_wired_interface == "/"
+        ):
+            return
+        asyncio.run_coroutine_threadsafe(
+            self._toggle_networking(False), self.loop
+        )
+
+    def activate_networking(self) -> None:
+        if not (self.primary_wifi_interface and self.primary_wired_interface):
+            return
+        if (
+            self.primary_wifi_interface == "/"
+            and self.primary_wired_interface == "/"
+        ):
+            return
+        asyncio.run_coroutine_threadsafe(
+            self._toggle_networking(True), self.loop
+        )
+
     def toggle_hotspot(self, toggle: bool) -> bool:
         """Activate/Deactivate device hotspot
 
@@ -1280,8 +1311,6 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
             logger.error(
                 f"Exception Caught while deactivating network {ssid}: {e}"
             )
-            
-    
 
     def create_hotspot(
         self, ssid: str = "PrinterHotspot", password: str = "123456789"
