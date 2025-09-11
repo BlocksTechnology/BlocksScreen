@@ -1249,6 +1249,40 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
             logging.debug(f"Unexpected exception detected: {e}")
             return {"status": "error"}
 
+    def get_hotspot_ssid(self) -> str:
+        return self.hotspot_ssid
+
+    def deactivate_connection(self, connection_path) -> None:
+        if not self.nm:
+            return
+        if not self.primary_wifi_interface:
+            return
+        if self.primary_wifi_interface == "/":
+            return
+        asyncio.run_coroutine_threadsafe(
+            self.nm.deactivate_connection(active_connection=connection_path),
+            self.loop,
+        )
+
+    def deactivate_connection_by_ssid(self, ssid: str):
+        if not self.nm:
+            return
+        if not self.primary_wifi_interface:
+            return
+        if self.primary_wifi_interface == "/":
+            return
+        _connection_path = self.get_connection_path_by_ssid(ssid)
+        if not _connection_path:
+            return f"No saved connection path for the SSID: {ssid}"
+        try:
+            self.deactivate_connection(_connection_path)
+        except Exception as e:
+            logger.error(
+                f"Exception Caught while deactivating network {ssid}: {e}"
+            )
+            
+    
+
     def create_hotspot(
         self, ssid: str = "PrinterHotspot", password: str = "123456789"
     ) -> typing.Dict:
@@ -1305,9 +1339,6 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                 f"Error occurred while adding hotspot connection: {e.args}"
             )
             return {"status": f"error, exception: {e}"}
-
-    def get_hotspot_ssid(self) -> str:
-        return self.hotspot_ssid
 
     def set_network_priority(
         self, ssid: str, priority: ConnectionPriority = ConnectionPriority.LOW
