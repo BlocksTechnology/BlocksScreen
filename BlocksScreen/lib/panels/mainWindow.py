@@ -72,7 +72,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.controlPanel = ControlTab(
             self.ui.controlTab, self.ws, self.printer
         )
-        self.utilitiesPanel = UtilitiesTab(self.ui.utilitiesTab)
+        self.utilitiesPanel = UtilitiesTab(self.ui.utilitiesTab,self.ws,self.printer)
         self.networkPanel = NetworkControlWindow(self)
 
         self.bo_ws_startup.connect(slot=self.bo_start_websocket_connection)
@@ -98,7 +98,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.controlPanel.request_change_page.connect(
             slot=self.global_change_page
         )
-        self.utilitiesPanel.request_back.connect(slot=self.global_back)
+        self.utilitiesPanel.request_back_page.connect(slot=self.global_back)
         self.utilitiesPanel.request_change_page.connect(
             slot=self.global_change_page
         )
@@ -133,6 +133,7 @@ class MainWindow(QtWidgets.QMainWindow):
         )
         self.gcode_response.connect(self.printer.gcode_response)
         self.query_object_list.connect(self.printer.on_object_list)
+        self.query_object_list.connect(self.utilitiesPanel.on_object_list)
         self.printer.extruder_update.connect(self.on_extruder_update)
         self.printer.heater_bed_update.connect(self.on_heater_bed_update)
         self.ui.main_content_widget.currentChanged.connect(

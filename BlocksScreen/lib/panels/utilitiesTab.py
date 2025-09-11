@@ -1,43 +1,81 @@
-from lib.utils.blocks_button import BlocksCustomButton
-
-
-from lib.ui.utilitiesStackedWidget_ui import Ui_utilitiesStackedWidget
-from PyQt6 import QtGui, QtCore ,QtWidgets
+import typing
 import csv
 from functools import partial
+from enum import Enum, auto
+from dataclasses import dataclass # Re-added dataclass import
+
+from PyQt6 import QtGui, QtCore, QtWidgets
+
+# Local imports from your project structure
+from lib.utils.blocks_button import BlocksCustomButton
+from lib.utils.toggleAnimatedButton import ToggleAnimatedButton
+from lib.ui.utilitiesStackedWidget_ui import Ui_utilitiesStackedWidget
 from lib.moonrakerComm import MoonWebSocket
+from lib.panels.widgets.loadPage import LoadScreen
+from lib.printer import Printer
 
 
+# RESTORED: Using a dataclass for a clean and concise data structure.
+@dataclass
+class LedState:
+    """Represents the state of an LED light."""
+    type: str
+    red: int = 0
+    green: int = 0
+    blue: int = 0
+    white: int = 255
+    state: str = "on"
+
+    def get_gcode(self, name: str) -> str:
+        """Generates the G-code command for the current state."""
+        if self.state == "off":
+            return f"SET_LED LED={name} RED=0 GREEN=0 BLUE=0 WHITE=0"
+
+        if self.type == "white":
+            return f"SET_LED LED={name} WHITE={self.white / 255:.2f}"
+        
+        # Default to RGB
+        return (
+            f"SET_LED LED={name} RED={self.red / 255:.2f} "
+            f"GREEN={self.green / 255:.2f} BLUE={self.blue / 255:.2f} "
+            f"WHITE={self.white / 255:.2f}"
+        )
+
+
+class Process(Enum):
+    FAN = auto()
+    AXIS = auto()
+    BED_HEATER = auto()
+    EXTRUDER = auto()
+    AXIS_MAINTENANCE = auto()
 
 
 class UtilitiesTab(QtWidgets.QStackedWidget):
-    request_back_button_pressed = QtCore.pyqtSignal(
-        name="request_back_button_pressed"
-    )
-
+    request_back_page = QtCore.pyqtSignal(name="request_back_page")
     request_change_page = QtCore.pyqtSignal(int, int, name="request_change_page")
-
     request_available_objects_signal = QtCore.pyqtSignal(name="get_available_objects")
-
     run_gcode_signal = QtCore.pyqtSignal(str, name="run_gcode")
 
     request_numpad_signal = QtCore.pyqtSignal(
-        int,
-        str,
-        str,
-        "PyQt_PyObject",
-        QtWidgets.QStackedWidget,
-        name="request_numpad",
+        int, str, str, "PyQt_PyObject", QtWidgets.QStackedWidget, name="request_numpad"
     )
 
-    def __init__(
-        self,parent: QtWidgets.QWidget, ws: MoonWebSocket
-    ) -> None:
+    subscribe_config = QtCore.pyqtSignal(
+        [list, "PyQt_PyObject"],
+        [str, "PyQt_PyObject"],
+        name="on_subscribe_config",
+    )
+
+    def __init__(self, parent: QtWidgets.QWidget, ws: MoonWebSocket, printer: Printer) -> None:
         super().__init__(parent)
 
         self.panel = Ui_utilitiesStackedWidget()
         self.panel.setupUi(self)
 
+        self.ws = ws
+        self.printer: Printer = printer
+
+        # --- State Variables ---
         self.objects = {
             "fans": {},
             "axis": {"x": "indf", "y": "indf", "z": "indf"},
@@ -45,593 +83,352 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
             "extrude": {"extruder": "indf"},
             "leds": {},
         }
-        self.x_inputshaper = {
-            "am_zv": {},
-            "am_mzv": {},
-            "am_ei": {},
-            "am_2hump_ei": {},
-            "am_3hump_ei": {},
-            "am_user_input": {},
-        }
-
-        self.ws = ws
-
-        self.current_object = None
-        self.current_process = None
-        self.resonance_test_state = "x"
-        self.index_count = 0
-        self.ammount = 1
-
+        self.x_inputshaper = {}
+        self.stepper_limits = {}
+        
+        self.current_object: typing.Optional[str] = None
+        self.current_process: typing.Optional[Process] = None
+        self.axis_in: str = "x"
+        self.ammount: int = 1
+        
+        # --- UI Setup ---
         self.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
+        self.sliderPage = LoadScreen(self)
+        self.addWidget(self.sliderPage)
+        
+
+        # --- Back Buttons ---
+        for button in (
+            self.panel.is_back_btn,
+            self.panel.leds_back_btn,
+            self.panel.info_back_btn,
+            self.panel.leds_slider_back_btn,
+            self.panel.input_shaper_back_btn,
+            self.panel.routine_check_back_btn,
+        ):
+            button.clicked.connect(self.back_button)
+
+        # --- Page Navigation ---
+        self._connect_page_change(self.panel.utilities_axes_btn, self.panel.axes_page)
+        self._connect_page_change(self.panel.utilities_input_shaper_btn, self.panel.input_shaper_page)
+        self._connect_page_change(self.panel.utilities_info_btn, self.panel.info_page)
+        self._connect_page_change(self.panel.utilities_routine_check_btn, self.panel.routines_page)
+        self._connect_page_change(self.panel.utilities_leds_btn, self.panel.leds_page)
+        self._connect_page_change(self.panel.is_confirm_btn, self.panel.utilities_page)
+        self._connect_page_change(self.panel.am_cancel, self.panel.utilities_page)
+        self._connect_page_change(self.panel.axes_back_btn, self.panel.utilities_page)
+        
+        
+        # --- Routines ---
+        self.panel.rc_fans.clicked.connect(partial(self.run_routine, Process.FAN))
+        self.panel.rc_bheat.clicked.connect(partial(self.run_routine, Process.BED_HEATER))
+        self.panel.rc_ext.clicked.connect(partial(self.run_routine, Process.EXTRUDER))
+        self.panel.rc_axis.clicked.connect(partial(self.run_routine, Process.AXIS))
+        self.panel.rc_no.clicked.connect(self.on_routine_answer)
+        self.panel.rc_yes.clicked.connect(self.on_routine_answer)
+
+        # --- Axis Maintenance ---
+        self.panel.axis_x_btn.clicked.connect(partial(self.axis_maintenance, "x"))
+        self.panel.axis_y_btn.clicked.connect(partial(self.axis_maintenance, "y"))
+        self.panel.axis_z_btn.clicked.connect(partial(self.axis_maintenance, "z"))
+        
+        # --- Input Shaper ---
+        self.panel.is_X_startis_btn.clicked.connect(partial(self.run_resonance_test, "x"))
+        self.panel.is_Y_startis_btn.clicked.connect(partial(self.run_resonance_test, "y"))
+        self.panel.am_confirm.clicked.connect(self.apply_input_shaper_selection)
+        self.panel.isc_btn_group.buttonClicked.connect(lambda btn: setattr(self, 'ammount', int(btn.text())))
+        self._connect_numpad_request(self.panel.isui_fq, "frequency", "Frequency")
+        self._connect_numpad_request(self.panel.isui_sm, "smoothing", "Smoothing")
+
+        self.panel.toggle_led_button.state = ToggleAnimatedButton.State.ON
+        
+        # --- LEDs ---
+        self.panel.leds_r_slider.sliderReleased.connect(self.update_led_values)
+        self.panel.leds_g_slider.sliderReleased.connect(self.update_led_values)
+        self.panel.leds_b_slider.sliderReleased.connect(self.update_led_values)
+        self.panel.leds_w_slider.sliderReleased.connect(self.update_led_values)
+        self.panel.toggle_led_button.clicked.connect(self.toggle_led_state)
+        
+        # --- Websocket/Printer Signals ---
+        self.run_gcode_signal.connect(self.ws.api.run_gcode)
+        self.subscribe_config[str, "PyQt_PyObject"].connect(self.printer.on_subscribe_config)
+        self.subscribe_config[list, "PyQt_PyObject"].connect(self.printer.on_subscribe_config)
+
+        # --- Initialize Printer Communication ---
+        self.printer.printer_config.connect(self.on_printer_config_received)
+        self.printer.gcode_move_update.connect(self.on_gcode_move_update)
 
 
-        # self.run_gcode_signal.connect(self.ws.api.run_gcode)
+    @QtCore.pyqtSlot(list, name="on_object_list")
+    def on_object_list(self, object_list: list) -> None:
+        self.cg = object_list
+        for obj in self.cg:
+            if "fan" in obj and "pin" not in obj and "controller" not in obj:
+                self.objects["fans"][obj] = "indf"
+        self._update_leds_from_config()
 
+    @QtCore.pyqtSlot(dict, name="on_object_config")
+    @QtCore.pyqtSlot(list, name="on_object_config")
+    def on_object_config(self, config: typing.Union[dict, list]) -> None:
+        if not config: return
+        config_items = [config] if isinstance(config, dict) else config
+        for item in config_items:
+            for key, value in item.items():
+                if key.startswith("stepper_") and isinstance(value, dict) and key not in self.stepper_limits:
+                    pos_min = value.get("position_min")
+                    pos_max = value.get("position_max")
+                    if pos_min is not None or pos_max is not None:
+                        self.stepper_limits[key] = {
+                            "min": float(pos_min) if pos_min is not None else -float('inf'),
+                            "max": float(pos_max) if pos_max is not None else float('inf')
+                        }
 
-        self.panel.leds_r_slider.valueChanged.connect(self.update_led_values)
-        self.panel.leds_g_slider.valueChanged.connect(self.update_led_values)
-        self.panel.leds_b_slider.valueChanged.connect(self.update_led_values)
-        self.panel.leds_w_slider.valueChanged.connect(self.update_led_values)
-        self.panel.leds_off_btn.clicked.connect(self.offonbutton)
-        self.panel.leds_on_btn.clicked.connect(self.offonbutton)
-        self.panel.axes_back_btn.clicked.connect(lambda: self.change_page(0))
-        self.panel.am_confirm.clicked.connect(self.is_select)
-        self.panel.is_back_btn.clicked.connect(lambda: self.change_page(7))
-        self.panel.is_confirm_btn.clicked.connect(lambda: self.change_page(0))
-        self.panel.leds_back_btn.clicked.connect(lambda: self.change_page(0))
-        self.panel.info_back_btn.clicked.connect(lambda: self.change_page(0))
-        self.panel.rc_fans.clicked.connect(lambda: self.routines("fans"))
-        self.panel.rc_bheat.clicked.connect(lambda: self.routines("bheat"))
-        self.panel.rc_ext.clicked.connect(lambda: self.routines("extrude"))
-        self.panel.rc_axis.clicked.connect(lambda: self.routines("axis"))
-        self.panel.rc_no.clicked.connect(self.rc_answer)
-        self.panel.rc_yes.clicked.connect(self.rc_answer)
-        self.panel.am_cancel.clicked.connect(lambda: self.change_page(0))
+    def on_printer_config_received(self, config: dict) -> None:
+        for axis in ("x", "y", "z"):
+            self.subscribe_config[str, "PyQt_PyObject"].emit(f"stepper_{axis}", self.on_object_config)
 
-        self.panel.leds_slider_back_btn.clicked.connect(
-            lambda: self.change_page(2)
-        )
-        self.panel.utilities_axes_btn.clicked.connect(
-            lambda: self.change_page(5)
-        )
-        self.panel.axis_x_btn.clicked.connect(
-            lambda: self.axis_maintenance("x")
-        )
-        self.panel.axis_y_btn.clicked.connect(
-            lambda: self.axis_maintenance("y")
-        )
-        self.panel.axis_z_btn.clicked.connect(
-            lambda: self.axis_maintenance("z")
-        )
-        self.panel.utilities_input_shaper_btn.clicked.connect(
-            lambda: self.change_page(6)
-        )
-        self.panel.input_shaper_back_btn.clicked.connect(
-            lambda: self.change_page(0)
-        )
-        self.panel.is_X_startis_btn.clicked.connect(
-            lambda: self.run_resonance_test("x")
-        )
-        self.panel.is_Y_startis_btn.clicked.connect(
-            lambda: self.run_resonance_test("y")
-        )
-        self.panel.utilities_info_btn.clicked.connect(
-            lambda: self.change_page(1)
-        )
-        self.panel.utilities_routine_check_btn.clicked.connect(
-            lambda: self.change_page(3)
-        )
-        self.panel.routine_check_back_btn.clicked.connect(
-            lambda: self.change_page(0)
-        )
-        self.panel.utilities_leds_btn.clicked.connect(
-            lambda: self.change_page(2)
-        )
-        self.panel.isc_btn_group.buttonClicked.connect(self.braed)
-
-        self.panel.isui_fq.clicked.connect(
+    @QtCore.pyqtSlot(str, list, name="on_gcode_move_update")
+    def on_gcode_move_update(self, name: str, value: list) -> None:
+        if not value:
+            return
+        if name == "gcode_position":
+            self.position = value
+   
+    def _connect_numpad_request(self, button: QtWidgets.QWidget, name: str, title: str):
+        button.clicked.connect(
             lambda: self.request_numpad_signal.emit(
-                3,
-                "frequency",
-                "Frequency",
-                self.handle_numpad_change,
-                self,
-            )
-        )
-        self.panel.isui_sm.clicked.connect(
-            lambda: self.request_numpad_signal.emit(
-                3,
-                "smoothing",
-                "Smoothing",
-                self.handle_numpad_change,
-                self,
+                3, name, title, self.handle_numpad_change, self
             )
         )
 
-    def braed(self, button):
-        self.ammount = int(button.text())
+    def handle_numpad_change(self, name: str, new_value: typing.Union[int, float]):
+        if name == "frequency": self.panel.isui_fq.setText(f"Frequency: {new_value} Hz")
+        elif name == "smoothing": self.panel.isui_sm.setText(f"Smoothing: {new_value}")
 
-    def handle_numpad_change(self, name: str, new_value: int | float):
-        print(name)
-        if name == "frequency":
-            self.panel.isui_fq.setText("Frequency: "+str(new_value) + " Hz")
-        if name == "smoothing":
-            self.panel.isui_sm.setText("Smoothing: "+str(new_value))
+    def run_routine(self, process: Process):
+        self.current_process = process
+        routine_configs = {
+            Process.FAN: ("fans", "fan is spinning"),
+            Process.AXIS: ("axis", "axis is moving"),
+            Process.BED_HEATER: ("bheat", "bed is heating"),
+            Process.EXTRUDER: ("extrude", "extruder is being tested"),
+        }
+        if process not in routine_configs: return
+        obj_key, message = routine_configs[process]
+        obj_list = list(self.objects.get(obj_key, {}).keys())
+        if not self._advance_routine_object(obj_list):
+            self.change_page(self.indexOf(self.panel.utilities_page))
+            if process == Process.FAN: self.run_gcode_signal.emit("M107")
+            return
+        self.set_routine_check_page(f"Running routine for: {self.current_object}", "")
+        self.show_waiting_page(
+            self.indexOf(self.panel.rc_page),
+            f"Please check if the {message}",
+            5000 if process in [Process.FAN, Process.AXIS] else 10000,
+        )
+        self._send_routine_gcode()
 
-    def routines(self, routine: str):
-        axis_list = list(self.objects.get("axis", {}).keys())
-        fan_list = list(self.objects.get("fans", {}).keys())
-        if routine == "fans":
-            self.current_process = "fan"
-
-            if (
-                self.current_object is None
-                or self.current_object not in fan_list
-            ):
-                self.current_object = fan_list[0]
+    def _advance_routine_object(self, obj_list: list) -> bool:
+        if not obj_list:
+            is_first_run = self.current_object is None
+            self.current_object = obj_list[0] if is_first_run and obj_list else "done"
+            return is_first_run
+        if self.current_object not in obj_list:
+            if self.current_process == Process.AXIS: self.run_gcode_signal.emit("G28")
+            self.current_object = obj_list[0]
+            return True
+        try:
+            current_index = obj_list.index(self.current_object)
+            if current_index + 1 < len(obj_list):
+                self.current_object = obj_list[current_index + 1]
+                return True
             else:
-                current_index = fan_list.index(self.current_object)
-                if current_index + 1 < len(fan_list):
-                    self.current_object = fan_list[current_index + 1]
-                else:
-                    self.setCurrentIndex(3)
-                    self.current_object = None
-                    self.run_gcode_signal.emit("M107\nM400")
-                    return
-
-            self.rc_page(f"Running routine for: {self.current_object}", "")
-            self.waiting_page(
-                4,
-                f"Running routine for: {self.current_object}",
-                "Please check if the fan is spinning",
-                5000,
-            )
-            self.rc_gcode("fans", self.current_object, 0.5)
-
-        elif routine == "axis":
-            self.current_process = "axis"
-
-            if (
-                self.current_object is None
-                or self.current_object not in axis_list
-            ):
-                self.run_gcode_signal.emit("G28\nM400")
-                self.current_object = axis_list[0]
-            else:
-                current_index = axis_list.index(self.current_object)
-                if current_index + 1 < len(axis_list):
-                    self.current_object = axis_list[current_index + 1]
-                else:
-                    self.setCurrentIndex(3)
-                    self.current_object = None
-                    return
-            self.rc_page(f"Running routine for: {self.current_object}", "")
-            self.waiting_page(
-                4,
-                f"Running routine for: {self.current_object}",
-                "Please check if the axis is moving",
-                10000,
-            )
-            self.rc_gcode("axis", self.current_object, 0.5)
-        elif routine == "bheat":
-            self.current_process = "bheat"
-
-            if self.current_object is None:
-                self.current_object = "heater_bed"
-                self.rc_page("Running Routine for: Bed Heater", "")
-                self.waiting_page(
-                    4,
-                    "Heating the Bed",
-                    "Please wait while the bed is heating",
-                    10000,
-                )
-                self.rc_gcode("bheat", self.current_object, 0)
-            else:
-                self.setCurrentIndex(3)
                 self.current_object = None
-                return
+                return False
+        except ValueError:
+            self.current_object = obj_list[0]
+            return True
 
-        elif routine == "extrude":
-            self.current_process = "extrude"
+    def on_routine_answer(self) -> None:
+        if self.current_process is None or self.current_object is None: return
+        answer = "yes" if self.sender() == self.panel.rc_yes else "no"
+        process_map = {
+            Process.FAN: ("fans", self.current_object),
+            Process.AXIS: ("axis", self.current_object),
+            Process.BED_HEATER: ("bheat", "Bed_Heater"),
+            Process.EXTRUDER: ("extrude", "extruder"),
+        }
+        if self.current_process in process_map:
+            obj_key, item_key = process_map[self.current_process]
+            self.objects[obj_key][item_key] = answer
+            if self.current_process in [Process.BED_HEATER, Process.EXTRUDER]:
+                self.run_gcode_signal.emit("TURN_OFF_HEATERS")
+            self.run_routine(self.current_process)
+        elif self.current_process == Process.AXIS_MAINTENANCE:
+            if answer == "yes": self._run_axis_maintenance_gcode(self.current_object)
+            else: self.change_page(self.indexOf(self.panel.axes_page))
 
-            if self.current_object is None:
-                self.current_object = "extruder"
-                self.rc_page("Running Routine for: Extruder", "")
-                self.waiting_page(
-                    4,
-                    "Extruding Test",
-                    "Please wait while extruder is being tested",
-                    10000,
-                )
-                self.rc_gcode("extrude", self.current_object, 0)
-            else:
-                self.setCurrentIndex(3)
-                self.current_object = None
-                return
+    def _send_routine_gcode(self):
+        gcode_map = {
+            Process.FAN: "M106 S80",
+            Process.BED_HEATER: "SET_HEATER_TEMPERATURE HEATER=heater_bed TARGET=60",
+            Process.EXTRUDER: "SET_HEATER_TEMPERATURE HEATER=extruder TARGET=60",
+            (Process.AXIS, "x"): "G91\nG1 X50 F700\nG1 X-50 F700",
+            (Process.AXIS, "y"): "G91\nG1 Y50 F700\nG1 Y-50 F700",
+            (Process.AXIS, "z"): "G91\nG1 Z50 F600\nG1 Z-50 F600",
+        }
+        key = (self.current_process, self.current_object) if self.current_process == Process.AXIS else self.current_process
+        if gcode := gcode_map.get(key):
+            self.run_gcode_signal.emit(f"{gcode}\nM400")
 
-    def rc_answer(self) -> None:
-        if self.current_process == "fan":
-            if self.sender() == self.panel.rc_yes:
-                self.objects["fans"][self.current_object] = "yes"
-            elif self.sender() == self.panel.rc_no:
-                self.objects["fans"][self.current_object] = "no"
-            self.routines("fans")
-
-        elif self.current_process == "axis":
-            if self.sender() == self.panel.rc_yes:
-                self.objects["axis"][self.current_object] = "yes"
-            elif self.sender() == self.panel.rc_no:
-                self.objects["axis"][self.current_object] = "no"
-            self.routines("axis")
-
-        elif self.current_process == "bheat":
-            if self.sender() == self.panel.rc_yes:
-                self.objects["bheat"]["Bed_Heater"] = "yes"
-            elif self.sender() == self.panel.rc_no:
-                self.objects["bheat"]["Bed_Heater"] = "no"
-            self.current_object = True
-            self.routines("bheat")
-            self.run_gcode_signal.emit("TURN_OFF_HEATERS\nM400")
-
-        elif self.current_process == "extrude":
-            if self.sender() == self.panel.rc_yes:
-                self.objects["extrude"]["extruder"] = "yes"
-            elif self.sender() == self.panel.rc_no:
-                self.objects["extrude"]["extruder"] = "no"
-            self.current_object = True
-            self.routines("extrude")
-            self.run_gcode_signal.emit("TURN_OFF_HEATERS\nM400")
-
-        elif self.current_process == "axismaintenec":
-            if self.sender() == self.panel.rc_yes:
-                if self.current_object == "x":
-                    distance = int(self.cg["stepper_x"]["position_max"]) - 20
-                    self.run_gcode_signal.emit(f"G1 X{distance}\nM400")
-                    self.run_gcode_signal.emit("G28 X\nM400")
-                    self.waiting_page(
-                        5,
-                        "axis maintence",
-                        "this is waitng page the moment where the x axis move up and dow",
-                        5000,
-                    )
-                elif self.current_object == "y":
-                    distance = int(self.cg["stepper_y"]["position_max"]) - 20
-                    self.run_gcode_signal.emit(f"G1 Y{distance}\nM400")
-                    self.run_gcode_signal.emit("G28 Y\nM400")
-
-                    self.waiting_page(
-                        5,
-                        "axis maintence",
-                        "this is waitng page the moment where the y axis move up and dow",
-                        5000,
-                    )
-                elif self.current_object == "z":
-                    distance = int(self.cg["stepper_z"]["position_max"]) - 20
-                    self.run_gcode_signal.emit(f"G1 Z{distance}\nM400")
-                    self.run_gcode_signal.emit("G28 Z\nM400")
-
-                    self.waiting_page(
-                        5,
-                        "axis maintence",
-                        "this is waitng page the moment where the z axis move up and dow",
-                        5000,
-                    )
-
-            elif self.sender() == self.panel.rc_no:
-                self.change_page(5)
-
-    def rc_gcode(self, process: str, name: str, value: float):
-        if process == "fans":
-            self.run_gcode_signal.emit("M106 S80")
-        elif process == "axis":
-            if name == "x":
-                distance = int(self.cg["stepper_x"]["position_max"]) - 20
-                self.run_gcode_signal.emit(f"G0 X{distance}\nM400")
-            if name == "y":
-                distance = int(self.cg["stepper_y"]["position_max"]) - 20
-                self.run_gcode_signal.emit(f"G0 Y{distance}\nM400")
-            if name == "z":
-                distance = int(self.cg["stepper_z"]["position_max"]) - 20
-                self.run_gcode_signal.emit(f"G0 Z{distance}\nM400")
-
-        elif process == "bheat":
-            self.run_gcode_signal.emit(
-                "SET_HEATER_TEMPERATURE HEATER=heater_bed TARGET=60\nM400"
-            )
-
-        elif process == "extrude":
-            self.run_gcode_signal.emit(
-                "SET_HEATER_TEMPERATURE HEATER=extruder TARGET=60\nM400"
-            )
-
-    def rc_page(self, tittle: str, label: str):
-        self.panel.rc_tittle.setText(tittle)
+    def set_routine_check_page(self, title: str, label: str):
+        self.panel.rc_tittle.setText(title)
         self.panel.rc_label.setText(label)
 
     def update_led_values(self) -> None:
-        # First, get the stored LED values for this object
-        self.leds = self.objects["leds"][self.current_object][-1]
-        rgb = self.objects["leds"][self.current_object][0]
-
-        self.panel.leds_r_value_label.setText(
-            str(self.panel.leds_r_slider.value())
-        )
-        self.panel.leds_g_value_label.setText(
-            str(self.panel.leds_g_slider.value())
-        )
-        self.panel.leds_b_value_label.setText(
-            str(self.panel.leds_b_slider.value())
-        )
-        self.panel.leds_w_value_label.setText(
-            str(self.panel.leds_w_slider.value())
-        )
-
-        if rgb == "rgb":
-            self.ledslist = [
-                self.objects["leds"][self.current_object][0],
-                self.panel.leds_r_slider.value(),
-                self.panel.leds_g_slider.value(),
-                self.panel.leds_b_slider.value(),
-                self.panel.leds_w_slider.value(),
-                self.leds,
-            ]
-        elif rgb == "white":
-            self.ledslist = [
-                self.objects["leds"][self.current_object][0],
-                self.objects["leds"][self.current_object][1],
-                self.objects["leds"][self.current_object][2],
-                self.objects["leds"][self.current_object][3],
-                self.panel.leds_w_slider.value(),
-                self.leds,
-            ]
-
-    def offonbutton(self) -> None:
-        if self.objects["leds"][self.current_object][5] == "off":
-            self.objects["leds"][self.current_object][5] = "on"
+        if self.current_object not in self.objects["leds"]: return
+        led_state: LedState = self.objects["leds"][self.current_object]
+        led_state.red = self.panel.leds_r_slider.value()
+        led_state.green = self.panel.leds_g_slider.value()
+        led_state.blue = self.panel.leds_b_slider.value()
+        led_state.white = self.panel.leds_w_slider.value()
+        self.save_led_state()
+    
+    def _update_leds_from_config(self):
+        layout = self.panel.leds_content_layout
+        while layout.count():
+            if (child := layout.takeAt(0)) and child.widget():
+                child.widget().deleteLater()
+        led_names = []
+        for obj in self.cg:
+            if "led" in obj:
+                try:
+                    name = obj.split()[1]
+                    led_names.append(name)
+                    self.objects["leds"][name] = LedState(type="white")
+                except IndexError: print(f"Could not parse LED name from '{obj}'")
+        max_columns = 3
+        for i, name in enumerate(led_names):
+            button = BlocksCustomButton(parent=self.panel.leds_widget)
+            button.setFixedSize(200, 70)
+            button.setText(name)
+            button.setProperty("class", "menu_btn")
+            button.setProperty("icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/LEDs.svg"))
+            row, col = divmod(i, max_columns)
+            layout.addWidget(button, row, col)
+            button.clicked.connect(partial(self.handle_led_button, name))
+    
+    def toggle_led_state(self) -> None:
+        if self.current_object not in self.objects["leds"]: return
+        led_state: LedState = self.objects["leds"][self.current_object]
+        if led_state.state == "off":
+            led_state.state = "on"
+            self.panel.toggle_led_button.state = ToggleAnimatedButton.State.ON
         else:
-            self.objects["leds"][self.current_object][5] = "off"
-        self.update_led_values()
+            led_state.state = "off"
+            self.panel.toggle_led_button.state = ToggleAnimatedButton.State.OFF
+        self.save_led_state()
 
     def handle_led_button(self, name: str) -> None:
-        self.panel.leds_slider_tittle_label.setText(name)
         self.current_object = name
-        rgb = self.objects["leds"][self.current_object][0]
-        if rgb == "rgb":
-            self.panel.leds_w_slider.hide()
-            self.panel.leds_r_slider.show()
-            self.panel.leds_g_slider.show()
-            self.panel.leds_b_slider.show()
-            self.panel.leds_r_value_label.show()
-            self.panel.leds_g_value_label.show()
-            self.panel.leds_b_value_label.show()
-            self.panel.leds_w_value_label.hide()
+        led_state: LedState = self.objects["leds"].get(name)
+        if not led_state: return
+        is_rgb = led_state.type == "rgb"
+        self.panel.leds_r_slider.setVisible(is_rgb)
+        self.panel.leds_g_slider.setVisible(is_rgb)
+        self.panel.leds_b_slider.setVisible(is_rgb)
+        self.panel.leds_w_slider.setVisible(not is_rgb)
+        self.panel.leds_slider_tittle_label.setText(name)
+        self.panel.leds_r_slider.setValue(led_state.red)
+        self.panel.leds_g_slider.setValue(led_state.green)
+        self.panel.leds_b_slider.setValue(led_state.blue)
+        self.panel.leds_w_slider.setValue(led_state.white)
+        self.change_page(self.indexOf(self.panel.leds_slider_page))
 
-        elif rgb == "white":
-            self.panel.leds_r_slider.hide()
-            self.panel.leds_g_slider.hide()
-            self.panel.leds_b_slider.hide()
-            self.panel.leds_w_slider.show()
+    def save_led_state(self):
+        if self.current_object in self.objects["leds"]:
+            led_state: LedState = self.objects["leds"][self.current_object]
+            self.run_gcode_signal.emit(led_state.get_gcode(self.current_object))
 
-            self.panel.leds_r_value_label.hide()
-            self.panel.leds_g_value_label.hide()
-            self.panel.leds_b_value_label.hide()
-            self.panel.leds_w_value_label.show()
-
-        self.panel.leds_r_slider.setValue(
-            self.objects["leds"][self.current_object][1]
-        )
-        self.panel.leds_g_slider.setValue(
-            self.objects["leds"][self.current_object][2]
-        )
-        self.panel.leds_b_slider.setValue(
-            self.objects["leds"][self.current_object][3]
-        )
-        self.panel.leds_w_slider.setValue(
-            self.objects["leds"][self.current_object][4]
-        )
-
-        self.change_page(10)
-
+#input shapper
     def run_resonance_test(self, axis: str) -> None:
         self.axis_in = axis
-
-        for i in range(self.ammount):
-            if axis == "x":
-                csv_path = "/tmp/resonances_x_axis_data.csv"
-                self.run_gcode_signal.emit("SHAPER_CALIBRATE AXIS=X")
-
-            elif axis == "y":
-                csv_path = "/tmp/resonances_y_axis_data.csv"
-                self.run_gcode_signal.emit("SHAPER_CALIBRATE AXIS=Y")
-        self.data = self.parse_shaper_csv(csv_path)
+        path_map = {"x": "/tmp/resonances_x_axis_data.csv", "y": "/tmp/resonances_y_axis_data.csv"}
+        if not (csv_path := path_map.get(axis)):
+            print(f"Error: Invalid axis '{axis}' for resonance test.")
+            return
+        self.run_gcode_signal.emit(f"SHAPER_CALIBRATE AXIS={axis.upper()}")
+        self.data = self._parse_shaper_csv(csv_path)
         for entry in self.data:
             shaper = entry["shaper"]
-            frequency = entry["frequency"]
-            vibrations = entry["vibrations"]
-            smoothing = entry["smoothing"]
-            max_accel = entry["max_accel"]
+            panel_attr = f"am_{shaper}"
+            if hasattr(self.panel, panel_attr):
+                text = (f"Shaper: {shaper}, Freq: {entry['frequency']}Hz, Vibrations: {entry['vibrations']}%\n"
+                        f"Smoothing: {entry['smoothing']}, Max Accel: {entry['max_accel']}mm/sec")
+                getattr(self.panel, panel_attr).setText(text)
+                self.x_inputshaper[panel_attr] = entry
+        self.change_page(self.indexOf(self.panel.is_page))
 
-            self.panel_attr = f"am_{shaper}"
-            if hasattr(self.panel, self.panel_attr):
-                getattr(self.panel, self.panel_attr).setText(
-                    f"Shaper: {shaper}, Frequency: {frequency}Hz, Vibrations: {vibrations}%\n"
-                    f"Smoothing: {smoothing}, Max Accel: {max_accel}mm/sec"
-                )
-                self.x_inputshaper[self.panel_attr] = {
-                    "frequency": frequency,
-                    "vibrations": vibrations,
-                    "smoothing": smoothing,
-                    "max_accel": max_accel,
-                }
-
-        self.change_page(7)
-
-    def parse_shaper_csv(self, file_path):
+    def _parse_shaper_csv(self, file_path: str) -> list:
         results = []
         try:
             with open(file_path, newline="") as csvfile:
                 reader = csv.DictReader(csvfile)
                 for row in reader:
                     if row.get("shaper") and row.get("freq"):
-                        results.append(
-                            {
-                                "shaper": row["shaper"],
-                                "frequency": row["freq"],
-                                "vibrations": row.get("vibrations", "N/A"),
-                                "smoothing": row.get("smoothing", "N/A"),
-                                "max_accel": row.get("max_accel", "N/A"),
-                            }
-                        )
-        except Exception as e:
-            print(f"Error parsing CSV {file_path}: {e}")
+                        results.append({k: row.get(v, "N/A") for k, v in 
+                                        {"shaper": "shaper", "frequency": "freq", "vibrations": "vibrations",
+                                         "smoothing": "smoothing", "max_accel": "max_accel"}.items()})
+        except FileNotFoundError: print(f"Error: CSV file not found at {file_path}")
+        except csv.Error as e: print(f"Error parsing CSV {file_path}: {e}")
         return results
 
-    def is_select(self) -> None:
-        checked = self.panel.is_btn_group.checkedButton()
-        if not checked:
+    def apply_input_shaper_selection(self) -> None:
+        if not (checked_button := self.panel.is_btn_group.checkedButton()): return
+        selected_name = checked_button.objectName()
+        if selected_name == "am_user_input":
+            self.change_page(self.indexOf(self.panel.input_shaper_user_input))
             return
+        if not (shaper_data := self.x_inputshaper.get(selected_name)): return
+        gcode = (f"SET_INPUT_SHAPER SHAPER_TYPE={shaper_data['shaper']} "
+                 f"SHAPER_FREQ_{self.axis_in.upper()}={shaper_data['frequency']} "
+                 f"SHAPER_DAMPING_{self.axis_in.upper()}={shaper_data['smoothing']}")
+        self.run_gcode_signal.emit(gcode)
+        self.change_page(self.indexOf(self.panel.utilities_page))
 
-        selected = checked.objectName()
 
-        if selected == "am_user_input":
-            self.change_page(8)
 
-        self.x_inputshaper["am_user_input"] = {
-            "frequency": self.panel.isui_fq.objectName(),
-            "smoothing": self.panel.isui_sm.objectName(),
-        }
+    def axis_maintenance(self, axis: str) -> None:
+        self.current_process = Process.AXIS_MAINTENANCE
+        self.current_object = axis
+        self.run_gcode_signal.emit(f"G28 {axis.upper()}\nM400")
+        self.set_routine_check_page("Axis Maintenance", f"Insert oil on the {axis.upper()} axis before confirming.")
+        self.show_waiting_page(self.indexOf(self.panel.rc_page), f"Homing {axis.upper()} axis...", 5000)
 
-        for entry in self.data:
-            shaper = entry["shaper"]
-            frequency = entry["frequency"]
-            smoothing = entry["smoothing"]
+    def _run_axis_maintenance_gcode(self, axis: str):
+        stepper_key = f"stepper_{axis}"
+        if stepper_key in self.stepper_limits:
+            max_pos = self.stepper_limits[stepper_key].get("max", 20)
+            distance = int(max_pos) - 20
+            self.run_gcode_signal.emit(f"G1 {axis.upper()}{distance} F3000\nM400\nG28 {axis.upper()}\nM400")
+            self.show_waiting_page(self.indexOf(self.panel.axes_page), f"Running maintenance cycle on {axis.upper()} axis...", 5000)
+        else:
+            print(f"Warning: Stepper limits for '{axis}' not found.")
+            self.change_page(self.indexOf(self.panel.axes_page))
 
-            self.panel_attr = f"am_{shaper}"
-            if selected == self.panel_attr:
-                if self.axis_in == "x":
-                    self.run_gcode_signal.emit(
-                        f"SET_INPUT_SHAPER SHAPER_TYPE={shaper} SHAPER_FREQ_X={frequency} SHAPER_DAMPING_X={smoothing}"
-                    )
-                elif self.axis_in == "y":
-                    self.run_gcode_signal.emit(
-                        f"SET_INPUT_SHAPER SHAPER_TYPE={shaper} SHAPER_FREQ_Y={frequency} SHAPER_DAMPING_Y={smoothing}"
-                    )
-                self.change_page(0)
 
-    def axis_maintenance(self, axis_am: str) -> None:
-        self.current_process = "axismaintenec"
-        self.current_object = axis_am
 
-        if axis_am == "x":
-            self.run_gcode_signal.emit("G28 X\nM400")
-            self.current_object = "x"
-            self.rc_page(
-                "Axis Maintenece",
-                "Insert oil on the X axis before confimating",
-            )
-            self.waiting_page(4, "Axis Maintenece", "homing X axis", 5000)
-        elif axis_am == "y":
-            self.run_gcode_signal.emit("G28 Y\nM400")
-            self.current_object = "y"
-            self.rc_page(
-                "Axis Maintenece",
-                "Insert oil on the Y axis before confimating",
-            )
-            self.waiting_page(4, "Axis Maintenece", "homing Y axis", 5000)
-        elif axis_am == "z":
-            self.run_gcode_signal.emit("G28 Z\nM400")
-            self.current_object = "z"
-            self.rc_page(
-                "Axis Maintenece",
-                "Insert oil on the Z axis before confimating",
-            )
-            self.waiting_page(4, "Axis Maintenece", "homing Z axis", 5000)
+    def show_waiting_page(self, page_to_go_to: int, label: str, time_ms: int):
+        self.sliderPage.label.setText(label)
+        self.sliderPage.show()
+        QtCore.QTimer.singleShot(time_ms, lambda: self.change_page(page_to_go_to))
 
-    # ptg = page to go
-    def waiting_page(self, ptg: int, tittle: str, label: str, time: int):
-        self.panel.wp_title.setText(tittle)
-        self.panel.wp_label.setText(label)
-        self.change_page(9)
-        QtCore.QTimer.singleShot(time, lambda: self.change_page(ptg))
+    def _connect_page_change(self, button: QtWidgets.QWidget, page: QtWidgets.QWidget):
+        button.clicked.connect(lambda: self.change_page(self.indexOf(page)))
 
     def change_page(self, index: int):
-        if index == 10:
-            self.timer = QtCore.QTimer(self)
-            self.timer.timeout.connect(self.saveleds)
-            self.timer.start(3000)
-
-        if index != 10:
-            if hasattr(self, "timer") and self.timer.isActive():
-                self.timer.stop()
-
-        if index < self.count():
-            self.request_change_page.emit(3, index)
-
-    def saveleds(self):
-        self.objects["leds"][self.current_object] = self.ledslist
-
-        if self.ledslist[0] == "white":
-            if self.ledslist[5] == "off":
-                self.run_gcode_signal.emit(
-                    f"SET_LED LED={self.current_object} WHITE=0"
-                )
-            else:
-                self.run_gcode_signal.emit(
-                    f"SET_LED LED={self.current_object} WHITE={self.ledslist[4] / 255:.2f}"
-                )
-            print(self.ledslist)
-        elif self.ledslist[0] == "rgb":
-            if self.ledslist[5] == "off":
-                self.run_gcode_signal.emit(
-                    "SET_LED LED={self.current_object} RED=0 GREEN=0 BLUE=0 WHITE=0"
-                )
-            else:
-                self.run_gcode_signal.emit(
-                    f"SET_LED LED={self.current_object} RED={self.ledslist[1] / 255:.2f} GREEN={self.ledslist[2] / 255:.2f} BLUE={self.ledslist[3] / 255:.2f} WHITE={self.ledslist[4] / 255:.2f}"
-                )
-
-    @QtCore.pyqtSlot(list, name="on_object_list")
-    def on_object_list(self, config: dict) -> None:
-        self.cg = config
-        self.leds_update()
-        self.fans_update()
-
-    def fans_update(self):
-        for obj in self.cg:
-            if "fan" in obj and "pin" not in obj and "controller" not in obj:
-                self.objects["fans"][obj] = "indf"
-
-    def leds_update(self):
-        layout = self.panel.leds_content_layout
-        row = 0
-        col = 0
-        max_columns = 3
-        self.ledslist = ["white", 0, 0, 0, 0, "on"]
-
-        for obj in self.cg:
-            if "led" in obj:
-                # find a way to check if the ligth is rgb or white and send it to handle led button as "rgb" or "white"
-                # if change rgb to white or something else you need to change rgb on "self.ledslist=["rgb",0, 0, 0, 0,"off"]"
-                name = obj.split()[1]
-
-                self.objects["leds"][name] = self.ledslist
-
-        # Now add buttons for each LED
-        led_objects = list(self.objects["leds"].keys())
-        for i, obj in enumerate(led_objects):
-            _translate = QtCore.QCoreApplication.translate
-            layout = self.panel.leds_content_layout
-            button = BlocksCustomButton(parent=self.panel.leds_widget)
-            button.setFixedSize(200, 70)
-            button.setText(obj)
-            button.setProperty(
-                "class", _translate("utilitiesStackedWidget", "menu_btn")
-            )
-            button.setProperty("icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/LEDs.svg"))
-
-            row = i // max_columns
-            col = i % max_columns
-            layout.addWidget(button, row, col)
-
-            button.clicked.connect(partial(self.handle_led_button, obj))
-
+        self.sliderPage.hide()
+        if index < self.count(): self.request_change_page.emit(3, index)
+    
+    def back_button(self) -> None:
+        self.request_back_page.emit()
