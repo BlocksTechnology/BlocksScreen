@@ -7,8 +7,7 @@ import typing
 from uuid import uuid4
 
 import sdbus
-
-# from PyQt6 import QtCore
+from PyQt6 import QtCore
 from sdbus_async.networkmanager import (
     AccessPoint,
     AccessPointCapabilities,
@@ -36,9 +35,7 @@ from sdbus_async.networkmanager.exceptions import (
     NmConnectionPropertyNotFoundError,
 )
 
-# logger = logging.getLogger("logs/BlocksScreen.log")
-logging.basicConfig(level=logging.DEBUG)
-logger = logging.getLogger()
+logger = logging.getLogger("logs/BlocksScreen.log")
 
 
 class NetworkManagerRescanError(Exception):
@@ -49,19 +46,19 @@ class NetworkManagerRescanError(Exception):
         self.error = error
 
 
-# class SdbusNetworkManagerAsync(QtCore.QObject):
-class SdbusNetworkManagerAsync:
+class SdbusNetworkManagerAsync(QtCore.QObject):
+    # class SdbusNetworkManagerAsync:
     class ConnectionPriority(enum.Enum):
         HIGH = 90
         MEDIUM = 50
         LOW = 0
 
-    # nm_state_change: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
-    #     str, name="nm-state-changed"
-    # )
-    # nm_properties_change: typing.ClassVar[QtCore.pyqtSignal] = (
-    #     QtCore.pyqtSignal(str, name="nm-properties-changed")
-    # )
+    nm_state_change: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        str, name="nm-state-changed"
+    )
+    nm_properties_change: typing.ClassVar[QtCore.pyqtSignal] = (
+        QtCore.pyqtSignal(str, name="nm-properties-changed")
+    )
 
     def __init__(self) -> None:
         super().__init__()
@@ -80,7 +77,7 @@ class SdbusNetworkManagerAsync:
         # Network Manager dbus
         self.system_dbus = sdbus.sd_bus_open_system()
         if not self.system_dbus:
-            logger.info("No dbus found, async network monitor exiting")
+            logger.error("No dbus found, async network monitor exiting")
             self.close()
             return
         sdbus.set_default_bus(self.system_dbus)
@@ -168,7 +165,7 @@ class SdbusNetworkManagerAsync:
             try:
                 async for state in self.nm.state_changed:
                     enum_state = NetworkManagerState(state)
-                    # self.nm_state_change.emit(enum_state.name)
+                    self.nm_state_change.emit(enum_state.name)
                     ...
             except Exception as e:
                 logging.error(
@@ -180,7 +177,7 @@ class SdbusNetworkManagerAsync:
             try:
                 logging.debug("Listening for Network Manager state change")
                 async for properties in self.nm.properties_changed:
-                    # self.nm_properties_change.emit(properties)
+                    self.nm_properties_change.emit(properties)
                     ...
             except Exception as e:
                 logging.error(
@@ -405,13 +402,13 @@ class SdbusNetworkManagerAsync:
             return ""
         primary_con = await self.nm.primary_connection.get_async()
         if primary_con == "/":
-            logger.info("primary con is none")
+            logger.debug("No primary connection")
             return ""
         active_connection = ActiveConnection(
             bus=self.system_dbus, connection_path=primary_con
         )
         if not active_connection:
-            logger.info("Active connection is none my man")
+            logger.debug("Active connection is none my man")
             return ""
         con = await active_connection.connection.get_async()
         con_settings = NetworkConnectionSettings(
@@ -521,27 +518,31 @@ class SdbusNetworkManagerAsync:
         )
         return future.result(timeout=2)
 
-    async def _rescan(self)-> None: 
-        if not self.primary_wifi_interface: 
-            return 
-        if self.primary_wifi_interface == "/": 
-            return 
+    async def _rescan(self) -> None:
+        if not self.primary_wifi_interface:
+            return
+        if self.primary_wifi_interface == "/":
+            return
         try:
-            task = self.loop.create_task(self.primary_wifi_interface.request_scan({}))
+            task = self.loop.create_task(
+                self.primary_wifi_interface.request_scan({})
+            )
             results = await asyncio.gather(task, return_exceptions=True)
-            for result in results: 
-                if isinstance(result, Exception): 
-                    raise NetworkManagerRescanError(f"Caught exception: {result}")
-                return 
+            for result in results:
+                if isinstance(result, Exception):
+                    raise NetworkManagerRescanError(
+                        f"Exception caught: {result}"
+                    )
+                return
         except Exception as e:
-            logger.error(f"Network scan failed: {e}")
-            return 
-                    
+            logger.error(f"Exception caught, network scan failed: {e}")
+            return
+
     def rescan_networks(self) -> None:
         """Scan for available networks."""
         future = asyncio.run_coroutine_threadsafe(self._rescan(), self.loop)
-        return future.result(timeout = 2)
-    
+        return future.result(timeout=2)
+
     async def _get_network_info(self, ap: AccessPoint) -> typing.Tuple:
         ssid = await ap.ssid.get_async()
         sec = await self._get_security_type(ap)
@@ -569,30 +570,27 @@ class SdbusNetworkManagerAsync:
                     self.loop.create_task(self._get_network_info(ap))
                     for ap in aps
                 ),
-                return_exceptions=False,
+                return_exceptions=True,
             )
-
         except Exception as e:
             logger.error(f"Exception while gathering AP information: {e}")
-        # for ap, result in zip(aps, results):
-        #     logger.info(f"Ap information : {ap}")
-        #     logger.info(f"result information: {result}")
-        #     if isinstance(result, Exception):
-        #         logger.info(f"Error retrieving network info for {ap}: {result}")
-        #     else:
-        #         # Do something with the successful result
-        #         logger.info(f"Network info for {ap}: {result}")
+        for result in results:
+            if isinstance(result, Exception):
+                logger.error(f"Error retrieving network info : {result}")
+            else:
+                return dict(results)
+                # Do something with the successful result
         logger.debug(
             "Successfully gathered available access point information"
         )
-        return dict(results)
+        return {}
 
     async def _get_available_networks(self) -> typing.Dict:
         if not self.primary_wifi_interface:
             return {"error": "No wifi interface found"}
         if self.primary_wifi_interface == "/":
             return {"error": "No wifi interface found"}
-        self.rescan_networks()
+        await self._rescan()
         try:
             last_scan = await self.primary_wifi_interface.last_scan.get_async()
             if last_scan != -1:
@@ -600,17 +598,35 @@ class SdbusNetworkManagerAsync:
                     await self.primary_wifi_interface.device_type.get_async()
                 )
                 if primary_wifi_dev_type == enums.DeviceType.WIFI:
-                    aps = await self.primary_wifi_interface.get_all_access_points()
-                    _aps: typing.List[AccessPoint] = list(
-                        map(
-                            lambda ap_path: AccessPoint(
-                                bus=self.system_dbus, point_path=ap_path
-                            ),
-                            aps,
+                    try:
+                        aps = await self.primary_wifi_interface.get_all_access_points()
+                        _aps: typing.List[AccessPoint] = list(
+                            map(
+                                lambda ap_path: AccessPoint(
+                                    bus=self.system_dbus, point_path=ap_path
+                                ),
+                                aps,
+                            )
                         )
-                    )
-                    return await self._gather_networks(_aps)
-
+                        task = self.loop.create_task(
+                            self._gather_networks(_aps)
+                        )
+                        results = await asyncio.gather(
+                            task, return_exceptions=True
+                        )
+                        for result in results:
+                            if isinstance(result, Exception):
+                                logger.error(
+                                    f"There was an exception {result}"
+                                )
+                                return {}
+                            else:
+                                return result
+                    except Exception as e:
+                        logger.error(
+                            f"Exception Caught on gathering available networks : {e}"
+                        )
+            return {}
         except Exception as e:
             logger.error(f"Exception while gathering access points: {e}")
         return {"error": "No available networks"}
@@ -618,8 +634,8 @@ class SdbusNetworkManagerAsync:
     def get_available_networks(self) -> typing.Dict:
         future = asyncio.run_coroutine_threadsafe(
             self._get_available_networks(), self.loop
-        ).result(timeout=5)
-        return future
+        )
+        return future.result(timeout=1999)
 
     async def _get_security_type(self, ap: AccessPoint) -> typing.Tuple:
         """Get the security type from a network AccessPoint
@@ -989,7 +1005,9 @@ class SdbusNetworkManagerAsync:
                             ).reload_connections()
                         )
                     )
-                    results = await asyncio.gather(*tasks, return_exceptions=True)
+                    results = await asyncio.gather(
+                        *tasks, return_exceptions=True
+                    )
                     for result in results:
                         if isinstance(result, Exception):
                             if isinstance(result, NmConnectionFailedError):
@@ -1181,10 +1199,31 @@ class SdbusNetworkManagerAsync:
             )
         return active_path
 
-    async def _delete(self, settings_path) -> None:
-        return await NetworkConnectionSettings(
-            settings_path=str(settings_path)
-        ).delete()
+    async def _delete_network(self, settings_path) -> None:
+        tasks = []
+        tasks.append(
+            self.loop.create_task(
+                NetworkConnectionSettings(
+                    bus=self.system_dbus, settings_path=str(settings_path)
+                ).delete()
+            )
+        )
+
+        tasks.append(
+            self.loop.create_task(
+                NetworkManagerSettings(
+                    bus=self.system_dbus
+                ).reload_connections()
+            )
+        )
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        for result in results:
+            if isinstance(result, Exception):
+                logger.error(
+                    f"Caught Exception while deleting network: {result}"
+                )
+            return
+        return
 
     def delete_network(self, ssid: str) -> typing.Union[typing.Dict, None]:
         """Deletes a saved network given a ssid
@@ -1192,9 +1231,6 @@ class SdbusNetworkManagerAsync:
         Args:
             ssid (str): The networks ssid to be deleted
 
-        Raises:
-            ValueError: If the ssid argument is not of type string
-            Exception: If an unexpected error occurred when deleting the network.
         ### `Should be refactored`
         Returns:
             typing.Dict: Status key with the outcome of the networks deletion.
@@ -1206,7 +1242,8 @@ class SdbusNetworkManagerAsync:
             return
         _path = self.get_connection_path_by_ssid(ssid)
         try:
-            asyncio.gather(self.loop.create_task(self._delete(_path)))
+            task = self.loop.create_task(self._delete_network(_path))
+            asyncio.gather(task, return_exceptions=False)
             return {"status": "success"}
         except Exception as e:
             logging.debug(f"Unexpected exception detected: {e}")
@@ -1340,5 +1377,3 @@ class SdbusNetworkManagerAsync:
             return {"status": "updated"}
         except Exception:
             return {"status": "error", "error": "Unexpected error"}
-
-
