@@ -1,5 +1,5 @@
 import helper_methods as helper_methods
-from PyQt6 import QtCore, QtWidgets
+from PyQt6 import QtCore, QtWidgets ,QtGui
 
 
 class ScreenSaver(QtCore.QObject):
@@ -31,7 +31,19 @@ class ScreenSaver(QtCore.QObject):
             self.blank_timeout = self.screensaver_config.getint(
                 "timeout", default=500000
             )
+        self.image_widget = QtWidgets.QLabel()
+        self.image_widget.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.image_widget.setWindowFlags(
+            QtCore.Qt.WindowType.FramelessWindowHint
+            | QtCore.Qt.WindowType.WindowStaysOnTopHint
+        )
+        self.image_widget.setStyleSheet("background-color: black;")
+        self.image_widget.setScaledContents(True)
+
+        # load image from config or hardcode
+        self.image_widget.setPixmap(QtGui.QPixmap("BlocksScreen/lib/ui/resources/media/logoblocks.png"))
         QtWidgets.QApplication.instance().installEventFilter(self)
+
         self.timer.timeout.connect(self.check_dpms)
         self.timer.setInterval(self.blank_timeout)
         self.timer.start()
@@ -46,21 +58,11 @@ class ScreenSaver(QtCore.QObject):
             QtCore.QEvent.Type.MouseButtonPress,
             QtCore.QEvent.Type.MouseButtonDblClick,
         ):
-            dpms_info = helper_methods.get_dpms_info()
-            if (
-                dpms_info.get("state")
-                in (
-                    helper_methods.DPMSState.OFF,
-                    helper_methods.DPMSState.STANDBY,
-                    helper_methods.DPMSState.SUSPEND,
-                )
-                or self.touch_blocked
-            ):
-                if not self.timer.isActive():
-                    self.touch_blocked = False
-                    helper_methods.set_dpms_mode(helper_methods.DPMSState.ON)
-                    self.timer.start()
-                    return True  # filter out the event, block touch events on the application
+            if self.image_widget.isVisible() or self.touch_blocked:
+                self.touch_blocked = False
+                self.image_widget.hide()
+                self.timer.start()
+                return True  # block the wake-up touch
         return False
 
     def timerEvent(self, a0: QtCore.QTimerEvent) -> None:
@@ -69,5 +71,6 @@ class ScreenSaver(QtCore.QObject):
     def check_dpms(self) -> None:
         """Checks the X11 extension dpms for the status of the screen"""
         self.touch_blocked = True
-        helper_methods.set_dpms_mode(helper_methods.DPMSState.STANDBY)
+        self.image_widget.showFullScreen()
+
         self.timer.stop()
