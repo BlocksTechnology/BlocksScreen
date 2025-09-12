@@ -112,6 +112,8 @@ class FilesPage(QtWidgets.QWidget):
     def add_file_entries(self) -> None:
         """Inserts the currently available gcode files on the QListWidget"""
         self.listWidget.clear()
+        self.listWidget.addItem(self.item)
+        self.listWidget.setItemWidget(self.item,self.label)
 
         self.listWidget.setSpacing(35)
         index = 0
@@ -120,30 +122,35 @@ class FilesPage(QtWidgets.QWidget):
         sorted_list = sorted(
             self.file_list, key=lambda x: x["modified"], reverse=True
         )
+        if sorted_list is not None:    
+            for item in sorted_list:
+                self.listWidget.setRowHidden(self.listWidget.row(self.item), True)
+                self.button = ListCustomButton(self)
+                self.button.setText(str(item["path"][:-6]))
+                self.request_file_info.emit(item["path"])
 
-        for item in sorted_list:
-            self.button = ListCustomButton(self)
-            self.button.setText(str(item["path"][:-6]))
-            self.request_file_info.emit(item["path"])
+                self.button.setPixmap(
+                    QtGui.QPixmap(":/arrow_icons/media/btn_icons/right_arrow.svg")
+                )
+                self.button.setFixedSize(600, 80)
+                self.button.setLeftFontSize(17)
+                self.button.setRightFontSize(12)
 
-            self.button.setPixmap(
-                QtGui.QPixmap(":/arrow_icons/media/btn_icons/right_arrow.svg")
-            )
-            self.button.setFixedSize(600, 80)
-            self.button.setLeftFontSize(17)
-            self.button.setRightFontSize(12)
+                list_item = QtWidgets.QListWidgetItem()
+                list_item.setSizeHint(self.button.sizeHint())
 
-            list_item = QtWidgets.QListWidgetItem()
-            list_item.setSizeHint(self.button.sizeHint())
+                self.listWidget.addItem(list_item)
+                self.listWidget.setItemWidget(list_item, self.button)
 
-            self.listWidget.addItem(list_item)
-            self.listWidget.setItemWidget(list_item, self.button)
+                namefile = str(item["path"])
+                self.button.clicked.connect(
+                    partial(self.fileItemClicked, namefile)
+                )
+                index += 1
+        else:
+            self.listWidget.setRowHidden(self.listWidget.row(self.item), False)
+            return
 
-            namefile = str(item["path"])
-            self.button.clicked.connect(
-                partial(self.fileItemClicked, namefile)
-            )
-            index += 1
 
         self.buttons = False
 
@@ -268,6 +275,22 @@ class FilesPage(QtWidgets.QWidget):
         QtWidgets.QScroller.scroller(self.listWidget).setScrollerProperties(
             scroller_props
         )
+
+        font = QtGui.QFont()
+        font.setPointSize(25)
+
+
+        self.item = QtWidgets.QListWidgetItem()
+        self.item.setSizeHint(QtCore.QSize(self.listWidget.width(),self.listWidget.height())) 
+
+
+        self.label = QtWidgets.QLabel("No Files found")
+        self.label.setFont(font)
+        self.label.setStyleSheet("color: gray;")  
+        self.label.setAlignment(QtCore.Qt.AlignmentFlag.AlignHCenter|QtCore.Qt.AlignmentFlag.AlignVCenter)
+        self.label.setMinimumSize(QtCore.QSize(self.listWidget.width(),self.listWidget.height()))
+
+
 
         self.fp_content_layout.addWidget(self.listWidget)
         self.scrollbar = CustomScrollBar()
