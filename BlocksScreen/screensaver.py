@@ -1,10 +1,9 @@
 import helper_methods as helper_methods
 from PyQt6 import QtCore, QtWidgets ,QtGui
-
+import typing
 
 class ScreenSaver(QtCore.QObject):
     timer = QtCore.QTimer()
-
     dpms_off_timeout = helper_methods.get_dpms_timeouts().get("off_timeout")
     dpms_suspend_timeout = helper_methods.get_dpms_timeouts().get(
         "suspend_timeout"
@@ -12,6 +11,10 @@ class ScreenSaver(QtCore.QObject):
     dpms_standby_timeout = helper_methods.get_dpms_timeouts().get(
         "standby_timeout"
     )
+    request_file_info: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        str, name="request_file_info"
+     )
+
 
     touch_blocked: bool = False
 
@@ -37,11 +40,13 @@ class ScreenSaver(QtCore.QObject):
             QtCore.Qt.WindowType.FramelessWindowHint
             | QtCore.Qt.WindowType.WindowStaysOnTopHint
         )
+        self.image=QtGui.QPixmap("BlocksScreen/lib/ui/resources/media/logoblocks.png")
+
         self.image_widget.setStyleSheet("background-color: black;")
         self.image_widget.setScaledContents(True)
 
         # load image from config or hardcode
-        self.image_widget.setPixmap(QtGui.QPixmap("BlocksScreen/lib/ui/resources/media/logoblocks.png"))
+        
         QtWidgets.QApplication.instance().installEventFilter(self)
 
         self.timer.timeout.connect(self.check_dpms)
@@ -71,6 +76,25 @@ class ScreenSaver(QtCore.QObject):
     def check_dpms(self) -> None:
         """Checks the X11 extension dpms for the status of the screen"""
         self.touch_blocked = True
+        if self.state == "printing":
+            self.request_file_info.emit(self.filename)
+            self.image = QtGui.QPixmap(self.thumbnail[2])
+        self.image_widget.setPixmap(self.image)
+        self.image_widget.setMaximumWidth(self.image.width())
         self.image_widget.showFullScreen()
-
         self.timer.stop()
+    
+    @QtCore.pyqtSlot(dict, name="on_fileinfo")
+    def on_fileinfo(self, filedata: dict) -> None:
+        self.thumbnail = filedata["thumbnail_images"]
+
+
+    @QtCore.pyqtSlot(str, dict, name="on_object_config")
+    @QtCore.pyqtSlot(str, float, name="on_object_config")
+    @QtCore.pyqtSlot(str, str, name="on_object_config")
+    def on_object_config(self, field: str, value: dict | float | str) -> None:
+        if field == "filename":
+            self.filename = value
+        if field == "state":
+            self.state = value
+            print(self.state)

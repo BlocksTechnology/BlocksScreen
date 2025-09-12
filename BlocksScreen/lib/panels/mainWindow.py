@@ -90,6 +90,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.printPanel.request_change_page.connect(
             slot=self.global_change_page
         )
+
+
         self.filamentPanel.request_back.connect(slot=self.global_back)
         self.filamentPanel.request_change_page.connect(
             slot=self.global_change_page
@@ -102,6 +104,26 @@ class MainWindow(QtWidgets.QMainWindow):
         self.utilitiesPanel.request_change_page.connect(
             slot=self.global_change_page
         )
+
+
+        self.printer.print_stats_update[str, str].connect(
+            self.screensaver.on_object_config
+        )
+        self.printer.print_stats_update[str, dict].connect(
+            self.screensaver.on_object_config
+        )
+        self.printer.print_stats_update[str, float].connect(
+            self.screensaver.on_object_config
+        )
+
+        self.screensaver.request_file_info.connect(
+            self.file_data.on_request_fileinfo
+        )
+        
+        self.file_data.fileinfo.connect(self.screensaver.on_fileinfo)
+
+
+
         self.ui.extruder_temp_display.clicked.connect(
             partial(self.global_change_page, 2, 4)
         )

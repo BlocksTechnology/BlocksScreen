@@ -82,7 +82,8 @@ class FilesPage(QtWidgets.QWidget):
 
             self.button.setRightText(f"{filament_type} - {time_str}")
             return
-        self.file_selected.emit(str(self._current_file_name), filedata)
+        if self.isVisible():
+            self.file_selected.emit(str(self._current_file_name), filedata)
 
     @QtCore.pyqtSlot(name="reload_list")
     def reload_list(self) -> None:
