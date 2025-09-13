@@ -1329,6 +1329,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
     def create_hotspot(
         self, ssid: str = "PrinterHotspot", password: str = "123456789"
     ) -> typing.Dict:
+        self.deactivate_connection_by_ssid(ssid)
         self.delete_network(ssid)
         psk = hashlib.sha256(password.encode()).hexdigest()
         properties: NetworkManagerConnectionProperties = {
@@ -1339,8 +1340,8 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                 "autoconnect": ("b", bool(True)),
                 "interface-name": ("s", "wlan0"),
                 "autoconnect-priority": ("u", 10),
-                "multi-connect": ("i", 5),  # Amount of allowed connections, 
-                "timestamp": ("t", int(time.time()))
+                "multi-connect": ("i", 5),  # Amount of allowed connections,
+                "timestamp": ("t", int(time.time())),
             },
             "802-11-wireless": {
                 "ssid": ("ay", ssid.encode("utf-8")),
