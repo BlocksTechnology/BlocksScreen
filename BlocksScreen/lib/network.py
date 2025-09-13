@@ -51,7 +51,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
     class ConnectionPriority(enum.Enum):
         HIGH = 90
         MEDIUM = 50
-        LOW = 0
+        LOW = 20
 
     nm_state_change: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         str, name="nm-state-changed"
@@ -673,7 +673,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
         future = asyncio.run_coroutine_threadsafe(
             self._get_available_networks(), self.loop
         )
-        return future.result(timeout=1999)
+        return future.result(timeout=20)
 
     async def _get_security_type(self, ap: AccessPoint) -> typing.Tuple:
         """Get the security type from a network AccessPoint
@@ -725,9 +725,9 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
         _connections: typing.List[str] = asyncio.run_coroutine_threadsafe(
             NetworkManagerSettings(bus=self.system_dbus).list_connections(),
             self.loop,
-        ).result()
+        ).result(timeout=2)
 
-        asyncio.gather().result()
+        # asyncio.gather().result()
         # _network_settings: typing.List[NetworkManagerConnectionProperties] =
 
         saved_cons = list(
@@ -1337,6 +1337,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                 "type": ("s", "802-11-wireless"),  # 802-3-ethernet
                 "autoconnect": ("b", bool(True)),
                 "interface-name": ("s", "wlan0"),
+                "autoconnect-priority": ("u", 10),
             },
             "802-11-wireless": {
                 "ssid": ("ay", ssid.encode("utf-8")),
