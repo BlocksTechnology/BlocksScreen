@@ -3,6 +3,7 @@ import enum
 import hashlib
 import logging
 import threading
+import time
 import typing
 from uuid import uuid4
 
@@ -1338,6 +1339,8 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                 "autoconnect": ("b", bool(True)),
                 "interface-name": ("s", "wlan0"),
                 "autoconnect-priority": ("u", 10),
+                "multi-connect": ("i", 5),  # Amount of allowed connections, 
+                "timestamp": ("t", int(time.time()))
             },
             "802-11-wireless": {
                 "ssid": ("ay", ssid.encode("utf-8")),
