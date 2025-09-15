@@ -15,6 +15,8 @@ from lib.panels.widgets.loadPage import LoadScreen
 from lib.printer import Printer
 
 
+
+
 # RESTORED: Using a dataclass for a clean and concise data structure.
 @dataclass
 class LedState:
@@ -74,6 +76,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
 
         self.ws = ws
         self.printer: Printer = printer
+        
 
         # --- State Variables ---
         self.objects = {
@@ -90,12 +93,14 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         self.current_process: typing.Optional[Process] = None
         self.axis_in: str = "x"
         self.ammount: int = 1
+        self.tb: bool = False
         
         # --- UI Setup ---
         self.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
-        self.sliderPage = LoadScreen(self)
-        self.addWidget(self.sliderPage)
-        
+        self.loadPage = LoadScreen(self)
+        self.addWidget(self.loadPage)
+
+
 
         # --- Back Buttons ---
         for button in (
@@ -111,12 +116,13 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         # --- Page Navigation ---
         self._connect_page_change(self.panel.utilities_axes_btn, self.panel.axes_page)
         self._connect_page_change(self.panel.utilities_input_shaper_btn, self.panel.input_shaper_page)
-        self._connect_page_change(self.panel.utilities_info_btn, self.panel.info_page)
+        self._connect_page_change(self.panel.utilities_info_btn, self.panel.troulbeshoot_page)
         self._connect_page_change(self.panel.utilities_routine_check_btn, self.panel.routines_page)
         self._connect_page_change(self.panel.utilities_leds_btn, self.panel.leds_page)
         self._connect_page_change(self.panel.is_confirm_btn, self.panel.utilities_page)
         self._connect_page_change(self.panel.am_cancel, self.panel.utilities_page)
         self._connect_page_change(self.panel.axes_back_btn, self.panel.utilities_page)
+        self._connect_page_change(self.panel.tb_back_btn, self.panel.utilities_page)
         
         
         # --- Routines ---
@@ -217,14 +223,19 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         obj_key, message = routine_configs[process]
         obj_list = list(self.objects.get(obj_key, {}).keys())
         if not self._advance_routine_object(obj_list):
-            self.change_page(self.indexOf(self.panel.utilities_page))
+            if self.tb:
+                 self.change_page(self.indexOf(self.panel.troulbeshoot_page))
+                 self.tb = False
+            else:
+                self.change_page(self.indexOf(self.panel.utilities_page))
+
             if process == Process.FAN: self.run_gcode_signal.emit("M107")
             return
         self.set_routine_check_page(f"Running routine for: {self.current_object}", "")
         self.show_waiting_page(
             self.indexOf(self.panel.rc_page),
             f"Please check if the {message}",
-            5000 if process in [Process.FAN, Process.AXIS] else 10000,
+            5 if process in [Process.FAN, Process.AXIS] else 5,
         )
         self._send_routine_gcode()
 
@@ -251,7 +262,11 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
 
     def on_routine_answer(self) -> None:
         if self.current_process is None or self.current_object is None: return
-        answer = "yes" if self.sender() == self.panel.rc_yes else "no"
+        if self.sender() == self.panel.rc_yes:
+            answer = "yes"
+        else:
+            answer = "no"
+            self.tb = True
         process_map = {
             Process.FAN: ("fans", self.current_object),
             Process.AXIS: ("axis", self.current_object),
@@ -265,8 +280,10 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
                 self.run_gcode_signal.emit("TURN_OFF_HEATERS")
             self.run_routine(self.current_process)
         elif self.current_process == Process.AXIS_MAINTENANCE:
-            if answer == "yes": self._run_axis_maintenance_gcode(self.current_object)
-            else: self.change_page(self.indexOf(self.panel.axes_page))
+            if answer == "yes": 
+                self._run_axis_maintenance_gcode(self.current_object)
+            else: 
+                self.change_page(self.indexOf(self.panel.axes_page))
 
     def _send_routine_gcode(self):
         gcode_map = {
@@ -279,7 +296,8 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         }
         key = (self.current_process, self.current_object) if self.current_process == Process.AXIS else self.current_process
         if gcode := gcode_map.get(key):
-            self.run_gcode_signal.emit(f"{gcode}\nM400")
+            #self.run_gcode_signal.emit(f"{gcode}\nM400")
+            return
 
     def set_routine_check_page(self, title: str, label: str):
         self.panel.rc_tittle.setText(title)
@@ -350,7 +368,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
             led_state: LedState = self.objects["leds"][self.current_object]
             self.run_gcode_signal.emit(led_state.get_gcode(self.current_object))
 
-#input shapper
+    # input shapper
     def run_resonance_test(self, axis: str) -> None:
         self.axis_in = axis
         path_map = {"x": "/tmp/resonances_x_axis_data.csv", "y": "/tmp/resonances_y_axis_data.csv"}
@@ -419,16 +437,18 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
 
 
     def show_waiting_page(self, page_to_go_to: int, label: str, time_ms: int):
-        self.sliderPage.label.setText(label)
-        self.sliderPage.show()
+        self.loadPage.label.setText(label)
+        self.loadPage.show()
         QtCore.QTimer.singleShot(time_ms, lambda: self.change_page(page_to_go_to))
 
     def _connect_page_change(self, button: QtWidgets.QWidget, page: QtWidgets.QWidget):
         button.clicked.connect(lambda: self.change_page(self.indexOf(page)))
 
+
     def change_page(self, index: int):
-        self.sliderPage.hide()
-        if index < self.count(): self.request_change_page.emit(3, index)
+        self.loadPage.hide()
+        if index < self.count(): 
+            self.request_change_page.emit(3, index)
     
     def back_button(self) -> None:
         self.request_back_page.emit()
