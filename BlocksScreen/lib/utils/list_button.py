@@ -33,6 +33,9 @@ class ListCustomButton(QtWidgets.QPushButton):
         self._right_text = text
         self.update()
 
+    def rightText(self) -> str:
+        return self._right_text
+
     def setLeftFontSize(self, size: int) -> None:
         self._lfontsize = size
         self.update()
@@ -75,9 +78,6 @@ class ListCustomButton(QtWidgets.QPushButton):
         path = QtGui.QPainterPath()
         path.addRoundedRect(QtCore.QRectF(rect), radius, radius)
 
-
-       
-
         # Ellipse ("hole") for the icon on the right
         ellipse_margin = rect.height() * 0.05
         ellipse_size = rect.height() * 0.90
@@ -102,7 +102,7 @@ class ListCustomButton(QtWidgets.QPushButton):
         )
         left_margin = 10  # default left margin
 
-         # Gradient background (left to right)
+        # Gradient background (left to right)
         if not self._is_pressed:
             pressed_color = QtGui.QColor(self.pressed_color)
             pressed_color.setAlpha(20)
@@ -115,7 +115,7 @@ class ListCustomButton(QtWidgets.QPushButton):
             painter.setPen(QtCore.Qt.PenStyle.NoPen)
             painter.setBrush(pressed_color)
             painter.fillPath(path, pressed_color)
-            
+
         # Draw icon inside the ellipse "hole" (on the right)
         if not self.icon_pixmap.isNull():
             icon_margin = ellipse_size * 0.10
