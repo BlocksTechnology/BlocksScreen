@@ -29,9 +29,7 @@ class TroubleshootPage(QtWidgets.QDialog):
             for widget in app_instance.allWidgets():
                 if isinstance(widget, QtWidgets.QMainWindow):
                     main_window = widget
-        print("Main window found:", main_window)
-        if main_window: 
-            
+        if main_window:      
             x = main_window.geometry().x()
             y = main_window.geometry().y()
             width = main_window.width()
@@ -43,8 +41,6 @@ class TroubleshootPage(QtWidgets.QDialog):
         self.repaint()
         return super().show()
 
-
-    
     def setupUI(self) -> None:
         self.setObjectName("troubleshoot_page")
         self.verticalLayout = QtWidgets.QVBoxLayout(self)
