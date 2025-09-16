@@ -1,10 +1,6 @@
 import logging
-import asyncio
 import typing
 from functools import partial
-
-import PyQt6
-
 from lib.network import SdbusNetworkManagerAsync
 from lib.panels.widgets.popupDialogWidget import Popup
 from lib.ui.wifiConnectivityWindow_ui import Ui_wifi_stacked_page
@@ -12,6 +8,109 @@ from lib.utils.list_button import ListCustomButton
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 logger = logging.getLogger("logs/BlocksScreen.log")
+
+
+class BuildNetworkList(QtCore.QThread):
+    scan_result: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        dict, name="scan-results"
+    )
+    finished_network_list_build: typing.ClassVar[QtCore.pyqtSignal] = (
+        QtCore.pyqtSignal(list, name="finished-network-list-build")
+    )
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.mutex = QtCore.QMutex()
+        self.condition = QtCore.QWaitCondition()
+        self.restart = False
+        self.mutex.unlock()
+        self.network_items_list = []
+        self.nm = SdbusNetworkManagerAsync()
+        if not self.nm:
+            logger.error(
+                "Cannot scan for networks, parent does not have sdbus_network ('SdbusNetworkManagerAsync' instance class)"
+            )
+            return
+
+        logger.info("Network Scanner Thread Initiated")
+
+    def build(self) -> None:
+        with QtCore.QMutexLocker(self.mutex):
+            if not self.isRunning():
+                self.start(QtCore.QThread.Priority.LowPriority)
+            else:
+                self.restart = True
+                self.condition.wakeOne()
+
+    def stop(self):
+        self.mutex.lock()
+        self.condition.wakeOne()
+        self.mutex.unlock()
+        self.deleteLater()
+
+    def run(self) -> None:
+        while True:
+            self.mutex.lock()
+            self.network_items_list.clear()
+            self.nm.rescan_networks()
+            saved_ssids = self.nm.get_saved_ssid_names()
+            saved_networks = self.nm.get_saved_networks()
+            unsaved_networks = []
+            networks = []
+            if self.nm.check_wifi_interface():
+                available_networks: dict = self.nm.get_available_networks()
+                for ssid_key in available_networks:
+                    properties = available_networks.get(ssid_key, {})
+                    signal = int(properties.get("signal_level", 0))
+                    networks.append(
+                        {
+                            "ssid": ssid_key if ssid_key else "UNKNOWN",
+                            "signal": signal,
+                            "is_saved": bool(ssid_key in saved_ssids),
+                        }
+                    )
+            if networks:
+                saved_networks = sorted(
+                    [n for n in networks if n["is_saved"]],
+                    key=lambda x: -x["signal"],
+                )
+                unsaved_networks = sorted(
+                    [n for n in networks if not n["is_saved"]],
+                    key=lambda x: -x["signal"],
+                )
+            else:
+                saved_networks = sorted(
+                    [n for n in saved_networks], key=lambda x: -1
+                )
+            if saved_networks:
+                for net in saved_networks:
+                    ssid = net.get("ssid", "UNKNOWN")
+                    signal = (
+                        self.nm.get_connection_signal_by_ssid(ssid)
+                        if ssid != "UNKNOWN"
+                        else 0
+                    )
+                    self.network_items_list.append((ssid, signal, "Saved"))
+            if saved_networks and unsaved_networks:  # Separator
+                self.network_items_list.append("separator")
+            if unsaved_networks:
+                for net in unsaved_networks:
+                    ssid = net.get("ssid", "UNKNOWN")
+                    signal = (
+                        self.nm.get_connection_signal_by_ssid(ssid)
+                        if ssid != "UNKNOWN"
+                        else 0
+                    )
+                    self.network_items_list.append((ssid, signal, "Protected"))
+            # Add a dummy blank space at the end if there are any unsaved networks
+            if unsaved_networks:
+                self.network_items_list.append("blank")
+
+            self.finished_network_list_build.emit(self.network_items_list)
+            if not self.restart:
+                self.condition.wait(self.mutex)
+            self.restart = False
+            self.mutex.unlock()
 
 
 class NetworkControlWindow(QtWidgets.QStackedWidget):
@@ -33,15 +132,24 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.panel = Ui_wifi_stacked_page()
         self.panel.setupUi(self)
         self.popup = Popup(self)
-        self.panel.network_list_widget.setLayoutDirection(
-            QtCore.Qt.LayoutDirection.LeftToRight
-        )
         self.sdbus_network = SdbusNetworkManagerAsync()
         self.network_dead: bool = not self.sdbus_network.check_wifi_interface()
-        
-        
-        self.sdbus_network.nm_state_change.connect(self.evaluate_network_state)
 
+        # Network Scan
+        self.network_list_widget = QtWidgets.QListWidget(
+            parent=self.panel.network_list_page
+        )
+        self.build_network_list()
+
+        self.network_list_worker = BuildNetworkList()
+        self.network_list_worker.finished_network_list_build.connect(
+            self.handle_network_list
+        )
+        self.panel.rescan_button.clicked.connect(
+            self.network_list_worker.build
+        )  # Run scanner worker To Update the network list
+
+        self.sdbus_network.nm_state_change.connect(self.evaluate_network_state)
         self.panel.wifi_button.clicked.connect(
             partial(
                 self.setCurrentIndex,
@@ -62,14 +170,6 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         )
 
         self.panel.hotspot_password_input_field.installEventFilter(self)
-        QtWidgets.QScroller.grabGesture(
-            self.panel.network_list_widget,
-            QtWidgets.QScroller.ScrollerGestureType.TouchGesture,
-        )
-        QtWidgets.QScroller.grabGesture(
-            self.panel.network_list_widget,
-            QtWidgets.QScroller.ScrollerGestureType.LeftMouseButtonGesture,
-        )
 
         self.panel.nl_back_button.clicked.connect(
             partial(
@@ -77,16 +177,12 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
                 self.indexOf(self.panel.main_network_page),
             )
         )
-        self.panel.network_list_widget.itemClicked.connect(
-            self.ssid_item_clicked
-        )
+
         self.panel.network_backButton.clicked.connect(self.hide)
         self.panel.rescan_button.clicked.connect(
             lambda: self.sdbus_network.rescan_networks()
         )
-        self.panel.rescan_button.clicked.connect(
-            self.add_ssid_network_entry
-        )  # To Update the network list
+
         self.request_network_scan.connect(self.rescan_networks)
         self.panel.add_network_validation_button.clicked.connect(
             self.add_network
@@ -204,6 +300,18 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
                 QtGui.QPixmap(":/ui/media/btn_icons/see.svg")
             )
         )
+
+        self.panel.add_network_password_field.setCursor(
+            QtCore.Qt.CursorShape.BlankCursor
+        )
+        self.panel.hotspot_name_input_field.setCursor(
+            QtCore.Qt.CursorShape.BlankCursor
+        )
+        self.panel.hotspot_password_input_field.setCursor(
+            QtCore.Qt.CursorShape.BlankCursor
+        )
+
+        self.network_list_worker.build()
 
         self.request_network_scan.emit()
         self.evaluate_network_state()
@@ -454,148 +562,37 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
     def eventFilter(self, obj, event):
         if (
             obj == self.panel.hotspot_password_input_field
-            and event.type() == QtCore.QEvent.Type.MouseButtonPress
-        ):
+            or obj == self.panel.add_network_password_field
+        ) and event.type() == QtCore.QEvent.Type.MouseButtonPress:
             self.panel.hotspot_password_input_field.setFocus()
             return True  # event handled
             # TODO: Open virtual keyboard here
             # subprocess.Popen(["onboard"])  # Open the virtual keyboard
         return super().eventFilter(obj, event)
 
-    def add_ssid_network_entry(self) -> None:
-        """Add scanned networks: saved go to network_list_widget, unsaved to network_list_widget_."""
-        self.panel.network_list_widget.clear()
-        self.panel.network_list_widget.setSpacing(35)
-
-        saved_ssids = self.sdbus_network.get_saved_ssid_names()
-        unsaved_networks = []
-        saved_networks = self.sdbus_network.get_saved_networks()
-        spacer_item = None
-        spacer_widget = None
-        networks = []
-
-        if self.sdbus_network.check_wifi_interface():
-            available_networks: dict = (
-                self.sdbus_network.get_available_networks()
-            )
-            for ssid_key in available_networks:
-                properties = available_networks.get(ssid_key, {})
-                signal = int(properties.get("signal_level", 0))
-                networks.append(
-                    {
-                        "ssid": ssid_key if ssid_key else "UNKNOWN",
-                        "signal": signal,
-                        "is_saved": bool(ssid_key in saved_ssids),
-                    }
-                )
-
-        if networks:
-            saved_networks = sorted(
-                [n for n in networks if n["is_saved"]],
-                key=lambda x: -x["signal"],
-            )
-            unsaved_networks = sorted(
-                [n for n in networks if not n["is_saved"]],
-                key=lambda x: -x["signal"],
-            )
-        else:
-            saved_networks = sorted(
-                [n for n in saved_networks], key=lambda x: -1
-            )
-
-        self.panel.network_list_widget.clear()
-
-        if saved_networks:
-            for net in saved_networks:
-                ssid = net.get("ssid", "UNKNOWN")
-                signal = self.sdbus_network.get_connection_signal_by_ssid(ssid)
-                self._add_network_button(
-                    ssid=ssid,
-                    signal=signal,
-                    right_text="Saved",
-                    target_widget=self.panel.network_list_widget,
-                )
-
-        if saved_networks and unsaved_networks:  # Separator
-            separator_item = QtWidgets.QListWidgetItem()
-            separator_widget = QtWidgets.QLabel()
-            separator_widget.setStyleSheet(
-                "background-color: gray; margin: 1px 1px; min-height: 1px; max-height: 1px;"
-            )
-            separator_item.setSizeHint(
-                QtCore.QSize(0, 2)
-            )  # Total vertical space: 2px
-            self.panel.network_list_widget.addItem(separator_item)
-            self.panel.network_list_widget.setItemWidget(
-                separator_item, separator_widget
-            )
-        if unsaved_networks:
-            for net in unsaved_networks:
-                ssid = net.get("ssid")
-                signal = self.sdbus_network.get_connection_signal_by_ssid(ssid)
-
-                self._add_network_button(
-                    ssid=ssid,
-                    signal=signal,
-                    right_text="Protected",
-                    target_widget=self.panel.network_list_widget,
-                )
-        # Add a dummy blank space at the end if there are any unsaved networks
-        if unsaved_networks:
-            spacer_item = QtWidgets.QListWidgetItem()
-            spacer_widget = QtWidgets.QWidget()
-            spacer_widget.setFixedHeight(10)  # Adjust height as needed
-            spacer_item.setSizeHint(spacer_widget.sizeHint())
-            self.panel.network_list_widget.addItem(spacer_item)
-
-        if spacer_item and spacer_widget:
-            self.panel.network_list_widget.setItemWidget(
-                spacer_item, spacer_widget
-            )
-
-    def _add_network_button(
-        self,
-        ssid: str,
-        signal: int,
-        right_text: str,
-        target_widget: QtWidgets.QListWidget,
-    ):
-        """Helper to create and insert a network button into the given list widget."""
-        if 70 <= signal <= 100:
-            wifi_pixmap = QtGui.QPixmap(
-                ":/network/media/btn_icons/3bar_wifi.svg"
-            )
-        elif signal >= 40:
-            wifi_pixmap = QtGui.QPixmap(
-                ":/network/media/btn_icons/2bar_wifi.svg"
-            )
-        elif 0 < signal < 40:
-            wifi_pixmap = QtGui.QPixmap(
-                ":/network/media/btn_icons/1bar_wifi.svg"
-            )
-        elif signal == 0:
-            wifi_pixmap = QtGui.QPixmap(
-                ":/network/media/btn_icons/no_wifi.svg"
-            )
-        button = ListCustomButton(parent=target_widget)
-        button.setText(ssid)
-        button.setRightText(right_text)
-        button.setPixmap(
-            QtGui.QPixmap(":/arrow_icons/media/btn_icons/right_arrow.svg")
+    @QtCore.pyqtSlot(list, name="finished-network-list-build")
+    def handle_network_list(self, data: typing.List[typing.Tuple]) -> None:
+        scroll_bar_position = (
+            self.network_list_widget.verticalScrollBar().value()
         )
-        button.setSecondPixmap(wifi_pixmap)
-        button.setFixedHeight(80)
-        button.setLeftFontSize(17)
-        button.setRightFontSize(12)
+        self.network_list_widget.blockSignals(True)
+        self.network_list_widget.clear()
+        self.network_list_widget.setSpacing(35)
+        for entry in data:
+            if entry == "separator":
+                self.separator_item()
+                continue
+            elif entry == "blank":
+                self.blank_space_item()
+                continue
+            self.network_button_item(*entry)
 
-        button.clicked.connect(
-            lambda checked, s=ssid: self.handle_button_click(s)
+        self.network_list_widget.verticalScrollBar().setValue(
+            scroll_bar_position
         )
-
-        item = QtWidgets.QListWidgetItem()
-        item.setSizeHint(button.sizeHint())
-        target_widget.addItem(item)
-        target_widget.setItemWidget(item, button)
+        self.network_list_widget.setAutoScroll(True)
+        self.network_list_widget.blockSignals(False)
+        self.network_list_worker.build()
 
     def handle_button_click(self, ssid: str):
         if ssid in self.sdbus_network.get_saved_ssid_names():
@@ -647,10 +644,10 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             return
 
         _cur = self.currentIndex()
-        if index == self.indexOf(self.panel.network_list_page):  # Main page 1
-            self.panel.network_list_widget.clear()
-            # self.add_ssid_network_entry()  # Add network entries to the list
-        elif index == self.indexOf(
+        # if index == self.indexOf(self.panel.network_list_page):  # Main page 1
+        #     self.panel.network_list_widget.clear()
+        # self.add_ssid_network_entry()  # Add network entries to the list
+        if index == self.indexOf(
             self.panel.add_network_page
         ):  # Add network page 2
             self.panel.add_network_password_field.clear()
@@ -717,11 +714,245 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
     ) -> None:
         if not self.parent():
             return
-
-        self.panel.network_list_widget.clear()
         self.setCurrentIndex(self.indexOf(self.panel.network_list_page))
-        _parent_size = self.parent().size()
+        _parent_size = self.parent().size()  # type: ignore
         self.setGeometry(0, 0, _parent_size.width(), _parent_size.height())
         self.updateGeometry()
         self.update()
         self.show()
+
+    def build_network_list(self) -> None:
+        palette = QtGui.QPalette()
+        brush = QtGui.QBrush(QtGui.QColor(0, 0, 0, 0))
+        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Active,
+            QtGui.QPalette.ColorRole.Button,
+            brush,
+        )
+        brush = QtGui.QBrush(QtGui.QColor(0, 0, 0))
+        brush.setStyle(QtCore.Qt.BrushStyle.NoBrush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Active,
+            QtGui.QPalette.ColorRole.Base,
+            brush,
+        )
+        brush = QtGui.QBrush(QtGui.QColor(0, 0, 0, 0))
+        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Active,
+            QtGui.QPalette.ColorRole.Window,
+            brush,
+        )
+        brush = QtGui.QBrush(QtGui.QColor(0, 120, 215, 0))
+        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Active,
+            QtGui.QPalette.ColorRole.Highlight,
+            brush,
+        )
+        brush = QtGui.QBrush(QtGui.QColor(0, 0, 255, 0))
+        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Active,
+            QtGui.QPalette.ColorRole.Link,
+            brush,
+        )
+        brush = QtGui.QBrush(QtGui.QColor(0, 0, 0, 0))
+        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Inactive,
+            QtGui.QPalette.ColorRole.Button,
+            brush,
+        )
+        brush = QtGui.QBrush(QtGui.QColor(0, 0, 0))
+        brush.setStyle(QtCore.Qt.BrushStyle.NoBrush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Inactive,
+            QtGui.QPalette.ColorRole.Base,
+            brush,
+        )
+        brush = QtGui.QBrush(QtGui.QColor(0, 0, 0, 0))
+        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Inactive,
+            QtGui.QPalette.ColorRole.Window,
+            brush,
+        )
+        brush = QtGui.QBrush(QtGui.QColor(0, 120, 215, 0))
+        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Inactive,
+            QtGui.QPalette.ColorRole.Highlight,
+            brush,
+        )
+        brush = QtGui.QBrush(QtGui.QColor(0, 0, 255, 0))
+        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Inactive,
+            QtGui.QPalette.ColorRole.Link,
+            brush,
+        )
+        brush = QtGui.QBrush(QtGui.QColor(0, 0, 0, 0))
+        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Disabled,
+            QtGui.QPalette.ColorRole.Button,
+            brush,
+        )
+        brush = QtGui.QBrush(QtGui.QColor(0, 0, 0))
+        brush.setStyle(QtCore.Qt.BrushStyle.NoBrush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Disabled,
+            QtGui.QPalette.ColorRole.Base,
+            brush,
+        )
+        brush = QtGui.QBrush(QtGui.QColor(0, 0, 0, 0))
+        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Disabled,
+            QtGui.QPalette.ColorRole.Window,
+            brush,
+        )
+        brush = QtGui.QBrush(QtGui.QColor(0, 120, 215, 0))
+        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Disabled,
+            QtGui.QPalette.ColorRole.Highlight,
+            brush,
+        )
+        brush = QtGui.QBrush(QtGui.QColor(0, 0, 255, 0))
+        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Disabled,
+            QtGui.QPalette.ColorRole.Link,
+            brush,
+        )
+        self.network_list_widget.setPalette(palette)
+        self.network_list_widget.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
+        self.network_list_widget.setStyleSheet("background-color:transparent")
+        self.network_list_widget.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
+        self.network_list_widget.setFrameShadow(QtWidgets.QFrame.Shadow.Sunken)
+        self.network_list_widget.setVerticalScrollBarPolicy(
+            QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
+        self.network_list_widget.setHorizontalScrollBarPolicy(
+            QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
+        self.network_list_widget.setSizeAdjustPolicy(
+            QtWidgets.QAbstractScrollArea.SizeAdjustPolicy.AdjustToContents
+        )
+        self.network_list_widget.setAutoScroll(False)
+        self.network_list_widget.setProperty("showDropIndicator", False)
+        self.network_list_widget.setDefaultDropAction(
+            QtCore.Qt.DropAction.IgnoreAction
+        )
+        self.network_list_widget.setAlternatingRowColors(False)
+        self.network_list_widget.setSelectionMode(
+            QtWidgets.QAbstractItemView.SelectionMode.NoSelection
+        )
+        self.network_list_widget.setSelectionBehavior(
+            QtWidgets.QAbstractItemView.SelectionBehavior.SelectItems
+        )
+        self.network_list_widget.setVerticalScrollMode(
+            QtWidgets.QAbstractItemView.ScrollMode.ScrollPerPixel
+        )
+        self.network_list_widget.setHorizontalScrollMode(
+            QtWidgets.QAbstractItemView.ScrollMode.ScrollPerPixel
+        )
+        QtWidgets.QScroller.grabGesture(
+            self.network_list_widget,
+            QtWidgets.QScroller.ScrollerGestureType.TouchGesture,
+        )
+        QtWidgets.QScroller.grabGesture(
+            self.network_list_widget,
+            QtWidgets.QScroller.ScrollerGestureType.LeftMouseButtonGesture,
+        )
+
+        self.network_list_widget.setObjectName("network_list_widget")
+        self.panel.nl_content_layout.addWidget(self.network_list_widget)
+
+    def separator_item(self) -> None:
+        separator_item = QtWidgets.QListWidgetItem()
+        separator_widget = QtWidgets.QLabel()
+        separator_widget.setStyleSheet(
+            "background-color: gray; margin: 1px 1px; min-height: 1px; max-height: 1px;"
+        )
+        separator_item.setSizeHint(
+            QtCore.QSize(0, 2)
+        )  # Total vertical space: 2px
+        self.network_list_widget.addItem(separator_item)
+        self.network_list_widget.setItemWidget(
+            separator_item, separator_widget
+        )
+
+    def blank_space_item(self) -> None:
+        spacer_item = QtWidgets.QListWidgetItem()
+        spacer_widget = QtWidgets.QWidget()
+        spacer_widget.setFixedHeight(10)  # Adjust height as needed
+        spacer_item.setSizeHint(spacer_widget.sizeHint())
+        self.network_list_widget.addItem(spacer_item)
+        self.network_list_widget.setItemWidget(spacer_item, spacer_widget)
+
+    def network_button_item(self, ssid, signal, right_text, /) -> None:
+        if 70 <= signal <= 100:
+            wifi_pixmap = QtGui.QPixmap(
+                ":/network/media/btn_icons/3bar_wifi.svg"
+            )
+        elif signal >= 40:
+            wifi_pixmap = QtGui.QPixmap(
+                ":/network/media/btn_icons/2bar_wifi.svg"
+            )
+        elif 0 < signal < 40:
+            wifi_pixmap = QtGui.QPixmap(
+                ":/network/media/btn_icons/1bar_wifi.svg"
+            )
+        elif signal == 0:
+            wifi_pixmap = QtGui.QPixmap(
+                ":/network/media/btn_icons/no_wifi.svg"
+            )
+
+        # # Update if it already exists:
+        # item_count = self.network_list_widget.count()
+        # for item_index in range(item_count):
+        #     item = self.network_list_widget.itemWidget(
+        #         self.network_list_widget.item(item_index)
+        #     )
+        #     if isinstance(item, ListCustomButton):
+        #         if not item:
+        #             logger.info("Not itemmmmmmm")
+        #             continue
+
+        #         if item.text() == ssid:
+        #             logger.info("SEtting new pixmpa")
+        #             item.setPixmap(wifi_pixmap)
+        #             item.update()
+        #             return
+        #         if hasattr(item, "rightText"):
+        #             if item.rightText() != right_text:
+        #                 logger.debug(
+        #                     f"Remove item, because it changed the right text new one will be put in place {item.rightText()}"
+        #                 )
+        #                 self.network_list_widget.takeItem(item_index)
+        #                 # item.deleteLater()
+        #         else:
+        #             logger.info("Has no right text")
+
+        button = ListCustomButton(parent=self.network_list_widget)
+        button.setText(ssid)
+        button.setRightText(right_text)
+        button.setPixmap(
+            QtGui.QPixmap(":/arrow_icons/media/btn_icons/right_arrow.svg")
+        )
+        button.setSecondPixmap(wifi_pixmap)
+        button.setFixedHeight(80)
+        button.setLeftFontSize(17)
+        button.setRightFontSize(12)
+
+        button.clicked.connect(
+            lambda checked, s=ssid: self.handle_button_click(s)
+        )
+        item = QtWidgets.QListWidgetItem()
+        item.setSizeHint(button.sizeHint())
+        self.network_list_widget.addItem(item)
+        self.network_list_widget.setItemWidget(item, button)
