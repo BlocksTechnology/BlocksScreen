@@ -14,7 +14,7 @@ from lib.moonrakerComm import MoonWebSocket
 from lib.panels.widgets.loadPage import LoadScreen
 from lib.printer import Printer
 
-
+from lib.panels.widgets.troubleshootPage import TroubleshootPage
 
 
 # RESTORED: Using a dataclass for a clean and concise data structure.
@@ -76,7 +76,9 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
 
         self.ws = ws
         self.printer: Printer = printer
-        
+        self.troubleshoot_page = TroubleshootPage(self)
+
+
 
         # --- State Variables ---
         self.objects = {
@@ -116,13 +118,15 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         # --- Page Navigation ---
         self._connect_page_change(self.panel.utilities_axes_btn, self.panel.axes_page)
         self._connect_page_change(self.panel.utilities_input_shaper_btn, self.panel.input_shaper_page)
-        self._connect_page_change(self.panel.utilities_info_btn, self.panel.troulbeshoot_page)
-        self._connect_page_change(self.panel.utilities_routine_check_btn, self.panel.routines_page)
+        self._connect_page_change(self.panel.utilities_info_btn, self.panel.info_page)
         self._connect_page_change(self.panel.utilities_leds_btn, self.panel.leds_page)
+        self._connect_page_change(self.panel.utilities_routine_check_btn, self.panel.routines_page)
+        self._connect_page_change(self.panel.utilities_leds_btn, self.troubleshoot_page)
         self._connect_page_change(self.panel.is_confirm_btn, self.panel.utilities_page)
         self._connect_page_change(self.panel.am_cancel, self.panel.utilities_page)
+
         self._connect_page_change(self.panel.axes_back_btn, self.panel.utilities_page)
-        self._connect_page_change(self.panel.tb_back_btn, self.panel.utilities_page)
+        self._connect_page_change(self.troubleshoot_page.tb_back_btn, self.panel.utilities_page)
         
         
         # --- Routines ---
@@ -224,7 +228,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         obj_list = list(self.objects.get(obj_key, {}).keys())
         if not self._advance_routine_object(obj_list):
             if self.tb:
-                 self.change_page(self.indexOf(self.panel.troulbeshoot_page))
+                 self.troubleshoot_request()
                  self.tb = False
             else:
                 self.change_page(self.indexOf(self.panel.utilities_page))
@@ -434,6 +438,9 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
             print(f"Warning: Stepper limits for '{axis}' not found.")
             self.change_page(self.indexOf(self.panel.axes_page))
 
+    def troubleshoot_request(self) -> None:
+        self.troubleshoot_page.geometry_calc()
+        self.troubleshoot_page.show()
 
 
     def show_waiting_page(self, page_to_go_to: int, label: str, time_ms: int):
@@ -447,6 +454,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
 
     def change_page(self, index: int):
         self.loadPage.hide()
+        self.troubleshoot_page.hide()
         if index < self.count(): 
             self.request_change_page.emit(3, index)
     
