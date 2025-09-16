@@ -1481,18 +1481,16 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                 con_settings.get_settings(), self.loop
             ).result(timeout=2)
             if new_ssid:
-                if ssid == self.hotspot_ssid:
-                    self.hotspot_ssid = new_ssid
                 properties["connection"]["id"] = ("s", str(new_ssid))
                 properties["802-11-wireless"]["ssid"] = (
                     "ay",
                     new_ssid.encode("utf-8"),
                 )
             if password:
-                password = hashlib.sha256(password.encode()).hexdigest()
+                pwd = hashlib.sha256(password.encode()).hexdigest()
                 properties["802-11-wireless-security"]["psk"] = (
                     "s",
-                    str(password),
+                    str(pwd),
                 )
 
             if priority != 0:
@@ -1502,6 +1500,12 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                 )
             task = self.loop.create_task(con_settings.update(properties))
             asyncio.gather(task)
+
+            if ssid == self.hotspot_ssid and new_ssid:
+                self.hotspot_ssid = new_ssid
+            if password != self.hotspot_password and password:
+                self.hotspot_password = password
+            
             return {"status": "updated"}
         except Exception:
             return {"status": "error", "error": "Unexpected error"}

@@ -234,10 +234,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             )
         )
         self.panel.hotspot_back_button.clicked.connect(
-            partial(
-                self.setCurrentIndex,
-                self.indexOf(self.panel.network_list_page),
-            )
+            self.handle_hotspot_back
         )
 
         self.panel.hotspot_password_input_field.setPlaceholderText(
@@ -252,7 +249,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         )
         self.panel.hotspot_change_confirm.clicked.connect(  # Also goes back to the main page
             lambda: self.setCurrentIndex(
-                self.indexOf(self.panel.network_list_page)
+                self.indexOf(self.panel.main_network_page)
             )
         )
 
@@ -269,7 +266,6 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.panel.hotspot_password_input_field.setText(
             str(self.sdbus_network.hotspot_password)
         )
-        hashlib.sha256().with
         self.new_connection_result.connect(self.process_new_connection_result)
 
         self.panel.saved_connection_change_password_view.pressed.connect(
@@ -283,23 +279,23 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             )
         )
         self.panel.add_network_password_view.released.connect(
-            lambda: self.panel.saved_connection_change_password_view.setPixmap(
+            lambda: self.panel.add_network_password_view.setPixmap(
                 QtGui.QPixmap(":/ui/media/btn_icons/see.svg")
             )
         )
         self.panel.add_network_password_view.pressed.connect(
-            lambda: self.panel.saved_connection_change_password_view.setPixmap(
-                QtGui.QPixmap(":/ui/media/btn_icons/unsee.svg")
-            )
-        )
-        self.panel.hotspot_password_view_button.pressed.connect(
-            lambda: self.panel.saved_connection_change_password_view.setPixmap(
+            lambda: self.panel.add_network_password_view.setPixmap(
                 QtGui.QPixmap(":/ui/media/btn_icons/unsee.svg")
             )
         )
         self.panel.hotspot_password_view_button.released.connect(
-            lambda: self.panel.saved_connection_change_password_view.setPixmap(
+            lambda: self.panel.hotspot_password_view_button.setPixmap(
                 QtGui.QPixmap(":/ui/media/btn_icons/see.svg")
+            )
+        )
+        self.panel.hotspot_password_view_button.pressed.connect(
+            lambda: self.panel.hotspot_password_view_button.setPixmap(
+                QtGui.QPixmap(":/ui/media/btn_icons/unsee.svg")
             )
         )
 
@@ -453,6 +449,25 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
                 persistent=False,
                 timeout=200,
             )
+
+    @QtCore.pyqtSlot(name="handle-hotspot-back")
+    def handle_hotspot_back(self) -> None:
+        if (
+            self.panel.hotspot_password_input_field.text()
+            != self.sdbus_network.hotspot_password
+        ):
+            self.panel.hotspot_password_input_field.setText(
+                self.sdbus_network.hotspot_password
+            )
+        if (
+            self.panel.hotspot_name_input_field.text()
+            != self.sdbus_network.hotspot_ssid
+        ):
+            self.panel.hotspot_name_input_field.setText(
+                self.sdbus_network.hotspot_ssid
+            )
+
+        self.setCurrentIndex(self.indexOf(self.panel.main_network_page))
 
     @QtCore.pyqtSlot(name="add_network")
     def add_network(self) -> None:
