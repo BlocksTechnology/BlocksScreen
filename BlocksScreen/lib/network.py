@@ -124,14 +124,21 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
             self.loop.run_until_complete(
                 asyncio.gather(self.listener_monitor())
             )
-
         except Exception as e:
             logging.error(f"Exception on loop coroutine: {e}")
 
     async def _end_tasks(self) -> None:
         for task in self.listener_task_queue:
             task.cancel()
-        await asyncio.gather(*self.listener_task_queue, return_exceptions=True)
+        results = await asyncio.gather(
+            *self.listener_task_queue, return_exceptions=True
+        )
+        for result in results:
+            if isinstance(result, Exception):
+                logger.error(
+                    f"Caught Exception while ending asyncio tasks: {result}"
+                )
+            return
 
     def close(self) -> None:
         future = asyncio.run_coroutine_threadsafe(self._end_tasks(), self.loop)
@@ -154,8 +161,17 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
             self.listener_task_queue.append(
                 self.loop.create_task(self._nm_properties_listener())
             )
-            asyncio.gather(*self.listener_task_queue)
-            await self.stop_listener_event.wait()
+            results = asyncio.gather(
+                *self.listener_task_queue, return_exceptions=True
+            )
+            for result in results:
+                if isinstance(result, Exception):
+                    logger.error(
+                        f"Caught Exception on network manager asyncio loop: {result}"
+                    )
+                    raise Exception(result)
+                await self.stop_listener_event.wait()
+
         except Exception as e:
             logging.error(
                 f"Exception on listener monitor produced coroutine: {e}"
@@ -304,7 +320,6 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                 logger.error(
                     f"Exception Caught when toggling network : {result}"
                 )
-        return
 
     def disable_networking(self) -> None:
         if not (self.primary_wifi_interface and self.primary_wired_interface):
@@ -350,7 +365,12 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                 self.disconnect_network()
             if self.is_known(self.hotspot_ssid):
                 self.connect_network(self.hotspot_ssid)
-                asyncio.gather(self.nm.reload(0x0), return_exceptions=False)
+                results = asyncio.gather(
+                    self.nm.reload(0x0), return_exceptions=True
+                ).result()
+                for result in results:
+                    if isinstance(result, Exception):
+                        raise Exception(result)
 
                 if self.nm.check_connectivity() == (
                     NetworkManagerConnectivityState.FULL
@@ -363,7 +383,9 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                 self.connect_network(old_ssid)
                 return
         except Exception as e:
-            logging.error(f"Unexpected error occurred: {e}")
+            logging.error(
+                f"Caught Exception while toggling hotspot to {toggle}: {e}"
+            )
 
     def hotspot_enabled(self) -> typing.Optional["bool"]:
         """Returns a boolean indicating whether the device hotspot is on or not .
@@ -571,18 +593,23 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
             results = await asyncio.gather(task, return_exceptions=True)
             for result in results:
                 if isinstance(result, Exception):
-                    raise NetworkManagerRescanError(
-                        f"Exception caught: {result}"
-                    )
+                    raise NetworkManagerRescanError(f"Rescan error: {result}")
                 return
         except Exception as e:
-            logger.error(f"Exception caught, network scan failed: {e}")
+            logger.error(f"Caught Exception: {e.__class__.__name__}: {e}")
             return
 
     def rescan_networks(self) -> None:
         """Scan for available networks."""
-        future = asyncio.run_coroutine_threadsafe(self._rescan(), self.loop)
-        return future.result(timeout=2)
+        try:
+            future = asyncio.run_coroutine_threadsafe(
+                self._rescan(), self.loop
+            )
+            result = future.result(timeout=2)
+            return result
+
+        except Exception as e:
+            logger.error(f"Caught Exception while rescanning networks: {e}")
 
     async def _get_network_info(self, ap: AccessPoint) -> typing.Tuple:
         ssid = await ap.ssid.get_async()
@@ -615,10 +642,12 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
             )
             for result in results:
                 if isinstance(result, Exception):
-                    logger.error(f"Error retrieving network info : {result}")
+                    raise Exception(result)
             return dict(results)
         except Exception as e:
-            logger.error(f"Exception while gathering AP information: {e}")
+            logger.error(
+                f"Caught Exception while gathering AP information: {e}"
+            )
         logger.debug(
             "Successfully gathered available access point information"
         )
@@ -655,19 +684,19 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                         )
                         for result in results:
                             if isinstance(result, Exception):
-                                logger.error(
-                                    f"There was an exception {result}"
-                                )
+                                raise Exception(result)
                                 return {}
                             else:
                                 return dict(result)
                     except Exception as e:
                         logger.error(
-                            f"Exception Caught on gathering available networks : {e}"
+                            f"Caught Exception  on gathering available networks : {e}"
                         )
             return {}
         except Exception as e:
-            logger.error(f"Exception while gathering access points: {e}")
+            logger.error(
+                f"Caught Exception while gathering access points: {e}"
+            )
         return {"error": "No available networks"}
 
     def get_available_networks(self) -> typing.Dict:
@@ -698,10 +727,19 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
         _wpa_flag_task = self.loop.create_task(ap.wpa_flags.get_async())
         _sec_flags_task = self.loop.create_task(ap.flags.get_async())
 
-        result = await asyncio.gather(
-            _rsn_flag_task, _wpa_flag_task, _sec_flags_task
+        results = await asyncio.gather(
+            _rsn_flag_task,
+            _wpa_flag_task,
+            _sec_flags_task,
+            return_exceptions=True,
         )
-        _rsn, _wpa, _sec = result
+        for result in results:
+            if isinstance(result, Exception):
+                logger.error(
+                    f"Exception caught getting security type: {result}"
+                )
+                return ()
+        _rsn, _wpa, _sec = results
         if len(AccessPointCapabilities(_sec)) == 0:
             return ("Open", "")
         return (
@@ -794,7 +832,15 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
         saved_connections: typing.List[NetworkConnectionSettings],
     ):
         tasks = [sc.get_settings() for sc in saved_connections]
-        return await asyncio.gather(*tasks)
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        for result in results:
+            if isinstance(result, Exception):
+                logger.error(
+                    f"Caught Exception on getting network connection settings: {e}"
+                )
+
+        return results
 
     def get_saved_networks_with_for(self) -> typing.List:
         """Get a list with the names and ids of all saved networks on the device.
@@ -1195,20 +1241,22 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                     ).result(timeout=2),
                 )
             )
-            for ap in _aps:
-                if (
-                    asyncio.run_coroutine_threadsafe(
-                        ap.ssid.get_async(), self.loop
-                    )
-                    .result(timeout=2)
-                    .decode("utf-8")
-                    .lower()
-                    == ssid.lower()
-                ):
-                    return asyncio.run_coroutine_threadsafe(
-                        ap.strength.get_async(), self.loop
-                    ).result(timeout=2)
-
+            try:
+                for ap in _aps:
+                    if (
+                        asyncio.run_coroutine_threadsafe(
+                            ap.ssid.get_async(), self.loop
+                        )
+                        .result(timeout=2)
+                        .decode("utf-8")
+                        .lower()
+                        == ssid.lower()
+                    ):
+                        return asyncio.run_coroutine_threadsafe(
+                            ap.strength.get_async(), self.loop
+                        ).result(timeout=2)
+            except Exception:
+                return 0
         return 0
 
     def connect_network(self, ssid: str) -> str:
@@ -1288,10 +1336,16 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
         _path = self.get_connection_path_by_ssid(ssid)
         try:
             task = self.loop.create_task(self._delete_network(_path))
-            asyncio.gather(task, return_exceptions=False)
-            return {"status": "success"}
+            results = asyncio.gather(task, return_exceptions=True).result()
+            for result in results:
+                if isinstance(result, Exception):
+                    raise Exception(result)
+
+                return {"status": "success"}
         except Exception as e:
-            logging.debug(f"Unexpected exception detected: {e}")
+            logging.debug(
+                f"Caught Exception while deleting network {ssid}: {e}"
+            )
             return {"status": "error"}
 
     def get_hotspot_ssid(self) -> str:
