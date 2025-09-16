@@ -575,6 +575,8 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         scroll_bar_position = (
             self.network_list_widget.verticalScrollBar().value()
         )
+        old_max_v = self.network_list_widget.verticalScrollBar().maximum()
+
         self.network_list_widget.blockSignals(True)
         self.network_list_widget.clear()
         self.network_list_widget.setSpacing(35)
@@ -587,12 +589,21 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
                 continue
             self.network_button_item(*entry)
 
-        self.network_list_widget.verticalScrollBar().setValue(
-            scroll_bar_position
-        )
-        self.network_list_widget.setAutoScroll(True)
+        max_v = self.network_list_widget.verticalScrollBar().maximum()
+        min_v = self.network_list_widget.verticalScrollBar().minimum()
+        if scroll_bar_position > max_v:
+            self.network_list_widget.verticalScrollBar().setValue(max_v)
+        else:
+            self.network_list_widget.verticalScrollBar().setValue(
+                scroll_bar_position
+            )
+
+        self.network_list_widget.verticalScrollBar().update()
+        self.network_list_widget.update()
         self.network_list_widget.blockSignals(False)
-        self.network_list_worker.build()
+        QtCore.QTimer().singleShot(
+            5000, lambda: self.network_list_worker.build()
+        )
 
     def handle_button_click(self, ssid: str):
         if ssid in self.sdbus_network.get_saved_ssid_names():
@@ -615,8 +626,6 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             return super().paintEvent(a0)
 
         self.updateGeometry()
-
-        # return super().paintEvent(a0)
 
     def event(self, event: QtCore.QEvent) -> bool:
         """Receives PyQt eEvents, this method is reimplemented from the QEvent class
