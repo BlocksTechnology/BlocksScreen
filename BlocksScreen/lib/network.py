@@ -90,9 +90,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
             )
 
         self.hotspot_ssid: str = "PrinterHotspot"
-        self.hotspot_password: str = hashlib.sha256(
-            "123456789".encode()
-        ).hexdigest()
+        self.hotspot_password: str = "123456789"
 
         self.check_connectivity()
 
@@ -1492,8 +1490,6 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                 )
             if password:
                 password = hashlib.sha256(password.encode()).hexdigest()
-                if ssid == self.hotspot_ssid:
-                    self.hotspot_password = password
                 properties["802-11-wireless-security"]["psk"] = (
                     "s",
                     str(password),

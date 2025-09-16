@@ -1,5 +1,6 @@
 import logging
 import typing
+import hashlib
 from functools import partial
 from lib.network import SdbusNetworkManagerAsync
 from lib.panels.widgets.popupDialogWidget import Popup
@@ -268,6 +269,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.panel.hotspot_password_input_field.setText(
             str(self.sdbus_network.hotspot_password)
         )
+        hashlib.sha256().with
         self.new_connection_result.connect(self.process_new_connection_result)
 
         self.panel.saved_connection_change_password_view.pressed.connect(
