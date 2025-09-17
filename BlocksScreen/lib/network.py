@@ -629,27 +629,22 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
             },
         )
 
-    async def _gather_networks(self, aps) -> typing.Dict:
+    async def _gather_networks(
+        self, aps: typing.List[AccessPoint]
+    ) -> typing.Union[typing.List[typing.Tuple], None]:
         try:
             results = await asyncio.gather(
                 *(
                     self.loop.create_task(self._get_network_info(ap))
                     for ap in aps
                 ),
-                return_exceptions=True,
+                return_exceptions=False,
             )
-            for result in results:
-                if isinstance(result, Exception):
-                    raise Exception(result)
-            return dict(results)
+            return results
         except Exception as e:
             logger.error(
-                f"Caught Exception while gathering AP information: {e}"
+                f"Caught Exception while asynchronously gathering AP information: {e}"
             )
-        logger.debug(
-            "Successfully gathered available access point information"
-        )
-        return {}
 
     async def _get_available_networks(self) -> typing.Dict:
         if not self.primary_wifi_interface:
@@ -677,27 +672,22 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                         task = self.loop.create_task(
                             self._gather_networks(_aps)
                         )
-                        results = await asyncio.gather(
-                            task, return_exceptions=True
+                        result = await asyncio.gather(
+                            task, return_exceptions=False
                         )
-                        for result in results:
-                            if isinstance(result, Exception):
-                                raise Exception(result)
-                                return {}
-                            else:
-                                return dict(result)
+                        return dict(*result) if result else None  # type:ignore
                     except Exception as e:
                         logger.error(
-                            f"Caught Exception  on gathering available networks : {e}"
+                            f"Caught Exception while gathering available networks : {e}"
                         )
-            return {}
+            return {"error": "No networks"}
         except Exception as e:
             logger.error(
                 f"Caught Exception while gathering access points: {e}"
             )
         return {"error": "No available networks"}
 
-    def get_available_networks(self) -> typing.Dict:
+    def get_available_networks(self) -> typing.Union[typing.Dict, None]:
         future = asyncio.run_coroutine_threadsafe(
             self._get_available_networks(), self.loop
         )
@@ -746,7 +736,9 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
             AccessPointCapabilities(_sec),
         )
 
-    def get_saved_networks(self) -> typing.List[typing.Optional[typing.Dict]]:
+    def get_saved_networks(
+        self,
+    ) -> typing.Union[typing.List[typing.Optional[typing.Dict]], None]:
         """get_saved_networks Gets a list with the names and ids of all saved networks on the device.
 
         Returns:
@@ -759,86 +751,83 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
         if not self.nm:
             return [{"error": "No network manager"}]
 
-        _connections: typing.List[str] = asyncio.run_coroutine_threadsafe(
-            NetworkManagerSettings(bus=self.system_dbus).list_connections(),
-            self.loop,
-        ).result(timeout=2)
+        try:
+            _connections: typing.List[str] = asyncio.run_coroutine_threadsafe(
+                NetworkManagerSettings(
+                    bus=self.system_dbus
+                ).list_connections(),
+                self.loop,
+            ).result(timeout=2)
 
-        # asyncio.gather().result()
-        # _network_settings: typing.List[NetworkManagerConnectionProperties] =
-
-        saved_cons = list(
-            map(
-                lambda connection: NetworkConnectionSettings(
-                    bus=self.system_dbus, settings_path=connection
-                ),
-                _connections,
+            saved_cons = list(
+                map(
+                    lambda connection: NetworkConnectionSettings(
+                        bus=self.system_dbus, settings_path=connection
+                    ),
+                    _connections,
+                )
             )
-        )
 
-        sv_cons_settings_future = asyncio.run_coroutine_threadsafe(
-            self._get_settings(saved_cons),
-            self.loop,
-        )
-        settings_list = sv_cons_settings_future.result(timeout=2)
-        _known_networks_parameters: typing.List[
-            typing.Optional[typing.Dict]
-        ] = list(
-            filter(
-                lambda network_entry: network_entry is not None,
-                list(
-                    map(
-                        lambda network_properties: (
-                            {
-                                "ssid": network_properties["802-11-wireless"][
-                                    "ssid"
-                                ][1].decode(),
-                                "uuid": network_properties["connection"][
-                                    "uuid"
-                                ][1],
-                                "signal": 0
-                                + self.get_connection_signal_by_ssid(
-                                    network_properties["802-11-wireless"][
-                                        "ssid"
-                                    ][1].decode()
-                                ),
-                                "security": network_properties[
-                                    str(
+            sv_cons_settings_future = asyncio.run_coroutine_threadsafe(
+                self._get_settings(saved_cons),
+                self.loop,
+            )
+            settings_list: typing.List[NetworkManagerConnectionProperties] = (
+                sv_cons_settings_future.result(timeout=2)
+            )
+            _known_networks_parameters: typing.List[
+                typing.Optional[typing.Dict]
+            ] = list(
+                filter(
+                    lambda network_entry: network_entry is not None,
+                    list(
+                        map(
+                            lambda network_properties: (
+                                {
+                                    "ssid": network_properties[
+                                        "802-11-wireless"
+                                    ]["ssid"][1].decode(),
+                                    "uuid": network_properties["connection"][
+                                        "uuid"
+                                    ][1],
+                                    "signal": 0
+                                    + self.get_connection_signal_by_ssid(
                                         network_properties["802-11-wireless"][
-                                            "security"
-                                        ][1]
-                                    )
-                                ]["key-mgmt"][1],
-                                "mode": network_properties["802-11-wireless"][
-                                    "mode"
-                                ],
-                            }
-                            if network_properties["connection"]["type"][1]
-                            == "802-11-wireless"
-                            else None
-                        ),
-                        settings_list,
-                    )
-                ),
+                                            "ssid"
+                                        ][1].decode()
+                                    ),
+                                    "security": network_properties[
+                                        str(
+                                            network_properties[
+                                                "802-11-wireless"
+                                            ]["security"][1]
+                                        )
+                                    ]["key-mgmt"][1],
+                                    "mode": network_properties[
+                                        "802-11-wireless"
+                                    ]["mode"],
+                                }
+                                if network_properties["connection"]["type"][1]
+                                == "802-11-wireless"
+                                else None
+                            ),
+                            settings_list,
+                        )
+                    ),
+                )
             )
-        )
-
-        return _known_networks_parameters
+            return _known_networks_parameters
+        except Exception as e:
+            logger.error(
+                f"Caught exception while fetching saved networks: {e}"
+            )
 
     @staticmethod
     async def _get_settings(
         saved_connections: typing.List[NetworkConnectionSettings],
-    ):
+    ) -> typing.List[NetworkManagerConnectionProperties]:
         tasks = [sc.get_settings() for sc in saved_connections]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-
-        for result in results:
-            if isinstance(result, Exception):
-                logger.error(
-                    f"Caught Exception on getting network connection settings: {e}"
-                )
-
-        return results
+        return await asyncio.gather(*tasks, return_exceptions=False)
 
     def get_saved_networks_with_for(self) -> typing.List:
         """Get a list with the names and ids of all saved networks on the device.
@@ -1331,10 +1320,12 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
         if not self.is_known(ssid):
             logging.debug(f"No known network with SSID {ssid}")
             return
-        _path = self.get_connection_path_by_ssid(ssid)
         try:
+            self.deactivate_connection_by_ssid(ssid)
+            _path = self.get_connection_path_by_ssid(ssid)
             task = self.loop.create_task(self._delete_network(_path))
-            results = asyncio.gather(task, return_exceptions=True).result()
+            future = asyncio.gather(task, return_exceptions=True)
+            results = future.result()
             for result in results:
                 if isinstance(result, Exception):
                     raise Exception(result)
@@ -1356,10 +1347,10 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
             return
         if self.primary_wifi_interface == "/":
             return
-        asyncio.run_coroutine_threadsafe(
-            self.nm.deactivate_connection(active_connection=connection_path),
-            self.loop,
+        task = self.loop.create_task(
+            self.nm.deactivate_connection(active_connection=connection_path)
         )
+        future = asyncio.gather(task)
 
     def deactivate_connection_by_ssid(self, ssid: str):
         if not self.nm:
@@ -1381,41 +1372,42 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
     def create_hotspot(
         self, ssid: str = "PrinterHotspot", password: str = "123456789"
     ) -> typing.Dict:
-        self.deactivate_connection_by_ssid(ssid)
-        self.delete_network(ssid)
-        psk = hashlib.sha256(password.encode()).hexdigest()
-        properties: NetworkManagerConnectionProperties = {
-            "connection": {
-                "id": ("s", str(ssid)),
-                "uuid": ("s", str(uuid4())),
-                "type": ("s", "802-11-wireless"),  # 802-3-ethernet
-                "autoconnect": ("b", bool(True)),
-                "interface-name": ("s", "wlan0"),
-                "autoconnect-priority": ("u", 10),
-                "multi-connect": ("i", 5),  # Amount of allowed connections,
-                "timestamp": ("t", int(time.time())),
-            },
-            "802-11-wireless": {
-                "ssid": ("ay", ssid.encode("utf-8")),
-                "mode": ("s", "ap"),
-                "band": ("s", "bg"),
-                "channel": ("u", 1),
-                "security": ("s", "802-11-wireless-security"),
-                "hidden": ("b", bool(False)),
-            },
-            "802-11-wireless-security": {
-                "key-mgmt": ("s", "wpa-psk"),
-                "psk": ("s", str(psk)),
-                "pmf": ("u", 1),
-                "pairwise": ("as", ["ccmp"]),
-            },
-            "ipv4": {
-                "method": ("s", "shared"),
-            },
-            "ipv6": {"method": ("s", "ignore")},
-        }
-
         try:
+            self.delete_network(ssid)
+            psk = hashlib.sha256(password.encode()).hexdigest()
+            properties: NetworkManagerConnectionProperties = {
+                "connection": {
+                    "id": ("s", str(ssid)),
+                    "uuid": ("s", str(uuid4())),
+                    "type": ("s", "802-11-wireless"),  # 802-3-ethernet
+                    "autoconnect": ("b", bool(True)),
+                    "interface-name": ("s", "wlan0"),
+                    "autoconnect-priority": ("u", 10),
+                    "multi-connect": (
+                        "i",
+                        5,
+                    ),  # Amount of allowed connections,
+                    "timestamp": ("t", int(time.time())),
+                },
+                "802-11-wireless": {
+                    "ssid": ("ay", ssid.encode("utf-8")),
+                    "mode": ("s", "ap"),
+                    "band": ("s", "bg"),
+                    "channel": ("u", 1),
+                    "security": ("s", "802-11-wireless-security"),
+                    "hidden": ("b", bool(False)),
+                },
+                "802-11-wireless-security": {
+                    "key-mgmt": ("s", "wpa-psk"),
+                    "psk": ("s", str(psk)),
+                    "pmf": ("u", 1),
+                    "pairwise": ("as", ["ccmp"]),
+                },
+                "ipv4": {
+                    "method": ("s", "shared"),
+                },
+                "ipv6": {"method": ("s", "ignore")},
+            }
             tasks = []
             tasks.append(
                 self.loop.create_task(
@@ -1431,12 +1423,11 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                     ).reload_connections()
                 )
             )
-            asyncio.gather(*tasks)
+            future = asyncio.gather(*tasks, return_exceptions=False)
+            results = future.result()
             return {"status": "success"}
         except Exception as e:
-            logging.debug(
-                f"Error occurred while adding hotspot connection: {e.args}"
-            )
+            logging.error(f"Caught exception while creating hotspot: {e}")
             return {"status": f"error, exception: {e}"}
 
     def set_network_priority(
@@ -1505,7 +1496,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                 self.hotspot_ssid = new_ssid
             if password != self.hotspot_password and password:
                 self.hotspot_password = password
-            
+
             return {"status": "updated"}
         except Exception:
             return {"status": "error", "error": "Unexpected error"}
