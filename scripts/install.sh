@@ -311,6 +311,8 @@ polkit.addRule(function(action, subject) {
          action.id == "org.freedesktop.login1.reboot-multiple-sessions" ||
          action.id == "org.freedesktop.login1.halt" ||
          action.id == "org.freedesktop.login1.halt-multiple-sessions" ||
+         action.id == "org.freedesktop.NetworkManager.settings.modify.system" ||
+         action.id == "org.freedesktop.NetworkManager.reload" ||
          action.id.startsWith("org.freedesktop.NetworkManager")) && 
          (subject.user == "$USER" || subject.isInGroup("blocksscreen"))) {
                  return polkit.Result.YES;
