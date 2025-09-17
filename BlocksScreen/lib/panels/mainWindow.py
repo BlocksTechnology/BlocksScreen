@@ -85,7 +85,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ws.connection_lost.connect(
             self.conn_window.on_websocket_connection_lost
         )
-
+        self.printer.webhooks_update.connect(
+            self.conn_window.webhook_update
+        )
         self.printPanel.request_back_page.connect(slot=self.global_back)
         self.printPanel.request_change_page.connect(
             slot=self.global_change_page
@@ -350,6 +352,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.printer_state_signal.emit("canceled")
 
         elif "printer.objects" in _method:
+            print(f"Printer object message received: {_method}")
             if "list" in _method:
                 _object_list: list = _data["objects"]
                 self.query_object_list[list].emit(_object_list)
