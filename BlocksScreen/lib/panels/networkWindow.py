@@ -1,6 +1,5 @@
 import logging
 import typing
-import hashlib
 from functools import partial
 from lib.network import SdbusNetworkManagerAsync
 from lib.panels.widgets.popupDialogWidget import Popup
@@ -247,6 +246,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
                 new_ssid=self.panel.hotspot_name_input_field.text(),
             )
         )
+
         self.panel.hotspot_change_confirm.clicked.connect(  # Also goes back to the main page
             lambda: self.setCurrentIndex(
                 self.indexOf(self.panel.main_network_page)
@@ -592,8 +592,6 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         scroll_bar_position = (
             self.network_list_widget.verticalScrollBar().value()
         )
-        old_max_v = self.network_list_widget.verticalScrollBar().maximum()
-
         self.network_list_widget.blockSignals(True)
         self.network_list_widget.clear()
         self.network_list_widget.setSpacing(35)
@@ -604,22 +602,22 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             elif entry == "blank":
                 self.blank_space_item()
                 continue
+            if entry[0] == self.sdbus_network.hotspot_ssid:
+                continue
             self.network_button_item(*entry)
 
         max_v = self.network_list_widget.verticalScrollBar().maximum()
-        min_v = self.network_list_widget.verticalScrollBar().minimum()
         if scroll_bar_position > max_v:
             self.network_list_widget.verticalScrollBar().setValue(max_v)
         else:
             self.network_list_widget.verticalScrollBar().setValue(
                 scroll_bar_position
             )
-
         self.network_list_widget.verticalScrollBar().update()
         self.network_list_widget.update()
         self.network_list_widget.blockSignals(False)
         QtCore.QTimer().singleShot(
-            5000, lambda: self.network_list_worker.build()
+            10000, lambda: self.network_list_worker.build()
         )
 
     def handle_button_click(self, ssid: str):
