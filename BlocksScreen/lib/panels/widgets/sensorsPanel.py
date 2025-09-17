@@ -36,22 +36,23 @@ class SensorsWindow(QtWidgets.QWidget):
         if not isinstance(sensors, dict):
             return
 
-        self.sensor_list = list(
-            map(
-                lambda sensor: self.create_sensor_widget(name=sensor),
-                list(
-                    filter(
-                        lambda printer_obj: str(printer_obj).startswith(
-                            "filament_switch_sensor"
-                        )
-                        or str(printer_obj).startswith(
-                            "filament_motion_sensor"
-                        ),
-                        sensors.keys(),
-                    ),
-                ),
+        filtered_sensors = list(
+        filter(
+            lambda printer_obj: str(printer_obj).startswith("filament_switch_sensor")
+            or str(printer_obj).startswith("filament_motion_sensor"),
+            sensors.keys(),
             )
         )
+
+        if filtered_sensors:
+            self.fs_sensors_list.setRowHidden(self.fs_sensors_list.row(self.item), True)
+            self.sensor_list = [
+                self.create_sensor_widget(name=sensor) for sensor in filtered_sensors
+            ]
+        else:
+            self.fs_sensors_list.setRowHidden(self.fs_sensors_list.row(self.item), False)
+
+
 
     @QtCore.pyqtSlot(str, str, bool, name="handle_fil_state_change")
     def handle_fil_state_change(
@@ -214,6 +215,26 @@ class SensorsWindow(QtWidgets.QWidget):
             QtCore.Qt.AlignmentFlag.AlignHCenter
             | QtCore.Qt.AlignmentFlag.AlignVCenter,
         )
+
+        font = QtGui.QFont()
+        font.setPointSize(25)
+
+
+        self.item = QtWidgets.QListWidgetItem()
+        self.item.setSizeHint(QtCore.QSize(self.fs_sensors_list.width(),self.fs_sensors_list.height())) 
+
+
+        self.label = QtWidgets.QLabel("No sensors found")
+        self.label.setFont(font)
+        self.label.setStyleSheet("color: gray;")  
+        self.label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.label.hide()
+
+        self.fs_sensors_list.addItem(self.item)
+        self.fs_sensors_list.setItemWidget(self.item,self.label)
+
+
+
         self.content_vertical_layout.addSpacing(5)
         self.setLayout(self.content_vertical_layout)
         self.retranslateUi()
