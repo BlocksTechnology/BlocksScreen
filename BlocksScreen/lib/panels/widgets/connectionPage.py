@@ -143,7 +143,7 @@ class ConnectionPage(QFrame):
         return False
 
     def add_dot(self):
-        if self.state == "shutdown":
+        if self.state == "shutdown"and self.message is not None:
             self.dot_timer.stop()
             return False
 
