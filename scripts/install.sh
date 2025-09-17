@@ -282,7 +282,7 @@ function create_policy(){
     fi 
 
     POLKIT_VERSION="$( pkaction --version | grep -Po "(\d+\.?\d*)" )"
-    echo_text "PolicyKit Version ${POLKIT_VERSION} Detected"
+    echo_info "PolicyKit Version ${POLKIT_VERSION} Detected"
     if [ "$POLKIT_VERSION" = "0.105" ]; then 
         # install legacy pkla
         create_policy_legacy
@@ -295,7 +295,7 @@ function create_policy(){
     elif [ -d $POLKIT_DIR ]; then 
         RULE_FILE="${POLKIT_DIR}/BlocksScreen.rules"
     else 
-        echo "PolicyKit rules folder not detected"
+        echo_error "PolicyKit rules folder not detected"
         exit 1
     fi 
     echo_text "Installing PolicyKit Rules to ${RULE_FILE}..."
@@ -303,21 +303,17 @@ function create_policy(){
 
     BS_GID=$( getent group blocksscreen | awk -F: '{printf "%d", $3}' )
     sudo tee ${RULE_FILE} > /dev/null << EOF 
-polkit.addRule(funciton(action, subject) {
-    if (action.id.indexOf("org.freedesktop.NetworkManager.") == 0 && subject.isInGroup("network")) {
-        return polkit.Result.YES;
-    }
-});
 polkit.addRule(function(action, subject) {
+    polkit.log("Second Rule Evaluating action: " + action.id + " for user: " + subject.user);
     if ((action.id == "org.freedesktop.login1.power-off" ||
          action.id == "org.freedesktop.login1.power-off-multiple-sessions" ||
          action.id == "org.freedesktop.login1.reboot" ||
          action.id == "org.freedesktop.login1.reboot-multiple-sessions" ||
          action.id == "org.freedesktop.login1.halt" ||
          action.id == "org.freedesktop.login1.halt-multiple-sessions" ||
-         action.id.startsWith("org.freedesktop.NetworkManager.")) && 
-         subject.user == "$USER") {
-         return polkit.Result.YES;
+         action.id.startsWith("org.freedesktop.NetworkManager")) && 
+         (subject.user == "$USER" || subject.isInGroup("blocksscreen"))) {
+                 return polkit.Result.YES;
          }
 });
 EOF
