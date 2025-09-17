@@ -1,17 +1,19 @@
+import hashlib
 import logging
-import random
 import typing
 from uuid import uuid4
 
+
 import sdbus
-import sdbus.dbus_common_elements
-from PyQt6.QtCore import QObject, pyqtSlot
+
+from PyQt6 import QtCore
 from sdbus_block.networkmanager import (
     AccessPoint,
     AccessPointCapabilities,
     ActiveConnection,
     IPv4Config,
     NetworkConnectionSettings,
+    NetworkManagerConnectivityState,
     NetworkDeviceGeneric,
     NetworkDeviceWired,
     NetworkDeviceWireless,
@@ -36,65 +38,52 @@ class NetworkManagerRescanError(Exception):
         self.error = error
 
 
-# class SdbusNetworkManager:
-class SdbusNetworkManager(QObject):
-    """Class that controls the linux NetworkManager tool using the sdbus library.
-
-    - Check and get available interfaces..
-    - Scans for available networks using the wireless interface.
-    - Connect to an available network using wireless interface.
-    - Methods to Create, Activate and deactivate a Hotspot.
-    - Get the current ip address of the machine.
-    - Prefer wired connection over wireless if available.
-    """
-
-    def __init__(self, parent: typing.Optional["QObject"]):
-    # def __init__(self):
+class SdbusNetworkManager(QtCore.QObject):
+    def __init__(self, parent: typing.Optional[QtCore.QObject]):
         super(SdbusNetworkManager, self).__init__()
         self.system_dbus = sdbus.sd_bus_open_system()
+
         if not self.system_dbus:
             return
         self.known_networks = []
         self.saved_networks_ssids: typing.List
         self.hotspot_ssid: str = "PrinterHotspot"
-        self.hotspot_password: str = "123456789"
+        self.hotspot_password: str = hashlib.sha256(
+            "123456789".encode()
+        ).hexdigest()  # "123456789"
+
         sdbus.set_default_bus(self.system_dbus)
+
         try:
             self.nm = NetworkManager()
         except Exception as e:
             logging.debug(
-                f"Exception occurred when getting NetworkManager, exception message: {e}"
+                f"Exception occurred when getting NetworkManager: {e}"
             )
         self.available_wired_interfaces = self.get_wired_interfaces()
         self.available_wireless_interfaces = self.get_wireless_interfaces()
-        self.primary_wifi_interface: NetworkDeviceWireless | None = (
+        self.primary_wifi_interface: typing.Union[
+            NetworkDeviceWireless, None
+        ] = (
             self.get_wireless_interfaces()[0]
             if len(self.get_wireless_interfaces()) > 0
             else None
         )
-        self.primary_wired_interface: NetworkDeviceWired | None = (
+        self.primary_wired_interface: typing.Union[
+            NetworkDeviceWired, None
+        ] = (
             self.get_wired_interfaces()[0]
             if len(self.get_wired_interfaces()) > 0
             else None
         )
 
+        if not self.is_known(self.hotspot_ssid):
+            self.create_hotspot(self.hotspot_ssid, self.hotspot_password)
+
         self.rescan_networks()
 
-    # def send_event(e0: QEvent):
-    #     if self.parent is None:
-    #         return None
-    #     try:
-    #         event = events.NetworkScan("Scanning networks")
-    #         instance = QApplication.instance()
-    #         if instance is not None:
-    #             instance.sendEvent(self.parent, event)
-    #         else:
-    #             raise TypeError("QApplication.instance expected a non-None value")
-    #     except Exception as e :
-    #         _logger.info(f"Unexpected error sending event {event}")
-
     def get_available_interfaces(self) -> typing.List[str]:
-        """get_available_interfaces Gets the names of all available interfaces
+        """Gets the names of all available interfaces
 
         Returns:
             typing.List[str]: List of strings with the available names of all interfaces
@@ -106,7 +95,7 @@ class SdbusNetworkManager(QObject):
         ]
 
     def wifi_enabled(self) -> bool:
-        """wifi_enabled Returns a boolean if wireless is enabled on the device.
+        """Returns a boolean if wireless is enabled on the device.
 
         Returns:
             bool: True if device is enabled | False if not
@@ -128,7 +117,7 @@ class SdbusNetworkManager(QObject):
 
         """
         if not isinstance(toggle, bool):
-            raise TypeError("Correct type should be a boolean")
+            raise TypeError("toggle expected boolean")
         self.nm.wireless_enabled = toggle
 
     def toggle_hotspot(self, toggle: bool):
@@ -140,11 +129,28 @@ class SdbusNetworkManager(QObject):
         Raises:
             ValueError: If the toggle argument is not a Boolean.
         """
-        # TODO: toggle Hotspot, function to activate or deactivate the device hotspot
         if not isinstance(toggle, bool):
             raise TypeError("Correct type should be a boolean.")
-            # TODO: Toggle Hotspot
-        pass
+
+        if not self.nm:
+            return
+        try:
+            old_ssid: typing.Union[str, None] = self.get_current_ssid()
+            if old_ssid:
+                self.disconnect_network()
+            if self.is_known(self.hotspot_ssid):
+                self.connect_network(self.hotspot_ssid)
+                self.nm.reload()
+                if self.nm.check_connectivity() == (
+                    NetworkManagerConnectivityState.FULL
+                    | NetworkManagerConnectivityState.LIMITED
+                ):
+                    logging.info(f"AP {self.hotspot_ssid} up!")
+                return
+            if old_ssid:
+                self.connect_network(old_ssid)
+        except Exception as e:
+            logging.error(f"Unexpected error occurred: {e}")
 
     def hotspot_enabled(self) -> typing.Optional["bool"]:
         """Returns a boolean indicating whether the device hotspot is on or not .
@@ -152,8 +158,8 @@ class SdbusNetworkManager(QObject):
         Returns:
             bool: True if Hotspot is activated, False otherwise.
         """
-        # TODO: Hotspot enbaled or not
-        pass
+        # REFACTOR: untested for all cases 
+        return bool(self.hotspot_ssid == self.get_current_ssid())
 
     def get_wired_interfaces(self) -> typing.List[NetworkDeviceWired]:
         """get_wired_interfaces Get only the names for the available wired (Ethernet) interfaces.
@@ -196,16 +202,22 @@ class SdbusNetworkManager(QObject):
             )
         )
 
-    def get_current_ssid(self) -> typing.Union[str, None]:
+    def get_current_ssid(self) -> str:
         if self.nm.primary_connection == "/":
-            return
+            return ""
         try:
-            return ActiveConnection(self.nm.primary_connection).id
+            active_con = ActiveConnection(
+                self.nm.primary_connection
+            ).connection
+            con = NetworkConnectionSettings(active_con)
+            settings = con.get_settings()
+            return str(settings["802-11-wireless"]["ssid"][1].decode())
         except Exception as e:
             logging.info(f"Unexpected error occurred: {e}")
+            return ""
 
     def get_current_ip_addr(self) -> typing.Union[typing.List[str], None]:
-        """get_current_ip_addr Gets the current connection ip address.
+        """Get the current connection ip address.
 
         Returns:
             str: A string containing the current ip address
@@ -232,7 +244,7 @@ class SdbusNetworkManager(QObject):
     ) -> typing.Union[
         NetworkDeviceWired, NetworkDeviceWireless, typing.Tuple, str
     ]:
-        """get_primary_interface Return the primary interface,
+        """Get the primary interface,
             If a there is a connection, returns the interface that is being currently used.
 
             If there is no connection and wifi is available return de wireless interface.
@@ -243,9 +255,9 @@ class SdbusNetworkManager(QObject):
             typing.List:
         """
         if self.nm.primary_connection == "/":
-            if self.primary_wifi_interface is not None:
+            if self.primary_wifi_interface:
                 return self.primary_wifi_interface
-            elif self.primary_wired_interface is not None:
+            elif self.primary_wired_interface:
                 return self.primary_wired_interface
             # TODO: Add the case where it is on Access point mode.
             else:
@@ -269,6 +281,8 @@ class SdbusNetworkManager(QObject):
             return True
         except Exception:
             raise NetworkManagerRescanError("Network scan failed")
+        finally:
+            return False
 
     def get_available_networks(self) -> typing.Dict:
         """get_available_networks Scan for networks, get the information about each network.
@@ -315,7 +329,7 @@ class SdbusNetworkManager(QObject):
         return {"error": "No available networks"}
 
     def get_security_type(self, ap: AccessPoint) -> typing.Tuple:
-        """get_security_type Get the security type from a network AccessPoint
+        """Get the security type from a network AccessPoint
 
         Args:
             ap (AccessPoint): The AccessPoint of the network.
@@ -402,8 +416,8 @@ class SdbusNetworkManager(QObject):
 
         return _known_networks_parameters
 
-    def get_saved_networks_with_for(self) -> typing.List[dict]:
-        """get_saved_networks_with_for Gets a list with the names and ids of all saved networks on the device.
+    def get_saved_networks_with_for(self) -> typing.List:
+        """Get a list with the names and ids of all saved networks on the device.
 
         Returns:
             typing.List[dict]: List that contains the names and ids of all saved networks on the device.
@@ -414,23 +428,23 @@ class SdbusNetworkManager(QObject):
         """
         if not self.nm:
             return []
-        known_networks = []
+        saved_networks = []
         for connection in NetworkManagerSettings().list_connections():
             saved_con = NetworkConnectionSettings(connection)
             conn = saved_con.get_settings()
             if conn["connection"]["type"][1] == "802-11-wireless":
-                known_networks.append(
+                saved_networks.append(
                     {
                         "SSID": conn["802-11-wireless"]["ssid"][1].decode(),
                         "UUID": conn["connection"]["uuid"][1],
-                        "SECURITY_TYPE": conn["802-11-wireless-security"][
-                            "key_mgmt"
-                        ][1].decode(),
+                        "SECURITY_TYPE": conn[
+                            str(conn["802-11-wireless"]["security"][1])
+                        ]["key-mgmt"][1],
                         "CONNECTION_PATH": connection,
+                        "MODE": conn["802-11-wireless"]["mode"],
                     }
                 )
-
-        return known_networks
+        return saved_networks
 
     def get_saved_ssid_names(self) -> typing.List[str]:
         """Get a list with the current saved network ssid names
@@ -438,15 +452,15 @@ class SdbusNetworkManager(QObject):
         Returns:
             typing.List[str]: List that contains the names of the saved ssid network names
         """
-
-        _saved_ssids: typing.List[str] = list(
+        _saved_networks = self.get_saved_networks_with_for()
+        if not _saved_networks:
+            return []
+        return list(
             map(
-                lambda saved_network: (saved_network["SSID"]),
-                self.get_saved_networks_with_for(),
+                lambda saved_network: (saved_network.get("SSID", None)),
+                _saved_networks,
             )
         )
-
-        return _saved_ssids
 
     def is_known(self, ssid: str) -> bool:
         """Whether or not a network is known
@@ -458,10 +472,13 @@ class SdbusNetworkManager(QObject):
             bool: True if the network is known otherwise False
         """
         return any(
-            net["SSID"] == ssid for net in self.get_saved_networks_with_for()
+            net.get("SSID", "") == ssid
+            for net in self.get_saved_networks_with_for()
         )
 
-    def add_wifi_network(self, ssid: str, psk: str) -> typing.Dict:
+    def add_wifi_network(
+        self, ssid: str, psk: str, priority: int = 0
+    ) -> typing.Dict:
         """Add and Save a network to the device.
 
         Args:
@@ -483,23 +500,15 @@ class SdbusNetworkManager(QObject):
         ):
             return {"status": "error", "msg": "No Available interface"}
 
-        # Connections with the same if result in failure, so get ids first.
-        # TODO: Get connections by id, calculate a new id that doesn't conflict with any other,
-        # TODO: Pass that new id to the properties NetworkManagerConnectionProperties on the "connection" -> "id"
-        # TODO: If the id exists, delete the connection with the same id or just not add it before the other one is manually deleted
-        # TODO: The id can be the ssid name, but i think this fucks up if the same id is used more than once
-
-        # Get the security type for this network.
+        psk = hashlib.sha256(psk.encode()).hexdigest()
         _available_networks: typing.Dict = self.get_available_networks()
         if "error" in _available_networks.keys():
             return {"status": "error", "msg": "No available Networks"}
-        # It is recommended to delete the network if it already exists so to not mess up the id's
         if self.is_known(ssid):
             self.delete_network(ssid)
 
         if ssid in _available_networks.keys():
             _wanted_network: typing.Dict = _available_networks[f"{ssid}"]
-            # TODO: Can add timestamp field in here to know the last time the connection was successful fully activated.
             properties: NetworkManagerConnectionProperties = {
                 "connection": {
                     "id": ("s", ssid),
@@ -510,6 +519,7 @@ class SdbusNetworkManager(QObject):
                         self.primary_wifi_interface.interface,
                     ),
                     "autoconnect": ("b", bool(True)),
+                    "autoconnect-priority": ("u", priority),
                 },
                 "802-11-wireless": {
                     "mode": ("s", "infrastructure"),
@@ -527,7 +537,6 @@ class SdbusNetworkManager(QObject):
                     "msg": "No security type for network, stopping",
                 }
             if _security_types[0] is None:
-                # The network doesn't have security
                 return {"status": "error", "msg": "unknown_security_type"}
 
             elif (
@@ -536,12 +545,10 @@ class SdbusNetworkManager(QObject):
                 or AccessPointCapabilities.WPS_BUTTON
                 or AccessPointCapabilities.WPS_PIN in _security_types[0]
             ):
-                # There is some sort of security in this case, privacy usually means that there is WEP as per the sdbus networkmanager documentation
                 properties["802-11-wireless"]["security"] = (
                     "s",
                     "802-11-wireless-security",
                 )
-
                 if (
                     WpaSecurityFlags.P2P_WEP104
                     or WpaSecurityFlags.P2P_WEP40
@@ -558,8 +565,6 @@ class SdbusNetworkManager(QObject):
                     WpaSecurityFlags.P2P_TKIP
                     or WpaSecurityFlags.BROADCAST_TKIP
                 ) in (_security_types[1] or _security_types[2]):
-                    # * TKip
-                    # raise NotImplementedError
                     return {
                         "status": "error",
                         "msg": "Security type P2P_TKIP OR BRADCAST_TKIP not supported",
@@ -638,6 +643,8 @@ class SdbusNetworkManager(QObject):
 
                 try:
                     NetworkManagerSettings().add_connection(properties)
+                    NetworkManagerSettings().reload_connections()
+
                     return {
                         "status": "success",
                         "msg": "Network added successfully",
@@ -663,23 +670,19 @@ class SdbusNetworkManager(QObject):
 
         return {"status": "failure", "msg": "Unable to add network connection"}
 
-    def disconnect_network(self) -> bool:
-        """disconnect_network Disconnect the wireless device and prevent it from reconnecting.
-
-        Returns:
-            bool:
-            - True -> wifi interface is not and can perform the disconnection
-            - False -> Wifi interface is none and the disconnect command is not run.
-        """
+    def disconnect_network(self) -> None:
+        """Disconnect the active connection"""
         if (
             self.primary_wifi_interface == "/"
-            or self.primary_wifi_interface is None
+            or not self.primary_wifi_interface
         ):
-            return False
-        self.primary_wifi_interface.disconnect()
-        return True
+            return
 
-    def get_connection_path_by_ssid(self, ssid: str) -> str | None:
+        self.primary_wifi_interface.disconnect()
+
+    def get_connection_path_by_ssid(
+        self, ssid: str
+    ) -> typing.Union[str, None]:
         """Given a ssid, get the connection path, if it's saved
 
         Raises:
@@ -694,18 +697,20 @@ class SdbusNetworkManager(QObject):
             )
         _connection_path = None
         _saved_networks = self.get_saved_networks_with_for()
-        if len(_saved_networks) == 0 or _saved_networks is None:
+        if not _saved_networks:
             return "There are no saved networks, must add a new network connection first."
 
-        # *Get the connection path by ssid
+        if len(_saved_networks) == 0:
+            return "There are no saved networks, must add a new network connection first."
         for saved_network in _saved_networks:
             if saved_network["SSID"].lower() == ssid.lower():
-                # print(self.nm.primary_connection)
                 _connection_path = saved_network["CONNECTION_PATH"]
 
         return _connection_path
 
-    def get_security_type_by_ssid(self, ssid: str) -> str | typing.Dict:
+    def get_security_type_by_ssid(
+        self, ssid: str
+    ) -> typing.Union[str, typing.Dict]:
         """Get the security type for a saved network by its ssid.
 
         Args:
@@ -716,22 +721,21 @@ class SdbusNetworkManager(QObject):
         """
         if not isinstance(ssid, str):
             return {"error": "ssid Argument must be of type string"}
-
-        if self.nm is None:
+        if not self.nm:
             return {"error": "No network manager instance available"}
         _security_type: str = ""
         _saved_networks = self.get_saved_networks_with_for()
-        if len(_saved_networks) == 0 or _saved_networks is None:
+        if not _saved_networks:
             return {"error": f"There is no saved network with {ssid} name."}
-
-        # * Get the actual security type
+        if len(_saved_networks) == 0:
+            return {"error": f"There is no saved network with {ssid} name."}
         for network in _saved_networks:
             if network["SSID"].lower() == ssid.lower():
                 _security_type = network["SECURITY_TYPE"]
 
         return _security_type
 
-    def get_connection_signal_by_ssid(self, ssid: str) -> typing.Dict | int:
+    def get_connection_signal_by_ssid(self, ssid: str) -> int:
         """Get the signal strength for a ssid
 
         Args:
@@ -743,16 +747,15 @@ class SdbusNetworkManager(QObject):
                                 The method returns the signal strength in %
         """
         if not isinstance(ssid, str):
-            return {"error": "ssid argument must be of type string"}
-        if self.nm is None:
-            return {"error": "No Network Manager instance available"}
+            return -1
+        if not self.nm:
+            return -1
         if (
             self.primary_wifi_interface == "/"
-            or self.primary_wifi_interface is None
+            or not self.primary_wifi_interface
         ):
-            return {"error": "No wifi interface"}
+            return -1
 
-        _signal: int = 0
         if self.rescan_networks():
             if (
                 self.primary_wifi_interface.device_type
@@ -765,14 +768,12 @@ class SdbusNetworkManager(QObject):
                         self.primary_wifi_interface.access_points,
                     )
                 )
-
                 for ap in _aps:
                     if ap.ssid.decode("utf-8").lower() == ssid.lower():
                         return ap.strength
+        return -1
 
-        return 0
-
-    def connect_network(self, ssid: str) -> str | bool:
+    def connect_network(self, ssid: str) -> str:
         """Connect to a saved network given an ssid
 
         Raises:
@@ -788,7 +789,7 @@ class SdbusNetworkManager(QObject):
             )
 
         _connection_path = self.get_connection_path_by_ssid(ssid)
-        if _connection_path is None:
+        if not _connection_path:
             return f"No saved connection path for the SSID: {ssid}"
         try:
             if self.nm.primary_connection == _connection_path:
@@ -798,12 +799,11 @@ class SdbusNetworkManager(QObject):
 
         except Exception as e:
             raise Exception(
-                f"Unkown error while trying to connect to {ssid} network. \n Exception {e}"
+                f"Unknown error while trying to connect to {ssid} network: {e}"
             )
-
         return active_path
 
-    def delete_network(self, ssid: str) -> typing.Dict | str:
+    def delete_network(self, ssid: str) -> typing.Union[typing.Dict, None]:
         """Deletes a saved network given a ssid
 
         Args:
@@ -817,16 +817,10 @@ class SdbusNetworkManager(QObject):
             typing.Dict: Status key with the outcome of the networks deletion.
         """
         if not isinstance(ssid, str):
-            logging.debug(
-                f"Argument type error, ssid expected a string and received : {type(ssid)} with value {ssid}"
-            )
-            raise TypeError(
-                f"Path argument must be of type string, inserted type: {type(ssid)}"
-            )
-
-        # * Check if the ssid is a valid saved network or not
+            raise TypeError("SSID argument is of type string")
         if not self.is_known(ssid):
-            return f"There is no saved network connection with ssid: {ssid}"
+            logging.debug(f"No known network with SSID {ssid}")
+            return
 
         _path = self.get_connection_path_by_ssid(ssid)
 
@@ -834,21 +828,19 @@ class SdbusNetworkManager(QObject):
             NetworkConnectionSettings(settings_path=str(_path)).delete()
             return {"status": "success"}
         except Exception as e:
-            logging.debug(f"Unkown Error detected exception: {e}")
+            logging.debug(f"Unexpected exception detected: {e}")
             return {"status": "error"}
 
     def create_hotspot(
         self, ssid: str = "PrinterHotspot", password: str = "123456789"
     ) -> typing.Dict:
-        # * Delete the old hotspot connection, if it exists
-        self.delete_old_hotspot_connection()
-
-        # * Create and add a hotspot connection if there is none
+        self.delete_network(ssid)
+        psk = hashlib.sha256(password.encode()).hexdigest()
         properties: NetworkManagerConnectionProperties = {
             "connection": {
                 "id": ("s", str(ssid)),
                 "uuid": ("s", str(uuid4())),
-                "type": ("s", "802-11-wireless"),
+                "type": ("s", "802-11-wireless"),  # 802-3-ethernet
                 "autoconnect": ("b", bool(True)),
                 "interface-name": ("s", "wlan0"),
             },
@@ -862,7 +854,7 @@ class SdbusNetworkManager(QObject):
             },
             "802-11-wireless-security": {
                 "key-mgmt": ("s", "wpa-psk"),
-                "psk": ("s", str(password)),
+                "psk": ("s", str(psk)),
                 "pmf": ("u", 1),
                 "pairwise": ("as", ["ccmp"]),
             },
@@ -877,12 +869,9 @@ class SdbusNetworkManager(QObject):
             return {"status": "success"}
         except Exception as e:
             logging.debug(
-                f"Error occurred while adding a hotspot connection: {e.args}"
+                f"Error occurred while adding hotspot connection: {e.args}"
             )
             return {"status": "error, exception"}
-
-    def delete_old_hotspot_connection(self) -> None:
-        self.delete_network(self.hotspot_ssid)
 
     def get_hotspot_ssid(self) -> str:
         return self.hotspot_ssid
@@ -891,11 +880,23 @@ class SdbusNetworkManager(QObject):
         self.hotspot_ssid = ssid
         self.create_hotspot(ssid=ssid)
 
+    def set_network_priority(self, ssid: str, priority: str) -> None:
+        if not self.nm:
+            return
+        ...
+        # Get Networks by ssid
+        # con_settings = NetworkConnectionSettings(a connection path for the connection with the specified ssid)
+        # properties = con_settings.get_settings()
+        # profile = con_settings.get_profile()
+        # properties["connection"]["autoconnect-priority"] = ("u", priority)
+        # con_settings.update(properties)
+
     def update_connection_settings(
         self,
         ssid: typing.Optional["str"] = None,
         password: typing.Optional["str"] = None,
         new_ssid: typing.Optional["str"] = None,
+        priority: int = 0,
     ) -> typing.Dict:
         """Update the settings for a connection with a specified ssid and or a password
 
@@ -906,12 +907,11 @@ class SdbusNetworkManager(QObject):
             typing.Dict: status dictionary with possible keys "error" and "status"
         """
 
-        if self.nm is None:
+        if not self.nm:
             return {"status": "error", "error": "No network manager"}
 
         _connection_path = self.get_connection_path_by_ssid(str(ssid))
-
-        if _connection_path is None:
+        if not _connection_path:
             return {
                 "status": "error",
                 "error": "No saved connection with the specified ssid.",
@@ -919,7 +919,7 @@ class SdbusNetworkManager(QObject):
         try:
             con_settings = NetworkConnectionSettings(str(_connection_path))
             properties = con_settings.get_settings()
-            if new_ssid is not None:
+            if new_ssid:
                 if ssid == self.hotspot_ssid:
                     self.hotspot_ssid = new_ssid
                 properties["connection"]["id"] = ("s", str(new_ssid))
@@ -927,7 +927,8 @@ class SdbusNetworkManager(QObject):
                     "ay",
                     new_ssid.encode("utf-8"),
                 )
-            if password is not None:
+            if password:
+                password = hashlib.sha256(password.encode()).hexdigest()
                 if ssid == self.hotspot_ssid:
                     self.hotspot_password = password
                 properties["802-11-wireless-security"]["psk"] = (
@@ -935,8 +936,13 @@ class SdbusNetworkManager(QObject):
                     str(password),
                 )
 
-            con_settings.update(properties)
+            if priority != 0:
+                properties["connection"]["autoconnect-priority"] = (
+                    "u",
+                    priority,
+                )
 
+            con_settings.update(properties)
             return {"status": "updated"}
         except Exception:
             return {"status": "error", "error": "Unexpected error"}
