@@ -22,7 +22,6 @@ class NetworkManagerRescanError(Exception):
 
 
 class SdbusNetworkManagerAsync(QtCore.QObject):
-    # class SdbusNetworkManagerAsync:
     class ConnectionPriority(enum.Enum):
         HIGH = 90
         MEDIUM = 50
@@ -877,7 +876,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
             return []
         return list(
             map(
-                lambda saved_network: (saved_network.get("SSID", None)),
+                lambda saved_network: (saved_network.get("ssid", None)),
                 _saved_networks,
             )
         )
