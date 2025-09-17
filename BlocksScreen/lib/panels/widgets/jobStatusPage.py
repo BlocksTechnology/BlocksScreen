@@ -181,16 +181,16 @@ class JobStatusWidget(QtWidgets.QWidget):
         if self._internal_print_status == "printing":
             self.print_pause.emit()
             self._internal_print_status = "paused"
-            self.pause_printing_btn.setText("Resume")
+            self.pause_printing_btn.setText("Pause")
             self.pause_printing_btn.setPixmap(
-                QtGui.QPixmap(":/ui/media/btn_icons/play.svg")
+                QtGui.QPixmap(":/ui/media/btn_icons/pause.svg")
             )
         elif self._internal_print_status == "paused":
             self.print_resume.emit()
             self._internal_print_status = "printing"
-            self.pause_printing_btn.setText("Pause")
+            self.pause_printing_btn.setText("Resume")
             self.pause_printing_btn.setPixmap(
-                QtGui.QPixmap(":/ui/media/btn_icons/pause.svg")
+                QtGui.QPixmap(":/ui/media/btn_icons/play.svg")
             )
 
     @QtCore.pyqtSlot(str, dict, name="on_print_stats_update")
