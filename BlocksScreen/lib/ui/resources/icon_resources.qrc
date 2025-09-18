@@ -113,6 +113,9 @@
     <file>media/btn_icons/time.svg</file>
     <file>media/btn_icons/troubleshoot.svg</file>
     <file>media/btn_icons/tune.svg</file>
+    <file>media/btn_icons/see.svg</file>
+    <file>media/btn_icons/unsee.svg</file>
+    <file>media/btn_icons/qrcode.svg</file>
     
   </qresource>
   <qresource prefix="z_levelling">

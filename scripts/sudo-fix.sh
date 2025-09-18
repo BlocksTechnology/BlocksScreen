@@ -56,7 +56,7 @@ Cmnd_Alias SYSTEMCTL_BS_RESTART = /bin/systemctl restart BlocksScreen
 }
 
 function update_env(){
-    report_status "Export System Variable: DEBIAN_FRONTEND=noniteractive"
+    report_status "Export System Variable: DEBIAN_FRONTEND=noninteractive"
     sudo /bin/sh -c 'echo "DEBIAN_FRONTEND=noninteractive" >> /etc/enviroment'
 }
 
