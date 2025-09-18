@@ -51,6 +51,7 @@ class BuildNetworkList(QtCore.QThread):
         self.deleteLater()
 
     def run(self) -> None:
+        logger.debug("Scanning and building network list")
         while True:
             self.mutex.lock()
             self.network_items_list.clear()
@@ -60,14 +61,19 @@ class BuildNetworkList(QtCore.QThread):
             unsaved_networks = []
             networks = []
             if self.nm.check_wifi_interface():
-                available_networks: dict = self.nm.get_available_networks()
-                if not available_networks:
+                available_networks = self.nm.get_available_networks()
+                if (
+                    not available_networks
+                ):  # Skip everything if no networks exist
+                    logger.debug("No available networks after scan")
+                    self.finished_network_list_build.emit(
+                        self.network_items_list
+                    )
                     return
                 for ssid_key in available_networks:
                     properties = available_networks.get(ssid_key, {})
                     # if not properties:
                     #     return
-                    logger.debug(properties)
                     signal = int(properties.get("signal_level", 0))
                     networks.append(
                         {
@@ -146,8 +152,10 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             self.handle_network_list
         )
         self.panel.rescan_button.clicked.connect(
-            self.network_list_worker.build
-        )  # Run scanner worker To Update the network list
+            lambda: QtCore.QTimer.singleShot(
+                100, lambda: self.network_list_worker.build()
+            )
+        )
 
         self.sdbus_network.nm_state_change.connect(self.evaluate_network_state)
         self.panel.wifi_button.clicked.connect(

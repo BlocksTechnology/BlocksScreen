@@ -36,9 +36,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
 
     def __init__(self) -> None:
         super().__init__()
-
         self._listeners_running: bool = False
-
         self.listener_thread: threading.Thread = threading.Thread(
             name="NMonitor.run_forever",
             target=self._listener_run_loop,
@@ -48,7 +46,6 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
         self.loop = asyncio.new_event_loop()
         self.stop_listener_event = asyncio.Event()
         self.stop_listener_event.clear()
-        # Network Manager dbus
         self.system_dbus = sdbus.sd_bus_open_system()
         if not self.system_dbus:
             logger.error("No dbus found, async network monitor exiting")
@@ -61,15 +58,11 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
             logger.info(
                 f"Sdbus NetworkManager Monitor Thread {self.listener_thread.name} Running"
             )
-
         self.hotspot_ssid: str = "PrinterHotspot"
         self.hotspot_password: str = "123456789"
-
         self.check_connectivity()
-
         self.available_wired_interfaces = self.get_wired_interfaces()
         self.available_wireless_interfaces = self.get_wireless_interfaces()
-
         wireless_interfaces: typing.List[dbusNm.NetworkDeviceWireless] = (
             self.get_wireless_interfaces()
         )
@@ -82,10 +75,8 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
         self.primary_wired_interface: typing.Optional[
             dbusNm.NetworkDeviceWired
         ] = wired_interfaces[0] if wired_interfaces else None
-
         if not self.is_known(self.hotspot_ssid):
             self.create_hotspot(self.hotspot_ssid, self.hotspot_password)
-
         if self.primary_wifi_interface:
             self.rescan_networks()
 
@@ -165,7 +156,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                 logging.debug("Listening for Network Manager state change")
                 async for properties in self.nm.properties_changed:
                     self.nm_properties_change.emit(properties)
-                    
+
             except Exception as e:
                 logging.error(
                     f"Exception on Network Manager state listener: {e}"
@@ -628,11 +619,11 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                 f"Caught Exception while asynchronously gathering AP information: {e}"
             )
 
-    async def _get_available_networks(self) -> typing.Dict:
+    async def _get_available_networks(self) -> typing.Union[typing.Dict, None]:
         if not self.primary_wifi_interface:
-            return {"error": "No wifi interface found"}
+            return
         if self.primary_wifi_interface == "/":
-            return {"error": "No wifi interface found"}
+            return
         await self._rescan()
         try:
             last_scan = await self.primary_wifi_interface.last_scan.get_async()
@@ -641,35 +632,27 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                     await self.primary_wifi_interface.device_type.get_async()
                 )
                 if primary_wifi_dev_type == dbusNm.enums.DeviceType.WIFI:
-                    try:
-                        aps = await self.primary_wifi_interface.get_all_access_points()
-                        _aps: typing.List[dbusNm.AccessPoint] = list(
-                            map(
-                                lambda ap_path: dbusNm.AccessPoint(
-                                    bus=self.system_dbus, point_path=ap_path
-                                ),
-                                aps,
-                            )
+                    aps = await self.primary_wifi_interface.get_all_access_points()
+                    _aps: typing.List[dbusNm.AccessPoint] = list(
+                        map(
+                            lambda ap_path: dbusNm.AccessPoint(
+                                bus=self.system_dbus, point_path=ap_path
+                            ),
+                            aps,
                         )
-                        task = self.loop.create_task(
-                            self._gather_networks(_aps)
-                        )
-                        result = await asyncio.gather(
-                            task, return_exceptions=False
-                        )
-                        return dict(*result) if result else None  # type:ignore
-                    except Exception as e:
-                        logger.error(
-                            f"Caught Exception while gathering available networks : {e}"
-                        )
-            return {"error": "No networks"}
+                    )
+                    task = self.loop.create_task(self._gather_networks(_aps))
+                    result = await asyncio.gather(
+                        task, return_exceptions=False
+                    )
+                    return dict(*result) if result else None  # type:ignore
         except Exception as e:
             logger.error(
                 f"Caught Exception while gathering access points: {e}"
             )
-        return {"error": "No available networks"}
+            return {}
 
-    def get_available_networks(self) -> typing.Dict:
+    def get_available_networks(self) -> typing.Union[typing.Dict, None]:
         future = asyncio.run_coroutine_threadsafe(
             self._get_available_networks(), self.loop
         )
@@ -902,7 +885,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
         ssid: str,
         psk: str,
         priority: ConnectionPriority = ConnectionPriority.LOW,
-    ) -> typing.Dict:
+    ) -> typing.Union[bool, None]:
         """Add and save a new wifi network. `Asynchronous`
 
         Args:
@@ -921,145 +904,143 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
             "exception"
         """
         if not self.primary_wifi_interface:
-            return {"status": "error", "msg": "No available interface"}
+            return
         if self.primary_wifi_interface == "/":
-            return {"status": "error", "msg": "No vailable interface"}
+            return
+        try:
+            psk = hashlib.sha256(psk.encode()).hexdigest()
+            _available_networks = await self._get_available_networks()
+            if not _available_networks:
+                return
 
-        psk = hashlib.sha256(psk.encode()).hexdigest()
+            if self.is_known(ssid):
+                self.delete_network(ssid)
 
-        _available_networks = await self._get_available_networks()
-
-        if "error" in _available_networks.keys():
-            return {"status": "error", "msg": "No available networks"}
-
-        if self.is_known(ssid):
-            self.delete_network(ssid)
-
-        if ssid in _available_networks.keys():
-            target_network = _available_networks.get(ssid, {})
-            if not target_network:
-                return {"status": "error", "msg": "No available networks"}
-            target_interface = (
-                await self.primary_wifi_interface.interface.get_async()
-            )
-            _properties: dbusNm.NetworkManagerConnectionProperties = {
-                "connection": {
-                    "id": ("s", ssid),
-                    "uuid": ("s", str(uuid4())),
-                    "type": ("s", "802-11-wireless"),
-                    "interface-name": (
-                        "s",
-                        target_interface,
-                    ),
-                    "autoconnect": ("b", bool(True)),
-                    "autoconnect-priority": ("u", priority),
-                },
-                "802-11-wireless": {
-                    "mode": ("s", "infrastructure"),
-                    "ssid": ("ay", ssid.encode("utf-8")),
-                },
-                "ipv4": {"method": ("s", "auto")},
-                "ipv6": {"method": ("s", "auto")},
-            }
-            if "security" in target_network.keys():
-                _security_types = target_network.get("security")
-                if not _security_types:
-                    return {
-                        "status": "error",
-                        "msg": "No security type for network, stopping",
-                    }
-            if not _security_types[0]:
-                return {"status": "error", "msg": "Unknown security type"}
-
-            if not dbusNm.AccessPointCapabilities.NONE != _security_types[0]:
-                _properties["802-11-wireless"]["security"] = (
-                    "s",
-                    "802-11-wireless-security",
+            if ssid in _available_networks.keys():
+                target_network = _available_networks.get(ssid, {})
+                if not target_network:
+                    return
+                target_interface = (
+                    await self.primary_wifi_interface.interface.get_async()
                 )
+                _properties: dbusNm.NetworkManagerConnectionProperties = {
+                    "connection": {
+                        "id": ("s", ssid),
+                        "uuid": ("s", str(uuid4())),
+                        "type": ("s", "802-11-wireless"),
+                        "interface-name": (
+                            "s",
+                            target_interface,
+                        ),
+                        "autoconnect": ("b", bool(True)),
+                        "autoconnect-priority": ("u", priority),
+                    },
+                    "802-11-wireless": {
+                        "mode": ("s", "infrastructure"),
+                        "ssid": ("ay", ssid.encode("utf-8")),
+                    },
+                    "ipv4": {"method": ("s", "auto")},
+                    "ipv6": {"method": ("s", "auto")},
+                }
+                if "security" in target_network.keys():
+                    _security_types = target_network.get("security")
+                    if not _security_types:
+                        return
+                if not _security_types[0]:
+                    return
+
                 if (
-                    dbusNm.WpaSecurityFlags.P2P_WEP104
-                    or dbusNm.WpaSecurityFlags.P2P_WEP40
-                    or dbusNm.WpaSecurityFlags.BROADCAST_WEP104
-                    or dbusNm.WpaSecurityFlags.BROADCAST_WEP40
-                ) in (_security_types[1] or _security_types[2]):
-                    _properties["802-11-wireless-security"] = {
-                        "key-mgmt": ("s", "none"),
-                        "wep-key-type": ("u", 2),
-                        "wep-key0": ("s", psk),
-                        "auth-alg": ("s", "shared"),
-                    }
-                elif (
-                    dbusNm.WpaSecurityFlags.P2P_TKIP
-                    or dbusNm.WpaSecurityFlags.BROADCAST_TKIP
-                ) in (_security_types[1] or _security_types[2]):
-                    return {
-                        "status": "error",
-                        "msg": "Security type P2P_TKIP OR BRADCAST_TKIP not supported",
-                    }
-                elif (
-                    dbusNm.WpaSecurityFlags.P2P_CCMP
-                    or dbusNm.WpaSecurityFlags.BROADCAST_CCMP
-                ) in (_security_types[1] or _security_types[2]):
-                    # * AES/CCMP WPA2
-                    _properties["802-11-wireless-security"] = {
-                        "key-mgmt": ("s", "wpa-psk"),
-                        "psk": ("s", psk),
-                        "pairwise": ("as", ["ccmp"]),
-                    }
+                    not dbusNm.AccessPointCapabilities.NONE
+                    != _security_types[0]
+                ):
+                    _properties["802-11-wireless"]["security"] = (
+                        "s",
+                        "802-11-wireless-security",
+                    )
+                    if (
+                        dbusNm.WpaSecurityFlags.P2P_WEP104
+                        or dbusNm.WpaSecurityFlags.P2P_WEP40
+                        or dbusNm.WpaSecurityFlags.BROADCAST_WEP104
+                        or dbusNm.WpaSecurityFlags.BROADCAST_WEP40
+                    ) in (_security_types[1] or _security_types[2]):
+                        _properties["802-11-wireless-security"] = {
+                            "key-mgmt": ("s", "none"),
+                            "wep-key-type": ("u", 2),
+                            "wep-key0": ("s", psk),
+                            "auth-alg": ("s", "shared"),
+                        }
+                    elif (
+                        dbusNm.WpaSecurityFlags.P2P_TKIP
+                        or dbusNm.WpaSecurityFlags.BROADCAST_TKIP
+                    ) in (_security_types[1] or _security_types[2]):
+                        raise NotImplementedError(
+                            "Security type P2P_TKIP OR BRADCAST_TKIP not supported"
+                        )
+                    elif (
+                        dbusNm.WpaSecurityFlags.P2P_CCMP
+                        or dbusNm.WpaSecurityFlags.BROADCAST_CCMP
+                    ) in (_security_types[1] or _security_types[2]):
+                        # * AES/CCMP WPA2
+                        _properties["802-11-wireless-security"] = {
+                            "key-mgmt": ("s", "wpa-psk"),
+                            "psk": ("s", psk),
+                            "pairwise": ("as", ["ccmp"]),
+                        }
 
-                elif (dbusNm.WpaSecurityFlags.AUTH_PSK) in (
-                    _security_types[1] or _security_types[2]
-                ):
-                    # * AUTH_PSK -> WPA-PSK
-                    _properties["802-11-wireless-security"] = {
-                        "key-mgmt": ("s", "wpa-psk"),
-                        "psk": ("s", psk),
-                    }
-                elif dbusNm.WpaSecurityFlags.AUTH_802_1X in (
-                    _security_types[1] or _security_types[2]
-                ):
-                    # * 802.1x IEEE standard
-                    # Notes:
-                    #   IEEE 802.1x standard used 8 to 64 passphrase hashed to derive
-                    #   the actual key in the form of 64 hexadecimal character.
-                    #
-                    _properties["802-11-wireless-security"] = {
-                        "key-mgmt": ("s", "ieee802.1x"),
-                        "wep-key-type": ("u", 2),
-                        "wep-key0": ("s", psk),
-                        "auth-alg": ("s", "shared"),
-                    }
-                elif (dbusNm.WpaSecurityFlags.AUTH_SAE) in (
-                    _security_types[1] or _security_types[2]
-                ):
-                    # * SAE
-                    # Notes:
-                    #   The SAE is WPA3 so they use a passphrase of any length for authentication.
-                    #
-                    _properties["802-11-wireless-security"] = {
-                        "key-mgmt": ("s", "sae"),
-                        "psk": ("s", psk),
-                    }
-                elif (dbusNm.WpaSecurityFlags.AUTH_OWE) in (
-                    _security_types[1] or _security_types[2]
-                ):
-                    # * OWE
-                    _properties["802-11-wireless-security"] = {
-                        "key-mgmt": ("s", "owe"),
-                        "psk": ("s", psk),
-                    }
-                elif (dbusNm.WpaSecurityFlags.AUTH_OWE_TM) in (
-                    _security_types[1] or _security_types[2]
-                ):
-                    # * OWE TM
-                    raise NotImplementedError("AUTH_OWE_TM not supported")
-                elif (dbusNm.WpaSecurityFlags.AUTH_EAP_SUITE_B) in (
-                    _security_types[1] or _security_types[2]
-                ):
-                    # * EAP SUITE B
-                    raise NotImplementedError("EAP SUITE B Auth not supported")
+                    elif (dbusNm.WpaSecurityFlags.AUTH_PSK) in (
+                        _security_types[1] or _security_types[2]
+                    ):
+                        # * AUTH_PSK -> WPA-PSK
+                        _properties["802-11-wireless-security"] = {
+                            "key-mgmt": ("s", "wpa-psk"),
+                            "psk": ("s", psk),
+                        }
+                    elif dbusNm.WpaSecurityFlags.AUTH_802_1X in (
+                        _security_types[1] or _security_types[2]
+                    ):
+                        # * 802.1x IEEE standard
+                        # Notes:
+                        #   IEEE 802.1x standard used 8 to 64 passphrase hashed to derive
+                        #   the actual key in the form of 64 hexadecimal character.
+                        #
+                        _properties["802-11-wireless-security"] = {
+                            "key-mgmt": ("s", "ieee802.1x"),
+                            "wep-key-type": ("u", 2),
+                            "wep-key0": ("s", psk),
+                            "auth-alg": ("s", "shared"),
+                        }
+                    elif (dbusNm.WpaSecurityFlags.AUTH_SAE) in (
+                        _security_types[1] or _security_types[2]
+                    ):
+                        # * SAE
+                        # Notes:
+                        #   The SAE is WPA3 so they use a passphrase of any length for authentication.
+                        #
+                        _properties["802-11-wireless-security"] = {
+                            "key-mgmt": ("s", "sae"),
+                            "psk": ("s", psk),
+                        }
+                    elif (dbusNm.WpaSecurityFlags.AUTH_OWE) in (
+                        _security_types[1] or _security_types[2]
+                    ):
+                        # * OWE
+                        _properties["802-11-wireless-security"] = {
+                            "key-mgmt": ("s", "owe"),
+                            "psk": ("s", psk),
+                        }
+                    elif (dbusNm.WpaSecurityFlags.AUTH_OWE_TM) in (
+                        _security_types[1] or _security_types[2]
+                    ):
+                        # * OWE TM
+                        raise NotImplementedError("AUTH_OWE_TM not supported")
+                    elif (dbusNm.WpaSecurityFlags.AUTH_EAP_SUITE_B) in (
+                        _security_types[1] or _security_types[2]
+                    ):
+                        # * EAP SUITE B
+                        raise NotImplementedError(
+                            "EAP SUITE B Auth not supported"
+                        )
 
-                try:
                     tasks = []
                     tasks.append(
                         self.loop.create_task(
@@ -1081,6 +1062,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                                 logger.error(
                                     f"Exception caught, could not connect to network: {result}"
                                 )
+                                return False
                             if isinstance(
                                 result,
                                 dbusNm.exceptions.NmConnectionPropertyNotFoundError,
@@ -1088,15 +1070,13 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                                 logger.error(
                                     f"Exception caught, network properties internal error: {result}"
                                 )
-
-                            return {
-                                "status": "error",
-                                "msg": f"Caught Exception Unable to add network connection {result}",
-                            }
-                        return {"status": "success"}
-                except Exception as e:
-                    logger.error(f"Unexpected error while adding network: {e}")
-        return {"status": "failure", "msg": "Unable to add network connection"}
+                                return False
+                        return True
+        except Exception as e:
+            logger.error(
+                f"Caught Exception Unable to add network connection {e}"
+            )
+            return False
 
     def add_wifi_network(
         self,
