@@ -1,3 +1,4 @@
+import enum
 import logging
 import typing
 from functools import partial
@@ -261,8 +262,12 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.panel.hotspot_password_input_field.setText(
             str(self.sdbus_network.hotspot_password)
         )
-        # self.panel.wifi_button
-        # self.panel.hotspot_button.toggle_button.
+        self.panel.wifi_button.toggle_button.stateChange.connect(
+            self.on_toggle_state
+        )
+        self.panel.hotspot_button.toggle_button.stateChange.connect(
+            self.on_toggle_state
+        )
         self.panel.saved_connection_change_password_view.pressed.connect(
             lambda: self.panel.saved_connection_change_password_view.setPixmap(
                 QtGui.QPixmap(":/ui/media/btn_icons/unsee.svg")
@@ -309,6 +314,50 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.request_network_scan.emit()
         self.evaluate_network_state()
         self.hide()
+
+    @QtCore.pyqtSlot(enum.Enum, name="stateChange")
+    def on_toggle_state(self, state) -> None:
+        if (
+            self.panel.wifi_button.toggle_button.state
+            == self.panel.wifi_button.toggle_button.State.OFF
+        ):
+            self.panel.wifi_button.toggle_button.setDisabled(False)
+            self.panel.hotspot_button.toggle_button.state = (
+                self.panel.hotspot_button.toggle_button.State.OFF
+            )
+            self.panel.hotspot_button.toggle_button.setDisabled(True)
+            self.sdbus_network.toggle_wifi(False)
+            self.sdbus_network.toggle_hotspot(False)
+        elif (
+            self.panel.wifi_button.toggle_button.state
+            == self.panel.wifi_button.toggle_button.State.ON
+            and state == self.panel.wifi_button.toggle_button.State.ON
+            and self.panel.hotspot_button.toggle_button.state
+            == self.panel.hotspot_button.toggle_button.State.OFF
+        ):
+            self.panel.wifi_button.toggle_button.setDisabled(False)
+            self.panel.hotspot_button.toggle_button.state = (
+                self.panel.hotspot_button.toggle_button.State.OFF
+            )
+            self.panel.hotspot_button.toggle_button.setDisabled(False)
+            self.sdbus_network.toggle_wifi(True)
+            self.sdbus_network.toggle_hotspot(False)
+        elif (
+            self.panel.wifi_button.toggle_button.state
+            == self.panel.wifi_button.toggle_button.State.ON
+            and self.panel.hotspot_button.toggle_button.state
+            == self.panel.hotspot_button.toggle_button.State.ON
+        ):
+            self.panel.wifi_button.toggle_button.setDisabled(True)
+            self.panel.hotspot_button.toggle_button.setDisabled(False)
+            self.sdbus_network.toggle_hotspot(True)
+        elif (
+            self.panel.hotspot_button.toggle_button.state
+            == self.panel.hotspot_button.toggle_button.State.OFF
+            and state == self.panel.hotspot_button.toggle_button.State.OFF
+        ):
+            self.panel.wifi_button.toggle_button.setDisabled(False)
+            self.sdbus_network.toggle_hotspot(False)
 
     @QtCore.pyqtSlot(str, name="nm-state-changed")
     def evaluate_network_state(self, nm_state: str = "") -> None:
@@ -513,7 +562,6 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             10000, lambda: self.network_list_worker.build()
         )
         self.setCurrentIndex(self.indexOf(self.panel.network_list_page))
-
 
     def eventFilter(self, obj, event):
         if (
