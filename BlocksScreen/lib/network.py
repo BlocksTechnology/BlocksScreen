@@ -31,7 +31,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
         str, name="nm-state-changed"
     )
     nm_properties_change: typing.ClassVar[QtCore.pyqtSignal] = (
-        QtCore.pyqtSignal(str, name="nm-properties-changed")
+        QtCore.pyqtSignal(tuple, name="nm-properties-changed")
     )
 
     def __init__(self) -> None:
@@ -165,7 +165,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                 logging.debug("Listening for Network Manager state change")
                 async for properties in self.nm.properties_changed:
                     self.nm_properties_change.emit(properties)
-                    ...
+                    
             except Exception as e:
                 logging.error(
                     f"Exception on Network Manager state listener: {e}"
@@ -272,7 +272,8 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
         """
         if not isinstance(toggle, bool):
             raise TypeError("Toggle wifi expected boolean")
-
+        if self.wifi_enabled() == toggle:
+            return
         asyncio.run_coroutine_threadsafe(
             self.nm.wireless_enabled.set_async(toggle), self.loop
         )
@@ -331,6 +332,8 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
         if not self.nm:
             return
         try:
+            if self.hotspot_enabled() == toggle:
+                return
             old_ssid: typing.Union[str, None] = self.get_current_ssid()
             if old_ssid:
                 self.disconnect_network()
@@ -1065,13 +1068,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                             ).add_connection(_properties)
                         )
                     )
-                    tasks.append(
-                        self.loop.create_task(
-                            dbusNm.NetworkManagerSettings(
-                                bus=self.system_dbus
-                            ).reload_connections()
-                        )
-                    )
+                    tasks.append(self.loop.create_task(self.nm.reload(0x0)))
                     results = await asyncio.gather(
                         *tasks, return_exceptions=True
                     )
@@ -1407,13 +1404,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                     ).add_connection(_properties)
                 )
             )
-            # tasks.append(
-            #     self.loop.create_task(
-            #         dbusNm.NetworkManagerSettings(
-            #             bus=self.system_dbus
-            #         ).reload_connections()
-            #     )
-            # )
+            tasks.append(self.loop.create_task(self.nm.reload(0x0)))
             asyncio.gather(*tasks, return_exceptions=False)
         except Exception as e:
             logging.error(f"Caught Exception while creating hotspot: {e}")
@@ -1478,7 +1469,9 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                 )
 
             task = self.loop.create_task(con_settings.update(properties))
-            asyncio.gather(task)
+            reload_task = self.loop.create_task(self.nm.reload(0x0))
+            asyncio.gather(task, reload_task)
+
             if ssid == self.hotspot_ssid and new_ssid:
                 self.hotspot_ssid = new_ssid
             if password != self.hotspot_password and password:
