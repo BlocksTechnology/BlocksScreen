@@ -604,7 +604,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                 "channel": channel,
                 "signal_level": signal,
                 "max_bitrate": mbit,
-                "BSSID": bssid,
+                "bssid": bssid,
             },
         )
 
@@ -666,7 +666,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
             )
         return {"error": "No available networks"}
 
-    def get_available_networks(self) -> typing.Union[typing.Dict, None]:
+    def get_available_networks(self) -> typing.Dict:
         future = asyncio.run_coroutine_threadsafe(
             self._get_available_networks(), self.loop
         )
@@ -685,7 +685,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
 
 
         Check: For more information about the flags
-            :py:class:`WpaSecurityFlags` and `ÀccessPointCapabilities` from :py:module:`python-sdbus-networkmanager.enums`
+            :py:class:`WpaSecurityFlags` and `AccessPointCapabilities` from :py:module:`python-sdbus-networkmanager.enums`
         """
         if not ap:
             return
@@ -717,7 +717,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
 
     def get_saved_networks(
         self,
-    ) -> typing.Union[typing.List[typing.Optional[typing.Dict]], None]:
+    ) -> typing.List[typing.Dict] | None:
         """get_saved_networks Gets a list with the names and ids of all saved networks on the device.
 
         Returns:
@@ -728,7 +728,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
         I admit that this implementation is way to complicated, I don't even think it's great on memory and time, but i didn't use for loops so mission achieved.
         """
         if not self.nm:
-            return [{"error": "No network manager"}]
+            return
 
         try:
             _connections: typing.List[str] = asyncio.run_coroutine_threadsafe(
@@ -754,9 +754,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
             settings_list: typing.List[
                 dbusNm.NetworkManagerConnectionProperties
             ] = sv_cons_settings_future.result(timeout=2)
-            _known_networks_parameters: typing.List[
-                typing.Optional[typing.Dict]
-            ] = list(
+            _known_networks_parameters = list(
                 filter(
                     lambda network_entry: network_entry is not None,
                     list(
@@ -894,7 +892,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
         #     self.get_saved_networks_with_for()
         # )
         saved_networks = self.get_saved_networks_with_for()
-        return any(net.get("SSID", "") == ssid for net in saved_networks)
+        return any(net.get("ssid", "") == ssid for net in saved_networks)
 
     async def _add_wifi_network(
         self,
@@ -1161,28 +1159,27 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
         if len(_saved_networks) == 0:
             raise Exception("There are no saved networks")
         for saved_network in _saved_networks:
-            if saved_network["SSID"].lower() == ssid.lower():
-                _connection_path = saved_network["CONNECTION_PATH"]
+            if saved_network["ssid"].lower() == ssid.lower():
+                _connection_path = saved_network["connection_path"]
         return _connection_path
 
-    def get_security_type_by_ssid(self, ssid: str) -> str:
+    def get_security_type_by_ssid(self, ssid: str) -> typing.Union[str, None]:
         """Get the security type for a saved network by its ssid.
 
         Args:
             ssid (str): SSID of a saved network
 
-        Returns:
-            str | typing.Dict: _description_
+        Returns: None or str wit the security type
         """
         if not self.nm:
-            return ""
+            return
         if not self.is_known(ssid):
-            return ""
+            return
         _security_type: str = ""
         _saved_networks = self.get_saved_networks_with_for()
         for network in _saved_networks:
-            if network["SSID"].lower() == ssid.lower():
-                _security_type = network["SECURITY_TYPE"]
+            if network["ssid"].lower() == ssid.lower():
+                _security_type = network["security_type"]
 
         return _security_type
 
@@ -1410,13 +1407,13 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                     ).add_connection(_properties)
                 )
             )
-            tasks.append(
-                self.loop.create_task(
-                    dbusNm.NetworkManagerSettings(
-                        bus=self.system_dbus
-                    ).reload_connections()
-                )
-            )
+            # tasks.append(
+            #     self.loop.create_task(
+            #         dbusNm.NetworkManagerSettings(
+            #             bus=self.system_dbus
+            #         ).reload_connections()
+            #     )
+            # )
             asyncio.gather(*tasks, return_exceptions=False)
         except Exception as e:
             logging.error(f"Caught Exception while creating hotspot: {e}")

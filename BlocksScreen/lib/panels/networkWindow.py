@@ -59,6 +59,8 @@ class BuildNetworkList(QtCore.QThread):
             networks = []
             if self.nm.check_wifi_interface():
                 available_networks: dict = self.nm.get_available_networks()
+                if not available_networks:
+                    return
                 for ssid_key in available_networks:
                     properties = available_networks.get(ssid_key, {})
                     signal = int(properties.get("signal_level", 0))
@@ -78,7 +80,7 @@ class BuildNetworkList(QtCore.QThread):
                     [n for n in networks if not n["is_saved"]],
                     key=lambda x: -x["signal"],
                 )
-            else:
+            elif saved_networks:
                 saved_networks = sorted(
                     [n for n in saved_networks], key=lambda x: -1
                 )
@@ -118,13 +120,6 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
     new_ip_signal = QtCore.pyqtSignal(str, name="ip-address-change")
     get_hotspot_ssid = QtCore.pyqtSignal(str, name="hotspot-ssid-name")
     delete_network_signal = QtCore.pyqtSignal(str, name="delete-network")
-    new_connection_result = QtCore.pyqtSignal(
-        [],
-        [
-            str,
-        ],
-        name="new-connection-result",
-    )
 
     def __init__(self, parent: typing.Optional[QtWidgets.QWidget], /) -> None:
         super(NetworkControlWindow, self).__init__(parent)
@@ -266,8 +261,8 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.panel.hotspot_password_input_field.setText(
             str(self.sdbus_network.hotspot_password)
         )
-        self.new_connection_result.connect(self.process_new_connection_result)
-
+        # self.panel.wifi_button
+        # self.panel.hotspot_button.toggle_button.
         self.panel.saved_connection_change_password_view.pressed.connect(
             lambda: self.panel.saved_connection_change_password_view.setPixmap(
                 QtGui.QPixmap(":/ui/media/btn_icons/unsee.svg")
@@ -430,26 +425,6 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
     def rescan_networks(self) -> None:
         self.sdbus_network.rescan_networks()
 
-    @QtCore.pyqtSlot(name="new-connection-result")
-    @QtCore.pyqtSlot(str, name="new-connection-result")
-    def process_new_connection_result(
-        self, msg: typing.Optional[str] = None
-    ) -> None:
-        if msg:
-            self.panel.add_network_password_field.setStyleSheet(
-                "border: 2px solid red;"
-            )
-            self.panel.add_network_network_label.setText(msg)
-            self.update()
-
-        else:
-            self.popup.new_message(
-                self.popup.MessageType.INFO,
-                message="Connection was added, no result message",
-                persistent=False,
-                timeout=200,
-            )
-
     @QtCore.pyqtSlot(name="handle-hotspot-back")
     def handle_hotspot_back(self) -> None:
         if (
@@ -482,31 +457,13 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         if not self.panel.add_network_password_field.text():
             return
         _network_psk = self.panel.add_network_password_field.text()
-        _add_network_result: typing.Dict = self.sdbus_network.add_wifi_network(
+        self.sdbus_network.add_wifi_network(
             ssid=self.panel.add_network_network_label.text(), psk=_network_psk
         )
-
-        if any(
-            word in _add_network_result.get("status", "")
-            for word in ("error", "exception", "failure")
-        ):
-            self.new_connection_result[str].emit(
-                str(_add_network_result.get("msg", ""))
-            )
-            self.popup.new_message(
-                message_type=Popup.MessageType.ERROR,
-                message=f"Could not connect to '{self.panel.add_network_network_label.text()}'\n \
-                    Please check your password or try again later.",
-            )
-        else:
-            self.new_connection_result[str].emit(
-                str(_add_network_result.get("msg", ""))
-            )
-            self.popup.new_message(
-                message_type=Popup.MessageType.INFO,
-                message=f"Connected to '{self.panel.add_network_network_label.text()}' successfully",
-            )
-            self.setCurrentIndex(self.indexOf(self.panel.network_list_page))
+        QtCore.QTimer().singleShot(
+            10000, lambda: self.network_list_worker.build()
+        )
+        self.setCurrentIndex(self.indexOf(self.panel.network_list_page))
 
     @QtCore.pyqtSlot(QtWidgets.QListWidgetItem, name="ssid_item_clicked")
     def ssid_item_clicked(self, item: QtWidgets.QListWidgetItem) -> None:
@@ -547,34 +504,16 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         if not self.sdbus_network.is_known(ssid):
             return
 
-        _update_network_result: typing.Dict = (
-            self.sdbus_network.update_connection_settings(
-                ssid=ssid,
-                password=password,
-                new_ssid=new_ssid,
-            )
+        self.sdbus_network.update_connection_settings(
+            ssid=ssid,
+            password=password,
+            new_ssid=new_ssid,
         )
+        QtCore.QTimer().singleShot(
+            10000, lambda: self.network_list_worker.build()
+        )
+        self.setCurrentIndex(self.indexOf(self.panel.network_list_page))
 
-        if any(
-            word in _update_network_result.get("status", "")
-            for word in ("error", "exception", "failure")
-        ):
-            self.new_connection_result[str].emit(
-                str(_update_network_result.get("msg", ""))
-            )
-            self.popup.new_message(
-                message_type=Popup.MessageType.ERROR,
-                message=f"Could not update the settings for '{ssid}'",
-            )
-
-        else:
-            self.new_connection_result[str].emit(
-                str(_update_network_result.get("msg", ""))
-            )
-            self.popup.new_message(
-                message_type=Popup.MessageType.INFO,
-                message=f"Network settings for '{ssid}' updated successfully",
-            )
 
     def eventFilter(self, obj, event):
         if (
@@ -668,9 +607,6 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             return
 
         _cur = self.currentIndex()
-        # if index == self.indexOf(self.panel.network_list_page):  # Main page 1
-        #     self.panel.network_list_widget.clear()
-        # self.add_ssid_network_entry()  # Add network entries to the list
         if index == self.indexOf(
             self.panel.add_network_page
         ):  # Add network page 2
@@ -935,32 +871,6 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             wifi_pixmap = QtGui.QPixmap(
                 ":/network/media/btn_icons/no_wifi.svg"
             )
-
-        # # Update if it already exists:
-        # item_count = self.network_list_widget.count()
-        # for item_index in range(item_count):
-        #     item = self.network_list_widget.itemWidget(
-        #         self.network_list_widget.item(item_index)
-        #     )
-        #     if isinstance(item, ListCustomButton):
-        #         if not item:
-        #             logger.info("Not itemmmmmmm")
-        #             continue
-
-        #         if item.text() == ssid:
-        #             logger.info("SEtting new pixmpa")
-        #             item.setPixmap(wifi_pixmap)
-        #             item.update()
-        #             return
-        #         if hasattr(item, "rightText"):
-        #             if item.rightText() != right_text:
-        #                 logger.debug(
-        #                     f"Remove item, because it changed the right text new one will be put in place {item.rightText()}"
-        #                 )
-        #                 self.network_list_widget.takeItem(item_index)
-        #                 # item.deleteLater()
-        #         else:
-        #             logger.info("Has no right text")
 
         button = ListCustomButton(parent=self.network_list_widget)
         button.setText(ssid)
