@@ -2,6 +2,7 @@ import enum
 import logging
 import typing
 from functools import partial
+
 from lib.network import SdbusNetworkManagerAsync
 from lib.panels.widgets.popupDialogWidget import Popup
 from lib.ui.wifiConnectivityWindow_ui import Ui_wifi_stacked_page
@@ -64,6 +65,9 @@ class BuildNetworkList(QtCore.QThread):
                     return
                 for ssid_key in available_networks:
                     properties = available_networks.get(ssid_key, {})
+                    # if not properties:
+                    #     return
+                    logger.debug(properties)
                     signal = int(properties.get("signal_level", 0))
                     networks.append(
                         {
@@ -331,14 +335,13 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         elif (
             self.panel.wifi_button.toggle_button.state
             == self.panel.wifi_button.toggle_button.State.ON
-            and state == self.panel.wifi_button.toggle_button.State.ON
             and self.panel.hotspot_button.toggle_button.state
             == self.panel.hotspot_button.toggle_button.State.OFF
         ):
-            self.panel.wifi_button.toggle_button.setDisabled(False)
             self.panel.hotspot_button.toggle_button.state = (
                 self.panel.hotspot_button.toggle_button.State.OFF
             )
+            self.panel.wifi_button.toggle_button.setDisabled(False)
             self.panel.hotspot_button.toggle_button.setDisabled(False)
             self.sdbus_network.toggle_wifi(True)
             self.sdbus_network.toggle_hotspot(False)
@@ -354,7 +357,6 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         elif (
             self.panel.hotspot_button.toggle_button.state
             == self.panel.hotspot_button.toggle_button.State.OFF
-            and state == self.panel.hotspot_button.toggle_button.State.OFF
         ):
             self.panel.wifi_button.toggle_button.setDisabled(False)
             self.sdbus_network.toggle_hotspot(False)
@@ -370,13 +372,10 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         # CONNECTED_SITE = 60   # site-wide ipv4/ipv4 connectivity
         # GLOBAL = 70           # Global ipv4/ipv6 internet connectivity, internet check succeeded, should display full connectivity
         _nm_state = nm_state
-        # logger.info(self.sdbus_network.primary_wifi_interface)
-
         if not _nm_state:
             _nm_state = self.sdbus_network.check_nm_state()
             if not _nm_state:
                 return
-
         if _nm_state in ("CONNECTED_LOCAL", "CONNECTED_SITE", "GLOBAL"):
             if not self.sdbus_network.check_wifi_interface():
                 self._expand_infobox(True)
@@ -404,9 +403,19 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
                 self.panel.wifi_button.toggle_button.state = (
                     self.panel.wifi_button.toggle_button.State.ON
                 )
+            else:
+                self.panel.wifi_button.toggle_button.state = (
+                    self.panel.wifi_button.toggle_button.State.OFF
+                )
+                self.panel.hotspot_button.toggle_button.state = (
+                    self.panel.hotspot_button.toggle_button.State.OFF
+                )
             if self.sdbus_network.hotspot_enabled():
                 self.panel.wifi_button.toggle_button.state = (
                     self.panel.wifi_button.toggle_button.State.ON
+                )
+                self.panel.hotspot_button.toggle_button.state = (
+                    self.panel.hotspot_button.toggle_button.State.ON
                 )
             ipv4_addr = self.sdbus_network.get_current_ip_addr()
             if not ipv4_addr:
