@@ -47,7 +47,6 @@ class BabystepPage(QtWidgets.QWidget):
     @QtCore.pyqtSlot(name="on_move_nozzle_away")
     def on_move_nozzle_away(self) -> None:
         """Slot for Babystep button to get far from the bed by **` self._z_offset`** amount"""
-        print("Moving nozzle away from bed by:", self._z_offset, "a")
         self.run_gcode.emit(
             f"SET_GCODE_OFFSET Z_ADJUST=+{self._z_offset}"  # Z_ADJUST adds the value to the existing offset
         )
@@ -67,10 +66,8 @@ class BabystepPage(QtWidgets.QWidget):
         _possible_z_values: typing.List = [0.01, 0.025, 0.05, 0.1]
         _sender: QtCore.QObject | None = self.sender()
         if self._z_offset == float(_sender.text()[:-3]):
-            print(_sender.text()[:-3], "is already set")
             return
         self._z_offset = float(_sender.text()[:-3])
-        print(_sender.text()[:-3], "is now set")
 
     def savevalue(self):
         self.run_gcode.emit("Z_OFFSET_APPLY_PROBE")

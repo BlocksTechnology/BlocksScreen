@@ -362,7 +362,6 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
     #         or event.type() == KlippyShutdown.type()
     #     ):
     #         # * Received notify_klippy_disconnected, start querying server information again to check if klipper is available
-    #         print("Klipper reported shutdown or error")
     #         self.evaluate_klippy_status()
     #     return super().customEvent(event)
 

@@ -133,7 +133,6 @@ class JobStatusWidget(QtWidgets.QWidget):
         self.js_file_name_label.setText(self._current_file_name)
         self.layer_display_button.setText("?")
         self.print_time_display_button.setText("?")
-        print(thumbnail)
         self.smalthumbnail = thumbnail[1]
         self.bigthumbnail = thumbnail[1]
 
