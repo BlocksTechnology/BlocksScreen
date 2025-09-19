@@ -346,7 +346,7 @@ class Printer(QtCore.QObject):
             _state_upper = _state[0].upper()
             _state_call = f"{_state_upper}{_state[1:]}"
             if hasattr(events, f"Klippy{_state_call}Event"):
-                _logger.error("Events does have the event")
+                _logger.debug(f"Events has {_state_call} event")
                 _event_callback = getattr(events, f"Klippy{_state_call}Event")
                 if callable(_event_callback):
                     try:
