@@ -34,9 +34,9 @@ class FilesPage(QtWidgets.QWidget):
         self.ReloadButton.clicked.connect(
             lambda: self.request_file_list_refresh.emit()
         )
-        # self.listWidget.verticalScrollBar().valueChanged.connect(
-        #     self.handle_scrollbar
-        # )
+        self.listWidget.verticalScrollBar().valueChanged.connect(
+            self.handle_scrollbar
+        )
         self.scrollbar.valueChanged.connect(self.handle_scrollbar)
         self.scrollbar.valueChanged.connect(
             lambda value: self.listWidget.verticalScrollBar().setValue(value)
@@ -87,7 +87,8 @@ class FilesPage(QtWidgets.QWidget):
     def on_file_list(self, file_list: list) -> None:
         self.file_list.clear()
         self.file_list = file_list
-        # self.add_file_entries()
+        if self.isVisible(): 
+            self.add_file_entries()
 
     @QtCore.pyqtSlot(QtWidgets.QListWidgetItem, name="file-item-clicked")
     def fileItemClicked(self, item: str) -> None:
@@ -105,11 +106,11 @@ class FilesPage(QtWidgets.QWidget):
         """Inserts the currently available gcode files on the QListWidget"""
         self.listWidget.blockSignals(True)
         self.listWidget.clear()
-        self.listWidget.setSpacing(35)
         index = 0
         self.buttons = True
-        print(self.file_list)
         if not self.file_list:
+            self.listWidget.setSpacing(-1)
+            self.scrollbar.hide()
             placeholder_item = QtWidgets.QListWidgetItem()
             placeholder_item.setSizeHint(
                 QtCore.QSize(self.listWidget.width(), self.listWidget.height())
@@ -121,10 +122,10 @@ class FilesPage(QtWidgets.QWidget):
             self.listWidget.blockSignals(False)
             return
 
+        self.listWidget.setSpacing(35)
         sorted_list = sorted(
             self.file_list, key=lambda x: x["modified"], reverse=True
         )
-
         for item in sorted_list:
             self.button = ListCustomButton(self)
             self.button.setText(str(item["path"][:-6]))
@@ -157,6 +158,7 @@ class FilesPage(QtWidgets.QWidget):
         self.scrollbar.setPageStep(
             self.listWidget.verticalScrollBar().pageStep()
         )
+        self.scrollbar.show()
         self.listWidget.blockSignals(False)
 
     def handle_scrollbar(self, value):
