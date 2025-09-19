@@ -1,24 +1,27 @@
-from functools import partial
-from PyQt6 import QtCore, QtGui, QtWidgets
+import logging
 import typing
 
+import helper_methods
+from lib.utils.blocks_Scrollbar import CustomScrollBar
 from lib.utils.icon_button import IconButton
 from lib.utils.list_button import ListCustomButton
-from lib.utils.blocks_Scrollbar import CustomScrollBar
+from PyQt6 import QtCore, QtGui, QtWidgets
+
+logger = logging.getLogger("logs/BlocksScreen.log")
 
 
 class FilesPage(QtWidgets.QWidget):
-    request_back_page: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
-        name="request_back_page"
+    request_back: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        name="request-back"
     )
     file_selected: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
-        str, dict, name="file_selected"
+        str, dict, name="file-selected"
     )
     request_file_info: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
-        str, name="request_file_info"
+        str, name="request-file-info"
     )
     request_file_list_refresh: typing.ClassVar[QtCore.pyqtSignal] = (
-        QtCore.pyqtSignal(name="request_file_list_refresh")
+        QtCore.pyqtSignal(name="request-file-list-refresh")
     )
     _current_file_name: str = ""
     file_list: list = []
@@ -28,30 +31,24 @@ class FilesPage(QtWidgets.QWidget):
         self.setupUI()
         self.setMouseTracking(True)
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_AcceptTouchEvents, True)
-
-        self.ReloadButton.clicked.connect(lambda: self.reload_list())
-        self.listWidget.verticalScrollBar().valueChanged.connect(
-            self.handlescrollbar
+        self.ReloadButton.clicked.connect(
+            lambda: self.request_file_list_refresh.emit()
         )
-        self.scrollbar.valueChanged.connect(self.handlescrollbar)
-
+        self.listWidget.verticalScrollBar().valueChanged.connect(
+            self.handle_scrollbar
+        )
+        self.scrollbar.valueChanged.connect(self.handle_scrollbar)
         self.scrollbar.valueChanged.connect(
             lambda value: self.listWidget.verticalScrollBar().setValue(value)
         )
         self.listWidget.itemClicked.connect(self.fileItemClicked)
-        
+        self.show()
 
     def showEvent(self, a0: QtGui.QShowEvent) -> None:
         self.add_file_entries()
         return super().showEvent(a0)
 
-    def estimate_print_time(self, seconds: int) -> list:
-        num_min, seconds = divmod(seconds, 60)
-        num_hours, minutes = divmod(num_min, 60)
-        days, hours = divmod(num_hours, 24)
-        return [days, hours, minutes, seconds]
-
-    @QtCore.pyqtSlot(dict, name="on_fileinfo")
+    @QtCore.pyqtSlot(dict, name="on-fileinfo")
     def on_fileinfo(self, filedata: dict) -> None:
         if self.buttons:
             estimated_time = filedata.get("estimated_time", 0)
@@ -67,7 +64,9 @@ class FilesPage(QtWidgets.QWidget):
                 else "Unknown filament"
             )
             time_str = ""
-            days, hours, minutes, _ = self.estimate_print_time(seconds)
+            days, hours, minutes, _ = helper_methods.estimate_print_time(
+                seconds
+            )
             if seconds <= 0:
                 time_str = "No time estimated"
             elif seconds < 60:
@@ -84,82 +83,72 @@ class FilesPage(QtWidgets.QWidget):
             return
         self.file_selected.emit(str(self._current_file_name), filedata)
 
-    @QtCore.pyqtSlot(name="reload_list")
-    def reload_list(self) -> None:
-        """Reload files list"""
-        
-        self.request_file_list_refresh.emit()
-
-    @QtCore.pyqtSlot(list, name="on_file_list")
+    @QtCore.pyqtSlot(list, name="on-file-list")
     def on_file_list(self, file_list: list) -> None:
         self.file_list.clear()
         self.file_list = file_list
-        self.add_file_entries()
+        if self.isVisible(): 
+            self.add_file_entries()
 
-    @QtCore.pyqtSlot(QtWidgets.QListWidgetItem, name="file_item_clicked")
+    @QtCore.pyqtSlot(QtWidgets.QListWidgetItem, name="file-item-clicked")
     def fileItemClicked(self, item: str) -> None:
         """Slot for List Item clicked
 
         Args:
             item (QListWidgetItem): Clicked item
         """
-        # * Get the filename from the list item pressed
-        if item is not None:
+        if item:
             self._current_file_name = item
             if self._current_file_name:
                 self.request_file_info.emit(self._current_file_name)
 
     def add_file_entries(self) -> None:
         """Inserts the currently available gcode files on the QListWidget"""
+        self.listWidget.blockSignals(True)
         self.listWidget.clear()
-        self.listWidget.addItem(self.item)
-        self.listWidget.setItemWidget(self.item,self.label)
-
-        self.listWidget.setSpacing(35)
         index = 0
         self.buttons = True
+        if not self.file_list:
+            self.listWidget.setSpacing(-1)
+            self.scrollbar.hide()
+            placeholder_item = QtWidgets.QListWidgetItem()
+            placeholder_item.setSizeHint(
+                QtCore.QSize(self.listWidget.width(), self.listWidget.height())
+            )
+            self.listWidget.addItem(placeholder_item)
+            self.listWidget.setItemWidget(
+                placeholder_item, self.placeholder_label
+            )
+            self.listWidget.blockSignals(False)
+            return
 
+        self.listWidget.setSpacing(35)
         sorted_list = sorted(
             self.file_list, key=lambda x: x["modified"], reverse=True
         )
-        if sorted_list is not None:    
-            for item in sorted_list:
-                self.listWidget.setRowHidden(self.listWidget.row(self.item), True)
-                self.button = ListCustomButton(self)
-                self.button.setText(str(item["path"][:-6]))
-                self.request_file_info.emit(item["path"])
-
-                self.button.setPixmap(
-                    QtGui.QPixmap(":/arrow_icons/media/btn_icons/right_arrow.svg")
-                )
-                self.button.setFixedSize(600, 80)
-                self.button.setLeftFontSize(17)
-                self.button.setRightFontSize(12)
-
-                list_item = QtWidgets.QListWidgetItem()
-                list_item.setSizeHint(self.button.sizeHint())
-
-                self.listWidget.addItem(list_item)
-                self.listWidget.setItemWidget(list_item, self.button)
-
-                namefile = str(item["path"])
-                self.button.clicked.connect(
-                    partial(self.fileItemClicked, namefile)
-                )
-                index += 1
-        else:
-            self.listWidget.setRowHidden(self.listWidget.row(self.item), False)
-            return
-
-
+        for item in sorted_list:
+            self.button = ListCustomButton(self)
+            self.button.setText(str(item["path"][:-6]))
+            self.request_file_info.emit(item["path"])
+            self.button.setPixmap(
+                QtGui.QPixmap(":/arrow_icons/media/btn_icons/right_arrow.svg")
+            )
+            self.button.setFixedSize(600, 80)
+            self.button.setLeftFontSize(17)
+            self.button.setRightFontSize(12)
+            list_item = QtWidgets.QListWidgetItem()
+            list_item.setSizeHint(self.button.sizeHint())
+            self.listWidget.addItem(list_item)
+            self.listWidget.setItemWidget(list_item, self.button)
+            filename = str(item["path"])
+            self.button.clicked.connect(lambda: self.fileItemClicked(filename))
+            index += 1
         self.buttons = False
-
         spacer_item = QtWidgets.QListWidgetItem()
         spacer_widget = QtWidgets.QWidget()
         spacer_widget.setFixedHeight(10)
         spacer_item.setSizeHint(spacer_widget.sizeHint())
         self.listWidget.addItem(spacer_item)
-
         self.scrollbar.setMinimum(
             self.listWidget.verticalScrollBar().minimum()
         )
@@ -169,10 +158,11 @@ class FilesPage(QtWidgets.QWidget):
         self.scrollbar.setPageStep(
             self.listWidget.verticalScrollBar().pageStep()
         )
+        self.scrollbar.show()
+        self.listWidget.blockSignals(False)
 
-    def handlescrollbar(self, value):
+    def handle_scrollbar(self, value):
         # Block signals to avoid recursion
-
         self.scrollbar.blockSignals(True)
         self.scrollbar.setValue(value)
         self.scrollbar.blockSignals(False)
@@ -244,6 +234,9 @@ class FilesPage(QtWidgets.QWidget):
         self.listWidget.setSelectionBehavior(
             QtWidgets.QAbstractItemView.SelectionBehavior.SelectItems
         )
+        self.listWidget.setHorizontalScrollBarPolicy(  # No horizontal scroll
+            QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
         self.listWidget.setVerticalScrollMode(
             QtWidgets.QAbstractItemView.ScrollMode.ScrollPerPixel
         )
@@ -275,23 +268,22 @@ class FilesPage(QtWidgets.QWidget):
         QtWidgets.QScroller.scroller(self.listWidget).setScrollerProperties(
             scroller_props
         )
-
         font = QtGui.QFont()
         font.setPointSize(25)
-
-
-        self.item = QtWidgets.QListWidgetItem()
-        self.item.setSizeHint(QtCore.QSize(self.listWidget.width(),self.listWidget.height())) 
-
-
-        self.label = QtWidgets.QLabel("No Files found")
-        self.label.setFont(font)
-        self.label.setStyleSheet("color: gray;")  
-        self.label.setAlignment(QtCore.Qt.AlignmentFlag.AlignHCenter|QtCore.Qt.AlignmentFlag.AlignVCenter)
-        self.label.setMinimumSize(QtCore.QSize(self.listWidget.width(),self.listWidget.height()))
-
-
-
+        placeholder_item = QtWidgets.QListWidgetItem()
+        placeholder_item.setSizeHint(
+            QtCore.QSize(self.listWidget.width(), self.listWidget.height())
+        )
+        self.placeholder_label = QtWidgets.QLabel("No Files found")
+        self.placeholder_label.setFont(font)
+        self.placeholder_label.setStyleSheet("color: gray;")
+        self.placeholder_label.setAlignment(
+            QtCore.Qt.AlignmentFlag.AlignHCenter
+            | QtCore.Qt.AlignmentFlag.AlignVCenter
+        )
+        self.placeholder_label.setMinimumSize(
+            QtCore.QSize(self.listWidget.width(), self.listWidget.height())
+        )
         self.fp_content_layout.addWidget(self.listWidget)
         self.scrollbar = CustomScrollBar()
         self.fp_content_layout.addWidget(self.scrollbar)
