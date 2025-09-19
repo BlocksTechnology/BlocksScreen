@@ -1,5 +1,4 @@
 import ctypes
-import hashlib
 import os
 import enum
 import logging
