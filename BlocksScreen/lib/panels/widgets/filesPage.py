@@ -82,7 +82,8 @@ class FilesPage(QtWidgets.QWidget):
 
             self.button.setRightText(f"{filament_type} - {time_str}")
             return
-        self.file_selected.emit(str(self._current_file_name), filedata)
+        if self.isVisible():
+            self.file_selected.emit(str(self._current_file_name), filedata)
 
     @QtCore.pyqtSlot(list, name="on-file-list")
     def on_file_list(self, file_list: list) -> None:
