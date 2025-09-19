@@ -315,7 +315,6 @@ class ControlTab(QtWidgets.QStackedWidget):
         self.run_gcode_signal.emit(
             f"SET_HEATER_TEMPERATURE HEATER={name} TARGET={new_value}"
         )
-        # print(f"SET_HEATER_TEMPERATURE HEATER={name} TARGET={new_value}")
 
     def change_page(self, index):
         self.request_change_page.emit(2, index)

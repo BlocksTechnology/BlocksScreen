@@ -45,9 +45,6 @@ class TuneWidget(QtWidgets.QWidget):
         self.tune_babystep_menu_btn.clicked.connect(self.request_bbpPage.emit)
         self.tune_back_btn.clicked.connect(self.request_back)
         self.bed_display.clicked.connect(
-            lambda: print(self.bed_display.text())
-        )
-        self.bed_display.clicked.connect(
             lambda: self.request_numpad[
                 str, int, "PyQt_PyObject", int, int
             ].emit(

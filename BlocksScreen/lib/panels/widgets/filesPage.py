@@ -30,6 +30,7 @@ class FilesPage(QtWidgets.QWidget):
         super().__init__(parent)
         self.setupUI()
         self.setMouseTracking(True)
+        self.buttons: bool = False
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_AcceptTouchEvents, True)
         self.ReloadButton.clicked.connect(
             lambda: self.request_file_list_refresh.emit()
