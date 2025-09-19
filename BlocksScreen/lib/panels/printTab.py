@@ -44,8 +44,8 @@ class PrintTab(QtWidgets.QStackedWidget):
         QtCore.pyqtSignal(dict, name="request_query_print_stats")
     )
 
-    request_back_page: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
-        name="request_back_page"
+    request_back: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        name="request-back"
     )
     request_change_page: typing.ClassVar[QtCore.pyqtSignal] = (
         QtCore.pyqtSignal(int, int, name="request_change_page")
@@ -168,7 +168,7 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.jobStatusPage_widget.tune_clicked.connect(
             lambda: self.change_page(self.indexOf(self.tune_page))
         )
-        self.tune_page.request_back_page.connect(self.back_button)
+        self.tune_page.request_back.connect(self.back_button)
         self.printer.extruder_update.connect(
             self.tune_page.on_extruder_temperature_change
         )
@@ -309,6 +309,6 @@ class PrintTab(QtWidgets.QStackedWidget):
 
     def back_button(self) -> None:
         """Goes back to the previous page"""
-        self.request_back_page.emit()
+        self.request_back.emit()
 
     def setupUI(self) -> None: ...

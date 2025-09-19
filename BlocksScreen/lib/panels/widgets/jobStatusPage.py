@@ -206,9 +206,7 @@ class JobStatusWidget(QtWidgets.QWidget):
             field (str): The name of the updated field.
             value (dict | float | str): The value for the field.
         """
-
         if isinstance(value, str):
-            print(f"Print status update received: {field} -> {value}")
             if "filename" in field:
                 self._current_file_name = value
                 if self.js_file_name_label.text().lower() != value.lower():
@@ -519,9 +517,7 @@ class JobStatusWidget(QtWidgets.QWidget):
         self.job_status_header_layout.addWidget(self.js_file_name_icon)
         self.job_status_header_layout.addWidget(self.js_file_name_label)
 
-
         # -----------------------------buttons
-
 
         font.setPointSize(18)
 

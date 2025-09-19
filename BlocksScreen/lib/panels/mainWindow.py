@@ -86,7 +86,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.conn_window.on_websocket_connection_lost
         )
 
-        self.printPanel.request_back_page.connect(slot=self.global_back)
+        self.printPanel.request_back.connect(slot=self.global_back)
         self.printPanel.request_change_page.connect(
             slot=self.global_change_page
         )
