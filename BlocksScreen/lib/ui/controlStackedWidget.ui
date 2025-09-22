@@ -5463,14 +5463,10 @@ Steppers</string>
  </customwidgets>
  <resources>
   <include location="resources/icon_resources.qrc"/>
-  <include location="resources/icon_resources.qrc"/>
   <include location="resources/main_menu_resources.qrc"/>
   <include location="resources/system_resources.qrc"/>
   <include location="resources/top_bar_resources.qrc"/>
   <include location="resources/background_resources.qrc"/>
-  <include location="resources/icon_resources.qrc"/>
-  <include location="resources/icon_resources.qrc"/>
-  <include location="resources/icon_resources.qrc"/>
   <include location="resources/icon_resources.qrc"/>
  </resources>
  <connections/>
