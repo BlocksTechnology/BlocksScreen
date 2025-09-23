@@ -518,11 +518,8 @@ class MoonAPI(QtCore.QObject):
             params={"interface": interface},
         )
 
-    @QtCore.pyqtSlot(name="api_request_file_list")
-    def get_file_list(self, root_folder: str | None = None):
-        # If the root argument is omitted the request will default to the gcodes root.
-        if root_folder is None:
-            return self._ws.send_request(method="server.files.list", params={})
+    @QtCore.pyqtSlot(name="api-request-file-list")
+    def get_file_list(self, root_folder: str = "gcodes"):
         return self._ws.send_request(
             method="server.files.list", params={"root": root_folder}
         )
