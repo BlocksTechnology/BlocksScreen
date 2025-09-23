@@ -4,7 +4,7 @@ from typing import Deque
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 
-BASE_POPUP_TIMEOUT = 2000
+BASE_POPUP_TIMEOUT = 6000
 
 
 class Popup(QtWidgets.QDialog):
@@ -46,12 +46,12 @@ class Popup(QtWidgets.QDialog):
 
 
         self.slide_in_animation = QtCore.QPropertyAnimation(self, b"geometry")
-        self.slide_in_animation.setDuration(self.popup_timeout // 2)
+        self.slide_in_animation.setDuration(1000)
         self.slide_in_animation.setEasingCurve(QtCore.QEasingCurve.Type.OutCubic)
 
 
         self.slide_out_animation = QtCore.QPropertyAnimation(self, b"geometry")
-        self.slide_out_animation.setDuration(self.popup_timeout // 10)
+        self.slide_out_animation.setDuration(200)
         self.slide_out_animation.setEasingCurve(QtCore.QEasingCurve.Type.InCubic)
 
 
@@ -119,9 +119,9 @@ class Popup(QtWidgets.QDialog):
             and self.slide_out_animation.state() == QtCore.QPropertyAnimation.State.Stopped
         ):
             message_entry = self.messages.popleft()
+            print(message_entry)
             self.message_type = message_entry.get("type")
             message = message_entry.get("message")
-            timeout = message_entry.get("timeout")
             self.text_label.setText(message)
             
             match self.message_type:
@@ -133,7 +133,7 @@ class Popup(QtWidgets.QDialog):
                     self.icon_label.setPixmap(self.error_icon)
 
             self.timeout_timer.setInterval(
-                self.popup_timeout if not timeout else timeout
+                self.popup_timeout
             )
             
             end_rect = self._calculate_target_geometry()
