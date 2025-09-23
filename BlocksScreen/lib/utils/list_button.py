@@ -3,9 +3,9 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 
 class ListCustomButton(QtWidgets.QPushButton):
     def __init__(self, parent=None) -> None:
-        if parent: 
+        if parent:
             super(ListCustomButton, self).__init__(parent)
-        else : 
+        else:
             super(ListCustomButton, self).__init__()
         self.icon_pixmap: QtGui.QPixmap = QtGui.QPixmap()
         self.second_icon_pixmap: QtGui.QPixmap = QtGui.QPixmap()
@@ -33,9 +33,8 @@ class ListCustomButton(QtWidgets.QPushButton):
         self.update()
 
     def text(self) -> str:
-        return self._text 
-        # return super().text()
-        
+        return self._text
+
     def setRightText(self, text: str) -> None:
         self._right_text = text
         self.update()
@@ -77,6 +76,9 @@ class ListCustomButton(QtWidgets.QPushButton):
     def paintEvent(self, e: QtGui.QPaintEvent | None) -> None:
         painter = QtGui.QPainter(self)
         painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing, True)
+        painter.setRenderHint(
+            QtGui.QPainter.RenderHint.SmoothPixmapTransform, True
+        )
 
         rect = self.rect()
         radius = rect.height() / 5.0
