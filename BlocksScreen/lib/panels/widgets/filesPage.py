@@ -1,5 +1,8 @@
+from functools import lru_cache
 import logging
 import typing
+
+from isort import file
 
 import helper_methods
 from lib.utils.blocks_Scrollbar import CustomScrollBar
@@ -23,133 +26,164 @@ class FilesPage(QtWidgets.QWidget):
     request_file_list_refresh: typing.ClassVar[QtCore.pyqtSignal] = (
         QtCore.pyqtSignal(name="request-file-list-refresh")
     )
-    _current_file_name: str = ""
     file_list: list = []
+    files_data: dict = {}
 
     def __init__(self, parent) -> None:
         super().__init__(parent)
-        self.setupUI()
+        self._setupUI()
         self.setMouseTracking(True)
-        self.buttons: bool = False
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_AcceptTouchEvents, True)
         self.ReloadButton.clicked.connect(
             lambda: self.request_file_list_refresh.emit()
         )
         self.listWidget.verticalScrollBar().valueChanged.connect(
-            self.handle_scrollbar
+            self._handle_scrollbar
         )
-        self.scrollbar.valueChanged.connect(self.handle_scrollbar)
+        self.scrollbar.valueChanged.connect(self._handle_scrollbar)
         self.scrollbar.valueChanged.connect(
             lambda value: self.listWidget.verticalScrollBar().setValue(value)
         )
-        self.listWidget.itemClicked.connect(self.fileItemClicked)
+        # self.listWidget.itemClicked.connect(self.fileItemClicked)
         self.show()
 
     def showEvent(self, a0: QtGui.QShowEvent) -> None:
-        self.add_file_entries()
+        self._build_file_list()
         return super().showEvent(a0)
 
-    @QtCore.pyqtSlot(dict, name="on-fileinfo")
-    def on_fileinfo(self, filedata: dict) -> None:
-        if self.buttons:
-            estimated_time = filedata.get("estimated_time", 0)
-            seconds = (
-                int(estimated_time)
-                if isinstance(estimated_time, (int, float))
-                else 0
-            )
-
-            filament_type = (
-                filedata.get("filament_type", "Unknown filament")
-                if filedata.get("filament_type", "Unknown filament") != -1.0
-                else "Unknown filament"
-            )
-            time_str = ""
-            days, hours, minutes, _ = helper_methods.estimate_print_time(
-                seconds
-            )
-            if seconds <= 0:
-                time_str = "No time estimated"
-            elif seconds < 60:
-                time_str = "less than 1 minute"
-            else:
-                if days > 0:
-                    time_str = f"{days}d {hours}h {minutes}m"
-                elif hours > 0:
-                    time_str = f"{hours}h {minutes}m"
-                else:
-                    time_str = f"{minutes}m"
-
-            self.button.setRightText(f"{filament_type} - {time_str}")
-            return
-        self.file_selected.emit(str(self._current_file_name), filedata)
-
     @QtCore.pyqtSlot(list, name="on-file-list")
-    def on_file_list(self, file_list: list) -> None:
-        self.file_list.clear()
+    def _on_file_list(self, file_list: list) -> None:
+        self.files_data.clear()  # Clear gathered information about files
         self.file_list = file_list
-        if self.isVisible(): 
-            self.add_file_entries()
+        if self.isVisible():
+            self._build_file_list()
+
+    @QtCore.pyqtSlot(dict, name="on-fileinfo")
+    def _on_fileinfo(self, filedata: dict) -> None:
+        if not filedata:
+            return
+        filename = filedata.get("filename", "")
+        if not filename:
+            return
+        self.files_data.update({f"{filename}": filedata})
+        estimated_time = filedata.get("estimated_time", 0)
+        seconds = (
+            int(estimated_time)
+            if isinstance(estimated_time, (int, float))
+            else 0
+        )
+        filament_type = (
+            filedata.get("filament_type", "Unknown filament")
+            if filedata.get("filament_type", "Unknown filament") != -1.0
+            else "Unknown filament"
+        )
+        time_str = ""
+        days, hours, minutes, _ = helper_methods.estimate_print_time(seconds)
+        if seconds <= 0:
+            time_str = "??"
+        elif seconds < 60:
+            time_str = "less than 1 minute"
+        else:
+            if days > 0:
+                time_str = f"{days}d {hours}h {minutes}m"
+            elif hours > 0:
+                time_str = f"{hours}h {minutes}m"
+            else:
+                time_str = f"{minutes}m"
+
+            list_items = [
+                self.listWidget.item(i) for i in range(self.listWidget.count())
+            ]
+        for list_item in list_items:
+            item_widget = self.listWidget.itemWidget(list_item)
+            if item_widget.text() in filename:
+                item_widget.setRightText(f"{filament_type} - {time_str}")
 
     @QtCore.pyqtSlot(QtWidgets.QListWidgetItem, name="file-item-clicked")
-    def fileItemClicked(self, item: str) -> None:
+    def _fileItemClicked(self, item: QtWidgets.QListWidgetItem) -> None:
         """Slot for List Item clicked
 
         Args:
             item (QListWidgetItem): Clicked item
         """
         if item:
-            self._current_file_name = item
-            if self._current_file_name:
-                self.request_file_info.emit(self._current_file_name)
+            widget = self.listWidget.itemWidget(item)
+            for file in self.file_list:
+                path = file.get("path", "")
+                if not path:
+                    return
+                if widget.text() in path:
+                    # Here the file_data is not the file_data is just only the available files
+                    print(f"file clicked -> {path}")
+                    # the file here shoudl be the data of that file that came with on_fileinfo
+                    self.file_selected.emit(
+                        str(path), self.files_data.get(f"{path}")
+                    )
 
-    def add_file_entries(self) -> None:
+    def _build_file_list(self) -> None:
         """Inserts the currently available gcode files on the QListWidget"""
         self.listWidget.blockSignals(True)
         self.listWidget.clear()
-        index = 0
-        self.buttons = True
         if not self.file_list:
-            self.listWidget.setSpacing(-1)
-            self.scrollbar.hide()
-            placeholder_item = QtWidgets.QListWidgetItem()
-            placeholder_item.setSizeHint(
-                QtCore.QSize(self.listWidget.width(), self.listWidget.height())
-            )
-            self.listWidget.addItem(placeholder_item)
-            self.listWidget.setItemWidget(
-                placeholder_item, self.placeholder_label
-            )
-            self.listWidget.blockSignals(False)
+            self._add_placeholder()
             return
-
         self.listWidget.setSpacing(35)
         sorted_list = sorted(
             self.file_list, key=lambda x: x["modified"], reverse=True
         )
         for item in sorted_list:
-            self.button = ListCustomButton(self)
-            self.button.setText(str(item["path"][:-6]))
-            self.request_file_info.emit(item["path"])
-            self.button.setPixmap(
-                QtGui.QPixmap(":/arrow_icons/media/btn_icons/right_arrow.svg")
-            )
-            self.button.setFixedSize(600, 80)
-            self.button.setLeftFontSize(17)
-            self.button.setRightFontSize(12)
-            list_item = QtWidgets.QListWidgetItem()
-            list_item.setSizeHint(self.button.sizeHint())
-            self.listWidget.addItem(list_item)
-            self.listWidget.setItemWidget(list_item, self.button)
-            filename = str(item["path"])
-            self.button.clicked.connect(lambda: self.fileItemClicked(filename))
-            index += 1
-        self.buttons = False
+            self._add_list_item(item)
+        self._add_spacer()
+        self._setup_scrollbar()
+        self.listWidget.blockSignals(False)
+
+    def _add_spacer(self) -> None:
         spacer_item = QtWidgets.QListWidgetItem()
         spacer_widget = QtWidgets.QWidget()
         spacer_widget.setFixedHeight(10)
         spacer_item.setSizeHint(spacer_widget.sizeHint())
         self.listWidget.addItem(spacer_item)
+
+    def _add_list_item(self, file_data_item) -> None:
+        button = ListCustomButton()
+        button.setText(str(file_data_item["path"][:-6]))
+        button.setPixmap(
+            QtGui.QPixmap(":/arrow_icons/media/btn_icons/right_arrow.svg")
+        )
+        button.setFixedSize(600, 80)
+        button.setLeftFontSize(17)
+        button.setRightFontSize(12)
+        list_item = QtWidgets.QListWidgetItem()
+        list_item.setSizeHint(button.sizeHint())
+        self.listWidget.addItem(list_item)
+        self.listWidget.setItemWidget(list_item, button)
+        # file_path = str(file_data_item["path"])
+        button.clicked.connect(lambda: self._fileItemClicked(list_item))
+        self.request_file_info.emit(
+            file_data_item["path"]
+        )  # This needs to be the last thing that is done here
+        print(
+            f"Requested file information for file with name {file_data_item['path']}"
+        )
+
+    def _add_placeholder(self) -> None:
+        self.listWidget.setSpacing(-1)
+        self.scrollbar.hide()
+        placeholder_item = QtWidgets.QListWidgetItem()
+        placeholder_item.setSizeHint(
+            QtCore.QSize(self.listWidget.width(), self.listWidget.height())
+        )
+        self.listWidget.addItem(placeholder_item)
+        self.listWidget.setItemWidget(placeholder_item, self.placeholder_label)
+        self.listWidget.blockSignals(False)
+
+    def _handle_scrollbar(self, value):
+        # Block signals to avoid recursion
+        self.scrollbar.blockSignals(True)
+        self.scrollbar.setValue(value)
+        self.scrollbar.blockSignals(False)
+
+    def _setup_scrollbar(self) -> None:
         self.scrollbar.setMinimum(
             self.listWidget.verticalScrollBar().minimum()
         )
@@ -160,15 +194,8 @@ class FilesPage(QtWidgets.QWidget):
             self.listWidget.verticalScrollBar().pageStep()
         )
         self.scrollbar.show()
-        self.listWidget.blockSignals(False)
 
-    def handle_scrollbar(self, value):
-        # Block signals to avoid recursion
-        self.scrollbar.blockSignals(True)
-        self.scrollbar.setValue(value)
-        self.scrollbar.blockSignals(False)
-
-    def setupUI(self):
+    def _setupUI(self):
         sizePolicy = QtWidgets.QSizePolicy(
             QtWidgets.QSizePolicy.Policy.MinimumExpanding,
             QtWidgets.QSizePolicy.Policy.MinimumExpanding,

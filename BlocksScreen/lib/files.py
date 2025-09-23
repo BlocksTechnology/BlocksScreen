@@ -11,6 +11,7 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 
 class Files(QtCore.QObject):
     request_file_list = QtCore.pyqtSignal(name="get_files_list")
+    request_directory_info = QtCore.pyqtSignal(str, name="get-dir-information")
     request_file_metadata = QtCore.pyqtSignal([str], name="get_file_metadata")
     request_files_thumbnails = QtCore.pyqtSignal(
         [str], name="request_files_thumbnail"
@@ -36,6 +37,7 @@ class Files(QtCore.QObject):
         self.files_metadata: dict = {}
         self.request_file_list.connect(slot=self.ws.api.get_file_list)
         self.request_file_metadata.connect(slot=self.ws.api.get_gcode_metadata)
+        self.request_directory_info.connect(slot=self.ws.api.get_dir_information)
         self.request_files_thumbnails.connect(
             slot=self.ws.api.get_gcode_thumbnail
         )
@@ -68,7 +70,7 @@ class Files(QtCore.QObject):
         _data: dict = {
             "thumbnail_images": list,
             "filament_total": dict,
-            "estimated_time": dict,
+            "estimated_time": int ,
             "layer_count": int,
             "object_height": float,
             "size": int,
@@ -82,6 +84,7 @@ class Files(QtCore.QObject):
             "filament_name": str,
             "nozzle_diameter": float,
             "slicer": str,
+            "filename": str
         }
         _file_metadata = self.files_metadata.get(str(filename))
         if not _file_metadata:
@@ -100,12 +103,13 @@ class Files(QtCore.QObject):
             map(lambda path: QtGui.QImage(path), _thumbnail_paths)
         )
         _data.update({"thumbnail_images": _thumbnail_images})
-
+        
+        _data.update({'filename': _file_metadata.get("filename", "?")})
         _data.update(
             {"filament_total": _file_metadata.get("filament_total", "?")}
         )
         _data.update(
-            {"estimated_time": _file_metadata.get("estimated_time", "?")}
+            {"estimated_time": _file_metadata.get("estimated_time", 0)}
         )
         _data.update({"layer_count": _file_metadata.get("layer_count", -1.0)})
         _data.update({"total_layer": _file_metadata.get("total_layer", -1.0)})
