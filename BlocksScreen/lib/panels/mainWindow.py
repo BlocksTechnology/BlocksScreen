@@ -483,6 +483,9 @@ class MainWindow(QtWidgets.QMainWindow):
 
         elif "error" in _method:
             self.handle_error_response[list].emit([_data, _metadata])
+            if "metadata" in _data.get("message", "").lower():
+                # Quick fix, don't care about no metadata errors
+                return
             self.popup.new_message(
                 message_type=Popup.MessageType.ERROR,
                 message=str(_data),
