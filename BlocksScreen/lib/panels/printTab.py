@@ -96,11 +96,11 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.filesPage_widget.request_file_info.connect(
             self.file_data.on_request_fileinfo
         )
-        self.file_data.fileinfo.connect(self.filesPage_widget.on_fileinfo)
+        self.file_data.fileinfo.connect(self.filesPage_widget._on_fileinfo)
         self.filesPage_widget.request_file_list_refresh.connect(
             self.file_data.request_file_list
         )
-        self.file_data.on_file_list.connect(self.filesPage_widget.on_file_list)
+        self.file_data.on_file_list.connect(self.filesPage_widget._on_file_list)
 
         self.jobStatusPage_widget = JobStatusWidget(self)
         self.addWidget(self.jobStatusPage_widget)
