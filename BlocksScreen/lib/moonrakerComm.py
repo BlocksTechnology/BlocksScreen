@@ -527,6 +527,7 @@ class MoonAPI(QtCore.QObject):
             method="server.files.list", params={"root": root_folder}
         )
 
+    @QtCore.pyqtSlot(name="api-list-roots")
     def list_registered_roots(self):
         return self._ws.send_request(method="server.files.roots")
 
@@ -538,6 +539,7 @@ class MoonAPI(QtCore.QObject):
             method="server.files.metadata", params={"filename": filename_dir}
         )
 
+    @QtCore.pyqtSlot(str, name="api-scan-gcode-metadata")
     def scan_gcode_metadata(self, filename_dir: str):
         if isinstance(filename_dir, str) is False or filename_dir is None:
             return False
@@ -553,7 +555,16 @@ class MoonAPI(QtCore.QObject):
             method="server.files.thumbnails", params={"filename": filename_dir}
         )
 
-    @QtCore.pyqtSlot(str, str, name="file_download")
+    @QtCore.pyqtSlot(str, str, name="api-delete-file")
+    @QtCore.pyqtSlot(str, name="api-delete-file")
+    def delete_file(self, filename: str, root_dir: str = "gcodes"):
+        filepath = f"{root_dir}/{filename}"
+        return self._ws.send_request(
+            method="server.files.delete_file",
+            params={"path": filepath},
+        )
+
+    @QtCore.pyqtSlot(str, str, name="api-file_download")
     def download_file(self, root: str, filename: str):
         """download_file Retrieves file *filename* at root *root*, the filename must include the relative path if
         it is not in the root folder
@@ -572,12 +583,16 @@ class MoonAPI(QtCore.QObject):
             f"/server/files/{root}/{filename}"
         )
 
-    # def upload_file(self, ) # TODO: Maybe this is not necessary but either way do it
-    QtCore.pyqtSlot(str, name="get-dir-information")
-
-    def get_dir_information(self, directory: str):
-        if not isinstance(directory, str) or not directory:
+    @QtCore.pyqtSlot(str, name="api-get-dir-info")
+    @QtCore.pyqtSlot(name="api-get-dir-info")
+    def get_dir_information(self, directory: str = ""):
+        if not isinstance(directory, str):
             return False
+        if not directory:
+            return self._ws.send_request(
+                method="server.files.get_directory",
+                params={"extended": True},
+            )
         return self._ws.send_request(
             method="server.files.get_directory",
             params={"path": f"gcodes/{directory}", "extended": True},
