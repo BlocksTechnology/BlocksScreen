@@ -573,9 +573,10 @@ class MoonAPI(QtCore.QObject):
         )
 
     # def upload_file(self, ) # TODO: Maybe this is not necessary but either way do it
+    QtCore.pyqtSlot(str, name="get-dir-information")
 
     def get_dir_information(self, directory: str):
-        if isinstance(directory, str) is False or directory is None:
+        if not isinstance(directory, str) or not directory:
             return False
         return self._ws.send_request(
             method="server.files.get_directory",
