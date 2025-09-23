@@ -70,13 +70,12 @@ class Files(QtCore.QObject):
                 self.files_metadata[data["filename"]] = data
         elif "server.files.get_directory" in method:
             self.directories = data.get("dirs", {})
-            print(data)
             self.on_dirs[list].emit(self.directories)
 
     @QtCore.pyqtSlot(str, name="on_request_fileinfo")
     def on_request_fileinfo(self, filename: str) -> None:
-        if not filename:
-            return
+        # if not filename:
+        #     return
         _data: dict = {
             "thumbnail_images": list,
             "filament_total": dict,
@@ -97,6 +96,7 @@ class Files(QtCore.QObject):
             "filename": str,
         }
         _file_metadata = self.files_metadata.get(str(filename), {})
+        _data.update({"filename": filename})
         _thumbnails = _file_metadata.get("thumbnails", {})
         _thumbnail_paths = list(
             map(
@@ -112,7 +112,6 @@ class Files(QtCore.QObject):
         )
         _data.update({"thumbnail_images": _thumbnail_images})
 
-        _data.update({"filename": _file_metadata.get("filename", "?")})
         _data.update(
             {"filament_total": _file_metadata.get("filament_total", "?")}
         )

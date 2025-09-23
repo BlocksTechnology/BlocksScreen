@@ -62,7 +62,6 @@ class FilesPage(QtWidgets.QWidget):
     @QtCore.pyqtSlot(list, name="on-dirs")
     def on_directories(self, directories_data: list) -> None:
         self.directories = directories_data
-        print(self.directories)
         self.request_dir_info[str].emit("USB")
 
 
@@ -71,7 +70,7 @@ class FilesPage(QtWidgets.QWidget):
 
     @QtCore.pyqtSlot(dict, name="on-fileinfo")
     def on_fileinfo(self, filedata: dict) -> None:
-        if not filedata:
+        if not filedata or not self.isVisible():
             return
         filename = filedata.get("filename", "")
         if not filename:
@@ -122,12 +121,12 @@ class FilesPage(QtWidgets.QWidget):
         if item:
             widget = self.listWidget.itemWidget(item)
             for file in self.file_list:
-                path = file.get("path", "")
+                path = file.get("path")
                 if not path:
                     return
                 if widget.text() in path:
                     self.file_selected.emit(
-                        str(path), self.files_data.get(f"{path}", {}) # Defaults to Nothing
+                        str(path), self.files_data.get(f"{path}") # Defaults to Nothing
                     )
 
     def _build_file_list(self) -> None:
@@ -142,6 +141,7 @@ class FilesPage(QtWidgets.QWidget):
         sorted_list = sorted(
             self.file_list, key=lambda x: x["modified"], reverse=True
         )
+        
         for item in sorted_list:
             self._add_file_list_item(item)
         self._add_spacer()
@@ -179,7 +179,6 @@ class FilesPage(QtWidgets.QWidget):
         button.setSecondPixmap(
             QtGui.QPixmap(":/files/media/btn_icons/file_icon.svg")
         )
-        # button.setFixedSize(600, 80)
         button.setMinimumSize(600, 80)
         button.setMaximumSize(700, 80)
         button.setLeftFontSize(17)
@@ -190,7 +189,7 @@ class FilesPage(QtWidgets.QWidget):
         self.listWidget.setItemWidget(list_item, button)
         button.clicked.connect(lambda: self._fileItemClicked(list_item))
         self.request_file_info.emit(
-            file_data_item["path"]
+            file_data_item.get("path")
         )  # This needs to be the last thing that is done here
 
     def _add_placeholder(self) -> None:
