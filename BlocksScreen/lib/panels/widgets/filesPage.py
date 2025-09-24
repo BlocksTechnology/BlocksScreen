@@ -55,7 +55,7 @@ class FilesPage(QtWidgets.QWidget):
 
     @QtCore.pyqtSlot(list, name="on-file-list")
     def on_file_list(self, file_list: list) -> None:
-        self.files_data.clear()
+        self.files_data.clear()  # Clear gathered information about files
         self.file_list = file_list
         if self.isVisible():
             self._build_file_list()
@@ -153,6 +153,7 @@ class FilesPage(QtWidgets.QWidget):
         if self.directories:
             if self.curr_dir != "" and self.curr_dir != "/":
                 self._add_back_folder_entry()  # Need to only build it if we are inside a directory
+            # else:
             for dir_data in self.directories:
                 if dir_data.get("dirname").startswith("."):
                     continue
