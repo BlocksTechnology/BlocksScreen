@@ -122,7 +122,11 @@ class FilesPage(QtWidgets.QWidget):
         if item:
             widget = self.listWidget.itemWidget(item)
             for file in self.file_list:
-                path = file.get("path") if 'path' in file.keys() else file.get('filename')
+                path = (
+                    file.get("path")
+                    if "path" in file.keys()
+                    else file.get("filename")
+                )
                 if not path:
                     return
                 if widget.text() in path:
@@ -134,7 +138,7 @@ class FilesPage(QtWidgets.QWidget):
     @QtCore.pyqtSlot(QtWidgets.QListWidgetItem, str, name="dir-item-clicked")
     def _dirItemClicked(
         self, item: QtWidgets.QListWidgetItem, directory: str
-    ) -> None:        
+    ) -> None:
         self.curr_dir = self.curr_dir + directory
         self.request_dir_info[str].emit(self.curr_dir)
 
