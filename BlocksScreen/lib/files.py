@@ -58,8 +58,6 @@ class Files(QtCore.QObject):
 
     def handle_message_received(self, method: str, data, params: dict) -> None:
         if "server.files.list" in method:
-            print("\n")
-            print(data)
             self.files.clear()
             self.files = data
             [
@@ -75,7 +73,6 @@ class Files(QtCore.QObject):
             else:
                 self.files_metadata[data["filename"]] = data
         elif "server.files.get_directory" in method:
-            # print(data)
             self.directories = data.get("dirs", {})
             self.files.clear()
             self.files = data.get("files", [])
@@ -84,7 +81,7 @@ class Files(QtCore.QObject):
                 self.request_file_metadata.emit(item["filename"])
                 for item in self.files
             ]
-            self.on_file_list.emit(self.files)
+            self.on_file_list[list].emit(self.files)
             self.on_dirs[list].emit(self.directories)
 
     @QtCore.pyqtSlot(str, name="on_request_fileinfo")

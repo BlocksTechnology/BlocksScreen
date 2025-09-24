@@ -1,4 +1,3 @@
-from locale import currency
 import logging
 import os
 import typing
@@ -39,10 +38,7 @@ class FilesPage(QtWidgets.QWidget):
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_AcceptTouchEvents, True)
         self.curr_dir: str = ""
         self.ReloadButton.clicked.connect(
-            lambda: (
-                self.request_dir_info[str].emit(self.curr_dir),
-                print("Refresh pressed"),
-            )
+            lambda: self.request_dir_info[str].emit(self.curr_dir)
         )
         self.listWidget.verticalScrollBar().valueChanged.connect(
             self._handle_scrollbar
@@ -60,7 +56,6 @@ class FilesPage(QtWidgets.QWidget):
     @QtCore.pyqtSlot(list, name="on-file-list")
     def on_file_list(self, file_list: list) -> None:
         self.files_data.clear()  # Clear gathered information about files
-        # self.directories.clear()
         self.file_list = file_list
         if self.isVisible():
             self._build_file_list()
@@ -68,6 +63,8 @@ class FilesPage(QtWidgets.QWidget):
     @QtCore.pyqtSlot(list, name="on-dirs")
     def on_directories(self, directories_data: list) -> None:
         self.directories = directories_data
+        if self.isVisible():
+            self._build_file_list()
 
     @QtCore.pyqtSlot(str, name="on-delete-file")
     def on_delete_file(self, filename: str) -> None: ...
@@ -138,9 +135,6 @@ class FilesPage(QtWidgets.QWidget):
     def _dirItemClicked(
         self, item: QtWidgets.QListWidgetItem, directory: str
     ) -> None:
-        print(
-            f"Dir item was clicked : || Current directory variable: {self.curr_dir}|| Gotten Directory: {directory}"
-        )
         self.curr_dir = directory
         self.request_dir_info[str].emit(self.curr_dir)
 
