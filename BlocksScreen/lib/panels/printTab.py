@@ -14,6 +14,7 @@ from lib.printer import Printer
 from lib.panels.widgets.slider_selector_page import SliderPage
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.panels.widgets.numpadPage import CustomNumpad
+from lib.panels.widgets.loadPage import LoadScreen
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 
@@ -78,6 +79,8 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.numpadPage = CustomNumpad(self)
         self.numpadPage.request_back.connect(self.back_button)
         self.addWidget(self.numpadPage)
+        self.loadscreen = LoadScreen(self, LoadScreen.AnimationGIF.DEFAULT)
+        self.addWidget(self.loadscreen)
 
         self.file_data: Files = file_data
         self.filesPage_widget = FilesPage(self)
@@ -124,7 +127,7 @@ class PrintTab(QtWidgets.QStackedWidget):
             self.ws.api.resume_print
         )
         self.jobStatusPage_widget.print_cancel.connect(
-            self.ws.api.cancel_print
+            self.handle_cancel_print
         )
         self.jobStatusPage_widget.print_pause.connect(self.ws.api.pause_print)
         self.jobStatusPage_widget.request_query_print_stats.connect(
@@ -297,6 +300,12 @@ class PrintTab(QtWidgets.QStackedWidget):
         if name == "backgroundPixmap":
             self.background = value
         return super().setProperty(name, value)
+    
+    def handle_cancel_print(self) -> None:
+        """Handles the print cancel action"""
+        self.ws.api.cancel_print()
+        self.loadscreen.show()
+        self.loadscreen.set_status_message("Cancelling print...\nPlease wait")
 
     def change_page(self, index: int) -> None:
         """Requests a page change page to the global manager
