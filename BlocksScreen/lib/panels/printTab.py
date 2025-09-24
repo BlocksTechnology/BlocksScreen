@@ -97,14 +97,10 @@ class PrintTab(QtWidgets.QStackedWidget):
             self.file_data.on_request_fileinfo
         )
         self.file_data.fileinfo.connect(self.filesPage_widget.on_fileinfo)
-        self.filesPage_widget.request_refresh.connect(
-            self.file_data.request_file_list
-        )
-        self.filesPage_widget.request_refresh.connect(
-            self.file_data.request_dir_info
-        )
+        
+        self.filesPage_widget.request_file_list[str].connect(self.file_data.request_file_list)
+        self.filesPage_widget.request_file_list.connect(self.file_data.request_file_list)
         self.file_data.on_dirs.connect(self.filesPage_widget.on_directories)
-
         self.filesPage_widget.request_dir_info[str].connect(
             self.file_data.request_dir_info[str]
         )
@@ -112,7 +108,6 @@ class PrintTab(QtWidgets.QStackedWidget):
             self.file_data.request_dir_info
         )
         self.file_data.on_file_list.connect(self.filesPage_widget.on_file_list)
-        self.file_data.on_dirs.connect(self.filesPage_widget.on_directories)
         self.jobStatusPage_widget = JobStatusWidget(self)
         self.addWidget(self.jobStatusPage_widget)
 

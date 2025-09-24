@@ -51,7 +51,6 @@ echo_ok ()
     printf "${Green}$1${Normal}\n"
 }
 
-
 function install_graphical_backend(){
     while true; do 
         if [ -z "$BACKEND" ]; then 

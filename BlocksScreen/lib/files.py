@@ -10,8 +10,8 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 
 
 class Files(QtCore.QObject):
-    request_file_list = QtCore.pyqtSignal(name="get_files_list")
-    request_dir_info = QtCore.pyqtSignal([], [str], name="api-get-dir-info")
+    request_file_list = QtCore.pyqtSignal([], [str], name="api-get-files-list")
+    request_dir_info = QtCore.pyqtSignal([], [str],[str, bool], name="api-get-dir-info")
     request_file_metadata = QtCore.pyqtSignal([str], name="get_file_metadata")
     request_files_thumbnails = QtCore.pyqtSignal(
         [str], name="request_files_thumbnail"
@@ -40,7 +40,11 @@ class Files(QtCore.QObject):
         self.directories: list = []
         self.files_metadata: dict = {}
         self.request_file_list.connect(slot=self.ws.api.get_file_list)
+        self.request_file_list[str].connect(slot=self.ws.api.get_file_list)
         self.request_dir_info.connect(slot=self.ws.api.get_dir_information)
+        self.request_dir_info[str].connect(
+            slot=self.ws.api.get_dir_information
+        )
         self.request_file_metadata.connect(slot=self.ws.api.get_gcode_metadata)
         self.request_files_thumbnails.connect(
             slot=self.ws.api.get_gcode_thumbnail
@@ -54,6 +58,8 @@ class Files(QtCore.QObject):
 
     def handle_message_received(self, method: str, data, params: dict) -> None:
         if "server.files.list" in method:
+            print("\n")
+            print(data)
             self.files.clear()
             self.files = data
             [
@@ -69,7 +75,16 @@ class Files(QtCore.QObject):
             else:
                 self.files_metadata[data["filename"]] = data
         elif "server.files.get_directory" in method:
+            # print(data)
             self.directories = data.get("dirs", {})
+            self.files.clear()
+            self.files = data.get("files", [])
+            [
+                # self.request_file_metadata.emit(item["path"])
+                self.request_file_metadata.emit(item["filename"])
+                for item in self.files
+            ]
+            self.on_file_list.emit(self.files)
             self.on_dirs[list].emit(self.directories)
 
     @QtCore.pyqtSlot(str, name="on_request_fileinfo")
@@ -175,7 +190,7 @@ class Files(QtCore.QObject):
             self.files.clear()
             return False
         elif a1.type() == events.KlippyReady.type():
-            self.request_file_list.emit()
+            # self.request_file_list.emit()
             self.request_dir_info.emit()
             return False
         return super().eventFilter(a0, a1)

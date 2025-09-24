@@ -519,6 +519,7 @@ class MoonAPI(QtCore.QObject):
         )
 
     @QtCore.pyqtSlot(name="api-request-file-list")
+    @QtCore.pyqtSlot(str, name="api-request-file-list")
     def get_file_list(self, root_folder: str = "gcodes"):
         return self._ws.send_request(
             method="server.files.list", params={"root": root_folder}
@@ -581,18 +582,14 @@ class MoonAPI(QtCore.QObject):
         )
 
     @QtCore.pyqtSlot(str, name="api-get-dir-info")
+    @QtCore.pyqtSlot(str, bool, name="api-get-dir-info")
     @QtCore.pyqtSlot(name="api-get-dir-info")
-    def get_dir_information(self, directory: str = ""):
+    def get_dir_information(self, directory: str = "", extended: bool = True):
         if not isinstance(directory, str):
             return False
-        if not directory:
-            return self._ws.send_request(
-                method="server.files.get_directory",
-                params={"extended": True},
-            )
         return self._ws.send_request(
             method="server.files.get_directory",
-            params={"path": f"gcodes/{directory}", "extended": True},
+            params={"path": f"gcodes/{directory}", "extended": extended},
         )
 
     def create_directory(self, directory: str):
