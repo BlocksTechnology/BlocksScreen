@@ -134,8 +134,8 @@ class FilesPage(QtWidgets.QWidget):
     @QtCore.pyqtSlot(QtWidgets.QListWidgetItem, str, name="dir-item-clicked")
     def _dirItemClicked(
         self, item: QtWidgets.QListWidgetItem, directory: str
-    ) -> None:
-        self.curr_dir = directory
+    ) -> None:        
+        self.curr_dir = self.curr_dir + directory
         self.request_dir_info[str].emit(self.curr_dir)
 
     def _build_file_list(self) -> None:
@@ -149,11 +149,11 @@ class FilesPage(QtWidgets.QWidget):
         if self.directories:
             if self.curr_dir != "" and self.curr_dir != "/":
                 self._add_back_folder_entry()  # Need to only build it if we are inside a directory
-            else:
-                for dir_data in self.directories:
-                    if dir_data.get("dirname").startswith("."):
-                        continue
-                    self._add_directory_list_item(dir_data)
+            # else:
+            for dir_data in self.directories:
+                if dir_data.get("dirname").startswith("."):
+                    continue
+                self._add_directory_list_item(dir_data)
 
         sorted_list = sorted(
             self.file_list, key=lambda x: x["modified"], reverse=True
@@ -184,7 +184,7 @@ class FilesPage(QtWidgets.QWidget):
         self.listWidget.addItem(list_item)
         self.listWidget.setItemWidget(list_item, button)
         button.clicked.connect(
-            lambda: self._dirItemClicked(list_item, "/" + f"{dir_name}")
+            lambda: self._dirItemClicked(list_item, str("/" + f"{dir_name}"))
         )
 
     def _add_back_folder_entry(self) -> None:
