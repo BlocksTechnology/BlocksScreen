@@ -152,7 +152,7 @@ class FilesPage(QtWidgets.QWidget):
         self.listWidget.setSpacing(35)
         if self.directories:
             if self.curr_dir != "" and self.curr_dir != "/":
-                self._add_back_folder_entry()  # Need to only build it if we are inside a directory
+                self._add_back_folder_entry()  
             for dir_data in self.directories:
                 if dir_data.get("dirname").startswith("."):
                     continue
@@ -227,9 +227,6 @@ class FilesPage(QtWidgets.QWidget):
         button.setPixmap(
             QtGui.QPixmap(":/arrow_icons/media/btn_icons/right_arrow.svg")
         )
-        # button.setSecondPixmap(
-        #     QtGui.QPixmap(":/files/media/btn_icons/file_icon.svg")
-        # )
         button.setMinimumSize(600, 80)
         button.setMaximumSize(700, 80)
         button.setLeftFontSize(17)
@@ -241,7 +238,7 @@ class FilesPage(QtWidgets.QWidget):
         button.clicked.connect(lambda: self._fileItemClicked(list_item))
         self.request_file_info.emit(
             name
-        )  # This needs to be the last thing that is done here
+        )
 
     def _add_spacer(self) -> None:
         spacer_item = QtWidgets.QListWidgetItem()
@@ -289,7 +286,6 @@ class FilesPage(QtWidgets.QWidget):
         sizePolicy.setHeightForWidth(self.sizePolicy().hasHeightForWidth())
         self.setSizePolicy(sizePolicy)
         self.setMinimumSize(QtCore.QSize(710, 400))
-        # self.setMaximumSize(QtCore.QSize(720, 420))
         font = QtGui.QFont()
         font.setStyleStrategy(QtGui.QFont.StyleStrategy.PreferAntialias)
         self.setFont(font)
