@@ -126,7 +126,6 @@ class FilesPage(QtWidgets.QWidget):
                 if not path:
                     return
                 if widget.text() in path:
-                    print(f"here : {widget.text()}")
                     self.file_selected.emit(
                         str(path),
                         self.files_data.get(f"{path}"),  # Defaults to Nothing
