@@ -102,7 +102,7 @@ class ListCustomButton(QtWidgets.QPushButton):
 
         # Ellipse ("hole") for the icon on the left (only if present)
         left_icon_margin = rect.height() * 0.05
-        left_icon_size = rect.height() * 0.90
+        left_icon_size = rect.height() * 0.50
         left_icon_rect = QtCore.QRectF(
             rect.left() + left_icon_margin,
             rect.top() + left_icon_margin,
@@ -167,11 +167,12 @@ class ListCustomButton(QtWidgets.QPushButton):
             # Center the icon in the rect
             adjusted_x = (
                 left_icon_rect.x()
-                + (left_icon_rect.width() - left_icon_scaled.width()) / 2.0
+                + (left_icon_rect.width() - left_icon_scaled.width()) // 2.0
             )
             adjusted_y = (
-                left_icon_rect.y()
-                + (left_icon_rect.height() - left_icon_scaled.height()) / 2.0
+                # left_icon_rect.y()
+                # + (left_icon_rect.height() - left_icon_scaled.height()) // 2.0
+                + (self.height()-left_icon_rect.height() ) // 2.0
             )
             adjusted_left_icon_rect = QtCore.QRectF(
                 adjusted_x,
