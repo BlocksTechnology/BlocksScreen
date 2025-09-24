@@ -122,10 +122,11 @@ class FilesPage(QtWidgets.QWidget):
         if item:
             widget = self.listWidget.itemWidget(item)
             for file in self.file_list:
-                path = file.get("path")
+                path = file.get("path") if 'path' in file.keys() else file.get('filename')
                 if not path:
                     return
                 if widget.text() in path:
+                    print(f"here : {widget.text()}")
                     self.file_selected.emit(
                         str(path),
                         self.files_data.get(f"{path}"),  # Defaults to Nothing
@@ -173,7 +174,7 @@ class FilesPage(QtWidgets.QWidget):
         button = ListCustomButton()
         button.setText(str(dir_data.get("dirname")))
         button.setSecondPixmap(
-            QtGui.QPixmap(":/ui/media/btn_icons/back_folder.svg")
+            QtGui.QPixmap(":/ui/media/btn_icons/folder_icon.svg")
         )
         button.setMinimumSize(600, 80)
         button.setMaximumSize(700, 80)
@@ -224,9 +225,9 @@ class FilesPage(QtWidgets.QWidget):
         button.setPixmap(
             QtGui.QPixmap(":/arrow_icons/media/btn_icons/right_arrow.svg")
         )
-        button.setSecondPixmap(
-            QtGui.QPixmap(":/files/media/btn_icons/file_icon.svg")
-        )
+        # button.setSecondPixmap(
+        #     QtGui.QPixmap(":/files/media/btn_icons/file_icon.svg")
+        # )
         button.setMinimumSize(600, 80)
         button.setMaximumSize(700, 80)
         button.setLeftFontSize(17)
