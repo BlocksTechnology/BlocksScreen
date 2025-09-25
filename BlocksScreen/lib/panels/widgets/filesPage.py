@@ -166,8 +166,8 @@ class FilesPage(QtWidgets.QWidget):
             self._add_placeholder()
             return
         self.listWidget.setSpacing(35)
-        if self.directories or self.curr_dir != "" :
-            if (self.curr_dir != "" and self.curr_dir != "/"):
+        if self.directories or self.curr_dir != "":
+            if self.curr_dir != "" and self.curr_dir != "/":
                 self._add_back_folder_entry()
             for dir_data in self.directories:
                 if dir_data.get("dirname").startswith("."):
@@ -269,14 +269,25 @@ class FilesPage(QtWidgets.QWidget):
 
     def _add_placeholder(self) -> None:
         self.listWidget.setSpacing(-1)
+        placeholder_label = QtWidgets.QLabel("No Files found")
+        font = QtGui.QFont()
+        font.setPointSize(25)
+        placeholder_label.setFont(font)
+        placeholder_label.setStyleSheet("color: gray;")
+        placeholder_label.setAlignment(
+            QtCore.Qt.AlignmentFlag.AlignHCenter
+            | QtCore.Qt.AlignmentFlag.AlignVCenter
+        )
+        placeholder_label.setMinimumSize(
+            QtCore.QSize(self.listWidget.width(), self.listWidget.height())
+        )
         self.scrollbar.hide()
         placeholder_item = QtWidgets.QListWidgetItem()
         placeholder_item.setSizeHint(
             QtCore.QSize(self.listWidget.width(), self.listWidget.height())
         )
         self.listWidget.addItem(placeholder_item)
-        self.listWidget.setItemWidget(placeholder_item, self.placeholder_label)
-        self.listWidget.blockSignals(False)
+        self.listWidget.setItemWidget(placeholder_item, placeholder_label)
 
     def _handle_scrollbar(self, value):
         # Block signals to avoid recursion
@@ -400,16 +411,6 @@ class FilesPage(QtWidgets.QWidget):
         font.setPointSize(25)
         placeholder_item = QtWidgets.QListWidgetItem()
         placeholder_item.setSizeHint(
-            QtCore.QSize(self.listWidget.width(), self.listWidget.height())
-        )
-        self.placeholder_label = QtWidgets.QLabel("No Files found")
-        self.placeholder_label.setFont(font)
-        self.placeholder_label.setStyleSheet("color: gray;")
-        self.placeholder_label.setAlignment(
-            QtCore.Qt.AlignmentFlag.AlignHCenter
-            | QtCore.Qt.AlignmentFlag.AlignVCenter
-        )
-        self.placeholder_label.setMinimumSize(
             QtCore.QSize(self.listWidget.width(), self.listWidget.height())
         )
         self.fp_content_layout.addWidget(self.listWidget)
