@@ -75,7 +75,9 @@ class NetworkWidgetbuttons(QtWidgets.QWidget):
         style_painter.fillPath(background_rect, _brush)
         style_painter.end()
 
-
+    def setDisabled(self, a0: bool) -> None:
+        self.toggle_button.setDisabled(a0)
+        return super().setDisabled(a0)
 
     def setupUI(self):
         _policy = QtWidgets.QSizePolicy.Policy.MinimumExpanding

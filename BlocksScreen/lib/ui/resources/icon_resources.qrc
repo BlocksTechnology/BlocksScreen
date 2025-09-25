@@ -81,6 +81,7 @@
     <file>media/btn_icons/back.svg</file>
     <file>media/btn_icons/refresh.svg</file>
     <file>media/btn_icons/back_folder.svg</file>
+    <file>media/btn_icons/folder_icon.svg</file>
     <file>media/btn_icons/background_list.svg</file>
     <file>media/btn_icons/center_arrows.svg</file>
     <file>media/btn_icons/confirm_stl_window.svg</file>
@@ -113,6 +114,9 @@
     <file>media/btn_icons/time.svg</file>
     <file>media/btn_icons/troubleshoot.svg</file>
     <file>media/btn_icons/tune.svg</file>
+    <file>media/btn_icons/see.svg</file>
+    <file>media/btn_icons/unsee.svg</file>
+    <file>media/btn_icons/qrcode.svg</file>
     
   </qresource>
   <qresource prefix="z_levelling">

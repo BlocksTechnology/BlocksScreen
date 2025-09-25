@@ -2,8 +2,11 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 
 
 class ListCustomButton(QtWidgets.QPushButton):
-    def __init__(self, parent) -> None:
-        super(ListCustomButton, self).__init__(parent)
+    def __init__(self, parent=None) -> None:
+        if parent:
+            super(ListCustomButton, self).__init__(parent)
+        else:
+            super(ListCustomButton, self).__init__()
         self.icon_pixmap: QtGui.QPixmap = QtGui.QPixmap()
         self.second_icon_pixmap: QtGui.QPixmap = QtGui.QPixmap()
         self.text_color: QtGui.QColor = QtGui.QColor(255, 255, 255)
@@ -29,9 +32,15 @@ class ListCustomButton(QtWidgets.QPushButton):
         self._text = text
         self.update()
 
+    def text(self) -> str:
+        return self._text
+
     def setRightText(self, text: str) -> None:
         self._right_text = text
         self.update()
+
+    def rightText(self) -> str:
+        return self._right_text
 
     def setLeftFontSize(self, size: int) -> None:
         self._lfontsize = size
@@ -67,6 +76,9 @@ class ListCustomButton(QtWidgets.QPushButton):
     def paintEvent(self, e: QtGui.QPaintEvent | None) -> None:
         painter = QtGui.QPainter(self)
         painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing, True)
+        painter.setRenderHint(
+            QtGui.QPainter.RenderHint.SmoothPixmapTransform, True
+        )
 
         rect = self.rect()
         radius = rect.height() / 5.0
@@ -74,9 +86,6 @@ class ListCustomButton(QtWidgets.QPushButton):
         # Main rounded rectangle path (using the adjusted rect)
         path = QtGui.QPainterPath()
         path.addRoundedRect(QtCore.QRectF(rect), radius, radius)
-
-
-       
 
         # Ellipse ("hole") for the icon on the right
         ellipse_margin = rect.height() * 0.05
@@ -93,7 +102,7 @@ class ListCustomButton(QtWidgets.QPushButton):
 
         # Ellipse ("hole") for the icon on the left (only if present)
         left_icon_margin = rect.height() * 0.05
-        left_icon_size = rect.height() * 0.90
+        left_icon_size = rect.height() * 0.50
         left_icon_rect = QtCore.QRectF(
             rect.left() + left_icon_margin,
             rect.top() + left_icon_margin,
@@ -102,7 +111,7 @@ class ListCustomButton(QtWidgets.QPushButton):
         )
         left_margin = 10  # default left margin
 
-         # Gradient background (left to right)
+        # Gradient background (left to right)
         if not self._is_pressed:
             pressed_color = QtGui.QColor(self.pressed_color)
             pressed_color.setAlpha(20)
@@ -115,7 +124,7 @@ class ListCustomButton(QtWidgets.QPushButton):
             painter.setPen(QtCore.Qt.PenStyle.NoPen)
             painter.setBrush(pressed_color)
             painter.fillPath(path, pressed_color)
-            
+
         # Draw icon inside the ellipse "hole" (on the right)
         if not self.icon_pixmap.isNull():
             icon_margin = ellipse_size * 0.10
@@ -158,11 +167,12 @@ class ListCustomButton(QtWidgets.QPushButton):
             # Center the icon in the rect
             adjusted_x = (
                 left_icon_rect.x()
-                + (left_icon_rect.width() - left_icon_scaled.width()) / 2.0
+                + (left_icon_rect.width() - left_icon_scaled.width()) // 2.0
             )
             adjusted_y = (
-                left_icon_rect.y()
-                + (left_icon_rect.height() - left_icon_scaled.height()) / 2.0
+                # left_icon_rect.y()
+                # + (left_icon_rect.height() - left_icon_scaled.height()) // 2.0
+                +(self.height() - left_icon_rect.height()) // 2.0
             )
             adjusted_left_icon_rect = QtCore.QRectF(
                 adjusted_x,
