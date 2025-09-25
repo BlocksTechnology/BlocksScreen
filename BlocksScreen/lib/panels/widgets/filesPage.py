@@ -1,8 +1,6 @@
-from functools import lru_cache
 import logging
+import os
 import typing
-
-from isort import file
 
 import helper_methods
 from lib.utils.blocks_Scrollbar import CustomScrollBar
@@ -23,19 +21,27 @@ class FilesPage(QtWidgets.QWidget):
     request_file_info: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         str, name="request-file-info"
     )
-    request_file_list_refresh: typing.ClassVar[QtCore.pyqtSignal] = (
-        QtCore.pyqtSignal(name="request-file-list-refresh")
+    request_dir_info: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        [], [str], [str, bool], name="api-get-dir-info"
+    )
+    request_file_list: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        [], [str], name="api-get-files-list"
+    )
+    request_file_metadata: typing.ClassVar[QtCore.pyqtSignal] = (
+        QtCore.pyqtSignal(str, name="api-get-gcode-metadata")
     )
     file_list: list = []
     files_data: dict = {}
+    directories: list = []
 
     def __init__(self, parent) -> None:
         super().__init__(parent)
         self._setupUI()
         self.setMouseTracking(True)
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_AcceptTouchEvents, True)
+        self.curr_dir: str = ""
         self.ReloadButton.clicked.connect(
-            lambda: self.request_file_list_refresh.emit()
+            lambda: self.request_dir_info[str].emit(self.curr_dir)
         )
         self.listWidget.verticalScrollBar().valueChanged.connect(
             self._handle_scrollbar
@@ -44,23 +50,36 @@ class FilesPage(QtWidgets.QWidget):
         self.scrollbar.valueChanged.connect(
             lambda value: self.listWidget.verticalScrollBar().setValue(value)
         )
-        # self.listWidget.itemClicked.connect(self.fileItemClicked)
-        self.show()
+        self.back_btn.clicked.connect(self.reset_dir)
+
+    @QtCore.pyqtSlot(name="reset-dir")
+    def reset_dir(self) -> None:
+        self.curr_dir = ""
+        self.request_dir_info[str].emit(self.curr_dir)
 
     def showEvent(self, a0: QtGui.QShowEvent) -> None:
         self._build_file_list()
         return super().showEvent(a0)
 
     @QtCore.pyqtSlot(list, name="on-file-list")
-    def _on_file_list(self, file_list: list) -> None:
-        self.files_data.clear()  # Clear gathered information about files
+    def on_file_list(self, file_list: list) -> None:
+        self.files_data.clear()
         self.file_list = file_list
+        # if self.isVisible(): # Only build the list when directories come
+        #     self._build_file_list()
+
+    @QtCore.pyqtSlot(list, name="on-dirs")
+    def on_directories(self, directories_data: list) -> None:
+        self.directories = directories_data
         if self.isVisible():
             self._build_file_list()
 
+    @QtCore.pyqtSlot(str, name="on-delete-file")
+    def on_delete_file(self, filename: str) -> None: ...
+
     @QtCore.pyqtSlot(dict, name="on-fileinfo")
-    def _on_fileinfo(self, filedata: dict) -> None:
-        if not filedata:
+    def on_fileinfo(self, filedata: dict) -> None:
+        if not filedata or not self.isVisible():
             return
         filename = filedata.get("filename", "")
         if not filename:
@@ -91,9 +110,11 @@ class FilesPage(QtWidgets.QWidget):
             else:
                 time_str = f"{minutes}m"
 
-            list_items = [
-                self.listWidget.item(i) for i in range(self.listWidget.count())
-            ]
+        list_items = [
+            self.listWidget.item(i) for i in range(self.listWidget.count())
+        ]
+        if not list_items:
+            return
         for list_item in list_items:
             item_widget = self.listWidget.itemWidget(list_item)
             if item_widget.text() in filename:
@@ -109,33 +130,134 @@ class FilesPage(QtWidgets.QWidget):
         if item:
             widget = self.listWidget.itemWidget(item)
             for file in self.file_list:
-                path = file.get("path", "")
+                path = (
+                    file.get("path")
+                    if "path" in file.keys()
+                    else file.get("filename")
+                )
                 if not path:
                     return
                 if widget.text() in path:
-                    # Here the file_data is not the file_data is just only the available files
-                    print(f"file clicked -> {path}")
-                    # the file here shoudl be the data of that file that came with on_fileinfo
-                    self.file_selected.emit(
-                        str(path), self.files_data.get(f"{path}")
+                    file_path = (
+                        path
+                        if not self.curr_dir
+                        else str(self.curr_dir + "/" + path)
                     )
+                    self.file_selected.emit(
+                        str(file_path.removeprefix("/")),
+                        self.files_data.get(
+                            file_path.removeprefix("/")
+                        ),  # Defaults to Nothing
+                    )
+
+    @QtCore.pyqtSlot(QtWidgets.QListWidgetItem, str, name="dir-item-clicked")
+    def _dirItemClicked(
+        self, item: QtWidgets.QListWidgetItem, directory: str
+    ) -> None:
+        self.curr_dir = self.curr_dir + directory
+        self.request_dir_info[str].emit(self.curr_dir)
 
     def _build_file_list(self) -> None:
         """Inserts the currently available gcode files on the QListWidget"""
         self.listWidget.blockSignals(True)
         self.listWidget.clear()
-        if not self.file_list:
+        if not self.file_list and not self.directories:
             self._add_placeholder()
             return
         self.listWidget.setSpacing(35)
+        if self.directories or self.curr_dir != "":
+            if self.curr_dir != "" and self.curr_dir != "/":
+                self._add_back_folder_entry()
+            for dir_data in self.directories:
+                if dir_data.get("dirname").startswith("."):
+                    continue
+                self._add_directory_list_item(dir_data)
         sorted_list = sorted(
             self.file_list, key=lambda x: x["modified"], reverse=True
         )
         for item in sorted_list:
-            self._add_list_item(item)
+            self._add_file_list_item(item)
         self._add_spacer()
         self._setup_scrollbar()
         self.listWidget.blockSignals(False)
+        self.repaint()
+
+    def _add_directory_list_item(self, dir_data: dict) -> None:
+        dir_name = dir_data.get("dirname", "")
+        if not dir_name:
+            return
+        button = ListCustomButton()
+        button.setText(str(dir_data.get("dirname")))
+        button.setSecondPixmap(
+            QtGui.QPixmap(":/ui/media/btn_icons/folder_icon.svg")
+        )
+        button.setMinimumSize(600, 80)
+        button.setMaximumSize(700, 80)
+        button.setLeftFontSize(17)
+        button.setRightFontSize(12)
+        list_item = QtWidgets.QListWidgetItem()
+        list_item.setSizeHint(button.sizeHint())
+        self.listWidget.addItem(list_item)
+        self.listWidget.setItemWidget(list_item, button)
+        button.clicked.connect(
+            lambda: self._dirItemClicked(list_item, "/" + dir_name)
+        )
+
+    def _add_back_folder_entry(self) -> None:
+        button = ListCustomButton()
+        button.setText("Go Back")
+        button.setSecondPixmap(
+            QtGui.QPixmap(":/ui/media/btn_icons/back_folder.svg")
+        )
+        button.setMinimumSize(600, 80)
+        button.setMaximumSize(700, 80)
+        button.setLeftFontSize(17)
+        button.setRightFontSize(12)
+        list_item = QtWidgets.QListWidgetItem()
+        list_item.setSizeHint(button.sizeHint())
+        self.listWidget.addItem(list_item)
+        self.listWidget.setItemWidget(list_item, button)
+        go_back_path = os.path.dirname(self.curr_dir)
+        if go_back_path == "/":
+            go_back_path = ""
+        button.clicked.connect(lambda: (self._on_goback_dir(go_back_path)))
+
+    @QtCore.pyqtSlot(str, str, name="on-goback-dir")
+    def _on_goback_dir(self, directory) -> None:
+        self.request_dir_info[str].emit(directory)
+        self.curr_dir = directory
+
+    def _add_file_list_item(self, file_data_item) -> None:
+        if not file_data_item:
+            return
+
+        name = (
+            file_data_item["path"]
+            if "path" in file_data_item.keys()
+            else file_data_item["filename"]
+        )
+        if not name.endswith(".gcode"):
+            # Only list .gcode files, all else ignore
+            return
+        button = ListCustomButton()
+        button.setText(name[:-6])
+        button.setPixmap(
+            QtGui.QPixmap(":/arrow_icons/media/btn_icons/right_arrow.svg")
+        )
+        button.setMinimumSize(600, 80)
+        button.setMaximumSize(700, 80)
+        button.setLeftFontSize(17)
+        button.setRightFontSize(12)
+        list_item = QtWidgets.QListWidgetItem()
+        list_item.setSizeHint(button.sizeHint())
+        self.listWidget.addItem(list_item)
+        self.listWidget.setItemWidget(list_item, button)
+        button.clicked.connect(lambda: self._fileItemClicked(list_item))
+        file_path = (
+            name if not self.curr_dir else str(self.curr_dir + "/" + name)
+        ).removeprefix("/")
+        self.request_file_metadata.emit(file_path.removeprefix("/"))
+        self.request_file_info.emit(file_path.removeprefix("/"))
 
     def _add_spacer(self) -> None:
         spacer_item = QtWidgets.QListWidgetItem()
@@ -144,38 +266,27 @@ class FilesPage(QtWidgets.QWidget):
         spacer_item.setSizeHint(spacer_widget.sizeHint())
         self.listWidget.addItem(spacer_item)
 
-    def _add_list_item(self, file_data_item) -> None:
-        button = ListCustomButton()
-        button.setText(str(file_data_item["path"][:-6]))
-        button.setPixmap(
-            QtGui.QPixmap(":/arrow_icons/media/btn_icons/right_arrow.svg")
-        )
-        button.setFixedSize(600, 80)
-        button.setLeftFontSize(17)
-        button.setRightFontSize(12)
-        list_item = QtWidgets.QListWidgetItem()
-        list_item.setSizeHint(button.sizeHint())
-        self.listWidget.addItem(list_item)
-        self.listWidget.setItemWidget(list_item, button)
-        # file_path = str(file_data_item["path"])
-        button.clicked.connect(lambda: self._fileItemClicked(list_item))
-        self.request_file_info.emit(
-            file_data_item["path"]
-        )  # This needs to be the last thing that is done here
-        print(
-            f"Requested file information for file with name {file_data_item['path']}"
-        )
-
     def _add_placeholder(self) -> None:
         self.listWidget.setSpacing(-1)
+        placeholder_label = QtWidgets.QLabel("No Files found")
+        font = QtGui.QFont()
+        font.setPointSize(25)
+        placeholder_label.setFont(font)
+        placeholder_label.setStyleSheet("color: gray;")
+        placeholder_label.setAlignment(
+            QtCore.Qt.AlignmentFlag.AlignHCenter
+            | QtCore.Qt.AlignmentFlag.AlignVCenter
+        )
+        placeholder_label.setMinimumSize(
+            QtCore.QSize(self.listWidget.width(), self.listWidget.height())
+        )
         self.scrollbar.hide()
         placeholder_item = QtWidgets.QListWidgetItem()
         placeholder_item.setSizeHint(
             QtCore.QSize(self.listWidget.width(), self.listWidget.height())
         )
         self.listWidget.addItem(placeholder_item)
-        self.listWidget.setItemWidget(placeholder_item, self.placeholder_label)
-        self.listWidget.blockSignals(False)
+        self.listWidget.setItemWidget(placeholder_item, placeholder_label)
 
     def _handle_scrollbar(self, value):
         # Block signals to avoid recursion
@@ -205,7 +316,6 @@ class FilesPage(QtWidgets.QWidget):
         sizePolicy.setHeightForWidth(self.sizePolicy().hasHeightForWidth())
         self.setSizePolicy(sizePolicy)
         self.setMinimumSize(QtCore.QSize(710, 400))
-        self.setMaximumSize(QtCore.QSize(720, 420))
         font = QtGui.QFont()
         font.setStyleStrategy(QtGui.QFont.StyleStrategy.PreferAntialias)
         self.setFont(font)
@@ -300,16 +410,6 @@ class FilesPage(QtWidgets.QWidget):
         font.setPointSize(25)
         placeholder_item = QtWidgets.QListWidgetItem()
         placeholder_item.setSizeHint(
-            QtCore.QSize(self.listWidget.width(), self.listWidget.height())
-        )
-        self.placeholder_label = QtWidgets.QLabel("No Files found")
-        self.placeholder_label.setFont(font)
-        self.placeholder_label.setStyleSheet("color: gray;")
-        self.placeholder_label.setAlignment(
-            QtCore.Qt.AlignmentFlag.AlignHCenter
-            | QtCore.Qt.AlignmentFlag.AlignVCenter
-        )
-        self.placeholder_label.setMinimumSize(
             QtCore.QSize(self.listWidget.width(), self.listWidget.height())
         )
         self.fp_content_layout.addWidget(self.listWidget)

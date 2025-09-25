@@ -3,9 +3,9 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 
 class ListCustomButton(QtWidgets.QPushButton):
     def __init__(self, parent=None) -> None:
-        if parent: 
+        if parent:
             super(ListCustomButton, self).__init__(parent)
-        else : 
+        else:
             super(ListCustomButton, self).__init__()
         self.icon_pixmap: QtGui.QPixmap = QtGui.QPixmap()
         self.second_icon_pixmap: QtGui.QPixmap = QtGui.QPixmap()
@@ -33,9 +33,8 @@ class ListCustomButton(QtWidgets.QPushButton):
         self.update()
 
     def text(self) -> str:
-        return self._text 
-        # return super().text()
-        
+        return self._text
+
     def setRightText(self, text: str) -> None:
         self._right_text = text
         self.update()
@@ -77,6 +76,9 @@ class ListCustomButton(QtWidgets.QPushButton):
     def paintEvent(self, e: QtGui.QPaintEvent | None) -> None:
         painter = QtGui.QPainter(self)
         painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing, True)
+        painter.setRenderHint(
+            QtGui.QPainter.RenderHint.SmoothPixmapTransform, True
+        )
 
         rect = self.rect()
         radius = rect.height() / 5.0
@@ -100,7 +102,7 @@ class ListCustomButton(QtWidgets.QPushButton):
 
         # Ellipse ("hole") for the icon on the left (only if present)
         left_icon_margin = rect.height() * 0.05
-        left_icon_size = rect.height() * 0.90
+        left_icon_size = rect.height() * 0.50
         left_icon_rect = QtCore.QRectF(
             rect.left() + left_icon_margin,
             rect.top() + left_icon_margin,
@@ -165,11 +167,12 @@ class ListCustomButton(QtWidgets.QPushButton):
             # Center the icon in the rect
             adjusted_x = (
                 left_icon_rect.x()
-                + (left_icon_rect.width() - left_icon_scaled.width()) / 2.0
+                + (left_icon_rect.width() - left_icon_scaled.width()) // 2.0
             )
             adjusted_y = (
-                left_icon_rect.y()
-                + (left_icon_rect.height() - left_icon_scaled.height()) / 2.0
+                # left_icon_rect.y()
+                # + (left_icon_rect.height() - left_icon_scaled.height()) // 2.0
+                +(self.height() - left_icon_rect.height()) // 2.0
             )
             adjusted_left_icon_rect = QtCore.QRectF(
                 adjusted_x,

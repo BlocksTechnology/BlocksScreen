@@ -22,7 +22,7 @@ PYTHON_VERSION=3.11.2
 XSERVER="xinit xinput x11-xserver-utils xserver-xorg-input-evdev xserver-xorg-input-libinput xserver-xorg-legacy xserver-xorg-video-fbdev"
 CAGE="cage seatd xwayland"
 PYOBJECT="pkg-config python3-dev"
-MISC="autoconf python3-venv libdbus-glib-1-dev"
+MISC="autoconf python3-venv libdbus-glib-1-dev udiskie"
 # QTMISC="'^libxcb.*-dev' libx11-xcb-dev libglu1-mesa-dev libxrender-dev libxi-dev libxkbcommon-dev libxkbcommon-x11-dev libxcb-cursor0 opencv-python-headless"
 QTMISC=" ^libxcb.*-dev libx11-xcb-dev libglu1-mesa-dev libxrender-dev libxi-dev libxkbcommon-dev libxkbcommon-x11-dev libxcb-cursor0"
 
@@ -50,7 +50,6 @@ echo_ok ()
 {
     printf "${Green}$1${Normal}\n"
 }
-
 
 function install_graphical_backend(){
     while true; do 
@@ -273,6 +272,7 @@ function create_policy(){
     echo_text "Installing BlocksScreen PolicyKit Rules"
     sudo groupadd -f blocksscreen
     sudo groupadd -f network 
+    sudo usermod -aG plugdev "$USER"
     sudo adduser "$USER" netdev 
     sudo adduser "$USER" network 
 
@@ -321,6 +321,30 @@ polkit.addRule(function(action, subject) {
 EOF
 }
 
+function create_udisks_policy(){
+    RULE_FILE=""
+    if [ -d $POLKIT_USR_DIR ]; then 
+        RULE_FILE="${POLKIT_USR_DIR}/50-udisks2.rules"
+    elif [ -d $POLKIT_DIR ]; then 
+        RULE_FILE="${POLKIT_DIR}/50-udisks2.rules"
+    else 
+        echo_error "PolicyKit rules folder not detected"
+        exit 1
+    fi 
+    echo_text "Installing PolicyKit Rules to ${RULE_FILE}..."
+    sudo rm -r ${RULE_FILE}
+    
+    BS_GID=$( getent group blocksscreen | awk -F: '{printf "%d", $3}' )
+
+    sudo tee ${RULE_FILE} > /dev/null << EOF 
+polkit.addRule(function(action, subject) {
+    if (action.id.startsWith("org.freedesktop.udisks2.") && 
+    subject.isInGroup("blocksscreen") && subject.user == "$USER") {
+        return polkit.Result.YES;
+    }
+});
+EOF
+}
 function create_policy_legacy(){
     RULE_FILE="/etc/polkit-1/localauthority/50-local.d/20-blocksscreen.pkla"
     sudo tee ${RULE_FILE} > /dev/null << EOF 
