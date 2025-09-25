@@ -341,6 +341,9 @@ class Printer(QtCore.QObject):
             name (str, optional): _description_. Defaults to "".
         """
         if "state" in value.keys() and "state_message" in value.keys():
+            self.webhooks_update.emit(
+                value["state"], value["state_message"]
+            )
             _logger.debug("Webhooks message received")
             _state: str = value["state"]
             _state_upper = _state[0].upper()
