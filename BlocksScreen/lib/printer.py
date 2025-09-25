@@ -341,13 +341,16 @@ class Printer(QtCore.QObject):
             name (str, optional): _description_. Defaults to "".
         """
         if "state" in value.keys() and "state_message" in value.keys():
+            self.webhooks_update.emit(
+                value["state"], value["state_message"]
+            )
             _logger.debug("Webhooks message received")
             _state: str = value["state"]
             _state_upper = _state[0].upper()
             _state_call = f"{_state_upper}{_state[1:]}"
-            if hasattr(events, f"Klippy{_state_call}Event"):
-                _logger.error("Events does have the event")
-                _event_callback = getattr(events, f"Klippy{_state_call}Event")
+            if hasattr(events, f"Klippy{_state_call}"):
+                _logger.debug(f"Events has {_state_call} event")
+                _event_callback = getattr(events, f"Klippy{_state_call}")
                 if callable(_event_callback):
                     try:
                         event = _event_callback(

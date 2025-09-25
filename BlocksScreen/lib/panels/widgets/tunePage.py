@@ -8,7 +8,7 @@ from helper_methods import normalize
 
 
 class TuneWidget(QtWidgets.QWidget):
-    request_back_page: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+    request_back: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         name="request_back_page"
     )
 
@@ -43,10 +43,7 @@ class TuneWidget(QtWidgets.QWidget):
         self.setupUI()
         self.sensors_menu_btn.clicked.connect(self.request_sensorsPage.emit)
         self.tune_babystep_menu_btn.clicked.connect(self.request_bbpPage.emit)
-        self.tune_back_btn.clicked.connect(self.request_back_page)
-        self.bed_display.clicked.connect(
-            lambda: print(self.bed_display.text())
-        )
+        self.tune_back_btn.clicked.connect(self.request_back)
         self.bed_display.clicked.connect(
             lambda: self.request_numpad[
                 str, int, "PyQt_PyObject", int, int

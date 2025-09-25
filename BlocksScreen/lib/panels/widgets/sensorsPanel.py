@@ -58,7 +58,6 @@ class SensorsWindow(QtWidgets.QWidget):
     def handle_fil_state_change(
         self, sensor_name: str, parameter: str, value: bool
     ) -> None:
-        print("on handle fil state")
         if sensor_name in self.sensor_list:
             state = SensorWidget.FilamentState(value)
             _split = sensor_name.split(" ")

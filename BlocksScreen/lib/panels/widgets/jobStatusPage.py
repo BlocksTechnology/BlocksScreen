@@ -95,6 +95,7 @@ class JobStatusWidget(QtWidgets.QWidget):
 
         return super().eventFilter(source, event)
 
+    @QtCore.pyqtSlot(name="show-thumbnail")
     def showthumbnail(self):
         self.contentWidget.hide()
         self.progressWidget.hide()
@@ -103,6 +104,7 @@ class JobStatusWidget(QtWidgets.QWidget):
         self.smallthumb_widget.hide()
         self.bigthumb_widget.show()
 
+    @QtCore.pyqtSlot(name="hide-thumbnail")
     def hidethumbnail(self):
         self.contentWidget.show()
         self.progressWidget.show()
@@ -111,6 +113,7 @@ class JobStatusWidget(QtWidgets.QWidget):
         self.smallthumb_widget.show()
         self.bigthumb_widget.hide()
 
+    @QtCore.pyqtSlot(name="handle-cancel")
     def handleCancel(self) -> None:
         """Handle the cancel print job dialog"""
         self.canceldialog.set_message(
@@ -127,15 +130,15 @@ class JobStatusWidget(QtWidgets.QWidget):
             pass
 
     @QtCore.pyqtSlot(str, list, name="on_print_start")
-    def on_print_start(self, file: str, thumbnail: list) -> None:
+    def on_print_start(self, file: str, thumbnails: list) -> None:
         """Start a print job, show job status page"""
         self._current_file_name = file
         self.js_file_name_label.setText(self._current_file_name)
         self.layer_display_button.setText("?")
         self.print_time_display_button.setText("?")
-        print(thumbnail)
-        self.smalthumbnail = thumbnail[1]
-        self.bigthumbnail = thumbnail[1]
+        if thumbnails:
+            self.smalthumbnail = thumbnails[1]
+            self.bigthumbnail = thumbnails[1]
 
         self.printing_progress_bar.reset()
         self._internal_print_status = "printing"
@@ -156,21 +159,24 @@ class JobStatusWidget(QtWidgets.QWidget):
                     "QApplication.instance expected non None value"
                 )
         except Exception as e:
-            logging.info(
+            logging.debug(
                 f"Unexpected error while posting print job start event: {e}"
             )
 
     @QtCore.pyqtSlot(dict, name="on_fileinfo")
     def on_fileinfo(self, fileinfo: dict) -> None:
+        if not self.isVisible():
+            return
         self.total_layers = str(fileinfo.get("layer_count", "?"))
         self.layer_display_button.setText("?")
         if (
-            fileinfo["thumbnail_images"] is not None
-            and len(fileinfo["thumbnail_images"]) > 0
+            fileinfo.get("thumbnail_images", [])
+            and len(fileinfo.get("thumbnail_images", [])) > 0
         ):
-            # Assign the first thumbnail to both by default
             self.smalthumbnail = fileinfo["thumbnail_images"][1]
-            self.bigthumbnail = fileinfo["thumbnail_images"][2]
+            self.bigthumbnail = fileinfo["thumbnail_images"][
+                -1
+            ]  # Last 'biggest' element
 
         self.layer_display_button.secondary_text = str(self.total_layers)
         self.file_metadata = fileinfo
@@ -206,9 +212,7 @@ class JobStatusWidget(QtWidgets.QWidget):
             field (str): The name of the updated field.
             value (dict | float | str): The value for the field.
         """
-
         if isinstance(value, str):
-            print(f"Print status update received: {field} -> {value}")
             if "filename" in field:
                 self._current_file_name = value
                 if self.js_file_name_label.text().lower() != value.lower():
@@ -221,14 +225,36 @@ class JobStatusWidget(QtWidgets.QWidget):
                     )
                     self.show_request.emit()
                     value = "start"  # This is for event compatibility
-
                 elif value in ("cancelled", "complete", "error", "standby"):
                     self._current_file_name = ""
                     self._internal_print_status = ""
                     self.total_layers = "?"
                     self.file_metadata.clear()
                     self.hide_request.emit()
-                    return
+
+                    _print_state_upper = value[0].upper()
+                    _print_state_call = f"{_print_state_upper}{value[1:]}"
+                    if hasattr(events, f"Print{_print_state_call}"):
+                        logging.debug(f"Events has {_print_state_call} event")
+                        _event_callback: QtCore.QEvent = getattr(
+                            events, f"Print{_print_state_call}"
+                        )
+                        if callable(_event_callback):
+                            logging.debug("event is callable")
+                            try:
+                                instance = QtWidgets.QApplication.instance()
+                                if instance:
+                                    instance.postEvent(
+                                        self.window(), _event_callback
+                                    )
+                                else:
+                                    raise TypeError(
+                                        "QApplication.instance expected non None value"
+                                    )
+                            except Exception as e:
+                                logging.info(
+                                    f"Unexpected error while posting print job start event: {e}"
+                                )
 
                 if hasattr(events, str("Print" + value.capitalize())):
                     event_obj = getattr(
@@ -519,9 +545,7 @@ class JobStatusWidget(QtWidgets.QWidget):
         self.job_status_header_layout.addWidget(self.js_file_name_icon)
         self.job_status_header_layout.addWidget(self.js_file_name_label)
 
-
         # -----------------------------buttons
-
 
         font.setPointSize(18)
 

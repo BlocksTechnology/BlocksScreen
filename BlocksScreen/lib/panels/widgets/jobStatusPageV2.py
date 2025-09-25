@@ -57,7 +57,6 @@ class JobStatusWidget(QtWidgets.QWidget):
         self.pause_printing_btn.clicked.connect(self.pause_resume_print)
         self.stop_printing_btn.clicked.connect(self.handleCancel)
 
-        print("PROGRESSBARRECT", self.printing_progress_bar.rect())
 
     def handleCancel(self) -> None:
         """Handle the cancel print job dialog"""
@@ -70,13 +69,9 @@ class JobStatusWidget(QtWidgets.QWidget):
     def on_dialog_button_clicked(self, button_name: str) -> None:
         """Handle dialog button clicks"""
         if button_name == "Confirm":
-            print(
-                "Confirm button clicked MY GD HELPO ME IDK WHAT AM I DOING I MISS MY WIFI OH GOD HE IS HERE M-MY , NOOOOOOOOOOooOooOO..."
-            )
             self.print_cancel.emit()  # Emit the print_cancel signal
         elif button_name == "Cancel":
-            print("Cancel button clicked")
-
+            ...
     @QtCore.pyqtSlot(str, name="on_print_start")
     def on_print_start(self, file: str) -> None:
         """Start a print job, show job status page"""
@@ -97,7 +92,6 @@ class JobStatusWidget(QtWidgets.QWidget):
         try:
             instance = QtWidgets.QApplication.instance()
             if instance:
-                print(self.window().objectName())
                 instance.postEvent(self.window(), print_start_event)
             else:
                 raise TypeError(
