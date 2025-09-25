@@ -392,7 +392,6 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.printer_state_signal.emit("canceled")
 
         elif "printer.objects" in _method:
-            print(f"Printer object message received: {_method}")
             if "list" in _method:
                 _object_list: list = _data["objects"]
                 self.query_object_list[list].emit(_object_list)
