@@ -10,13 +10,18 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 
 
 class Files(QtCore.QObject):
-    request_file_list = QtCore.pyqtSignal(name="get_files_list")
-    request_directory_info = QtCore.pyqtSignal(str, name="get-dir-information")
+    request_file_list = QtCore.pyqtSignal([], [str], name="api-get-files-list")
+    request_dir_info = QtCore.pyqtSignal(
+        [], [str], [str, bool], name="api-get-dir-info"
+    )
     request_file_metadata = QtCore.pyqtSignal([str], name="get_file_metadata")
     request_files_thumbnails = QtCore.pyqtSignal(
         [str], name="request_files_thumbnail"
     )
     request_file_download = QtCore.pyqtSignal([str, str], name="file_download")
+    on_dirs: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        list, name="on-dirs"
+    )
     on_file_list: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         list, name="on_file_list"
     )
@@ -34,15 +39,23 @@ class Files(QtCore.QObject):
         self.ws = ws
         self.gcode_path = os.path.expanduser("~/printer_data/gcodes")
         self.files: list = []
+        self.directories: list = []
         self.files_metadata: dict = {}
         self.request_file_list.connect(slot=self.ws.api.get_file_list)
+        self.request_file_list[str].connect(slot=self.ws.api.get_file_list)
+        self.request_dir_info.connect(slot=self.ws.api.get_dir_information)
+        self.request_dir_info[str, bool].connect(
+            self.ws.api.get_dir_information
+        )
+        self.request_dir_info[str].connect(
+            slot=self.ws.api.get_dir_information
+        )
         self.request_file_metadata.connect(slot=self.ws.api.get_gcode_metadata)
-        self.request_directory_info.connect(slot=self.ws.api.get_dir_information)
         self.request_files_thumbnails.connect(
             slot=self.ws.api.get_gcode_thumbnail
         )
         self.request_file_download.connect(slot=self.ws.api.download_file)
-        QtWidgets.QApplication.instance().installEventFilter(self)
+        QtWidgets.QApplication.instance().installEventFilter(self)  # type: ignore
 
     @property
     def file_list(self):
@@ -50,27 +63,38 @@ class Files(QtCore.QObject):
 
     def handle_message_received(self, method: str, data, params: dict) -> None:
         if "server.files.list" in method:
+            # Get all files in root and its subdirectories and
+            # request their metadata
             self.files.clear()
             self.files = data
             [
                 self.request_file_metadata.emit(item["path"])
                 for item in self.files
             ]
-            self.on_file_list.emit(self.files)
         elif "server.files.metadata" in method:
             if data["filename"] in self.files_metadata.keys():
+                if not data.get("filename", None):
+                    return
                 self.files_metadata.update({data["filename"]: data})
             else:
                 self.files_metadata[data["filename"]] = data
+        elif "server.files.get_directory" in method:
+            # Emit here the files for each directory so the
+            # ui can build the files list
+            self.directories = data.get("dirs", {})
+            self.files.clear()
+            self.files = data.get("files", [])
+            self.on_file_list[list].emit(self.files)
+            self.on_dirs[list].emit(self.directories)
 
     @QtCore.pyqtSlot(str, name="on_request_fileinfo")
     def on_request_fileinfo(self, filename: str) -> None:
-        if not self.files_metadata or not filename:
-            return
+        # if not filename:
+        #     return
         _data: dict = {
             "thumbnail_images": list,
             "filament_total": dict,
-            "estimated_time": int ,
+            "estimated_time": int,
             "layer_count": int,
             "object_height": float,
             "size": int,
@@ -84,11 +108,10 @@ class Files(QtCore.QObject):
             "filament_name": str,
             "nozzle_diameter": float,
             "slicer": str,
-            "filename": str
+            "filename": str,
         }
-        _file_metadata = self.files_metadata.get(str(filename))
-        if not _file_metadata:
-            return
+        _file_metadata = self.files_metadata.get(str(filename), {})
+        _data.update({"filename": filename})
         _thumbnails = _file_metadata.get("thumbnails", {})
         _thumbnail_paths = list(
             map(
@@ -103,8 +126,7 @@ class Files(QtCore.QObject):
             map(lambda path: QtGui.QImage(path), _thumbnail_paths)
         )
         _data.update({"thumbnail_images": _thumbnail_images})
-        
-        _data.update({'filename': _file_metadata.get("filename", "?")})
+
         _data.update(
             {"filament_total": _file_metadata.get("filament_total", "?")}
         )
@@ -168,7 +190,11 @@ class Files(QtCore.QObject):
             self.files.clear()
             return False
         elif a1.type() == events.KlippyReady.type():
+            # Request all files including in subdirectories
+            # in order to get all metadata
             self.request_file_list.emit()
+            # List and directory build is depended only on this signal
+            self.request_dir_info[str, bool].emit("", False)
             return False
         return super().eventFilter(a0, a1)
 

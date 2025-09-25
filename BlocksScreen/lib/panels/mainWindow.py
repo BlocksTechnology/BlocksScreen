@@ -126,9 +126,14 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui.filament_type_icon.update()
         self.ui.nozzle_size_icon.setText("0.4mm")
         self.ui.nozzle_size_icon.update()
-        self.ws.connected_signal.connect(
-            slot=self.file_data.request_file_list.emit
-        )
+        
+        # self.ws.connected_signal.connect(
+        #     slot=self.file_data.request_file_list.emit
+        # )
+        # self.ws.connected_signal.connect(
+        #     slot=self.file_data.request_dir_info.emit
+        # )
+        
         self.conn_window.retry_connection_clicked.connect(
             slot=self.ws.retry_wb_conn
         )
@@ -484,6 +489,9 @@ class MainWindow(QtWidgets.QMainWindow):
 
         elif "error" in _method:
             self.handle_error_response[list].emit([_data, _metadata])
+            if "metadata" in _data.get("message", "").lower():
+                # Quick fix, don't care about no metadata errors
+                return
             self.popup.new_message(
                 message_type=Popup.MessageType.ERROR,
                 message=str(_data),

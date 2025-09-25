@@ -99,12 +99,25 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.filesPage_widget.request_file_info.connect(
             self.file_data.on_request_fileinfo
         )
-        self.file_data.fileinfo.connect(self.filesPage_widget._on_fileinfo)
-        self.filesPage_widget.request_file_list_refresh.connect(
+        self.filesPage_widget.request_file_metadata.connect(
+            self.file_data.request_file_metadata
+        )
+        self.file_data.fileinfo.connect(self.filesPage_widget.on_fileinfo)
+
+        self.filesPage_widget.request_file_list[str].connect(
             self.file_data.request_file_list
         )
-        self.file_data.on_file_list.connect(self.filesPage_widget._on_file_list)
-
+        self.filesPage_widget.request_file_list.connect(
+            self.file_data.request_file_list
+        )
+        self.file_data.on_dirs.connect(self.filesPage_widget.on_directories)
+        self.filesPage_widget.request_dir_info[str].connect(
+            self.file_data.request_dir_info[str]
+        )
+        self.filesPage_widget.request_dir_info.connect(
+            self.file_data.request_dir_info
+        )
+        self.file_data.on_file_list.connect(self.filesPage_widget.on_file_list)
         self.jobStatusPage_widget = JobStatusWidget(self)
         self.addWidget(self.jobStatusPage_widget)
 
@@ -417,11 +430,8 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.main_text_label.setObjectName("main_text_label")
         self.addWidget(self.print_page)
 
-        
         _translate = QtCore.QCoreApplication.translate
-        self.setWindowTitle(
-            _translate("printStackedWidget", "StackedWidget")
-        )
+        self.setWindowTitle(_translate("printStackedWidget", "StackedWidget"))
         self.main_print_btn.setText(_translate("printStackedWidget", "Print"))
         self.main_print_btn.setProperty(
             "class", _translate("printStackedWidget", "menu_btn")
@@ -429,4 +439,3 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.main_text_label.setText(
             _translate("printStackedWidget", "Printer ready")
         )
-        
