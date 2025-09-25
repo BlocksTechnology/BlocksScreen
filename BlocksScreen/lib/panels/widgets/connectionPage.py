@@ -3,18 +3,20 @@ import logging
 from events import KlippyDisconnected, KlippyReady, KlippyShutdown
 from lib.moonrakerComm import MoonWebSocket
 from lib.ui.connectionWindow_ui import Ui_ConnectivityForm
-
-
 from PyQt6 import QtCore, QtWidgets, QtGui
 
 
 class ConnectionPage(QtWidgets.QFrame):
     text_updated = QtCore.pyqtSignal(int, name="connection_text_updated")
-    retry_connection_clicked = QtCore.pyqtSignal(name="retry_connection_clicked")
+    retry_connection_clicked = QtCore.pyqtSignal(
+        name="retry_connection_clicked"
+    )
     wifi_button_clicked = QtCore.pyqtSignal(name="call_network_page")
     reboot_clicked = QtCore.pyqtSignal(name="reboot_clicked")
     restart_klipper_clicked = QtCore.pyqtSignal(name="restart_klipper_clicked")
-    firmware_restart_clicked = QtCore.pyqtSignal(name="firmware_restart_clicked")
+    firmware_restart_clicked = QtCore.pyqtSignal(
+        name="firmware_restart_clicked"
+    )
 
     def __init__(self, parent: QtWidgets.QWidget, ws: MoonWebSocket, /):
         super().__init__(parent)
@@ -30,8 +32,6 @@ class ConnectionPage(QtWidgets.QFrame):
         self.dot_timer = QtCore.QTimer(self)
         self.dot_timer.setInterval(1000)
         self.dot_timer.timeout.connect(self.add_dot)
-
-
 
         self.installEventFilter(self.parent())
 
@@ -131,37 +131,38 @@ class ConnectionPage(QtWidgets.QFrame):
                     "Unable to Connect to Moonraker.\n\nTry again"
                 )
                 return False
-            
+
             if text == 1:
                 if self.dot_timer.isActive():
                     self.dot_timer.stop()
                     return
                 self.dot_timer.start()
-            
-            self.text2 = (f"Attempting to reconnect to Moonraker.\n\nConnection try number: {text}")
+
+            self.text2 = f"Attempting to reconnect to Moonraker.\n\nConnection try number: {text}"
 
         return False
 
     def add_dot(self):
-        if self.state == "shutdown"and self.message is not None:
+        if self.state == "shutdown" and self.message is not None:
             self.dot_timer.stop()
             return False
 
         if self.dot_count > 2:
             self.dot_count = 1
         else:
-            self.dot_count += 1          
+            self.dot_count += 1
         dots = "." * self.dot_count + " " * (3 - self.dot_count)
         self.panel.connectionTextBox.setText(f"{self.text2}{dots}")
-
 
     @QtCore.pyqtSlot(str, str, name="webhooks_update")
     def webhook_update(self, state: str, message: str):
         self.state = state
         self.message = message
         self.text_update()
-      
-    def eventFilter(self, object: QtCore.QObject, event: QtCore.QEvent) -> bool:
+
+    def eventFilter(
+        self, object: QtCore.QObject, event: QtCore.QEvent
+    ) -> bool:
         if event.type() == KlippyDisconnected.type():
             if not self.isVisible():
                 self.panel.connectionTextBox.setText("Klippy Disconnected")
