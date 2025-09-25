@@ -12,156 +12,139 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 class Ui_filamentStackedWidget(object):
     def setupUi(self, filamentStackedWidget):
         filamentStackedWidget.setObjectName("filamentStackedWidget")
-        filamentStackedWidget.resize(710, 410)
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-        )
+        filamentStackedWidget.resize(710, 411)
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.MinimumExpanding, QtWidgets.QSizePolicy.Policy.MinimumExpanding)
         sizePolicy.setHorizontalStretch(1)
         sizePolicy.setVerticalStretch(1)
-        sizePolicy.setHeightForWidth(
-            filamentStackedWidget.sizePolicy().hasHeightForWidth()
-        )
+        sizePolicy.setHeightForWidth(filamentStackedWidget.sizePolicy().hasHeightForWidth())
         filamentStackedWidget.setSizePolicy(sizePolicy)
         filamentStackedWidget.setMinimumSize(QtCore.QSize(710, 410))
         filamentStackedWidget.setMaximumSize(QtCore.QSize(720, 420))
-        filamentStackedWidget.setLayoutDirection(
-            QtCore.Qt.LayoutDirection.LeftToRight
-        )
+        filamentStackedWidget.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
         self.filament_control_page = QtWidgets.QWidget()
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-        )
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.MinimumExpanding, QtWidgets.QSizePolicy.Policy.MinimumExpanding)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(
-            self.filament_control_page.sizePolicy().hasHeightForWidth()
-        )
+        sizePolicy.setHeightForWidth(self.filament_control_page.sizePolicy().hasHeightForWidth())
         self.filament_control_page.setSizePolicy(sizePolicy)
         self.filament_control_page.setMinimumSize(QtCore.QSize(710, 400))
         self.filament_control_page.setMaximumSize(QtCore.QSize(720, 420))
         self.filament_control_page.setObjectName("filament_control_page")
-        self.horizontalLayoutWidget = QtWidgets.QWidget(
-            parent=self.filament_control_page
-        )
-        self.horizontalLayoutWidget.setGeometry(QtCore.QRect(9, 9, 691, 71))
-        self.horizontalLayoutWidget.setObjectName("horizontalLayoutWidget")
-        self.filament_page_header_layout = QtWidgets.QHBoxLayout(
-            self.horizontalLayoutWidget
-        )
-        self.filament_page_header_layout.setContentsMargins(0, 0, 0, 0)
-        self.filament_page_header_layout.setObjectName(
-            "filament_page_header_layout"
-        )
-        self.filament_page_header_title = QtWidgets.QLabel(
-            parent=self.horizontalLayoutWidget
-        )
-        font = QtGui.QFont()
-        font.setFamily("Momcake")
-        font.setPointSize(24)
-        self.filament_page_header_title.setFont(font)
-        self.filament_page_header_title.setLayoutDirection(
-            QtCore.Qt.LayoutDirection.RightToLeft
-        )
-        self.filament_page_header_title.setStyleSheet(
-            "background: transparent; color: white;"
-        )
-        self.filament_page_header_title.setAlignment(
-            QtCore.Qt.AlignmentFlag.AlignCenter
-        )
-        self.filament_page_header_title.setObjectName(
-            "filament_page_header_title"
-        )
-        self.filament_page_header_layout.addWidget(
-            self.filament_page_header_title,
-            0,
-            QtCore.Qt.AlignmentFlag.AlignHCenter
-            | QtCore.Qt.AlignmentFlag.AlignVCenter,
-        )
-        self.verticalLayoutWidget = QtWidgets.QWidget(
-            parent=self.filament_control_page
-        )
-        self.verticalLayoutWidget.setGeometry(QtCore.QRect(10, 90, 691, 297))
-        self.verticalLayoutWidget.setObjectName("verticalLayoutWidget")
-        self.filament_page_content_layout = QtWidgets.QVBoxLayout(
-            self.verticalLayoutWidget
-        )
-        self.filament_page_content_layout.setContentsMargins(0, 0, 0, 0)
-        self.filament_page_content_layout.setObjectName(
-            "filament_page_content_layout"
-        )
-        self.filament_page_information = QtWidgets.QHBoxLayout()
-        self.filament_page_information.setContentsMargins(50, 0, 20, 20)
-        self.filament_page_information.setSpacing(0)
-        self.filament_page_information.setObjectName(
-            "filament_page_information"
-        )
-        self.filament_page_info_title = QtWidgets.QLabel(
-            parent=self.verticalLayoutWidget
-        )
-        self.filament_page_info_title.setMinimumSize(QtCore.QSize(210, 60))
-        self.filament_page_info_title.setMaximumSize(QtCore.QSize(220, 60))
-        font = QtGui.QFont()
-        font.setPointSize(14)
-        self.filament_page_info_title.setFont(font)
-        self.filament_page_info_title.setStyleSheet(
-            "background: transparent; color: white;"
-        )
-        self.filament_page_info_title.setObjectName("filament_page_info_title")
-        self.filament_page_information.addWidget(
-            self.filament_page_info_title,
-            0,
-            QtCore.Qt.AlignmentFlag.AlignLeft
-            | QtCore.Qt.AlignmentFlag.AlignVCenter,
-        )
-        self.filament_page_info_content = QtWidgets.QLabel(
-            parent=self.verticalLayoutWidget
-        )
-        self.filament_page_info_content.setMinimumSize(QtCore.QSize(250, 60))
-        self.filament_page_info_content.setMaximumSize(QtCore.QSize(300, 60))
-        font = QtGui.QFont()
-        font.setPointSize(14)
-        self.filament_page_info_content.setFont(font)
-        self.filament_page_info_content.setStyleSheet(
-            "background: transparent; color: white;"
-        )
-        self.filament_page_info_content.setAlignment(
-            QtCore.Qt.AlignmentFlag.AlignLeading
-            | QtCore.Qt.AlignmentFlag.AlignLeft
-            | QtCore.Qt.AlignmentFlag.AlignVCenter
-        )
-        self.filament_page_info_content.setTextInteractionFlags(
-            QtCore.Qt.TextInteractionFlag.NoTextInteraction
-        )
-        self.filament_page_info_content.setObjectName(
-            "filament_page_info_content"
-        )
-        self.filament_page_information.addWidget(
-            self.filament_page_info_content,
-            0,
-            QtCore.Qt.AlignmentFlag.AlignLeft
-            | QtCore.Qt.AlignmentFlag.AlignVCenter,
-        )
-        self.filament_page_content_layout.addLayout(
-            self.filament_page_information
-        )
-        self.filament_page_button_group = QtWidgets.QHBoxLayout()
-        self.filament_page_button_group.setObjectName(
-            "filament_page_button_group"
-        )
-        self.filament_page_load_btn = BlocksCustomButton(
-            parent=self.verticalLayoutWidget
-        )
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-        )
+        self.verticalLayout = QtWidgets.QVBoxLayout(self.filament_control_page)
+        self.verticalLayout.setObjectName("verticalLayout")
+        self.filament_page_header_layout = QtWidgets.QHBoxLayout()
+        self.filament_page_header_layout.setObjectName("filament_page_header_layout")
+        self.filament_page_header_title = QtWidgets.QLabel(parent=self.filament_control_page)
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Minimum)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(
-            self.filament_page_load_btn.sizePolicy().hasHeightForWidth()
-        )
+        sizePolicy.setHeightForWidth(self.filament_page_header_title.sizePolicy().hasHeightForWidth())
+        self.filament_page_header_title.setSizePolicy(sizePolicy)
+        self.filament_page_header_title.setMinimumSize(QtCore.QSize(0, 60))
+        self.filament_page_header_title.setMaximumSize(QtCore.QSize(16777215, 60))
+        font = QtGui.QFont()
+        font.setFamily("Momcake")
+        font.setPointSize(20)
+        self.filament_page_header_title.setFont(font)
+        self.filament_page_header_title.setLayoutDirection(QtCore.Qt.LayoutDirection.RightToLeft)
+        self.filament_page_header_title.setStyleSheet("background: transparent; color: white;")
+        self.filament_page_header_title.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.filament_page_header_title.setObjectName("filament_page_header_title")
+        self.filament_page_header_layout.addWidget(self.filament_page_header_title, 0, QtCore.Qt.AlignmentFlag.AlignHCenter|QtCore.Qt.AlignmentFlag.AlignVCenter)
+        self.verticalLayout.addLayout(self.filament_page_header_layout)
+        spacerItem = QtWidgets.QSpacerItem(20, 40, QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Expanding)
+        self.verticalLayout.addItem(spacerItem)
+        self.verticalLayout_4 = QtWidgets.QVBoxLayout()
+        self.verticalLayout_4.setObjectName("verticalLayout_4")
+        self.verticalLayout_3 = QtWidgets.QVBoxLayout()
+        self.verticalLayout_3.setObjectName("verticalLayout_3")
+        self.frame_8 = BlocksCustomFrame(parent=self.filament_control_page)
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Expanding)
+        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setVerticalStretch(0)
+        sizePolicy.setHeightForWidth(self.frame_8.sizePolicy().hasHeightForWidth())
+        self.frame_8.setSizePolicy(sizePolicy)
+        self.frame_8.setMinimumSize(QtCore.QSize(600, 80))
+        self.frame_8.setMaximumSize(QtCore.QSize(600, 80))
+        self.frame_8.setFrameShape(QtWidgets.QFrame.Shape.StyledPanel)
+        self.frame_8.setFrameShadow(QtWidgets.QFrame.Shadow.Raised)
+        self.frame_8.setObjectName("frame_8")
+        self.filament_page_info_content_6 = QtWidgets.QLabel(parent=self.frame_8)
+        self.filament_page_info_content_6.setGeometry(QtCore.QRect(20, 20, 201, 41))
+        self.filament_page_info_content_6.setMinimumSize(QtCore.QSize(0, 0))
+        self.filament_page_info_content_6.setMaximumSize(QtCore.QSize(280, 60))
+        font = QtGui.QFont()
+        font.setPointSize(15)
+        self.filament_page_info_content_6.setFont(font)
+        self.filament_page_info_content_6.setStyleSheet("background: transparent; color:white ;")
+        self.filament_page_info_content_6.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.filament_page_info_content_6.setTextInteractionFlags(QtCore.Qt.TextInteractionFlag.NoTextInteraction)
+        self.filament_page_info_content_6.setObjectName("filament_page_info_content_6")
+        self.label = QtWidgets.QLabel(parent=self.frame_8)
+        self.label.setGeometry(QtCore.QRect(260, 10, 321, 60))
+        self.label.setMinimumSize(QtCore.QSize(0, 60))
+        self.label.setMaximumSize(QtCore.QSize(16777215, 60))
+        font = QtGui.QFont()
+        font.setPointSize(13)
+        self.label.setFont(font)
+        self.label.setStyleSheet("color:white")
+        self.label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.label.setObjectName("label")
+        self.line = QtWidgets.QFrame(parent=self.frame_8)
+        self.line.setGeometry(QtCore.QRect(240, 10, 3, 61))
+        self.line.setStyleSheet("color:white")
+        self.line.setFrameShape(QtWidgets.QFrame.Shape.VLine)
+        self.line.setFrameShadow(QtWidgets.QFrame.Shadow.Sunken)
+        self.line.setObjectName("line")
+        self.verticalLayout_3.addWidget(self.frame_8, 0, QtCore.Qt.AlignmentFlag.AlignHCenter)
+        spacerItem1 = QtWidgets.QSpacerItem(20, 40, QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Expanding)
+        self.verticalLayout_3.addItem(spacerItem1)
+        self.frame_7 = BlocksCustomFrame(parent=self.filament_control_page)
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Expanding)
+        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setVerticalStretch(0)
+        sizePolicy.setHeightForWidth(self.frame_7.sizePolicy().hasHeightForWidth())
+        self.frame_7.setSizePolicy(sizePolicy)
+        self.frame_7.setMinimumSize(QtCore.QSize(600, 80))
+        self.frame_7.setMaximumSize(QtCore.QSize(600, 80))
+        self.frame_7.setFrameShape(QtWidgets.QFrame.Shape.StyledPanel)
+        self.frame_7.setFrameShadow(QtWidgets.QFrame.Shadow.Raised)
+        self.frame_7.setObjectName("frame_7")
+        self.filament_page_info_title_6 = QtWidgets.QLabel(parent=self.frame_7)
+        self.filament_page_info_title_6.setGeometry(QtCore.QRect(10, 20, 231, 41))
+        self.filament_page_info_title_6.setMinimumSize(QtCore.QSize(0, 0))
+        self.filament_page_info_title_6.setMaximumSize(QtCore.QSize(280, 60))
+        font = QtGui.QFont()
+        font.setPointSize(15)
+        self.filament_page_info_title_6.setFont(font)
+        self.filament_page_info_title_6.setStyleSheet("background: transparent; color: white;")
+        self.filament_page_info_title_6.setObjectName("filament_page_info_title_6")
+        self.label_2 = QtWidgets.QLabel(parent=self.frame_7)
+        self.label_2.setGeometry(QtCore.QRect(260, 10, 321, 60))
+        self.label_2.setMinimumSize(QtCore.QSize(0, 60))
+        self.label_2.setMaximumSize(QtCore.QSize(16777215, 60))
+        font = QtGui.QFont()
+        font.setPointSize(13)
+        self.label_2.setFont(font)
+        self.label_2.setStyleSheet("color:white")
+        self.label_2.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.label_2.setObjectName("label_2")
+        self.line_2 = QtWidgets.QFrame(parent=self.frame_7)
+        self.line_2.setGeometry(QtCore.QRect(240, 10, 3, 61))
+        self.line_2.setStyleSheet("color:white")
+        self.line_2.setFrameShape(QtWidgets.QFrame.Shape.VLine)
+        self.line_2.setFrameShadow(QtWidgets.QFrame.Shadow.Sunken)
+        self.line_2.setObjectName("line_2")
+        self.verticalLayout_3.addWidget(self.frame_7, 0, QtCore.Qt.AlignmentFlag.AlignHCenter)
+        spacerItem2 = QtWidgets.QSpacerItem(20, 40, QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Expanding)
+        self.verticalLayout_3.addItem(spacerItem2)
+        self.horizontalLayout = QtWidgets.QHBoxLayout()
+        self.horizontalLayout.setObjectName("horizontalLayout")
+        self.filament_page_load_btn = BlocksCustomButton(parent=self.filament_control_page)
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Minimum)
+        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setVerticalStretch(0)
+        sizePolicy.setHeightForWidth(self.filament_page_load_btn.sizePolicy().hasHeightForWidth())
         self.filament_page_load_btn.setSizePolicy(sizePolicy)
         self.filament_page_load_btn.setMinimumSize(QtCore.QSize(250, 80))
         self.filament_page_load_btn.setMaximumSize(QtCore.QSize(250, 80))
@@ -173,35 +156,19 @@ class Ui_filamentStackedWidget(object):
         self.filament_page_load_btn.setFont(font)
         self.filament_page_load_btn.setMouseTracking(False)
         self.filament_page_load_btn.setTabletTracking(True)
-        self.filament_page_load_btn.setContextMenuPolicy(
-            QtCore.Qt.ContextMenuPolicy.NoContextMenu
-        )
-        self.filament_page_load_btn.setLayoutDirection(
-            QtCore.Qt.LayoutDirection.LeftToRight
-        )
+        self.filament_page_load_btn.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.NoContextMenu)
+        self.filament_page_load_btn.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
         self.filament_page_load_btn.setStyleSheet("")
         self.filament_page_load_btn.setAutoDefault(False)
         self.filament_page_load_btn.setFlat(True)
-        self.filament_page_load_btn.setProperty(
-            "icon_pixmap",
-            QtGui.QPixmap(
-                ":/filament_related/media/btn_icons/load_filament.svg"
-            ),
-        )
+        self.filament_page_load_btn.setProperty("icon_pixmap", QtGui.QPixmap(":/filament_related/media/btn_icons/load_filament.svg"))
         self.filament_page_load_btn.setObjectName("filament_page_load_btn")
-        self.filament_page_button_group.addWidget(self.filament_page_load_btn)
-        self.filament_page_unload_btn = BlocksCustomButton(
-            parent=self.verticalLayoutWidget
-        )
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-        )
+        self.horizontalLayout.addWidget(self.filament_page_load_btn)
+        self.filament_page_unload_btn = BlocksCustomButton(parent=self.filament_control_page)
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Minimum)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(
-            self.filament_page_unload_btn.sizePolicy().hasHeightForWidth()
-        )
+        sizePolicy.setHeightForWidth(self.filament_page_unload_btn.sizePolicy().hasHeightForWidth())
         self.filament_page_unload_btn.setSizePolicy(sizePolicy)
         self.filament_page_unload_btn.setMinimumSize(QtCore.QSize(250, 80))
         self.filament_page_unload_btn.setMaximumSize(QtCore.QSize(250, 80))
@@ -213,85 +180,53 @@ class Ui_filamentStackedWidget(object):
         self.filament_page_unload_btn.setFont(font)
         self.filament_page_unload_btn.setMouseTracking(False)
         self.filament_page_unload_btn.setTabletTracking(True)
-        self.filament_page_unload_btn.setContextMenuPolicy(
-            QtCore.Qt.ContextMenuPolicy.NoContextMenu
-        )
-        self.filament_page_unload_btn.setLayoutDirection(
-            QtCore.Qt.LayoutDirection.LeftToRight
-        )
+        self.filament_page_unload_btn.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.NoContextMenu)
+        self.filament_page_unload_btn.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
         self.filament_page_unload_btn.setStyleSheet("")
         self.filament_page_unload_btn.setAutoDefault(False)
         self.filament_page_unload_btn.setFlat(True)
-        self.filament_page_unload_btn.setProperty(
-            "icon_pixmap",
-            QtGui.QPixmap(
-                ":/filament_related/media/btn_icons/unload_filament.svg"
-            ),
-        )
+        self.filament_page_unload_btn.setProperty("icon_pixmap", QtGui.QPixmap(":/filament_related/media/btn_icons/unload_filament.svg"))
         self.filament_page_unload_btn.setObjectName("filament_page_unload_btn")
-        self.filament_page_button_group.addWidget(
-            self.filament_page_unload_btn
-        )
-        self.filament_page_content_layout.addLayout(
-            self.filament_page_button_group
-        )
-        self.filament_page_content_layout.setStretch(1, 1)
+        self.horizontalLayout.addWidget(self.filament_page_unload_btn)
+        self.verticalLayout_3.addLayout(self.horizontalLayout)
+        self.verticalLayout_4.addLayout(self.verticalLayout_3)
+        self.verticalLayout.addLayout(self.verticalLayout_4)
+        spacerItem3 = QtWidgets.QSpacerItem(20, 40, QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Expanding)
+        self.verticalLayout.addItem(spacerItem3)
         filamentStackedWidget.addWidget(self.filament_control_page)
         self.load_page = QtWidgets.QWidget()
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-        )
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.MinimumExpanding, QtWidgets.QSizePolicy.Policy.MinimumExpanding)
         sizePolicy.setHorizontalStretch(1)
         sizePolicy.setVerticalStretch(1)
-        sizePolicy.setHeightForWidth(
-            self.load_page.sizePolicy().hasHeightForWidth()
-        )
+        sizePolicy.setHeightForWidth(self.load_page.sizePolicy().hasHeightForWidth())
         self.load_page.setSizePolicy(sizePolicy)
         self.load_page.setMinimumSize(QtCore.QSize(710, 400))
         self.load_page.setMaximumSize(QtCore.QSize(720, 420))
         self.load_page.setSizeIncrement(QtCore.QSize(1, 1))
         self.load_page.setObjectName("load_page")
-        self.horizontalLayoutWidget_3 = QtWidgets.QWidget(
-            parent=self.load_page
-        )
-        self.horizontalLayoutWidget_3.setGeometry(
-            QtCore.QRect(10, 10, 691, 71)
-        )
-        self.horizontalLayoutWidget_3.setObjectName("horizontalLayoutWidget_3")
-        self.load_page_header_layout = QtWidgets.QHBoxLayout(
-            self.horizontalLayoutWidget_3
-        )
-        self.load_page_header_layout.setContentsMargins(0, 0, 0, 0)
+        self.verticalLayout_2 = QtWidgets.QVBoxLayout(self.load_page)
+        self.verticalLayout_2.setObjectName("verticalLayout_2")
+        self.load_page_header_layout = QtWidgets.QHBoxLayout()
         self.load_page_header_layout.setObjectName("load_page_header_layout")
-        self.load_header_page_title = QtWidgets.QLabel(
-            parent=self.horizontalLayoutWidget_3
-        )
-        self.load_header_page_title.setMinimumSize(QtCore.QSize(400, 60))
+        spacerItem4 = QtWidgets.QSpacerItem(250, 20, QtWidgets.QSizePolicy.Policy.Maximum, QtWidgets.QSizePolicy.Policy.Minimum)
+        self.load_page_header_layout.addItem(spacerItem4)
+        self.load_header_page_title = QtWidgets.QLabel(parent=self.load_page)
+        self.load_header_page_title.setMinimumSize(QtCore.QSize(0, 60))
         font = QtGui.QFont()
         font.setFamily("Momcake")
-        font.setPointSize(24)
+        font.setPointSize(20)
         self.load_header_page_title.setFont(font)
-        self.load_header_page_title.setStyleSheet(
-            "background: transparent; color: white;"
-        )
-        self.load_header_page_title.setAlignment(
-            QtCore.Qt.AlignmentFlag.AlignCenter
-        )
+        self.load_header_page_title.setStyleSheet("background: transparent; color: white;")
+        self.load_header_page_title.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self.load_header_page_title.setObjectName("load_header_page_title")
         self.load_page_header_layout.addWidget(self.load_header_page_title)
-        self.load_header_back_button = IconButton(
-            parent=self.horizontalLayoutWidget_3
-        )
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.Preferred,
-            QtWidgets.QSizePolicy.Policy.Preferred,
-        )
+        spacerItem5 = QtWidgets.QSpacerItem(40, 20, QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Minimum)
+        self.load_page_header_layout.addItem(spacerItem5)
+        self.load_header_back_button = IconButton(parent=self.load_page)
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Preferred, QtWidgets.QSizePolicy.Policy.Preferred)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(
-            self.load_header_back_button.sizePolicy().hasHeightForWidth()
-        )
+        sizePolicy.setHeightForWidth(self.load_header_back_button.sizePolicy().hasHeightForWidth())
         self.load_header_back_button.setSizePolicy(sizePolicy)
         self.load_header_back_button.setMinimumSize(QtCore.QSize(60, 60))
         self.load_header_back_button.setMaximumSize(QtCore.QSize(60, 60))
@@ -303,387 +238,231 @@ class Ui_filamentStackedWidget(object):
         self.load_header_back_button.setFont(font)
         self.load_header_back_button.setMouseTracking(False)
         self.load_header_back_button.setTabletTracking(True)
-        self.load_header_back_button.setContextMenuPolicy(
-            QtCore.Qt.ContextMenuPolicy.NoContextMenu
-        )
-        self.load_header_back_button.setLayoutDirection(
-            QtCore.Qt.LayoutDirection.LeftToRight
-        )
+        self.load_header_back_button.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.NoContextMenu)
+        self.load_header_back_button.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
         self.load_header_back_button.setStyleSheet("")
         self.load_header_back_button.setAutoDefault(False)
         self.load_header_back_button.setFlat(True)
-        self.load_header_back_button.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/back.svg")
-        )
+        self.load_header_back_button.setProperty("icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/back.svg"))
         self.load_header_back_button.setObjectName("load_header_back_button")
         self.load_page_header_layout.addWidget(self.load_header_back_button)
-        self.gridLayoutWidget_3 = QtWidgets.QWidget(parent=self.load_page)
-        self.gridLayoutWidget_3.setGeometry(QtCore.QRect(10, 80, 691, 264))
-        self.gridLayoutWidget_3.setObjectName("gridLayoutWidget_3")
-        self.load_page_content_layout = QtWidgets.QGridLayout(
-            self.gridLayoutWidget_3
-        )
+        self.verticalLayout_2.addLayout(self.load_page_header_layout)
+        spacerItem6 = QtWidgets.QSpacerItem(20, 40, QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Expanding)
+        self.verticalLayout_2.addItem(spacerItem6)
+        self.load_page_content_layout = QtWidgets.QGridLayout()
         self.load_page_content_layout.setContentsMargins(5, 5, 5, 5)
         self.load_page_content_layout.setHorizontalSpacing(6)
         self.load_page_content_layout.setObjectName("load_page_content_layout")
-        self.load_nylon_btn = BlocksCustomButton(
-            parent=self.gridLayoutWidget_3
-        )
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-        )
+        self.load_nylon_btn = BlocksCustomButton(parent=self.load_page)
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.MinimumExpanding, QtWidgets.QSizePolicy.Policy.MinimumExpanding)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(
-            self.load_nylon_btn.sizePolicy().hasHeightForWidth()
-        )
+        sizePolicy.setHeightForWidth(self.load_nylon_btn.sizePolicy().hasHeightForWidth())
         self.load_nylon_btn.setSizePolicy(sizePolicy)
         self.load_nylon_btn.setMinimumSize(QtCore.QSize(200, 80))
         self.load_nylon_btn.setMaximumSize(QtCore.QSize(200, 80))
         font = QtGui.QFont()
         font.setFamily("MS Shell Dlg 2")
-        font.setPointSize(18)
+        font.setPointSize(15)
         font.setItalic(False)
         font.setStyleStrategy(QtGui.QFont.StyleStrategy.PreferAntialias)
         self.load_nylon_btn.setFont(font)
         self.load_nylon_btn.setMouseTracking(False)
         self.load_nylon_btn.setTabletTracking(True)
-        self.load_nylon_btn.setContextMenuPolicy(
-            QtCore.Qt.ContextMenuPolicy.NoContextMenu
-        )
-        self.load_nylon_btn.setLayoutDirection(
-            QtCore.Qt.LayoutDirection.LeftToRight
-        )
+        self.load_nylon_btn.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.NoContextMenu)
+        self.load_nylon_btn.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
         self.load_nylon_btn.setStyleSheet("")
         self.load_nylon_btn.setAutoDefault(False)
         self.load_nylon_btn.setFlat(True)
-        self.load_nylon_btn.setProperty(
-            "icon_pixmap",
-            QtGui.QPixmap(
-                ":/filament_related/media/topbar/nylon_filament_topbar.svg"
-            ),
-        )
+        self.load_nylon_btn.setProperty("icon_pixmap", QtGui.QPixmap(":/filament_related/media/topbar/nylon_filament_topbar.svg"))
         self.load_nylon_btn.setObjectName("load_nylon_btn")
-        self.load_page_content_layout.addWidget(
-            self.load_nylon_btn, 2, 0, 1, 1
-        )
-        self.load_petg_btn = BlocksCustomButton(parent=self.gridLayoutWidget_3)
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-        )
+        self.load_page_content_layout.addWidget(self.load_nylon_btn, 2, 0, 1, 1)
+        self.load_petg_btn = BlocksCustomButton(parent=self.load_page)
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.MinimumExpanding, QtWidgets.QSizePolicy.Policy.MinimumExpanding)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(
-            self.load_petg_btn.sizePolicy().hasHeightForWidth()
-        )
+        sizePolicy.setHeightForWidth(self.load_petg_btn.sizePolicy().hasHeightForWidth())
         self.load_petg_btn.setSizePolicy(sizePolicy)
         self.load_petg_btn.setMinimumSize(QtCore.QSize(200, 80))
         self.load_petg_btn.setMaximumSize(QtCore.QSize(200, 80))
         font = QtGui.QFont()
         font.setFamily("MS Shell Dlg 2")
-        font.setPointSize(18)
+        font.setPointSize(15)
         font.setItalic(False)
         font.setStyleStrategy(QtGui.QFont.StyleStrategy.PreferAntialias)
         self.load_petg_btn.setFont(font)
         self.load_petg_btn.setMouseTracking(False)
         self.load_petg_btn.setTabletTracking(True)
-        self.load_petg_btn.setContextMenuPolicy(
-            QtCore.Qt.ContextMenuPolicy.NoContextMenu
-        )
-        self.load_petg_btn.setLayoutDirection(
-            QtCore.Qt.LayoutDirection.LeftToRight
-        )
+        self.load_petg_btn.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.NoContextMenu)
+        self.load_petg_btn.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
         self.load_petg_btn.setStyleSheet("")
         self.load_petg_btn.setAutoDefault(False)
         self.load_petg_btn.setFlat(True)
-        self.load_petg_btn.setProperty(
-            "icon_pixmap",
-            QtGui.QPixmap(
-                ":/filament_related/media/topbar/petg_filament_topbar.svg"
-            ),
-        )
+        self.load_petg_btn.setProperty("icon_pixmap", QtGui.QPixmap(":/filament_related/media/topbar/petg_filament_topbar.svg"))
         self.load_petg_btn.setObjectName("load_petg_btn")
         self.load_page_content_layout.addWidget(self.load_petg_btn, 0, 1, 1, 1)
-        self.load_abs_btn = BlocksCustomButton(parent=self.gridLayoutWidget_3)
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-        )
+        self.load_abs_btn = BlocksCustomButton(parent=self.load_page)
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.MinimumExpanding, QtWidgets.QSizePolicy.Policy.MinimumExpanding)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(
-            self.load_abs_btn.sizePolicy().hasHeightForWidth()
-        )
+        sizePolicy.setHeightForWidth(self.load_abs_btn.sizePolicy().hasHeightForWidth())
         self.load_abs_btn.setSizePolicy(sizePolicy)
         self.load_abs_btn.setMinimumSize(QtCore.QSize(200, 80))
         self.load_abs_btn.setMaximumSize(QtCore.QSize(200, 80))
         font = QtGui.QFont()
         font.setFamily("MS Shell Dlg 2")
-        font.setPointSize(18)
+        font.setPointSize(15)
         font.setItalic(False)
         font.setStyleStrategy(QtGui.QFont.StyleStrategy.PreferAntialias)
         self.load_abs_btn.setFont(font)
         self.load_abs_btn.setMouseTracking(False)
         self.load_abs_btn.setTabletTracking(True)
-        self.load_abs_btn.setContextMenuPolicy(
-            QtCore.Qt.ContextMenuPolicy.NoContextMenu
-        )
-        self.load_abs_btn.setLayoutDirection(
-            QtCore.Qt.LayoutDirection.LeftToRight
-        )
+        self.load_abs_btn.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.NoContextMenu)
+        self.load_abs_btn.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
         self.load_abs_btn.setStyleSheet("")
         self.load_abs_btn.setAutoDefault(False)
         self.load_abs_btn.setFlat(True)
-        self.load_abs_btn.setProperty(
-            "icon_pixmap",
-            QtGui.QPixmap(
-                ":/filament_related/media/topbar/abs_filament_topbar.svg"
-            ),
-        )
+        self.load_abs_btn.setProperty("icon_pixmap", QtGui.QPixmap(":/filament_related/media/topbar/abs_filament_topbar.svg"))
         self.load_abs_btn.setObjectName("load_abs_btn")
         self.load_page_content_layout.addWidget(self.load_abs_btn, 1, 0, 1, 1)
-        self.load_tpu_btn = BlocksCustomButton(parent=self.gridLayoutWidget_3)
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-        )
+        self.load_pla_btn = BlocksCustomButton(parent=self.load_page)
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.MinimumExpanding, QtWidgets.QSizePolicy.Policy.MinimumExpanding)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(
-            self.load_tpu_btn.sizePolicy().hasHeightForWidth()
-        )
-        self.load_tpu_btn.setSizePolicy(sizePolicy)
-        self.load_tpu_btn.setMinimumSize(QtCore.QSize(200, 80))
-        self.load_tpu_btn.setMaximumSize(QtCore.QSize(200, 80))
-        font = QtGui.QFont()
-        font.setFamily("MS Shell Dlg 2")
-        font.setPointSize(18)
-        font.setItalic(False)
-        font.setStyleStrategy(QtGui.QFont.StyleStrategy.PreferAntialias)
-        self.load_tpu_btn.setFont(font)
-        self.load_tpu_btn.setMouseTracking(False)
-        self.load_tpu_btn.setTabletTracking(True)
-        self.load_tpu_btn.setContextMenuPolicy(
-            QtCore.Qt.ContextMenuPolicy.NoContextMenu
-        )
-        self.load_tpu_btn.setLayoutDirection(
-            QtCore.Qt.LayoutDirection.LeftToRight
-        )
-        self.load_tpu_btn.setStyleSheet("")
-        self.load_tpu_btn.setAutoDefault(False)
-        self.load_tpu_btn.setFlat(True)
-        self.load_tpu_btn.setProperty(
-            "icon_pixmap",
-            QtGui.QPixmap(
-                ":/filament_related/media/topbar/tpu_filament_topbar.svg"
-            ),
-        )
-        self.load_tpu_btn.setObjectName("load_tpu_btn")
-        self.load_page_content_layout.addWidget(self.load_tpu_btn, 2, 1, 1, 1)
-        self.load_hips_btn = BlocksCustomButton(parent=self.gridLayoutWidget_3)
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-        )
-        sizePolicy.setHorizontalStretch(0)
-        sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(
-            self.load_hips_btn.sizePolicy().hasHeightForWidth()
-        )
-        self.load_hips_btn.setSizePolicy(sizePolicy)
-        self.load_hips_btn.setMinimumSize(QtCore.QSize(200, 80))
-        self.load_hips_btn.setMaximumSize(QtCore.QSize(200, 80))
-        font = QtGui.QFont()
-        font.setFamily("MS Shell Dlg 2")
-        font.setPointSize(18)
-        font.setItalic(False)
-        font.setStyleStrategy(QtGui.QFont.StyleStrategy.PreferAntialias)
-        self.load_hips_btn.setFont(font)
-        self.load_hips_btn.setMouseTracking(False)
-        self.load_hips_btn.setTabletTracking(True)
-        self.load_hips_btn.setContextMenuPolicy(
-            QtCore.Qt.ContextMenuPolicy.NoContextMenu
-        )
-        self.load_hips_btn.setLayoutDirection(
-            QtCore.Qt.LayoutDirection.LeftToRight
-        )
-        self.load_hips_btn.setStyleSheet("")
-        self.load_hips_btn.setAutoDefault(False)
-        self.load_hips_btn.setFlat(True)
-        self.load_hips_btn.setProperty(
-            "icon_pixmap",
-            QtGui.QPixmap(
-                ":/filament_related/media/topbar/hips_filament_topbar.svg"
-            ),
-        )
-        self.load_hips_btn.setObjectName("load_hips_btn")
-        self.load_page_content_layout.addWidget(self.load_hips_btn, 1, 1, 1, 1)
-        self.load_pla_btn = BlocksCustomButton(parent=self.gridLayoutWidget_3)
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-        )
-        sizePolicy.setHorizontalStretch(0)
-        sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(
-            self.load_pla_btn.sizePolicy().hasHeightForWidth()
-        )
+        sizePolicy.setHeightForWidth(self.load_pla_btn.sizePolicy().hasHeightForWidth())
         self.load_pla_btn.setSizePolicy(sizePolicy)
         self.load_pla_btn.setMinimumSize(QtCore.QSize(200, 80))
         self.load_pla_btn.setMaximumSize(QtCore.QSize(200, 80))
         font = QtGui.QFont()
         font.setFamily("MS Shell Dlg 2")
-        font.setPointSize(18)
+        font.setPointSize(15)
         font.setItalic(False)
         font.setStyleStrategy(QtGui.QFont.StyleStrategy.PreferAntialias)
         self.load_pla_btn.setFont(font)
         self.load_pla_btn.setMouseTracking(False)
         self.load_pla_btn.setTabletTracking(True)
-        self.load_pla_btn.setContextMenuPolicy(
-            QtCore.Qt.ContextMenuPolicy.NoContextMenu
-        )
-        self.load_pla_btn.setLayoutDirection(
-            QtCore.Qt.LayoutDirection.LeftToRight
-        )
+        self.load_pla_btn.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.NoContextMenu)
+        self.load_pla_btn.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
         self.load_pla_btn.setStyleSheet("")
         self.load_pla_btn.setAutoDefault(False)
         self.load_pla_btn.setFlat(True)
-        self.load_pla_btn.setProperty(
-            "icon_pixmap",
-            QtGui.QPixmap(
-                ":/filament_related/media/topbar/pla_filament_topbar.svg"
-            ),
-        )
+        self.load_pla_btn.setProperty("icon_pixmap", QtGui.QPixmap(":/filament_related/media/topbar/pla_filament_topbar.svg"))
         self.load_pla_btn.setObjectName("load_pla_btn")
         self.load_page_content_layout.addWidget(self.load_pla_btn, 0, 0, 1, 1)
-        self.horizontalLayoutWidget_6 = QtWidgets.QWidget(
-            parent=self.load_page
-        )
-        self.horizontalLayoutWidget_6.setGeometry(
-            QtCore.QRect(10, 341, 691, 51)
-        )
-        self.horizontalLayoutWidget_6.setObjectName("horizontalLayoutWidget_6")
-        self.load_page_footer_layout = QtWidgets.QHBoxLayout(
-            self.horizontalLayoutWidget_6
-        )
-        self.load_page_footer_layout.setContentsMargins(0, 0, 0, 0)
-        self.load_page_footer_layout.setObjectName("load_page_footer_layout")
-        self.load_custom_btn = BlocksCustomButton(
-            parent=self.horizontalLayoutWidget_6
-        )
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-        )
+        self.load_hips_btn = BlocksCustomButton(parent=self.load_page)
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.MinimumExpanding, QtWidgets.QSizePolicy.Policy.MinimumExpanding)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(
-            self.load_custom_btn.sizePolicy().hasHeightForWidth()
-        )
+        sizePolicy.setHeightForWidth(self.load_hips_btn.sizePolicy().hasHeightForWidth())
+        self.load_hips_btn.setSizePolicy(sizePolicy)
+        self.load_hips_btn.setMinimumSize(QtCore.QSize(200, 80))
+        self.load_hips_btn.setMaximumSize(QtCore.QSize(200, 80))
+        font = QtGui.QFont()
+        font.setFamily("MS Shell Dlg 2")
+        font.setPointSize(15)
+        font.setItalic(False)
+        font.setStyleStrategy(QtGui.QFont.StyleStrategy.PreferAntialias)
+        self.load_hips_btn.setFont(font)
+        self.load_hips_btn.setMouseTracking(False)
+        self.load_hips_btn.setTabletTracking(True)
+        self.load_hips_btn.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.NoContextMenu)
+        self.load_hips_btn.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
+        self.load_hips_btn.setStyleSheet("")
+        self.load_hips_btn.setAutoDefault(False)
+        self.load_hips_btn.setFlat(True)
+        self.load_hips_btn.setProperty("icon_pixmap", QtGui.QPixmap(":/filament_related/media/topbar/hips_filament_topbar.svg"))
+        self.load_hips_btn.setObjectName("load_hips_btn")
+        self.load_page_content_layout.addWidget(self.load_hips_btn, 1, 1, 1, 1)
+        self.load_tpu_btn = BlocksCustomButton(parent=self.load_page)
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.MinimumExpanding, QtWidgets.QSizePolicy.Policy.MinimumExpanding)
+        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setVerticalStretch(0)
+        sizePolicy.setHeightForWidth(self.load_tpu_btn.sizePolicy().hasHeightForWidth())
+        self.load_tpu_btn.setSizePolicy(sizePolicy)
+        self.load_tpu_btn.setMinimumSize(QtCore.QSize(200, 80))
+        self.load_tpu_btn.setMaximumSize(QtCore.QSize(200, 80))
+        font = QtGui.QFont()
+        font.setFamily("MS Shell Dlg 2")
+        font.setPointSize(15)
+        font.setItalic(False)
+        font.setStyleStrategy(QtGui.QFont.StyleStrategy.PreferAntialias)
+        self.load_tpu_btn.setFont(font)
+        self.load_tpu_btn.setMouseTracking(False)
+        self.load_tpu_btn.setTabletTracking(True)
+        self.load_tpu_btn.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.NoContextMenu)
+        self.load_tpu_btn.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
+        self.load_tpu_btn.setStyleSheet("")
+        self.load_tpu_btn.setAutoDefault(False)
+        self.load_tpu_btn.setFlat(True)
+        self.load_tpu_btn.setProperty("icon_pixmap", QtGui.QPixmap(":/filament_related/media/topbar/tpu_filament_topbar.svg"))
+        self.load_tpu_btn.setObjectName("load_tpu_btn")
+        self.load_page_content_layout.addWidget(self.load_tpu_btn, 2, 1, 1, 1)
+        self.verticalLayout_2.addLayout(self.load_page_content_layout)
+        self.load_page_footer_layout = QtWidgets.QHBoxLayout()
+        self.load_page_footer_layout.setObjectName("load_page_footer_layout")
+        self.load_custom_btn = BlocksCustomButton(parent=self.load_page)
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.MinimumExpanding, QtWidgets.QSizePolicy.Policy.MinimumExpanding)
+        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setVerticalStretch(0)
+        sizePolicy.setHeightForWidth(self.load_custom_btn.sizePolicy().hasHeightForWidth())
         self.load_custom_btn.setSizePolicy(sizePolicy)
         self.load_custom_btn.setMinimumSize(QtCore.QSize(200, 70))
         self.load_custom_btn.setMaximumSize(QtCore.QSize(250, 60))
         font = QtGui.QFont()
         font.setFamily("MS Shell Dlg 2")
-        font.setPointSize(18)
+        font.setPointSize(15)
         font.setItalic(False)
         font.setStyleStrategy(QtGui.QFont.StyleStrategy.PreferAntialias)
         self.load_custom_btn.setFont(font)
         self.load_custom_btn.setMouseTracking(False)
         self.load_custom_btn.setTabletTracking(True)
-        self.load_custom_btn.setContextMenuPolicy(
-            QtCore.Qt.ContextMenuPolicy.NoContextMenu
-        )
-        self.load_custom_btn.setLayoutDirection(
-            QtCore.Qt.LayoutDirection.LeftToRight
-        )
+        self.load_custom_btn.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.NoContextMenu)
+        self.load_custom_btn.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
         self.load_custom_btn.setStyleSheet("")
         self.load_custom_btn.setAutoDefault(False)
         self.load_custom_btn.setFlat(True)
         self.load_custom_btn.setObjectName("load_custom_btn")
-        self.load_page_footer_layout.addWidget(
-            self.load_custom_btn,
-            0,
-            QtCore.Qt.AlignmentFlag.AlignHCenter
-            | QtCore.Qt.AlignmentFlag.AlignVCenter,
-        )
+        self.load_page_footer_layout.addWidget(self.load_custom_btn)
+        self.verticalLayout_2.addLayout(self.load_page_footer_layout)
+        spacerItem7 = QtWidgets.QSpacerItem(20, 40, QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Expanding)
+        self.verticalLayout_2.addItem(spacerItem7)
         filamentStackedWidget.addWidget(self.load_page)
         self.custom_filament_page = QtWidgets.QWidget()
         self.custom_filament_page.setMinimumSize(QtCore.QSize(710, 400))
         self.custom_filament_page.setMaximumSize(QtCore.QSize(720, 420))
         self.custom_filament_page.setObjectName("custom_filament_page")
-        self.horizontalLayoutWidget_4 = QtWidgets.QWidget(
-            parent=self.custom_filament_page
-        )
+        self.horizontalLayoutWidget_4 = QtWidgets.QWidget(parent=self.custom_filament_page)
         self.horizontalLayoutWidget_4.setGeometry(QtCore.QRect(9, 9, 691, 71))
         self.horizontalLayoutWidget_4.setObjectName("horizontalLayoutWidget_4")
-        self.cfil_page_header_layout = QtWidgets.QHBoxLayout(
-            self.horizontalLayoutWidget_4
-        )
+        self.cfil_page_header_layout = QtWidgets.QHBoxLayout(self.horizontalLayoutWidget_4)
         self.cfil_page_header_layout.setContentsMargins(0, 0, 0, 0)
         self.cfil_page_header_layout.setSpacing(6)
         self.cfil_page_header_layout.setObjectName("cfil_page_header_layout")
-        self.custom_filament_page_header_title = QtWidgets.QLabel(
-            parent=self.horizontalLayoutWidget_4
-        )
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-        )
+        self.custom_filament_page_header_title = QtWidgets.QLabel(parent=self.horizontalLayoutWidget_4)
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.MinimumExpanding, QtWidgets.QSizePolicy.Policy.MinimumExpanding)
         sizePolicy.setHorizontalStretch(1)
         sizePolicy.setVerticalStretch(1)
-        sizePolicy.setHeightForWidth(
-            self.custom_filament_page_header_title.sizePolicy().hasHeightForWidth()
-        )
+        sizePolicy.setHeightForWidth(self.custom_filament_page_header_title.sizePolicy().hasHeightForWidth())
         self.custom_filament_page_header_title.setSizePolicy(sizePolicy)
-        self.custom_filament_page_header_title.setMinimumSize(
-            QtCore.QSize(500, 60)
-        )
-        self.custom_filament_page_header_title.setMaximumSize(
-            QtCore.QSize(500, 60)
-        )
+        self.custom_filament_page_header_title.setMinimumSize(QtCore.QSize(500, 60))
+        self.custom_filament_page_header_title.setMaximumSize(QtCore.QSize(500, 60))
         font = QtGui.QFont()
         font.setFamily("Momcake")
         font.setPointSize(24)
         self.custom_filament_page_header_title.setFont(font)
-        self.custom_filament_page_header_title.setLayoutDirection(
-            QtCore.Qt.LayoutDirection.RightToLeft
-        )
-        self.custom_filament_page_header_title.setStyleSheet(
-            "background: transparent; color: white;"
-        )
-        self.custom_filament_page_header_title.setAlignment(
-            QtCore.Qt.AlignmentFlag.AlignCenter
-        )
-        self.custom_filament_page_header_title.setObjectName(
-            "custom_filament_page_header_title"
-        )
-        self.cfil_page_header_layout.addWidget(
-            self.custom_filament_page_header_title,
-            0,
-            QtCore.Qt.AlignmentFlag.AlignHCenter,
-        )
-        self.custom_filament_header_back_btn = IconButton(
-            parent=self.horizontalLayoutWidget_4
-        )
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-        )
+        self.custom_filament_page_header_title.setLayoutDirection(QtCore.Qt.LayoutDirection.RightToLeft)
+        self.custom_filament_page_header_title.setStyleSheet("background: transparent; color: white;")
+        self.custom_filament_page_header_title.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.custom_filament_page_header_title.setObjectName("custom_filament_page_header_title")
+        self.cfil_page_header_layout.addWidget(self.custom_filament_page_header_title, 0, QtCore.Qt.AlignmentFlag.AlignHCenter)
+        self.custom_filament_header_back_btn = IconButton(parent=self.horizontalLayoutWidget_4)
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.MinimumExpanding, QtWidgets.QSizePolicy.Policy.MinimumExpanding)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(
-            self.custom_filament_header_back_btn.sizePolicy().hasHeightForWidth()
-        )
+        sizePolicy.setHeightForWidth(self.custom_filament_header_back_btn.sizePolicy().hasHeightForWidth())
         self.custom_filament_header_back_btn.setSizePolicy(sizePolicy)
-        self.custom_filament_header_back_btn.setMinimumSize(
-            QtCore.QSize(60, 60)
-        )
-        self.custom_filament_header_back_btn.setMaximumSize(
-            QtCore.QSize(60, 60)
-        )
+        self.custom_filament_header_back_btn.setMinimumSize(QtCore.QSize(60, 60))
+        self.custom_filament_header_back_btn.setMaximumSize(QtCore.QSize(60, 60))
         font = QtGui.QFont()
         font.setFamily("Momcake")
         font.setPointSize(20)
@@ -692,184 +471,88 @@ class Ui_filamentStackedWidget(object):
         self.custom_filament_header_back_btn.setFont(font)
         self.custom_filament_header_back_btn.setMouseTracking(False)
         self.custom_filament_header_back_btn.setTabletTracking(True)
-        self.custom_filament_header_back_btn.setContextMenuPolicy(
-            QtCore.Qt.ContextMenuPolicy.NoContextMenu
-        )
-        self.custom_filament_header_back_btn.setLayoutDirection(
-            QtCore.Qt.LayoutDirection.LeftToRight
-        )
+        self.custom_filament_header_back_btn.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.NoContextMenu)
+        self.custom_filament_header_back_btn.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
         self.custom_filament_header_back_btn.setStyleSheet("")
         self.custom_filament_header_back_btn.setAutoDefault(False)
         self.custom_filament_header_back_btn.setFlat(True)
-        self.custom_filament_header_back_btn.setProperty(
-            "icon_pixmap",
-            QtGui.QPixmap(":/button_borders/media/btn_icons/back.svg"),
-        )
-        self.custom_filament_header_back_btn.setObjectName(
-            "custom_filament_header_back_btn"
-        )
-        self.cfil_page_header_layout.addWidget(
-            self.custom_filament_header_back_btn,
-            0,
-            QtCore.Qt.AlignmentFlag.AlignRight
-            | QtCore.Qt.AlignmentFlag.AlignVCenter,
-        )
+        self.custom_filament_header_back_btn.setProperty("icon_pixmap", QtGui.QPixmap(":/button_borders/media/btn_icons/back.svg"))
+        self.custom_filament_header_back_btn.setObjectName("custom_filament_header_back_btn")
+        self.cfil_page_header_layout.addWidget(self.custom_filament_header_back_btn, 0, QtCore.Qt.AlignmentFlag.AlignRight|QtCore.Qt.AlignmentFlag.AlignVCenter)
         self.cfil_page_header_layout.setStretch(0, 1)
-        self.verticalLayoutWidget_2 = QtWidgets.QWidget(
-            parent=self.custom_filament_page
-        )
-        self.verticalLayoutWidget_2.setGeometry(
-            QtCore.QRect(10, 120, 691, 234)
-        )
+        self.verticalLayoutWidget_2 = QtWidgets.QWidget(parent=self.custom_filament_page)
+        self.verticalLayoutWidget_2.setGeometry(QtCore.QRect(10, 120, 691, 234))
         self.verticalLayoutWidget_2.setObjectName("verticalLayoutWidget_2")
-        self.cfil_page_content_layout = QtWidgets.QVBoxLayout(
-            self.verticalLayoutWidget_2
-        )
+        self.cfil_page_content_layout = QtWidgets.QVBoxLayout(self.verticalLayoutWidget_2)
         self.cfil_page_content_layout.setContentsMargins(5, 5, 5, 5)
         self.cfil_page_content_layout.setObjectName("cfil_page_content_layout")
         self.cfil_temp_settings_layout = QtWidgets.QHBoxLayout()
         self.cfil_temp_settings_layout.setContentsMargins(5, 5, 5, 5)
-        self.cfil_temp_settings_layout.setObjectName(
-            "cfil_temp_settings_layout"
-        )
-        self.custom_filament_temperature_settings_title = QtWidgets.QLabel(
-            parent=self.verticalLayoutWidget_2
-        )
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-        )
+        self.cfil_temp_settings_layout.setObjectName("cfil_temp_settings_layout")
+        self.custom_filament_temperature_settings_title = QtWidgets.QLabel(parent=self.verticalLayoutWidget_2)
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.MinimumExpanding, QtWidgets.QSizePolicy.Policy.MinimumExpanding)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(
-            self.custom_filament_temperature_settings_title.sizePolicy().hasHeightForWidth()
-        )
-        self.custom_filament_temperature_settings_title.setSizePolicy(
-            sizePolicy
-        )
-        self.custom_filament_temperature_settings_title.setMinimumSize(
-            QtCore.QSize(200, 60)
-        )
-        self.custom_filament_temperature_settings_title.setMaximumSize(
-            QtCore.QSize(200, 60)
-        )
+        sizePolicy.setHeightForWidth(self.custom_filament_temperature_settings_title.sizePolicy().hasHeightForWidth())
+        self.custom_filament_temperature_settings_title.setSizePolicy(sizePolicy)
+        self.custom_filament_temperature_settings_title.setMinimumSize(QtCore.QSize(200, 60))
+        self.custom_filament_temperature_settings_title.setMaximumSize(QtCore.QSize(200, 60))
         font = QtGui.QFont()
         font.setPointSize(12)
         self.custom_filament_temperature_settings_title.setFont(font)
-        self.custom_filament_temperature_settings_title.setStyleSheet(
-            "background: transparent; color: white;"
-        )
-        self.custom_filament_temperature_settings_title.setObjectName(
-            "custom_filament_temperature_settings_title"
-        )
-        self.cfil_temp_settings_layout.addWidget(
-            self.custom_filament_temperature_settings_title
-        )
-        self.cfil_temp_settings_display_button = BlocksCustomButton(
-            parent=self.verticalLayoutWidget_2
-        )
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-        )
+        self.custom_filament_temperature_settings_title.setStyleSheet("background: transparent; color: white;")
+        self.custom_filament_temperature_settings_title.setObjectName("custom_filament_temperature_settings_title")
+        self.cfil_temp_settings_layout.addWidget(self.custom_filament_temperature_settings_title)
+        self.cfil_temp_settings_display_button = BlocksCustomButton(parent=self.verticalLayoutWidget_2)
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.MinimumExpanding, QtWidgets.QSizePolicy.Policy.MinimumExpanding)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(
-            self.cfil_temp_settings_display_button.sizePolicy().hasHeightForWidth()
-        )
+        sizePolicy.setHeightForWidth(self.cfil_temp_settings_display_button.sizePolicy().hasHeightForWidth())
         self.cfil_temp_settings_display_button.setSizePolicy(sizePolicy)
-        self.cfil_temp_settings_display_button.setMinimumSize(
-            QtCore.QSize(200, 60)
-        )
-        self.cfil_temp_settings_display_button.setMaximumSize(
-            QtCore.QSize(200, 60)
-        )
+        self.cfil_temp_settings_display_button.setMinimumSize(QtCore.QSize(200, 60))
+        self.cfil_temp_settings_display_button.setMaximumSize(QtCore.QSize(200, 60))
         self.cfil_temp_settings_display_button.setText("")
         self.cfil_temp_settings_display_button.setFlat(True)
-        self.cfil_temp_settings_display_button.setObjectName(
-            "cfil_temp_settings_display_button"
-        )
-        self.cfil_temp_settings_layout.addWidget(
-            self.cfil_temp_settings_display_button,
-            0,
-            QtCore.Qt.AlignmentFlag.AlignHCenter
-            | QtCore.Qt.AlignmentFlag.AlignVCenter,
-        )
+        self.cfil_temp_settings_display_button.setObjectName("cfil_temp_settings_display_button")
+        self.cfil_temp_settings_layout.addWidget(self.cfil_temp_settings_display_button, 0, QtCore.Qt.AlignmentFlag.AlignHCenter|QtCore.Qt.AlignmentFlag.AlignVCenter)
         self.cfil_temp_settings_layout.setStretch(1, 1)
         self.cfil_page_content_layout.addLayout(self.cfil_temp_settings_layout)
         self.cfil_name_settings_layout = QtWidgets.QHBoxLayout()
         self.cfil_name_settings_layout.setContentsMargins(5, 5, 5, 5)
-        self.cfil_name_settings_layout.setObjectName(
-            "cfil_name_settings_layout"
-        )
-        self.cfil_name_settings_title = QtWidgets.QLabel(
-            parent=self.verticalLayoutWidget_2
-        )
+        self.cfil_name_settings_layout.setObjectName("cfil_name_settings_layout")
+        self.cfil_name_settings_title = QtWidgets.QLabel(parent=self.verticalLayoutWidget_2)
         self.cfil_name_settings_title.setMinimumSize(QtCore.QSize(200, 60))
         self.cfil_name_settings_title.setMaximumSize(QtCore.QSize(200, 60))
         font = QtGui.QFont()
         font.setPointSize(12)
         self.cfil_name_settings_title.setFont(font)
-        self.cfil_name_settings_title.setStyleSheet(
-            "background: transparent; color: white;"
-        )
+        self.cfil_name_settings_title.setStyleSheet("background: transparent; color: white;")
         self.cfil_name_settings_title.setObjectName("cfil_name_settings_title")
-        self.cfil_name_settings_layout.addWidget(
-            self.cfil_name_settings_title,
-            0,
-            QtCore.Qt.AlignmentFlag.AlignLeft
-            | QtCore.Qt.AlignmentFlag.AlignVCenter,
-        )
-        self.cfil_name_input = QtWidgets.QLineEdit(
-            parent=self.verticalLayoutWidget_2
-        )
+        self.cfil_name_settings_layout.addWidget(self.cfil_name_settings_title, 0, QtCore.Qt.AlignmentFlag.AlignLeft|QtCore.Qt.AlignmentFlag.AlignVCenter)
+        self.cfil_name_input = QtWidgets.QLineEdit(parent=self.verticalLayoutWidget_2)
         self.cfil_name_input.setMinimumSize(QtCore.QSize(200, 60))
         self.cfil_name_input.setMaximumSize(QtCore.QSize(200, 60))
         self.cfil_name_input.setObjectName("cfil_name_input")
-        self.cfil_name_settings_layout.addWidget(
-            self.cfil_name_input,
-            0,
-            QtCore.Qt.AlignmentFlag.AlignHCenter
-            | QtCore.Qt.AlignmentFlag.AlignVCenter,
-        )
-        self.cfil_name_save_btn = BlocksCustomButton(
-            parent=self.verticalLayoutWidget_2
-        )
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.Minimum,
-            QtWidgets.QSizePolicy.Policy.Minimum,
-        )
+        self.cfil_name_settings_layout.addWidget(self.cfil_name_input, 0, QtCore.Qt.AlignmentFlag.AlignHCenter|QtCore.Qt.AlignmentFlag.AlignVCenter)
+        self.cfil_name_save_btn = BlocksCustomButton(parent=self.verticalLayoutWidget_2)
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Minimum)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(
-            self.cfil_name_save_btn.sizePolicy().hasHeightForWidth()
-        )
+        sizePolicy.setHeightForWidth(self.cfil_name_save_btn.sizePolicy().hasHeightForWidth())
         self.cfil_name_save_btn.setSizePolicy(sizePolicy)
         self.cfil_name_save_btn.setMinimumSize(QtCore.QSize(60, 60))
         self.cfil_name_save_btn.setMaximumSize(QtCore.QSize(60, 60))
         self.cfil_name_save_btn.setText("")
         self.cfil_name_save_btn.setFlat(True)
         self.cfil_name_save_btn.setObjectName("cfil_name_save_btn")
-        self.cfil_name_settings_layout.addWidget(
-            self.cfil_name_save_btn,
-            0,
-            QtCore.Qt.AlignmentFlag.AlignHCenter
-            | QtCore.Qt.AlignmentFlag.AlignVCenter,
-        )
+        self.cfil_name_settings_layout.addWidget(self.cfil_name_save_btn, 0, QtCore.Qt.AlignmentFlag.AlignHCenter|QtCore.Qt.AlignmentFlag.AlignVCenter)
         self.cfil_name_settings_layout.setStretch(1, 1)
         self.cfil_page_content_layout.addLayout(self.cfil_name_settings_layout)
-        self.cfil_load_btn = BlocksCustomButton(
-            parent=self.verticalLayoutWidget_2
-        )
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-        )
+        self.cfil_load_btn = BlocksCustomButton(parent=self.verticalLayoutWidget_2)
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.MinimumExpanding, QtWidgets.QSizePolicy.Policy.MinimumExpanding)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(
-            self.cfil_load_btn.sizePolicy().hasHeightForWidth()
-        )
+        sizePolicy.setHeightForWidth(self.cfil_load_btn.sizePolicy().hasHeightForWidth())
         self.cfil_load_btn.setSizePolicy(sizePolicy)
         self.cfil_load_btn.setMinimumSize(QtCore.QSize(200, 70))
         self.cfil_load_btn.setMaximumSize(QtCore.QSize(200, 70))
@@ -881,19 +564,13 @@ class Ui_filamentStackedWidget(object):
         self.cfil_load_btn.setFont(font)
         self.cfil_load_btn.setMouseTracking(False)
         self.cfil_load_btn.setTabletTracking(True)
-        self.cfil_load_btn.setContextMenuPolicy(
-            QtCore.Qt.ContextMenuPolicy.NoContextMenu
-        )
-        self.cfil_load_btn.setLayoutDirection(
-            QtCore.Qt.LayoutDirection.LeftToRight
-        )
+        self.cfil_load_btn.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.NoContextMenu)
+        self.cfil_load_btn.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
         self.cfil_load_btn.setStyleSheet("")
         self.cfil_load_btn.setAutoDefault(False)
         self.cfil_load_btn.setFlat(True)
         self.cfil_load_btn.setObjectName("cfil_load_btn")
-        self.cfil_page_content_layout.addWidget(
-            self.cfil_load_btn, 0, QtCore.Qt.AlignmentFlag.AlignHCenter
-        )
+        self.cfil_page_content_layout.addWidget(self.cfil_load_btn, 0, QtCore.Qt.AlignmentFlag.AlignHCenter)
         self.cfil_page_content_layout.setStretch(2, 1)
         filamentStackedWidget.addWidget(self.custom_filament_page)
 
@@ -903,139 +580,57 @@ class Ui_filamentStackedWidget(object):
 
     def retranslateUi(self, filamentStackedWidget):
         _translate = QtCore.QCoreApplication.translate
-        filamentStackedWidget.setWindowTitle(
-            _translate("filamentStackedWidget", "StackedWidget")
-        )
-        self.filament_page_header_title.setText(
-            _translate("filamentStackedWidget", "Filament Control")
-        )
-        self.filament_page_header_title.setProperty(
-            "class", _translate("filamentStackedWidget", "title_text")
-        )
-        self.filament_page_info_title.setText(
-            _translate("filamentStackedWidget", "Loaded Filament Type:")
-        )
-        self.filament_page_info_content.setText(
-            _translate("filamentStackedWidget", "My filament name")
-        )
-        self.filament_page_load_btn.setText(
-            _translate("filamentStackedWidget", "LOAD")
-        )
-        self.filament_page_load_btn.setProperty(
-            "class", _translate("filamentStackedWidget", "menu_btn")
-        )
-        self.filament_page_load_btn.setProperty(
-            "button_type", _translate("filamentStackedWidget", "normal")
-        )
-        self.filament_page_unload_btn.setText(
-            _translate("filamentStackedWidget", "UNLOAD")
-        )
-        self.filament_page_unload_btn.setProperty(
-            "class", _translate("filamentStackedWidget", "menu_btn")
-        )
-        self.filament_page_unload_btn.setProperty(
-            "button_type", _translate("filamentStackedWidget", "normal")
-        )
-        self.load_header_page_title.setText(
-            _translate("filamentStackedWidget", "Load ToolHead")
-        )
-        self.load_header_page_title.setProperty(
-            "class", _translate("filamentStackedWidget", "title_text")
-        )
-        self.load_header_back_button.setText(
-            _translate("filamentStackedWidget", "Back")
-        )
-        self.load_header_back_button.setProperty(
-            "class", _translate("filamentStackedWidget", "menu_btn")
-        )
-        self.load_header_back_button.setProperty(
-            "button_type", _translate("filamentStackedWidget", "icon")
-        )
-        self.load_nylon_btn.setText(
-            _translate("filamentStackedWidget", "NYLON")
-        )
-        self.load_nylon_btn.setProperty(
-            "class", _translate("filamentStackedWidget", "menu_btn")
-        )
-        self.load_nylon_btn.setProperty(
-            "button_type", _translate("filamentStackedWidget", "normal")
-        )
+        filamentStackedWidget.setWindowTitle(_translate("filamentStackedWidget", "StackedWidget"))
+        self.filament_page_header_title.setText(_translate("filamentStackedWidget", "Filament Control"))
+        self.filament_page_header_title.setProperty("class", _translate("filamentStackedWidget", "title_text"))
+        self.filament_page_info_content_6.setText(_translate("filamentStackedWidget", "Filament Name"))
+        self.label.setText(_translate("filamentStackedWidget", "inster smth here"))
+        self.filament_page_info_title_6.setText(_translate("filamentStackedWidget", "Loaded Filament Type"))
+        self.label_2.setText(_translate("filamentStackedWidget", "inster smth here"))
+        self.filament_page_load_btn.setText(_translate("filamentStackedWidget", "Load"))
+        self.filament_page_load_btn.setProperty("class", _translate("filamentStackedWidget", "menu_btn"))
+        self.filament_page_load_btn.setProperty("button_type", _translate("filamentStackedWidget", "normal"))
+        self.filament_page_unload_btn.setText(_translate("filamentStackedWidget", "Unload"))
+        self.filament_page_unload_btn.setProperty("class", _translate("filamentStackedWidget", "menu_btn"))
+        self.filament_page_unload_btn.setProperty("button_type", _translate("filamentStackedWidget", "normal"))
+        self.load_header_page_title.setText(_translate("filamentStackedWidget", "Load ToolHead"))
+        self.load_header_page_title.setProperty("class", _translate("filamentStackedWidget", "title_text"))
+        self.load_header_back_button.setText(_translate("filamentStackedWidget", "Back"))
+        self.load_header_back_button.setProperty("class", _translate("filamentStackedWidget", "menu_btn"))
+        self.load_header_back_button.setProperty("button_type", _translate("filamentStackedWidget", "icon"))
+        self.load_nylon_btn.setText(_translate("filamentStackedWidget", "NYLON"))
+        self.load_nylon_btn.setProperty("class", _translate("filamentStackedWidget", "menu_btn"))
+        self.load_nylon_btn.setProperty("button_type", _translate("filamentStackedWidget", "normal"))
         self.load_petg_btn.setText(_translate("filamentStackedWidget", "PETG"))
-        self.load_petg_btn.setProperty(
-            "class", _translate("filamentStackedWidget", "menu_btn")
-        )
-        self.load_petg_btn.setProperty(
-            "button_type", _translate("filamentStackedWidget", "normal")
-        )
+        self.load_petg_btn.setProperty("class", _translate("filamentStackedWidget", "menu_btn"))
+        self.load_petg_btn.setProperty("button_type", _translate("filamentStackedWidget", "normal"))
         self.load_abs_btn.setText(_translate("filamentStackedWidget", "ABS"))
-        self.load_abs_btn.setProperty(
-            "class", _translate("filamentStackedWidget", "menu_btn")
-        )
-        self.load_abs_btn.setProperty(
-            "button_type", _translate("filamentStackedWidget", "normal")
-        )
-        self.load_tpu_btn.setText(_translate("filamentStackedWidget", "TPU"))
-        self.load_tpu_btn.setProperty(
-            "class", _translate("filamentStackedWidget", "menu_btn")
-        )
-        self.load_tpu_btn.setProperty(
-            "button_type", _translate("filamentStackedWidget", "normal")
-        )
-        self.load_hips_btn.setText(_translate("filamentStackedWidget", "HIPS"))
-        self.load_hips_btn.setProperty(
-            "class", _translate("filamentStackedWidget", "menu_btn")
-        )
-        self.load_hips_btn.setProperty(
-            "button_type", _translate("filamentStackedWidget", "normal")
-        )
+        self.load_abs_btn.setProperty("class", _translate("filamentStackedWidget", "menu_btn"))
+        self.load_abs_btn.setProperty("button_type", _translate("filamentStackedWidget", "normal"))
         self.load_pla_btn.setText(_translate("filamentStackedWidget", "PLA"))
-        self.load_pla_btn.setProperty(
-            "class", _translate("filamentStackedWidget", "menu_btn")
-        )
-        self.load_pla_btn.setProperty(
-            "button_type", _translate("filamentStackedWidget", "normal")
-        )
-        self.load_custom_btn.setText(
-            _translate("filamentStackedWidget", "Custom\nFilament")
-        )
-        self.load_custom_btn.setProperty(
-            "class", _translate("filamentStackedWidget", "menu_btn")
-        )
-        self.load_custom_btn.setProperty(
-            "button_type", _translate("filamentStackedWidget", "normal")
-        )
-        self.custom_filament_page_header_title.setText(
-            _translate("filamentStackedWidget", "Custom Filament Settings")
-        )
-        self.custom_filament_page_header_title.setProperty(
-            "class", _translate("filamentStackedWidget", "title_text")
-        )
-        self.custom_filament_header_back_btn.setText(
-            _translate("filamentStackedWidget", "Back")
-        )
-        self.custom_filament_header_back_btn.setProperty(
-            "class", _translate("filamentStackedWidget", "menu_btn")
-        )
-        self.custom_filament_temperature_settings_title.setText(
-            _translate("filamentStackedWidget", "Filament Temperature:")
-        )
-        self.cfil_temp_settings_display_button.setProperty(
-            "button_type", _translate("filamentStackedWidget", "display")
-        )
-        self.cfil_name_settings_title.setText(
-            _translate("filamentStackedWidget", "Filament Name")
-        )
-        self.cfil_name_save_btn.setProperty(
-            "button_type", _translate("filamentStackedWidget", "icon")
-        )
+        self.load_pla_btn.setProperty("class", _translate("filamentStackedWidget", "menu_btn"))
+        self.load_pla_btn.setProperty("button_type", _translate("filamentStackedWidget", "normal"))
+        self.load_hips_btn.setText(_translate("filamentStackedWidget", "HIPS"))
+        self.load_hips_btn.setProperty("class", _translate("filamentStackedWidget", "menu_btn"))
+        self.load_hips_btn.setProperty("button_type", _translate("filamentStackedWidget", "normal"))
+        self.load_tpu_btn.setText(_translate("filamentStackedWidget", "TPU"))
+        self.load_tpu_btn.setProperty("class", _translate("filamentStackedWidget", "menu_btn"))
+        self.load_tpu_btn.setProperty("button_type", _translate("filamentStackedWidget", "normal"))
+        self.load_custom_btn.setText(_translate("filamentStackedWidget", "Custom\n"
+"Filament"))
+        self.load_custom_btn.setProperty("class", _translate("filamentStackedWidget", "menu_btn"))
+        self.load_custom_btn.setProperty("button_type", _translate("filamentStackedWidget", "normal"))
+        self.custom_filament_page_header_title.setText(_translate("filamentStackedWidget", "Custom Filament Settings"))
+        self.custom_filament_page_header_title.setProperty("class", _translate("filamentStackedWidget", "title_text"))
+        self.custom_filament_header_back_btn.setText(_translate("filamentStackedWidget", "Back"))
+        self.custom_filament_header_back_btn.setProperty("class", _translate("filamentStackedWidget", "menu_btn"))
+        self.custom_filament_temperature_settings_title.setText(_translate("filamentStackedWidget", "Filament Temperature:"))
+        self.cfil_temp_settings_display_button.setProperty("button_type", _translate("filamentStackedWidget", "display"))
+        self.cfil_name_settings_title.setText(_translate("filamentStackedWidget", "Filament Name"))
+        self.cfil_name_save_btn.setProperty("button_type", _translate("filamentStackedWidget", "icon"))
         self.cfil_load_btn.setText(_translate("filamentStackedWidget", "Load"))
-        self.cfil_load_btn.setProperty(
-            "class", _translate("filamentStackedWidget", "menu_btn")
-        )
-        self.cfil_load_btn.setProperty(
-            "button_type", _translate("filamentStackedWidget", "normal")
-        )
-
-
+        self.cfil_load_btn.setProperty("class", _translate("filamentStackedWidget", "menu_btn"))
+        self.cfil_load_btn.setProperty("button_type", _translate("filamentStackedWidget", "normal"))
 from lib.utils.blocks_button import BlocksCustomButton
+from lib.utils.blocks_frame import BlocksCustomFrame
 from lib.utils.icon_button import IconButton
