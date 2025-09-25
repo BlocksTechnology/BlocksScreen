@@ -56,7 +56,7 @@ class FilesPage(QtWidgets.QWidget):
     @QtCore.pyqtSlot(name="reset-dir")
     def reset_dir(self) -> None:
         self.curr_dir = ""
-        self.request_dir_info[str].emit(self.curr_dir)
+        # self.request_dir_info[str].emit(self.curr_dir)
 
     def showEvent(self, a0: QtGui.QShowEvent) -> None:
         self._build_file_list()

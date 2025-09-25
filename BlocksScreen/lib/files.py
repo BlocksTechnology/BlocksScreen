@@ -44,6 +44,9 @@ class Files(QtCore.QObject):
         self.request_file_list.connect(slot=self.ws.api.get_file_list)
         self.request_file_list[str].connect(slot=self.ws.api.get_file_list)
         self.request_dir_info.connect(slot=self.ws.api.get_dir_information)
+        self.request_dir_info[str, bool].connect(
+            self.ws.api.get_dir_information
+        )
         self.request_dir_info[str].connect(
             slot=self.ws.api.get_dir_information
         )
@@ -60,13 +63,14 @@ class Files(QtCore.QObject):
 
     def handle_message_received(self, method: str, data, params: dict) -> None:
         if "server.files.list" in method:
+            # Get all files in root and its subdirectories and
+            # request their metadata
             self.files.clear()
             self.files = data
             [
                 self.request_file_metadata.emit(item["path"])
                 for item in self.files
             ]
-            self.on_file_list.emit(self.files)
         elif "server.files.metadata" in method:
             if data["filename"] in self.files_metadata.keys():
                 if not data.get("filename", None):
@@ -75,17 +79,11 @@ class Files(QtCore.QObject):
             else:
                 self.files_metadata[data["filename"]] = data
         elif "server.files.get_directory" in method:
+            # Emit here the files for each directory so the
+            # ui can build the files list
             self.directories = data.get("dirs", {})
             self.files.clear()
             self.files = data.get("files", [])
-            [
-                self.request_file_metadata.emit(
-                    item["filename"]
-                    if "filename" in item.keys()
-                    else item["path"]
-                )
-                for item in self.files
-            ]
             self.on_file_list[list].emit(self.files)
             self.on_dirs[list].emit(self.directories)
 
@@ -192,8 +190,11 @@ class Files(QtCore.QObject):
             self.files.clear()
             return False
         elif a1.type() == events.KlippyReady.type():
-            # self.request_file_list.emit()
-            self.request_dir_info.emit()
+            # Request all files including in subdirectories
+            # in order to get all metadata
+            self.request_file_list.emit()
+            # List and directory build is depended only on this signal
+            self.request_dir_info[str, bool].emit("", False)
             return False
         return super().eventFilter(a0, a1)
 

@@ -581,9 +581,9 @@ class MoonAPI(QtCore.QObject):
             f"/server/files/{root}/{filename}"
         )
 
+    @QtCore.pyqtSlot(name="api-get-dir-info")
     @QtCore.pyqtSlot(str, name="api-get-dir-info")
     @QtCore.pyqtSlot(str, bool, name="api-get-dir-info")
-    @QtCore.pyqtSlot(name="api-get-dir-info")
     def get_dir_information(self, directory: str = "", extended: bool = True):
         if not isinstance(directory, str):
             return False
