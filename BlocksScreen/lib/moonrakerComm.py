@@ -35,27 +35,7 @@ class OneShotTokenError(Exception):
 
 
 class MoonWebSocket(QtCore.QObject, threading.Thread):
-    """MoonWebSocket class object for creating a websocket connection to Moonraker.
-
-    This class handles all there is to do with connecting to Moonraker to gather information.
-    Tries the to connect the the websocket, if no connection is established the class retries three times, after which it may or may not
-    successfully connect to the websocket. If not sends an event accordingly, the user may then try to connect again.
-
-
-    The class also exposes an api to use with moonraker.
-
-
-    Args:
-        QObject (QtCore.QObject): Double inheritance from QObject.
-        threading.Thread (threading.Thread): Double inheritance from threading.Thread
-
-    Raises:
-        Exception: _description_
-        Exception: _description_
-        Exception: _description_
-        Exception: _description_
-
-    """
+    """MoonWebSocket class object for creating a websocket connection to Moonraker."""
 
     QUERY_KLIPPY_TIMEOUT: int = 2
     connected = False
@@ -92,7 +72,7 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
         self._wst = None
         self._request_id = 0
         self.request_table = {}
-        self._moonRest = MoonRest(host= self._host, port = self._port)
+        self._moonRest = MoonRest(host=self._host, port=self._port)
         self.api: MoonAPI = MoonAPI(self)
         self._retry_timer: RepeatedTimer
         websocket.setdefaulttimeout(self.timeout)
@@ -200,8 +180,6 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
             self.ws.close()
             if self._wst.is_alive():
                 self._wst.join()
-            # self.join()
-            # self.ws.close()
             _logger.info("Websocket closed")
 
     def on_error(self, *args) -> None:
@@ -292,7 +270,6 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
         )  # First argument is ws second is message
 
         response: dict = json.loads(_message)
-
         if "id" in response and response["id"] in self.request_table:
             _entry = self.request_table.pop(response["id"])
             if "server.info" in _entry[0]:
@@ -385,7 +362,6 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
     #         or event.type() == KlippyShutdown.type()
     #     ):
     #         # * Received notify_klippy_disconnected, start querying server information again to check if klipper is available
-    #         print("Klipper reported shutdown or error")
     #         self.evaluate_klippy_status()
     #     return super().customEvent(event)
 
@@ -542,26 +518,26 @@ class MoonAPI(QtCore.QObject):
             params={"interface": interface},
         )
 
-    @QtCore.pyqtSlot(name="api_request_file_list")
-    def get_file_list(self, root_folder: str | None = None):
-        # If the root argument is omitted the request will default to the gcodes root.
-        if root_folder is None:
-            return self._ws.send_request(method="server.files.list", params={})
+    @QtCore.pyqtSlot(name="api-request-file-list")
+    @QtCore.pyqtSlot(str, name="api-request-file-list")
+    def get_file_list(self, root_folder: str = "gcodes"):
         return self._ws.send_request(
             method="server.files.list", params={"root": root_folder}
         )
 
+    @QtCore.pyqtSlot(name="api-list-roots")
     def list_registered_roots(self):
         return self._ws.send_request(method="server.files.roots")
 
     @QtCore.pyqtSlot(str, name="api_request_file_list")
     def get_gcode_metadata(self, filename_dir: str):
-        if isinstance(filename_dir, str) is False or filename_dir is None:
+        if not isinstance(filename_dir, str) or not filename_dir:
             return False
         return self._ws.send_request(
             method="server.files.metadata", params={"filename": filename_dir}
         )
 
+    @QtCore.pyqtSlot(str, name="api-scan-gcode-metadata")
     def scan_gcode_metadata(self, filename_dir: str):
         if isinstance(filename_dir, str) is False or filename_dir is None:
             return False
@@ -577,7 +553,16 @@ class MoonAPI(QtCore.QObject):
             method="server.files.thumbnails", params={"filename": filename_dir}
         )
 
-    @QtCore.pyqtSlot(str, str, name="file_download")
+    @QtCore.pyqtSlot(str, str, name="api-delete-file")
+    @QtCore.pyqtSlot(str, name="api-delete-file")
+    def delete_file(self, filename: str, root_dir: str = "gcodes"):
+        filepath = f"{root_dir}/{filename}"
+        return self._ws.send_request(
+            method="server.files.delete_file",
+            params={"path": filepath},
+        )
+
+    @QtCore.pyqtSlot(str, str, name="api-file_download")
     def download_file(self, root: str, filename: str):
         """download_file Retrieves file *filename* at root *root*, the filename must include the relative path if
         it is not in the root folder
@@ -596,14 +581,15 @@ class MoonAPI(QtCore.QObject):
             f"/server/files/{root}/{filename}"
         )
 
-    # def upload_file(self, ) # TODO: Maybe this is not necessary but either way do it
-
-    def get_dir_information(self, directory: str):
-        if isinstance(directory, str) is False or directory is None:
+    @QtCore.pyqtSlot(name="api-get-dir-info")
+    @QtCore.pyqtSlot(str, name="api-get-dir-info")
+    @QtCore.pyqtSlot(str, bool, name="api-get-dir-info")
+    def get_dir_information(self, directory: str = "", extended: bool = True):
+        if not isinstance(directory, str):
             return False
         return self._ws.send_request(
             method="server.files.get_directory",
-            params={"path": f"gcodes/{directory}", "extended": True},
+            params={"path": f"gcodes/{directory}", "extended": extended},
         )
 
     def create_directory(self, directory: str):

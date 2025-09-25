@@ -1,0 +1,12 @@
+[Unit]
+Description=USB Automount
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=2
+ExecStart=/usr/bin/udiskie --tray --automount
+User=$USER
+
+[Install]
+WantedBy=default.user.target

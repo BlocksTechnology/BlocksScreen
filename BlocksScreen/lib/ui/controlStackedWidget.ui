@@ -2817,270 +2817,6 @@ Steppers</string>
      </item>
     </layout>
    </widget>
-   <widget class="QWidget" name="verticalLayoutWidget">
-    <property name="geometry">
-     <rect>
-      <x>410</x>
-      <y>123</y>
-      <width>211</width>
-      <height>202</height>
-     </rect>
-    </property>
-    <layout class="QVBoxLayout" name="mva_xy_layout">
-     <property name="spacing">
-      <number>5</number>
-     </property>
-     <property name="leftMargin">
-      <number>0</number>
-     </property>
-     <property name="topMargin">
-      <number>5</number>
-     </property>
-     <property name="rightMargin">
-      <number>0</number>
-     </property>
-     <property name="bottomMargin">
-      <number>5</number>
-     </property>
-     <item alignment="Qt::AlignHCenter">
-      <widget class="IconButton" name="mva_up_btn">
-       <property name="enabled">
-        <bool>true</bool>
-       </property>
-       <property name="sizePolicy">
-        <sizepolicy hsizetype="MinimumExpanding" vsizetype="MinimumExpanding">
-         <horstretch>1</horstretch>
-         <verstretch>1</verstretch>
-        </sizepolicy>
-       </property>
-       <property name="minimumSize">
-        <size>
-         <width>60</width>
-         <height>60</height>
-        </size>
-       </property>
-       <property name="maximumSize">
-        <size>
-         <width>60</width>
-         <height>60</height>
-        </size>
-       </property>
-       <property name="styleSheet">
-        <string notr="true"/>
-       </property>
-       <property name="text">
-        <string/>
-       </property>
-       <property name="iconSize">
-        <size>
-         <width>16</width>
-         <height>16</height>
-        </size>
-       </property>
-       <property name="checkable">
-        <bool>false</bool>
-       </property>
-       <property name="checked">
-        <bool>false</bool>
-       </property>
-       <property name="flat">
-        <bool>true</bool>
-       </property>
-       <property name="button_type" stdset="0">
-        <string>icon</string>
-       </property>
-       <property name="icon_pixmap" stdset="0">
-        <pixmap resource="resources/icon_resources.qrc">:/arrow_icons/media/btn_icons/up_arrow.svg</pixmap>
-       </property>
-      </widget>
-     </item>
-     <item>
-      <layout class="QHBoxLayout" name="mva_y_layout">
-       <property name="spacing">
-        <number>5</number>
-       </property>
-       <item alignment="Qt::AlignLeft|Qt::AlignVCenter">
-        <widget class="IconButton" name="mva_left_btn">
-         <property name="enabled">
-          <bool>true</bool>
-         </property>
-         <property name="sizePolicy">
-          <sizepolicy hsizetype="MinimumExpanding" vsizetype="MinimumExpanding">
-           <horstretch>1</horstretch>
-           <verstretch>1</verstretch>
-          </sizepolicy>
-         </property>
-         <property name="minimumSize">
-          <size>
-           <width>60</width>
-           <height>60</height>
-          </size>
-         </property>
-         <property name="maximumSize">
-          <size>
-           <width>60</width>
-           <height>60</height>
-          </size>
-         </property>
-         <property name="styleSheet">
-          <string notr="true"/>
-         </property>
-         <property name="text">
-          <string/>
-         </property>
-         <property name="iconSize">
-          <size>
-           <width>16</width>
-           <height>16</height>
-          </size>
-         </property>
-         <property name="checkable">
-          <bool>false</bool>
-         </property>
-         <property name="checked">
-          <bool>false</bool>
-         </property>
-         <property name="flat">
-          <bool>true</bool>
-         </property>
-         <property name="button_type" stdset="0">
-          <string>icon</string>
-         </property>
-         <property name="icon_pixmap" stdset="0">
-          <pixmap resource="resources/icon_resources.qrc">:/arrow_icons/media/btn_icons/left_arrow.svg</pixmap>
-         </property>
-        </widget>
-       </item>
-       <item alignment="Qt::AlignHCenter|Qt::AlignVCenter">
-        <widget class="BlocksLabel" name="mva_middle">
-         <property name="minimumSize">
-          <size>
-           <width>60</width>
-           <height>60</height>
-          </size>
-         </property>
-         <property name="maximumSize">
-          <size>
-           <width>60</width>
-           <height>60</height>
-          </size>
-         </property>
-         <property name="text">
-          <string/>
-         </property>
-         <property name="icon_pixmap" stdset="0">
-          <pixmap resource="resources/icon_resources.qrc">:/ui/media/btn_icons/center_arrows.svg</pixmap>
-         </property>
-        </widget>
-       </item>
-       <item alignment="Qt::AlignRight|Qt::AlignVCenter">
-        <widget class="IconButton" name="mva_right_btn">
-         <property name="enabled">
-          <bool>true</bool>
-         </property>
-         <property name="sizePolicy">
-          <sizepolicy hsizetype="MinimumExpanding" vsizetype="MinimumExpanding">
-           <horstretch>1</horstretch>
-           <verstretch>1</verstretch>
-          </sizepolicy>
-         </property>
-         <property name="minimumSize">
-          <size>
-           <width>60</width>
-           <height>60</height>
-          </size>
-         </property>
-         <property name="maximumSize">
-          <size>
-           <width>60</width>
-           <height>60</height>
-          </size>
-         </property>
-         <property name="styleSheet">
-          <string notr="true"/>
-         </property>
-         <property name="text">
-          <string/>
-         </property>
-         <property name="iconSize">
-          <size>
-           <width>16</width>
-           <height>16</height>
-          </size>
-         </property>
-         <property name="checkable">
-          <bool>false</bool>
-         </property>
-         <property name="checked">
-          <bool>false</bool>
-         </property>
-         <property name="flat">
-          <bool>true</bool>
-         </property>
-         <property name="button_type" stdset="0">
-          <string>icon</string>
-         </property>
-         <property name="icon_pixmap" stdset="0">
-          <pixmap resource="resources/icon_resources.qrc">:/arrow_icons/media/btn_icons/right_arrow.svg</pixmap>
-         </property>
-        </widget>
-       </item>
-      </layout>
-     </item>
-     <item alignment="Qt::AlignHCenter">
-      <widget class="IconButton" name="mva_down_btn">
-       <property name="enabled">
-        <bool>true</bool>
-       </property>
-       <property name="sizePolicy">
-        <sizepolicy hsizetype="MinimumExpanding" vsizetype="MinimumExpanding">
-         <horstretch>1</horstretch>
-         <verstretch>1</verstretch>
-        </sizepolicy>
-       </property>
-       <property name="minimumSize">
-        <size>
-         <width>60</width>
-         <height>60</height>
-        </size>
-       </property>
-       <property name="maximumSize">
-        <size>
-         <width>60</width>
-         <height>60</height>
-        </size>
-       </property>
-       <property name="styleSheet">
-        <string notr="true"/>
-       </property>
-       <property name="text">
-        <string/>
-       </property>
-       <property name="iconSize">
-        <size>
-         <width>16</width>
-         <height>16</height>
-        </size>
-       </property>
-       <property name="checkable">
-        <bool>false</bool>
-       </property>
-       <property name="checked">
-        <bool>false</bool>
-       </property>
-       <property name="flat">
-        <bool>true</bool>
-       </property>
-       <property name="button_type" stdset="0">
-        <string>icon</string>
-       </property>
-       <property name="icon_pixmap" stdset="0">
-        <pixmap resource="resources/icon_resources.qrc">:/arrow_icons/media/btn_icons/down_arrow.svg</pixmap>
-       </property>
-      </widget>
-     </item>
-    </layout>
-   </widget>
    <widget class="QWidget" name="verticalLayoutWidget_2">
     <property name="geometry">
      <rect>
@@ -4256,6 +3992,272 @@ Steppers</string>
     <property name="text">
      <string>Move Length mm/s</string>
     </property>
+   </widget>
+   <widget class="QWidget" name="verticalLayoutWidget">
+    <property name="geometry">
+     <rect>
+      <x>440</x>
+      <y>140</y>
+      <width>171</width>
+      <height>171</height>
+     </rect>
+    </property>
+    <layout class="QGridLayout" name="gridLayout_2">
+     <property name="leftMargin">
+      <number>0</number>
+     </property>
+     <property name="topMargin">
+      <number>5</number>
+     </property>
+     <property name="rightMargin">
+      <number>0</number>
+     </property>
+     <property name="bottomMargin">
+      <number>5</number>
+     </property>
+     <item row="1" column="0">
+      <widget class="IconButton" name="mva_left_btn">
+       <property name="enabled">
+        <bool>true</bool>
+       </property>
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Minimum" vsizetype="Minimum">
+         <horstretch>1</horstretch>
+         <verstretch>1</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="minimumSize">
+        <size>
+         <width>60</width>
+         <height>60</height>
+        </size>
+       </property>
+       <property name="maximumSize">
+        <size>
+         <width>60</width>
+         <height>60</height>
+        </size>
+       </property>
+       <property name="styleSheet">
+        <string notr="true"/>
+       </property>
+       <property name="text">
+        <string/>
+       </property>
+       <property name="iconSize">
+        <size>
+         <width>16</width>
+         <height>16</height>
+        </size>
+       </property>
+       <property name="checkable">
+        <bool>false</bool>
+       </property>
+       <property name="checked">
+        <bool>false</bool>
+       </property>
+       <property name="flat">
+        <bool>true</bool>
+       </property>
+       <property name="button_type" stdset="0">
+        <string>icon</string>
+       </property>
+       <property name="icon_pixmap" stdset="0">
+        <pixmap resource="resources/icon_resources.qrc">:/arrow_icons/media/btn_icons/left_arrow.svg</pixmap>
+       </property>
+      </widget>
+     </item>
+     <item row="1" column="2">
+      <widget class="IconButton" name="mva_right_btn">
+       <property name="enabled">
+        <bool>true</bool>
+       </property>
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Minimum" vsizetype="Minimum">
+         <horstretch>1</horstretch>
+         <verstretch>1</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="minimumSize">
+        <size>
+         <width>60</width>
+         <height>60</height>
+        </size>
+       </property>
+       <property name="maximumSize">
+        <size>
+         <width>60</width>
+         <height>60</height>
+        </size>
+       </property>
+       <property name="styleSheet">
+        <string notr="true"/>
+       </property>
+       <property name="text">
+        <string/>
+       </property>
+       <property name="iconSize">
+        <size>
+         <width>16</width>
+         <height>16</height>
+        </size>
+       </property>
+       <property name="checkable">
+        <bool>false</bool>
+       </property>
+       <property name="checked">
+        <bool>false</bool>
+       </property>
+       <property name="flat">
+        <bool>true</bool>
+       </property>
+       <property name="button_type" stdset="0">
+        <string>icon</string>
+       </property>
+       <property name="icon_pixmap" stdset="0">
+        <pixmap resource="resources/icon_resources.qrc">:/arrow_icons/media/btn_icons/right_arrow.svg</pixmap>
+       </property>
+      </widget>
+     </item>
+     <item row="2" column="1">
+      <widget class="IconButton" name="mva_down_btn">
+       <property name="enabled">
+        <bool>true</bool>
+       </property>
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Minimum" vsizetype="Minimum">
+         <horstretch>1</horstretch>
+         <verstretch>1</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="minimumSize">
+        <size>
+         <width>60</width>
+         <height>60</height>
+        </size>
+       </property>
+       <property name="maximumSize">
+        <size>
+         <width>60</width>
+         <height>60</height>
+        </size>
+       </property>
+       <property name="styleSheet">
+        <string notr="true"/>
+       </property>
+       <property name="text">
+        <string/>
+       </property>
+       <property name="iconSize">
+        <size>
+         <width>60</width>
+         <height>60</height>
+        </size>
+       </property>
+       <property name="checkable">
+        <bool>false</bool>
+       </property>
+       <property name="checked">
+        <bool>false</bool>
+       </property>
+       <property name="flat">
+        <bool>true</bool>
+       </property>
+       <property name="button_type" stdset="0">
+        <string>icon</string>
+       </property>
+       <property name="icon_pixmap" stdset="0">
+        <pixmap resource="resources/icon_resources.qrc">:/arrow_icons/media/btn_icons/down_arrow.svg</pixmap>
+       </property>
+      </widget>
+     </item>
+     <item row="0" column="1">
+      <widget class="IconButton" name="mva_up_btn">
+       <property name="enabled">
+        <bool>true</bool>
+       </property>
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Minimum" vsizetype="Minimum">
+         <horstretch>1</horstretch>
+         <verstretch>1</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="minimumSize">
+        <size>
+         <width>60</width>
+         <height>60</height>
+        </size>
+       </property>
+       <property name="maximumSize">
+        <size>
+         <width>60</width>
+         <height>60</height>
+        </size>
+       </property>
+       <property name="styleSheet">
+        <string notr="true"/>
+       </property>
+       <property name="text">
+        <string/>
+       </property>
+       <property name="iconSize">
+        <size>
+         <width>60</width>
+         <height>60</height>
+        </size>
+       </property>
+       <property name="checkable">
+        <bool>false</bool>
+       </property>
+       <property name="checked">
+        <bool>false</bool>
+       </property>
+       <property name="flat">
+        <bool>true</bool>
+       </property>
+       <property name="button_type" stdset="0">
+        <string>icon</string>
+       </property>
+       <property name="icon_pixmap" stdset="0">
+        <pixmap resource="resources/icon_resources.qrc">:/arrow_icons/media/btn_icons/up_arrow.svg</pixmap>
+       </property>
+      </widget>
+     </item>
+     <item row="1" column="1">
+      <widget class="IconButton" name="mva_middle">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="minimumSize">
+        <size>
+         <width>60</width>
+         <height>60</height>
+        </size>
+       </property>
+       <property name="maximumSize">
+        <size>
+         <width>60</width>
+         <height>60</height>
+        </size>
+       </property>
+       <property name="text">
+        <string/>
+       </property>
+       <property name="flat">
+        <bool>true</bool>
+       </property>
+       <property name="button_type" stdset="0">
+        <string>icon</string>
+       </property>
+       <property name="icon_pixmap" stdset="0">
+        <pixmap resource="resources/icon_resources.qrc">:/ui/media/btn_icons/center_arrows.svg</pixmap>
+       </property>
+      </widget>
+     </item>
+    </layout>
    </widget>
   </widget>
   <widget class="QWidget" name="temperature_page">
@@ -5441,7 +5443,7 @@ Steppers</string>
   <customwidget>
    <class>IconButton</class>
    <extends>QPushButton</extends>
-   <header location="global">lib.utils.iconButton</header>
+   <header location="global">lib.utils.icon_button</header>
   </customwidget>
   <customwidget>
    <class>DisplayButton</class>
@@ -5461,21 +5463,17 @@ Steppers</string>
  </customwidgets>
  <resources>
   <include location="resources/icon_resources.qrc"/>
-  <include location="resources/icon_resources.qrc"/>
   <include location="resources/main_menu_resources.qrc"/>
   <include location="resources/system_resources.qrc"/>
   <include location="resources/top_bar_resources.qrc"/>
   <include location="resources/background_resources.qrc"/>
   <include location="resources/icon_resources.qrc"/>
-  <include location="resources/icon_resources.qrc"/>
-  <include location="resources/icon_resources.qrc"/>
-  <include location="resources/icon_resources.qrc"/>
  </resources>
  <connections/>
  <buttongroups>
-  <buttongroup name="extrude_select_length_group"/>
-  <buttongroup name="axis_select_speed_group"/>
-  <buttongroup name="axis_select_length_group"/>
   <buttongroup name="extrude_select_feedrate_group"/>
+  <buttongroup name="extrude_select_length_group"/>
+  <buttongroup name="axis_select_length_group"/>
+  <buttongroup name="axis_select_speed_group"/>
  </buttongroups>
 </ui>

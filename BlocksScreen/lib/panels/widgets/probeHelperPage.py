@@ -412,15 +412,11 @@ class ProbeHelper(QtWidgets.QWidget):
     def on_manual_probe_update(self, update: dict) -> None:
         if not update:
             return
-        # print("Received ´manual_probe´ object update...")
-        # print(update)
 
         # if update.get("z_position_lower"):
         # f"{update.get('z_position_lower'):.4f} mm"
-        # print(update)
         if update.get("is_active"):
             if not self.isVisible():
-                print("Requested probe helper page view")
                 self.request_page_view.emit()
 
             self.helper_initialize = False
@@ -448,9 +444,6 @@ class ProbeHelper(QtWidgets.QWidget):
         # TODO: Only check for messages if we are in the tool otherwise ignore them
         if self.isVisible():
             if data[0].startswith("!!"):  # An error occurred
-                print(
-                    f"Calibration aborted, gcode message: {data[0].strip('!! ')}"
-                )
                 if (
                     "already in a manual z probe"
                     in data[0].strip("!! ").lower()
