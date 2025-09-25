@@ -35,7 +35,9 @@ class ConfirmWidget(QtWidgets.QWidget):
         self._thumbnails = filedata.get("thumbnail_images", [])
 
         if self._thumbnails:
-            _biggest_thumbnail = self._thumbnails[2]
+            _biggest_thumbnail = self._thumbnails[
+                -1
+            ]  # Show last which is biggest
             self.thumbnail = QtGui.QImage(_biggest_thumbnail)
 
         _total_filament = filedata.get("filament_total")
@@ -63,7 +65,6 @@ class ConfirmWidget(QtWidgets.QWidget):
             + " seconds"
         )
         self.repaint()
-    
 
     def estimate_print_time(self, seconds: int) -> list:
         """Convert time in seconds format to days, hours, minutes, seconds.

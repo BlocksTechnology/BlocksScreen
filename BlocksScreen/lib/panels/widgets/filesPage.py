@@ -27,6 +27,9 @@ class FilesPage(QtWidgets.QWidget):
     request_file_list: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         [], [str], name="api-get-files-list"
     )
+    request_file_metadata: typing.ClassVar[QtCore.pyqtSignal] = (
+        QtCore.pyqtSignal(str, name="api-get-gcode-metadata")
+    )
     file_list: list = []
     files_data: dict = {}
     directories: list = []
@@ -47,7 +50,13 @@ class FilesPage(QtWidgets.QWidget):
         self.scrollbar.valueChanged.connect(
             lambda value: self.listWidget.verticalScrollBar().setValue(value)
         )
+        self.back_btn.clicked.connect(self.reset_dir)
         self.show()
+
+    @QtCore.pyqtSlot(name="reset-dir")
+    def reset_dir(self) -> None:
+        self.curr_dir = ""
+        self.request_dir_info[str].emit(self.curr_dir)
 
     def showEvent(self, a0: QtGui.QShowEvent) -> None:
         self._build_file_list()
@@ -57,8 +66,8 @@ class FilesPage(QtWidgets.QWidget):
     def on_file_list(self, file_list: list) -> None:
         self.files_data.clear()
         self.file_list = file_list
-        if self.isVisible():
-            self._build_file_list()
+        # if self.isVisible(): # Only build the list when directories come
+        #     self._build_file_list()
 
     @QtCore.pyqtSlot(list, name="on-dirs")
     def on_directories(self, directories_data: list) -> None:
@@ -130,9 +139,16 @@ class FilesPage(QtWidgets.QWidget):
                 if not path:
                     return
                 if widget.text() in path:
+                    file_path = (
+                        path
+                        if not self.curr_dir
+                        else str(self.curr_dir + "/" + path)
+                    )
                     self.file_selected.emit(
-                        str(path),
-                        self.files_data.get(f"{path}"),  # Defaults to Nothing
+                        str(file_path.removeprefix("/")),
+                        self.files_data.get(
+                            file_path.removeprefix("/")
+                        ),  # Defaults to Nothing
                     )
 
     @QtCore.pyqtSlot(QtWidgets.QListWidgetItem, str, name="dir-item-clicked")
@@ -150,14 +166,13 @@ class FilesPage(QtWidgets.QWidget):
             self._add_placeholder()
             return
         self.listWidget.setSpacing(35)
-        if self.directories:
-            if self.curr_dir != "" and self.curr_dir != "/":
-                self._add_back_folder_entry()  
+        if self.directories or self.curr_dir != "" :
+            if (self.curr_dir != "" and self.curr_dir != "/"):
+                self._add_back_folder_entry()
             for dir_data in self.directories:
                 if dir_data.get("dirname").startswith("."):
                     continue
                 self._add_directory_list_item(dir_data)
-
         sorted_list = sorted(
             self.file_list, key=lambda x: x["modified"], reverse=True
         )
@@ -186,7 +201,7 @@ class FilesPage(QtWidgets.QWidget):
         self.listWidget.addItem(list_item)
         self.listWidget.setItemWidget(list_item, button)
         button.clicked.connect(
-            lambda: self._dirItemClicked(list_item, str("/" + f"{dir_name}"))
+            lambda: self._dirItemClicked(list_item, "/" + dir_name)
         )
 
     def _add_back_folder_entry(self) -> None:
@@ -216,12 +231,16 @@ class FilesPage(QtWidgets.QWidget):
     def _add_file_list_item(self, file_data_item) -> None:
         if not file_data_item:
             return
-        button = ListCustomButton()
+
         name = (
             file_data_item["path"]
             if "path" in file_data_item.keys()
             else file_data_item["filename"]
         )
+        if not name.endswith(".gcode"):
+            # Only list .gcode files, all else ignore
+            return
+        button = ListCustomButton()
         button.setText(name[:-6])
         button.setPixmap(
             QtGui.QPixmap(":/arrow_icons/media/btn_icons/right_arrow.svg")
@@ -235,9 +254,11 @@ class FilesPage(QtWidgets.QWidget):
         self.listWidget.addItem(list_item)
         self.listWidget.setItemWidget(list_item, button)
         button.clicked.connect(lambda: self._fileItemClicked(list_item))
-        self.request_file_info.emit(
-            name
-        )
+        file_path = (
+            name if not self.curr_dir else str(self.curr_dir + "/" + name)
+        ).removeprefix("/")
+        self.request_file_metadata.emit(file_path.removeprefix("/"))
+        self.request_file_info.emit(file_path.removeprefix("/"))
 
     def _add_spacer(self) -> None:
         spacer_item = QtWidgets.QListWidgetItem()

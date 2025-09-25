@@ -96,10 +96,17 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.filesPage_widget.request_file_info.connect(
             self.file_data.on_request_fileinfo
         )
+        self.filesPage_widget.request_file_metadata.connect(
+            self.file_data.request_file_metadata
+        )
         self.file_data.fileinfo.connect(self.filesPage_widget.on_fileinfo)
-        
-        self.filesPage_widget.request_file_list[str].connect(self.file_data.request_file_list)
-        self.filesPage_widget.request_file_list.connect(self.file_data.request_file_list)
+
+        self.filesPage_widget.request_file_list[str].connect(
+            self.file_data.request_file_list
+        )
+        self.filesPage_widget.request_file_list.connect(
+            self.file_data.request_file_list
+        )
         self.file_data.on_dirs.connect(self.filesPage_widget.on_directories)
         self.filesPage_widget.request_dir_info[str].connect(
             self.file_data.request_dir_info[str]

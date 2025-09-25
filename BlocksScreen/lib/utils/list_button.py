@@ -172,7 +172,7 @@ class ListCustomButton(QtWidgets.QPushButton):
             adjusted_y = (
                 # left_icon_rect.y()
                 # + (left_icon_rect.height() - left_icon_scaled.height()) // 2.0
-                + (self.height()-left_icon_rect.height() ) // 2.0
+                +(self.height() - left_icon_rect.height()) // 2.0
             )
             adjusted_left_icon_rect = QtCore.QRectF(
                 adjusted_x,

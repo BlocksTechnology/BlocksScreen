@@ -531,7 +531,7 @@ class MoonAPI(QtCore.QObject):
 
     @QtCore.pyqtSlot(str, name="api_request_file_list")
     def get_gcode_metadata(self, filename_dir: str):
-        if isinstance(filename_dir, str) is False or filename_dir is None:
+        if not isinstance(filename_dir, str) or not filename_dir:
             return False
         return self._ws.send_request(
             method="server.files.metadata", params={"filename": filename_dir}

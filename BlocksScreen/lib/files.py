@@ -11,7 +11,9 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 
 class Files(QtCore.QObject):
     request_file_list = QtCore.pyqtSignal([], [str], name="api-get-files-list")
-    request_dir_info = QtCore.pyqtSignal([], [str],[str, bool], name="api-get-dir-info")
+    request_dir_info = QtCore.pyqtSignal(
+        [], [str], [str, bool], name="api-get-dir-info"
+    )
     request_file_metadata = QtCore.pyqtSignal([str], name="get_file_metadata")
     request_files_thumbnails = QtCore.pyqtSignal(
         [str], name="request_files_thumbnail"
@@ -77,8 +79,11 @@ class Files(QtCore.QObject):
             self.files.clear()
             self.files = data.get("files", [])
             [
-                # self.request_file_metadata.emit(item["path"])
-                self.request_file_metadata.emit(item["filename"])
+                self.request_file_metadata.emit(
+                    item["filename"]
+                    if "filename" in item.keys()
+                    else item["path"]
+                )
                 for item in self.files
             ]
             self.on_file_list[list].emit(self.files)

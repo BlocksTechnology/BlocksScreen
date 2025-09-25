@@ -95,6 +95,7 @@ class JobStatusWidget(QtWidgets.QWidget):
 
         return super().eventFilter(source, event)
 
+    @QtCore.pyqtSlot(name="show-thumbnail")
     def showthumbnail(self):
         self.contentWidget.hide()
         self.progressWidget.hide()
@@ -103,6 +104,7 @@ class JobStatusWidget(QtWidgets.QWidget):
         self.smallthumb_widget.hide()
         self.bigthumb_widget.show()
 
+    @QtCore.pyqtSlot(name="hide-thumbnail")
     def hidethumbnail(self):
         self.contentWidget.show()
         self.progressWidget.show()
@@ -111,6 +113,7 @@ class JobStatusWidget(QtWidgets.QWidget):
         self.smallthumb_widget.show()
         self.bigthumb_widget.hide()
 
+    @QtCore.pyqtSlot(name="handle-cancel")
     def handleCancel(self) -> None:
         """Handle the cancel print job dialog"""
         self.canceldialog.set_message(
@@ -162,15 +165,18 @@ class JobStatusWidget(QtWidgets.QWidget):
 
     @QtCore.pyqtSlot(dict, name="on_fileinfo")
     def on_fileinfo(self, fileinfo: dict) -> None:
+        if not self.isVisible():
+            return
         self.total_layers = str(fileinfo.get("layer_count", "?"))
         self.layer_display_button.setText("?")
         if (
             fileinfo.get("thumbnail_images", [])
             and len(fileinfo.get("thumbnail_images", [])) > 0
         ):
-            # Assign the first thumbnail to both by default
             self.smalthumbnail = fileinfo["thumbnail_images"][1]
-            self.bigthumbnail = fileinfo["thumbnail_images"][2]
+            self.bigthumbnail = fileinfo["thumbnail_images"][
+                -1
+            ]  # Last 'biggest' element
 
         self.layer_display_button.secondary_text = str(self.total_layers)
         self.file_metadata = fileinfo
