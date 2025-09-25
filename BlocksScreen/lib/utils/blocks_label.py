@@ -38,6 +38,9 @@ class BlocksLabel(QtWidgets.QLabel):
             QtCore.QEasingCurve().Type.InOutQuart
         )
         self.glow_animation.setDuration(self.animation_speed)
+        
+        self.glow_animation.finished.connect(self.change_glow_direction)
+        self.glow_animation.finished.connect(self.repaint)
 
         self.total_scroll_width: float = 0.0
         self.marquee_delay = 5000
@@ -113,26 +116,24 @@ class BlocksLabel(QtWidgets.QLabel):
     @QtCore.pyqtSlot(name="start_glow_animation")
     def start_glow_animation(self) -> None:
         self.glow_animation.setDuration(self.animation_speed)
-        start_color = QtGui.QColor("#E9575700")
+        start_color = QtGui.QColor("#00000000")
         self.glow_animation.setStartValue(start_color)
-        end_color = QtGui.QColor(self.glow_color)
-        self.glow_animation.setEndValue(end_color)
+        base_end_color = QtGui.QColor("#E95757")
+        self.glow_animation.setEndValue(base_end_color)
+
         self.glow_animation.setDirection(
             QtCore.QPropertyAnimation.Direction.Forward
         )
         self.glow_animation.setLoopCount(-1)
-        self.glow_animation.finished.connect(self.change_glow_direction)
-        self.glow_animation.finished.connect(self.repaint)
         self.glow_animation.start()
 
     @QtCore.pyqtSlot(name="change_glow_direction")
     def change_glow_direction(self) -> None:
-        self.glow_animation.setDirection(
-            self.glow_animation.Direction.Backward
-            if self.glow_animation.direction()
-            == self.glow_animation.Direction.Forward
-            else self.glow_animation.Direction.Forward
-        )
+        current_direction = self.glow_animation.direction()
+        if current_direction == self.glow_animation.Direction.Forward:
+            self.glow_animation.setDirection(self.glow_animation.Direction.Backward)
+        else:
+            self.glow_animation.setDirection(self.glow_animation.Direction.Forward)
 
     def update_text_metrics(self) -> None:
         font_metrics = self.fontMetrics()
@@ -251,7 +252,6 @@ class BlocksLabel(QtWidgets.QLabel):
             )
             subtracted.setFillRule(QtCore.Qt.FillRule.OddEvenFill)
             qp.fillPath(subtracted, self.glow_color)
-
         if self._text:
             qp.setCompositionMode(
                 qp.CompositionMode.CompositionMode_SourceOver
@@ -264,7 +264,11 @@ class BlocksLabel(QtWidgets.QLabel):
 
             text_option = QtGui.QTextOption(self.alignment())
             text_option.setWrapMode(QtGui.QTextOption.WrapMode.NoWrap)
-
+            qp.drawText(
+                QtCore.QRectF(text_rect),
+                self._text,
+                text_option,
+            )
             if self._marquee and self.text_width > self.label_width:
                 # Draw the main text instance
                 draw_rect = QtCore.QRectF(
@@ -273,8 +277,9 @@ class BlocksLabel(QtWidgets.QLabel):
                     self.text_width,
                     self.contentsRect().height()
                 )
-                qp.drawText(draw_rect, self._text, text_option)
-
+                qp.drawText(
+                    QtCore.QRectF(second_text_rect), self._text, text_option
+                )
 
                 draw_rect2 = QtCore.QRectF(
                     self.contentsRect().x() + self.scroll_pos + self.text_width + self.marquee_spacing,
@@ -293,4 +298,3 @@ class BlocksLabel(QtWidgets.QLabel):
         if name == "icon_pixmap":
             self.setPixmap(value)
         return super().setProperty(name, value)
-
