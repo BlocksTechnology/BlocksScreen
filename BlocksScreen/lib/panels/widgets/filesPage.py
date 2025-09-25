@@ -146,7 +146,7 @@ class FilesPage(QtWidgets.QWidget):
         """Inserts the currently available gcode files on the QListWidget"""
         self.listWidget.blockSignals(True)
         self.listWidget.clear()
-        if not self.file_list:
+        if not self.file_list and not self.directories:
             self._add_placeholder()
             return
         self.listWidget.setSpacing(35)
@@ -161,7 +161,6 @@ class FilesPage(QtWidgets.QWidget):
         sorted_list = sorted(
             self.file_list, key=lambda x: x["modified"], reverse=True
         )
-
         for item in sorted_list:
             self._add_file_list_item(item)
         self._add_spacer()
