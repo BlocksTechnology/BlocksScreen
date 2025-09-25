@@ -91,6 +91,8 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
 
     @state.setter
     def state(self, new_state: State) -> None:
+        if self._state == new_state: 
+            return 
         self._state = new_state
         if self.isVisible():
             self.stateChange.emit(self._state)

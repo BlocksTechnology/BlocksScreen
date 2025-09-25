@@ -19,7 +19,7 @@ export XDG_RUNTIME_DIR
 SCRIPT_PATH=$(dirname $(realpath $0))
 if [ -f $SCRIPT_PATH/launch_BlocksScreen.sh ]; then
     echo "Running $SCRIPT_PATH/launch_BlocksScreen.sh"
-    $SCRIPT_PATH/launch_BlocksScrenn.sh
+    $SCRIPT_PATH/launch_BlocksScreen.sh
     exit $?
 fi
 

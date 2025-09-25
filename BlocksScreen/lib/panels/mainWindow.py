@@ -42,9 +42,7 @@ class MainWindow(QtWidgets.QMainWindow):
     handle_error_response = QtCore.pyqtSignal(
         list, name="handle_error_response"
     )
-    call_network_panel = QtCore.pyqtSignal(
-        name="visibilityChange_networkPanel"
-    )
+    call_network_panel = QtCore.pyqtSignal(name="call-network-panel")
 
     def __init__(self):
         super(MainWindow, self).__init__()
@@ -86,7 +84,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.conn_window.on_websocket_connection_lost
         )
 
-        self.printPanel.request_back_page.connect(slot=self.global_back)
+        self.printPanel.request_back.connect(slot=self.global_back)
         self.printPanel.request_change_page.connect(
             slot=self.global_change_page
         )
@@ -103,21 +101,39 @@ class MainWindow(QtWidgets.QMainWindow):
             slot=self.global_change_page
         )
         self.ui.extruder_temp_display.clicked.connect(
-            partial(self.global_change_page, 2, 4)
+            lambda: self.global_change_page(
+                self.ui.main_content_widget.indexOf(self.ui.controlTab),
+                self.controlPanel.indexOf(
+                    self.controlPanel.panel.temperature_page
+                ),
+            )
         )
         self.ui.bed_temp_display.clicked.connect(
-            partial(self.global_change_page, 2, 4)
+            lambda: self.global_change_page(
+                self.ui.main_content_widget.indexOf(self.ui.controlTab),
+                self.controlPanel.indexOf(
+                    self.controlPanel.panel.temperature_page
+                ),
+            )
         )
         self.ui.filament_type_icon.clicked.connect(
-            partial(self.global_change_page, 1, 1)
+            lambda: self.global_change_page(
+                self.ui.main_content_widget.indexOf(self.ui.filamentTab),
+                self.filamentPanel.indexOf(self.filamentPanel.panel.load_page),
+            )
         )
         self.ui.filament_type_icon.setText("PLA")
         self.ui.filament_type_icon.update()
         self.ui.nozzle_size_icon.setText("0.4mm")
         self.ui.nozzle_size_icon.update()
-        self.ws.connected_signal.connect(
-            slot=self.file_data.request_file_list.emit
-        )
+        
+        # self.ws.connected_signal.connect(
+        #     slot=self.file_data.request_file_list.emit
+        # )
+        # self.ws.connected_signal.connect(
+        #     slot=self.file_data.request_dir_info.emit
+        # )
+        
         self.conn_window.retry_connection_clicked.connect(
             slot=self.ws.retry_wb_conn
         )
@@ -139,13 +155,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui.main_content_widget.currentChanged.connect(
             slot=self.reset_tab_indexes
         )
-        # self.printPanel.request_block_manual_tab_change.connect(
-        # self.disable_tab_bar
-        # )
-        # self.printPanel.request_activate_manual_tab_change.connect(
-        # self.enable_tab_bar
-        # )
-        self.call_network_panel.connect(self.networkPanel.call_network_panel)
+        self.call_network_panel.connect(self.networkPanel.show_network_panel)
         self.conn_window.wifi_button_clicked.connect(
             self.call_network_panel.emit
         )
@@ -163,42 +173,72 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.reset_tab_indexes()
 
-    def enable_tab_bar(self) -> None:
-        """Enables the tab bar"""
-        if (
-            self.ui.main_content_widget.isTabEnabled(1)
-            and self.ui.main_content_widget.isTabEnabled(2)
-            and self.ui.main_content_widget.isTabEnabled(3)
-            and self.ui.main_content_widget.isTabEnabled(4)
-            and self.ui.header_main_layout.isEnabled()
-        ):
-            self.ui.main_content_widget.setTabEnabled(1, True)
-            self.ui.main_content_widget.setTabEnabled(2, True)
-            self.ui.main_content_widget.setTabEnabled(3, True)
-            self.ui.main_content_widget.setTabEnabled(4, True)
-            self.ui.header_main_layout.setEnabled(True)
+    def enable_tab_bar(self) -> bool:
+        """Enables the tab bar
 
-    def disable_tab_bar(self) -> bool:
-        """Disables the tab bar so to not change the tab.
+            `This method is only used when a print job is ongoing, so the printTab is never disabled`
 
         Returns:
             bool: True if the TabBar was disabled
         """
 
-        self.ui.main_content_widget.setTabEnabled(1, False)
-        self.ui.main_content_widget.setTabEnabled(2, False)
-        self.ui.main_content_widget.setTabEnabled(3, False)
-        self.ui.main_content_widget.setTabEnabled(4, False)
+        self.ui.main_content_widget.setTabEnabled(
+            self.ui.main_content_widget.indexOf(self.ui.filamentTab), True
+        )
+        self.ui.main_content_widget.setTabEnabled(
+            self.ui.main_content_widget.indexOf(self.ui.controlTab), True
+        )
+        self.ui.main_content_widget.setTabEnabled(
+            self.ui.main_content_widget.indexOf(self.ui.utilitiesTab), True
+        )
+        self.ui.header_main_layout.setEnabled(True)
+        return all(
+            [
+                not self.ui.main_content_widget.isTabEnabled(
+                    self.ui.main_content_widget.indexOf(self.ui.filamentTab)
+                ),
+                not self.ui.main_content_widget.isTabEnabled(
+                    self.ui.main_content_widget.indexOf(self.ui.controlTab)
+                ),
+                not self.ui.main_content_widget.isTabEnabled(
+                    self.ui.main_content_widget.indexOf(self.ui.utilitiesTab)
+                ),
+                not self.ui.header_main_layout.isEnabled(),
+            ]
+        )
+
+    def disable_tab_bar(self) -> bool:
+        """Disables the tab bar so to not change the tab.
+
+            `This method is only used when a print job is ongoing, so the printTab is never disabled`
+
+        Returns:
+            bool: True if the TabBar was disabled
+        """
+        self.ui.main_content_widget.setTabEnabled(
+            self.ui.main_content_widget.indexOf(self.ui.filamentTab), False
+        )
+        self.ui.main_content_widget.setTabEnabled(
+            self.ui.main_content_widget.indexOf(self.ui.controlTab), False
+        )
+        self.ui.main_content_widget.setTabEnabled(
+            self.ui.main_content_widget.indexOf(self.ui.utilitiesTab), False
+        )
         self.ui.header_main_layout.setEnabled(False)
 
-        return (
-            False
-            if self.ui.main_content_widget.isTabEnabled(1)
-            and self.ui.main_content_widget.isTabEnabled(2)
-            and self.ui.main_content_widget.isTabEnabled(3)
-            and self.ui.main_content_widget.isTabEnabled(4)
-            and self.ui.header_main_layout.isEnabled()
-            else True
+        return all(
+            [
+                not self.ui.main_content_widget.isTabEnabled(
+                    self.ui.main_content_widget.indexOf(self.ui.filamentTab)
+                ),
+                not self.ui.main_content_widget.isTabEnabled(
+                    self.ui.main_content_widget.indexOf(self.ui.controlTab)
+                ),
+                not self.ui.main_content_widget.isTabEnabled(
+                    self.ui.main_content_widget.indexOf(self.ui.utilitiesTab)
+                ),
+                not self.ui.header_main_layout.isEnabled(),
+            ]
         )
 
     def reset_tab_indexes(self):
@@ -258,6 +298,7 @@ class MainWindow(QtWidgets.QMainWindow):
             _logger.debug(
                 f"Panel page index expected type int, {type(panel_index)}"
             )
+        self.printPanel.loadscreen.hide()
         current_page = [
             self.ui.main_content_widget.currentIndex(),
             self.current_panel_index(),
@@ -284,7 +325,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.index_stack.pop()  # Remove the last position.
         _logger.debug("Successfully went back a page.")
 
-    @QtCore.pyqtSlot(name="bo_start_websocket_connection")
+    @QtCore.pyqtSlot(name="bo-start-websocket-connection")
     def bo_start_websocket_connection(self) -> None:
         """Starts the Websocket connection with moonraker"""
         self.ws.start()
@@ -319,9 +360,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 "No method found on message received from websocket"
             )
         if not _data:
-            raise Exception(
-                "No data found on message received from websocket."
-            )
+            return
 
         if "server.file" in _method:
             file_data_event = events.ReceivedFileData(
@@ -360,11 +399,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.printer_object_report_signal[list].emit(
                     _objects_response_list
                 )
-                # TODO: This
-                # ! Don't display chamber temperatures if there is no chamber, should do the
-                if not self.printer.has_chamber:
-                    # self.ui.chamber_temperature_frame.hide()
-                    ...
+
             if "query" in _method:
                 if isinstance(_data["status"], dict):
                     _object_report = [_data["status"]]
@@ -455,6 +490,9 @@ class MainWindow(QtWidgets.QMainWindow):
 
         elif "error" in _method:
             self.handle_error_response[list].emit([_data, _metadata])
+            if "metadata" in _data.get("message", "").lower():
+                # Quick fix, don't care about no metadata errors
+                return
             self.popup.new_message(
                 message_type=Popup.MessageType.ERROR,
                 message=str(_data),
@@ -541,16 +579,50 @@ class MainWindow(QtWidgets.QMainWindow):
             return False
         elif event.type() == events.PrintStart.type():
             self.disable_tab_bar()
+            self.ui.extruder_temp_display.clicked.disconnect()
+            self.ui.bed_temp_display.clicked.disconnect()
+            self.ui.filament_type_icon.setDisabled(True)
+            self.ui.nozzle_size_icon.setDisabled(True)
+            self.ui.extruder_temp_display.clicked.connect(
+                lambda: self.global_change_page(
+                    self.ui.main_content_widget.indexOf(self.ui.printTab),
+                    self.printPanel.indexOf(self.printPanel.tune_page),
+                )
+            )
+            self.ui.bed_temp_display.clicked.connect(
+                lambda: self.global_change_page(
+                    self.ui.main_content_widget.indexOf(self.ui.printTab),
+                    self.printPanel.indexOf(self.printPanel.tune_page),
+                )
+            )
             return False
-
         elif (
             event.type() == events.PrintError.type()
             or event.type() == events.PrintComplete.type()
             or event.type() == events.PrintCancelled.type()
         ):
             self.enable_tab_bar()
+            self.ui.extruder_temp_display.clicked.disconnect()
+            self.ui.bed_temp_display.clicked.disconnect()
+            self.ui.filament_type_icon.setDisabled(False)
+            self.ui.nozzle_size_icon.setDisabled(False)
+            self.ui.extruder_temp_display.clicked.connect(
+                lambda: self.global_change_page(
+                    self.ui.main_content_widget.indexOf(self.ui.controlTab),
+                    self.controlPanel.indexOf(
+                        self.controlPanel.panel.temperature_page
+                    ),
+                )
+            )
+            self.ui.bed_temp_display.clicked.connect(
+                lambda: self.global_change_page(
+                    self.ui.main_content_widget.indexOf(self.ui.controlTab),
+                    self.controlPanel.indexOf(
+                        self.controlPanel.panel.temperature_page
+                    ),
+                )
+            )
             return False
-
         return super().event(event)
 
     def sizeHint(self) -> QtCore.QSize:
