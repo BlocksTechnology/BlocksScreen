@@ -11,10 +11,10 @@ from lib.panels.widgets.filesPage import FilesPage
 from lib.panels.widgets.jobStatusPage import JobStatusWidget
 from lib.panels.widgets.sensorsPanel import SensorsWindow
 from lib.printer import Printer
-from lib.ui.printStackedWidget_ui import Ui_printStackedWidget
 from lib.panels.widgets.slider_selector_page import SliderPage
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.panels.widgets.numpadPage import CustomNumpad
+from lib.panels.widgets.loadPage import LoadScreen
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 
@@ -65,8 +65,7 @@ class PrintTab(QtWidgets.QStackedWidget):
     ) -> None:
         super().__init__(parent)
 
-        self.panel = Ui_printStackedWidget()
-        self.panel.setupUi(self)
+        self.setupMainPrintPage()
         self.ws: MoonWebSocket = ws
         self.printer: Printer = printer
 
@@ -74,16 +73,14 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.gcode_path = os.path.expanduser("~/printer_data/gcodes")
         self.setMouseTracking(True)
 
-        self.change_page(
-            self.indexOf(self.panel.print_page)
-        )  # force set the initial page
-
         self.sliderPage = SliderPage(self)
         self.addWidget(self.sliderPage)
         self.sliderPage.request_back.connect(self.back_button)
         self.numpadPage = CustomNumpad(self)
         self.numpadPage.request_back.connect(self.back_button)
         self.addWidget(self.numpadPage)
+        self.loadscreen = LoadScreen(self, LoadScreen.AnimationGIF.DEFAULT)
+        self.addWidget(self.loadscreen)
 
         self.file_data: Files = file_data
         self.filesPage_widget = FilesPage(self)
@@ -102,12 +99,25 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.filesPage_widget.request_file_info.connect(
             self.file_data.on_request_fileinfo
         )
+        self.filesPage_widget.request_file_metadata.connect(
+            self.file_data.request_file_metadata
+        )
         self.file_data.fileinfo.connect(self.filesPage_widget.on_fileinfo)
-        self.filesPage_widget.request_file_list_refresh.connect(
+
+        self.filesPage_widget.request_file_list[str].connect(
             self.file_data.request_file_list
         )
+        self.filesPage_widget.request_file_list.connect(
+            self.file_data.request_file_list
+        )
+        self.file_data.on_dirs.connect(self.filesPage_widget.on_directories)
+        self.filesPage_widget.request_dir_info[str].connect(
+            self.file_data.request_dir_info[str]
+        )
+        self.filesPage_widget.request_dir_info.connect(
+            self.file_data.request_dir_info
+        )
         self.file_data.on_file_list.connect(self.filesPage_widget.on_file_list)
-
         self.jobStatusPage_widget = JobStatusWidget(self)
         self.addWidget(self.jobStatusPage_widget)
 
@@ -118,7 +128,8 @@ class PrintTab(QtWidgets.QStackedWidget):
             lambda: self.change_page(self.indexOf(self.jobStatusPage_widget))
         )
         self.jobStatusPage_widget.hide_request.connect(
-            lambda: self.change_page(self.indexOf(self.panel.print_page))
+            # lambda: self.change_page(self.indexOf(self.panel.print_page))
+            lambda: self.change_page(self.indexOf(self.print_page))
         )
         self.jobStatusPage_widget.request_file_info.connect(
             self.file_data.on_request_fileinfo
@@ -129,7 +140,7 @@ class PrintTab(QtWidgets.QStackedWidget):
             self.ws.api.resume_print
         )
         self.jobStatusPage_widget.print_cancel.connect(
-            self.ws.api.cancel_print
+            self.handle_cancel_print
         )
         self.jobStatusPage_widget.print_pause.connect(self.ws.api.pause_print)
         self.jobStatusPage_widget.request_query_print_stats.connect(
@@ -224,12 +235,16 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.printer.filament_switch_sensor_update.connect(
             self.sensorsPanel.handle_fil_state_change
         )
-        self.panel.main_print_btn.clicked.connect(
+        self.main_print_btn.clicked.connect(
             partial(self.change_page, self.indexOf(self.filesPage_widget))
         )
         self.babystepPage.run_gcode.connect(self.ws.api.run_gcode)
 
         self.run_gcode_signal.connect(self.ws.api.run_gcode)
+
+        self.change_page(
+            self.indexOf(self.print_page)
+        )  # force set the initial page
 
     @QtCore.pyqtSlot(str, int, "PyQt_PyObject", name="on_numpad_request")
     @QtCore.pyqtSlot(
@@ -248,6 +263,7 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.numpadPage.set_value(current_value)
         self.numpadPage.set_min_value(min_value)
         self.numpadPage.set_max_value(max_value)
+        self.numpadPage.firsttime = True
         self.change_page(self.indexOf(self.numpadPage))
 
     @QtCore.pyqtSlot(str, int, "PyQt_PyObject", name="on_slidePage_request")
@@ -274,10 +290,10 @@ class PrintTab(QtWidgets.QStackedWidget):
         REFACTOR: Instead of using a background svg pixmap just draw the
                 background with with the correct styles and everything
         """
-        if self.panel.babystep_page.isVisible():
+        if self.babystepPage.isVisible():
             _button_name_str = f"nozzle_offset_{self._z_offset}"
-            if hasattr(self.panel, _button_name_str):
-                _button_attr = getattr(self.panel, _button_name_str)
+            if hasattr(self, _button_name_str):
+                _button_attr = getattr(self, _button_name_str)
                 if callable(_button_attr) and isinstance(
                     _button_attr, BlocksCustomButton
                 ):
@@ -298,6 +314,12 @@ class PrintTab(QtWidgets.QStackedWidget):
         if name == "backgroundPixmap":
             self.background = value
         return super().setProperty(name, value)
+    
+    def handle_cancel_print(self) -> None:
+        """Handles the print cancel action"""
+        self.ws.api.cancel_print()
+        self.loadscreen.show()
+        self.loadscreen.set_status_message("Cancelling print...\nPlease wait")
 
     def change_page(self, index: int) -> None:
         """Requests a page change page to the global manager
@@ -311,4 +333,110 @@ class PrintTab(QtWidgets.QStackedWidget):
         """Goes back to the previous page"""
         self.request_back.emit()
 
-    def setupUI(self) -> None: ...
+    def setupMainPrintPage(self) -> None:
+        self.setObjectName("printStackedWidget")
+        self.setWindowModality(QtCore.Qt.WindowModality.WindowModal)
+        self.resize(710, 410)
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
+            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
+        )
+        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setVerticalStretch(0)
+        sizePolicy.setHeightForWidth(self.sizePolicy().hasHeightForWidth())
+        self.setSizePolicy(sizePolicy)
+        self.setMinimumSize(QtCore.QSize(710, 410))
+        self.setMaximumSize(QtCore.QSize(720, 420))
+        self.setProperty(
+            "backgroundPixmap",
+            QtGui.QPixmap(
+                ":/background/media/graphics/scroll_list_window.svg"
+            ),
+        )
+        self.print_page = QtWidgets.QWidget()
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
+            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
+        )
+        sizePolicy.setHorizontalStretch(1)
+        sizePolicy.setVerticalStretch(1)
+        sizePolicy.setHeightForWidth(
+            self.print_page.sizePolicy().hasHeightForWidth()
+        )
+        self.print_page.setSizePolicy(sizePolicy)
+        self.print_page.setMinimumSize(QtCore.QSize(710, 400))
+        self.print_page.setMaximumSize(QtCore.QSize(720, 420))
+        self.print_page.setObjectName("print_page")
+        self.main_print_btn = BlocksCustomButton(parent=self.print_page)
+        self.main_print_btn.setGeometry(QtCore.QRect(230, 120, 250, 80))
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
+            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
+        )
+        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setVerticalStretch(0)
+        sizePolicy.setHeightForWidth(
+            self.main_print_btn.sizePolicy().hasHeightForWidth()
+        )
+        self.main_print_btn.setSizePolicy(sizePolicy)
+        self.main_print_btn.setMinimumSize(QtCore.QSize(250, 80))
+        self.main_print_btn.setMaximumSize(QtCore.QSize(250, 80))
+        font = QtGui.QFont()
+        font.setFamily("MS Shell Dlg 2")
+        font.setPointSize(18)
+        font.setItalic(False)
+        font.setStyleStrategy(QtGui.QFont.StyleStrategy.PreferAntialias)
+        self.main_print_btn.setFont(font)
+        self.main_print_btn.setMouseTracking(False)
+        self.main_print_btn.setTabletTracking(True)
+        self.main_print_btn.setContextMenuPolicy(
+            QtCore.Qt.ContextMenuPolicy.NoContextMenu
+        )
+        self.main_print_btn.setLayoutDirection(
+            QtCore.Qt.LayoutDirection.LeftToRight
+        )
+        self.main_print_btn.setStyleSheet("")
+        self.main_print_btn.setAutoDefault(False)
+        self.main_print_btn.setFlat(True)
+        self.main_print_btn.setProperty(
+            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/print.svg")
+        )
+        self.main_print_btn.setObjectName("main_print_btn")
+        self.main_text_label = QtWidgets.QLabel(parent=self.print_page)
+        self.main_text_label.setEnabled(True)
+        self.main_text_label.setGeometry(QtCore.QRect(105, 180, 500, 200))
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
+            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
+        )
+        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setVerticalStretch(0)
+        sizePolicy.setHeightForWidth(
+            self.main_text_label.sizePolicy().hasHeightForWidth()
+        )
+        self.main_text_label.setSizePolicy(sizePolicy)
+        self.main_text_label.setMinimumSize(QtCore.QSize(0, 200))
+        self.main_text_label.setMaximumSize(QtCore.QSize(500, 200))
+        font = QtGui.QFont()
+        font.setFamily("Montserrat")
+        font.setPointSize(14)
+        self.main_text_label.setFont(font)
+        self.main_text_label.setStyleSheet(
+            "background: transparent; color: white;"
+        )
+        self.main_text_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.main_text_label.setTextInteractionFlags(
+            QtCore.Qt.TextInteractionFlag.NoTextInteraction
+        )
+        self.main_text_label.setObjectName("main_text_label")
+        self.addWidget(self.print_page)
+
+        _translate = QtCore.QCoreApplication.translate
+        self.setWindowTitle(_translate("printStackedWidget", "StackedWidget"))
+        self.main_print_btn.setText(_translate("printStackedWidget", "Print"))
+        self.main_print_btn.setProperty(
+            "class", _translate("printStackedWidget", "menu_btn")
+        )
+        self.main_text_label.setText(
+            _translate("printStackedWidget", "Printer ready")
+        )

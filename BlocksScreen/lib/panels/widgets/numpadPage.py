@@ -22,7 +22,8 @@ class CustomNumpad(QtWidgets.QWidget):
         self.name: str = ""
         self.min_value: int = 0
         self.max_value: int = 100
-        self.limit_hit: bool = False
+        self.firsttime: bool = True
+
         self.numpad_0.clicked.connect(lambda: self.value_inserted("0"))
         self.numpad_1.clicked.connect(lambda: self.value_inserted("1"))
         self.numpad_2.clicked.connect(lambda: self.value_inserted("2"))
@@ -34,7 +35,6 @@ class CustomNumpad(QtWidgets.QWidget):
         self.numpad_8.clicked.connect(lambda: self.value_inserted("8"))
         self.numpad_9.clicked.connect(lambda: self.value_inserted("9"))
         self.numpad_enter.clicked.connect(lambda: self.value_inserted("enter"))
-        self.numpad_enter.clicked.connect(self.value_selected.disconnect)
         self.numpad_clear.clicked.connect(lambda: self.value_inserted("clear"))
         self.numpad_back_btn.clicked.connect(self.back_button)
         self.start_glow_animation.connect(
@@ -47,56 +47,41 @@ class CustomNumpad(QtWidgets.QWidget):
         Args:
             value (int | str): value
         """
-
-        if (
-            value.isnumeric()
-            and (
-                self.min_value
-                <= round(int(self.current_value))
-                <= self.max_value
-            )
-            and int(str(self.current_value) + str(value)) <= self.max_value
-        ):
-            self.limit_hit = False
+        if self.firsttime and value.isnumeric():
+            self.current_value = str(value)
+            self.firsttime = False
+        elif value.isnumeric():
             if self.current_value == "0":
                 self.current_value = str(value)
             else:
-                self.current_value = str(self.current_value) + str(value)
-            self.inserted_value.clear()
-            self.inserted_value.setText(str(self.current_value))
-        else:
-            self.start_glow_animation.emit()
-            self.limit_hit = True
+                self.current_value += str(value)
 
         if "enter" in value and self.current_value.isnumeric():
             if len(self.current_value) == 0:
                 self.current_value = "0"
-
             if (
                 self.min_value
-                <= round(int(self.current_value))
+                <= int(self.current_value)
                 <= self.max_value
             ):
-                self.value_selected[str, int].emit(
-                    self.name, round(int(self.current_value))
+                self.value_selected.emit(
+                    self.name, int(self.current_value)
                 )
                 self.request_back.emit()
 
         elif "clear" in value:
-            if len(self.current_value) >= 1:
-                self.current_value = self.current_value[
-                    : len(self.current_value) - 1
-                ]
-                self.inserted_value.clear()
-                self.inserted_value.setText(str(self.current_value))
-            if len(self.current_value) == 0:
+            if len(self.current_value) > 1:
+                self.current_value = self.current_value[:-1]
+            else:
                 self.current_value = "0"
-                self.inserted_value.clear()
-                self.inserted_value.setText(self.current_value)
 
+        if not (self.min_value <= int(self.current_value) <= self.max_value):
+            self.start_glow_animation.emit()
+        else:
             self.inserted_value.glow_animation.stop()
-            self.limit_hit = False
 
+        self.inserted_value.setText(str(self.current_value))
+            
     def back_button(self):
         self.request_back.emit()
 
@@ -104,6 +89,7 @@ class CustomNumpad(QtWidgets.QWidget):
         """Sets the header name for the page"""
         self.name = name
         self.numpad_title.setText(name)
+        self.update_min_max_label()
         self.update()
 
     def set_value(self, value: int) -> None:
@@ -112,25 +98,18 @@ class CustomNumpad(QtWidgets.QWidget):
 
     def set_min_value(self, min_value: int) -> None:
         self.min_value = min_value
+        self.update_min_max_label()
 
     def set_max_value(self, max_value: int) -> None:
         self.max_value = max_value
+        self.update_min_max_label()
 
-    def paintEvent(self, a0: QtGui.QPaintEvent | None) -> None:
-        """paintEvent
-            Repaints the widget with custom controls
-
-        Args:
-            a0 (QtGui.QPaintEvent | None): The event for repainting
-
-        """
-        if self.limit_hit:
-            # Start glowing red animation
-            ...
-
-        painter = QtGui.QPainter(self)
-        painter.end()
-
+    def update_min_max_label(self) -> None:
+        """Updates the text of the min/max label."""
+        self.min_max_label.setText(
+            f"Range: {self.min_value} - {self.max_value}"
+        )
+        
     def setupUI(self) -> None:
         self.setCursor(QtGui.QCursor(QtCore.Qt.CursorShape.BlankCursor))
 
@@ -203,6 +182,17 @@ class CustomNumpad(QtWidgets.QWidget):
         self.header_layout.setStretch(0, 1)
         self.header_layout.setStretch(1, 0)
         self.main_content_layout.addLayout(self.header_layout, 1)
+
+        self.value_and_range_layout = QtWidgets.QVBoxLayout()
+        self.value_and_range_layout.setSpacing(0)
+        self.value_and_range_layout.setContentsMargins(0, 0, 0, 0)
+
+        self.min_max_label = BlocksLabel(self)
+        self.min_max_label.setMinimumSize(QtCore.QSize(500, 20))
+        self.min_max_label.setMaximumSize(QtCore.QSize(16777215, 20))
+        self.min_max_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.min_max_label.setStyleSheet("color: gray; font-size: 14px;")
+
         self.inserted_value = BlocksLabel(self)
         self.inserted_value.setMinimumSize(QtCore.QSize(500, 30))
         self.inserted_value.setMaximumSize(QtCore.QSize(16777215, 40))
@@ -231,16 +221,20 @@ class CustomNumpad(QtWidgets.QWidget):
         self.inserted_value.setBackgroundRole(palette.ColorRole.Window)
         self.inserted_value.setPalette(palette)
         self.inserted_value.setAcceptDrops(False)
-
         self.inserted_value.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
         self.inserted_value.setObjectName("inserted_value")
 
-        self.main_content_layout.addWidget(
-            self.inserted_value,
-            0,
-            QtCore.Qt.AlignmentFlag.AlignHCenter
-            | QtCore.Qt.AlignmentFlag.AlignVCenter,  #
+        self.value_and_range_layout.addWidget(
+            self.min_max_label, 0, QtCore.Qt.AlignmentFlag.AlignCenter
         )
+        self.value_and_range_layout.addWidget(
+            self.inserted_value, 0, QtCore.Qt.AlignmentFlag.AlignCenter
+        )
+        
+        self.main_content_layout.addLayout(
+            self.value_and_range_layout, 1
+        )
+        
         self.inserted_value.setBackgroundRole(QtGui.QPalette.ColorRole.Window)
         self.setBackgroundRole(QtGui.QPalette.ColorRole.Window)
         self.line = QtWidgets.QFrame(self)

@@ -83,8 +83,11 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ws.connection_lost.connect(
             self.conn_window.on_websocket_connection_lost
         )
-
+        self.printer.webhooks_update.connect(
+            self.conn_window.webhook_update
+        )
         self.printPanel.request_back.connect(slot=self.global_back)
+
         self.printPanel.request_change_page.connect(
             slot=self.global_change_page
         )
@@ -101,21 +104,39 @@ class MainWindow(QtWidgets.QMainWindow):
             slot=self.global_change_page
         )
         self.ui.extruder_temp_display.clicked.connect(
-            partial(self.global_change_page, 2, 4)
+            lambda: self.global_change_page(
+                self.ui.main_content_widget.indexOf(self.ui.controlTab),
+                self.controlPanel.indexOf(
+                    self.controlPanel.panel.temperature_page
+                ),
+            )
         )
         self.ui.bed_temp_display.clicked.connect(
-            partial(self.global_change_page, 2, 4)
+            lambda: self.global_change_page(
+                self.ui.main_content_widget.indexOf(self.ui.controlTab),
+                self.controlPanel.indexOf(
+                    self.controlPanel.panel.temperature_page
+                ),
+            )
         )
         self.ui.filament_type_icon.clicked.connect(
-            partial(self.global_change_page, 1, 1)
+            lambda: self.global_change_page(
+                self.ui.main_content_widget.indexOf(self.ui.filamentTab),
+                self.filamentPanel.indexOf(self.filamentPanel.panel.load_page),
+            )
         )
         self.ui.filament_type_icon.setText("PLA")
         self.ui.filament_type_icon.update()
         self.ui.nozzle_size_icon.setText("0.4mm")
         self.ui.nozzle_size_icon.update()
-        self.ws.connected_signal.connect(
-            slot=self.file_data.request_file_list.emit
-        )
+        
+        # self.ws.connected_signal.connect(
+        #     slot=self.file_data.request_file_list.emit
+        # )
+        # self.ws.connected_signal.connect(
+        #     slot=self.file_data.request_dir_info.emit
+        # )
+        
         self.conn_window.retry_connection_clicked.connect(
             slot=self.ws.retry_wb_conn
         )
@@ -279,6 +300,7 @@ class MainWindow(QtWidgets.QMainWindow):
             _logger.debug(
                 f"Panel page index expected type int, {type(panel_index)}"
             )
+        self.printPanel.loadscreen.hide()
         current_page = [
             self.ui.main_content_widget.currentIndex(),
             self.current_panel_index(),
@@ -470,6 +492,9 @@ class MainWindow(QtWidgets.QMainWindow):
 
         elif "error" in _method:
             self.handle_error_response[list].emit([_data, _metadata])
+            if "metadata" in _data.get("message", "").lower():
+                # Quick fix, don't care about no metadata errors
+                return
             self.popup.new_message(
                 message_type=Popup.MessageType.ERROR,
                 message=str(_data),
@@ -556,16 +581,50 @@ class MainWindow(QtWidgets.QMainWindow):
             return False
         elif event.type() == events.PrintStart.type():
             self.disable_tab_bar()
+            self.ui.extruder_temp_display.clicked.disconnect()
+            self.ui.bed_temp_display.clicked.disconnect()
+            self.ui.filament_type_icon.setDisabled(True)
+            self.ui.nozzle_size_icon.setDisabled(True)
+            self.ui.extruder_temp_display.clicked.connect(
+                lambda: self.global_change_page(
+                    self.ui.main_content_widget.indexOf(self.ui.printTab),
+                    self.printPanel.indexOf(self.printPanel.tune_page),
+                )
+            )
+            self.ui.bed_temp_display.clicked.connect(
+                lambda: self.global_change_page(
+                    self.ui.main_content_widget.indexOf(self.ui.printTab),
+                    self.printPanel.indexOf(self.printPanel.tune_page),
+                )
+            )
             return False
-
         elif (
             event.type() == events.PrintError.type()
             or event.type() == events.PrintComplete.type()
             or event.type() == events.PrintCancelled.type()
         ):
             self.enable_tab_bar()
+            self.ui.extruder_temp_display.clicked.disconnect()
+            self.ui.bed_temp_display.clicked.disconnect()
+            self.ui.filament_type_icon.setDisabled(False)
+            self.ui.nozzle_size_icon.setDisabled(False)
+            self.ui.extruder_temp_display.clicked.connect(
+                lambda: self.global_change_page(
+                    self.ui.main_content_widget.indexOf(self.ui.controlTab),
+                    self.controlPanel.indexOf(
+                        self.controlPanel.panel.temperature_page
+                    ),
+                )
+            )
+            self.ui.bed_temp_display.clicked.connect(
+                lambda: self.global_change_page(
+                    self.ui.main_content_widget.indexOf(self.ui.controlTab),
+                    self.controlPanel.indexOf(
+                        self.controlPanel.panel.temperature_page
+                    ),
+                )
+            )
             return False
-
         return super().event(event)
 
     def sizeHint(self) -> QtCore.QSize:
