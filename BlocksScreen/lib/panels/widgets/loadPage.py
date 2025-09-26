@@ -18,7 +18,7 @@ class LoadScreen(QtWidgets.QDialog):
     ) -> None:
         super().__init__(parent)
 
-        self.type = anim_type
+        self.anim_type = anim_type
         self._angle = 0
         self._span_angle = 90.0
         self._is_span_growing = True
@@ -37,25 +37,25 @@ class LoadScreen(QtWidgets.QDialog):
         self.setupUI()
         config: BlocksScreenConfig = get_configparser()
         try:
-            # if config.has_section("loading"):
             if config:
                 loading_config = config["loading"]
                 animation = loading_config.get(
-                    str(self.type.name), default=LoadScreen.AnimationGIF.DEFAULT
+                    str(self.anim_type.name),
+                    default=LoadScreen.AnimationGIF.DEFAULT,
                 )
         except Exception:
-            self.type = LoadScreen.AnimationGIF.DEFAULT
+            self.anim_type = LoadScreen.AnimationGIF.DEFAULT
 
         self.timer = QtCore.QTimer(self)
         self.timer.timeout.connect(self._update_animation)
 
-        if self.type == LoadScreen.AnimationGIF.PLACEHOLDER:
+        if self.anim_type == LoadScreen.AnimationGIF.PLACEHOLDER:
             self.movie = QtGui.QMovie(animation)  # Create QMovie object
             self.gifshow.setMovie(self.movie)  # Set QMovie to QLabel
             self.movie.start()  # Start the QMovie
 
         # Only start the animation timer if no GIF is provided
-        if self.type == LoadScreen.AnimationGIF.DEFAULT:
+        if self.anim_type == LoadScreen.AnimationGIF.DEFAULT:
             self.timer.start(16)
 
         self.repaint()
@@ -83,7 +83,7 @@ class LoadScreen(QtWidgets.QDialog):
         self.label.setText("Loading...")
         self._angle = 0
         # Stop the GIF animation if it was started
-        if self.type != LoadScreen.AnimationGIF.DEFAULT:
+        if self.anim_type != LoadScreen.AnimationGIF.DEFAULT:
             self.gifshow.movie().stop()
         return super().close()
 
@@ -119,7 +119,7 @@ class LoadScreen(QtWidgets.QDialog):
     def paintEvent(self, a0: QtGui.QPaintEvent) -> None:
         painter = QtGui.QPainter(self)
         # loading circle draw
-        if self.type == LoadScreen.AnimationGIF.DEFAULT:
+        if self.anim_type == LoadScreen.AnimationGIF.DEFAULT:
             painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing, True)
             painter.setRenderHint(
                 QtGui.QPainter.RenderHint.LosslessImageRendering, True
@@ -169,7 +169,7 @@ class LoadScreen(QtWidgets.QDialog):
     def show(self) -> None:
         self.geometry_calc()
         # Start the animation timer only if no GIF is present
-        if self.type == LoadScreen.AnimationGIF.DEFAULT:
+        if self.anim_type == LoadScreen.AnimationGIF.DEFAULT:
             self.timer.start()
         self.repaint()
         return super().show()

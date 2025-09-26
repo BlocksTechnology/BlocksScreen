@@ -30,10 +30,8 @@ class LedState:
         """Generates the G-code command for the current state."""
         if self.state == "off":
             return f"SET_LED LED={name} RED=0 GREEN=0 BLUE=0 WHITE=0"
-
         if self.led_type == "white":
             return f"SET_LED LED={name} WHITE={self.white / 255:.2f}"
-
         # Default to RGB
         return (
             f"SET_LED LED={name} RED={self.red / 255:.2f} "
@@ -421,16 +419,15 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
                     ...
         max_columns = 3
         for i, name in enumerate(led_names):
-            button = BlocksCustomButton(parent=self.panel.leds_widget)
-            button.setFixedSize(200, 70)
-            button.setText(name)
-            button.setProperty("class", "menu_btn")
-            button.setProperty(
-                "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/LEDs.svg")
-            )
-            row, col = divmod(i, max_columns)
-            layout.addWidget(button, row, col)
-            button.clicked.connect(partial(self.handle_led_button, name))
+            if self.panel.leds_widget:
+                button = BlocksCustomButton()
+                button.setFixedSize(200, 70)
+                button.setText(name)
+                button.setProperty("class", "menu_btn")                
+                button.setPixmap(QtGui.QPixmap(":/ui/media/btn_icons/LEDs.svg"))
+                row, col = divmod(i, max_columns)
+                layout.addWidget(button, row, col)
+                button.clicked.connect(partial(self.handle_led_button, name))
 
     def toggle_led_state(self) -> None:
         if self.current_object not in self.objects["leds"]:
