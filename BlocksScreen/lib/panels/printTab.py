@@ -331,6 +331,7 @@ class PrintTab(QtWidgets.QStackedWidget):
         """
         self.request_change_page.emit(0, index)
 
+    @QtCore.pyqtSlot(name="request-back")
     def back_button(self) -> None:
         """Goes back to the previous page"""
         self.request_back.emit()

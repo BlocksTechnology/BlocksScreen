@@ -69,7 +69,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.controlPanel = ControlTab(
             self.ui.controlTab, self.ws, self.printer
         )
-        self.utilitiesPanel = UtilitiesTab(self.ui.utilitiesTab,self.ws,self.printer)
+        self.utilitiesPanel = UtilitiesTab(
+            self.ui.utilitiesTab, self.ws, self.printer
+        )
         self.networkPanel = NetworkControlWindow(self)
 
         self.bo_ws_startup.connect(slot=self.bo_start_websocket_connection)
@@ -82,9 +84,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ws.connection_lost.connect(
             self.conn_window.on_websocket_connection_lost
         )
-        self.printer.webhooks_update.connect(
-            self.conn_window.webhook_update
-        )
+        self.printer.webhooks_update.connect(self.conn_window.webhook_update)
         self.printPanel.request_back.connect(slot=self.global_back)
 
         self.printPanel.request_change_page.connect(
@@ -128,14 +128,14 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui.filament_type_icon.update()
         self.ui.nozzle_size_icon.setText("0.4mm")
         self.ui.nozzle_size_icon.update()
-        
+
         # self.ws.connected_signal.connect(
         #     slot=self.file_data.request_file_list.emit
         # )
         # self.ws.connected_signal.connect(
         #     slot=self.file_data.request_dir_info.emit
         # )
-        
+
         self.conn_window.retry_connection_clicked.connect(
             slot=self.ws.retry_wb_conn
         )
@@ -316,11 +316,11 @@ class MainWindow(QtWidgets.QMainWindow):
             f"Requested page change -> Tab index :{requested_page[0]}, pane panel index : {requested_page[1]}"
         )
 
-    @QtCore.pyqtSlot(name="request_back")
+    @QtCore.pyqtSlot(name="request-back")
     def global_back(self) -> None:
         """Requests to go back a page globally"""
         if not len(self.index_stack):
-            _logger.debug("Index stack is empty cannot got further back.")
+            _logger.debug("Index stack is empty, cannot go back any further")
             return
         self.ui.main_content_widget.setCurrentIndex(self.index_stack[-1][0])
         self.set_current_panel_index(self.index_stack[-1][1])

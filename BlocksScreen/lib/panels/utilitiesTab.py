@@ -50,7 +50,7 @@ class Process(Enum):
 
 class UtilitiesTab(QtWidgets.QStackedWidget):
     request_back: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
-        name="request-back-page"
+        name="request-back"
     )
     request_change_page: typing.ClassVar[QtCore.pyqtSignal] = (
         QtCore.pyqtSignal(int, int, name="request-change-page")
@@ -87,18 +87,18 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
 
         self.ws = ws
         self.printer: Printer = printer
-        self.troubleshoot_page = TroubleshootPage(self)
+        self.troubleshoot_page: TroubleshootPage = TroubleshootPage(self)
 
         # --- State Variables ---
-        self.objects = {
+        self.objects: dict = {
             "fans": {},
             "axis": {"x": "indf", "y": "indf", "z": "indf"},
             "bheat": {"Bed_Heater": "indf"},
             "extrude": {"extruder": "indf"},
             "leds": {},
         }
-        self.x_inputshaper = {}
-        self.stepper_limits = {}
+        self.x_inputshaper: dict = {}
+        self.stepper_limits: dict = {}
 
         self.current_object: typing.Optional[str] = None
         self.current_process: typing.Optional[Process] = None
@@ -138,10 +138,6 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         self._connect_page_change(
             self.panel.utilities_routine_check_btn, self.panel.routines_page
         )
-        self._connect_page_change(
-            self.panel.utilities_leds_btn, self.troubleshoot_page
-        )
-
         self._connect_page_change(
             self.panel.is_confirm_btn, self.panel.utilities_page
         )
@@ -590,5 +586,6 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         if index < self.count():
             self.request_change_page.emit(3, index)
 
+    @QtCore.pyqtSlot(name="request-back")
     def back_button(self) -> None:
         self.request_back.emit()
