@@ -15,6 +15,7 @@ from lib.panels.widgets.slider_selector_page import SliderPage
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.panels.widgets.numpadPage import CustomNumpad
 from lib.panels.widgets.loadPage import LoadScreen
+from configfile import BlocksScreenConfig, get_configparser
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 
@@ -68,11 +69,12 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.setupMainPrintPage()
         self.ws: MoonWebSocket = ws
         self.printer: Printer = printer
-
+        self.config: BlocksScreenConfig = get_configparser()
         # TODO: Get the gcode path from the configfile by asking the websocket first
         self.gcode_path = os.path.expanduser("~/printer_data/gcodes")
         self.setMouseTracking(True)
 
+        
         self.sliderPage = SliderPage(self)
         self.addWidget(self.sliderPage)
         self.sliderPage.request_back.connect(self.back_button)
@@ -329,6 +331,7 @@ class PrintTab(QtWidgets.QStackedWidget):
         """
         self.request_change_page.emit(0, index)
 
+    @QtCore.pyqtSlot(name="request-back")
     def back_button(self) -> None:
         """Goes back to the previous page"""
         self.request_back.emit()
