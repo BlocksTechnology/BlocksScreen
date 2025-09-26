@@ -1,27 +1,25 @@
-import typing
 import csv
-from functools import partial
+import typing
+from dataclasses import dataclass
 from enum import Enum, auto
-from dataclasses import dataclass  # Re-added dataclass import
+from functools import partial
 
-from PyQt6 import QtGui, QtCore, QtWidgets
-
-# Local imports from your project structure
-from lib.utils.blocks_button import BlocksCustomButton
-from lib.utils.toggleAnimatedButton import ToggleAnimatedButton
-from lib.ui.utilitiesStackedWidget_ui import Ui_utilitiesStackedWidget
 from lib.moonrakerComm import MoonWebSocket
 from lib.panels.widgets.loadPage import LoadScreen
-from lib.printer import Printer
-
 from lib.panels.widgets.troubleshootPage import TroubleshootPage
+from lib.printer import Printer
+from lib.ui.utilitiesStackedWidget_ui import Ui_utilitiesStackedWidget
+
+from lib.utils.blocks_button import BlocksCustomButton
+from lib.utils.toggleAnimatedButton import ToggleAnimatedButton
+from PyQt6 import QtCore, QtGui, QtWidgets
 
 
 @dataclass
 class LedState:
     """Represents the state of an LED light."""
 
-    type: str
+    led_type: str
     red: int = 0
     green: int = 0
     blue: int = 0
@@ -33,7 +31,7 @@ class LedState:
         if self.state == "off":
             return f"SET_LED LED={name} RED=0 GREEN=0 BLUE=0 WHITE=0"
 
-        if self.type == "white":
+        if self.led_type == "white":
             return f"SET_LED LED={name} WHITE={self.white / 255:.2f}"
 
         # Default to RGB
@@ -65,7 +63,6 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
     run_gcode_signal: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         str, name="run-gcode"
     )
-
     request_numpad_signal: typing.ClassVar[QtCore.pyqtSignal] = (
         QtCore.pyqtSignal(
             int,
@@ -76,7 +73,6 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
             name="request-numpad",
         )
     )
-
     subscribe_config: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         [list, "PyQt_PyObject"],
         [str, "PyQt_PyObject"],
@@ -147,6 +143,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         self._connect_page_change(
             self.panel.utilities_leds_btn, self.troubleshoot_page
         )
+
         self._connect_page_change(
             self.panel.is_confirm_btn, self.panel.utilities_page
         )
@@ -279,11 +276,12 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
     def _connect_numpad_request(
         self, button: QtWidgets.QWidget, name: str, title: str
     ):
-        button.clicked.connect(
-            lambda: self.request_numpad_signal.emit(
-                3, name, title, self.handle_numpad_change, self
+        if isinstance(button, QtWidgets.QPushButton):
+            button.clicked.connect(
+                lambda: self.request_numpad_signal.emit(
+                    3, name, title, self.handle_numpad_change, self
+                )
             )
-        )
 
     def handle_numpad_change(
         self, name: str, new_value: typing.Union[int, float]
@@ -418,9 +416,9 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
                 try:
                     name = obj.split()[1]
                     led_names.append(name)
-                    self.objects["leds"][name] = LedState(type="white")
+                    self.objects["leds"][name] = LedState(led_type="white")
                 except IndexError:
-                    print(f"Could not parse LED name from '{obj}'")
+                    ...
         max_columns = 3
         for i, name in enumerate(led_names):
             button = BlocksCustomButton(parent=self.panel.leds_widget)
@@ -451,12 +449,12 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         led_state: LedState = self.objects["leds"].get(name)
         if not led_state:
             return
-        is_rgb = led_state.type == "rgb"
+        is_rgb = led_state.led_type == "rgb"
         self.panel.leds_r_slider.setVisible(is_rgb)
         self.panel.leds_g_slider.setVisible(is_rgb)
         self.panel.leds_b_slider.setVisible(is_rgb)
         self.panel.leds_w_slider.setVisible(not is_rgb)
-        self.panel.leds_slider_tittle_label.setText(name)
+        self.panel.leds_slider_title_label.setText(name)
         self.panel.leds_r_slider.setValue(led_state.red)
         self.panel.leds_g_slider.setValue(led_state.green)
         self.panel.leds_b_slider.setValue(led_state.blue)
@@ -464,11 +462,12 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         self.change_page(self.indexOf(self.panel.leds_slider_page))
 
     def save_led_state(self):
-        if self.current_object in self.objects["leds"]:
-            led_state: LedState = self.objects["leds"][self.current_object]
-            self.run_gcode_signal.emit(
-                led_state.get_gcode(self.current_object)
-            )
+        if self.current_object:
+            if self.current_object in self.objects["leds"]:
+                led_state: LedState = self.objects["leds"][self.current_object]
+                self.run_gcode_signal.emit(
+                    led_state.get_gcode(self.current_object)
+                )
 
     # input shapper
     def run_resonance_test(self, axis: str) -> None:
@@ -478,7 +477,6 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
             "y": "/tmp/resonances_y_axis_data.csv",
         }
         if not (csv_path := path_map.get(axis)):
-            print(f"Error: Invalid axis '{axis}' for resonance test.")
             return
         self.run_gcode_signal.emit(f"SHAPER_CALIBRATE AXIS={axis.upper()}")
         self.data = self._parse_shaper_csv(csv_path)
@@ -514,9 +512,9 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
                             }
                         )
         except FileNotFoundError:
-            print(f"Error: CSV file not found at {file_path}")
+            ...
         except csv.Error as e:
-            print(f"Error parsing CSV {file_path}: {e}")
+            ...
         return results
 
     def apply_input_shaper_selection(self) -> None:
@@ -524,7 +522,9 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
             return
         selected_name = checked_button.objectName()
         if selected_name == "am_user_input":
-            self.change_page(self.indexOf(self.panel.input_shaper_user_input))
+            self.change_page(
+                self.indexOf(self.panel.input_shaper_page)
+            )  # TEST: CHANGED THIS FROM input_shaper_user_input
             return
         if not (shaper_data := self.x_inputshaper.get(selected_name)):
             return
@@ -564,7 +564,6 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
                 5000,
             )
         else:
-            print(f"Warning: Stepper limits for '{axis}' not found.")
             self.change_page(self.indexOf(self.panel.axes_page))
 
     def troubleshoot_request(self) -> None:
@@ -581,7 +580,10 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
     def _connect_page_change(
         self, button: QtWidgets.QWidget, page: QtWidgets.QWidget
     ):
-        button.clicked.connect(lambda: self.change_page(self.indexOf(page)))
+        if isinstance(button, QtWidgets.QPushButton):
+            button.clicked.connect(
+                lambda: self.change_page(self.indexOf(page))
+            )
 
     def change_page(self, index: int):
         self.loadPage.hide()

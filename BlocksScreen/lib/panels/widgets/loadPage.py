@@ -36,7 +36,6 @@ class LoadScreen(QtWidgets.QDialog):
         )
         self.setupUI()
         config: BlocksScreenConfig = get_configparser()
-        print(config)
         try:
             # if config.has_section("loading"):
             if config:
