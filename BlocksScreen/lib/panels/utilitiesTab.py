@@ -423,8 +423,10 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
                 button = BlocksCustomButton()
                 button.setFixedSize(200, 70)
                 button.setText(name)
-                button.setProperty("class", "menu_btn")                
-                button.setPixmap(QtGui.QPixmap(":/ui/media/btn_icons/LEDs.svg"))
+                button.setProperty("class", "menu_btn")
+                button.setPixmap(
+                    QtGui.QPixmap(":/ui/media/btn_icons/LEDs.svg")
+                )
                 row, col = divmod(i, max_columns)
                 layout.addWidget(button, row, col)
                 button.clicked.connect(partial(self.handle_led_button, name))
