@@ -103,7 +103,7 @@ class BlocksScreenConfig:
         self,
         option: str,
         parser: type = str,
-        default: typing.Union[Sentinel, str] = Sentinel.MISSING,
+        default: typing.Union[Sentinel, str, T] = Sentinel.MISSING,
     ) -> typing.Union[Sentinel, str]:
         return parser(
             self.config.get(

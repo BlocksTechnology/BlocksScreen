@@ -1,5 +1,5 @@
 import enum
-
+from configfile import BlocksScreenConfig, get_configparser
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 
@@ -8,16 +8,17 @@ class LoadScreen(QtWidgets.QDialog):
         # [x]: WATHERE ARE NO GIFS IN LOADSCREEN PLEASE REMEMBER THIS IM WARNING
 
         # TODO : add more types into LoadScreen
-
         DEFAULT = None
         PLACEHOLDER = ""
 
     def __init__(
-        self, parent: QtWidgets.QWidget, type: AnimationGIF = AnimationGIF.DEFAULT
+        self,
+        parent: QtWidgets.QWidget,
+        anim_type: AnimationGIF = AnimationGIF.DEFAULT,
     ) -> None:
         super().__init__(parent)
 
-        self.type = type
+        self.type = anim_type
         self._angle = 0
         self._span_angle = 90.0
         self._is_span_growing = True
@@ -33,23 +34,23 @@ class LoadScreen(QtWidgets.QDialog):
             QtCore.Qt.WindowType.Popup
             | QtCore.Qt.WindowType.FramelessWindowHint
         )
-
         self.setupUI()
-
-        config = parent.get_config()
+        config: BlocksScreenConfig = get_configparser()
+        print(config)
         try:
-            if config is not None:
+            # if config.has_section("loading"):
+            if config:
                 loading_config = config["loading"]
                 animation = loading_config.get(
-                    str(self.type.name), self.type.value
+                    str(self.type.name), default=LoadScreen.AnimationGIF.DEFAULT
                 )
-        except KeyError:
+        except Exception:
             self.type = LoadScreen.AnimationGIF.DEFAULT
 
         self.timer = QtCore.QTimer(self)
         self.timer.timeout.connect(self._update_animation)
 
-        if self.type != LoadScreen.AnimationGIF.PLACEHOLDER:
+        if self.type == LoadScreen.AnimationGIF.PLACEHOLDER:
             self.movie = QtGui.QMovie(animation)  # Create QMovie object
             self.gifshow.setMovie(self.movie)  # Set QMovie to QLabel
             self.movie.start()  # Start the QMovie

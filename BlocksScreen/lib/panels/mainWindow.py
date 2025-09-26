@@ -47,7 +47,6 @@ class MainWindow(QtWidgets.QMainWindow):
     def __init__(self):
         super(MainWindow, self).__init__()
         self.config: BlocksScreenConfig = get_configparser()
-
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
         self.screensaver = ScreenSaver(self)
@@ -99,7 +98,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.controlPanel.request_change_page.connect(
             slot=self.global_change_page
         )
-        self.utilitiesPanel.request_back_page.connect(slot=self.global_back)
+        self.utilitiesPanel.request_back.connect(slot=self.global_back)
         self.utilitiesPanel.request_change_page.connect(
             slot=self.global_change_page
         )
