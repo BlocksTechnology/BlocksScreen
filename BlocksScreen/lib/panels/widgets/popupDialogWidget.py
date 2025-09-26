@@ -119,7 +119,6 @@ class Popup(QtWidgets.QDialog):
             and self.slide_out_animation.state() == QtCore.QPropertyAnimation.State.Stopped
         ):
             message_entry = self.messages.popleft()
-            print(message_entry)
             self.message_type = message_entry.get("type")
             message = message_entry.get("message")
             self.text_label.setText(message)
