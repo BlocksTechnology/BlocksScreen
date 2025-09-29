@@ -10,7 +10,6 @@
 #
 # Modified from the work referenced above
 #
-# 
 # This file is distributed under the terms of the GNU General Public License v3.
 # See https://www.gnu.org/licenses/gpl-3.0.html for details.
 
