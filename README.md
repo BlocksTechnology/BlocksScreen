@@ -44,7 +44,7 @@ We would like to express our deepest gratitude to the excellent work produced on
 
 Let us know if there is any issue or bug by reporting it on the repo issues tab.
 
-Contact us on [Github](https://) | [LinkedIn](https://) | [Website](https://) 
+Contact us on [Github](https://github.com/BlocksTechnology) | [LinkedIn](https://www.linkedin.com/company/blockstec/) | [Website](https://blockstec.com) 
 
 ## License 
 
