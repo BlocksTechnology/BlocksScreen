@@ -96,9 +96,6 @@ def destroy_logger(name): ...  # TODO: Implement this
 
 
 
-# [ ] SLOW: Currently the logging is slow, which slows down the initialization of the screen
-
-
 
 
 

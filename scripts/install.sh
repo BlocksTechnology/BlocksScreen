@@ -1,8 +1,18 @@
 #!/bin/bash 
 
-# This script install Blocks Screen on Debian devices, intended to be used with Klipper.
-# This Modified from KlipperScreen (alfrix) installation script aswell as Klippain-shaketune (Frix-x) installation script.
-
+# BlocksScreen install script
+#
+# Copyright (C) 2025 Hugo Costa <h.costa@blockstec.com>
+#
+# Based on the work:
+# https://github.com/KlipperScreen/KlipperScreen/blob/master/scripts/KlipperScreen-install.sh
+# Copyright (C) KlipperScreen contributors
+#
+# Modified from the work referenced above
+#
+# 
+# This file is distributed under the terms of the GNU General Public License v3.
+# See https://www.gnu.org/licenses/gpl-3.0.html for details.
 
 MOONRAKER_CONFIG="${HOME}/printer_data/config/moonraker.conf"
 KLIPPER_PATH="${HOME}/klipper"
