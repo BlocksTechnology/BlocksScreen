@@ -12,23 +12,11 @@ Following the same philosophy as KlipperScreen, Blocks_Screen interfaces with [K
 
 ## Acknowledgements
 
-We would like to express our deepest gratitude to the excellent work listed bellow, which inspired the development of [Blocks_Screen](https://github.com/BlocksTechnology/BlocksScreen). The current project includes modified code derived from:
+We would like to express our deepest gratitude to the excellent work listed bellow, which inspired the development of [Blocks_Screen](https://github.com/BlocksTechnology/BlocksScreen). The current project includes modified code derived from those porjects:
  
 - [KlipperScreen](https://github.com/KlipperScreen/KlipperScreen)
 - [Klipper Firmware](https://github.com/Klipper3d/klipper) 
 - [Moonraker](https://github.com/arksine/moonraker)
-
-
-## Acknowledgements
-
-We would like to express our deepest gratitude to the excellent work produced on, which inspired the development of [Blocks_Screen](https://github.com/BlocksTechnology/BlocksScreen):
- 
-- [KlipperScreen GUI](https://github.com/KlipperScreen/KlipperScreen).
-
-- [Klipper Firmware](https://github.com/Klipper3d/klipper)
-
-- [Moonraker](https://github.com/arksine/moonraker)
-
 
 
 ## About 
