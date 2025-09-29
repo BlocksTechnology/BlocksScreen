@@ -305,6 +305,14 @@ class ControlTab(QtWidgets.QStackedWidget):
             )
         )
 
+        self.panel.cp_z_tilt_btn.clicked.connect(
+            lambda: self.run_gcode_signal.emit(
+                "G28\n"
+                "M400\n"
+                "Z_TILT_ADJUST"
+            )
+        )
+
         self.printcores_page.pc_accept.clicked.connect(self.handle_swapcore)
 
         self.ws.klippy_state_signal.connect(self.on_klippy_status)
