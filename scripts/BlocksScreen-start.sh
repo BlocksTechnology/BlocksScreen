@@ -2,11 +2,13 @@
 
 # BlocksScreen start script
 #
-# Copyright (C) 2020 Eric Callahan <arksine.code@gmail.com>
 # Copyright (C) 2025 Hugo Costa <h.costa@blockstec.com>
 #
 # Based on the work :
 # https://github.com/KlipperScreen/KlipperScreen/blob/master/scripts/KlipperScreen-start.sh
+# Copyright (C) KlipperScreen contributors
+#
+# Modified from the work referenced above
 #
 # This file is distributed under the terms of the GNU General Public License v3.
 # See https://www.gnu.org/licenses/gpl-3.0.html for details.
