@@ -1,6 +1,6 @@
 ![alt](BlocksScreen/lib/ui/resources/media/logoblocks.png)
 
-# Blocks_Screen - A GUI for Blocks 3D Printers
+# BlocksScreen - A GUI for Blocks 3D Printers
 
 
 ## :exclamation: This Software is currently a work in progress, some parts may not work as intended. It's in active development. 
@@ -12,7 +12,7 @@ Following the same philosophy as KlipperScreen, Blocks_Screen interfaces with [K
 
 ## Acknowledgements
 
-We would like to express our deepest gratitude to the excellent work listed bellow, which inspired the development of [Blocks_Screen](https://github.com/BlocksTechnology/Blocks_Screen). The current project includes modified code derived from:
+We would like to express our deepest gratitude to the excellent work listed bellow, which inspired the development of [Blocks_Screen](https://github.com/BlocksTechnology/BlocksScreen). The current project includes modified code derived from:
  
 - [KlipperScreen](https://github.com/KlipperScreen/KlipperScreen)
 - [Klipper Firmware](https://github.com/Klipper3d/klipper) 
@@ -21,7 +21,7 @@ We would like to express our deepest gratitude to the excellent work listed bell
 
 ## Acknowledgements
 
-We would like to express our deepest gratitude to the excellent work produced on, which inspired the development of [Blocks_Screen](https://github.com/BlocksTechnology/Blocks_Screen):
+We would like to express our deepest gratitude to the excellent work produced on, which inspired the development of [Blocks_Screen](https://github.com/BlocksTechnology/BlocksScreen):
  
 - [KlipperScreen GUI](https://github.com/KlipperScreen/KlipperScreen).
 
@@ -39,7 +39,7 @@ Contact us on [Github](https://github.com/BlocksTechnology) | [LinkedIn](https:/
 
 ## License 
 
-[Blocks_Screen](https://github.com/BlocksTechnology/Blocks_Screen) is a Free Software. See LICENSE for more information.
+[BlocksScreen](https://github.com/BlocksTechnology/BlocksScreen) is a Free Software. See LICENSE for more information.
  
 
 
