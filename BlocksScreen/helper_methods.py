@@ -1,3 +1,9 @@
+# This file contains some methods derived from KlipperScreen
+# Original source: https://github.com/KlipperScreen/KlipperScreen
+# License: GNU General Public License v3
+# Modifications made by Hugo Costa <h.costa@blockstec.com> (2025) for BlocksScreen 
+
+
 import ctypes
 import os
 import enum
@@ -5,6 +11,7 @@ import logging
 import pathlib
 import struct
 import typing
+
 
 try:
     ctypes.cdll.LoadLibrary("libXext.so.6")

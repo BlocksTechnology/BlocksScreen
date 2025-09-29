@@ -1,17 +1,15 @@
 #!/bin/bash
 
-# BlocksScreen.sh . Modified from KlipperScreen.sh
-
-# moonraker-sudo (mnrkrsudo)
-# Provides a specified Group that is intended to elevate user privileges
-# to help moonraker with sudo actions, if in CustomPIOS Images with
-# Module "password-for-sudo".
+# BlocksScreen start script
 #
-# Partially used functions from Arcsine
+# Copyright (C) 2020 Eric Callahan <arksine.code@gmail.com>
+# Copyright (C) 2025 Hugo Costa <h.costa@blockstec.com>
 #
-# Copyright (C) 2020 Stephan Wendel <me@stephanwe.de>
+# Based on the work :
+# https://github.com/KlipperScreen/KlipperScreen/blob/master/scripts/KlipperScreen-start.sh
 #
-# This file may be distributed under the terms of the GNU GPLv3 license
+# This file is distributed under the terms of the GNU General Public License v3.
+# See https://www.gnu.org/licenses/gpl-3.0.html for details.
 
 XDG_RUNTIME_DIR=/run/user/$(id -u)
 export XDG_RUNTIME_DIR

@@ -1,13 +1,11 @@
 #!/bin/bash 
 
-# Much like Klipper screen Modified moonraker-sudo (mnrksudo) by Arksin and KwadFan Blocks screen needs it aswel
 # Credits go to Moonraker and some modification to KlipperScreen (alfrix)
-
 # Provides a specified Group that is intended to elevate user privileges
 # to help moonraker with sudo actions, if in CustomPIOS Images with
 # Module "password-for-sudo".
 #
-# Partially used functions from Arcsine
+# Partially used functions from Arksine
 #
 # Copyright (C) 2020 Stephan Wendel <me@stephanwe.de>
 #
