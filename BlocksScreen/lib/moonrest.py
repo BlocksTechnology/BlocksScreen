@@ -1,3 +1,17 @@
+# moonraker rest
+#
+# Copyright (C) 2025 Hugo Costa <h.costa@blockstec.com>
+#
+# Based on the work:
+# https://github.com/KlipperScreen/KlipperScreen/blob/master/ks_includes/KlippyRest.py
+# Copyright (C) KlipperScreen contributors
+#
+# Modified from the work referenced above
+#
+# This file is distributed under the terms of the GNU General Public License v3.
+# See https://www.gnu.org/licenses/gpl-3.0.html for details.
+
+
 import logging
 
 import requests
@@ -15,10 +29,6 @@ class UncallableError(Exception):
 
 class MoonRest:
     """MoonRest Basic API for sending end posting requests to MoonrakerAPI
-
-    - Credit goes to from Klipper Screen project
-        https://github.com/KlipperScreen/KlipperScreen
-        https://github.com/KlipperScreen/KlipperScreen/blob/a32d1d8e8085724068ac6a43adbba9757228aebb/ks_includes/KlippyRest.py
 
     Raises:
         UncallableError: An error occurred when the request type invalid
