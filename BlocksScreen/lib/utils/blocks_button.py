@@ -134,29 +134,30 @@ class BlocksCustomButton(QtWidgets.QPushButton):
             _parent_rect.width() * 0.80,
             _parent_rect.height() * 0.80,
         )
-        _icon_scaled = self.icon_pixmap.scaled(
-            _icon_rect.size().toSize(),
-            QtCore.Qt.AspectRatioMode.KeepAspectRatio,
-            QtCore.Qt.TransformationMode.SmoothTransformation,
-        )
+        if not self.icon_pixmap.isNull():
+            _icon_scaled = self.icon_pixmap.scaled(
+                _icon_rect.size().toSize(),
+                QtCore.Qt.AspectRatioMode.KeepAspectRatio,
+                QtCore.Qt.TransformationMode.SmoothTransformation,
+            )
 
-        # Calculate the actual QRect for the scaled pixmap (centering it if needed)
-        scaled_width = _icon_scaled.width()
-        scaled_height = _icon_scaled.height()
-        adjusted_x = (_icon_rect.width() - scaled_width) // 2.0
-        adjusted_y = (_icon_rect.height() - scaled_height) // 2.0
-        adjusted_icon_rect = QtCore.QRectF(
-            _icon_rect.x() + adjusted_x,
-            _icon_rect.y() + adjusted_y,
-            scaled_width,
-            scaled_height,
-        )
+            # Calculate the actual QRect for the scaled pixmap (centering it if needed)
+            scaled_width = _icon_scaled.width()
+            scaled_height = _icon_scaled.height()
+            adjusted_x = (_icon_rect.width() - scaled_width) // 2.0
+            adjusted_y = (_icon_rect.height() - scaled_height) // 2.0
+            adjusted_icon_rect = QtCore.QRectF(
+                _icon_rect.x() + adjusted_x,
+                _icon_rect.y() + adjusted_y,
+                scaled_width,
+                scaled_height,
+            )
 
-        painter.drawPixmap(
-            adjusted_icon_rect,  # Target area (center adjusted)
-            _icon_scaled,  # Scaled pixmap
-            _icon_scaled.rect().toRectF(),  # Entire source (scaled) pixmap
-        )
+            painter.drawPixmap(
+                adjusted_icon_rect,  # Target area (center adjusted)
+                _icon_scaled,  # Scaled pixmap
+                _icon_scaled.rect().toRectF(),  # Entire source (scaled) pixmap
+            )
 
         if self.text():
             _start_text_position = int(self.button_ellipse.width())
