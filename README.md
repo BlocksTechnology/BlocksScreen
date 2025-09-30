@@ -24,6 +24,8 @@ We would like to express our deepest gratitude to the excellent work listed bell
 Let us know if there is any issue or bug by reporting it on the repo issues tab.
 Feel free to contact us on [Github](https://github.com/BlocksTechnology) | [LinkedIn](https://www.linkedin.com/company/blockstec/) | [Website](https://blockstec.com) 
 
+BlocksScreen includes portions of code derived from KlipperScreen and Moonraker, but is not affiliated with or endorsed by their maintainers.
+
 ## License 
 
 [BlocksScreen](https://github.com/BlocksTechnology/BlocksScreen) is a Free Software. See LICENSE for more information.
