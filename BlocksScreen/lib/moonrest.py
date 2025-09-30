@@ -50,9 +50,7 @@ class MoonRest:
 
     timeout = 3
 
-    def __init__(
-        self, host: str = "localhost", port: int = 7125, api_key=False
-    ):
+    def __init__(self, host: str = "localhost", port: int = 7125, api_key=False):
         self._host = host
         self._port = port
         self._api_key = api_key
@@ -147,9 +145,7 @@ class MoonRest:
                 )
                 if isinstance(response, Response):
                     response.raise_for_status()
-                    return (
-                        response.json() if json_response else response.content
-                    )
+                    return response.json() if json_response else response.content
 
         except Exception as e:
             logging.info(f"Unexpected error while sending HTTP request: {e}")
