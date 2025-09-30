@@ -55,8 +55,6 @@ BlocksScreen is independently developed and maintained. It is **not affiliated w
 
 ## 🛠 Additional Tools & Libraries
 
-If you’ve used other third-party libraries (e.g. `requests`, `PyQt6`, `aiohttp`, etc.), you can add a section like:
-
 ```markdown
 ### PyQt6  
 - **License**: GPL v3  
