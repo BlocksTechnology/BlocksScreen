@@ -22,11 +22,12 @@ BlocksScreen is built upon the work of several outstanding open-source projects.
 - **Repository**: [https://github.com/arksine/moonraker](https://github.com/arksine/moonraker)  
 - **License**: GNU Affero General Public License v3.0 (AGPL-3.0)  
 - **Usage**:  
-  - BlocksScreen communicates with Moonraker via its HTTP API.  
-  - API schemas and endpoint logic were referenced to build the GUI’s backend.  
+  - BlocksScreen communicates with Moonraker using both HTTP and WebSocket (JSON-RPC) protocols.  
+  - API schemas and endpoint logic were referenced to build the GUI’s backend.
+  - Configuration parsing was used as a referece to build the GUI's configuration.
 - **Modifications**:  
-  - Custom API wrappers for BLOCKS-specific printer states  
-  - Enhanced error handling and async integration with PyQt event loop
+  - Custom API wrappers for BLOCKS-specific printer states
+  - Simplified configuration classes for integration with the current project. 
 
 ---
 
