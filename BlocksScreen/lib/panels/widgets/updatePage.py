@@ -43,6 +43,17 @@ class UpdatePage(QtWidgets.QWidget):
             super().__init__()
 
         self._setupUI()
+        self.update_btn.clicked.connect(self.request_update_status)
+        self.needs_update: bool = False
+        
+    @QtCore.pyqtSlot(dict, name="handle-update-message")
+    def handle_update_message(self, message: dict) -> None:
+        
+        cli_version_info = message.get('version_info', None)
+        if not cli_version_info: 
+            return 
+        app_version_info = cli_version_info.get('BlocksScreen', None)
+        print(app_version_info)
 
     def _setupUI(self) -> None:
         font_id = QtGui.QFontDatabase.addApplicationFont(

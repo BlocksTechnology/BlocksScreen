@@ -743,6 +743,7 @@ class MoonAPI(QtCore.QObject):
     def update_system(self):
         return self._ws.send_request(method="machine.update.system")
 
+    @QtCore.pyqtSlot(str, name="recover-repo")
     @QtCore.pyqtSlot(str, bool, name="recover-repo")
     def recover_corrupt_repo(self, name: str, hard: bool = False):
         if isinstance(name, str) is False or name is None:

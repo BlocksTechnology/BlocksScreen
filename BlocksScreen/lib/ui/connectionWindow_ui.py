@@ -1,4 +1,4 @@
-# Form implementation generated from reading ui file '/home/levi/main/Blocks_Screen/BlocksScreen/lib/ui/connectionWindow.ui'
+# Form implementation generated from reading ui file 'main/BlocksScreen/BlocksScreen/lib/ui/connectionWindow.ui'
 #
 # Created by: PyQt6 UI code generator 6.7.1
 #

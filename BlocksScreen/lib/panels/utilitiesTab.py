@@ -77,6 +77,9 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         [str, "PyQt_PyObject"],
         name="on-subscribe-config",
     )
+    _on_update_message: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        dict, name="handle-update-message"
+    )
 
     def __init__(
         self, parent: QtWidgets.QWidget, ws: MoonWebSocket, printer: Printer
@@ -198,8 +201,15 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         self.printer.gcode_move_update.connect(self.on_gcode_move_update)
 
         # ---- Websocket connections ----
+
+        self._on_update_message.connect(self.update_page.handle_update_message)
         self.update_page.request_full_update.connect(self.ws.api.full_update)
-        self.update_page.request_recover_repo.connect(self.ws.api.recover_corrupt_repo)
+        self.update_page.request_recover_repo[str].connect(
+            self.ws.api.recover_corrupt_repo
+        )
+        self.update_page.request_recover_repo[str, bool].connect(
+            self.ws.api.recover_corrupt_repo
+        )
         self.update_page.request_refresh_update.connect(
             self.ws.api.refresh_update_status
         )

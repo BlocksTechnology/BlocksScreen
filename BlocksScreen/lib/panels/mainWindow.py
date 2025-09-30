@@ -19,12 +19,12 @@ from lib.ui.mainWindow_ui import Ui_MainWindow  # With header
 
 # from lib.ui.mainWindow_v2_ui import Ui_MainWindow # No header
 from lib.ui.resources.background_resources_rc import *
+from lib.ui.resources.font_rc import *
 from lib.ui.resources.graphic_resources_rc import *
 from lib.ui.resources.icon_resources_rc import *
 from lib.ui.resources.main_menu_resources_rc import *
 from lib.ui.resources.system_resources_rc import *
 from lib.ui.resources.top_bar_resources_rc import *
-from lib.ui.resources.font_rc import *
 from PyQt6 import QtCore, QtGui, QtWidgets
 from screensaver import ScreenSaver
 
@@ -41,9 +41,8 @@ class MainWindow(QtWidgets.QMainWindow):
     gcode_response = QtCore.pyqtSignal(list, name="gcode_response")
     handle_error_response = QtCore.pyqtSignal(list, name="handle_error_response")
     call_network_panel = QtCore.pyqtSignal(name="call-network-panel")
-
-    update_available = QtCore.pyqtSignal(bool, name="update_available")
-
+    on_update_message: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(dict, name='on-update-message')
+    
     def __init__(self):
         super(MainWindow, self).__init__()
         self.config: BlocksScreenConfig = get_configparser()
@@ -82,7 +81,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.filamentPanel.request_change_page.connect(slot=self.global_change_page)
         self.controlPanel.request_back_button.connect(slot=self.global_back)
         self.controlPanel.request_change_page.connect(slot=self.global_change_page)
-
         self.utilitiesPanel.request_back.connect(slot=self.global_back)
         self.utilitiesPanel.request_change_page.connect(slot=self.global_change_page)
         self.ui.extruder_temp_display.clicked.connect(
@@ -139,6 +137,8 @@ class MainWindow(QtWidgets.QMainWindow):
             self.controlPanel.probe_helper_page.handle_error_response
         )
 
+        self.on_update_message.connect(self.utilitiesPanel._on_update_message)
+        
         self.ui.extruder_temp_display.display_format = "upper_downer"
         self.ui.bed_temp_display.display_format = "upper_downer"
 
@@ -351,8 +351,21 @@ class MainWindow(QtWidgets.QMainWindow):
                         received from websocket | error message received: {e}"
                 )
         elif "machine" in _method:
-            ...
+            if 'update' in _method: 
+                self.on_update_message.emit(_data)
         elif "printer.info" in _method:
+            # REVIEW: PARSE
+            # {
+            #     "state": "ready",
+            #     "state_message": "Printer is ready",
+            #     "hostname": "my-pi-hostname",
+            #     "software_version": "v0.9.1-302-g900c7396",
+            #     "cpu_info": "4 core ARMv7 Processor rev 4 (v7l)",
+            #     "klipper_path": "/home/pi/klipper",
+            #     "python_path": "/home/pi/klippy-env/bin/python",
+            #     "log_file": "/tmp/klippy.log",
+            #     "config_file": "/home/pi/printer.cfg",
+            # }
             ...
         elif "printer.print" in _method:
             if "start" in _method and "ok" in _data:

@@ -1,4 +1,4 @@
-# Form implementation generated from reading ui file '/home/bugo/github/Blocks_Screen/BlocksScreen/lib/ui/filamentSensorsPage.ui'
+# Form implementation generated from reading ui file 'Blocks_Screen/BlocksScreen/lib/ui/filamentSensorsPage.ui'
 #
 # Created by: PyQt6 UI code generator 6.4.2
 #
