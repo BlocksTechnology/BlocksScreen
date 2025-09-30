@@ -12,7 +12,7 @@ Following the same philosophy as KlipperScreen, Blocks_Screen interfaces with [K
 
 ## Acknowledgements
 
-We would like to express our deepest gratitude to the excellent work listed bellow, which inspired the development of [BlocksScreen](https://github.com/BlocksTechnology/BlocksScreen). The current project includes modified code derived from those porjects:
+We would like to express our deepest gratitude to the excellent work listed bellow, which inspired the development of [BlocksScreen](https://github.com/BlocksTechnology/BlocksScreen). The current project includes modified code derived from those projects:
  
 - [KlipperScreen](https://github.com/KlipperScreen/KlipperScreen)
 - [Klipper Firmware](https://github.com/Klipper3d/klipper) 
