@@ -8,10 +8,23 @@
 # https://github.com/KlipperScreen/KlipperScreen/blob/master/scripts/KlipperScreen-start.sh
 # Copyright (C) KlipperScreen contributors
 #
-# Modified from the work referenced above
+# This file is part of BlocksScreen.
 #
-# This file is distributed under the terms of the GNU General Public License v3.
-# See https://www.gnu.org/licenses/gpl-3.0.html for details.
+# BlocksScreen is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published
+# by the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# BlocksScreen is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with BlocksScreen. If not, see <https://www.gnu.org/licenses/>.
+# 
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 
 XDG_RUNTIME_DIR=/run/user/$(id -u)
 export XDG_RUNTIME_DIR
