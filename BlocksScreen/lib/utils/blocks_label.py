@@ -257,7 +257,8 @@ class BlocksLabel(QtWidgets.QLabel):
                 qp.CompositionMode.CompositionMode_SourceOver
             )
             
-
+            text_rect = self.contentsRect()
+            text_rect.translate(int(self.scroll_pos), 0)
             text_path = QtGui.QPainterPath()
             text_path.addRect(self.contentsRect().toRectF())
             qp.setClipPath(text_path)
