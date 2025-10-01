@@ -6,18 +6,19 @@ from functools import partial
 from lib.printer import Printer
 from lib.filament import Filament
 from lib.ui.filamentStackedWidget_ui import Ui_filamentStackedWidget
-from PyQt6.QtCore import QSize, pyqtSignal, pyqtSlot
-from PyQt6.QtGui import QPaintEngine, QPaintEvent, QResizeEvent
-from PyQt6.QtWidgets import QStackedWidget, QWidget
+
+from lib.panels.widgets.loadPage import LoadScreen
+from lib.panels.widgets.popupDialogWidget import Popup
+from PyQt6 import QtCore, QtGui, QtWidgets
 
 
-class FilamentTab(QStackedWidget):
-    request_filament_change_page = pyqtSignal(name="filament_change_page")
-    request_filament_load = pyqtSignal(name="filament_load_t1")
-    request_back = pyqtSignal(name="request_back")
-    request_change_page = pyqtSignal(int, int, name="request_change_page")
-    request_toolhead_count = pyqtSignal(int, name="toolhead_number_received")
-    run_gcode = pyqtSignal(str, name="run_gcode")
+class FilamentTab(QtWidgets.QStackedWidget):
+    request_filament_change_page = QtCore.pyqtSignal(name="filament_change_page")
+    request_filament_load = QtCore.pyqtSignal(name="filament_load_t1")
+    request_back = QtCore.pyqtSignal(name="request_back")
+    request_change_page = QtCore.pyqtSignal(int, int, name="request_change_page")
+    request_toolhead_count = QtCore.pyqtSignal(int, name="toolhead_number_received")
+    run_gcode = QtCore.pyqtSignal(str, name="run_gcode")
 
     class FilamentTypes(enum.Enum):
         PLA = Filament(name="PLA", temperature=220)
@@ -30,7 +31,7 @@ class FilamentTab(QStackedWidget):
         def __repr__(self) -> str:
             return "<%s.%s>" % (self.__class__.__name__, self._name_)
 
-    def __init__(self, parent: QWidget, printer: Printer, ws, /) -> None:
+    def __init__(self, parent: QtWidgets.QWidget, printer: Printer, ws, /) -> None:
         super().__init__(parent)
 
         self.panel = Ui_filamentStackedWidget()
@@ -41,8 +42,19 @@ class FilamentTab(QStackedWidget):
         self.printer = printer
         self.toolhead_count: int = 0
 
+        self.target_temp: int = 0
+        self.current_temp: int = 0
+
+        self.popup = Popup(self)
+
+
+        self.loadscreen = LoadScreen(self, LoadScreen.AnimationGIF.DEFAULT)
+        self.addWidget(self.loadscreen)
+
+
         self.has_load_unload_objects = None
         self._filament_state = self.FilamentStates.UNKNOWN
+        self._sensor_states = {} 
         self.filament_type: Filament | None = None
 
         self.panel.filament_page_load_btn.clicked.connect(
@@ -79,33 +91,126 @@ class FilamentTab(QStackedWidget):
         )
         self.run_gcode.connect(self.ws.api.run_gcode)
 
-    @pyqtSlot(int, int, name="load_filament")
+        self.printer.extruder_update.connect(self.on_extruder_update)
+
+        self.printer.unload_filament_update.connect(self.on_unload_filament)
+        self.printer.load_filament_update.connect(self.on_load_filament)
+        self.printer.filament_switch_sensor_update.connect(self.on_filament_sensor_update)
+
+    #IF nothings shows is bc of the connection between printer.py and this ,MAYbe the load and unload file itself with printer idk should work tho
+
+    @QtCore.pyqtSlot(str, str, bool, name="on_filament_sensor_update")
+    def on_filament_sensor_update(self, sensor_name: str, parameter: str, value: bool): 
+        print(sensor_name, parameter, value)
+
+        # TODO: machine have N sensors, if all N are true = "loaded", otherwise = "unloaded"
+        if parameter == "filament_detected":
+            if not isinstance(value, bool):
+                self._filament_state = self.FilamentStates.UNKNOWN
+                print(f"Warning: Invalid value type for sensor '{sensor_name}'.")
+                self.handle_filamment_state()
+                return
+            print("working")
+            self._sensor_states[sensor_name] = value
+            if not self._sensor_states:
+                new_state = self.FilamentStates.UNKNOWN
+            elif all(self._sensor_states.values()):
+                new_state = self.FilamentStates.LOADED
+            else:
+                new_state = self.FilamentStates.UNLOADED
+            
+            if self._filament_state != new_state:
+                self._filament_state = new_state
+                self.handle_filamment_state()
+
+
+    @QtCore.pyqtSlot(str, str, float, name="on_extruder_update")
+    def on_extruder_update(
+        self, extruder_name: str, field: str, new_value: float
+    ) -> None:
+        
+        if self.target_temp != 0:
+            if self.current_temp == self.target_temp:
+                self.loadscreen.set_status_message("extruder heated up \n please wait")
+                return
+
+            if field == "temperature":
+                self.current_temp = round(new_value,0) #somehow this works 
+                self.loadscreen.set_status_message(f"heating up ({new_value}/{self.target_temp}) \n please wait")
+            
+
+
+        if field == "target":
+            self.target_temp = round(new_value,0) #somehow this works again
+            self.loadscreen.set_status_message("heating up \n please wait")
+
+
+    @QtCore.pyqtSlot(bool, name="on_load_filament")
+    def on_load_filament(self,status:bool):
+
+        if status:
+            self.loadscreen.show()
+        else:
+            self.loadscreen.hide()
+            self._filament_state = self.FilamentStates.LOADED
+        self.handle_filamment_state()
+
+    @QtCore.pyqtSlot(bool, name="on_unload_filament")
+    def on_unload_filament(self,status:bool):
+
+        if status:
+            self.loadscreen.show()
+        else:
+            self.loadscreen.hide()
+            self._filament_state = self.FilamentStates.UNLOADED
+        self.handle_filamment_state()
+
+        
+
+    @QtCore.pyqtSlot(int, int, name="load_filament")
     def load_filament(self, toolhead: int = 0, temp: int = 220) -> None:
-        # if not self.has_load_unload_objects:
-        #     return  # {"error": "No load/unload routines"}
-        # if not self._filament_state == self.FilamentStates.UNLOADED:
-        #     return  # {"error": "Filament already loaded"}
-        # if toolhead == 0:
-        #     self.run_gcode.emit(f"LOAD_FILAMENT TEMPERATURE={temp}")
-        # else:
-        self.run_gcode.emit(
-            f"LOAD_FILAMENT TOOLHEAD=load_toolhead TEMPERATURE={temp}"
-        )
+        if self._filament_state == self.FilamentStates.UNKNOWN:
+            self.popup.new_message(message_type=Popup.MessageType.ERROR , message="Cannot Find If Machine is Loadded or not",)
+        
+        if self._filament_state == self.FilamentStates.LOADED:
+            self.popup.new_message(message_type=Popup.MessageType.ERROR , message="Allready Loaded",)
+            return  
+        if toolhead == 0:
+            self.run_gcode.emit(f"LOAD_FILAMENT TEMPERATURE={temp}")
+        else:
+            self.run_gcode.emit(
+                f"LOAD_FILAMENT TOOLHEAD=load_toolhead TEMPERATURE={temp}"
+            )
 
-    @pyqtSlot(str, int, name="unload_filament")
-    def unload_filament(self, toolhead: str = "0", temp: int = 220) -> None:
-        # if not self.has_load_unload_objects:
-        #     return  # {"error": "No load/unload routines"}
-        # if not self._filament_state == self.FilamentStates.LOADED:
-        #     return  # {"error": "No loaded filament"}
-
-        # self.find_routine_objects()
+    @QtCore.pyqtSlot(str, int, name="unload_filament")
+    def unload_filament(self, toolhead: int = 0, temp: int = 220) -> None:
+        if self._filament_state == self.FilamentStates.UNKNOWN:
+            self.popup.new_message(message_type=Popup.MessageType.ERROR , message="Cannot Find If Machine is Loadded or not",)
+                
+        if  self._filament_state == self.FilamentStates.UNLOADED:
+            self.popup.new_message(message_type=Popup.MessageType.ERROR , message="Allready UnLoaded",)
+            return  
+        
+        self.find_routine_objects()
         if toolhead == 0:
             self.run_gcode.emit(f"UNLOAD_FILAMENT TEMPERATURE={temp}")
         else:
             self.run_gcode.emit(
                 f"UNLOAD_FILAMENT TOOLHEAD={toolhead} TEMPERATURE={temp}"
             )
+            
+    def handle_filamment_state(self):
+        if self._filament_state == self.FilamentStates.LOADED:
+            self.panel.filament_page_load_btn.setDisabled(True)
+            self.panel.filament_page_load_btn.setDisabled(False)
+        elif self._filament_state == self.FilamentStates.UNLOADED:
+            self.panel.filament_page_unload_btn.setDisabled(True)
+            self.panel.filament_page_unload_btn.setDisabled(False)
+        else:
+            self.panel.filament_page_load_btn.setDisabled(False)
+            self.panel.filament_page_unload_btn.setDisabled(False)
+
+
 
     @property
     def filament_state(self):
@@ -117,20 +222,20 @@ class FilamentTab(QStackedWidget):
     def back_button(self):
         self.request_back.emit()
 
-    def sizeHint(self) -> QSize:
+    def sizeHint(self) -> QtCore.QSize:
         return super().sizeHint()
 
-    def paintEvent(self, a0: QPaintEvent | None) -> None:
+    def paintEvent(self, a0: QtGui.QPaintEvent | None) -> None:
         if self.panel.load_page.isVisible() and self.toolhead_count == 1:
             self.panel.load_header_page_title.setText("Load Toolhead")
         if a0 is not None:
             return super().paintEvent(a0)
 
-    def removeWidget(self, w: QWidget | None) -> None:
+    def removeWidget(self, w: QtWidgets.QWidget | None) -> None:
         if w is not None:
             return super().removeWidget(w)
 
-    def resizeEvent(self, a0: QResizeEvent | None) -> None:
+    def resizeEvent(self, a0: QtGui.QResizeEvent | None) -> None:
         if a0 is not None:
             return super().resizeEvent(a0)
 
