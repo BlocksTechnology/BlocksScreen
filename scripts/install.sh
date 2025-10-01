@@ -46,7 +46,7 @@ PYTHON_VERSION=3.11.2
 XSERVER="xinit xinput x11-xserver-utils xserver-xorg-input-evdev xserver-xorg-input-libinput xserver-xorg-legacy xserver-xorg-video-fbdev"
 CAGE="cage seatd xwayland"
 PYOBJECT="pkg-config python3-dev"
-MISC="autoconf python3-venv libdbus-glib-1-dev udiskie"
+MISC="autoconf python3-venv libdbus-glib-1-dev udiskie xdg-utils"
 # QTMISC="'^libxcb.*-dev' libx11-xcb-dev libglu1-mesa-dev libxrender-dev libxi-dev libxkbcommon-dev libxkbcommon-x11-dev libxcb-cursor0 opencv-python-headless"
 QTMISC=" ^libxcb.*-dev libx11-xcb-dev libglu1-mesa-dev libxrender-dev libxi-dev libxkbcommon-dev libxkbcommon-x11-dev libxcb-cursor0"
 
