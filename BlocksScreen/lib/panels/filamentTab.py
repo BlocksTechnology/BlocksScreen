@@ -1,5 +1,4 @@
 import enum
-import typing
 from functools import partial
 
 
@@ -101,16 +100,11 @@ class FilamentTab(QtWidgets.QStackedWidget):
 
     @QtCore.pyqtSlot(str, str, bool, name="on_filament_sensor_update")
     def on_filament_sensor_update(self, sensor_name: str, parameter: str, value: bool): 
-        print(sensor_name, parameter, value)
-
-        # TODO: machine have N sensors, if all N are true = "loaded", otherwise = "unloaded"
         if parameter == "filament_detected":
             if not isinstance(value, bool):
                 self._filament_state = self.FilamentStates.UNKNOWN
-                print(f"Warning: Invalid value type for sensor '{sensor_name}'.")
                 self.handle_filamment_state()
                 return
-            print("working")
             self._sensor_states[sensor_name] = value
             if not self._sensor_states:
                 new_state = self.FilamentStates.UNKNOWN
