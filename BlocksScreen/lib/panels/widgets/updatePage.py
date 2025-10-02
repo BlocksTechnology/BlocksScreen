@@ -13,7 +13,7 @@ class ListItem:
     right_text: str | None = None
     icon: QtGui.QPixmap | None = None
     callback: callable = None
-    enabled: bool = False
+    selected: bool = False
     allow_check: bool = True
     _lfontsize: int = 0
     _rfontsize: int = 0
@@ -62,7 +62,7 @@ class UpdatePage(QtWidgets.QWidget):
         self.model.setParent(self.update_buttons_list_widget)
         self.entry_delegate = EntryDelegate()
         self.update_buttons_list_widget.setModel(self.model)
-        self.entry_delegate.item_clicked.connect(self.on_item_clicked)
+        self.entry_delegate.item_selected.connect(self.on_item_clicked)
         self.update_btn.clicked.connect(self.on_update_clicked)
         self.recover_btn.clicked.connect(self.on_recover_clicked)
         self.update_back_btn.clicked.connect(self.reset_view_model)
@@ -151,7 +151,7 @@ class UpdatePage(QtWidgets.QWidget):
             text=cli_name,
             icon=QtGui.QPixmap(":/ui/media/btn_icons/info.svg"),
             callback=self.on_item_clicked,
-            enabled=False,
+            selected=False,
             right_text=None,
             _lfontsize=17,
             _rfontsize=12,
@@ -521,7 +521,7 @@ class EntryListModel(QtCore.QAbstractListModel):
             return False
         if role == EntryListModel.EnableRole:
             item = self.entries[index.row()]
-            item.enabled = value
+            item.selected = value
             self.dataChanged.emit(index, index, [EntryListModel.EnableRole])
             return True
         if role == QtCore.Qt.ItemDataRole.UserRole:
@@ -536,12 +536,12 @@ class EntryListModel(QtCore.QAbstractListModel):
         if role == QtCore.Qt.ItemDataRole.UserRole:
             return item
         if role == EntryListModel.EnableRole:
-            return item.enabled
+            return item.selected
 
 
 class EntryDelegate(QtWidgets.QStyledItemDelegate):
-    item_clicked: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
-        str, name="item-clicked"
+    item_selected: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        str, name="item-selected"
     )
 
     def __init__(self) -> None:
@@ -600,7 +600,7 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
         left_margin = 10  # default left margin
 
         # Gradient background (left to right)
-        if not item.enabled:
+        if not item.selected:
             pressed_color = QtGui.QColor("#1A8FBF")
             pressed_color.setAlpha(20)
             painter.setPen(QtCore.Qt.PenStyle.NoPen)
@@ -716,6 +716,8 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
         index: QtCore.QModelIndex,
     ):
         item = index.data(QtCore.Qt.ItemDataRole.UserRole)
+        if item.selected:
+            self.item_selected.emit(item.text)
         if event.type() == QtCore.QEvent.Type.MouseButtonPress:
             item.callback("Can call callback")
             if self.prev_index is None:
@@ -725,6 +727,6 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
                 model.setData(prev_index, False, EntryListModel.EnableRole)
                 self.prev_index = index.row()
             model.setData(index, True, EntryListModel.EnableRole)
-            self.item_clicked.emit(item.text)
+            self.item_selected.emit(item.text)
             return True
         return False
