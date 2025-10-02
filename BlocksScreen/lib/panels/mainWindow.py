@@ -44,6 +44,9 @@ class MainWindow(QtWidgets.QMainWindow):
     )
     call_network_panel = QtCore.pyqtSignal(name="call-network-panel")
 
+    update_available = QtCore.pyqtSignal(bool, name="update_available")
+
+
     def __init__(self):
         super(MainWindow, self).__init__()
         self.config: BlocksScreenConfig = get_configparser()
@@ -174,6 +177,17 @@ class MainWindow(QtWidgets.QMainWindow):
             self.bo_ws_startup.emit()
 
         self.reset_tab_indexes()
+
+
+
+    @QtCore.pyqtSlot(bool,name="update_available")
+    def update_avaible(self,state=bool):
+        if state:
+            self.ui.main_content_widget.setNotification(3,True)
+            #TODO: change to update button
+            self.utilitiesPanel.panel.utilities_info_btn.setShowNotification(True)
+            
+
 
     def enable_tab_bar(self) -> bool:
         """Enables the tab bar
