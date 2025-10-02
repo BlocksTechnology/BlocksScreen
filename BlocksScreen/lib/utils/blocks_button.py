@@ -177,10 +177,10 @@ class BlocksCustomButton(QtWidgets.QPushButton):
         if self.text():
             _start_text_position = int(self.button_ellipse.width())
             _text_rect = _rect
-            _text_rect.setLeft(_start_text_position + margin)
             _text_rect.setWidth(
                 self.width() - int(self.button_ellipse.width())
             )
+            _text_rect.setLeft(int(self.button_ellipse.width()))
             _pen = painter.pen()
             _pen.setStyle(QtCore.Qt.PenStyle.SolidLine)
             _pen.setWidth(1)
@@ -191,8 +191,7 @@ class BlocksCustomButton(QtWidgets.QPushButton):
             painter.drawText(
                 _text_rect,
                 QtCore.Qt.TextFlag.TextShowMnemonic
-                | QtCore.Qt.AlignmentFlag.AlignLeft
-                | QtCore.Qt.AlignmentFlag.AlignVCenter,
+                | QtCore.Qt.AlignmentFlag.AlignCenter,
                 str(self.text()),
             )
             painter.setPen(QtCore.Qt.PenStyle.NoPen)
