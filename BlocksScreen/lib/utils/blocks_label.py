@@ -271,6 +271,18 @@ class BlocksLabel(QtWidgets.QLabel):
                 text_option,
             )
             if self._marquee and self.text_width > self.label_width:
+                
+                second_text_rect = self.rect()
+                second_text_rect.translate(
+                    int(
+                        self.scroll_pos
+                        + self.text_width
+                        + self.label_width / 2
+                    ),
+                    0,
+                )
+
+                
                 # Draw the main text instance
                 draw_rect = QtCore.QRectF(
                     self.contentsRect().x() + self.scroll_pos,
