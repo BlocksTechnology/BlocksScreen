@@ -14,6 +14,7 @@ class ListItem:
     icon: QtGui.QPixmap | None = None
     callback: callable = None
     enabled: bool = False
+    allow_check: bool = True
     _lfontsize: int = 0
     _rfontsize: int = 0
 
@@ -58,15 +59,41 @@ class UpdatePage(QtWidgets.QWidget):
         self._setupUI()
         self.cli_tracking = {}
         self.model = EntryListModel()
+        self.model.setParent(self.update_buttons_list_widget)
         self.entry_delegate = EntryDelegate()
+        self.update_buttons_list_widget.setModel(self.model)
         self.entry_delegate.item_clicked.connect(self.on_item_clicked)
         self.update_btn.clicked.connect(self.on_update_clicked)
         self.recover_btn.clicked.connect(self.on_recover_clicked)
+        self.update_back_btn.clicked.connect(self.reset_view_model)
+
+        self.update_buttons_list_widget.setModel(self.model)
+        self.update_buttons_list_widget.setItemDelegate(self.entry_delegate)
+
+    def reset_view_model(self) -> None:
+        """Clears items from ListView (Resets `QAbstractListModel` by clearing entries)"""
+        self.model.clear()
+        self.entry_delegate.clear()
+        self.update_buttons_list_widget.selectionModel().clear()
+        self.request_update_status.emit(True)
+
+    def deleteLater(self) -> None:
+        self.reset_view_model()
+        return super().deleteLater()
 
     def showEvent(self, a0: QtGui.QShowEvent | None) -> None:
-        self.infobox_frame.hide()
-        # self.request_update_status.emit(True)
+        """Re-add clients to update list"""
+        self.update_buttons_list_widget.blockSignals(True)
+        for cli_name in self.cli_tracking.keys():
+            self.add_update_entry(cli_name)
+        self.model.setData(
+            self.model.index(0), True, EntryListModel.EnableRole
+        )  # Set the first item checked on startup
+        self.update_buttons_list_widget.blockSignals(False)
         return super().showEvent(a0)
+
+    def hide(self) -> None:
+        return super().hide()
 
     @QtCore.pyqtSlot(name="on-recover-clicked")
     def on_recover_clicked(self) -> None:
@@ -86,21 +113,24 @@ class UpdatePage(QtWidgets.QWidget):
             self.version_tracking_info.setText("Missing, Cannot Update")
         if name == "system":
             updatable_packages = cli_data.get("package_count", 0)
+            self.recover_btn.hide()
             if updatable_packages == 0:
                 self.version_tracking_info.setText("No updates")
-                self.update_btn.setDisabled(True)
+                self.update_btn.hide()
+                self.remote_version_title.hide()
+                self.remote_version_tracking.hide()
+                self.version_tracking_info.setWordWrap(True)
+                return
             self.version_tracking_info.setText(
                 f"{updatable_packages} upgradable \n packages"
             )
-            self.remote_version_title.hide()
-            self.remote_version_tracking.hide()
-            self.version_tracking_info.setWordWrap(True)
+            self.update_btn.show()
             return
+        self.update_btn.show()
+        self.recover_btn.show()
         self.remote_version_title.show()
         self.remote_version_tracking.show()
         self.version_tracking_info.setText(cli_data.get("version", "Missing"))
-        self.infobox_frame.show()
-        self.request_update_status.emit(True)
 
     @QtCore.pyqtSlot(dict, name="handle-update-message")
     def handle_update_message(self, message: dict) -> None:
@@ -115,14 +145,6 @@ class UpdatePage(QtWidgets.QWidget):
         if not cli_version_info:
             return
         self.cli_tracking = cli_version_info
-        self.update_buttons_list_widget.blockSignals(True)
-        self.model.entries.clear()
-        for cli_name in cli_version_info.keys():
-            self.add_update_entry(cli_name)
-        self.update_buttons_list_widget.setModel(self.model)
-        self.update_buttons_list_widget.setItemDelegate(self.entry_delegate)
-
-        self.update_buttons_list_widget.blockSignals(False)
 
     def add_update_entry(self, cli_name: str) -> None:
         item = ListItem(
@@ -134,11 +156,7 @@ class UpdatePage(QtWidgets.QWidget):
             _lfontsize=17,
             _rfontsize=12,
         )
-        self.model.beginInsertRows(
-            QtCore.QModelIndex(), self.model.rowCount(), self.model.rowCount()
-        )
-        self.model.entries.append(item)
-        self.model.endInsertRows()
+        self.model.add_item(item)
 
     def _setupUI(self) -> None:
         font_id = QtGui.QFontDatabase.addApplicationFont(
@@ -464,35 +482,52 @@ class UpdatePage(QtWidgets.QWidget):
 
 class EntryListModel(QtCore.QAbstractListModel):
     EnableRole = QtCore.Qt.ItemDataRole.UserRole + 1
+
     def __init__(self, entries=None) -> None:
         super().__init__()
         self.entries = entries or []
-        # self._previous_index: int = 0
-        # self.current_index: int = 0
 
     def rowCount(self, parent=QtCore.QModelIndex()):
         return len(self.entries)
 
-    def index(
-        self, row: int, column: int = ..., parent: QtCore.QModelIndex = ...
-    ) -> QtCore.QModelIndex:
-        return super().index(row, column, parent)
+    def deleteLater(self) -> None:
+        return super().deleteLater()
+
+    def clear(self) -> None:
+        self.beginResetModel()
+        self.entries.clear()
+        self.endResetModel()
+
+    def add_item(self, item: ListItem) -> None:
+        self.beginInsertRows(
+            QtCore.QModelIndex(),
+            self.rowCount(),
+            self.rowCount(),
+        )
+        self.entries.append(item)
+        self.endInsertRows()
+
+    def flags(self, index):
+        item = self.entries[index.row()]
+        flags = QtCore.Qt.ItemFlag.ItemIsEnabled | QtCore.Qt.ItemFlag.ItemIsSelectable
+        if item.allow_check:
+            flags |= QtCore.Qt.ItemFlag.ItemIsUserCheckable
+        return flags
 
     def setData(
         self, index: QtCore.QModelIndex, value: typing.Any, role: int = ...
     ) -> bool:
         if not index.isValid():
             return False
-        
         if role == EntryListModel.EnableRole:
             item = self.entries[index.row()]
             item.enabled = value
             self.dataChanged.emit(index, index, [EntryListModel.EnableRole])
             return True
-        self.dataChanged.emit(index, index, [QtCore.Qt.ItemDataRole.UserRole])
+        if role == QtCore.Qt.ItemDataRole.UserRole:
+            self.dataChanged.emit(index, index, [QtCore.Qt.ItemDataRole.UserRole])
+            return True
         return False
-        # print("here")
-        # super().setData(index, value, role)
 
     def data(self, index: QtCore.QModelIndex, role: int):
         if not index.isValid():
@@ -500,6 +535,8 @@ class EntryListModel(QtCore.QAbstractListModel):
         item: ListItem = self.entries[index.row()]
         if role == QtCore.Qt.ItemDataRole.UserRole:
             return item
+        if role == EntryListModel.EnableRole:
+            return item.enabled
 
 
 class EntryDelegate(QtWidgets.QStyledItemDelegate):
@@ -510,7 +547,9 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
     def __init__(self) -> None:
         super().__init__()
         self.prev_index: int = 0
-        self.current_index: int = 0
+
+    def clear(self) -> None:
+        self.prev_index = 0
 
     def sizeHint(self, option, index):
         base = super().sizeHint(option, index)
@@ -676,16 +715,16 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
         option: QtWidgets.QStyleOptionViewItem,
         index: QtCore.QModelIndex,
     ):
+        item = index.data(QtCore.Qt.ItemDataRole.UserRole)
         if event.type() == QtCore.QEvent.Type.MouseButtonPress:
-            item = index.data(QtCore.Qt.ItemDataRole.UserRole)
             item.callback("Can call callback")
-            if self.prev_index != index.row():
-                prev_index: QtCore.QModelIndex = model.index(self.prev_index, 0 ,index.parent())
-                model.setData(prev_index,False , EntryListModel.EnableRole)
-                self.prev_index = index.row()
-            else: 
+            if self.prev_index is None:
                 return False
-            item.enabled = True
+            if self.prev_index != index.row():
+                prev_index: QtCore.QModelIndex = model.index(self.prev_index)
+                model.setData(prev_index, False, EntryListModel.EnableRole)
+                self.prev_index = index.row()
+            model.setData(index, True, EntryListModel.EnableRole)
             self.item_clicked.emit(item.text)
             return True
         return False
