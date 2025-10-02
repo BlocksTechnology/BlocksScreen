@@ -255,7 +255,7 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
             if "server.info" in _entry[0]:
                 if response["result"]["klippy_state"] == "ready":
                     self.query_klippy_status_timer.stopTimer()
-
+                    self.api.update_status() # Request update status immediately after klippy ready DEVDEBT
                 elif response["result"]["klippy_state"] == "startup":
                     # request server.info in 2 seconds
                     if not self.query_klippy_status_timer.running:

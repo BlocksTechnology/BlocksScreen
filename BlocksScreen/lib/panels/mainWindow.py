@@ -563,7 +563,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 return True
             return False
         elif event.type() == events.PrintStart.type():
-            self.disable_tab_bar()
+            # self.disable_tab_bar()
             self.ui.extruder_temp_display.clicked.disconnect()
             self.ui.bed_temp_display.clicked.disconnect()
             self.ui.filament_type_icon.setDisabled(True)

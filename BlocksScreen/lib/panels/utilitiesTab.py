@@ -394,7 +394,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         layout = self.panel.leds_content_layout
         while layout.count():
             if (child := layout.takeAt(0)) and child.widget():
-                child.widget().deleteLater()
+                child.widget().deleteLater() # type: ignore
         led_names = []
         for obj in self.cg:
             if "led" in obj:
