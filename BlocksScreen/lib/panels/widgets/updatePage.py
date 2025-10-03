@@ -1,22 +1,9 @@
 import typing
-from dataclasses import dataclass
-
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_frame import BlocksCustomFrame
 from lib.utils.icon_button import IconButton
+from lib.utils.list_model import EntryDelegate, EntryListModel, ListItem
 from PyQt6 import QtCore, QtGui, QtWidgets
-
-
-@dataclass
-class ListItem:
-    text: str
-    right_text: str | None = None
-    icon: QtGui.QPixmap | None = None
-    callback: callable = None
-    selected: bool = False
-    allow_check: bool = True
-    _lfontsize: int = 0
-    _rfontsize: int = 0
 
 
 class UpdatePage(QtWidgets.QWidget):
@@ -112,13 +99,13 @@ class UpdatePage(QtWidgets.QWidget):
         if not cli_data:
             self.version_tracking_info.setText("Missing, Cannot Update")
         if name == "system":
-            updatable_packages = cli_data.get("package_count", 0)
             self.recover_btn.hide()
+            self.remote_version_title.hide()
+            self.remote_version_tracking.hide()
+            updatable_packages = cli_data.get("package_count", 0)
             if updatable_packages == 0:
                 self.version_tracking_info.setText("No updates")
                 self.update_btn.hide()
-                self.remote_version_title.hide()
-                self.remote_version_tracking.hide()
                 self.version_tracking_info.setWordWrap(True)
                 return
             self.version_tracking_info.setText(
@@ -480,253 +467,5 @@ class UpdatePage(QtWidgets.QWidget):
         self.setLayout(self.update_page_content_layout)
 
 
-class EntryListModel(QtCore.QAbstractListModel):
-    EnableRole = QtCore.Qt.ItemDataRole.UserRole + 1
-
-    def __init__(self, entries=None) -> None:
-        super().__init__()
-        self.entries = entries or []
-
-    def rowCount(self, parent=QtCore.QModelIndex()):
-        return len(self.entries)
-
-    def deleteLater(self) -> None:
-        return super().deleteLater()
-
-    def clear(self) -> None:
-        self.beginResetModel()
-        self.entries.clear()
-        self.endResetModel()
-
-    def add_item(self, item: ListItem) -> None:
-        self.beginInsertRows(
-            QtCore.QModelIndex(),
-            self.rowCount(),
-            self.rowCount(),
-        )
-        self.entries.append(item)
-        self.endInsertRows()
-
-    def flags(self, index):
-        item = self.entries[index.row()]
-        flags = QtCore.Qt.ItemFlag.ItemIsEnabled | QtCore.Qt.ItemFlag.ItemIsSelectable
-        if item.allow_check:
-            flags |= QtCore.Qt.ItemFlag.ItemIsUserCheckable
-        return flags
-
-    def setData(
-        self, index: QtCore.QModelIndex, value: typing.Any, role: int = ...
-    ) -> bool:
-        if not index.isValid():
-            return False
-        if role == EntryListModel.EnableRole:
-            item = self.entries[index.row()]
-            item.selected = value
-            self.dataChanged.emit(index, index, [EntryListModel.EnableRole])
-            return True
-        if role == QtCore.Qt.ItemDataRole.UserRole:
-            self.dataChanged.emit(index, index, [QtCore.Qt.ItemDataRole.UserRole])
-            return True
-        return False
-
-    def data(self, index: QtCore.QModelIndex, role: int):
-        if not index.isValid():
-            return
-        item: ListItem = self.entries[index.row()]
-        if role == QtCore.Qt.ItemDataRole.UserRole:
-            return item
-        if role == EntryListModel.EnableRole:
-            return item.selected
 
 
-class EntryDelegate(QtWidgets.QStyledItemDelegate):
-    item_selected: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
-        str, name="item-selected"
-    )
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.prev_index: int = 0
-
-    def clear(self) -> None:
-        self.prev_index = 0
-
-    def sizeHint(self, option, index):
-        base = super().sizeHint(option, index)
-        return QtCore.QSize(base.width(), base.height() + 55)
-
-    def paint(self, painter: QtGui.QPainter, option, index):
-        item = index.data(QtCore.Qt.ItemDataRole.UserRole)
-        painter.save()
-        rect = option.rect
-        rect.setHeight(60)
-        button = QtWidgets.QStyleOptionButton()
-        style = QtWidgets.QApplication.style()
-        if not style:
-            return
-        style.drawControl(
-            QtWidgets.QStyle.ControlElement.CE_PushButton, button, painter
-        )
-        button.rect = rect
-        painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing, True)
-        painter.setRenderHint(QtGui.QPainter.RenderHint.SmoothPixmapTransform, True)
-        radius = rect.height() / 5.0
-
-        # Main rounded rectangle path (using the adjusted rect)
-        path = QtGui.QPainterPath()
-        path.addRoundedRect(QtCore.QRectF(rect), radius, radius)
-
-        # Ellipse ("hole") for the icon on the right
-        ellipse_margin = rect.height() * 0.05
-        ellipse_size = rect.height() * 0.90
-        ellipse_rect = QtCore.QRectF(
-            rect.right() - ellipse_margin - ellipse_size,
-            rect.top() + ellipse_margin,
-            ellipse_size,
-            ellipse_size,
-        )
-        ellipse_path = QtGui.QPainterPath()
-        ellipse_path.addEllipse(ellipse_rect)
-
-        # Ellipse ("hole") for the icon on the left (only if present)
-        left_icon_margin = rect.height() * 0.05
-        left_icon_size = rect.height() * 0.50
-        left_icon_rect = QtCore.QRectF(
-            rect.left() + left_icon_margin,
-            rect.top() + left_icon_margin,
-            left_icon_size,
-            left_icon_size,
-        )
-        left_margin = 10  # default left margin
-
-        # Gradient background (left to right)
-        if not item.selected:
-            pressed_color = QtGui.QColor("#1A8FBF")
-            pressed_color.setAlpha(20)
-            painter.setPen(QtCore.Qt.PenStyle.NoPen)
-            painter.setBrush(pressed_color)
-            painter.fillPath(path, pressed_color)
-        else:
-            pressed_color = QtGui.QColor("#1A8FBF")
-            pressed_color.setAlpha(90)
-            painter.setPen(QtCore.Qt.PenStyle.NoPen)
-            painter.setBrush(pressed_color)
-            painter.fillPath(path, pressed_color)
-
-        # Draw icon inside the ellipse "hole" (on the right)
-        if not item.icon.isNull():
-            icon_margin = ellipse_size * 0.10
-            icon_rect = QtCore.QRectF(
-                ellipse_rect.left() + icon_margin / 2,
-                ellipse_rect.top() + icon_margin / 2,
-                ellipse_rect.width() - icon_margin,
-                ellipse_rect.height() - icon_margin,
-            )
-            icon_scaled = item.icon.scaled(
-                icon_rect.size().toSize(),
-                QtCore.Qt.AspectRatioMode.KeepAspectRatio,
-                QtCore.Qt.TransformationMode.SmoothTransformation,
-            )
-            # Center the icon in the ellipse
-            adjusted_x = icon_rect.x() + (icon_rect.width() - icon_scaled.width()) / 2.0
-            adjusted_y = (
-                icon_rect.y() + (icon_rect.height() - icon_scaled.height()) / 2.0
-            )
-            adjusted_icon_rect = QtCore.QRectF(
-                adjusted_x,
-                adjusted_y,
-                icon_scaled.width(),
-                icon_scaled.height(),
-            )
-            painter.drawPixmap(
-                adjusted_icon_rect, icon_scaled, icon_scaled.rect().toRectF()
-            )
-
-        # Draw text, area before the ellipse (adjusted for left icon)
-        text_margin = int(
-            rect.right() - ellipse_size - ellipse_margin - rect.height() * 0.10
-        )
-        text_rect = QtCore.QRectF(
-            rect.left() + left_margin,
-            rect.top(),
-            text_margin - rect.left() - left_margin,
-            rect.height(),
-        )
-
-        # Draw main text (left-aligned)
-        painter.setPen(QtGui.QColor(255, 255, 255))
-        _font = painter.font()
-        _font.setPointSize(item._lfontsize)
-        painter.setFont(_font)
-        metrics = QtGui.QFontMetrics(_font)
-        main_text_height = metrics.height()
-
-        # Vertically center text
-        text_y = rect.top() + (rect.height() + main_text_height) / 2 - metrics.descent()
-
-        # Calculate where to start the right text: just left of the right icon ellipse
-        gap = 10  # gap between right text and icon ellipse
-        right_font = QtGui.QFont(_font)
-        right_font.setPointSize(item._rfontsize)
-        right_metrics = QtGui.QFontMetrics(right_font)
-        right_text_width = right_metrics.horizontalAdvance(item.right_text)
-
-        # The right text should end at ellipse_rect.left() - gap
-        right_text_x = ellipse_rect.left() - gap - right_text_width
-
-        # Draw main text (left-aligned, but don't overlap right text)
-        max_main_text_width = (
-            right_text_x - text_rect.left() - 10
-        )  # 10px gap between main and right text
-        elided_main_text = metrics.elidedText(
-            item.text,
-            QtCore.Qt.TextElideMode.ElideRight,
-            int(max_main_text_width),
-        )
-
-        painter.setFont(_font)
-        painter.drawText(
-            int(text_rect.left()),
-            int(text_y),
-            elided_main_text,
-        )
-
-        # Draw right text (smaller, grey, just left of the icon)
-        if item.right_text:
-            painter.setFont(right_font)
-            painter.setPen(QtGui.QColor(160, 160, 160))  # grey color
-            right_text_height = right_metrics.height()
-            right_text_y = (
-                rect.top()
-                + (rect.height() + right_text_height) / 2
-                - right_metrics.descent()
-            )
-            painter.drawText(
-                int(right_text_x),
-                int(right_text_y),
-                item.right_text,
-            )
-        painter.restore()
-
-    def editorEvent(
-        self,
-        event: QtCore.QEvent,
-        model: EntryListModel,
-        option: QtWidgets.QStyleOptionViewItem,
-        index: QtCore.QModelIndex,
-    ):
-        item = index.data(QtCore.Qt.ItemDataRole.UserRole)
-        if item.selected:
-            self.item_selected.emit(item.text)
-        if event.type() == QtCore.QEvent.Type.MouseButtonPress:
-            item.callback("Can call callback")
-            if self.prev_index is None:
-                return False
-            if self.prev_index != index.row():
-                prev_index: QtCore.QModelIndex = model.index(self.prev_index)
-                model.setData(prev_index, False, EntryListModel.EnableRole)
-                self.prev_index = index.row()
-            model.setData(index, True, EntryListModel.EnableRole)
-            self.item_selected.emit(item.text)
-            return True
-        return False
