@@ -163,9 +163,7 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
             adjusted_x = (
                 icon_rect.x() + (icon_rect.width() - icon_scaled.width()) // 2.0
             )
-            adjusted_y = (
-                rect.y() + (rect.height() - icon_scaled.height()) // 2.0
-            )
+            adjusted_y = rect.y() + (rect.height() - icon_scaled.height()) // 2.0
             adjusted_icon_rect = QtCore.QRectF(
                 adjusted_x,
                 adjusted_y,
@@ -198,10 +196,7 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
                 left_icon_rect.x()
                 + (left_icon_rect.width() - left_icon_scaled.width()) // 2.0
             )
-            adjusted_y = (
-                rect.y()
-                + (rect.height() - left_icon_scaled.height()) // 2.0
-            )
+            adjusted_y = rect.y() + (rect.height() - left_icon_scaled.height()) // 2.0
             adjusted_left_icon_rect = QtCore.QRectF(
                 adjusted_x,
                 adjusted_y,
