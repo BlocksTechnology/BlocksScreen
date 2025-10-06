@@ -37,4 +37,4 @@ indent-width = 4
 indent-style = "space"
 line-ending = 'auto'
 docstring-code-format = true
-docstring-code-line-length = 79
+docstring-code-line-length = 94
