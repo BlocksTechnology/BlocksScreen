@@ -6,13 +6,15 @@ import typing
 @dataclass
 class ListItem:
     text: str
-    right_text: str | None = None
-    icon: QtGui.QPixmap | None = None
+    right_text: str = ""
+    right_icon: QtGui.QPixmap | None = None
+    left_icon: QtGui.QPixmap | None = None
     callback: callable = None
     selected: bool = False
     allow_check: bool = True
     _lfontsize: int = 0
     _rfontsize: int = 0
+    height: int = 60  # Change has needed
 
 
 class EntryListModel(QtCore.QAbstractListModel):
@@ -49,9 +51,7 @@ class EntryListModel(QtCore.QAbstractListModel):
             flags |= QtCore.Qt.ItemFlag.ItemIsUserCheckable
         return flags
 
-    def setData(
-        self, index: QtCore.QModelIndex, value: typing.Any, role: int = ...
-    ) -> bool:
+    def setData(self, index: QtCore.QModelIndex, value: typing.Any, role: int) -> bool:
         if not index.isValid():
             return False
         if role == EntryListModel.EnableRole:
@@ -68,33 +68,42 @@ class EntryListModel(QtCore.QAbstractListModel):
         if not index.isValid():
             return
         item: ListItem = self.entries[index.row()]
-        if role == QtCore.Qt.ItemDataRole.UserRole:
-            return item
         if role == EntryListModel.EnableRole:
             return item.selected
+        if role == QtCore.Qt.ItemDataRole.UserRole:
+            return item
 
 
 class EntryDelegate(QtWidgets.QStyledItemDelegate):
     item_selected: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
-        str, name="item-selected"
+        ListItem, name="item-selected"
     )
 
     def __init__(self) -> None:
         super().__init__()
         self.prev_index: int = 0
+        self.height: int = 60
 
     def clear(self) -> None:
         self.prev_index = 0
 
-    def sizeHint(self, option, index):
+    def sizeHint(
+        self, option: QtWidgets.QStyleOptionViewItem, index: QtCore.QModelIndex
+    ):
         base = super().sizeHint(option, index)
-        return QtCore.QSize(base.width(), base.height() + 55)
+        return QtCore.QSize(base.width(), int(base.height() + self.height * 0.9))
 
-    def paint(self, painter: QtGui.QPainter, option, index):
+    def paint(
+        self,
+        painter: QtGui.QPainter,
+        option: QtWidgets.QStyleOptionViewItem,
+        index: QtCore.QModelIndex,
+    ):
         item = index.data(QtCore.Qt.ItemDataRole.UserRole)
+
         painter.save()
         rect = option.rect
-        rect.setHeight(60)
+        rect.setHeight(item.height)
         button = QtWidgets.QStyleOptionButton()
         style = QtWidgets.QApplication.style()
         if not style:
@@ -111,29 +120,6 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
         path = QtGui.QPainterPath()
         path.addRoundedRect(QtCore.QRectF(rect), radius, radius)
 
-        # Ellipse ("hole") for the icon on the right
-        ellipse_margin = rect.height() * 0.05
-        ellipse_size = rect.height() * 0.90
-        ellipse_rect = QtCore.QRectF(
-            rect.right() - ellipse_margin - ellipse_size,
-            rect.top() + ellipse_margin,
-            ellipse_size,
-            ellipse_size,
-        )
-        ellipse_path = QtGui.QPainterPath()
-        ellipse_path.addEllipse(ellipse_rect)
-
-        # Ellipse ("hole") for the icon on the left (only if present)
-        left_icon_margin = rect.height() * 0.05
-        left_icon_size = rect.height() * 0.50
-        left_icon_rect = QtCore.QRectF(
-            rect.left() + left_icon_margin,
-            rect.top() + left_icon_margin,
-            left_icon_size,
-            left_icon_size,
-        )
-        left_margin = 10  # default left margin
-
         # Gradient background (left to right)
         if not item.selected:
             pressed_color = QtGui.QColor("#1A8FBF")
@@ -148,24 +134,37 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
             painter.setBrush(pressed_color)
             painter.fillPath(path, pressed_color)
 
+        # Ellipse ("hole") for the icon on the right
+        ellipse_margin = rect.height() * 0.05
+        ellipse_size = rect.height() * 0.90
+        ellipse_rect = QtCore.QRectF(
+            rect.right() - ellipse_margin - ellipse_size,
+            rect.top() + ellipse_margin,
+            ellipse_size,
+            ellipse_size,
+        )
+        ellipse_path = QtGui.QPainterPath()
+        ellipse_path.addEllipse(ellipse_rect)
+        icon_margin = ellipse_size * 0.10
         # Draw icon inside the ellipse "hole" (on the right)
-        if not item.icon.isNull():
-            icon_margin = ellipse_size * 0.10
+        if item.right_icon:
             icon_rect = QtCore.QRectF(
                 ellipse_rect.left() + icon_margin / 2,
                 ellipse_rect.top() + icon_margin / 2,
                 ellipse_rect.width() - icon_margin,
                 ellipse_rect.height() - icon_margin,
             )
-            icon_scaled = item.icon.scaled(
+            icon_scaled = item.right_icon.scaled(
                 icon_rect.size().toSize(),
                 QtCore.Qt.AspectRatioMode.KeepAspectRatio,
                 QtCore.Qt.TransformationMode.SmoothTransformation,
             )
             # Center the icon in the ellipse
-            adjusted_x = icon_rect.x() + (icon_rect.width() - icon_scaled.width()) / 2.0
+            adjusted_x = (
+                icon_rect.x() + (icon_rect.width() - icon_scaled.width()) // 2.0
+            )
             adjusted_y = (
-                icon_rect.y() + (icon_rect.height() - icon_scaled.height()) / 2.0
+                rect.y() + (rect.height() - icon_scaled.height()) // 2.0
             )
             adjusted_icon_rect = QtCore.QRectF(
                 adjusted_x,
@@ -176,6 +175,45 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
             painter.drawPixmap(
                 adjusted_icon_rect, icon_scaled, icon_scaled.rect().toRectF()
             )
+
+        # Ellipse ("hole") for the icon on the left (only if present)
+        left_icon_margin = rect.height() * 0.05
+        left_icon_size = rect.height() * 0.70
+        left_icon_rect = QtCore.QRectF(
+            rect.left() + left_icon_margin,
+            rect.top() + left_icon_margin,
+            left_icon_size,
+            left_icon_size,
+        )
+        left_margin = 10  # default left margin
+        # Draw second icon (on the left, if present)
+        if item.left_icon:
+            left_icon_scaled = item.left_icon.scaled(
+                left_icon_rect.size().toSize(),
+                QtCore.Qt.AspectRatioMode.KeepAspectRatio,
+                QtCore.Qt.TransformationMode.SmoothTransformation,
+            )
+            # Center the icon in the rect
+            adjusted_x = (
+                left_icon_rect.x()
+                + (left_icon_rect.width() - left_icon_scaled.width()) // 2.0
+            )
+            adjusted_y = (
+                rect.y()
+                + (rect.height() - left_icon_scaled.height()) // 2.0
+            )
+            adjusted_left_icon_rect = QtCore.QRectF(
+                adjusted_x,
+                adjusted_y,
+                left_icon_scaled.width(),
+                left_icon_scaled.height(),
+            )
+            painter.drawPixmap(
+                adjusted_left_icon_rect,
+                left_icon_scaled,
+                left_icon_scaled.rect().toRectF(),
+            )
+            left_margin = left_icon_margin + left_icon_size + 8  # 8px gap after icon
 
         # Draw text, area before the ellipse (adjusted for left icon)
         text_margin = int(
@@ -251,10 +289,10 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
         index: QtCore.QModelIndex,
     ):
         item = index.data(QtCore.Qt.ItemDataRole.UserRole)
-        if item.selected:
-            self.item_selected.emit(item.text)
         if event.type() == QtCore.QEvent.Type.MouseButtonPress:
-            item.callback("Can call callback")
+            if item.callback:
+                if callable(item.callback):
+                    item.callback("Can call callback")
             if self.prev_index is None:
                 return False
             if self.prev_index != index.row():
@@ -262,6 +300,6 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
                 model.setData(prev_index, False, EntryListModel.EnableRole)
                 self.prev_index = index.row()
             model.setData(index, True, EntryListModel.EnableRole)
-            self.item_selected.emit(item.text)
+            self.item_selected.emit(item)
             return True
         return False
