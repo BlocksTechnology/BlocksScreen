@@ -1,4 +1,7 @@
+import copy
 import typing
+
+from lib.panels.widgets.loadPage import LoadScreen
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_frame import BlocksCustomFrame
 from lib.utils.icon_button import IconButton
@@ -26,7 +29,7 @@ class UpdatePage(QtWidgets.QWidget):
         bool, name="update-status"
     )
     request_refresh_update: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
-        str, name="update-refresh"
+        [], [str], name="update-refresh"
     )
     request_recover_repo: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         [str], [str, bool], name="recover-repo"
@@ -37,6 +40,9 @@ class UpdatePage(QtWidgets.QWidget):
     update_in_progress: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         name="update-in-progress"
     )
+    update_end: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        name="update-end"
+    )
 
     def __init__(self, parent=None) -> None:
         if parent:
@@ -45,26 +51,41 @@ class UpdatePage(QtWidgets.QWidget):
             super().__init__()
         self._setupUI()
         self.cli_tracking = {}
+        self.selected_item: ListItem | None = None
+        self.ongoing_update: bool = False
+        self.load_popup: LoadScreen = LoadScreen(self)
         self.model = EntryListModel()
         self.model.setParent(self.update_buttons_list_widget)
         self.entry_delegate = EntryDelegate()
         self.update_buttons_list_widget.setModel(self.model)
         self.entry_delegate.item_selected.connect(self.on_item_clicked)
-        self.update_btn.clicked.connect(self.on_update_clicked)
-        self.recover_btn.clicked.connect(self.on_recover_clicked)
+        self.action_btn.clicked.connect(self.on_update_clicked)
         self.update_back_btn.clicked.connect(self.reset_view_model)
-
         self.update_buttons_list_widget.setModel(self.model)
         self.update_buttons_list_widget.setItemDelegate(self.entry_delegate)
+        self.update_in_progress.connect(self.handle_ongoing_update)
+        self.update_end.connect(self.handle_update_end)
+
+    def handle_update_end(self) -> None:
+        """Handles update end signal (closes loading page, returns to normal operation)"""
+        if self.load_popup.isVisible():
+            self.load_popup.close()
+        self.request_refresh_update.emit()
+
+    def handle_ongoing_update(self) -> None:
+        """Handled ongoing update signal, calls loading page (blocks user interaction)"""
+        self.load_popup.set_status_message("Updating...")
+        self.load_popup.show()
+        self.request_update_status.emit(True)
 
     def reset_view_model(self) -> None:
         """Clears items from ListView (Resets `QAbstractListModel` by clearing entries)"""
         self.model.clear()
         self.entry_delegate.clear()
-        self.update_buttons_list_widget.selectionModel().clear()
         self.request_update_status.emit(True)
 
     def deleteLater(self) -> None:
+        """Schedule the object for deletion, resets the list model first"""
         self.reset_view_model()
         return super().deleteLater()
 
@@ -79,45 +100,89 @@ class UpdatePage(QtWidgets.QWidget):
         self.update_buttons_list_widget.blockSignals(False)
         return super().showEvent(a0)
 
-    def hide(self) -> None:
-        return super().hide()
-
-    @QtCore.pyqtSlot(name="on-recover-clicked")
-    def on_recover_clicked(self) -> None:
-        """Handle `recover_btn` clicked event"""
-        ...
-
     @QtCore.pyqtSlot(name="on-update-clicked")
     def on_update_clicked(self) -> None:
         """Handle `update_btn` clicked event"""
-        ...
+        mode = self.action_btn.text()
+        if not self.selected_item:
+            return
+        cli_name = self.selected_item.text
+        if mode == "Update":
+            if "system" in cli_name:
+                self.request_update_system.emit()
+            elif "klipper" in cli_name:
+                self.request_update_klipper.emit()
+            elif "moonraker" in cli_name:
+                self.request_update_moonraker.emit()
+            self.request_update_client.emit(cli_name)
+            self.load_popup.set_status_message(f"Updating {cli_name}")
+        else:
+            self.request_recover_repo[str, bool].emit(cli_name, True)
+            self.load_popup.set_status_message(f"Recovering {cli_name}")
+        self.load_popup.show()
+        self.request_update_status.emit()
 
-    @QtCore.pyqtSlot(str, name="on-item-clicked")
-    def on_item_clicked(self, name: str) -> None:
+    @QtCore.pyqtSlot(ListItem, name="on-item-clicked")
+    def on_item_clicked(self, item: ListItem) -> None:
         """Setup information for the currently clicked list item on the info box. Keeps track of the list item"""
-        cli_data = self.cli_tracking.get(name, {})
+        cli_data = self.cli_tracking.get(item.text, {})
         if not cli_data:
             self.version_tracking_info.setText("Missing, Cannot Update")
-        if name == "system":
-            self.recover_btn.hide()
+        self.selected_item = copy.copy(item)
+        if item.text == "system":
             self.remote_version_title.hide()
             self.remote_version_tracking.hide()
             updatable_packages = cli_data.get("package_count", 0)
             if updatable_packages == 0:
                 self.version_tracking_info.setText("No updates")
-                self.update_btn.hide()
+                self.action_btn.hide()
                 self.version_tracking_info.setWordWrap(True)
                 return
             self.version_tracking_info.setText(
                 f"{updatable_packages} upgradable \n packages"
             )
-            self.update_btn.show()
+            self.action_btn.show()
             return
-        self.update_btn.show()
-        self.recover_btn.show()
+        _remote_version = cli_data.get("remote_version", None)
+        if not _remote_version:
+            self.remote_version_title.hide()
+            self.remote_version_tracking.hide()
         self.remote_version_title.show()
         self.remote_version_tracking.show()
-        self.version_tracking_info.setText(cli_data.get("version", "Missing"))
+        self.remote_version_tracking.setText(_remote_version)
+        _curr_version = cli_data.get("version", None)
+        if not _curr_version:
+            # There is no version information something is seriously wrong here
+            self.action_btn.setText("Recover")
+
+        self.version_title.show()
+        self.version_tracking_info.show()
+        self.version_tracking_info.setText(_curr_version)
+        is_valid = cli_data.get(
+            "is_valid", None
+        )  # True if git_repo is valid and can be updated
+        is_dirty = cli_data.get(
+            "is_dirty", None
+        )  # true if git_repo has modified files. A dirty repo cannot be updated
+        detached = cli_data.get(
+            "detached", None
+        )  # True if git_repo is currently in detached state
+        corrupt = cli_data.get("corrupt", None)
+        commits_behind = cli_data.get("commits_behind", None)
+
+        if not (corrupt or is_dirty or detached) and is_valid and commits_behind:
+            self.no_update_placeholder.hide()
+            self.action_btn.setText("Update")
+            # Add text saying no updates
+        elif corrupt or is_dirty:
+            self.action_btn.setText("Recover")
+        else:
+            self.no_update_placeholder.show()
+            self.action_btn.hide()
+            return
+
+        self.no_update_placeholder.hide()
+        self.action_btn.show()
 
     @QtCore.pyqtSlot(dict, name="handle-update-message")
     def handle_update_message(self, message: dict) -> None:
@@ -126,26 +191,27 @@ class UpdatePage(QtWidgets.QWidget):
         Receives updates from moonraker `machine.update.status` request.
         """
         busy = message.get("busy", False)
-        if busy:
-            self.update_in_progress.emit()
+        print(busy)
+        self.update_in_progress.emit() if busy else self.update_end.emit()
         cli_version_info = message.get("version_info", None)
         if not cli_version_info:
             return
         self.cli_tracking = cli_version_info
 
     def add_update_entry(self, cli_name: str) -> None:
+        """Adds a new item to the list model"""
         item = ListItem(
             text=cli_name,
-            icon=QtGui.QPixmap(":/ui/media/btn_icons/info.svg"),
-            callback=self.on_item_clicked,
+            right_icon=QtGui.QPixmap(":/ui/media/btn_icons/info.svg"),
             selected=False,
-            right_text=None,
             _lfontsize=17,
             _rfontsize=12,
+            height=60,
         )
         self.model.add_item(item)
 
     def _setupUI(self) -> None:
+        """Setup UI for updatePage"""
         font_id = QtGui.QFontDatabase.addApplicationFont(
             ":/font/media/fonts for text/Momcake-Bold.ttf"
         )
@@ -420,9 +486,7 @@ class UpdatePage(QtWidgets.QWidget):
         )
         palette = self.remote_version_tracking.palette()
         palette.setColor(palette.ColorRole.WindowText, QtGui.QColor("#FFFFFF"))
-        self.remote_version_tracking.setAlignment(
-            QtCore.Qt.AlignmentFlag.AlignLeft | QtCore.Qt.AlignmentFlag.AlignVCenter
-        )
+        self.remote_version_tracking.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self.remote_version_tracking.setFont(font)
         self.remote_version_tracking.setPalette(palette)
         self.remote_version_box.addWidget(self.remote_version_tracking, 0)
@@ -432,31 +496,31 @@ class UpdatePage(QtWidgets.QWidget):
         self.button_box.setContentsMargins(0, 0, 0, 0)
         self.button_box.addSpacing(-1)
 
-        self.update_btn = BlocksCustomButton()
-        self.update_btn.setMinimumSize(QtCore.QSize(200, 60))
-        self.update_btn.setMaximumSize(QtCore.QSize(250, 60))
+        self.action_btn = BlocksCustomButton()
+        self.action_btn.setMinimumSize(QtCore.QSize(200, 60))
+        self.action_btn.setMaximumSize(QtCore.QSize(250, 60))
         font.setPointSize(20)
-        self.update_btn.setFont(font)
-        self.update_btn.setPalette(palette)
-        self.update_btn.setSizePolicy(sizePolicy)
-        self.update_btn.text
-        self.update_btn.setText("Update")
+        self.action_btn.setFont(font)
+        self.action_btn.setPalette(palette)
+        self.action_btn.setSizePolicy(sizePolicy)
+        self.action_btn.text
+        self.action_btn.setText("Update")
         self.button_box.addWidget(
-            self.update_btn, 0, QtCore.Qt.AlignmentFlag.AlignHCenter
+            self.action_btn, 0, QtCore.Qt.AlignmentFlag.AlignHCenter
         )
+        self.no_update_placeholder = QtWidgets.QLabel(self)
+        self.no_update_placeholder.setMinimumSize(QtCore.QSize(200, 60))
+        self.no_update_placeholder.setMaximumSize(QtCore.QSize(300, 60))
+        font.setPointSize(20)
+        self.no_update_placeholder.setFont(font)
+        self.no_update_placeholder.setPalette(palette)
+        self.no_update_placeholder.setSizePolicy(sizePolicy)
+        self.no_update_placeholder.setText("No Updates Available")
+        self.no_update_placeholder.setWordWrap(True)
+        self.no_update_placeholder.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.info_box_layout.addWidget(self.no_update_placeholder, 0)
+        self.no_update_placeholder.hide()
 
-        self.recover_btn = BlocksCustomButton()
-        self.recover_btn.setMinimumSize(QtCore.QSize(200, 60))
-        self.recover_btn.setMaximumSize(QtCore.QSize(250, 60))
-        font.setPointSize(20)
-        self.recover_btn.setFont(font)
-        self.recover_btn.setPalette(palette)
-        self.recover_btn.setSizePolicy(sizePolicy)
-        self.recover_btn.text
-        self.recover_btn.setText("Recover")
-        self.button_box.addWidget(
-            self.recover_btn, 0, QtCore.Qt.AlignmentFlag.AlignHCenter
-        )
         self.info_box_layout.addLayout(
             self.button_box,
             0,
@@ -465,7 +529,3 @@ class UpdatePage(QtWidgets.QWidget):
         self.main_content_layout.addWidget(self.infobox_frame, 1)
         self.update_page_content_layout.addLayout(self.main_content_layout, 1)
         self.setLayout(self.update_page_content_layout)
-
-
-
-

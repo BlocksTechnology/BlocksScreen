@@ -213,6 +213,9 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         self.update_page.request_refresh_update.connect(
             self.ws.api.refresh_update_status
         )
+        self.update_page.request_refresh_update[str].connect(
+            self.ws.api.refresh_update_status
+        )
         self.update_page.request_rollback_update.connect(self.ws.api.rollback_update)
         self.update_page.request_update_client.connect(self.ws.api.update_client)
         self.update_page.request_update_klipper.connect(self.ws.api.update_klipper)
