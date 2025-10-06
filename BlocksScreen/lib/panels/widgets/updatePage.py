@@ -97,6 +97,9 @@ class UpdatePage(QtWidgets.QWidget):
         self.model.setData(
             self.model.index(0), True, EntryListModel.EnableRole
         )  # Set the first item checked on startup
+        self.on_item_clicked(
+            self.model.data(self.model.index(0), QtCore.Qt.ItemDataRole.UserRole)  # type: ignore
+        )  # Bandage solution: simulate click for setting information on infobox
         self.update_buttons_list_widget.blockSignals(False)
         return super().showEvent(a0)
 
