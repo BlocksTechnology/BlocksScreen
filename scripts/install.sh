@@ -397,12 +397,18 @@ function add_moonraker_update(){
     sudo tee ${MOONRAKER_CONFIG} > /dev/null << EOF 
 [update_manager BlocksScreen]
 type: git_repo
-channel: dev 
 primary_branch: master
 path: "$BS_PATH"
 origin: https://github.com/BlocksTechnology/BlocksScreen.git
 is_system_service: True
+managed_services: klipper moonraker
+virtualenv: "BSENV"
+requirements: "$BS_PATH"/requirements.txt
+
 EOF
+
+
+let moonraker manager thiss 
 }
 
 # fix fbturbo

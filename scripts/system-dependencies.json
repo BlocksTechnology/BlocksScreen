@@ -1,0 +1,22 @@
+{
+    "debian": [
+        "xinit",
+        "xinput",
+        "python3-dev",
+        "pkg-config",
+        "autoconf",
+        "python3-venv",
+        "libdbus-glib-1-dev",
+        "udiskie",
+        "xdg-utils",
+        "^libxcb.*-dev",
+        "libx11-xcb-dev",
+        "libglu1-mesa-dev",
+        "libxrender-dev",
+        "libxi-dev",
+        "libxkbcommon-dev",
+        "libxkbcommon-x11-dev",
+        "libxcb-cursor0"
+
+    ]
+}
