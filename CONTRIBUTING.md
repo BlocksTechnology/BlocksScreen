@@ -6,7 +6,7 @@ Bug reports via the GitHub Issues tab
 
 Project documentation is currently under development and not yet available. We appreciate feedback on any areas that may require clarification, including setup steps, usage expectations, or technical assumptions. Your input helps us shape a more accessible and transparent experience as BlocksScreen evolves. 
 
-Licensing or attribution inquiries via h.costa@blockstec.com
+Licensing or attribution inquiries via info@blockstec.com
 
 # 🧪 Reporting Bugs
 If you encounter a bug:

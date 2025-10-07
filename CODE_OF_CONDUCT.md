@@ -43,9 +43,8 @@ This Code of Conduct applies to all project spaces, including:
 ## Reporting Violations
 
 If you experience or witness behavior that violates this Code of Conduct, please report it to:
-
-**Hugo Costa**  
-**Email**: [h.costa@blockstec.com](mailto:h.costa@blockstec.com)
+ 
+**Email**: [info@blockstec.com](mailto:info@blockstec.com)
 
 All reports will be handled confidentially and reviewed in accordance with Blocks Technology’s internal policies.
 
