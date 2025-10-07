@@ -1,0 +1,609 @@
+from lib.utils.icon_button import IconButton
+
+from PyQt6 import QtCore, QtGui, QtWidgets
+
+
+class CustomQwertyKeyboard(QtWidgets.QWidget):
+    """A custom numpad for inserting integer values"""
+
+    value_selected = QtCore.pyqtSignal(str, name="value_selected")
+    request_back = QtCore.pyqtSignal(name="request_back")
+    def __init__(
+        self,
+        parent,
+    ) -> None:
+        super().__init__(parent)
+        self.setupUi()
+        self.current_value: str = ""
+        self.symbolsrun = False
+
+
+        self.K_q.clicked.connect(lambda: self.value_inserted(str(self.K_q.text())))
+        self.K_w.clicked.connect(lambda: self.value_inserted(str(self.K_w.text())))
+        self.K_e.clicked.connect(lambda: self.value_inserted(str(self.K_e.text())))
+        self.K_r.clicked.connect(lambda: self.value_inserted(str(self.K_r.text())))
+        self.K_t.clicked.connect(lambda: self.value_inserted(str(self.K_t.text())))
+        self.K_y.clicked.connect(lambda: self.value_inserted(str(self.K_y.text())))
+        self.K_u.clicked.connect(lambda: self.value_inserted(str(self.K_u.text())))
+        self.K_i.clicked.connect(lambda: self.value_inserted(str(self.K_i.text())))
+        self.K_o.clicked.connect(lambda: self.value_inserted(str(self.K_o.text())))
+        self.K_p.clicked.connect(lambda: self.value_inserted(str(self.K_p.text())))
+        self.K_a.clicked.connect(lambda: self.value_inserted(str(self.K_a.text())))
+        self.K_s.clicked.connect(lambda: self.value_inserted(str(self.K_s.text())))
+        self.K_d.clicked.connect(lambda: self.value_inserted(str(self.K_d.text())))
+        self.K_f.clicked.connect(lambda: self.value_inserted(str(self.K_f.text())))
+        self.K_g.clicked.connect(lambda: self.value_inserted(str(self.K_g.text())))
+        self.K_h.clicked.connect(lambda: self.value_inserted(str(self.K_h.text())))
+        self.K_j.clicked.connect(lambda: self.value_inserted(str(self.K_j.text())))
+        self.K_k.clicked.connect(lambda: self.value_inserted(str(self.K_k.text())))
+        self.K_l.clicked.connect(lambda: self.value_inserted(str(self.K_l.text())))
+        self.K_z.clicked.connect(lambda: self.value_inserted(str(self.K_z.text())))
+        self.K_x.clicked.connect(lambda: self.value_inserted(str(self.K_x.text())))
+        self.K_c.clicked.connect(lambda: self.value_inserted(str(self.K_c.text())))
+        self.K_v.clicked.connect(lambda: self.value_inserted(str(self.K_v.text())))
+        self.K_b.clicked.connect(lambda: self.value_inserted(str(self.K_b.text())))
+        self.K_n.clicked.connect(lambda: self.value_inserted(str(self.K_n.text())))
+        self.K_m.clicked.connect(lambda: self.value_inserted(str(self.K_m.text())))
+                                 
+        self.K_space.clicked.connect(lambda: self.value_inserted(" "))
+        self.k_Enter.clicked.connect(lambda: self.value_inserted("enter"))
+        self.k_delete.clicked.connect(lambda: self.value_inserted("clear"))
+
+        self.inserted_value.setText("")
+
+
+        self.K_keychange.clicked.connect(self.handle_checkbuttons)
+        self.K_shift.clicked.connect(self.handle_checkbuttons)
+
+
+
+
+
+
+        self.numpad_back_btn.clicked.connect(self.back_button)
+
+        
+
+        self.setStyleSheet("""
+            QPushButton {
+                background-color: #dfdfdf;
+                border-radius: 10px;
+                padding: 6px;
+                font-size: 25px;
+            }
+            QPushButton:pressed {
+                background-color: lightgrey;
+                color: black;
+            }
+            QPushButton:checked {
+                background-color: #212120;
+                color: white;
+            }
+        """)
+        self.handle_checkbuttons()
+
+
+    def handle_checkbuttons(self):
+        shift = self.K_shift.isChecked()
+        keychange = self.K_keychange.isChecked()
+
+
+        # references to all key buttons
+        keys = [
+            self.K_q, self.K_w, self.K_e, self.K_r, self.K_t, self.K_y,
+            self.K_u, self.K_i, self.K_o, self.K_p,
+            self.K_a, self.K_s, self.K_d, self.K_f, self.K_g, self.K_h,
+            self.K_j, self.K_k, self.K_l,
+            self.K_z, self.K_x, self.K_c, self.K_v, self.K_b, self.K_n, self.K_m
+        ]
+
+        # -------------------------------
+        # Keyboard Layouts
+        # -------------------------------
+        lowercase = list("qwertyuiopasdfghjklzxcvbnm")
+        uppercase = list("QWERTYUIOPASDFGHJKLZXCVBNM")
+        numbers = ["1","2","3","4","5","6","7","8","9","0",
+                "@","#","$","%","&&","*","-","+","=",
+                "(",")","!",":",";","'","?"]
+        symbols = ["~","`","|","•","√","π","÷","×","¶","∆",
+                "€","£","¥","₩","^","°","_","{","}",
+                "[","]","<",">","/","\\",",","."]
+
+        # -------------------------------   
+        # Logic
+        # -------------------------------
+        
+
+        if not keychange and not shift:
+            layout = lowercase
+        
+        elif not keychange and shift:
+            if self.symbolsrun:
+                layout = lowercase
+                self.K_shift.setChecked(False)
+                self.symbolsrun = False
+            else:
+                layout = uppercase
+        elif keychange and not shift:
+            layout = numbers
+        elif keychange and shift:
+            layout = symbols
+            self.symbolsrun = True
+        else:
+            layout = lowercase
+
+        # update all button texts
+        for btn, txt in zip(keys, layout):
+            btn.setText(txt)
+
+        # update shift button text for clarity
+        if keychange:
+            self.K_shift.setText("#+=")
+        else:
+            self.K_shift.setText("Shift")
+
+    def value_inserted(self, value: str) -> None:
+        """Handle number insertion on the numpad
+
+        Args:
+            value (int | str): value
+        """
+
+
+        if value == "&&":
+            value = "&"
+
+        if "enter" in value:
+                
+                self.value_selected.emit(
+                 self.current_value
+                )
+                self.current_value = ""
+                self.request_back.emit()
+                self.inserted_value.setText("")
+                return
+
+        elif "clear" in value:
+            if len(self.current_value) > 1:
+                self.current_value = self.current_value[:-1]
+                
+            else:
+                self.current_value = ""
+
+        else:
+            self.current_value += str(value)
+
+        self.inserted_value.setText(str(self.current_value))
+            
+    def back_button(self):
+        self.request_back.emit()
+
+
+    def set_value(self, value: str) -> None:
+        self.current_value = value
+        self.inserted_value.setText(value)
+    
+    #QtWidgets.QPushButton
+
+    def setupUi(self):
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Preferred, QtWidgets.QSizePolicy.Policy.Preferred)
+        sizePolicy.setHeightForWidth(self.sizePolicy().hasHeightForWidth())
+        self.setSizePolicy(sizePolicy)
+        self.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
+        self.layoutWidget_2 = QtWidgets.QWidget(parent=self)
+        self.layoutWidget_2.setGeometry(QtCore.QRect(10, 140, 691, 52))
+        self.layoutWidget_2.setObjectName("layoutWidget_2")
+        self.gridLayout_2 = QtWidgets.QGridLayout(self.layoutWidget_2)
+        self.gridLayout_2.setSizeConstraint(QtWidgets.QLayout.SizeConstraint.SetMinimumSize)
+        self.gridLayout_2.setContentsMargins(0, 0, 0, 0)
+        self.gridLayout_2.setHorizontalSpacing(2)
+        self.gridLayout_2.setVerticalSpacing(5)
+        self.gridLayout_2.setObjectName("gridLayout_2")
+        self.K_p = QtWidgets.QPushButton(parent=self.layoutWidget_2)
+        sizePolicy.setHeightForWidth(self.K_p.sizePolicy().hasHeightForWidth())
+        self.K_p.setSizePolicy(sizePolicy)
+        self.K_p.setMinimumSize(QtCore.QSize(64, 50))
+        self.K_p.setMaximumSize(QtCore.QSize(16777215, 50))
+        font = QtGui.QFont()
+        font.setFamily("Modern")
+        font.setPointSize(29)
+        font.setBold(False)
+        font.setItalic(False)
+        font.setUnderline(False)
+        font.setWeight(50)
+        font.setStrikeOut(False)
+        font.setStyleStrategy(QtGui.QFont.StyleStrategy.PreferDefault)
+        self.K_p.setFont(font)
+        self.K_p.setTabletTracking(False)
+        self.K_p.setFlat(True)
+        self.K_p.setObjectName("K_p")
+        self.gridLayout_2.addWidget(self.K_p, 0, 9, 1, 1, QtCore.Qt.AlignmentFlag.AlignHCenter)
+        self.K_i = QtWidgets.QPushButton(parent=self.layoutWidget_2)
+        sizePolicy.setHeightForWidth(self.K_i.sizePolicy().hasHeightForWidth())
+        self.K_i.setSizePolicy(sizePolicy)
+        self.K_i.setMinimumSize(QtCore.QSize(64, 50))
+        self.K_i.setMaximumSize(QtCore.QSize(16777215, 50))
+        self.K_i.setFont(font)
+        self.K_i.setTabletTracking(False)
+        self.K_i.setFlat(True)
+        self.K_i.setObjectName("K_i")
+        self.gridLayout_2.addWidget(self.K_i, 0, 7, 1, 1, QtCore.Qt.AlignmentFlag.AlignHCenter)
+        self.K_y = QtWidgets.QPushButton(parent=self.layoutWidget_2)
+        sizePolicy.setHeightForWidth(self.K_y.sizePolicy().hasHeightForWidth())
+        self.K_y.setSizePolicy(sizePolicy)
+        self.K_y.setMinimumSize(QtCore.QSize(64, 50))
+        self.K_y.setMaximumSize(QtCore.QSize(16777215, 50))
+        self.K_y.setFont(font)
+        self.K_y.setTabletTracking(False)
+        self.K_y.setFlat(True)
+        self.K_y.setObjectName("K_y")
+        self.gridLayout_2.addWidget(self.K_y, 0, 5, 1, 1, QtCore.Qt.AlignmentFlag.AlignHCenter)
+        self.K_t = QtWidgets.QPushButton(parent=self.layoutWidget_2)
+        sizePolicy.setHeightForWidth(self.K_t.sizePolicy().hasHeightForWidth())
+        self.K_t.setSizePolicy(sizePolicy)
+        self.K_t.setMinimumSize(QtCore.QSize(64, 50))
+        self.K_t.setMaximumSize(QtCore.QSize(16777215, 50))
+        self.K_t.setFont(font)
+        self.K_t.setTabletTracking(False)
+        self.K_t.setFlat(True)
+        self.K_t.setObjectName("K_t")
+        self.gridLayout_2.addWidget(self.K_t, 0, 4, 1, 1, QtCore.Qt.AlignmentFlag.AlignHCenter)
+        self.K_r = QtWidgets.QPushButton(parent=self.layoutWidget_2)
+        sizePolicy.setHeightForWidth(self.K_r.sizePolicy().hasHeightForWidth())
+        self.K_r.setSizePolicy(sizePolicy)
+        self.K_r.setMinimumSize(QtCore.QSize(64, 50))
+        self.K_r.setMaximumSize(QtCore.QSize(16777215, 50))
+        self.K_r.setFont(font)
+        self.K_r.setTabletTracking(False)
+        self.K_r.setFlat(True)
+        self.K_r.setObjectName("K_r")
+        self.gridLayout_2.addWidget(self.K_r, 0, 3, 1, 1, QtCore.Qt.AlignmentFlag.AlignHCenter)
+        self.K_o = QtWidgets.QPushButton(parent=self.layoutWidget_2)
+        sizePolicy.setHeightForWidth(self.K_o.sizePolicy().hasHeightForWidth())
+        self.K_o.setSizePolicy(sizePolicy)
+        self.K_o.setMinimumSize(QtCore.QSize(64, 50))
+        self.K_o.setMaximumSize(QtCore.QSize(16777215, 50))
+        self.K_o.setFont(font)
+        self.K_o.setTabletTracking(False)
+        self.K_o.setFlat(True)
+        self.K_o.setObjectName("K_o")
+        self.gridLayout_2.addWidget(self.K_o, 0, 8, 1, 1, QtCore.Qt.AlignmentFlag.AlignHCenter)
+        self.K_u = QtWidgets.QPushButton(parent=self.layoutWidget_2)
+        sizePolicy.setHeightForWidth(self.K_u.sizePolicy().hasHeightForWidth())
+        self.K_u.setSizePolicy(sizePolicy)
+        self.K_u.setMinimumSize(QtCore.QSize(64, 50))
+        self.K_u.setMaximumSize(QtCore.QSize(16777215, 50))
+        self.K_u.setFont(font)
+        self.K_u.setTabletTracking(False)
+        self.K_u.setFlat(True)
+        self.K_u.setObjectName("K_u")
+        self.gridLayout_2.addWidget(self.K_u, 0, 6, 1, 1, QtCore.Qt.AlignmentFlag.AlignHCenter)
+        self.K_w = QtWidgets.QPushButton(parent=self.layoutWidget_2)
+        sizePolicy.setHeightForWidth(self.K_w.sizePolicy().hasHeightForWidth())
+        self.K_w.setSizePolicy(sizePolicy)
+        self.K_w.setMinimumSize(QtCore.QSize(64, 50))
+        self.K_w.setMaximumSize(QtCore.QSize(16777215, 50))
+        self.K_w.setFont(font)
+        self.K_w.setTabletTracking(False)
+        self.K_w.setFlat(True)
+        self.K_w.setObjectName("K_w")
+        self.gridLayout_2.addWidget(self.K_w, 0, 1, 1, 1, QtCore.Qt.AlignmentFlag.AlignHCenter|QtCore.Qt.AlignmentFlag.AlignVCenter)
+        self.K_e = QtWidgets.QPushButton(parent=self.layoutWidget_2)
+        sizePolicy.setHeightForWidth(self.K_e.sizePolicy().hasHeightForWidth())
+        self.K_e.setSizePolicy(sizePolicy)
+        self.K_e.setMinimumSize(QtCore.QSize(64, 50))
+        self.K_e.setMaximumSize(QtCore.QSize(16777215, 50))
+        self.K_e.setFont(font)
+        self.K_e.setTabletTracking(False)
+        self.K_e.setFlat(True)
+        self.K_e.setObjectName("K_e")
+        self.gridLayout_2.addWidget(self.K_e, 0, 2, 1, 1, QtCore.Qt.AlignmentFlag.AlignHCenter)
+        self.K_q = QtWidgets.QPushButton(parent=self.layoutWidget_2)
+        sizePolicy.setHeightForWidth(self.K_q.sizePolicy().hasHeightForWidth())
+        self.K_q.setSizePolicy(sizePolicy)
+        self.K_q.setMinimumSize(QtCore.QSize(64, 50))
+        self.K_q.setMaximumSize(QtCore.QSize(16777215, 50))
+        self.K_q.setFont(font)
+        self.K_q.setTabletTracking(False)
+        self.K_q.setFlat(True)
+        self.K_q.setObjectName("K_q")
+        self.gridLayout_2.addWidget(self.K_q, 0, 0, 1, 1, QtCore.Qt.AlignmentFlag.AlignHCenter|QtCore.Qt.AlignmentFlag.AlignVCenter)
+        self.layoutWidget = QtWidgets.QWidget(parent=self)
+        self.layoutWidget.setGeometry(QtCore.QRect(50, 200, 611, 52))
+        self.layoutWidget.setMinimumSize(QtCore.QSize(64, 0))
+        self.layoutWidget.setObjectName("layoutWidget")
+        self.horizontalLayout_2 = QtWidgets.QHBoxLayout(self.layoutWidget)
+        self.horizontalLayout_2.setContentsMargins(0, 0, 0, 0)
+        self.horizontalLayout_2.setSpacing(2)
+        self.horizontalLayout_2.setObjectName("horizontalLayout_2")
+        self.K_a = QtWidgets.QPushButton(parent=self.layoutWidget)
+        sizePolicy.setHeightForWidth(self.K_a.sizePolicy().hasHeightForWidth())
+        self.K_a.setSizePolicy(sizePolicy)
+        self.K_a.setMinimumSize(QtCore.QSize(64, 50))
+        self.K_a.setMaximumSize(QtCore.QSize(16777215, 50))
+        self.K_a.setFont(font)
+        self.K_a.setTabletTracking(False)
+        self.K_a.setFlat(True)
+        self.K_a.setObjectName("K_a")
+        self.horizontalLayout_2.addWidget(self.K_a)
+        self.K_s = QtWidgets.QPushButton(parent=self.layoutWidget)
+        sizePolicy.setHeightForWidth(self.K_s.sizePolicy().hasHeightForWidth())
+        self.K_s.setSizePolicy(sizePolicy)
+        self.K_s.setMinimumSize(QtCore.QSize(64, 50))
+        self.K_s.setMaximumSize(QtCore.QSize(16777215, 50))
+        self.K_s.setFont(font)
+        self.K_s.setTabletTracking(False)
+        self.K_s.setFlat(True)
+        self.K_s.setObjectName("K_s")
+        self.horizontalLayout_2.addWidget(self.K_s)
+        self.K_d = QtWidgets.QPushButton(parent=self.layoutWidget)
+        sizePolicy.setHeightForWidth(self.K_d.sizePolicy().hasHeightForWidth())
+        self.K_d.setSizePolicy(sizePolicy)
+        self.K_d.setMinimumSize(QtCore.QSize(64, 50))
+        self.K_d.setMaximumSize(QtCore.QSize(16777215, 50))
+        self.K_d.setFont(font)
+        self.K_d.setTabletTracking(False)
+        self.K_d.setFlat(True)
+        self.K_d.setObjectName("K_d")
+        self.horizontalLayout_2.addWidget(self.K_d)
+        self.K_f = QtWidgets.QPushButton(parent=self.layoutWidget)
+        sizePolicy.setHeightForWidth(self.K_f.sizePolicy().hasHeightForWidth())
+        self.K_f.setSizePolicy(sizePolicy)
+        self.K_f.setMinimumSize(QtCore.QSize(64, 50))
+        self.K_f.setMaximumSize(QtCore.QSize(16777215, 50))
+        self.K_f.setFont(font)
+        self.K_f.setTabletTracking(False)
+        self.K_f.setFlat(True)
+        self.K_f.setObjectName("K_f")
+        self.horizontalLayout_2.addWidget(self.K_f)
+        self.K_g = QtWidgets.QPushButton(parent=self.layoutWidget)
+        sizePolicy.setHeightForWidth(self.K_g.sizePolicy().hasHeightForWidth())
+        self.K_g.setSizePolicy(sizePolicy)
+        self.K_g.setMinimumSize(QtCore.QSize(64, 50))
+        self.K_g.setMaximumSize(QtCore.QSize(16777215, 50))
+        self.K_g.setFont(font)
+        self.K_g.setTabletTracking(False)
+        self.K_g.setFlat(True)
+        self.K_g.setObjectName("K_g")
+        self.horizontalLayout_2.addWidget(self.K_g)
+        self.K_h = QtWidgets.QPushButton(parent=self.layoutWidget)
+        sizePolicy.setHeightForWidth(self.K_h.sizePolicy().hasHeightForWidth())
+        self.K_h.setSizePolicy(sizePolicy)
+        self.K_h.setMinimumSize(QtCore.QSize(64, 50))
+        self.K_h.setMaximumSize(QtCore.QSize(16777215, 50))
+        self.K_h.setFont(font)
+        self.K_h.setTabletTracking(False)
+        self.K_h.setFlat(True)
+        self.K_h.setObjectName("K_h")
+        self.horizontalLayout_2.addWidget(self.K_h)
+        self.K_j = QtWidgets.QPushButton(parent=self.layoutWidget)
+        sizePolicy.setHeightForWidth(self.K_j.sizePolicy().hasHeightForWidth())
+        self.K_j.setSizePolicy(sizePolicy)
+        self.K_j.setMinimumSize(QtCore.QSize(64, 50))
+        self.K_j.setMaximumSize(QtCore.QSize(16777215, 50))
+        self.K_j.setFont(font)
+        self.K_j.setTabletTracking(False)
+        self.K_j.setFlat(True)
+        self.K_j.setObjectName("K_j")
+        self.horizontalLayout_2.addWidget(self.K_j)
+        self.K_k = QtWidgets.QPushButton(parent=self.layoutWidget)
+        sizePolicy.setHeightForWidth(self.K_k.sizePolicy().hasHeightForWidth())
+        self.K_k.setSizePolicy(sizePolicy)
+        self.K_k.setMinimumSize(QtCore.QSize(64, 50))
+        self.K_k.setMaximumSize(QtCore.QSize(16777215, 50))
+        self.K_k.setFont(font)
+        self.K_k.setTabletTracking(False)
+        self.K_k.setFlat(True)
+        self.K_k.setObjectName("K_k")
+        self.horizontalLayout_2.addWidget(self.K_k)
+        self.K_l = QtWidgets.QPushButton(parent=self.layoutWidget)
+        sizePolicy.setHeightForWidth(self.K_l.sizePolicy().hasHeightForWidth())
+        self.K_l.setSizePolicy(sizePolicy)
+        self.K_l.setMinimumSize(QtCore.QSize(64, 50))
+        self.K_l.setMaximumSize(QtCore.QSize(16777215, 50))
+        self.K_l.setFont(font)
+        self.K_l.setTabletTracking(False)
+        self.K_l.setFlat(True)
+        self.K_l.setObjectName("K_l")
+        self.horizontalLayout_2.addWidget(self.K_l)
+        self.layoutWidget_3 = QtWidgets.QWidget(parent=self)
+        self.layoutWidget_3.setGeometry(QtCore.QRect(90, 260, 531, 52))
+        self.layoutWidget_3.setObjectName("layoutWidget_3")
+        self.horizontalLayout = QtWidgets.QHBoxLayout(self.layoutWidget_3)
+        self.horizontalLayout.setSizeConstraint(QtWidgets.QLayout.SizeConstraint.SetMinimumSize)
+        self.horizontalLayout.setContentsMargins(0, 0, 0, 0)
+        self.horizontalLayout.setSpacing(2)
+        self.horizontalLayout.setObjectName("horizontalLayout")
+        self.K_z = QtWidgets.QPushButton(parent=self.layoutWidget_3)
+        sizePolicy.setHeightForWidth(self.K_z.sizePolicy().hasHeightForWidth())
+        self.K_z.setSizePolicy(sizePolicy)
+        self.K_z.setMinimumSize(QtCore.QSize(55, 50))
+        self.K_z.setMaximumSize(QtCore.QSize(16777215, 60))
+        self.K_z.setFont(font)
+        self.K_z.setTabletTracking(False)
+        self.K_z.setFlat(True)
+        self.K_z.setObjectName("K_z")
+        self.horizontalLayout.addWidget(self.K_z)
+        self.K_x = QtWidgets.QPushButton(parent=self.layoutWidget_3)
+        sizePolicy.setHeightForWidth(self.K_x.sizePolicy().hasHeightForWidth())
+        self.K_x.setSizePolicy(sizePolicy)
+        self.K_x.setMinimumSize(QtCore.QSize(55, 50))
+        self.K_x.setMaximumSize(QtCore.QSize(16777215, 50))
+        self.K_x.setFont(font)
+        self.K_x.setTabletTracking(False)
+        self.K_x.setFlat(True)
+        self.K_x.setObjectName("K_x")
+        self.horizontalLayout.addWidget(self.K_x)
+        self.K_c = QtWidgets.QPushButton(parent=self.layoutWidget_3)
+        sizePolicy.setHeightForWidth(self.K_c.sizePolicy().hasHeightForWidth())
+        self.K_c.setSizePolicy(sizePolicy)
+        self.K_c.setMinimumSize(QtCore.QSize(55, 50))
+        self.K_c.setMaximumSize(QtCore.QSize(16777215, 50))
+        self.K_c.setFont(font)
+        self.K_c.setTabletTracking(False)
+        self.K_c.setFlat(True)
+        self.K_c.setObjectName("K_c")
+        self.horizontalLayout.addWidget(self.K_c)
+        self.K_v = QtWidgets.QPushButton(parent=self.layoutWidget_3)
+        sizePolicy.setHeightForWidth(self.K_v.sizePolicy().hasHeightForWidth())
+        self.K_v.setSizePolicy(sizePolicy)
+        self.K_v.setMinimumSize(QtCore.QSize(55, 50))
+        self.K_v.setMaximumSize(QtCore.QSize(16777215, 50))
+        self.K_v.setFont(font)
+        self.K_v.setTabletTracking(False)
+        self.K_v.setFlat(True)
+        self.K_v.setObjectName("K_v")
+        self.horizontalLayout.addWidget(self.K_v)
+        self.K_b = QtWidgets.QPushButton(parent=self.layoutWidget_3)
+        sizePolicy.setHeightForWidth(self.K_b.sizePolicy().hasHeightForWidth())
+        self.K_b.setSizePolicy(sizePolicy)
+        self.K_b.setMinimumSize(QtCore.QSize(55, 50))
+        self.K_b.setMaximumSize(QtCore.QSize(16777215, 50))
+        self.K_b.setFont(font)
+        self.K_b.setTabletTracking(False)
+        self.K_b.setFlat(True)
+        self.K_b.setObjectName("K_b")
+        self.horizontalLayout.addWidget(self.K_b)
+        self.K_n = QtWidgets.QPushButton(parent=self.layoutWidget_3)
+        sizePolicy.setHeightForWidth(self.K_n.sizePolicy().hasHeightForWidth())
+        self.K_n.setSizePolicy(sizePolicy)
+        self.K_n.setMinimumSize(QtCore.QSize(55, 50))
+        self.K_n.setMaximumSize(QtCore.QSize(16777215, 50))
+        self.K_n.setFont(font)
+        self.K_n.setTabletTracking(False)
+        self.K_n.setFlat(True)
+        self.K_n.setObjectName("K_n")
+        self.horizontalLayout.addWidget(self.K_n)
+        self.K_m = QtWidgets.QPushButton(parent=self.layoutWidget_3)
+        sizePolicy.setHeightForWidth(self.K_m.sizePolicy().hasHeightForWidth())
+        self.K_m.setSizePolicy(sizePolicy)
+        self.K_m.setMinimumSize(QtCore.QSize(55, 50))
+        self.K_m.setMaximumSize(QtCore.QSize(16777215, 50))
+        self.K_m.setFont(font)
+        self.K_m.setTabletTracking(False)
+        self.K_m.setFlat(True)
+        self.K_m.setObjectName("K_m")
+        self.horizontalLayout.addWidget(self.K_m)
+        self.K_space = QtWidgets.QPushButton(parent=self)
+        self.K_space.setGeometry(QtCore.QRect(109, 332, 491, 60))
+        sizePolicy.setHeightForWidth(self.K_space.sizePolicy().hasHeightForWidth())
+        self.K_space.setSizePolicy(sizePolicy)
+        self.K_space.setMinimumSize(QtCore.QSize(0, 60))
+        self.K_space.setMaximumSize(QtCore.QSize(16777215, 60))
+        self.K_space.setObjectName("K_space")
+        self.k_Enter = QtWidgets.QPushButton(parent=self)
+        self.k_Enter.setGeometry(QtCore.QRect(610, 320, 93, 60))
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Minimum)
+        sizePolicy.setHeightForWidth(self.k_Enter.sizePolicy().hasHeightForWidth())
+        self.k_Enter.setSizePolicy(sizePolicy)
+        self.k_Enter.setMinimumSize(QtCore.QSize(0, 0))
+        self.k_Enter.setAutoRepeat(False)
+        self.k_Enter.setObjectName("k_Enter")
+        self.k_delete = QtWidgets.QPushButton(parent=self)
+        self.k_delete.setGeometry(QtCore.QRect(630, 260, 81, 51))
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Minimum)
+        sizePolicy.setHeightForWidth(self.k_delete.sizePolicy().hasHeightForWidth())
+        self.k_delete.setSizePolicy(sizePolicy)
+        self.k_delete.setMinimumSize(QtCore.QSize(0, 0))
+        self.k_delete.setObjectName("k_delete")
+        self.K_keychange = QtWidgets.QPushButton(parent=self)
+        self.K_keychange.setGeometry(QtCore.QRect(10, 320, 93, 60))
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Minimum)
+        sizePolicy.setHeightForWidth(self.K_keychange.sizePolicy().hasHeightForWidth())
+        self.K_keychange.setSizePolicy(sizePolicy)
+        self.K_keychange.setMinimumSize(QtCore.QSize(0, 0))
+        self.K_keychange.setCheckable(True)
+        self.K_keychange.setObjectName("K_keychange")
+        self.K_shift = QtWidgets.QPushButton(parent=self)
+        self.K_shift.setGeometry(QtCore.QRect(0, 260, 81, 51))
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Minimum)
+        sizePolicy.setHeightForWidth(self.K_shift.sizePolicy().hasHeightForWidth())
+        self.K_shift.setSizePolicy(sizePolicy)
+        self.K_shift.setMinimumSize(QtCore.QSize(0, 0))
+        self.K_shift.setCheckable(True)
+        self.K_shift.setObjectName("K_shift")
+        self.numpad_back_btn = IconButton(parent=self)
+        self.numpad_back_btn.setEnabled(True)
+        self.numpad_back_btn.setGeometry(QtCore.QRect(630, 10, 60, 60))
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.MinimumExpanding, QtWidgets.QSizePolicy.Policy.MinimumExpanding)
+        sizePolicy.setHorizontalStretch(1)
+        sizePolicy.setVerticalStretch(1)
+        sizePolicy.setHeightForWidth(self.numpad_back_btn.sizePolicy().hasHeightForWidth())
+        self.numpad_back_btn.setSizePolicy(sizePolicy)
+        self.numpad_back_btn.setMinimumSize(QtCore.QSize(60, 60))
+        self.numpad_back_btn.setMaximumSize(QtCore.QSize(60, 60))
+        self.numpad_back_btn.setStyleSheet("")
+        self.numpad_back_btn.setText("")
+        self.numpad_back_btn.setIconSize(QtCore.QSize(16, 16))
+        self.numpad_back_btn.setCheckable(False)
+        self.numpad_back_btn.setChecked(False)
+        self.numpad_back_btn.setFlat(True)
+        self.numpad_back_btn.setProperty("icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/back.svg"))
+        self.numpad_back_btn.setObjectName("numpad_back_btn")
+        self.layoutWidget1 = QtWidgets.QWidget(parent=self)
+        self.layoutWidget1.setGeometry(QtCore.QRect(10, 80, 691, 46))
+        self.layoutWidget1.setObjectName("layoutWidget1")
+        self.verticalLayout_2 = QtWidgets.QVBoxLayout(self.layoutWidget1)
+        self.verticalLayout_2.setContentsMargins(0, 0, 0, 0)
+        self.verticalLayout_2.setObjectName("verticalLayout_2")
+        self.inserted_value = QtWidgets.QLabel(parent=self.layoutWidget1)
+        self.inserted_value.setMinimumSize(QtCore.QSize(500, 0))
+        font = QtGui.QFont()
+        font.setFamily("Modern")
+        font.setPointSize(18)
+        self.inserted_value.setFont(font)
+        self.inserted_value.setAutoFillBackground(False)
+        self.inserted_value.setStyleSheet("color: white;")
+        self.inserted_value.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
+        self.inserted_value.setFrameShadow(QtWidgets.QFrame.Shadow.Sunken)
+        self.inserted_value.setLineWidth(0)
+        self.inserted_value.setScaledContents(False)
+        self.inserted_value.setAlignment(QtCore.Qt.AlignmentFlag.AlignBottom|QtCore.Qt.AlignmentFlag.AlignHCenter)
+        self.inserted_value.setIndent(0)
+        self.inserted_value.setTextInteractionFlags(QtCore.Qt.TextInteractionFlag.LinksAccessibleByMouse)
+        self.inserted_value.setObjectName("inserted_value")
+        self.verticalLayout_2.addWidget(self.inserted_value)
+        self.line = QtWidgets.QFrame(parent=self.layoutWidget1)
+        self.line.setFrameShape(QtWidgets.QFrame.Shape.HLine)
+        self.line.setFrameShadow(QtWidgets.QFrame.Shadow.Sunken)
+        self.line.setObjectName("line")
+        self.verticalLayout_2.addWidget(self.line)
+        self.retranslateUi()
+        QtCore.QMetaObject.connectSlotsByName(self)
+
+    def retranslateUi(self):
+        _translate = QtCore.QCoreApplication.translate
+        self.setWindowTitle(_translate("self", "Form"))
+        self.K_p.setText(_translate("self", "P"))
+        self.K_i.setText(_translate("self", "I"))
+        self.K_y.setText(_translate("self", "Y"))
+        self.K_t.setText(_translate("self", "T"))
+        self.K_r.setText(_translate("self", "R"))
+        self.K_o.setText(_translate("self", "O"))
+        self.K_u.setText(_translate("self", "U"))
+        self.K_w.setText(_translate("self", "W"))
+        self.K_e.setText(_translate("self", "E"))
+        self.K_q.setText(_translate("self", "Q"))
+        self.K_a.setText(_translate("self", "A"))
+        self.K_s.setText(_translate("self", "S"))
+        self.K_d.setText(_translate("self", "D"))
+        self.K_f.setText(_translate("self", "F"))
+        self.K_g.setText(_translate("self", "G"))
+        self.K_h.setText(_translate("self", "H"))
+        self.K_j.setText(_translate("self", "J"))
+        self.K_k.setText(_translate("self", "K"))
+        self.K_l.setText(_translate("self", "L"))
+        self.K_z.setText(_translate("self", "Z"))
+        self.K_x.setText(_translate("self", "X"))
+        self.K_c.setText(_translate("self", "C"))
+        self.K_v.setText(_translate("self", "V"))
+        self.K_b.setText(_translate("self", "B"))
+        self.K_n.setText(_translate("self", "N"))
+        self.K_m.setText(_translate("self", "M"))
+        self.K_space.setText(_translate("self", "Spacing"))
+        self.k_Enter.setText(_translate("self", "⏎"))
+        self.k_delete.setText(_translate("self", "⌫"))
+        self.K_keychange.setText(_translate("self", "123"))
+        self.K_shift.setText(_translate("self", "⇧"))
+        self.numpad_back_btn.setProperty("button_type", _translate("self", "icon"))
+        self.inserted_value.setText(_translate("self", "TextLabel"))
