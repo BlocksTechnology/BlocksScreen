@@ -73,6 +73,10 @@ class Printer(QtCore.QObject):
         str, dict, name="gcode_macro_update"
     )
     webhooks_update = QtCore.pyqtSignal(str, str, name="webhooks_update")
+
+    load_filament_update = QtCore.pyqtSignal(bool, name="load_filament_update")
+    unload_filament_update = QtCore.pyqtSignal(bool, name="unload_filament_update")
+
     query_printer_object = QtCore.pyqtSignal(dict, name="query_printer_object")
     save_config_pending: typing.ClassVar[QtCore.pyqtSignal] = (
         QtCore.pyqtSignal(name="save_config_pending")
@@ -811,9 +815,17 @@ class Printer(QtCore.QObject):
     ) -> None:
         pass
 
+    
+    
+    # TODO: testing needed here idk if does work
     def _unload_filament_object_updated(
         self, values: dict, name: str
-    ) -> None: ...  # TODO Add unload filament object verification
+    ) -> None: 
+        if 'state' in values.keys(): 
+            self.unload_filament_update[bool].emit(values['state'])
+        
     def _load_filament_object_updated(
         self, values: dict, name: str
-    ) -> None: ...  # TODO Add load filament object verification
+    ) -> None: 
+        if 'state' in values.keys(): 
+            self.load_filament_update[bool].emit(values['state'])
