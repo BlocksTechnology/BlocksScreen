@@ -169,7 +169,7 @@
     <string notr="true">#main_widget{background-image: url(:/background/media/1st_background.png);}
 </string>
    </property>
-   <widget class="QTabWidget" name="main_content_widget">
+   <widget class="NotificationQTabWidget" name="main_content_widget">
     <property name="enabled">
      <bool>true</bool>
     </property>
@@ -235,7 +235,7 @@ QTabBar::tab{
      <enum>QTabWidget::Rounded</enum>
     </property>
     <property name="currentIndex">
-     <number>0</number>
+     <number>2</number>
     </property>
     <property name="iconSize">
      <size>
@@ -1344,6 +1344,12 @@ QPushButton:pressed{
    <class>DisplayButton</class>
    <extends>QPushButton</extends>
    <header location="global">lib.utils.display_button</header>
+  </customwidget>
+  <customwidget>
+   <class>NotificationQTabWidget</class>
+   <extends>QTabWidget</extends>
+   <header location="global">lib.utils.tabwidget_test</header>
+   <container>1</container>
   </customwidget>
  </customwidgets>
  <resources>
