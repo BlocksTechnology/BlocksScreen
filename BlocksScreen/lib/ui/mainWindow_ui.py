@@ -519,4 +519,4 @@ class Ui_MainWindow(object):
         self.wifi_button.setProperty("button_type", _translate("MainWindow", "icon"))
 from lib.utils.display_button import DisplayButton
 from lib.utils.icon_button import IconButton
-from BlocksScreen.lib.utils.blocks_tabwidget import NotificationQTabWidget
+from lib.utils.blocks_tabwidget import NotificationQTabWidget

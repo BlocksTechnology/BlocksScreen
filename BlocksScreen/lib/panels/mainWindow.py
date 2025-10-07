@@ -1,7 +1,6 @@
 import logging
 import typing
 from collections import deque
-from functools import partial
 
 import events
 from configfile import BlocksScreenConfig, get_configparser
@@ -39,13 +38,10 @@ class MainWindow(QtWidgets.QMainWindow):
         list, name="handle_report_received"
     )
     gcode_response = QtCore.pyqtSignal(list, name="gcode_response")
-    handle_error_response = QtCore.pyqtSignal(
-        list, name="handle_error_response"
-    )
+    handle_error_response = QtCore.pyqtSignal(list, name="handle_error_response")
     call_network_panel = QtCore.pyqtSignal(name="call-network-panel")
 
     update_available = QtCore.pyqtSignal(bool, name="update_available")
-
 
     def __init__(self):
         super(MainWindow, self).__init__()
@@ -66,60 +62,38 @@ class MainWindow(QtWidgets.QMainWindow):
         self.printPanel = PrintTab(
             self.ui.printTab, self.file_data, self.ws, self.printer
         )
-        self.filamentPanel = FilamentTab(
-            self.ui.filamentTab, self.printer, self.ws
-        )
-        self.controlPanel = ControlTab(
-            self.ui.controlTab, self.ws, self.printer
-        )
-        self.utilitiesPanel = UtilitiesTab(
-            self.ui.utilitiesTab, self.ws, self.printer
-        )
+        self.filamentPanel = FilamentTab(self.ui.filamentTab, self.printer, self.ws)
+        self.controlPanel = ControlTab(self.ui.controlTab, self.ws, self.printer)
+        self.utilitiesPanel = UtilitiesTab(self.ui.utilitiesTab, self.ws, self.printer)
         self.networkPanel = NetworkControlWindow(self)
 
         self.bo_ws_startup.connect(slot=self.bo_start_websocket_connection)
-        self.ws.connecting_signal.connect(
-            self.conn_window.on_websocket_connecting
-        )
+        self.ws.connecting_signal.connect(self.conn_window.on_websocket_connecting)
         self.ws.connected_signal.connect(
             self.conn_window.on_websocket_connection_achieved
         )
-        self.ws.connection_lost.connect(
-            self.conn_window.on_websocket_connection_lost
-        )
+        self.ws.connection_lost.connect(self.conn_window.on_websocket_connection_lost)
         self.printer.webhooks_update.connect(self.conn_window.webhook_update)
         self.printPanel.request_back.connect(slot=self.global_back)
 
-        self.printPanel.request_change_page.connect(
-            slot=self.global_change_page
-        )
+        self.printPanel.request_change_page.connect(slot=self.global_change_page)
         self.filamentPanel.request_back.connect(slot=self.global_back)
-        self.filamentPanel.request_change_page.connect(
-            slot=self.global_change_page
-        )
+        self.filamentPanel.request_change_page.connect(slot=self.global_change_page)
         self.controlPanel.request_back_button.connect(slot=self.global_back)
-        self.controlPanel.request_change_page.connect(
-            slot=self.global_change_page
-        )
+        self.controlPanel.request_change_page.connect(slot=self.global_change_page)
 
         self.utilitiesPanel.request_back.connect(slot=self.global_back)
-        self.utilitiesPanel.request_change_page.connect(
-            slot=self.global_change_page
-        )
+        self.utilitiesPanel.request_change_page.connect(slot=self.global_change_page)
         self.ui.extruder_temp_display.clicked.connect(
             lambda: self.global_change_page(
                 self.ui.main_content_widget.indexOf(self.ui.controlTab),
-                self.controlPanel.indexOf(
-                    self.controlPanel.panel.temperature_page
-                ),
+                self.controlPanel.indexOf(self.controlPanel.panel.temperature_page),
             )
         )
         self.ui.bed_temp_display.clicked.connect(
             lambda: self.global_change_page(
                 self.ui.main_content_widget.indexOf(self.ui.controlTab),
-                self.controlPanel.indexOf(
-                    self.controlPanel.panel.temperature_page
-                ),
+                self.controlPanel.indexOf(self.controlPanel.panel.temperature_page),
             )
         )
         self.ui.filament_type_icon.clicked.connect(
@@ -140,9 +114,7 @@ class MainWindow(QtWidgets.QMainWindow):
         #     slot=self.file_data.request_dir_info.emit
         # )
 
-        self.conn_window.retry_connection_clicked.connect(
-            slot=self.ws.retry_wb_conn
-        )
+        self.conn_window.retry_connection_clicked.connect(slot=self.ws.retry_wb_conn)
         self.conn_window.firmware_restart_clicked.connect(
             slot=self.ws.api.firmware_restart
         )
@@ -158,13 +130,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.query_object_list.connect(self.utilitiesPanel.on_object_list)
         self.printer.extruder_update.connect(self.on_extruder_update)
         self.printer.heater_bed_update.connect(self.on_heater_bed_update)
-        self.ui.main_content_widget.currentChanged.connect(
-            slot=self.reset_tab_indexes
-        )
+        self.ui.main_content_widget.currentChanged.connect(slot=self.reset_tab_indexes)
         self.call_network_panel.connect(self.networkPanel.show_network_panel)
-        self.conn_window.wifi_button_clicked.connect(
-            self.call_network_panel.emit
-        )
+        self.conn_window.wifi_button_clicked.connect(self.call_network_panel.emit)
         self.ui.wifi_button.clicked.connect(self.call_network_panel.emit)
         self.handle_error_response.connect(
             self.controlPanel.probe_helper_page.handle_error_response
@@ -179,16 +147,12 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.reset_tab_indexes()
 
-
-
-    @QtCore.pyqtSlot(bool,name="update_available")
-    def update_avaible(self,state=bool):
+    @QtCore.pyqtSlot(bool, name="update_available")
+    def update_avaible(self, state=bool):
         if state:
-            self.ui.main_content_widget.setNotification(3,True)
-            #TODO: change to update button
+            self.ui.main_content_widget.setNotification(3, True)
+            # TODO: change to update button
             self.utilitiesPanel.panel.utilities_info_btn.setShowNotification(True)
-            
-
 
     def enable_tab_bar(self) -> bool:
         """Enables the tab bar
@@ -261,7 +225,6 @@ class MainWindow(QtWidgets.QMainWindow):
     def disable_popups(self) -> None:
         self.popup_bool = False
 
-
     def reset_tab_indexes(self):
         """Used to grantee all tabs reset to their first page once the user leaves the tab"""
         self.printPanel.setCurrentIndex(0)
@@ -316,9 +279,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 f"Tab index argument expected type int, got {type(tab_index)}"
             )
         if not isinstance(panel_index, int):
-            _logger.debug(
-                f"Panel page index expected type int, {type(panel_index)}"
-            )
+            _logger.debug(f"Panel page index expected type int, {type(panel_index)}")
         self.printPanel.loadscreen.hide()
         current_page = [
             self.ui.main_content_widget.currentIndex(),
@@ -352,9 +313,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ws.start()
         self.ws.try_connection()
 
-    def messageReceivedEvent(
-        self, event: events.WebSocketMessageReceived
-    ) -> None:
+    def messageReceivedEvent(self, event: events.WebSocketMessageReceived) -> None:
         """Helper method that handles the event messages
         received from the websocket
 
@@ -377,20 +336,14 @@ class MainWindow(QtWidgets.QMainWindow):
         _metadata = event.metadata
 
         if not _method:
-            raise Exception(
-                "No method found on message received from websocket"
-            )
+            raise Exception("No method found on message received from websocket")
         if not _data:
             return
 
         if "server.file" in _method:
-            file_data_event = events.ReceivedFileData(
-                _data, _method, _metadata
-            )
+            file_data_event = events.ReceivedFileData(_data, _method, _metadata)
             try:
-                QtWidgets.QApplication.postEvent(
-                    self.file_data, file_data_event
-                )
+                QtWidgets.QApplication.postEvent(self.file_data, file_data_event)
             except Exception as e:
                 _logger.error(
                     f"Error posting event for file related information \
@@ -417,9 +370,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
             if "subscribe" in _method:
                 _objects_response_list = [_data["status"], _data["eventtime"]]
-                self.printer_object_report_signal[list].emit(
-                    _objects_response_list
-                )
+                self.printer_object_report_signal[list].emit(_objects_response_list)
 
             if "query" in _method:
                 if isinstance(_data["status"], dict):
@@ -457,14 +408,10 @@ class MainWindow(QtWidgets.QMainWindow):
                             if not isinstance(_event, QtCore.QEvent):
                                 return
                             if instance:
-                                _logger.info(
-                                    f"Event {_klippy_event_callback} sent"
-                                )
+                                _logger.info(f"Event {_klippy_event_callback} sent")
                                 instance.postEvent(self, _event)
                             else:
-                                raise Exception(
-                                    "QApplication.instance is None type."
-                                )
+                                raise Exception("QApplication.instance is None type.")
                         except Exception as e:
                             _logger.debug(
                                 f"Unable to send internal klippy {_state_call} notification: {e}"
@@ -518,7 +465,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 # Quick fix, don't care about no metadata errors
                 return
             if self.disable_popups:
-                    return
+                return
             self.popup.new_message(
                 message_type=Popup.MessageType.ERROR,
                 message=str(_data),
@@ -526,7 +473,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         elif "notify_cpu_throttled" in _method:
             if self.disable_popups:
-                    return
+                return
             self.popup.new_message(
                 message_type=Popup.MessageType.WARNING,
                 message=f"CPU THROTTLED: {_data} | {_metadata}",
@@ -553,17 +500,13 @@ class MainWindow(QtWidgets.QMainWindow):
                 )
 
     @QtCore.pyqtSlot(str, str, float, name="on_heater_bed_update")
-    def on_heater_bed_update(
-        self, name: str, field: str, new_value: float
-    ) -> None:
+    def on_heater_bed_update(self, name: str, field: str, new_value: float) -> None:
         # TODO: Add the text dynamically considering the amount of extruders
         if field == "temperature":
             self.ui.bed_temp_display.setText(f"{new_value:.1f}")
 
         elif field == "target":
-            self.ui.bed_temp_display.secondary_text = (
-                f"{round(int(new_value)):.0f}"
-            )
+            self.ui.bed_temp_display.secondary_text = f"{round(int(new_value)):.0f}"
 
     def paintEvent(self, a0: QtGui.QPaintEvent | None) -> None:
         # TODO: If tab bar is disabled gray it out
@@ -637,17 +580,13 @@ class MainWindow(QtWidgets.QMainWindow):
             self.ui.extruder_temp_display.clicked.connect(
                 lambda: self.global_change_page(
                     self.ui.main_content_widget.indexOf(self.ui.controlTab),
-                    self.controlPanel.indexOf(
-                        self.controlPanel.panel.temperature_page
-                    ),
+                    self.controlPanel.indexOf(self.controlPanel.panel.temperature_page),
                 )
             )
             self.ui.bed_temp_display.clicked.connect(
                 lambda: self.global_change_page(
                     self.ui.main_content_widget.indexOf(self.ui.controlTab),
-                    self.controlPanel.indexOf(
-                        self.controlPanel.panel.temperature_page
-                    ),
+                    self.controlPanel.indexOf(self.controlPanel.panel.temperature_page),
                 )
             )
             return False
