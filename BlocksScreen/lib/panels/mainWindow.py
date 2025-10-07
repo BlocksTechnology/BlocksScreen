@@ -44,6 +44,9 @@ class MainWindow(QtWidgets.QMainWindow):
     )
     call_network_panel = QtCore.pyqtSignal(name="call-network-panel")
 
+    update_available = QtCore.pyqtSignal(bool, name="update_available")
+
+
     def __init__(self):
         super(MainWindow, self).__init__()
         self.config: BlocksScreenConfig = get_configparser()
@@ -98,6 +101,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.controlPanel.request_change_page.connect(
             slot=self.global_change_page
         )
+
         self.utilitiesPanel.request_back.connect(slot=self.global_back)
         self.utilitiesPanel.request_change_page.connect(
             slot=self.global_change_page
@@ -175,6 +179,17 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.reset_tab_indexes()
 
+
+
+    @QtCore.pyqtSlot(bool,name="update_available")
+    def update_avaible(self,state=bool):
+        if state:
+            self.ui.main_content_widget.setNotification(3,True)
+            #TODO: change to update button
+            self.utilitiesPanel.panel.utilities_info_btn.setShowNotification(True)
+            
+
+
     def enable_tab_bar(self) -> bool:
         """Enables the tab bar
 
@@ -242,6 +257,10 @@ class MainWindow(QtWidgets.QMainWindow):
                 not self.ui.header_main_layout.isEnabled(),
             ]
         )
+
+    def disable_popups(self) -> None:
+        self.popup_bool = False
+
 
     def reset_tab_indexes(self):
         """Used to grantee all tabs reset to their first page once the user leaves the tab"""
@@ -467,6 +486,8 @@ class MainWindow(QtWidgets.QMainWindow):
             if entry:
                 service_entry: dict = entry[0]
                 service_name, service_info = service_entry.popitem()
+                if self.disable_popups:
+                    return
                 self.popup.new_message(
                     message_type=Popup.MessageType.INFO,
                     message=f"""{service_name} service changed state to 
@@ -485,7 +506,8 @@ class MainWindow(QtWidgets.QMainWindow):
                     _msg_type = Popup.MessageType.ERROR
                 elif _gcode_msg_type == "//":
                     _msg_type = Popup.MessageType.INFO
-
+                if self.disable_popups:
+                    return
                 # self.popup.new_message(
                 #     message_type=_msg_type, message=str(_message)
                 # )
@@ -495,12 +517,16 @@ class MainWindow(QtWidgets.QMainWindow):
             if "metadata" in _data.get("message", "").lower():
                 # Quick fix, don't care about no metadata errors
                 return
+            if self.disable_popups:
+                    return
             self.popup.new_message(
                 message_type=Popup.MessageType.ERROR,
                 message=str(_data),
             )
 
         elif "notify_cpu_throttled" in _method:
+            if self.disable_popups:
+                    return
             self.popup.new_message(
                 message_type=Popup.MessageType.WARNING,
                 message=f"CPU THROTTLED: {_data} | {_metadata}",
