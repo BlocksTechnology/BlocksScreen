@@ -27,7 +27,7 @@ Feel free to contact us on [Github](https://github.com/BlocksTechnology) | [Link
 
 For inquiries related to licensing, attribution, or project documentation—excluding feature requests or code contributions—please contact Blocks Technology at: 
 
-Hugo Costa Email: [h.costa@blockstec.com](mailto:h.costa@blockstec.com)
+[info@blockstec.com](mailto:info@blockstec.com) 
 
 We welcome responsible engagement and are committed to maintaining clear and respectful communication regarding the origins and evolution of this project.
 
