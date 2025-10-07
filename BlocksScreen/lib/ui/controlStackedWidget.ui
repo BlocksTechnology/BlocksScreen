@@ -32,7 +32,7 @@
    <string>StackedWidget</string>
   </property>
   <property name="currentIndex">
-   <number>3</number>
+   <number>0</number>
   </property>
   <widget class="QWidget" name="control_page">
    <property name="sizePolicy">
@@ -299,7 +299,7 @@ Control</string>
       </widget>
      </item>
      <item row="1" column="1">
-      <widget class="BlocksCustomButton" name="cp_bed_leveling_btn">
+      <widget class="BlocksCustomButton" name="cp_z_tilt_btn">
        <property name="sizePolicy">
         <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
          <horstretch>0</horstretch>
@@ -342,7 +342,7 @@ Control</string>
         <string notr="true"/>
        </property>
        <property name="text">
-        <string>Bed Level</string>
+        <string>Z-Tilt</string>
        </property>
        <property name="autoDefault">
         <bool>false</bool>
@@ -3998,8 +3998,8 @@ Steppers</string>
      <rect>
       <x>440</x>
       <y>140</y>
-      <width>171</width>
-      <height>171</height>
+      <width>196</width>
+      <height>204</height>
      </rect>
     </property>
     <layout class="QGridLayout" name="gridLayout_2">
@@ -5471,9 +5471,9 @@ Steppers</string>
  </resources>
  <connections/>
  <buttongroups>
-  <buttongroup name="extrude_select_feedrate_group"/>
-  <buttongroup name="extrude_select_length_group"/>
-  <buttongroup name="axis_select_length_group"/>
   <buttongroup name="axis_select_speed_group"/>
+  <buttongroup name="extrude_select_length_group"/>
+  <buttongroup name="extrude_select_feedrate_group"/>
+  <buttongroup name="axis_select_length_group"/>
  </buttongroups>
 </ui>

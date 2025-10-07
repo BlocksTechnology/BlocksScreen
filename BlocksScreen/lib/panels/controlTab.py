@@ -7,7 +7,9 @@ from lib.panels.widgets.numpadPage import CustomNumpad
 from lib.printer import Printer
 from lib.moonrakerComm import MoonWebSocket
 from lib.panels.widgets.probeHelperPage import ProbeHelper
+from lib.panels.widgets.printcorePage import SwapPrintcorePage
 from lib.ui.controlStackedWidget_ui import Ui_controlStackedWidget
+from lib.panels.widgets.loadPage import LoadScreen
 from PyQt6 import QtCore, QtWidgets
 from PyQt6.QtCore import (
     pyqtSignal,
@@ -31,11 +33,17 @@ class ControlTab(QtWidgets.QStackedWidget):
 
     run_gcode_signal = pyqtSignal(str, name="run_gcode")
 
+    disable_popups = pyqtSignal(bool,name="disable_popups")
+
     request_numpad: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         [str, int, "PyQt_PyObject"],
         [str, int, "PyQt_PyObject", int, int],
         name="request_numpad",
     )
+
+    request_file_info: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        str, name="request_file_info"
+     )
 
     def __init__(
         self,
@@ -63,6 +71,14 @@ class ControlTab(QtWidgets.QStackedWidget):
 
         self.probe_helper_page = ProbeHelper(self)
         self.addWidget(self.probe_helper_page)
+
+        self.printcores_page = SwapPrintcorePage(self)
+        self.addWidget(self.printcores_page)
+
+        self.loadpage = LoadScreen(self,LoadScreen.AnimationGIF.DEFAULT)
+        self.addWidget(self.loadpage)
+
+
 
         self.probe_helper_page.request_page_view.connect(
             partial(self.change_page, self.indexOf(self.probe_helper_page))
@@ -109,6 +125,7 @@ class ControlTab(QtWidgets.QStackedWidget):
                 self.change_page, self.indexOf(self.panel.temperature_page)
             )
         )
+        self.panel.cp_switch_print_core_btn.clicked.connect(self.show_swapcore)
         self.panel.cp_printer_settings_btn.clicked.connect(
             partial(
                 self.change_page,
@@ -264,6 +281,7 @@ class ControlTab(QtWidgets.QStackedWidget):
                 300,  # TODO: Get this value from printer objects
             )
         )
+        
 
         self.panel.bed_temp_display.clicked.connect(
             lambda: self.request_numpad[
@@ -286,6 +304,48 @@ class ControlTab(QtWidgets.QStackedWidget):
                 SET_HEATER_TEMPERATURE HEATER=extruder TARGET=0"
             )
         )
+
+        self.panel.cp_z_tilt_btn.clicked.connect(
+            lambda: self.run_gcode_signal.emit(
+                "G28\n"
+                "M400\n"
+                "Z_TILT_ADJUST"
+            )
+        )
+
+        self.printcores_page.pc_accept.clicked.connect(self.handle_swapcore)
+
+        self.ws.klippy_state_signal.connect(self.on_klippy_status)
+
+    @QtCore.pyqtSlot(str, name="on_klippy_status")
+    def on_klippy_status(self, state: str):
+        if state.lower() == "ready":
+            self.printcores_page.hide()
+            self.disable_popups.emit(False)
+            return
+        if state.lower() == "startup":
+            self.printcores_page.setText("Almost done \n be patience")
+            return
+
+    def show_swapcore(self):
+        # TODO: swap print core posision comands here
+        self.loadpage.show()
+        self.loadpage.set_status_message("Moving axis...")
+        QtCore.QTimer.singleShot(5000, self.after_loading) # should be a if here 
+        
+
+    def after_loading(self):
+        # TODO: swap print core macro here
+        self.loadpage.hide()
+        self.printcores_page.show()
+        self.disable_popups.emit(True)
+        self.printcores_page.setText("Please Insert Print Core \n \n Afterwards click continue")
+
+
+    def handle_swapcore(self):
+        self.printcores_page.setText("Executing \n Firmware Restart")
+        self.run_gcode_signal.emit("FIRMWARE_RESTART")
+        
 
     @QtCore.pyqtSlot(str, int, "PyQt_PyObject", name="on_numpad_request")
     @QtCore.pyqtSlot(

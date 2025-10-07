@@ -17,7 +17,10 @@ class BlocksCustomButton(QtWidgets.QPushButton):
         self,
         parent: QtWidgets.QWidget = None,
     ) -> None:
-        super().__init__(parent)
+        if parent:
+            super(BlocksCustomButton, self).__init__(parent)
+        else:
+            super(BlocksCustomButton, self).__init__()
 
         self.icon_pixmap: QtGui.QPixmap = QtGui.QPixmap()
         self._icon_rect: QtCore.QRectF = QtCore.QRectF()
