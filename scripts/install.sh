@@ -369,6 +369,7 @@ polkit.addRule(function(action, subject) {
 });
 EOF
 }
+
 function create_policy_legacy(){
     RULE_FILE="/etc/polkit-1/localauthority/50-local.d/20-blocksscreen.pkla"
     sudo tee ${RULE_FILE} > /dev/null << EOF 
@@ -392,8 +393,19 @@ needs_root_rights=yes
 EOF
 }
 
-# fix fbturbo
+function add_moonraker_update(){
+    sudo tee ${MOONRAKER_CONFIG} > /dev/null << EOF 
+[update_manager BlocksScreen]
+type: git_repo
+channel: dev 
+primary_branch: master
+path: "$BS_PATH"
+origin: https://github.com/BlocksTechnology/BlocksScreen.git
+is_system_service: True
+EOF
+}
 
+# fix fbturbo
 function add_desktop_file(){
     echo_info "Adding desktop file"
     mkdir -p "$HOME"/.local/share/applications/
@@ -405,6 +417,7 @@ function start_BlocksScreen(){
     echo_info "Starting Blocks Screen service"
     sudo systemctl restart BlocksScreen.service
 }
+
 
 # function add_updater{
 #     update_section=$(grep -c '\[update_manager[a-z ]* Blocks Screen\)]' $BLOCKS_SCREEN_CONFIG || true)
@@ -464,6 +477,9 @@ create_policy
 
 # fix fbturbo
 add_desktop_file 
+
+# Add update_manager entry to moonraker conf
+add_moonraker_update
 
 restart_klipper
 restart_moonraker
