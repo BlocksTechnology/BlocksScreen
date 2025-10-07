@@ -10,6 +10,11 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 
 
 class UpdatePage(QtWidgets.QWidget):
+    """Update GUI Page,
+    retrieves from moonraker available clients and adds functionality
+    for updating or recovering them
+    """
+
     request_update_klipper: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         name="update-klipper"
     )
@@ -66,17 +71,22 @@ class UpdatePage(QtWidgets.QWidget):
         self.update_in_progress.connect(self.handle_ongoing_update)
         self.update_end.connect(self.handle_update_end)
 
+        self.repeated_request_status = QtCore.QTimer()
+        self.repeated_request_status.timeout.connect(self.request_update_status.emit)
+        self.repeated_request_status.setInterval(2000)  # every 2 seconds
+
     def handle_update_end(self) -> None:
         """Handles update end signal (closes loading page, returns to normal operation)"""
         if self.load_popup.isVisible():
             self.load_popup.close()
+        self.repeated_request_status.stop()
         self.request_refresh_update.emit()
 
     def handle_ongoing_update(self) -> None:
         """Handled ongoing update signal, calls loading page (blocks user interaction)"""
         self.load_popup.set_status_message("Updating...")
         self.load_popup.show()
-        self.request_update_status.emit(True)
+        self.repeated_request_status.start(2000)
 
     def reset_view_model(self) -> None:
         """Clears items from ListView (Resets `QAbstractListModel` by clearing entries)"""
@@ -89,7 +99,7 @@ class UpdatePage(QtWidgets.QWidget):
         self.reset_view_model()
         return super().deleteLater()
 
-    def showEvent(self, a0: QtGui.QShowEvent | None) -> None:
+    def showEvent(self, event: QtGui.QShowEvent | None) -> None:
         """Re-add clients to update list"""
         self.update_buttons_list_widget.blockSignals(True)
         for cli_name in self.cli_tracking.keys():
@@ -101,7 +111,7 @@ class UpdatePage(QtWidgets.QWidget):
             self.model.data(self.model.index(0), QtCore.Qt.ItemDataRole.UserRole)  # type: ignore
         )  # Bandage solution: simulate click for setting information on infobox
         self.update_buttons_list_widget.blockSignals(False)
-        return super().showEvent(a0)
+        return super().showEvent(event)
 
     @QtCore.pyqtSlot(name="on-update-clicked")
     def on_update_clicked(self) -> None:
@@ -137,9 +147,10 @@ class UpdatePage(QtWidgets.QWidget):
             self.remote_version_tracking.hide()
             updatable_packages = cli_data.get("package_count", 0)
             if updatable_packages == 0:
-                self.version_tracking_info.setText("No updates")
+                self.version_title.hide()
+                self.version_tracking_info.hide()
                 self.action_btn.hide()
-                self.version_tracking_info.setWordWrap(True)
+                self.no_update_placeholder.show()
                 return
             self.version_tracking_info.setText(
                 f"{updatable_packages} upgradable \n packages"
@@ -194,7 +205,6 @@ class UpdatePage(QtWidgets.QWidget):
         Receives updates from moonraker `machine.update.status` request.
         """
         busy = message.get("busy", False)
-        print(busy)
         self.update_in_progress.emit() if busy else self.update_end.emit()
         cli_version_info = message.get("version_info", None)
         if not cli_version_info:
@@ -521,7 +531,10 @@ class UpdatePage(QtWidgets.QWidget):
         self.no_update_placeholder.setText("No Updates Available")
         self.no_update_placeholder.setWordWrap(True)
         self.no_update_placeholder.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
-        self.info_box_layout.addWidget(self.no_update_placeholder, 0)
+        self.info_box_layout.addWidget(
+            self.no_update_placeholder, 0, QtCore.Qt.AlignmentFlag.AlignBottom
+        )
+
         self.no_update_placeholder.hide()
 
         self.info_box_layout.addLayout(

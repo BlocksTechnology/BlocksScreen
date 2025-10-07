@@ -1,10 +1,13 @@
-from PyQt6 import QtWidgets, QtCore, QtGui
-from dataclasses import dataclass
 import typing
+from dataclasses import dataclass
+
+from PyQt6 import QtCore, QtGui, QtWidgets  # pylint: disable=import-error
 
 
 @dataclass
 class ListItem:
+    """Data for a list item"""
+
     text: str
     right_text: str = ""
     right_icon: QtGui.QPixmap | None = None
@@ -17,25 +20,34 @@ class ListItem:
     height: int = 60  # Change has needed
 
 
+T = typing.TypeVar("T", bound=ListItem)
+
+
 class EntryListModel(QtCore.QAbstractListModel):
+    """List model Subclassed QAbstractListModel"""
+
     EnableRole = QtCore.Qt.ItemDataRole.UserRole + 1
 
     def __init__(self, entries=None) -> None:
         super().__init__()
         self.entries = entries or []
 
-    def rowCount(self, parent=QtCore.QModelIndex()):
+    def rowCount(self, parent=QtCore.QModelIndex()) -> int:
+        """Gets model row count"""
         return len(self.entries)
 
     def deleteLater(self) -> None:
+        """subclass for deleting the object"""
         return super().deleteLater()
 
     def clear(self) -> None:
+        """Clear model rows"""
         self.beginResetModel()
         self.entries.clear()
         self.endResetModel()
 
     def add_item(self, item: ListItem) -> None:
+        """Adds one row item to the model"""
         self.beginInsertRows(
             QtCore.QModelIndex(),
             self.rowCount(),
@@ -44,7 +56,8 @@ class EntryListModel(QtCore.QAbstractListModel):
         self.entries.append(item)
         self.endInsertRows()
 
-    def flags(self, index):
+    def flags(self, index) -> QtCore.Qt.ItemFlag:
+        """Models item flags, re-implemented method"""
         item = self.entries[index.row()]
         flags = QtCore.Qt.ItemFlag.ItemIsEnabled | QtCore.Qt.ItemFlag.ItemIsSelectable
         if item.allow_check:
@@ -52,6 +65,7 @@ class EntryListModel(QtCore.QAbstractListModel):
         return flags
 
     def setData(self, index: QtCore.QModelIndex, value: typing.Any, role: int) -> bool:
+        """Set data for items, re-implemented method"""
         if not index.isValid():
             return False
         if role == EntryListModel.EnableRole:
@@ -64,17 +78,21 @@ class EntryListModel(QtCore.QAbstractListModel):
             return True
         return False
 
-    def data(self, index: QtCore.QModelIndex, role: int):
+    def data(self, index: QtCore.QModelIndex, role: int) -> typing.Any:
+        """Gets item data, re-implemented method"""
         if not index.isValid():
-            return
+            return None
         item: ListItem = self.entries[index.row()]
         if role == EntryListModel.EnableRole:
             return item.selected
         if role == QtCore.Qt.ItemDataRole.UserRole:
             return item
+        return None
 
 
 class EntryDelegate(QtWidgets.QStyledItemDelegate):
+    """Renders each item in the view model, provides user interaction to the items"""
+
     item_selected: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         ListItem, name="item-selected"
     )
@@ -85,13 +103,26 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
         self.height: int = 60
 
     def clear(self) -> None:
+        """Clears delegate indexing"""
         self.prev_index = 0
 
     def sizeHint(
         self, option: QtWidgets.QStyleOptionViewItem, index: QtCore.QModelIndex
     ):
+        """Returns base size for items, re-implemented method"""
         base = super().sizeHint(option, index)
-        return QtCore.QSize(base.width(), int(base.height() + self.height * 0.9))
+        # return QtCore.QSize(base.width(), int(base.height() + self.height))
+        base.setHeight(self.height)
+        return QtCore.QSize(base.width(), int(self.height + self.height * 0.20))
+
+    def updateEditorGeometry(
+        self,
+        editor: QtWidgets.QWidget | None,
+        option: QtWidgets.QStyleOptionViewItem,
+        index: QtCore.QModelIndex,
+    ) -> None:
+        """re-implemented method"""
+        return super().updateEditorGeometry(editor, option, index)
 
     def paint(
         self,
@@ -99,8 +130,9 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
         option: QtWidgets.QStyleOptionViewItem,
         index: QtCore.QModelIndex,
     ):
+        """Renders each item, re-implemented method"""
+        super().paint(painter, option, index)
         item = index.data(QtCore.Qt.ItemDataRole.UserRole)
-
         painter.save()
         rect = option.rect
         rect.setHeight(item.height)
@@ -283,6 +315,7 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
         option: QtWidgets.QStyleOptionViewItem,
         index: QtCore.QModelIndex,
     ):
+        """Capture view model events, re-implemented method"""
         item = index.data(QtCore.Qt.ItemDataRole.UserRole)
         if event.type() == QtCore.QEvent.Type.MouseButtonPress:
             if item.callback:
