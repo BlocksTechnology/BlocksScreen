@@ -160,22 +160,30 @@ class BlocksCustomButton(QtWidgets.QPushButton):
             tinted_icon_pixmap = QtGui.QPixmap(_icon_scaled.size())
             tinted_icon_pixmap.fill(QtCore.Qt.GlobalColor.transparent)
 
-            icon_painter = QtGui.QPainter(tinted_icon_pixmap)
-            icon_painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing, True)
-            icon_painter.setRenderHint(QtGui.QPainter.RenderHint.SmoothPixmapTransform, True)
-            icon_painter.drawPixmap(0, 0, _icon_scaled)
-            icon_painter.setCompositionMode(QtGui.QPainter.CompositionMode.CompositionMode_SourceIn)
-            icon_painter.setBrush(bg_color)
-            icon_painter.setPen(QtCore.Qt.PenStyle.NoPen)
-            icon_painter.drawRect(tinted_icon_pixmap.rect())
-            icon_painter.end()
+            if not self.isEnabled():
+
+                tinted_icon_pixmap = QtGui.QPixmap(_icon_scaled.size())
+                tinted_icon_pixmap.fill(QtCore.Qt.GlobalColor.transparent)
+
+                icon_painter = QtGui.QPainter(tinted_icon_pixmap)
+                icon_painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
+                icon_painter.setRenderHint(QtGui.QPainter.RenderHint.SmoothPixmapTransform)
+
+
+                icon_painter.drawPixmap(0, 0, _icon_scaled)
+
+                icon_painter.setCompositionMode(QtGui.QPainter.CompositionMode.CompositionMode_SourceAtop)
+                tint = QtGui.QColor(bg_color.red(), bg_color.green(), bg_color.blue(), 120)
+                icon_painter.fillRect(tinted_icon_pixmap.rect(), tint)
+                icon_painter.end()
+
+                final_pixmap = tinted_icon_pixmap
+            else:
+                final_pixmap = _icon_scaled
+
 
             destination_point = adjusted_icon_rect.toRect().topLeft()
-
-            painter.drawPixmap(
-                destination_point,
-                tinted_icon_pixmap
-            )
+            painter.drawPixmap(destination_point, final_pixmap)
 
         if self.text():
             _start_text_position = int(self.button_ellipse.width())
