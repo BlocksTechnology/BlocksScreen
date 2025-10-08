@@ -2,7 +2,15 @@ import typing
 
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_label import BlocksLabel
+from lib.utils.icon_button import IconButton
 from PyQt6 import QtCore, QtGui, QtWidgets
+
+import helper_methods
+
+
+import os
+
+
 
 
 class ConfirmWidget(QtWidgets.QWidget):
@@ -11,6 +19,10 @@ class ConfirmWidget(QtWidgets.QWidget):
     )
     on_reject: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         name="on_reject"
+    )
+
+    on_delete: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        str,str,name="on_delete"
     )
 
     def __init__(self, parent) -> None:
@@ -26,10 +38,20 @@ class ConfirmWidget(QtWidgets.QWidget):
             )
         )
         self.reject_button.clicked.connect(self.on_reject.emit)
+        self.delete_btn.clicked.connect(lambda: self.on_delete.emit(self.direcotry,self.filename))
+     
 
     @QtCore.pyqtSlot(str, dict, name="on_show_widget")
     def on_show_widget(self, text: str, filedata: dict | None = None) -> None:
-        self.cf_file_name.setText(str(text))
+
+        directory = os.path.dirname(text)
+        filename = os.path.basename(text)
+
+        self.direcotry = directory
+        self.filename = filename
+
+
+        self.cf_file_name.setText(self.filename)
         if not filedata:
             return
         self._thumbnails = filedata.get("thumbnail_images", [])
@@ -40,7 +62,7 @@ class ConfirmWidget(QtWidgets.QWidget):
             ]  # Show last which is biggest
             self.thumbnail = QtGui.QImage(_biggest_thumbnail)
 
-        _total_filament = filedata.get("filament_total")
+        _total_filament = filedata.get("filament_weight_total")
         _estimated_time = filedata.get("estimated_time")
 
         if isinstance(_estimated_time, str):
@@ -48,22 +70,38 @@ class ConfirmWidget(QtWidgets.QWidget):
         else:
             seconds = _estimated_time
 
-        _estimated_time = self.estimate_print_time(seconds)
+        days, hours, minutes, _ = helper_methods.estimate_print_time(seconds)
+        if seconds <= 0:
+            time_str = "??"
+        elif seconds < 60:
+            time_str = "less than 1 minute"
+        else:
+            if days > 0:
+                time_str = f"{days}d {hours}h {minutes}m"
+            elif hours > 0:
+                time_str = f"{hours}h {minutes}m"
+            else:
+                time_str = f"{minutes}m"
+
+        if _total_filament == 0:
+            _total_filament = "Unknown"
+        elif _total_filament > 499:
+            _total_filament /= 1000
+            _total_filament = str("%.2f" %_total_filament) + "kg"
+        else:
+            _total_filament = str("%.2f" %_total_filament) + "g"
 
         self.cf_info.setText(
             "Total Filament:"
-            + str(_total_filament)
+            + "\n"
+            + _total_filament
             + "\n"
             + "Slicer time: "
-            + str(_estimated_time[0])
-            + " days "
-            + str(_estimated_time[1])
-            + " hours "
-            + str(_estimated_time[2])
-            + " minutes "
-            + str(_estimated_time[3])
-            + " seconds"
+            +"\n"
+            + time_str
+            + "\n"
         )
+
         self.repaint()
 
     def estimate_print_time(self, seconds: int) -> list:
@@ -139,6 +177,24 @@ class ConfirmWidget(QtWidgets.QWidget):
         self.verticalLayout_4.setObjectName("verticalLayout_4")
         self.cf_header_title = QtWidgets.QHBoxLayout()
         self.cf_header_title.setObjectName("cf_header_title")
+
+        self.delete_btn = IconButton(self)
+        self.delete_btn.setMinimumSize(QtCore.QSize(60, 60))
+        self.delete_btn.setMaximumSize(QtCore.QSize(60, 60))
+        self.delete_btn.setFlat(True)
+        self.delete_btn.setProperty(
+            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/troubleshoot.svg")
+        )
+        self.cf_header_title.addWidget(
+            self.delete_btn, 0, QtCore.Qt.AlignmentFlag.AlignLeft
+        )
+
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Expanding,
+            QtWidgets.QSizePolicy.Policy.Expanding,
+        )
+
+
         self.confirm_title_label = QtWidgets.QLabel(parent=self)
         self.confirm_title_label.setMinimumSize(QtCore.QSize(0, 60))
         self.confirm_title_label.setMaximumSize(QtCore.QSize(16777215, 60))
@@ -149,6 +205,7 @@ class ConfirmWidget(QtWidgets.QWidget):
         self.confirm_title_label.setLayoutDirection(
             QtCore.Qt.LayoutDirection.RightToLeft
         )
+        self.confirm_title_label.setSizePolicy(sizePolicy)
         self.confirm_title_label.setStyleSheet(
             "background: transparent; color: white;"
         )
@@ -157,6 +214,11 @@ class ConfirmWidget(QtWidgets.QWidget):
         )
         self.confirm_title_label.setObjectName("confirm_title_label")
         self.cf_header_title.addWidget(self.confirm_title_label)
+        self.spacer = QtWidgets.QSpacerItem(
+            60, 60, QtWidgets.QSizePolicy.Policy.Fixed, QtWidgets.QSizePolicy.Policy.Fixed
+        )
+        self.spacer.setGeometry(QtCore.QRect(0, 0, 60, 60))
+        self.cf_header_title.addItem(self.spacer)
         self.verticalLayout_4.addLayout(self.cf_header_title)
         self.cf_content_vertical_layout = QtWidgets.QHBoxLayout()
         self.cf_content_vertical_layout.setObjectName(
@@ -166,27 +228,9 @@ class ConfirmWidget(QtWidgets.QWidget):
         self.cf_content_horizontal_layout.setObjectName(
             "cf_content_horizontal_layout"
         )
-        self.cf_info = QtWidgets.QLabel(parent=self)
-        self.cf_info.setEnabled(True)
-        self.cf_info.setMinimumSize(QtCore.QSize(200, 60))
-        self.cf_info.setMaximumSize(QtCore.QSize(250, 60))
-        font = QtGui.QFont()
-        font.setFamily("Momcake")
-        font.setPointSize(14)
-        self.cf_info.setFont(font)
-        self.cf_info.setStyleSheet("background: transparent; color: white;")
-        self.cf_info.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
-        self.cf_info.setWordWrap(True)
-        self.cf_info.setObjectName("cf_info")
-        self.cf_content_horizontal_layout.addWidget(
-            self.cf_info,
-            0,
-            QtCore.Qt.AlignmentFlag.AlignHCenter
-            | QtCore.Qt.AlignmentFlag.AlignVCenter,
-        )
         self.cf_file_name = BlocksLabel(parent=self)
         self.cf_file_name.setEnabled(True)
-        self.cf_file_name.setMinimumSize(QtCore.QSize(250, 80))
+        self.cf_file_name.setMinimumSize(QtCore.QSize(250, 0))
         self.cf_file_name.setMaximumSize(QtCore.QSize(250, 80))
         font = QtGui.QFont()
         font.setFamily("Momcake")
@@ -201,6 +245,25 @@ class ConfirmWidget(QtWidgets.QWidget):
         self.cf_content_horizontal_layout.addWidget(
             self.cf_file_name, 0, QtCore.Qt.AlignmentFlag.AlignHCenter
         )
+        self.cf_info = QtWidgets.QLabel(parent=self)
+        self.cf_info.setEnabled(True)
+        self.cf_info.setMinimumSize(QtCore.QSize(200, 60))
+        self.cf_info.setMaximumSize(QtCore.QSize(250, 16777215))
+        font = QtGui.QFont()
+        font.setFamily("Momcake")
+        font.setPointSize(14)
+        self.cf_info.setFont(font)
+        self.cf_info.setStyleSheet("background: transparent; color: white;")
+        self.cf_info.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.cf_info.setWordWrap(True)
+        self.cf_info.setObjectName("cf_info")
+        self.cf_content_horizontal_layout.addWidget(
+            self.cf_info,
+            0,
+            QtCore.Qt.AlignmentFlag.AlignHCenter
+            | QtCore.Qt.AlignmentFlag.AlignVCenter,
+        )
+
         self.cf_confirm_layout = QtWidgets.QVBoxLayout()
         self.cf_confirm_layout.setSizeConstraint(
             QtWidgets.QLayout.SizeConstraint.SetFixedSize

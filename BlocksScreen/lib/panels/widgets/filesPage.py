@@ -189,7 +189,7 @@ class FilesPage(QtWidgets.QWidget):
         button = ListCustomButton()
         button.setText(str(dir_data.get("dirname")))
         button.setSecondPixmap(
-            QtGui.QPixmap(":/ui/media/btn_icons/folder_icon.svg")
+            QtGui.QPixmap(":/ui/media/btn_icons/folderIcon.svg")
         )
         button.setMinimumSize(600, 80)
         button.setMaximumSize(700, 80)
