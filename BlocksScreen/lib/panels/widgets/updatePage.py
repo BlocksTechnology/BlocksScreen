@@ -107,15 +107,13 @@ class UpdatePage(QtWidgets.QWidget):
     def showEvent(self, event: QtGui.QShowEvent | None) -> None:
         """Re-add clients to update list"""
         self.update_buttons_list_widget.blockSignals(True)
-        for cli_name in self.cli_tracking.keys():
-            _cli_info = self.cli_tracking.get(cli_name, None)
+        for cli_name, _cli_info in self.cli_tracking.items():
             if not _cli_info:
                 continue
             if "system" in cli_name.lower():
-                _updatable = True if _cli_info.get("package_count", 0) else False
+                _updatable = bool(_cli_info.get("package_count", 0))
             else:
-                _commit_behind = _cli_info.get("commits_behind", [])
-                _updatable = True if len(_commit_behind) else False
+                _updatable = bool(_cli_info.get("commits_behind", []))
             self.add_update_entry(cli_name, _updatable)
         self.model.setData(
             self.model.index(0), True, EntryListModel.EnableRole
@@ -226,17 +224,14 @@ class UpdatePage(QtWidgets.QWidget):
             return
         self.cli_tracking = cli_version_info
         # Signal that updates exist (Used to render red dots)
-        _update_avail = False
-        for key, value in cli_version_info.items():
-            if not value:
-                continue
-            if "system" in key.lower():
-                if value.get("package_count", 0):
-                    _update_avail = True
-            else:
-                _commit_behind = value.get("commits_behind", [])
-                if len(_commit_behind):
-                    _update_avail = True
+        _update_avail = any(
+            value
+            and (
+                ("system" in key.lower() and value.get("package_count", 0))
+                or (value.get("commits_behind"))
+            )
+            for key, value in cli_version_info.items()
+        )
         self.update_available.emit(_update_avail)
 
     def add_update_entry(self, cli_name: str, updatable: bool = False) -> None:
