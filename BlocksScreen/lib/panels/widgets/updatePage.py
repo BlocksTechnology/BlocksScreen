@@ -75,7 +75,9 @@ class UpdatePage(QtWidgets.QWidget):
         self.update_end.connect(self.handle_update_end)
 
         self.repeated_request_status = QtCore.QTimer()
-        self.repeated_request_status.timeout.connect(self.request_update_status.emit)
+        self.repeated_request_status.timeout.connect(
+            lambda: self.request_update_status.emit(False)
+        )
         self.repeated_request_status.setInterval(2000)  # every 2 seconds
 
     def handle_update_end(self) -> None:
@@ -144,7 +146,7 @@ class UpdatePage(QtWidgets.QWidget):
             self.request_recover_repo[str, bool].emit(cli_name, True)
             self.load_popup.set_status_message(f"Recovering {cli_name}")
         self.load_popup.show()
-        self.request_update_status.emit()
+        self.request_update_status.emit(False)
 
     @QtCore.pyqtSlot(ListItem, name="on-item-clicked")
     def on_item_clicked(self, item: ListItem) -> None:
@@ -217,13 +219,12 @@ class UpdatePage(QtWidgets.QWidget):
         busy = message.get("busy", False)
         if busy:
             self.update_in_progress.emit()
-        else:
+        else:  # todo: this will always fire, and it shouldn't so i need to only send this signal if we were updating before
             self.update_end.emit()
         cli_version_info = message.get("version_info", None)
         if not cli_version_info:
             return
         self.cli_tracking = cli_version_info
-
         # Signal that updates exist (Used to render red dots)
         _update_avail = False
         for key, value in cli_version_info.items():
@@ -236,8 +237,7 @@ class UpdatePage(QtWidgets.QWidget):
                 _commit_behind = value.get("commits_behind", [])
                 if len(_commit_behind):
                     _update_avail = True
-        if _update_avail:
-            self.update_available.emit(_update_avail)
+        self.update_available.emit(_update_avail)
 
     def add_update_entry(self, cli_name: str, updatable: bool = False) -> None:
         """Adds a new item to the list model"""
