@@ -354,10 +354,13 @@ class MainWindow(QtWidgets.QMainWindow):
                         received from websocket | error message received: {e}"
                 )
         elif "machine" in _method:
+            if "ok" in _data:
+                # Can here capture if 'ok' if a request for an update was successful
+                return
             if "update" in _method:
-                self.on_update_message.emit(_data)
+                if ("status" or "refresh") in _method:
+                    self.on_update_message.emit(_data)
         elif "printer.info" in _method:
-            # REVIEW: PARSE
             # {
             #     "state": "ready",
             #     "state_message": "Printer is ready",
@@ -566,7 +569,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 return True
             return False
         elif event.type() == events.PrintStart.type():
-            # self.disable_tab_bar()
+            self.disable_tab_bar()
             self.ui.extruder_temp_display.clicked.disconnect()
             self.ui.bed_temp_display.clicked.disconnect()
             self.ui.filament_type_icon.setDisabled(True)
