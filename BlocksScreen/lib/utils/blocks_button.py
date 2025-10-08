@@ -88,6 +88,7 @@ class BlocksCustomButton(QtWidgets.QAbstractButton):
 
         if _style is None or _rect is None:
             return
+        margin = _style.pixelMetric(_style.PixelMetric.PM_ButtonMargin, opt, self)
 
         margin = _style.pixelMetric(_style.PixelMetric.PM_ButtonMargin, opt, self)
 
@@ -205,6 +206,8 @@ class BlocksCustomButton(QtWidgets.QAbstractButton):
             _text_rect2.setWidth(self.width() - int(self.button_ellipse.width()))
             _text_rect2.setLeft(int(self.button_ellipse.width()))
 
+            _text_rect.setWidth(self.width() - int(self.button_ellipse.width()))
+            _text_rect.setLeft(int(self.button_ellipse.width()))
             _pen = painter.pen()
             _pen.setStyle(QtCore.Qt.PenStyle.SolidLine)
             _pen.setWidth(1)
