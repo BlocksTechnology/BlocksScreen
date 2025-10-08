@@ -7,12 +7,9 @@ from functools import partial
 from lib.moonrakerComm import MoonWebSocket
 from lib.panels.widgets.loadPage import LoadScreen
 from lib.panels.widgets.troubleshootPage import TroubleshootPage
-from lib.printer import Printer
 from lib.panels.widgets.updatePage import UpdatePage
-
-
+from lib.printer import Printer
 from lib.ui.utilitiesStackedWidget_ui import Ui_utilitiesStackedWidget
-
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.toggleAnimatedButton import ToggleAnimatedButton
 from PyQt6 import QtCore, QtGui, QtWidgets
