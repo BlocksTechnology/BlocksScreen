@@ -41,8 +41,10 @@ class MainWindow(QtWidgets.QMainWindow):
     gcode_response = QtCore.pyqtSignal(list, name="gcode_response")
     handle_error_response = QtCore.pyqtSignal(list, name="handle_error_response")
     call_network_panel = QtCore.pyqtSignal(name="call-network-panel")
-    on_update_message: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(dict, name='on-update-message')
-    
+    on_update_message: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        dict, name="on-update-message"
+    )
+
     def __init__(self):
         super(MainWindow, self).__init__()
         self.config: BlocksScreenConfig = get_configparser()
@@ -83,6 +85,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.controlPanel.request_change_page.connect(slot=self.global_change_page)
         self.utilitiesPanel.request_back.connect(slot=self.global_back)
         self.utilitiesPanel.request_change_page.connect(slot=self.global_change_page)
+        self.utilitiesPanel.update_available.connect(self.on_update_available)
+
         self.ui.extruder_temp_display.clicked.connect(
             lambda: self.global_change_page(
                 self.ui.main_content_widget.indexOf(self.ui.controlTab),
@@ -138,7 +142,7 @@ class MainWindow(QtWidgets.QMainWindow):
         )
 
         self.on_update_message.connect(self.utilitiesPanel._on_update_message)
-        
+
         self.ui.extruder_temp_display.display_format = "upper_downer"
         self.ui.bed_temp_display.display_format = "upper_downer"
 
@@ -148,12 +152,11 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.reset_tab_indexes()
 
-    @QtCore.pyqtSlot(bool, name="update_available")
-    def update_avaible(self, state=bool):
+    @QtCore.pyqtSlot(bool, name="update-available")
+    def on_update_available(self, state=bool):
+        """Signal render for red dot on utilities tab icon"""
         if state:
             self.ui.main_content_widget.setNotification(3, True)
-            # TODO: change to update button
-            self.utilitiesPanel.panel.utilities_info_btn.setShowNotification(True)
 
     def enable_tab_bar(self) -> bool:
         """Enables the tab bar
@@ -351,7 +354,7 @@ class MainWindow(QtWidgets.QMainWindow):
                         received from websocket | error message received: {e}"
                 )
         elif "machine" in _method:
-            if 'update' in _method: 
+            if "update" in _method:
                 self.on_update_message.emit(_data)
         elif "printer.info" in _method:
             # REVIEW: PARSE

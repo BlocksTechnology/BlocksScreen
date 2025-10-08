@@ -18,6 +18,7 @@ class ListItem:
     _lfontsize: int = 0
     _rfontsize: int = 0
     height: int = 60  # Change has needed
+    notificate: bool = False  # render red dot
 
 
 T = typing.TypeVar("T", bound=ListItem)
@@ -27,6 +28,7 @@ class EntryListModel(QtCore.QAbstractListModel):
     """List model Subclassed QAbstractListModel"""
 
     EnableRole = QtCore.Qt.ItemDataRole.UserRole + 1
+    NotificateRole = QtCore.Qt.ItemDataRole.UserRole + 2
 
     def __init__(self, entries=None) -> None:
         super().__init__()
@@ -73,6 +75,10 @@ class EntryListModel(QtCore.QAbstractListModel):
             item.selected = value
             self.dataChanged.emit(index, index, [EntryListModel.EnableRole])
             return True
+        if role == EntryListModel.NotificateRole:
+            item = self.entries[index.row()]
+            item.notificate = value
+            self.dataChanged.emit(index, index, [EntryListModel.NotificateRole])
         if role == QtCore.Qt.ItemDataRole.UserRole:
             self.dataChanged.emit(index, index, [QtCore.Qt.ItemDataRole.UserRole])
             return True
@@ -85,6 +91,8 @@ class EntryListModel(QtCore.QAbstractListModel):
         item: ListItem = self.entries[index.row()]
         if role == EntryListModel.EnableRole:
             return item.selected
+        if role == EntryListModel.NotificateRole:
+            return item.notificate
         if role == QtCore.Qt.ItemDataRole.UserRole:
             return item
         return None
@@ -306,6 +314,18 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
                 int(right_text_y),
                 item.right_text,
             )
+        if item.notificate:
+            dot_diameter = rect.height() * 0.3
+            dot_x = rect.width() - dot_diameter - 5
+
+            notification_color = QtGui.QColor(226, 31, 31)
+            painter.setBrush(notification_color)
+            painter.setPen(QtCore.Qt.PenStyle.NoPen)
+
+            dot_rect = QtCore.QRectF(
+                dot_x, rect.top(), dot_diameter, dot_diameter
+            )
+            painter.drawEllipse(dot_rect)
         painter.restore()
 
     def editorEvent(
@@ -320,7 +340,7 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
         if event.type() == QtCore.QEvent.Type.MouseButtonPress:
             if item.callback:
                 if callable(item.callback):
-                    item.callback("Can call callback")
+                    item.callback()
             if self.prev_index is None:
                 return False
             if self.prev_index != index.row():

@@ -81,6 +81,10 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         dict, name="handle-update-message"
     )
 
+    update_available: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        bool, name="update-available"
+    )
+
     def __init__(
         self, parent: QtWidgets.QWidget, ws: MoonWebSocket, printer: Printer
     ) -> None:
@@ -109,6 +113,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         self.axis_in: str = "x"
         self.ammount: int = 1
         self.tb: bool = False
+        self.cg = None
 
         # --- UI Setup ---
         self.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
@@ -222,6 +227,10 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         self.update_page.request_update_moonraker.connect(self.ws.api.update_moonraker)
         self.update_page.request_update_status.connect(self.ws.api.update_status)
         self.update_page.request_update_system.connect(self.ws.api.update_system)
+        self.update_page.update_available.connect(self.update_available.emit)
+        self.update_page.update_available.connect(
+            self.panel.update_btn.setShowNotification
+        )
 
     @QtCore.pyqtSlot(list, name="on_object_list")
     def on_object_list(self, object_list: list) -> None:
@@ -267,7 +276,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         if not value:
             return
         if name == "gcode_position":
-            self.position = value
+            ...
 
     def _connect_numpad_request(self, button: QtWidgets.QWidget, name: str, title: str):
         if isinstance(button, QtWidgets.QPushButton):
@@ -397,8 +406,10 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         layout = self.panel.leds_content_layout
         while layout.count():
             if (child := layout.takeAt(0)) and child.widget():
-                child.widget().deleteLater() # type: ignore
+                child.widget().deleteLater()  # type: ignore
         led_names = []
+        if not self.cg:
+            return
         for obj in self.cg:
             if "led" in obj:
                 try:

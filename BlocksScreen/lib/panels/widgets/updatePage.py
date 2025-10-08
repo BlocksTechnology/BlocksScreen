@@ -48,6 +48,9 @@ class UpdatePage(QtWidgets.QWidget):
     update_end: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         name="update-end"
     )
+    update_available: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        bool, name="update-available"
+    )
 
     def __init__(self, parent=None) -> None:
         if parent:
@@ -103,7 +106,15 @@ class UpdatePage(QtWidgets.QWidget):
         """Re-add clients to update list"""
         self.update_buttons_list_widget.blockSignals(True)
         for cli_name in self.cli_tracking.keys():
-            self.add_update_entry(cli_name)
+            _cli_info = self.cli_tracking.get(cli_name, None)
+            if not _cli_info:
+                continue
+            if "system" in cli_name.lower():
+                _updatable = True if _cli_info.get("package_count", 0) else False
+            else:
+                _commit_behind = _cli_info.get("commits_behind", [])
+                _updatable = True if len(_commit_behind) else False
+            self.add_update_entry(cli_name, _updatable)
         self.model.setData(
             self.model.index(0), True, EntryListModel.EnableRole
         )  # Set the first item checked on startup
@@ -183,7 +194,6 @@ class UpdatePage(QtWidgets.QWidget):
         )  # True if git_repo is currently in detached state
         corrupt = cli_data.get("corrupt", None)
         commits_behind = cli_data.get("commits_behind", None)
-
         if not (corrupt or is_dirty or detached) and is_valid and commits_behind:
             self.no_update_placeholder.hide()
             self.action_btn.setText("Update")
@@ -205,13 +215,31 @@ class UpdatePage(QtWidgets.QWidget):
         Receives updates from moonraker `machine.update.status` request.
         """
         busy = message.get("busy", False)
-        self.update_in_progress.emit() if busy else self.update_end.emit()
+        if busy:
+            self.update_in_progress.emit()
+        else:
+            self.update_end.emit()
         cli_version_info = message.get("version_info", None)
         if not cli_version_info:
             return
         self.cli_tracking = cli_version_info
 
-    def add_update_entry(self, cli_name: str) -> None:
+        # Signal that updates exist (Used to render red dots)
+        _update_avail = False
+        for key, value in cli_version_info.items():
+            if not value:
+                continue
+            if "system" in key.lower():
+                if value.get("package_count", 0):
+                    _update_avail = True
+            else:
+                _commit_behind = value.get("commits_behind", [])
+                if len(_commit_behind):
+                    _update_avail = True
+        if _update_avail:
+            self.update_available.emit(_update_avail)
+
+    def add_update_entry(self, cli_name: str, updatable: bool = False) -> None:
         """Adds a new item to the list model"""
         item = ListItem(
             text=cli_name,
@@ -220,6 +248,7 @@ class UpdatePage(QtWidgets.QWidget):
             _lfontsize=17,
             _rfontsize=12,
             height=60,
+            notificate=updatable,
         )
         self.model.add_item(item)
 
@@ -516,7 +545,6 @@ class UpdatePage(QtWidgets.QWidget):
         self.action_btn.setFont(font)
         self.action_btn.setPalette(palette)
         self.action_btn.setSizePolicy(sizePolicy)
-        self.action_btn.text
         self.action_btn.setText("Update")
         self.button_box.addWidget(
             self.action_btn, 0, QtCore.Qt.AlignmentFlag.AlignHCenter
