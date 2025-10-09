@@ -27,29 +27,6 @@
 # 
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
-
-MOONRAKER_CONFIG="${HOME}/printer_data/config/moonraker.conf"
-KLIPPER_PATH="${HOME}/klipper"
-KLIPPER_VENV_PATH="${HOME}/klippy-env"
-
-USER_CONFIG_PATH="${HOME}/printer_data/config"
-
-SCRIPT_PATH=$(dirname -- "$(readlink -f -- "$0")")
-echo ${SCRIPT_PATH}
-BS_PATH=$(dirname "$SCRIPT_PATH")
-echo ${BS_PATH}
-BSENV="${BLOCKSSCREEN_VENV:-${HOME}/.BlocksScreen-env}"
-echo ${BSENV}
-PYTHON_VERSION=3.11.2
-
-
-XSERVER="xinit xinput x11-xserver-utils xserver-xorg-input-evdev xserver-xorg-input-libinput xserver-xorg-legacy xserver-xorg-video-fbdev"
-CAGE="cage seatd xwayland"
-PYOBJECT="pkg-config python3-dev"
-MISC="autoconf python3-venv libdbus-glib-1-dev udiskie xdg-utils"
-# QTMISC="'^libxcb.*-dev' libx11-xcb-dev libglu1-mesa-dev libxrender-dev libxi-dev libxkbcommon-dev libxkbcommon-x11-dev libxcb-cursor0 opencv-python-headless"
-QTMISC=" ^libxcb.*-dev libx11-xcb-dev libglu1-mesa-dev libxrender-dev libxi-dev libxkbcommon-dev libxkbcommon-x11-dev libxcb-cursor0"
-
 Red='\033[0;31m'
 Green='\033[0;32m'
 Blue='\033[0;34m'
@@ -74,6 +51,30 @@ echo_ok ()
 {
     printf "${Green}$1${Normal}\n"
 }
+
+MOONRAKER_ASVC="${HOME}/printer_data/moonraker.asvc"
+MOONRAKER_CONFIG="${HOME}/printer_data/config/moonraker.conf"
+KLIPPER_PATH="${HOME}/klipper"
+KLIPPER_VENV_PATH="${HOME}/klippy-env"
+
+USER_CONFIG_PATH="${HOME}/printer_data/config"
+
+SCRIPT_PATH=$(dirname -- "$(readlink -f -- "$0")")
+echo_info "Script Path -> ${SCRIPT_PATH}"
+BS_PATH=$(dirname "$SCRIPT_PATH")
+echo_info "BlocksScreen path ->  ${BS_PATH}"
+BSENV="${BLOCKSSCREEN_VENV:-${HOME}/.BlocksScreen-env}"
+echo_info "BlocksScreen virtual environment path -> ${BSENV}"
+PYTHON_VERSION=3.11.2
+
+
+
+XSERVER="xinit xinput x11-xserver-utils xserver-xorg-input-evdev xserver-xorg-input-libinput xserver-xorg-legacy xserver-xorg-video-fbdev"
+CAGE="cage seatd xwayland"
+PYOBJECT="pkg-config python3-dev"
+MISC="autoconf python3-venv libdbus-glib-1-dev udiskie xdg-utils"
+QTMISC=" ^libxcb.*-dev libx11-xcb-dev libglu1-mesa-dev libxrender-dev libxi-dev libxkbcommon-dev libxkbcommon-x11-dev libxcb-cursor0"
+
 
 function install_graphical_backend(){
     while true; do 
@@ -337,35 +338,11 @@ polkit.addRule(function(action, subject) {
          action.id == "org.freedesktop.login1.halt-multiple-sessions" ||
          action.id == "org.freedesktop.NetworkManager.settings.modify.system" ||
          action.id == "org.freedesktop.NetworkManager.reload" ||
-         action.id.startsWith("org.freedesktop.NetworkManager")) && 
+         action.id.startsWith("org.freedesktop.NetworkManager")) ||
+         action.id.startsWith("org.freedesktop.udisks2.") && 
          (subject.user == "$USER" || subject.isInGroup("blocksscreen"))) {
                  return polkit.Result.YES;
          }
-});
-EOF
-}
-
-function create_udisks_policy(){
-    RULE_FILE=""
-    if [ -d $POLKIT_USR_DIR ]; then 
-        RULE_FILE="${POLKIT_USR_DIR}/50-udisks2.rules"
-    elif [ -d $POLKIT_DIR ]; then 
-        RULE_FILE="${POLKIT_DIR}/50-udisks2.rules"
-    else 
-        echo_error "PolicyKit rules folder not detected"
-        exit 1
-    fi 
-    echo_text "Installing PolicyKit Rules to ${RULE_FILE}..."
-    sudo rm -r ${RULE_FILE}
-    
-    BS_GID=$( getent group blocksscreen | awk -F: '{printf "%d", $3}' )
-
-    sudo tee ${RULE_FILE} > /dev/null << EOF 
-polkit.addRule(function(action, subject) {
-    if (action.id.startsWith("org.freedesktop.udisks2.") && 
-    subject.isInGroup("blocksscreen") && subject.user == "$USER") {
-        return polkit.Result.YES;
-    }
 });
 EOF
 }
@@ -402,15 +379,17 @@ path: "$BS_PATH"
 origin: https://github.com/BlocksTechnology/BlocksScreen.git
 is_system_service: True
 managed_services: klipper moonraker
-virtualenv: "BSENV"
-requirements: "$BS_PATH"/requirements.txt
-
+virtualenv: "$BSENV"
+requirements: scripts/requirements.txt
+system_dependencies: scripts/system-dependencies.json
 EOF
-
-
-let moonraker manager thiss 
 }
 
+function add_asvc(){
+    sudo tee ${MOONRAKER_ASVC} > /dev/null << EOF
+BlocksScreen
+EOF
+}
 # fix fbturbo
 function add_desktop_file(){
     echo_info "Adding desktop file"
@@ -486,6 +465,7 @@ add_desktop_file
 
 # Add update_manager entry to moonraker conf
 add_moonraker_update
+add_asvc
 
 restart_klipper
 restart_moonraker
