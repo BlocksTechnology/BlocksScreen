@@ -108,7 +108,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         self.current_object: typing.Optional[str] = None
         self.current_process: typing.Optional[Process] = None
         self.axis_in: str = "x"
-        self.ammount: int = 1
+        self.amount: int = 1
         self.tb: bool = False
         self.cg = None
 
@@ -569,7 +569,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         QtCore.QTimer.singleShot(time_ms, lambda: self.change_page(page_to_go_to))
 
     def _connect_page_change(self, button: QtWidgets.QWidget, page: QtWidgets.QWidget):
-        if isinstance(button, QtWidgets.QPushButton):
+        if isinstance(button, QtWidgets.QAbstractButton):
             button.clicked.connect(lambda: self.change_page(self.indexOf(page)))
 
     def change_page(self, index: int):

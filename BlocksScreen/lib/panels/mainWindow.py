@@ -270,7 +270,7 @@ class MainWindow(QtWidgets.QMainWindow):
             case 3:
                 self.utilitiesPanel.setCurrentIndex(panel_index)
 
-    @QtCore.pyqtSlot(int, int, name="request_change_page")
+    @QtCore.pyqtSlot(int, int, name="request-change-page")
     def global_change_page(self, tab_index: int, panel_index: int) -> None:
         """Changes panels pages globally
 
@@ -284,6 +284,7 @@ class MainWindow(QtWidgets.QMainWindow):
             )
         if not isinstance(panel_index, int):
             _logger.debug(f"Panel page index expected type int, {type(panel_index)}")
+        
         self.printPanel.loadscreen.hide()
         current_page = [
             self.ui.main_content_widget.currentIndex(),
