@@ -88,10 +88,9 @@ class BlocksCustomButton(QtWidgets.QAbstractButton):
 
         if _style is None or _rect is None:
             return
-        margin = _style.pixelMetric(_style.PixelMetric.PM_ButtonMargin, opt, self)
+
 
         margin = _style.pixelMetric(_style.PixelMetric.PM_ButtonMargin, opt, self)
-
         # Determine background and text colors based on state
         if not self.isEnabled():
             bg_color_tuple = ButtonColors.DISABLED_BG.value
@@ -191,10 +190,12 @@ class BlocksCustomButton(QtWidgets.QAbstractButton):
             destination_point = adjusted_icon_rect.toRect().topLeft()
             painter.drawPixmap(destination_point, final_pixmap)
 
+
         if self.text():
             font_metrics = self.fontMetrics()
             self.text_width = font_metrics.horizontalAdvance(self._text)
             self.label_width = self.contentsRect().width()
+
 
             margin = _style.pixelMetric(_style.PixelMetric.PM_ButtonMargin, opt, self)
 
@@ -214,10 +215,13 @@ class BlocksCustomButton(QtWidgets.QAbstractButton):
             _pen.setColor(current_text_color)
             painter.setPen(_pen)
 
-            if self.text_width < _text_rect2.width():
-                _text_rect.setWidth(self.width() - int(self.button_ellipse.width() * 2))
-                _text_rect.setLeft(int(self.button_ellipse.width()))
 
+            if self.text_width < _text_rect2.width():
+                _text_rect.setWidth(
+                    self.width() - int(self.button_ellipse.width()*2)
+                )
+                _text_rect.setLeft(int(self.button_ellipse.width()))
+                
                 painter.drawText(
                     _text_rect,
                     QtCore.Qt.TextFlag.TextShowMnemonic
@@ -226,6 +230,7 @@ class BlocksCustomButton(QtWidgets.QAbstractButton):
                 )
             else:
                 _text_rect.setLeft(_start_text_position + margin)
+
                 _text_rect.setWidth(self.width() - int(self.button_ellipse.width()))
 
                 painter.drawText(
@@ -235,7 +240,6 @@ class BlocksCustomButton(QtWidgets.QAbstractButton):
                     | QtCore.Qt.AlignmentFlag.AlignVCenter,
                     str(self.text()),
                 )
-
             painter.setPen(QtCore.Qt.PenStyle.NoPen)
 
         if self._show_notification:
