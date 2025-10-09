@@ -86,6 +86,7 @@ class UpdatePage(QtWidgets.QWidget):
             self.load_popup.close()
         self.repeated_request_status.stop()
         self.request_refresh_update.emit()
+        self.build_model_list()
 
     def handle_ongoing_update(self) -> None:
         """Handled ongoing update signal, calls loading page (blocks user interaction)"""
@@ -106,6 +107,11 @@ class UpdatePage(QtWidgets.QWidget):
 
     def showEvent(self, event: QtGui.QShowEvent | None) -> None:
         """Re-add clients to update list"""
+        self.build_model_list()
+        return super().showEvent(event)
+
+    def build_model_list(self) -> None:
+        """Builds the model list containing updatable cli"""
         self.update_buttons_list_widget.blockSignals(True)
         for cli_name, _cli_info in self.cli_tracking.items():
             if not _cli_info:
@@ -122,7 +128,6 @@ class UpdatePage(QtWidgets.QWidget):
             self.model.data(self.model.index(0), QtCore.Qt.ItemDataRole.UserRole)  # type: ignore
         )  # Bandage solution: simulate click for setting information on infobox
         self.update_buttons_list_widget.blockSignals(False)
-        return super().showEvent(event)
 
     @QtCore.pyqtSlot(name="on-update-clicked")
     def on_update_clicked(self) -> None:
@@ -148,7 +153,11 @@ class UpdatePage(QtWidgets.QWidget):
 
     @QtCore.pyqtSlot(ListItem, name="on-item-clicked")
     def on_item_clicked(self, item: ListItem) -> None:
-        """Setup information for the currently clicked list item on the info box. Keeps track of the list item"""
+        """Setup information for the currently clicked list item on the info box.
+        Keeps track of the list item
+        """
+        if not item:
+            return
         cli_data = self.cli_tracking.get(item.text, {})
         if not cli_data:
             self.version_tracking_info.setText("Missing, Cannot Update")
@@ -183,22 +192,23 @@ class UpdatePage(QtWidgets.QWidget):
         self.version_title.show()
         self.version_tracking_info.show()
         self.version_tracking_info.setText(_curr_version)
-        is_valid = cli_data.get(
-            "is_valid", None
-        )  # True if git_repo is valid and can be updated
-        is_dirty = cli_data.get(
-            "is_dirty", None
-        )  # true if git_repo has modified files. A dirty repo cannot be updated
-        detached = cli_data.get(
-            "detached", None
-        )  # True if git_repo is currently in detached state
-        corrupt = cli_data.get("corrupt", None)
-        commits_behind = cli_data.get("commits_behind", None)
-        if not (corrupt or is_dirty or detached) and is_valid and commits_behind:
+        _updatable = bool(
+            not (
+                cli_data.get("corrupt", False)
+                or cli_data.get("is_dirty", False)
+                or cli_data.get("detached", False)
+            )
+            and (cli_data.get("is_valid", False) and cli_data.get("commits_behind", []))
+        )
+        _recover = bool(
+            cli_data.get("corrupt", False)
+            or cli_data.get("is_dirty", False)
+            or cli_data.get("detached", False)
+        )
+        if _updatable and not _recover:
             self.no_update_placeholder.hide()
             self.action_btn.setText("Update")
-            # Add text saying no updates
-        elif corrupt or is_dirty:
+        elif _recover:
             self.action_btn.setText("Recover")
         else:
             self.no_update_placeholder.show()
@@ -217,6 +227,7 @@ class UpdatePage(QtWidgets.QWidget):
         busy = message.get("busy", False)
         if busy:
             self.update_in_progress.emit()
+            return
         else:  # todo: this will always fire, and it shouldn't so i need to only send this signal if we were updating before
             self.update_end.emit()
         cli_version_info = message.get("version_info", None)

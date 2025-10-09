@@ -10,18 +10,15 @@ class ListItem:
 
     text: str
     right_text: str = ""
-    right_icon: QtGui.QPixmap | None = None
-    left_icon: QtGui.QPixmap | None = None
-    callback: callable = None
+    right_icon: typing.Optional[QtGui.QPixmap] = None
+    left_icon: typing.Optional[QtGui.QPixmap] = None
+    callback: typing.Optional[typing.Callable] = None
     selected: bool = False
     allow_check: bool = True
     _lfontsize: int = 0
     _rfontsize: int = 0
     height: int = 60  # Change has needed
     notificate: bool = False  # render red dot
-
-
-T = typing.TypeVar("T", bound=ListItem)
 
 
 class EntryListModel(QtCore.QAbstractListModel):
@@ -322,9 +319,7 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
             painter.setBrush(notification_color)
             painter.setPen(QtCore.Qt.PenStyle.NoPen)
 
-            dot_rect = QtCore.QRectF(
-                dot_x, rect.top(), dot_diameter, dot_diameter
-            )
+            dot_rect = QtCore.QRectF(dot_x, rect.top(), dot_diameter, dot_diameter)
             painter.drawEllipse(dot_rect)
         painter.restore()
 

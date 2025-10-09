@@ -153,10 +153,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self.reset_tab_indexes()
 
     @QtCore.pyqtSlot(bool, name="update-available")
-    def on_update_available(self, state=bool):
+    def on_update_available(self, state: bool = False):
         """Signal render for red dot on utilities tab icon"""
-        if state:
-            self.ui.main_content_widget.setNotification(3, True)
+        self.ui.main_content_widget.setNotification(3, state)
+        self.repaint()
 
     def enable_tab_bar(self) -> bool:
         """Enables the tab bar
