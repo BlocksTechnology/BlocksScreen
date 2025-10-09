@@ -161,7 +161,6 @@ class UpdatePage(QtWidgets.QWidget):
         """Setup information for the currently clicked list item on the info box.
         Keeps track of the list item
         """
-        print(item)
         if not item:
             return
         cli_data = self.cli_tracking.get(item.text, {})
@@ -229,7 +228,6 @@ class UpdatePage(QtWidgets.QWidget):
 
         Receives updates from moonraker `machine.update.status` request.
         """
-        print(message)
         busy = message.get("busy", False)
         if busy:
             self.update_in_progress.emit()
