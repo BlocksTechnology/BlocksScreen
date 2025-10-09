@@ -231,8 +231,10 @@ class UpdatePage(QtWidgets.QWidget):
         busy = message.get("busy", False)
         if busy:
             self.update_in_progress.emit()
+            self.ongoing_update = True
             return
-        else:  # todo: this will always fire, and it shouldn't so i need to only send this signal if we were updating before
+        elif self.ongoing_update:
+            self.ongoing_update = False
             self.update_end.emit()
         cli_version_info = message.get("version_info", None)
         if not cli_version_info:
