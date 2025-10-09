@@ -18,7 +18,7 @@ class BlocksLabel(QtWidgets.QLabel):
         self.delay_timer = QtCore.QTimer()
         self.delay_timer.setSingleShot(True)
         self.delay_timer.timeout.connect(self._start_marquee)
-        
+
         self.scroll_pos = 0.0
         self.marquee_spacing = 20
         self.paused = False
@@ -34,11 +34,9 @@ class BlocksLabel(QtWidgets.QLabel):
         self._glow_color: QtGui.QColor = QtGui.QColor("#E95757")
         self._animation_speed: int = 300
         self.glow_animation = QtCore.QPropertyAnimation(self, b"glow_color")
-        self.glow_animation.setEasingCurve(
-            QtCore.QEasingCurve().Type.InOutQuart
-        )
+        self.glow_animation.setEasingCurve(QtCore.QEasingCurve().Type.InOutQuart)
         self.glow_animation.setDuration(self.animation_speed)
-        
+
         self.glow_animation.finished.connect(self.change_glow_direction)
         self.glow_animation.finished.connect(self.repaint)
 
@@ -52,7 +50,11 @@ class BlocksLabel(QtWidgets.QLabel):
         return super().resizeEvent(a0)
 
     def mousePressEvent(self, ev: QtGui.QMouseEvent) -> None:
-        if ev.button() == QtCore.Qt.MouseButton.LeftButton and not self.timer.isActive() and self._marquee:
+        if (
+            ev.button() == QtCore.Qt.MouseButton.LeftButton
+            and not self.timer.isActive()
+            and self._marquee
+        ):
             self.start_scroll()
 
     def setPixmap(self, a0: QtGui.QPixmap) -> None:
@@ -121,9 +123,7 @@ class BlocksLabel(QtWidgets.QLabel):
         base_end_color = QtGui.QColor("#E95757")
         self.glow_animation.setEndValue(base_end_color)
 
-        self.glow_animation.setDirection(
-            QtCore.QPropertyAnimation.Direction.Forward
-        )
+        self.glow_animation.setDirection(QtCore.QPropertyAnimation.Direction.Forward)
         self.glow_animation.setLoopCount(-1)
         self.glow_animation.start()
 
@@ -140,7 +140,7 @@ class BlocksLabel(QtWidgets.QLabel):
         self.text_width = font_metrics.horizontalAdvance(self._text)
         self.label_width = self.contentsRect().width()
         self.total_scroll_width = float(self.text_width + self.marquee_spacing)
-        
+
         if self._marquee and self.text_width > self.label_width:
             self.start_scroll()
         else:
@@ -194,16 +194,12 @@ class BlocksLabel(QtWidgets.QLabel):
         _rect = self.rect()
         _style = self.style()
 
-        icon_margin = _style.pixelMetric(
-            _style.PixelMetric.PM_HeaderMargin, opt, self
-        )
+        icon_margin = _style.pixelMetric(_style.PixelMetric.PM_HeaderMargin, opt, self)
         if not _style or _rect.isNull():
             return
 
         if self.icon_pixmap:
-            qp.setCompositionMode(
-                qp.CompositionMode.CompositionMode_SourceOver
-            )
+            qp.setCompositionMode(qp.CompositionMode.CompositionMode_SourceOver)
             _icon_rect = QtCore.QRectF(
                 0.0 + icon_margin,
                 0.0 + icon_margin,
@@ -231,9 +227,7 @@ class BlocksLabel(QtWidgets.QLabel):
 
         big_rect = QtGui.QPainterPath()
         rect = self.contentsRect().toRectF()
-        big_rect.addRoundedRect(
-            rect, 10.0, 10.0, QtCore.Qt.SizeMode.AbsoluteSize
-        )
+        big_rect.addRoundedRect(rect, 10.0, 10.0, QtCore.Qt.SizeMode.AbsoluteSize)
         mini_rect = QtCore.QRectF(
             (rect.width() - rect.width() * 0.99) / 2,
             (rect.height() - rect.height() * 0.85) / 2,
@@ -241,22 +235,16 @@ class BlocksLabel(QtWidgets.QLabel):
             rect.height() * 0.85,
         )
         mini_path = QtGui.QPainterPath()
-        mini_path.addRoundedRect(
-            mini_rect, 10.0, 10.0, QtCore.Qt.SizeMode.AbsoluteSize
-        )
+        mini_path.addRoundedRect(mini_rect, 10.0, 10.0, QtCore.Qt.SizeMode.AbsoluteSize)
         subtracted = big_rect.subtracted(mini_path)
 
         if self.glow_animation.state() == self.glow_animation.State.Running:
-            qp.setCompositionMode(
-                qp.CompositionMode.CompositionMode_SourceAtop
-            )
+            qp.setCompositionMode(qp.CompositionMode.CompositionMode_SourceAtop)
             subtracted.setFillRule(QtCore.Qt.FillRule.OddEvenFill)
             qp.fillPath(subtracted, self.glow_color)
         if self._text:
-            qp.setCompositionMode(
-                qp.CompositionMode.CompositionMode_SourceOver
-            )
-            
+            qp.setCompositionMode(qp.CompositionMode.CompositionMode_SourceOver)
+
             text_rect = self.contentsRect()
             text_rect.translate(int(self.scroll_pos), 0)
             text_path = QtGui.QPainterPath()
@@ -271,34 +259,28 @@ class BlocksLabel(QtWidgets.QLabel):
                 text_option,
             )
             if self._marquee and self.text_width > self.label_width:
-                
                 second_text_rect = self.rect()
                 second_text_rect.translate(
-                    int(
-                        self.scroll_pos
-                        + self.text_width
-                        + self.label_width / 2
-                    ),
+                    int(self.scroll_pos + self.text_width + self.label_width / 2),
                     0,
                 )
-
-                
                 # Draw the main text instance
                 draw_rect = QtCore.QRectF(
                     self.contentsRect().x() + self.scroll_pos,
                     self.contentsRect().y(),
                     self.text_width,
-                    self.contentsRect().height()
+                    self.contentsRect().height(),
                 )
-                qp.drawText(
-                    QtCore.QRectF(second_text_rect), self._text, text_option
-                )
+                qp.drawText(QtCore.QRectF(second_text_rect), self._text, text_option)
 
                 draw_rect2 = QtCore.QRectF(
-                    self.contentsRect().x() + self.scroll_pos + self.text_width + self.marquee_spacing,
+                    self.contentsRect().x()
+                    + self.scroll_pos
+                    + self.text_width
+                    + self.marquee_spacing,
                     self.contentsRect().y(),
                     self.text_width,
-                    self.contentsRect().height()
+                    self.contentsRect().height(),
                 )
                 qp.drawText(draw_rect2, self._text, text_option)
             else:

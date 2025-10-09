@@ -37,7 +37,7 @@ def setup_app_loggers():
 
 def show_splash(window: typing.Optional[QtWidgets.QWidget] = None):
     logo = QtGui.QPixmap(
-        "Blocks_Screen/BlocksScreen/lib/ui/resources/logoblocks.png"
+        "BlocksScreen/BlocksScreen/lib/ui/resources/logoblocks.png"
     )
     splash = QtWidgets.QSplashScreen(pixmap=logo)
     splash.setGeometry(QtCore.QRect(0, 0, 400, 200))

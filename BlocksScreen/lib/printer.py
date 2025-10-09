@@ -11,22 +11,14 @@ _logger = logging.getLogger(name="logs/BlocksScreen.logs")
 
 
 class Printer(QtCore.QObject):
-    request_available_objects_signal = QtCore.pyqtSignal(
-        name="get_available_objects"
-    )
+    request_available_objects_signal = QtCore.pyqtSignal(name="get_available_objects")
     request_object_subscription_signal = QtCore.pyqtSignal(
         dict, name="object_subscription"
     )
-    toolhead_number_signal = QtCore.pyqtSignal(
-        int, name="toolhead_number_received"
-    )
+    toolhead_number_signal = QtCore.pyqtSignal(int, name="toolhead_number_received")
 
-    extruder_update = QtCore.pyqtSignal(
-        str, str, float, name="extruder_update"
-    )
-    heater_bed_update = QtCore.pyqtSignal(
-        str, str, float, name="heater_bed_update"
-    )
+    extruder_update = QtCore.pyqtSignal(str, str, float, name="extruder_update")
+    heater_bed_update = QtCore.pyqtSignal(str, str, float, name="heater_bed_update")
     fan_update = QtCore.pyqtSignal(
         [str, str, float], [str, str, int], name="fan_update"
     )
@@ -48,9 +40,7 @@ class Printer(QtCore.QObject):
     print_stats_update = QtCore.pyqtSignal(
         [str, dict], [str, float], [str, str], name="print_stats_update"
     )
-    display_update = QtCore.pyqtSignal(
-        [str, str], [str, float], name="display_update"
-    )
+    display_update = QtCore.pyqtSignal([str, str], [str, float], name="display_update")
     temperature_sensor_update = QtCore.pyqtSignal(
         str, str, float, name="temperature_sensor_update"
     )
@@ -63,23 +53,19 @@ class Printer(QtCore.QObject):
     filament_motion_sensor_update = QtCore.pyqtSignal(
         str, str, bool, name="filament_motion_sensor_update"
     )
-    output_pin_update = QtCore.pyqtSignal(
-        str, str, float, name="output_pin_update"
-    )
+    output_pin_update = QtCore.pyqtSignal(str, str, float, name="output_pin_update")
     bed_mesh_update = QtCore.pyqtSignal(
         str, list, list, list, list, name="bed_mesh_update"
     )
-    gcode_macro_update = QtCore.pyqtSignal(
-        str, dict, name="gcode_macro_update"
-    )
+    gcode_macro_update = QtCore.pyqtSignal(str, dict, name="gcode_macro_update")
     webhooks_update = QtCore.pyqtSignal(str, str, name="webhooks_update")
 
     load_filament_update = QtCore.pyqtSignal(bool, name="load_filament_update")
     unload_filament_update = QtCore.pyqtSignal(bool, name="unload_filament_update")
 
     query_printer_object = QtCore.pyqtSignal(dict, name="query_printer_object")
-    save_config_pending: typing.ClassVar[QtCore.pyqtSignal] = (
-        QtCore.pyqtSignal(name="save_config_pending")
+    save_config_pending: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        name="save_config_pending"
     )
     printer_config: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         dict, name="printer_config"
@@ -89,18 +75,16 @@ class Printer(QtCore.QObject):
         dict, name="configfile_update"
     )
 
-    config_subscription: typing.ClassVar[QtCore.pyqtSignal] = (
-        QtCore.pyqtSignal(
-            [dict],
-            [list],
-            name="config_subscription",
-        )
+    config_subscription: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        [dict],
+        [list],
+        name="config_subscription",
     )
-    manual_probe_update: typing.ClassVar[QtCore.pyqtSignal] = (
-        QtCore.pyqtSignal(dict, name="manual_probe_update")
+    manual_probe_update: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        dict, name="manual_probe_update"
     )
-    available_gcode_cmds: typing.ClassVar[QtCore.pyqtSignal] = (
-        QtCore.pyqtSignal(dict, name="available_gcode_cmds")
+    available_gcode_cmds: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        dict, name="available_gcode_cmds"
     )
     gcode_response: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         list, name="gcode_response"
@@ -136,12 +120,8 @@ class Printer(QtCore.QObject):
         }
 
         self.ws.klippy_state_signal.connect(self.on_klippy_status)
-        self.request_available_objects_signal.connect(
-            self.ws.api.get_available_objects
-        )
-        self.request_object_subscription_signal.connect(
-            self.ws.api.object_subscription
-        )
+        self.request_available_objects_signal.connect(self.ws.api.get_available_objects)
+        self.request_object_subscription_signal.connect(self.ws.api.object_subscription)
         self.query_printer_object.connect(self.ws.api.object_query)
 
     def clear_printer_objs(self) -> None:
@@ -242,9 +222,7 @@ class Printer(QtCore.QObject):
         _config = self.fetch_config_by_keyword(section_name)
         return _config[0].get(section_name)
 
-    def search_config_list(
-        self, search_list: list[str], _objects: list = []
-    ) -> list:
+    def search_config_list(self, search_list: list[str], _objects: list = []) -> list:
         """
         Search a list of printer objects recursively
 
@@ -283,21 +261,15 @@ class Printer(QtCore.QObject):
 
         if isinstance(section, str):
             self.config_subscription[dict].connect(callback)  # type:ignore
-            self.config_subscription[dict].emit(
-                {section: self.get_config(section)}
-            )
+            self.config_subscription[dict].emit({section: self.get_config(section)})
         elif isinstance(section, list):
             self.config_subscription[list].connect(callback)  # type:ignore
-            self.config_subscription[list].emit(
-                self.search_config_list(section)
-            )
+            self.config_subscription[list].emit(self.search_config_list(section))
         return
 
     def _check_callback(self, name: str, values: dict) -> bool:
         _split: list = name.split(" ", 1)  # Only need the first " " separation
-        _object_type, _object_name = tuple(
-            _split + [""] * max(0, 2 - len(_split))
-        )
+        _object_type, _object_name = tuple(_split + [""] * max(0, 2 - len(_split)))
 
         if name.startswith(
             "extruder"
@@ -334,9 +306,7 @@ class Printer(QtCore.QObject):
     def _gcode_response(self, report: list) -> None:
         self.gcode_response.emit(report)
 
-    def _webhooks_object_updated(
-        self, value: dict, name: str = "webhooks"
-    ) -> None:
+    def _webhooks_object_updated(self, value: dict, name: str = "webhooks") -> None:
         """Sends an event type according to the received state
             from webhooks object
 
@@ -345,9 +315,7 @@ class Printer(QtCore.QObject):
             name (str, optional): _description_. Defaults to "".
         """
         if "state" in value.keys() and "state_message" in value.keys():
-            self.webhooks_update.emit(
-                value["state"], value["state_message"]
-            )
+            self.webhooks_update.emit(value["state"], value["state_message"])
             _logger.debug("Webhooks message received")
             _state: str = value["state"]
             _state_upper = _state[0].upper()
@@ -357,26 +325,18 @@ class Printer(QtCore.QObject):
                 _event_callback = getattr(events, f"Klippy{_state_call}")
                 if callable(_event_callback):
                     try:
-                        event = _event_callback(
-                            value["state"], value["state_message"]
-                        )
+                        event = _event_callback(value["state"], value["state_message"])
                         instance = QtWidgets.QApplication.instance()
-                        if instance is not None and isinstance(
-                            event, QtCore.QEvent
-                        ):
+                        if instance is not None and isinstance(event, QtCore.QEvent):
                             instance.sendEvent(self.parent(), event)
                         else:
-                            raise Exception(
-                                "QApplication.instance is None type."
-                            )
+                            raise Exception("QApplication.instance is None type.")
                     except Exception as e:
                         _logger.debug(
                             f"Unable to send internal Klippy {_state_call} notification : {e}"
                         )
 
-    def _gcode_move_object_updated(
-        self, value: dict, name: str = "gcode_move"
-    ) -> None:
+    def _gcode_move_object_updated(self, value: dict, name: str = "gcode_move") -> None:
         if "speed_factor" in value.keys():
             self.gcode_move_update[str, float].emit(
                 "speed_factor", value["speed_factor"]
@@ -400,25 +360,17 @@ class Printer(QtCore.QObject):
                 "homing_origin", value["homing_origin"]
             )
         if "position" in value.keys():
-            self.gcode_move_update[str, list].emit(
-                "position", value["position"]
-            )
+            self.gcode_move_update[str, list].emit("position", value["position"])
         if "gcode_position" in value.keys():
             self.gcode_move_update[str, list].emit(
                 "gcode_position", value["gcode_position"]
             )
 
-    def _toolhead_object_updated(
-        self, values: dict, name: str = "toolhead"
-    ) -> None:
+    def _toolhead_object_updated(self, values: dict, name: str = "toolhead") -> None:
         if "homed_axes" in values.keys():
-            self.toolhead_update[str, str].emit(
-                "homed_axes", values["homed_axes"]
-            )
+            self.toolhead_update[str, str].emit("homed_axes", values["homed_axes"])
         if "print_time" in values.keys():
-            self.toolhead_update[str, float].emit(
-                "print_time", values["print_time"]
-            )
+            self.toolhead_update[str, float].emit("print_time", values["print_time"])
         if "estimated_print_time" in values.keys():
             self.toolhead_update[str, float].emit(
                 "estimated_print_time", values["estimated_print_time"]
@@ -427,17 +379,13 @@ class Printer(QtCore.QObject):
             self.toolhead_update[str, str].emit("extruder", values["extruder"])
             self.active_extruder_name = values["extruder"]
         if "position" in values.keys():
-            self.toolhead_update[str, list].emit(
-                "position", values["position"]
-            )
+            self.toolhead_update[str, list].emit("position", values["position"])
         if "max_velocity" in values.keys():
             self.toolhead_update[str, float].emit(
                 "max_velocity", values["max_velocity"]
             )
         if "max_accel" in values.keys():
-            self.toolhead_update[str, float].emit(
-                "max_accel", values["max_accel"]
-            )
+            self.toolhead_update[str, float].emit("max_accel", values["max_accel"])
         if "max_accel_to_decel" in values.keys():
             self.toolhead_update[str, float].emit(
                 "max_accel_to_decel", values["max_accel_to_decel"]
@@ -454,14 +402,14 @@ class Printer(QtCore.QObject):
             self.extruder_update.emit(
                 extruder_name, "temperature", value["temperature"]
             )
-            self.heaters_object[f"{extruder_name}"]["actual_temperature"] = (
-                value["temperature"]
-            )
+            self.heaters_object[f"{extruder_name}"]["actual_temperature"] = value[
+                "temperature"
+            ]
         if "target" in value.keys():
             self.extruder_update.emit(extruder_name, "target", value["target"])
-            self.heaters_object[f"{extruder_name}"]["target_temperature"] = (
-                value["target"]
-            )
+            self.heaters_object[f"{extruder_name}"]["target_temperature"] = value[
+                "target"
+            ]
         if "can_extrude" in value.keys():
             self.heaters_object[f"{extruder_name}"]["can_extrude"] = value[
                 "can_extrude"
@@ -487,32 +435,24 @@ class Printer(QtCore.QObject):
             self.heater_bed_update.emit(
                 heater_name, "temperature", value["temperature"]
             )
-            self.heaters_object["bed"]["actual_temperature"] = value[
-                "temperature"
-            ]
+            self.heaters_object["bed"]["actual_temperature"] = value["temperature"]
         if "target" in value.keys():
             self.heater_bed_update.emit(heater_name, "target", value["target"])
             self.heaters_object["bed"]["target_temperature"] = value["target"]
         if "power" in value.keys():
             self.heater_bed_update.emit(heater_name, "power", value["power"])
 
-    def _chamber_object_updated(
-        self, value: dict, heater_name: str = "chamber"
-    ):
+    def _chamber_object_updated(self, value: dict, heater_name: str = "chamber"):
         # TODO: Complete Chamber object, this object does not actually exist on klippy, i would need to create it
         self.has_chamber = True
 
     def _fan_object_updated(self, value: dict, fan_name: str = "fan") -> None:
         if "speed" in value.keys():
-            self.fan_update[str, str, float].emit(
-                "fan", "speed", value["speed"]
-            )
+            self.fan_update[str, str, float].emit("fan", "speed", value["speed"])
         if "rpm" in value.keys():
             self.fan_update[str, str, int].emit("fan", "rpm", value["rpm"])
 
-    def _fan_generic_object_updated(
-        self, value: dict, fan_name: str = ""
-    ) -> None:
+    def _fan_generic_object_updated(self, value: dict, fan_name: str = "") -> None:
         _names = ["fan_generic", fan_name]
         object_name = " ".join(_names)
         if "speed" in value.keys():
@@ -520,13 +460,9 @@ class Printer(QtCore.QObject):
                 object_name, "speed", value.get("speed")
             )
         if "rpm" in value.keys():
-            self.fan_update[str, str, int].emit(
-                object_name, "rpm", value.get("rpm")
-            )
+            self.fan_update[str, str, int].emit(object_name, "rpm", value.get("rpm"))
 
-    def _controller_fan_object_updated(
-        self, value: dict, fan_name: str = ""
-    ) -> None:
+    def _controller_fan_object_updated(self, value: dict, fan_name: str = "") -> None:
         _names = ["controller_fan", fan_name]
         object_name = " ".join(_names)
         if "speed" in value.keys():
@@ -534,13 +470,9 @@ class Printer(QtCore.QObject):
                 object_name, "speed", value.get("speed")
             )
         elif "rpm" in value.keys():
-            self.fan_update[str, str, int].emit(
-                object_name, "rpm", value.get("rpm")
-            )
+            self.fan_update[str, str, int].emit(object_name, "rpm", value.get("rpm"))
 
-    def _heater_fan_object_updated(
-        self, value: dict, fan_name: str = ""
-    ) -> None:
+    def _heater_fan_object_updated(self, value: dict, fan_name: str = "") -> None:
         # Associated with a heater, on when heater is active
         _names = ["heater_fan", fan_name]
         object_name = " ".join(_names)
@@ -563,10 +495,7 @@ class Printer(QtCore.QObject):
             self.idle_timeout_update[str, str].emit("state", value["state"])
             if "printing" in value["state"]:
                 self.printer_busy = True
-            elif (
-                self.printing_state != "printing"
-                and value["state"] != "printing"
-            ):
+            elif self.printing_state != "printing" and value["state"] != "printing":
                 # It's also busy if the printer is printing or paused
                 self.printer_busy = False
         if "printing_time" in value.keys():
@@ -578,13 +507,9 @@ class Printer(QtCore.QObject):
         self, values: dict, name: str = "virtual_sdcard"
     ) -> None:
         if "progress" in values.keys():
-            self.virtual_sdcard_update[str, float].emit(
-                "progress", values["progress"]
-            )
+            self.virtual_sdcard_update[str, float].emit("progress", values["progress"])
         if "is_active" in values.keys():
-            self.virtual_sdcard_update[str, bool].emit(
-                "is_active", values["is_active"]
-            )
+            self.virtual_sdcard_update[str, bool].emit("is_active", values["is_active"])
         if "file_position" in values.keys():
             self.virtual_sdcard_update[str, float].emit(
                 "file_position", float(values["file_position"])
@@ -595,9 +520,7 @@ class Printer(QtCore.QObject):
     ) -> None:
         try:
             if "filename" in values.keys():
-                self.print_stats_update[str, str].emit(
-                    "filename", values["filename"]
-                )
+                self.print_stats_update[str, str].emit("filename", values["filename"])
                 self.print_file_loaded = True
             if "total_duration" in values.keys():
                 self.print_stats_update[str, float].emit(
@@ -612,25 +535,18 @@ class Printer(QtCore.QObject):
                     "filament_used", values["filament_used"]
                 )
             if "state" in values.keys():
-                self.print_stats_update[str, str].emit(
-                    "state", values["state"]
-                )
+                self.print_stats_update[str, str].emit("state", values["state"])
                 self.printing_state = values["state"]
                 if values["state"] == "standby" or values["state"] == "error":
                     self.print_file_loaded = False
                     self.printing = False
                 else:
                     self.print_file_loaded = True
-                    if (
-                        values["state"] == "printing"
-                        or values["state"] == "pause"
-                    ):
+                    if values["state"] == "printing" or values["state"] == "pause":
                         self.printing = True
 
             if "message" in values.keys():
-                self.print_stats_update[str, str].emit(
-                    "message", values["message"]
-                )
+                self.print_stats_update[str, str].emit("message", values["message"])
                 # self.printing_error_message = values["message"]
             if "info" in values.keys():
                 self.print_stats_update[str, dict].emit("info", values["info"])
@@ -644,9 +560,7 @@ class Printer(QtCore.QObject):
         if "message" in values.keys():
             self.display_update[str, str].emit("message", values["message"])
         if "progress" in values.keys():
-            self.display_update[str, float].emit(
-                "progress", values["progress"]
-            )
+            self.display_update[str, float].emit("progress", values["progress"])
 
     def _temperature_sensor_object_updated(
         self, values: dict, temperature_sensor_name: str
@@ -701,16 +615,12 @@ class Printer(QtCore.QObject):
                 "filament_detected",
                 values["filament_detected"],
             )
-            self.available_filament_sensors.update(
-                {f"{filament_switch_name}": values}
-            )
+            self.available_filament_sensors.update({f"{filament_switch_name}": values})
         if "enabled" in values.keys():
             self.filament_switch_sensor_update.emit(
                 filament_switch_name, "enabled", values["enabled"]
             )
-            self.available_filament_sensors.update(
-                {f"{filament_switch_name}": values}
-            )
+            self.available_filament_sensors.update({f"{filament_switch_name}": values})
 
     def _filament_motion_sensor_object_updated(
         self, values: dict, filament_motion_name: str
@@ -721,35 +631,23 @@ class Printer(QtCore.QObject):
                 "filament_detected",
                 values["filament_detected"],
             )
-            self.available_filament_sensors.update(
-                {f"{filament_motion_name}": values}
-            )
+            self.available_filament_sensors.update({f"{filament_motion_name}": values})
 
         if "enabled" in values.keys():
             self.filament_motion_sensor_update.emit(
                 filament_motion_name, "enabled", values["enabled"]
             )
-            self.available_filament_sensors.update(
-                {f"{filament_motion_name}": values}
-            )
+            self.available_filament_sensors.update({f"{filament_motion_name}": values})
 
-    def _output_pin_object_updated(
-        self, values: dict, output_pin_name: str
-    ) -> None:
+    def _output_pin_object_updated(self, values: dict, output_pin_name: str) -> None:
         if "value" in values.keys():
-            self.output_pin_update.emit(
-                output_pin_name, "value", values["value"]
-            )
+            self.output_pin_update.emit(output_pin_name, "value", values["value"])
 
-    def _bed_mesh_object_updated(
-        self, values: dict, name: str = "bed_mesh"
-    ) -> None:
+    def _bed_mesh_object_updated(self, values: dict, name: str = "bed_mesh") -> None:
         # TODO
         pass
 
-    def _gcode_macro_object_updated(
-        self, values: dict, gcode_macro_name: str
-    ) -> None:
+    def _gcode_macro_object_updated(self, values: dict, gcode_macro_name: str) -> None:
         # * values argument can come with many different types for this macro so handle them in another place
 
         self.gcode_macro_update.emit(gcode_macro_name, values)
@@ -777,9 +675,7 @@ class Printer(QtCore.QObject):
 
         return
 
-    def _gcode_object_updated(
-        self, values: dict, name: str = "gcode_object"
-    ) -> None:
+    def _gcode_object_updated(self, values: dict, name: str = "gcode_object") -> None:
         if not values.get("commands"):
             return
         self.available_gcode_commands.update(values.get("commands"))  # type: ignore
@@ -798,21 +694,15 @@ class Printer(QtCore.QObject):
         # TODO:
         ...
 
-    def _probe_eddy_current_object_updated(
-        self, values: dict, name: str
-    ) -> None:
+    def _probe_eddy_current_object_updated(self, values: dict, name: str) -> None:
         # TODO
         pass
 
-    def _axis_twist_compensation_object_updated(
-        self, values: dict, name: str
-    ) -> None:
+    def _axis_twist_compensation_object_updated(self, values: dict, name: str) -> None:
         # TODO
         ...
 
-    def _temperature_probe_object_updated(
-        self, values: dict, name: str
-    ) -> None:
+    def _temperature_probe_object_updated(self, values: dict, name: str) -> None:
         pass
 
     

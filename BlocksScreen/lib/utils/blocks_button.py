@@ -35,6 +35,7 @@ class BlocksCustomButton(QtWidgets.QAbstractButton):
     def setShowNotification(self, show: bool) -> None:
         if self._show_notification != show:
             self._show_notification = show
+            self.repaint()
             self.update()
 
     @property
@@ -62,7 +63,7 @@ class BlocksCustomButton(QtWidgets.QAbstractButton):
         if not self.isEnabled():
             e.ignore()
             return
-            
+
         if self.button_background is not None:
             pos_f = QtCore.QPointF(e.pos())
             if self.button_background.contains(pos_f):
@@ -88,7 +89,8 @@ class BlocksCustomButton(QtWidgets.QAbstractButton):
         if _style is None or _rect is None:
             return
 
-       
+
+        margin = _style.pixelMetric(_style.PixelMetric.PM_ButtonMargin, opt, self)
         # Determine background and text colors based on state
         if not self.isEnabled():
             bg_color_tuple = ButtonColors.DISABLED_BG.value
@@ -99,9 +101,9 @@ class BlocksCustomButton(QtWidgets.QAbstractButton):
         else:
             bg_color_tuple = ButtonColors.NORMAL_BG.value
             current_text_color = self.text_color
-            
+
         bg_color = QtGui.QColor(*bg_color_tuple)
-        
+
         path = QtGui.QPainterPath()
         xRadius = self.rect().toRectF().normalized().height() / 2.0
         yRadius = self.rect().toRectF().normalized().height() / 2.0
@@ -154,35 +156,36 @@ class BlocksCustomButton(QtWidgets.QAbstractButton):
                 scaled_width,
                 scaled_height,
             )
-            
+
             tinted_icon_pixmap = QtGui.QPixmap(_icon_scaled.size())
             tinted_icon_pixmap.fill(QtCore.Qt.GlobalColor.transparent)
 
-            margin = _style.pixelMetric(
-            _style.PixelMetric.PM_ButtonMargin, opt, self
-            )
+            margin = _style.pixelMetric(_style.PixelMetric.PM_ButtonMargin, opt, self)
 
             if not self.isEnabled():
-
                 tinted_icon_pixmap = QtGui.QPixmap(_icon_scaled.size())
                 tinted_icon_pixmap.fill(QtCore.Qt.GlobalColor.transparent)
 
                 icon_painter = QtGui.QPainter(tinted_icon_pixmap)
                 icon_painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
-                icon_painter.setRenderHint(QtGui.QPainter.RenderHint.SmoothPixmapTransform)
-
+                icon_painter.setRenderHint(
+                    QtGui.QPainter.RenderHint.SmoothPixmapTransform
+                )
 
                 icon_painter.drawPixmap(0, 0, _icon_scaled)
 
-                icon_painter.setCompositionMode(QtGui.QPainter.CompositionMode.CompositionMode_SourceAtop)
-                tint = QtGui.QColor(bg_color.red(), bg_color.green(), bg_color.blue(), 120)
+                icon_painter.setCompositionMode(
+                    QtGui.QPainter.CompositionMode.CompositionMode_SourceAtop
+                )
+                tint = QtGui.QColor(
+                    bg_color.red(), bg_color.green(), bg_color.blue(), 120
+                )
                 icon_painter.fillRect(tinted_icon_pixmap.rect(), tint)
                 icon_painter.end()
 
                 final_pixmap = tinted_icon_pixmap
             else:
                 final_pixmap = _icon_scaled
-
 
             destination_point = adjusted_icon_rect.toRect().topLeft()
             painter.drawPixmap(destination_point, final_pixmap)
@@ -193,25 +196,25 @@ class BlocksCustomButton(QtWidgets.QAbstractButton):
             self.text_width = font_metrics.horizontalAdvance(self._text)
             self.label_width = self.contentsRect().width()
 
-            margin = _style.pixelMetric(
-            _style.PixelMetric.PM_ButtonMargin, opt, self
-            )
-            
+
+            margin = _style.pixelMetric(_style.PixelMetric.PM_ButtonMargin, opt, self)
+
             _start_text_position = int(self.button_ellipse.width())
             _text_rect = _rect
+            _text_rect.setWidth(self.width() - int(self.button_ellipse.width()))
+            _text_rect.setLeft(int(self.button_ellipse.width()))
             _text_rect2 = _rect
-            _text_rect2.setWidth(
-                    self.width() - int(self.button_ellipse.width())
-                )
+            _text_rect2.setWidth(self.width() - int(self.button_ellipse.width()))
             _text_rect2.setLeft(int(self.button_ellipse.width()))
 
+            _text_rect.setWidth(self.width() - int(self.button_ellipse.width()))
+            _text_rect.setLeft(int(self.button_ellipse.width()))
             _pen = painter.pen()
             _pen.setStyle(QtCore.Qt.PenStyle.SolidLine)
             _pen.setWidth(1)
             _pen.setColor(current_text_color)
             painter.setPen(_pen)
 
-            
 
             if self.text_width < _text_rect2.width():
                 _text_rect.setWidth(
@@ -227,9 +230,8 @@ class BlocksCustomButton(QtWidgets.QAbstractButton):
                 )
             else:
                 _text_rect.setLeft(_start_text_position + margin)
-                _text_rect.setWidth(
-                    self.width() - int(self.button_ellipse.width())
-                )
+
+                _text_rect.setWidth(self.width() - int(self.button_ellipse.width()))
 
                 painter.drawText(
                     _text_rect,
@@ -237,21 +239,19 @@ class BlocksCustomButton(QtWidgets.QAbstractButton):
                     | QtCore.Qt.AlignmentFlag.AlignLeft
                     | QtCore.Qt.AlignmentFlag.AlignVCenter,
                     str(self.text()),
-            )
-                
+                )
             painter.setPen(QtCore.Qt.PenStyle.NoPen)
 
         if self._show_notification:
-
             dot_diameter = self.height() * 0.4
             dot_x = self.width() - dot_diameter
-            
             notification_color = QtGui.QColor(*ButtonColors.NOTIFICATION_DOT.value)
             painter.setBrush(notification_color)
             painter.setPen(QtCore.Qt.PenStyle.NoPen)
-            
-            dot_rect = QtCore.QRectF(dot_x,0, dot_diameter, dot_diameter)
+            dot_rect = QtCore.QRectF(dot_x, 0, dot_diameter, dot_diameter)
             painter.drawEllipse(dot_rect)
+
+        painter.end()
 
     def setProperty(self, name: str, value: typing.Any):
         if name == "icon_pixmap":
@@ -262,12 +262,12 @@ class BlocksCustomButton(QtWidgets.QAbstractButton):
             self.text_color = QtGui.QColor(value)
             self.update()
 
-    def handleTouchBegin(self, e: QtCore.QEvent):...
+    def handleTouchBegin(self, e: QtCore.QEvent): ...
     def handleTouchUpdate(self, e: QtCore.QEvent): ...
     def handleTouchEnd(self, e: QtCore.QEvent): ...
     def handleTouchCancel(self, e: QtCore.QEvent): ...
-    def setAutoDefault(self,bool):...
-    def setFlat(self,bool):...
+    def setAutoDefault(self, bool): ...
+    def setFlat(self, bool): ...
 
     def event(self, e: QtCore.QEvent) -> bool:
         if e.type() == QtCore.QEvent.Type.TouchBegin:

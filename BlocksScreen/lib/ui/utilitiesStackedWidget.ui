@@ -26,7 +26,7 @@
    <string>StackedWidget</string>
   </property>
   <property name="currentIndex">
-   <number>9</number>
+   <number>0</number>
   </property>
   <widget class="QWidget" name="utilities_page">
    <widget class="QWidget" name="layoutWidget">
@@ -63,6 +63,8 @@
         <font>
          <family>Momcake</family>
          <pointsize>24</pointsize>
+         <weight>75</weight>
+         <bold>true</bold>
         </font>
        </property>
        <property name="styleSheet">
@@ -91,6 +93,103 @@
      </rect>
     </property>
     <layout class="QGridLayout" name="utilities_content_layout">
+     <item row="2" column="0">
+      <widget class="BlocksCustomButton" name="update_btn">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="minimumSize">
+        <size>
+         <width>250</width>
+         <height>80</height>
+        </size>
+       </property>
+       <property name="maximumSize">
+        <size>
+         <width>250</width>
+         <height>80</height>
+        </size>
+       </property>
+       <property name="font">
+        <font>
+         <family>Momcake</family>
+         <pointsize>20</pointsize>
+         <weight>50</weight>
+         <bold>false</bold>
+        </font>
+       </property>
+       <property name="text">
+        <string>Update</string>
+       </property>
+       <property name="flat">
+        <bool>true</bool>
+       </property>
+      </widget>
+     </item>
+     <item row="2" column="1">
+      <widget class="BlocksCustomButton" name="utilities_input_shaper_btn">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="minimumSize">
+        <size>
+         <width>250</width>
+         <height>80</height>
+        </size>
+       </property>
+       <property name="maximumSize">
+        <size>
+         <width>250</width>
+         <height>80</height>
+        </size>
+       </property>
+       <property name="font">
+        <font>
+         <family>Momcake</family>
+         <pointsize>20</pointsize>
+         <italic>false</italic>
+         <stylestrategy>PreferAntialias</stylestrategy>
+        </font>
+       </property>
+       <property name="mouseTracking">
+        <bool>false</bool>
+       </property>
+       <property name="tabletTracking">
+        <bool>true</bool>
+       </property>
+       <property name="contextMenuPolicy">
+        <enum>Qt::NoContextMenu</enum>
+       </property>
+       <property name="layoutDirection">
+        <enum>Qt::LeftToRight</enum>
+       </property>
+       <property name="styleSheet">
+        <string notr="true"/>
+       </property>
+       <property name="text">
+        <string>INPUT
+SHAPER</string>
+       </property>
+       <property name="autoDefault">
+        <bool>false</bool>
+       </property>
+       <property name="flat">
+        <bool>true</bool>
+       </property>
+       <property name="class" stdset="0">
+        <string>menu_btn</string>
+       </property>
+       <property name="icon_pixmap" stdset="0">
+        <pixmap resource="resources/icon_resources.qrc">:/input_shaper/media/btn_icons/input_shaper.svg</pixmap>
+       </property>
+      </widget>
+     </item>
      <item row="1" column="1">
       <widget class="BlocksCustomButton" name="utilities_axes_btn">
        <property name="sizePolicy">
@@ -102,7 +201,7 @@
        <property name="minimumSize">
         <size>
          <width>250</width>
-         <height>74</height>
+         <height>80</height>
         </size>
        </property>
        <property name="maximumSize">
@@ -152,66 +251,6 @@ MAINT.</string>
        </property>
       </widget>
      </item>
-     <item row="0" column="0">
-      <widget class="BlocksCustomButton" name="utilities_info_btn">
-       <property name="sizePolicy">
-        <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
-         <horstretch>0</horstretch>
-         <verstretch>0</verstretch>
-        </sizepolicy>
-       </property>
-       <property name="minimumSize">
-        <size>
-         <width>250</width>
-         <height>74</height>
-        </size>
-       </property>
-       <property name="maximumSize">
-        <size>
-         <width>250</width>
-         <height>80</height>
-        </size>
-       </property>
-       <property name="font">
-        <font>
-         <family>Momcake</family>
-         <pointsize>20</pointsize>
-         <italic>false</italic>
-         <stylestrategy>PreferAntialias</stylestrategy>
-        </font>
-       </property>
-       <property name="mouseTracking">
-        <bool>false</bool>
-       </property>
-       <property name="tabletTracking">
-        <bool>true</bool>
-       </property>
-       <property name="contextMenuPolicy">
-        <enum>Qt::NoContextMenu</enum>
-       </property>
-       <property name="layoutDirection">
-        <enum>Qt::LeftToRight</enum>
-       </property>
-       <property name="styleSheet">
-        <string notr="true"/>
-       </property>
-       <property name="text">
-        <string>INFO</string>
-       </property>
-       <property name="autoDefault">
-        <bool>false</bool>
-       </property>
-       <property name="flat">
-        <bool>true</bool>
-       </property>
-       <property name="class" stdset="0">
-        <string>menu_btn</string>
-       </property>
-       <property name="icon_pixmap" stdset="0">
-        <pixmap resource="resources/icon_resources.qrc">:/ui/media/btn_icons/info.svg</pixmap>
-       </property>
-      </widget>
-     </item>
      <item row="1" column="0">
       <widget class="BlocksCustomButton" name="utilities_routine_check_btn">
        <property name="sizePolicy">
@@ -223,7 +262,7 @@ MAINT.</string>
        <property name="minimumSize">
         <size>
          <width>250</width>
-         <height>74</height>
+         <height>80</height>
         </size>
        </property>
        <property name="maximumSize">
@@ -284,7 +323,7 @@ CHECK</string>
        <property name="minimumSize">
         <size>
          <width>250</width>
-         <height>74</height>
+         <height>80</height>
         </size>
        </property>
        <property name="maximumSize">
@@ -333,8 +372,8 @@ CHECK</string>
        </property>
       </widget>
      </item>
-     <item row="2" column="0" colspan="2" alignment="Qt::AlignHCenter">
-      <widget class="BlocksCustomButton" name="utilities_input_shaper_btn">
+     <item row="0" column="0">
+      <widget class="BlocksCustomButton" name="utilities_info_btn">
        <property name="sizePolicy">
         <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
          <horstretch>0</horstretch>
@@ -344,7 +383,7 @@ CHECK</string>
        <property name="minimumSize">
         <size>
          <width>250</width>
-         <height>10</height>
+         <height>80</height>
         </size>
        </property>
        <property name="maximumSize">
@@ -377,8 +416,7 @@ CHECK</string>
         <string notr="true"/>
        </property>
        <property name="text">
-        <string>INPUT
-SHAPER</string>
+        <string>INFO</string>
        </property>
        <property name="autoDefault">
         <bool>false</bool>
@@ -390,7 +428,7 @@ SHAPER</string>
         <string>menu_btn</string>
        </property>
        <property name="icon_pixmap" stdset="0">
-        <pixmap resource="resources/icon_resources.qrc">:/input_shaper/media/btn_icons/input_shaper.svg</pixmap>
+        <pixmap resource="resources/icon_resources.qrc">:/ui/media/btn_icons/info.svg</pixmap>
        </property>
       </widget>
      </item>
