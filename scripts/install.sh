@@ -104,7 +104,7 @@ function install_graphical_backend(){
                     BACKEND="X"
                     break
                 else 
-                    echo_erro "Installation of X-server dependencies failed ($XSERVER)"
+                    echo_error "Installation of X-server dependencies failed ($XSERVER)"
                     exit 1 
                 fi 
             fi 
@@ -281,12 +281,8 @@ function install_systemd_service(){
 
     if systemctl status "BlocksScreen.service" &>/dev/null; then
         echo_ok "BlocksScreen service exists. Successfully installed"
-        # Display success image
-        # feh --fullscreen /path/to/success_image.png
     else
         echo_error "BlocksScreen service does not exist. Please fix that."
-        # Display failure image
-        # feh --fullscreen /path/to/failure_image.png
     fi
 }
 
@@ -403,14 +399,6 @@ function start_BlocksScreen(){
     sudo systemctl restart BlocksScreen.service
 }
 
-
-# function add_updater{
-#     update_section=$(grep -c '\[update_manager[a-z ]* Blocks Screen\)]' $BLOCKS_SCREEN_CONFIG || true)
-#     if [ "$update_section" -eq 0 ]; then 
-#         echo -n "[INSTALL] Adding update manager to moonraker.conf...."
-#         cat $(BLOCKS_SCREEN_PATH)/moonraker.conf >> $MOONRAKER_CONFIG
-# }
-
 function restart_klipper(){
     echo_info "Restarting Klipper"
     sudo systemctl restart klipper
@@ -426,26 +414,6 @@ function is_package_installed(){
     return $?
 }
 
-
-# function add_updater{
-#     # TODO: Add updater to moonraker.conf, so BlocksScreen is always updated 
-#     update_section=$(grep -c '\[update_manager[a-z ]* Blocks-Screen\]' $MOONRAKER_CONFIG || true)
-#     if [ "$update_section" -eq 0 ]; then 
-#         echo_text -n "[INSTALL] Adding update manager to moonraker.conf..."
-#         cat ${SCRIPT_PATH}/moonraker.conf >> $MOONRAKER_CONFIG
-#     fi 
-# }
-
-
-# function link_klipper_extras(){
-#     # TODO: Get files from blocks screen klipper extras and create symlinks to klipper/extras/* | or just copy them to that directory 
-#     if [ ! -d "${KLIPPER_PATH}/klippy/extras/BlocksScreen" ]; then 
-#         echo "[HELPER] Linking BlocksScreen extras to klippy extras directory;" 
-#         # TODO: Need to create a symlinks to all extras on Blocks Screen klipper_extras/
-#         ln -frsn ${SCRIPT_PATH}/klipper_extras/* ${KLIPPER_PATH}/klippy/extras/*
-#     fi
-#     # find * -name '*.py' -exec ln -sf $PWD/{} ~/klipper/klippy/extras/{} \; 
-# }
 
 printf "\n===================================\n"
 echo_info "-Blocks Screen installation script-"
