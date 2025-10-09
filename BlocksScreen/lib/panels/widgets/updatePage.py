@@ -61,27 +61,28 @@ class UpdatePage(QtWidgets.QWidget):
         self.cli_tracking = {}
         self.selected_item: ListItem | None = None
         self.ongoing_update: bool = False
+
         self.load_popup: LoadScreen = LoadScreen(self)
+        self.repeated_request_status = QtCore.QTimer()
+        self.repeated_request_status.setInterval(2000)  # every 2 seconds
         self.model = EntryListModel()
         self.model.setParent(self.update_buttons_list_widget)
         self.entry_delegate = EntryDelegate()
         self.update_buttons_list_widget.setModel(self.model)
+        self.update_buttons_list_widget.setItemDelegate(self.entry_delegate)
         self.entry_delegate.item_selected.connect(self.on_item_clicked)
         self.action_btn.clicked.connect(self.on_update_clicked)
         self.update_back_btn.clicked.connect(self.reset_view_model)
-        self.update_buttons_list_widget.setModel(self.model)
-        self.update_buttons_list_widget.setItemDelegate(self.entry_delegate)
         self.update_in_progress.connect(self.handle_ongoing_update)
         self.update_end.connect(self.handle_update_end)
-
-        self.repeated_request_status = QtCore.QTimer()
         self.repeated_request_status.timeout.connect(
             lambda: self.request_update_status.emit(False)
         )
-        self.repeated_request_status.setInterval(2000)  # every 2 seconds
 
     def handle_update_end(self) -> None:
-        """Handles update end signal (closes loading page, returns to normal operation)"""
+        """Handles update end signal
+        (closes loading page, returns to normal operation)
+        """
         if self.load_popup.isVisible():
             self.load_popup.close()
         self.repeated_request_status.stop()
@@ -89,16 +90,19 @@ class UpdatePage(QtWidgets.QWidget):
         self.build_model_list()
 
     def handle_ongoing_update(self) -> None:
-        """Handled ongoing update signal, calls loading page (blocks user interaction)"""
+        """Handled ongoing update signal,
+        calls loading page (blocks user interaction)
+        """
         self.load_popup.set_status_message("Updating...")
         self.load_popup.show()
         self.repeated_request_status.start(2000)
 
     def reset_view_model(self) -> None:
-        """Clears items from ListView (Resets `QAbstractListModel` by clearing entries)"""
+        """Clears items from ListView
+        (Resets `QAbstractListModel` by clearing entries)
+        """
         self.model.clear()
         self.entry_delegate.clear()
-        self.request_update_status.emit(True)
 
     def deleteLater(self) -> None:
         """Schedule the object for deletion, resets the list model first"""
@@ -111,8 +115,9 @@ class UpdatePage(QtWidgets.QWidget):
         return super().showEvent(event)
 
     def build_model_list(self) -> None:
-        """Builds the model list containing updatable cli"""
+        """Builds the model list (`self.model`) containing updatable clients"""
         self.update_buttons_list_widget.blockSignals(True)
+        self.reset_view_model()
         for cli_name, _cli_info in self.cli_tracking.items():
             if not _cli_info:
                 continue
@@ -125,7 +130,7 @@ class UpdatePage(QtWidgets.QWidget):
             self.model.index(0), True, EntryListModel.EnableRole
         )  # Set the first item checked on startup
         self.on_item_clicked(
-            self.model.data(self.model.index(0), QtCore.Qt.ItemDataRole.UserRole)  # type: ignore
+            self.model.data(self.model.index(0), QtCore.Qt.ItemDataRole.UserRole)
         )  # Bandage solution: simulate click for setting information on infobox
         self.update_buttons_list_widget.blockSignals(False)
 
@@ -156,6 +161,7 @@ class UpdatePage(QtWidgets.QWidget):
         """Setup information for the currently clicked list item on the info box.
         Keeps track of the list item
         """
+        print(item)
         if not item:
             return
         cli_data = self.cli_tracking.get(item.text, {})
@@ -188,7 +194,6 @@ class UpdatePage(QtWidgets.QWidget):
         if not _curr_version:
             # There is no version information something is seriously wrong here
             self.action_btn.setText("Recover")
-
         self.version_title.show()
         self.version_tracking_info.show()
         self.version_tracking_info.setText(_curr_version)
@@ -224,6 +229,7 @@ class UpdatePage(QtWidgets.QWidget):
 
         Receives updates from moonraker `machine.update.status` request.
         """
+        print(message)
         busy = message.get("busy", False)
         if busy:
             self.update_in_progress.emit()
