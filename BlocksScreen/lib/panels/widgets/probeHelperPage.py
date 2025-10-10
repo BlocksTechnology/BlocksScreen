@@ -36,7 +36,7 @@ class ProbeHelper(QtWidgets.QWidget):
         name="request_page_view"
     )
 
-    distances = ["0.01", ".025", ".05", ".01", "1"]
+    distances = ["0.01", ".025", "0.1", "0.5", "1"]
     _calibration_commands: list = []
     helper_start: bool = False
     helper_initialize: bool = False
@@ -702,7 +702,7 @@ class ProbeHelper(QtWidgets.QWidget):
         )
         self.move_option_1.setMinimumSize(QtCore.QSize(100, 60))
         self.move_option_1.setMaximumSize(QtCore.QSize(100, 60))
-        self.move_option_1.setText("0.1 mm")
+        self.move_option_1.setText("0.01 mm")
 
         font = QtGui.QFont()
         font.setPointSize(14)
@@ -732,7 +732,7 @@ class ProbeHelper(QtWidgets.QWidget):
         self.move_option_2.setMaximumSize(
             QtCore.QSize(100, 60)
         )  # Increased max width by 5 pixels
-        self.move_option_2.setText("0.01 mm")
+        self.move_option_2.setText("0.25 mm")
 
         font = QtGui.QFont()
         font.setPointSize(14)
@@ -759,7 +759,7 @@ class ProbeHelper(QtWidgets.QWidget):
         self.move_option_3.setMaximumSize(
             QtCore.QSize(100, 60)
         )  # Increased max width by 5 pixels
-        self.move_option_3.setText("0.05 mm")
+        self.move_option_3.setText("0.1 mm")
 
         font = QtGui.QFont()
         font.setPointSize(14)
@@ -786,7 +786,7 @@ class ProbeHelper(QtWidgets.QWidget):
         self.move_option_4.setMaximumSize(
             QtCore.QSize(100, 60)
         )  # Increased max width by 5 pixels
-        self.move_option_4.setText("0.025 mm")
+        self.move_option_4.setText("0.5 mm")
 
         font = QtGui.QFont()
         font.setPointSize(14)
@@ -813,7 +813,7 @@ class ProbeHelper(QtWidgets.QWidget):
         self.move_option_5.setMaximumSize(
             QtCore.QSize(100, 60)
         )  # Increased max width by 5 pixels
-        self.move_option_5.setText("0.025 mm")
+        self.move_option_5.setText("1 mm")
 
         font = QtGui.QFont()
         font.setPointSize(14)
