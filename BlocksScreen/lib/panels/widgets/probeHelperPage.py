@@ -366,6 +366,10 @@ class ProbeHelper(QtWidgets.QWidget):
         """
         if not sender:
             return
+        
+        for i in self.card_options.values():
+            i.setDisabled(True)
+
         self.Loadscreen.show()
         self.Loadscreen.set_status_message("Homing Axes...")
 
@@ -515,6 +519,8 @@ class ProbeHelper(QtWidgets.QWidget):
         self.accept_button.hide()
         self.abort_button.hide()
         if state:
+            for i in self.card_options.values():
+                i.setDisabled(False)
             self.Loadscreen.hide()
             self.po_back_button.setEnabled(False)
             self.po_back_button.hide()
