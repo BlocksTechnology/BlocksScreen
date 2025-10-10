@@ -148,7 +148,9 @@ class UpdatePage(QtWidgets.QWidget):
                 self.request_update_klipper.emit()
             elif "moonraker" in cli_name:
                 self.request_update_moonraker.emit()
-            self.request_update_client.emit(cli_name)
+            else:
+                self.request_update_client.emit(cli_name) 
+            
             self.load_popup.set_status_message(f"Updating {cli_name}")
         else:
             self.request_recover_repo[str, bool].emit(cli_name, True)
