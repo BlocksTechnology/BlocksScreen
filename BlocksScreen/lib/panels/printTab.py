@@ -94,7 +94,7 @@ class PrintTab(QtWidgets.QStackedWidget):
 
         self.confirmPage_widget = ConfirmWidget(self)
         self.addWidget(self.confirmPage_widget)
-        self.confirmPage_widget.reject_button.clicked.connect(self.back_button)
+        self.confirmPage_widget.back_btn.clicked.connect(self.back_button)
         self.filesPage_widget.file_selected.connect(
             self.confirmPage_widget.on_show_widget
         )
