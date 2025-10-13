@@ -31,7 +31,7 @@
     <file>media/btn_icons/restart_printer.svg</file>
     <file>media/btn_icons/factory_reset.svg</file>
     <file>media/btn_icons/update_system.svg</file>
-
+    <file>media/btn_icons/update-software-icon.svg</file>
   </qresource>
   <qresource prefix="fan_related">
     <file>media/btn_icons/fan.svg</file>
@@ -46,6 +46,7 @@
     <file>media/btn_icons/blower.svg</file>
     <file>media/btn_icons/fan.svg</file>
     <file>media/btn_icons/cooldown.svg</file>
+    <file>media/btn_icons/heatsoak_icon.svg</file>
     <file>media/btn_icons/hot_temperature.svg</file>
   </qresource>
   <qresource prefix="motion">
@@ -78,6 +79,7 @@
     <file>media/btn_icons/unload_filament.svg</file>
   </qresource>
   <qresource prefix="ui">
+    <file>media/btn_icons/garbage-icon.svg</file>
     <file>media/btn_icons/back.svg</file>
     <file>media/btn_icons/refresh.svg</file>
     <file>media/btn_icons/back_folder.svg</file>
