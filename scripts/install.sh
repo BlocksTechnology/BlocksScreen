@@ -56,9 +56,7 @@ MOONRAKER_ASVC="${HOME}/printer_data/moonraker.asvc"
 MOONRAKER_CONFIG="${HOME}/printer_data/config/moonraker.conf"
 KLIPPER_PATH="${HOME}/klipper"
 KLIPPER_VENV_PATH="${HOME}/klippy-env"
-
 USER_CONFIG_PATH="${HOME}/printer_data/config"
-
 SCRIPT_PATH=$(dirname -- "$(readlink -f -- "$0")")
 echo_info "Script Path -> ${SCRIPT_PATH}"
 BS_PATH=$(dirname "$SCRIPT_PATH")
@@ -71,8 +69,8 @@ PYTHON_VERSION=3.11.2
 
 XSERVER="xinit xinput x11-xserver-utils xserver-xorg-input-evdev xserver-xorg-input-libinput xserver-xorg-legacy xserver-xorg-video-fbdev"
 CAGE="cage seatd xwayland"
-PYOBJECT="pkg-config python3-dev"
-MISC="autoconf python3-venv libdbus-glib-1-dev udiskie xdg-utils"
+PYOBJECT="pkg-config python3-dev openssl libssl-dev python3-venv"
+MISC="autoconf libdbus-glib-1-dev udiskie xdg-utils"
 QTMISC=" ^libxcb.*-dev libx11-xcb-dev libglu1-mesa-dev libxrender-dev libxi-dev libxkbcommon-dev libxkbcommon-x11-dev libxcb-cursor0"
 
 
@@ -115,11 +113,12 @@ function install_graphical_backend(){
 function install_packages(){
     echo_info "Updating package data"
     sudo apt update 
+    sudo apt upgrade -y 
 
     
-    echo_text "Checking for broken packages...."
+    echo_info "Checking for broken packages...."
     if dpkg-query -W -f='${db:Status-Abbrev} ${binary:Package}\n' | grep -E "^.[^nci]"; then 
-        echo_text "Detected brocken packages. Attemping to fix"
+        echo_text "Detected brocken packages. Attempting fix"
         sudo apt -f install 
 
         if dpkg-query -W -f='${db:Status-Abbrev} ${binary:Package}\n' | grep -E "^.[^nci]"; then 
@@ -131,14 +130,13 @@ function install_packages(){
         echo_info "No broken packages"
     fi 
 
-    echo_text "Installing dependencies"
-    sudo apt install -y $OPTIONAL
+    echo_info "Installing dependencies"
     echo "$_"
 
-    if sudo apt install -y $PYFOBJECT; then 
-        echo_ok "Installed PyGobject dependencies"
+    if sudo apt install -y $PYOBJECT; then 
+        echo_ok "Installed PyObject dependencies"
     else
-        echo_error "Installation of PyGobject dependencies failed ($PYGOBJECT)"
+        echo_error "Installation of PyObject dependencies failed ($PYOBJECT)"
         exit 1
     fi 
 
@@ -149,10 +147,10 @@ function install_packages(){
         exit 1
     fi 
 
-    if sudo apt-get install -y $QTMISC; then
+    if sudo apt install -y $QTMISC; then
         echo_ok "Installed PyQt6 dependencies"
     else 
-        echo_error "Installation of PyQT dependencie packages failed ($QTMISC)"
+        echo_error "Installation of PyQT dependencies packages failed ($QTMISC)"
         exit 1
     fi
 }
@@ -171,9 +169,10 @@ function check_requirements(){
 function install_app_python_version(){
     echo_info "Checking python version on target 3.11.2; Installing if needed"
     if python${PYTHON_VERSION:0:4} --version &>/dev/null; then 
+    # if command -v python$PYTHON_VERSION &>/dev/null; then
         echo_ok "Python $PYTHON_VERSION is already installed."
     else 
-        echo_error "BlocksScreen requires python $PYTHON_VERSION, Installing ...."
+        echo_warning "BlocksScreen requires python $PYTHON_VERSION, Installing ...."
 
         echo_info "Downloading Python 3.11.2"
         # Download the specific Python version
@@ -187,15 +186,20 @@ function install_app_python_version(){
         # Install python 
         sudo chmod +x /usr/src/Python-$PYTHON_VERSION/configure
 
+        # cd /us
         sudo sh /usr/src/Python-$PYTHON_VERSION/configure --enable-optimizations --prefix=/usr/local
+        # sudo ./usr/src/Python-$PYTHON_VERSION/configure --enable-optimizations --prefix=/usr/local
         
         sudo make -j $(nproc) # Compile software and try to use all cores 
-        echo_info "Using $(nproc) Cores to compile python 3.11.2" 
-        echo_info "Prociding with compiling and installation with 'make altinstall'"
-        sudo make altinstall 
-        
-        if python3.${PYTHON_VERSION:0:4} --version &>/dev/null; then 
 
+        echo_info "Using $(nproc) Cores to compile python 3.11.2" 
+        echo_info "Preceding with compiling and installation with 'make altinstall'"
+
+        
+        sudo make altinstall
+        
+        if python${PYTHON_VERSION:0:4} --version &>/dev/null; then 
+        # if command -v python$PYTHON_VERSION &>/dev/null; then
             echo_ok "Python $PYTHON_VERSION installed successfully"
         else 
             echo_error "Python version $PYTHON_VERSION was not installed for some reason. Exiting"
@@ -217,15 +221,15 @@ function create_virtualenv(){
     fi 
 
     if [ -d "$BSENV" ]; then 
-        echo_text "Removing old virtual enviroment"
+        echo_text "Removing old virtual environment"
         rm -rf "${BSENV}"
     fi 
 
-    echo_text "Creating virtual enviroment"
+    echo_text "Creating virtual environment"
     python${PYTHON_VERSION:0:4} -m venv "${BSENV}"
 
     if ! . "${BSENV}/bin/activate"; then 
-        echo_error "Could not activate the enviroment, try deleting ${BSENV} and retry"
+        echo_error "Could not activate the environment, try deleting ${BSENV} and retry"
         exit 1
     fi 
 
@@ -238,7 +242,7 @@ function create_virtualenv(){
     if [ $? -gt 0 ]; then 
         echo_error "Error: pip install exited with status code $?"
         echo_text "Trying again with new tools..."
-        sudo apt install -y build-essentials cmake libsystmed-dev 
+        sudo apt install -y build-essential cmake libsystemd-dev 
         if [[ "$(uname -m)" =~ armv[67]l ]]; then 
             echo_text "Adding piwheels.org as extra index..."
             echo_info "Installing with pip setuptools and app requirements"
@@ -258,7 +262,7 @@ function create_virtualenv(){
     fi 
     deactivate
     if [ "${BSENV}" = "/" ]; then  
-        echo_info "Blocks Screen Virtual enviroment created."
+        echo_info "Blocks Screen Virtual environment created."
     fi
 
 }
@@ -296,6 +300,7 @@ function create_policy(){
     sudo usermod -aG plugdev "$USER"
     sudo adduser "$USER" netdev 
     sudo adduser "$USER" network 
+    
 
     if [ ! -x "$(command -v pkaction)" ]; then 
         echo "Policykit not installed"
@@ -312,9 +317,9 @@ function create_policy(){
 
     RULE_FILE=""
     if [ -d $POLKIT_USR_DIR ]; then 
-        RULE_FILE="${POLKIT_USR_DIR}/BlocksScreen.rules"
+        RULE_FILE="${POLKIT_USR_DIR}/90-BlocksScreen.rules"
     elif [ -d $POLKIT_DIR ]; then 
-        RULE_FILE="${POLKIT_DIR}/BlocksScreen.rules"
+        RULE_FILE="${POLKIT_DIR}/90-BlocksScreen.rules"
     else 
         echo_error "PolicyKit rules folder not detected"
         exit 1
@@ -323,24 +328,39 @@ function create_policy(){
     sudo rm -r ${RULE_FILE}
 
     BS_GID=$( getent group blocksscreen | awk -F: '{printf "%d", $3}' )
-    sudo tee ${RULE_FILE} > /dev/null << EOF 
-polkit.addRule(function(action, subject) {
-    polkit.log("Second Rule Evaluating action: " + action.id + " for user: " + subject.user);
-    if ((action.id == "org.freedesktop.login1.power-off" ||
-         action.id == "org.freedesktop.login1.power-off-multiple-sessions" ||
-         action.id == "org.freedesktop.login1.reboot" ||
-         action.id == "org.freedesktop.login1.reboot-multiple-sessions" ||
-         action.id == "org.freedesktop.login1.halt" ||
-         action.id == "org.freedesktop.login1.halt-multiple-sessions" ||
-         action.id == "org.freedesktop.NetworkManager.settings.modify.system" ||
-         action.id == "org.freedesktop.NetworkManager.reload" ||
-         action.id.startsWith("org.freedesktop.NetworkManager")) ||
-         action.id.startsWith("org.freedesktop.udisks2.") && 
-         (subject.user == "$USER" || subject.isInGroup("blocksscreen"))) {
-                 return polkit.Result.YES;
-         }
+    cat << EOF | sudo tee ${RULE_FILE} > /dev/null 
+
+polkit.addRule(function(action, subject){
+    var allowd_actions = [
+        "org.freedesktop.login1.power-off-multiple-sessions", 
+        "org.freedesktop.login1.reboot-multiple-sessions", 
+        "org.freedesktop.login1.halt-multiple-sessions", 
+        "org.freedesktop.login1.power-off", 
+        "org.freedesktop.login1.reboot", 
+        "org.freedesktop.login1.halt", 
+        "org.freedesktop.NetworkManager.reload", 
+        "org.freedesktop.NetworkManager.network-control", 
+        "org.freedesktop.NetworkManager.settings.modify.own", 
+        "org.freedesktop.NetworkManager.settings.modify.system",
+        
+    ]
+    polkit.log("Evaluating Rule: " + action.id + " " + subject.local + " " + subject.active );
+    if (allowd_actions.indexOf(action.id) >= 0 || 
+        action.id.indexOf("org.freedesktop.NetworkManager.") >= 0 || 
+        action.id.indexOf("org.freedesktop.udisks2.") >= 0) {
+    
+        if (subject.user == "bugo"  || 
+            subject.isInGroup("network") || 
+            subject.isInGroup("netdev") || 
+            subject.isInGroup("blocksscreen")
+        ){
+            return polkit.Result.YES;
+        }
+    }
 });
 EOF
+
+sudo systemctl restart polkit.service
 }
 
 function create_policy_legacy(){
@@ -367,22 +387,24 @@ EOF
 }
 
 function add_moonraker_update(){
-    sudo tee ${MOONRAKER_CONFIG} > /dev/null << EOF 
+    cat << EOF | sudo tee -a "$MOONRAKER_CONFIG" > /dev/null 
+    
 [update_manager BlocksScreen]
 type: git_repo
 primary_branch: master
-path: "$BS_PATH"
+path: $BS_PATH
 origin: https://github.com/BlocksTechnology/BlocksScreen.git
 is_system_service: True
 managed_services: klipper moonraker
-virtualenv: "$BSENV"
+virtualenv: $BSENV
 requirements: scripts/requirements.txt
 system_dependencies: scripts/system-dependencies.json
 EOF
 }
 
 function add_asvc(){
-    sudo tee ${MOONRAKER_ASVC} > /dev/null << EOF
+    cat << EOF | sudo tee -a "$MOONRAKER_ASVC" > /dev/null 
+    
 BlocksScreen
 EOF
 }
@@ -425,6 +447,7 @@ echo_ok "Starting Blocks Screen installation"
 install_graphical_backend
 install_systemd_service
 install_packages
+
 create_virtualenv
 create_policy
 
