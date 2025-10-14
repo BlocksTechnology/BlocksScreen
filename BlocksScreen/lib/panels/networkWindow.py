@@ -13,6 +13,8 @@ logger = logging.getLogger("logs/BlocksScreen.log")
 
 
 class BuildNetworkList(QtCore.QThread):
+    """Retrieves information from sdbus interface about scanned networks"""
+
     scan_result: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         dict, name="scan-results"
     )
@@ -30,13 +32,14 @@ class BuildNetworkList(QtCore.QThread):
         self.nm = SdbusNetworkManagerAsync()
         if not self.nm:
             logger.error(
-                "Cannot scan for networks, parent does not have sdbus_network ('SdbusNetworkManagerAsync' instance class)"
+                "Cannot scan for networks, parent does not have \
+                sdbus_network ('SdbusNetworkManagerAsync' instance class)"
             )
             return
-
         logger.info("Network Scanner Thread Initiated")
 
     def build(self) -> None:
+        """Starts QThread"""
         with QtCore.QMutexLocker(self.mutex):
             if not self.isRunning():
                 self.start(QtCore.QThread.Priority.LowPriority)
@@ -45,12 +48,14 @@ class BuildNetworkList(QtCore.QThread):
                 self.condition.wakeOne()
 
     def stop(self):
+        """Stops QThread execution"""
         self.mutex.lock()
         self.condition.wakeOne()
         self.mutex.unlock()
         self.deleteLater()
 
     def run(self) -> None:
+        """BuildNetworkList main thread logic"""
         logger.debug("Scanning and building network list")
         while True:
             self.mutex.lock()
@@ -68,8 +73,6 @@ class BuildNetworkList(QtCore.QThread):
                     return
                 for ssid_key in available_networks:
                     properties = available_networks.get(ssid_key, {})
-                    # if not properties:
-                    #     return
                     signal = int(properties.get("signal_level", 0))
                     networks.append(
                         {
@@ -121,6 +124,7 @@ class BuildNetworkList(QtCore.QThread):
 
 
 class NetworkControlWindow(QtWidgets.QStackedWidget):
+    """Network Control panel Widget"""
     request_network_scan = QtCore.pyqtSignal(name="scan-network")
     new_ip_signal = QtCore.pyqtSignal(str, name="ip-address-change")
     get_hotspot_ssid = QtCore.pyqtSignal(str, name="hotspot-ssid-name")
@@ -147,7 +151,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         )
         self.panel.rescan_button.clicked.connect(
             lambda: QtCore.QTimer.singleShot(
-                100, lambda: self.network_list_worker.build()
+                100, self.network_list_worker.build
             )
         )
 
@@ -600,28 +604,20 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         QtCore.QTimer().singleShot(10000, lambda: self.network_list_worker.build())
 
     def handle_button_click(self, ssid: str):
+        """Handles pressing a network"""
         if ssid in self.sdbus_network.get_saved_ssid_names():
             self.setCurrentIndex(self.indexOf(self.panel.saved_connection_page))
             self.panel.saved_connection_network_name.setText(str(ssid))
             _curr_ssid = self.sdbus_network.get_current_ssid()
-            self.panel.network_activate_btn.show() if _curr_ssid != str(
-                ssid
-            ) else self.panel.network_activate_btn.hide()
+            if _curr_ssid != str(ssid):
+                self.panel.network_activate_btn.show()
+            else:
+                self.panel.network_activate_btn.hide()
+            self.panel.frame.repaint()
 
         else:
             self.setCurrentIndex(self.indexOf(self.panel.add_network_page))
             self.panel.add_network_network_label.setText(str(ssid))
-
-    def paintEvent(self, a0: QtGui.QPaintEvent) -> None:
-        """Controls UI aspects of the current panel, such as images
-
-        Args:
-            a0 (QPaintEvent)
-        """
-        if not self.isVisible():
-            return super().paintEvent(a0)
-
-        self.updateGeometry()
 
     def event(self, event: QtCore.QEvent) -> bool:
         """Receives PyQt eEvents, this method is reimplemented from the QEvent class
@@ -639,7 +635,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         return super().event(event)
 
     def setCurrentIndex(self, index: int):
-        """Reimplementation of the QStackedWidget setCurrentIndex method
+        """Re-implementation of the QStackedWidget setCurrentIndex method
             in order to clear and display text as needed for each panel on the StackedWidget
         Args:
             index (int): The index we want to change to
@@ -647,7 +643,6 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         """
         if not self.isVisible():
             return
-
         _cur = self.currentIndex()
         if index == self.indexOf(self.panel.add_network_page):  # Add network page 2
             self.panel.add_network_password_field.clear()
@@ -678,9 +673,8 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             self.panel.saved_connection_signal_strength_info_frame.setText(
                 _signal_string
             )
-
         self.update()
-        return super().setCurrentIndex(index)
+        super().setCurrentIndex(index)
 
     def setProperty(self, name: str, value: typing.Any) -> bool:
         """setProperty-> Intercept the set property method
@@ -700,6 +694,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
     def show_network_panel(
         self,
     ) -> None:
+        """Slot for displaying networkWindow Panel"""
         if not self.parent():
             return
         self.setCurrentIndex(self.indexOf(self.panel.network_list_page))
@@ -710,6 +705,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.show()
 
     def build_network_list(self) -> None:
+        """Build available/saved network list"""
         palette = QtGui.QPalette()
         brush = QtGui.QBrush(QtGui.QColor(0, 0, 0, 0))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
@@ -859,6 +855,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.panel.nl_content_layout.addWidget(self.network_list_widget)
 
     def separator_item(self) -> None:
+        """Add separator item to network list"""
         separator_item = QtWidgets.QListWidgetItem()
         separator_widget = QtWidgets.QLabel()
         separator_widget.setStyleSheet(
@@ -869,6 +866,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.network_list_widget.setItemWidget(separator_item, separator_widget)
 
     def blank_space_item(self) -> None:
+        """Add blank space item to network list"""
         spacer_item = QtWidgets.QListWidgetItem()
         spacer_widget = QtWidgets.QWidget()
         spacer_widget.setFixedHeight(10)  # Adjust height as needed
@@ -877,6 +875,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.network_list_widget.setItemWidget(spacer_item, spacer_widget)
 
     def network_button_item(self, ssid, signal, right_text, /) -> None:
+        """Add a network entry to network list"""
         wifi_pixmap = QtGui.QPixmap(":/network/media/btn_icons/no_wifi.svg")
         if 70 <= signal <= 100:
             wifi_pixmap = QtGui.QPixmap(":/network/media/btn_icons/3bar_wifi.svg")
