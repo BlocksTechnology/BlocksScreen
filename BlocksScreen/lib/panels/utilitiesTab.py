@@ -228,6 +228,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         self.update_page.update_available.connect(
             self.panel.update_btn.setShowNotification
         )
+        self.panel.update_btn.setPixmap(QtGui.QPixmap(":/system/media/btn_icons/update-software-icon.svg"))
 
     @QtCore.pyqtSlot(list, name="on_object_list")
     def on_object_list(self, object_list: list) -> None:
