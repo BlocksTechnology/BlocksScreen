@@ -15,6 +15,7 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 
 class ControlTab(QtWidgets.QStackedWidget):
     """Printer Control Stacked Widget"""
+
     request_back_button = QtCore.pyqtSignal(name="request-back-button")
     request_change_page = QtCore.pyqtSignal(int, int, name="request-change-page")
     request_numpad_signal = QtCore.pyqtSignal(
@@ -25,8 +26,12 @@ class ControlTab(QtWidgets.QStackedWidget):
         QtWidgets.QStackedWidget,
         name="request-numpad",
     )
-    run_gcode_signal = QtCore.pyqtSignal(str, name="run-gcode")
-    disable_popups = QtCore.pyqtSignal(bool, name="disable-popups")
+    run_gcode_signal: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        str, name="run-gcode"
+    )
+    disable_popups: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        bool, name="disable-popups"
+    )
     request_numpad: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         [str, int, "PyQt_PyObject"],
         [str, int, "PyQt_PyObject", int, int],

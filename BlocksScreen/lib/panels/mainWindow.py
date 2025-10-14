@@ -83,11 +83,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.filamentPanel.request_change_page.connect(slot=self.global_change_page)
         self.controlPanel.request_back_button.connect(slot=self.global_back)
         self.controlPanel.request_change_page.connect(slot=self.global_change_page)
-        self.controlPanel.disable_popups.connect(self.popup_toggle)
         self.utilitiesPanel.request_back.connect(slot=self.global_back)
         self.utilitiesPanel.request_change_page.connect(slot=self.global_change_page)
         self.utilitiesPanel.update_available.connect(self.on_update_available)
-
         self.ui.extruder_temp_display.clicked.connect(
             lambda: self.global_change_page(
                 self.ui.main_content_widget.indexOf(self.ui.controlTab),
@@ -134,13 +132,13 @@ class MainWindow(QtWidgets.QMainWindow):
         self.handle_error_response.connect(
             self.controlPanel.probe_helper_page.handle_error_response
         )
+        self.controlPanel.disable_popups.connect(self.popup_toggle)
         self.on_update_message.connect(self.utilitiesPanel._on_update_message)
         self.ui.extruder_temp_display.display_format = "upper_downer"
         self.ui.bed_temp_display.display_format = "upper_downer"
         if self.config.has_section("server"):
             # @ Start websocket connection with moonraker
             self.bo_ws_startup.emit()
-
         self.reset_tab_indexes()
 
     @QtCore.pyqtSlot(bool, name="update-available")
@@ -186,10 +184,13 @@ class MainWindow(QtWidgets.QMainWindow):
     def disable_tab_bar(self) -> bool:
         """Disables the tab bar so to not change the tab.
 
-            `This method is only used when a print job is ongoing, so the printTab is never disabled`
+        `This method is only used when a print job is ongoing, so the printTab is never disabled`
+
+
+        ---
 
         Returns:
-            bool: True if the TabBar was disabled
+            boolean: True if the TabBar was disabled
         """
         self.ui.main_content_widget.setTabEnabled(
             self.ui.main_content_widget.indexOf(self.ui.filamentTab), False
@@ -201,7 +202,6 @@ class MainWindow(QtWidgets.QMainWindow):
             self.ui.main_content_widget.indexOf(self.ui.utilitiesTab), False
         )
         self.ui.header_main_layout.setEnabled(False)
-
         return all(
             [
                 not self.ui.main_content_widget.isTabEnabled(
@@ -223,11 +223,15 @@ class MainWindow(QtWidgets.QMainWindow):
         return self._popup_toggle
 
     @popup_toggle.setter
+    @QtCore.pyqtSlot(bool)
     def popup_toggle(self, toggle: bool) -> None:
         self._popup_toggle = toggle
 
     def reset_tab_indexes(self):
-        """Used to grantee all tabs reset to their first page once the user leaves the tab"""
+        """
+        Used to grantee all tabs reset to their
+        first page once the user leaves the tab
+        """
         self.printPanel.setCurrentIndex(0)
         self.filamentPanel.setCurrentIndex(0)
         self.controlPanel.setCurrentIndex(0)
@@ -277,10 +281,10 @@ class MainWindow(QtWidgets.QMainWindow):
         """
         if not isinstance(tab_index, int):
             _logger.debug(
-                f"Tab index argument expected type int, got {type(tab_index)}"
+                "Tab index argument expected type int, got %s", type(tab_index)
             )
         if not isinstance(panel_index, int):
-            _logger.debug(f"Panel page index expected type int, {type(panel_index)}")
+            _logger.debug("Panel page index expected type int, %s", type(panel_index))
 
         self.printPanel.loadscreen.hide()
         current_page = [
@@ -295,13 +299,15 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui.main_content_widget.setCurrentIndex(tab_index)
         self.set_current_panel_index(panel_index)
         _logger.debug(
-            f"Requested page change -> Tab index :{requested_page[0]}, pane panel index : {requested_page[1]}"
+            "Requested page change -> Tab index :%s, pane panel index : %s",
+            requested_page[0],
+            requested_page[1],
         )
 
     @QtCore.pyqtSlot(name="request-back")
     def global_back(self) -> None:
         """Requests to go back a page globally"""
-        if not len(self.index_stack):
+        if not bool(self.index_stack):
             _logger.debug("Index stack is empty, cannot go back any further")
             return
         self.ui.main_content_widget.setCurrentIndex(self.index_stack[-1][0])
@@ -332,24 +338,22 @@ class MainWindow(QtWidgets.QMainWindow):
             None raises an exception because the event
             cannot be sent.
         """
-
         _method = event.method
         _data = event.data
         _metadata = event.metadata
-
         if not _method:
-            raise Exception("No method found on message received from websocket")
+            return
         if not _data:
             return
-
         if "server.file" in _method:
             file_data_event = events.ReceivedFileData(_data, _method, _metadata)
             try:
                 QtWidgets.QApplication.postEvent(self.file_data, file_data_event)
             except Exception as e:
                 _logger.error(
-                    f"Error posting event for file related information \
-                        received from websocket | error message received: {e}"
+                    "Error posting event for file related information \
+                        received from websocket | error message received: %s",
+                    e,
                 )
         elif "machine" in _method:
             if "ok" in _data:
@@ -503,47 +507,41 @@ class MainWindow(QtWidgets.QMainWindow):
             _object_report = _data["params"]
             self.printer_object_report_signal[list].emit(_object_report)
 
-    @QtCore.pyqtSlot(str, str, float, name="on_extruder_update")
+    @QtCore.pyqtSlot(str, str, float, name="on-extruder-update")
     def on_extruder_update(
         self, extruder_name: str, field: str, new_value: float
     ) -> None:
-        # TODO: Add the text dynamically considering the amount of extruders
+        """Handles extruder printer object updates"""
         if extruder_name == "extruder":
             if field == "temperature":
                 self.ui.extruder_temp_display.setText(f"{new_value:.1f}")
-                ...
             elif field == "target":
                 self.ui.extruder_temp_display.secondary_text = (
                     f"{round(int(new_value)):.0f}"
                 )
 
-    @QtCore.pyqtSlot(str, str, float, name="on_heater_bed_update")
+    @QtCore.pyqtSlot(str, str, float, name="on-heater-bed-update")
     def on_heater_bed_update(self, name: str, field: str, new_value: float) -> None:
-        # TODO: Add the text dynamically considering the amount of extruders
+        """Handles heater_bed printer object updates"""
         if field == "temperature":
             self.ui.bed_temp_display.setText(f"{new_value:.1f}")
-
         elif field == "target":
             self.ui.bed_temp_display.secondary_text = f"{round(int(new_value)):.0f}"
 
-    def paintEvent(self, a0: QtGui.QPaintEvent | None) -> None:
-        # TODO: If tab bar is disabled gray it out
-        self.updateGeometry()
-        if a0 is None:
-            return  # TEST: Maybe this return fucks up the app
-        return super().paintEvent(a0)
-
-    @QtCore.pyqtSlot(str, name="set_header_filament_type")
+    @QtCore.pyqtSlot(str, name="set-header-filament-type")
     def set_header_filament_type(self, type: str):
+        """Sets header filament text label"""
         self.ui.filament_type_icon.setText(f"{type}")
         self.ui.filament_type_icon.update()
 
-    @QtCore.pyqtSlot(str, name="set_header_nozzle_diameter")
+    @QtCore.pyqtSlot(str, name="set-header-nozzle-diameter")
     def set_header_nozzle_diameter(self, diam: str):
+        """Sets header nozzle diameter text label"""
         self.ui.nozzle_size_icon.setText(f"{diam}mm")
         self.ui.nozzle_size_icon.update()
 
     def closeEvent(self, a0: typing.Optional[QtGui.QCloseEvent]) -> None:
+        """Handles GUI closing"""
         _loggers = [
             logging.getLogger(name) for name in logging.root.manager.loggerDict
         ]  # Get available logger handlers
@@ -555,7 +553,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ws.wb_disconnect()
         self.close()
         if a0 is None:
-            return  # TEST Maybe this return fucks up the app
+            return
         QtWidgets.QMainWindow.closeEvent(self, a0)
         super().closeEvent(a0)
 
@@ -566,7 +564,8 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.messageReceivedEvent(event)
                 return True
             return False
-        elif event.type() == events.PrintStart.type():
+
+        if event.type() == events.PrintStart.type():
             self.disable_tab_bar()
             self.ui.extruder_temp_display.clicked.disconnect()
             self.ui.bed_temp_display.clicked.disconnect()
@@ -585,10 +584,11 @@ class MainWindow(QtWidgets.QMainWindow):
                 )
             )
             return False
-        elif (
-            event.type() == events.PrintError.type()
-            or event.type() == events.PrintComplete.type()
-            or event.type() == events.PrintCancelled.type()
+
+        if event.type() == (
+            events.PrintError.type()
+            or events.PrintComplete.type()
+            or events.PrintCancelled.type()
         ):
             self.enable_tab_bar()
             self.ui.extruder_temp_display.clicked.disconnect()
@@ -611,5 +611,6 @@ class MainWindow(QtWidgets.QMainWindow):
         return super().event(event)
 
     def sizeHint(self) -> QtCore.QSize:
+        """Sets default size for the widget"""
         self.adjustSize()
-        return super().sizeHint()
+        return super().sizeHint(QtCore.QSize(800, 480))
