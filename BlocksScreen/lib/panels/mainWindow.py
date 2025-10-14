@@ -51,7 +51,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
         self.screensaver = ScreenSaver(self)
-
+        self._popup_toggle: bool = False
         self.ui.main_content_widget.setCurrentIndex(0)
         self.popup = Popup(self)
         self.ws = MoonWebSocket(self)
@@ -83,6 +83,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.filamentPanel.request_change_page.connect(slot=self.global_change_page)
         self.controlPanel.request_back_button.connect(slot=self.global_back)
         self.controlPanel.request_change_page.connect(slot=self.global_change_page)
+        self.controlPanel.disable_popups.connect(self.popup_toggle)
         self.utilitiesPanel.request_back.connect(slot=self.global_back)
         self.utilitiesPanel.request_change_page.connect(slot=self.global_change_page)
         self.utilitiesPanel.update_available.connect(self.on_update_available)
@@ -110,13 +111,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui.nozzle_size_icon.setText("0.4mm")
         self.ui.nozzle_size_icon.update()
 
-        # self.ws.connected_signal.connect(
-        #     slot=self.file_data.request_file_list.emit
-        # )
-        # self.ws.connected_signal.connect(
-        #     slot=self.file_data.request_dir_info.emit
-        # )
-
         self.conn_window.retry_connection_clicked.connect(slot=self.ws.retry_wb_conn)
         self.conn_window.firmware_restart_clicked.connect(
             slot=self.ws.api.firmware_restart
@@ -140,12 +134,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.handle_error_response.connect(
             self.controlPanel.probe_helper_page.handle_error_response
         )
-
         self.on_update_message.connect(self.utilitiesPanel._on_update_message)
-
         self.ui.extruder_temp_display.display_format = "upper_downer"
         self.ui.bed_temp_display.display_format = "upper_downer"
-
         if self.config.has_section("server"):
             # @ Start websocket connection with moonraker
             self.bo_ws_startup.emit()
@@ -226,8 +217,14 @@ class MainWindow(QtWidgets.QMainWindow):
             ]
         )
 
-    def disable_popups(self) -> None:
-        self.popup_bool = False
+    @property
+    def popup_toggle(self) -> bool:
+        """Toggle popup property"""
+        return self._popup_toggle
+
+    @popup_toggle.setter
+    def popup_toggle(self, toggle: bool) -> None:
+        self._popup_toggle = toggle
 
     def reset_tab_indexes(self):
         """Used to grantee all tabs reset to their first page once the user leaves the tab"""
@@ -284,7 +281,7 @@ class MainWindow(QtWidgets.QMainWindow):
             )
         if not isinstance(panel_index, int):
             _logger.debug(f"Panel page index expected type int, {type(panel_index)}")
-        
+
         self.printPanel.loadscreen.hide()
         current_page = [
             self.ui.main_content_widget.currentIndex(),
@@ -454,7 +451,7 @@ class MainWindow(QtWidgets.QMainWindow):
             if entry:
                 service_entry: dict = entry[0]
                 service_name, service_info = service_entry.popitem()
-                if self.disable_popups:
+                if self.popup_toggle:
                     return
                 self.popup.new_message(
                     message_type=Popup.MessageType.INFO,
@@ -474,7 +471,7 @@ class MainWindow(QtWidgets.QMainWindow):
                     _msg_type = Popup.MessageType.ERROR
                 elif _gcode_msg_type == "//":
                     _msg_type = Popup.MessageType.INFO
-                if self.disable_popups:
+                if self.popup_toggle:
                     return
                 # self.popup.new_message(
                 #     message_type=_msg_type, message=str(_message)
@@ -485,7 +482,7 @@ class MainWindow(QtWidgets.QMainWindow):
             if "metadata" in _data.get("message", "").lower():
                 # Quick fix, don't care about no metadata errors
                 return
-            if self.disable_popups:
+            if self.popup_toggle:
                 return
             self.popup.new_message(
                 message_type=Popup.MessageType.ERROR,
@@ -493,7 +490,7 @@ class MainWindow(QtWidgets.QMainWindow):
             )
 
         elif "notify_cpu_throttled" in _method:
-            if self.disable_popups:
+            if self.popup_toggle:
                 return
             self.popup.new_message(
                 message_type=Popup.MessageType.WARNING,
