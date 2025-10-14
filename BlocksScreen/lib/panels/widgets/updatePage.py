@@ -149,8 +149,8 @@ class UpdatePage(QtWidgets.QWidget):
             elif "moonraker" in cli_name:
                 self.request_update_moonraker.emit()
             else:
-                self.request_update_client.emit(cli_name) 
-            
+                self.request_update_client.emit(cli_name)
+
             self.load_popup.set_status_message(f"Updating {cli_name}")
         else:
             self.request_recover_repo[str, bool].emit(cli_name, True)
@@ -560,6 +560,9 @@ class UpdatePage(QtWidgets.QWidget):
         self.action_btn.setPalette(palette)
         self.action_btn.setSizePolicy(sizePolicy)
         self.action_btn.setText("Update")
+        self.action_btn.setPixmap(
+            QtGui.QPixmap(":/system/media/btn_icons/update-software-icon.svg")
+        )
         self.button_box.addWidget(
             self.action_btn, 0, QtCore.Qt.AlignmentFlag.AlignHCenter
         )
