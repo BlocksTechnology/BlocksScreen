@@ -15,6 +15,7 @@ from lib.panels.widgets.slider_selector_page import SliderPage
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.panels.widgets.numpadPage import CustomNumpad
 from lib.panels.widgets.loadPage import LoadScreen
+from lib.panels.widgets.dialogPage import DialogPage
 from configfile import BlocksScreenConfig, get_configparser
 from PyQt6 import QtCore, QtGui, QtWidgets
 
@@ -88,9 +89,12 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.filesPage_widget = FilesPage(self)
         self.addWidget(self.filesPage_widget)
 
+        self.dialogPage = DialogPage(self)
+
+
         self.confirmPage_widget = ConfirmWidget(self)
         self.addWidget(self.confirmPage_widget)
-        self.confirmPage_widget.reject_button.clicked.connect(self.back_button)
+        self.confirmPage_widget.back_btn.clicked.connect(self.back_button)
         self.filesPage_widget.file_selected.connect(
             self.confirmPage_widget.on_show_widget
         )
@@ -244,6 +248,11 @@ class PrintTab(QtWidgets.QStackedWidget):
 
         self.run_gcode_signal.connect(self.ws.api.run_gcode)
 
+        self.confirmPage_widget.on_delete.connect(
+            self.delete_file
+        )
+
+
         self.change_page(
             self.indexOf(self.print_page)
         )  # force set the initial page
@@ -286,6 +295,26 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.sliderPage.set_slider_minimum(min_value)
         self.sliderPage.set_slider_maximum(max_value)
         self.change_page(self.indexOf(self.sliderPage))
+
+    def delete_file(self,direcotry:str,name:str):
+        self.directory:str = direcotry
+        self.filename:str = name
+        self.dialogPage.set_message("Are you sure you want to delete this file?")
+        self.dialogPage.button_clicked.connect(self.on_dialog_button_clicked)
+        self.dialogPage.show()
+
+    def on_dialog_button_clicked(self, button_name: str) -> None:
+        print(button_name)
+        """Handle dialog button clicks"""
+        if button_name == "Confirm":
+            self.ws.api.delete_file(self.filename,self.directory)
+            self.dialogPage.hide()
+        else:
+            self.dialogPage.hide()
+
+
+
+
 
     def paintEvent(self, a0: QtGui.QPaintEvent) -> None:
         """

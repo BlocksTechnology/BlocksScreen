@@ -83,8 +83,8 @@
     <file>media/btn_icons/back.svg</file>
     <file>media/btn_icons/refresh.svg</file>
     <file>media/btn_icons/back_folder.svg</file>
-    <file>media/btn_icons/folder_icon.svg</file>
     <file>media/btn_icons/background_list.svg</file>
+    <file>media/btn_icons/folderIcon.svg</file>
     <file>media/btn_icons/center_arrows.svg</file>
     <file>media/btn_icons/confirm_stl_window.svg</file>
     <file>media/btn_icons/horizontal_scroll_bar.svg</file>
@@ -119,7 +119,6 @@
     <file>media/btn_icons/see.svg</file>
     <file>media/btn_icons/unsee.svg</file>
     <file>media/btn_icons/qrcode.svg</file>
-    
   </qresource>
   <qresource prefix="z_levelling">
     <file>media/btn_icons/baby_step.svg</file>
@@ -173,6 +172,4 @@
     <file>media/btn_icons/eng.svg</file>
     <file>media/btn_icons/pt.svg</file>
   </qresource>
-
-
 </RCC>
