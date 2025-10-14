@@ -16,8 +16,8 @@ class BuildNetworkList(QtCore.QThread):
     scan_result: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         dict, name="scan-results"
     )
-    finished_network_list_build: typing.ClassVar[QtCore.pyqtSignal] = (
-        QtCore.pyqtSignal(list, name="finished-network-list-build")
+    finished_network_list_build: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        list, name="finished-network-list-build"
     )
 
     def __init__(self) -> None:
@@ -62,13 +62,9 @@ class BuildNetworkList(QtCore.QThread):
             networks = []
             if self.nm.check_wifi_interface():
                 available_networks = self.nm.get_available_networks()
-                if (
-                    not available_networks
-                ):  # Skip everything if no networks exist
+                if not available_networks:  # Skip everything if no networks exist
                     logger.debug("No available networks after scan")
-                    self.finished_network_list_build.emit(
-                        self.network_items_list
-                    )
+                    self.finished_network_list_build.emit(self.network_items_list)
                     return
                 for ssid_key in available_networks:
                     properties = available_networks.get(ssid_key, {})
@@ -92,9 +88,7 @@ class BuildNetworkList(QtCore.QThread):
                     key=lambda x: -x["signal"],
                 )
             elif saved_networks:
-                saved_networks = sorted(
-                    [n for n in saved_networks], key=lambda x: -1
-                )
+                saved_networks = sorted([n for n in saved_networks], key=lambda x: -1)
             if saved_networks:
                 for net in saved_networks:
                     ssid = net.get("ssid", "UNKNOWN")
@@ -165,9 +159,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             )
         )
         self.panel.hotspot_button.clicked.connect(
-            partial(
-                self.setCurrentIndex, self.indexOf(self.panel.hotspot_page)
-            )
+            partial(self.setCurrentIndex, self.indexOf(self.panel.hotspot_page))
         )
 
         self.panel.hotspot_button.setPixmap(
@@ -192,9 +184,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         )
 
         self.request_network_scan.connect(self.rescan_networks)
-        self.panel.add_network_validation_button.clicked.connect(
-            self.add_network
-        )
+        self.panel.add_network_validation_button.clicked.connect(self.add_network)
         self.panel.add_network_page_backButton.clicked.connect(
             partial(
                 self.setCurrentIndex,
@@ -240,9 +230,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
                 QtWidgets.QLineEdit.EchoMode.Password,
             )
         )
-        self.panel.hotspot_back_button.clicked.connect(
-            self.handle_hotspot_back
-        )
+        self.panel.hotspot_back_button.clicked.connect(self.handle_hotspot_back)
 
         self.panel.hotspot_password_input_field.setPlaceholderText(
             "Defaults to: 123456789"
@@ -256,9 +244,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         )
 
         self.panel.hotspot_change_confirm.clicked.connect(  # Also goes back to the main page
-            lambda: self.setCurrentIndex(
-                self.indexOf(self.panel.main_network_page)
-            )
+            lambda: self.setCurrentIndex(self.indexOf(self.panel.main_network_page))
         )
 
         self.panel.hotspot_password_input_field.setHidden(True)
@@ -274,9 +260,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.panel.hotspot_password_input_field.setText(
             str(self.sdbus_network.hotspot_password)
         )
-        self.panel.wifi_button.toggle_button.stateChange.connect(
-            self.on_toggle_state
-        )
+        self.panel.wifi_button.toggle_button.stateChange.connect(self.on_toggle_state)
         self.panel.hotspot_button.toggle_button.stateChange.connect(
             self.on_toggle_state
         )
@@ -314,15 +298,20 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.panel.add_network_password_field.setCursor(
             QtCore.Qt.CursorShape.BlankCursor
         )
-        self.panel.hotspot_name_input_field.setCursor(
-            QtCore.Qt.CursorShape.BlankCursor
-        )
+        self.panel.hotspot_name_input_field.setCursor(QtCore.Qt.CursorShape.BlankCursor)
         self.panel.hotspot_password_input_field.setCursor(
             QtCore.Qt.CursorShape.BlankCursor
         )
+        self.panel.network_delete_btn.setPixmap(
+            QtGui.QPixmap(":/ui/media/btn_icons/garbage-icon.svg")
+        )
+        self.panel.network_delete_btn.clicked.connect(
+            lambda: self.sdbus_network.delete_network(
+                self.panel.saved_connection_network_name.text()
+            )
+        )
 
         self.network_list_worker.build()
-
         self.request_network_scan.emit()
         self.evaluate_network_state()
         self.hide()
@@ -390,9 +379,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
                 self.panel.mn_info_box.setText(
                     "No wifi interface detected.\nWifi and Hotspot unavailable\nResort to Ethernet connection."
                 )
-                self.panel.mn_info_box.setAlignment(
-                    QtCore.Qt.AlignmentFlag.AlignCenter
-                )
+                self.panel.mn_info_box.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
                 self.panel.hotspot_button.setDisabled(True)
                 self.panel.wifi_button.setDisabled(True)
                 self.panel.wifi_button.toggle_button.state = (
@@ -435,9 +422,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             self.panel.mn_info_box.setText("Connected")
             current_ssid = self.sdbus_network.get_current_ssid()
             self.panel.netlist_ssuid.setText(current_ssid)
-            sec_type = self.sdbus_network.get_security_type_by_ssid(
-                current_ssid
-            )
+            sec_type = self.sdbus_network.get_security_type_by_ssid(current_ssid)
             if not sec_type:
                 sec_type = "--"
             self.panel.netlist_security.setText(str(sec_type).upper())
@@ -452,9 +437,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             self.panel.mn_info_box.setText(
                 "No Network connection\n Hotspot not enabled\nConnect to a network."
             )
-            self.panel.mn_info_box.setAlignment(
-                QtCore.Qt.AlignmentFlag.AlignCenter
-            )
+            self.panel.mn_info_box.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
             return
 
     def close(self) -> bool:
@@ -479,9 +462,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.panel.netlist_security_label.setVisible(not toggle)
         # Align text
         self.panel.mn_info_box.setWordWrap(True)
-        self.panel.mn_info_box.setAlignment(
-            QtCore.Qt.AlignmentFlag.AlignCenter
-        )
+        self.panel.mn_info_box.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
 
     @QtCore.pyqtSlot(str, name="delete-network")
     def delete_network(self, ssid: str) -> None:
@@ -504,9 +485,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             self.panel.hotspot_name_input_field.text()
             != self.sdbus_network.hotspot_ssid
         ):
-            self.panel.hotspot_name_input_field.setText(
-                self.sdbus_network.hotspot_ssid
-            )
+            self.panel.hotspot_name_input_field.setText(self.sdbus_network.hotspot_ssid)
 
         self.setCurrentIndex(self.indexOf(self.panel.main_network_page))
 
@@ -526,9 +505,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.sdbus_network.add_wifi_network(
             ssid=self.panel.add_network_network_label.text(), psk=_network_psk
         )
-        QtCore.QTimer().singleShot(
-            10000, lambda: self.network_list_worker.build()
-        )
+        QtCore.QTimer().singleShot(10000, lambda: self.network_list_worker.build())
         self.setCurrentIndex(self.indexOf(self.panel.network_list_page))
 
     @QtCore.pyqtSlot(QtWidgets.QListWidgetItem, name="ssid_item_clicked")
@@ -542,16 +519,12 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             self.panel.network_list_widget.itemWidget(item)  # type: ignore
         )
         if _current_item:
-            _current_ssid_name = _current_item.findChild(
-                QtWidgets.QLabel
-            ).text()
+            _current_ssid_name = _current_item.findChild(QtWidgets.QLabel).text()
 
             if (
                 _current_ssid_name in self.sdbus_network.get_saved_ssid_names()
             ):  # Network already saved go to the information page
-                self.setCurrentIndex(
-                    self.indexOf(self.panel.saved_connection_page)
-                )
+                self.setCurrentIndex(self.indexOf(self.panel.saved_connection_page))
                 self.panel.saved_connection_network_name.setText(
                     str(_current_ssid_name)
                 )
@@ -575,9 +548,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             password=password,
             new_ssid=new_ssid,
         )
-        QtCore.QTimer().singleShot(
-            10000, lambda: self.network_list_worker.build()
-        )
+        QtCore.QTimer().singleShot(10000, lambda: self.network_list_worker.build())
         self.setCurrentIndex(self.indexOf(self.panel.network_list_page))
 
     def eventFilter(self, obj, event):
@@ -593,9 +564,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
 
     @QtCore.pyqtSlot(list, name="finished-network-list-build")
     def handle_network_list(self, data: typing.List[typing.Tuple]) -> None:
-        scroll_bar_position = (
-            self.network_list_widget.verticalScrollBar().value()
-        )
+        scroll_bar_position = self.network_list_widget.verticalScrollBar().value()
         self.network_list_widget.blockSignals(True)
         self.network_list_widget.clear()
         self.network_list_widget.setSpacing(35)
@@ -614,21 +583,15 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         if scroll_bar_position > max_v:
             self.network_list_widget.verticalScrollBar().setValue(max_v)
         else:
-            self.network_list_widget.verticalScrollBar().setValue(
-                scroll_bar_position
-            )
+            self.network_list_widget.verticalScrollBar().setValue(scroll_bar_position)
         self.network_list_widget.verticalScrollBar().update()
         self.network_list_widget.update()
         self.network_list_widget.blockSignals(False)
-        QtCore.QTimer().singleShot(
-            10000, lambda: self.network_list_worker.build()
-        )
+        QtCore.QTimer().singleShot(10000, lambda: self.network_list_worker.build())
 
     def handle_button_click(self, ssid: str):
         if ssid in self.sdbus_network.get_saved_ssid_names():
-            self.setCurrentIndex(
-                self.indexOf(self.panel.saved_connection_page)
-            )
+            self.setCurrentIndex(self.indexOf(self.panel.saved_connection_page))
             self.panel.saved_connection_network_name.setText(str(ssid))
 
         else:
@@ -672,9 +635,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             return
 
         _cur = self.currentIndex()
-        if index == self.indexOf(
-            self.panel.add_network_page
-        ):  # Add network page 2
+        if index == self.indexOf(self.panel.add_network_page):  # Add network page 2
             self.panel.add_network_password_field.clear()
             self.panel.add_network_password_field.setPlaceholderText(
                 "Insert password here, press enter when finished."
@@ -706,18 +667,6 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
 
         self.update()
         return super().setCurrentIndex(index)
-
-    def sizeHint(self) -> QtCore.QSize:
-        """
-        When implementing a new widget, it is almost always useful to reimplement sizeHint() to provide a reasonable default size for the widget and to set the correct size policy with setSizePolicy().
-
-        By default, composite widgets that do not provide a size hint will be sized according to the space requirements of their child widgets.
-
-        The size policy lets you supply good default behavior for the layout management system, so that other widgets can contain and manage yours easily. The default size policy indicates that the size hint represents the preferred size of the widget, and this is often good enough for many widgets.
-
-        Note: The size of top-level widgets are constrained to 2/3 of the desktop’s height and width. You can resize() the widget manually if these bounds are inadequate
-        """
-        return super().sizeHint()
 
     def setProperty(self, name: str, value: typing.Any) -> bool:
         """setProperty-> Intercept the set property method
@@ -869,9 +818,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         )
         self.network_list_widget.setAutoScroll(False)
         self.network_list_widget.setProperty("showDropIndicator", False)
-        self.network_list_widget.setDefaultDropAction(
-            QtCore.Qt.DropAction.IgnoreAction
-        )
+        self.network_list_widget.setDefaultDropAction(QtCore.Qt.DropAction.IgnoreAction)
         self.network_list_widget.setAlternatingRowColors(False)
         self.network_list_widget.setSelectionMode(
             QtWidgets.QAbstractItemView.SelectionMode.NoSelection
@@ -903,13 +850,9 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         separator_widget.setStyleSheet(
             "background-color: gray; margin: 1px 1px; min-height: 1px; max-height: 1px;"
         )
-        separator_item.setSizeHint(
-            QtCore.QSize(0, 2)
-        )  # Total vertical space: 2px
+        separator_item.setSizeHint(QtCore.QSize(0, 2))  # Total vertical space: 2px
         self.network_list_widget.addItem(separator_item)
-        self.network_list_widget.setItemWidget(
-            separator_item, separator_widget
-        )
+        self.network_list_widget.setItemWidget(separator_item, separator_widget)
 
     def blank_space_item(self) -> None:
         spacer_item = QtWidgets.QListWidgetItem()
@@ -921,36 +864,24 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
 
     def network_button_item(self, ssid, signal, right_text, /) -> None:
         if 70 <= signal <= 100:
-            wifi_pixmap = QtGui.QPixmap(
-                ":/network/media/btn_icons/3bar_wifi.svg"
-            )
+            wifi_pixmap = QtGui.QPixmap(":/network/media/btn_icons/3bar_wifi.svg")
         elif signal >= 40:
-            wifi_pixmap = QtGui.QPixmap(
-                ":/network/media/btn_icons/2bar_wifi.svg"
-            )
+            wifi_pixmap = QtGui.QPixmap(":/network/media/btn_icons/2bar_wifi.svg")
         elif 0 < signal < 40:
-            wifi_pixmap = QtGui.QPixmap(
-                ":/network/media/btn_icons/1bar_wifi.svg"
-            )
+            wifi_pixmap = QtGui.QPixmap(":/network/media/btn_icons/1bar_wifi.svg")
         elif signal == 0:
-            wifi_pixmap = QtGui.QPixmap(
-                ":/network/media/btn_icons/no_wifi.svg"
-            )
+            wifi_pixmap = QtGui.QPixmap(":/network/media/btn_icons/no_wifi.svg")
 
         button = ListCustomButton(parent=self.network_list_widget)
         button.setText(ssid)
         button.setRightText(right_text)
-        button.setPixmap(
-            QtGui.QPixmap(":/arrow_icons/media/btn_icons/right_arrow.svg")
-        )
+        button.setPixmap(QtGui.QPixmap(":/arrow_icons/media/btn_icons/right_arrow.svg"))
         button.setSecondPixmap(wifi_pixmap)
         button.setFixedHeight(80)
         button.setLeftFontSize(17)
         button.setRightFontSize(12)
 
-        button.clicked.connect(
-            lambda checked, s=ssid: self.handle_button_click(s)
-        )
+        button.clicked.connect(lambda checked, s=ssid: self.handle_button_click(s))
         item = QtWidgets.QListWidgetItem()
         item.setSizeHint(button.sizeHint())
         self.network_list_widget.addItem(item)
