@@ -1,4 +1,4 @@
-# Form implementation generated from reading ui file 'BlocksScreen/lib/ui/wifiConnectivityWindow.ui'
+# Form implementation generated from reading ui file '/home/bugo/github/BlocksScreen/BlocksScreen/lib/ui/wifiConnectivityWindow.ui'
 #
 # Created by: PyQt6 UI code generator 6.7.1
 #
@@ -606,13 +606,28 @@ class Ui_wifi_stacked_page(object):
         self.saved_connection_signal_strength_info_frame.setObjectName("saved_connection_signal_strength_info_frame")
         self.verticalLayout_6.addWidget(self.saved_connection_signal_strength_info_frame, 0, QtCore.Qt.AlignmentFlag.AlignHCenter|QtCore.Qt.AlignmentFlag.AlignTop)
         self.horizontalLayout_9.addWidget(self.frame_3)
-        self.network_delete_btn = IconButton(parent=self.saved_connection_page)
+        self.frame = BlocksCustomFrame(parent=self.saved_connection_page)
+        self.frame.setMaximumSize(QtCore.QSize(200, 100))
+        self.frame.setFrameShape(QtWidgets.QFrame.Shape.StyledPanel)
+        self.frame.setFrameShadow(QtWidgets.QFrame.Shadow.Raised)
+        self.frame.setObjectName("frame")
+        self.horizontalLayout = QtWidgets.QHBoxLayout(self.frame)
+        self.horizontalLayout.setObjectName("horizontalLayout")
+        self.network_activate_btn = IconButton(parent=self.frame)
+        self.network_activate_btn.setMinimumSize(QtCore.QSize(80, 80))
+        self.network_activate_btn.setMaximumSize(QtCore.QSize(80, 80))
+        self.network_activate_btn.setText("")
+        self.network_activate_btn.setFlat(True)
+        self.network_activate_btn.setObjectName("network_activate_btn")
+        self.horizontalLayout.addWidget(self.network_activate_btn)
+        self.network_delete_btn = IconButton(parent=self.frame)
         self.network_delete_btn.setMinimumSize(QtCore.QSize(60, 60))
         self.network_delete_btn.setMaximumSize(QtCore.QSize(80, 80))
         self.network_delete_btn.setText("")
         self.network_delete_btn.setFlat(True)
         self.network_delete_btn.setObjectName("network_delete_btn")
-        self.horizontalLayout_9.addWidget(self.network_delete_btn)
+        self.horizontalLayout.addWidget(self.network_delete_btn)
+        self.horizontalLayout_9.addWidget(self.frame)
         self.frame_4 = BlocksCustomFrame(parent=self.saved_connection_page)
         sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Expanding)
         sizePolicy.setHorizontalStretch(0)

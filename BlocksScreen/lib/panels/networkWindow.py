@@ -305,6 +305,16 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.panel.network_delete_btn.setPixmap(
             QtGui.QPixmap(":/ui/media/btn_icons/garbage-icon.svg")
         )
+
+        self.panel.network_activate_btn.setPixmap(
+            QtGui.QPixmap(":/ui/dialog/btn_icons/on.svg")
+        )
+
+        self.panel.network_activate_btn.clicked.connect(
+            lambda: self.sdbus_network.connect_network(
+                self.panel.saved_connection_network_name.text()
+            )
+        )
         self.panel.network_delete_btn.clicked.connect(
             lambda: self.sdbus_network.delete_network(
                 self.panel.saved_connection_network_name.text()
@@ -593,6 +603,10 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         if ssid in self.sdbus_network.get_saved_ssid_names():
             self.setCurrentIndex(self.indexOf(self.panel.saved_connection_page))
             self.panel.saved_connection_network_name.setText(str(ssid))
+            _curr_ssid = self.sdbus_network.get_current_ssid()
+            self.panel.network_activate_btn.show() if _curr_ssid != str(
+                ssid
+            ) else self.panel.network_activate_btn.hide()
 
         else:
             self.setCurrentIndex(self.indexOf(self.panel.add_network_page))
@@ -863,14 +877,13 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.network_list_widget.setItemWidget(spacer_item, spacer_widget)
 
     def network_button_item(self, ssid, signal, right_text, /) -> None:
+        wifi_pixmap = QtGui.QPixmap(":/network/media/btn_icons/no_wifi.svg")
         if 70 <= signal <= 100:
             wifi_pixmap = QtGui.QPixmap(":/network/media/btn_icons/3bar_wifi.svg")
         elif signal >= 40:
             wifi_pixmap = QtGui.QPixmap(":/network/media/btn_icons/2bar_wifi.svg")
-        elif 0 < signal < 40:
+        elif 1 < signal < 40:
             wifi_pixmap = QtGui.QPixmap(":/network/media/btn_icons/1bar_wifi.svg")
-        elif signal == 0:
-            wifi_pixmap = QtGui.QPixmap(":/network/media/btn_icons/no_wifi.svg")
 
         button = ListCustomButton(parent=self.network_list_widget)
         button.setText(ssid)
