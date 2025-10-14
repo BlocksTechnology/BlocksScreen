@@ -7,9 +7,9 @@ from functools import partial
 from lib.moonrakerComm import MoonWebSocket
 from lib.panels.widgets.loadPage import LoadScreen
 from lib.panels.widgets.troubleshootPage import TroubleshootPage
+from lib.panels.widgets.updatePage import UpdatePage
 from lib.printer import Printer
 from lib.ui.utilitiesStackedWidget_ui import Ui_utilitiesStackedWidget
-
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.toggleAnimatedButton import ToggleAnimatedButton
 from PyQt6 import QtCore, QtGui, QtWidgets
@@ -52,8 +52,8 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
     request_back: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         name="request-back"
     )
-    request_change_page: typing.ClassVar[QtCore.pyqtSignal] = (
-        QtCore.pyqtSignal(int, int, name="request-change-page")
+    request_change_page: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        int, int, name="request-change-page"
     )
     request_available_objects_signal: typing.ClassVar[QtCore.pyqtSignal] = (
         QtCore.pyqtSignal(name="get-available-objects")
@@ -61,20 +61,25 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
     run_gcode_signal: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         str, name="run-gcode"
     )
-    request_numpad_signal: typing.ClassVar[QtCore.pyqtSignal] = (
-        QtCore.pyqtSignal(
-            int,
-            str,
-            str,
-            "PyQt_PyObject",
-            QtWidgets.QStackedWidget,
-            name="request-numpad",
-        )
+    request_numpad_signal: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        int,
+        str,
+        str,
+        "PyQt_PyObject",
+        QtWidgets.QStackedWidget,
+        name="request-numpad",
     )
     subscribe_config: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         [list, "PyQt_PyObject"],
         [str, "PyQt_PyObject"],
         name="on-subscribe-config",
+    )
+    _on_update_message: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        dict, name="handle-update-message"
+    )
+
+    update_available: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        bool, name="update-available"
     )
 
     def __init__(
@@ -103,13 +108,17 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         self.current_object: typing.Optional[str] = None
         self.current_process: typing.Optional[Process] = None
         self.axis_in: str = "x"
-        self.ammount: int = 1
+        self.amount: int = 1
         self.tb: bool = False
+        self.cg = None
 
         # --- UI Setup ---
         self.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
         self.loadPage = LoadScreen(self)
         self.addWidget(self.loadPage)
+
+        self.update_page = UpdatePage(self)
+        self.addWidget(self.update_page)
 
         # --- Back Buttons ---
         for button in (
@@ -119,65 +128,43 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
             self.panel.leds_slider_back_btn,
             self.panel.input_shaper_back_btn,
             self.panel.routine_check_back_btn,
+            self.update_page.update_back_btn,
         ):
             button.clicked.connect(self.back_button)
 
         # --- Page Navigation ---
-        self._connect_page_change(
-            self.panel.utilities_axes_btn, self.panel.axes_page
-        )
+        self._connect_page_change(self.panel.utilities_axes_btn, self.panel.axes_page)
+        self._connect_page_change(self.panel.update_btn, self.update_page)
         self._connect_page_change(
             self.panel.utilities_input_shaper_btn, self.panel.input_shaper_page
         )
-        self._connect_page_change(
-            self.panel.utilities_info_btn, self.panel.info_page
-        )
-        self._connect_page_change(
-            self.panel.utilities_leds_btn, self.panel.leds_page
-        )
+        self._connect_page_change(self.panel.utilities_info_btn, self.panel.info_page)
+        self._connect_page_change(self.panel.utilities_leds_btn, self.panel.leds_page)
         self._connect_page_change(
             self.panel.utilities_routine_check_btn, self.panel.routines_page
         )
-        self._connect_page_change(
-            self.panel.is_confirm_btn, self.panel.utilities_page
-        )
-        self._connect_page_change(
-            self.panel.am_cancel, self.panel.utilities_page
-        )
+        self._connect_page_change(self.panel.is_confirm_btn, self.panel.utilities_page)
+        self._connect_page_change(self.panel.am_cancel, self.panel.utilities_page)
 
-        self._connect_page_change(
-            self.panel.axes_back_btn, self.panel.utilities_page
-        )
+        self._connect_page_change(self.panel.axes_back_btn, self.panel.utilities_page)
         self._connect_page_change(
             self.troubleshoot_page.tb_back_btn, self.panel.utilities_page
         )
 
         # --- Routines ---
-        self.panel.rc_fans.clicked.connect(
-            partial(self.run_routine, Process.FAN)
-        )
+        self.panel.rc_fans.clicked.connect(partial(self.run_routine, Process.FAN))
         self.panel.rc_bheat.clicked.connect(
             partial(self.run_routine, Process.BED_HEATER)
         )
-        self.panel.rc_ext.clicked.connect(
-            partial(self.run_routine, Process.EXTRUDER)
-        )
-        self.panel.rc_axis.clicked.connect(
-            partial(self.run_routine, Process.AXIS)
-        )
+        self.panel.rc_ext.clicked.connect(partial(self.run_routine, Process.EXTRUDER))
+        self.panel.rc_axis.clicked.connect(partial(self.run_routine, Process.AXIS))
         self.panel.rc_no.clicked.connect(self.on_routine_answer)
         self.panel.rc_yes.clicked.connect(self.on_routine_answer)
 
         # --- Axis Maintenance ---
-        self.panel.axis_x_btn.clicked.connect(
-            partial(self.axis_maintenance, "x")
-        )
-        self.panel.axis_y_btn.clicked.connect(
-            partial(self.axis_maintenance, "y")
-        )
-        self.panel.axis_z_btn.clicked.connect(
-            partial(self.axis_maintenance, "z")
-        )
+        self.panel.axis_x_btn.clicked.connect(partial(self.axis_maintenance, "x"))
+        self.panel.axis_y_btn.clicked.connect(partial(self.axis_maintenance, "y"))
+        self.panel.axis_z_btn.clicked.connect(partial(self.axis_maintenance, "z"))
 
         # --- Input Shaper ---
         self.panel.is_X_startis_btn.clicked.connect(
@@ -186,18 +173,12 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         self.panel.is_Y_startis_btn.clicked.connect(
             partial(self.run_resonance_test, "y")
         )
-        self.panel.am_confirm.clicked.connect(
-            self.apply_input_shaper_selection
-        )
+        self.panel.am_confirm.clicked.connect(self.apply_input_shaper_selection)
         self.panel.isc_btn_group.buttonClicked.connect(
             lambda btn: setattr(self, "ammount", int(btn.text()))
         )
-        self._connect_numpad_request(
-            self.panel.isui_fq, "frequency", "Frequency"
-        )
-        self._connect_numpad_request(
-            self.panel.isui_sm, "smoothing", "Smoothing"
-        )
+        self._connect_numpad_request(self.panel.isui_fq, "frequency", "Frequency")
+        self._connect_numpad_request(self.panel.isui_sm, "smoothing", "Smoothing")
 
         self.panel.toggle_led_button.state = ToggleAnimatedButton.State.ON
 
@@ -220,6 +201,34 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         # --- Initialize Printer Communication ---
         self.printer.printer_config.connect(self.on_printer_config_received)
         self.printer.gcode_move_update.connect(self.on_gcode_move_update)
+
+        # ---- Websocket connections ----
+
+        self._on_update_message.connect(self.update_page.handle_update_message)
+        self.update_page.request_full_update.connect(self.ws.api.full_update)
+        self.update_page.request_recover_repo[str].connect(
+            self.ws.api.recover_corrupt_repo
+        )
+        self.update_page.request_recover_repo[str, bool].connect(
+            self.ws.api.recover_corrupt_repo
+        )
+        self.update_page.request_refresh_update.connect(
+            self.ws.api.refresh_update_status
+        )
+        self.update_page.request_refresh_update[str].connect(
+            self.ws.api.refresh_update_status
+        )
+        self.update_page.request_rollback_update.connect(self.ws.api.rollback_update)
+        self.update_page.request_update_client.connect(self.ws.api.update_client)
+        self.update_page.request_update_klipper.connect(self.ws.api.update_klipper)
+        self.update_page.request_update_moonraker.connect(self.ws.api.update_moonraker)
+        self.update_page.request_update_status.connect(self.ws.api.update_status)
+        self.update_page.request_update_system.connect(self.ws.api.update_system)
+        self.update_page.update_available.connect(self.update_available.emit)
+        self.update_page.update_available.connect(
+            self.panel.update_btn.setShowNotification
+        )
+        self.panel.update_btn.setPixmap(QtGui.QPixmap(":/system/media/btn_icons/update-software-icon.svg"))
 
     @QtCore.pyqtSlot(list, name="on_object_list")
     def on_object_list(self, object_list: list) -> None:
@@ -265,11 +274,9 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         if not value:
             return
         if name == "gcode_position":
-            self.position = value
+            ...
 
-    def _connect_numpad_request(
-        self, button: QtWidgets.QWidget, name: str, title: str
-    ):
+    def _connect_numpad_request(self, button: QtWidgets.QWidget, name: str, title: str):
         if isinstance(button, QtWidgets.QPushButton):
             button.clicked.connect(
                 lambda: self.request_numpad_signal.emit(
@@ -277,9 +284,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
                 )
             )
 
-    def handle_numpad_change(
-        self, name: str, new_value: typing.Union[int, float]
-    ):
+    def handle_numpad_change(self, name: str, new_value: typing.Union[int, float]):
         if name == "frequency":
             self.panel.isui_fq.setText(f"Frequency: {new_value} Hz")
         elif name == "smoothing":
@@ -307,9 +312,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
             if process == Process.FAN:
                 self.run_gcode_signal.emit("M107")
             return
-        self.set_routine_check_page(
-            f"Running routine for: {self.current_object}", ""
-        )
+        self.set_routine_check_page(f"Running routine for: {self.current_object}", "")
         self.show_waiting_page(
             self.indexOf(self.panel.rc_page),
             f"Please check if the {message}",
@@ -320,9 +323,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
     def _advance_routine_object(self, obj_list: list) -> bool:
         if not obj_list:
             is_first_run = self.current_object is None
-            self.current_object = (
-                obj_list[0] if is_first_run and obj_list else "done"
-            )
+            self.current_object = obj_list[0] if is_first_run and obj_list else "done"
             return is_first_run
         if self.current_object not in obj_list:
             if self.current_process == Process.AXIS:
@@ -403,8 +404,10 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         layout = self.panel.leds_content_layout
         while layout.count():
             if (child := layout.takeAt(0)) and child.widget():
-                child.widget().deleteLater()
+                child.widget().deleteLater()  # type: ignore
         led_names = []
+        if not self.cg:
+            return
         for obj in self.cg:
             if "led" in obj:
                 try:
@@ -420,9 +423,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
                 button.setFixedSize(200, 70)
                 button.setText(name)
                 button.setProperty("class", "menu_btn")
-                button.setPixmap(
-                    QtGui.QPixmap(":/ui/media/btn_icons/LEDs.svg")
-                )
+                button.setPixmap(QtGui.QPixmap(":/ui/media/btn_icons/LEDs.svg"))
                 row, col = divmod(i, max_columns)
                 layout.addWidget(button, row, col)
                 button.clicked.connect(partial(self.handle_led_button, name))
@@ -460,9 +461,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         if self.current_object:
             if self.current_object in self.objects["leds"]:
                 led_state: LedState = self.objects["leds"][self.current_object]
-                self.run_gcode_signal.emit(
-                    led_state.get_gcode(self.current_object)
-                )
+                self.run_gcode_signal.emit(led_state.get_gcode(self.current_object))
 
     # input shapper
     def run_resonance_test(self, axis: str) -> None:
@@ -568,17 +567,11 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
     def show_waiting_page(self, page_to_go_to: int, label: str, time_ms: int):
         self.loadPage.label.setText(label)
         self.loadPage.show()
-        QtCore.QTimer.singleShot(
-            time_ms, lambda: self.change_page(page_to_go_to)
-        )
+        QtCore.QTimer.singleShot(time_ms, lambda: self.change_page(page_to_go_to))
 
-    def _connect_page_change(
-        self, button: QtWidgets.QWidget, page: QtWidgets.QWidget
-    ):
-        if isinstance(button, QtWidgets.QPushButton):
-            button.clicked.connect(
-                lambda: self.change_page(self.indexOf(page))
-            )
+    def _connect_page_change(self, button: QtWidgets.QWidget, page: QtWidgets.QWidget):
+        if isinstance(button, QtWidgets.QAbstractButton):
+            button.clicked.connect(lambda: self.change_page(self.indexOf(page)))
 
     def change_page(self, index: int):
         self.loadPage.hide()

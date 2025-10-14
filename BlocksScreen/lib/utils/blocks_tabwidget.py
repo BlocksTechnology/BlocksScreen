@@ -2,7 +2,6 @@ from PyQt6 import QtWidgets, QtGui, QtCore
 
 
 class NotificationTabBar(QtWidgets.QTabBar):
-
     def __init__(self, parent=None):
         super().__init__(parent)
         self._notifications = {}  # {tab_index: bool}
@@ -24,10 +23,11 @@ class NotificationTabBar(QtWidgets.QTabBar):
                 dot_diameter = min(10, rect.height() * 0.3)
                 dot_x = rect.right() - dot_diameter - 4
                 dot_y = rect.top() + 30
-
                 painter.setBrush(QtGui.QColor(226, 31, 31))
                 painter.setPen(QtCore.Qt.PenStyle.NoPen)
-                painter.drawEllipse(dot_x, dot_y, dot_diameter, dot_diameter)
+                painter.drawEllipse(
+                    int(dot_x), dot_y, int(dot_diameter), int(dot_diameter)
+                )
 
 
 class NotificationQTabWidget(QtWidgets.QTabWidget):

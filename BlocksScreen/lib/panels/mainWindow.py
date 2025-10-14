@@ -19,6 +19,7 @@ from lib.ui.mainWindow_ui import Ui_MainWindow  # With header
 
 # from lib.ui.mainWindow_v2_ui import Ui_MainWindow # No header
 from lib.ui.resources.background_resources_rc import *
+from lib.ui.resources.font_rc import *
 from lib.ui.resources.graphic_resources_rc import *
 from lib.ui.resources.icon_resources_rc import *
 from lib.ui.resources.main_menu_resources_rc import *
@@ -40,8 +41,9 @@ class MainWindow(QtWidgets.QMainWindow):
     gcode_response = QtCore.pyqtSignal(list, name="gcode_response")
     handle_error_response = QtCore.pyqtSignal(list, name="handle_error_response")
     call_network_panel = QtCore.pyqtSignal(name="call-network-panel")
-
-    update_available = QtCore.pyqtSignal(bool, name="update_available")
+    on_update_message: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        dict, name="on-update-message"
+    )
 
     def __init__(self):
         super(MainWindow, self).__init__()
@@ -81,9 +83,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self.filamentPanel.request_change_page.connect(slot=self.global_change_page)
         self.controlPanel.request_back_button.connect(slot=self.global_back)
         self.controlPanel.request_change_page.connect(slot=self.global_change_page)
-
         self.utilitiesPanel.request_back.connect(slot=self.global_back)
         self.utilitiesPanel.request_change_page.connect(slot=self.global_change_page)
+        self.utilitiesPanel.update_available.connect(self.on_update_available)
+
         self.ui.extruder_temp_display.clicked.connect(
             lambda: self.global_change_page(
                 self.ui.main_content_widget.indexOf(self.ui.controlTab),
@@ -138,6 +141,8 @@ class MainWindow(QtWidgets.QMainWindow):
             self.controlPanel.probe_helper_page.handle_error_response
         )
 
+        self.on_update_message.connect(self.utilitiesPanel._on_update_message)
+
         self.ui.extruder_temp_display.display_format = "upper_downer"
         self.ui.bed_temp_display.display_format = "upper_downer"
 
@@ -147,12 +152,11 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.reset_tab_indexes()
 
-    @QtCore.pyqtSlot(bool, name="update_available")
-    def update_avaible(self, state=bool):
-        if state:
-            self.ui.main_content_widget.setNotification(3, True)
-            # TODO: change to update button
-            self.utilitiesPanel.panel.utilities_info_btn.setShowNotification(True)
+    @QtCore.pyqtSlot(bool, name="update-available")
+    def on_update_available(self, state: bool = False):
+        """Signal render for red dot on utilities tab icon"""
+        self.ui.main_content_widget.setNotification(3, state)
+        self.repaint()
 
     def enable_tab_bar(self) -> bool:
         """Enables the tab bar
@@ -266,7 +270,7 @@ class MainWindow(QtWidgets.QMainWindow):
             case 3:
                 self.utilitiesPanel.setCurrentIndex(panel_index)
 
-    @QtCore.pyqtSlot(int, int, name="request_change_page")
+    @QtCore.pyqtSlot(int, int, name="request-change-page")
     def global_change_page(self, tab_index: int, panel_index: int) -> None:
         """Changes panels pages globally
 
@@ -280,6 +284,7 @@ class MainWindow(QtWidgets.QMainWindow):
             )
         if not isinstance(panel_index, int):
             _logger.debug(f"Panel page index expected type int, {type(panel_index)}")
+        
         self.printPanel.loadscreen.hide()
         current_page = [
             self.ui.main_content_widget.currentIndex(),
@@ -350,8 +355,24 @@ class MainWindow(QtWidgets.QMainWindow):
                         received from websocket | error message received: {e}"
                 )
         elif "machine" in _method:
-            ...
+            if "ok" in _data:
+                # Can here capture if 'ok' if a request for an update was successful
+                return
+            if "update" in _method:
+                if ("status" or "refresh") in _method:
+                    self.on_update_message.emit(_data)
         elif "printer.info" in _method:
+            # {
+            #     "state": "ready",
+            #     "state_message": "Printer is ready",
+            #     "hostname": "my-pi-hostname",
+            #     "software_version": "v0.9.1-302-g900c7396",
+            #     "cpu_info": "4 core ARMv7 Processor rev 4 (v7l)",
+            #     "klipper_path": "/home/pi/klipper",
+            #     "python_path": "/home/pi/klippy-env/bin/python",
+            #     "log_file": "/tmp/klippy.log",
+            #     "config_file": "/home/pi/printer.cfg",
+            # }
             ...
         elif "printer.print" in _method:
             if "start" in _method and "ok" in _data:

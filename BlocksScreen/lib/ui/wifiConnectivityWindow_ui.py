@@ -1,4 +1,4 @@
-# Form implementation generated from reading ui file 'BlocksScreen/lib/ui/wifiConnectivityWindow.ui'
+# Form implementation generated from reading ui file '/home/bugo/github/BlocksScreen/BlocksScreen/lib/ui/wifiConnectivityWindow.ui'
 #
 # Created by: PyQt6 UI code generator 6.7.1
 #
@@ -383,7 +383,7 @@ class Ui_wifi_stacked_page(object):
         self.add_network_password_view.setMinimumSize(QtCore.QSize(60, 60))
         self.add_network_password_view.setMaximumSize(QtCore.QSize(60, 60))
         self.add_network_password_view.setFlat(True)
-        self.add_network_password_view.setProperty("icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/see.svg"))
+        self.add_network_password_view.setProperty("icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/unsee.svg"))
         self.add_network_password_view.setObjectName("add_network_password_view")
         self.horizontalLayout_5.addWidget(self.add_network_password_view)
         self.add_np_content_layout.addWidget(self.frame_2)
@@ -534,7 +534,7 @@ class Ui_wifi_stacked_page(object):
         self.saved_connection_change_password_view.setMinimumSize(QtCore.QSize(60, 60))
         self.saved_connection_change_password_view.setMaximumSize(QtCore.QSize(60, 60))
         self.saved_connection_change_password_view.setFlat(True)
-        self.saved_connection_change_password_view.setProperty("icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/see.svg"))
+        self.saved_connection_change_password_view.setProperty("icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/unsee.svg"))
         self.saved_connection_change_password_view.setObjectName("saved_connection_change_password_view")
         self.horizontalLayout_8.addWidget(self.saved_connection_change_password_view, 0, QtCore.Qt.AlignmentFlag.AlignHCenter|QtCore.Qt.AlignmentFlag.AlignVCenter)
         self.verticalLayout_5.addWidget(self.frame_5)
@@ -606,6 +606,28 @@ class Ui_wifi_stacked_page(object):
         self.saved_connection_signal_strength_info_frame.setObjectName("saved_connection_signal_strength_info_frame")
         self.verticalLayout_6.addWidget(self.saved_connection_signal_strength_info_frame, 0, QtCore.Qt.AlignmentFlag.AlignHCenter|QtCore.Qt.AlignmentFlag.AlignTop)
         self.horizontalLayout_9.addWidget(self.frame_3)
+        self.frame = BlocksCustomFrame(parent=self.saved_connection_page)
+        self.frame.setMaximumSize(QtCore.QSize(200, 100))
+        self.frame.setFrameShape(QtWidgets.QFrame.Shape.StyledPanel)
+        self.frame.setFrameShadow(QtWidgets.QFrame.Shadow.Raised)
+        self.frame.setObjectName("frame")
+        self.horizontalLayout = QtWidgets.QHBoxLayout(self.frame)
+        self.horizontalLayout.setObjectName("horizontalLayout")
+        self.network_activate_btn = IconButton(parent=self.frame)
+        self.network_activate_btn.setMinimumSize(QtCore.QSize(80, 80))
+        self.network_activate_btn.setMaximumSize(QtCore.QSize(80, 80))
+        self.network_activate_btn.setText("")
+        self.network_activate_btn.setFlat(True)
+        self.network_activate_btn.setObjectName("network_activate_btn")
+        self.horizontalLayout.addWidget(self.network_activate_btn)
+        self.network_delete_btn = IconButton(parent=self.frame)
+        self.network_delete_btn.setMinimumSize(QtCore.QSize(60, 60))
+        self.network_delete_btn.setMaximumSize(QtCore.QSize(80, 80))
+        self.network_delete_btn.setText("")
+        self.network_delete_btn.setFlat(True)
+        self.network_delete_btn.setObjectName("network_delete_btn")
+        self.horizontalLayout.addWidget(self.network_delete_btn)
+        self.horizontalLayout_9.addWidget(self.frame)
         self.frame_4 = BlocksCustomFrame(parent=self.saved_connection_page)
         sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Expanding)
         sizePolicy.setHorizontalStretch(0)
@@ -967,7 +989,7 @@ class Ui_wifi_stacked_page(object):
         self.hotspot_password_view_button.setMinimumSize(QtCore.QSize(60, 60))
         self.hotspot_password_view_button.setMaximumSize(QtCore.QSize(60, 60))
         self.hotspot_password_view_button.setFlat(True)
-        self.hotspot_password_view_button.setProperty("icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/see.svg"))
+        self.hotspot_password_view_button.setProperty("icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/unsee.svg"))
         self.hotspot_password_view_button.setObjectName("hotspot_password_view_button")
         self.horizontalLayout_12.addWidget(self.hotspot_password_view_button)
         self.hotspot_page_content_layout.addWidget(self.frame_7)
@@ -986,7 +1008,7 @@ class Ui_wifi_stacked_page(object):
         wifi_stacked_page.addWidget(self.hotspot_page)
 
         self.retranslateUi(wifi_stacked_page)
-        wifi_stacked_page.setCurrentIndex(4)
+        wifi_stacked_page.setCurrentIndex(3)
         QtCore.QMetaObject.connectSlotsByName(wifi_stacked_page)
 
     def retranslateUi(self, wifi_stacked_page):
