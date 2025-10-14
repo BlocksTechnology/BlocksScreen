@@ -4,6 +4,10 @@ from lib.panels.widgets.optionCardWidget import OptionCard
 from PyQt6 import QtCore, QtGui, QtWidgets
 from lib.utils.blocks_label import BlocksLabel
 from lib.utils.icon_button import IconButton
+from lib.utils.group_button import GroupButton
+from lib.utils.blocks_button import BlocksCustomButton
+
+from  lib.panels.widgets.loadPage import LoadScreen
 
 
 class ProbeHelper(QtWidgets.QWidget):
@@ -32,7 +36,7 @@ class ProbeHelper(QtWidgets.QWidget):
         name="request_page_view"
     )
 
-    distances = ["0.01", ".025", ".05", ".01", "1"]
+    distances = ["0.01", ".025", "0.1", "0.5", "1"]
     _calibration_commands: list = []
     helper_start: bool = False
     helper_initialize: bool = False
@@ -45,8 +49,10 @@ class ProbeHelper(QtWidgets.QWidget):
     def __init__(self, parent: QtWidgets.QWidget) -> None:
         super().__init__(parent)
 
+        self.Loadscreen = LoadScreen(self)
+
         self.setObjectName("probe_offset_page")
-        self.setupUi(self)
+        self.setupUi()
 
         self.inductive_icon = QtGui.QPixmap(
             ":/z_levelling/media/btn_icons/inductive.svg"
@@ -89,14 +95,25 @@ class ProbeHelper(QtWidgets.QWidget):
             )
         )
         self.mb_raise_nozzle.clicked.connect(
-            lambda: self.run_gcode_signal.emit(f"TESTZ Z={self._zhop_height}")
+            lambda:self.handle_nozzle_move("raise")
         )
         self.mb_lower_nozzle.clicked.connect(
-            lambda: self.run_gcode_signal.emit(f"TESTZ Z=-{self._zhop_height}")
+            lambda:self.handle_nozzle_move("lower")
         )
         self.po_back_button.clicked.connect(self.request_back)
         self.accept_button.clicked.connect(self.handle_accept)
         self.abort_button.clicked.connect(self.handle_abort)
+        self.update()
+
+    def handle_nozzle_move(self, direction: str):
+        if direction == "raise":
+            self._pending_gcode = f"TESTZ Z={self._zhop_height}"
+        elif direction == "lower":
+            self._pending_gcode = f"TESTZ Z=-{self._zhop_height}"
+
+        self.accept_button.show()
+        self.abort_button.show()
+        self.run_gcode_signal.emit(self._pending_gcode)
         self.update()
 
     def _configure_option_cards(self, probes_list: list[str]) -> None:
@@ -125,8 +142,7 @@ class ProbeHelper(QtWidgets.QWidget):
             _card = OptionCard(self, _card_text, str(probe), _icon)  # type: ignore
             _card.setObjectName(str(probe))
             self.card_options.update({str(probe): _card})
-            self.po_main_content_layout.addWidget(_card)
-
+            self.main_content_horizontal_layout.addWidget(_card, alignment=QtCore.Qt.AlignmentFlag.AlignHCenter)
             if not hasattr(self.card_options.get(probe), "continue_clicked"):
                 del _card
                 self.card_options.pop(probe)
@@ -350,6 +366,12 @@ class ProbeHelper(QtWidgets.QWidget):
         """
         if not sender:
             return
+        
+        for i in self.card_options.values():
+            i.setDisabled(True)
+
+        self.Loadscreen.show()
+        self.Loadscreen.set_status_message("Homing Axes...")
 
         if self.z_offset_safe_xy:
             self.run_gcode_signal.emit("G28\nM400")
@@ -494,19 +516,25 @@ class ProbeHelper(QtWidgets.QWidget):
         self.mb_raise_nozzle.setEnabled(state)
         self.accept_button.setEnabled(state)
         self.abort_button.setEnabled(state)
+        self.accept_button.hide()
+        self.abort_button.hide()
         if state:
+            for i in self.card_options.values():
+                i.setDisabled(False)
+            self.Loadscreen.hide()
             self.po_back_button.setEnabled(False)
             self.po_back_button.hide()
             self.po_header_title.setEnabled(False)
             self.po_header_title.hide()
             self.separator_line.hide()
-            self.old_offset_box_2.show()
-            self.tool_content_info.show()
+            self.old_offset_info.show()
+            self.bbp_offset_steps_buttons_group_box.show()
+            self.current_offset_info.show()
             self.tool_image.show()
-            self.current_offset_box_2.show()
-            self.move_intervals.show()
-            self.tool_dialog_2.show()
-            self.tool_move.show()
+            self.mb_raise_nozzle.show()
+            self.mb_lower_nozzle.show()
+            self.frame_2.show()
+            self.spacerItem.changeSize(40,20,QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Minimum)
 
         else:
             self.po_back_button.setEnabled(True)
@@ -514,435 +542,465 @@ class ProbeHelper(QtWidgets.QWidget):
             self.po_header_title.setEnabled(False)
             self.po_header_title.show()
             self.separator_line.show()
-            self.tool_content_info.hide()
-            self.old_offset_box_2.hide()
-            self.current_offset_box_2.hide()
+            self.bbp_offset_steps_buttons_group_box.hide()
+            self.old_offset_info.hide()
+            self.current_offset_info.hide()
             self.tool_image.hide()
-            self.move_intervals.hide()
-            self.tool_dialog_2.hide()
-            self.tool_move.hide()
+            self.mb_raise_nozzle.hide()
+            self.mb_lower_nozzle.hide()
+            self.frame_2.hide()
+            self.spacerItem.changeSize(0,0,QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Minimum)
+        
         self.update()
         return
+    
+    def setupUi(self) -> None:
 
-    def setupUi(self, probe_offset_page):
-        probe_offset_page.setObjectName("probe_offset_page")
-        probe_offset_page.resize(710, 410)
+        self.bbp_offset_value_selector_group = QtWidgets.QButtonGroup(self)
+        self.bbp_offset_value_selector_group.setExclusive(True)
         sizePolicy = QtWidgets.QSizePolicy(
             QtWidgets.QSizePolicy.Policy.MinimumExpanding,
             QtWidgets.QSizePolicy.Policy.MinimumExpanding,
         )
-        sizePolicy.setHorizontalStretch(0)
-        sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(
-            probe_offset_page.sizePolicy().hasHeightForWidth()
-        )
-        probe_offset_page.setSizePolicy(sizePolicy)
-        probe_offset_page.setMinimumSize(QtCore.QSize(700, 410))
-        probe_offset_page.setMaximumSize(QtCore.QSize(720, 420))
-        self.verticalLayout = QtWidgets.QVBoxLayout(probe_offset_page)
+        sizePolicy.setHorizontalStretch(1)
+        sizePolicy.setVerticalStretch(1)
+        sizePolicy.setHeightForWidth(self.sizePolicy().hasHeightForWidth())
+        self.setSizePolicy(sizePolicy)
+        self.setMinimumSize(QtCore.QSize(710, 400))
+        self.setMaximumSize(
+            QtCore.QSize(720, 420)
+        )  # This sets the maximum width of the entire page
+        self.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
+
+        # Main Vertical Layout for the entire page
+        self.verticalLayout = QtWidgets.QVBoxLayout(self)
         self.verticalLayout.setObjectName("verticalLayout")
-        self.po_header_layout = QtWidgets.QHBoxLayout()
-        self.po_header_layout.setObjectName("po_header_layout")
-        self.po_header_title = QtWidgets.QLabel(parent=probe_offset_page)
-        self.po_header_title.setMinimumSize(QtCore.QSize(200, 60))
+
+        # Header Layout
+        self.bbp_header_layout = QtWidgets.QHBoxLayout()
+        self.bbp_header_layout.setObjectName("bbp_header_layout")
+        self.po_header_title = QtWidgets.QLabel(parent=self)
+        sizePolicy.setHeightForWidth(
+            self.po_header_title.sizePolicy().hasHeightForWidth()
+        )
+        self.po_header_title.setSizePolicy(sizePolicy)
+        self.po_header_title.setMinimumSize(QtCore.QSize(400, 60))
         self.po_header_title.setMaximumSize(QtCore.QSize(16777215, 60))
         font = QtGui.QFont()
-        font.setPointSize(24)
+        font.setPointSize(20)
         self.po_header_title.setFont(font)
-        self.po_header_title.setStyleSheet(
-            "background: transparent; color: white;"
+        palette = QtGui.QPalette()
+        palette.setColor(
+            palette.ColorGroup.All,
+            palette.ColorRole.Window,
+            QtCore.Qt.GlobalColor.transparent,
         )
+        palette.setColor(
+            palette.ColorGroup.All,
+            palette.ColorRole.WindowText,
+            QtGui.QColor("#FFFFFF"),
+        )
+        self.po_header_title.setAutoFillBackground(True)
+        self.po_header_title.setBackgroundRole(palette.ColorRole.Window)
+        self.po_header_title.setPalette(palette)
+        self.po_header_title.setText("Z Probe Offset Calibrate")
+        self.po_header_title.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self.po_header_title.setObjectName("po_header_title")
-        self.po_header_layout.addWidget(self.po_header_title)
-        self.po_back_button = IconButton(parent=probe_offset_page)
+
+        self.accept_button = BlocksCustomButton(self)
+        self.accept_button.setGeometry(QtCore.QRect(480, 340, 170, 60))
+        self.accept_button.setText("Accept")
+        self.accept_button.setObjectName("accept_button")
+        self.accept_button.setPixmap(
+            QtGui.QPixmap(":/dialog/media/btn_icons/yes.svg")
+        )
+        self.accept_button.setVisible(False)
+        font = QtGui.QFont()
+        font.setPointSize(15)
+        self.accept_button.setFont(font)
+
+        self.abort_button = BlocksCustomButton(self)
+        self.abort_button.setGeometry(QtCore.QRect(300, 340, 170, 60))
+        self.abort_button.setText("Abort")
+        self.abort_button.setObjectName("accept_button")
+        self.abort_button.setPixmap(
+            QtGui.QPixmap(":/dialog/media/btn_icons/no.svg")
+        )
+        self.abort_button.setVisible(False)
+        font = QtGui.QFont()
+        font.setPointSize(15)
+        self.abort_button.setFont(font)
+
+        spacerItem = QtWidgets.QSpacerItem(
+            60,
+            0,
+            QtWidgets.QSizePolicy.Policy.Expanding,
+            QtWidgets.QSizePolicy.Policy.Minimum,
+        )
+        self.bbp_header_layout.addItem(spacerItem)
+
+        self.bbp_header_layout.addWidget(
+            self.po_header_title,
+            0,
+            QtCore.Qt.AlignmentFlag.AlignCenter,
+        )
+        self.po_back_button = IconButton(parent=self)
+        sizePolicy.setHeightForWidth(
+            self.po_back_button.sizePolicy().hasHeightForWidth()
+        )
+        self.po_back_button.setSizePolicy(sizePolicy)
         self.po_back_button.setMinimumSize(QtCore.QSize(60, 60))
         self.po_back_button.setMaximumSize(QtCore.QSize(60, 60))
+        self.po_back_button.setText("")
         self.po_back_button.setFlat(True)
-        self.po_back_button.setProperty(
-            "icon_pixmap",
-            QtGui.QPixmap(":/ui/media/btn_icons/back.svg"),
+        self.po_back_button.setPixmap(
+            QtGui.QPixmap(":/ui/media/btn_icons/back.svg")
         )
         self.po_back_button.setObjectName("po_back_button")
-        self.po_header_layout.addWidget(self.po_back_button)
-        self.verticalLayout.addLayout(self.po_header_layout)
-        self.separator_line = QtWidgets.QFrame(parent=probe_offset_page)
-        font = QtGui.QFont()
-        font.setPointSize(20)
-        self.separator_line.setFont(font)
+
+        self.bbp_header_layout.addWidget(
+            self.po_back_button,
+            0,
+            QtCore.Qt.AlignmentFlag.AlignRight
+            | QtCore.Qt.AlignmentFlag.AlignVCenter,
+        )
+        self.bbp_header_layout.setStretch(0, 1)
+        self.verticalLayout.addLayout(self.bbp_header_layout)
+
+        self.main_content_horizontal_layout = QtWidgets.QHBoxLayout()
+        self.main_content_horizontal_layout.setObjectName(
+            "main_content_horizontal_layout"
+        )
+
+        self.separator_line = QtWidgets.QFrame(parent=self)
+        self.separator_line.setMaximumHeight(2)
         self.separator_line.setFrameShape(QtWidgets.QFrame.Shape.HLine)
         self.separator_line.setFrameShadow(QtWidgets.QFrame.Shadow.Sunken)
         self.separator_line.setObjectName("separator_line")
         self.verticalLayout.addWidget(self.separator_line)
-        self.po_main_content_layout = QtWidgets.QHBoxLayout()
-        self.po_main_content_layout.setObjectName("po_main_content_layout")
-        self.po_tool_content_layout = QtWidgets.QVBoxLayout()
-        self.po_tool_content_layout.setContentsMargins(5, 5, 5, 5)
-        self.po_tool_content_layout.setObjectName("po_tool_content_layout")
-        self.tool_options_content = QtWidgets.QHBoxLayout()
-        self.tool_options_content.setContentsMargins(5, 5, 5, 5)
-        self.tool_options_content.setObjectName("tool_options_content")
-        self.tool_move = QtWidgets.QWidget(parent=probe_offset_page)
-        self.tool_move.setObjectName("tool_move")
-        self.move_buttons = QtWidgets.QVBoxLayout(self.tool_move)
-        self.move_buttons.setContentsMargins(9, 9, 9, 9)
-        self.move_buttons.setObjectName("move_buttons")
-        self.mb_raise_nozzle = IconButton(parent=self.tool_move)
-        self.mb_raise_nozzle.setMinimumSize(QtCore.QSize(80, 80))
-        self.mb_raise_nozzle.setMaximumSize(QtCore.QSize(80, 80))
-        self.mb_raise_nozzle.setFlat(True)
-        self.mb_raise_nozzle.setProperty(
-            "icon_pixmap",
-            QtGui.QPixmap(":/arrow_icons/media/btn_icons/up_arrow.svg"),
+
+
+    
+
+        # Offset Steps Buttons Group Box (LEFT side of main_content_horizontal_layout)
+        self.bbp_offset_steps_buttons_group_box = QtWidgets.QGroupBox(self)
+        font = QtGui.QFont()
+        font.setPointSize(14)
+        self.bbp_offset_steps_buttons_group_box.setFont(font)
+        self.bbp_offset_steps_buttons_group_box.setFlat(True)
+        # Add stylesheet to explicitly remove any border from the QGroupBox
+        self.bbp_offset_steps_buttons_group_box.setStyleSheet(
+            "QGroupBox { border: none; }"
         )
-        self.mb_raise_nozzle.setObjectName("mb_raise_nozzle")
-        self.move_buttons.addWidget(self.mb_raise_nozzle)
-        self.mb_lower_nozzle = IconButton(parent=self.tool_move)
-        self.mb_lower_nozzle.setMinimumSize(QtCore.QSize(80, 80))
-        self.mb_lower_nozzle.setMaximumSize(QtCore.QSize(80, 80))
-        self.mb_lower_nozzle.setFlat(True)
-        self.mb_lower_nozzle.setProperty(
-            "icon_pixmap",
-            QtGui.QPixmap(":/arrow_icons/media/btn_icons/down_arrow.svg"),
+        self.bbp_offset_steps_buttons_group_box.setObjectName(
+            "bbp_offset_steps_buttons_group_box"
         )
-        self.mb_lower_nozzle.setObjectName("mb_lower_nozzle")
-        self.move_buttons.addWidget(
-            self.mb_lower_nozzle,
+
+        self.bbp_offset_steps_buttons = QtWidgets.QVBoxLayout(
+            self.bbp_offset_steps_buttons_group_box
+        )
+        self.bbp_offset_steps_buttons.setContentsMargins(9, 9, 9, 9)
+        self.bbp_offset_steps_buttons.setObjectName("bbp_offset_steps_buttons")
+
+        # 0.1mm button
+        self.move_option_1 = GroupButton(
+            parent=self.bbp_offset_steps_buttons_group_box
+        )
+        self.move_option_1.setMinimumSize(QtCore.QSize(100, 60))
+        self.move_option_1.setMaximumSize(QtCore.QSize(100, 60))
+        self.move_option_1.setText("0.01 mm")
+
+        font = QtGui.QFont()
+        font.setPointSize(14)
+        self.move_option_1.setFont(font)
+        self.move_option_1.setCheckable(True)
+        self.move_option_1.setChecked(True)  # Set as initially checked
+        self.move_option_1.setFlat(True)
+        self.move_option_1.setProperty("button_type", "")
+        self.move_option_1.setObjectName("move_option_1")
+        self.bbp_offset_value_selector_group.addButton(
+            self.move_option_1
+        )
+        self.bbp_offset_steps_buttons.addWidget(
+            self.move_option_1,
             0,
-            QtCore.Qt.AlignmentFlag.AlignLeft
+            QtCore.Qt.AlignmentFlag.AlignHCenter
             | QtCore.Qt.AlignmentFlag.AlignVCenter,
         )
-        self.tool_options_content.addWidget(
-            self.tool_move, 0, QtCore.Qt.AlignmentFlag.AlignLeft
+
+
+
+        # 0.01mm button
+        self.move_option_2 = GroupButton(
+            parent=self.bbp_offset_steps_buttons_group_box
         )
-        self.tool_content_info = QtWidgets.QFrame(parent=probe_offset_page)
-        self.tool_content_info.setMinimumSize(QtCore.QSize(400, 200))
-        self.tool_content_info.setMaximumSize(QtCore.QSize(16777215, 16777215))
-        self.tool_content_info.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
-        self.tool_content_info.setFrameShadow(QtWidgets.QFrame.Shadow.Plain)
-        self.tool_content_info.setObjectName("tool_content_info")
-        self.tool_image = QtWidgets.QLabel(parent=self.tool_content_info)
-        self.tool_image.setGeometry(QtCore.QRect(20, 30, 346, 211))
-        self.tool_image.setText("")
+        self.move_option_2.setMinimumSize(QtCore.QSize(100, 60))
+        self.move_option_2.setMaximumSize(
+            QtCore.QSize(100, 60)
+        )  # Increased max width by 5 pixels
+        self.move_option_2.setText("0.25 mm")
+
+        font = QtGui.QFont()
+        font.setPointSize(14)
+        self.move_option_2.setFont(font)
+        self.move_option_2.setCheckable(True)
+        self.move_option_2.setFlat(True)
+        self.move_option_2.setProperty("button_type", "")
+        self.move_option_2.setObjectName("move_option_2")
+        self.bbp_offset_value_selector_group.addButton(
+            self.move_option_2
+        )
+        self.bbp_offset_steps_buttons.addWidget(
+            self.move_option_2,
+            0,
+            QtCore.Qt.AlignmentFlag.AlignHCenter
+            | QtCore.Qt.AlignmentFlag.AlignVCenter,
+        )
+
+        # 0.05mm button
+        self.move_option_3 = GroupButton(
+            parent=self.bbp_offset_steps_buttons_group_box
+        )
+        self.move_option_3.setMinimumSize(QtCore.QSize(100, 60))
+        self.move_option_3.setMaximumSize(
+            QtCore.QSize(100, 60)
+        )  # Increased max width by 5 pixels
+        self.move_option_3.setText("0.1 mm")
+
+        font = QtGui.QFont()
+        font.setPointSize(14)
+        self.move_option_3.setFont(font)
+        self.move_option_3.setCheckable(True)
+        self.move_option_3.setFlat(True)
+        self.move_option_3.setProperty("button_type", "")
+        self.move_option_3.setObjectName("move_option_3")
+        self.bbp_offset_value_selector_group.addButton(
+            self.move_option_3
+        )
+        self.bbp_offset_steps_buttons.addWidget(
+            self.move_option_3,
+            0,
+            QtCore.Qt.AlignmentFlag.AlignHCenter
+            | QtCore.Qt.AlignmentFlag.AlignVCenter,
+        )
+
+        # 0.025mm button
+        self.move_option_4 = GroupButton(
+            parent=self.bbp_offset_steps_buttons_group_box
+        )
+        self.move_option_4.setMinimumSize(QtCore.QSize(100, 60))
+        self.move_option_4.setMaximumSize(
+            QtCore.QSize(100, 60)
+        )  # Increased max width by 5 pixels
+        self.move_option_4.setText("0.5 mm")
+
+        font = QtGui.QFont()
+        font.setPointSize(14)
+        self.move_option_4.setFont(font)
+        self.move_option_4.setCheckable(True)
+        self.move_option_4.setFlat(True)
+        self.move_option_4.setProperty("button_type", "")
+        self.move_option_4.setObjectName("move_option_4")
+        self.bbp_offset_value_selector_group.addButton(
+            self.move_option_4
+        )
+        self.bbp_offset_steps_buttons.addWidget(
+            self.move_option_4,
+            0,
+            QtCore.Qt.AlignmentFlag.AlignHCenter
+            | QtCore.Qt.AlignmentFlag.AlignVCenter,
+        )
+
+         # 0.01mm button
+        self.move_option_5 = GroupButton(
+            parent=self.bbp_offset_steps_buttons_group_box
+        )
+        self.move_option_5.setMinimumSize(QtCore.QSize(100, 60))
+        self.move_option_5.setMaximumSize(
+            QtCore.QSize(100, 60)
+        )  # Increased max width by 5 pixels
+        self.move_option_5.setText("1 mm")
+
+        font = QtGui.QFont()
+        font.setPointSize(14)
+        self.move_option_5.setFont(font)
+        self.move_option_5.setCheckable(True)
+        self.move_option_5.setFlat(True)
+        self.move_option_5.setProperty("button_type", "")
+        self.move_option_5.setObjectName("move_option_4")
+        self.bbp_offset_value_selector_group.addButton(
+            self.move_option_5
+        )
+        self.bbp_offset_steps_buttons.addWidget(
+            self.move_option_5,
+            0,
+            QtCore.Qt.AlignmentFlag.AlignHCenter
+            | QtCore.Qt.AlignmentFlag.AlignVCenter,
+        )
+
+        # Line separator for 0.025mm - set size policy to expanding horizontally
+
+        # Set the layout for the group box
+        self.bbp_offset_steps_buttons_group_box.setLayout(
+            self.bbp_offset_steps_buttons
+        )
+        # Add the group box to the main content horizontal layout FIRST for left placement
+        self.main_content_horizontal_layout.addWidget(
+            self.bbp_offset_steps_buttons_group_box
+        )
+
+        # Graphic and Current Value Frame (This will now be in the MIDDLE)
+        self.frame_2 = QtWidgets.QFrame(parent=self)
+        sizePolicy.setHeightForWidth(
+            self.frame_2.sizePolicy().hasHeightForWidth()
+        )
+        self.frame_2.setSizePolicy(sizePolicy)
+        self.frame_2.setMinimumSize(QtCore.QSize(350, 160))
+        self.frame_2.setMaximumSize(QtCore.QSize(350, 160))
+        self.frame_2.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
+        self.frame_2.setFrameShadow(QtWidgets.QFrame.Shadow.Raised)
+        self.frame_2.setObjectName("frame_2")
+        self.tool_image = QtWidgets.QLabel(parent=self.frame_2)
+        self.tool_image.setGeometry(QtCore.QRect(0, 30, 371, 121))
+        self.tool_image.setLayoutDirection(
+            QtCore.Qt.LayoutDirection.RightToLeft
+        )
         self.tool_image.setPixmap(
             QtGui.QPixmap(":/graphics/media/graphics/babystep_graphic.png")
         )
-        self.tool_image.setObjectName("tool_image")
-        self.verticalLayoutWidget = QtWidgets.QWidget(
-            parent=self.tool_content_info
-        )
-        self.verticalLayoutWidget.setGeometry(QtCore.QRect(130, 30, 220, 154))
-        self.verticalLayoutWidget.setObjectName("verticalLayoutWidget")
-        self.tool_content_info_box = QtWidgets.QVBoxLayout(
-            self.verticalLayoutWidget
-        )
-        self.tool_content_info_box.setContentsMargins(6, 6, 6, 6)
-        self.tool_content_info_box.setSpacing(2)
-        self.tool_content_info_box.setObjectName("tool_content_info_box")
-        self.old_offset_box_2 = QtWidgets.QWidget(
-            parent=self.verticalLayoutWidget
-        )
-        self.old_offset_box_2.setMinimumSize(QtCore.QSize(200, 70))
-        self.old_offset_box_2.setMaximumSize(QtCore.QSize(200, 70))
-        self.old_offset_box_2.setObjectName("old_offset_box_2")
-        self.old_offset_box = QtWidgets.QHBoxLayout(self.old_offset_box_2)
-        self.old_offset_box.setObjectName("old_offset_box")
-        self.old_offset_icon = BlocksLabel(parent=self.old_offset_box_2)
-        self.old_offset_icon.setMinimumSize(QtCore.QSize(60, 60))
-        self.old_offset_icon.setMaximumSize(QtCore.QSize(60, 60))
-        self.old_offset_icon.setText("")
-        self.old_offset_icon.setPixmap(
-            QtGui.QPixmap(":/graphics/media/btn_icons/old_z_offset_icon.svg")
-        )
-        self.old_offset_icon.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
-        self.old_offset_icon.setObjectName("old_offset_icon")
-        self.old_offset_box.addWidget(self.old_offset_icon)
-        self.old_offset_info = QtWidgets.QLabel(parent=self.old_offset_box_2)
-        self.old_offset_info.setMinimumSize(QtCore.QSize(140, 60))
-        self.old_offset_info.setMaximumSize(QtCore.QSize(140, 60))
-        font = QtGui.QFont()
-        font.setPointSize(14)
-        self.old_offset_info.setFont(font)
-        self.old_offset_info.setStyleSheet(
-            "background: transparent; color: white;"
-        )
-        self.old_offset_info.setObjectName("old_offset_info")
-        self.old_offset_box.addWidget(self.old_offset_info)
-        self.tool_content_info_box.addWidget(self.old_offset_box_2)
-        self.current_offset_box_2 = QtWidgets.QWidget(
-            parent=self.verticalLayoutWidget
-        )
-        self.current_offset_box_2.setMinimumSize(QtCore.QSize(200, 70))
-        self.current_offset_box_2.setMaximumSize(QtCore.QSize(200, 70))
-        self.current_offset_box_2.setObjectName("current_offset_box_2")
-        self.current_offset_box = QtWidgets.QHBoxLayout(
-            self.current_offset_box_2
-        )
-        self.current_offset_box.setObjectName("current_offset_box")
-        self.current_offset_icon = BlocksLabel(
-            parent=self.current_offset_box_2
-        )
-        self.current_offset_icon.setMinimumSize(QtCore.QSize(60, 60))
-        self.current_offset_icon.setMaximumSize(QtCore.QSize(60, 60))
-        self.current_offset_icon.setText("")
-        self.current_offset_icon.setPixmap(
-            QtGui.QPixmap(":/graphics/media/btn_icons/new_z_offset_icon.svg")
-        )
-        self.current_offset_icon.setScaledContents(True)
-        self.current_offset_icon.setAlignment(
+        self.tool_image.setScaledContents(False)
+        self.tool_image.setAlignment(
             QtCore.Qt.AlignmentFlag.AlignCenter
         )
-        self.current_offset_icon.setObjectName("current_offset_icon")
-        self.current_offset_box.addWidget(self.current_offset_icon)
-        self.current_offset_info = QtWidgets.QLabel(
-            parent=self.current_offset_box_2
+        self.tool_image.setObjectName("tool_image")
+
+        # === NEW LABEL ADDED HERE ===
+        # This is the title label that appears above the red value box.
+        self.old_offset_info = QtWidgets.QLabel(parent=self.frame_2)
+        # Position it just above the red box. Red box is at y=70, so y=40 is appropriate.
+        self.old_offset_info.setGeometry(
+            QtCore.QRect(240, 95, 200, 60)
         )
-        self.current_offset_info.setMinimumSize(QtCore.QSize(140, 60))
-        self.current_offset_info.setMaximumSize(QtCore.QSize(140, 60))
+        font = QtGui.QFont()
+        font.setPointSize(12)
+
+        self.old_offset_info.setFont(font)
+        # Set color to white to be visible on the dark background
+        self.old_offset_info.setStyleSheet(
+            "color: gray; background: transparent;"
+        )
+        self.old_offset_info.setText("Z-Offset")
+        self.old_offset_info.setObjectName("old_offset_info")
+        self.old_offset_info.setText("0 mm")
+
+        # === END OF NEW LABEL ===
+
+        self.current_offset_info = BlocksLabel(parent=self.frame_2)
+        self.current_offset_info.setGeometry(
+            QtCore.QRect(100, 70, 200, 60)
+        )
+        sizePolicy.setHeightForWidth(
+            self.current_offset_info.sizePolicy().hasHeightForWidth()
+        )
+        self.current_offset_info.setSizePolicy(sizePolicy)
+        self.current_offset_info.setMinimumSize(QtCore.QSize(150, 60))
+        self.current_offset_info.setMaximumSize(QtCore.QSize(200, 60))
         font = QtGui.QFont()
         font.setPointSize(14)
         self.current_offset_info.setFont(font)
         self.current_offset_info.setStyleSheet(
             "background: transparent; color: white;"
         )
-        self.current_offset_info.setObjectName("current_offset_info")
-        self.current_offset_box.addWidget(self.current_offset_info)
-        self.tool_content_info_box.addWidget(self.current_offset_box_2)
-        self.tool_options_content.addWidget(
-            self.tool_content_info,
+        self.current_offset_info.setText("Z:0mm")
+        self.current_offset_info.setPixmap(
+            QtGui.QPixmap(":/graphics/media/btn_icons/z_offset_adjust.svg")
+        )
+        self.current_offset_info.setAlignment(
+            QtCore.Qt.AlignmentFlag.AlignCenter
+        )
+        self.current_offset_info.setObjectName(
+            "current_offset_info"
+        )
+        # Add graphic frame AFTER the offset buttons group box
+        self.main_content_horizontal_layout.addWidget(
+            self.frame_2,
             0,
             QtCore.Qt.AlignmentFlag.AlignHCenter
             | QtCore.Qt.AlignmentFlag.AlignVCenter,
         )
-        self.tool_dialog_2 = QtWidgets.QWidget(parent=probe_offset_page)
-        self.tool_dialog_2.setObjectName("tool_dialog_2")
-        self.tool_dialog = QtWidgets.QVBoxLayout(self.tool_dialog_2)
-        self.tool_dialog.setContentsMargins(9, 9, 9, 9)
-        self.tool_dialog.setObjectName("tool_dialog")
-        self.accept_button = IconButton(parent=self.tool_dialog_2)
-        self.accept_button.setMinimumSize(QtCore.QSize(80, 80))
-        self.accept_button.setMaximumSize(QtCore.QSize(80, 80))
-        self.accept_button.setFlat(True)
-        self.accept_button.setProperty(
-            "icon_pixmap",
-            QtGui.QPixmap(":/dialog/media/btn_icons/yes.svg"),
-        )
-        self.accept_button.setProperty(
-            "text_color", QtGui.QColor(255, 255, 255)
-        )
-        self.accept_button.setObjectName("accept_button")
-        self.tool_dialog.addWidget(
-            self.accept_button,
-            0,
-            QtCore.Qt.AlignmentFlag.AlignRight
-            | QtCore.Qt.AlignmentFlag.AlignVCenter,
-        )
-        self.abort_button = IconButton(parent=self.tool_dialog_2)
-        self.abort_button.setMinimumSize(QtCore.QSize(80, 80))
-        self.abort_button.setMaximumSize(QtCore.QSize(80, 80))
-        self.abort_button.setFlat(True)
-        self.abort_button.setProperty(
-            "icon_pixmap",
-            QtGui.QPixmap(":/dialog/media/btn_icons/no.svg"),
-        )
-        self.abort_button.setProperty(
-            "text_color", QtGui.QColor(255, 255, 255)
-        )
-        self.abort_button.setObjectName("abort_button")
-        self.tool_dialog.addWidget(
-            self.abort_button,
-            0,
-            QtCore.Qt.AlignmentFlag.AlignRight
-            | QtCore.Qt.AlignmentFlag.AlignVCenter,
-        )
-        self.tool_options_content.addWidget(
-            self.tool_dialog_2, 0, QtCore.Qt.AlignmentFlag.AlignRight
-        )
-        self.po_tool_content_layout.addLayout(self.tool_options_content)
-        self.move_intervals_button_group = QtWidgets.QButtonGroup(
-            parent=probe_offset_page
-        )
-        self.move_intervals = QtWidgets.QGroupBox(parent=probe_offset_page)
-        self.move_intervals.setMinimumSize(QtCore.QSize(350, 90))
-        self.move_intervals.setMaximumSize(QtCore.QSize(16777215, 100))
-        palette = QtGui.QPalette()
-        brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
-        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Active,
-            QtGui.QPalette.ColorRole.WindowText,
-            brush,
-        )
-        brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
-        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Active,
-            QtGui.QPalette.ColorRole.ButtonText,
-            brush,
-        )
-        brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
-        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Inactive,
-            QtGui.QPalette.ColorRole.WindowText,
-            brush,
-        )
-        brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
-        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Inactive,
-            QtGui.QPalette.ColorRole.ButtonText,
-            brush,
-        )
-        brush = QtGui.QBrush(QtGui.QColor(120, 120, 120))
-        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Disabled,
-            QtGui.QPalette.ColorRole.WindowText,
-            brush,
-        )
-        brush = QtGui.QBrush(QtGui.QColor(120, 120, 120))
-        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Disabled,
-            QtGui.QPalette.ColorRole.ButtonText,
-            brush,
-        )
-        self.move_intervals.setPalette(palette)
-        font = QtGui.QFont()
-        font.setPointSize(14)
-        self.move_intervals.setFont(font)
-        self.move_intervals.setFlat(True)
-        self.move_intervals.setObjectName("move_intervals")
-        self.horizontalLayout = QtWidgets.QHBoxLayout(self.move_intervals)
-        self.horizontalLayout.setContentsMargins(9, 4, -1, 9)
-        self.horizontalLayout.setObjectName("horizontalLayout")
-        self.move_option_1 = QtWidgets.QPushButton(parent=self.move_intervals)
-        self.move_option_1.setMinimumSize(QtCore.QSize(60, 60))
-        self.move_option_1.setMaximumSize(QtCore.QSize(16777215, 60))
-        font = QtGui.QFont()
-        font.setPointSize(20)
-        self.move_option_1.setFont(font)
-        self.move_option_1.setStyleSheet("color: white;")
-        self.move_option_1.setCheckable(True)
-        self.move_option_1.setFlat(True)
-        self.move_option_1.setObjectName("move_option_1")
-        self.horizontalLayout.addWidget(self.move_option_1)
-        self.move_intervals_button_group.addButton(self.move_option_1)
-        self.move_option_2 = QtWidgets.QPushButton(parent=self.move_intervals)
-        self.move_option_2.setMinimumSize(QtCore.QSize(60, 60))
-        self.move_option_2.setMaximumSize(QtCore.QSize(16777215, 60))
-        font = QtGui.QFont()
-        font.setPointSize(20)
-        self.move_option_2.setFont(font)
-        self.move_option_2.setStyleSheet("color: white;")
-        self.move_option_2.setCheckable(True)
-        self.move_option_2.setFlat(True)
-        self.move_option_2.setObjectName("move_option_2")
-        self.move_intervals_button_group.addButton(self.move_option_2)
-        self.horizontalLayout.addWidget(self.move_option_2)
-        self.move_option_3 = QtWidgets.QPushButton(parent=self.move_intervals)
-        self.move_option_3.setMinimumSize(QtCore.QSize(60, 60))
-        self.move_option_3.setMaximumSize(QtCore.QSize(16777215, 60))
-        font = QtGui.QFont()
-        font.setPointSize(20)
-        self.move_option_3.setFont(font)
-        self.move_option_3.setStyleSheet("color: white;")
-        self.move_option_3.setCheckable(True)
-        self.move_option_3.setFlat(True)
-        self.move_option_3.setObjectName("move_option_3")
-        self.move_intervals_button_group.addButton(self.move_option_3)
-        self.horizontalLayout.addWidget(self.move_option_3)
-        self.move_option_4 = QtWidgets.QPushButton(parent=self.move_intervals)
-        self.move_option_4.setMinimumSize(QtCore.QSize(60, 60))
-        self.move_option_4.setMaximumSize(QtCore.QSize(16777215, 60))
-        font = QtGui.QFont()
-        font.setPointSize(20)
-        self.move_option_4.setFont(font)
-        self.move_option_4.setStyleSheet("color: white;")
-        self.move_option_4.setCheckable(True)
-        self.move_option_4.setChecked(False)
-        self.move_option_4.setFlat(True)
-        self.move_option_4.setObjectName("move_option_4")
-        self.horizontalLayout.addWidget(self.move_option_4)
-        self.move_intervals_button_group.addButton(self.move_option_4)
-        self.move_option_5 = QtWidgets.QPushButton(parent=self.move_intervals)
-        self.move_option_5.setMinimumSize(QtCore.QSize(60, 60))
-        self.move_option_5.setMaximumSize(QtCore.QSize(16777215, 60))
-        font = QtGui.QFont()
-        font.setPointSize(20)
-        self.move_option_5.setFont(font)
-        self.move_option_5.setStyleSheet("color: white;")
-        self.move_option_5.setCheckable(True)
-        self.move_option_5.setChecked(True)
-        self.move_option_5.setFlat(True)
-        self.move_option_5.setObjectName("move_option_5")
-        self.horizontalLayout.addWidget(self.move_option_5)
-        self.move_intervals_button_group.addButton(self.move_option_5)
-        self.po_tool_content_layout.addWidget(self.move_intervals)
-        self.po_main_content_layout.addLayout(self.po_tool_content_layout)
-        self.verticalLayout.addLayout(self.po_main_content_layout)
 
-        self.retranslateUi(probe_offset_page)
-        QtCore.QMetaObject.connectSlotsByName(probe_offset_page)
+        # Move Buttons Layout (This will now be on the RIGHT)
+        self.bbp_buttons_layout = QtWidgets.QVBoxLayout()
+        self.bbp_buttons_layout.setContentsMargins(5, 5, 5, 5)
+        self.bbp_buttons_layout.setObjectName("bbp_buttons_layout")
+        self.mb_lower_nozzle = IconButton(parent=self)
+        sizePolicy.setHeightForWidth(
+            self.mb_lower_nozzle.sizePolicy().hasHeightForWidth()
+        )
+        self.mb_lower_nozzle.setSizePolicy(sizePolicy)
+        self.mb_lower_nozzle.setMinimumSize(QtCore.QSize(80, 80))
+        self.mb_lower_nozzle.setMaximumSize(QtCore.QSize(80, 80))
+        self.mb_lower_nozzle.setText("")
+        self.mb_lower_nozzle.setFlat(True)
+        self.mb_lower_nozzle.setPixmap(
+            QtGui.QPixmap(":/arrow_icons/media/btn_icons/up_arrow.svg")
+        )
+        self.mb_lower_nozzle.setObjectName("bbp_away_from_bed")
+        self.bbp_option_button_group = QtWidgets.QButtonGroup(self)
+        self.bbp_option_button_group.setObjectName("bbp_option_button_group")
+        self.bbp_option_button_group.addButton(self.mb_lower_nozzle)
+        self.bbp_buttons_layout.addWidget(
+            self.mb_lower_nozzle, 0, QtCore.Qt.AlignmentFlag.AlignRight
+        )
+        self.mb_raise_nozzle = IconButton(parent=self)
+        sizePolicy.setHeightForWidth(
+            self.mb_raise_nozzle.sizePolicy().hasHeightForWidth()
+        )
+        self.mb_raise_nozzle.setSizePolicy(sizePolicy)
+        self.mb_raise_nozzle.setMinimumSize(QtCore.QSize(80, 80))
+        self.mb_raise_nozzle.setMaximumSize(QtCore.QSize(80, 80))
+        self.mb_raise_nozzle.setText("")
+        self.mb_raise_nozzle.setFlat(True)
+        self.mb_raise_nozzle.setPixmap(
+            QtGui.QPixmap(":/arrow_icons/media/btn_icons/down_arrow.svg")
+        )
+        self.mb_raise_nozzle.setObjectName("bbp_close_to_bed")
+        self.bbp_option_button_group.addButton(self.mb_raise_nozzle)
+        self.bbp_buttons_layout.addWidget(
+            self.mb_raise_nozzle, 0, QtCore.Qt.AlignmentFlag.AlignRight
+        )
+        self.spacerItem = QtWidgets.QSpacerItem(
+            40,
+            20,
+            QtWidgets.QSizePolicy.Policy.Expanding,
+            QtWidgets.QSizePolicy.Policy.Minimum,
+        )
+        self.main_content_horizontal_layout.addItem(self.spacerItem)
 
-    def retranslateUi(self, probe_offset_page):
-        _translate = QtCore.QCoreApplication.translate
-        probe_offset_page.setWindowTitle(
-            _translate("probe_offset_page", "Form")
-        )
-        self.po_header_title.setText(
-            _translate("probe_offset_page", "Z Probe Offset Calibrate")
-        )
-        self.po_back_button.setText(
-            _translate("probe_offset_page", "PushButton")
-        )
-        self.po_back_button.setProperty(
-            "button_type", _translate("probe_offset_page", "icon")
-        )
-        self.mb_raise_nozzle.setText(_translate("probe_offset_page", "bb"))
-        self.mb_raise_nozzle.setProperty(
-            "button_type", _translate("probe_offset_page", "icon")
-        )
-        self.mb_lower_nozzle.setText(_translate("probe_offset_page", "bb"))
-        self.mb_lower_nozzle.setProperty(
-            "button_type", _translate("probe_offset_page", "icon")
-        )
-        self.old_offset_info.setText(
-            _translate("probe_offset_page", "TextLabel")
-        )
-        self.current_offset_info.setText(
-            _translate("probe_offset_page", "TextLabel")
-        )
-        self.accept_button.setText(_translate("probe_offset_page", "Accept"))
-        self.accept_button.setProperty(
-            "button_type", _translate("probe_offset_page", "icon_text")
-        )
-        self.accept_button.setProperty(
-            "text_formatting", _translate("probe_offset_page", "bottom")
-        )
-        self.abort_button.setText(_translate("probe_offset_page", "Abort"))
-        self.abort_button.setProperty(
-            "button_type", _translate("probe_offset_page", "icon_text")
-        )
-        self.abort_button.setProperty(
-            "text_formatting", _translate("probe_offset_page", "bottom")
-        )
-        self.move_intervals.setTitle(
-            _translate("probe_offset_page", "Move Distance (mm)")
-        )
-        self.move_option_1.setText(
-            _translate("probe_offset_page", self.distances[0])
-        )
-        self.move_option_2.setText(
-            _translate("probe_offset_page", self.distances[1])
-        )
-        self.move_option_3.setText(
-            _translate("probe_offset_page", self.distances[2])
-        )
-        self.move_option_4.setText(
-            _translate("probe_offset_page", self.distances[3])
-        )
-        self.move_option_5.setText(
-            _translate("probe_offset_page", self.distances[4])
-        )
-        self.move_option_5.setAutoDefault(True)
+        # Add move buttons layout LAST for right placement
+        self.main_content_horizontal_layout.addLayout(self.bbp_buttons_layout)
+
+
+        self.main_content_horizontal_layout.addItem(self.spacerItem)
+
+        # Set stretch factors for main content horizontal layout
+        # This will distribute space: offset buttons, graphic frame, move buttons
+        self.main_content_horizontal_layout.setStretch(
+            0, 1
+        )  # offset_steps_buttons_group_box
+        self.main_content_horizontal_layout.setStretch(
+            1, 2
+        )  # frame_2 (graphic and current value)
+        self.main_content_horizontal_layout.setStretch(
+            2, 0
+        )  # bbp_buttons_layout (move buttons)
+
+        # Add the main content horizontal layout to the vertical layout
+        self.verticalLayout.addLayout(self.main_content_horizontal_layout)
+
+        # Set stretch factors for vertical layout (adjust as needed for overall sizing)
+        self.verticalLayout.setStretch(
+            1, 1
+        )  # This stretch applies to main_content_horizontal_layout
+
+        self.setLayout(self.verticalLayout)
