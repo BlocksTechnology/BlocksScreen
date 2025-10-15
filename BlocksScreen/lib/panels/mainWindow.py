@@ -148,7 +148,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.controlPanel.probe_helper_page.handle_error_response
         )
         self.controlPanel.disable_popups.connect(self.popup_toggle)
-        self.on_update_message.connect(self.utilitiesPanel._on_update_message)
+        self.on_update_message.connect(self.utilitiesPanel.on_update_message)
         self.ui.extruder_temp_display.display_format = "upper_downer"
         self.ui.bed_temp_display.display_format = "upper_downer"
         if self.config.has_section("server"):
@@ -353,10 +353,8 @@ class MainWindow(QtWidgets.QMainWindow):
             return
         if not _data:
             return
-
         api_reference = _method.split(".")
         if "klippy" in _method:
-            print("notify klippy")
             api_reference = "notify_klippy"
         method_handle = f"_handle_{api_reference[0]}_message"
         if hasattr(self, method_handle):
@@ -387,6 +385,18 @@ class MainWindow(QtWidgets.QMainWindow):
         if "update" in method:
             if ("status" or "refresh") in method:
                 self.on_update_message.emit(data)
+
+    @api_handler
+    def _handle_notify_update_response_message(self, method, data, metadata) -> None:
+        """Handle update response messages"""
+        self.on_update_message.emit(
+            data.get("params", {})
+        )  # Also necessary, notify klippy can also signal update complete
+
+    @api_handler
+    def _handle_notify_update_refreshed_message(self, method, data, metadata) -> None:
+        """Handle update refreshed messages"""
+        self.on_update_message.emit(data.get("params", {}))
 
     @api_handler
     def _handle_printer_message(self, method, data, metadata) -> None:
@@ -469,11 +479,6 @@ class MainWindow(QtWidgets.QMainWindow):
         # self.file_data.request_file_list.emit()
 
     @api_handler
-    def _handle_notify_update_response_message(self, method, data, metadata) -> None:
-        # Can signal here that an update finished successfully or not
-        print(data)
-
-    @api_handler
     def _handle_notify_service_state_changed_message(
         self, method, data, metadata
     ) -> None:
@@ -503,9 +508,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 _msg_type = Popup.MessageType.ERROR
             elif _gcode_msg_type == "//":
                 _msg_type = Popup.MessageType.INFO
-            # self.popup.new_message(
-            #     message_type=_msg_type, message=str(_message)
-            # )
+            self.popup.new_message(message_type=_msg_type, message=str(_message))
 
     @api_handler
     def _handle_error_message(self, method, data, metadata) -> None:

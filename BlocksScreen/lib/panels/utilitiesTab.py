@@ -74,7 +74,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         [str, "PyQt_PyObject"],
         name="on-subscribe-config",
     )
-    _on_update_message: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+    on_update_message: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         dict, name="handle-update-message"
     )
 
@@ -204,7 +204,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
 
         # ---- Websocket connections ----
 
-        self._on_update_message.connect(self.update_page.handle_update_message)
+        self.on_update_message.connect(self.update_page.handle_update_message)
         self.update_page.request_full_update.connect(self.ws.api.full_update)
         self.update_page.request_recover_repo[str].connect(
             self.ws.api.recover_corrupt_repo
@@ -228,7 +228,9 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         self.update_page.update_available.connect(
             self.panel.update_btn.setShowNotification
         )
-        self.panel.update_btn.setPixmap(QtGui.QPixmap(":/system/media/btn_icons/update-software-icon.svg"))
+        self.panel.update_btn.setPixmap(
+            QtGui.QPixmap(":/system/media/btn_icons/update-software-icon.svg")
+        )
 
     @QtCore.pyqtSlot(list, name="on_object_list")
     def on_object_list(self, object_list: list) -> None:
