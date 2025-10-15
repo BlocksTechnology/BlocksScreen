@@ -31,7 +31,23 @@ from screensaver import ScreenSaver
 _logger = logging.getLogger(name="logs/BlocksScreen.log")
 
 
+def api_handler(func):
+    """Decorator for methods that handle api responses"""
+
+    def wrapper(*args, **kwargs):
+        try:
+            result = func(*args, **kwargs)
+            return result
+        except Exception as e:
+            _logger.error(f"Caught Exception in %s : %s ", func.__name__, e)
+            raise
+
+    return wrapper
+
+
 class MainWindow(QtWidgets.QMainWindow):
+    """GUI MainWindow, handles most of the app logic"""
+
     bo_ws_startup = QtCore.pyqtSignal(name="bo_start_websocket_connection")
     printer_state_signal = QtCore.pyqtSignal(str, name="printer_state")
     query_object_list = QtCore.pyqtSignal(list, name="query_object_list")
@@ -68,7 +84,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.controlPanel = ControlTab(self.ui.controlTab, self.ws, self.printer)
         self.utilitiesPanel = UtilitiesTab(self.ui.utilitiesTab, self.ws, self.printer)
         self.networkPanel = NetworkControlWindow(self)
-
         self.bo_ws_startup.connect(slot=self.bo_start_websocket_connection)
         self.ws.connecting_signal.connect(self.conn_window.on_websocket_connecting)
         self.ws.connected_signal.connect(
@@ -133,7 +148,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.controlPanel.probe_helper_page.handle_error_response
         )
         self.controlPanel.disable_popups.connect(self.popup_toggle)
-        self.on_update_message.connect(self.utilitiesPanel._on_update_message)
+        self.on_update_message.connect(self.utilitiesPanel.on_update_message)
         self.ui.extruder_temp_display.display_format = "upper_downer"
         self.ui.bed_temp_display.display_format = "upper_downer"
         if self.config.has_section("server"):
@@ -219,6 +234,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     @QtCore.pyqtSlot(bool, name="toggle-popups")
     def popup_toggle(self, toggle: bool) -> None:
+        """Toggles app popups"""
         self._popup_toggle = toggle
 
     def reset_tab_indexes(self):
@@ -316,13 +332,11 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ws.try_connection()
 
     def messageReceivedEvent(self, event: events.WebSocketMessageReceived) -> None:
-        """Helper method that handles the event messages
-        received from the websocket
-
+        """Helper method that handles dispatching websocket
+        event messages to their respective handlers
 
         Args:
             event (events.WebSocketMessageReceivedEvent): The message event with all its contents
-
 
         Raises:
             Exception: When a klippy status change comes from the
@@ -339,8 +353,19 @@ class MainWindow(QtWidgets.QMainWindow):
             return
         if not _data:
             return
-        if "server.file" in _method:
-            file_data_event = events.ReceivedFileData(_data, _method, _metadata)
+        api_reference = _method.split(".")
+        if "klippy" in _method:
+            api_reference = "notify_klippy"
+        method_handle = f"_handle_{api_reference[0]}_message"
+        if hasattr(self, method_handle):
+            obj = getattr(self, method_handle)
+            if callable(obj):
+                obj(_method, _data, _metadata)
+
+    @api_handler
+    def _handle_server_message(self, method, data, metadata) -> None:
+        if "file" in method:
+            file_data_event = events.ReceivedFileData(data, method, metadata)
             try:
                 QtWidgets.QApplication.postEvent(self.file_data, file_data_event)
             except Exception as e:
@@ -351,162 +376,174 @@ class MainWindow(QtWidgets.QMainWindow):
                     ),
                     str(e),
                 )
-        elif "machine" in _method:
-            if "ok" in _data:
-                # Can here capture if 'ok' if a request for an update was successful
-                return
-            if "update" in _method:
-                if ("status" or "refresh") in _method:
-                    self.on_update_message.emit(_data)
-        elif "printer.info" in _method:
-            # {
-            #     "state": "ready",
-            #     "state_message": "Printer is ready",
-            #     "hostname": "my-pi-hostname",
-            #     "software_version": "v0.9.1-302-g900c7396",
-            #     "cpu_info": "4 core ARMv7 Processor rev 4 (v7l)",
-            #     "klipper_path": "/home/pi/klipper",
-            #     "python_path": "/home/pi/klippy-env/bin/python",
-            #     "log_file": "/tmp/klippy.log",
-            #     "config_file": "/home/pi/printer.cfg",
-            # }
+
+    @api_handler
+    def _handle_machine_message(self, method, data, metadata) -> None:
+        if "ok" in data:
+            # Can here capture if 'ok' if a request for an update was successful
+            return
+        if "update" in method:
+            if ("status" or "refresh") in method:
+                self.on_update_message.emit(data)
+
+    @api_handler
+    def _handle_notify_update_response_message(self, method, data, metadata) -> None:
+        """Handle update response messages"""
+        self.on_update_message.emit(
+            data.get("params", {})
+        )  # Also necessary, notify klippy can also signal update complete
+
+    @api_handler
+    def _handle_notify_update_refreshed_message(self, method, data, metadata) -> None:
+        """Handle update refreshed messages"""
+        self.on_update_message.emit(data.get("params", {}))
+
+    @api_handler
+    def _handle_printer_message(self, method, data, metadata) -> None:
+        """Handle Printer messages"""
+        if "info" in method:
+            # TODO: Handle info
             ...
-        elif "printer.print" in _method:
-            if "start" in _method and "ok" in _data:
+        if "print" in method:
+            if "start" in method and "ok" in data:
                 self.printer_state_signal.emit("printing")
-            elif "pause" in _method and "ok" in _data:
+            elif "pause" in method and "ok" in data:
                 self.printer_state_signal.emit("paused")
-            elif "resume" in _method and "ok" in _data:
+            elif "resume" in method and "ok" in data:
                 self.printer_state_signal.emit("printing")
-            elif "cancel" in _method and "ok" in _data:
+            elif "cancel" in method and "ok" in data:
                 self.printer_state_signal.emit("canceled")
-
-        elif "printer.objects" in _method:
-            if "list" in _method:
-                _object_list: list = _data["objects"]
+        if "objects" in method:
+            if "list" in method:
+                _object_list: list = data["objects"]
                 self.query_object_list[list].emit(_object_list)
-
-            if "subscribe" in _method:
-                _objects_response_list = [_data["status"], _data["eventtime"]]
+            if "subscribe" in method:
+                _objects_response_list = [data["status"], data["eventtime"]]
                 self.printer_object_report_signal[list].emit(_objects_response_list)
-
-            if "query" in _method:
-                if isinstance(_data["status"], dict):
-                    _object_report = [_data["status"]]
-                    _object_report_keys = _data["status"].items()
+            if "query" in method:
+                if isinstance(data["status"], dict):
+                    _object_report = [data["status"]]
+                    _object_report_keys = data["status"].items()
                     _object_report_list_dict: list = []
                     for _, key in enumerate(_object_report_keys):
                         _helper_dict: dict = {key[0]: key[1]}
                         _object_report_list_dict.append(_helper_dict)
-
                     self.printer_object_report_signal[list].emit(
                         _object_report_list_dict
                     )
 
-        elif "notify_klippy" in _method:
-            _split = _method.split("_")
-            if len(_split) > 2:
-                status_type = _split[2]
-                _state_upper = status_type[0].upper()
-                _state_call = f"{_state_upper}{status_type[1:]}"
-                _logger.debug(
-                    "Notify_klippy_ %s Received from object subscription.",
-                    str(_state_call),
+    @api_handler
+    def _handle_notify_klippy_message(self, method, data, metadata) -> None:
+        """Handle websocket notifications for klippy events"""
+        _split = method.split("_")
+        if len(_split) > 2:
+            status_type = _split[2]
+            _state_upper = status_type[0].upper()
+            _state_call = f"{_state_upper}{status_type[1:]}"
+            _logger.debug(
+                "Notify_klippy_ %s Received from object subscription.",
+                str(_state_call),
+            )
+            if hasattr(events, f"Klippy{_state_call}"):
+                _klippy_event_callback = getattr(
+                    events,
+                    f"Klippy{_state_call}",
                 )
-                if hasattr(events, f"Klippy{_state_call}"):
-                    _klippy_event_callback = getattr(
-                        events,
-                        f"Klippy{_state_call}",
-                    )
-                    if callable(_klippy_event_callback):
-                        try:
-                            _event = _klippy_event_callback(
-                                data=f"Moonraker reported klippy is {_state_call}"
-                            )
-                            instance = QtWidgets.QApplication.instance()
-                            if not isinstance(_event, QtCore.QEvent):
-                                return
-                            if instance:
-                                _logger.info(
-                                    "Event %s sent", str(_klippy_event_callback)
-                                )
-                                instance.postEvent(self, _event)
-                            else:
-                                raise Exception("QApplication.instance is None type.")
-                        except Exception as e:
-                            _logger.debug(
-                                "Unable to send internal klippy %s notification: %s",
-                                str(_state_call),
-                                str(e),
-                            )
-        elif "notify_filelist_changed" in _method:
-            _file_change_list = _data.get("params")
-            if _file_change_list:
-                fileaction = _file_change_list[0].get("action")
-                filepath = (
-                    _file_change_list[0].get("item").get("path")
-                )  # TODO : NOTIFY_FILELIST_CHANGED, I DON'T KNOW IF I REALLY WANT TO SEND NOTIFICATIONS ON FILE CHANGES.
-            ...
-            # self.file_data.request_file_list.emit()
+                if callable(_klippy_event_callback):
+                    try:
+                        _event = _klippy_event_callback(
+                            data=f"Moonraker reported klippy is {_state_call}"
+                        )
+                        instance = QtWidgets.QApplication.instance()
+                        if not isinstance(_event, QtCore.QEvent):
+                            return
+                        if instance:
+                            _logger.info("Event %s sent", str(_klippy_event_callback))
+                            instance.postEvent(self, _event)
+                        else:
+                            raise Exception("QApplication.instance is None type.")
+                    except Exception as e:
+                        _logger.debug(
+                            "Unable to send internal klippy %s notification: %s",
+                            str(_state_call),
+                            str(e),
+                        )
 
-        elif "notify_update_response" in _method:
-            ...
-        elif "notify_service_state_changed" in _method:
-            entry = _data.get("params")
-            if entry:
-                if not self._popup_toggle:
-                    return
-                service_entry: dict = entry[0]
-                service_name, service_info = service_entry.popitem()
-                self.popup.new_message(
-                    message_type=Popup.MessageType.INFO,
-                    message=f"""{service_name} service changed state to 
-                    {service_info.get("sub_state")}
-                    """,
-                )
-        elif "notify_gcode_response" in _method:
-            _gcode_response = _data.get("params")
-            self.gcode_response[list].emit(_gcode_response)
-            if _gcode_response:
-                if not self._popup_toggle:
-                    return
-                _gcode_msg_type, _message = str(_gcode_response[0]).split(
-                    " ", maxsplit=1
-                )
-                _msg_type = Popup.MessageType.UNKNOWN
-                if _gcode_msg_type == "!!":
-                    _msg_type = Popup.MessageType.ERROR
-                elif _gcode_msg_type == "//":
-                    _msg_type = Popup.MessageType.INFO
-                # self.popup.new_message(
-                #     message_type=_msg_type, message=str(_message)
-                # )
+    @api_handler
+    def _handle_notify_filelist_changed_message(self, method, data, metadata) -> None:
+        """Handle websocket file list messages"""
+        _file_change_list = data.get("params")
+        if _file_change_list:
+            fileaction = _file_change_list[0].get("action")
+            filepath = (
+                _file_change_list[0].get("item").get("path")
+            )  # TODO : NOTIFY_FILELIST_CHANGED, I DON'T KNOW IF I REALLY WANT TO SEND NOTIFICATIONS ON FILE CHANGES.
+        ...
+        # self.file_data.request_file_list.emit()
 
-        elif "error" in _method:
-            self.handle_error_response[list].emit([_data, _metadata])
-            if "metadata" in _data.get("message", "").lower():
-                # Quick fix, don't care about no metadata errors
-                return
+    @api_handler
+    def _handle_notify_service_state_changed_message(
+        self, method, data, metadata
+    ) -> None:
+        """Handle websocket service messages"""
+        entry = data.get("params")
+        if entry:
             if not self._popup_toggle:
                 return
+            service_entry: dict = entry[0]
+            service_name, service_info = service_entry.popitem()
             self.popup.new_message(
-                message_type=Popup.MessageType.ERROR,
-                message=str(_data),
+                message_type=Popup.MessageType.INFO,
+                message=f"""{service_name} service changed state to 
+                {service_info.get("sub_state")}
+                """,
             )
 
-        elif "notify_cpu_throttled" in _method:
+    @api_handler
+    def _handle_notify_gcode_response_message(self, method, data, metadata) -> None:
+        """Handle websocket gcode responses messages"""
+        _gcode_response = data.get("params")
+        self.gcode_response[list].emit(_gcode_response)
+        if _gcode_response:
             if not self._popup_toggle:
                 return
-            self.popup.new_message(
-                message_type=Popup.MessageType.WARNING,
-                message=f"CPU THROTTLED: {_data} | {_metadata}",
-            )
+            _gcode_msg_type, _message = str(_gcode_response[0]).split(" ", maxsplit=1)
+            _msg_type = Popup.MessageType.UNKNOWN
+            if _gcode_msg_type == "!!":
+                _msg_type = Popup.MessageType.ERROR
+            elif _gcode_msg_type == "//":
+                _msg_type = Popup.MessageType.INFO
+            self.popup.new_message(message_type=_msg_type, message=str(_message))
 
-        elif "notify_history_changed" in _method:
-            ...
-        elif "notify_status_update" in _method:
-            _object_report = _data["params"]
-            self.printer_object_report_signal[list].emit(_object_report)
+    @api_handler
+    def _handle_error_message(self, method, data, metadata) -> None:
+        """Handle error messages"""
+        self.handle_error_response[list].emit([data, metadata])
+        if "metadata" in data.get("message", "").lower():
+            # Quick fix, don't care about no metadata errors
+            return
+        if not self._popup_toggle:
+            return
+        self.popup.new_message(
+            message_type=Popup.MessageType.ERROR,
+            message=str(data),
+        )
+
+    @api_handler
+    def _handle_notify_cpu_throttled_message(self, method, data, metadata) -> None:
+        """Handle websocket cpu throttled messages"""
+        if not self._popup_toggle:
+            return
+        self.popup.new_message(
+            message_type=Popup.MessageType.WARNING,
+            message=f"CPU THROTTLED: {data} | {metadata}",
+        )
+
+    @api_handler
+    def _handle_notify_status_update_message(self, method, data, metadata) -> None:
+        """Handle websocket printer objects status update messages"""
+        _object_report = data["params"]
+        self.printer_object_report_signal[list].emit(_object_report)
 
     @QtCore.pyqtSlot(str, str, float, name="on-extruder-update")
     def on_extruder_update(

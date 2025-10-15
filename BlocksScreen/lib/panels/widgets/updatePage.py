@@ -231,13 +231,15 @@ class UpdatePage(QtWidgets.QWidget):
         Receives updates from moonraker `machine.update.status` request.
         """
         busy = message.get("busy", False)
+        complete = message.get("complete", False)
         if busy:
             self.update_in_progress.emit()
             self.ongoing_update = True
             return
-        elif self.ongoing_update:
+        elif self.ongoing_update or complete:
             self.ongoing_update = False
             self.update_end.emit()
+            
         cli_version_info = message.get("version_info", None)
         if not cli_version_info:
             return
