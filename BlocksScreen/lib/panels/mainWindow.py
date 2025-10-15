@@ -400,6 +400,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     @api_handler
     def _handle_printer_message(self, method, data, metadata) -> None:
+        """Handle Printer messages"""
         if "info" in method:
             # TODO: Handle info
             ...
@@ -433,6 +434,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     @api_handler
     def _handle_notify_klippy_message(self, method, data, metadata) -> None:
+        """Handle websocket notifications for klippy events"""
         _split = method.split("_")
         if len(_split) > 2:
             status_type = _split[2]
@@ -469,6 +471,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     @api_handler
     def _handle_notify_filelist_changed_message(self, method, data, metadata) -> None:
+        """Handle websocket file list messages"""
         _file_change_list = data.get("params")
         if _file_change_list:
             fileaction = _file_change_list[0].get("action")
@@ -482,6 +485,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def _handle_notify_service_state_changed_message(
         self, method, data, metadata
     ) -> None:
+        """Handle websocket service messages"""
         entry = data.get("params")
         if entry:
             if not self._popup_toggle:
@@ -497,6 +501,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     @api_handler
     def _handle_notify_gcode_response_message(self, method, data, metadata) -> None:
+        """Handle websocket gcode responses messages"""
         _gcode_response = data.get("params")
         self.gcode_response[list].emit(_gcode_response)
         if _gcode_response:
@@ -512,6 +517,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     @api_handler
     def _handle_error_message(self, method, data, metadata) -> None:
+        """Handle error messages"""
         self.handle_error_response[list].emit([data, metadata])
         if "metadata" in data.get("message", "").lower():
             # Quick fix, don't care about no metadata errors
@@ -525,6 +531,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     @api_handler
     def _handle_notify_cpu_throttled_message(self, method, data, metadata) -> None:
+        """Handle websocket cpu throttled messages"""
         if not self._popup_toggle:
             return
         self.popup.new_message(
@@ -534,6 +541,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     @api_handler
     def _handle_notify_status_update_message(self, method, data, metadata) -> None:
+        """Handle websocket printer objects status update messages"""
         _object_report = data["params"]
         self.printer_object_report_signal[list].emit(_object_report)
 
