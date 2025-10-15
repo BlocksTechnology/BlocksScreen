@@ -217,13 +217,7 @@ class MainWindow(QtWidgets.QMainWindow):
             ]
         )
 
-    @property
-    def popup_toggle(self) -> bool:
-        """Toggle popup property"""
-        return self._popup_toggle
-
-    @popup_toggle.setter
-    @QtCore.pyqtSlot(bool)
+    @QtCore.pyqtSlot(bool, name="toggle-popups")
     def popup_toggle(self, toggle: bool) -> None:
         self._popup_toggle = toggle
 
@@ -281,10 +275,12 @@ class MainWindow(QtWidgets.QMainWindow):
         """
         if not isinstance(tab_index, int):
             _logger.debug(
-                "Tab index argument expected type int, got %s", type(tab_index)
+                "Tab index argument expected type int, got %s", str(type(tab_index))
             )
         if not isinstance(panel_index, int):
-            _logger.debug("Panel page index expected type int, %s", type(panel_index))
+            _logger.debug(
+                "Panel page index expected type int, %s", str(type(panel_index))
+            )
 
         self.printPanel.loadscreen.hide()
         current_page = [
@@ -299,9 +295,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui.main_content_widget.setCurrentIndex(tab_index)
         self.set_current_panel_index(panel_index)
         _logger.debug(
-            "Requested page change -> Tab index :%s, pane panel index : %s",
-            requested_page[0],
-            requested_page[1],
+            f"Requested page change -> Tab index : {requested_page[0]} | panel index : {requested_page[1]}",
         )
 
     @QtCore.pyqtSlot(name="request-back")
@@ -351,9 +345,11 @@ class MainWindow(QtWidgets.QMainWindow):
                 QtWidgets.QApplication.postEvent(self.file_data, file_data_event)
             except Exception as e:
                 _logger.error(
-                    "Error posting event for file related information \
-                        received from websocket | error message received: %s",
-                    e,
+                    (
+                        "Error posting event for file related information",
+                        "received from websocket | error message received: %s",
+                    ),
+                    str(e),
                 )
         elif "machine" in _method:
             if "ok" in _data:
@@ -399,7 +395,7 @@ class MainWindow(QtWidgets.QMainWindow):
                     _object_report = [_data["status"]]
                     _object_report_keys = _data["status"].items()
                     _object_report_list_dict: list = []
-                    for index, key in enumerate(_object_report_keys):
+                    for _, key in enumerate(_object_report_keys):
                         _helper_dict: dict = {key[0]: key[1]}
                         _object_report_list_dict.append(_helper_dict)
 
@@ -414,7 +410,8 @@ class MainWindow(QtWidgets.QMainWindow):
                 _state_upper = status_type[0].upper()
                 _state_call = f"{_state_upper}{status_type[1:]}"
                 _logger.debug(
-                    f"Notify_klippy_{_state_call} Received from object subscription."
+                    "Notify_klippy_ %s Received from object subscription.",
+                    str(_state_call),
                 )
                 if hasattr(events, f"Klippy{_state_call}"):
                     _klippy_event_callback = getattr(
@@ -430,13 +427,17 @@ class MainWindow(QtWidgets.QMainWindow):
                             if not isinstance(_event, QtCore.QEvent):
                                 return
                             if instance:
-                                _logger.info(f"Event {_klippy_event_callback} sent")
+                                _logger.info(
+                                    "Event %s sent", str(_klippy_event_callback)
+                                )
                                 instance.postEvent(self, _event)
                             else:
                                 raise Exception("QApplication.instance is None type.")
                         except Exception as e:
                             _logger.debug(
-                                f"Unable to send internal klippy {_state_call} notification: {e}"
+                                "Unable to send internal klippy %s notification: %s",
+                                str(_state_call),
+                                str(e),
                             )
         elif "notify_filelist_changed" in _method:
             _file_change_list = _data.get("params")
@@ -453,10 +454,10 @@ class MainWindow(QtWidgets.QMainWindow):
         elif "notify_service_state_changed" in _method:
             entry = _data.get("params")
             if entry:
+                if not self._popup_toggle:
+                    return
                 service_entry: dict = entry[0]
                 service_name, service_info = service_entry.popitem()
-                if self.popup_toggle:
-                    return
                 self.popup.new_message(
                     message_type=Popup.MessageType.INFO,
                     message=f"""{service_name} service changed state to 
@@ -467,6 +468,8 @@ class MainWindow(QtWidgets.QMainWindow):
             _gcode_response = _data.get("params")
             self.gcode_response[list].emit(_gcode_response)
             if _gcode_response:
+                if not self._popup_toggle:
+                    return
                 _gcode_msg_type, _message = str(_gcode_response[0]).split(
                     " ", maxsplit=1
                 )
@@ -475,8 +478,6 @@ class MainWindow(QtWidgets.QMainWindow):
                     _msg_type = Popup.MessageType.ERROR
                 elif _gcode_msg_type == "//":
                     _msg_type = Popup.MessageType.INFO
-                if self.popup_toggle:
-                    return
                 # self.popup.new_message(
                 #     message_type=_msg_type, message=str(_message)
                 # )
@@ -486,7 +487,7 @@ class MainWindow(QtWidgets.QMainWindow):
             if "metadata" in _data.get("message", "").lower():
                 # Quick fix, don't care about no metadata errors
                 return
-            if self.popup_toggle:
+            if not self._popup_toggle:
                 return
             self.popup.new_message(
                 message_type=Popup.MessageType.ERROR,
@@ -494,7 +495,7 @@ class MainWindow(QtWidgets.QMainWindow):
             )
 
         elif "notify_cpu_throttled" in _method:
-            if self.popup_toggle:
+            if not self._popup_toggle:
                 return
             self.popup.new_message(
                 message_type=Popup.MessageType.WARNING,
