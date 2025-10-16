@@ -165,8 +165,6 @@ class JobStatusWidget(QtWidgets.QWidget):
 
     @QtCore.pyqtSlot(dict, name="on_fileinfo")
     def on_fileinfo(self, fileinfo: dict) -> None:
-        if not self.isVisible():
-            return
         self.total_layers = str(fileinfo.get("layer_count", "?"))
         self.layer_display_button.setText("?")
         if (
@@ -276,79 +274,68 @@ class JobStatusWidget(QtWidgets.QWidget):
                             f"Unexpected error while posting print job start event: {e}"
                         )
                 self._internal_print_status = value
-
-        if self.isVisible() and (
-            self._internal_print_status == "printing"
-            or self._internal_print_status == "paused"
-        ):
-            self.layer_display_button.secondary_text = (  # type:ignore
-                self.file_metadata.get("layer_count", "?")
-            )
-            if not self.file_metadata:
-                return
-            if isinstance(value, dict):
-                if "total_layer" in value.keys():
-                    # Only available if SET_PRINT_STATS_INFO TOTAL_LAYER=<value>
-                    # gcode command is ran
-                    if value["total_layer"] is not None:
-                        self.total_layers = value.get("total_layer", "?")
-                        self.layer_display_button.secondary_text = (  # type:ignore
-                            str(self.total_layers)
+        
+        if not self.file_metadata:
+            return
+        if isinstance(value, dict):
+            print(value, field)
+            if "total_layer" in value.keys():
+                self.total_layers = value["total_layer"]
+                self.layer_display_button.secondary_text = (  
+                    str(self.total_layers)
+                )
+            if "current_layer" in value.keys():
+                if value["current_layer"] is not None:
+                    _current_layer = value["current_layer"]
+                    if _current_layer is not None:
+                        self.layer_display_button.setText(
+                            f"{int(_current_layer)}"
                         )
-                if "current_layer" in value.keys():
-                    # Only available if SET_PRINT_STATS_INFO CURRENT_LAYER=<value>
-                    # gcode command is ran
-                    if value["current_layer"] is not None:
-                        _current_layer = value["current_layer"]
-                        if _current_layer is not None:
-                            self.layer_display_button.setText(
-                                f"{int(_current_layer)}"
-                                if _current_layer != -1
-                                else "?"
-                            )
-            elif isinstance(value, float):
-                if "total_duration" in field:
-                    self.print_total_duration = value
-                    _time = estimate_print_time(int(self.print_total_duration))
-                    _print_time_string = (
-                        f"{_time[0]}Day {_time[1]}H {_time[2]}min {_time[3]} s"
-                        if _time[0] != 0
-                        else f"{_time[1]}H {_time[2]}min {_time[3]}s"
-                    )
-                    self.print_time_display_button.setText(_print_time_string)
-                elif "print_duration" in field:
-                    self.current_print_duration_seconds = value
-                elif "filament_used" in field:
-                    self.filament_used_mm = value
+        elif isinstance(value, float):
+            
+
+            if "total_duration" in field:
+                self.print_total_duration = value
+                _time = estimate_print_time(int(self.print_total_duration))
+                _print_time_string = (
+                    f"{_time[0]}Day {_time[1]}H {_time[2]}min {_time[3]} s"
+                    if _time[0] != 0
+                    else f"{_time[1]}H {_time[2]}min {_time[3]}s"
+                )
+                self.print_time_display_button.setText(_print_time_string)
+            elif "print_duration" in field:
+                self.current_print_duration_seconds = value
+            elif "filament_used" in field:
+                self.filament_used_mm = value
 
     @QtCore.pyqtSlot(str, list, name="on_gcode_move_update")
-    def on_gcode_move_update(self, field: str, value: list) -> None:
-        """Processes the information that comes from the printer object "gcode_move"
+    def on_gcode_move_update(self, field: str, value: list) -> None:...
+        # """Processes the information that comes from the printer object "gcode_move"
 
-        Args:
-            field (str): Name of the updated field
-            value (list): New value for the field
-        """
-        if isinstance(value, list):
-            if "gcode_position" in field:  # Without offsets
-                if self._internal_print_status == "printing":
-                    _current_layer = calculate_current_layer(
-                        z_position=value[2],
-                        object_height=float(
-                            self.file_metadata.get("object_height", -1.0)
-                        ),
-                        layer_height=float(
-                            self.file_metadata.get("layer_height", -1.0)
-                        ),
-                        first_layer_height=float(
-                            self.file_metadata.get("first_layer_height", -1.0)
-                        ),
-                    )
-                    self.layer_display_button.setText(
-                        f"{int(_current_layer)}"
-                        if _current_layer != -1
-                        else "?"
-                    )
+        # Args:
+        #     field (str): Name of the updated field
+        #     value (list): New value for the field
+        # """
+        # if isinstance(value, list):
+        #     if "gcode_position" in field:  # Without offsets
+        #         if self._internal_print_status == "printing":
+        #             _current_layer = calculate_current_layer(
+        #                 z_position=value[2],
+        #                 object_height=float(
+        #                     self.file_metadata.get("object_height", -1.0)
+        #                 ),
+        #                 layer_height=float(
+        #                     self.file_metadata.get("layer_height", -1.0)
+        #                 ),
+        #                 first_layer_height=float(
+        #                     self.file_metadata.get("first_layer_height", -1.0)
+        #                 ),
+        #             )
+        #             self.layer_display_button.setText(
+        #                 f"{int(_current_layer)}"
+        #                 if _current_layer != -1
+        #                 else "?"
+        #             )
 
     @QtCore.pyqtSlot(str, float, name="virtual_sdcard_update")
     @QtCore.pyqtSlot(str, bool, name="virtual_sdcard_update")
@@ -675,7 +662,7 @@ class JobStatusWidget(QtWidgets.QWidget):
         self.layer_display_button.setObjectName("layer_display_button")
 
         self.print_time_display_button = DisplayButton(self)
-        self.print_time_display_button.button_type = "display_secondary"
+        self.print_time_display_button.button_type = "normal"
         self.print_time_display_button.setEnabled(False)
         self.print_time_display_button.setSizePolicy(sizePolicy)
 
