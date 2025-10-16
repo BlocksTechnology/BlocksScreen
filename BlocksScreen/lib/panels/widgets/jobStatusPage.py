@@ -181,21 +181,23 @@ class JobStatusWidget(QtWidgets.QWidget):
 
     @QtCore.pyqtSlot(name="pause_resume_print")
     def pause_resume_print(self) -> None:
-        """Handle pause/resume button clicks"""
-        if self._internal_print_status == "printing":
-            self.print_pause.emit()
-            self._internal_print_status = "paused"
-            self.pause_printing_btn.setText("Pause")
-            self.pause_printing_btn.setPixmap(
-                QtGui.QPixmap(":/ui/media/btn_icons/pause.svg")
-            )
-        elif self._internal_print_status == "paused":
-            self.print_resume.emit()
-            self._internal_print_status = "printing"
-            self.pause_printing_btn.setText("Resume")
-            self.pause_printing_btn.setPixmap(
-                QtGui.QPixmap(":/ui/media/btn_icons/play.svg")
-            )
+        if not getattr(self, "_pause_locked", False):
+            self._pause_locked = True
+            self.pause_printing_btn.setEnabled(False)
+
+            if self._internal_print_status == "printing":
+                self.print_pause.emit()
+                self._internal_print_status = "paused"
+
+            elif self._internal_print_status == "paused":
+                self.print_resume.emit()
+                self._internal_print_status = "printing"
+
+        QtCore.QTimer.singleShot(5000, self._unlock_pause_button)
+
+    def _unlock_pause_button(self):
+        self._pause_locked = False
+        self.pause_printing_btn.setEnabled(True)
 
     @QtCore.pyqtSlot(str, dict, name="on_print_stats_update")
     @QtCore.pyqtSlot(str, float, name="on_print_stats_update")
@@ -218,6 +220,17 @@ class JobStatusWidget(QtWidgets.QWidget):
                     self.request_file_info.emit(value)  # Request file metadata
             if "state" in field:
                 if value.lower() == "printing" or value == "paused":
+                    self._internal_print_status = value
+                    if value == "paused":
+                        self.pause_printing_btn.setText("Resume")
+                        self.pause_printing_btn.setPixmap(
+                            QtGui.QPixmap(":/ui/media/btn_icons/play.svg")
+                        )
+                    elif value == "printing":
+                        self.pause_printing_btn.setText("Pause")
+                        self.pause_printing_btn.setPixmap(
+                            QtGui.QPixmap(":/ui/media/btn_icons/pause.svg")
+                        )
                     self.request_query_print_stats.emit(
                         {"print_stats": ["filename"]}
                     )
@@ -273,12 +286,11 @@ class JobStatusWidget(QtWidgets.QWidget):
                         logging.info(
                             f"Unexpected error while posting print job start event: {e}"
                         )
-                self._internal_print_status = value
+                
         
         if not self.file_metadata:
             return
         if isinstance(value, dict):
-            print(value, field)
             if "total_layer" in value.keys():
                 self.total_layers = value["total_layer"]
                 self.layer_display_button.secondary_text = (  
@@ -309,33 +321,35 @@ class JobStatusWidget(QtWidgets.QWidget):
                 self.filament_used_mm = value
 
     @QtCore.pyqtSlot(str, list, name="on_gcode_move_update")
-    def on_gcode_move_update(self, field: str, value: list) -> None:...
+    def on_gcode_move_update(self, field: str, value: list) -> None:
         # """Processes the information that comes from the printer object "gcode_move"
 
         # Args:
         #     field (str): Name of the updated field
         #     value (list): New value for the field
         # """
-        # if isinstance(value, list):
-        #     if "gcode_position" in field:  # Without offsets
-        #         if self._internal_print_status == "printing":
-        #             _current_layer = calculate_current_layer(
-        #                 z_position=value[2],
-        #                 object_height=float(
-        #                     self.file_metadata.get("object_height", -1.0)
-        #                 ),
-        #                 layer_height=float(
-        #                     self.file_metadata.get("layer_height", -1.0)
-        #                 ),
-        #                 first_layer_height=float(
-        #                     self.file_metadata.get("first_layer_height", -1.0)
-        #                 ),
-        #             )
-        #             self.layer_display_button.setText(
-        #                 f"{int(_current_layer)}"
-        #                 if _current_layer != -1
-        #                 else "?"
-        #             )
+
+        print(self.file_metadata)
+        if isinstance(value, list):
+            if "gcode_position" in field:  # Without offsets
+                if self._internal_print_status == "printing":
+                    _current_layer = calculate_current_layer(
+                        z_position=value[2],
+                        object_height=float(
+                            self.file_metadata.get("object_height", -1.0)
+                        ),
+                        layer_height=float(
+                            self.file_metadata.get("layer_height", -1.0)
+                        ),
+                        first_layer_height=float(
+                            self.file_metadata.get("first_layer_height", -1.0)
+                        ),
+                    )
+                    self.layer_display_button.setText(
+                        f"{int(_current_layer)}"
+                        if _current_layer != -1
+                        else "?"
+                    )
 
     @QtCore.pyqtSlot(str, float, name="virtual_sdcard_update")
     @QtCore.pyqtSlot(str, bool, name="virtual_sdcard_update")
