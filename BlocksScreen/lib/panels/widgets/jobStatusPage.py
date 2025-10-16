@@ -329,7 +329,6 @@ class JobStatusWidget(QtWidgets.QWidget):
         #     value (list): New value for the field
         # """
 
-        print(self.file_metadata)
         if isinstance(value, list):
             if "gcode_position" in field:  # Without offsets
                 if self._internal_print_status == "printing":
