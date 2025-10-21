@@ -9,8 +9,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>710</width>
-    <height>410</height>
+    <width>800</width>
+    <height>480</height>
    </rect>
   </property>
   <property name="sizePolicy">
@@ -21,8 +21,8 @@
   </property>
   <property name="maximumSize">
    <size>
-    <width>710</width>
-    <height>410</height>
+    <width>800</width>
+    <height>480</height>
    </size>
   </property>
   <property name="cursor">
@@ -38,8 +38,8 @@
    <property name="geometry">
     <rect>
      <x>10</x>
-     <y>140</y>
-     <width>691</width>
+     <y>150</y>
+     <width>781</width>
      <height>52</height>
     </rect>
    </property>
@@ -549,8 +549,8 @@
    <property name="geometry">
     <rect>
      <x>50</x>
-     <y>200</y>
-     <width>611</width>
+     <y>220</y>
+     <width>701</width>
      <height>52</height>
     </rect>
    </property>
@@ -1010,9 +1010,9 @@
   <widget class="QWidget" name="layoutWidget_3">
    <property name="geometry">
     <rect>
-     <x>90</x>
-     <y>260</y>
-     <width>531</width>
+     <x>100</x>
+     <y>290</y>
+     <width>591</width>
      <height>52</height>
     </rect>
    </property>
@@ -1371,9 +1371,9 @@
   <widget class="QPushButton" name="K_space">
    <property name="geometry">
     <rect>
-     <x>109</x>
-     <y>332</y>
-     <width>491</width>
+     <x>120</x>
+     <y>362</y>
+     <width>551</width>
      <height>60</height>
     </rect>
    </property>
@@ -1402,8 +1402,8 @@
   <widget class="QPushButton" name="k_Enter">
    <property name="geometry">
     <rect>
-     <x>610</x>
-     <y>320</y>
+     <x>680</x>
+     <y>350</y>
      <width>93</width>
      <height>60</height>
     </rect>
@@ -1436,8 +1436,8 @@
   <widget class="QPushButton" name="k_delete">
    <property name="geometry">
     <rect>
-     <x>630</x>
-     <y>260</y>
+     <x>700</x>
+     <y>280</y>
      <width>81</width>
      <height>51</height>
     </rect>
@@ -1467,8 +1467,8 @@
   <widget class="QPushButton" name="K_keychange">
    <property name="geometry">
     <rect>
-     <x>10</x>
-     <y>320</y>
+     <x>20</x>
+     <y>350</y>
      <width>93</width>
      <height>60</height>
     </rect>
@@ -1501,8 +1501,8 @@
   <widget class="QPushButton" name="K_shift">
    <property name="geometry">
     <rect>
-     <x>0</x>
-     <y>260</y>
+     <x>10</x>
+     <y>280</y>
      <width>81</width>
      <height>51</height>
     </rect>
@@ -1538,8 +1538,8 @@
    </property>
    <property name="geometry">
     <rect>
-     <x>630</x>
-     <y>10</y>
+     <x>720</x>
+     <y>20</y>
      <width>60</width>
      <height>60</height>
     </rect>
@@ -1594,9 +1594,9 @@
    <property name="geometry">
     <rect>
      <x>10</x>
-     <y>80</y>
-     <width>691</width>
-     <height>46</height>
+     <y>90</y>
+     <width>781</width>
+     <height>48</height>
     </rect>
    </property>
    <layout class="QVBoxLayout" name="verticalLayout_2">
