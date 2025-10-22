@@ -356,6 +356,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.setCurrentIndex(self.indexOf(self.qwerty))
             
     def on_qwerty_go_back(self):
+        QtWidgets.QApplication.instance().focusWidget().clearFocus()
         self.setCurrentIndex(self.indexOf(self.previousPanel))
 
     def on_qwerty_value_selected(self, value: str):
