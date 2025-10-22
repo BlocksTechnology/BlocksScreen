@@ -219,9 +219,9 @@ class BlocksCustomButton(QtWidgets.QAbstractButton):
             painter.setPen(_pen)
 
 
-            if self.text_width < _text_rect2.width():
+            if self.text_width < _text_rect2.width()*0.6:
                 _text_rect.setWidth(
-                    self.width() - int(self.button_ellipse.width()*2)
+                    self.width() - int(self.button_ellipse.width()*1.5)
                 )
                 _text_rect.setLeft(int(self.button_ellipse.width()))
                 
