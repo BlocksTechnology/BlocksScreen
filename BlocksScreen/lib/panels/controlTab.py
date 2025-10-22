@@ -240,7 +240,7 @@ class ControlTab(QtWidgets.QStackedWidget):
                 int(round(float(self.panel.bed_temp_display.secondary_text))),
                 self.on_numpad_change,
                 0,
-                300,  # TODO: Get this value from printer objects
+                120,  # TODO: Get this value from printer objects
             )
         )
         self.request_numpad[str, int, "PyQt_PyObject", int, int].connect(
@@ -261,6 +261,7 @@ class ControlTab(QtWidgets.QStackedWidget):
         self.printcores_page.pc_accept.clicked.connect(self.handle_swapcore)
 
         self.ws.klippy_state_signal.connect(self.on_klippy_status)
+        self.panel.cp_printer_settings_btn.hide()
 
     def handle_ztilt(self):
         """Handle Z-Tilt Adjustment"""
@@ -467,9 +468,9 @@ class ControlTab(QtWidgets.QStackedWidget):
     def on_toolhead_update(self, field: str, values: list) -> None:
         """Handles updated from toolhead printer object"""
         if field == "position":
-            self.panel.mva_x_value_label.setText(f"{values[0]}")
-            self.panel.mva_y_value_label.setText(f"{values[1]}")
-            self.panel.mva_z_value_label.setText(f"{values[2]}")
+            self.panel.mva_x_value_label.setText(f"{values[0]:.2f}")
+            self.panel.mva_y_value_label.setText(f"{values[1]:.2f}")
+            self.panel.mva_z_value_label.setText(f"{values[2]:.3f}")
         self.toolhead_info.update({f"{field}": values})
 
     @QtCore.pyqtSlot(str, str, float, name="on-extruder-update")
