@@ -196,15 +196,18 @@ class BlocksCustomButton(QtWidgets.QAbstractButton):
             self.text_width = font_metrics.horizontalAdvance(self._text)
             self.label_width = self.contentsRect().width()
 
-
-            margin = _style.pixelMetric(_style.PixelMetric.PM_ButtonMargin, opt, self)
-
+            margin = _style.pixelMetric(
+            _style.PixelMetric.PM_ButtonMargin, opt, self
+            )
+            
             _start_text_position = int(self.button_ellipse.width())
             _text_rect = _rect
-            _text_rect.setWidth(self.width() - int(self.button_ellipse.width()))
-            _text_rect.setLeft(int(self.button_ellipse.width()))
+
+
             _text_rect2 = _rect
-            _text_rect2.setWidth(self.width() - int(self.button_ellipse.width()))
+            _text_rect2.setWidth(
+                    self.width() - int(self.button_ellipse.width())
+                )
             _text_rect2.setLeft(int(self.button_ellipse.width()))
 
             _text_rect.setWidth(self.width() - int(self.button_ellipse.width()))
