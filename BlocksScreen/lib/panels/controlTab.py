@@ -265,7 +265,7 @@ class ControlTab(QtWidgets.QStackedWidget):
     def handle_ztilt(self):
         """Handle Z-Tilt Adjustment"""
         self.loadpage.show()
-        self.loadpage.set_status_message("Starting Z-Tilt Adjustment...")
+        self.loadpage.set_status_message("Running Z-Tilt Adjustment...")
         self.run_gcode_signal.emit("Z_TILT_ADJUST")
         QtCore.QTimer.singleShot(30000, self.after_ztilt)  # should be a if here
 
