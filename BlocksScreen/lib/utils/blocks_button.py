@@ -219,30 +219,30 @@ class BlocksCustomButton(QtWidgets.QAbstractButton):
             painter.setPen(_pen)
 
 
-            if self.text_width < _text_rect2.width()*0.6:
-                _text_rect.setWidth(
-                    self.width() - int(self.button_ellipse.width()*1.5)
-                )
-                _text_rect.setLeft(int(self.button_ellipse.width()))
-                
-                painter.drawText(
-                    _text_rect,
-                    QtCore.Qt.TextFlag.TextShowMnemonic
-                    | QtCore.Qt.AlignmentFlag.AlignCenter,
-                    str(self.text()),
-                )
-            else:
-                _text_rect.setLeft(_start_text_position + margin)
+            # if self.text_width < _text_rect2.width()*0.6:
+            _text_rect.setWidth(
+                self.width() - int(self.button_ellipse.width()*1.4)
+            )
+            _text_rect.setLeft(int(self.button_ellipse.width()))
+            
+            painter.drawText(
+                _text_rect,
+                QtCore.Qt.TextFlag.TextShowMnemonic
+                | QtCore.Qt.AlignmentFlag.AlignCenter,
+                str(self.text()),
+            )
+            # else:
+            #     _text_rect.setLeft(_start_text_position + margin)
 
-                _text_rect.setWidth(self.width() - int(self.button_ellipse.width()))
+            #     _text_rect.setWidth(self.width() - int(self.button_ellipse.width()))
 
-                painter.drawText(
-                    _text_rect,
-                    QtCore.Qt.TextFlag.TextShowMnemonic
-                    | QtCore.Qt.AlignmentFlag.AlignLeft
-                    | QtCore.Qt.AlignmentFlag.AlignVCenter,
-                    str(self.text()),
-                )
+            #     painter.drawText(
+            #         _text_rect,
+            #         QtCore.Qt.TextFlag.TextShowMnemonic
+            #         | QtCore.Qt.AlignmentFlag.AlignLeft
+            #         | QtCore.Qt.AlignmentFlag.AlignVCenter,
+            #         str(self.text()),
+            #     )
             painter.setPen(QtCore.Qt.PenStyle.NoPen)
 
         if self._show_notification:
