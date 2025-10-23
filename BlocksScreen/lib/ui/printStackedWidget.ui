@@ -158,7 +158,7 @@
     <property name="font">
      <font>
       <family>Montserrat</family>
-      <pointsize>14</pointsize>
+      <pointsize>19</pointsize>
      </font>
     </property>
     <property name="styleSheet">
@@ -2643,7 +2643,7 @@ Change</string>
   <customwidget>
    <class>IconButton</class>
    <extends>QPushButton</extends>
-   <header location="global">lib.utils.iconButton</header>
+   <header location="global">lib.utils.icon_button</header>
   </customwidget>
   <customwidget>
    <class>DisplayButton</class>

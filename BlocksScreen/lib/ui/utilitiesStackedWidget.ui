@@ -10,6 +10,12 @@
     <height>410</height>
    </rect>
   </property>
+  <property name="sizePolicy">
+   <sizepolicy hsizetype="Preferred" vsizetype="Minimum">
+    <horstretch>0</horstretch>
+    <verstretch>0</verstretch>
+   </sizepolicy>
+  </property>
   <property name="minimumSize">
    <size>
     <width>710</width>
@@ -29,414 +35,416 @@
    <number>9</number>
   </property>
   <widget class="QWidget" name="utilities_page">
-   <widget class="QWidget" name="layoutWidget">
-    <property name="geometry">
-     <rect>
-      <x>10</x>
-      <y>10</y>
-      <width>691</width>
-      <height>71</height>
-     </rect>
-    </property>
-    <layout class="QHBoxLayout" name="utilities_header_layout">
-     <item>
-      <widget class="QLabel" name="utilities_title_label">
-       <property name="sizePolicy">
-        <sizepolicy hsizetype="Expanding" vsizetype="Minimum">
-         <horstretch>0</horstretch>
-         <verstretch>0</verstretch>
-        </sizepolicy>
-       </property>
-       <property name="minimumSize">
-        <size>
-         <width>0</width>
-         <height>60</height>
-        </size>
-       </property>
-       <property name="maximumSize">
-        <size>
-         <width>16777215</width>
-         <height>60</height>
-        </size>
-       </property>
-       <property name="font">
-        <font>
-         <family>Momcake</family>
-         <pointsize>24</pointsize>
-         <weight>75</weight>
-         <bold>true</bold>
-        </font>
-       </property>
-       <property name="styleSheet">
-        <string notr="true">background: transparent; color: white;</string>
-       </property>
-       <property name="text">
-        <string>Utilities</string>
-       </property>
-       <property name="alignment">
-        <set>Qt::AlignCenter</set>
-       </property>
-       <property name="class" stdset="0">
-        <string>title_text</string>
-       </property>
-      </widget>
-     </item>
-    </layout>
-   </widget>
-   <widget class="QWidget" name="layoutWidget">
-    <property name="geometry">
-     <rect>
-      <x>10</x>
-      <y>90</y>
-      <width>691</width>
-      <height>311</height>
-     </rect>
-    </property>
-    <layout class="QGridLayout" name="utilities_content_layout">
-     <item row="2" column="0">
-      <widget class="BlocksCustomButton" name="update_btn">
-       <property name="sizePolicy">
-        <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
-         <horstretch>0</horstretch>
-         <verstretch>0</verstretch>
-        </sizepolicy>
-       </property>
-       <property name="minimumSize">
-        <size>
-         <width>250</width>
-         <height>80</height>
-        </size>
-       </property>
-       <property name="maximumSize">
-        <size>
-         <width>250</width>
-         <height>80</height>
-        </size>
-       </property>
-       <property name="font">
-        <font>
-         <family>Momcake</family>
-         <pointsize>20</pointsize>
-         <weight>50</weight>
-         <bold>false</bold>
-        </font>
-       </property>
-       <property name="text">
-        <string>Update</string>
-       </property>
-       <property name="flat">
-        <bool>true</bool>
-       </property>
-      </widget>
-     </item>
-     <item row="2" column="1">
-      <widget class="BlocksCustomButton" name="utilities_input_shaper_btn">
-       <property name="sizePolicy">
-        <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
-         <horstretch>0</horstretch>
-         <verstretch>0</verstretch>
-        </sizepolicy>
-       </property>
-       <property name="minimumSize">
-        <size>
-         <width>250</width>
-         <height>80</height>
-        </size>
-       </property>
-       <property name="maximumSize">
-        <size>
-         <width>250</width>
-         <height>80</height>
-        </size>
-       </property>
-       <property name="font">
-        <font>
-         <family>Momcake</family>
-         <pointsize>20</pointsize>
-         <italic>false</italic>
-         <stylestrategy>PreferAntialias</stylestrategy>
-        </font>
-       </property>
-       <property name="mouseTracking">
-        <bool>false</bool>
-       </property>
-       <property name="tabletTracking">
-        <bool>true</bool>
-       </property>
-       <property name="contextMenuPolicy">
-        <enum>Qt::NoContextMenu</enum>
-       </property>
-       <property name="layoutDirection">
-        <enum>Qt::LeftToRight</enum>
-       </property>
-       <property name="styleSheet">
-        <string notr="true"/>
-       </property>
-       <property name="text">
-        <string>INPUT
-SHAPER</string>
-       </property>
-       <property name="autoDefault">
-        <bool>false</bool>
-       </property>
-       <property name="flat">
-        <bool>true</bool>
-       </property>
-       <property name="class" stdset="0">
-        <string>menu_btn</string>
-       </property>
-       <property name="icon_pixmap" stdset="0">
-        <pixmap resource="resources/icon_resources.qrc">:/input_shaper/media/btn_icons/input_shaper.svg</pixmap>
-       </property>
-      </widget>
-     </item>
-     <item row="1" column="1">
-      <widget class="BlocksCustomButton" name="utilities_axes_btn">
-       <property name="sizePolicy">
-        <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
-         <horstretch>0</horstretch>
-         <verstretch>0</verstretch>
-        </sizepolicy>
-       </property>
-       <property name="minimumSize">
-        <size>
-         <width>250</width>
-         <height>80</height>
-        </size>
-       </property>
-       <property name="maximumSize">
-        <size>
-         <width>250</width>
-         <height>80</height>
-        </size>
-       </property>
-       <property name="font">
-        <font>
-         <family>Momcake</family>
-         <pointsize>20</pointsize>
-         <italic>false</italic>
-         <stylestrategy>PreferAntialias</stylestrategy>
-        </font>
-       </property>
-       <property name="mouseTracking">
-        <bool>false</bool>
-       </property>
-       <property name="tabletTracking">
-        <bool>true</bool>
-       </property>
-       <property name="contextMenuPolicy">
-        <enum>Qt::NoContextMenu</enum>
-       </property>
-       <property name="layoutDirection">
-        <enum>Qt::LeftToRight</enum>
-       </property>
-       <property name="styleSheet">
-        <string notr="true"/>
-       </property>
-       <property name="text">
-        <string>AXES
-MAINT.</string>
-       </property>
-       <property name="autoDefault">
-        <bool>false</bool>
-       </property>
-       <property name="flat">
-        <bool>true</bool>
-       </property>
-       <property name="class" stdset="0">
-        <string>menu_btn</string>
-       </property>
-       <property name="icon_pixmap" stdset="0">
-        <pixmap resource="resources/icon_resources.qrc">:/motion/media/btn_icons/axis_maintenance.svg</pixmap>
-       </property>
-      </widget>
-     </item>
-     <item row="1" column="0">
-      <widget class="BlocksCustomButton" name="utilities_routine_check_btn">
-       <property name="sizePolicy">
-        <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
-         <horstretch>0</horstretch>
-         <verstretch>0</verstretch>
-        </sizepolicy>
-       </property>
-       <property name="minimumSize">
-        <size>
-         <width>250</width>
-         <height>80</height>
-        </size>
-       </property>
-       <property name="maximumSize">
-        <size>
-         <width>250</width>
-         <height>80</height>
-        </size>
-       </property>
-       <property name="font">
-        <font>
-         <family>Momcake</family>
-         <pointsize>20</pointsize>
-         <italic>false</italic>
-         <stylestrategy>PreferAntialias</stylestrategy>
-        </font>
-       </property>
-       <property name="mouseTracking">
-        <bool>false</bool>
-       </property>
-       <property name="tabletTracking">
-        <bool>true</bool>
-       </property>
-       <property name="contextMenuPolicy">
-        <enum>Qt::NoContextMenu</enum>
-       </property>
-       <property name="layoutDirection">
-        <enum>Qt::LeftToRight</enum>
-       </property>
-       <property name="styleSheet">
-        <string notr="true"/>
-       </property>
-       <property name="text">
-        <string>ROUTINE
-CHECK</string>
-       </property>
-       <property name="autoDefault">
-        <bool>false</bool>
-       </property>
-       <property name="flat">
-        <bool>true</bool>
-       </property>
-       <property name="class" stdset="0">
-        <string>menu_btn</string>
-       </property>
-       <property name="icon_pixmap" stdset="0">
-        <pixmap resource="resources/icon_resources.qrc">:/ui/media/btn_icons/routine.svg</pixmap>
-       </property>
-      </widget>
-     </item>
-     <item row="0" column="1">
-      <widget class="BlocksCustomButton" name="utilities_leds_btn">
-       <property name="sizePolicy">
-        <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
-         <horstretch>0</horstretch>
-         <verstretch>0</verstretch>
-        </sizepolicy>
-       </property>
-       <property name="minimumSize">
-        <size>
-         <width>250</width>
-         <height>80</height>
-        </size>
-       </property>
-       <property name="maximumSize">
-        <size>
-         <width>250</width>
-         <height>80</height>
-        </size>
-       </property>
-       <property name="font">
-        <font>
-         <family>Momcake</family>
-         <pointsize>20</pointsize>
-         <italic>false</italic>
-         <stylestrategy>PreferAntialias</stylestrategy>
-        </font>
-       </property>
-       <property name="mouseTracking">
-        <bool>false</bool>
-       </property>
-       <property name="tabletTracking">
-        <bool>true</bool>
-       </property>
-       <property name="contextMenuPolicy">
-        <enum>Qt::NoContextMenu</enum>
-       </property>
-       <property name="layoutDirection">
-        <enum>Qt::LeftToRight</enum>
-       </property>
-       <property name="styleSheet">
-        <string notr="true"/>
-       </property>
-       <property name="text">
-        <string>LEDs</string>
-       </property>
-       <property name="autoDefault">
-        <bool>false</bool>
-       </property>
-       <property name="flat">
-        <bool>true</bool>
-       </property>
-       <property name="class" stdset="0">
-        <string>menu_btn</string>
-       </property>
-       <property name="icon_pixmap" stdset="0">
-        <pixmap resource="resources/icon_resources.qrc">:/ui/media/btn_icons/LEDs.svg</pixmap>
-       </property>
-      </widget>
-     </item>
-     <item row="0" column="0">
-      <widget class="BlocksCustomButton" name="utilities_info_btn">
-       <property name="sizePolicy">
-        <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
-         <horstretch>0</horstretch>
-         <verstretch>0</verstretch>
-        </sizepolicy>
-       </property>
-       <property name="minimumSize">
-        <size>
-         <width>250</width>
-         <height>80</height>
-        </size>
-       </property>
-       <property name="maximumSize">
-        <size>
-         <width>250</width>
-         <height>80</height>
-        </size>
-       </property>
-       <property name="font">
-        <font>
-         <family>Momcake</family>
-         <pointsize>20</pointsize>
-         <italic>false</italic>
-         <stylestrategy>PreferAntialias</stylestrategy>
-        </font>
-       </property>
-       <property name="mouseTracking">
-        <bool>false</bool>
-       </property>
-       <property name="tabletTracking">
-        <bool>true</bool>
-       </property>
-       <property name="contextMenuPolicy">
-        <enum>Qt::NoContextMenu</enum>
-       </property>
-       <property name="layoutDirection">
-        <enum>Qt::LeftToRight</enum>
-       </property>
-       <property name="styleSheet">
-        <string notr="true"/>
-       </property>
-       <property name="text">
-        <string>INFO</string>
-       </property>
-       <property name="autoDefault">
-        <bool>false</bool>
-       </property>
-       <property name="flat">
-        <bool>true</bool>
-       </property>
-       <property name="class" stdset="0">
-        <string>menu_btn</string>
-       </property>
-       <property name="icon_pixmap" stdset="0">
-        <pixmap resource="resources/icon_resources.qrc">:/ui/media/btn_icons/info.svg</pixmap>
-       </property>
-      </widget>
-     </item>
-    </layout>
-   </widget>
+   <layout class="QVBoxLayout" name="verticalLayout">
+    <item>
+     <layout class="QHBoxLayout" name="utilities_header_layout">
+      <item>
+       <widget class="QLabel" name="utilities_title_label">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Expanding" vsizetype="Minimum">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="minimumSize">
+         <size>
+          <width>0</width>
+          <height>60</height>
+         </size>
+        </property>
+        <property name="maximumSize">
+         <size>
+          <width>16777215</width>
+          <height>60</height>
+         </size>
+        </property>
+        <property name="font">
+         <font>
+          <family>Momcake</family>
+          <pointsize>24</pointsize>
+          <weight>75</weight>
+          <bold>true</bold>
+         </font>
+        </property>
+        <property name="styleSheet">
+         <string notr="true">background: transparent; color: white;</string>
+        </property>
+        <property name="text">
+         <string>Utilities</string>
+        </property>
+        <property name="alignment">
+         <set>Qt::AlignCenter</set>
+        </property>
+        <property name="class" stdset="0">
+         <string>title_text</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </item>
+    <item>
+     <layout class="QGridLayout" name="utilities_content_layout">
+      <item row="1" column="1">
+       <widget class="BlocksCustomButton" name="utilities_axes_btn">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="minimumSize">
+         <size>
+          <width>250</width>
+          <height>80</height>
+         </size>
+        </property>
+        <property name="maximumSize">
+         <size>
+          <width>250</width>
+          <height>80</height>
+         </size>
+        </property>
+        <property name="font">
+         <font>
+          <family>Momcake</family>
+          <pointsize>19</pointsize>
+          <italic>false</italic>
+          <stylestrategy>PreferAntialias</stylestrategy>
+         </font>
+        </property>
+        <property name="mouseTracking">
+         <bool>false</bool>
+        </property>
+        <property name="tabletTracking">
+         <bool>true</bool>
+        </property>
+        <property name="contextMenuPolicy">
+         <enum>Qt::NoContextMenu</enum>
+        </property>
+        <property name="layoutDirection">
+         <enum>Qt::LeftToRight</enum>
+        </property>
+        <property name="styleSheet">
+         <string notr="true"/>
+        </property>
+        <property name="text">
+         <string>Axis
+Maint.</string>
+        </property>
+        <property name="autoDefault">
+         <bool>false</bool>
+        </property>
+        <property name="flat">
+         <bool>true</bool>
+        </property>
+        <property name="class" stdset="0">
+         <string>menu_btn</string>
+        </property>
+        <property name="icon_pixmap" stdset="0">
+         <pixmap resource="resources/icon_resources.qrc">:/motion/media/btn_icons/axis_maintenance.svg</pixmap>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="0">
+       <widget class="BlocksCustomButton" name="update_btn">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="minimumSize">
+         <size>
+          <width>250</width>
+          <height>80</height>
+         </size>
+        </property>
+        <property name="maximumSize">
+         <size>
+          <width>250</width>
+          <height>80</height>
+         </size>
+        </property>
+        <property name="font">
+         <font>
+          <family>Momcake</family>
+          <pointsize>19</pointsize>
+          <weight>50</weight>
+          <bold>false</bold>
+         </font>
+        </property>
+        <property name="text">
+         <string>Update</string>
+        </property>
+        <property name="flat">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="0">
+       <widget class="BlocksCustomButton" name="utilities_routine_check_btn">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="minimumSize">
+         <size>
+          <width>250</width>
+          <height>80</height>
+         </size>
+        </property>
+        <property name="maximumSize">
+         <size>
+          <width>250</width>
+          <height>80</height>
+         </size>
+        </property>
+        <property name="font">
+         <font>
+          <family>Momcake</family>
+          <pointsize>19</pointsize>
+          <italic>false</italic>
+          <stylestrategy>PreferAntialias</stylestrategy>
+         </font>
+        </property>
+        <property name="mouseTracking">
+         <bool>false</bool>
+        </property>
+        <property name="tabletTracking">
+         <bool>true</bool>
+        </property>
+        <property name="contextMenuPolicy">
+         <enum>Qt::NoContextMenu</enum>
+        </property>
+        <property name="layoutDirection">
+         <enum>Qt::LeftToRight</enum>
+        </property>
+        <property name="styleSheet">
+         <string notr="true"/>
+        </property>
+        <property name="text">
+         <string>Routine
+Check</string>
+        </property>
+        <property name="autoDefault">
+         <bool>false</bool>
+        </property>
+        <property name="flat">
+         <bool>true</bool>
+        </property>
+        <property name="class" stdset="0">
+         <string>menu_btn</string>
+        </property>
+        <property name="icon_pixmap" stdset="0">
+         <pixmap resource="resources/icon_resources.qrc">:/ui/media/btn_icons/routine.svg</pixmap>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="1">
+       <widget class="BlocksCustomButton" name="utilities_input_shaper_btn">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="minimumSize">
+         <size>
+          <width>250</width>
+          <height>80</height>
+         </size>
+        </property>
+        <property name="maximumSize">
+         <size>
+          <width>250</width>
+          <height>80</height>
+         </size>
+        </property>
+        <property name="font">
+         <font>
+          <family>Momcake</family>
+          <pointsize>19</pointsize>
+          <italic>false</italic>
+          <stylestrategy>PreferAntialias</stylestrategy>
+         </font>
+        </property>
+        <property name="mouseTracking">
+         <bool>false</bool>
+        </property>
+        <property name="tabletTracking">
+         <bool>true</bool>
+        </property>
+        <property name="contextMenuPolicy">
+         <enum>Qt::NoContextMenu</enum>
+        </property>
+        <property name="layoutDirection">
+         <enum>Qt::LeftToRight</enum>
+        </property>
+        <property name="styleSheet">
+         <string notr="true"/>
+        </property>
+        <property name="text">
+         <string>Input
+Shaper</string>
+        </property>
+        <property name="autoDefault">
+         <bool>false</bool>
+        </property>
+        <property name="flat">
+         <bool>true</bool>
+        </property>
+        <property name="class" stdset="0">
+         <string>menu_btn</string>
+        </property>
+        <property name="icon_pixmap" stdset="0">
+         <pixmap resource="resources/icon_resources.qrc">:/input_shaper/media/btn_icons/input_shaper.svg</pixmap>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="0">
+       <widget class="BlocksCustomButton" name="utilities_info_btn">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="minimumSize">
+         <size>
+          <width>250</width>
+          <height>80</height>
+         </size>
+        </property>
+        <property name="maximumSize">
+         <size>
+          <width>250</width>
+          <height>80</height>
+         </size>
+        </property>
+        <property name="font">
+         <font>
+          <family>Momcake</family>
+          <pointsize>19</pointsize>
+          <italic>false</italic>
+          <stylestrategy>PreferAntialias</stylestrategy>
+         </font>
+        </property>
+        <property name="mouseTracking">
+         <bool>false</bool>
+        </property>
+        <property name="tabletTracking">
+         <bool>true</bool>
+        </property>
+        <property name="contextMenuPolicy">
+         <enum>Qt::NoContextMenu</enum>
+        </property>
+        <property name="layoutDirection">
+         <enum>Qt::LeftToRight</enum>
+        </property>
+        <property name="styleSheet">
+         <string notr="true"/>
+        </property>
+        <property name="text">
+         <string>Info</string>
+        </property>
+        <property name="autoDefault">
+         <bool>false</bool>
+        </property>
+        <property name="flat">
+         <bool>true</bool>
+        </property>
+        <property name="class" stdset="0">
+         <string>menu_btn</string>
+        </property>
+        <property name="icon_pixmap" stdset="0">
+         <pixmap resource="resources/icon_resources.qrc">:/ui/media/btn_icons/info.svg</pixmap>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="1">
+       <widget class="BlocksCustomButton" name="utilities_leds_btn">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="minimumSize">
+         <size>
+          <width>250</width>
+          <height>80</height>
+         </size>
+        </property>
+        <property name="maximumSize">
+         <size>
+          <width>250</width>
+          <height>80</height>
+         </size>
+        </property>
+        <property name="font">
+         <font>
+          <family>Momcake</family>
+          <pointsize>19</pointsize>
+          <italic>false</italic>
+          <stylestrategy>PreferAntialias</stylestrategy>
+         </font>
+        </property>
+        <property name="mouseTracking">
+         <bool>false</bool>
+        </property>
+        <property name="tabletTracking">
+         <bool>true</bool>
+        </property>
+        <property name="contextMenuPolicy">
+         <enum>Qt::NoContextMenu</enum>
+        </property>
+        <property name="layoutDirection">
+         <enum>Qt::LeftToRight</enum>
+        </property>
+        <property name="styleSheet">
+         <string notr="true"/>
+        </property>
+        <property name="text">
+         <string>LED's</string>
+        </property>
+        <property name="autoDefault">
+         <bool>false</bool>
+        </property>
+        <property name="flat">
+         <bool>true</bool>
+        </property>
+        <property name="class" stdset="0">
+         <string>menu_btn</string>
+        </property>
+        <property name="icon_pixmap" stdset="0">
+         <pixmap resource="resources/icon_resources.qrc">:/ui/media/btn_icons/LEDs.svg</pixmap>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </item>
+   </layout>
   </widget>
   <widget class="QWidget" name="info_page">
-   <layout class="QVBoxLayout" name="verticalLayout_3">
+   <layout class="QVBoxLayout" name="verticalLayout_2">
+    <item>
+     <spacer name="verticalSpacer_7">
+      <property name="orientation">
+       <enum>Qt::Vertical</enum>
+      </property>
+      <property name="sizeType">
+       <enum>QSizePolicy::Minimum</enum>
+      </property>
+      <property name="sizeHint" stdset="0">
+       <size>
+        <width>20</width>
+        <height>24</height>
+       </size>
+      </property>
+     </spacer>
+    </item>
     <item>
      <layout class="QHBoxLayout" name="info_header_layout">
       <item>
@@ -450,7 +458,7 @@ CHECK</string>
         <property name="sizeHint" stdset="0">
          <size>
           <width>60</width>
-          <height>20</height>
+          <height>60</height>
          </size>
         </property>
        </spacer>
@@ -463,6 +471,12 @@ CHECK</string>
           <verstretch>0</verstretch>
          </sizepolicy>
         </property>
+        <property name="maximumSize">
+         <size>
+          <width>16777215</width>
+          <height>60</height>
+         </size>
+        </property>
         <property name="font">
          <font>
           <family>Momcake</family>
@@ -473,7 +487,7 @@ CHECK</string>
          <string notr="true">background: transparent; color: white;</string>
         </property>
         <property name="text">
-         <string>INFO</string>
+         <string>Info</string>
         </property>
         <property name="alignment">
          <set>Qt::AlignCenter</set>
@@ -550,58 +564,92 @@ CHECK</string>
     </item>
     <item>
      <layout class="QVBoxLayout" name="info_content_layout">
-      <item>
-       <widget class="QLabel" name="kv_label">
-        <property name="font">
-         <font>
-          <pointsize>20</pointsize>
-         </font>
+      <item alignment="Qt::AlignHCenter">
+       <widget class="BlocksCustomFrame" name="frame">
+        <property name="minimumSize">
+         <size>
+          <width>350</width>
+          <height>260</height>
+         </size>
         </property>
-        <property name="styleSheet">
-         <string notr="true">color:white</string>
+        <property name="maximumSize">
+         <size>
+          <width>350</width>
+          <height>290</height>
+         </size>
         </property>
-        <property name="text">
-         <string>TextLabel</string>
+        <property name="frameShape">
+         <enum>QFrame::StyledPanel</enum>
         </property>
-        <property name="alignment">
-         <set>Qt::AlignCenter</set>
+        <property name="frameShadow">
+         <enum>QFrame::Raised</enum>
         </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QLabel" name="smth_label">
-        <property name="font">
-         <font>
-          <pointsize>20</pointsize>
-         </font>
-        </property>
-        <property name="styleSheet">
-         <string notr="true">color:white</string>
-        </property>
-        <property name="text">
-         <string>TextLabel</string>
-        </property>
-        <property name="alignment">
-         <set>Qt::AlignCenter</set>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QLabel" name="other_label">
-        <property name="font">
-         <font>
-          <pointsize>20</pointsize>
-         </font>
-        </property>
-        <property name="styleSheet">
-         <string notr="true">color:white</string>
-        </property>
-        <property name="text">
-         <string>TextLabel</string>
-        </property>
-        <property name="alignment">
-         <set>Qt::AlignCenter</set>
-        </property>
+        <widget class="QLabel" name="kv_label">
+         <property name="geometry">
+          <rect>
+           <x>0</x>
+           <y>10</y>
+           <width>351</width>
+           <height>81</height>
+          </rect>
+         </property>
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Preferred" vsizetype="Expanding">
+           <horstretch>0</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
+         </property>
+         <property name="font">
+          <font>
+           <pointsize>20</pointsize>
+          </font>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">color:white</string>
+         </property>
+         <property name="text">
+          <string>Model: Blocks RF50</string>
+         </property>
+         <property name="alignment">
+          <set>Qt::AlignCenter</set>
+         </property>
+        </widget>
+        <widget class="QLabel" name="smth_label">
+         <property name="geometry">
+          <rect>
+           <x>0</x>
+           <y>110</y>
+           <width>351</width>
+           <height>81</height>
+          </rect>
+         </property>
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Preferred" vsizetype="Expanding">
+           <horstretch>0</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
+         </property>
+         <property name="minimumSize">
+          <size>
+           <width>0</width>
+           <height>0</height>
+          </size>
+         </property>
+         <property name="font">
+          <font>
+           <pointsize>20</pointsize>
+          </font>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">color:white</string>
+         </property>
+         <property name="text">
+          <string>www.blockstec.com </string>
+         </property>
+         <property name="alignment">
+          <set>Qt::AlignCenter</set>
+         </property>
+        </widget>
        </widget>
       </item>
      </layout>
@@ -610,6 +658,22 @@ CHECK</string>
   </widget>
   <widget class="QWidget" name="leds_page">
    <layout class="QVBoxLayout" name="verticalLayout_4">
+    <item>
+     <spacer name="verticalSpacer_10">
+      <property name="orientation">
+       <enum>Qt::Vertical</enum>
+      </property>
+      <property name="sizeType">
+       <enum>QSizePolicy::Minimum</enum>
+      </property>
+      <property name="sizeHint" stdset="0">
+       <size>
+        <width>20</width>
+        <height>24</height>
+       </size>
+      </property>
+     </spacer>
+    </item>
     <item>
      <layout class="QHBoxLayout" name="leds_header_layout">
       <item>
@@ -646,7 +710,7 @@ CHECK</string>
          <string notr="true">background: transparent; color: white;</string>
         </property>
         <property name="text">
-         <string>LEDs</string>
+         <string>LED's</string>
         </property>
         <property name="alignment">
          <set>Qt::AlignCenter</set>
@@ -759,6 +823,22 @@ CHECK</string>
   <widget class="QWidget" name="routines_page">
    <layout class="QVBoxLayout" name="verticalLayout_5">
     <item>
+     <spacer name="verticalSpacer_11">
+      <property name="orientation">
+       <enum>Qt::Vertical</enum>
+      </property>
+      <property name="sizeType">
+       <enum>QSizePolicy::Minimum</enum>
+      </property>
+      <property name="sizeHint" stdset="0">
+       <size>
+        <width>20</width>
+        <height>24</height>
+       </size>
+      </property>
+     </spacer>
+    </item>
+    <item>
      <layout class="QHBoxLayout" name="routines_header_layout">
       <property name="sizeConstraint">
        <enum>QLayout::SetMinimumSize</enum>
@@ -780,7 +860,7 @@ CHECK</string>
        </spacer>
       </item>
       <item>
-       <widget class="QLabel" name="leds_title_label_2">
+       <widget class="QLabel" name="routines_page_title">
         <property name="sizePolicy">
          <sizepolicy hsizetype="Minimum" vsizetype="Minimum">
           <horstretch>0</horstretch>
@@ -916,7 +996,7 @@ CHECK</string>
         <property name="font">
          <font>
           <family>Momcake</family>
-          <pointsize>20</pointsize>
+          <pointsize>19</pointsize>
           <italic>false</italic>
           <stylestrategy>PreferAntialias</stylestrategy>
          </font>
@@ -976,7 +1056,7 @@ CHECK</string>
         <property name="font">
          <font>
           <family>Momcake</family>
-          <pointsize>20</pointsize>
+          <pointsize>19</pointsize>
           <italic>false</italic>
           <stylestrategy>PreferAntialias</stylestrategy>
          </font>
@@ -1036,7 +1116,7 @@ CHECK</string>
         <property name="font">
          <font>
           <family>Momcake</family>
-          <pointsize>20</pointsize>
+          <pointsize>19</pointsize>
           <italic>false</italic>
           <stylestrategy>PreferAntialias</stylestrategy>
          </font>
@@ -1096,7 +1176,7 @@ CHECK</string>
         <property name="font">
          <font>
           <family>Momcake</family>
-          <pointsize>20</pointsize>
+          <pointsize>19</pointsize>
           <italic>false</italic>
           <stylestrategy>PreferAntialias</stylestrategy>
          </font>
@@ -1152,6 +1232,22 @@ CHECK</string>
   </widget>
   <widget class="QWidget" name="rc_page">
    <layout class="QVBoxLayout" name="verticalLayout_6">
+    <item>
+     <spacer name="verticalSpacer_12">
+      <property name="orientation">
+       <enum>Qt::Vertical</enum>
+      </property>
+      <property name="sizeType">
+       <enum>QSizePolicy::Minimum</enum>
+      </property>
+      <property name="sizeHint" stdset="0">
+       <size>
+        <width>20</width>
+        <height>24</height>
+       </size>
+      </property>
+     </spacer>
+    </item>
     <item>
      <layout class="QHBoxLayout" name="rc_header_layout">
       <item>
@@ -1244,7 +1340,7 @@ CHECK</string>
           <property name="font">
            <font>
             <family>Momcake</family>
-            <pointsize>20</pointsize>
+            <pointsize>19</pointsize>
             <italic>false</italic>
             <stylestrategy>PreferAntialias</stylestrategy>
            </font>
@@ -1320,7 +1416,7 @@ CHECK</string>
           <property name="font">
            <font>
             <family>Momcake</family>
-            <pointsize>20</pointsize>
+            <pointsize>19</pointsize>
             <italic>false</italic>
             <stylestrategy>PreferAntialias</stylestrategy>
            </font>
@@ -1366,6 +1462,22 @@ CHECK</string>
   <widget class="QWidget" name="axes_page">
    <layout class="QVBoxLayout" name="verticalLayout_7">
     <item>
+     <spacer name="verticalSpacer_13">
+      <property name="orientation">
+       <enum>Qt::Vertical</enum>
+      </property>
+      <property name="sizeType">
+       <enum>QSizePolicy::Minimum</enum>
+      </property>
+      <property name="sizeHint" stdset="0">
+       <size>
+        <width>20</width>
+        <height>24</height>
+       </size>
+      </property>
+     </spacer>
+    </item>
+    <item>
      <layout class="QHBoxLayout" name="lcd_settings_header_layout">
       <item>
        <spacer name="horizontalSpacer_3">
@@ -1407,7 +1519,7 @@ CHECK</string>
          <string notr="true">background: transparent; color: white;</string>
         </property>
         <property name="text">
-         <string>AXES MAINTENANCE</string>
+         <string>Axis Maintenance</string>
         </property>
         <property name="alignment">
          <set>Qt::AlignCenter</set>
@@ -1520,7 +1632,7 @@ CHECK</string>
         <property name="font">
          <font>
           <family>Momcake</family>
-          <pointsize>20</pointsize>
+          <pointsize>19</pointsize>
           <italic>false</italic>
           <stylestrategy>PreferAntialias</stylestrategy>
          </font>
@@ -1591,7 +1703,7 @@ CHECK</string>
           <property name="font">
            <font>
             <family>Momcake</family>
-            <pointsize>20</pointsize>
+            <pointsize>19</pointsize>
             <italic>false</italic>
             <stylestrategy>PreferAntialias</stylestrategy>
            </font>
@@ -1651,7 +1763,7 @@ CHECK</string>
           <property name="font">
            <font>
             <family>Momcake</family>
-            <pointsize>20</pointsize>
+            <pointsize>19</pointsize>
             <italic>false</italic>
             <stylestrategy>PreferAntialias</stylestrategy>
            </font>
@@ -1709,6 +1821,22 @@ CHECK</string>
   </widget>
   <widget class="QWidget" name="input_shaper_page">
    <layout class="QVBoxLayout" name="verticalLayout_13">
+    <item>
+     <spacer name="verticalSpacer_14">
+      <property name="orientation">
+       <enum>Qt::Vertical</enum>
+      </property>
+      <property name="sizeType">
+       <enum>QSizePolicy::Minimum</enum>
+      </property>
+      <property name="sizeHint" stdset="0">
+       <size>
+        <width>20</width>
+        <height>24</height>
+       </size>
+      </property>
+     </spacer>
+    </item>
     <item>
      <layout class="QHBoxLayout" name="is_header_layout">
       <item>
@@ -1853,7 +1981,7 @@ CHECK</string>
           <property name="font">
            <font>
             <family>Momcake</family>
-            <pointsize>20</pointsize>
+            <pointsize>19</pointsize>
             <italic>false</italic>
             <stylestrategy>PreferAntialias</stylestrategy>
            </font>
@@ -1913,7 +2041,7 @@ CHECK</string>
           <property name="font">
            <font>
             <family>Momcake</family>
-            <pointsize>20</pointsize>
+            <pointsize>19</pointsize>
             <italic>false</italic>
             <stylestrategy>PreferAntialias</stylestrategy>
            </font>
@@ -2372,6 +2500,22 @@ CHECK</string>
   <widget class="QWidget" name="is_page">
    <layout class="QVBoxLayout" name="verticalLayout_8">
     <item>
+     <spacer name="verticalSpacer_15">
+      <property name="orientation">
+       <enum>Qt::Vertical</enum>
+      </property>
+      <property name="sizeType">
+       <enum>QSizePolicy::Minimum</enum>
+      </property>
+      <property name="sizeHint" stdset="0">
+       <size>
+        <width>20</width>
+        <height>24</height>
+       </size>
+      </property>
+     </spacer>
+    </item>
+    <item>
      <layout class="QHBoxLayout" name="horizontalLayout_4">
       <item>
        <widget class="QLabel" name="label_3">
@@ -2380,6 +2524,12 @@ CHECK</string>
           <horstretch>0</horstretch>
           <verstretch>0</verstretch>
          </sizepolicy>
+        </property>
+        <property name="minimumSize">
+         <size>
+          <width>60</width>
+          <height>0</height>
+         </size>
         </property>
         <property name="maximumSize">
          <size>
@@ -2425,7 +2575,7 @@ CHECK</string>
         <property name="font">
          <font>
           <family>Momcake</family>
-          <pointsize>20</pointsize>
+          <pointsize>19</pointsize>
           <italic>false</italic>
           <stylestrategy>PreferAntialias</stylestrategy>
          </font>
@@ -2491,7 +2641,7 @@ CHECK</string>
         <property name="font">
          <font>
           <family>Momcake</family>
-          <pointsize>20</pointsize>
+          <pointsize>19</pointsize>
           <italic>false</italic>
           <stylestrategy>PreferAntialias</stylestrategy>
          </font>
@@ -2557,7 +2707,7 @@ CHECK</string>
         <property name="font">
          <font>
           <family>Momcake</family>
-          <pointsize>20</pointsize>
+          <pointsize>19</pointsize>
           <italic>false</italic>
           <stylestrategy>PreferAntialias</stylestrategy>
          </font>
@@ -2623,7 +2773,7 @@ CHECK</string>
         <property name="font">
          <font>
           <family>Momcake</family>
-          <pointsize>20</pointsize>
+          <pointsize>19</pointsize>
           <italic>false</italic>
           <stylestrategy>PreferAntialias</stylestrategy>
          </font>
@@ -2689,7 +2839,7 @@ CHECK</string>
         <property name="font">
          <font>
           <family>Momcake</family>
-          <pointsize>20</pointsize>
+          <pointsize>19</pointsize>
           <italic>false</italic>
           <stylestrategy>PreferAntialias</stylestrategy>
          </font>
@@ -2758,7 +2908,7 @@ CHECK</string>
         <property name="font">
          <font>
           <family>Momcake</family>
-          <pointsize>20</pointsize>
+          <pointsize>19</pointsize>
           <italic>false</italic>
           <stylestrategy>PreferAntialias</stylestrategy>
          </font>
@@ -2824,7 +2974,7 @@ CHECK</string>
         <property name="font">
          <font>
           <family>Momcake</family>
-          <pointsize>20</pointsize>
+          <pointsize>19</pointsize>
           <italic>false</italic>
           <stylestrategy>PreferAntialias</stylestrategy>
          </font>
@@ -2884,7 +3034,7 @@ CHECK</string>
         <property name="font">
          <font>
           <family>Momcake</family>
-          <pointsize>20</pointsize>
+          <pointsize>19</pointsize>
           <italic>false</italic>
           <stylestrategy>PreferAntialias</stylestrategy>
          </font>
@@ -2927,6 +3077,22 @@ CHECK</string>
   </widget>
   <widget class="QWidget" name="user_input_page">
    <layout class="QVBoxLayout" name="verticalLayout_9">
+    <item>
+     <spacer name="verticalSpacer_16">
+      <property name="orientation">
+       <enum>Qt::Vertical</enum>
+      </property>
+      <property name="sizeType">
+       <enum>QSizePolicy::Minimum</enum>
+      </property>
+      <property name="sizeHint" stdset="0">
+       <size>
+        <width>20</width>
+        <height>24</height>
+       </size>
+      </property>
+     </spacer>
+    </item>
     <item>
      <layout class="QHBoxLayout" name="horizontalLayout_5">
       <item>
@@ -2978,7 +3144,7 @@ CHECK</string>
         <property name="font">
          <font>
           <family>Momcake</family>
-          <pointsize>20</pointsize>
+          <pointsize>19</pointsize>
           <italic>false</italic>
           <stylestrategy>PreferAntialias</stylestrategy>
          </font>
@@ -3040,7 +3206,7 @@ CHECK</string>
           <property name="font">
            <font>
             <family>Momcake</family>
-            <pointsize>20</pointsize>
+            <pointsize>19</pointsize>
             <italic>false</italic>
             <stylestrategy>PreferAntialias</stylestrategy>
            </font>
@@ -3104,7 +3270,7 @@ CHECK</string>
           <property name="font">
            <font>
             <family>Momcake</family>
-            <pointsize>20</pointsize>
+            <pointsize>19</pointsize>
             <italic>false</italic>
             <stylestrategy>PreferAntialias</stylestrategy>
            </font>
@@ -3163,7 +3329,7 @@ CHECK</string>
         <property name="font">
          <font>
           <family>Momcake</family>
-          <pointsize>20</pointsize>
+          <pointsize>19</pointsize>
           <italic>false</italic>
           <stylestrategy>PreferAntialias</stylestrategy>
          </font>
@@ -3485,6 +3651,12 @@ CHECK</string>
    <extends>QPushButton</extends>
    <header location="global">lib.utils.toggleAnimatedButton</header>
   </customwidget>
+  <customwidget>
+   <class>BlocksCustomFrame</class>
+   <extends>QFrame</extends>
+   <header location="global">lib.utils.blocks_frame</header>
+   <container>1</container>
+  </customwidget>
  </customwidgets>
  <resources>
   <include location="resources/icon_resources.qrc"/>
@@ -3499,7 +3671,7 @@ CHECK</string>
  </resources>
  <connections/>
  <buttongroups>
-  <buttongroup name="isc_btn_group"/>
   <buttongroup name="is_btn_group"/>
+  <buttongroup name="isc_btn_group"/>
  </buttongroups>
 </ui>
