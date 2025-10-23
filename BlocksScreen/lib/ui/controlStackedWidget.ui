@@ -32,7 +32,7 @@
    <string>StackedWidget</string>
   </property>
   <property name="currentIndex">
-   <number>2</number>
+   <number>1</number>
   </property>
   <widget class="QWidget" name="control_page">
    <property name="sizePolicy">
@@ -542,7 +542,7 @@ Print Core</string>
          <string notr="true">background: transparent; color: white;</string>
         </property>
         <property name="text">
-         <string>Motions</string>
+         <string>Motion</string>
         </property>
         <property name="alignment">
          <set>Qt::AlignCenter</set>

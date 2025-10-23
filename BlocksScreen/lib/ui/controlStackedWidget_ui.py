@@ -1997,7 +1997,7 @@ class Ui_controlStackedWidget(object):
         controlStackedWidget.addWidget(self.printer_settings_page)
 
         self.retranslateUi(controlStackedWidget)
-        controlStackedWidget.setCurrentIndex(2)
+        controlStackedWidget.setCurrentIndex(1)
         QtCore.QMetaObject.connectSlotsByName(controlStackedWidget)
 
     def retranslateUi(self, controlStackedWidget):
@@ -2022,7 +2022,7 @@ class Ui_controlStackedWidget(object):
         self.cp_switch_print_core_btn.setText(_translate("controlStackedWidget", "Swap\n"
 "Print Core"))
         self.cp_switch_print_core_btn.setProperty("class", _translate("controlStackedWidget", "menu_btn"))
-        self.mp_header_title.setText(_translate("controlStackedWidget", "Motions"))
+        self.mp_header_title.setText(_translate("controlStackedWidget", "Motion"))
         self.mp_header_title.setProperty("class", _translate("controlStackedWidget", "title_text"))
         self.mp_back_btn.setText(_translate("controlStackedWidget", "Back"))
         self.mp_back_btn.setProperty("class", _translate("controlStackedWidget", "menu_btn"))
