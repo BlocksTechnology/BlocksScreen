@@ -58,6 +58,22 @@
    </property>
    <layout class="QVBoxLayout" name="verticalLayout">
     <item>
+     <spacer name="verticalSpacer_7">
+      <property name="orientation">
+       <enum>Qt::Vertical</enum>
+      </property>
+      <property name="sizeType">
+       <enum>QSizePolicy::Minimum</enum>
+      </property>
+      <property name="sizeHint" stdset="0">
+       <size>
+        <width>20</width>
+        <height>24</height>
+       </size>
+      </property>
+     </spacer>
+    </item>
+    <item>
      <layout class="QHBoxLayout" name="filament_page_header_layout">
       <item alignment="Qt::AlignHCenter|Qt::AlignVCenter">
        <widget class="QLabel" name="filament_page_header_title">
@@ -82,7 +98,7 @@
         <property name="font">
          <font>
           <family>Momcake</family>
-          <pointsize>20</pointsize>
+          <pointsize>24</pointsize>
          </font>
         </property>
         <property name="layoutDirection">
@@ -216,7 +232,7 @@
             <string notr="true">color:white</string>
            </property>
            <property name="text">
-            <string>inster smth here</string>
+            <string>...</string>
            </property>
            <property name="alignment">
             <set>Qt::AlignCenter</set>
@@ -342,7 +358,7 @@
             <string notr="true">color:white</string>
            </property>
            <property name="text">
-            <string>inster smth here</string>
+            <string>...</string>
            </property>
            <property name="alignment">
             <set>Qt::AlignCenter</set>
@@ -403,8 +419,8 @@
             </property>
             <property name="font">
              <font>
-              <family>MS Shell Dlg 2</family>
-              <pointsize>18</pointsize>
+              <family>Momcake</family>
+              <pointsize>19</pointsize>
               <italic>false</italic>
               <stylestrategy>PreferAntialias</stylestrategy>
              </font>
@@ -466,8 +482,8 @@
             </property>
             <property name="font">
              <font>
-              <family>MS Shell Dlg 2</family>
-              <pointsize>18</pointsize>
+              <family>Momcake</family>
+              <pointsize>19</pointsize>
               <italic>false</italic>
               <stylestrategy>PreferAntialias</stylestrategy>
              </font>
@@ -514,6 +530,22 @@
      </layout>
     </item>
     <item>
+     <spacer name="verticalSpacer_9">
+      <property name="orientation">
+       <enum>Qt::Vertical</enum>
+      </property>
+      <property name="sizeType">
+       <enum>QSizePolicy::Minimum</enum>
+      </property>
+      <property name="sizeHint" stdset="0">
+       <size>
+        <width>20</width>
+        <height>26</height>
+       </size>
+      </property>
+     </spacer>
+    </item>
+    <item>
      <spacer name="verticalSpacer_4">
       <property name="orientation">
        <enum>Qt::Vertical</enum>
@@ -555,6 +587,22 @@
    </property>
    <layout class="QVBoxLayout" name="verticalLayout_2">
     <item>
+     <spacer name="verticalSpacer_8">
+      <property name="orientation">
+       <enum>Qt::Vertical</enum>
+      </property>
+      <property name="sizeType">
+       <enum>QSizePolicy::Minimum</enum>
+      </property>
+      <property name="sizeHint" stdset="0">
+       <size>
+        <width>20</width>
+        <height>24</height>
+       </size>
+      </property>
+     </spacer>
+    </item>
+    <item>
      <layout class="QHBoxLayout" name="load_page_header_layout">
       <item>
        <spacer name="horizontalSpacer">
@@ -566,7 +614,7 @@
         </property>
         <property name="sizeHint" stdset="0">
          <size>
-          <width>250</width>
+          <width>60</width>
           <height>20</height>
          </size>
         </property>
@@ -583,14 +631,14 @@
         <property name="font">
          <font>
           <family>Momcake</family>
-          <pointsize>20</pointsize>
+          <pointsize>24</pointsize>
          </font>
         </property>
         <property name="styleSheet">
          <string notr="true">background: transparent; color: white;</string>
         </property>
         <property name="text">
-         <string>Load ToolHead</string>
+         <string>Load Filament</string>
         </property>
         <property name="alignment">
          <set>Qt::AlignCenter</set>
@@ -599,22 +647,6 @@
          <string>title_text</string>
         </property>
        </widget>
-      </item>
-      <item>
-       <spacer name="horizontalSpacer_2">
-        <property name="orientation">
-         <enum>Qt::Horizontal</enum>
-        </property>
-        <property name="sizeType">
-         <enum>QSizePolicy::Expanding</enum>
-        </property>
-        <property name="sizeHint" stdset="0">
-         <size>
-          <width>40</width>
-          <height>20</height>
-         </size>
-        </property>
-       </spacer>
       </item>
       <item>
        <widget class="IconButton" name="load_header_back_button">
@@ -733,8 +765,8 @@
         </property>
         <property name="font">
          <font>
-          <family>MS Shell Dlg 2</family>
-          <pointsize>15</pointsize>
+          <family>Momcake</family>
+          <pointsize>19</pointsize>
           <italic>false</italic>
           <stylestrategy>PreferAntialias</stylestrategy>
          </font>
@@ -796,8 +828,8 @@
         </property>
         <property name="font">
          <font>
-          <family>MS Shell Dlg 2</family>
-          <pointsize>15</pointsize>
+          <family>Momcake</family>
+          <pointsize>19</pointsize>
           <italic>false</italic>
           <stylestrategy>PreferAntialias</stylestrategy>
          </font>
@@ -859,8 +891,8 @@
         </property>
         <property name="font">
          <font>
-          <family>MS Shell Dlg 2</family>
-          <pointsize>15</pointsize>
+          <family>Momcake</family>
+          <pointsize>19</pointsize>
           <italic>false</italic>
           <stylestrategy>PreferAntialias</stylestrategy>
          </font>
@@ -922,8 +954,8 @@
         </property>
         <property name="font">
          <font>
-          <family>MS Shell Dlg 2</family>
-          <pointsize>15</pointsize>
+          <family>Momcake</family>
+          <pointsize>19</pointsize>
           <italic>false</italic>
           <stylestrategy>PreferAntialias</stylestrategy>
          </font>
@@ -985,8 +1017,8 @@
         </property>
         <property name="font">
          <font>
-          <family>MS Shell Dlg 2</family>
-          <pointsize>15</pointsize>
+          <family>Momcake</family>
+          <pointsize>19</pointsize>
           <italic>false</italic>
           <stylestrategy>PreferAntialias</stylestrategy>
          </font>
@@ -1048,8 +1080,8 @@
         </property>
         <property name="font">
          <font>
-          <family>MS Shell Dlg 2</family>
-          <pointsize>15</pointsize>
+          <family>Momcake</family>
+          <pointsize>19</pointsize>
           <italic>false</italic>
           <stylestrategy>PreferAntialias</stylestrategy>
          </font>
@@ -1522,8 +1554,8 @@ Filament</string>
        </property>
        <property name="font">
         <font>
-         <family>MS Shell Dlg 2</family>
-         <pointsize>18</pointsize>
+         <family>Momcake</family>
+         <pointsize>19</pointsize>
          <italic>false</italic>
          <stylestrategy>PreferAntialias</stylestrategy>
         </font>
@@ -1566,6 +1598,11 @@ Filament</string>
  </widget>
  <customwidgets>
   <customwidget>
+   <class>BlocksCustomButton</class>
+   <extends>QPushButton</extends>
+   <header location="global">lib.utils.blocks_button</header>
+  </customwidget>
+  <customwidget>
    <class>IconButton</class>
    <extends>QPushButton</extends>
    <header location="global">lib.utils.icon_button</header>
@@ -1575,11 +1612,6 @@ Filament</string>
    <extends>QFrame</extends>
    <header location="global">lib.utils.blocks_frame</header>
    <container>1</container>
-  </customwidget>
-  <customwidget>
-   <class>BlocksCustomButton</class>
-   <extends>QPushButton</extends>
-   <header location="global">lib.utils.blocks_button</header>
   </customwidget>
  </customwidgets>
  <resources>

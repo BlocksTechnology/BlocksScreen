@@ -164,10 +164,10 @@ class FilamentTab(QtWidgets.QStackedWidget):
     @QtCore.pyqtSlot(int, int, name="load_filament")
     def load_filament(self, toolhead: int = 0, temp: int = 220) -> None:
         if self._filament_state == self.FilamentStates.UNKNOWN:
-            self.popup.new_message(message_type=Popup.MessageType.ERROR , message="Cannot Find If Machine is Loadded or not",)
+            self.popup.new_message(message_type=Popup.MessageType.ERROR , message="Unable to detect whether the filament is loaded or unloaded.",)
         
         if self._filament_state == self.FilamentStates.LOADED:
-            self.popup.new_message(message_type=Popup.MessageType.ERROR , message="Allready Loaded",)
+            self.popup.new_message(message_type=Popup.MessageType.ERROR , message="Filament is already loaded.",)
             return  
         if toolhead == 0:
             self.run_gcode.emit(f"LOAD_FILAMENT TEMPERATURE={temp}")
@@ -179,10 +179,10 @@ class FilamentTab(QtWidgets.QStackedWidget):
     @QtCore.pyqtSlot(str, int, name="unload_filament")
     def unload_filament(self, toolhead: int = 0, temp: int = 220) -> None:
         if self._filament_state == self.FilamentStates.UNKNOWN:
-            self.popup.new_message(message_type=Popup.MessageType.ERROR , message="Cannot Find If Machine is Loadded or not",)
-                
-        if  self._filament_state == self.FilamentStates.UNLOADED:
-            self.popup.new_message(message_type=Popup.MessageType.ERROR , message="Allready UnLoaded",)
+            self.popup.new_message(message_type=Popup.MessageType.ERROR , message="Unable to detect whether the filament is loaded or unloaded.",)
+
+        if self._filament_state == self.FilamentStates.UNLOADED:
+            self.popup.new_message(message_type=Popup.MessageType.ERROR , message="Filament is already unloaded.",)
             return  
         
         self.find_routine_objects()
