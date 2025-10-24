@@ -267,7 +267,7 @@ class ControlTab(QtWidgets.QStackedWidget):
         """Handle Z-Tilt Adjustment"""
         self.loadpage.show()
         self.loadpage.set_status_message("Please wait, performing Z-axis calibration.")
-        self.run_gcode_signal.emit("Z_TILT_ADJUST")
+        self.run_gcode_signal.emit("G28\nM400\nZ_TILT_ADJUST")
         QtCore.QTimer.singleShot(30000, self.after_ztilt)  # should be a if here
 
     @QtCore.pyqtSlot(name="after-ztilt")
