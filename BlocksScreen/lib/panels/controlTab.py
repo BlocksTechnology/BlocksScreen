@@ -12,7 +12,6 @@ from lib.printer import Printer
 from lib.ui.controlStackedWidget_ui import Ui_controlStackedWidget
 from PyQt6 import QtCore, QtGui, QtWidgets
 
-
 class ControlTab(QtWidgets.QStackedWidget):
     """Printer Control Stacked Widget"""
 
@@ -256,12 +255,24 @@ class ControlTab(QtWidgets.QStackedWidget):
         )
 
         self.panel.cp_z_tilt_btn.clicked.connect(
-            lambda: self.run_gcode_signal.emit("G28\nM400\nZ_TILT_ADJUST")
+            lambda: self.handle_ztilt()
         )
 
         self.printcores_page.pc_accept.clicked.connect(self.handle_swapcore)
 
         self.ws.klippy_state_signal.connect(self.on_klippy_status)
+
+    def handle_ztilt(self):
+        """Handle Z-Tilt Adjustment"""
+        self.loadpage.show()
+        self.loadpage.set_status_message("Please wait, performing Z-axis calibration.")
+        self.run_gcode_signal.emit("Z_TILT_ADJUST")
+        QtCore.QTimer.singleShot(30000, self.after_ztilt)  # should be a if here
+
+    @QtCore.pyqtSlot(name="after-ztilt")
+    def after_ztilt(self):
+        """Handles after Z-Tilt Adjustment"""
+        self.loadpage.hide()
 
     @QtCore.pyqtSlot(str, name="on-klippy-status")
     def on_klippy_status(self, state: str):

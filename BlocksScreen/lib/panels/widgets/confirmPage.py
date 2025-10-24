@@ -303,7 +303,7 @@ class ConfirmWidget(QtWidgets.QWidget):
         self.reject_button.setFont(font)
         self.reject_button.setFlat(True)
         self.reject_button.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/dialog/media/btn_icons/delete.svg")
+            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/garbage-icon.svg")
         )
         self.reject_button.setText("Delete")
         # 2. Align buttons to the right
