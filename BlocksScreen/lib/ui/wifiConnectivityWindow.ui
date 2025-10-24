@@ -40,7 +40,7 @@
 </string>
   </property>
   <property name="currentIndex">
-   <number>3</number>
+   <number>0</number>
   </property>
   <widget class="QWidget" name="main_network_page">
    <property name="sizePolicy">
@@ -468,6 +468,22 @@ using the buttons on the side.</string>
            </property>
            <property name="alignment">
             <set>Qt::AlignCenter</set>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="LoadingOverlayWidget" name="loadingwidget">
+           <property name="enabled">
+            <bool>true</bool>
+           </property>
+           <property name="sizePolicy">
+            <sizepolicy hsizetype="Minimum" vsizetype="Minimum">
+             <horstretch>0</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
+           <property name="text">
+            <string/>
            </property>
           </widget>
          </item>
@@ -2761,6 +2777,11 @@ Type</string>
    <class>BlocksCustomButton</class>
    <extends>QPushButton</extends>
    <header location="global">lib.utils.blocks_button</header>
+  </customwidget>
+  <customwidget>
+   <class>LoadingOverlayWidget</class>
+   <extends>QLabel</extends>
+   <header location="global">lib.panels.widgets.loadWidget</header>
   </customwidget>
  </customwidgets>
  <resources>

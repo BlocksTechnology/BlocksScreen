@@ -1,4 +1,4 @@
-# Form implementation generated from reading ui file '/home/bugo/github/BlocksScreen/BlocksScreen/lib/ui/wifiConnectivityWindow.ui'
+# Form implementation generated from reading ui file '/home/levi/main/Blocks_Screen/BlocksScreen/lib/ui/wifiConnectivityWindow.ui'
 #
 # Created by: PyQt6 UI code generator 6.7.1
 #
@@ -211,6 +211,16 @@ class Ui_wifi_stacked_page(object):
         self.mn_info_box.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self.mn_info_box.setObjectName("mn_info_box")
         self.verticalLayout_3.addWidget(self.mn_info_box)
+        self.loadingwidget = LoadingOverlayWidget(parent=self.mn_information_layout)
+        self.loadingwidget.setEnabled(True)
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Minimum)
+        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setVerticalStretch(0)
+        sizePolicy.setHeightForWidth(self.loadingwidget.sizePolicy().hasHeightForWidth())
+        self.loadingwidget.setSizePolicy(sizePolicy)
+        self.loadingwidget.setText("")
+        self.loadingwidget.setObjectName("loadingwidget")
+        self.verticalLayout_3.addWidget(self.loadingwidget)
         self.main_network_content_layout.addWidget(self.mn_information_layout)
         self.mn_option_button_layout = QtWidgets.QVBoxLayout()
         self.mn_option_button_layout.setObjectName("mn_option_button_layout")
@@ -1008,7 +1018,7 @@ class Ui_wifi_stacked_page(object):
         wifi_stacked_page.addWidget(self.hotspot_page)
 
         self.retranslateUi(wifi_stacked_page)
-        wifi_stacked_page.setCurrentIndex(3)
+        wifi_stacked_page.setCurrentIndex(0)
         QtCore.QMetaObject.connectSlotsByName(wifi_stacked_page)
 
     def retranslateUi(self, wifi_stacked_page):
@@ -1074,6 +1084,7 @@ class Ui_wifi_stacked_page(object):
         self.hotspot_password_view_button.setProperty("class", _translate("wifi_stacked_page", "back_btn"))
         self.hotspot_password_view_button.setProperty("button_type", _translate("wifi_stacked_page", "icon"))
         self.hotspot_change_confirm.setText(_translate("wifi_stacked_page", "Save"))
+from lib.panels.widgets.loadWidget import LoadingOverlayWidget
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_frame import BlocksCustomFrame
 from lib.utils.blocks_linedit import BlocksCustomLinEdit

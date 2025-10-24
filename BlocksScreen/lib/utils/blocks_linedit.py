@@ -3,6 +3,8 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 
 
 class BlocksCustomLinEdit(QtWidgets.QLineEdit):
+    clicked = QtCore.pyqtSignal() 
+
     def __init__(
         self,
         parent: QtWidgets.QWidget,
@@ -15,7 +17,7 @@ class BlocksCustomLinEdit(QtWidgets.QLineEdit):
         self.placeholder_str = "Type here"
         self._name: str = ""
         self.text_color: QtGui.QColor = QtGui.QColor(0, 0, 0)
-        self.secret: bool = False  # NEW: controls masking
+        self.secret: bool = False  
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_AcceptTouchEvents, True)
 
     @property
@@ -28,11 +30,19 @@ class BlocksCustomLinEdit(QtWidgets.QLineEdit):
         self.setObjectName(new_name)
 
     def setText(self, text: str) -> None:
-        super().setText(text)  # let QLineEdit handle storing and editing
+        super().setText(text)
 
     def setHidden(self, hidden: bool) -> None:
         self.secret = hidden
         self.update()
+
+    def mousePressEvent(self, event: QtGui.QMouseEvent) -> None:
+        self.clicked.emit() 
+        super().mousePressEvent(event)  
+
+    def focusInEvent(self, event: QtGui.QFocusEvent) -> None:
+        self.clicked.emit()
+        super().focusInEvent(event)
 
     def paintEvent(self, e: typing.Optional[QtGui.QPaintEvent]):
         painter = QtGui.QPainter(self)
@@ -44,14 +54,11 @@ class BlocksCustomLinEdit(QtWidgets.QLineEdit):
         painter.setPen(QtCore.Qt.PenStyle.NoPen)
         painter.drawRoundedRect(self.rect(), 8, 8)
 
-        margin = 5  # adjust as needed
-
-        # Get display text (masked if secret)
+        margin = 5 
         display_text = self.text()
         if self.secret and display_text:
             display_text = "*" * len(display_text)
 
-        # Draw text
         if self.text():
             painter.setPen(self.text_color)
             painter.drawText(
@@ -61,7 +68,6 @@ class BlocksCustomLinEdit(QtWidgets.QLineEdit):
                 display_text,
             )
         else:
-            # Draw placeholder
             painter.setPen(QtGui.QColor(150, 150, 150))
             painter.drawText(
                 self.rect().adjusted(margin, 0, 0, 0),

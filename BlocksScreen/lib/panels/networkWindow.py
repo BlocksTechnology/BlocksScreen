@@ -7,6 +7,7 @@ from lib.network import SdbusNetworkManagerAsync
 from lib.panels.widgets.popupDialogWidget import Popup
 from lib.ui.wifiConnectivityWindow_ui import Ui_wifi_stacked_page
 from lib.utils.list_button import ListCustomButton
+from lib.panels.widgets.keyboardPage import CustomQwertyKeyboard
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 logger = logging.getLogger("logs/BlocksScreen.log")
@@ -100,7 +101,10 @@ class BuildNetworkList(QtCore.QThread):
                         if ssid != "UNKNOWN"
                         else 0
                     )
-                    self.network_items_list.append((ssid, signal, "Saved"))
+                    if ssid == self.nm.get_current_ssid():
+                        self.network_items_list.append((ssid, signal, "Active"))
+                    else:
+                        self.network_items_list.append((ssid, signal, "Saved"))
             if saved_networks and unsaved_networks:  # Separator
                 self.network_items_list.append("separator")
             if unsaved_networks:
@@ -247,8 +251,10 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             )
         )
 
-        self.panel.hotspot_change_confirm.clicked.connect(  # Also goes back to the main page
-            lambda: self.setCurrentIndex(self.indexOf(self.panel.main_network_page))
+        self.panel.hotspot_change_confirm.clicked.connect(  
+            lambda: self.setCurrentIndex(
+                self.indexOf(self.panel.main_network_page)
+            )
         )
 
         self.panel.hotspot_password_input_field.setHidden(True)
@@ -270,32 +276,32 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         )
         self.panel.saved_connection_change_password_view.pressed.connect(
             lambda: self.panel.saved_connection_change_password_view.setPixmap(
-                QtGui.QPixmap(":/ui/media/btn_icons/unsee.svg")
+                QtGui.QPixmap(":/ui/media/btn_icons/see.svg")
             )
         )
         self.panel.saved_connection_change_password_view.released.connect(
             lambda: self.panel.saved_connection_change_password_view.setPixmap(
-                QtGui.QPixmap(":/ui/media/btn_icons/see.svg")
+                QtGui.QPixmap(":/ui/media/btn_icons/unsee.svg")
             )
         )
         self.panel.add_network_password_view.released.connect(
             lambda: self.panel.add_network_password_view.setPixmap(
-                QtGui.QPixmap(":/ui/media/btn_icons/see.svg")
+                QtGui.QPixmap(":/ui/media/btn_icons/unsee.svg")
             )
         )
         self.panel.add_network_password_view.pressed.connect(
             lambda: self.panel.add_network_password_view.setPixmap(
-                QtGui.QPixmap(":/ui/media/btn_icons/unsee.svg")
+                QtGui.QPixmap(":/ui/media/btn_icons/see.svg")
             )
         )
         self.panel.hotspot_password_view_button.released.connect(
             lambda: self.panel.hotspot_password_view_button.setPixmap(
-                QtGui.QPixmap(":/ui/media/btn_icons/see.svg")
+                QtGui.QPixmap(":/ui/media/btn_icons/unsee.svg")
             )
         )
         self.panel.hotspot_password_view_button.pressed.connect(
             lambda: self.panel.hotspot_password_view_button.setPixmap(
-                QtGui.QPixmap(":/ui/media/btn_icons/unsee.svg")
+                QtGui.QPixmap(":/ui/media/btn_icons/see.svg")
             )
         )
 
@@ -329,6 +335,69 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.request_network_scan.emit()
         self.evaluate_network_state()
         self.hide()
+        self.info_box_load()
+
+        self.qwerty = CustomQwertyKeyboard(self)
+        self.addWidget(self.qwerty)
+        self.qwerty.value_selected.connect(self.on_qwerty_value_selected)
+        self.qwerty.request_back.connect(self.on_qwerty_go_back)
+
+        self.panel.add_network_password_field.clicked.connect(lambda: self.on_show_keyboard(self.panel.add_network_page, self.panel.add_network_password_field))
+        self.panel.hotspot_password_input_field.clicked.connect(lambda: self.on_show_keyboard(self.panel.hotspot_page, self.panel.hotspot_password_input_field))
+        self.panel.hotspot_name_input_field.clicked.connect(lambda: self.on_show_keyboard(self.panel.hotspot_page, self.panel.hotspot_name_input_field))
+        self.panel.saved_connection_change_password_field.clicked.connect(lambda: self.on_show_keyboard(self.panel.saved_connection_page, self.panel.saved_connection_change_password_field))
+
+
+    def on_show_keyboard(self, panel: QtWidgets.QWidget, field: QtWidgets.QLineEdit):
+        self.previousPanel = panel
+        print(self.previousPanel.objectName())
+        self.currentField = field
+        self.qwerty.set_value(field.text())
+        self.setCurrentIndex(self.indexOf(self.qwerty))
+            
+    def on_qwerty_go_back(self):
+        QtWidgets.QApplication.instance().focusWidget().clearFocus()
+        self.setCurrentIndex(self.indexOf(self.previousPanel))
+
+    def on_qwerty_value_selected(self, value: str):
+        QtWidgets.QApplication.instance().focusWidget().clearFocus()
+        self.setCurrentIndex(self.indexOf(self.previousPanel))
+        if hasattr(self, "currentField") and self.currentField:
+            self.currentField.setText(value)
+
+    def info_box_load(self, toggle: bool = False) -> None:
+        if toggle:
+            self.panel.netlist_ssuid.hide()
+            self.panel.mn_info_seperator.hide()
+            self.panel.netlist_ip.hide()
+
+            self.panel.netlist_strength_label.hide()
+            self.panel.line_2.hide()
+            self.panel.netlist_strength.hide()
+
+            self.panel.netlist_security_label.hide()
+            self.panel.line_3.hide()
+            self.panel.netlist_security.hide()
+
+            self.panel.mn_info_box.hide()
+
+            self.panel.loadingwidget.show()
+        else:
+            self.panel.netlist_ssuid.show()
+            self.panel.mn_info_seperator.show()
+            self.panel.netlist_ip.show()
+
+            self.panel.netlist_strength_label.show()
+            self.panel.line_2.show()
+            self.panel.netlist_strength.show()
+
+            self.panel.netlist_security_label.show()
+            self.panel.line_3.show()
+            self.panel.netlist_security.show()
+        
+            self.panel.mn_info_box.show()
+
+            self.panel.loadingwidget.hide()
 
     @QtCore.pyqtSlot(enum.Enum, name="stateChange")
     def on_toggle_state(self, state) -> None:
@@ -387,6 +456,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             _nm_state = self.sdbus_network.check_nm_state()
             if not _nm_state:
                 return
+        self.info_box_load(True)
         if _nm_state in ("CONNECTED_LOCAL", "CONNECTED_SITE", "GLOBAL"):
             if not self.sdbus_network.check_wifi_interface():
                 self._expand_infobox(True)
@@ -402,6 +472,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
                 self.panel.wifi_button.toggle_button.state = (
                     self.panel.wifi_button.toggle_button.State.OFF
                 )
+                self.info_box_load(False)
                 return
 
             logger.debug("Network Interface recognized, Connection available")
@@ -446,7 +517,9 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             if signal_strength == -1:
                 signal_strength = "--"
             self.panel.netlist_strength.setText(str(signal_strength))
+            self.info_box_load(False)
         else:
+            self.info_box_load(False)
             self._expand_infobox(True)
             self.panel.mn_info_box.setText(
                 "No Network connection\n Hotspot not enabled\nConnect to a network."
