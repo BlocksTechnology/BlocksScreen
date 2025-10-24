@@ -3449,13 +3449,13 @@ Shaper</string>
      <set>Qt::AlignCenter</set>
     </property>
    </widget>
-   <widget class="QWidget" name="">
+   <widget class="QWidget" name="layoutWidget">
     <property name="geometry">
      <rect>
-      <x>11</x>
-      <y>11</y>
+      <x>10</x>
+      <y>30</y>
       <width>691</width>
-      <height>71</height>
+      <height>81</height>
      </rect>
     </property>
     <layout class="QHBoxLayout" name="leds_slider_header_layout">
@@ -3580,7 +3580,7 @@ Shaper</string>
      </item>
     </layout>
    </widget>
-   <widget class="QWidget" name="">
+   <widget class="QWidget" name="layoutWidget">
     <property name="geometry">
      <rect>
       <x>10</x>
@@ -3671,7 +3671,7 @@ Shaper</string>
  </resources>
  <connections/>
  <buttongroups>
-  <buttongroup name="is_btn_group"/>
   <buttongroup name="isc_btn_group"/>
+  <buttongroup name="is_btn_group"/>
  </buttongroups>
 </ui>
