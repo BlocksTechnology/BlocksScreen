@@ -139,7 +139,6 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
             self.panel.utilities_input_shaper_btn, self.panel.input_shaper_page
         )
         self._connect_page_change(self.panel.utilities_info_btn, self.panel.info_page)
-        self._connect_page_change(self.panel.utilities_leds_btn, self.panel.leds_page)
         self._connect_page_change(
             self.panel.utilities_routine_check_btn, self.panel.routines_page
         )
@@ -183,9 +182,9 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         self.panel.toggle_led_button.state = ToggleAnimatedButton.State.ON
 
         # --- LEDs ---
-        self.panel.leds_r_slider.sliderReleased.connect(self.update_led_values)
-        self.panel.leds_g_slider.sliderReleased.connect(self.update_led_values)
-        self.panel.leds_b_slider.sliderReleased.connect(self.update_led_values)
+        # self.panel.leds_r_slider.sliderReleased.connect(self.update_led_values)
+        # self.panel.leds_g_slider.sliderReleased.connect(self.update_led_values)
+        # self.panel.leds_b_slider.sliderReleased.connect(self.update_led_values)
         self.panel.leds_w_slider.sliderReleased.connect(self.update_led_values)
         self.panel.toggle_led_button.clicked.connect(self.toggle_led_state)
 
@@ -236,8 +235,11 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
     def on_object_list(self, object_list: list) -> None:
         self.cg = object_list
         for obj in self.cg:
-            if "fan" in obj and "pin" not in obj and "controller" not in obj:
-                self.objects["fans"][obj] = "indf"
+            base_name = obj.split()[0]
+
+            # Only accept 'fan_generic' or 'fan'
+            if base_name == "fan_generic" or base_name == "fan":
+                self.objects["fans"][obj] = "indef"
         self._update_leds_from_config()
 
     @QtCore.pyqtSlot(dict, name="on_object_config")
@@ -314,11 +316,21 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
             if process == Process.FAN:
                 self.run_gcode_signal.emit("M107")
             return
-        self.set_routine_check_page(f"Running routine for: {self.current_object}", "")
+
+        message = f"Please check if the {self.current_object} is functioning correctly."
+        if process == Process.AXIS:
+            message = f"Please ensure the {self.current_object} axis moves correctly."
+        elif process in [Process.BED_HEATER, Process.EXTRUDER]:
+            message = "Please check if the temperature reaches 60°C. \n you may need to wait a few moments."
+
+        self.set_routine_check_page(
+            f"Running routine for: {self.current_object}",
+            message
+        )
         self.show_waiting_page(
             self.indexOf(self.panel.rc_page),
             f"Please check if the {message}",
-            5 if process in [Process.FAN, Process.AXIS] else 5,
+            10000 if process == Process.AXIS else 0,
         )
         self._send_routine_gcode()
 
@@ -371,22 +383,34 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
                 self.change_page(self.indexOf(self.panel.axes_page))
 
     def _send_routine_gcode(self):
+        """Send the correct G-code for the current process and object."""
+        if self.current_process == Process.FAN:
+            fan_name = self.current_object or next(iter(self.objects["fans"]), None)
+            if fan_name:
+                if fan_name == "fan":
+                    self.run_gcode_signal.emit("M106 S255\nM400")
+                else:
+                    self.run_gcode_signal.emit(f"SET_FAN_SPEED FAN={fan_name} SPEED=0.8\nM400")
+    
+            return
+
         gcode_map = {
-            Process.FAN: "M106 S80",
             Process.BED_HEATER: "SET_HEATER_TEMPERATURE HEATER=heater_bed TARGET=60",
             Process.EXTRUDER: "SET_HEATER_TEMPERATURE HEATER=extruder TARGET=60",
             (Process.AXIS, "x"): "G91\nG1 X50 F700\nG1 X-50 F700",
             (Process.AXIS, "y"): "G91\nG1 Y50 F700\nG1 Y-50 F700",
             (Process.AXIS, "z"): "G91\nG1 Z50 F600\nG1 Z-50 F600",
         }
+
         key = (
             (self.current_process, self.current_object)
             if self.current_process == Process.AXIS
             else self.current_process
         )
+
         if gcode := gcode_map.get(key):
-            # self.run_gcode_signal.emit(f"{gcode}\nM400")
-            return
+            self.run_gcode_signal.emit(f"{gcode}\nM400")
+
 
     def set_routine_check_page(self, title: str, label: str):
         self.panel.rc_tittle.setText(title)
@@ -396,20 +420,24 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         if self.current_object not in self.objects["leds"]:
             return
         led_state: LedState = self.objects["leds"][self.current_object]
-        led_state.red = self.panel.leds_r_slider.value()
-        led_state.green = self.panel.leds_g_slider.value()
-        led_state.blue = self.panel.leds_b_slider.value()
-        led_state.white = self.panel.leds_w_slider.value()
+        # led_state.red = self.panel.leds_r_slider.value()
+        # led_state.green = self.panel.leds_g_slider.value()
+        # led_state.blue = self.panel.leds_b_slider.value()
+        led_state.white = int(self.panel.leds_w_slider.value() * 255 / 100)
         self.save_led_state()
 
     def _update_leds_from_config(self):
         layout = self.panel.leds_content_layout
+
         while layout.count():
             if (child := layout.takeAt(0)) and child.widget():
                 child.widget().deleteLater()  # type: ignore
+
         led_names = []
         if not self.cg:
             return
+
+        # Collect LED names
         for obj in self.cg:
             if "led" in obj:
                 try:
@@ -417,8 +445,12 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
                     led_names.append(name)
                     self.objects["leds"][name] = LedState(led_type="white")
                 except IndexError:
-                    ...
+                    pass
+
         max_columns = 3
+        buttons = []  # store references to created buttons
+
+        # Create LED buttons
         for i, name in enumerate(led_names):
             if self.panel.leds_widget:
                 button = BlocksCustomButton()
@@ -429,6 +461,15 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
                 row, col = divmod(i, max_columns)
                 layout.addWidget(button, row, col)
                 button.clicked.connect(partial(self.handle_led_button, name))
+                buttons.append(button)
+
+        if len(buttons) == 1:
+            self.panel.utilities_leds_btn.clicked.connect(
+                partial(self.handle_led_button, led_names[0])
+            )
+        else:
+            self._connect_page_change(self.panel.utilities_leds_btn, self.panel.leds_page)
+
 
     def toggle_led_state(self) -> None:
         if self.current_object not in self.objects["leds"]:
@@ -448,14 +489,14 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         if not led_state:
             return
         is_rgb = led_state.led_type == "rgb"
-        self.panel.leds_r_slider.setVisible(is_rgb)
-        self.panel.leds_g_slider.setVisible(is_rgb)
-        self.panel.leds_b_slider.setVisible(is_rgb)
+        # self.panel.leds_r_slider.setVisible(is_rgb)
+        # self.panel.leds_g_slider.setVisible(is_rgb)
+        # self.panel.leds_b_slider.setVisible(is_rgb)
         self.panel.leds_w_slider.setVisible(not is_rgb)
-        self.panel.leds_slider_title_label.setText(name)
-        self.panel.leds_r_slider.setValue(led_state.red)
-        self.panel.leds_g_slider.setValue(led_state.green)
-        self.panel.leds_b_slider.setValue(led_state.blue)
+        #self.panel.leds_slider_tittle_label.setText(name)
+        # self.panel.leds_r_slider.setValue(led_state.red)
+        # self.panel.leds_g_slider.setValue(led_state.green)
+        # self.panel.leds_b_slider.setValue(led_state.blue)
         self.panel.leds_w_slider.setValue(led_state.white)
         self.change_page(self.indexOf(self.panel.leds_slider_page))
 
@@ -488,7 +529,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
                 self.x_inputshaper[panel_attr] = entry
         self.change_page(self.indexOf(self.panel.is_page))
 
-    def _parse_shaper_csv(self, file_path: str) -> list:
+    def _parse_shaper_csv(self, file_path: str) -> list: 
         results = []
         try:
             with open(file_path, newline="") as csvfile:
