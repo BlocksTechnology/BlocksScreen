@@ -1,0 +1,14 @@
+[Unit]
+Description= Set printer hostname %i
+DefaultDependencies=no
+Before=network-pre.target
+Wants=network-pre.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/set-hostname.sh %i
+RemainAfterExit=yes
+
+[Install]
+# Run real early on boot
+WantedBy=sysinit.target 
