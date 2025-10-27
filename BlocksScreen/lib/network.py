@@ -293,12 +293,10 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
         if not self.nm:
             return
         try:
-            if self.hotspot_enabled() == toggle:
-                return
             old_ssid: typing.Union[str, None] = self.get_current_ssid()
             if old_ssid:
+                self.old_ssid = old_ssid
                 self.disconnect_network()
-            if self.is_known(self.hotspot_ssid):
                 self.connect_network(self.hotspot_ssid)
                 results = asyncio.gather(
                     self.nm.reload(0x0), return_exceptions=True
@@ -314,11 +312,12 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                     logging.debug(f"Hotspot AP {self.hotspot_ssid} up!")
 
                 return
-            if old_ssid:
-                self.connect_network(old_ssid)
+            if not old_ssid:
+                self.connect_network(self.old_ssid)
                 return
         except Exception as e:
             logging.error(f"Caught Exception while toggling hotspot to {toggle}: {e}")
+
 
     def hotspot_enabled(self) -> typing.Optional["bool"]:
         """Returns a boolean indicating whether the device hotspot is on or not .
