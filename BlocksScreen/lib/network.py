@@ -295,26 +295,28 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
         try:
             old_ssid: typing.Union[str, None] = self.get_current_ssid()
             if old_ssid:
-                self.old_ssid = old_ssid
-                self.disconnect_network()
-                self.connect_network(self.hotspot_ssid)
-                results = asyncio.gather(
-                    self.nm.reload(0x0), return_exceptions=True
-                ).result()
-                for result in results:
-                    if isinstance(result, Exception):
-                        raise Exception(result)
+                    self.old_ssid = old_ssid
+            if toggle:
+                    self.disconnect_network()
+                    self.connect_network(self.hotspot_ssid)
+                    results = asyncio.gather(
+                        self.nm.reload(0x0), return_exceptions=True
+                    ).result()
+                    for result in results:
+                        if isinstance(result, Exception):
+                            raise Exception(result)
 
-                if self.nm.check_connectivity() == (
-                    dbusNm.NetworkManagerConnectivityState.FULL
-                    | dbusNm.NetworkManagerConnectivityState.LIMITED
-                ):
-                    logging.debug(f"Hotspot AP {self.hotspot_ssid} up!")
+                    if self.nm.check_connectivity() == (
+                        dbusNm.NetworkManagerConnectivityState.FULL
+                        | dbusNm.NetworkManagerConnectivityState.LIMITED
+                    ):
+                        logging.debug(f"Hotspot AP {self.hotspot_ssid} up!")
 
-                return
-            if not old_ssid:
-                self.connect_network(self.old_ssid)
-                return
+                    return
+            else: 
+                if self.old_ssid: 
+                    self.connect_network(self.old_ssid)
+                    return
         except Exception as e:
             logging.error(f"Caught Exception while toggling hotspot to {toggle}: {e}")
 
