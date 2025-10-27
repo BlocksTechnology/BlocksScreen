@@ -59,7 +59,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                 f"Sdbus NetworkManager Monitor Thread {self.listener_thread.name} Running"
             )
         self.hotspot_ssid: str = "PrinterHotspot"
-        self.hotspot_password: str = "123456789"
+        self.hotspot_password: str = "123456789" 
         self.check_connectivity()
         self.available_wired_interfaces = self.get_wired_interfaces()
         self.available_wireless_interfaces = self.get_wireless_interfaces()
@@ -908,7 +908,6 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
         if self.primary_wifi_interface == "/":
             return
         try:
-            psk = hashlib.sha256(psk.encode()).hexdigest()
             _available_networks = await self._get_available_networks()
             if not _available_networks:
                 return
@@ -1342,50 +1341,59 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                 f"Exception Caught while deactivating network {ssid}: {e}"
             )
 
-    def create_hotspot(
+    async def create_hotspot(
         self, ssid: str = "PrinterHotspot", password: str = "123456789"
     ) -> None:
         try:
             self.delete_network(ssid)
-            psk = hashlib.sha256(password.encode()).hexdigest()
-            _properties: dbusNm.NetworkManagerConnectionProperties = {
+            
+            _properties = {
                 "connection": {
-                    "id": ("s", str(ssid)),
+                    "id": ("s", ssid),
                     "uuid": ("s", str(uuid4())),
-                    "type": ("s", "802-11-wireless"),  # 802-3-ethernet
-                    "autoconnect": ("b", bool(True)),
+                    "type": ("s", "802-11-wireless"),
+                    "autoconnect": ("b", True),
                     "interface-name": ("s", "wlan0"),
-                    "autoconnect-priority": ("u", 10),
                 },
                 "802-11-wireless": {
                     "ssid": ("ay", ssid.encode("utf-8")),
                     "mode": ("s", "ap"),
                     "band": ("s", "bg"),
-                    "channel": ("u", 1),
+                    "channel": ("u", 6),
                     "security": ("s", "802-11-wireless-security"),
-                    "hidden": ("b", bool(False)),
                 },
                 "802-11-wireless-security": {
                     "key-mgmt": ("s", "wpa-psk"),
-                    "psk": ("s", str(psk)),
-                    "pmf": ("u", 1),
-                    "pairwise": ("as", ["ccmp"]),
+                    "psk": ("s", password),
+                    "pmf": ("u", 0),
                 },
-                "ipv4": {
-                    "method": ("s", "shared"),
-                },
+                "ipv4": {"method": ("s", "shared")},
                 "ipv6": {"method": ("s", "ignore")},
             }
             tasks = []
-            tasks.append(
+            
+            tasks = [
                 self.loop.create_task(
                     dbusNm.NetworkManagerSettings(
                         bus=self.system_dbus
                     ).add_connection(_properties)
-                )
+                ),
+                self.loop.create_task(self.nm.reload(0x0)),
+            ]
+            
+            connection_path, _ = await asyncio.gather(*tasks, return_exceptions=False)
+            
+            logging.info(f"Hotspot '{ssid}' connection profile added and NM reloaded.")
+
+
+            await self.nm.activate_connection(
+                connection_path, 
+                '/org/freedesktop/NetworkManager/Devices/wlan0', 
+                '/' # 
             )
-            tasks.append(self.loop.create_task(self.nm.reload(0x0)))
-            asyncio.gather(*tasks, return_exceptions=False)
+            
+            logging.info(f"Hotspot '{ssid}' is active.")
+
         except Exception as e:
             logging.error(f"Caught Exception while creating hotspot: {e}")
 
@@ -1439,7 +1447,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                 pwd = hashlib.sha256(password.encode()).hexdigest()
                 properties["802-11-wireless-security"]["psk"] = (
                     "s",
-                    str(pwd),
+                    str(password),
                 )
 
             if priority != 0:
