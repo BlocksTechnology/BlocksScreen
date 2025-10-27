@@ -30,8 +30,8 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
     nm_state_change: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         str, name="nm-state-changed"
     )
-    nm_properties_change: typing.ClassVar[QtCore.pyqtSignal] = (
-        QtCore.pyqtSignal(tuple, name="nm-properties-changed")
+    nm_properties_change: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        tuple, name="nm-properties-changed"
     )
 
     def __init__(self) -> None:
@@ -66,15 +66,15 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
         wireless_interfaces: typing.List[dbusNm.NetworkDeviceWireless] = (
             self.get_wireless_interfaces()
         )
-        self.primary_wifi_interface: typing.Optional[
-            dbusNm.NetworkDeviceWireless
-        ] = wireless_interfaces[0] if wireless_interfaces else None
+        self.primary_wifi_interface: typing.Optional[dbusNm.NetworkDeviceWireless] = (
+            wireless_interfaces[0] if wireless_interfaces else None
+        )
         wired_interfaces: typing.List[dbusNm.NetworkDeviceWired] = (
             self.get_wired_interfaces()
         )
-        self.primary_wired_interface: typing.Optional[
-            dbusNm.NetworkDeviceWired
-        ] = wired_interfaces[0] if wired_interfaces else None
+        self.primary_wired_interface: typing.Optional[dbusNm.NetworkDeviceWired] = (
+            wired_interfaces[0] if wired_interfaces else None
+        )
         if not self.is_known(self.hotspot_ssid):
             self.create_hotspot(self.hotspot_ssid, self.hotspot_password)
         if self.primary_wifi_interface:
@@ -83,9 +83,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
     def _listener_run_loop(self) -> None:
         try:
             asyncio.set_event_loop(self.loop)
-            self.loop.run_until_complete(
-                asyncio.gather(self.listener_monitor())
-            )
+            self.loop.run_until_complete(asyncio.gather(self.listener_monitor()))
         except Exception as e:
             logging.error(f"Exception on loop coroutine: {e}")
 
@@ -97,9 +95,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
         )
         for result in results:
             if isinstance(result, Exception):
-                logger.error(
-                    f"Caught Exception while ending asyncio tasks: {result}"
-                )
+                logger.error(f"Caught Exception while ending asyncio tasks: {result}")
             return
 
     def close(self) -> None:
@@ -123,9 +119,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
             self.listener_task_queue.append(
                 self.loop.create_task(self._nm_properties_listener())
             )
-            results = asyncio.gather(
-                *self.listener_task_queue, return_exceptions=True
-            )
+            results = asyncio.gather(*self.listener_task_queue, return_exceptions=True)
             for result in results:
                 if isinstance(result, Exception):
                     logger.error(
@@ -135,9 +129,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                 await self.stop_listener_event.wait()
 
         except Exception as e:
-            logging.error(
-                f"Exception on listener monitor produced coroutine: {e}"
-            )
+            logging.error(f"Exception on listener monitor produced coroutine: {e}")
 
     async def _nm_state_listener(self) -> None:
         while self._listeners_running:
@@ -146,9 +138,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                     enum_state = dbusNm.NetworkManagerState(state)
                     self.nm_state_change.emit(enum_state.name)
             except Exception as e:
-                logging.error(
-                    f"Exception on Network Manager state listener: {e}"
-                )
+                logging.error(f"Exception on Network Manager state listener: {e}")
 
     async def _nm_properties_listener(self) -> None:
         while self._listeners_running:
@@ -158,23 +148,17 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                     self.nm_properties_change.emit(properties)
 
             except Exception as e:
-                logging.error(
-                    f"Exception on Network Manager state listener: {e}"
-                )
+                logging.error(f"Exception on Network Manager state listener: {e}")
 
     def check_nm_state(self) -> typing.Union[str, None]:
         if not self.nm:
             return
-        future = asyncio.run_coroutine_threadsafe(
-            self.nm.state.get_async(), self.loop
-        )
+        future = asyncio.run_coroutine_threadsafe(self.nm.state.get_async(), self.loop)
         try:
             state_value = future.result(timeout=2)
             return str(dbusNm.NetworkManagerState(state_value).name)
         except Exception as e:
-            logging.error(
-                f"Exception while fetching Network Monitor State: {e}"
-            )
+            logging.error(f"Exception while fetching Network Monitor State: {e}")
             return None
 
     def check_connectivity(self) -> str:
@@ -218,9 +202,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
             typing.List[str]: List of strings with the available names of all interfaces
         """
         try:
-            future = asyncio.run_coroutine_threadsafe(
-                self.nm.get_devices(), self.loop
-            )
+            future = asyncio.run_coroutine_threadsafe(self.nm.get_devices(), self.loop)
             devices = future.result(timeout=2)
             interfaces = []
             for device in devices:
@@ -280,33 +262,21 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
         )
         for result in results:
             if isinstance(result, Exception):
-                logger.error(
-                    f"Exception Caught when toggling network : {result}"
-                )
+                logger.error(f"Exception Caught when toggling network : {result}")
 
     def disable_networking(self) -> None:
         if not (self.primary_wifi_interface and self.primary_wired_interface):
             return
-        if (
-            self.primary_wifi_interface == "/"
-            and self.primary_wired_interface == "/"
-        ):
+        if self.primary_wifi_interface == "/" and self.primary_wired_interface == "/":
             return
-        asyncio.run_coroutine_threadsafe(
-            self._toggle_networking(False), self.loop
-        )
+        asyncio.run_coroutine_threadsafe(self._toggle_networking(False), self.loop)
 
     def activate_networking(self) -> None:
         if not (self.primary_wifi_interface and self.primary_wired_interface):
             return
-        if (
-            self.primary_wifi_interface == "/"
-            and self.primary_wired_interface == "/"
-        ):
+        if self.primary_wifi_interface == "/" and self.primary_wired_interface == "/":
             return
-        asyncio.run_coroutine_threadsafe(
-            self._toggle_networking(True), self.loop
-        )
+        asyncio.run_coroutine_threadsafe(self._toggle_networking(True), self.loop)
 
     def toggle_hotspot(self, toggle: bool) -> None:
         """Activate/Deactivate device hotspot
@@ -348,9 +318,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                 self.connect_network(old_ssid)
                 return
         except Exception as e:
-            logging.error(
-                f"Caught Exception while toggling hotspot to {toggle}: {e}"
-            )
+            logging.error(f"Caught Exception while toggling hotspot to {toggle}: {e}")
 
     def hotspot_enabled(self) -> typing.Optional["bool"]:
         """Returns a boolean indicating whether the device hotspot is on or not .
@@ -367,9 +335,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
         Returns:
             typing.List[str]: List containing the names of all wired(Ethernet) interfaces.
         """
-        devs_future = asyncio.run_coroutine_threadsafe(
-            self.nm.get_devices(), self.loop
-        )
+        devs_future = asyncio.run_coroutine_threadsafe(self.nm.get_devices(), self.loop)
         devices = devs_future.result(timeout=2)
 
         return list(
@@ -400,9 +366,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
             typing.List[str]: A list containing the names of wireless interfaces.
         """
         # Each interface type has a device flag that is exposed in enums.DeviceType.<device such as Ethernet or Wifi>
-        devs_future = asyncio.run_coroutine_threadsafe(
-            self.nm.get_devices(), self.loop
-        )
+        devs_future = asyncio.run_coroutine_threadsafe(self.nm.get_devices(), self.loop)
         devices = devs_future.result(timeout=2)
         return list(
             map(
@@ -447,9 +411,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
 
     def get_current_ssid(self) -> str:
         try:
-            future = asyncio.run_coroutine_threadsafe(
-                self._gather_ssid(), self.loop
-            )
+            future = asyncio.run_coroutine_threadsafe(self._gather_ssid(), self.loop)
             return future.result(timeout=5)
         except Exception as e:
             logging.info(f"Unexpected error occurred: {e}")
@@ -476,9 +438,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
         )
 
         if _device_ip4_conf_path == "/":
-            logging.info(
-                "NetworkManager reports no IP configuration for the interface"
-            )
+            logging.info("NetworkManager reports no IP configuration for the interface")
             return ""
         ip4_conf = dbusNm.IPv4Config(
             bus=self.system_dbus, ip4_path=ip4_conf_future.result(timeout=2)
@@ -504,15 +464,9 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
         if not primary_connection:
             return ""
         if primary_connection == "/":
-            if (
-                self.primary_wifi_interface
-                and self.primary_wifi_interface != "/"
-            ):
+            if self.primary_wifi_interface and self.primary_wifi_interface != "/":
                 return self.primary_wifi_interface
-            elif (
-                self.primary_wired_interface
-                and self.primary_wired_interface != "/"
-            ):
+            elif self.primary_wired_interface and self.primary_wired_interface != "/":
                 return self.primary_wired_interface
             else:
                 "/"
@@ -558,9 +512,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
         if self.primary_wifi_interface == "/":
             return
         try:
-            task = self.loop.create_task(
-                self.primary_wifi_interface.request_scan({})
-            )
+            task = self.loop.create_task(self.primary_wifi_interface.request_scan({}))
             results = await asyncio.gather(task, return_exceptions=True)
             for result in results:
                 if isinstance(result, Exception):
@@ -573,9 +525,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
     def rescan_networks(self) -> None:
         """Scan for available networks."""
         try:
-            future = asyncio.run_coroutine_threadsafe(
-                self._rescan(), self.loop
-            )
+            future = asyncio.run_coroutine_threadsafe(self._rescan(), self.loop)
             result = future.result(timeout=2)
             return result
 
@@ -607,10 +557,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
     ) -> typing.Union[typing.List[typing.Tuple], None]:
         try:
             results = await asyncio.gather(
-                *(
-                    self.loop.create_task(self._get_network_info(ap))
-                    for ap in aps
-                ),
+                *(self.loop.create_task(self._get_network_info(ap)) for ap in aps),
                 return_exceptions=False,
             )
             return results
@@ -642,14 +589,10 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                         )
                     )
                     task = self.loop.create_task(self._gather_networks(_aps))
-                    result = await asyncio.gather(
-                        task, return_exceptions=False
-                    )
+                    result = await asyncio.gather(task, return_exceptions=False)
                     return dict(*result) if result else None  # type:ignore
         except Exception as e:
-            logger.error(
-                f"Caught Exception while gathering access points: {e}"
-            )
+            logger.error(f"Caught Exception while gathering access points: {e}")
             return {}
 
     def get_available_networks(self) -> typing.Union[typing.Dict, None]:
@@ -688,9 +631,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
         )
         for result in results:
             if isinstance(result, Exception):
-                logger.error(
-                    f"Exception caught getting security type: {result}"
-                )
+                logger.error(f"Exception caught getting security type: {result}")
                 return ()
         _rsn, _wpa, _sec = results
         if len(dbusNm.AccessPointCapabilities(_sec)) == 0:
@@ -718,9 +659,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
 
         try:
             _connections: typing.List[str] = asyncio.run_coroutine_threadsafe(
-                dbusNm.NetworkManagerSettings(
-                    bus=self.system_dbus
-                ).list_connections(),
+                dbusNm.NetworkManagerSettings(bus=self.system_dbus).list_connections(),
                 self.loop,
             ).result(timeout=2)
 
@@ -737,9 +676,9 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                 self._get_settings(saved_cons),
                 self.loop,
             )
-            settings_list: typing.List[
-                dbusNm.NetworkManagerConnectionProperties
-            ] = sv_cons_settings_future.result(timeout=2)
+            settings_list: typing.List[dbusNm.NetworkManagerConnectionProperties] = (
+                sv_cons_settings_future.result(timeout=2)
+            )
             _known_networks_parameters = list(
                 filter(
                     lambda network_entry: network_entry is not None,
@@ -747,28 +686,26 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                         map(
                             lambda network_properties: (
                                 {
-                                    "ssid": network_properties[
-                                        "802-11-wireless"
-                                    ]["ssid"][1].decode(),
-                                    "uuid": network_properties["connection"][
-                                        "uuid"
-                                    ][1],
+                                    "ssid": network_properties["802-11-wireless"][
+                                        "ssid"
+                                    ][1].decode(),
+                                    "uuid": network_properties["connection"]["uuid"][1],
                                     "signal": 0
                                     + self.get_connection_signal_by_ssid(
-                                        network_properties["802-11-wireless"][
-                                            "ssid"
-                                        ][1].decode()
+                                        network_properties["802-11-wireless"]["ssid"][
+                                            1
+                                        ].decode()
                                     ),
                                     "security": network_properties[
                                         str(
-                                            network_properties[
-                                                "802-11-wireless"
-                                            ]["security"][1]
+                                            network_properties["802-11-wireless"][
+                                                "security"
+                                            ][1]
                                         )
                                     ]["key-mgmt"][1],
-                                    "mode": network_properties[
-                                        "802-11-wireless"
-                                    ]["mode"],
+                                    "mode": network_properties["802-11-wireless"][
+                                        "mode"
+                                    ],
                                 }
                                 if network_properties["connection"]["type"][1]
                                 == "802-11-wireless"
@@ -781,9 +718,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
             )
             return _known_networks_parameters
         except Exception as e:
-            logger.error(
-                f"Caught exception while fetching saved networks: {e}"
-            )
+            logger.error(f"Caught exception while fetching saved networks: {e}")
 
     @staticmethod
     async def _get_settings(
@@ -807,18 +742,18 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
         try:
             saved_networks: list = []
             conn_future = asyncio.run_coroutine_threadsafe(
-                dbusNm.NetworkManagerSettings(
-                    bus=self.system_dbus
-                ).list_connections(),
+                dbusNm.NetworkManagerSettings(bus=self.system_dbus).list_connections(),
                 self.loop,
             )
+
             connections = conn_future.result(timeout=2)
+
+            # logger.debug(f"got connections from request {connections}")
             saved_cons = [
-                dbusNm.NetworkConnectionSettings(
-                    bus=self.system_dbus, settings_path=c
-                )
+                dbusNm.NetworkConnectionSettings(bus=self.system_dbus, settings_path=c)
                 for c in connections
             ]
+            # logger.error(f"Getting saved networks with for: {conn_future}")
 
             sv_cons_settings_future = asyncio.run_coroutine_threadsafe(
                 self._get_settings(saved_cons),
@@ -831,9 +766,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                 if conn["connection"]["type"][1] == "802-11-wireless":
                     saved_networks.append(
                         {
-                            "ssid": conn["802-11-wireless"]["ssid"][
-                                1
-                            ].decode(),
+                            "ssid": conn["802-11-wireless"]["ssid"][1].decode(),
                             "uuid": conn["connection"]["uuid"][1],
                             "security_type": conn[
                                 str(conn["802-11-wireless"]["security"][1])
@@ -844,9 +777,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                     )
             return saved_networks
         except Exception as e:
-            logger.error(
-                f"Caught Exception while fetching saved networks: {e}"
-            )
+            logger.error(f"Caught Exception while fetching saved networks: {e}")
             return []
 
     def get_saved_ssid_names(self) -> typing.List[str]:
@@ -904,13 +835,16 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
             "exception"
         """
         if not self.primary_wifi_interface:
+            logger.debug("[add wifi network] no primary wifi interface ")
             return
         if self.primary_wifi_interface == "/":
+            logger.debug("[add wifi network] no primary wifi interface ")
             return
         try:
             psk = hashlib.sha256(psk.encode()).hexdigest()
             _available_networks = await self._get_available_networks()
             if not _available_networks:
+                logger.debug("Networks not available cancelling adding network")
                 return
 
             if self.is_known(ssid):
@@ -933,7 +867,10 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                             target_interface,
                         ),
                         "autoconnect": ("b", bool(True)),
-                        "autoconnect-priority": ("u", priority),
+                        "autoconnect-priority": (
+                            "u",
+                            priority.value,
+                        ),  # We need an integer here
                     },
                     "802-11-wireless": {
                         "mode": ("s", "infrastructure"),
@@ -948,11 +885,9 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                         return
                 if not _security_types[0]:
                     return
-
                 if (
-                    not dbusNm.AccessPointCapabilities.NONE
-                    != _security_types[0]
-                ):
+                    dbusNm.AccessPointCapabilities.NONE != _security_types[-1]
+                ):  # Normally on last index
                     _properties["802-11-wireless"]["security"] = (
                         "s",
                         "802-11-wireless-security",
@@ -962,7 +897,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                         or dbusNm.WpaSecurityFlags.P2P_WEP40
                         or dbusNm.WpaSecurityFlags.BROADCAST_WEP104
                         or dbusNm.WpaSecurityFlags.BROADCAST_WEP40
-                    ) in (_security_types[1] or _security_types[2]):
+                    ) in (_security_types[0] or _security_types[1]):
                         _properties["802-11-wireless-security"] = {
                             "key-mgmt": ("s", "none"),
                             "wep-key-type": ("u", 2),
@@ -972,23 +907,23 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                     elif (
                         dbusNm.WpaSecurityFlags.P2P_TKIP
                         or dbusNm.WpaSecurityFlags.BROADCAST_TKIP
-                    ) in (_security_types[1] or _security_types[2]):
+                    ) in (_security_types[0] or _security_types[1]):
                         raise NotImplementedError(
                             "Security type P2P_TKIP OR BRADCAST_TKIP not supported"
                         )
                     elif (
                         dbusNm.WpaSecurityFlags.P2P_CCMP
                         or dbusNm.WpaSecurityFlags.BROADCAST_CCMP
-                    ) in (_security_types[1] or _security_types[2]):
+                        # ) in _security_types:
+                    ) in (_security_types[0] or _security_types[1]):
                         # * AES/CCMP WPA2
                         _properties["802-11-wireless-security"] = {
                             "key-mgmt": ("s", "wpa-psk"),
                             "psk": ("s", psk),
                             "pairwise": ("as", ["ccmp"]),
                         }
-
                     elif (dbusNm.WpaSecurityFlags.AUTH_PSK) in (
-                        _security_types[1] or _security_types[2]
+                        _security_types[0] or _security_types[1]
                     ):
                         # * AUTH_PSK -> WPA-PSK
                         _properties["802-11-wireless-security"] = {
@@ -996,7 +931,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                             "psk": ("s", psk),
                         }
                     elif dbusNm.WpaSecurityFlags.AUTH_802_1X in (
-                        _security_types[1] or _security_types[2]
+                        _security_types[0] or _security_types[1]
                     ):
                         # * 802.1x IEEE standard
                         # Notes:
@@ -1010,7 +945,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                             "auth-alg": ("s", "shared"),
                         }
                     elif (dbusNm.WpaSecurityFlags.AUTH_SAE) in (
-                        _security_types[1] or _security_types[2]
+                        _security_types[0] or _security_types[1]
                     ):
                         # * SAE
                         # Notes:
@@ -1021,7 +956,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                             "psk": ("s", psk),
                         }
                     elif (dbusNm.WpaSecurityFlags.AUTH_OWE) in (
-                        _security_types[1] or _security_types[2]
+                        _security_types[0] or _security_types[1]
                     ):
                         # * OWE
                         _properties["802-11-wireless-security"] = {
@@ -1029,17 +964,15 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                             "psk": ("s", psk),
                         }
                     elif (dbusNm.WpaSecurityFlags.AUTH_OWE_TM) in (
-                        _security_types[1] or _security_types[2]
+                        _security_types[0] or _security_types[1]
                     ):
                         # * OWE TM
                         raise NotImplementedError("AUTH_OWE_TM not supported")
                     elif (dbusNm.WpaSecurityFlags.AUTH_EAP_SUITE_B) in (
-                        _security_types[1] or _security_types[2]
+                        _security_types[0] or _security_types[1]
                     ):
                         # * EAP SUITE B
-                        raise NotImplementedError(
-                            "EAP SUITE B Auth not supported"
-                        )
+                        raise NotImplementedError("EAP SUITE B Auth not supported")
 
                     tasks = []
                     tasks.append(
@@ -1050,9 +983,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                         )
                     )
                     tasks.append(self.loop.create_task(self.nm.reload(0x0)))
-                    results = await asyncio.gather(
-                        *tasks, return_exceptions=True
-                    )
+                    results = await asyncio.gather(*tasks, return_exceptions=True)
                     for result in results:
                         if isinstance(result, Exception):
                             if isinstance(
@@ -1073,16 +1004,14 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                                 return False
                         return True
         except Exception as e:
-            logger.error(
-                f"Caught Exception Unable to add network connection {e}"
-            )
+            logger.error(f"Caught Exception Unable to add network connection {e}")
             return False
 
     def add_wifi_network(
         self,
         ssid: str,
         psk: str,
-        priority: ConnectionPriority = ConnectionPriority.LOW,
+        priority: ConnectionPriority = ConnectionPriority.MEDIUM,
     ) -> typing.Dict:
         """Add and Save a network to the device. `Synchronous`
 
@@ -1114,9 +1043,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
             self.primary_wifi_interface.disconnect(), self.loop
         )
 
-    def get_connection_path_by_ssid(
-        self, ssid: str
-    ) -> typing.Union[str, None]:
+    def get_connection_path_by_ssid(self, ssid: str) -> typing.Union[str, None]:
         """Given a ssid, get the connection path, if it's saved
 
         Raises:
@@ -1198,9 +1125,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
             try:
                 for ap in _aps:
                     if (
-                        asyncio.run_coroutine_threadsafe(
-                            ap.ssid.get_async(), self.loop
-                        )
+                        asyncio.run_coroutine_threadsafe(ap.ssid.get_async(), self.loop)
                         .result(timeout=2)
                         .decode("utf-8")
                         .lower()
@@ -1232,9 +1157,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
             raise Exception(f"No saved connection path for the SSID: {ssid}")
         try:
             if self.nm.primary_connection == _connection_path:
-                raise Exception(
-                    f"Network connection already established with {ssid}"
-                )
+                raise Exception(f"Network connection already established with {ssid}")
             active_path = asyncio.run_coroutine_threadsafe(
                 self.nm.activate_connection(str(_connection_path)), self.loop
             ).result(timeout=2)
@@ -1256,17 +1179,13 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
 
         tasks.append(
             self.loop.create_task(
-                dbusNm.NetworkManagerSettings(
-                    bus=self.system_dbus
-                ).reload_connections()
+                dbusNm.NetworkManagerSettings(bus=self.system_dbus).reload_connections()
             )
         )
         results = await asyncio.gather(*tasks, return_exceptions=True)
         for result in results:
             if isinstance(result, Exception):
-                raise Exception(
-                    f"Caught Exception while deleting network: {result}"
-                )
+                raise Exception(f"Caught Exception while deleting network: {result}")
 
     def delete_network(self, ssid: str) -> None:
         """Deletes a saved network given a ssid
@@ -1293,9 +1212,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                 if isinstance(result, Exception):
                     raise Exception(result)
         except Exception as e:
-            logging.debug(
-                f"Caught Exception while deleting network {ssid}: {e}"
-            )
+            logging.debug(f"Caught Exception while deleting network {ssid}: {e}")
 
     def get_hotspot_ssid(self) -> str:
         return self.hotspot_ssid
@@ -1314,9 +1231,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
             active_connections = future.result(timeout=2)
             if connection_path in active_connections:
                 task = self.loop.create_task(
-                    self.nm.deactivate_connection(
-                        active_connection=connection_path
-                    )
+                    self.nm.deactivate_connection(active_connection=connection_path)
                 )
                 future = asyncio.gather(task)
         except Exception as e:
@@ -1338,9 +1253,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                 raise Exception(f"Network saved network with name {ssid}")
             self.deactivate_connection(_connection_path)
         except Exception as e:
-            logger.error(
-                f"Exception Caught while deactivating network {ssid}: {e}"
-            )
+            logger.error(f"Exception Caught while deactivating network {ssid}: {e}")
 
     def create_hotspot(
         self, ssid: str = "PrinterHotspot", password: str = "123456789"
@@ -1379,9 +1292,9 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
             tasks = []
             tasks.append(
                 self.loop.create_task(
-                    dbusNm.NetworkManagerSettings(
-                        bus=self.system_dbus
-                    ).add_connection(_properties)
+                    dbusNm.NetworkManagerSettings(bus=self.system_dbus).add_connection(
+                        _properties
+                    )
                 )
             )
             tasks.append(self.loop.create_task(self.nm.reload(0x0)))
