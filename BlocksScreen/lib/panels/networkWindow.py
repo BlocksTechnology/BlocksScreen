@@ -133,6 +133,7 @@ class BuildNetworkList(QtCore.QThread):
 
 class NetworkControlWindow(QtWidgets.QStackedWidget):
     """Network Control panel Widget"""
+
     request_network_scan = QtCore.pyqtSignal(name="scan-network")
     new_ip_signal = QtCore.pyqtSignal(str, name="ip-address-change")
     get_hotspot_ssid = QtCore.pyqtSignal(str, name="hotspot-ssid-name")
@@ -158,9 +159,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             self.handle_network_list
         )
         self.panel.rescan_button.clicked.connect(
-            lambda: QtCore.QTimer.singleShot(
-                100, self.network_list_worker.build
-            )
+            lambda: QtCore.QTimer.singleShot(100, self.network_list_worker.build)
         )
 
         self.sdbus_network.nm_state_change.connect(self.evaluate_network_state)
@@ -255,10 +254,8 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             )
         )
 
-        self.panel.hotspot_change_confirm.clicked.connect(  
-            lambda: self.setCurrentIndex(
-                self.indexOf(self.panel.main_network_page)
-            )
+        self.panel.hotspot_change_confirm.clicked.connect(
+            lambda: self.setCurrentIndex(self.indexOf(self.panel.main_network_page))
         )
 
         self.panel.hotspot_password_input_field.setHidden(True)
@@ -346,25 +343,51 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.qwerty.value_selected.connect(self.on_qwerty_value_selected)
         self.qwerty.request_back.connect(self.on_qwerty_go_back)
 
-        self.panel.add_network_password_field.clicked.connect(lambda: self.on_show_keyboard(self.panel.add_network_page, self.panel.add_network_password_field))
-        self.panel.hotspot_password_input_field.clicked.connect(lambda: self.on_show_keyboard(self.panel.hotspot_page, self.panel.hotspot_password_input_field))
-        self.panel.hotspot_name_input_field.clicked.connect(lambda: self.on_show_keyboard(self.panel.hotspot_page, self.panel.hotspot_name_input_field))
-        self.panel.saved_connection_change_password_field.clicked.connect(lambda: self.on_show_keyboard(self.panel.saved_connection_page, self.panel.saved_connection_change_password_field))
-
+        self.panel.add_network_password_field.clicked.connect(
+            lambda: self.on_show_keyboard(
+                self.panel.add_network_page, self.panel.add_network_password_field
+            )
+        )
+        self.panel.hotspot_password_input_field.clicked.connect(
+            lambda: self.on_show_keyboard(
+                self.panel.hotspot_page, self.panel.hotspot_password_input_field
+            )
+        )
+        self.panel.hotspot_name_input_field.clicked.connect(
+            lambda: self.on_show_keyboard(
+                self.panel.hotspot_page, self.panel.hotspot_name_input_field
+            )
+        )
+        self.panel.saved_connection_change_password_field.clicked.connect(
+            lambda: self.on_show_keyboard(
+                self.panel.saved_connection_page,
+                self.panel.saved_connection_change_password_field,
+            )
+        )
 
     def on_show_keyboard(self, panel: QtWidgets.QWidget, field: QtWidgets.QLineEdit):
         self.previousPanel = panel
-        print(self.previousPanel.objectName())
         self.currentField = field
         self.qwerty.set_value(field.text())
         self.setCurrentIndex(self.indexOf(self.qwerty))
-            
+
     def on_qwerty_go_back(self):
-        QtWidgets.QApplication.instance().focusWidget().clearFocus()
+        # try:
+        #     instance = QtWidgets.QApplication.instance()
+        #     if instance:
+        #         instance.focusWidget().clearFocus()
+
+        # except Exception as e:
+        #     raise LookupError("Cannot retrieve QApplication instance %s", e)
         self.setCurrentIndex(self.indexOf(self.previousPanel))
 
     def on_qwerty_value_selected(self, value: str):
-        QtWidgets.QApplication.instance().focusWidget().clearFocus()
+        # try:
+        #     instance = QtWidgets.QApplication.instance()
+        #     if instance:
+        #         instance.focusWidget().clearFocus()
+        # except Exception as e:
+        #     raise LookupError("Cannot retrieve QApplication instance %s", e)
         self.setCurrentIndex(self.indexOf(self.previousPanel))
         if hasattr(self, "currentField") and self.currentField:
             self.currentField.setText(value)
@@ -398,7 +421,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             self.panel.netlist_security_label.show()
             self.panel.line_3.show()
             self.panel.netlist_security.show()
-        
+
             self.panel.mn_info_box.show()
 
             self.panel.loadingwidget.hide()
@@ -590,14 +613,19 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         """
         # Check if a password was inserted
 
-        if not self.panel.add_network_password_field.text():
+        if not self.currentField.text():
             return
-        _network_psk = self.panel.add_network_password_field.text()
+
+        _network_psk = self.currentField.text()
         self.sdbus_network.add_wifi_network(
             ssid=self.panel.add_network_network_label.text(), psk=_network_psk
         )
         QtCore.QTimer().singleShot(10000, lambda: self.network_list_worker.build())
+        # TODO: Add loading page here
         self.setCurrentIndex(self.indexOf(self.panel.network_list_page))
+        logger.debug(
+            f"Added new wifi connection {self.panel.add_network_network_label.text()}"
+        )
 
     @QtCore.pyqtSlot(QtWidgets.QListWidgetItem, name="ssid_item_clicked")
     def ssid_item_clicked(self, item: QtWidgets.QListWidgetItem) -> None:

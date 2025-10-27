@@ -8,6 +8,7 @@ class CustomQwertyKeyboard(QtWidgets.QWidget):
 
     value_selected = QtCore.pyqtSignal(str, name="value_selected")
     request_back = QtCore.pyqtSignal(name="request_back")
+
     def __init__(
         self,
         parent,
@@ -16,7 +17,9 @@ class CustomQwertyKeyboard(QtWidgets.QWidget):
         self.setupUi()
         self.current_value: str = ""
         self.symbolsrun = False
-
+        self.setCursor(
+            QtCore.Qt.CursorShape.BlankCursor
+        )  # Disable cursor on touch keyboard
 
         self.K_q.clicked.connect(lambda: self.value_inserted(str(self.K_q.text())))
         self.K_w.clicked.connect(lambda: self.value_inserted(str(self.K_w.text())))
@@ -44,20 +47,17 @@ class CustomQwertyKeyboard(QtWidgets.QWidget):
         self.K_b.clicked.connect(lambda: self.value_inserted(str(self.K_b.text())))
         self.K_n.clicked.connect(lambda: self.value_inserted(str(self.K_n.text())))
         self.K_m.clicked.connect(lambda: self.value_inserted(str(self.K_m.text())))
-                                 
+
         self.K_space.clicked.connect(lambda: self.value_inserted(" "))
         self.k_Enter.clicked.connect(lambda: self.value_inserted("enter"))
         self.k_delete.clicked.connect(lambda: self.value_inserted("clear"))
 
         self.inserted_value.setText("")
 
-
         self.K_keychange.clicked.connect(self.handle_checkbuttons)
         self.K_shift.clicked.connect(self.handle_checkbuttons)
 
         self.numpad_back_btn.clicked.connect(lambda: self.request_back.emit())
-
-        
 
         self.setStyleSheet("""
             QPushButton {
@@ -77,19 +77,38 @@ class CustomQwertyKeyboard(QtWidgets.QWidget):
         """)
         self.handle_checkbuttons()
 
-
     def handle_checkbuttons(self):
         shift = self.K_shift.isChecked()
         keychange = self.K_keychange.isChecked()
 
-
         # references to all key buttons
         keys = [
-            self.K_q, self.K_w, self.K_e, self.K_r, self.K_t, self.K_y,
-            self.K_u, self.K_i, self.K_o, self.K_p,
-            self.K_a, self.K_s, self.K_d, self.K_f, self.K_g, self.K_h,
-            self.K_j, self.K_k, self.K_l,
-            self.K_z, self.K_x, self.K_c, self.K_v, self.K_b, self.K_n, self.K_m
+            self.K_q,
+            self.K_w,
+            self.K_e,
+            self.K_r,
+            self.K_t,
+            self.K_y,
+            self.K_u,
+            self.K_i,
+            self.K_o,
+            self.K_p,
+            self.K_a,
+            self.K_s,
+            self.K_d,
+            self.K_f,
+            self.K_g,
+            self.K_h,
+            self.K_j,
+            self.K_k,
+            self.K_l,
+            self.K_z,
+            self.K_x,
+            self.K_c,
+            self.K_v,
+            self.K_b,
+            self.K_n,
+            self.K_m,
         ]
 
         # -------------------------------
@@ -97,21 +116,71 @@ class CustomQwertyKeyboard(QtWidgets.QWidget):
         # -------------------------------
         lowercase = list("qwertyuiopasdfghjklzxcvbnm")
         uppercase = list("QWERTYUIOPASDFGHJKLZXCVBNM")
-        numbers = ["1","2","3","4","5","6","7","8","9","0",
-                "@","#","$","%","&&","*","-","+","=",
-                "(",")","!",":",";","'","?"]
-        symbols = ["~","`","|","•","√","π","÷","×","¶","∆",
-                "€","£","¥","₩","^","°","_","{","}",
-                "[","]","<",">","/","\\",",","."]
+        numbers = [
+            "1",
+            "2",
+            "3",
+            "4",
+            "5",
+            "6",
+            "7",
+            "8",
+            "9",
+            "0",
+            "@",
+            "#",
+            "$",
+            "%",
+            "&&",
+            "*",
+            "-",
+            "+",
+            "=",
+            "(",
+            ")",
+            "!",
+            ":",
+            ";",
+            "'",
+            "?",
+        ]
+        symbols = [
+            "~",
+            "`",
+            "|",
+            "•",
+            "√",
+            "π",
+            "÷",
+            "×",
+            "¶",
+            "∆",
+            "€",
+            "£",
+            "¥",
+            "₩",
+            "^",
+            "°",
+            "_",
+            "{",
+            "}",
+            "[",
+            "]",
+            "<",
+            ">",
+            "/",
+            "\\",
+            ",",
+            ".",
+        ]
 
-        # -------------------------------   
+        # -------------------------------
         # Logic
         # -------------------------------
-        
 
         if not keychange and not shift:
             layout = lowercase
-        
+
         elif not keychange and shift:
             if self.symbolsrun:
                 layout = lowercase
@@ -144,23 +213,19 @@ class CustomQwertyKeyboard(QtWidgets.QWidget):
             value (int | str): value
         """
 
-
         if value == "&&":
             value = "&"
 
         if "enter" in value:
-                
-                self.value_selected.emit(
-                 self.current_value
-                )
-                self.current_value = ""
-                self.inserted_value.setText("")
-                return
+            self.value_selected.emit(self.current_value)
+            self.current_value = ""
+            self.inserted_value.setText("")
+            return
 
         elif "clear" in value:
             if len(self.current_value) > 1:
                 self.current_value = self.current_value[:-1]
-                
+
             else:
                 self.current_value = ""
 
@@ -168,18 +233,19 @@ class CustomQwertyKeyboard(QtWidgets.QWidget):
             self.current_value += str(value)
 
         self.inserted_value.setText(str(self.current_value))
-            
+
     def set_value(self, value: str) -> None:
         self.current_value = value
         self.inserted_value.setText(value)
-    
-    #QtWidgets.QPushButton
 
     def setupUi(self):
         self.setObjectName("self")
         self.setEnabled(True)
         self.resize(800, 480)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Preferred, QtWidgets.QSizePolicy.Policy.Preferred)
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Preferred,
+            QtWidgets.QSizePolicy.Policy.Preferred,
+        )
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(self.sizePolicy().hasHeightForWidth())
@@ -191,13 +257,18 @@ class CustomQwertyKeyboard(QtWidgets.QWidget):
         self.layoutWidget_2.setGeometry(QtCore.QRect(10, 150, 781, 52))
         self.layoutWidget_2.setObjectName("layoutWidget_2")
         self.gridLayout_2 = QtWidgets.QGridLayout(self.layoutWidget_2)
-        self.gridLayout_2.setSizeConstraint(QtWidgets.QLayout.SizeConstraint.SetMinimumSize)
+        self.gridLayout_2.setSizeConstraint(
+            QtWidgets.QLayout.SizeConstraint.SetMinimumSize
+        )
         self.gridLayout_2.setContentsMargins(0, 0, 0, 0)
         self.gridLayout_2.setHorizontalSpacing(2)
         self.gridLayout_2.setVerticalSpacing(5)
         self.gridLayout_2.setObjectName("gridLayout_2")
         self.K_p = QtWidgets.QPushButton(parent=self.layoutWidget_2)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Expanding)
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Expanding,
+            QtWidgets.QSizePolicy.Policy.Expanding,
+        )
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(self.K_p.sizePolicy().hasHeightForWidth())
@@ -218,9 +289,14 @@ class CustomQwertyKeyboard(QtWidgets.QWidget):
         self.K_p.setLayoutDirection(QtCore.Qt.LayoutDirection.RightToLeft)
         self.K_p.setFlat(True)
         self.K_p.setObjectName("K_p")
-        self.gridLayout_2.addWidget(self.K_p, 0, 9, 1, 1, QtCore.Qt.AlignmentFlag.AlignHCenter)
+        self.gridLayout_2.addWidget(
+            self.K_p, 0, 9, 1, 1, QtCore.Qt.AlignmentFlag.AlignHCenter
+        )
         self.K_i = QtWidgets.QPushButton(parent=self.layoutWidget_2)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Expanding)
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Expanding,
+            QtWidgets.QSizePolicy.Policy.Expanding,
+        )
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(self.K_i.sizePolicy().hasHeightForWidth())
@@ -241,9 +317,14 @@ class CustomQwertyKeyboard(QtWidgets.QWidget):
         self.K_i.setLayoutDirection(QtCore.Qt.LayoutDirection.RightToLeft)
         self.K_i.setFlat(True)
         self.K_i.setObjectName("K_i")
-        self.gridLayout_2.addWidget(self.K_i, 0, 7, 1, 1, QtCore.Qt.AlignmentFlag.AlignHCenter)
+        self.gridLayout_2.addWidget(
+            self.K_i, 0, 7, 1, 1, QtCore.Qt.AlignmentFlag.AlignHCenter
+        )
         self.K_y = QtWidgets.QPushButton(parent=self.layoutWidget_2)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Expanding)
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Expanding,
+            QtWidgets.QSizePolicy.Policy.Expanding,
+        )
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(self.K_y.sizePolicy().hasHeightForWidth())
@@ -264,9 +345,14 @@ class CustomQwertyKeyboard(QtWidgets.QWidget):
         self.K_y.setLayoutDirection(QtCore.Qt.LayoutDirection.RightToLeft)
         self.K_y.setFlat(True)
         self.K_y.setObjectName("K_y")
-        self.gridLayout_2.addWidget(self.K_y, 0, 5, 1, 1, QtCore.Qt.AlignmentFlag.AlignHCenter)
+        self.gridLayout_2.addWidget(
+            self.K_y, 0, 5, 1, 1, QtCore.Qt.AlignmentFlag.AlignHCenter
+        )
         self.K_t = QtWidgets.QPushButton(parent=self.layoutWidget_2)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Expanding)
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Expanding,
+            QtWidgets.QSizePolicy.Policy.Expanding,
+        )
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(self.K_t.sizePolicy().hasHeightForWidth())
@@ -287,9 +373,14 @@ class CustomQwertyKeyboard(QtWidgets.QWidget):
         self.K_t.setLayoutDirection(QtCore.Qt.LayoutDirection.RightToLeft)
         self.K_t.setFlat(True)
         self.K_t.setObjectName("K_t")
-        self.gridLayout_2.addWidget(self.K_t, 0, 4, 1, 1, QtCore.Qt.AlignmentFlag.AlignHCenter)
+        self.gridLayout_2.addWidget(
+            self.K_t, 0, 4, 1, 1, QtCore.Qt.AlignmentFlag.AlignHCenter
+        )
         self.K_r = QtWidgets.QPushButton(parent=self.layoutWidget_2)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Expanding)
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Expanding,
+            QtWidgets.QSizePolicy.Policy.Expanding,
+        )
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(self.K_r.sizePolicy().hasHeightForWidth())
@@ -310,9 +401,14 @@ class CustomQwertyKeyboard(QtWidgets.QWidget):
         self.K_r.setLayoutDirection(QtCore.Qt.LayoutDirection.RightToLeft)
         self.K_r.setFlat(True)
         self.K_r.setObjectName("K_r")
-        self.gridLayout_2.addWidget(self.K_r, 0, 3, 1, 1, QtCore.Qt.AlignmentFlag.AlignHCenter)
+        self.gridLayout_2.addWidget(
+            self.K_r, 0, 3, 1, 1, QtCore.Qt.AlignmentFlag.AlignHCenter
+        )
         self.K_o = QtWidgets.QPushButton(parent=self.layoutWidget_2)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Expanding)
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Expanding,
+            QtWidgets.QSizePolicy.Policy.Expanding,
+        )
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(self.K_o.sizePolicy().hasHeightForWidth())
@@ -333,9 +429,14 @@ class CustomQwertyKeyboard(QtWidgets.QWidget):
         self.K_o.setLayoutDirection(QtCore.Qt.LayoutDirection.RightToLeft)
         self.K_o.setFlat(True)
         self.K_o.setObjectName("K_o")
-        self.gridLayout_2.addWidget(self.K_o, 0, 8, 1, 1, QtCore.Qt.AlignmentFlag.AlignHCenter)
+        self.gridLayout_2.addWidget(
+            self.K_o, 0, 8, 1, 1, QtCore.Qt.AlignmentFlag.AlignHCenter
+        )
         self.K_u = QtWidgets.QPushButton(parent=self.layoutWidget_2)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Expanding)
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Expanding,
+            QtWidgets.QSizePolicy.Policy.Expanding,
+        )
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(self.K_u.sizePolicy().hasHeightForWidth())
@@ -356,9 +457,14 @@ class CustomQwertyKeyboard(QtWidgets.QWidget):
         self.K_u.setLayoutDirection(QtCore.Qt.LayoutDirection.RightToLeft)
         self.K_u.setFlat(True)
         self.K_u.setObjectName("K_u")
-        self.gridLayout_2.addWidget(self.K_u, 0, 6, 1, 1, QtCore.Qt.AlignmentFlag.AlignHCenter)
+        self.gridLayout_2.addWidget(
+            self.K_u, 0, 6, 1, 1, QtCore.Qt.AlignmentFlag.AlignHCenter
+        )
         self.K_w = QtWidgets.QPushButton(parent=self.layoutWidget_2)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Expanding)
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Expanding,
+            QtWidgets.QSizePolicy.Policy.Expanding,
+        )
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(self.K_w.sizePolicy().hasHeightForWidth())
@@ -379,9 +485,19 @@ class CustomQwertyKeyboard(QtWidgets.QWidget):
         self.K_w.setLayoutDirection(QtCore.Qt.LayoutDirection.RightToLeft)
         self.K_w.setFlat(True)
         self.K_w.setObjectName("K_w")
-        self.gridLayout_2.addWidget(self.K_w, 0, 1, 1, 1, QtCore.Qt.AlignmentFlag.AlignHCenter|QtCore.Qt.AlignmentFlag.AlignVCenter)
+        self.gridLayout_2.addWidget(
+            self.K_w,
+            0,
+            1,
+            1,
+            1,
+            QtCore.Qt.AlignmentFlag.AlignHCenter | QtCore.Qt.AlignmentFlag.AlignVCenter,
+        )
         self.K_e = QtWidgets.QPushButton(parent=self.layoutWidget_2)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Expanding)
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Expanding,
+            QtWidgets.QSizePolicy.Policy.Expanding,
+        )
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(self.K_e.sizePolicy().hasHeightForWidth())
@@ -402,9 +518,14 @@ class CustomQwertyKeyboard(QtWidgets.QWidget):
         self.K_e.setLayoutDirection(QtCore.Qt.LayoutDirection.RightToLeft)
         self.K_e.setFlat(True)
         self.K_e.setObjectName("K_e")
-        self.gridLayout_2.addWidget(self.K_e, 0, 2, 1, 1, QtCore.Qt.AlignmentFlag.AlignHCenter)
+        self.gridLayout_2.addWidget(
+            self.K_e, 0, 2, 1, 1, QtCore.Qt.AlignmentFlag.AlignHCenter
+        )
         self.K_q = QtWidgets.QPushButton(parent=self.layoutWidget_2)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Expanding)
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Expanding,
+            QtWidgets.QSizePolicy.Policy.Expanding,
+        )
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(self.K_q.sizePolicy().hasHeightForWidth())
@@ -425,7 +546,14 @@ class CustomQwertyKeyboard(QtWidgets.QWidget):
         self.K_q.setLayoutDirection(QtCore.Qt.LayoutDirection.RightToLeft)
         self.K_q.setFlat(True)
         self.K_q.setObjectName("K_q")
-        self.gridLayout_2.addWidget(self.K_q, 0, 0, 1, 1, QtCore.Qt.AlignmentFlag.AlignHCenter|QtCore.Qt.AlignmentFlag.AlignVCenter)
+        self.gridLayout_2.addWidget(
+            self.K_q,
+            0,
+            0,
+            1,
+            1,
+            QtCore.Qt.AlignmentFlag.AlignHCenter | QtCore.Qt.AlignmentFlag.AlignVCenter,
+        )
         self.layoutWidget = QtWidgets.QWidget(parent=self)
         self.layoutWidget.setGeometry(QtCore.QRect(50, 220, 701, 52))
         self.layoutWidget.setMinimumSize(QtCore.QSize(64, 0))
@@ -435,7 +563,9 @@ class CustomQwertyKeyboard(QtWidgets.QWidget):
         self.horizontalLayout_2.setSpacing(2)
         self.horizontalLayout_2.setObjectName("horizontalLayout_2")
         self.K_a = QtWidgets.QPushButton(parent=self.layoutWidget)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Fixed)
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Fixed
+        )
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(self.K_a.sizePolicy().hasHeightForWidth())
@@ -458,7 +588,9 @@ class CustomQwertyKeyboard(QtWidgets.QWidget):
         self.K_a.setObjectName("K_a")
         self.horizontalLayout_2.addWidget(self.K_a)
         self.K_s = QtWidgets.QPushButton(parent=self.layoutWidget)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Fixed)
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Fixed
+        )
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(self.K_s.sizePolicy().hasHeightForWidth())
@@ -481,7 +613,9 @@ class CustomQwertyKeyboard(QtWidgets.QWidget):
         self.K_s.setObjectName("K_s")
         self.horizontalLayout_2.addWidget(self.K_s)
         self.K_d = QtWidgets.QPushButton(parent=self.layoutWidget)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Fixed)
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Fixed
+        )
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(self.K_d.sizePolicy().hasHeightForWidth())
@@ -504,7 +638,9 @@ class CustomQwertyKeyboard(QtWidgets.QWidget):
         self.K_d.setObjectName("K_d")
         self.horizontalLayout_2.addWidget(self.K_d)
         self.K_f = QtWidgets.QPushButton(parent=self.layoutWidget)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Fixed)
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Fixed
+        )
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(self.K_f.sizePolicy().hasHeightForWidth())
@@ -527,7 +663,9 @@ class CustomQwertyKeyboard(QtWidgets.QWidget):
         self.K_f.setObjectName("K_f")
         self.horizontalLayout_2.addWidget(self.K_f)
         self.K_g = QtWidgets.QPushButton(parent=self.layoutWidget)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Fixed)
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Fixed
+        )
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(self.K_g.sizePolicy().hasHeightForWidth())
@@ -550,7 +688,9 @@ class CustomQwertyKeyboard(QtWidgets.QWidget):
         self.K_g.setObjectName("K_g")
         self.horizontalLayout_2.addWidget(self.K_g)
         self.K_h = QtWidgets.QPushButton(parent=self.layoutWidget)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Fixed)
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Fixed
+        )
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(self.K_h.sizePolicy().hasHeightForWidth())
@@ -573,7 +713,9 @@ class CustomQwertyKeyboard(QtWidgets.QWidget):
         self.K_h.setObjectName("K_h")
         self.horizontalLayout_2.addWidget(self.K_h)
         self.K_j = QtWidgets.QPushButton(parent=self.layoutWidget)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Fixed)
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Fixed
+        )
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(self.K_j.sizePolicy().hasHeightForWidth())
@@ -596,7 +738,9 @@ class CustomQwertyKeyboard(QtWidgets.QWidget):
         self.K_j.setObjectName("K_j")
         self.horizontalLayout_2.addWidget(self.K_j)
         self.K_k = QtWidgets.QPushButton(parent=self.layoutWidget)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Fixed)
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Fixed
+        )
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(self.K_k.sizePolicy().hasHeightForWidth())
@@ -619,7 +763,9 @@ class CustomQwertyKeyboard(QtWidgets.QWidget):
         self.K_k.setObjectName("K_k")
         self.horizontalLayout_2.addWidget(self.K_k)
         self.K_l = QtWidgets.QPushButton(parent=self.layoutWidget)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Fixed)
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Fixed
+        )
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(self.K_l.sizePolicy().hasHeightForWidth())
@@ -645,12 +791,16 @@ class CustomQwertyKeyboard(QtWidgets.QWidget):
         self.layoutWidget_3.setGeometry(QtCore.QRect(100, 290, 591, 52))
         self.layoutWidget_3.setObjectName("layoutWidget_3")
         self.horizontalLayout = QtWidgets.QHBoxLayout(self.layoutWidget_3)
-        self.horizontalLayout.setSizeConstraint(QtWidgets.QLayout.SizeConstraint.SetMinimumSize)
+        self.horizontalLayout.setSizeConstraint(
+            QtWidgets.QLayout.SizeConstraint.SetMinimumSize
+        )
         self.horizontalLayout.setContentsMargins(0, 0, 0, 0)
         self.horizontalLayout.setSpacing(2)
         self.horizontalLayout.setObjectName("horizontalLayout")
         self.K_z = QtWidgets.QPushButton(parent=self.layoutWidget_3)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Fixed)
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Fixed
+        )
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(self.K_z.sizePolicy().hasHeightForWidth())
@@ -673,7 +823,9 @@ class CustomQwertyKeyboard(QtWidgets.QWidget):
         self.K_z.setObjectName("K_z")
         self.horizontalLayout.addWidget(self.K_z)
         self.K_x = QtWidgets.QPushButton(parent=self.layoutWidget_3)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Fixed)
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Fixed
+        )
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(self.K_x.sizePolicy().hasHeightForWidth())
@@ -696,7 +848,9 @@ class CustomQwertyKeyboard(QtWidgets.QWidget):
         self.K_x.setObjectName("K_x")
         self.horizontalLayout.addWidget(self.K_x)
         self.K_c = QtWidgets.QPushButton(parent=self.layoutWidget_3)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Fixed)
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Fixed
+        )
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(self.K_c.sizePolicy().hasHeightForWidth())
@@ -719,7 +873,9 @@ class CustomQwertyKeyboard(QtWidgets.QWidget):
         self.K_c.setObjectName("K_c")
         self.horizontalLayout.addWidget(self.K_c)
         self.K_v = QtWidgets.QPushButton(parent=self.layoutWidget_3)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Fixed)
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Fixed
+        )
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(self.K_v.sizePolicy().hasHeightForWidth())
@@ -742,7 +898,9 @@ class CustomQwertyKeyboard(QtWidgets.QWidget):
         self.K_v.setObjectName("K_v")
         self.horizontalLayout.addWidget(self.K_v)
         self.K_b = QtWidgets.QPushButton(parent=self.layoutWidget_3)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Fixed)
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Fixed
+        )
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(self.K_b.sizePolicy().hasHeightForWidth())
@@ -765,7 +923,9 @@ class CustomQwertyKeyboard(QtWidgets.QWidget):
         self.K_b.setObjectName("K_b")
         self.horizontalLayout.addWidget(self.K_b)
         self.K_n = QtWidgets.QPushButton(parent=self.layoutWidget_3)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Fixed)
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Fixed
+        )
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(self.K_n.sizePolicy().hasHeightForWidth())
@@ -788,7 +948,9 @@ class CustomQwertyKeyboard(QtWidgets.QWidget):
         self.K_n.setObjectName("K_n")
         self.horizontalLayout.addWidget(self.K_n)
         self.K_m = QtWidgets.QPushButton(parent=self.layoutWidget_3)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Fixed)
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Fixed
+        )
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(self.K_m.sizePolicy().hasHeightForWidth())
@@ -812,7 +974,10 @@ class CustomQwertyKeyboard(QtWidgets.QWidget):
         self.horizontalLayout.addWidget(self.K_m)
         self.K_space = QtWidgets.QPushButton(parent=self)
         self.K_space.setGeometry(QtCore.QRect(120, 362, 551, 60))
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Expanding)
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Expanding,
+            QtWidgets.QSizePolicy.Policy.Expanding,
+        )
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(self.K_space.sizePolicy().hasHeightForWidth())
@@ -822,7 +987,9 @@ class CustomQwertyKeyboard(QtWidgets.QWidget):
         self.K_space.setObjectName("K_space")
         self.k_Enter = QtWidgets.QPushButton(parent=self)
         self.k_Enter.setGeometry(QtCore.QRect(680, 350, 93, 60))
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Minimum)
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Minimum
+        )
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(self.k_Enter.sizePolicy().hasHeightForWidth())
@@ -833,7 +1000,9 @@ class CustomQwertyKeyboard(QtWidgets.QWidget):
         self.k_Enter.setObjectName("k_Enter")
         self.k_delete = QtWidgets.QPushButton(parent=self)
         self.k_delete.setGeometry(QtCore.QRect(700, 280, 81, 51))
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Minimum)
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Minimum
+        )
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(self.k_delete.sizePolicy().hasHeightForWidth())
@@ -843,7 +1012,9 @@ class CustomQwertyKeyboard(QtWidgets.QWidget):
         self.k_delete.setObjectName("k_delete")
         self.K_keychange = QtWidgets.QPushButton(parent=self)
         self.K_keychange.setGeometry(QtCore.QRect(20, 350, 93, 60))
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Minimum)
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Minimum
+        )
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(self.K_keychange.sizePolicy().hasHeightForWidth())
@@ -854,7 +1025,9 @@ class CustomQwertyKeyboard(QtWidgets.QWidget):
         self.K_keychange.setObjectName("K_keychange")
         self.K_shift = QtWidgets.QPushButton(parent=self)
         self.K_shift.setGeometry(QtCore.QRect(10, 280, 81, 51))
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Minimum)
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Minimum
+        )
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(self.K_shift.sizePolicy().hasHeightForWidth())
@@ -866,10 +1039,15 @@ class CustomQwertyKeyboard(QtWidgets.QWidget):
         self.numpad_back_btn = IconButton(parent=self)
         self.numpad_back_btn.setEnabled(True)
         self.numpad_back_btn.setGeometry(QtCore.QRect(720, 20, 60, 60))
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.MinimumExpanding, QtWidgets.QSizePolicy.Policy.MinimumExpanding)
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
+            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
+        )
         sizePolicy.setHorizontalStretch(1)
         sizePolicy.setVerticalStretch(1)
-        sizePolicy.setHeightForWidth(self.numpad_back_btn.sizePolicy().hasHeightForWidth())
+        sizePolicy.setHeightForWidth(
+            self.numpad_back_btn.sizePolicy().hasHeightForWidth()
+        )
         self.numpad_back_btn.setSizePolicy(sizePolicy)
         self.numpad_back_btn.setMinimumSize(QtCore.QSize(60, 60))
         self.numpad_back_btn.setMaximumSize(QtCore.QSize(60, 60))
@@ -879,7 +1057,9 @@ class CustomQwertyKeyboard(QtWidgets.QWidget):
         self.numpad_back_btn.setCheckable(False)
         self.numpad_back_btn.setChecked(False)
         self.numpad_back_btn.setFlat(True)
-        self.numpad_back_btn.setProperty("icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/back.svg"))
+        self.numpad_back_btn.setProperty(
+            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/back.svg")
+        )
         self.numpad_back_btn.setObjectName("numpad_back_btn")
         self.layoutWidget1 = QtWidgets.QWidget(parent=self)
         self.layoutWidget1.setGeometry(QtCore.QRect(10, 90, 781, 48))
@@ -895,16 +1075,21 @@ class CustomQwertyKeyboard(QtWidgets.QWidget):
         font.setPointSize(18)
         self.inserted_value.setFont(font)
         self.inserted_value.setAutoFillBackground(False)
-        self.inserted_value.setStyleSheet("color: white;\n"
-"                                                        ")
+        self.inserted_value.setStyleSheet(
+            "color: white;\n                                                        "
+        )
         self.inserted_value.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
         self.inserted_value.setFrameShadow(QtWidgets.QFrame.Shadow.Sunken)
         self.inserted_value.setLineWidth(0)
         self.inserted_value.setText("")
         self.inserted_value.setScaledContents(False)
-        self.inserted_value.setAlignment(QtCore.Qt.AlignmentFlag.AlignBottom|QtCore.Qt.AlignmentFlag.AlignHCenter)
+        self.inserted_value.setAlignment(
+            QtCore.Qt.AlignmentFlag.AlignBottom | QtCore.Qt.AlignmentFlag.AlignHCenter
+        )
         self.inserted_value.setIndent(0)
-        self.inserted_value.setTextInteractionFlags(QtCore.Qt.TextInteractionFlag.LinksAccessibleByMouse)
+        self.inserted_value.setTextInteractionFlags(
+            QtCore.Qt.TextInteractionFlag.LinksAccessibleByMouse
+        )
         self.inserted_value.setObjectName("inserted_value")
         self.verticalLayout_2.addWidget(self.inserted_value)
         self.line = QtWidgets.QFrame(parent=self.layoutWidget1)

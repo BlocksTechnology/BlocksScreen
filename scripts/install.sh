@@ -330,30 +330,43 @@ function create_policy(){
     BS_GID=$( getent group blocksscreen | awk -F: '{printf "%d", $3}' )
     cat << EOF | sudo tee ${RULE_FILE} > /dev/null 
 
-polkit.addRule(function(action, subject){
-    var allowd_actions = [
-        "org.freedesktop.login1.power-off-multiple-sessions", 
-        "org.freedesktop.login1.reboot-multiple-sessions", 
-        "org.freedesktop.login1.halt-multiple-sessions", 
-        "org.freedesktop.login1.power-off", 
-        "org.freedesktop.login1.reboot", 
-        "org.freedesktop.login1.halt", 
-        "org.freedesktop.NetworkManager.reload", 
-        "org.freedesktop.NetworkManager.network-control", 
-        "org.freedesktop.NetworkManager.settings.modify.own", 
-        "org.freedesktop.NetworkManager.settings.modify.system",
-        
-    ]
-    polkit.log("Evaluating Rule: " + action.id + " " + subject.local + " " + subject.active );
-    if (allowd_actions.indexOf(action.id) >= 0 || 
-        action.id.indexOf("org.freedesktop.NetworkManager.") >= 0 || 
-        action.id.indexOf("org.freedesktop.udisks2.") >= 0) {
-    
-        if (subject.user == "bugo"  || 
-            subject.isInGroup("network") || 
-            subject.isInGroup("netdev") || 
-            subject.isInGroup("blocksscreen")
-        ){
+polkit.addRule(function(action, subject) {
+        if (action.id.startsWith("org.freedesktop.NetworkManager") &&
+                subject.user == "$USER") {
+                return polkit.Result.YES;
+        }
+});
+
+polkit.addRule(function(action, subject) {
+    var allowed_actions = [
+        "org.freedesktop.login1.power-off-multiple-sessions",
+        "org.freedesktop.login1.reboot-multiple-sessions",
+        "org.freedesktop.login1.halt-multiple-sessions",
+        "org.freedesktop.login1.power-off",
+        "org.freedesktop.login1.reboot",
+        "org.freedesktop.login1.halt",
+        "org.freedesktop.NetworkManager.reload",
+        "org.freedesktop.NetworkManager.network-control",
+        "org.freedesktop.NetworkManager.settings.modify.own",
+        "org.freedesktop.NetworkManager.settings.modify.system"
+    ];
+
+    polkit.log("Evaluating Rule: " + action.id + " " + subject.user + " " + subject.local + " " + subject.active);
+
+    if (
+        allowed_actions.indexOf(action.id) >= 0 ||
+        action.id.indexOf("org.freedesktop.NetworkManager.") >= 0 ||
+        action.id.indexOf("org.freedesktop.udisks2.") >= 0
+    ) {
+        if (
+            subject.user == "$USER" &&
+            (
+                subject.isInGroup("network") ||
+                subject.isInGroup("netdev") ||
+                subject.isInGroup("blocksscreen") ||
+                subject.isInGroup("blocksscreensudo")
+            )
+        ) {
             return polkit.Result.YES;
         }
     }
