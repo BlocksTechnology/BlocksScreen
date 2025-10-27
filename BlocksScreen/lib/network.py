@@ -1267,6 +1267,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                     "type": ("s", "802-11-wireless"),
                     "autoconnect": ("b", True),
                     "interface-name": ("s", "wlan0"),
+                    "autoconnect-priority": ("u", 10),
                 },
                 "802-11-wireless": {
                     "ssid": ("ay", ssid.encode("utf-8")),
@@ -1283,8 +1284,6 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                 "ipv4": {"method": ("s", "shared")},
                 "ipv6": {"method": ("s", "ignore")},
             }
-            tasks = []
-            
             tasks = [
                 self.loop.create_task(
                     dbusNm.NetworkManagerSettings(
