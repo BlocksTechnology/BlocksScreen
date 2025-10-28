@@ -59,10 +59,11 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                 f"Sdbus NetworkManager Monitor Thread {self.listener_thread.name} Running"
             )
         self.hotspot_ssid: str = "PrinterHotspot"
-        self.hotspot_password: str = "123456789"
+        self.hotspot_password: str = "123456789" 
         self.check_connectivity()
         self.available_wired_interfaces = self.get_wired_interfaces()
         self.available_wireless_interfaces = self.get_wireless_interfaces()
+        self.old_ssid: str = ""
         wireless_interfaces: typing.List[dbusNm.NetworkDeviceWireless] = (
             self.get_wireless_interfaces()
         )
@@ -75,8 +76,8 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
         self.primary_wired_interface: typing.Optional[dbusNm.NetworkDeviceWired] = (
             wired_interfaces[0] if wired_interfaces else None
         )
-        if not self.is_known(self.hotspot_ssid):
-            self.create_hotspot(self.hotspot_ssid, self.hotspot_password)
+        
+        self.create_hotspot(self.hotspot_ssid, self.hotspot_password)
         if self.primary_wifi_interface:
             self.rescan_networks()
 
@@ -293,32 +294,33 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
         if not self.nm:
             return
         try:
-            if self.hotspot_enabled() == toggle:
-                return
             old_ssid: typing.Union[str, None] = self.get_current_ssid()
             if old_ssid:
-                self.disconnect_network()
-            if self.is_known(self.hotspot_ssid):
-                self.connect_network(self.hotspot_ssid)
-                results = asyncio.gather(
-                    self.nm.reload(0x0), return_exceptions=True
-                ).result()
-                for result in results:
-                    if isinstance(result, Exception):
-                        raise Exception(result)
+                    self.old_ssid = old_ssid
+            if toggle:
+                    self.disconnect_network()
+                    self.connect_network(self.hotspot_ssid)
+                    results = asyncio.gather(
+                        self.nm.reload(0x0), return_exceptions=True
+                    ).result()
+                    for result in results:
+                        if isinstance(result, Exception):
+                            raise Exception(result)
 
-                if self.nm.check_connectivity() == (
-                    dbusNm.NetworkManagerConnectivityState.FULL
-                    | dbusNm.NetworkManagerConnectivityState.LIMITED
-                ):
-                    logging.debug(f"Hotspot AP {self.hotspot_ssid} up!")
+                    if self.nm.check_connectivity() == (
+                        dbusNm.NetworkManagerConnectivityState.FULL
+                        | dbusNm.NetworkManagerConnectivityState.LIMITED
+                    ):
+                        logging.debug(f"Hotspot AP {self.hotspot_ssid} up!")
 
-                return
-            if old_ssid:
-                self.connect_network(old_ssid)
-                return
+                    return
+            else: 
+                if self.old_ssid: 
+                    self.connect_network(self.old_ssid)
+                    return
         except Exception as e:
             logging.error(f"Caught Exception while toggling hotspot to {toggle}: {e}")
+
 
     def hotspot_enabled(self) -> typing.Optional["bool"]:
         """Returns a boolean indicating whether the device hotspot is on or not .
@@ -841,7 +843,6 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
             logger.debug("[add wifi network] no primary wifi interface ")
             return
         try:
-            psk = hashlib.sha256(psk.encode()).hexdigest()
             _available_networks = await self._get_available_networks()
             if not _available_networks:
                 logger.debug("Networks not available cancelling adding network")
@@ -1256,51 +1257,56 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
             logger.error(f"Exception Caught while deactivating network {ssid}: {e}")
 
     def create_hotspot(
-        self, ssid: str = "PrinterHotspot", password: str = "123456789"
-    ) -> None:
-        try:
-            self.delete_network(ssid)
-            psk = hashlib.sha256(password.encode()).hexdigest()
-            _properties: dbusNm.NetworkManagerConnectionProperties = {
-                "connection": {
-                    "id": ("s", str(ssid)),
-                    "uuid": ("s", str(uuid4())),
-                    "type": ("s", "802-11-wireless"),  # 802-3-ethernet
-                    "autoconnect": ("b", bool(True)),
-                    "interface-name": ("s", "wlan0"),
-                    "autoconnect-priority": ("u", 10),
-                },
-                "802-11-wireless": {
-                    "ssid": ("ay", ssid.encode("utf-8")),
-                    "mode": ("s", "ap"),
-                    "band": ("s", "bg"),
-                    "channel": ("u", 1),
-                    "security": ("s", "802-11-wireless-security"),
-                    "hidden": ("b", bool(False)),
-                },
-                "802-11-wireless-security": {
-                    "key-mgmt": ("s", "wpa-psk"),
-                    "psk": ("s", str(psk)),
-                    "pmf": ("u", 1),
-                    "pairwise": ("as", ["ccmp"]),
-                },
-                "ipv4": {
-                    "method": ("s", "shared"),
-                },
-                "ipv6": {"method": ("s", "ignore")},
-            }
-            tasks = []
-            tasks.append(
-                self.loop.create_task(
-                    dbusNm.NetworkManagerSettings(bus=self.system_dbus).add_connection(
-                        _properties
-                    )
-                )
-            )
-            tasks.append(self.loop.create_task(self.nm.reload(0x0)))
-            asyncio.gather(*tasks, return_exceptions=False)
-        except Exception as e:
-            logging.error(f"Caught Exception while creating hotspot: {e}")
+            self, ssid: str = "PrinterHotspot", password: str = "123456789"
+        ) -> None:
+            if self.is_known(ssid):
+                self.delete_network(ssid)
+                logger.debug("old hotspot deleted")
+            try:            
+                self.delete_network(ssid)
+                # psk = hashlib.sha256(password.encode()).hexdigest()
+                _properties: dbusNm.NetworkManagerConnectionProperties = {
+                    "connection": {
+                        "id": ("s", str(ssid)),
+                        "uuid": ("s", str(uuid4())),
+                        "type": ("s", "802-11-wireless"),  # 802-3-ethernet
+                        "autoconnect": ("b", bool(True)),
+                        "interface-name": ("s", "wlan0"),
+                        "autoconnect-priority": ("u", 10),
+                    },
+                    "802-11-wireless": {
+                        "ssid": ("ay", ssid.encode("utf-8")),
+                        "mode": ("s", "ap"),
+                        "band": ("s", "bg"),
+                        "channel": ("u", 6),
+                        "security": ("s", "802-11-wireless-security"),
+                    },
+                    "802-11-wireless-security": {
+                        "key-mgmt": ("s", "wpa-psk"),
+                        "psk": ("s", password),
+                        "pmf": ("u", 0),
+                    },
+                    "ipv4": {
+                        "method": ("s", "shared"),
+                    },
+                    "ipv6": {"method": ("s", "ignore")},
+                }
+                
+                tasks = [
+                    self.loop.create_task(
+                        dbusNm.NetworkManagerSettings(
+                            bus=self.system_dbus
+                        ).add_connection(_properties)
+                    ),  
+                    self.loop.create_task(self.nm.reload(0x0)),
+                ]
+                
+                self.loop.run_until_complete(asyncio.gather(*tasks, return_exceptions=False))
+                for task in tasks:
+                    self.loop.run_until_complete(task)
+
+            except Exception as e:
+                logging.error(f"Caught Exception while creating hotspot: {e}")
 
     def set_network_priority(
         self, ssid: str, priority: ConnectionPriority = ConnectionPriority.LOW
@@ -1352,7 +1358,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                 pwd = hashlib.sha256(password.encode()).hexdigest()
                 properties["802-11-wireless-security"]["psk"] = (
                     "s",
-                    str(pwd),
+                    str(password),
                 )
 
             if priority != 0:
