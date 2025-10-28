@@ -449,6 +449,17 @@ function is_package_installed(){
     return $?
 }
 
+function configure_hostname_setter(){
+    # Install service file
+    if [ -d set-hostname@.service ]; then 
+        echo "there is hostname service template"       
+    fi 
+
+    if [ -d hostname-helper.sh ]; then  
+    # File exists 
+        echo "there is hostame helper script"
+    fi
+}
 
 printf "\n===================================\n"
 echo_info "-Blocks Screen installation script-"
@@ -457,6 +468,7 @@ printf "\n===================================\n"
 
 # Run the actual installation 
 echo_ok "Starting Blocks Screen installation"
+configure_hostname_setter
 install_graphical_backend
 install_systemd_service
 install_packages
