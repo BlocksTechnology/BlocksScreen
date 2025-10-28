@@ -59,7 +59,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                 f"Sdbus NetworkManager Monitor Thread {self.listener_thread.name} Running"
             )
         self.hotspot_ssid: str = "PrinterHotspot"
-        self.hotspot_password: str = "123456789" 
+        self.hotspot_password: str = "123456789"
         self.check_connectivity()
         self.available_wired_interfaces = self.get_wired_interfaces()
         self.available_wireless_interfaces = self.get_wireless_interfaces()
@@ -76,7 +76,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
         self.primary_wired_interface: typing.Optional[dbusNm.NetworkDeviceWired] = (
             wired_interfaces[0] if wired_interfaces else None
         )
-        
+
         self.create_hotspot(self.hotspot_ssid, self.hotspot_password)
         if self.primary_wifi_interface:
             self.rescan_networks()
@@ -296,31 +296,30 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
         try:
             old_ssid: typing.Union[str, None] = self.get_current_ssid()
             if old_ssid:
-                    self.old_ssid = old_ssid
+                self.old_ssid = old_ssid
             if toggle:
-                    self.disconnect_network()
-                    self.connect_network(self.hotspot_ssid)
-                    results = asyncio.gather(
-                        self.nm.reload(0x0), return_exceptions=True
-                    ).result()
-                    for result in results:
-                        if isinstance(result, Exception):
-                            raise Exception(result)
+                self.disconnect_network()
+                self.connect_network(self.hotspot_ssid)
+                results = asyncio.gather(
+                    self.nm.reload(0x0), return_exceptions=True
+                ).result()
+                for result in results:
+                    if isinstance(result, Exception):
+                        raise Exception(result)
 
-                    if self.nm.check_connectivity() == (
-                        dbusNm.NetworkManagerConnectivityState.FULL
-                        | dbusNm.NetworkManagerConnectivityState.LIMITED
-                    ):
-                        logging.debug(f"Hotspot AP {self.hotspot_ssid} up!")
+                if self.nm.check_connectivity() == (
+                    dbusNm.NetworkManagerConnectivityState.FULL
+                    | dbusNm.NetworkManagerConnectivityState.LIMITED
+                ):
+                    logging.debug(f"Hotspot AP {self.hotspot_ssid} up!")
 
-                    return
-            else: 
-                if self.old_ssid: 
+                return
+            else:
+                if self.old_ssid:
                     self.connect_network(self.old_ssid)
                     return
         except Exception as e:
             logging.error(f"Caught Exception while toggling hotspot to {toggle}: {e}")
-
 
     def hotspot_enabled(self) -> typing.Optional["bool"]:
         """Returns a boolean indicating whether the device hotspot is on or not .
@@ -843,6 +842,8 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
             logger.debug("[add wifi network] no primary wifi interface ")
             return
         try:
+            # psk = hashlib.sha256(psk.encode()).hexdigest()
+            psk = psk.encode("utf-8")
             _available_networks = await self._get_available_networks()
             if not _available_networks:
                 logger.debug("Networks not available cancelling adding network")
@@ -893,6 +894,8 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                         "s",
                         "802-11-wireless-security",
                     )
+                    # if any(_security_types) dbusNm.WpaSe
+                    # curityFlags.
                     if (
                         dbusNm.WpaSecurityFlags.P2P_WEP104
                         or dbusNm.WpaSecurityFlags.P2P_WEP40
@@ -975,15 +978,15 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                         # * EAP SUITE B
                         raise NotImplementedError("EAP SUITE B Auth not supported")
 
-                    tasks = []
-                    tasks.append(
+                    tasks = [
                         self.loop.create_task(
                             dbusNm.NetworkManagerSettings(
                                 bus=self.system_dbus
                             ).add_connection(_properties)
-                        )
-                    )
-                    tasks.append(self.loop.create_task(self.nm.reload(0x0)))
+                        ),
+                        self.loop.create_task(self.nm.reload(0x0))
+                    ]
+
                     results = await asyncio.gather(*tasks, return_exceptions=True)
                     for result in results:
                         if isinstance(result, Exception):
@@ -1257,56 +1260,58 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
             logger.error(f"Exception Caught while deactivating network {ssid}: {e}")
 
     def create_hotspot(
-            self, ssid: str = "PrinterHotspot", password: str = "123456789"
-        ) -> None:
-            if self.is_known(ssid):
-                self.delete_network(ssid)
-                logger.debug("old hotspot deleted")
-            try:            
-                self.delete_network(ssid)
-                # psk = hashlib.sha256(password.encode()).hexdigest()
-                _properties: dbusNm.NetworkManagerConnectionProperties = {
-                    "connection": {
-                        "id": ("s", str(ssid)),
-                        "uuid": ("s", str(uuid4())),
-                        "type": ("s", "802-11-wireless"),  # 802-3-ethernet
-                        "autoconnect": ("b", bool(True)),
-                        "interface-name": ("s", "wlan0"),
-                        "autoconnect-priority": ("u", 10),
-                    },
-                    "802-11-wireless": {
-                        "ssid": ("ay", ssid.encode("utf-8")),
-                        "mode": ("s", "ap"),
-                        "band": ("s", "bg"),
-                        "channel": ("u", 6),
-                        "security": ("s", "802-11-wireless-security"),
-                    },
-                    "802-11-wireless-security": {
-                        "key-mgmt": ("s", "wpa-psk"),
-                        "psk": ("s", password),
-                        "pmf": ("u", 0),
-                    },
-                    "ipv4": {
-                        "method": ("s", "shared"),
-                    },
-                    "ipv6": {"method": ("s", "ignore")},
-                }
-                
-                tasks = [
-                    self.loop.create_task(
-                        dbusNm.NetworkManagerSettings(
-                            bus=self.system_dbus
-                        ).add_connection(_properties)
-                    ),  
-                    self.loop.create_task(self.nm.reload(0x0)),
-                ]
-                
-                self.loop.run_until_complete(asyncio.gather(*tasks, return_exceptions=False))
-                for task in tasks:
-                    self.loop.run_until_complete(task)
+        self, ssid: str = "PrinterHotspot", password: str = "123456789"
+    ) -> None:
+        if self.is_known(ssid):
+            self.delete_network(ssid)
+            logger.debug("old hotspot deleted")
+        try:
+            self.delete_network(ssid)
+            # psk = hashlib.sha256(password.encode()).hexdigest()
+            _properties: dbusNm.NetworkManagerConnectionProperties = {
+                "connection": {
+                    "id": ("s", str(ssid)),
+                    "uuid": ("s", str(uuid4())),
+                    "type": ("s", "802-11-wireless"),  # 802-3-ethernet
+                    "autoconnect": ("b", bool(True)),
+                    "interface-name": ("s", "wlan0"),
+                    "autoconnect-priority": ("u", 10),
+                },
+                "802-11-wireless": {
+                    "ssid": ("ay", ssid.encode("utf-8")),
+                    "mode": ("s", "ap"),
+                    "band": ("s", "bg"),
+                    "channel": ("u", 6),
+                    "security": ("s", "802-11-wireless-security"),
+                },
+                "802-11-wireless-security": {
+                    "key-mgmt": ("s", "wpa-psk"),
+                    "psk": ("s", password),
+                    "pmf": ("u", 0),
+                },
+                "ipv4": {
+                    "method": ("s", "shared"),
+                },
+                "ipv6": {"method": ("s", "ignore")},
+            }
 
-            except Exception as e:
-                logging.error(f"Caught Exception while creating hotspot: {e}")
+            tasks = [
+                self.loop.create_task(
+                    dbusNm.NetworkManagerSettings(bus=self.system_dbus).add_connection(
+                        _properties
+                    )
+                ),
+                self.loop.create_task(self.nm.reload(0x0)),
+            ]
+
+            self.loop.run_until_complete(
+                asyncio.gather(*tasks, return_exceptions=False)
+            )
+            for task in tasks:
+                self.loop.run_until_complete(task)
+
+        except Exception as e:
+            logging.error(f"Caught Exception while creating hotspot: {e}")
 
     def set_network_priority(
         self, ssid: str, priority: ConnectionPriority = ConnectionPriority.LOW
@@ -1336,7 +1341,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
         if not self.nm:
             raise Exception("NetworkManager Missing")
         if not self.is_known(str(ssid)):
-            raise Exception("{ssid} network is not known, cannot update")
+            raise Exception("%s network is not known, cannot update", ssid)
 
         _connection_path = self.get_connection_path_by_ssid(str(ssid))
         if not _connection_path:
@@ -1355,10 +1360,10 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                     new_ssid.encode("utf-8"),
                 )
             if password:
-                pwd = hashlib.sha256(password.encode()).hexdigest()
+                # pwd = hashlib.sha256(password.encode()).hexdigest()
                 properties["802-11-wireless-security"]["psk"] = (
                     "s",
-                    str(password),
+                    str(password.encode("utf-8")),
                 )
 
             if priority != 0:
@@ -1367,14 +1372,17 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                     priority,
                 )
 
-            task = self.loop.create_task(con_settings.update(properties))
-            reload_task = self.loop.create_task(self.nm.reload(0x0))
-            asyncio.gather(task, reload_task)
+            tasks = [
+                self.loop.create_task(con_settings.update(properties)),
+                self.loop.create_task(self.nm.reload(0x0)),
+            ]
+            self.loop.run_until_complete(
+                asyncio.gather(*tasks, return_exceptions=False)
+            )
 
             if ssid == self.hotspot_ssid and new_ssid:
                 self.hotspot_ssid = new_ssid
             if password != self.hotspot_password and password:
                 self.hotspot_password = password
         except Exception as e:
-            logger.error(f"Caught Exception: {e}")
-            raise Exception(e)
+            logger.error(f"Caught Exception while updating network: %s", e)
