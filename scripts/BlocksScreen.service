@@ -14,13 +14,18 @@ User=BS_USER
 Group=blocksscreen
 SupplementaryGroups=network, netdev, plugdev
 WorkingDirectory=BS_DIR
-Environment="BS_XCLIENT=BS_ENV/bin/python3.11 BS_DIR/BlocksScreen/BlocksScreen.py" BACKEND=BS_BACKEND
+Environment="BS_XCLIENT=BS_ENV/bin/python3.11 BS_DIR/BlocksScreen/BlocksScreen.py" 
+Environment=BACKEND=BS_BACKEND
 ExecStart="BS_DIR/scripts/BlocksScreen-start.sh"
 
 UtmpIdentifier=tty7
 UtmpMode=user
 
+StandartOutput=journal
+StandartError=journal
+SyslogIndentifier=blocksscreen
 PAMName=%u
+
 
 TTYPath=/dev/tty7
 TTYReset=yes

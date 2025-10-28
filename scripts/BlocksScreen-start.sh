@@ -38,8 +38,8 @@ fi
 
 if [[ "$BACKEND" =~ ^[wW]$ ]]; then
     echo "Running BlocksScreen on Cage"
-    /usr/bin/cage -ds $BS_XCLIENT
+    exec /usr/bin/cage -ds $BS_XCLIENT
 else
     echo "Running BlocksScreen on X in display :0 by default"
-    /usr/bin/xinit $BS_XCLIENT
+    exec /usr/bin/xinit $BS_XCLIENT
 fi

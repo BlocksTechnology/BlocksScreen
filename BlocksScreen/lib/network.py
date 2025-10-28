@@ -843,6 +843,8 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
             logger.debug("[add wifi network] no primary wifi interface ")
             return
         try:
+            # psk = hashlib.sha256(psk.encode()).hexdigest()
+            psk= psk.encode("utf-8")
             _available_networks = await self._get_available_networks()
             if not _available_networks:
                 logger.debug("Networks not available cancelling adding network")
@@ -893,6 +895,8 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                         "s",
                         "802-11-wireless-security",
                     )
+                    # if any(_security_types) dbusNm.WpaSe
+                    # curityFlags.
                     if (
                         dbusNm.WpaSecurityFlags.P2P_WEP104
                         or dbusNm.WpaSecurityFlags.P2P_WEP40
@@ -975,15 +979,15 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                         # * EAP SUITE B
                         raise NotImplementedError("EAP SUITE B Auth not supported")
 
-                    tasks = []
-                    tasks.append(
+                    tasks = [
                         self.loop.create_task(
                             dbusNm.NetworkManagerSettings(
                                 bus=self.system_dbus
                             ).add_connection(_properties)
-                        )
-                    )
-                    tasks.append(self.loop.create_task(self.nm.reload(0x0)))
+                        ),
+                        # self.loop.create_task(self.nm.reload(0x0))
+                    ]
+                    
                     results = await asyncio.gather(*tasks, return_exceptions=True)
                     for result in results:
                         if isinstance(result, Exception):
@@ -1355,10 +1359,10 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                     new_ssid.encode("utf-8"),
                 )
             if password:
-                pwd = hashlib.sha256(password.encode()).hexdigest()
+                # pwd = hashlib.sha256(password.encode()).hexdigest()
                 properties["802-11-wireless-security"]["psk"] = (
                     "s",
-                    str(password),
+                    str(password.encode("utf-8")),
                 )
 
             if priority != 0:

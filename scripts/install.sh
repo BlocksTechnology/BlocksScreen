@@ -448,7 +448,23 @@ function is_package_installed(){
     dpkg -s "$1" &> /dev/null
     return $?
 }
+function configure_nmcli(){
+    sudo tee /etc/NetworkManager/conf.d/any-user.conf > /dev/null << EOF
+[main]
+auto-polkit=false
+EOF
+}
+function configure_hostname_setter(){
+    # Install service file
+    if [ -d set-hostname@.service ]; then 
+        echo "there is hostname service template"       
+    fi 
 
+    if [ -d hostname-helper.sh ]; then  
+    # File exists 
+        echo "there is hostame helper script"
+    fi
+}
 
 printf "\n===================================\n"
 echo_info "-Blocks Screen installation script-"
