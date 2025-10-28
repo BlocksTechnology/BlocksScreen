@@ -540,6 +540,8 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
                 self.panel.netlist_ip.setText(
                     f"IP: {ipv4_addr}"
                 )  # Set the current ip address on the network list page
+                self.panel.netlist_strength.setText("--")
+                self.panel.netlist_security.setText("--")
                 self.panel.mn_info_box.setText("Hotspot On")
                 self.panel.netlist_ssuid.setText(self.sdbus_network.hotspot_ssid)
                 return
