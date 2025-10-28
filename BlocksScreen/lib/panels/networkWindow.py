@@ -673,9 +673,6 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         QtCore.QTimer().singleShot(10000, lambda: self.network_list_worker.build())
         # TODO: Add loading page here
         self.setCurrentIndex(self.indexOf(self.panel.network_list_page))
-        logger.debug(
-            f"Added new wifi connection {self.panel.add_network_network_label.text()}"
-        )
 
     @QtCore.pyqtSlot(QtWidgets.QListWidgetItem, name="ssid_item_clicked")
     def ssid_item_clicked(self, item: QtWidgets.QListWidgetItem) -> None:

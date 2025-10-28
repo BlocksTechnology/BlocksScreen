@@ -861,7 +861,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                 )
                 _properties: dbusNm.NetworkManagerConnectionProperties = {
                     "connection": {
-                        "id": ("s", ssid),
+                        "id": ("s", str(ssid)),
                         "uuid": ("s", str(uuid4())),
                         "type": ("s", "802-11-wireless"),
                         "interface-name": (
