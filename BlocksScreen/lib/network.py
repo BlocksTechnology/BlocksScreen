@@ -63,6 +63,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
         self.check_connectivity()
         self.available_wired_interfaces = self.get_wired_interfaces()
         self.available_wireless_interfaces = self.get_wireless_interfaces()
+        self.old_ssid: str = ""
         wireless_interfaces: typing.List[dbusNm.NetworkDeviceWireless] = (
             self.get_wireless_interfaces()
         )
@@ -75,8 +76,8 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
         self.primary_wired_interface: typing.Optional[dbusNm.NetworkDeviceWired] = (
             wired_interfaces[0] if wired_interfaces else None
         )
-        if not self.is_known(self.hotspot_ssid):
-            self.create_hotspot(self.hotspot_ssid, self.hotspot_password)
+        
+        self.create_hotspot(self.hotspot_ssid, self.hotspot_password)
         if self.primary_wifi_interface:
             self.rescan_networks()
 
@@ -1255,60 +1256,57 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
         except Exception as e:
             logger.error(f"Exception Caught while deactivating network {ssid}: {e}")
 
-    async def create_hotspot(
-        self, ssid: str = "PrinterHotspot", password: str = "123456789"
-    ) -> None:
-        try:
-            self.delete_network(ssid)
-            
-            _properties = {
-                "connection": {
-                    "id": ("s", ssid),
-                    "uuid": ("s", str(uuid4())),
-                    "type": ("s", "802-11-wireless"),
-                    "autoconnect": ("b", True),
-                    "interface-name": ("s", "wlan0"),
-                    "autoconnect-priority": ("u", 10),
-                },
-                "802-11-wireless": {
-                    "ssid": ("ay", ssid.encode("utf-8")),
-                    "mode": ("s", "ap"),
-                    "band": ("s", "bg"),
-                    "channel": ("u", 6),
-                    "security": ("s", "802-11-wireless-security"),
-                },
-                "802-11-wireless-security": {
-                    "key-mgmt": ("s", "wpa-psk"),
-                    "psk": ("s", password),
-                    "pmf": ("u", 0),
-                },
-                "ipv4": {"method": ("s", "shared")},
-                "ipv6": {"method": ("s", "ignore")},
-            }
-            tasks = [
-                self.loop.create_task(
-                    dbusNm.NetworkManagerSettings(
-                        bus=self.system_dbus
-                    ).add_connection(_properties)
-                ),
-                self.loop.create_task(self.nm.reload(0x0)),
-            ]
-            
-            connection_path, _ = await asyncio.gather(*tasks, return_exceptions=False)
-            
-            logging.info(f"Hotspot '{ssid}' connection profile added and NM reloaded.")
+    def create_hotspot(
+            self, ssid: str = "PrinterHotspot", password: str = "123456789"
+        ) -> None:
+            if self.is_known(ssid):
+                self.delete_network(ssid)
+                logger.debug("old hotspot deleted")
+            try:            
+                self.delete_network(ssid)
+                # psk = hashlib.sha256(password.encode()).hexdigest()
+                _properties: dbusNm.NetworkManagerConnectionProperties = {
+                    "connection": {
+                        "id": ("s", str(ssid)),
+                        "uuid": ("s", str(uuid4())),
+                        "type": ("s", "802-11-wireless"),  # 802-3-ethernet
+                        "autoconnect": ("b", bool(True)),
+                        "interface-name": ("s", "wlan0"),
+                        "autoconnect-priority": ("u", 10),
+                    },
+                    "802-11-wireless": {
+                        "ssid": ("ay", ssid.encode("utf-8")),
+                        "mode": ("s", "ap"),
+                        "band": ("s", "bg"),
+                        "channel": ("u", 6),
+                        "security": ("s", "802-11-wireless-security"),
+                    },
+                    "802-11-wireless-security": {
+                        "key-mgmt": ("s", "wpa-psk"),
+                        "psk": ("s", password),
+                        "pmf": ("u", 0),
+                    },
+                    "ipv4": {
+                        "method": ("s", "shared"),
+                    },
+                    "ipv6": {"method": ("s", "ignore")},
+                }
+                
+                tasks = [
+                    self.loop.create_task(
+                        dbusNm.NetworkManagerSettings(
+                            bus=self.system_dbus
+                        ).add_connection(_properties)
+                    ),  
+                    self.loop.create_task(self.nm.reload(0x0)),
+                ]
+                
+                self.loop.run_until_complete(asyncio.gather(*tasks, return_exceptions=False))
+                for task in tasks:
+                    self.loop.run_until_complete(task)
 
-
-            await self.nm.activate_connection(
-                connection_path, 
-                '/org/freedesktop/NetworkManager/Devices/wlan0', 
-                '/' # 
-            )
-            
-            logging.info(f"Hotspot '{ssid}' is active.")
-
-        except Exception as e:
-            logging.error(f"Caught Exception while creating hotspot: {e}")
+            except Exception as e:
+                logging.error(f"Caught Exception while creating hotspot: {e}")
 
     def set_network_priority(
         self, ssid: str, priority: ConnectionPriority = ConnectionPriority.LOW
