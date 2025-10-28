@@ -319,20 +319,25 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         )
 
         self.panel.network_activate_btn.setPixmap(
-            QtGui.QPixmap(":/ui/dialog/btn_icons/on.svg")
+            QtGui.QPixmap(":/dialog/media/btn_icons/yes.svg")
         )
+        self.stopupdate = False
 
         self.panel.network_activate_btn.clicked.connect(
-            lambda: self.sdbus_network.connect_network(
+            lambda: (self.sdbus_network.connect_network(
                 self.panel.saved_connection_network_name.text()
+            ) , 
+            self.saved_wifi_option_selected()
             )
         )
         self.panel.network_delete_btn.clicked.connect(
-            lambda: self.sdbus_network.delete_network(
+            lambda: (self.sdbus_network.delete_network(
                 self.panel.saved_connection_network_name.text()
+            ),
+            self.saved_wifi_option_selected()
             )
         )
-
+        
         self.network_list_worker.build()
         self.request_network_scan.emit()
         self.evaluate_network_state()
@@ -392,6 +397,12 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.setCurrentIndex(self.indexOf(self.previousPanel))
         if hasattr(self, "currentField") and self.currentField:
             self.currentField.setText(value)
+
+    def saved_wifi_option_selected(self):
+        self.stopupdate = True
+        self.setCurrentIndex(self.indexOf(self.panel.main_network_page))
+        self.info_box_load(True)
+
 
     def info_box_load(self, toggle: bool = False) -> None:
         if toggle:
@@ -502,6 +513,10 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
                 self.panel.hotspot_button.toggle_button.state = (
                     self.panel.hotspot_button.toggle_button.State.ON
                  )     
+        if self.stopupdate:
+            self.stopupdate = False
+            return
+        
         if wifi_btn.state == wifi_btn.State.OFF and hotspot_btn.state == hotspot_btn.State.OFF:
                 self.sdbus_network.disconnect_network()
                 self._expand_infobox(True)
