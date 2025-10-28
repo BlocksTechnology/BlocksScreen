@@ -524,6 +524,10 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
                     "No Network connection\n Hotspot not enabled\nConnect to a network."
                 )
                 return
+        
+        if hotspot_btn == hotspot_btn.State.OFF:
+            self.sdbus_network.toggle_hotspot(False)
+
         logger.debug(f"Network State: {_nm_state}") 
         if _nm_state in ("CONNECTED_LOCAL", "CONNECTED_SITE", "GLOBAL"):
             if not self.sdbus_network.check_wifi_interface():
