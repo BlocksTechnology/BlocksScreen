@@ -843,7 +843,6 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
             return
         try:
             # psk = hashlib.sha256(psk.encode()).hexdigest()
-            psk = psk.encode("utf-8")
             _available_networks = await self._get_available_networks()
             if not _available_networks:
                 logger.debug("Networks not available cancelling adding network")
