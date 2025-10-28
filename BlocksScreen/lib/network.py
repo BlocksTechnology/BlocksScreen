@@ -876,7 +876,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                     },
                     "802-11-wireless": {
                         "mode": ("s", "infrastructure"),
-                        "ssid": ("ay", ssid.encode("utf-8")),
+                        "ssid": ("ay", str(ssid)),
                     },
                     "ipv4": {"method": ("s", "auto")},
                     "ipv6": {"method": ("s", "auto")},
@@ -1280,7 +1280,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                     "autoconnect-priority": ("u", 10),
                 },
                 "802-11-wireless": {
-                    "ssid": ("ay", ssid.encode("utf-8")),
+                    "ssid": ("ay", ssid),
                     "mode": ("s", "ap"),
                     "band": ("s", "bg"),
                     "channel": ("u", 6),
@@ -1359,7 +1359,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                 properties["connection"]["id"] = ("s", str(new_ssid))
                 properties["802-11-wireless"]["ssid"] = (
                     "ay",
-                    new_ssid.encode("utf-8"),
+                    str(new_ssid),
                 )
             if password:
                 # pwd = hashlib.sha256(password.encode()).hexdigest()
