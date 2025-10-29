@@ -390,7 +390,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def _handle_notify_update_response_message(self, method, data, metadata) -> None:
         """Handle update response messages"""
         self.on_update_message.emit(
-            data.get("params", {})
+            dict(data.get("params", {}))
         )  # Also necessary, notify klippy can also signal update complete
 
     @api_handler
