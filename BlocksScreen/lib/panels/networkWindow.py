@@ -105,10 +105,6 @@ class BuildNetworkList(QtCore.QThread):
                         self.network_items_list.append((ssid, signal, "Active"))
                     else:
                         self.network_items_list.append((ssid, signal, "Saved"))
-                    if ssid == self.nm.get_current_ssid():
-                        self.network_items_list.append((ssid, signal, "Active"))
-                    else:
-                        self.network_items_list.append((ssid, signal, "Saved"))
             if saved_networks and unsaved_networks:  # Separator
                 self.network_items_list.append("separator")
             if unsaved_networks:
