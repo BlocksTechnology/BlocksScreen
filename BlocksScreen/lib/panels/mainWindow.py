@@ -380,11 +380,11 @@ class MainWindow(QtWidgets.QMainWindow):
     @api_handler
     def _handle_machine_message(self, method, data, metadata) -> None:
         if "ok" in data:
-            # Can here capture if 'ok' if a request for an update was successful
+            # Here capture if 'ok' if a request for an update was successful
             return
         if "update" in method:
             if ("status" or "refresh") in method:
-                self.on_update_message.emit(data)
+                self.on_update_message.emit(dict(data))
 
     @api_handler
     def _handle_notify_update_response_message(self, method, data, metadata) -> None:
