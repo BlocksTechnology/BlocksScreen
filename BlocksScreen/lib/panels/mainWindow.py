@@ -396,7 +396,7 @@ class MainWindow(QtWidgets.QMainWindow):
     @api_handler
     def _handle_notify_update_refreshed_message(self, method, data, metadata) -> None:
         """Handle update refreshed messages"""
-        self.on_update_message.emit(data.get("params", {}))
+        self.on_update_message.emit(dict(data.get("params", {})))
 
     @api_handler
     def _handle_printer_message(self, method, data, metadata) -> None:
