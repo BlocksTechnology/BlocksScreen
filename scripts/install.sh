@@ -473,6 +473,7 @@ printf "\n===================================\n"
 
 # Run the actual installation 
 echo_ok "Starting Blocks Screen installation"
+configure_hostname_setter
 install_graphical_backend
 install_systemd_service
 install_packages

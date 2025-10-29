@@ -843,7 +843,6 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
             return
         try:
             # psk = hashlib.sha256(psk.encode()).hexdigest()
-            psk = psk.encode("utf-8")
             _available_networks = await self._get_available_networks()
             if not _available_networks:
                 logger.debug("Networks not available cancelling adding network")
@@ -918,11 +917,11 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                     elif (
                         dbusNm.WpaSecurityFlags.P2P_CCMP
                         or dbusNm.WpaSecurityFlags.BROADCAST_CCMP
-                        # ) in _security_types:
                     ) in (_security_types[0] or _security_types[1]):
                         # * AES/CCMP WPA2
                         _properties["802-11-wireless-security"] = {
                             "key-mgmt": ("s", "wpa-psk"),
+                            "auth-alg": ("s", "open"),
                             "psk": ("s", psk),
                             "pairwise": ("as", ["ccmp"]),
                         }
@@ -932,18 +931,19 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                         # * AUTH_PSK -> WPA-PSK
                         _properties["802-11-wireless-security"] = {
                             "key-mgmt": ("s", "wpa-psk"),
+                            "auth-alg": ("s", "open"),
                             "psk": ("s", psk),
                         }
                     elif dbusNm.WpaSecurityFlags.AUTH_802_1X in (
                         _security_types[0] or _security_types[1]
                     ):
-                        # * 802.1x IEEE standard
+                        # * 802.1x IEEE standard ieee802.1x
                         # Notes:
                         #   IEEE 802.1x standard used 8 to 64 passphrase hashed to derive
                         #   the actual key in the form of 64 hexadecimal character.
                         #
                         _properties["802-11-wireless-security"] = {
-                            "key-mgmt": ("s", "ieee802.1x"),
+                            "key-mgmt": ("s", "wpa-eap"),
                             "wep-key-type": ("u", 2),
                             "wep-key0": ("s", psk),
                             "auth-alg": ("s", "shared"),
@@ -957,6 +957,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                         #
                         _properties["802-11-wireless-security"] = {
                             "key-mgmt": ("s", "sae"),
+                            "auth-alg": ("s", "open"),
                             "psk": ("s", psk),
                         }
                     elif (dbusNm.WpaSecurityFlags.AUTH_OWE) in (
