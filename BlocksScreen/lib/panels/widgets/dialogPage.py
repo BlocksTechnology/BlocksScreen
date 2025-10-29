@@ -126,7 +126,7 @@ class DialogPage(QtWidgets.QDialog):
 
         # Create Confirm and Cancel buttons
         self.confirm_button = QtWidgets.QPushButton("Confirm", self)
-        self.cancel_button = QtWidgets.QPushButton("Cancel", self)
+        self.cancel_button = QtWidgets.QPushButton("Back", self)
 
         # Set button styles
         button_font = QtGui.QFont()
