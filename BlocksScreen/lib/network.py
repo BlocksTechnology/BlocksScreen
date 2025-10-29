@@ -1274,9 +1274,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                     "id": ("s", str(ssid)),
                     "uuid": ("s", str(uuid4())),
                     "type": ("s", "802-11-wireless"),  # 802-3-ethernet
-                    "autoconnect": ("b", bool(True)),
                     "interface-name": ("s", "wlan0"),
-                    "autoconnect-priority": ("u", 10),
                 },
                 "802-11-wireless": {
                     "ssid": ("ay", ssid.encode("utf-8")),
