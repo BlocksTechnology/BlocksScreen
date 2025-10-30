@@ -125,7 +125,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
         
         if self.target_temp != 0:
             if self.current_temp == self.target_temp:
-                self.loadscreen.set_status_message("extruder heated up \n please wait")
+                self.loadscreen.set_status_message("Extruder heated up \n please wait")
                 return
 
             if field == "temperature":
