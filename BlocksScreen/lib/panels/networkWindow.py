@@ -318,18 +318,10 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.stopupdate = False
 
         self.panel.network_activate_btn.clicked.connect(
-            lambda: (self.sdbus_network.connect_network(
-                self.panel.saved_connection_network_name.text()
-            ) , 
-            self.saved_wifi_option_selected()
-            )
+            lambda: self.saved_wifi_option_selected()
         )
         self.panel.network_delete_btn.clicked.connect(
-            lambda: (self.sdbus_network.delete_network(
-                self.panel.saved_connection_network_name.text()
-            ),
-            self.saved_wifi_option_selected()
-            )
+            lambda: self.saved_wifi_option_selected()
         )
         
         self.network_list_worker.build()
@@ -364,17 +356,38 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
                 self.panel.saved_connection_change_password_field,
             )
         )
-
-    def saved_wifi_option_selected(self,update:bool = False):
-        if update:
-            self.stopupdate = False
-        else:
-            self.stopupdate = True
-        self.setCurrentIndex(self.indexOf(self.panel.main_network_page))
+        connection = self.sdbus_network.check_connectivity()
+        if connection == "FULL":
+            self.panel.wifi_button.toggle_button.state = self.panel.wifi_button.toggle_button.State.ON
+            self.panel.hotspot_button.toggle_button.state = self.panel.hotspot_button.toggle_button.State.OFF
+        elif connection == "LIMITED":
+            self.panel.wifi_button.toggle_button.state = self.panel.wifi_button.toggle_button.State.OFF
+            self.panel.hotspot_button.toggle_button.state = self.panel.hotspot_button.toggle_button.State.ON
+        
+        if self.panel.wifi_button.toggle_button.state == self.panel.wifi_button.toggle_button.State.OFF and self.panel.hotspot_button.toggle_button.state == self.panel.hotspot_button.toggle_button.State.OFF:
+            self.sdbus_network.disconnect_network()
+            self._expand_infobox(True)
+            self.panel.mn_info_box.setText("Network connection required.\n\nConnect to Wi-Fi\nor\nTurn on Hotspot")
+    def saved_wifi_option_selected(self):
+        _sender = self.sender()
         self.panel.wifi_button.toggle_button.state = self.panel.wifi_button.toggle_button.State.ON
         self.panel.hotspot_button.toggle_button.state = self.panel.hotspot_button.toggle_button.State.OFF
-        
-        self.info_box_load(True)
+
+        self.stopupdate = True
+
+        if _sender == self.panel.network_delete_btn:
+            self.sdbus_network.delete_network(self.panel.saved_connection_network_name.text())
+            self.setCurrentIndex(self.indexOf(self.panel.main_network_page))
+            self.panel.wifi_button.toggle_button.setEnabled(True)
+            self.panel.hotspot_button.toggle_button.setEnabled(True)
+
+        elif _sender == self.panel.network_activate_btn:
+            self.setCurrentIndex(self.indexOf(self.panel.main_network_page))
+            self.panel.wifi_button.toggle_button.setEnabled(False)
+            self.panel.hotspot_button.toggle_button.setEnabled(False)
+            self.sdbus_network.connect_network(self.panel.saved_connection_network_name.text())
+            self.info_box_load(True)
+
 
     def on_show_keyboard(self, panel: QtWidgets.QWidget, field: QtWidgets.QLineEdit):
         self.previousPanel = panel
@@ -430,18 +443,19 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         hotspot_btn = self.panel.hotspot_button.toggle_button
         if self.panel.loadingwidget.isVisible():   
             if wifi_btn.state == wifi_btn.State.ON:
-                message  = "Wi-Fi Connection Failed.\nThe connection attempt timed out.\n Please check your network stability \nor\n try reconnecting."
+                message  = "Wi-Fi Connection Failed.\nThe connection attempt \ntimed out.\n Please check\nyour network stability \nor\n try reconnecting."
 
             elif hotspot_btn.state == hotspot_btn.State.ON:
-                message  = "Hotspot Setup Failed.\nThe local network sharing timed out.\n Please check your system's network adapter settings \nor\n restart your Wi-Fi device."
+                message  = "Hotspot Setup Failed.\nThe local network sharing\n timed out.\n\n restart the hotspot."
             else:
                 message = "Loading timed out.\n Please check your connection \n and try again."
+            
+            self.panel.wifi_button.toggle_button.setEnabled(True)
+            self.panel.hotspot_button.toggle_button.setEnabled(True)
                 
             self.panel.mn_info_box.setText(message)
             self._show_loadscreen(False) 
             self._expand_infobox(True) 
-
-            
 
     def _show_loadscreen(self, toggle: bool = False):
         """Expand LOAD box on the main network panel
@@ -503,7 +517,6 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         else:
             self.info_box_load(True)
 
-
     @QtCore.pyqtSlot(str, name="nm-state-changed")
     def evaluate_network_state(self, nm_state: str = "") -> None:
         # NM State Constants: UNKNOWN=0, ASLEEP=10, DISCONNECTED=20, DISCONNECTING=30,
@@ -513,22 +526,30 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         hotspot_btn = self.panel.hotspot_button.toggle_button
         _nm_state = nm_state
         CONNECTED_STATES = ("CONNECTED_LOCAL", "CONNECTED_SITE", "GLOBAL")
-        connection = self.sdbus_network.check_connectivity()
+        
 
         if not _nm_state:
             _nm_state = self.sdbus_network.check_nm_state()
             if not _nm_state:
                 return
-            
+        if self.stopupdate:
+            self.stopupdate = False
+            return
+
         if self.start:
             self.start = False
-            
+            connection = self.sdbus_network.check_connectivity()
             if connection == "FULL":
-                wifi_btn.state = wifi_btn.State.ON
-                hotspot_btn.state = hotspot_btn.State.OFF
+                self.panel.wifi_button.toggle_button.state = self.panel.wifi_button.toggle_button.State.ON
+                self.panel.hotspot_button.toggle_button.state = self.panel.hotspot_button.toggle_button.State.OFF
             elif connection == "LIMITED":
-                wifi_btn.state = wifi_btn.State.OFF
-                hotspot_btn.state = hotspot_btn.State.ON
+                self.panel.wifi_button.toggle_button.state = self.panel.wifi_button.toggle_button.State.OFF
+                self.panel.hotspot_button.toggle_button.state = self.panel.hotspot_button.toggle_button.State.ON
+            
+            if self.panel.wifi_button.toggle_button.state == self.panel.wifi_button.toggle_button.State.OFF and self.panel.hotspot_button.toggle_button.state == self.panel.hotspot_button.toggle_button.State.OFF:
+                self.sdbus_network.disconnect_network()
+                self._expand_infobox(True)
+                self.panel.mn_info_box.setText("Network connection required.\n\nConnect to Wi-Fi\nor\nTurn on Hotspot")
 
         if _nm_state in CONNECTED_STATES:
             if not self.sdbus_network.check_wifi_interface():
@@ -552,6 +573,8 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             if wifi_btn.state == wifi_btn.State.ON:
                 ipv4_addr = self.sdbus_network.get_current_ip_addr()
                 current_ssid = self.sdbus_network.get_current_ssid()
+                if current_ssid == "":
+                    return
                 sec_type = self.sdbus_network.get_security_type_by_ssid(current_ssid)
                 signal_strength = self.sdbus_network.get_connection_signal_by_ssid(current_ssid)
 
@@ -569,13 +592,15 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
 
             if (wifi_btn.state == wifi_btn.State.ON or hotspot_btn.state == hotspot_btn.State.ON):
                 self.info_box_load(False)
-            
-            if wifi_btn.state == wifi_btn.State.OFF and hotspot_btn.state == hotspot_btn.State.OFF:
-                self.sdbus_network.disconnect_network()
-                self._expand_infobox(True)
-                self.panel.mn_info_box.setText("Network connection required.\n\nConnect to Wi-Fi\nor\nTurn on Hotspot")
+                self.panel.wifi_button.toggle_button.setEnabled(True)
+                self.panel.hotspot_button.toggle_button.setEnabled(True)
 
-    
+            
+        if wifi_btn.state == wifi_btn.State.OFF and hotspot_btn.state == hotspot_btn.State.OFF:
+            self.sdbus_network.disconnect_network()
+            self._expand_infobox(True)
+            self.panel.mn_info_box.setText("Network connection required.\n\nConnect to Wi-Fi\nor\nTurn on Hotspot")
+
     def get_hotspot_ip_via_shell(self,interface: str):
         """
         Executes a shell command to retrieve the IPv4 address for a specified interface.
@@ -665,16 +690,34 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         """
         # Check if a password was inserted
 
-        if not self.currentField.text():
-            return
 
-        _network_psk = self.currentField.text()
-        self.sdbus_network.add_wifi_network(
-            ssid=self.panel.add_network_network_label.text(), psk=_network_psk
-        )
-        QtCore.QTimer().singleShot(10000, lambda: self.network_list_worker.build())
-        # TODO: Add loading page here
-        self.setCurrentIndex(self.indexOf(self.panel.network_list_page))
+        if not self.panel.add_network_password_field.text():
+            self.popup.new_message(message_type=Popup.MessageType.ERROR , message="Password field cannot be empty.",)
+            return
+        
+    
+        
+        _network_psk = self.panel.add_network_password_field.text()
+        # result = self.sdbus_network.add_wifi_network(
+        #     ssid=self.panel.add_network_network_label.text(), psk=_network_psk
+        # )
+        result = {"error": "Invalid password"}
+
+        if result != {"state": "success"}:
+            if result == {"error": "Invalid password"}:
+                message= "Invalid password. Please try again"
+            elif {"error": "Network connection properties error"}:
+                message= "Network connection properties error. Please try again"
+            elif {"error": "Permission Denied"}:
+                message= "Permission Denied. Please try again"
+            else:
+                message= "Error while adding network. Please try again"
+            self.panel.add_network_password_field.clear()
+            self.popup.new_message(message_type=Popup.MessageType.ERROR , message=message)
+            return
+        else:
+            QtCore.QTimer().singleShot(5000, lambda: self.network_list_worker.build())
+            self.setCurrentIndex(self.indexOf(self.panel.network_list_page))
 
     @QtCore.pyqtSlot(QtWidgets.QListWidgetItem, name="ssid_item_clicked")
     def ssid_item_clicked(self, item: QtWidgets.QListWidgetItem) -> None:
