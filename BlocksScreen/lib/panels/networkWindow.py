@@ -395,12 +395,28 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             self.currentField.setText(value)
 
     def saved_wifi_option_selected(self):
+        sender_button = self.sender()
         self.stopupdate = True
         self.setCurrentIndex(self.indexOf(self.panel.main_network_page))
+        self.panel.wifi_button.toggle_button.state = self.panel.wifi_button.toggle_button.State.ON
+        self.panel.hotspot_button.toggle_button.state = self.panel.hotspot_button.toggle_button.State.OFF
+        if sender_button != self.panel.network_delete_btn:
+            self.panel.hotspot_button.toggle_button.setDisabled(True)
+            self.panel.wifi_button.toggle_button.setDisabled(True)
+        
         self.info_box_load(True)
 
 
     def info_box_load(self, toggle: bool = False) -> None:
+        if toggle:
+            self._show_loadscreen(True)
+            # self.panel.mn_info_box.setText(
+            #         "Something went wrong \n please try again") 
+            # QtCore.QTimer.singleShot(10000, lambda: self._show_loadscreen(False))
+        else:
+            self._show_loadscreen(False)
+          
+    def _show_loadscreen(self, toggle: bool = False):
         if toggle:
             self.panel.netlist_ssuid.hide()
             self.panel.mn_info_seperator.hide()
@@ -450,7 +466,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
                 self.sdbus_network.toggle_hotspot(False)
                 if saved_network:
                     try:
-                        self.sdbus_network.connect_network(saved_network[0]['ssid'])
+                        self.sdbus_network.connect_network(str(next((n['ssid'] for n in saved_network if 'ap' not in n['mode']), None)))
                     except Exception as e:
                         logger.error(f"error when turning ON wifi on_toggle_state:{e}")
                     
@@ -477,14 +493,9 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
 
     @QtCore.pyqtSlot(str, name="nm-state-changed")
     def evaluate_network_state(self, nm_state: str = "") -> None:
-        # UNKNOWN = 0           # Networking state is unknown daemon error, assume connectivity might be present, may hide network accessibility
-        # ASLEEP = 10           # networking is not enabled system is being suspended or resumed from suspend
-        # DISCONNECTED = 20     # there is no active network connection
-        # DISCONNECTING = 30    # network connections are being cleaned up
-        # CONNECTING = 40       # network connection is being started
-        # CONNECTED_LOCAL=50    # only local ipv4/ipv6 connectivity, no route to access internet
-        # CONNECTED_SITE = 60   # site-wide ipv4/ipv4 connectivity
-        # GLOBAL = 70           # Global ipv4/ipv6 internet connectivity, internet check succeeded, should display full connectivity
+        # NM State Constants: UNKNOWN=0, ASLEEP=10, DISCONNECTED=20, DISCONNECTING=30,
+        # CONNECTING=40, CONNECTED_LOCAL=50, CONNECTED_SITE=60, GLOBAL=70
+        
         wifi_btn = self.panel.wifi_button.toggle_button
         hotspot_btn = self.panel.hotspot_button.toggle_button
         _nm_state = nm_state
@@ -494,101 +505,82 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
                 return
         if self.start:
             self.start = False
-            conection = self.sdbus_network.check_connectivity()
-            if conection == "FULL":
-                self.panel.wifi_button.toggle_button.state = (
-                    self.panel.wifi_button.toggle_button.State.ON
-                )
-                self.panel.hotspot_button.toggle_button.state = (
-                    self.panel.hotspot_button.toggle_button.State.OFF
-                )
-            elif conection == "LIMITED":
-                self.panel.wifi_button.toggle_button.state = (
-                    self.panel.wifi_button.toggle_button.State.OFF
-                )
-                self.panel.hotspot_button.toggle_button.state = (
-                    self.panel.hotspot_button.toggle_button.State.ON
-                 )     
-        if self.stopupdate:
-            self.stopupdate = False
-            return
-        
-        if wifi_btn.state == wifi_btn.State.OFF and hotspot_btn.state == hotspot_btn.State.OFF:
+            connection = self.sdbus_network.check_connectivity()
+            if connection == "FULL":
+                wifi_btn.state = wifi_btn.State.ON
+                hotspot_btn.state = hotspot_btn.State.OFF
+            elif connection == "LIMITED":
+                wifi_btn.state = wifi_btn.State.OFF
+                hotspot_btn.state = hotspot_btn.State.ON
+            else:
                 self.sdbus_network.disconnect_network()
                 self._expand_infobox(True)
                 self.panel.mn_info_box.setText(
                     "No Network connection\n Hotspot not enabled\nConnect to a network."
                 )
-                return
-        
-        if hotspot_btn == hotspot_btn.State.OFF:
-            self.sdbus_network.toggle_hotspot(False)
 
-        logger.debug(f"Network State: {_nm_state}") 
-        if _nm_state in ("CONNECTED_LOCAL", "CONNECTED_SITE", "GLOBAL"):
+
+        if self.stopupdate:
+            self.stopupdate = False
+            self.sdbus_network.disconnect_network()
+            return
+
+        if wifi_btn.state == wifi_btn.State.OFF and hotspot_btn.state == hotspot_btn.State.OFF:
+            self.sdbus_network.disconnect_network()
+            self._expand_infobox(True)
+            self.panel.mn_info_box.setText(
+                "No Network connection\n Hotspot not enabled\nConnect to a network."
+            )
+            return
+
+        logger.debug(f"Network State: {_nm_state}")
+
+        CONNECTED_STATES = ("CONNECTED_LOCAL", "CONNECTED_SITE", "GLOBAL")
+
+        if _nm_state in CONNECTED_STATES:
             if not self.sdbus_network.check_wifi_interface():
-                self._expand_infobox(True)
-                self.panel.mn_info_box.setText(
-                    "No wifi interface detected.\nWifi and Hotspot unavailable\nResort to Ethernet connection."
-                )
-                self.panel.mn_info_box.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
-                self.panel.hotspot_button.setDisabled(True)
-                self.panel.wifi_button.setDisabled(True)
-                self.panel.wifi_button.toggle_button.state = (
-                    self.panel.wifi_button.toggle_button.State.OFF
-                )
-                self.panel.wifi_button.toggle_button.state = (
-                    self.panel.wifi_button.toggle_button.State.OFF
-                )
-                self.info_box_load(False)
                 return
-            logger.debug("Network Interface recognized, Connection available")
+
             self.panel.hotspot_button.setDisabled(False)
             self.panel.wifi_button.setDisabled(False)
-            if wifi_btn.state == wifi_btn.State.ON or hotspot_btn.state == hotspot_btn.State.ON:
-                self.info_box_load(False)
+
 
             if hotspot_btn.state == hotspot_btn.State.ON:
-                ipv4_addr = None
                 ipv4_addr = self.get_hotspot_ip_via_shell("wlan0")
+
                 self.panel.netlist_ip.setProperty("text_color", "white")
-                self.panel.netlist_ip.setText(
-                    f"IP: {ipv4_addr}"
-                )  # Set the current ip address on the network list page
+                self.panel.netlist_ip.setText(f"IP: {ipv4_addr or 'No IP Address'}") 
                 self.panel.netlist_strength.setText("--")
                 self.panel.netlist_security.setText("--")
                 self.panel.mn_info_box.setText("Hotspot On")
                 self.panel.netlist_ssuid.setText(self.sdbus_network.hotspot_ssid)
+                self.info_box_load(False)
                 return
+
+
             ipv4_addr = self.sdbus_network.get_current_ip_addr()
-            if not ipv4_addr:
-                ipv4_addr = "No IP Address"
-            self.panel.netlist_ip.setProperty("text_color", "white")
-            self.panel.netlist_ip.setText(
-                f"IP: {ipv4_addr}"
-            )  # Set the current ip address on the network list page
-            self.panel.mn_info_box.setText("Connected")
             current_ssid = self.sdbus_network.get_current_ssid()
+
+            self.panel.netlist_ip.setProperty("text_color", "white")
+            self.panel.netlist_ip.setText(f"IP: {ipv4_addr or 'No IP Address'}")
+            self.panel.mn_info_box.setText("Connected")
             self.panel.netlist_ssuid.setText(current_ssid)
+
             sec_type = self.sdbus_network.get_security_type_by_ssid(current_ssid)
-            if not sec_type:
-                sec_type = "--"
-            self.panel.netlist_security.setText(str(sec_type).upper())
-            signal_strength = self.sdbus_network.get_connection_signal_by_ssid(
-                current_ssid
-            )
-            if signal_strength == -1:
-                signal_strength = "--"
-            self.panel.netlist_strength.setText(str(signal_strength))
+            self.panel.netlist_security.setText(str(sec_type or "--").upper())
+            
+            signal_strength = self.sdbus_network.get_connection_signal_by_ssid(current_ssid)
+            self.panel.netlist_strength.setText(str(signal_strength if signal_strength != -1 else "--"))
+
+            if (wifi_btn.state == wifi_btn.State.ON or hotspot_btn.state == hotspot_btn.State.ON) and current_ssid != "":
+                self.info_box_load(False)
+                
         else:...
             # self._expand_infobox(True)
-            # self.panel.mn_info_box.setText(
-            #     "No Network connection\n Hotspot not enabled\nConnect to a network."
-            # )
+            # self.panel.mn_info_box.setText("No Network connection\n Hotspot not enabled\nConnect to a network.")
             # self.panel.mn_info_box.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
             # QtCore.QTimer.singleShot(10000, lambda: self.info_box_load(False))
             # return
-
     def get_hotspot_ip_via_shell(self,interface: str):
         """
         Executes a shell command to retrieve the IPv4 address for a specified interface.
