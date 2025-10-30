@@ -216,8 +216,6 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
         painter.setBackgroundMode(QtCore.Qt.BGMode.TransparentMode)
         painter.setRenderHint(painter.RenderHint.LosslessImageRendering)
         
-        if not self.isEnabled(): # When disabled show it's off
-            self.state = self.State.OFF
         
         painter.fillPath(
             self.trailPath,
