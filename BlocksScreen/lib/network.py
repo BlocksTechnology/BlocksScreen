@@ -817,23 +817,19 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
         ssid: str,
         psk: str,
         priority: ConnectionPriority = ConnectionPriority.LOW,
-    ) -> typing.Union[bool, None]:
-        """Add and save a new wifi network. `Asynchronous`
+    ) -> dict:
+        """Add new wifi connection
 
         Args:
-            ssid (str): Network ssid
+            ssid (str): Network ssid.
             psk (str): Network password
-            priority (int, optional): Network connection priority. Defaults to ConnectionPriority.LOW.
+            priority (ConnectionPriority, optional): Priority of the network connection. Defaults to ConnectionPriority.LOW.
 
         Raises:
-            NotImplementedError:
-
+            NotImplementedError: Network security type is not implemented
 
         Returns:
-            typing.Dict: Dictionary with a status key that reports whether or not the connection was saved and connected.
-
-            On the returned dictionary a key value "error" can appear if an error occurred, the value will say what the error was.
-            "exception"
+            dict: A dictionary containing the result of the operation
         """
         if not self.primary_wifi_interface:
             logger.debug("[add wifi network] no primary wifi interface ")
@@ -842,19 +838,16 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
             logger.debug("[add wifi network] no primary wifi interface ")
             return
         try:
-            # psk = hashlib.sha256(psk.encode()).hexdigest()
             _available_networks = await self._get_available_networks()
             if not _available_networks:
                 logger.debug("Networks not available cancelling adding network")
-                return
-
+                return {"error": "No networks available"}
             if self.is_known(ssid):
                 self.delete_network(ssid)
-
             if ssid in _available_networks.keys():
                 target_network = _available_networks.get(ssid, {})
                 if not target_network:
-                    return
+                    return {"error": "Network unavailable"}
                 target_interface = (
                     await self.primary_wifi_interface.interface.get_async()
                 )
@@ -893,8 +886,6 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                         "s",
                         "802-11-wireless-security",
                     )
-                    # if any(_security_types) dbusNm.WpaSe
-                    # curityFlags.
                     if (
                         dbusNm.WpaSecurityFlags.P2P_WEP104
                         or dbusNm.WpaSecurityFlags.P2P_WEP40
@@ -978,16 +969,14 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                     ):
                         # * EAP SUITE B
                         raise NotImplementedError("EAP SUITE B Auth not supported")
-
                     tasks = [
                         self.loop.create_task(
                             dbusNm.NetworkManagerSettings(
                                 bus=self.system_dbus
                             ).add_connection(_properties)
                         ),
-                        self.loop.create_task(self.nm.reload(0x0))
+                        self.loop.create_task(self.nm.reload(0x0)),
                     ]
-
                     results = await asyncio.gather(*tasks, return_exceptions=True)
                     for result in results:
                         if isinstance(result, Exception):
@@ -996,42 +985,62 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                                 dbusNm.exceptions.NmConnectionFailedError,
                             ):
                                 logger.error(
-                                    f"Exception caught, could not connect to network: {result}"
+                                    "Exception caught, could not connect to network: %s",
+                                    str(result),
                                 )
-                                return False
+                                return {"error": f"Connection failed to {ssid}"}
                             if isinstance(
                                 result,
                                 dbusNm.exceptions.NmConnectionPropertyNotFoundError,
                             ):
                                 logger.error(
-                                    f"Exception caught, network properties internal error: {result}"
+                                    "Exception caught, network properties internal error: %s",
+                                    str(result),
                                 )
-                                return False
-                        return True
+                                return {"error": "Network connection properties error"}
+                            if isinstance(
+                                result,
+                                dbusNm.exceptions.NmConnectionInvalidPropertyError,
+                            ):
+                                logger.error(
+                                    "Caught exception while adding new wifi connection: Invalid password: %s",
+                                    str(result),
+                                )
+                                return {"error": "Invalid password"}
+                            if isinstance(
+                                result,
+                                dbusNm.exceptions.NmSettingsPermissionDeniedError,
+                            ):
+                                logger.error(
+                                    "Caught exception while adding new wifi connection: Permission Denied: %s",
+                                    str(result),
+                                )
+                                return {"error": "Permission Denied"}
+                        return {"state": "success"}
+        except NotImplementedError:
+            logger.error("Network security type not implemented")
+            return {"error": "Network security type not implemented"}
         except Exception as e:
-            logger.error(f"Caught Exception Unable to add network connection {e}")
-            return False
+            logger.error(
+                "Caught Exception Unable to add network connection : %s", str(e)
+            )
+            return {"error": "Unable to add network"}
 
     def add_wifi_network(
         self,
         ssid: str,
         psk: str,
         priority: ConnectionPriority = ConnectionPriority.MEDIUM,
-    ) -> typing.Dict:
-        """Add and Save a network to the device. `Synchronous`
+    ) -> dict:
+        """Add new wifi password `Synchronous`
 
         Args:
-            ssid (str): Networks SSID
-            psk (str): Networks password
-
-        Raises:
-            NotImplementedError: Some network security types are not yet available so there is no way to connect to them.
+            ssid (str): Network ssid
+            psk (str): Network password
+            priority (ConnectionPriority, optional): Network priority. Defaults to ConnectionPriority.MEDIUM.
 
         Returns:
-            typing.Dict: Dictionary with a status key that reports whether or not the connection was saved and connected.
-
-            On the returned dictionary a key value "error" can appear if an error occurred, the value will say what the error was.
-            "exception"
+            dict: A dictionary containing the result of the operation
         """
         future = asyncio.run_coroutine_threadsafe(
             self._add_wifi_network(ssid, psk, priority), self.loop
