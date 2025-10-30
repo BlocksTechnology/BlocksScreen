@@ -300,6 +300,7 @@ function create_policy(){
     sudo usermod -aG plugdev "$USER"
     sudo adduser "$USER" netdev 
     sudo adduser "$USER" network 
+    sudo adduser "$USER" blocksscreen
     
 
     if [ ! -x "$(command -v pkaction)" ]; then 
