@@ -40,7 +40,7 @@
 </string>
   </property>
   <property name="currentIndex">
-   <number>0</number>
+   <number>2</number>
   </property>
   <widget class="QWidget" name="main_network_page">
    <property name="sizePolicy">
@@ -996,7 +996,7 @@ using the buttons on the side.</string>
          <enum>QLayout::SetMinimumSize</enum>
         </property>
         <item alignment="Qt::AlignHCenter|Qt::AlignTop">
-         <widget class="IconButton" name="add_network_validation_button">
+         <widget class="BlocksCustomButton" name="add_network_validation_button">
           <property name="enabled">
            <bool>true</bool>
           </property>
@@ -1008,21 +1008,27 @@ using the buttons on the side.</string>
           </property>
           <property name="minimumSize">
            <size>
-            <width>60</width>
-            <height>60</height>
+            <width>250</width>
+            <height>80</height>
            </size>
           </property>
           <property name="maximumSize">
            <size>
-            <width>60</width>
-            <height>60</height>
+            <width>250</width>
+            <height>80</height>
            </size>
+          </property>
+          <property name="font">
+           <font>
+            <family>Momcake</family>
+            <pointsize>15</pointsize>
+           </font>
           </property>
           <property name="styleSheet">
            <string notr="true"/>
           </property>
           <property name="text">
-           <string>a</string>
+           <string>Activate</string>
           </property>
           <property name="iconSize">
            <size>
@@ -1038,64 +1044,9 @@ using the buttons on the side.</string>
           </property>
           <property name="flat">
            <bool>true</bool>
-          </property>
-          <property name="button_type" stdset="0">
-           <string>icon</string>
           </property>
           <property name="icon_pixmap" stdset="0">
            <pixmap resource="resources/icon_resources.qrc">:/dialog/media/btn_icons/yes.svg</pixmap>
-          </property>
-         </widget>
-        </item>
-        <item alignment="Qt::AlignHCenter|Qt::AlignTop">
-         <widget class="IconButton" name="cancel_network_validation_button">
-          <property name="enabled">
-           <bool>true</bool>
-          </property>
-          <property name="sizePolicy">
-           <sizepolicy hsizetype="MinimumExpanding" vsizetype="MinimumExpanding">
-            <horstretch>1</horstretch>
-            <verstretch>1</verstretch>
-           </sizepolicy>
-          </property>
-          <property name="minimumSize">
-           <size>
-            <width>60</width>
-            <height>60</height>
-           </size>
-          </property>
-          <property name="maximumSize">
-           <size>
-            <width>60</width>
-            <height>60</height>
-           </size>
-          </property>
-          <property name="styleSheet">
-           <string notr="true"/>
-          </property>
-          <property name="text">
-           <string>a</string>
-          </property>
-          <property name="iconSize">
-           <size>
-            <width>16</width>
-            <height>16</height>
-           </size>
-          </property>
-          <property name="checkable">
-           <bool>false</bool>
-          </property>
-          <property name="checked">
-           <bool>false</bool>
-          </property>
-          <property name="flat">
-           <bool>true</bool>
-          </property>
-          <property name="button_type" stdset="0">
-           <string>icon</string>
-          </property>
-          <property name="icon_pixmap" stdset="0">
-           <pixmap resource="resources/icon_resources.qrc">:/dialog/media/btn_icons/no.svg</pixmap>
           </property>
          </widget>
         </item>
