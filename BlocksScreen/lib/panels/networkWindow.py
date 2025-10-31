@@ -482,13 +482,13 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         is_sender_now_on = (new_state == sender_button.State.ON)
         _old_hotspot = None
 
-        saved_network = self.sdbus_network.get_saved_networks()
+        self.saved_network = self.sdbus_network.get_saved_networks()
 
         if sender_button is wifi_btn:
             if is_sender_now_on:
                 hotspot_btn.state = hotspot_btn.State.OFF   
                 self.sdbus_network.toggle_hotspot(False)
-                if saved_network:
+                if self.saved_network:
                     try:
                         ssid = next((n['ssid'] for n in saved_network if 'ap' not in n['mode']), None)
                         self.sdbus_network.connect_network(str(ssid))
