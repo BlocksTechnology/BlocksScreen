@@ -95,6 +95,8 @@ class BuildNetworkList(QtCore.QThread):
                 saved_networks = sorted([n for n in saved_networks], key=lambda x: -1)
             if saved_networks:
                 for net in saved_networks:
+                    if 'ap' in n.get('mode', ''):
+                        return
                     ssid = net.get("ssid", "UNKNOWN")
                     signal = (
                         self.nm.get_connection_signal_by_ssid(ssid)
@@ -144,6 +146,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.sdbus_network = SdbusNetworkManagerAsync()
         self.start: bool = True
         self._load_timer = None
+        self.saved_network = dict
 
         # Network Scan
         self.network_list_widget = QtWidgets.QListWidget(
@@ -228,7 +231,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             partial(
                 self.panel.saved_connection_change_password_field.setEchoMode,
                 QtWidgets.QLineEdit.EchoMode.Normal,
-            )
+            )   
         )
         self.panel.saved_connection_change_password_view.released.connect(
             partial(
@@ -236,19 +239,11 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
                 QtWidgets.QLineEdit.EchoMode.Password,
             )
         )
-        self.panel.hotspot_back_button.clicked.connect(self.handle_hotspot_back)
+        self.panel.hotspot_back_button.clicked.connect( lambda: self.setCurrentIndex(self.indexOf(self.panel.main_network_page)))
 
         self.panel.hotspot_password_input_field.setPlaceholderText(
             "Defaults to: 123456789"
         )
-        self.panel.hotspot_change_confirm.clicked.connect(
-            lambda: self.update_network(
-                ssid=self.sdbus_network.get_hotspot_ssid(),
-                password=self.panel.hotspot_password_input_field.text(),
-                new_ssid=self.panel.hotspot_name_input_field.text(),
-            )
-        )
-
         self.panel.hotspot_change_confirm.clicked.connect(
             lambda: self.setCurrentIndex(self.indexOf(self.panel.main_network_page))
         )
@@ -485,6 +480,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         wifi_btn = self.panel.wifi_button.toggle_button
         hotspot_btn = self.panel.hotspot_button.toggle_button
         is_sender_now_on = (new_state == sender_button.State.ON)
+        _old_hotspot = None
 
         self.saved_network = self.sdbus_network.get_saved_networks()
 
@@ -494,21 +490,28 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
                 self.sdbus_network.toggle_hotspot(False)
                 if self.saved_network:
                     try:
-                        ssid = next((n['ssid'] for n in self.saved_network if 'ap' not in n['mode']), None)
+                        ssid = next((n['ssid'] for n in saved_network if 'ap' not in n['mode']), None)
                         self.sdbus_network.connect_network(str(ssid))
 
-                        logger.debug(self.saved_network)
-                    except Exception as e:
+                        logger.debug(saved_network)
+                    except Exception as e:  
                         logger.error(f"error when turning ON wifi on_toggle_state:{e}")
                     
         elif sender_button is hotspot_btn:
             if is_sender_now_on:
                 wifi_btn.state = wifi_btn.State.OFF
-                if self.sdbus_network.is_known(self.sdbus_network.hotspot_ssid):
-                    self.sdbus_network.delete_network(self.sdbus_network.hotspot_ssid)
                 
-                self.sdbus_network.create_hotspot()
+                for n in saved_network:
+                    if 'ap' in n.get('mode', ''):
+                        _old_hotspot = n
+                        break
+                    
+                if _old_hotspot and _old_hotspot['ssid'] != self.panel.hotspot_name_input_field.text():
+                    self.sdbus_network.delete_network(_old_hotspot['ssid'])
+                
+                self.sdbus_network.create_hotspot(self.panel.hotspot_name_input_field.text(), self.panel.hotspot_password_input_field.text())
                 self.sdbus_network.toggle_hotspot(True)
+                self.sdbus_network.connect_network(self.panel.hotspot_name_input_field.text())
 
 
         self.info_box_load(False)
@@ -538,6 +541,17 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
 
         if self.start:
             self.start = False
+            saved_network = self.sdbus_network.get_saved_networks()
+            logger.debug(f"{saved_network}")
+            for n in saved_network:
+                    if 'ap' in n.get('mode', ''):
+                        _old_hotspot = n
+                        break
+            
+            if _old_hotspot:    
+                self.panel.hotspot_name_input_field.setText(_old_hotspot['ssid'])
+            
+            
             connection = self.sdbus_network.check_connectivity()
             if connection == "FULL":
                 self.panel.wifi_button.toggle_button.state = self.panel.wifi_button.toggle_button.State.ON
@@ -558,7 +572,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             if hotspot_btn.state == hotspot_btn.State.ON:
                 ipv4_addr = self.get_hotspot_ip_via_shell("wlan0")
 
-                self.panel.netlist_ssuid.setText(self.sdbus_network.hotspot_ssid)
+                self.panel.netlist_ssuid.setText(self.panel.hotspot_name_input_field.text())
                 
                 self.panel.netlist_ip.setText(f"IP: {ipv4_addr or 'No IP Address'}") 
                 
@@ -698,10 +712,9 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
     
         
         _network_psk = self.panel.add_network_password_field.text()
-        # result = self.sdbus_network.add_wifi_network(
-        #     ssid=self.panel.add_network_network_label.text(), psk=_network_psk
-        # )
-        result = {"error": "Invalid password"}
+        result = self.sdbus_network.add_wifi_network(
+            ssid=self.panel.add_network_network_label.text(), psk=_network_psk
+        )
 
         if result != {"state": "success"}:
             if result == {"error": "Invalid password"}:
