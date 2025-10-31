@@ -310,7 +310,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.panel.network_activate_btn.setPixmap(
             QtGui.QPixmap(":/dialog/media/btn_icons/yes.svg")
         )
-        self.stopupdate = False
+
 
         self.panel.network_activate_btn.clicked.connect(
             lambda: self.saved_wifi_option_selected()
@@ -355,8 +355,6 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         _sender = self.sender()
         self.panel.wifi_button.toggle_button.state = self.panel.wifi_button.toggle_button.State.ON
         self.panel.hotspot_button.toggle_button.state = self.panel.hotspot_button.toggle_button.State.OFF
-
-        self.stopupdate = True
 
         if _sender == self.panel.network_delete_btn:
             self.sdbus_network.delete_network(self.panel.saved_connection_network_name.text())
@@ -528,9 +526,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             _nm_state = self.sdbus_network.check_nm_state()
             if not _nm_state:
                 return
-        if self.stopupdate:
-            self.stopupdate = False
-            return
+
 
         if self.start:
             self.start = False
