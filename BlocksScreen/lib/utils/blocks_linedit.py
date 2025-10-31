@@ -40,9 +40,6 @@ class BlocksCustomLinEdit(QtWidgets.QLineEdit):
         self.clicked.emit() 
         super().mousePressEvent(event)  
 
-    def focusInEvent(self, event: QtGui.QFocusEvent) -> None:
-        self.clicked.emit()
-        super().focusInEvent(event)
 
     def paintEvent(self, e: typing.Optional[QtGui.QPaintEvent]):
         painter = QtGui.QPainter(self)
