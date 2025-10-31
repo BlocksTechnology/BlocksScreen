@@ -95,7 +95,7 @@ class BuildNetworkList(QtCore.QThread):
                 saved_networks = sorted([n for n in saved_networks], key=lambda x: -1)
             if saved_networks:
                 for net in saved_networks:
-                    if 'ap' in n.get('mode', ''):
+                    if 'ap' in net.get('mode', ''):
                         return
                     ssid = net.get("ssid", "UNKNOWN")
                     signal = (
@@ -351,18 +351,6 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
                 self.panel.saved_connection_change_password_field,
             )
         )
-        connection = self.sdbus_network.check_connectivity()
-        if connection == "FULL":
-            self.panel.wifi_button.toggle_button.state = self.panel.wifi_button.toggle_button.State.ON
-            self.panel.hotspot_button.toggle_button.state = self.panel.hotspot_button.toggle_button.State.OFF
-        elif connection == "LIMITED":
-            self.panel.wifi_button.toggle_button.state = self.panel.wifi_button.toggle_button.State.OFF
-            self.panel.hotspot_button.toggle_button.state = self.panel.hotspot_button.toggle_button.State.ON
-        
-        if self.panel.wifi_button.toggle_button.state == self.panel.wifi_button.toggle_button.State.OFF and self.panel.hotspot_button.toggle_button.state == self.panel.hotspot_button.toggle_button.State.OFF:
-            self.sdbus_network.disconnect_network()
-            self._expand_infobox(True)
-            self.panel.mn_info_box.setText("Network connection required.\n\nConnect to Wi-Fi\nor\nTurn on Hotspot")
     def saved_wifi_option_selected(self):
         _sender = self.sender()
         self.panel.wifi_button.toggle_button.state = self.panel.wifi_button.toggle_button.State.ON
@@ -522,6 +510,11 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
 
     @QtCore.pyqtSlot(str, name="nm-state-changed")
     def evaluate_network_state(self, nm_state: str = "") -> None:
+        """Handles or Reloads network state
+
+        Args:
+            nm_state (str, optional): Handles Network state depending on state
+        """
         # NM State Constants: UNKNOWN=0, ASLEEP=10, DISCONNECTED=20, DISCONNECTING=30,
         # CONNECTING=40, CONNECTED_LOCAL=50, CONNECTED_SITE=60, GLOBAL=70
         
@@ -556,18 +549,24 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             if connection == "FULL":
                 self.panel.wifi_button.toggle_button.state = self.panel.wifi_button.toggle_button.State.ON
                 self.panel.hotspot_button.toggle_button.state = self.panel.hotspot_button.toggle_button.State.OFF
-            elif connection == "LIMITED":
+            
+            if connection == "LIMITED":
                 self.panel.wifi_button.toggle_button.state = self.panel.wifi_button.toggle_button.State.OFF
                 self.panel.hotspot_button.toggle_button.state = self.panel.hotspot_button.toggle_button.State.ON
             
-            if self.panel.wifi_button.toggle_button.state == self.panel.wifi_button.toggle_button.State.OFF and self.panel.hotspot_button.toggle_button.state == self.panel.hotspot_button.toggle_button.State.OFF:
-                self.sdbus_network.disconnect_network()
-                self._expand_infobox(True)
-                self.panel.mn_info_box.setText("Network connection required.\n\nConnect to Wi-Fi\nor\nTurn on Hotspot")
+            # if self.panel.wifi_button.toggle_button.state == self.panel.wifi_button.toggle_button.State.OFF and self.panel.hotspot_button.toggle_button.state == self.panel.hotspot_button.toggle_button.State.OFF:
+            #     self.sdbus_network.disconnect_network()
+            #     self._expand_infobox(True)
+            #     self.panel.mn_info_box.setText("Network connection required.\n\nConnect to Wi-Fi\nor\nTurn on Hotspot")
 
         if _nm_state in CONNECTED_STATES:
             if not self.sdbus_network.check_wifi_interface():
                 return
+
+            self._expand_infobox(False)
+            self.info_box_load(False)
+            self.panel.wifi_button.toggle_button.setEnabled(True)
+            self.panel.hotspot_button.toggle_button.setEnabled(True)
 
             if hotspot_btn.state == hotspot_btn.State.ON:
                 ipv4_addr = self.get_hotspot_ip_via_shell("wlan0")
@@ -581,9 +580,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
                 self.panel.netlist_security.setText("--")
                 
                 self.panel.mn_info_box.setText("Hotspot On")
-                
-                self.info_box_load(False)
-            
+
             if wifi_btn.state == wifi_btn.State.ON:
                 ipv4_addr = self.sdbus_network.get_current_ip_addr()
                 current_ssid = self.sdbus_network.get_current_ssid()
@@ -603,11 +600,6 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
 
                 self.panel.mn_info_box.setText("Connected")
 
-
-            if (wifi_btn.state == wifi_btn.State.ON or hotspot_btn.state == hotspot_btn.State.ON):
-                self.info_box_load(False)
-                self.panel.wifi_button.toggle_button.setEnabled(True)
-                self.panel.hotspot_button.toggle_button.setEnabled(True)
 
             
         if wifi_btn.state == wifi_btn.State.OFF and hotspot_btn.state == hotspot_btn.State.OFF:
