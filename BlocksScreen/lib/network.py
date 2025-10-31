@@ -21,6 +21,13 @@ class NetworkManagerRescanError(Exception):
         super(NetworkManagerRescanError, self).__init__()
         self.error = error
 
+class DeleteNetworkError(Exception):
+    """Exception raised when deleting a network fails"""
+    def __init__(self, error) -> None:
+        super().__init__()
+        self.error = error
+
+
 
 class DeleteNetworkError(Exception):
     """Exception raised when deleting a network fails"""
@@ -33,7 +40,6 @@ class DeleteNetworkError(Exception):
 class SdbusNetworkManagerAsync(QtCore.QObject):
     class ConnectionPriority(enum.Enum):
         """Enumeration types for network priorities"""
-
         HIGH = 90
         MEDIUM = 50
         LOW = 20
