@@ -12,7 +12,7 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 
 logger = logging.getLogger("logs/BlocksScreen.log")
 
-
+#RAEL NETWORK
 class BuildNetworkList(QtCore.QThread):
     """Retrieves information from sdbus interface about scanned networks"""
 
@@ -353,6 +353,8 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
                 self.panel.saved_connection_change_password_field,
             )
         )
+        self.i = 0
+
     def saved_wifi_option_selected(self):
         _sender = self.sender()
         self.panel.wifi_button.toggle_button.state = self.panel.wifi_button.toggle_button.State.ON
@@ -379,66 +381,53 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.setCurrentIndex(self.indexOf(self.qwerty))
 
     def on_qwerty_go_back(self):
-        # try:
-        #     instance = QtWidgets.QApplication.instance()
-        #     if instance:
-        #         instance.focusWidget().clearFocus()
-
-        # except Exception as e:
-        #     raise LookupError("Cannot retrieve QApplication instance %s", e)
         self.setCurrentIndex(self.indexOf(self.previousPanel))
 
     def on_qwerty_value_selected(self, value: str):
-        # try:
-        #     instance = QtWidgets.QApplication.instance()
-        #     if instance:
-        #         instance.focusWidget().clearFocus()
-        # except Exception as e:
-        #     raise LookupError("Cannot retrieve QApplication instance %s", e)
         self.setCurrentIndex(self.indexOf(self.previousPanel))
         if hasattr(self, "currentField") and self.currentField:
             self.currentField.setText(value)
 
     def info_box_load(self, toggle: bool = False) -> None:
-            """
-            Shows or hides the loading screen.
-            Sets a 30-second timeout to handle loading failures.
-            """
-            if toggle:
-                self._show_loadscreen(True)
-                if self._load_timer is not None and self._load_timer.isActive():
-                    self._load_timer.stop()
-                    
-                self._load_timer = QtCore.QTimer() 
-                self._load_timer.setSingleShot(True)
-                self._load_timer.timeout.connect(self._handle_load_timeout)
+        """
+        Shows or hides the loading screen.
+        Sets a 30-second timeout to handle loading failures.
+        """
+        if toggle:
+            self._show_loadscreen(True)
+            if self._load_timer is not None and self._load_timer.isActive():
+                self._load_timer.stop()
 
-                self._load_timer.start(30000)
-                
-            else:
-                self._show_loadscreen(False)
- 
+            self._load_timer = QtCore.QTimer()
+            self._load_timer.setSingleShot(True)
+            self._load_timer.timeout.connect(self._handle_load_timeout)
+
+            self._load_timer.start(30000)
+
+        else:
+            self._show_loadscreen(False)
+
     def _handle_load_timeout(self):
         """
         Logic to execute if the loading screen is still visible after 30 seconds.<
         """
         wifi_btn = self.panel.wifi_button.toggle_button
         hotspot_btn = self.panel.hotspot_button.toggle_button
-        if self.panel.loadingwidget.isVisible():   
+        if self.panel.loadingwidget.isVisible():
             if wifi_btn.state == wifi_btn.State.ON:
-                message  = "Wi-Fi Connection Failed.\nThe connection attempt \ntimed out.\n Please check\nyour network stability \nor\n try reconnecting."
+                message = "Wi-Fi Connection Failed.\nThe connection attempt \ntimed out.\n Please check\nyour network stability \nor\n try reconnecting."
 
             elif hotspot_btn.state == hotspot_btn.State.ON:
-                message  = "Hotspot Setup Failed.\nThe local network sharing\n timed out.\n\n restart the hotspot."
+                message = "Hotspot Setup Failed.\nThe local network sharing\n timed out.\n\n restart the hotspot."
             else:
                 message = "Loading timed out.\n Please check your connection \n and try again."
-            
+
             self.panel.wifi_button.toggle_button.setEnabled(True)
             self.panel.hotspot_button.toggle_button.setEnabled(True)
-                
+
             self.panel.mn_info_box.setText(message)
-            self._show_loadscreen(False) 
-            self._expand_infobox(True) 
+            self._show_loadscreen(False)
+            self._expand_infobox(True)
 
     def _show_loadscreen(self, toggle: bool = False):
         """Expand LOAD box on the main network panel
@@ -458,7 +447,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.panel.netlist_security_label.setVisible(not toggle)
 
         self.panel.mn_info_box.setVisible(not toggle)
-        
+
         self.panel.loadingwidget.setVisible(toggle)
 
     @QtCore.pyqtSlot(object, name="stateChange")
@@ -469,36 +458,26 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         is_sender_now_on = (new_state == sender_button.State.ON)
         _old_hotspot = None
 
-        self.saved_network = self.sdbus_network.get_saved_networks()
+        saved_network = self.sdbus_network.get_saved_networks()
 
         if sender_button is wifi_btn:
             if is_sender_now_on:
                 hotspot_btn.state = hotspot_btn.State.OFF
                 self.sdbus_network.toggle_hotspot(False)
-                if self.saved_network:
+                if saved_network:
                     try:
-                        ssid = next((n['ssid'] for n in saved_network if 'ap' not in n['mode']), None)
+                        ssid = next(
+                            (n["ssid"] for n in saved_network if "ap" not in n['mode']),
+                            None)
                         self.sdbus_network.connect_network(str(ssid))
 
                         logger.debug(saved_network)
-                    except Exception as e:  
+                    except Exception as e:
                         logger.error(f"error when turning ON wifi on_toggle_state:{e}")
-                    
+
         elif sender_button is hotspot_btn:
             if is_sender_now_on:
                 wifi_btn.state = wifi_btn.State.OFF
-                
-                for n in saved_network:
-                    if 'ap' in n.get('mode', ''):
-                        _old_hotspot = n
-                        break
-                    
-                if _old_hotspot and _old_hotspot['ssid'] != self.panel.hotspot_name_input_field.text():
-                    self.sdbus_network.delete_network(_old_hotspot['ssid'])
-                
-                self.sdbus_network.create_hotspot(self.panel.hotspot_name_input_field.text(), self.panel.hotspot_password_input_field.text())
-                self.sdbus_network.toggle_hotspot(True)
-                self.sdbus_network.connect_network(self.panel.hotspot_name_input_field.text())
 
                 for n in saved_network:
                     if "ap" in n.get("mode", ""):
@@ -550,7 +529,6 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             if not _nm_state:
                 return
 
-
         if self.start:
             self.start = False
             saved_network = self.sdbus_network.get_saved_networks()
@@ -579,11 +557,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         if _nm_state in CONNECTED_STATES:
             if not self.sdbus_network.check_wifi_interface():
                 return
-
-            self._expand_infobox(False)
-            self.info_box_load(False)
-            self.panel.wifi_button.toggle_button.setEnabled(True)
-            self.panel.hotspot_button.toggle_button.setEnabled(True)
+            
 
             if hotspot_btn.state == hotspot_btn.State.ON:
                 ipv4_addr = self.get_hotspot_ip_via_shell("wlan0")
@@ -604,27 +578,33 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
                 if current_ssid == "":
                     return
                 sec_type = self.sdbus_network.get_security_type_by_ssid(current_ssid)
-                signal_strength = self.sdbus_network.get_connection_signal_by_ssid(current_ssid)
-
-
+                signal_strength = self.sdbus_network.get_connection_signal_by_ssid(
+                    current_ssid
+                )
                 self.panel.netlist_ssuid.setText(current_ssid)
-
                 self.panel.netlist_ip.setText(f"IP: {ipv4_addr or 'No IP Address'}")
-
                 self.panel.netlist_security.setText(str(sec_type or "--").upper())
-                
-                self.panel.netlist_strength.setText(str(signal_strength if signal_strength != -1 else "--"))
-
+                self.panel.netlist_strength.setText(
+                    str(signal_strength if signal_strength != -1 else "--")
+                )
                 self.panel.mn_info_box.setText("Connected")
 
+            self._expand_infobox(False)
+            self.info_box_load(False)
+            self.panel.wifi_button.toggle_button.setEnabled(True)
+            self.panel.hotspot_button.toggle_button.setEnabled(True)
 
-            
-        if wifi_btn.state == wifi_btn.State.OFF and hotspot_btn.state == hotspot_btn.State.OFF:
+        if (
+            wifi_btn.state == wifi_btn.State.OFF
+            and hotspot_btn.state == hotspot_btn.State.OFF
+        ):
             self.sdbus_network.disconnect_network()
             self._expand_infobox(True)
-            self.panel.mn_info_box.setText("Network connection required.\n\nConnect to Wi-Fi\nor\nTurn on Hotspot")
+            self.panel.mn_info_box.setText(
+                "Network connection required.\n\nConnect to Wi-Fi\nor\nTurn on Hotspot"
+            )
 
-    def get_hotspot_ip_via_shell(self,interface: str):
+    def get_hotspot_ip_via_shell(self, interface: str):
         """
         Executes a shell command to retrieve the IPv4 address for a specified interface.
                Args:
