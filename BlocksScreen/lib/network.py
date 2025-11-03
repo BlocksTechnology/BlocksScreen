@@ -361,24 +361,27 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
             )
 
     def toggle_hotspot(self, toggle: bool) -> dict:
-        """Toggle hotspot
+        """Toggle hotsopt
 
         Args:
-            toggle (bool): True to activate Hotspot, False otherwise
+            toggle (bool): True to activate the hotspot, False otherwise
 
         Raises:
-            TypeError: If the toggle argument is not a Boolean.
-        """
+            TypeError: raised if toggle argument is not boolean
+
+        Returns:
+            dict: A dictionary containing the result of the operation
+        """        
         try:
             if not isinstance(toggle, bool):
                 raise TypeError("Correct type should be a boolean.")
-            old_ssid: str = self.get_current_ssid()
-            if old_ssid:
-                self.old_ssid = old_ssid
             if toggle:
                 self.disconnect_network()
                 result = self.connect_network(self.hotspot_ssid)
-                return result              
+            else: 
+                result = self.deactivate_connection_by_ssid(self.hotspot_ssid)
+                
+            return result
         except Exception as e:
             logger.error(f"Caught exception while toggling hotspot: Failed {e}")
         
