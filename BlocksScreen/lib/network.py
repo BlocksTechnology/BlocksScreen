@@ -30,18 +30,6 @@ class DeleteNetworkError(Exception):
         self.error = error
 
 
-<<<<<<< HEAD
-
-class DeleteNetworkError(Exception):
-    """Exception raised when deleting a network fails"""
-
-    def __init__(self, error) -> None:
-        super().__init__()
-        self.error = error
-
-
-=======
->>>>>>> c5b1bae (Refactor: logging, exception handling, documentation)
 class SdbusNetworkManagerAsync(QtCore.QObject):
     class ConnectionPriority(enum.Enum):
         """Enumeration types for network priorities"""
@@ -506,36 +494,46 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
         return future.result(timeout=5)
 
     def get_current_ip_addr(self) -> str:
-        """Get the current connection ip address.
+        """Get active connection ip address
         Returns:
             str: A string containing the current ip address
         """
-        primary_con_fut = asyncio.run_coroutine_threadsafe(
-            self.nm.primary_connection.get_async(), self.loop
-        )
-        primary_con = primary_con_fut.result(timeout=2)
-        if primary_con == "/":
-            logger.info("There is no NetworkManager active connection.")
-            return ""
+        try:
+            primary_con_fut = asyncio.run_coroutine_threadsafe(
+                self.nm.primary_connection.get_async(), self.loop
+            )
+            primary_con = primary_con_fut.result(timeout=2)
+            if primary_con == "/":
+                logger.info("There is no NetworkManager active connection.")
+                return ""
 
-        _device_ip4_conf_path = dbusNm.ActiveConnection(
-            bus=self.system_dbus, connection_path=primary_con
-        )
-        ip4_conf_future = asyncio.run_coroutine_threadsafe(
-            _device_ip4_conf_path.ip4_config.get_async(), self.loop
-        )
+            _device_ip4_conf_path = dbusNm.ActiveConnection(
+                bus=self.system_dbus, connection_path=primary_con
+            )
+            ip4_conf_future = asyncio.run_coroutine_threadsafe(
+                _device_ip4_conf_path.ip4_config.get_async(), self.loop
+            )
 
-        if _device_ip4_conf_path == "/":
-            logger.info("NetworkManager reports no IP configuration for the interface")
-            return ""
-        ip4_conf = dbusNm.IPv4Config(
-            bus=self.system_dbus, ip4_path=ip4_conf_future.result(timeout=2)
-        )
-        addr_data_fut = asyncio.run_coroutine_threadsafe(
-            ip4_conf.address_data.get_async(), self.loop
-        )
-        addr_data = addr_data_fut.result(timeout=2)
-        return [address_data["address"][1] for address_data in addr_data][0]
+            if _device_ip4_conf_path == "/":
+                return ""
+            
+            ip4_conf = dbusNm.IPv4Config(
+                bus=self.system_dbus, ip4_path=ip4_conf_future.result(timeout=2)
+            )
+            addr_data_fut = asyncio.run_coroutine_threadsafe(
+                ip4_conf.address_data.get_async(), self.loop
+            )
+            addr_data = addr_data_fut.result(timeout=2)
+            return [address_data["address"][1] for address_data in addr_data][0]
+        except KeyError:
+            logger.error("Caught exception while fetching active connection ip address: Property address does not exist") 
+        except asyncio.CancelledError:
+            logger.error("Caught exception while fetching active connection ip address: Cancelled")
+        except TimeoutError:
+            logger.error("Caught exception while fetching active connection ip address: Timeout")
+        except dbusNm.
+            
+        return ""
 
     async def _gather_primary_interface(
         self,
