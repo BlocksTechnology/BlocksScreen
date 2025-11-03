@@ -365,13 +365,9 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         if _sender == self.panel.network_delete_btn:
             self.sdbus_network.delete_network(self.panel.saved_connection_network_name.text())
             self.setCurrentIndex(self.indexOf(self.panel.main_network_page))
-            self.panel.wifi_button.setEnabled(True)
-            self.panel.hotspot_button.setEnabled(True)
 
         elif _sender == self.panel.network_activate_btn:
             self.setCurrentIndex(self.indexOf(self.panel.main_network_page))
-            self.panel.wifi_button.setEnabled(False)
-            self.panel.hotspot_button.setEnabled(False)
             self.sdbus_network.connect_network(self.panel.saved_connection_network_name.text())
             self.info_box_load(True)
 
@@ -431,7 +427,6 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         
         hotspot_btn.setEnabled(True)
         wifi_btn.setEnabled(True)
-
         self.repaint()
 
     def _show_loadscreen(self, toggle: bool = False):
@@ -597,6 +592,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.info_box_load(False)
         self.panel.wifi_button.setEnabled(True)
         self.panel.hotspot_button.setEnabled(True)
+        self.repaint()
 
         if (
             wifi_btn.state == wifi_btn.State.OFF
@@ -698,7 +694,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         # Check if a password was inserted
 
         self.panel.add_network_validation_button.setEnabled(False)
-        self.panel.add_network_validation_button.repaint()
+        self.repaint()
 
         if not self.panel.add_network_password_field.text():
             self.popup.new_message(
@@ -729,7 +725,6 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             message = "Error while adding network. Please try again"
 
         self.panel.add_network_password_field.clear()
-        self.panel.add_network_validation_button.repaint()
         self.repaint()
         if message:
             self.popup.new_message(message_type=Popup.MessageType.ERROR, message=message)
