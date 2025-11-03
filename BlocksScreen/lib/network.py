@@ -502,12 +502,8 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
         return ""
 
     def get_current_ssid(self) -> str:
-        try:
-            future = asyncio.run_coroutine_threadsafe(self._gather_ssid(), self.loop)
-            return future.result(timeout=5)
-        except Exception as e:
-            logger.info(f"Unexpected error occurred: {e}")
-            return ""
+        future = asyncio.run_coroutine_threadsafe(self._gather_ssid(), self.loop)
+        return future.result(timeout=5)
 
     def get_current_ip_addr(self) -> str:
         """Get the current connection ip address.
