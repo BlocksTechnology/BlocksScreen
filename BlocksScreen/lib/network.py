@@ -4,6 +4,7 @@ import hashlib
 import logging
 import threading
 import typing
+from unittest.mock import Base
 from uuid import uuid4
 
 import sdbus
@@ -20,17 +21,19 @@ class NetworkManagerRescanError(Exception):
         super(NetworkManagerRescanError, self).__init__()
         self.error = error
 
+
 class DeleteNetworkError(Exception):
     """Exception raised when deleting a network fails"""
+
     def __init__(self, error) -> None:
         super().__init__()
         self.error = error
 
 
-
 class SdbusNetworkManagerAsync(QtCore.QObject):
     class ConnectionPriority(enum.Enum):
         """Enumeration types for network priorities"""
+
         HIGH = 90
         MEDIUM = 50
         LOW = 20
@@ -60,11 +63,12 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
             self.close()
             return
         sdbus.set_default_bus(self.system_dbus)
-        self.nm = dbusNm.NetworkManager()
+        self.nm = dbusNm.NetworkManager(bus=self.system_dbus)
         self.listener_thread.start()
         if self.listener_thread.is_alive():
             logger.info(
-                f"Sdbus NetworkManager Monitor Thread {self.listener_thread.name} Running"
+                "Sdbus NetworkManager Monitor Thread %s Running",
+                self.listener_thread.name,
             )
         self.hotspot_ssid: str = "PrinterHotspot"
         self.hotspot_password: str = "123456789"
@@ -84,7 +88,6 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
         self.primary_wired_interface: typing.Optional[dbusNm.NetworkDeviceWired] = (
             wired_interfaces[0] if wired_interfaces else None
         )
-
         self.create_hotspot(self.hotspot_ssid, self.hotspot_password)
         if self.primary_wifi_interface:
             self.rescan_networks()
@@ -93,32 +96,44 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
         try:
             asyncio.set_event_loop(self.loop)
             self.loop.run_until_complete(asyncio.gather(self.listener_monitor()))
+        except asyncio.CancelledError:
+            logger.error("Exception raised on listener run loop: Cancelled")
         except Exception as e:
-            logging.error(f"Exception on loop coroutine: {e}")
+            logger.error("Exception on loop coroutine: %s ", e)
 
     async def _end_tasks(self) -> None:
+        """INTERNAL USE Finish event loop tasks before close, helper for `close` method"""
         for task in self.listener_task_queue:
             task.cancel()
         results = await asyncio.gather(
             *self.listener_task_queue, return_exceptions=True
         )
         for result in results:
+            if isinstance(result, asyncio.CancelledError):
+                logger.error("Caught Exception while ending asyncio loop: Cancelled")
             if isinstance(result, Exception):
-                logger.error(f"Caught Exception while ending asyncio tasks: {result}")
-            return
+                logger.error("Caught Exception while ending asyncio loop: %s", result)
 
     def close(self) -> None:
+        """Close asyncio loop"""
         future = asyncio.run_coroutine_threadsafe(self._end_tasks(), self.loop)
         try:
             future.result(timeout=5)
+        except asyncio.CancelledError as e:
+            logger.error(
+                "Caught Exception while closing run loop: Cancelled Error %s", e
+            )
+        except TimeoutError as e:
+            logger.error("Caught Exception while closing run loop: Timeout %s", e)
         except Exception as e:
-            logging.info(f"Exception while ending loop tasks: {e}")
+            logging.info("Caught Exception while closing loop tasks: %s", e)
         self.stop_listener_event.set()
         self.loop.call_soon_threadsafe(self.loop.stop)
         self.listener_thread.join()
         self.loop.close()
 
     async def listener_monitor(self) -> None:
+        """Add state listener tasks to run loop"""
         try:
             self._listeners_running = True
 
@@ -130,85 +145,122 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
             )
             results = asyncio.gather(*self.listener_task_queue, return_exceptions=True)
             for result in results:
+                if isinstance(result, asyncio.CancelledError):
+                    logger.error(
+                        "Caught Exception on NetworkManager state listener monitor: Cancelled %s",
+                        result,
+                    )
                 if isinstance(result, Exception):
                     logger.error(
-                        f"Caught Exception on network manager asyncio loop: {result}"
+                        "Caught Exception on NetworkManager state listener monitor: %s",
+                        result,
                     )
-                    raise Exception(result)
-                await self.stop_listener_event.wait()
-
+            await self.stop_listener_event.wait()
         except Exception as e:
-            logging.error(f"Exception on listener monitor produced coroutine: {e}")
+            logging.error(
+                "Caught Exception on NetworkManager state listener monitor: %s", e
+            )
 
     async def _nm_state_listener(self) -> None:
+        """Network Manager state signal listener"""
         while self._listeners_running:
             try:
                 async for state in self.nm.state_changed:
                     enum_state = dbusNm.NetworkManagerState(state)
                     self.nm_state_change.emit(enum_state.name)
+            except dbusNm.NetworkManagerBaseError as e:
+                logger.error(
+                    "Caught exception while listening for Network Manager state signal: Base exception %s",
+                    e,
+                )
             except Exception as e:
-                logging.error(f"Exception on Network Manager state listener: {e}")
+                logger.error(
+                    "Caught Exception while listening for Network Manager state signal : %e",
+                    e,
+                )
 
     async def _nm_properties_listener(self) -> None:
+        """Network Manager properties signal listener"""
         while self._listeners_running:
             try:
-                logging.debug("Listening for Network Manager state change")
                 async for properties in self.nm.properties_changed:
                     self.nm_properties_change.emit(properties)
-
+            except dbusNm.NetworkManagerBaseError as e:
+                logger.error(
+                    "Caught exception while listening for Network Manager properties signal: Base exception %s",
+                    e,
+                )
             except Exception as e:
-                logging.error(f"Exception on Network Manager state listener: {e}")
+                logger.error(
+                    "Caught exception while listening for Network Manager properties signal %s",
+                    e,
+                )
 
-    def check_nm_state(self) -> typing.Union[str, None]:
-        if not self.nm:
-            return
-        future = asyncio.run_coroutine_threadsafe(self.nm.state.get_async(), self.loop)
+    def check_nm_state(self) -> str:
+        """Check NetworkManager state
+
+        Returns:
+            str: Network Manager state
+        """
         try:
+            future = asyncio.run_coroutine_threadsafe(
+                self.nm.state.get_async(), self.loop
+            )
             state_value = future.result(timeout=2)
             return str(dbusNm.NetworkManagerState(state_value).name)
+        except dbusNm.NetworkManagerFailedError:
+            logger.error(
+                "Caught Exception while fetching NetworkManager state: Unspecified error"
+            )
+        except dbusNm.NetworkManagerBaseError as e:
+            logger.error("Caught Exception while fetching NetworkManager state %s", e)
         except Exception as e:
-            logging.error(f"Exception while fetching Network Monitor State: {e}")
-            return None
+            logger.error("Exception while fetching Network Monitor State: %s", e)
+        return ""
 
     def check_connectivity(self) -> str:
         """Checks Network Manager Connectivity state
-
-                UNKNOWN = 0 - Network connectivity is unknown, connectivity checks are disabled.
-
-                NONE = 1    - Host is not connected to any network.
-
-                PORTAL = 2  - Internet connection is hijacked by a captive portal gateway.
-
-                LIMITED = 3 - The host is connected to a network, does not appear to be able to reach full internet.
-
-                FULL = 4    - The host is connected to a network, appears to be able to reach fill internet.
-
-
         Returns:
-            _type_: _description_
+            str: device connectivity state possible values bellow:
+        * UNKNOWN = 0 - Network connectivity is unknown, connectivity checks are disabled.
+        * NONE = 1    - Host is not connected to any network.
+        * PORTAL = 2  - Internet connection is hijacked by a captive portal gateway.
+        * LIMITED = 3 - The host is connected to a network, does not appear to be able to reach full internet.
+        * FULL = 4    - The host is connected to a network, appears to be able to reach fill internet.
         """
-        if not self.nm:
-            return ""
-        future = asyncio.run_coroutine_threadsafe(
-            self.nm.check_connectivity(), self.loop
-        )
         try:
+            future = asyncio.run_coroutine_threadsafe(
+                self.nm.check_connectivity(), self.loop
+            )
             connectivity = future.result(timeout=2)
             return dbusNm.NetworkManagerConnectivityState(connectivity).name
-        except Exception as e:
-            logging.error(
-                f"Exception while fetching Network Monitor Connectivity State: {e}"
+        except dbusNm.NetworkManagerFailedError:
+            logger.error(
+                "Caught Exception while fetching NetworkManager connectivity: Unspecified error"
             )
-            return ""
+        except dbusNm.NetworkManagerBaseError as e:
+            logger.error(
+                "Caught Exception while fetching NetworkManager connectivity %s", e
+            )
+        except Exception as e:
+            logger.error(
+                "Exception while fetching Network Monitor Connectivity State: %s", e
+            )
+        return ""
 
     def check_wifi_interface(self) -> bool:
+        """Check if wifi interface exists
+
+        Returns:
+            bool: True if the wireless interface exists, False otherwise
+        """
         return bool(self.primary_wifi_interface)
 
-    def get_available_interfaces(self) -> typing.Union[typing.List[str], None]:
+    def get_available_interfaces(self) -> typing.List[str]:
         """Gets the names of all available interfaces
 
         Returns:
-            typing.List[str]: List of strings with the available names of all interfaces
+            typing.List[str]: list containing all available interface name
         """
         try:
             future = asyncio.run_coroutine_threadsafe(self.nm.get_devices(), self.loop)
@@ -224,85 +276,103 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                 interface_name = interface_future.result(timeout=2)
                 interfaces.append(interface_name)
             return interfaces
+        except dbusNm.NetworkManagerFailedError:
+            logger.error(
+                "Caught Exception while getting available interfaces: Unspecified error"
+            )
+        except dbusNm.NetworkManagerBaseError as e:
+            logger.error("Caught Exception while getting available interfaces %s", e)
         except Exception as e:
-            logging.error(f"Exception on fetching available interfaces: {e}")
+            logger.error("Caught Exception while getting available interfaces: %s", e)
+        return []
 
     def wifi_enabled(self) -> bool:
-        """Returns a boolean if wireless is enabled on the device.
+        """Checks if wireless is enabled on the device.
 
         Returns:
-            bool: True if device is enabled | False if not
+            bool: True if enabled, False otherwise
         """
-        future = asyncio.run_coroutine_threadsafe(
-            self.nm.wireless_enabled.get_async(), self.loop
-        )
-        return future.result(timeout=2)
+        try:
+            future = asyncio.run_coroutine_threadsafe(
+                self.nm.wireless_enabled.get_async(), self.loop
+            )
+            return future.result(timeout=2)
+        except dbusNm.NetworkManagerFailedError:
+            logger.error(
+                "Caught Exception while checking if wifi is enabled: Unspecified error"
+            )
+        except dbusNm.NetworkManagerBaseError as e:
+            logger.error("Caught Exception while checking if wifi is enabled %s", e)
+        return False
 
     def toggle_wifi(self, toggle: bool):
-        """toggle_wifi Enable/Disable wifi
+        """Toggles wifi
 
         Args:
             toggle (bool):
-
             - True -> Enable wireless
-
             - False -> Disable wireless
-
         Raises:
-            ValueError: Raised when the argument is not of type boolean.
+            TypeError: Raised when the argument is not of type boolean.
 
         """
         if not isinstance(toggle, bool):
             raise TypeError("Toggle wifi expected boolean")
         if self.wifi_enabled() == toggle:
             return
-        asyncio.run_coroutine_threadsafe(
-            self.nm.wireless_enabled.set_async(toggle), self.loop
-        )
+        try:
+            asyncio.run_coroutine_threadsafe(
+                self.nm.wireless_enabled.set_async(toggle), self.loop
+            )
+        except dbusNm.NetworkManagerFailedError:
+            logger.error(
+                "Caught Exception while toggling wifi %s: Unspecified error", toggle
+            )
+        except dbusNm.NetworkManagerBaseError as e:
+            logger.error("Caught Exception while toggling wifi: %s", e)
+        except BaseException as e:
+            logger.error("Caught general exception while toggling wifi: %s", e)
 
     async def _toggle_networking(self, value: bool = True) -> None:
-        if not self.primary_wifi_interface:
-            return
-        if self.primary_wifi_interface == "/":
-            return
-        results = asyncio.gather(
-            self.loop.create_task(self.nm.enable(value)),
-            return_exceptions=True,
-        )
-        for result in results:
-            if isinstance(result, Exception):
-                logger.error(f"Exception Caught when toggling network : {result}")
-
-    def disable_networking(self) -> None:
-        if not (self.primary_wifi_interface and self.primary_wired_interface):
-            return
-        if self.primary_wifi_interface == "/" and self.primary_wired_interface == "/":
-            return
-        asyncio.run_coroutine_threadsafe(self._toggle_networking(False), self.loop)
-
-    def activate_networking(self) -> None:
-        if not (self.primary_wifi_interface and self.primary_wired_interface):
-            return
-        if self.primary_wifi_interface == "/" and self.primary_wired_interface == "/":
-            return
-        asyncio.run_coroutine_threadsafe(self._toggle_networking(True), self.loop)
-
-    def toggle_hotspot(self, toggle: bool) -> None:
-        """Activate/Deactivate device hotspot
+        """Toggle Networking
 
         Args:
-            toggle (bool): toggle option, True to activate Hotspot, False otherwise
+            value (bool): Enable  or disable networking. Defaults to True.
+        """
+        try:
+            if not self.primary_wifi_interface:
+                return
+            if self.primary_wifi_interface == "/":
+                return
+            results = asyncio.gather(
+                self.loop.create_task(self.nm.enable(value)),
+                return_exceptions=True,
+            )
+            for result in results:
+                if isinstance(result, Exception):
+                    logger.error("Caught exception while toggling network : %s", result)
+        except dbusNm.NetworkManagerFailedError:
+            logger.error(
+                "Caught Exception while fetching NetworkManager connectivity: Unspecified error"
+            )
+        except dbusNm.NetworkManagerBaseError as e:
+            logger.error(
+                "Caught Exception while fetching NetworkManager connectivity %s", e
+            )
+
+    def toggle_hotspot(self, toggle: bool) -> dict:
+        """Toggle hotspot
+
+        Args:
+            toggle (bool): True to activate Hotspot, False otherwise
 
         Raises:
             ValueError: If the toggle argument is not a Boolean.
         """
-        if not isinstance(toggle, bool):
-            raise TypeError("Correct type should be a boolean.")
-
-        if not self.nm:
-            return
         try:
-            old_ssid: typing.Union[str, None] = self.get_current_ssid()
+            if not isinstance(toggle, bool):
+                raise TypeError("Correct type should be a boolean.")
+            old_ssid: str = self.get_current_ssid()
             if old_ssid:
                 self.old_ssid = old_ssid
             if toggle:
@@ -312,22 +382,60 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                     self.nm.reload(0x0), return_exceptions=True
                 ).result()
                 for result in results:
+                    if not isinstance(result, BaseException): 
+                        return {"state": "success"}
+                    if isinstance(result, asyncio.CancelledError):
+                        logger.error(
+                            "Caught exception while toggling hotspot: Cancelled"
+                        )
+                        return {"error": "cancelled"}
+                    if isinstance(result, dbusNm.NmConnectionFailedError):
+                        logger.error(
+                            "Caught exception while toggling hotspot: Connection Failed %s",
+                            result,
+                        )
+                        return {"error": "connection failed"}
+                    if isinstance(
+                        result, dbusNm.NetworkManagerConnectionAlreadyActiveError
+                    ):
+                        logger.error(
+                            "Caught exception while toggling hotspot: Connection already active %s",
+                            result,
+                        )
+                        return {"error": "connection already active"}
+                    if isinstance(result, dbusNm.NetworkManagerFailedError):
+                        logger.error(
+                            "Caught exception while toggling hotspot: NetworkManager Failed %s",
+                            result,
+                        )
+                        return  {"error": "NetworkManager failed"}
+                    if isinstance(result, dbusNm.NetworkManagerBaseError):
+                        logger.error(
+                            "Caught exception while toggling hotspot: NetworkManager Failure %s",
+                            result,
+                        )
+                        return {"error": "NetworkManager failure"}
                     if isinstance(result, Exception):
-                        raise Exception(result)
-
+                        logger.error(
+                            "Caught exception while toggling hotspot: %s", result
+                        )
+                        return {"error": "failed"}
+                    
                 if self.nm.check_connectivity() == (
                     dbusNm.NetworkManagerConnectivityState.FULL
                     | dbusNm.NetworkManagerConnectivityState.LIMITED
                 ):
-                    logging.debug(f"Hotspot AP {self.hotspot_ssid} up!")
-
+                    logger.debug("Hotspot AP %s up!", self.hotspot_ssid)
                 return
-            else:
-                if self.old_ssid:
-                    self.connect_network(self.old_ssid)
-                    return
+            if self.old_ssid:
+                self.connect_network(self.old_ssid)
+                return
+        except dbusNm.NetworkManagerConnectionAlreadyActiveError:
+            logger.error(
+                "Caught exception while toggling hotspot: Connection already active"
+            )
         except Exception as e:
-            logging.error(f"Caught Exception while toggling hotspot to {toggle}: {e}")
+            logger.error(f"Caught Exception while toggling hotspot to {toggle}: {e}")
 
     def hotspot_enabled(self) -> typing.Optional["bool"]:
         """Returns a boolean indicating whether the device hotspot is on or not .
@@ -423,7 +531,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
             future = asyncio.run_coroutine_threadsafe(self._gather_ssid(), self.loop)
             return future.result(timeout=5)
         except Exception as e:
-            logging.info(f"Unexpected error occurred: {e}")
+            logger.info(f"Unexpected error occurred: {e}")
             return ""
 
     def get_current_ip_addr(self) -> str:
@@ -436,7 +544,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
         )
         primary_con = primary_con_fut.result(timeout=2)
         if primary_con == "/":
-            logging.info("There is no NetworkManager active connection.")
+            logger.info("There is no NetworkManager active connection.")
             return ""
 
         _device_ip4_conf_path = dbusNm.ActiveConnection(
@@ -447,7 +555,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
         )
 
         if _device_ip4_conf_path == "/":
-            logging.info("NetworkManager reports no IP configuration for the interface")
+            logger.info("NetworkManager reports no IP configuration for the interface")
             return ""
         ip4_conf = dbusNm.IPv4Config(
             bus=self.system_dbus, ip4_path=ip4_conf_future.result(timeout=2)
@@ -1222,7 +1330,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
         if not isinstance(ssid, str):
             raise TypeError("SSID argument is of type string")
         if not self.is_known(ssid):
-            logging.debug(f"No known network with SSID {ssid}")
+            logger.debug(f"No known network with SSID {ssid}")
             return
         try:
             self.deactivate_connection_by_ssid(ssid)
@@ -1234,7 +1342,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                 if isinstance(result, Exception):
                     raise Exception(result)
         except Exception as e:
-            logging.debug(f"Caught Exception while deleting network {ssid}: {e}")
+            logger.debug(f"Caught Exception while deleting network {ssid}: {e}")
 
     def get_hotspot_ssid(self) -> str:
         return self.hotspot_ssid
@@ -1327,7 +1435,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                 self.loop.run_until_complete(task)
 
         except Exception as e:
-            logging.error(f"Caught Exception while creating hotspot: {e}")
+            logger.error(f"Caught Exception while creating hotspot: {e}")
 
     def set_network_priority(
         self, ssid: str, priority: ConnectionPriority = ConnectionPriority.LOW
