@@ -497,6 +497,8 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
             logger.error("Caught exception while getting network ssid: Failed")
         except dbusNm.NetworkManagerConnectionNotActiveError: 
             logger.error("Caught exception while getting network ssid: Connection is not active")
+        except dbusNm.NetworkManagerBaseError: 
+            logger.error("Caught exception while getting network ssid: Failed")
         return ""
 
     def get_current_ssid(self) -> str:
