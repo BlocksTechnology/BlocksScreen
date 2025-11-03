@@ -12,7 +12,6 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 
 logger = logging.getLogger("logs/BlocksScreen.log")
 
-#RAEL NETWORK
 class BuildNetworkList(QtCore.QThread):
     """Retrieves information from sdbus interface about scanned networks"""
 
