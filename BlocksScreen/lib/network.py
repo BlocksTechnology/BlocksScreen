@@ -29,7 +29,6 @@ class DeleteNetworkError(Exception):
         self.error = error
 
 
-<<<<<<< HEAD
 
 class DeleteNetworkError(Exception):
     """Exception raised when deleting a network fails"""
@@ -39,8 +38,6 @@ class DeleteNetworkError(Exception):
         self.error = error
 
 
-=======
->>>>>>> 2657a74 (Refactor: logging, exception handling, documentation)
 class SdbusNetworkManagerAsync(QtCore.QObject):
     class ConnectionPriority(enum.Enum):
         """Enumeration types for network priorities"""
