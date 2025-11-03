@@ -379,7 +379,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
             toggle (bool): True to activate Hotspot, False otherwise
 
         Raises:
-            ValueError: If the toggle argument is not a Boolean.
+            TypeError: If the toggle argument is not a Boolean.
         """
         try:
             if not isinstance(toggle, bool):
@@ -389,66 +389,12 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                 self.old_ssid = old_ssid
             if toggle:
                 self.disconnect_network()
-                self.connect_network(self.hotspot_ssid)
-                results = asyncio.gather(
-                    self.nm.reload(0x0), return_exceptions=True
-                ).result()
-                for result in results:
-                    if not isinstance(result, BaseException): 
-                        return {"state": "success"}
-                    if isinstance(result, asyncio.CancelledError):
-                        logger.error(
-                            "Caught exception while toggling hotspot: Cancelled"
-                        )
-                        return {"error": "cancelled"}
-                    if isinstance(result, dbusNm.NmConnectionFailedError):
-                        logger.error(
-                            "Caught exception while toggling hotspot: Connection Failed %s",
-                            result,
-                        )
-                        return {"error": "connection failed"}
-                    if isinstance(
-                        result, dbusNm.NetworkManagerConnectionAlreadyActiveError
-                    ):
-                        logger.error(
-                            "Caught exception while toggling hotspot: Connection already active %s",
-                            result,
-                        )
-                        return {"error": "connection already active"}
-                    if isinstance(result, dbusNm.NetworkManagerFailedError):
-                        logger.error(
-                            "Caught exception while toggling hotspot: NetworkManager Failed %s",
-                            result,
-                        )
-                        return  {"error": "NetworkManager failed"}
-                    if isinstance(result, dbusNm.NetworkManagerBaseError):
-                        logger.error(
-                            "Caught exception while toggling hotspot: NetworkManager Failure %s",
-                            result,
-                        )
-                        return {"error": "NetworkManager failure"}
-                    if isinstance(result, Exception):
-                        logger.error(
-                            "Caught exception while toggling hotspot: %s", result
-                        )
-                        return {"error": "failed"}
-                    
-                if self.nm.check_connectivity() == (
-                    dbusNm.NetworkManagerConnectivityState.FULL
-                    | dbusNm.NetworkManagerConnectivityState.LIMITED
-                ):
-                    logger.debug("Hotspot AP %s up!", self.hotspot_ssid)
-                return
-            if self.old_ssid:
-                self.connect_network(self.old_ssid)
-                return
-        except dbusNm.NetworkManagerConnectionAlreadyActiveError:
-            logger.error(
-                "Caught exception while toggling hotspot: Connection already active"
-            )
+                result = self.connect_network(self.hotspot_ssid)
+                return result              
         except Exception as e:
-            logger.error(f"Caught Exception while toggling hotspot to {toggle}: {e}")
-
+            logger.error(f"Caught exception while toggling hotspot: Failed {e}")
+        
+            
     def hotspot_enabled(self) -> typing.Optional["bool"]:
         """Returns a boolean indicating whether the device hotspot is on or not .
 
