@@ -388,16 +388,16 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
             if not isinstance(toggle, bool):
                 raise TypeError("Correct type should be a boolean.")
             if self.hotspot_enabled(): 
-                return {"state": "Already active"}
+                return {"state": "success"}
             if toggle:
                 self.disconnect_network()
                 result = self.connect_network(self.hotspot_ssid)
             else: 
                 result = self.deactivate_connection_by_ssid(self.hotspot_ssid)
-
             return result
         except Exception as e:
             logger.error(f"Caught exception while toggling hotspot: Failed {e}")
+            return {"error": "failed"}
         
             
     def hotspot_enabled(self) -> bool:
@@ -409,14 +409,13 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
         return bool(self.hotspot_ssid == self.get_current_ssid())
 
     def get_wired_interfaces(self) -> typing.List[dbusNm.NetworkDeviceWired]:
-        """get_wired_interfaces Get only the names for the available wired (Ethernet) interfaces.
+        """Get the names for the available wired (Ethernet) interfaces.
 
         Returns:
             typing.List[str]: List containing the names of all wired(Ethernet) interfaces.
         """
         devs_future = asyncio.run_coroutine_threadsafe(self.nm.get_devices(), self.loop)
         devices = devs_future.result(timeout=2)
-
         return list(
             map(
                 lambda path: dbusNm.NetworkDeviceWired(path),
@@ -435,6 +434,8 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                 ),
             )
         )
+    
+
 
     def get_wireless_interfaces(
         self,
@@ -444,7 +445,6 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
         Returns:
             typing.List[str]: A list containing the names of wireless interfaces.
         """
-        # Each interface type has a device flag that is exposed in enums.DeviceType.<device such as Ethernet or Wifi>
         devs_future = asyncio.run_coroutine_threadsafe(self.nm.get_devices(), self.loop)
         devices = devs_future.result(timeout=2)
         return list(
@@ -469,24 +469,35 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
         )
 
     async def _gather_ssid(self) -> str:
-        if not self.nm:
-            return ""
-        primary_con = await self.nm.primary_connection.get_async()
-        if primary_con == "/":
-            logger.debug("No primary connection")
-            return ""
-        active_connection = dbusNm.ActiveConnection(
-            bus=self.system_dbus, connection_path=primary_con
-        )
-        if not active_connection:
-            logger.debug("Active connection is none my man")
-            return ""
-        con = await active_connection.connection.get_async()
-        con_settings = dbusNm.NetworkConnectionSettings(
-            bus=self.system_dbus, settings_path=con
-        )
-        settings = await con_settings.get_settings()
-        return str(settings["802-11-wireless"]["ssid"][1].decode())
+        try:
+            if not self.nm:
+                return ""
+            primary_con = await self.nm.primary_connection.get_async()
+            if primary_con == "/":
+                return ""
+            active_connection = dbusNm.ActiveConnection(
+                bus=self.system_dbus, connection_path=primary_con
+            )
+            # if not active_connection:
+            #     logger.debug("Active connection is none my man")
+            #     return ""
+            con = await active_connection.connection.get_async()
+            con_settings = dbusNm.NetworkConnectionSettings(
+                bus=self.system_dbus, settings_path=con
+            )
+            settings = await con_settings.get_settings()
+            return str(settings["802-11-wireless"]["ssid"][1].decode())
+        except KeyError: 
+            logger.error("Caught exception while getting network ssid: Connection ssid property does not exist")
+        except dbusNm.NmConnectionInvalidPropertyError:
+            logger.error("Caught exception while getting network ssid: Connection object invalid because property is missing")
+        except dbusNm.NmConnectionPropertyNotFoundError: 
+            logger.error("Caught exception while getting network ssid: Connection does not have requested property")
+        except dbusNm.NmConnectionFailedError:
+            logger.error("Caught exception while getting network ssid: Failed")
+        except dbusNm.NetworkManagerConnectionNotActiveError: 
+            logger.error("Caught exception while getting network ssid: Connection is not active")
+        return ""
 
     def get_current_ssid(self) -> str:
         try:
