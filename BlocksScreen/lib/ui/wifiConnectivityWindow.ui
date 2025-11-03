@@ -1028,7 +1028,7 @@ using the buttons on the side.</string>
            <string notr="true"/>
           </property>
           <property name="text">
-           <string>Activate</string>
+           <string>Save</string>
           </property>
           <property name="iconSize">
            <size>

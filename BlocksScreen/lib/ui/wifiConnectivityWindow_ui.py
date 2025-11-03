@@ -1039,7 +1039,7 @@ class Ui_wifi_stacked_page(object):
         self.add_network_password_view.setText(_translate("wifi_stacked_page", "View"))
         self.add_network_password_view.setProperty("class", _translate("wifi_stacked_page", "back_btn"))
         self.add_network_password_view.setProperty("button_type", _translate("wifi_stacked_page", "icon"))
-        self.add_network_validation_button.setText(_translate("wifi_stacked_page", "Activate"))
+        self.add_network_validation_button.setText(_translate("wifi_stacked_page", "Save"))
         self.saved_connection_delete_network_button.setText(_translate("wifi_stacked_page", "Delete"))
         self.saved_connection_delete_network_button.setProperty("class", _translate("wifi_stacked_page", "back_btn"))
         self.saved_connection_delete_network_button.setProperty("button_type", _translate("wifi_stacked_page", "icon"))
