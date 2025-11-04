@@ -77,6 +77,8 @@ class NetworkWidgetbuttons(QtWidgets.QWidget):
 
     def setDisabled(self, a0: bool) -> None:
         self.toggle_button.setDisabled(a0)
+        self.repaint()
+        self.toggle_button.repaint()
         return super().setDisabled(a0)
 
     def setupUI(self):
