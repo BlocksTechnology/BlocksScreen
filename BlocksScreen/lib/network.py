@@ -1311,7 +1311,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
             typing.Dict: Status key with the outcome of the networks deletion.
         """
         if not isinstance(ssid, str):
-            raise TypeError("SSID argument is of type string")
+            raise TypeError("SSID argument expected type string")
         if not self.is_known(ssid):
             logger.debug(f"No known network with SSID {ssid}")
             return
