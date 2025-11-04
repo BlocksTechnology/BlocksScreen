@@ -656,7 +656,7 @@ using the buttons on the side.</string>
          </font>
         </property>
         <property name="text">
-         <string>Wi-fi List</string>
+         <string>Wi-Fi List</string>
         </property>
         <property name="alignment">
          <set>Qt::AlignCenter</set>
@@ -843,7 +843,7 @@ using the buttons on the side.</string>
            <x>10</x>
            <y>10</y>
            <width>761</width>
-           <height>62</height>
+           <height>82</height>
           </rect>
          </property>
          <layout class="QHBoxLayout" name="horizontalLayout_5">
@@ -934,8 +934,13 @@ using the buttons on the side.</string>
             <property name="minimumSize">
              <size>
               <width>500</width>
-              <height>40</height>
+              <height>60</height>
              </size>
+            </property>
+            <property name="font">
+             <font>
+              <pointsize>12</pointsize>
+             </font>
             </property>
            </widget>
           </item>
@@ -1028,7 +1033,7 @@ using the buttons on the side.</string>
            <string notr="true"/>
           </property>
           <property name="text">
-           <string>Save</string>
+           <string>Activate</string>
           </property>
           <property name="iconSize">
            <size>
@@ -1342,7 +1347,7 @@ Password</string>
             <property name="minimumSize">
              <size>
               <width>500</width>
-              <height>40</height>
+              <height>60</height>
              </size>
             </property>
             <property name="maximumSize">
@@ -1350,6 +1355,11 @@ Password</string>
               <width>500</width>
               <height>16777215</height>
              </size>
+            </property>
+            <property name="font">
+             <font>
+              <pointsize>12</pointsize>
+             </font>
             </property>
            </widget>
           </item>
@@ -2085,8 +2095,13 @@ Type</string>
             <property name="maximumSize">
              <size>
               <width>500</width>
-              <height>40</height>
+              <height>60</height>
              </size>
+            </property>
+            <property name="font">
+             <font>
+              <pointsize>12</pointsize>
+             </font>
             </property>
             <property name="echoMode">
              <enum>QLineEdit::Password</enum>
@@ -2625,8 +2640,13 @@ Type</string>
             <property name="maximumSize">
              <size>
               <width>500</width>
-              <height>40</height>
+              <height>60</height>
              </size>
+            </property>
+            <property name="font">
+             <font>
+              <pointsize>12</pointsize>
+             </font>
             </property>
             <property name="echoMode">
              <enum>QLineEdit::Password</enum>
