@@ -22,6 +22,10 @@ class SwapPrintcorePage(QtWidgets.QDialog):
     def setText(self, text: str) -> None:
         self.label.setText(text)
         self.repaint()
+    
+    def Text(self) -> str:
+        return self.label.text()
+
 
 
 
