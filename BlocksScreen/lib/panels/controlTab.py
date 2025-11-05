@@ -261,7 +261,32 @@ class ControlTab(QtWidgets.QStackedWidget):
         self.printcores_page.pc_accept.clicked.connect(self.handle_swapcore)
 
         self.ws.klippy_state_signal.connect(self.on_klippy_status)
+        self.printer.on_printcore_update.connect(self.handle_printcoreupdate)
+
         self.panel.cp_printer_settings_btn.hide()
+
+
+    def handle_printcoreupdate(self, value:dict):
+
+        if value["swapping"] == "idle":
+            return
+
+        if value["swapping"] == "in_pos":
+            self.loadpage.hide()
+            self.printcores_page.show()
+            self.disable_popups.emit(True)
+            self.printcores_page.setText(
+                "Please Insert Print Core \n \n Afterwards click continue"
+            )
+        if value["swapping"] == "unloading":
+            self.loadpage.set_status_message("Unloading print core")
+        
+        if value["swapping"] == "cleaning":
+            self.loadpage.set_status_message("Cleaning print core")
+
+        
+
+
 
     def handle_ztilt(self):
         """Handle Z-Tilt Adjustment"""
@@ -288,20 +313,10 @@ class ControlTab(QtWidgets.QStackedWidget):
 
     def show_swapcore(self):
         """Show swap printcore"""
-        # TODO: swap print core posision comands here
+        self.run_gcode_signal.emit("PRINT_CORE_CHANGE")
         self.loadpage.show()
-        self.loadpage.set_status_message("Moving axis...")
-        QtCore.QTimer.singleShot(5000, self.after_loading)  # should be a if here
+        self.loadpage.set_status_message("Preparing to swap print core")
 
-    def after_loading(self):
-        """Handles loading"""
-        # TODO: swap print core macro here
-        self.loadpage.hide()
-        self.printcores_page.show()
-        self.disable_popups.emit(True)
-        self.printcores_page.setText(
-            "Please Insert Print Core \n \n Afterwards click continue"
-        )
 
     def handle_swapcore(self):
         """Handle swap printcore routine finish"""
@@ -471,6 +486,9 @@ class ControlTab(QtWidgets.QStackedWidget):
             self.panel.mva_x_value_label.setText(f"{values[0]:.2f}")
             self.panel.mva_y_value_label.setText(f"{values[1]:.2f}")
             self.panel.mva_z_value_label.setText(f"{values[2]:.3f}")
+
+            if values[0] == "252,50" and values[1] == "250" and  values[2] == "50":
+                self.loadpage.hide
         self.toolhead_info.update({f"{field}": values})
 
     @QtCore.pyqtSlot(str, str, float, name="on-extruder-update")
