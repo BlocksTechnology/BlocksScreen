@@ -17,7 +17,6 @@ class SwapPrintcorePage(QtWidgets.QDialog):
             | QtCore.Qt.WindowType.FramelessWindowHint
         )
         self.setupUI()
-        self.pc_cancel.clicked.connect(lambda:self.hide())
         self.repaint()
 
     def setText(self, text: str) -> None:
