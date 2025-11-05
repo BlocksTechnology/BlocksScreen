@@ -61,6 +61,9 @@ class ScreenSaver(QtCore.QObject):
                     helper_methods.set_dpms_mode(helper_methods.DPMSState.ON)
                     self.timer.start()
                     return True  # filter out the event, block touch events on the application
+            else:
+                self.timer.stop()
+                self.timer.start()
         return False
 
     def timerEvent(self, a0: QtCore.QTimerEvent) -> None:
