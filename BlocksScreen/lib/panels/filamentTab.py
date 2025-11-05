@@ -163,6 +163,9 @@ class FilamentTab(QtWidgets.QStackedWidget):
 
     @QtCore.pyqtSlot(int, int, name="load_filament")
     def load_filament(self, toolhead: int = 0, temp: int = 220) -> None:
+        if not self.isVisible:
+            return
+
         if self._filament_state == self.FilamentStates.UNKNOWN:
             self.popup.new_message(message_type=Popup.MessageType.ERROR , message="Unable to detect whether the filament is loaded or unloaded.",)
         
@@ -178,6 +181,9 @@ class FilamentTab(QtWidgets.QStackedWidget):
 
     @QtCore.pyqtSlot(str, int, name="unload_filament")
     def unload_filament(self, toolhead: int = 0, temp: int = 220) -> None:
+        if not self.isVisible:
+            return
+            
         if self._filament_state == self.FilamentStates.UNKNOWN:
             self.popup.new_message(message_type=Popup.MessageType.ERROR , message="Unable to detect whether the filament is loaded or unloaded.",)
 
