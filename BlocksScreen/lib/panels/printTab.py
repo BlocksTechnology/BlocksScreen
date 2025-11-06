@@ -56,6 +56,10 @@ class PrintTab(QtWidgets.QStackedWidget):
     run_gcode_signal: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         str, name="run_gcode"
     )
+    on_cancel_print: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        name="on_cancel_print"
+    )
+
     _z_offset: float = 0.0
 
     def __init__(
@@ -349,6 +353,7 @@ class PrintTab(QtWidgets.QStackedWidget):
     def handle_cancel_print(self) -> None:
         """Handles the print cancel action"""
         self.ws.api.cancel_print()
+        self.on_cancel_print.emit()
         self.loadscreen.show()
         self.loadscreen.set_status_message("Cancelling print...\nPlease wait")
 
