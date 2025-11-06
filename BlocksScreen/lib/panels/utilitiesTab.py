@@ -119,7 +119,8 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
 
         self.update_page = UpdatePage(self)
         self.addWidget(self.update_page)
-
+        
+        self.panel.utilities_input_shaper_btn.hide()
         # --- Back Buttons ---
         for button in (
             self.panel.is_back_btn,
