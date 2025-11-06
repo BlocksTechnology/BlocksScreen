@@ -196,11 +196,9 @@ class Printer(QtCore.QObject):
         if not _printer_config:
             return []
         return [
-            {key: _printer_config.get(key)}  # Used get to get the default None
+            {key: _printer_config.get(key)}
             for key in _printer_config
-            if key.startswith(str(section + " "))
-            or key
-            == section  # O(s) time per key, the space is for delimiting the prefix
+            if key.startswith(str(section + " ")) or key == section
         ]
         # Iterates over every key and checks if it starts
         # with the prefix -> Complexity O(n*s)
@@ -221,7 +219,7 @@ class Printer(QtCore.QObject):
         if not self.has_config_keyword(section_name):
             return {}
         _config = self.fetch_config_by_keyword(section_name)
-        return _config[0].get(section_name)
+        return _config[0].get(section_name, {})
 
     def search_config_list(self, search_list: list[str], _objects: list = []) -> list:
         """
