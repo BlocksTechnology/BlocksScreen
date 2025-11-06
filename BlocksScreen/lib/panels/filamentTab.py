@@ -132,7 +132,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
 
             if field == "temperature":
                 self.current_temp = round(new_value,0) #somehow this works 
-                self.loadscreen.set_status_message(f"Feating up ({new_value}/{self.target_temp}) \n Please wait")
+                self.loadscreen.set_status_message(f"Heating up ({new_value}/{self.target_temp}) \n Please wait")
             
 
 
