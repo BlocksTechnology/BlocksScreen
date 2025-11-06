@@ -265,6 +265,7 @@ class ControlTab(QtWidgets.QStackedWidget):
         self.printcores_page.pc_accept.clicked.connect(self.handle_swapcore)
 
         self.ws.klippy_state_signal.connect(self.on_klippy_status)
+        self.ws.klippy_state_signal.connect(self.probe_helper_page.on_klippy_status)
         self.printer.on_printcore_update.connect(self.handle_printcoreupdate)
 
         self.panel.cp_printer_settings_btn.hide()
@@ -344,7 +345,7 @@ class ControlTab(QtWidgets.QStackedWidget):
 
     def show_swapcore(self):
         """Show swap printcore"""
-        self.run_gcode_signal.emit("PRINT_CORE_CHANGE")
+        self.run_gcode_signal.emit("CHANGE_PRINTCORES")
         self.loadpage.show()
         self.loadpage.set_status_message("Preparing to swap print core")
 
