@@ -504,7 +504,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
             )
             primary_con = primary_con_fut.result(timeout=2)
             if primary_con == "/":
-                logger.info("There is no NetworkManager active connection.")
+                logging.info("There is no NetworkManager active connection.")
                 return ""
 
             _device_ip4_conf_path = dbusNm.ActiveConnection(
