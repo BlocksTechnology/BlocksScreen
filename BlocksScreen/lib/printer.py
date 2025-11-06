@@ -221,7 +221,9 @@ class Printer(QtCore.QObject):
         _config = self.fetch_config_by_keyword(section_name)
         return _config[0].get(section_name, {})
 
-    def search_config_list(self, search_list: list[str], _objects: list = []) -> list:
+    def search_config_list(
+        self, search_list: list[str], _objects: typing.Optional[list] = None
+    ) -> list:
         """
         Search a list of printer objects recursively
 
@@ -233,9 +235,12 @@ class Printer(QtCore.QObject):
         Returns:
             list: A list containing the found objects with their configuration
         """
-        if len(search_list) == 0:
+        if not _objects:
+            _objects = []
+        if not search_list:
             return _objects
-        _objects.extend(self.fetch_config_by_keyword(search_list.pop()))
+        key = search_list.pop()
+        _objects.extend(self.fetch_config_by_keyword(key))
         return self.search_config_list(search_list, _objects)
 
     @QtCore.pyqtSlot(str, "PyQt_PyObject", name="on_subscribe_config")
