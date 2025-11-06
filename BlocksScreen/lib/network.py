@@ -391,24 +391,28 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
         )
 
     async def _gather_ssid(self) -> str:
-        if not self.nm:
-            return ""
-        primary_con = await self.nm.primary_connection.get_async()
-        if primary_con == "/":
-            logger.debug("No primary connection")
-            return ""
-        active_connection = dbusNm.ActiveConnection(
-            bus=self.system_dbus, connection_path=primary_con
-        )
-        if not active_connection:
-            logger.debug("Active connection is none my man")
-            return ""
-        con = await active_connection.connection.get_async()
-        con_settings = dbusNm.NetworkConnectionSettings(
-            bus=self.system_dbus, settings_path=con
-        )
-        settings = await con_settings.get_settings()
-        return str(settings["802-11-wireless"]["ssid"][1].decode())
+        try:
+            if not self.nm:
+                return ""
+            primary_con = await self.nm.primary_connection.get_async()
+            if primary_con == "/":
+                logger.debug("No primary connection")
+                return ""
+            active_connection = dbusNm.ActiveConnection(
+                bus=self.system_dbus, connection_path=primary_con
+            )
+            if not active_connection:
+                logger.debug("Active connection is none my man")
+                return ""
+            con = await active_connection.connection.get_async()
+            con_settings = dbusNm.NetworkConnectionSettings(
+                bus=self.system_dbus, settings_path=con
+            )
+            settings = await con_settings.get_settings()
+            return str(settings["802-11-wireless"]["ssid"][1].decode())
+        except Exception as e:
+            logger.error("Caught exception while gathering ssid %s", e)
+        return ""
 
     def get_current_ssid(self) -> str:
         try:
@@ -416,7 +420,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
             return future.result(timeout=5)
         except Exception as e:
             logging.info(f"Unexpected error occurred: {e}")
-            return ""
+        return ""
 
     def get_current_ip_addr(self) -> str:
         """Get the current connection ip address.
@@ -453,8 +457,8 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
             addr_data = addr_data_fut.result(timeout=2)
             return [address_data["address"][1] for address_data in addr_data][0]
         except IndexError as e:
-            logger.error(f"List out of index %s", )
-        return []
+            logger.error(f"List out of index %s", e)
+        return ""
 
     async def _gather_primary_interface(
         self,
@@ -793,15 +797,19 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
         Returns:
             typing.List[str]: List that contains the names of the saved ssid network names
         """
-        _saved_networks = self.get_saved_networks_with_for()
-        if not _saved_networks:
-            return []
-        return list(
-            map(
-                lambda saved_network: (saved_network.get("ssid", None)),
-                _saved_networks,
+        try:
+            _saved_networks = self.get_saved_networks_with_for()
+            if not _saved_networks:
+                return []
+            return list(
+                map(
+                    lambda saved_network: (saved_network.get("ssid", None)),
+                    _saved_networks,
+                )
             )
-        )
+        except BaseException as e:
+            logger.error("Caught exception while getting saved SSID names %s", e)
+        return []
 
     def is_known(self, ssid: str) -> bool:
         """Whether or not a network is known
