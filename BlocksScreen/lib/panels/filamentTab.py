@@ -220,8 +220,6 @@ class FilamentTab(QtWidgets.QStackedWidget):
         """Paints the widget"""
         if self.panel.load_page.isVisible() and self.toolhead_count == 1:
             self.panel.load_header_page_title.setText("Load Toolhead")
-        if a0 is not None:
-            return super().paintEvent(a0)
 
     def find_routine_objects(self):
         """Finds if objects necessary for loading and unloading exist"""
