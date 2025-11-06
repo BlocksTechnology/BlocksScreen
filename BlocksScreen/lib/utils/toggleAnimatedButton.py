@@ -197,11 +197,7 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
         option.state |= QtWidgets.QStyle.StateFlag.State_Active
 
         _rect = self.contentsRect()
-        bg_color = (
-            self.backgroundColor.darker(160)
-            if self.isDown()
-            else self.backgroundColor
-        )
+        bg_color = (self.backgroundColor)
         self.handlePath: QtGui.QPainterPath = QtGui.QPainterPath()
         self.handle_ellipseRect = QtCore.QRectF(
             self._handle_position,
