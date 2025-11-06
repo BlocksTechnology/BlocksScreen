@@ -126,9 +126,9 @@ class FilamentTab(QtWidgets.QStackedWidget):
 
     @QtCore.pyqtSlot(bool, name="on_load_filament")
     def on_load_filament(self, status: bool):
+        """Handles load filament update"""
         if not self.isVisible:
             return
-
         if status:
             self.loadscreen.show()
         else:
@@ -139,6 +139,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
 
     @QtCore.pyqtSlot(bool, name="on_unload_filament")
     def on_unload_filament(self, status: bool):
+        """Handle unload filament update"""
         if not self.isVisible:
             return
 
@@ -152,6 +153,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
 
     @QtCore.pyqtSlot(int, int, name="load_filament")
     def load_filament(self, toolhead: int = 0, temp: int = 220) -> None:
+        """Issues a signal for load filament macro, handles states accordingly"""
         if not self.isVisible:
             return
 
@@ -172,26 +174,25 @@ class FilamentTab(QtWidgets.QStackedWidget):
 
     @QtCore.pyqtSlot(str, int, name="unload_filament")
     def unload_filament(self, toolhead: int = 0, temp: int = 220) -> None:
+        """Issues unload filament macro, handles state accordingly"""
         if not self.isVisible:
             return
-
         if self._filament_state == self.FilamentStates.UNKNOWN:
             self.popup.new_message(
                 message_type=Popup.MessageType.ERROR,
                 message="Unable to detect whether the filament is loaded or unloaded.",
             )
-
         if self._filament_state == self.FilamentStates.UNLOADED:
             self.popup.new_message(
                 message_type=Popup.MessageType.ERROR,
                 message="Filament is already unloaded.",
             )
             return
-
         self.find_routine_objects()
         self.run_gcode.emit(f"UNLOAD_FILAMENT TEMPERATURE={temp}")
 
     def handle_filament_state(self):
+        """Handles filament states"""
         if self._filament_state == self.FilamentStates.LOADED:
             self.panel.filament_page_load_btn.setDisabled(True)
             self.panel.filament_page_load_btn.setDisabled(False)
@@ -204,37 +205,38 @@ class FilamentTab(QtWidgets.QStackedWidget):
 
     @property
     def filament_state(self):
+        """Filament state property"""
         return self._filament_state
 
     def change_page(self, index):
+        """Requests to change page"""
         self.request_change_page.emit(1, index)
 
     def back_button(self):
+        """Requests going back a page"""
         self.request_back.emit()
 
-    def sizeHint(self) -> QtCore.QSize:
-        return super().sizeHint()
-
     def paintEvent(self, a0: QtGui.QPaintEvent | None) -> None:
+        """Paints the widget"""
         if self.panel.load_page.isVisible() and self.toolhead_count == 1:
             self.panel.load_header_page_title.setText("Load Toolhead")
         if a0 is not None:
             return super().paintEvent(a0)
 
     def removeWidget(self, w: QtWidgets.QWidget | None) -> None:
+        """Removes a widget
+
+        Args:
+            w (QtWidgets.QWidget | None): The widget
+        """
         if w is not None:
             return super().removeWidget(w)
 
-    def resizeEvent(self, a0: QtGui.QResizeEvent | None) -> None:
-        if a0 is not None:
-            return super().resizeEvent(a0)
-
     def find_routine_objects(self):
+        """Finds if objects necessary for loading and unloading exist"""
         if not self.printer:
-            return
-
+            return False
         _available_objects = self.printer.available_objects.copy()
-
         if "load_filament" in _available_objects.keys():
             self.has_load_unload_objects = True
             return True
@@ -245,5 +247,4 @@ class FilamentTab(QtWidgets.QStackedWidget):
             return True
         if "gcode_macro UNLOAD_FILAMENT" in _available_objects.keys():
             return True
-
         return False
