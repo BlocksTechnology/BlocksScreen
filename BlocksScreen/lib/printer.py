@@ -117,7 +117,6 @@ class Printer(QtCore.QObject):
         }
         self.heaters_object: dict = {
             "extruder": _heater_attributes.copy(),
-            "extruder1": _heater_attributes.copy(),
             "bed": _heater_attributes.copy(),
         }
 
