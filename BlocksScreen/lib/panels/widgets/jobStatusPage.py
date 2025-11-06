@@ -137,7 +137,7 @@ class JobStatusWidget(QtWidgets.QWidget):
         self.layer_display_button.setText("?")
         self.print_time_display_button.setText("?")
         if thumbnails:
-            self.smalthumbnail = thumbnails[1]
+            self.smalthumbnail = thumbnails[0]
             self.bigthumbnail = thumbnails[1]
 
         self.printing_progress_bar.reset()
@@ -222,7 +222,7 @@ class JobStatusWidget(QtWidgets.QWidget):
                 if value.lower() == "printing" or value == "paused":
                     self._internal_print_status = value
                     if value == "paused":
-                        self.pause_printing_btn.setText("Resume")
+                        self.pause_printing_btn.setText(" Resume")
                         self.pause_printing_btn.setPixmap(
                             QtGui.QPixmap(":/ui/media/btn_icons/play.svg")
                         )
@@ -394,6 +394,9 @@ class JobStatusWidget(QtWidgets.QWidget):
             )
             _scene.addItem(_item_scaled)
             self.CBVSmallThumbnail.setScene(_scene)
+
+        else: 
+            self.request_file_info.emit(self.js_file_name_label.text())
         _scene = QtWidgets.QGraphicsScene()
 
         if not self.bigthumbnail.isNull():
