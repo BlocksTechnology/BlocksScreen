@@ -423,32 +423,38 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
         Returns:
             str: A string containing the current ip address
         """
-        primary_con_fut = asyncio.run_coroutine_threadsafe(
-            self.nm.primary_connection.get_async(), self.loop
-        )
-        primary_con = primary_con_fut.result(timeout=2)
-        if primary_con == "/":
-            logging.info("There is no NetworkManager active connection.")
-            return ""
+        try:
+            primary_con_fut = asyncio.run_coroutine_threadsafe(
+                self.nm.primary_connection.get_async(), self.loop
+            )
+            primary_con = primary_con_fut.result(timeout=2)
+            if primary_con == "/":
+                logging.info("There is no NetworkManager active connection.")
+                return ""
 
-        _device_ip4_conf_path = dbusNm.ActiveConnection(
-            bus=self.system_dbus, connection_path=primary_con
-        )
-        ip4_conf_future = asyncio.run_coroutine_threadsafe(
-            _device_ip4_conf_path.ip4_config.get_async(), self.loop
-        )
+            _device_ip4_conf_path = dbusNm.ActiveConnection(
+                bus=self.system_dbus, connection_path=primary_con
+            )
+            ip4_conf_future = asyncio.run_coroutine_threadsafe(
+                _device_ip4_conf_path.ip4_config.get_async(), self.loop
+            )
 
-        if _device_ip4_conf_path == "/":
-            logging.info("NetworkManager reports no IP configuration for the interface")
-            return ""
-        ip4_conf = dbusNm.IPv4Config(
-            bus=self.system_dbus, ip4_path=ip4_conf_future.result(timeout=2)
-        )
-        addr_data_fut = asyncio.run_coroutine_threadsafe(
-            ip4_conf.address_data.get_async(), self.loop
-        )
-        addr_data = addr_data_fut.result(timeout=2)
-        return [address_data["address"][1] for address_data in addr_data][0]
+            if _device_ip4_conf_path == "/":
+                logging.info(
+                    "NetworkManager reports no IP configuration for the interface"
+                )
+                return ""
+            ip4_conf = dbusNm.IPv4Config(
+                bus=self.system_dbus, ip4_path=ip4_conf_future.result(timeout=2)
+            )
+            addr_data_fut = asyncio.run_coroutine_threadsafe(
+                ip4_conf.address_data.get_async(), self.loop
+            )
+            addr_data = addr_data_fut.result(timeout=2)
+            return [address_data["address"][1] for address_data in addr_data][0]
+        except IndexError as e:
+            logger.error(f"List out of index %s", )
+        return []
 
     async def _gather_primary_interface(
         self,
