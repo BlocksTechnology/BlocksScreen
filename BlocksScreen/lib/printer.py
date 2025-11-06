@@ -279,6 +279,7 @@ class Printer(QtCore.QObject):
 
     @QtCore.pyqtSlot(list, name="on_object_report_received")
     def on_object_report_received(self, report: list) -> None:
+        """Handles generic object updates, emits callback on specific names"""
         if not report or len(report) <= 1:
             return
         if not isinstance(report[0], dict):
