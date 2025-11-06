@@ -267,6 +267,7 @@ class ControlTab(QtWidgets.QStackedWidget):
         self.ws.klippy_state_signal.connect(self.on_klippy_status)
         self.ws.klippy_state_signal.connect(self.probe_helper_page.on_klippy_status)
         self.printer.on_printcore_update.connect(self.handle_printcoreupdate)
+        self.printer.gcode_response.connect(self._handle_gcode_response)
 
         self.panel.cp_printer_settings_btn.hide()
 
@@ -290,8 +291,6 @@ class ControlTab(QtWidgets.QStackedWidget):
             self.loadpage.set_status_message("Cleaning print core")
 
         
-
-        self.printer.gcode_response.connect(self._handle_gcode_response)
 
 
 
