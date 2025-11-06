@@ -132,13 +132,13 @@ class FilamentTab(QtWidgets.QStackedWidget):
 
             if field == "temperature":
                 self.current_temp = round(new_value,0) #somehow this works 
-                self.loadscreen.set_status_message(f"heating up ({new_value}/{self.target_temp}) \n please wait")
+                self.loadscreen.set_status_message(f"Feating up ({new_value}/{self.target_temp}) \n Please wait")
             
 
 
         if field == "target":
             self.target_temp = round(new_value,0) #somehow this works again
-            self.loadscreen.set_status_message("heating up \n please wait")
+            self.loadscreen.set_status_message("Heating up \n Please wait")
 
 
     @QtCore.pyqtSlot(bool, name="on_load_filament")
@@ -150,6 +150,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
         if status:
             self.loadscreen.show()
         else:
+            self.current_temp = 0
             self.loadscreen.hide()
             self._filament_state = self.FilamentStates.LOADED
         self.handle_filamment_state()
@@ -163,6 +164,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
             self.loadscreen.show()
         else:
             self.loadscreen.hide()
+            self.current_temp = 0
             self._filament_state = self.FilamentStates.UNLOADED
         self.handle_filamment_state()
 
@@ -179,12 +181,10 @@ class FilamentTab(QtWidgets.QStackedWidget):
         if self._filament_state == self.FilamentStates.LOADED:
             self.popup.new_message(message_type=Popup.MessageType.ERROR , message="Filament is already loaded.",)
             return  
-        if toolhead == 0:
-            self.run_gcode.emit(f"LOAD_FILAMENT TEMPERATURE={temp}")
-        else:
-            self.run_gcode.emit(
-                f"LOAD_FILAMENT TOOLHEAD=load_toolhead TEMPERATURE={temp}"
-            )
+        
+        self.run_gcode.emit(
+            f"LOAD_FILAMENT TOOLHEAD=load_toolhead TEMPERATURE={temp}"
+        )
 
     @QtCore.pyqtSlot(str, int, name="unload_filament")
     def unload_filament(self, toolhead: int = 0, temp: int = 220) -> None:
@@ -199,12 +199,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
             return  
         
         self.find_routine_objects()
-        if toolhead == 0:
-            self.run_gcode.emit(f"UNLOAD_FILAMENT TEMPERATURE={temp}")
-        else:
-            self.run_gcode.emit(
-                f"UNLOAD_FILAMENT TOOLHEAD={toolhead} TEMPERATURE={temp}"
-            )
+        self.run_gcode.emit(f"UNLOAD_FILAMENT TEMPERATURE={temp}")
             
     def handle_filamment_state(self):
         if self._filament_state == self.FilamentStates.LOADED:
