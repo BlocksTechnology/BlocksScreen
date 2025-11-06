@@ -254,22 +254,19 @@ class Printer(QtCore.QObject):
 
         """
         if not self.configfile.get("config"):
-            return None
+            return
         if not section or not callable(callback):
             return
-
         if isinstance(section, str):
-            self.config_subscription[dict].connect(callback)  # type:ignore
+            self.config_subscription[dict].connect(callback)
             self.config_subscription[dict].emit({section: self.get_config(section)})
         elif isinstance(section, list):
-            self.config_subscription[list].connect(callback)  # type:ignore
+            self.config_subscription[list].connect(callback)
             self.config_subscription[list].emit(self.search_config_list(section))
-        return
 
     def _check_callback(self, name: str, values: dict) -> bool:
         _split: list = name.split(" ", 1)  # Only need the first " " separation
         _object_type, _object_name = tuple(_split + [""] * max(0, 2 - len(_split)))
-
         if name.startswith("extruder"):
             _object_name = name
         if hasattr(self, f"_{_object_type}_object_updated"):
@@ -286,18 +283,10 @@ class Printer(QtCore.QObject):
             return
         if not isinstance(report[0], dict):
             return
+
         _objects_updated_dict: dict = report[0]
-        _objects_updated_names = list(report[0])
-        list(
-            map(
-                lambda n: self._check_callback(n, _objects_updated_dict[n]),
-                _objects_updated_names,
-            )
-        )
-        logger.debug(
-            "Object report received for %s objects,going to callbacks",
-            _objects_updated_names,
-        )
+        for name, value in _objects_updated_dict.items():
+            self._check_callback(name, value)
 
     ####################*# Callbacks #*#####################
     @QtCore.pyqtSlot(list, name="_gcode_response")
