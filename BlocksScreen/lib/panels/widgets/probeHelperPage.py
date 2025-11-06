@@ -224,29 +224,29 @@ class ProbeHelper(QtWidgets.QWidget):
             return
 
         # BUG: If i don't add if not self.probe_config i'll just receive the configuration a bunch of times
-        if isinstance(config, list):
-            if self.block_list:
-                return
-            else:
-                self.block_list = True
+        if isinstance(config, list):...
+            # if self.block_list:
+            #     return
+            # else:
+            #     self.block_list = True
             
-            _keys = []
-            if not isinstance(config, list):
-                return
+            # _keys = []
+            # if not isinstance(config, list):
+            #     return
 
-            list(map(lambda item: _keys.extend(item.keys()), config))
+            # list(map(lambda item: _keys.extend(item.keys()), config))
 
-            probe, *_ = config[0].items()
-            self.z_offset_method_type = probe[0]  # The one found first
-            self.z_offset_method_config = (
-                probe[1],
-                "PROBE_CALIBRATE",
-                "Z_OFFSET_APPLY_PROBE",
-            )
-            self.init_probe_config()
-            if not _keys:
-                return
-            self._configure_option_cards(_keys)
+            # probe, *_ = config[0].items()
+            # self.z_offset_method_type = probe[0]  # The one found first
+            # self.z_offset_method_config = (
+            #     probe[1],
+            #     "PROBE_CALIBRATE",
+            #     "Z_OFFSET_APPLY_PROBE",
+            # )
+            # self.init_probe_config()
+            # if not _keys:
+            #     return
+            # self._configure_option_cards(_keys)
 
         elif isinstance(config, dict):
             if config.get("stepper_z"):
