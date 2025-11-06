@@ -17,6 +17,8 @@ class Printer(QtCore.QObject):
     )
     toolhead_number_signal = QtCore.pyqtSignal(int, name="toolhead_number_received")
 
+    on_printcore_update = QtCore.pyqtSignal(dict, name="on_printcore_update")
+
     extruder_update = QtCore.pyqtSignal(str, str, float, name="extruder_update")
     heater_bed_update = QtCore.pyqtSignal(str, str, float, name="heater_bed_update")
     fan_update = QtCore.pyqtSignal(
@@ -305,6 +307,9 @@ class Printer(QtCore.QObject):
     @QtCore.pyqtSlot(list, name="_gcode_response")
     def _gcode_response(self, report: list) -> None:
         self.gcode_response.emit(report)
+
+    def _webhook_printcore_updated(self, value: dict):
+        self.on_printcore_update[dict].emit(value)
 
     def _webhooks_object_updated(self, value: dict, name: str = "webhooks") -> None:
         """Sends an event type according to the received state

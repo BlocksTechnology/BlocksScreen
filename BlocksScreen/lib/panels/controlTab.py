@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import typing
 from functools import partial
-
+import re
 from lib.moonrakerComm import MoonWebSocket
 from lib.panels.widgets.loadPage import LoadScreen
 from lib.panels.widgets.numpadPage import CustomNumpad
@@ -11,6 +11,8 @@ from lib.panels.widgets.probeHelperPage import ProbeHelper
 from lib.printer import Printer
 from lib.ui.controlStackedWidget_ui import Ui_controlStackedWidget
 from PyQt6 import QtCore, QtGui, QtWidgets
+
+from lib.panels.widgets.popupDialogWidget import Popup
 
 class ControlTab(QtWidgets.QStackedWidget):
     """Printer Control Stacked Widget"""
@@ -50,6 +52,8 @@ class ControlTab(QtWidgets.QStackedWidget):
         super().__init__(parent)
         self.panel = Ui_controlStackedWidget()
         self.panel.setupUi(self)
+
+        self.popup = Popup(self)
 
         self.ws: MoonWebSocket = ws
         self.printer: Printer = printer
@@ -261,19 +265,71 @@ class ControlTab(QtWidgets.QStackedWidget):
         self.printcores_page.pc_accept.clicked.connect(self.handle_swapcore)
 
         self.ws.klippy_state_signal.connect(self.on_klippy_status)
+        self.printer.on_printcore_update.connect(self.handle_printcoreupdate)
+
         self.panel.cp_printer_settings_btn.hide()
+
+
+    def handle_printcoreupdate(self, value:dict):
+
+        if value["swapping"] == "idle":
+            return
+
+        if value["swapping"] == "in_pos":
+            self.loadpage.hide()
+            self.printcores_page.show()
+            self.disable_popups.emit(True)
+            self.printcores_page.setText(
+                "Please Insert Print Core \n \n Afterwards click continue"
+            )
+        if value["swapping"] == "unloading":
+            self.loadpage.set_status_message("Unloading print core")
+        
+        if value["swapping"] == "cleaning":
+            self.loadpage.set_status_message("Cleaning print core")
+
+        
+
+        self.printer.gcode_response.connect(self._handle_gcode_response)
+
+
+
+    def _handle_gcode_response(self, messages: list):
+        """Handle gcode response for Z-tilt adjustment"""
+        pattern = r"Retries:\s*(\d+)/(\d+).*?range:\s*([\d.]+)\s*tolerance:\s*([\d.]+)"
+
+        for msg_list in messages:
+            if not msg_list:
+                continue
+
+            if "Retries:" in msg_list and "range:" in msg_list and "tolerance:" in msg_list:
+                print("Match candidate:", msg_list)
+                match = re.search(pattern, msg_list)
+                print("Regex match:", match)
+
+                if match:
+                    retries_done = int(match.group(1))
+                    retries_total = int(match.group(2))
+                    probed_range = float(match.group(3))
+                    tolerance = float(match.group(4))
+                    if retries_done == retries_total:
+                        self.loadpage.hide()
+                        return
+
+                    if probed_range < tolerance:
+                        self.loadpage.hide()
+                        return
+
+                    self.loadpage.set_status_message(
+                        f"Retries: {retries_done}/{retries_total} | Range: {probed_range:.6f} | Tolerance: {tolerance:.6f}"
+                    )
+
 
     def handle_ztilt(self):
         """Handle Z-Tilt Adjustment"""
         self.loadpage.show()
         self.loadpage.set_status_message("Please wait, performing Z-axis calibration.")
         self.run_gcode_signal.emit("G28\nM400\nZ_TILT_ADJUST")
-        QtCore.QTimer.singleShot(30000, self.after_ztilt)  # should be a if here
-
-    @QtCore.pyqtSlot(name="after-ztilt")
-    def after_ztilt(self):
-        """Handles after Z-Tilt Adjustment"""
-        self.loadpage.hide()
 
     @QtCore.pyqtSlot(str, name="on-klippy-status")
     def on_klippy_status(self, state: str):
@@ -288,20 +344,10 @@ class ControlTab(QtWidgets.QStackedWidget):
 
     def show_swapcore(self):
         """Show swap printcore"""
-        # TODO: swap print core posision comands here
+        self.run_gcode_signal.emit("PRINT_CORE_CHANGE")
         self.loadpage.show()
-        self.loadpage.set_status_message("Moving axis...")
-        QtCore.QTimer.singleShot(5000, self.after_loading)  # should be a if here
+        self.loadpage.set_status_message("Preparing to swap print core")
 
-    def after_loading(self):
-        """Handles loading"""
-        # TODO: swap print core macro here
-        self.loadpage.hide()
-        self.printcores_page.show()
-        self.disable_popups.emit(True)
-        self.printcores_page.setText(
-            "Please Insert Print Core \n \n Afterwards click continue"
-        )
 
     def handle_swapcore(self):
         """Handle swap printcore routine finish"""
@@ -471,6 +517,9 @@ class ControlTab(QtWidgets.QStackedWidget):
             self.panel.mva_x_value_label.setText(f"{values[0]:.2f}")
             self.panel.mva_y_value_label.setText(f"{values[1]:.2f}")
             self.panel.mva_z_value_label.setText(f"{values[2]:.3f}")
+
+            if values[0] == "252,50" and values[1] == "250" and  values[2] == "50":
+                self.loadpage.hide
         self.toolhead_info.update({f"{field}": values})
 
     @QtCore.pyqtSlot(str, str, float, name="on-extruder-update")
