@@ -666,7 +666,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
         I admit that this implementation is way to complicated, I don't even think it's great on memory and time, but i didn't use for loops so mission achieved.
         """
         if not self.nm:
-            return
+            return []
 
         try:
             _connections: typing.List[str] = asyncio.run_coroutine_threadsafe(
@@ -730,7 +730,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
             return _known_networks_parameters
         except Exception as e:
             logger.error(f"Caught exception while fetching saved networks: {e}")
-
+        return []
     @staticmethod
     async def _get_settings(
         saved_connections: typing.List[dbusNm.NetworkConnectionSettings],
