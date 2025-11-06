@@ -46,6 +46,8 @@ class ProbeHelper(QtWidgets.QWidget):
     z_offset_config_method: tuple = ()
     z_offset_calibration_speed: int = 100
 
+    
+
     def __init__(self, parent: QtWidgets.QWidget) -> None:
         super().__init__(parent)
 
@@ -104,6 +106,39 @@ class ProbeHelper(QtWidgets.QWidget):
         self.accept_button.clicked.connect(self.handle_accept)
         self.abort_button.clicked.connect(self.handle_abort)
         self.update()
+
+        self.block_z = False
+        self.block_list = False
+
+    def on_klippy_status(self, state: str):
+        if state.lower() == "standby":
+            self.block_z = False
+            self.block_list = False
+            # Safely remove all items (widgets, spacers, sub-layouts) from the layout.
+            layout = self.main_content_horizontal_layout
+            if layout is not None:
+                while layout.count():
+                    item = layout.takeAt(0)
+                    if item is None:
+                        continue
+                    widget = item.widget()
+                    if widget is not None:
+                        # Remove widget from layout and schedule for deletion
+                        widget.setParent(None)
+                        widget.deleteLater()
+                        continue
+                    child_layout = item.layout()
+                    if child_layout is not None:
+                        # Clear child layouts recursively
+                        while child_layout.count():
+                            child_item = child_layout.takeAt(0)
+                            if child_item is None:
+                                continue
+                            child_widget = child_item.widget()
+                            if child_widget is not None:
+                                child_widget.setParent(None)
+                                child_widget.deleteLater()
+            return
 
     def handle_nozzle_move(self, direction: str):
         if direction == "raise":
@@ -190,6 +225,11 @@ class ProbeHelper(QtWidgets.QWidget):
 
         # BUG: If i don't add if not self.probe_config i'll just receive the configuration a bunch of times
         if isinstance(config, list):
+            if self.block_list:
+                return
+            else:
+                self.block_list = True
+            
             _keys = []
             if not isinstance(config, list):
                 return
@@ -210,6 +250,11 @@ class ProbeHelper(QtWidgets.QWidget):
 
         elif isinstance(config, dict):
             if config.get("stepper_z"):
+                if self.block_z:
+                    return
+                else:
+                    self.block_z = True
+                    
                 _virtual_endstop = "probe:z_virtual_endstop"
                 _config = config.get("stepper_z")
                 if not _config:
