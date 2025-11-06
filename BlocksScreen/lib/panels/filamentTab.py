@@ -223,15 +223,6 @@ class FilamentTab(QtWidgets.QStackedWidget):
         if a0 is not None:
             return super().paintEvent(a0)
 
-    def removeWidget(self, w: QtWidgets.QWidget | None) -> None:
-        """Removes a widget
-
-        Args:
-            w (QtWidgets.QWidget | None): The widget
-        """
-        if w is not None:
-            return super().removeWidget(w)
-
     def find_routine_objects(self):
         """Finds if objects necessary for loading and unloading exist"""
         if not self.printer:
