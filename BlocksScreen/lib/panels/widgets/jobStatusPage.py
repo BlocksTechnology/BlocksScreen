@@ -233,28 +233,7 @@ class JobStatusWidget(QtWidgets.QWidget):
                     self.file_metadata.clear()
                     self.hide_request.emit()
 
-                    _print_state_upper = value[0].upper()
-                    _print_state_call = f"{_print_state_upper}{value[1:]}"
-                    if hasattr(events, f"Print{_print_state_call}"):
-                        logging.debug(f"Events has {_print_state_call} event")
-                        _event_callback: QtCore.QEvent = getattr(
-                            events, f"Print{_print_state_call}"
-                        )
-                        if callable(_event_callback):
-                            logging.debug("event is callable")
-                            try:
-                                instance = QtWidgets.QApplication.instance()
-                                if instance:
-                                    instance.postEvent(self.window(), _event_callback)
-                                else:
-                                    raise TypeError(
-                                        "QApplication.instance expected non None value"
-                                    )
-                            except Exception as e:
-                                logging.info(
-                                    f"Unexpected error while posting print job start event: {e}"
-                                )
-
+                    
                 if hasattr(events, str("Print" + value.capitalize())):
                     event_obj = getattr(events, str("Print" + value.capitalize()))
                     event = event_obj(self._current_file_name, self.file_metadata)

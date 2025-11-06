@@ -7,7 +7,7 @@ import events
 from lib.moonrakerComm import MoonWebSocket
 from PyQt6 import QtCore, QtWidgets
 
-_logger = logging.getLogger(name="logs/BlocksScreen.logs")
+logger = logging.getLogger(name="logs/BlocksScreen.logs")
 
 
 class Printer(QtCore.QObject):
@@ -250,12 +250,7 @@ class Printer(QtCore.QObject):
             section (str | list): Config section to subscribe to
             callback (function): Callback method that is executed signaled after
 
-        Returns:
-            _type_: _description_
         """
-        logging.debug(
-            f"NEW CONFIG SUBSCRIPTION : {self.on_subscribe_config} called from {callback.__class__.__name__}"
-        )
         if not self.configfile.get("config"):
             return None
         if not section or not callable(callback):
@@ -273,10 +268,7 @@ class Printer(QtCore.QObject):
         _split: list = name.split(" ", 1)  # Only need the first " " separation
         _object_type, _object_name = tuple(_split + [""] * max(0, 2 - len(_split)))
 
-        if name.startswith(
-            "extruder"
-        ):  # TODO fix this extruder and naming its just stupid code,
-            # if this goes away the ui breaks :/ FOR NOW
+        if name.startswith("extruder"):
             _object_name = name
         if hasattr(self, f"_{_object_type}_object_updated"):
             _callback = getattr(self, f"_{_object_type}_object_updated")
@@ -289,8 +281,9 @@ class Printer(QtCore.QObject):
     def on_object_report_received(self, report: list) -> None:
         if not report or len(report) <= 1:
             return
-        if isinstance(report[0], dict):
-            _objects_updated_dict: dict = report[0]
+        if not isinstance(report[0], dict):
+            return
+        _objects_updated_dict: dict = report[0]
         _objects_updated_names = list(report[0])
         list(
             map(
@@ -298,9 +291,9 @@ class Printer(QtCore.QObject):
                 _objects_updated_names,
             )
         )
-        _logger.debug(
-            f"""Object report received for {_objects_updated_names} 
-            objects,going to callbacks"""
+        logger.debug(
+            "Object report received for %s objects,going to callbacks",
+            _objects_updated_names,
         )
 
     ####################*# Callbacks #*#####################
@@ -321,12 +314,12 @@ class Printer(QtCore.QObject):
         """
         if "state" in value.keys() and "state_message" in value.keys():
             self.webhooks_update.emit(value["state"], value["state_message"])
-            _logger.debug("Webhooks message received")
+            logger.debug("Webhooks message received")
             _state: str = value["state"]
             _state_upper = _state[0].upper()
             _state_call = f"{_state_upper}{_state[1:]}"
             if hasattr(events, f"Klippy{_state_call}"):
-                _logger.debug(f"Events has {_state_call} event")
+                logger.debug(f"Events has {_state_call} event")
                 _event_callback = getattr(events, f"Klippy{_state_call}")
                 if callable(_event_callback):
                     try:
@@ -337,7 +330,7 @@ class Printer(QtCore.QObject):
                         else:
                             raise Exception("QApplication.instance is None type.")
                     except Exception as e:
-                        _logger.debug(
+                        logger.debug(
                             f"Unable to send internal Klippy {_state_call} notification : {e}"
                         )
 
@@ -541,7 +534,10 @@ class Printer(QtCore.QObject):
                 )
             if "state" in values.keys():
                 self.print_stats_update[str, str].emit("state", values["state"])
-                self.printing_state = values["state"]
+                self.printing_state = values.get("state", None)
+                if not self.printing_state:
+                    return
+
                 if values["state"] == "standby" or values["state"] == "error":
                     self.print_file_loaded = False
                     self.printing = False
@@ -549,6 +545,31 @@ class Printer(QtCore.QObject):
                     self.print_file_loaded = True
                     if values["state"] == "printing" or values["state"] == "pause":
                         self.printing = True
+                # Issue Print stats Qt events accordingly
+                _print_state_upper = self.printing_state[0].upper()
+                _print_state_call = f"{_print_state_upper}{self.printing_state[1:]}"
+                if hasattr(events, f"Print{_print_state_call}"):
+                    logging.debug(
+                        "Print Event Caught, print is %s, calling event %s",
+                        _print_state_call,
+                        f"Print{_print_state_call}",
+                    )
+                    _event_callback: QtCore.QEvent = getattr(
+                        events, f"Print{_print_state_call}"
+                    )
+                    if callable(_event_callback):
+                        try:
+                            instance = QtWidgets.QApplication.instance()
+                            if instance:
+                                instance.postEvent(self.window(), _event_callback)
+                            else:
+                                raise TypeError(
+                                    "QApplication.instance expected non None value"
+                                )
+                        except Exception as e:
+                            logging.info(
+                                f"Unexpected error while posting print job start event: {e}"
+                            )
 
             if "message" in values.keys():
                 self.print_stats_update[str, str].emit("message", values["message"])
@@ -557,7 +578,7 @@ class Printer(QtCore.QObject):
                 self.print_stats_update[str, dict].emit("info", values["info"])
             return
         except Exception as e:
-            _logger.error(f"Error sending print stats update {e}")
+            logger.error(f"Error sending print stats update {e}")
 
     def _display_status_object_updated(
         self, values: dict, name: str = "display_status"
@@ -710,17 +731,11 @@ class Printer(QtCore.QObject):
     def _temperature_probe_object_updated(self, values: dict, name: str) -> None:
         pass
 
-    
-    
     # TODO: testing needed here idk if does work
-    def _unload_filament_object_updated(
-        self, values: dict, name: str
-    ) -> None: 
-        if 'state' in values.keys(): 
-            self.unload_filament_update[bool].emit(values['state'])
-        
-    def _load_filament_object_updated(
-        self, values: dict, name: str
-    ) -> None: 
-        if 'state' in values.keys(): 
-            self.load_filament_update[bool].emit(values['state'])
+    def _unload_filament_object_updated(self, values: dict, name: str) -> None:
+        if "state" in values.keys():
+            self.unload_filament_update[bool].emit(values["state"])
+
+    def _load_filament_object_updated(self, values: dict, name: str) -> None:
+        if "state" in values.keys():
+            self.load_filament_update[bool].emit(values["state"])
