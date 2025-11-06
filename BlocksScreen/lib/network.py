@@ -731,6 +731,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
         except Exception as e:
             logger.error(f"Caught exception while fetching saved networks: {e}")
         return []
+
     @staticmethod
     async def _get_settings(
         saved_connections: typing.List[dbusNm.NetworkConnectionSettings],
@@ -789,7 +790,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
             return saved_networks
         except Exception as e:
             logger.error(f"Caught Exception while fetching saved networks: {e}")
-            return []
+        return []
 
     def get_saved_ssid_names(self) -> typing.List[str]:
         """Get a list with the current saved network ssid names
