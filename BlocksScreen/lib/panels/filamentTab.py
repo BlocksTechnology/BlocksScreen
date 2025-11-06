@@ -122,7 +122,9 @@ class FilamentTab(QtWidgets.QStackedWidget):
     def on_extruder_update(
         self, extruder_name: str, field: str, new_value: float
     ) -> None:
-        
+        if not self.isVisible:
+            return
+
         if self.target_temp != 0:
             if self.current_temp == self.target_temp:
                 self.loadscreen.set_status_message("Extruder heated up \n please wait")
@@ -141,6 +143,9 @@ class FilamentTab(QtWidgets.QStackedWidget):
 
     @QtCore.pyqtSlot(bool, name="on_load_filament")
     def on_load_filament(self,status:bool):
+        if not self.isVisible:
+            return
+
 
         if status:
             self.loadscreen.show()
@@ -151,6 +156,8 @@ class FilamentTab(QtWidgets.QStackedWidget):
 
     @QtCore.pyqtSlot(bool, name="on_unload_filament")
     def on_unload_filament(self,status:bool):
+        if not self.isVisible:
+            return
 
         if status:
             self.loadscreen.show()
@@ -163,6 +170,9 @@ class FilamentTab(QtWidgets.QStackedWidget):
 
     @QtCore.pyqtSlot(int, int, name="load_filament")
     def load_filament(self, toolhead: int = 0, temp: int = 220) -> None:
+        if not self.isVisible:
+            return
+
         if self._filament_state == self.FilamentStates.UNKNOWN:
             self.popup.new_message(message_type=Popup.MessageType.ERROR , message="Unable to detect whether the filament is loaded or unloaded.",)
         
@@ -178,6 +188,9 @@ class FilamentTab(QtWidgets.QStackedWidget):
 
     @QtCore.pyqtSlot(str, int, name="unload_filament")
     def unload_filament(self, toolhead: int = 0, temp: int = 220) -> None:
+        if not self.isVisible:
+            return
+            
         if self._filament_state == self.FilamentStates.UNKNOWN:
             self.popup.new_message(message_type=Popup.MessageType.ERROR , message="Unable to detect whether the filament is loaded or unloaded.",)
 
