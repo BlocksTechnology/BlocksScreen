@@ -126,6 +126,7 @@ class Printer(QtCore.QObject):
         self.query_printer_object.connect(self.ws.api.object_query)
 
     def clear_printer_objs(self) -> None:
+        """Clear all tracking of printer object"""
         self.available_gcode_commands.clear()
         self.available_objects.clear()
         self.configfile.clear()
@@ -138,7 +139,10 @@ class Printer(QtCore.QObject):
 
     @QtCore.pyqtSlot(str, name="on_klippy_status")
     def on_klippy_status(self, state: str):
-        # "startup", "error", "ready", "shutdown", "disconnected"
+        """Handles klippy update status
+
+        States include `"startup", "error", "ready", "shutdown", "disconnect"`
+        """
         if state.lower() == "ready":
             self.request_available_objects_signal.emit()  # request available objects
             _query_request: dict = {
@@ -147,23 +151,19 @@ class Printer(QtCore.QObject):
                 "virtual_sdcard": None,
             }
             self.query_printer_object.emit(_query_request)
-        elif (
-            state.lower() == "error"
-            or state.lower() == "disconnected"
-            or state.lower() == "shutdown"
-        ):
-            self.clear_printer_objs()
+            return
+        self.clear_printer_objs()  # All other states clear it
 
     @QtCore.pyqtSlot(list, name="on_object_list")
     def on_object_list(self, object_list: list):
-        [self.available_objects.update({obj: None}) for obj in object_list]
-        self.request_object_subscription_signal[dict].emit(
-            self.available_objects
-        )  # subscribe to all available printer objects
+        """Handle receiving Printer object list"""
+        self.available_objects = dict.fromkeys(object_list, None)
+        self.request_object_subscription_signal[dict].emit(self.available_objects)
 
     def has_config_keyword(self, section: str) -> bool:
         """Check if a section exists on the printers available object configurations
-            Does not accept prefixes
+
+            **`Does not accept prefixes`**
 
         Args:
             section (str): Name of the section to check its existence
@@ -173,10 +173,10 @@ class Printer(QtCore.QObject):
         """
         if not section:
             return False
-        _printer_config = self.configfile.get("config")
+        _printer_config = self.configfile.get("config", None)
         if not _printer_config:
             return False
-        return section in _printer_config
+        return bool(section in _printer_config)
 
     def fetch_config_by_keyword(self, section: str) -> list:
         """Retrieve a section or sections from the printers configfile
