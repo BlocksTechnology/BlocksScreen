@@ -1,5 +1,3 @@
-import enum
-
 from lib.utils.blocks_label import BlocksLabel
 from lib.utils.toggleAnimatedButton import ToggleAnimatedButton
 from PyQt6 import QtCore, QtGui, QtWidgets
@@ -53,8 +51,10 @@ class NetworkWidgetbuttons(QtWidgets.QWidget):
         style_painter.setRenderHint(
             style_painter.RenderHint.LosslessImageRendering, True
         )
-        
-        _color = QtGui.QColor(13, 99, 128, 54)
+        if self.isEnabled():
+            _color = QtGui.QColor(13, 99, 128, 54)
+        else:
+            _color = QtGui.QColor(255, 255, 255, 54)
 
         _brush = QtGui.QBrush()
         _brush.setColor(_color)
@@ -77,6 +77,8 @@ class NetworkWidgetbuttons(QtWidgets.QWidget):
 
     def setDisabled(self, a0: bool) -> None:
         self.toggle_button.setDisabled(a0)
+        self.repaint()
+        self.toggle_button.repaint()
         return super().setDisabled(a0)
 
     def setupUI(self):
