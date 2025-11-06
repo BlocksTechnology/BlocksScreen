@@ -466,9 +466,9 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
             active_connection = dbusNm.ActiveConnection(
                 bus=self.system_dbus, connection_path=primary_con
             )
-            # if not active_connection:
-            #     logger.debug("Active connection is none my man")
-            #     return ""
+            if not active_connection:
+                logger.debug("Active connection is none my man")
+                return ""
             con = await active_connection.connection.get_async()
             con_settings = dbusNm.NetworkConnectionSettings(
                 bus=self.system_dbus, settings_path=con
@@ -872,15 +872,19 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
         Returns:
             typing.List[str]: List that contains the names of the saved ssid network names
         """
-        _saved_networks = self.get_saved_networks_with_for()
-        if not _saved_networks:
-            return []
-        return list(
-            map(
-                lambda saved_network: (saved_network.get("ssid", None)),
-                _saved_networks,
+        try:
+            _saved_networks = self.get_saved_networks_with_for()
+            if not _saved_networks:
+                return []
+            return list(
+                map(
+                    lambda saved_network: (saved_network.get("ssid", None)),
+                    _saved_networks,
+                )
             )
-        )
+        except BaseException as e:
+            logger.error("Caught exception while getting saved SSID names %s", e)
+        return []
 
     def is_known(self, ssid: str) -> bool:
         """Whether or not a network is known
