@@ -81,9 +81,10 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self.printer.filament_switch_sensor_update.connect(
             self.on_filament_sensor_update
         )
-
-    # IF nothings shows is bc of the connection between printer.py and this ,MAYbe the load and unload file itself with printer idk should work tho
-
+        self.printer.filament_motion_sensor_update.connect(
+            self.on_filament_sensor_update
+        )
+        
     @QtCore.pyqtSlot(str, str, bool, name="on_filament_sensor_update")
     def on_filament_sensor_update(self, sensor_name: str, parameter: str, value: bool):
         """Handles filament sensor updates"""
