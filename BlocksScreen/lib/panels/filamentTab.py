@@ -192,7 +192,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
                 message="Filament is already loaded.",
             )
             return
-
+        self.loadscreen.show()
         self.run_gcode.emit(f"LOAD_FILAMENT TOOLHEAD=load_toolhead TEMPERATURE={temp}")
 
     @QtCore.pyqtSlot(str, int, name="unload_filament")
@@ -214,6 +214,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
             return
 
         self.find_routine_objects()
+        self.loadscreen.show()
         self.run_gcode.emit(f"UNLOAD_FILAMENT TEMPERATURE={temp}")
 
     def handle_filament_state(self):
