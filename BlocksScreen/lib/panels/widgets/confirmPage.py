@@ -39,7 +39,7 @@ class ConfirmWidget(QtWidgets.QWidget):
             )
         )
         self.back_btn.clicked.connect(self.on_reject.emit)
-        self.reject_button.clicked.connect(lambda: self.on_delete.emit(self.direcotry,self.filename))
+        self.reject_button.clicked.connect(lambda: self.on_delete.emit(self.directory,self.filename))
      
 
     @QtCore.pyqtSlot(str, dict, name="on_show_widget")
@@ -47,25 +47,19 @@ class ConfirmWidget(QtWidgets.QWidget):
 
         directory = os.path.dirname(text)
         filename = os.path.basename(text)
-
-        self.direcotry = directory
+        self.directory = directory
         self.filename = filename
-
-
         self.cf_file_name.setText(self.filename)
         if not filedata:
             return
         self._thumbnails = filedata.get("thumbnail_images", [])
-
         if self._thumbnails:
             _biggest_thumbnail = self._thumbnails[
                 -1
             ]  # Show last which is biggest
             self.thumbnail = QtGui.QImage(_biggest_thumbnail)
-
         _total_filament = filedata.get("filament_weight_total")
         _estimated_time = filedata.get("estimated_time")
-
         if isinstance(_estimated_time, str):
             seconds = 0
         else:
@@ -83,7 +77,6 @@ class ConfirmWidget(QtWidgets.QWidget):
                 time_str = f"{hours}h {minutes}m"
             else:
                 time_str = f"{minutes}m"
-
         if _total_filament == 0:
             _total_filament = "Unknown"
         elif _total_filament > 499:
@@ -91,33 +84,10 @@ class ConfirmWidget(QtWidgets.QWidget):
             _total_filament = str("%.2f" %_total_filament) + "kg"
         else:
             _total_filament = str("%.2f" %_total_filament) + "g"
-
-
         filament_label = f"Total Filament: {_total_filament}"
         time_label = f"Slicer time: {time_str}"
-
-        # Find which line is longer
-        print("Fila",len(filament_label),"Time:", len(time_label))
-        # if len(filament_label) > len(time_label):
-        #     spaces = len(filament_label) - len(time_label)+1
-        #     print("Spaces:",spaces)
-        #     time_label += " " * spaces
-        # else:
-        #     spaces = len(time_label) - len(filament_label)+1
-        #     print("Spaces:",spaces)
-        #     filament_label += " " * spaces
-
         self.cf_info_tf.setText(f"{filament_label}")
         self.cf_info_tr.setText(f"{time_label}")
-
-        # # After setting texts
-        # self.cf_info_tf.adjustSize()
-        # self.cf_info_tr.adjustSize()
-
-        # max_width = max(self.cf_info_tf.width(), self.cf_info_tr.width())
-        # self.cf_info_tf.setFixedWidth(max_width)
-        # self.cf_info_tr.setFixedWidth(max_width)
-
         self.repaint()
 
     def estimate_print_time(self, seconds: int) -> list:
