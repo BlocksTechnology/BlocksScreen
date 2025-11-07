@@ -283,7 +283,6 @@ class Printer(QtCore.QObject):
             return
         if not isinstance(report[0], dict):
             return
-
         _objects_updated_dict: dict = report[0]
         for name, value in _objects_updated_dict.items():
             self._check_callback(name, value)
@@ -311,7 +310,6 @@ class Printer(QtCore.QObject):
             _state_upper = _state[0].upper()
             _state_call = f"{_state_upper}{_state[1:]}"
             if hasattr(events, f"Klippy{_state_call}"):
-                logger.debug(f"Events has {_state_call} event")
                 _event_callback = getattr(events, f"Klippy{_state_call}")
                 if callable(_event_callback):
                     try:
@@ -320,10 +318,12 @@ class Printer(QtCore.QObject):
                         if instance is not None and isinstance(event, QtCore.QEvent):
                             instance.sendEvent(self.parent(), event)
                         else:
-                            raise Exception("QApplication.instance is None type.")
+                            raise TypeError("QApplication.instance is None type.")
                     except Exception as e:
                         logger.debug(
-                            f"Unable to send internal Klippy {_state_call} notification : {e}"
+                            "Unable to send internal Klippy %s notification : %e",
+                            _state_call,
+                            e,
                         )
 
     def _gcode_move_object_updated(self, value: dict, name: str = "gcode_move") -> None:
