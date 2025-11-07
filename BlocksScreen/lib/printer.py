@@ -432,7 +432,6 @@ class Printer(QtCore.QObject):
             self.heater_bed_update.emit(heater_name, "power", value["power"])
 
     def _chamber_object_updated(self, value: dict, heater_name: str = "chamber"):
-        # TODO: Complete Chamber object, this object does not actually exist on klippy, i would need to create it
         self.has_chamber = True
 
     def _fan_object_updated(self, value: dict, fan_name: str = "fan") -> None:
