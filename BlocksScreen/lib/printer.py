@@ -496,69 +496,70 @@ class Printer(QtCore.QObject):
     def _print_stats_object_updated(
         self, values: dict, name: str = "print_stats"
     ) -> None:
-        try:
-            if "filename" in values.keys():
-                self.print_stats_update[str, str].emit("filename", values["filename"])
+        if "filename" in values.keys():
+            self.print_stats_update[str, str].emit("filename", values["filename"])
+            self.print_file_loaded = True
+        if "total_duration" in values.keys():
+            self.print_stats_update[str, float].emit(
+                "total_duration", values["total_duration"]
+            )
+        if "print_duration" in values.keys():
+            self.print_stats_update[str, float].emit(
+                "print_duration", values["print_duration"]
+            )
+        if "filament_used" in values.keys():
+            self.print_stats_update[str, float].emit(
+                "filament_used", values["filament_used"]
+            )
+        if "state" in values.keys():
+            self.print_stats_update[str, str].emit("state", values["state"])
+            self.printing_state = values.get("state", None)
+            if not self.printing_state:
+                return
+            self.send_print_event(self.printing_state)
+            if values["state"] == "standby" or values["state"] == "error":
+                self.print_file_loaded = False
+                self.printing = False
+            else:
                 self.print_file_loaded = True
-            if "total_duration" in values.keys():
-                self.print_stats_update[str, float].emit(
-                    "total_duration", values["total_duration"]
-                )
-            if "print_duration" in values.keys():
-                self.print_stats_update[str, float].emit(
-                    "print_duration", values["print_duration"]
-                )
-            if "filament_used" in values.keys():
-                self.print_stats_update[str, float].emit(
-                    "filament_used", values["filament_used"]
-                )
-            if "state" in values.keys():
-                self.print_stats_update[str, str].emit("state", values["state"])
-                self.printing_state = values.get("state", None)
-                if not self.printing_state:
-                    return
+                if values["state"] == "printing" or values["state"] == "pause":
+                    self.printing = True
+        if "message" in values.keys():
+            self.print_stats_update[str, str].emit("message", values["message"])
+        if "info" in values.keys():
+            self.print_stats_update[str, dict].emit("info", values["info"])
 
-                if values["state"] == "standby" or values["state"] == "error":
-                    self.print_file_loaded = False
-                    self.printing = False
-                else:
-                    self.print_file_loaded = True
-                    if values["state"] == "printing" or values["state"] == "pause":
-                        self.printing = True
-                # Issue Print stats Qt events accordingly
-                _print_state_upper = self.printing_state[0].upper()
-                _print_state_call = f"{_print_state_upper}{self.printing_state[1:]}"
-                if hasattr(events, f"Print{_print_state_call}"):
-                    logging.debug(
-                        "Print Event Caught, print is %s, calling event %s",
-                        _print_state_call,
-                        f"Print{_print_state_call}",
-                    )
-                    _event_callback: QtCore.QEvent = getattr(
-                        events, f"Print{_print_state_call}"
-                    )
-                    if callable(_event_callback):
-                        try:
-                            instance = QtWidgets.QApplication.instance()
-                            if instance:
-                                instance.postEvent(self.window(), _event_callback)
-                            else:
-                                raise TypeError(
-                                    "QApplication.instance expected non None value"
-                                )
-                        except Exception as e:
-                            logging.info(
-                                f"Unexpected error while posting print job start event: {e}"
-                            )
+    def send_print_event(self, event: str):
+        """Dispatches a print event throughout the gui
 
-            if "message" in values.keys():
-                self.print_stats_update[str, str].emit("message", values["message"])
-                # self.printing_error_message = values["message"]
-            if "info" in values.keys():
-                self.print_stats_update[str, dict].emit("info", values["info"])
-            return
-        except Exception as e:
-            logger.error(f"Error sending print stats update {e}")
+        Args:
+            event (str): event name
+
+        Raises:
+            TypeError: Thrown when QApplication is None
+        """
+        _print_state_upper = event[0].upper()
+        _print_state_call = f"{_print_state_upper}{event[1:]}"
+        if hasattr(events, f"Print{_print_state_call}"):
+            logging.debug(
+                "Print Event Caught, print is %s, calling event %s",
+                _print_state_call,
+                f"Print{_print_state_call}",
+            )
+            _event_callback: QtCore.QEvent = getattr(
+                events, f"Print{_print_state_call}"
+            )
+            if callable(_event_callback):
+                try:
+                    instance = QtWidgets.QApplication.instance()
+                    if instance:
+                        instance.postEvent(self.window(), _event_callback)
+                    else:
+                        raise TypeError("QApplication.instance expected non None value")
+                except Exception as e:
+                    logging.info(
+                        f"Unexpected error while posting print job start event: {e}"
+                    )
 
     def _display_status_object_updated(
         self, values: dict, name: str = "display_status"
