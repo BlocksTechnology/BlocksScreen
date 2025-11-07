@@ -92,6 +92,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ws.connection_lost.connect(self.conn_window.on_websocket_connection_lost)
         self.printer.webhooks_update.connect(self.conn_window.webhook_update)
         self.printPanel.request_back.connect(slot=self.global_back)
+        self.printPanel.on_cancel_print.connect(slot=self.on_cancel_print)
 
         self.printPanel.request_change_page.connect(slot=self.global_change_page)
         self.filamentPanel.request_back.connect(slot=self.global_back)
@@ -155,6 +156,25 @@ class MainWindow(QtWidgets.QMainWindow):
             # @ Start websocket connection with moonraker
             self.bo_ws_startup.emit()
         self.reset_tab_indexes()
+    @QtCore.pyqtSlot(name="on-cancel-print")
+    def on_cancel_print(self):
+            self.enable_tab_bar()
+            self.ui.extruder_temp_display.clicked.disconnect()
+            self.ui.bed_temp_display.clicked.disconnect()
+            self.ui.filament_type_icon.setDisabled(False)
+            self.ui.nozzle_size_icon.setDisabled(False)
+            self.ui.extruder_temp_display.clicked.connect(
+                lambda: self.global_change_page(
+                    self.ui.main_content_widget.indexOf(self.ui.controlTab),
+                    self.controlPanel.indexOf(self.controlPanel.panel.temperature_page),
+                )
+            )
+            self.ui.bed_temp_display.clicked.connect(
+                lambda: self.global_change_page(
+                    self.ui.main_content_widget.indexOf(self.ui.controlTab),
+                    self.controlPanel.indexOf(self.controlPanel.panel.temperature_page),
+                )
+            )
 
     @QtCore.pyqtSlot(bool, name="update-available")
     def on_update_available(self, state: bool = False):

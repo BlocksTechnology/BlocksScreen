@@ -391,24 +391,28 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
         )
 
     async def _gather_ssid(self) -> str:
-        if not self.nm:
-            return ""
-        primary_con = await self.nm.primary_connection.get_async()
-        if primary_con == "/":
-            logger.debug("No primary connection")
-            return ""
-        active_connection = dbusNm.ActiveConnection(
-            bus=self.system_dbus, connection_path=primary_con
-        )
-        if not active_connection:
-            logger.debug("Active connection is none my man")
-            return ""
-        con = await active_connection.connection.get_async()
-        con_settings = dbusNm.NetworkConnectionSettings(
-            bus=self.system_dbus, settings_path=con
-        )
-        settings = await con_settings.get_settings()
-        return str(settings["802-11-wireless"]["ssid"][1].decode())
+        try:
+            if not self.nm:
+                return ""
+            primary_con = await self.nm.primary_connection.get_async()
+            if primary_con == "/":
+                logger.debug("No primary connection")
+                return ""
+            active_connection = dbusNm.ActiveConnection(
+                bus=self.system_dbus, connection_path=primary_con
+            )
+            if not active_connection:
+                logger.debug("Active connection is none my man")
+                return ""
+            con = await active_connection.connection.get_async()
+            con_settings = dbusNm.NetworkConnectionSettings(
+                bus=self.system_dbus, settings_path=con
+            )
+            settings = await con_settings.get_settings()
+            return str(settings["802-11-wireless"]["ssid"][1].decode())
+        except Exception as e:
+            logger.error("Caught exception while gathering ssid %s", e)
+        return ""
 
     def get_current_ssid(self) -> str:
         try:
@@ -416,39 +420,45 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
             return future.result(timeout=5)
         except Exception as e:
             logging.info(f"Unexpected error occurred: {e}")
-            return ""
+        return ""
 
     def get_current_ip_addr(self) -> str:
         """Get the current connection ip address.
         Returns:
             str: A string containing the current ip address
         """
-        primary_con_fut = asyncio.run_coroutine_threadsafe(
-            self.nm.primary_connection.get_async(), self.loop
-        )
-        primary_con = primary_con_fut.result(timeout=2)
-        if primary_con == "/":
-            logging.info("There is no NetworkManager active connection.")
-            return ""
+        try:
+            primary_con_fut = asyncio.run_coroutine_threadsafe(
+                self.nm.primary_connection.get_async(), self.loop
+            )
+            primary_con = primary_con_fut.result(timeout=2)
+            if primary_con == "/":
+                logging.info("There is no NetworkManager active connection.")
+                return ""
 
-        _device_ip4_conf_path = dbusNm.ActiveConnection(
-            bus=self.system_dbus, connection_path=primary_con
-        )
-        ip4_conf_future = asyncio.run_coroutine_threadsafe(
-            _device_ip4_conf_path.ip4_config.get_async(), self.loop
-        )
+            _device_ip4_conf_path = dbusNm.ActiveConnection(
+                bus=self.system_dbus, connection_path=primary_con
+            )
+            ip4_conf_future = asyncio.run_coroutine_threadsafe(
+                _device_ip4_conf_path.ip4_config.get_async(), self.loop
+            )
 
-        if _device_ip4_conf_path == "/":
-            logging.info("NetworkManager reports no IP configuration for the interface")
-            return ""
-        ip4_conf = dbusNm.IPv4Config(
-            bus=self.system_dbus, ip4_path=ip4_conf_future.result(timeout=2)
-        )
-        addr_data_fut = asyncio.run_coroutine_threadsafe(
-            ip4_conf.address_data.get_async(), self.loop
-        )
-        addr_data = addr_data_fut.result(timeout=2)
-        return [address_data["address"][1] for address_data in addr_data][0]
+            if _device_ip4_conf_path == "/":
+                logging.info(
+                    "NetworkManager reports no IP configuration for the interface"
+                )
+                return ""
+            ip4_conf = dbusNm.IPv4Config(
+                bus=self.system_dbus, ip4_path=ip4_conf_future.result(timeout=2)
+            )
+            addr_data_fut = asyncio.run_coroutine_threadsafe(
+                ip4_conf.address_data.get_async(), self.loop
+            )
+            addr_data = addr_data_fut.result(timeout=2)
+            return [address_data["address"][1] for address_data in addr_data][0]
+        except IndexError as e:
+            logger.error(f"List out of index %s", e)
+        return ""
 
     async def _gather_primary_interface(
         self,
@@ -656,7 +666,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
         I admit that this implementation is way to complicated, I don't even think it's great on memory and time, but i didn't use for loops so mission achieved.
         """
         if not self.nm:
-            return
+            return []
 
         try:
             _connections: typing.List[str] = asyncio.run_coroutine_threadsafe(
@@ -720,6 +730,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
             return _known_networks_parameters
         except Exception as e:
             logger.error(f"Caught exception while fetching saved networks: {e}")
+        return []
 
     @staticmethod
     async def _get_settings(
@@ -779,7 +790,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
             return saved_networks
         except Exception as e:
             logger.error(f"Caught Exception while fetching saved networks: {e}")
-            return []
+        return []
 
     def get_saved_ssid_names(self) -> typing.List[str]:
         """Get a list with the current saved network ssid names
@@ -787,15 +798,19 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
         Returns:
             typing.List[str]: List that contains the names of the saved ssid network names
         """
-        _saved_networks = self.get_saved_networks_with_for()
-        if not _saved_networks:
-            return []
-        return list(
-            map(
-                lambda saved_network: (saved_network.get("ssid", None)),
-                _saved_networks,
+        try:
+            _saved_networks = self.get_saved_networks_with_for()
+            if not _saved_networks:
+                return []
+            return list(
+                map(
+                    lambda saved_network: (saved_network.get("ssid", None)),
+                    _saved_networks,
+                )
             )
-        )
+        except BaseException as e:
+            logger.error("Caught exception while getting saved SSID names %s", e)
+        return []
 
     def is_known(self, ssid: str) -> bool:
         """Whether or not a network is known
