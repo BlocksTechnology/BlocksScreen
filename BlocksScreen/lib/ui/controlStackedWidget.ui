@@ -32,7 +32,7 @@
    <string>StackedWidget</string>
   </property>
   <property name="currentIndex">
-   <number>1</number>
+   <number>0</number>
   </property>
   <widget class="QWidget" name="control_page">
    <property name="sizePolicy">
@@ -345,67 +345,6 @@ Control</string>
         </property>
        </widget>
       </item>
-      <item row="2" column="1">
-       <widget class="BlocksCustomButton" name="cp_printer_settings_btn">
-        <property name="sizePolicy">
-         <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
-          <horstretch>0</horstretch>
-          <verstretch>0</verstretch>
-         </sizepolicy>
-        </property>
-        <property name="minimumSize">
-         <size>
-          <width>10</width>
-          <height>80</height>
-         </size>
-        </property>
-        <property name="maximumSize">
-         <size>
-          <width>250</width>
-          <height>80</height>
-         </size>
-        </property>
-        <property name="font">
-         <font>
-          <family>Momcake</family>
-          <pointsize>19</pointsize>
-          <italic>false</italic>
-          <stylestrategy>PreferAntialias</stylestrategy>
-         </font>
-        </property>
-        <property name="mouseTracking">
-         <bool>false</bool>
-        </property>
-        <property name="tabletTracking">
-         <bool>true</bool>
-        </property>
-        <property name="contextMenuPolicy">
-         <enum>Qt::NoContextMenu</enum>
-        </property>
-        <property name="layoutDirection">
-         <enum>Qt::LeftToRight</enum>
-        </property>
-        <property name="styleSheet">
-         <string notr="true"/>
-        </property>
-        <property name="text">
-         <string>Printer
-Settings</string>
-        </property>
-        <property name="autoDefault">
-         <bool>false</bool>
-        </property>
-        <property name="flat">
-         <bool>true</bool>
-        </property>
-        <property name="class" stdset="0">
-         <string>menu_btn</string>
-        </property>
-        <property name="icon_pixmap" stdset="0">
-         <pixmap resource="resources/icon_resources.qrc">:/ui/media/btn_icons/printer_settings.svg</pixmap>
-        </property>
-       </widget>
-      </item>
       <item row="2" column="0">
        <widget class="BlocksCustomButton" name="cp_switch_print_core_btn">
         <property name="sizePolicy">
@@ -464,6 +403,28 @@ Print Core</string>
         </property>
         <property name="icon_pixmap" stdset="0">
          <pixmap resource="resources/icon_resources.qrc">:/extruder_related/media/btn_icons/switch_print_core.svg</pixmap>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="1">
+       <widget class="QWidget" name="blank_2" native="true">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="minimumSize">
+         <size>
+          <width>10</width>
+          <height>80</height>
+         </size>
+        </property>
+        <property name="maximumSize">
+         <size>
+          <width>250</width>
+          <height>80</height>
+         </size>
         </property>
        </widget>
       </item>
@@ -5623,8 +5584,8 @@ Home</string>
  <connections/>
  <buttongroups>
   <buttongroup name="extrude_select_length_group"/>
-  <buttongroup name="axis_select_length_group"/>
   <buttongroup name="axis_select_speed_group"/>
+  <buttongroup name="axis_select_length_group"/>
   <buttongroup name="extrude_select_feedrate_group"/>
  </buttongroups>
 </ui>

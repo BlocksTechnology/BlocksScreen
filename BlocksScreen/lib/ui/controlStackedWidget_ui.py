@@ -1,4 +1,4 @@
-# Form implementation generated from reading ui file '/home/levi/main/Blocks_Screen/BlocksScreen/lib/ui/controlStackedWidget.ui'
+# Form implementation generated from reading ui file '/home/levi/main/BlocksScreen/BlocksScreen/lib/ui/controlStackedWidget.ui'
 #
 # Created by: PyQt6 UI code generator 6.7.1
 #
@@ -150,30 +150,6 @@ class Ui_controlStackedWidget(object):
         self.cp_z_tilt_btn.setProperty("icon_pixmap", QtGui.QPixmap(":/z_levelling/media/btn_icons/bed_levelling.svg"))
         self.cp_z_tilt_btn.setObjectName("cp_z_tilt_btn")
         self.cp_content_layout.addWidget(self.cp_z_tilt_btn, 1, 1, 1, 1)
-        self.cp_printer_settings_btn = BlocksCustomButton(parent=self.control_page)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Fixed)
-        sizePolicy.setHorizontalStretch(0)
-        sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(self.cp_printer_settings_btn.sizePolicy().hasHeightForWidth())
-        self.cp_printer_settings_btn.setSizePolicy(sizePolicy)
-        self.cp_printer_settings_btn.setMinimumSize(QtCore.QSize(10, 80))
-        self.cp_printer_settings_btn.setMaximumSize(QtCore.QSize(250, 80))
-        font = QtGui.QFont()
-        font.setFamily("Momcake")
-        font.setPointSize(19)
-        font.setItalic(False)
-        font.setStyleStrategy(QtGui.QFont.StyleStrategy.PreferAntialias)
-        self.cp_printer_settings_btn.setFont(font)
-        self.cp_printer_settings_btn.setMouseTracking(False)
-        self.cp_printer_settings_btn.setTabletTracking(True)
-        self.cp_printer_settings_btn.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.NoContextMenu)
-        self.cp_printer_settings_btn.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
-        self.cp_printer_settings_btn.setStyleSheet("")
-        self.cp_printer_settings_btn.setAutoDefault(False)
-        self.cp_printer_settings_btn.setFlat(True)
-        self.cp_printer_settings_btn.setProperty("icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/printer_settings.svg"))
-        self.cp_printer_settings_btn.setObjectName("cp_printer_settings_btn")
-        self.cp_content_layout.addWidget(self.cp_printer_settings_btn, 2, 1, 1, 1)
         self.cp_switch_print_core_btn = BlocksCustomButton(parent=self.control_page)
         sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Fixed)
         sizePolicy.setHorizontalStretch(0)
@@ -198,6 +174,16 @@ class Ui_controlStackedWidget(object):
         self.cp_switch_print_core_btn.setProperty("icon_pixmap", QtGui.QPixmap(":/extruder_related/media/btn_icons/switch_print_core.svg"))
         self.cp_switch_print_core_btn.setObjectName("cp_switch_print_core_btn")
         self.cp_content_layout.addWidget(self.cp_switch_print_core_btn, 2, 0, 1, 1)
+        self.blank_2 = QtWidgets.QWidget(parent=self.control_page)
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Fixed)
+        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setVerticalStretch(0)
+        sizePolicy.setHeightForWidth(self.blank_2.sizePolicy().hasHeightForWidth())
+        self.blank_2.setSizePolicy(sizePolicy)
+        self.blank_2.setMinimumSize(QtCore.QSize(10, 80))
+        self.blank_2.setMaximumSize(QtCore.QSize(250, 80))
+        self.blank_2.setObjectName("blank_2")
+        self.cp_content_layout.addWidget(self.blank_2, 2, 1, 1, 1)
         self.verticalLayout.addLayout(self.cp_content_layout)
         controlStackedWidget.addWidget(self.control_page)
         self.motion_page = QtWidgets.QWidget()
@@ -1997,7 +1983,7 @@ class Ui_controlStackedWidget(object):
         controlStackedWidget.addWidget(self.printer_settings_page)
 
         self.retranslateUi(controlStackedWidget)
-        controlStackedWidget.setCurrentIndex(1)
+        controlStackedWidget.setCurrentIndex(0)
         QtCore.QMetaObject.connectSlotsByName(controlStackedWidget)
 
     def retranslateUi(self, controlStackedWidget):
@@ -2016,9 +2002,6 @@ class Ui_controlStackedWidget(object):
         self.cp_temperature_btn.setProperty("class", _translate("controlStackedWidget", "menu_btn"))
         self.cp_z_tilt_btn.setText(_translate("controlStackedWidget", "Z-Tilt"))
         self.cp_z_tilt_btn.setProperty("class", _translate("controlStackedWidget", "menu_btn"))
-        self.cp_printer_settings_btn.setText(_translate("controlStackedWidget", "Printer\n"
-"Settings"))
-        self.cp_printer_settings_btn.setProperty("class", _translate("controlStackedWidget", "menu_btn"))
         self.cp_switch_print_core_btn.setText(_translate("controlStackedWidget", "Swap\n"
 "Print Core"))
         self.cp_switch_print_core_btn.setProperty("class", _translate("controlStackedWidget", "menu_btn"))
