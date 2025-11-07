@@ -655,7 +655,7 @@ class Printer(QtCore.QObject):
             )
         if "enabled" in values.keys():
             self.filament_switch_sensor_update.emit(
-                cutter_name, "filament_detected", values["enabled"]
+                cutter_name, "enabled", values["enabled"]
             )
 
         self.available_filament_sensors.update({f"{cutter_name}": values})
