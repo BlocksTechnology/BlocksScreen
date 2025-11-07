@@ -56,6 +56,10 @@ class PrintTab(QtWidgets.QStackedWidget):
     run_gcode_signal: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         str, name="run_gcode"
     )
+    on_cancel_print: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        name="on_cancel_print"
+    )
+
     _z_offset: float = 0.0
 
     def __init__(
@@ -172,6 +176,16 @@ class PrintTab(QtWidgets.QStackedWidget):
             self.jobStatusPage_widget.on_print_stats_update
         )
 
+        self.printer.print_stats_update[str, str].connect(
+            self.on_print_stats_update
+        )
+        self.printer.print_stats_update[str, dict].connect(
+            self.on_print_stats_update
+        )
+        self.printer.print_stats_update[str, float].connect(
+            self.on_print_stats_update
+        )
+
         self.printer.gcode_move_update[str, list].connect(
             self.jobStatusPage_widget.on_gcode_move_update
         )
@@ -252,10 +266,26 @@ class PrintTab(QtWidgets.QStackedWidget):
             self.delete_file
         )
 
-
         self.change_page(
             self.indexOf(self.print_page)
         )  # force set the initial page
+
+    @QtCore.pyqtSlot(str, dict, name="on_print_stats_update")
+    @QtCore.pyqtSlot(str, float, name="on_print_stats_update")
+    @QtCore.pyqtSlot(str, str, name="on_print_stats_update")
+    def on_print_stats_update(
+        self, field: str, value: dict | float | str
+    ) -> None:
+        """
+        unblocks tabs if on standby
+        """
+        if isinstance(value, str):
+            if "state" in field:
+                if value in ("standby"):
+                    self.on_cancel_print.emit()
+
+                
+        
 
     @QtCore.pyqtSlot(str, int, "PyQt_PyObject", name="on_numpad_request")
     @QtCore.pyqtSlot(
@@ -313,9 +343,6 @@ class PrintTab(QtWidgets.QStackedWidget):
             self.dialogPage.hide()
 
 
-
-
-
     def paintEvent(self, a0: QtGui.QPaintEvent) -> None:
         """
         REFACTOR: Instead of using a background svg pixmap just draw the
@@ -349,6 +376,7 @@ class PrintTab(QtWidgets.QStackedWidget):
     def handle_cancel_print(self) -> None:
         """Handles the print cancel action"""
         self.ws.api.cancel_print()
+        self.on_cancel_print.emit()
         self.loadscreen.show()
         self.loadscreen.set_status_message("Cancelling print...\nPlease wait")
 

@@ -1,15 +1,13 @@
 import logging
 import typing
 
-
+import events
 from helper_methods import calculate_current_layer, estimate_print_time
+from lib.panels.widgets import dialogPage
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_label import BlocksLabel
 from lib.utils.blocks_progressbar import CustomProgressBar
 from lib.utils.display_button import DisplayButton
-from lib.panels.widgets import dialogPage
-import events
-
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 
@@ -45,8 +43,8 @@ class JobStatusWidget(QtWidgets.QWidget):
     hide_request: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         name="hide_request"
     )
-    request_query_print_stats: typing.ClassVar[QtCore.pyqtSignal] = (
-        QtCore.pyqtSignal(dict, name="request_query_print_stats")
+    request_query_print_stats: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        dict, name="request_query_print_stats"
     )
     request_file_info: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         str, name="request_file_info"
@@ -137,7 +135,7 @@ class JobStatusWidget(QtWidgets.QWidget):
         self.layer_display_button.setText("?")
         self.print_time_display_button.setText("?")
         if thumbnails:
-            self.smalthumbnail = thumbnails[1]
+            self.smalthumbnail = thumbnails[0]
             self.bigthumbnail = thumbnails[1]
 
         self.printing_progress_bar.reset()
@@ -155,13 +153,9 @@ class JobStatusWidget(QtWidgets.QWidget):
             if instance:
                 instance.postEvent(self.window(), print_start_event)
             else:
-                raise TypeError(
-                    "QApplication.instance expected non None value"
-                )
+                raise TypeError("QApplication.instance expected non None value")
         except Exception as e:
-            logging.debug(
-                f"Unexpected error while posting print job start event: {e}"
-            )
+            logging.debug(f"Unexpected error while posting print job start event: {e}")
 
     @QtCore.pyqtSlot(dict, name="on_fileinfo")
     def on_fileinfo(self, fileinfo: dict) -> None:
@@ -202,9 +196,7 @@ class JobStatusWidget(QtWidgets.QWidget):
     @QtCore.pyqtSlot(str, dict, name="on_print_stats_update")
     @QtCore.pyqtSlot(str, float, name="on_print_stats_update")
     @QtCore.pyqtSlot(str, str, name="on_print_stats_update")
-    def on_print_stats_update(
-        self, field: str, value: dict | float | str
-    ) -> None:
+    def on_print_stats_update(self, field: str, value: dict | float | str) -> None:
         """Processes the information that comes from the printer object "print_stats"
             Displays information on the ui accordingly.
 
@@ -222,7 +214,7 @@ class JobStatusWidget(QtWidgets.QWidget):
                 if value.lower() == "printing" or value == "paused":
                     self._internal_print_status = value
                     if value == "paused":
-                        self.pause_printing_btn.setText("Resume")
+                        self.pause_printing_btn.setText(" Resume")
                         self.pause_printing_btn.setPixmap(
                             QtGui.QPixmap(":/ui/media/btn_icons/play.svg")
                         )
@@ -231,9 +223,7 @@ class JobStatusWidget(QtWidgets.QWidget):
                         self.pause_printing_btn.setPixmap(
                             QtGui.QPixmap(":/ui/media/btn_icons/pause.svg")
                         )
-                    self.request_query_print_stats.emit(
-                        {"print_stats": ["filename"]}
-                    )
+                    self.request_query_print_stats.emit({"print_stats": ["filename"]})
                     self.show_request.emit()
                     value = "start"  # This is for event compatibility
                 elif value in ("cancelled", "complete", "error", "standby"):
@@ -243,37 +233,10 @@ class JobStatusWidget(QtWidgets.QWidget):
                     self.file_metadata.clear()
                     self.hide_request.emit()
 
-                    _print_state_upper = value[0].upper()
-                    _print_state_call = f"{_print_state_upper}{value[1:]}"
-                    if hasattr(events, f"Print{_print_state_call}"):
-                        logging.debug(f"Events has {_print_state_call} event")
-                        _event_callback: QtCore.QEvent = getattr(
-                            events, f"Print{_print_state_call}"
-                        )
-                        if callable(_event_callback):
-                            logging.debug("event is callable")
-                            try:
-                                instance = QtWidgets.QApplication.instance()
-                                if instance:
-                                    instance.postEvent(
-                                        self.window(), _event_callback
-                                    )
-                                else:
-                                    raise TypeError(
-                                        "QApplication.instance expected non None value"
-                                    )
-                            except Exception as e:
-                                logging.info(
-                                    f"Unexpected error while posting print job start event: {e}"
-                                )
-
+                    
                 if hasattr(events, str("Print" + value.capitalize())):
-                    event_obj = getattr(
-                        events, str("Print" + value.capitalize())
-                    )
-                    event = event_obj(
-                        self._current_file_name, self.file_metadata
-                    )
+                    event_obj = getattr(events, str("Print" + value.capitalize()))
+                    event = event_obj(self._current_file_name, self.file_metadata)
                     try:
                         instance = QtWidgets.QApplication.instance()
                         if instance:
@@ -286,26 +249,19 @@ class JobStatusWidget(QtWidgets.QWidget):
                         logging.info(
                             f"Unexpected error while posting print job start event: {e}"
                         )
-                
-        
+
         if not self.file_metadata:
             return
         if isinstance(value, dict):
             if "total_layer" in value.keys():
                 self.total_layers = value["total_layer"]
-                self.layer_display_button.secondary_text = (  
-                    str(self.total_layers)
-                )
+                self.layer_display_button.secondary_text = str(self.total_layers)
             if "current_layer" in value.keys():
                 if value["current_layer"] is not None:
                     _current_layer = value["current_layer"]
                     if _current_layer is not None:
-                        self.layer_display_button.setText(
-                            f"{int(_current_layer)}"
-                        )
+                        self.layer_display_button.setText(f"{int(_current_layer)}")
         elif isinstance(value, float):
-            
-
             if "total_duration" in field:
                 self.print_total_duration = value
                 _time = estimate_print_time(int(self.print_total_duration))
@@ -345,9 +301,7 @@ class JobStatusWidget(QtWidgets.QWidget):
                         ),
                     )
                     self.layer_display_button.setText(
-                        f"{int(_current_layer)}"
-                        if _current_layer != -1
-                        else "?"
+                        f"{int(_current_layer)}" if _current_layer != -1 else "?"
                     )
 
     @QtCore.pyqtSlot(str, float, name="virtual_sdcard_update")
@@ -394,6 +348,9 @@ class JobStatusWidget(QtWidgets.QWidget):
             )
             _scene.addItem(_item_scaled)
             self.CBVSmallThumbnail.setScene(_scene)
+
+        else:
+            self.request_file_info.emit(self.js_file_name_label.text())
         _scene = QtWidgets.QGraphicsScene()
 
         if not self.bigthumbnail.isNull():
@@ -471,15 +428,11 @@ class JobStatusWidget(QtWidgets.QWidget):
 
         self.biglayout = QtWidgets.QHBoxLayout(self.bigthumb_widget)
 
-        self.job_status_header_layout = QtWidgets.QHBoxLayout(
-            self.headerWidget
-        )
+        self.job_status_header_layout = QtWidgets.QHBoxLayout(self.headerWidget)
         self.job_status_header_layout.setSpacing(20)
         self.job_status_header_layout.setObjectName("job_status_header_layout")
 
-        self.job_status_progress_layout = QtWidgets.QVBoxLayout(
-            self.progressWidget
-        )
+        self.job_status_progress_layout = QtWidgets.QVBoxLayout(self.progressWidget)
         self.job_status_progress_layout.setSizeConstraint(
             QtWidgets.QLayout.SizeConstraint.SetMinimumSize
         )
@@ -511,16 +464,10 @@ class JobStatusWidget(QtWidgets.QWidget):
         self.js_file_name_icon.setSizePolicy(sizePolicy)
         self.js_file_name_icon.setMinimumSize(QtCore.QSize(60, 60))
         self.js_file_name_icon.setMaximumSize(QtCore.QSize(60, 60))
-        self.js_file_name_icon.setLayoutDirection(
-            QtCore.Qt.LayoutDirection.RightToLeft
-        )
-        self.js_file_name_icon.setStyleSheet(
-            "background: transparent; color: white;"
-        )
+        self.js_file_name_icon.setLayoutDirection(QtCore.Qt.LayoutDirection.RightToLeft)
+        self.js_file_name_icon.setStyleSheet("background: transparent; color: white;")
         self.js_file_name_icon.setText("")
-        self.js_file_name_icon.setAlignment(
-            QtCore.Qt.AlignmentFlag.AlignCenter
-        )
+        self.js_file_name_icon.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self.js_file_name_icon.setProperty(
             "icon_pixmap",
             QtGui.QPixmap(":/files/media/btn_icons/file_icon.svg"),
@@ -534,12 +481,8 @@ class JobStatusWidget(QtWidgets.QWidget):
         self.js_file_name_label.setMaximumSize(QtCore.QSize(16777215, 60))
 
         self.js_file_name_label.setFont(font)
-        self.js_file_name_label.setStyleSheet(
-            "background: transparent; color: white;"
-        )
-        self.js_file_name_label.setAlignment(
-            QtCore.Qt.AlignmentFlag.AlignCenter
-        )
+        self.js_file_name_label.setStyleSheet("background: transparent; color: white;")
+        self.js_file_name_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self.js_file_name_label.setObjectName("js_file_name_label")
 
         self.job_status_header_layout.addWidget(self.js_file_name_icon)
@@ -684,21 +627,17 @@ class JobStatusWidget(QtWidgets.QWidget):
         self.print_time_display_button.setProperty(
             "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/time.svg")
         )
-        self.print_time_display_button.setObjectName(
-            "print_time_display_button"
-        )
+        self.print_time_display_button.setObjectName("print_time_display_button")
 
         self.job_stats_display_layout.addWidget(
             self.layer_display_button,
             0,
-            QtCore.Qt.AlignmentFlag.AlignHCenter
-            | QtCore.Qt.AlignmentFlag.AlignVCenter,
+            QtCore.Qt.AlignmentFlag.AlignHCenter | QtCore.Qt.AlignmentFlag.AlignVCenter,
         )
 
         self.job_stats_display_layout.addWidget(
             self.print_time_display_button,
             0,
-            QtCore.Qt.AlignmentFlag.AlignHCenter
-            | QtCore.Qt.AlignmentFlag.AlignVCenter,
+            QtCore.Qt.AlignmentFlag.AlignHCenter | QtCore.Qt.AlignmentFlag.AlignVCenter,
         )
         self.job_content_layout.addLayout(self.job_stats_display_layout)
