@@ -12,18 +12,14 @@ import helper_methods
 import os
 
 
-
-
 class ConfirmWidget(QtWidgets.QWidget):
     on_accept: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         str, list, name="on_accept"
     )
-    on_reject: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
-        name="on_reject"
-    )
+    on_reject: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(name="on_reject")
 
     on_delete: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
-        str,str,name="on_delete"
+        str, str, name="on_delete"
     )
 
     def __init__(self, parent) -> None:
@@ -33,18 +29,20 @@ class ConfirmWidget(QtWidgets.QWidget):
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_AcceptTouchEvents, True)
         self.thumbnail: QtGui.QImage = QtGui.QImage()
         self._thumbnails: typing.List = []
+        self.directory = ""
+        self.filename = ""
         self.confirm_button.clicked.connect(
             lambda: self.on_accept.emit(
-                str(self.cf_file_name._text), self._thumbnails
+                str(os.path.join(self.directory, self.filename)), self._thumbnails
             )
         )
         self.back_btn.clicked.connect(self.on_reject.emit)
-        self.reject_button.clicked.connect(lambda: self.on_delete.emit(self.directory,self.filename))
-     
+        self.reject_button.clicked.connect(
+            lambda: self.on_delete.emit(self.directory, self.filename)
+        )
 
     @QtCore.pyqtSlot(str, dict, name="on_show_widget")
     def on_show_widget(self, text: str, filedata: dict | None = None) -> None:
-
         directory = os.path.dirname(text)
         filename = os.path.basename(text)
         self.directory = directory
@@ -54,9 +52,7 @@ class ConfirmWidget(QtWidgets.QWidget):
             return
         self._thumbnails = filedata.get("thumbnail_images", [])
         if self._thumbnails:
-            _biggest_thumbnail = self._thumbnails[
-                -1
-            ]  # Show last which is biggest
+            _biggest_thumbnail = self._thumbnails[-1]  # Show last which is biggest
             self.thumbnail = QtGui.QImage(_biggest_thumbnail)
         _total_filament = filedata.get("filament_weight_total")
         _estimated_time = filedata.get("estimated_time")
@@ -81,9 +77,9 @@ class ConfirmWidget(QtWidgets.QWidget):
             _total_filament = "Unknown"
         elif _total_filament > 499:
             _total_filament /= 1000
-            _total_filament = str("%.2f" %_total_filament) + "kg"
+            _total_filament = str("%.2f" % _total_filament) + "kg"
         else:
-            _total_filament = str("%.2f" %_total_filament) + "g"
+            _total_filament = str("%.2f" % _total_filament) + "g"
         filament_label = f"Total Filament: {_total_filament}"
         time_label = f"Slicer time: {time_str}"
         self.cf_info_tf.setText(f"{filament_label}")
@@ -104,7 +100,15 @@ class ConfirmWidget(QtWidgets.QWidget):
         days, hours = divmod(num_hours, 24)
         return [days, hours, minutes, seconds]
 
+    def hide(self):
+        self.directory = ""
+        self.filename = ""
+        return super().hide()
+
     def paintEvent(self, event: QtGui.QPaintEvent) -> None:
+        if not self.isVisible():
+            self.directory = ""
+            self.filename = ""
         if not hasattr(self, "_scene"):
             self._scene = QtWidgets.QGraphicsScene(self)
             self.cf_thumbnail.setScene(self._scene)
@@ -165,7 +169,10 @@ class ConfirmWidget(QtWidgets.QWidget):
         self.cf_header_title.setObjectName("cf_header_title")
 
         self.spacer = QtWidgets.QSpacerItem(
-            60, 60, QtWidgets.QSizePolicy.Policy.Fixed, QtWidgets.QSizePolicy.Policy.Fixed
+            60,
+            60,
+            QtWidgets.QSizePolicy.Policy.Fixed,
+            QtWidgets.QSizePolicy.Policy.Fixed,
         )
         self.spacer.setGeometry(QtCore.QRect(0, 0, 60, 60))
         self.cf_header_title.addItem(self.spacer)
@@ -180,16 +187,10 @@ class ConfirmWidget(QtWidgets.QWidget):
         font.setFamily("Momcake")
         font.setPointSize(24)
         self.cf_file_name.setFont(font)
-        self.cf_file_name.setLayoutDirection(
-            QtCore.Qt.LayoutDirection.RightToLeft
-        )
+        self.cf_file_name.setLayoutDirection(QtCore.Qt.LayoutDirection.RightToLeft)
         self.cf_file_name.setSizePolicy(sizePolicy)
-        self.cf_file_name.setStyleSheet(
-            "background: transparent; color: white;"
-        )
-        self.cf_file_name.setAlignment(
-            QtCore.Qt.AlignmentFlag.AlignCenter
-        )
+        self.cf_file_name.setStyleSheet("background: transparent; color: white;")
+        self.cf_file_name.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self.cf_file_name.setObjectName("cf_file_name")
         self.cf_header_title.addWidget(self.cf_file_name)
 
@@ -203,16 +204,12 @@ class ConfirmWidget(QtWidgets.QWidget):
         self.cf_header_title.addWidget(
             self.back_btn, 0, QtCore.Qt.AlignmentFlag.AlignLeft
         )
-        
+
         self.verticalLayout_4.addLayout(self.cf_header_title)
         self.cf_content_vertical_layout = QtWidgets.QHBoxLayout()
-        self.cf_content_vertical_layout.setObjectName(
-            "cf_content_vertical_layout"
-        )
+        self.cf_content_vertical_layout.setObjectName("cf_content_vertical_layout")
         self.cf_content_horizontal_layout = QtWidgets.QVBoxLayout()
-        self.cf_content_horizontal_layout.setObjectName(
-            "cf_content_horizontal_layout"
-        )
+        self.cf_content_horizontal_layout.setObjectName("cf_content_horizontal_layout")
         self.info_frame = BlocksCustomFrame(parent=self)
         sizePolicy = QtWidgets.QSizePolicy(
             QtWidgets.QSizePolicy.Policy.Expanding,
@@ -222,9 +219,7 @@ class ConfirmWidget(QtWidgets.QWidget):
 
         self.info_frame.setFrameShadow(QtWidgets.QFrame.Shadow.Raised)
 
-
         self.info_layout = QtWidgets.QVBoxLayout(self.info_frame)
-
 
         self.cf_info_tf = QtWidgets.QLabel(parent=self.info_frame)
         font = QtGui.QFont()
@@ -234,24 +229,22 @@ class ConfirmWidget(QtWidgets.QWidget):
         self.cf_info_tf.setFont(font)
         self.cf_info_tf.setStyleSheet("background: transparent; color: white;")
 
-        self.cf_info_tf.setAlignment(QtCore.Qt.AlignmentFlag.AlignLeft|QtCore.Qt.AlignmentFlag.AlignVCenter) 
+        self.cf_info_tf.setAlignment(
+            QtCore.Qt.AlignmentFlag.AlignLeft | QtCore.Qt.AlignmentFlag.AlignVCenter
+        )
         self.info_layout.addWidget(self.cf_info_tf)
-
 
         self.cf_info_tr = QtWidgets.QLabel(parent=self.info_frame)
 
         self.cf_info_tr.setFont(font)
         self.cf_info_tr.setStyleSheet("background: transparent; color: white;")
-        self.cf_info_tr.setAlignment(QtCore.Qt.AlignmentFlag.AlignLeft|QtCore.Qt.AlignmentFlag.AlignTop)
+        self.cf_info_tr.setAlignment(
+            QtCore.Qt.AlignmentFlag.AlignLeft | QtCore.Qt.AlignmentFlag.AlignTop
+        )
         self.info_layout.addWidget(self.cf_info_tr)
-
-
-
-
 
         self.cf_confirm_layout = QtWidgets.QVBoxLayout()
         self.cf_confirm_layout.setSpacing(15)
-
 
         self.confirm_button = BlocksCustomButton(parent=self.info_frame)
         self.confirm_button.setMinimumSize(QtCore.QSize(250, 70))
@@ -264,8 +257,9 @@ class ConfirmWidget(QtWidgets.QWidget):
         )
         self.confirm_button.setText("Print")
         # 2. Align buttons to the right
-        self.cf_confirm_layout.addWidget(self.confirm_button, 0, QtCore.Qt.AlignmentFlag.AlignCenter)
-
+        self.cf_confirm_layout.addWidget(
+            self.confirm_button, 0, QtCore.Qt.AlignmentFlag.AlignCenter
+        )
 
         self.reject_button = BlocksCustomButton(parent=self.info_frame)
         self.reject_button.setMinimumSize(QtCore.QSize(250, 70))
@@ -277,18 +271,15 @@ class ConfirmWidget(QtWidgets.QWidget):
         )
         self.reject_button.setText("Delete")
         # 2. Align buttons to the right
-        self.cf_confirm_layout.addWidget(self.reject_button, 0, QtCore.Qt.AlignmentFlag.AlignCenter)
-
+        self.cf_confirm_layout.addWidget(
+            self.reject_button, 0, QtCore.Qt.AlignmentFlag.AlignCenter
+        )
 
         self.info_layout.addLayout(self.cf_confirm_layout)
 
-
         self.cf_content_horizontal_layout.addWidget(self.info_frame)
 
-
-        self.cf_content_vertical_layout.addLayout(
-            self.cf_content_horizontal_layout
-        )
+        self.cf_content_vertical_layout.addLayout(self.cf_content_horizontal_layout)
         self.cf_thumbnail = QtWidgets.QGraphicsView(self)
         sizePolicy = QtWidgets.QSizePolicy(
             QtWidgets.QSizePolicy.Policy.Expanding,
@@ -296,9 +287,7 @@ class ConfirmWidget(QtWidgets.QWidget):
         )
         sizePolicy.setHorizontalStretch(1)
         sizePolicy.setVerticalStretch(1)
-        sizePolicy.setHeightForWidth(
-            self.cf_thumbnail.sizePolicy().hasHeightForWidth()
-        )
+        sizePolicy.setHeightForWidth(self.cf_thumbnail.sizePolicy().hasHeightForWidth())
         self.cf_thumbnail.setSizePolicy(sizePolicy)
         self.cf_thumbnail.setMinimumSize(QtCore.QSize(400, 300))
         self.cf_thumbnail.setMaximumSize(QtCore.QSize(400, 300))
@@ -331,9 +320,6 @@ class ConfirmWidget(QtWidgets.QWidget):
         self.cf_content_vertical_layout.addWidget(
             self.cf_thumbnail,
             0,
-            QtCore.Qt.AlignmentFlag.AlignRight
-            | QtCore.Qt.AlignmentFlag.AlignVCenter,
+            QtCore.Qt.AlignmentFlag.AlignRight | QtCore.Qt.AlignmentFlag.AlignVCenter,
         )
         self.verticalLayout_4.addLayout(self.cf_content_vertical_layout)
-
-
