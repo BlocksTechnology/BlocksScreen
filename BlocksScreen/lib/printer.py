@@ -415,7 +415,6 @@ class Printer(QtCore.QObject):
                 extruder_name, "smooth_time", value["smooth_time"]
             )
         if "can_extrude" in value.keys():
-            # TODO: Emit a signal that means that the extruder can extrude
             pass
 
     def _heater_bed_object_updated(
