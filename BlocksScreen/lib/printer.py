@@ -493,6 +493,38 @@ class Printer(QtCore.QObject):
                 "file_position", float(values["file_position"])
             )
 
+    def send_print_event(self, event: str):
+        """Dispatches a print event throughout the gui
+
+        Args:
+            event (str): event name
+
+        Raises:
+            TypeError: Thrown when QApplication is None
+        """
+        _print_state_upper = event[0].upper()
+        _print_state_call = f"{_print_state_upper}{event[1:]}"
+        if hasattr(events, f"Print{_print_state_call}"):
+            logging.debug(
+                "Print Event Caught, print is %s, calling event %s",
+                _print_state_call,
+                f"Print{_print_state_call}",
+            )
+            _event_callback: QtCore.QEvent = getattr(
+                events, f"Print{_print_state_call}"
+            )
+            if callable(_event_callback):
+                try:
+                    instance = QtWidgets.QApplication.instance()
+                    if instance:
+                        instance.postEvent(self.window(), _event_callback)
+                    else:
+                        raise TypeError("QApplication.instance expected non None value")
+                except Exception as e:
+                    logger.info(
+                        f"Unexpected error while posting print job start event: {e}"
+                    )
+
     def _print_stats_object_updated(
         self, values: dict, name: str = "print_stats"
     ) -> None:
@@ -528,38 +560,6 @@ class Printer(QtCore.QObject):
             self.print_stats_update[str, str].emit("message", values["message"])
         if "info" in values.keys():
             self.print_stats_update[str, dict].emit("info", values["info"])
-
-    def send_print_event(self, event: str):
-        """Dispatches a print event throughout the gui
-
-        Args:
-            event (str): event name
-
-        Raises:
-            TypeError: Thrown when QApplication is None
-        """
-        _print_state_upper = event[0].upper()
-        _print_state_call = f"{_print_state_upper}{event[1:]}"
-        if hasattr(events, f"Print{_print_state_call}"):
-            logging.debug(
-                "Print Event Caught, print is %s, calling event %s",
-                _print_state_call,
-                f"Print{_print_state_call}",
-            )
-            _event_callback: QtCore.QEvent = getattr(
-                events, f"Print{_print_state_call}"
-            )
-            if callable(_event_callback):
-                try:
-                    instance = QtWidgets.QApplication.instance()
-                    if instance:
-                        instance.postEvent(self.window(), _event_callback)
-                    else:
-                        raise TypeError("QApplication.instance expected non None value")
-                except Exception as e:
-                    logging.info(
-                        f"Unexpected error while posting print job start event: {e}"
-                    )
 
     def _display_status_object_updated(
         self, values: dict, name: str = "display_status"
