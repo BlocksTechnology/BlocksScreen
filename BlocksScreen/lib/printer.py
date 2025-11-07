@@ -522,7 +522,7 @@ class Printer(QtCore.QObject):
                         raise TypeError("QApplication.instance expected non None value")
                 except Exception as e:
                     logger.info(
-                        f"Unexpected error while posting print job start event: {e}"
+                        "Unexpected error while posting print job start event: %s", e
                     )
 
     def _print_stats_object_updated(
