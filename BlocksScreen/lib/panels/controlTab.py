@@ -108,12 +108,12 @@ class ControlTab(QtWidgets.QStackedWidget):
             partial(self.change_page, self.indexOf(self.panel.temperature_page))
         )
         self.panel.cp_switch_print_core_btn.clicked.connect(self.show_swapcore)
-        self.panel.cp_printer_settings_btn.clicked.connect(
-            partial(
-                self.change_page,
-                self.indexOf(self.panel.printer_settings_page),
-            )
-        )
+        # self.panel.cp_printer_settings_btn.clicked.connect(
+        #     partial(
+        #         self.change_page,
+        #         self.indexOf(self.panel.printer_settings_page),
+        #     )
+        # )
         self.panel.cp_nozzles_calibration_btn.clicked.connect(
             partial(self.change_page, self.indexOf(self.probe_helper_page))
         )
@@ -269,7 +269,10 @@ class ControlTab(QtWidgets.QStackedWidget):
         self.printer.on_printcore_update.connect(self.handle_printcoreupdate)
         self.printer.gcode_response.connect(self._handle_gcode_response)
 
-        self.panel.cp_printer_settings_btn.hide()
+        # self.panel.cp_printer_settings_btn.hide()
+        self.panel.temperature_cooldown_btn.hide()
+        self.panel.cooldown_btn.hide()
+        self.panel.cp_switch_print_core_btn.hide()
 
 
     def handle_printcoreupdate(self, value:dict):
