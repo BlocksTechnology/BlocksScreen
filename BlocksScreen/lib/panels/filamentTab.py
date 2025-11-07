@@ -84,7 +84,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self.printer.filament_motion_sensor_update.connect(
             self.on_filament_sensor_update
         )
-        
+
     @QtCore.pyqtSlot(str, str, bool, name="on_filament_sensor_update")
     def on_filament_sensor_update(self, sensor_name: str, parameter: str, value: bool):
         """Handles filament sensor updates"""
@@ -93,12 +93,12 @@ class FilamentTab(QtWidgets.QStackedWidget):
                 self._filament_state = self.FilamentStates.UNKNOWN
                 self.handle_filament_state()
                 return
-            self._sensor_states[sensor_name] = value
+            self._sensor_states.update({sensor_name: value})
             if not self._sensor_states:
                 new_state = self.FilamentStates.UNKNOWN
-            elif all(self._sensor_states.values()):
+            elif all(self._sensor_states.values()): # All sensors detect filament
                 new_state = self.FilamentStates.LOADED
-            else:
+            else: # No filament sensors detect filament
                 new_state = self.FilamentStates.UNLOADED
             if self._filament_state != new_state:
                 self._filament_state = new_state

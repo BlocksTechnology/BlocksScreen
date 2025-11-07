@@ -638,13 +638,27 @@ class Printer(QtCore.QObject):
                 "filament_detected",
                 values["filament_detected"],
             )
-            self.available_filament_sensors.update({f"{filament_motion_name}": values})
+            self.available_filament_sensors.update(
+                {f"{filament_motion_name}": values["filament_detected"]}
+            )
 
         if "enabled" in values.keys():
             self.filament_motion_sensor_update.emit(
                 filament_motion_name, "enabled", values["enabled"]
             )
             self.available_filament_sensors.update({f"{filament_motion_name}": values})
+
+    def _cutter_sensor_object_updated(self, values: dict, cutter_name: str) -> None:
+        if "filament_detected" in values.keys():
+            self.filament_switch_sensor_update.emit(
+                cutter_name, "filament_detected", values["filament_detected"]
+            )
+        if "enabled" in values.keys():
+            self.filament_switch_sensor_update.emit(
+                cutter_name, "filament_detected", values["enabled"]
+            )
+
+        self.available_filament_sensors.update({f"{cutter_name}": values})
 
     def _output_pin_object_updated(self, values: dict, output_pin_name: str) -> None:
         if "value" in values.keys():
