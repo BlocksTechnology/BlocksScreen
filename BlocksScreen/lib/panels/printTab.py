@@ -176,6 +176,16 @@ class PrintTab(QtWidgets.QStackedWidget):
             self.jobStatusPage_widget.on_print_stats_update
         )
 
+        self.printer.print_stats_update[str, str].connect(
+            self.on_print_stats_update
+        )
+        self.printer.print_stats_update[str, dict].connect(
+            self.on_print_stats_update
+        )
+        self.printer.print_stats_update[str, float].connect(
+            self.on_print_stats_update
+        )
+
         self.printer.gcode_move_update[str, list].connect(
             self.jobStatusPage_widget.on_gcode_move_update
         )
@@ -256,10 +266,26 @@ class PrintTab(QtWidgets.QStackedWidget):
             self.delete_file
         )
 
-
         self.change_page(
             self.indexOf(self.print_page)
         )  # force set the initial page
+
+    @QtCore.pyqtSlot(str, dict, name="on_print_stats_update")
+    @QtCore.pyqtSlot(str, float, name="on_print_stats_update")
+    @QtCore.pyqtSlot(str, str, name="on_print_stats_update")
+    def on_print_stats_update(
+        self, field: str, value: dict | float | str
+    ) -> None:
+        """
+        unblocks tabs if on standby
+        """
+        if isinstance(value, str):
+            if "state" in field:
+                if value in ("standby"):
+                    self.on_cancel_print.emit()
+
+                
+        
 
     @QtCore.pyqtSlot(str, int, "PyQt_PyObject", name="on_numpad_request")
     @QtCore.pyqtSlot(
@@ -315,9 +341,6 @@ class PrintTab(QtWidgets.QStackedWidget):
             self.dialogPage.hide()
         else:
             self.dialogPage.hide()
-
-
-
 
 
     def paintEvent(self, a0: QtGui.QPaintEvent) -> None:
