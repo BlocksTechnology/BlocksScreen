@@ -462,19 +462,9 @@ class Printer(QtCore.QObject):
 
     def _heater_fan_object_updated(self, value: dict, fan_name: str = "") -> None:
         # Associated with a heater, on when heater is active
+        # Parameters same as a normal fan
         _names = ["heater_fan", fan_name]
         object_name = " ".join(_names)
-        ...
-        # _names = ["heater_fan", fan_name]
-        # object_name = " ".join(_names)
-        # if "speed" in value.keys():
-        #     self.fan_update[str, str, float].emit(
-        #         object_name, "speed", value.get("speed")
-        #     )
-        # elif "rpm" in value.keys():
-        #     self.fan_update[str, str, int].emit(
-        #         object_name, "rpm", value.get("rpm")
-        #     )
 
     def _idle_timeout_object_updated(
         self, value: dict, name: str = "idle_timeout"
