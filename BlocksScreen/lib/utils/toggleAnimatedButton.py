@@ -38,6 +38,10 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
         self.icon_pixmap: QtGui.QPixmap = QtGui.QPixmap()
         self._backgroundColor: QtGui.QColor = QtGui.QColor(223, 223, 223)
         self._handleColor: QtGui.QColor = QtGui.QColor(255, 100, 10)
+
+        self._handleONcolor: QtGui.QColor = QtGui.QColor(0, 224, 0)
+        self._handleOFFcolor: QtGui.QColor = QtGui.QColor(224, 0, 0)
+
         self.disable_bg_color: QtGui.QColor = QtGui.QColor("#A9A9A9")
         self.disable_handle_color: QtGui.QColor = QtGui.QColor("#666666")
         self._state = ToggleAnimatedButton.State.OFF
@@ -212,7 +216,20 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
         painter.setBackgroundMode(QtCore.Qt.BGMode.TransparentMode)
         painter.setRenderHint(painter.RenderHint.LosslessImageRendering)
         
-        
+        rect_norm = _rect.toRectF().normalized()
+        min_x = rect_norm.x()
+        max_x = rect_norm.x() + rect_norm.width() - rect_norm.height() * 0.80
+        progress = (self._handle_position - min_x) / (max_x - min_x)
+        progress = max(0.0, min(1.0, progress))
+
+        # Inline color interpolation (no separate functions)
+        r = self._handleOFFcolor.red()   + (self._handleONcolor.red()   - self._handleOFFcolor.red())   * progress
+        g = self._handleOFFcolor.green() + (self._handleONcolor.green() - self._handleOFFcolor.green()) * progress
+        b = self._handleOFFcolor.blue()  + (self._handleONcolor.blue()  - self._handleOFFcolor.blue())  * progress
+        a = self._handleOFFcolor.alpha() + (self._handleONcolor.alpha() - self._handleOFFcolor.alpha()) * progress
+
+        self.handleColor = QtGui.QColor(int(r), int(g), int(b), int(a))
+
         painter.fillPath(
             self.trailPath,
             bg_color if self.isEnabled() else self.disable_bg_color,
