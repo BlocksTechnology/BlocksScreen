@@ -1,0 +1,10 @@
+name: test-code
+on:
+    push:
+        paths-ignore:
+            - "scripts/**"
+            - "BlocksScreen/lib/ui/**"
+    pull_request:
+        paths-ignore:
+            - "scripts/**"
+            - "BlocksScreen/lib/ui/**"
