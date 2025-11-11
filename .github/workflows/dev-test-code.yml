@@ -1,0 +1,60 @@
+name: dev-test-code
+
+on:
+  push:
+    paths-ignore:
+      - "scripts/**"
+      - "BlocksScreen/lib/ui/**"
+  pull_request:
+    paths-ignore:
+      - "scripts/**"
+      - "BlocksScreen/lib/ui/**"
+  # schedule:
+  #   - cron: "0 2 * * 1-5"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11.2"]
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff
+          pip install pylint
+          pip install pytest pytest-cov
+
+      - name: Linting & Analyzing code formatting with Ruff
+        run: |
+          ruff check --output-format=github --target-version=py311 --config=pyproject.toml
+          ruff format --diff --target-version=py311 --config=pyproject.toml
+        continue-on-error: true
+      
+      # - name: QA code
+      #   uses: weibullguy/python-lint-plus@v1.11.0
+      #   with:
+      #     python-root-list: "tests"
+      #     virtual-environment: "python-lint-plus"
+      #     use-radon: true
+      #     extra-radon-options
+
+      - name: Analyzing code with pylint
+        run: |
+          pylint -j$(nproc) $(git ls-files '*.py')
+        continue-on-error: true
+
+      - name: Running Unit tests with pytest
+        run: |
+          pip install pytest pytest-cov
+          if [ -d "tests/" ] && [ "$(ls -A tests/)" ]; then pytest tests/'*.py' --doctest-modules --junitxml=junit/test-results.xml --cov=com --conv-report=xml --cov-report=html fi

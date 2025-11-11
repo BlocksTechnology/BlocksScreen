@@ -2,7 +2,7 @@ name: Enforce Branch Naming
 
 on:
   push:
-    branches-ignore: [main, staging, dev]
+    branches-ignore: [staging, dev]
   pull_request:
 
 jobs:
