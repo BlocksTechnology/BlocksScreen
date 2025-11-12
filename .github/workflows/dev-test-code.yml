@@ -38,7 +38,7 @@ jobs:
         run: |
           ruff check --output-format=github --target-version=py311 --config=pyproject.toml
           ruff format --diff --target-version=py311 --config=pyproject.toml
-        continue-on-error: true
+        continue-on-error: false
   QA-check:
     runs-on: ubuntu-latest
     strategy:
@@ -61,7 +61,7 @@ jobs:
         run: |
           echo "Linting files..."
           pylint -j$(nproc) --recursive=y --rcfile=tools/.pylintrc.dev .
-        continue-on-error: true
+        continue-on-error: false
   Unit-tests:
     runs-on: ubuntu-latest
     strategy:
