@@ -1,4 +1,4 @@
-# Form implementation generated from reading ui file '/home/levi/main/BlocksScreen/BlocksScreen/lib/ui/controlStackedWidget.ui'
+# Form implementation generated from reading ui file '/home/levi/BlocksScreen/BlocksScreen/lib/ui/controlStackedWidget.ui'
 #
 # Created by: PyQt6 UI code generator 6.7.1
 #
