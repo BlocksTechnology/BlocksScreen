@@ -2,16 +2,19 @@ name: dev-test-code
 
 on:
   push:
+    branches-ignore:
+      - main
     paths-ignore:
       - "scripts/**"
       - "BlocksScreen/lib/ui/**"
+      - "extras/**"
   pull_request:
+    branches-ignore:
+      - main
     paths-ignore:
       - "scripts/**"
       - "BlocksScreen/lib/ui/**"
-  # schedule:
-  #   - cron: "0 2 * * 1-5"
-
+      - "extras/**"
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -40,21 +43,17 @@ jobs:
           ruff check --output-format=github --target-version=py311 --config=pyproject.toml
           ruff format --diff --target-version=py311 --config=pyproject.toml
         continue-on-error: true
-      
-      # - name: QA code
-      #   uses: weibullguy/python-lint-plus@v1.11.0
-      #   with:
-      #     python-root-list: "tests"
-      #     virtual-environment: "python-lint-plus"
-      #     use-radon: true
-      #     extra-radon-options
 
-      - name: Analyzing code with pylint
+      - name: QA code with pylint
         run: |
-          pylint -j$(nproc) $(git ls-files '*.py')
+          echo "Linting files..."
+          pylint -j$(nproc) --recursive=y --rcfile=tools/.pylintrc.dev .
         continue-on-error: true
 
       - name: Running Unit tests with pytest
         run: |
-          pip install pytest pytest-cov
-          if [ -d "tests/" ] && [ "$(ls -A tests/)" ]; then pytest tests/'*.py' --doctest-modules --junitxml=junit/test-results.xml --cov=com --conv-report=xml --cov-report=html fi
+          if [ -d "tests/" ] && [ "$(ls -A tests/)" ]; then 
+            pytest tests/'*.py' --doctest-modules --junitxml=junit/test-results.xml --cov=com --conv-report=xml --cov-report=html 
+          else
+            echo "No tests directory no need to proceed with tests"
+          fi
