@@ -13,6 +13,10 @@ from lib.ui.controlStackedWidget_ui import Ui_controlStackedWidget
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 from lib.panels.widgets.popupDialogWidget import Popup
+from lib.utils.display_button import DisplayButton
+from lib.panels.widgets.slider_selector_page import SliderPage
+
+from helper_methods import normalize
 
 class ControlTab(QtWidgets.QStackedWidget):
     """Printer Control Stacked Widget"""
@@ -41,6 +45,7 @@ class ControlTab(QtWidgets.QStackedWidget):
     request_file_info: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         str, name="request-file-info"
     )
+    tune_display_buttons: dict = {}
 
     def __init__(
         self,
@@ -73,6 +78,11 @@ class ControlTab(QtWidgets.QStackedWidget):
         self.addWidget(self.printcores_page)
         self.loadpage = LoadScreen(self, LoadScreen.AnimationGIF.DEFAULT)
         self.addWidget(self.loadpage)
+
+        self.sliderPage = SliderPage(self)
+        self.addWidget(self.sliderPage)
+        self.sliderPage.request_back.connect(self.back_button)
+        
         self.probe_helper_page.request_page_view.connect(
             partial(self.change_page, self.indexOf(self.probe_helper_page))
         )
@@ -107,6 +117,10 @@ class ControlTab(QtWidgets.QStackedWidget):
         self.panel.cp_temperature_btn.clicked.connect(
             partial(self.change_page, self.indexOf(self.panel.temperature_page))
         )
+        self.panel.cp_fans_btn.clicked.connect(
+            partial(self.change_page, self.indexOf(self.panel.fans_page))
+        )
+        self.panel.fans_back_btn.clicked.connect(self.back_button)
         self.panel.cp_switch_print_core_btn.clicked.connect(self.show_swapcore)
         # self.panel.cp_printer_settings_btn.clicked.connect(
         #     partial(
@@ -274,7 +288,128 @@ class ControlTab(QtWidgets.QStackedWidget):
         self.panel.cooldown_btn.hide()
         self.panel.cp_switch_print_core_btn.hide()
 
+        self.printer.fan_update[str, str, float].connect(
+            self.on_fan_object_update
+        )
+        self.printer.fan_update[str, str, int].connect(
+            self.on_fan_object_update
+        )
 
+    @QtCore.pyqtSlot(str, str, float, name="on_fan_update")
+    @QtCore.pyqtSlot(str, str, int, name="on_fan_update")
+    def on_fan_object_update(
+        self, name: str, field: str, new_value: int | float
+    ) -> None:
+        """Slot Method that receives information from fan objects
+
+        Args:
+            name (str): fan object name
+            field (str): field name
+            new_value (int | float): New value for field name
+        """
+        if "speed" in field:
+            if not self.tune_display_buttons.get(name, None):
+                _new_display_button = self.create_display_button(name)
+                _new_display_button.setParent(self)
+                if "blower" in name:
+                    _new_display_button.icon_pixmap = QtGui.QPixmap(
+                        ":/temperature_related/media/btn_icons/blower.svg"
+                    )
+                else:
+                    _new_display_button.icon_pixmap = QtGui.QPixmap(
+                        ":/temperature_related/media/btn_icons/fan.svg"
+                    )
+                self.tune_display_buttons.update(
+                    {
+                        name: {
+                            "display_button": _new_display_button,
+                            "speed": 0,
+                        }
+                    }
+                )
+                if name in ("fan", "fan_generic"):
+                    _new_display_button.clicked.connect(
+                        lambda: self.on_slidePage_request(
+                            str(name),
+                            int(
+                                round(
+                                    self.tune_display_buttons.get(name).get(  # type:ignore
+                                        "speed", 0
+                                    )
+                                )
+                            ),
+                            self.on_slider_change,
+                            0,
+                            100,
+                        )
+                    )
+                else:   
+                    _new_display_button.setDisabled(True)
+                self.panel.fans_content_layout.addWidget(
+                    _new_display_button
+                )
+            _display_button = self.tune_display_buttons.get(name)
+            if not _display_button:
+                return
+            _display_button.update({"speed": int(round(new_value * 100))})
+            _display_button.get("display_button").setText(
+                f"{new_value * 100:.0f}%"
+            )
+
+    @QtCore.pyqtSlot(str, int, "PyQt_PyObject", name="on_slidePage_request")
+    @QtCore.pyqtSlot(
+        str, int, "PyQt_PyObject", int, int, name="on_slidePage_request"
+    )
+    def on_slidePage_request(
+        self,
+        name: str,
+        current_value: int,
+        callback,
+        min_value: int = 0,
+        max_value: int = 100,
+    ) -> None:
+        self.sliderPage.value_selected.connect(callback)
+        self.sliderPage.set_name(name)
+        self.sliderPage.set_slider_position(int(current_value))
+        self.sliderPage.set_slider_minimum(min_value)
+        self.sliderPage.set_slider_maximum(max_value)
+        self.change_page(self.indexOf(self.sliderPage))
+
+
+    @QtCore.pyqtSlot(str, int, name="on_slider_change")
+    def on_slider_change(self, name: str, new_value: int) -> None:
+        if "speed" in name.lower():
+            self.speed_factor_override = new_value / 100
+            self.run_gcode_signal.emit(f"M220 S{new_value}")
+
+        if "fan" in name.lower():
+            if name.lower() == "fan":
+                self.run_gcode_signal.emit(
+                    f"M106 S{int(round((normalize(float(new_value / 100), 0.0, 1.0, 0, 255))))}"
+                )  # [0, 255] Range
+            else:
+                self.run_gcode_signal.emit(
+                    f"SET_FAN_SPEED FAN={name} SPEED={float(new_value / 100.00)}"
+                )  # [0.0, 1.0] Range
+
+    def create_display_button(self, name: str) -> DisplayButton:
+        """Create and return a DisplayButton
+
+        Args:
+            name (str): Name for the display button
+
+        Returns:
+            DisplayButton: The created DisplayButton object
+        """
+        display_button = DisplayButton()
+        display_button.setObjectName(str(name + "_display"))
+        display_button.setMinimumSize(QtCore.QSize(150, 50))
+        display_button.setMaximumSize(QtCore.QSize(150, 80))
+        font = QtGui.QFont()
+        font.setPointSize(16)
+        display_button.setFont(font)
+        return display_button
+    
     def handle_printcoreupdate(self, value:dict):
 
         if value["swapping"] == "idle":
