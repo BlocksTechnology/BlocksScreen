@@ -102,6 +102,7 @@ class BlocksLabel(QtWidgets.QLabel):
 
     @marquee.setter
     def marquee(self, activate: bool) -> None:
+    def marquee(self, activate: bool) -> None:
         self._marquee = activate
         self.update_text_metrics()
 
@@ -129,6 +130,7 @@ class BlocksLabel(QtWidgets.QLabel):
         """Start glow animation"""
         self.glow_animation.setDuration(self.animation_speed)
         start_color = QtGui.QColor("#00000000")
+        end_color = QtGui.QColor("#E95757")
         end_color = QtGui.QColor("#E95757")
         self.glow_animation.setStartValue(start_color)
         self.glow_animation.setEndValue(end_color)
@@ -161,6 +163,8 @@ class BlocksLabel(QtWidgets.QLabel):
         self.update()
 
     def start_scroll(self) -> None:
+        """Start or restart the scrolling."""
+        if not self.timer.isActive():
         """Start or restart the scrolling."""
         if not self.timer.isActive():
             self.scroll_pos = 0
