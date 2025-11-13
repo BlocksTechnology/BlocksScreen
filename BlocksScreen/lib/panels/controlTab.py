@@ -9,7 +9,7 @@ from lib.panels.widgets.numpadPage import CustomNumpad
 from lib.panels.widgets.printcorePage import SwapPrintcorePage
 from lib.panels.widgets.probeHelperPage import ProbeHelper
 from lib.printer import Printer
-from lib.ui.controlStackedWidget_ui import Ui_controlStackedWidget  
+from lib.ui.controlStackedWidget_ui import Ui_controlStackedWidget
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 from lib.panels.widgets.popupDialogWidget import Popup
@@ -18,6 +18,7 @@ from lib.panels.widgets.slider_selector_page import SliderPage
 
 from lib.panels.widgets.optionCardWidget import OptionCard
 from helper_methods import normalize
+
 
 class ControlTab(QtWidgets.QStackedWidget):
     """Printer Control Stacked Widget"""
@@ -84,7 +85,7 @@ class ControlTab(QtWidgets.QStackedWidget):
         self.sliderPage = SliderPage(self)
         self.addWidget(self.sliderPage)
         self.sliderPage.request_back.connect(self.back_button)
-        
+
         self.probe_helper_page.request_page_view.connect(
             partial(self.change_page, self.indexOf(self.probe_helper_page))
         )
@@ -282,72 +283,84 @@ class ControlTab(QtWidgets.QStackedWidget):
         self.panel.cooldown_btn.hide()
         self.panel.cp_switch_print_core_btn.hide()
 
-        self.printer.fan_update[str, str, float].connect(
-            self.on_fan_object_update
-        )
-        self.printer.fan_update[str, str, int].connect(
-            self.on_fan_object_update
-        )
+        self.printer.fan_update[str, str, float].connect(self.on_fan_object_update)
+        self.printer.fan_update[str, str, int].connect(self.on_fan_object_update)
 
     @QtCore.pyqtSlot(str, str, float, name="on_fan_update")
     @QtCore.pyqtSlot(str, str, int, name="on_fan_update")
     def on_fan_object_update(
         self, name: str, field: str, new_value: int | float
     ) -> None:
-        """Slot Method that receives information from fan objects
+        """Slot that receives updates from fan objects.
 
         Args:
-            name (str): fan object name
-            field (str): field name
-            new_value (int | float): New value for field name
+            name (str): Fan object name
+            field (str): Field name
+            new_value (int | float): New value for the field
         """
-        if "speed" in field:
-            if not self.tune_display_buttons.get(name, None):
-                if name in ("fan", "fan_generic"):       
-                    if  "blower" in name.lower():
-                        _icon = QtGui.QPixmap(
-                            ":/temperature_related/media/btn_icons/blower.svg"
-                        )
-                    else:
-                        _icon = QtGui.QPixmap(":/temperature_related/media/btn_icons/fan.svg")
+        if "speed" not in field:
+            return
 
-                    _card = OptionCard(self, name, str(name), _icon)  # type: ignore
-                    _card.setObjectName(str(name))
-                    self.card_options.update({str(name): _card})
-                    self.panel.fans_content_layout.addWidget(_card)
+        # Check if this fan already has a display button
+        fan_card = self.tune_display_buttons.get(name)
 
-                    if not hasattr(self.card_options.get(name), "continue_clicked"):
-                        del _card
-                        self.card_options.pop(name)
-                        return
-                    
-                    self.card_options.get(name).setMode(True)
-                    self.card_options.get(name).secondtext.setText(f"{new_value}%")
-                    self.card_options.get(name).continue_clicked.connect(
-                        lambda: self.on_slidePage_request(
-                            str(name),
-                            self.card_options.get(name).secondtext.text().replace("%", ""),
-                            self.on_slider_change,
-                            0,
-                            100,
-                        )
-                    )
-                    self.tune_display_buttons[name] = self.card_options.get(name) #{self.card_options.get(name),True,self.card_options.get(name).secondtext.text().replace("%", "")}
-
-
-                    self.card_options.get(name)
-                    self.update()
-            _display_button = self.tune_display_buttons.get(name)
-            if not _display_button:
+        # Create a new card if it doesn't exist
+        if fan_card is None:
+            if not name.startswith(("fan", "fan_generic")):
                 return
-            _display_button.secondtext.setText(
-                f"{new_value * 100:.0f}%"
+
+            icon_path = (
+                ":/temperature_related/media/btn_icons/blower.svg"
+                if "blower" in name.lower()
+                else ":/temperature_related/media/btn_icons/fan.svg"
+            )
+            icon = QtGui.QPixmap(icon_path)
+            if name == "fan_generic Auxiliary_Cooling_Fans":
+                name = "Auxiliary\ncooling fans"
+            elif name == "fan_generic CHAMBER_EXHAUST":
+                name = "Exhaust"
+            elif name == "fan_generic Part_Cooling_Fan":
+                name = "Cooling fan"
+            else:
+                name = name.removeprefix("fan_generic")
+
+            card = OptionCard(self, name, str(name), icon)  # type: ignore
+            card.setObjectName(str(name))
+
+            # Add card to layout and record reference
+            self.card_options[name] = card
+            self.panel.fans_content_layout.addWidget(card)
+
+            # If the card doesn't have expected UI properties, discard it
+            if not hasattr(card, "continue_clicked"):
+                del card
+                self.card_options.pop(name, None)
+                return
+
+            card.setMode(True)
+            card.secondtext.setText(f"{new_value}%")
+            card.continue_clicked.connect(
+                lambda: self.on_slidePage_request(
+                    str(name),
+                    card.secondtext.text().replace("%", ""),
+                    self.on_slider_change,
+                    0,
+                    100,
+                )
             )
 
+            self.tune_display_buttons[name] = card
+            self.update()
+            fan_card = card  # reuse for next section
+
+        # Update existing card value display
+        if fan_card:
+            # Only multiply by 100 if it seems like a normalized value (0–1)
+            value_percent = new_value * 100 if new_value <= 1 else new_value
+            fan_card.secondtext.setText(f"{value_percent:.0f}%")
+
     @QtCore.pyqtSlot(str, int, "PyQt_PyObject", name="on_slidePage_request")
-    @QtCore.pyqtSlot(
-        str, int, "PyQt_PyObject", int, int, name="on_slidePage_request"
-    )
+    @QtCore.pyqtSlot(str, int, "PyQt_PyObject", int, int, name="on_slidePage_request")
     def on_slidePage_request(
         self,
         name: str,
@@ -362,7 +375,6 @@ class ControlTab(QtWidgets.QStackedWidget):
         self.sliderPage.set_slider_minimum(min_value)
         self.sliderPage.set_slider_maximum(max_value)
         self.change_page(self.indexOf(self.sliderPage))
-
 
     @QtCore.pyqtSlot(str, int, name="on_slider_change")
     def on_slider_change(self, name: str, new_value: int) -> None:
@@ -397,9 +409,8 @@ class ControlTab(QtWidgets.QStackedWidget):
         font.setPointSize(16)
         display_button.setFont(font)
         return display_button
-    
-    def handle_printcoreupdate(self, value:dict):
 
+    def handle_printcoreupdate(self, value: dict):
         if value["swapping"] == "idle":
             return
 
