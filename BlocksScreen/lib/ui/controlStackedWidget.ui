@@ -5733,7 +5733,7 @@ Home</string>
      </spacer>
     </item>
     <item>
-     <layout class="QGridLayout" name="fans_content_layout"/>
+     <layout class="QHBoxLayout" name="fans_content_layout"/>
     </item>
     <item>
      <spacer name="verticalSpacer_9">
@@ -5789,8 +5789,8 @@ Home</string>
  <connections/>
  <buttongroups>
   <buttongroup name="extrude_select_length_group"/>
+  <buttongroup name="axis_select_length_group"/>
   <buttongroup name="axis_select_speed_group"/>
   <buttongroup name="extrude_select_feedrate_group"/>
-  <buttongroup name="axis_select_length_group"/>
  </buttongroups>
 </ui>
