@@ -2051,7 +2051,7 @@ class Ui_controlStackedWidget(object):
         self.verticalLayout_5.addWidget(self.line)
         spacerItem11 = QtWidgets.QSpacerItem(20, 111, QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Expanding)
         self.verticalLayout_5.addItem(spacerItem11)
-        self.fans_content_layout = QtWidgets.QGridLayout()
+        self.fans_content_layout = QtWidgets.QHBoxLayout()
         self.fans_content_layout.setObjectName("fans_content_layout")
         self.verticalLayout_5.addLayout(self.fans_content_layout)
         spacerItem12 = QtWidgets.QSpacerItem(20, 111, QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Expanding)
