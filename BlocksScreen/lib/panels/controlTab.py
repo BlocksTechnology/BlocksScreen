@@ -9,13 +9,14 @@ from lib.panels.widgets.numpadPage import CustomNumpad
 from lib.panels.widgets.printcorePage import SwapPrintcorePage
 from lib.panels.widgets.probeHelperPage import ProbeHelper
 from lib.printer import Printer
-from lib.ui.controlStackedWidget_ui import Ui_controlStackedWidget
+from lib.ui.controlStackedWidget_ui import Ui_controlStackedWidget  
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 from lib.panels.widgets.popupDialogWidget import Popup
 from lib.utils.display_button import DisplayButton
 from lib.panels.widgets.slider_selector_page import SliderPage
 
+from lib.panels.widgets.optionCardWidget import OptionCard
 from helper_methods import normalize
 
 class ControlTab(QtWidgets.QStackedWidget):
@@ -46,6 +47,7 @@ class ControlTab(QtWidgets.QStackedWidget):
         str, name="request-file-info"
     )
     tune_display_buttons: dict = {}
+    card_options: dict = {}
 
     def __init__(
         self,
@@ -301,50 +303,44 @@ class ControlTab(QtWidgets.QStackedWidget):
         """
         if "speed" in field:
             if not self.tune_display_buttons.get(name, None):
-                _new_display_button = self.create_display_button(name)
-                _new_display_button.setParent(self)
-                if "blower" in name:
-                    _new_display_button.icon_pixmap = QtGui.QPixmap(
-                        ":/temperature_related/media/btn_icons/blower.svg"
-                    )
-                else:
-                    _new_display_button.icon_pixmap = QtGui.QPixmap(
-                        ":/temperature_related/media/btn_icons/fan.svg"
-                    )
-                self.tune_display_buttons.update(
-                    {
-                        name: {
-                            "display_button": _new_display_button,
-                            "speed": 0,
-                        }
-                    }
-                )
-                if name in ("fan", "fan_generic"):
-                    _new_display_button.clicked.connect(
+                if name in ("fan", "fan_generic"):       
+                    if  "blower" in name.lower():
+                        _icon = QtGui.QPixmap(
+                            ":/temperature_related/media/btn_icons/blower.svg"
+                        )
+                    else:
+                        _icon = QtGui.QPixmap(":/temperature_related/media/btn_icons/fan.svg")
+
+                    _card = OptionCard(self, name, str(name), _icon)  # type: ignore
+                    _card.setObjectName(str(name))
+                    self.card_options.update({str(name): _card})
+                    self.panel.fans_content_layout.addWidget(_card)
+
+                    if not hasattr(self.card_options.get(name), "continue_clicked"):
+                        del _card
+                        self.card_options.pop(name)
+                        return
+                    
+                    self.card_options.get(name).setMode(True)
+                    self.card_options.get(name).secondtext.setText(f"{new_value}%")
+                    self.card_options.get(name).continue_clicked.connect(
                         lambda: self.on_slidePage_request(
                             str(name),
-                            int(
-                                round(
-                                    self.tune_display_buttons.get(name).get(  # type:ignore
-                                        "speed", 0
-                                    )
-                                )
-                            ),
+                            self.card_options.get(name).secondtext.text().replace("%", ""),
                             self.on_slider_change,
                             0,
                             100,
                         )
                     )
-                else:   
-                    _new_display_button.setDisabled(True)
-                self.panel.fans_content_layout.addWidget(
-                    _new_display_button
-                )
+                    self.tune_display_buttons[name] = self.card_options.get(name) #{self.card_options.get(name),True,self.card_options.get(name).secondtext.text().replace("%", "")}
+
+
+                    self.card_options.get(name)
+                    self.update()
             _display_button = self.tune_display_buttons.get(name)
             if not _display_button:
                 return
-            _display_button.update({"speed": int(round(new_value * 100))})
-            _display_button.get("display_button").setText(
+            _display_button.secondtext.setText(
                 f"{new_value * 100:.0f}%"
             )
 

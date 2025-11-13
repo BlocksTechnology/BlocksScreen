@@ -5,8 +5,8 @@ from lib.utils.blocks_label import BlocksLabel
 from lib.utils.icon_button import IconButton
 
 
-class OptionCard(QtWidgets.QFrame):
-    continue_clicked: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+class OptionCard(QtWidgets.QAbstractButton):
+    clicked: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         "PyQt_PyObject", name="continue_clicked"
     )
 
@@ -25,8 +25,10 @@ class OptionCard(QtWidgets.QFrame):
         self.icon_background_color = QtGui.QColor(150, 150, 130, 80)
         self.name = name
         self.card_text = text
-        self._setupUi(self)
-        self.continue_button.clicked.connect(lambda: self.continue_clicked.emit(self))
+        self.doubleT: bool = False
+        self.setupUi(self)
+        
+        self.setMode(False)
         self.set_card_icon(icon)
         self.set_card_text(text)
 
@@ -42,7 +44,13 @@ class OptionCard(QtWidgets.QFrame):
 
     def set_card_icon(self, pixmap: QtGui.QPixmap) -> None:
         """Set widget icon"""
-        self.option_icon.setPixmap(pixmap)
+        scaled = pixmap.scaled(
+            300,
+            300,
+            QtCore.Qt.AspectRatioMode.IgnoreAspectRatio,
+            QtCore.Qt.TransformationMode.SmoothTransformation
+        )
+        self.option_icon.setPixmap(scaled)
         self.repaint()
 
     def set_card_text(self, text: str) -> None:
@@ -79,8 +87,51 @@ class OptionCard(QtWidgets.QFrame):
 
     def mousePressEvent(self, a0: QtGui.QMouseEvent) -> None:
         """Re-implemented method, handle mouse press event"""
+        self.clicked.emit(self)
         self.update()
         return super().mousePressEvent(a0)
+    
+    def setMode(self, double_mode: bool = False):
+        """Set the mode of the layout: single or double text."""
+        self.doubleT = double_mode
+
+        # Clear existing widgets from layout before adding new ones
+        while self.verticalLayout.count():
+            item = self.verticalLayout.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.setParent(None)
+
+
+
+        if self.doubleT:
+            self.verticalLayout.addWidget(
+            self.option_icon, 
+            0, 
+            QtCore.Qt.AlignmentFlag.AlignHCenter
+            | QtCore.Qt.AlignmentFlag.AlignBottom,
+        )
+            self.verticalLayout.addWidget(
+                self.secondtext, 0, QtCore.Qt.AlignmentFlag.AlignHCenter
+            )
+            self.verticalLayout.addWidget(
+                self.line_separator, 0, QtCore.Qt.AlignmentFlag.AlignCenter
+            )
+            self.verticalLayout.addWidget(self.option_text)
+            self.verticalLayout.addItem(self.spacer)
+            self.secondtext.show()
+        else:
+            self.verticalLayout.addWidget(
+                self.option_icon, 0, QtCore.Qt.AlignmentFlag.AlignCenter
+            )
+            self.verticalLayout.addWidget(
+                self.line_separator, 0, QtCore.Qt.AlignmentFlag.AlignCenter
+            )
+            self.verticalLayout.addWidget(self.option_text)
+            self.verticalLayout.addWidget(self.continue_button)
+
+        self.update()
+
 
     def paintEvent(self, a0: QtGui.QPaintEvent) -> None:
         """Re-implemented method, paint widget"""
@@ -157,9 +208,20 @@ class OptionCard(QtWidgets.QFrame):
         self.option_icon = BlocksLabel(parent=option_card)
         self.option_icon.setMinimumSize(QtCore.QSize(200, 150))
         self.option_icon.setObjectName("option_icon")
-        self.verticalLayout.addWidget(
-            self.option_icon, 0, QtCore.Qt.AlignmentFlag.AlignHCenter
+        self.option_icon.setScaledContents(True)
+        _button_font = QtGui.QFont()
+        _button_font.setBold(True)
+        _button_font.setPointSize(20)
+        self.secondtext = QtWidgets.QLabel(parent=option_card)
+        self.secondtext.setText("%")
+        self.secondtext.setStyleSheet("color:white")
+        self.secondtext.setFont(_button_font)
+        self.secondtext.setObjectName("option_text")
+        self.secondtext.setWordWrap(True)
+        self.secondtext.setAlignment(
+            QtCore.Qt.AlignmentFlag.AlignCenter
         )
+        self.secondtext.hide()
         self.line_separator = QtWidgets.QFrame(parent=option_card)
         self.line_separator.setFrameShape(QtWidgets.QFrame.Shape.HLine)
         self.line_separator.setFrameShadow(QtWidgets.QFrame.Shadow.Sunken)
@@ -174,21 +236,17 @@ class OptionCard(QtWidgets.QFrame):
         self.option_text = QtWidgets.QLabel(parent=option_card)
         self.option_text.setMinimumSize(QtCore.QSize(200, 50))
         self.option_text.setObjectName("option_text")
-        self.verticalLayout.addWidget(
-            self.option_text,
-        )
-        self.continue_button = IconButton(parent=option_card)
-        self.option_text.setAlignment(
-            QtCore.Qt.AlignmentFlag.AlignHCenter | QtCore.Qt.AlignmentFlag.AlignVCenter
-        )
         self.option_text.setWordWrap(True)
-        _button_font = QtGui.QFont()
-        _button_font.setBold(True)
+        self.option_text.setStyleSheet("color:white")
+        self.option_text.setAlignment(
+            QtCore.Qt.AlignmentFlag.AlignCenter
+        )
         _palette = self.option_text.palette()
         _palette.setColor(QtGui.QPalette.ColorRole.WindowText, self.text_color)
         self.option_text.setPalette(_palette)
-        _button_font.setPointSize(15)
+
         self.option_text.setFont(_button_font)
+        self.continue_button = IconButton(parent=option_card)
         sizePolicy = QtWidgets.QSizePolicy(
             QtWidgets.QSizePolicy.Policy.MinimumExpanding,
             QtWidgets.QSizePolicy.Policy.MinimumExpanding,
@@ -207,9 +265,14 @@ class OptionCard(QtWidgets.QFrame):
             QtGui.QPixmap(":/arrow_icons/media/btn_icons/right_arrow.svg"),
         )
         self.continue_button.setObjectName("continue_button")
-        self.verticalLayout.addWidget(self.continue_button)
 
-        self._retranslateUi(option_card)
+        self.spacer = QtWidgets.QSpacerItem(
+            20,
+            40,
+            QtWidgets.QSizePolicy.Policy.Minimum,
+            QtWidgets.QSizePolicy.Policy.Expanding,
+        )
+        self.retranslateUi(option_card)
         QtCore.QMetaObject.connectSlotsByName(option_card)
 
     def _retranslateUi(self, option_card):
