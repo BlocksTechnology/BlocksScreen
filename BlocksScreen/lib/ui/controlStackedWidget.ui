@@ -5713,13 +5713,6 @@ Home</string>
      </layout>
     </item>
     <item>
-     <widget class="Line" name="line">
-      <property name="orientation">
-       <enum>Qt::Horizontal</enum>
-      </property>
-     </widget>
-    </item>
-    <item>
      <spacer name="verticalSpacer_8">
       <property name="orientation">
        <enum>Qt::Vertical</enum>
@@ -5788,9 +5781,9 @@ Home</string>
  </resources>
  <connections/>
  <buttongroups>
-  <buttongroup name="extrude_select_length_group"/>
-  <buttongroup name="axis_select_length_group"/>
-  <buttongroup name="axis_select_speed_group"/>
   <buttongroup name="extrude_select_feedrate_group"/>
+  <buttongroup name="axis_select_length_group"/>
+  <buttongroup name="extrude_select_length_group"/>
+  <buttongroup name="axis_select_speed_group"/>
  </buttongroups>
 </ui>
