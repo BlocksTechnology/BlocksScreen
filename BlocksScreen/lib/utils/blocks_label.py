@@ -175,11 +175,11 @@ class BlocksLabel(QtWidgets.QLabel):
                 self.scroll_pos = 0
 
         self.update()
-    def paintEvent(self, event: QtGui.QPaintEvent) -> None:
+    def paintEvent(self, a0: QtGui.QPaintEvent) -> None:
         qp = QtGui.QPainter(self)
-        qp.setRenderHint(qp.RenderHint.Antialiasing)
-        qp.setRenderHint(qp.RenderHint.TextAntialiasing)
-        qp.setRenderHint(qp.RenderHint.SmoothPixmapTransform)
+        qp.setRenderHint(qp.RenderHint.Antialiasing, True)
+        qp.setRenderHint(qp.RenderHint.SmoothPixmapTransform, True)
+        qp.setRenderHint(qp.RenderHint.LosslessImageRendering, True)
         rect = self.contentsRect()
         if self._background_color:
             qp.setBrush(self._background_color)
