@@ -156,7 +156,7 @@ class BlocksLabel(QtWidgets.QLabel):
 
         if self._marquee and self.text_width > self.label_width:
             self.scroll_pos = 0.0
-            QtCore.QTimer.singleShot(2000, lambda: self.start_scroll())
+            QtCore.QTimer.singleShot(2000,self.start_scroll())
         else:
             self.stop_scroll()
             self.scroll_pos = 0.0
