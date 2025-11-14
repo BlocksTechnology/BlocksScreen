@@ -15,7 +15,6 @@ class BlocksLabel(QtWidgets.QLabel):
         self._marquee: bool = True
         self.timer = QtCore.QTimer()
         self.timer.timeout.connect(self._scroll_text)
-
         self.scroll_pos = 0.0
         self.marquee_spacing = 40
         self.scroll_speed = 40
@@ -64,6 +63,7 @@ class BlocksLabel(QtWidgets.QLabel):
     def setText(self, text: str) -> None:
         """Set widget text"""
         self._text = text
+        self.scroll_pos = 0.0
         self.update_text_metrics()
 
     @property
@@ -151,7 +151,8 @@ class BlocksLabel(QtWidgets.QLabel):
         self.total_scroll_width = float(self.text_width + self.marquee_spacing)
 
         if self._marquee and self.text_width > self.label_width:
-            self.start_scroll()
+            self.scroll_pos = 0.0
+            QtCore.QTimer.singleShot(2000, lambda:self.start_scroll())
         else:
             self.stop_scroll()
             self.scroll_pos = 0.0
