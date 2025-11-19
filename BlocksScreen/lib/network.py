@@ -731,6 +731,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                                     "mode": network_properties["802-11-wireless"][
                                         "mode"
                                     ],
+                                    "priority": network_properties["connection"].get("autoconnect-priority", (None, None))[1],
                                 }
                                 if network_properties["connection"]["type"][1]
                                 == "802-11-wireless"
