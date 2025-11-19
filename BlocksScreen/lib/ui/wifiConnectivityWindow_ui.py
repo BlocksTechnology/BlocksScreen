@@ -1202,7 +1202,7 @@ class Ui_wifi_stacked_page(object):
         self.saved_connection_change_password_view.setText(_translate("wifi_stacked_page", "View"))
         self.saved_connection_change_password_view.setProperty("class", _translate("wifi_stacked_page", "back_btn"))
         self.saved_connection_change_password_view.setProperty("button_type", _translate("wifi_stacked_page", "icon"))
-        self.frame_12.setProperty("text", _translate("wifi_stacked_page", "Priority"))
+        self.frame_12.setProperty("text", _translate("wifi_stacked_page", "Network priority"))
         self.low_priorrity_btn.setText(_translate("wifi_stacked_page", "Low"))
         self.low_priorrity_btn.setProperty("class", _translate("wifi_stacked_page", "back_btn"))
         self.low_priorrity_btn.setProperty("button_type", _translate("wifi_stacked_page", "icon"))
