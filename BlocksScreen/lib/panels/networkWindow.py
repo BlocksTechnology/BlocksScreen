@@ -222,7 +222,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             )
         )
         self.delete_network_signal.connect(self.delete_network)
-        self.panel.saved_connection_change_password_field.returnPressed.connect(
+        self.panel.snd_back.clicked.connect(
             lambda: self.update_network(
                 ssid=self.panel.saved_connection_network_name.text(),
                 password=self.panel.saved_connection_change_password_field.text(),
@@ -315,6 +315,12 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             QtGui.QPixmap(":/dialog/media/btn_icons/yes.svg")
         )
 
+        self.panel.network_details_btn.setPixmap(
+            QtGui.QPixmap(":/ui/media/btn_icons/printer_settings.svg")
+        )
+        
+        self.panel.snd_back.clicked.connect(lambda:self.setCurrentIndex(self.indexOf(self.panel.saved_connection_page)))
+        self.panel.network_details_btn.clicked.connect(lambda:self.setCurrentIndex(self.indexOf(self.panel.saved_details_page)))
 
         self.panel.network_activate_btn.clicked.connect(
             lambda: self.saved_wifi_option_selected()
@@ -768,10 +774,19 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         if not self.sdbus_network.is_known(ssid):
             return
 
+        checked_btn = self.panel.prioritbtngroup.checkedButton()
+        if checked_btn == self.panel.hig_priorrity_btn:
+            priority = 90
+        elif checked_btn == self.panel.low_priorrity_btn:
+            priority = 20
+        else:
+            priority = 50 
+
         self.sdbus_network.update_connection_settings(
             ssid=ssid,
             password=password,
             new_ssid=new_ssid,
+            priority=priority
         )
         QtCore.QTimer().singleShot(10000, lambda: self.network_list_worker.build())
         self.setCurrentIndex(self.indexOf(self.panel.network_list_page))
@@ -804,14 +819,35 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
 
     def handle_button_click(self, ssid: str):
         """Handles pressing a network"""
-        if ssid in self.sdbus_network.get_saved_ssid_names():
+        _saved_ssids = self.sdbus_network.get_saved_networks()
+        if any(item["ssid"] == ssid for item in _saved_ssids):
             self.setCurrentIndex(self.indexOf(self.panel.saved_connection_page))
             self.panel.saved_connection_network_name.setText(str(ssid))
+            self.panel.snd_name.setText(str(ssid))
+
+            # find the entry for this SSID
+            entry = next((item for item in _saved_ssids if item["ssid"] == ssid), None)
+
+            logger.debug(_saved_ssids)
+
+            if entry is not None:
+                priority = entry.get("priority")
+
+                if priority == 90:
+                    self.panel.hig_priorrity_btn.setChecked(True)
+                elif priority == 20:
+                    self.panel.low_priorrity_btn.setChecked(True)
+                else:
+                    self.panel.med_priorrity_btn.setChecked(True)
+
             _curr_ssid = self.sdbus_network.get_current_ssid()
             if _curr_ssid != str(ssid):
-                self.panel.network_activate_btn.show()
+                self.panel.network_activate_btn.setDisabled(False)
+                self.panel.sn_info.setText("Saved Network")
             else:
-                self.panel.network_activate_btn.hide()
+                self.panel.network_activate_btn.setDisabled(True)
+                self.panel.sn_info.setText("Active Network")
+                
             self.panel.frame.repaint()
 
         else:
