@@ -1996,7 +1996,7 @@ Password</string>
              <enum>QFrame::Raised</enum>
             </property>
             <property name="text" stdset="0">
-             <string>Priority</string>
+             <string>Network priority</string>
             </property>
             <layout class="QVBoxLayout" name="verticalLayout_17">
              <item>
