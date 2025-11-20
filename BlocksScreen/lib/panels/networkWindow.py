@@ -4,139 +4,208 @@ import copy
 import subprocess
 from functools import partial
 
+from PyQt6 import QtCore, QtGui, QtWidgets
+from PyQt6.QtCore import QRunnable, QThreadPool, QObject, pyqtSignal, QVariant
+from PyQt6.QtWidgets import QScroller, QScrollerProperties
+
 from lib.network import SdbusNetworkManagerAsync
 from lib.panels.widgets.popupDialogWidget import Popup
 from lib.ui.wifiConnectivityWindow_ui import Ui_wifi_stacked_page
-from lib.utils.list_button import ListCustomButton
 from lib.panels.widgets.keyboardPage import CustomQwertyKeyboard
-from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_frame import BlocksCustomFrame
 from lib.panels.widgets.loadPage import LoadScreen
-from lib.utils.icon_button import IconButton
 from lib.utils.list_model import EntryDelegate, EntryListModel, ListItem
-from PyQt6 import QtCore, QtGui, QtWidgets
-from PyQt6.QtCore import QVariant
-from PyQt6.QtWidgets import  QScroller, QScrollerProperties
+
 
 logger = logging.getLogger("logs/BlocksScreen.log")
 
+<<<<<<< HEAD
 
 class BuildNetworkList(QtCore.QThread):
     """Retrieves information from sdbus interface about scanned networks"""
+=======
+class NetworkScanRunnable(QRunnable):
+    """QRunnable task that performs network scanning using SdbusNetworkManagerAsync
+>>>>>>> 9285fb7 (Refactor: Refac to MVC view with Controller being runnables on a threadpoll)
 
-    scan_result: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
-        dict, name="scan-results"
-    )
-    finished_network_list_build: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
-        list, name="finished-network-list-build"
-    )
+        This runnable:
+          - Triggers a network rescan via SdbusNetworkManagerAsync
+          - collects SSIDs, signal strenght and saved status
+          - emits signal with raw scan data and a processed lisgs
+          
+        Signals:
+            - scan_results (dict): Emitted with raw scan results mapping SSID to properties
+            - finished_network_list_build (list): Emitted with processed list of networks
+            - error (str): Emitted if an error occurs during scanning
+    
+    """
 
-    def __init__(self) -> None:
+    class Signals(QObject):
+        scan_results = pyqtSignal(dict, name="scan-results")
+        finished_network_list_build = pyqtSignal(list, name="finished-network-list-build")
+        error = pyqtSignal(str)
+
+    def __init__(self):
         super().__init__()
-        self.mutex = QtCore.QMutex()
-        self.condition = QtCore.QWaitCondition()
-        self.restart = False
-        self.mutex.unlock()
-        self.network_items_list = []
         self.nm = SdbusNetworkManagerAsync()
-        if not self.nm:
-            logger.error(
-                "Cannot scan for networks, parent does not have \
-                sdbus_network ('SdbusNetworkManagerAsync' instance class)"
-            )
-            return
-        logger.info("Network Scanner Thread Initiated")
+        self.signals = NetworkScanRunnable.Signals()
 
-    def build(self) -> None:
-        """Starts QThread"""
-        with QtCore.QMutexLocker(self.mutex):
-            if not self.isRunning():
-                self.start(QtCore.QThread.Priority.LowPriority)
-            else:
-                self.restart = True
-                self.condition.wakeOne()
-
-    def stop(self):
-        """Stops QThread execution"""
-        self.mutex.lock()
-        self.condition.wakeOne()
-        self.mutex.unlock()
-        self.deleteLater()
-
-    def run(self) -> None:
-        """BuildNetworkList main thread logic"""
-        logger.debug("Scanning and building network list")
-        while True:
-            self.mutex.lock()
-            self.network_items_list.clear()
+    def run(self):
+        try:
+            logger.debug("NetworkScanRunnable: scanning networks")
             self.nm.rescan_networks()
-            saved_ssids = self.nm.get_saved_ssid_names()
-            saved_networks = self.nm.get_saved_networks()
-            unsaved_networks = []
-            networks = []
-            if self.nm.check_wifi_interface():
-                available_networks = self.nm.get_available_networks()
-                if not available_networks:  # Skip everything if no networks exist
-                    logger.debug("No available networks after scan")
-                    self.finished_network_list_build.emit(self.network_items_list)
-                    return
-                for ssid_key in available_networks:
-                    properties = available_networks.get(ssid_key, {})
-                    signal = int(properties.get("signal_level", 0))
-                    networks.append(
-                        {
-                            "ssid": ssid_key if ssid_key else "UNKNOWN",
-                            "signal": signal,
-                            "is_saved": bool(ssid_key in saved_ssids),
-                        }
-                    )
-            if networks:
-                saved_networks = sorted(
-                    [n for n in networks if n["is_saved"]],
-                    key=lambda x: -x["signal"],
-                )
-                unsaved_networks = sorted(
-                    [n for n in networks if not n["is_saved"]],
-                    key=lambda x: -x["signal"],
-                )
-            elif saved_networks:
-                saved_networks = sorted([n for n in saved_networks], key=lambda x: -1)
-            if saved_networks:
-                for net in saved_networks:
-                    if "ap" in net.get("mode", ""):
-                        return
-                    ssid = net.get("ssid", "UNKNOWN")
-                    signal = (
-                        self.nm.get_connection_signal_by_ssid(ssid)
-                        if ssid != "UNKNOWN"
-                        else 0
-                    )
-                    if ssid == self.nm.get_current_ssid():
-                        self.network_items_list.append((ssid, signal, "Active"))
-                    else:
-                        self.network_items_list.append((ssid, signal, "Saved"))
-            if saved_networks and unsaved_networks:  # Separator
-                self.network_items_list.append("separator")
-            if unsaved_networks:
-                for net in unsaved_networks:
-                    ssid = net.get("ssid", "UNKNOWN")
-                    signal = (
-                        self.nm.get_connection_signal_by_ssid(ssid)
-                        if ssid != "UNKNOWN"
-                        else 0
-                    )
-                    self.network_items_list.append((ssid, signal, "Protected"))
-            # Add a dummy blank space at the end if there are any unsaved networks
-            if unsaved_networks:
-                self.network_items_list.append("blank")
+            saved = self.nm.get_saved_ssid_names()
+            available = self.nm.get_available_networks() if self.nm.check_wifi_interface() else {}
 
-            self.finished_network_list_build.emit(self.network_items_list)
-            if not self.restart:
-                self.condition.wait(self.mutex)
-            self.restart = False
-            self.mutex.unlock()
+            data_dict: dict[str, dict] = {}
+            for ssid, props in available.items():
+                signal = int(props.get("signal_level", 0))
+                data_dict[ssid] = {
+                    "signal_level": signal,
+                    "is_saved": ssid in saved,
+                }
+
+            # Emit scan_result (same name)
+            self.signals.scan_results.emit(data_dict)
+
+            # Transform into your “list of tuples + blank / separator” format
+            items: list[typing.Union[tuple[str,int,str], str]] = []
+            saved_nets = [ (ssid, info["signal_level"]) for ssid, info in data_dict.items() if info["is_saved"] ]
+            unsaved_nets = [ (ssid, info["signal_level"]) for ssid, info in data_dict.items() if not info["is_saved"] ]
+            saved_nets.sort(key=lambda x: -x[1])
+            unsaved_nets.sort(key=lambda x: -x[1])
+
+            # Build your list with statuses
+            for ssid, sig in saved_nets:
+                status = "Active" if ssid == self.nm.get_current_ssid() else "Saved"
+                items.append((ssid, sig, status))
+
+            for ssid, sig in unsaved_nets:
+                items.append((ssid, sig, "Protected"))
+
+            self.signals.finished_network_list_build.emit(items)
+
+        except Exception as e:
+            logger.error("Error scanning networks", exc_info=True)
+            self.signals.error.emit(str(e))
+
+class BuildNetworkList(QtCore.QObject):
+    """
+    Controller class that schedules and manages repeted network scans
+    
+    Uses a QThreadPool to un NetworkScanRunnable tasks periodically. with a QTimer to trigger scans.
+    Prevents overlapping scans by tracking whether a scan is already in progress.
+
+    Args:
+        poll_interval_ms: (int) Milliseconds between scans (default: 10000)
+        _timer (QtCore.QTimer): Timer that schedules next scan
+        _is_scanning (bool): Flag indicating if a scan is currently in progress
+        
+    Signals:
+        scan_results (dict): Emitted with raw scan results mapping SSID to properties
+        finished_network_list_build (list): Emitted with processed list of networks
+        error (str): Emitted if an error occurs during scanning
+    """
+    scan_results = pyqtSignal(dict, name="scan-results")
+    finished_network_list_build = pyqtSignal(list, name="finished-network-list-build")
+    error = pyqtSignal(str)
+
+    def __init__(self, poll_interval_ms: int = 10000):
+        super().__init__()
+        self.threadpool = QThreadPool.globalInstance()
+        self.poll_interval_ms = poll_interval_ms
+        self._is_scanning = False
+
+        self._timer = QtCore.QTimer(self)
+        self._timer.setSingleShot(True)
+        self._timer.timeout.connect(self._do_scan)
+
+    def start_polling(self):
+        self._schedule_next_scan()
+
+    def stop_polling(self):
+        self._timer.stop()
+
+    def build(self):
+        self._do_scan()
+
+    def _schedule_next_scan(self):
+        self._timer.start(self.poll_interval_ms)
+
+    def _on_task_finished(self, items):
+        self._is_scanning = False
+        self.finished_network_list_build.emit(items)
+        self._schedule_next_scan()
+
+    def _on_task_scan_results(self, data_dict):
+        self.scan_results.emit(data_dict)
+
+    def _on_task_error(self, err):
+        self._is_scanning = False
+        self.error.emit(err)
+        self._schedule_next_scan()
+
+    def _do_scan(self):
+        if self._is_scanning:
+            logger.debug("Already scanning, skip scheduling.")
+            self._schedule_next_scan()
+            return
+
+        self._is_scanning = True
+        task = NetworkScanRunnable()
+        task.signals.finished_network_list_build.connect(self._on_task_finished)
+        task.signals.scan_results.connect(self._on_task_scan_results)
+        task.signals.error.connect(self._on_task_error)
+
+        self.threadpool.start(task)
+        logger.debug("Submitted scan task to thread pool")
+
+class WifiIconProvider:
+    """Simple provider: loads QPixmap for WiFi bars + protection without caching."""
+
+    def __init__(self):
+        # Map from (bars, is_protected) to resource path
+        self.paths = {
+            ("no", False): ":/network/media/btn_icons/0bar_wifi.svg",
+            (4, False): ":/network/media/btn_icons/4bar_wifi.svg",
+            (3, False): ":/network/media/btn_icons/3bar_wifi.svg",
+            (2, False): ":/network/media/btn_icons/2bar_wifi.svg",
+            (1, False): ":/network/media/btn_icons/1bar_wifi.svg",
+
+            ("no", True): ":/network/media/btn_icons/0bar_wifi_protected.svg",
+            (4, True): ":/network/media/btn_icons/4bar_wifi_protected.svg",
+            (3, True): ":/network/media/btn_icons/3bar_wifi_protected.svg",
+            (2, True): ":/network/media/btn_icons/2bar_wifi_protected.svg",
+            (1, True): ":/network/media/btn_icons/1bar_wifi_protected.svg",
+        }
 
 
+    def get_pixmap(self, signal: int, state: str) -> QtGui.QPixmap:
+        """Return a QPixmap for the given signal (0-100) and state ("Protected" or not)."""
+        # Normalize signal
+        if signal <= 0:
+            bars = "no"
+        elif signal >= 75:
+            bars = 4
+        elif signal >= 50:
+            bars = 3
+        elif signal >= 25:
+            bars = 2
+        else:
+            bars = 1
+
+        is_protected = (state == "Protected")
+        key = (bars, is_protected)
+
+        path = self.paths.get(key)
+        if path is None:
+            logger.warning(f"No icon path for key {key}, falling back to no-signal unprotected")
+            path = self.paths[("no", False)]
+
+        pm = QtGui.QPixmap(path)
+        if pm.isNull():
+            logger.error(f"Failed to load pixmap from '{path}' for key {key}")
+        return pm
 class NetworkControlWindow(QtWidgets.QStackedWidget):
     """Network Control panel Widget"""
 
@@ -155,7 +224,8 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.panel.setupUi(self)
         
         self._setupUI()
-        #self.background: typing.Optional[QtGui.QPixmap] = None
+        
+        self._provider = WifiIconProvider()
         self.ongoing_update: bool = False
         
         self.popup = Popup(self)
@@ -171,7 +241,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self._load_timer.setSingleShot(True)
         self._load_timer.timeout.connect(self._handle_load_timeout)
         
-        #View Models and Controllers
+        #View Models and Delegates
         self.model = EntryListModel()
         self.model.setParent(self.network_list_widget)
         self.entry_delegate = EntryDelegate()
@@ -187,9 +257,8 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.network_list_worker.finished_network_list_build.connect(
             self.handle_network_list
         )
-        self.panel.rescan_button.clicked.connect(
-            lambda: QtCore.QTimer.singleShot(100, self.network_list_worker.build)
-        )
+        self.network_list_worker.start_polling()
+        self.panel.rescan_button.clicked.connect(self.network_list_worker.build)
 
         self.sdbus_network.nm_state_change.connect(self.evaluate_network_state)
         self.panel.wifi_button.clicked.connect(
@@ -415,7 +484,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         """Builds the model list (`self.model`) containing updatable clients"""
         self.network_list_widget.blockSignals(True)
         self.model.clear()
-        #logger.debug(f"len saved: {len(self.saved_network.items())}")
+
         test:dict = copy.copy(self.saved_network)
         if test.items():
             for ssid,(signal,is_saved) in test.items():
@@ -904,7 +973,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
                 continue
             if entry == "separator":
                 continue
-            self.saved_network[entry[0]] = (entry[1], entry[2] == "Saved" or entry[2] == "Active")
+            self.saved_network[entry[0]] = (entry[1], entry[2])
         self.build_model_list()
         self.network_list_widget.blockSignals(False)
                
@@ -1000,23 +1069,17 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
     def add_network_entry(self, ssid: str, signal: int, is_saved:str) -> None:
         """Adds a new item to the list model"""
         
-        wifi_pixmap = QtGui.QPixmap(":/network/media/btn_icons/no_wifi.svg")
-        if 70 <= signal <= 100:
-            wifi_pixmap = QtGui.QPixmap(":/network/media/btn_icons/3bar_wifi.svg")
-        elif signal >= 40:
-            wifi_pixmap = QtGui.QPixmap(":/network/media/btn_icons/2bar_wifi.svg")
-        elif 1 < signal < 40:
-            wifi_pixmap = QtGui.QPixmap(":/network/media/btn_icons/1bar_wifi.svg")
+        wifi_pixmap = self._provider.get_pixmap(signal=signal, state=is_saved)
             
         item = ListItem(
             text=ssid,
             left_icon=wifi_pixmap,
-            right_text=f"Signal - {signal} % | {'Active' if is_saved else 'Protect'} ",
+            right_text=is_saved,
             selected=False,
             allow_check=False,
             _lfontsize=17,
             _rfontsize=13,
-            height=60,
+            height=70,
         )
         self.model.add_item(item)
         
@@ -1115,14 +1178,8 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.network_list_widget.setVerticalScrollMode(QtWidgets.QAbstractItemView.ScrollMode.ScrollPerPixel)
         self.network_list_widget.setHorizontalScrollMode(QtWidgets.QAbstractItemView.ScrollMode.ScrollPerPixel)
         self.network_list_widget.setUniformItemSizes(True)
-
-        #self.network_list_widget.setStyleSheet("QListView { padding-bottom: 8px; }")
-
-        # inside build_network_list
-
-        # ... (your palette / list-view setup)
-
-        # Grab gesture on the viewport
+        self.network_list_widget.setSpacing(3)
+        
         viewport = self.network_list_widget.viewport()
         QScroller.grabGesture(viewport, QScroller.ScrollerGestureType.TouchGesture)
         QScroller.grabGesture(viewport, QScroller.ScrollerGestureType.LeftMouseButtonGesture)
@@ -1152,9 +1209,6 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         )
 
         scroller.setScrollerProperties(props)
-
-        # ... add widget to layout, etc.
-
 
         self.network_list_widget.setObjectName("network_list_widget")
         self.panel.nl_content_layout.addWidget(self.network_list_widget)
