@@ -39,6 +39,8 @@ class BlocksLabel(QtWidgets.QLabel):
         self.glow_animation.finished.connect(self.repaint)
 
         self.total_scroll_width: float = 0.0
+        self.text_width: float = 0.0
+        self.label_width: float = 0.0
         self.first_run = True
 
     def resizeEvent(self, a0: QtGui.QResizeEvent) -> None:
@@ -140,7 +142,7 @@ class BlocksLabel(QtWidgets.QLabel):
 
         if self._marquee and self.text_width > self.label_width:
             self.scroll_pos = 0.0
-            QtCore.QTimer.singleShot(2000, lambda:self.start_scroll())
+            QtCore.QTimer.singleShot(2000, lambda: self.start_scroll())
         else:
             self.stop_scroll()
             self.scroll_pos = 0.0
@@ -187,7 +189,7 @@ class BlocksLabel(QtWidgets.QLabel):
             qp.setPen(QtCore.Qt.PenStyle.NoPen)
             if self._rounded:
                 path = QtGui.QPainterPath()
-                path.addRoundedRect(rect, 10, 10)
+                path.addRoundedRect(QtCore.QRectF(rect), 10, 10)
                 qp.fillPath(path, self._background_color)
             else:
                 qp.fillRect(rect, self._background_color)
@@ -202,22 +204,37 @@ class BlocksLabel(QtWidgets.QLabel):
             qp.drawPixmap(icon_rect.toRect(), scaled)
         if self.glow_animation.state() == self.glow_animation.State.Running:
             path = QtGui.QPainterPath()
-            path.addRoundedRect(rect.toRect(), 10, 10)
+            path.addRoundedRect(QtCore.QRectF(rect), 10, 10)
             qp.fillPath(path, self.glow_color)
         if self._text:
             text_option = QtGui.QTextOption(self.alignment())
             text_option.setWrapMode(QtGui.QTextOption.WrapMode.NoWrap)
             qp.save()
             qp.setClipRect(rect)
-            baseline_y = rect.y() + (rect.height() + self.fontMetrics().ascent() - self.fontMetrics().descent()) / 2
-            qp.drawText(
-                QtCore.QPointF(rect.x() + self.scroll_pos, baseline_y),
-                self._text
+            baseline_y = (
+                rect.y()
+                + (rect.height() + self.fontMetrics().ascent() - self.fontMetrics().descent())
+                / 2
             )
-            qp.drawText(
-                QtCore.QPointF(rect.x() + self.scroll_pos + self.total_scroll_width, baseline_y),
-                self._text
-            )
+            
+            if self.text_width > self.label_width:
+                qp.drawText(
+                    QtCore.QPointF(rect.x() + self.scroll_pos, baseline_y), self._text
+                )
+                # Draw scrolling repeater text
+                qp.drawText(
+                    QtCore.QPointF(
+                        rect.x() + self.scroll_pos + self.total_scroll_width, baseline_y
+                    ),
+                    self._text,
+                )
+            else:
+                center_x = rect.x() + (rect.width() - self.text_width) / 2
+                
+                qp.drawText(
+                    QtCore.QPointF(center_x, baseline_y), 
+                    self._text
+                )
             qp.restore()
 
         qp.end()
