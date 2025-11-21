@@ -19,6 +19,7 @@ jobs:
   ci-checks:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         python-version: ["3.11.2"]
         test-type: [ruff, pylint, pytest]
@@ -44,10 +45,12 @@ jobs:
             echo "Running Formatting Test"
             ruff check --output-format=github --target-version=py311 --config=pyproject.toml > ruff-output.txt 2>&1
             ruff format --diff --target-version=py311 --config=pyproject.toml >> ruff-output.txt 2>&1
+            echo "Ruff finished"
           fi
           if [ "${{ matrix.test-type }}" == "pylint" ]; then
             echo "Running Code Test"
             pylint -j$(nproc) --recursive=y --rcfile=.pylintrc.dev . > pylint-output.txt 2>&1
+            echo "Pylint finished"
           fi
 
           if [ "${{ matrix.test-type }}" == "pytest" ]; then
