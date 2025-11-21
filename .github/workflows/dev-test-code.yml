@@ -42,21 +42,45 @@ jobs:
           echo "Starting test runs"
           if [ "${{ matrix.test-type }}" == "ruff" ]; then 
             echo "Running Formatting Test"
-            ruff check --output-format=github --target-version=py311 --config=pyproject.toml > ruff_output.txt
-            ruff format --diff --target-version=py311 --config=pyproject.toml
+            ruff check --output-format=github --target-version=py311 --config=pyproject.toml > ruff-output.txt 2>&1
+            ruff format --diff --target-version=py311 --config=pyproject.toml >> ruff-output.txt 2>&1
           fi
           if [ "${{ matrix.test-type }}" == "pylint" ]; then
             echo "Running Code Test"
-            pylint -j$(nproc) --recursive=y --rcfile=.pylintrc.dev . > pylint-output.txt
+            pylint -j$(nproc) --recursive=y --rcfile=.pylintrc.dev . > pylint-output.txt 2>&1
           fi
 
           if [ "${{ matrix.test-type }}" == "pytest" ]; then
             if [ -d "tests/" ] && [ "$(ls -A tests/)" ]; then 
               echo "Running Python unit tests"
-              pytest tests/'*.py' --doctest-modules --junitxml=junit/test-results.xml --cov=com --conv-report=xml --cov-report=html 
+              pytest tests/'*.py' --doctest-modules --junitxml=junit/test-results.xml --cov=com --conv-report=xml --cov-report=html > pytest-output.txt 2>&1 
             else
               echo "No tests directory no need to proceed with tests"
             fi
           fi
-        continue-on-error: false
 
+      - name: Upload ruff artifact 
+        if: always() && matrix.test-type == 'ruff'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ruff-results
+          path: ruff-output.txt
+
+      - name: Upload Pylint Artifacts
+        if: always() && matrix.test-type == 'pylint'
+        uses: actions/upload-artifact@v4
+        with:
+          name: pylint-results
+          path: pylint-output.txt
+        
+      - name: Upload Pytest Artifacts
+        if: always() && matrix.test-type == 'pytest' && hashFiles('pytest-output.txt', 'junit/test-results.xml', 'coverage.xml')
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-results
+          path: |
+            pytest_output.txt
+            junit/test-results.xml
+            coverage.xml
+            htmlcov/
+      
