@@ -16,11 +16,12 @@ on:
       - "BlocksScreen/lib/ui/**"
       - "extras/**"
 jobs:
-  formatting-check:
+  ci-checks:
     runs-on: ubuntu-latest
     strategy:
       matrix:
         python-version: ["3.11.2"]
+        test-type: [ruff, pylint, pytest]
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -33,57 +34,39 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install ruff
-      - name: Linting & Analyzing code formatting with Ruff
-        run: |
-          ruff check --output-format=github --target-version=py311 --config=pyproject.toml
-          ruff format --diff --target-version=py311 --config=pyproject.toml
-        continue-on-error: false
-  QA-check:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.11.2"]
-    steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
+          pip install scripts -r scripts/requirements-dev.txt
 
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v4
-        with:
-          python-version: ${{ matrix.python-version }}
-          cache: "pip"
-      - name: Install dependencies
+      - name: Run Test ${{ matrix.test-type }}
         run: |
-          python -m pip install --upgrade pip
-          pip install pylint
-      - name: QA code with pylint
-        run: |
-          echo "Linting files..."
-          pylint -j$(nproc) --recursive=y --rcfile=tools/.pylintrc.dev .
-        continue-on-error: false
-  Unit-tests:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.11.2"]
-    steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
-
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v4
-        with:
-          python-version: ${{ matrix.python-version }}
-          cache: "pip"
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install pytest pytest-cov
-      - name: Running Unit tests with pytest
-        run: |
-          if [ -d "tests/" ] && [ "$(ls -A tests/)" ]; then 
-            pytest tests/'*.py' --doctest-modules --junitxml=junit/test-results.xml --cov=com --conv-report=xml --cov-report=html 
-          else
-            echo "No tests directory no need to proceed with tests"
+          if [ "${{ matrix.test-type }}" == "ruff" ]; then 
+            echo "Running Formatting Test"
+            ruff check --output-format=github --target-version=py311 --config=pyproject.toml
+            ruff format --diff --target-version=py311 --config=pyproject.toml
           fi
+
+          if [ "${{ matrix.test-type }}" == "pylint" ]; then
+            echo "Running Code Test"
+            pylint -j$(nproc) --recursive=y --rcfile=tools/.pylintrc.dev .
+          fi
+
+          if [ "${{ matrix.test-type }}" == "pytest" ]; then
+            if [ -d "tests/" ] && [ "$(ls -A tests/)" ]; then 
+              echo "Running Python unit tests"
+              pytest tests/'*.py' --doctest-modules --junitxml=junit/test-results.xml --cov=com --conv-report=xml --cov-report=html 
+            else
+              echo "No tests directory no need to proceed with tests"
+            fi
+          fi
+        # continue-on-error: false
+      - name: Upload Test Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.test-type }}-results
+          path: |
+            junit/test-results.xml
+            coverage.xml
+            htmlcov/
+            ruff_output.txt
+            pylint_output.txt
+
