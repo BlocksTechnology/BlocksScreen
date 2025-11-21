@@ -2,15 +2,15 @@ name: dev-test-code
 
 on:
   push:
-    branches-ignore:
-      - main
+    branches:
+      - dev 
     paths-ignore:
       - "scripts/**"
       - "BlocksScreen/lib/ui/**"
       - "extras/**"
   pull_request:
-    branches-ignore:
-      - main
+    branches:
+      - dev
     paths-ignore:
       - "scripts/**"
       - "BlocksScreen/lib/ui/**"
