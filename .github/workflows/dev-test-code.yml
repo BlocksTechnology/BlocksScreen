@@ -33,20 +33,21 @@ jobs:
           cache: "pip"
       - name: Install dependencies
         run: |
+          echo "Installing dependencies"
           python -m pip install --upgrade pip
           pip install scripts -r scripts/requirements-dev.txt
 
       - name: Run Test ${{ matrix.test-type }}
         run: |
+          echo "Starting test runs"
           if [ "${{ matrix.test-type }}" == "ruff" ]; then 
             echo "Running Formatting Test"
-            ruff check --output-format=github --target-version=py311 --config=pyproject.toml
+            ruff check --output-format=github --target-version=py311 --config=pyproject.toml > ruff_output.txt
             ruff format --diff --target-version=py311 --config=pyproject.toml
           fi
-
           if [ "${{ matrix.test-type }}" == "pylint" ]; then
             echo "Running Code Test"
-            pylint -j$(nproc) --recursive=y --rcfile=tools/.pylintrc.dev .
+            pylint -j$(nproc) --recursive=y --rcfile=.pylintrc.dev . > pylint-output.txt
           fi
 
           if [ "${{ matrix.test-type }}" == "pytest" ]; then
@@ -57,16 +58,5 @@ jobs:
               echo "No tests directory no need to proceed with tests"
             fi
           fi
-        # continue-on-error: false
-      - name: Upload Test Artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.test-type }}-results
-          path: |
-            junit/test-results.xml
-            coverage.xml
-            htmlcov/
-            ruff_output.txt
-            pylint_output.txt
+        continue-on-error: false
 
