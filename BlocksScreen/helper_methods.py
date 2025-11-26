@@ -303,8 +303,20 @@ def check_file_on_path(
     return os.path.exists(_filepath)
 
 
-def get_file_loc(filename) -> pathlib.Path:
-    ...
+def get_file_loc(filename: typing.Optional[str]) -> str:
+    # If filename is None or empty, return empty string instead of None
+    if not filename:
+        return ""
+    # Remove trailing slashes or backslashes
+    filename = filename.rstrip("/\\")
+    
+    # Normalize Windows backslashes to forward slashes
+    filename = filename.replace("\\", "/")
+    
+    parts = filename.split("/")
+    
+    # Split and return the last path component
+    return parts[-1] if filename else ""
 
 
 # def get_hash(data) -> hashlib._Hash:
