@@ -77,8 +77,8 @@ class FilesPage(QtWidgets.QWidget):
     def on_file_list(self, file_list: list) -> None:
         self.files_data.clear()
         self.file_list = file_list
-       # if self.isVisible(): # Only build the list when directories come
-        #    self._build_file_list()
+        if self.isVisible(): # Only build the list when directories come
+            self._build_file_list()
 
     @QtCore.pyqtSlot(list, name="on-dirs")
     def on_directories(self, directories_data: list) -> None:
@@ -130,7 +130,7 @@ class FilesPage(QtWidgets.QWidget):
             right_text=f"{filament_type} - {time_str}",
             right_icon=QtGui.QPixmap(":/arrow_icons/media/btn_icons/right_arrow.svg"),
             left_icon=None,
-            callback=lambda: self._fileItemClicked(item),
+            callback=lambda namelam=filename: self._fileItemClicked(namelam),
             selected=False,
             allow_check=False,
             _lfontsize=17,
@@ -142,34 +142,20 @@ class FilesPage(QtWidgets.QWidget):
         self.model.add_item(item)
 
 
-    @QtCore.pyqtSlot(ListItem,str, name="file-item-clicked")
-    def _fileItemClicked(self, item: ListItem,path:str ) -> None:
+    @QtCore.pyqtSlot(str, name="file-item-clicked")
+    def _fileItemClicked(self, filename: str) -> None:
         """Slot for List Item clicked
 
         Args:
-            item (QListWidgetItem): Clicked item
+            filename (str): Clicked item path
         """
-        if item:
-            for file in self.file_list:
-                path = (
-                    file.get("path")
-                    if "path" in file.keys()
-                    else file.get("filename")
-                )
-                if not path:
-                    return
-                if item.text in path:
-                    file_path = (
-                        path
-                        if not self.curr_dir
-                        else str(self.curr_dir + "/" + path)
-                    )
-                    self.file_selected.emit(
-                        str(file_path.removeprefix("/")),
+        self.file_selected.emit(
+                        str(filename.removeprefix("/")),
                         self.files_data.get(
-                            file_path.removeprefix("/")
+                            filename.removeprefix("/")
                         ),  # Defaults to Nothing
                     )
+
 
     def _dirItemClicked(
         self, directory: str
@@ -199,10 +185,8 @@ class FilesPage(QtWidgets.QWidget):
         )
         for item in sorted_list:
             self._add_file_list_item(item)
-
-        self._add_spacer()
+        
         self._setup_scrollbar()
-        #self.listWidget.blockSignals(False)
         self.listWidget.repaint()
 
     def _add_directory_list_item(self, dir_data: dict) -> None:
@@ -266,13 +250,6 @@ class FilesPage(QtWidgets.QWidget):
         self.request_file_metadata.emit(file_path.removeprefix("/"))
         self.request_file_info.emit(file_path.removeprefix("/"))
 
-    def _add_spacer(self) -> None:
-        spacer_item = QtWidgets.QListWidgetItem()
-        spacer_widget = QtWidgets.QWidget()
-        spacer_widget.setFixedHeight(10)
-        spacer_item.setSizeHint(spacer_widget.sizeHint())
-        #self.listWidget.addItem(spacer_item)
-
     def _add_placeholder(self) -> None:
         self.scrollbar.hide()
         self.listWidget.hide()
@@ -287,6 +264,9 @@ class FilesPage(QtWidgets.QWidget):
         self.scrollbar.blockSignals(False)
 
     def _setup_scrollbar(self) -> None:
+        idx = self.model.index(0, 0)
+    
+        rect = self.listWidget.rectForIndex(idx)
         self.scrollbar.setMinimum(
             self.listWidget.verticalScrollBar().minimum()
         )
@@ -431,10 +411,11 @@ class FilesPage(QtWidgets.QWidget):
         self.scrollbar = CustomScrollBar()
         self.fp_content_layout.addWidget(self.scrollbar)
         self.verticalLayout_5.addLayout(self.fp_content_layout)
-        self.scrollbar.setAttribute(
-            QtCore.Qt.WidgetAttribute.WA_TransparentForMouseEvents, True
-        )
-        self.scroller = QtWidgets.QScroller.scroller(self.listWidget)
+        #self.scrollbar.setAttribute(
+        #    QtCore.Qt.WidgetAttribute.WA_TransparentForMouseEvents, True
+        #)
+        #self.scroller = QtWidgets.QScroller.scroller(self.listWidget)
+        self.scrollbar.show()
         self.label.hide()
 
 
