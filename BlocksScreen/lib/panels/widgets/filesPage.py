@@ -79,10 +79,15 @@ class FilesPage(QtWidgets.QWidget):
         self.files_data.clear()
         self.file_list = file_list
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
        # if self.isVisible(): # Only build the list when directories come
         #    self._build_file_list()
 >>>>>>> 342be69 (FilesPage: Refactor almost complete  missing passing the directory by itemclick)
+=======
+        if self.isVisible(): # Only build the list when directories come
+            self._build_file_list()
+>>>>>>> 44841b3 (filesPage.py: refactor concluded, scrollbar bugfix)
 
     @QtCore.pyqtSlot(list, name="on-dirs")
     def on_directories(self, directories_data: list) -> None:
@@ -143,7 +148,7 @@ class FilesPage(QtWidgets.QWidget):
             right_text=f"{filament_type} - {time_str}",
             right_icon=QtGui.QPixmap(":/arrow_icons/media/btn_icons/right_arrow.svg"),
             left_icon=None,
-            callback=lambda: self._fileItemClicked(item),
+            callback=lambda namelam=filename: self._fileItemClicked(namelam),
             selected=False,
             allow_check=False,
             _lfontsize=17,
@@ -156,13 +161,14 @@ class FilesPage(QtWidgets.QWidget):
 >>>>>>> 342be69 (FilesPage: Refactor almost complete  missing passing the directory by itemclick)
 
 
-    @QtCore.pyqtSlot(ListItem,str, name="file-item-clicked")
-    def _fileItemClicked(self, item: ListItem,path:str ) -> None:
+    @QtCore.pyqtSlot(str, name="file-item-clicked")
+    def _fileItemClicked(self, filename: str) -> None:
         """Slot for List Item clicked
 
         Args:
-            item (QListWidgetItem): Clicked item
+            filename (str): Clicked item path
         """
+<<<<<<< HEAD
         if item:
             for file in self.file_list:
                 path = (
@@ -176,15 +182,23 @@ class FilesPage(QtWidgets.QWidget):
                     )
                     self.file_selected.emit(
                         str(file_path.removeprefix("/")),
+=======
+        self.file_selected.emit(
+                        str(filename.removeprefix("/")),
+>>>>>>> 44841b3 (filesPage.py: refactor concluded, scrollbar bugfix)
                         self.files_data.get(
-                            file_path.removeprefix("/")
+                            filename.removeprefix("/")
                         ),  # Defaults to Nothing
                     )
 
 <<<<<<< HEAD
+<<<<<<< HEAD
     @QtCore.pyqtSlot(QtWidgets.QListWidgetItem, str, name="dir-item-clicked")
     def _dirItemClicked(self, item: QtWidgets.QListWidgetItem, directory: str) -> None:
 =======
+=======
+
+>>>>>>> 44841b3 (filesPage.py: refactor concluded, scrollbar bugfix)
     def _dirItemClicked(
         self, directory: str
     ) -> None:
@@ -212,10 +226,8 @@ class FilesPage(QtWidgets.QWidget):
         sorted_list = sorted(self.file_list, key=lambda x: x["modified"], reverse=True)
         for item in sorted_list:
             self._add_file_list_item(item)
-
-        self._add_spacer()
+        
         self._setup_scrollbar()
-        #self.listWidget.blockSignals(False)
         self.listWidget.repaint()
 
     def _add_directory_list_item(self, dir_data: dict) -> None:
@@ -322,13 +334,6 @@ class FilesPage(QtWidgets.QWidget):
         self.request_file_metadata.emit(file_path.removeprefix("/"))
         self.request_file_info.emit(file_path.removeprefix("/"))
 
-    def _add_spacer(self) -> None:
-        spacer_item = QtWidgets.QListWidgetItem()
-        spacer_widget = QtWidgets.QWidget()
-        spacer_widget.setFixedHeight(10)
-        spacer_item.setSizeHint(spacer_widget.sizeHint())
-        #self.listWidget.addItem(spacer_item)
-
     def _add_placeholder(self) -> None:
 <<<<<<< HEAD
         self.listWidget.setSpacing(-1)
@@ -358,9 +363,24 @@ class FilesPage(QtWidgets.QWidget):
         self.scrollbar.blockSignals(False)
 
     def _setup_scrollbar(self) -> None:
+<<<<<<< HEAD
         self.scrollbar.setMinimum(self.listWidget.verticalScrollBar().minimum())
         self.scrollbar.setMaximum(self.listWidget.verticalScrollBar().maximum())
         self.scrollbar.setPageStep(self.listWidget.verticalScrollBar().pageStep())
+=======
+        idx = self.model.index(0, 0)
+    
+        rect = self.listWidget.rectForIndex(idx)
+        self.scrollbar.setMinimum(
+            self.listWidget.verticalScrollBar().minimum()
+        )
+        self.scrollbar.setMaximum(
+            self.listWidget.verticalScrollBar().maximum()
+        )
+        self.scrollbar.setPageStep(
+            self.listWidget.verticalScrollBar().pageStep()
+        )
+>>>>>>> 44841b3 (filesPage.py: refactor concluded, scrollbar bugfix)
         self.scrollbar.show()
 
     def _setupUI(self):
@@ -494,10 +514,11 @@ class FilesPage(QtWidgets.QWidget):
         self.scrollbar = CustomScrollBar()
         self.fp_content_layout.addWidget(self.scrollbar)
         self.verticalLayout_5.addLayout(self.fp_content_layout)
-        self.scrollbar.setAttribute(
-            QtCore.Qt.WidgetAttribute.WA_TransparentForMouseEvents, True
-        )
-        self.scroller = QtWidgets.QScroller.scroller(self.listWidget)
+        #self.scrollbar.setAttribute(
+        #    QtCore.Qt.WidgetAttribute.WA_TransparentForMouseEvents, True
+        #)
+        #self.scroller = QtWidgets.QScroller.scroller(self.listWidget)
+        self.scrollbar.show()
         self.label.hide()
 
 
