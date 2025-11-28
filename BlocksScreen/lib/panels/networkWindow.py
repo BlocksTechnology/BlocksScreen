@@ -1,32 +1,24 @@
+import copy
 import logging
-import typing
-import copy 
 import subprocess
+import typing
 from functools import partial
 
 from PyQt6 import QtCore, QtGui, QtWidgets
-from PyQt6.QtCore import QRunnable, QThreadPool, QObject, pyqtSignal, QVariant
-from PyQt6.QtWidgets import QScroller, QScrollerProperties
+from PyQt6.QtCore import QRunnable, QThreadPool, QObject, pyqtSignal
 
 from lib.network import SdbusNetworkManagerAsync
 from lib.panels.widgets.popupDialogWidget import Popup
 from lib.ui.wifiConnectivityWindow_ui import Ui_wifi_stacked_page
 from lib.panels.widgets.keyboardPage import CustomQwertyKeyboard
-from lib.utils.blocks_frame import BlocksCustomFrame
 from lib.panels.widgets.loadPage import LoadScreen
 from lib.utils.list_model import EntryDelegate, EntryListModel, ListItem
 
 
 logger = logging.getLogger("logs/BlocksScreen.log")
 
-<<<<<<< HEAD
-
-class BuildNetworkList(QtCore.QThread):
-    """Retrieves information from sdbus interface about scanned networks"""
-=======
 class NetworkScanRunnable(QRunnable):
     """QRunnable task that performs network scanning using SdbusNetworkManagerAsync
->>>>>>> 9285fb7 (Refactor: Refac to MVC view with Controller being runnables on a threadpoll)
 
         This runnable:
           - Triggers a network rescan via SdbusNetworkManagerAsync
@@ -222,9 +214,6 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             
         self.panel = Ui_wifi_stacked_page()
         self.panel.setupUi(self)
-        
-        self._setupUI()
-        
         self._provider = WifiIconProvider()
         self.ongoing_update: bool = False
         
@@ -243,16 +232,14 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         
         #View Models and Delegates
         self.model = EntryListModel()
-        self.model.setParent(self.network_list_widget)
+        self.model.setParent(self.panel.listView)
         self.entry_delegate = EntryDelegate()
-        self.network_list_widget.setModel(self.model)
-        self.network_list_widget.setItemDelegate(self.entry_delegate)
+        self.panel.listView.setModel(self.model)
+        self.panel.listView.setItemDelegate(self.entry_delegate)
         self.entry_delegate.item_selected.connect(self.ssid_item_clicked)
-        self.panel.network_backButton.clicked.connect(self.reset_view_model)
 
         # Network Scan
         self.build_network_list()
-
         self.network_list_worker = BuildNetworkList()
         self.network_list_worker.finished_network_list_build.connect(
             self.handle_network_list
@@ -413,8 +400,15 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
 
         self.network_list_worker.build()
         self.request_network_scan.emit()
+        self.panel.listView.verticalScrollBar().valueChanged.connect(
+            self._handle_scrollbar
+        )
+        self.panel.verticalScrollBar.valueChanged.connect(self._handle_scrollbar)
+        self.panel.verticalScrollBar.valueChanged.connect(
+            lambda value: self.panel.listView.verticalScrollBar().setValue(value)
+        )
+        self.panel.verticalScrollBar.show()
         self.hide()
-        
         self.info_box_load()
 
         self.qwerty = CustomQwertyKeyboard(self)
@@ -477,20 +471,28 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
 
     def showEvent(self, event: QtGui.QShowEvent | None) -> None:
         """Re-add clients to update list"""
+        # Block all touch events so multitouch is ignored
+        if event.type() in (
+            QtCore.QEvent.Type.TouchBegin,
+            QtCore.QEvent.Type.TouchUpdate,
+            QtCore.QEvent.Type.TouchEnd
+        ):
+            return True  # ignore the event entirely
+        
         self.build_model_list()
         return super().showEvent(event)
 
     def build_model_list(self) -> None:
         """Builds the model list (`self.model`) containing updatable clients"""
-        self.network_list_widget.blockSignals(True)
-        self.model.clear()
-
-        test:dict = copy.copy(self.saved_network)
-        if test.items():
-            for ssid,(signal,is_saved) in test.items():
+        self.panel.listView.blockSignals(True)
+        self.reset_view_model()
+        saved_networks:dict = copy.copy(self.saved_network)
+        if saved_networks.items():
+            for ssid,(signal,is_saved) in saved_networks.items():
                 self.add_network_entry(ssid=ssid, signal=signal, is_saved=is_saved)
-        
-        self.network_list_widget.blockSignals(False)
+            self._setup_scrollbar()
+
+        self.panel.listView.blockSignals(False)
         
     def saved_wifi_option_selected(self):
         """Handle connect/delete network button clicks"""
@@ -739,6 +741,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.panel.hotspot_button.setEnabled(True)
         self.repaint()
 
+
         if (
             wifi_btn.state == wifi_btn.State.OFF
             and hotspot_btn.state == hotspot_btn.State.OFF
@@ -905,15 +908,9 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.panel.add_network_validation_button.setEnabled(True)
         self.panel.add_network_validation_button.repaint()
         self.popup.new_message(message_type=Popup.MessageType.ERROR, message=message)
-<<<<<<< HEAD
-
-    @QtCore.pyqtSlot(QtWidgets.QListWidgetItem, name="ssid_item_clicked")
-    def ssid_item_clicked(self, item: QtWidgets.QListWidgetItem) -> None:
-=======
         
     @QtCore.pyqtSlot(ListItem, name="ssid_item_clicked")
     def ssid_item_clicked(self, item: ListItem) -> None:
->>>>>>> da41c34 (refactor: change network list to listview)
         """Handles when a network is clicked on the QListWidget.
 
         Args:
@@ -923,7 +920,6 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             return 
         
         _current_ssid_name = item.text
-        #_current_ssid_name = self.saved_network.get(item.text, {})
         self.selected_item = copy.copy(item)
         if (
             _current_ssid_name in self.sdbus_network.get_saved_ssid_names()
@@ -964,7 +960,6 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         scroll_bar_position = self.network_list_widget.verticalScrollBar().value()
 =======
     def handle_network_list(self, data: typing.Dict) -> None:
->>>>>>> da41c34 (refactor: change network list to listview)
         self.network_list_widget.blockSignals(True)
         for entry in data:
             if entry[0] == self.sdbus_network.hotspot_ssid:
@@ -975,8 +970,6 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
                 continue
             self.saved_network[entry[0]] = (entry[1], entry[2])
         self.build_model_list()
-        self.network_list_widget.blockSignals(False)
-               
         self.evaluate_network_state()
         QtCore.QTimer().singleShot(10000, lambda: self.network_list_worker.build())
 
@@ -990,7 +983,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
                 self.panel.network_activate_btn.show()
             else:
                 self.panel.network_activate_btn.hide()
-            self.panel.frame.repaint()
+            #self.panel.frame.repaint()
 
         else:
             self.setCurrentIndex(self.indexOf(self.panel.add_network_page))
@@ -1070,7 +1063,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         """Adds a new item to the list model"""
         
         wifi_pixmap = self._provider.get_pixmap(signal=signal, state=is_saved)
-            
+        ssid = ssid if ssid is not "" else "UNKOWN"
         item = ListItem(
             text=ssid,
             left_icon=wifi_pixmap,
@@ -1078,59 +1071,27 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             selected=False,
             allow_check=False,
             _lfontsize=17,
-            _rfontsize=13,
-            height=70,
+            _rfontsize=12,
+            height=80,
         )
         self.model.add_item(item)
+   
+    def _handle_scrollbar(self, value):
+        # Block signals to avoid recursion
+        self.panel.verticalScrollBar.blockSignals(True)
+        self.panel.verticalScrollBar.setValue(value)
+        self.panel.verticalScrollBar.blockSignals(False)
         
-    def _setupUI(self) -> None:
-        
-        """Sets up the UI components and layout for the network window."""
-
-        font_id = QtGui.QFontDatabase.addApplicationFont(
-            ":/font/media/fonts for text/Momcake-Bold.ttf"
+    def _setup_scrollbar(self) -> None:
+        self.panel.verticalScrollBar.setMinimum(
+            self.panel.listView.verticalScrollBar().minimum()
         )
-        font_family = QtGui.QFontDatabase.applicationFontFamilies(font_id)[0]
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
+        self.panel.verticalScrollBar.setMaximum(
+            self.panel.listView.verticalScrollBar().maximum()
         )
-        sizePolicy.setHorizontalStretch(1)
-        #sizePolicy.setVerticalStretch(1)
-        self.setSizePolicy(sizePolicy)
-        self.setMinimumSize(QtCore.QSize(800, 500))
-        #self.setMaximumSize(QtCore.QSize(800, 500))
-        self.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
-        self.main_content_layout = QtWidgets.QHBoxLayout()
-        self.main_content_layout.setAlignment(QtCore.Qt.AlignmentFlag.AlignTop)
-                                              
-        font = QtGui.QFont()
-        font.setFamily(font_family)
-        font.setPointSize(24)
-        
-        self.header_title = QtWidgets.QLabel(self)
-        self.header_title.setMinimumSize(QtCore.QSize(100, 60))
-        self.header_title.setMaximumSize(QtCore.QSize(16777215, 60))
-        self.header_title.setFont(font)
-
-        # Timer for loading screen timeout
-        self._load_timer = QtCore.QTimer(self)
-                
-        #Buttons frame for update buttons
-        self.network_buttons_frame = BlocksCustomFrame()
-        #self.network_buttons_frame.setMinimumSize(QtCore.QSize(100, 100))
-        #self.network_buttons_frame.setMaximumSize(QtCore.QSize(800, 450))
-        
-        #List widget for update buttons
-        self.network_list_widget = QtWidgets.QListView(self.network_buttons_frame)
-        
-        self.network_buttons_layout = QtWidgets.QVBoxLayout()
-        self.network_buttons_layout.setContentsMargins(15, 20, 20, 5)
-        self.network_buttons_layout.addWidget(self.network_list_widget, 0, QtCore.Qt.AlignmentFlag.AlignBottom)
-        self.network_buttons_frame.setLayout(self.network_buttons_layout)
-
-        self.main_content_layout.addWidget(self.network_buttons_frame, 0)
-        self.setLayout(self.main_content_layout)
+        self.panel.verticalScrollBar.setPageStep(
+            self.panel.listView.verticalScrollBar().pageStep()
+        )
         
     def build_network_list(self) -> None:
         """Build available/saved network list with optimized palette setup."""
@@ -1159,56 +1120,4 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         set_brush_for_all_groups(palette, QtGui.QPalette.ColorRole.Link, (0, 0, 255, 0))
         
         # Apply palette
-        self.network_list_widget.setPalette(palette)
-        
-        # General QListView setup
-        self.network_list_widget.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
-        self.network_list_widget.setStyleSheet("background-color:transparent")
-        self.network_list_widget.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
-        self.network_list_widget.setFrameShadow(QtWidgets.QFrame.Shadow.Sunken)
-        self.network_list_widget.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        self.network_list_widget.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self.network_list_widget.setSizeAdjustPolicy(QtWidgets.QAbstractScrollArea.SizeAdjustPolicy.AdjustIgnored)
-        self.network_list_widget.setAutoScroll(False)
-        self.network_list_widget.setProperty("showDropIndicator", False)
-        self.network_list_widget.setDefaultDropAction(QtCore.Qt.DropAction.IgnoreAction)
-        self.network_list_widget.setAlternatingRowColors(False)
-        self.network_list_widget.setSelectionMode(QtWidgets.QAbstractItemView.SelectionMode.NoSelection)
-        self.network_list_widget.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectionBehavior.SelectItems)
-        self.network_list_widget.setVerticalScrollMode(QtWidgets.QAbstractItemView.ScrollMode.ScrollPerPixel)
-        self.network_list_widget.setHorizontalScrollMode(QtWidgets.QAbstractItemView.ScrollMode.ScrollPerPixel)
-        self.network_list_widget.setUniformItemSizes(True)
-        self.network_list_widget.setSpacing(3)
-        
-        viewport = self.network_list_widget.viewport()
-        QScroller.grabGesture(viewport, QScroller.ScrollerGestureType.TouchGesture)
-        QScroller.grabGesture(viewport, QScroller.ScrollerGestureType.LeftMouseButtonGesture)
-
-        scroller = QScroller.scroller(viewport)
-        props = scroller.scrollerProperties()
-
-        props.setScrollMetric(
-            QScrollerProperties.ScrollMetric.VerticalOvershootPolicy,
-            QVariant(QScrollerProperties.OvershootPolicy.OvershootAlwaysOff)
-        )
-        props.setScrollMetric(
-            QScrollerProperties.ScrollMetric.OvershootDragResistanceFactor,
-            QVariant(1.0)
-        )
-        props.setScrollMetric(
-            QScrollerProperties.ScrollMetric.OvershootDragDistanceFactor,
-            QVariant(0.0)
-        )
-        props.setScrollMetric(
-            QScrollerProperties.ScrollMetric.OvershootScrollDistanceFactor,
-            QVariant(0.0)
-        )
-        props.setScrollMetric(
-            QScrollerProperties.ScrollMetric.OvershootScrollTime,
-            QVariant(0.0)
-        )
-
-        scroller.setScrollerProperties(props)
-
-        self.network_list_widget.setObjectName("network_list_widget")
-        self.panel.nl_content_layout.addWidget(self.network_list_widget)
+        self.panel.listView.setPalette(palette)
