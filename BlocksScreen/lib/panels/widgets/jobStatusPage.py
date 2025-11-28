@@ -1,6 +1,6 @@
 import logging
 import typing
-
+import os
 import events
 from helper_methods import calculate_current_layer, estimate_print_time
 from lib.panels.widgets import dialogPage
@@ -10,6 +10,7 @@ from lib.utils.blocks_progressbar import CustomProgressBar
 from lib.utils.display_button import DisplayButton
 from PyQt6 import QtCore, QtGui, QtWidgets
 
+logger = logging.getLogger("logs/BlocksScreen.log")
 
 class ClickableGraphicsView(QtWidgets.QGraphicsView):
     clicked = QtCore.pyqtSignal()
@@ -67,12 +68,6 @@ class JobStatusWidget(QtWidgets.QWidget):
         self.CBVSmallThumbnail.clicked.connect(self.showthumbnail)
         self.CBVBigThumbnail.clicked.connect(self.hidethumbnail)
 
-        self.smalthumbnail = QtGui.QImage(
-            "BlocksScreen/lib/ui/resources/media/smalltest.png"
-        )
-        self.bigthumbnail = QtGui.QImage(
-            "BlocksScreen/lib/ui/resources/media/thumbnailmissing.png"
-        )
         self.CBVSmallThumbnail.installEventFilter(self)
         self.CBVBigThumbnail.installEventFilter(self)
 
@@ -134,9 +129,6 @@ class JobStatusWidget(QtWidgets.QWidget):
         self.js_file_name_label.setText(self._current_file_name)
         self.layer_display_button.setText("?")
         self.print_time_display_button.setText("?")
-        if thumbnails:
-            self.smalthumbnail = thumbnails[0]
-            self.bigthumbnail = thumbnails[1]
 
         self.printing_progress_bar.reset()
         self._internal_print_status = "printing"
@@ -155,21 +147,12 @@ class JobStatusWidget(QtWidgets.QWidget):
             else:
                 raise TypeError("QApplication.instance expected non None value")
         except Exception as e:
-            logging.debug(f"Unexpected error while posting print job start event: {e}")
+            logger.debug(f"Unexpected error while posting print job start event: {e}")
 
     @QtCore.pyqtSlot(dict, name="on_fileinfo")
     def on_fileinfo(self, fileinfo: dict) -> None:
         self.total_layers = str(fileinfo.get("layer_count", "?"))
         self.layer_display_button.setText("?")
-        if (
-            fileinfo.get("thumbnail_images", [])
-            and len(fileinfo.get("thumbnail_images", [])) > 0
-        ):
-            self.smalthumbnail = fileinfo["thumbnail_images"][1]
-            self.bigthumbnail = fileinfo["thumbnail_images"][
-                -1
-            ]  # Last 'biggest' element
-
         self.layer_display_button.secondary_text = str(self.total_layers)
         self.file_metadata = fileinfo
 
@@ -246,7 +229,7 @@ class JobStatusWidget(QtWidgets.QWidget):
                                 "QApplication.instance expected non None value"
                             )
                     except Exception as e:
-                        logging.info(
+                        logger.info(
                             f"Unexpected error while posting print job start event: {e}"
                         )
 
@@ -320,65 +303,72 @@ class JobStatusWidget(QtWidgets.QWidget):
                 self.print_progress = value
                 self.printing_progress_bar.setValue(self.print_progress)
 
+    def _load_thumbnail(
+        self,
+        scene_attr: str,
+        view_widget,
+        filename: str,
+        size: int
+    ):
+        """
+        Loads a thumbnail into a QGraphicsScene, creating the scene if needed.
+        """
+        try:
+            pixmap_path = os.path.expanduser(
+                f"~/printer_data/gcodes/.thumbs/{filename}-{size}x{size}.png"
+            )
+
+            if not os.path.exists(pixmap_path):
+                logger.debug(f"Thumbnail file does NOT exist: {pixmap_path}")
+                return
+
+            pixmap = QtGui.QPixmap(pixmap_path)
+            if pixmap.isNull():
+                logger.debug(f"Failed to load pixmap: {pixmap_path}")
+                return
+
+            scene = getattr(self, scene_attr, None)
+            if scene is None:
+                scene = QtWidgets.QGraphicsScene()
+                setattr(self, scene_attr, scene)
+                view_widget.setScene(scene)
+            else:
+                scene.clear()
+
+            scaled = pixmap.scaled(
+                size, size,
+                QtCore.Qt.AspectRatioMode.KeepAspectRatio,
+                QtCore.Qt.TransformationMode.SmoothTransformation,
+            )
+
+            item = QtWidgets.QGraphicsPixmapItem(scaled)
+            item.setOffset(
+                (size - scaled.width()) / 2,
+                (size - scaled.height()) / 2
+            )
+
+            scene.addItem(item)
+            scene.setSceneRect(0, 0, size, size)
+
+        except Exception as e:
+            logger.debug(f"Error loading thumbnail {size}px: {e}")
+
+
     def paintEvent(self, a0: QtGui.QPaintEvent) -> None:
-        _scene = QtWidgets.QGraphicsScene()
-        if not self.smalthumbnail.isNull():
-            _graphics_rect = self.CBVSmallThumbnail.rect().toRectF()
-            _image_rect = self.smalthumbnail.rect()
+        base_name = self._current_file_name[:-6]
 
-            scaled_width = _image_rect.width()
-            scaled_height = _image_rect.height()
-            adjusted_x = (_graphics_rect.width() - scaled_width) // 2.0
-            adjusted_y = (_graphics_rect.height() - scaled_height) // 2.0
-
-            adjusted_rect = QtCore.QRectF(
-                _image_rect.x() + adjusted_x,
-                _image_rect.y() + adjusted_y,
-                scaled_width,
-                scaled_height,
-            )
-            _scene.setSceneRect(adjusted_rect)
-            _item_scaled = QtWidgets.QGraphicsPixmapItem(
-                QtGui.QPixmap.fromImage(self.smalthumbnail).scaled(
-                    int(scaled_width),
-                    int(scaled_height),
-                    QtCore.Qt.AspectRatioMode.KeepAspectRatio,
-                    QtCore.Qt.TransformationMode.SmoothTransformation,
-                )
-            )
-            _scene.addItem(_item_scaled)
-            self.CBVSmallThumbnail.setScene(_scene)
-
-        else:
-            self.request_file_info.emit(self.js_file_name_label.text())
-        _scene = QtWidgets.QGraphicsScene()
-
-        if not self.bigthumbnail.isNull():
-            _graphics_rect = self.CBVBigThumbnail.rect().toRectF()
-            _image_rect = self.bigthumbnail.rect()
-
-            scaled_width = _image_rect.width()
-            scaled_height = _image_rect.height()
-            adjusted_x = (_graphics_rect.width() - scaled_width) // 2.0
-            adjusted_y = (_graphics_rect.height() - scaled_height) // 2.0
-
-            adjusted_rect = QtCore.QRectF(
-                _image_rect.x() + adjusted_x,
-                _image_rect.y() + adjusted_y,
-                scaled_width,
-                scaled_height,
-            )
-            _scene.setSceneRect(adjusted_rect)
-            _item_scaled = QtWidgets.QGraphicsPixmapItem(
-                QtGui.QPixmap.fromImage(self.bigthumbnail).scaled(
-                    int(scaled_width),
-                    int(scaled_height),
-                    QtCore.Qt.AspectRatioMode.KeepAspectRatio,
-                    QtCore.Qt.TransformationMode.SmoothTransformation,
-                )
-            )
-            _scene.addItem(_item_scaled)
-            self.CBVBigThumbnail.setScene(_scene)
+        self._load_thumbnail(
+            "_scene_small",
+            self.CBVSmallThumbnail,
+            base_name,
+            48
+        )
+        self._load_thumbnail(
+            "_scene_big",
+            self.CBVBigThumbnail,
+            base_name,
+            300
+        )
 
     def setupUI(self) -> None:
         sizePolicy = QtWidgets.QSizePolicy(
