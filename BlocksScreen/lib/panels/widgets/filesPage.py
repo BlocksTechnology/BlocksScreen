@@ -5,9 +5,7 @@ import typing
 import helper_methods
 from lib.utils.blocks_Scrollbar import CustomScrollBar
 from lib.utils.icon_button import IconButton
-from lib.utils.list_button import ListCustomButton
 from PyQt6 import QtCore, QtGui, QtWidgets
-from lib.utils.blocks_frame import BlocksCustomFrame
 
 from lib.utils.list_model import EntryDelegate, EntryListModel, ListItem
 
@@ -39,7 +37,6 @@ class FilesPage(QtWidgets.QWidget):
 
     def __init__(self, parent) -> None:
         super().__init__()
-        #VM
         self.model = EntryListModel()
         self.entry_delegate = EntryDelegate()
         self._setupUI()
@@ -62,6 +59,14 @@ class FilesPage(QtWidgets.QWidget):
 
     @QtCore.pyqtSlot(ListItem, name="on-item-selected")
     def _on_item_selected(self, item: ListItem) -> None:
+        """Slot called when a list item is selected in the UI.
+        This method is connected to the `item_selected` signal of the entry delegate.
+        It handles the selection of a `ListItem` and is intended to be overridden
+        or customized for each specific item type, allowing different behavior
+        depending on the item.
+        Args:
+            item : ListItem The item that was selected by the user.
+        """
         logger.debug("Item Selected")
 
     @QtCore.pyqtSlot(name="reset-dir")
@@ -91,6 +96,7 @@ class FilesPage(QtWidgets.QWidget):
 
     @QtCore.pyqtSlot(dict, name="on-fileinfo")
     def on_fileinfo(self, filedata: dict) -> None:
+        """Method called per file to contruct file entry to the list"""
         if not filedata or not self.isVisible():
             return
         filename = filedata.get("filename", "")
@@ -121,9 +127,7 @@ class FilesPage(QtWidgets.QWidget):
                 time_str = f"{hours}h {minutes}m"
             else:
                 time_str = f"{minutes}m"
-            
-
-            
+             
         name = helper_methods.get_file_name(filename)
         item = ListItem(
             text=name[:-6],
@@ -160,15 +164,15 @@ class FilesPage(QtWidgets.QWidget):
     def _dirItemClicked(
         self, directory: str
     ) -> None:
+        """Method that changes the current view in the list """
         self.curr_dir = self.curr_dir + directory
         self.request_dir_info[str].emit(self.curr_dir)
 
     def _build_file_list(self) -> None:
         """Inserts the currently available gcode files on the QListWidget"""
-        #self.listWidget.blockSignals(True)
+        self.listWidget.blockSignals(True)
         self.model.clear()
         self.entry_delegate.clear()
-
         if not self.file_list and not self.directories and os.path.islink(self.curr_dir):
             self._add_placeholder()
             return
@@ -187,9 +191,11 @@ class FilesPage(QtWidgets.QWidget):
             self._add_file_list_item(item)
         
         self._setup_scrollbar()
+        self.listWidget.blockSignals(False)
         self.listWidget.repaint()
 
     def _add_directory_list_item(self, dir_data: dict) -> None:
+        """Method that adds directories to the list """
         dir_name = dir_data.get("dirname", "")
         if not dir_name:
             return
@@ -207,6 +213,7 @@ class FilesPage(QtWidgets.QWidget):
         self.model.add_item(item)
 
     def _add_back_folder_entry(self) -> None:
+        """Method to insert in the list the "Go back" item """
         go_back_path = os.path.dirname(self.curr_dir)
         if go_back_path == "/":
             go_back_path = ""
@@ -253,7 +260,6 @@ class FilesPage(QtWidgets.QWidget):
     def _add_placeholder(self) -> None:
         self.scrollbar.hide()
         self.listWidget.hide()
-        
         self.label.show()
 
 
@@ -288,7 +294,6 @@ class FilesPage(QtWidgets.QWidget):
         sizePolicy.setHeightForWidth(self.sizePolicy().hasHeightForWidth())
         self.setSizePolicy(sizePolicy)
         self.setMinimumSize(QtCore.QSize(710, 400))
-        #self.setMaximumSize(QtCore.QSize(500, 400))
         font = QtGui.QFont()
         font.setStyleStrategy(QtGui.QFont.StyleStrategy.PreferAntialias)
         self.setFont(font)
@@ -331,13 +336,8 @@ class FilesPage(QtWidgets.QWidget):
         self.line.setObjectName("line")
         self.verticalLayout_5.addWidget(self.line)
         self.fp_content_layout = QtWidgets.QHBoxLayout()
-        #self.fp_content_layout.setContentsMargins(0, 0, 0, 0)
+        self.fp_content_layout.setContentsMargins(0, 0, 0, 0)
         self.fp_content_layout.setObjectName("fp_content_layout")
-        #self.setMinimumSize(QtCore.QSize(800, 500))
-
-
-        
-        #Listwidget
         self.listWidget = QtWidgets.QListView(parent=self)
         self.listWidget.setModel(self.model)
         self.listWidget.setItemDelegate(self.entry_delegate)
@@ -349,7 +349,6 @@ class FilesPage(QtWidgets.QWidget):
         self.listWidget.setUniformItemSizes(True)
         self.listWidget.setObjectName("listWidget")
         self.listWidget.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
-        self.listWidget.setDefaultDropAction(QtCore.Qt.DropAction.IgnoreAction)
         self.listWidget.setSelectionBehavior(
             QtWidgets.QAbstractItemView.SelectionBehavior.SelectItems
         )
@@ -390,12 +389,7 @@ class FilesPage(QtWidgets.QWidget):
         
         font = QtGui.QFont()
         font.setPointSize(25)
-        #placeholder_item = QtWidgets.QListWidgetItem()
-        #placeholder_item.setSizeHint(
-        #    QtCore.QSize(self.listWidget.width(), self.listWidget.height())
-        #)
         self.label = QtWidgets.QLabel("No Files found")
-       # self.label.setBuddy(self.listWidget)
         self.label.setFont(font)
         self.label.setStyleSheet("color: gray;")
         self.label.setMinimumSize(
@@ -411,10 +405,6 @@ class FilesPage(QtWidgets.QWidget):
         self.scrollbar = CustomScrollBar()
         self.fp_content_layout.addWidget(self.scrollbar)
         self.verticalLayout_5.addLayout(self.fp_content_layout)
-        #self.scrollbar.setAttribute(
-        #    QtCore.Qt.WidgetAttribute.WA_TransparentForMouseEvents, True
-        #)
-        #self.scroller = QtWidgets.QScroller.scroller(self.listWidget)
         self.scrollbar.show()
         self.label.hide()
 
