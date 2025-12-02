@@ -326,7 +326,10 @@ def check_file_on_path(
     return os.path.exists(_filepath)
 
 
-def get_file_loc(filename: typing.Optional[str]) -> str:
+def get_file_loc(filename) -> pathlib.Path:
+    ...
+    
+def get_file_name(filename: typing.Optional[str]) -> str:
     # If filename is None or empty, return empty string instead of None
     if not filename:
         return ""

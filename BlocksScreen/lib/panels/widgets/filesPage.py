@@ -142,7 +142,7 @@ class FilesPage(QtWidgets.QWidget):
                 item_widget.setRightText(f"{filament_type} - {time_str}")
 =======
             
-        name = helper_methods.get_file_loc(filename)
+        name = helper_methods.get_file_name(filename)
         item = ListItem(
             text=name[:-6],
             right_text=f"{filament_type} - {time_str}",
