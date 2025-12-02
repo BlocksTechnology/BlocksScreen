@@ -385,6 +385,7 @@ class FilesPage(QtWidgets.QWidget):
 
     def _setup_scrollbar(self) -> None:
 <<<<<<< HEAD
+<<<<<<< HEAD
         self.scrollbar.setMinimum(self.listWidget.verticalScrollBar().minimum())
         self.scrollbar.setMaximum(self.listWidget.verticalScrollBar().maximum())
         self.scrollbar.setPageStep(self.listWidget.verticalScrollBar().pageStep())
@@ -392,6 +393,8 @@ class FilesPage(QtWidgets.QWidget):
         idx = self.model.index(0, 0)
     
         rect = self.listWidget.rectForIndex(idx)
+=======
+>>>>>>> e8b88d5 (filesPage.py: remove unused lines of code)
         self.scrollbar.setMinimum(
             self.listWidget.verticalScrollBar().minimum()
         )
