@@ -1,9 +1,9 @@
-name: dev-test-code
+name: CI-dev-pipeline
 
 on:
   push:
     branches:
-      - dev 
+      - dev
     paths-ignore:
       - "scripts/**"
       - "BlocksScreen/lib/ui/**"
@@ -22,7 +22,7 @@ jobs:
       fail-fast: false
       matrix:
         python-version: ["3.11.2"]
-        test-type: [ruff, pylint, pytest]
+        test-type: [ruff, pylint, pytest, docstrcov]
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -62,7 +62,11 @@ jobs:
             fi
           fi
 
-      - name: Upload ruff artifact 
+          if [ "${{ matrix.test-type }}" == "docstrcov" ]; then 
+            docstr_coverage --exclude .*/BlocksScreen/lib/ui(/.*)?$ --fail-under=80 --skip-magic --skip-init --skip-private --skip-property > docstr-cov-output.txt 2>&1 
+          fi
+
+      - name: Upload ruff artifact
         if: always() && matrix.test-type == 'ruff'
         uses: actions/upload-artifact@v4
         with:
@@ -75,7 +79,7 @@ jobs:
         with:
           name: pylint-results
           path: pylint-output.txt
-        
+
       - name: Upload Pytest Artifacts
         if: always() && matrix.test-type == 'pytest' && hashFiles('pytest-output.txt', 'junit/test-results.xml', 'coverage.xml')
         uses: actions/upload-artifact@v4
@@ -86,4 +90,10 @@ jobs:
             junit/test-results.xml
             coverage.xml
             htmlcov/
-      
+
+      - name: Upload docstr coverage report
+        if: always() && matrix.test-type == 'docstrcov'
+        uses: actions/upload-artifact@v4
+        with:
+          name: docstr-coverage
+          path: docstr-cov-output.txt
