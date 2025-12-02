@@ -39,7 +39,7 @@ jobs:
         run: |
           echo "Installing dependencies"
           python -m pip install --upgrade pip
-          pip install scripts -r scripts/requirements-dev.txt
+          pip install -r scripts/requirements-dev.txt
 
       - name: Run Test ${{ matrix.test-type }}
         run: |
