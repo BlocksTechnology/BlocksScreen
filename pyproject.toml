@@ -32,6 +32,9 @@ keywords = ["GUI", "klipper", "BlocksScreen", "BLOCKS"]
 line-length = 88
 indent-width = 4
 
+[tool.ruff.lint]
+ignore = ["F403"]
+
 [tool.ruff.format]
 indent-style = "space"
 line-ending = 'auto'
