@@ -270,9 +270,6 @@ class FilesPage(QtWidgets.QWidget):
         self.scrollbar.blockSignals(False)
 
     def _setup_scrollbar(self) -> None:
-        idx = self.model.index(0, 0)
-    
-        rect = self.listWidget.rectForIndex(idx)
         self.scrollbar.setMinimum(
             self.listWidget.verticalScrollBar().minimum()
         )
