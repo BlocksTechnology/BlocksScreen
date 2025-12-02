@@ -23,6 +23,7 @@ jobs:
       matrix:
         python-version: ["3.11.2"]
         test-type: [ruff, pylint, pytest, docstrcov]
+
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -31,7 +32,9 @@ jobs:
         uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.python-version }}
-          cache: "pip"
+          cache: pip
+          cache-dependency-path: scripts/requirements-dev.txt
+
       - name: Install dependencies
         run: |
           echo "Installing dependencies"
@@ -56,7 +59,7 @@ jobs:
           if [ "${{ matrix.test-type }}" == "pytest" ]; then
             if [ -d "tests/" ] && [ "$(ls -A tests/)" ]; then 
               echo "Running Python unit tests"
-              pytest tests/'*.py' --doctest-modules --junitxml=junit/test-results.xml --cov=com --conv-report=xml --cov-report=html > pytest-output.txt 2>&1 
+              pytest tests/*.py --doctest-modules --junitxml=junit/test-results.xml --cov=com --cov-report=xml --cov-report=html > pytest-output.txt 2>&1 
             else
               echo "No tests directory no need to proceed with tests"
             fi
@@ -81,15 +84,16 @@ jobs:
           path: pylint-output.txt
 
       - name: Upload Pytest Artifacts
-        if: always() && matrix.test-type == 'pytest' && hashFiles('pytest-output.txt', 'junit/test-results.xml', 'coverage.xml')
+        if: always() && matrix.test-type == 'pytest'
         uses: actions/upload-artifact@v4
         with:
           name: pytest-results
           path: |
-            pytest_output.txt
+            pytest-output.txt
             junit/test-results.xml
             coverage.xml
             htmlcov/
+        continue-on-error: true
 
       - name: Upload docstr coverage report
         if: always() && matrix.test-type == 'docstrcov'
