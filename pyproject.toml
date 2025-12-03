@@ -19,7 +19,7 @@ dependencies = [
     'PyQt6==6.7.1',
     'PyQt6-Qt6==6.7.2',
     'PyQt6_sip==13.8.0',
-    'requests==2.32.4',
+    'requests==2.32.5',
     'sdbus==0.12.0',
     'sdbus-networkmanager==2.0.0',
     'typing==3.7.4.3',
@@ -48,3 +48,6 @@ indent-style = "space"
 line-ending = 'auto'
 docstring-code-format = true
 docstring-code-line-length = 94
+
+[tool.bandit]
+exclude_dirs = ["tests", "BlocksScreen/lib/ui/resources/"]
