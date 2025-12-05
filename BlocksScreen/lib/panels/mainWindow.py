@@ -492,15 +492,8 @@ class MainWindow(QtWidgets.QMainWindow):
     @api_handler
     def _handle_notify_filelist_changed_message(self, method, data, metadata) -> None:
         """Handle websocket file list messages"""
-        _file_change_list = data.get("params")
-        if _file_change_list:
-            fileaction = _file_change_list[0].get("action")
-            filepath = (
-                _file_change_list[0].get("item").get("path")
-            )  # TODO : NOTIFY_FILELIST_CHANGED, I DON'T KNOW IF I REALLY WANT TO SEND NOTIFICATIONS ON FILE CHANGES.
-        ...
-        # self.file_data.request_file_list.emit()
-
+        ... 
+        
     @api_handler
     def _handle_notify_service_state_changed_message(
         self, method, data, metadata
