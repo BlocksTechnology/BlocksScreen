@@ -4,8 +4,6 @@ import threading
 
 import websocket
 from events import (
-    KlippyDisconnected,
-    KlippyShutdown,
     WebSocketDisconnected,
     WebSocketError,
     WebSocketMessageReceived,
