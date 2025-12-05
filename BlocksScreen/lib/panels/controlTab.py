@@ -108,12 +108,6 @@ class ControlTab(QtWidgets.QStackedWidget):
             partial(self.change_page, self.indexOf(self.panel.temperature_page))
         )
         self.panel.cp_switch_print_core_btn.clicked.connect(self.show_swapcore)
-        # self.panel.cp_printer_settings_btn.clicked.connect(
-        #     partial(
-        #         self.change_page,
-        #         self.indexOf(self.panel.printer_settings_page),
-        #     )
-        # )
         self.panel.cp_nozzles_calibration_btn.clicked.connect(
             partial(self.change_page, self.indexOf(self.probe_helper_page))
         )
