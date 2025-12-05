@@ -179,7 +179,6 @@ class BlocksSlider(QtWidgets.QSlider):
             QtWidgets.QStyle.SubControl.SC_SliderTickmarks,
             self,
         )
-        tick_interval = self.tickInterval() or self.singleStep()
         min_v, max_v = self.minimum(), self.maximum()
         painter.setPen(QtGui.QColor("#888888"))
         fm = QtGui.QFontMetrics(painter.font())
