@@ -60,7 +60,7 @@ jobs:
           if [ "${{ matrix.test-type }}" == "pytest" ]; then
             if [ -d "tests/" ] && [ "$(ls -A tests/)" ]; then 
               echo "Running Python unit tests"
-              pytest tests/*.py --doctest-modules --junitxml=junit/test-results.xml --cov=BlocksScreen --cov-report=xml --cov-report=html > pytest-output.txt 2>&1 
+              pytest tests/ --doctest-modules --junitxml=junit/test-results.xml --cov=BlocksScreen/ --cov-report=xml --cov-report=html > pytest-output.txt 2>&1 
             else
               echo "No tests directory no need to proceed with tests"
             fi
@@ -115,4 +115,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: bandit-output
-          path: bandit-output.txt
+          path: bandit-output.json
