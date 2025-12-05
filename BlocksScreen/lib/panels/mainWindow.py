@@ -39,7 +39,7 @@ def api_handler(func):
             result = func(*args, **kwargs)
             return result
         except Exception as e:
-            _logger.error(f"Caught Exception in %s : %s ", func.__name__, e)
+            _logger.error("Caught Exception in %s : %s ", func.__name__, e)
             raise
 
     return wrapper
