@@ -551,7 +551,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
                         )
         except FileNotFoundError:
             ...
-        except csv.Error as e:
+        except csv.Error :
             ...
         return results
 
