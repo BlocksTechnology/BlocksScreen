@@ -68,7 +68,7 @@ jobs:
 
           if [ "${{ matrix.test-type }}" == "docstrcov" ]; then 
             echo "Running docstring coverage test"
-            docstr-coverage BlocksScreen/ --exclude .*/BlocksScreen/lib/ui/.*?$ --fail-under=80 --skip-magic --skip-init --skip-private --skip-property > docstr-cov-output.txt 2>&1
+            docstr-coverage BlocksScreen/ --exclude '.*/BlocksScreen/lib/ui/.*?$' --fail-under=80 --skip-magic --skip-init --skip-private --skip-property > docstr-cov-output.txt 2>&1
           fi
           
           if [ "${{matrix.test-type }}" == "security" ]; then
