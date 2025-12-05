@@ -72,7 +72,7 @@ jobs:
           
           if [ "${{matrix.test-type }}" == "security" ]; then
             echo "Running bandit security test"
-            bandit -c pyproject.toml -r . > bandit-output.txt 2>&1
+            bandit -c pyproject.toml -r . -f json -o bandit-output.json 2>&1
           fi
 
 
