@@ -257,11 +257,6 @@ class BlocksScreenConfig:
         finally:
             self.update_pending = False
 
-    def _do_save(self, data) -> bool:
-        try:
-            return True
-        except Exception as e:
-            return False
 
     def load_config(self):
         try:
