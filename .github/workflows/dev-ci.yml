@@ -1,13 +1,6 @@
 name: CI-dev-pipeline
 
 on:
-  push:
-    branches:
-      - dev
-    paths-ignore:
-      - "scripts/**"
-      - "BlocksScreen/lib/ui/**"
-      - "extras/**"
   pull_request:
     branches:
       - dev
@@ -23,7 +16,6 @@ jobs:
       matrix:
         python-version: ["3.11.2"]
         test-type: [ruff, pylint, pytest, docstrcov, security]
-    environment: Dev
 
     steps:
       - name: Checkout repo
@@ -41,7 +33,7 @@ jobs:
           echo "Installing dependencies"
           python -m pip install --upgrade pip
           pip install -r scripts/requirements-dev.txt
-      
+
       - name: Run Test ${{ matrix.test-type }}
         run: |
           echo "Starting test runs"
@@ -70,12 +62,11 @@ jobs:
             echo "Running docstring coverage test"
             docstr-coverage BlocksScreen/ --exclude '.*/BlocksScreen/lib/ui/.*?$' --fail-under=80 --skip-magic --skip-init --skip-private --skip-property > docstr-cov-output.txt 2>&1
           fi
-          
+
           if [ "${{matrix.test-type }}" == "security" ]; then
             echo "Running bandit security test"
             bandit -c pyproject.toml -r . -f json -o bandit-output.json 2>&1
           fi
-
 
       - name: Upload ruff artifact
         if: always() && matrix.test-type == 'ruff'
