@@ -24,7 +24,6 @@ dependencies = [
     'sdbus-networkmanager==2.0.0',
     'typing==3.7.4.3',
     'websocket-client==1.9.0',
-    'opencv-python-headless==4.12.0.88',
     'qrcode==8.2',
 ]
 requires-python = "==3.11.2"
