@@ -23,6 +23,7 @@ jobs:
       matrix:
         python-version: ["3.11.2"]
         test-type: [ruff, pylint, pytest, docstrcov, security]
+    environment: Dev
 
     steps:
       - name: Checkout repo
