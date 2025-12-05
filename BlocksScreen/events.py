@@ -1,3 +1,4 @@
+"""Collection of all custom events used by the application"""
 import typing
 from PyQt6.QtCore import QEvent
 
@@ -21,6 +22,7 @@ class WebSocketConnecting(QEvent):
 
     @staticmethod
     def type() -> QEvent.Type:
+        """Return event type"""
         return QEvent.Type(WebSocketConnecting.WebsocketConnectingEvent)
 
 
@@ -48,6 +50,7 @@ class WebSocketMessageReceived(QEvent):
 
     @staticmethod
     def type() -> QEvent.Type:
+        """Return event type"""
         return QEvent.Type(
             WebSocketMessageReceived.WebsocketMessageReceivedEvent
         )
@@ -70,6 +73,7 @@ class WebSocketOpen(QEvent):
 
     @staticmethod
     def type() -> QEvent.Type:
+        """Return event type"""
         return QEvent.Type(WebSocketOpen.WebsocketOpenEvent)
 
 
@@ -92,6 +96,7 @@ class WebSocketError(QEvent):
 
     @staticmethod
     def type() -> QEvent.Type:
+        """Return event type"""
         return QEvent.Type(WebSocketError.WebsocketErrorEvent)
 
 
@@ -114,6 +119,7 @@ class WebSocketDisconnected(QEvent):
 
     @staticmethod
     def type() -> QEvent.Type:
+        """Return event type"""
         return QEvent.Type(WebSocketDisconnected.WebsocketDisconnectedEvent)
 
 
@@ -137,6 +143,7 @@ class WebSocketClose(QEvent):
 
     @staticmethod
     def type() -> QEvent.Type:
+        """Return event type"""
         return QEvent.Type(WebSocketClose.WebsocketCloseEvent)
 
 
@@ -160,6 +167,7 @@ class KlippyShutdown(QEvent):
 
     @staticmethod
     def type() -> QEvent.Type:
+        """Return event type"""
         return KlippyShutdown.KlippyShutdownEvent
 
     # def __instancecheck__(self, instance: Any) -> bool:
@@ -186,6 +194,7 @@ class KlippyReady(QEvent):
 
     @staticmethod
     def type() -> QEvent.Type:
+        """Return event type"""
         return QEvent.Type(KlippyReady.KlippyReadyEvent)
 
 
@@ -208,6 +217,7 @@ class KlippyDisconnected(QEvent):
 
     @staticmethod
     def type() -> QEvent.Type:
+        """Return event type"""
         return QEvent.Type(KlippyDisconnected.KlippyDisconnectedEvent)
 
 
@@ -227,6 +237,7 @@ class KlippyError(QEvent):
 
     @staticmethod
     def type() -> QEvent.Type:
+        """Return event type"""
         return QEvent.Type(KlippyError.KlippyErrorEvent)
 
 
@@ -255,6 +266,7 @@ class ReceivedFileData(QEvent):
 
     @staticmethod
     def type() -> QEvent.Type:
+        """Return event type"""
         return QEvent.Type(ReceivedFileData.ReceivedFileDataEvent)
 
 
@@ -276,6 +288,7 @@ class PrintStart(QEvent):
 
     @staticmethod
     def type() -> QEvent.Type:
+        """Return event type"""
         return QEvent.Type(PrintStart.PrintStartEvent)
 
 
@@ -296,6 +309,7 @@ class PrintComplete(QEvent):
 
     @staticmethod
     def type() -> QEvent.Type:
+        """Return event type"""
         return QEvent.Type(PrintComplete.PrintCompleteEvent)
 
 
@@ -317,6 +331,7 @@ class PrintPause(QEvent):
 
     @staticmethod
     def type() -> QEvent.Type:
+        """Return event type"""
         return QEvent.Type(PrintPause.PrintPauseEvent)
 
 
@@ -338,6 +353,7 @@ class PrintResume(QEvent):
 
     @staticmethod
     def type() -> QEvent.Type:
+        """Return event type"""
         return QEvent.Type(PrintResume.PrintResumeEvent)
 
 
@@ -361,6 +377,7 @@ class PrintCancelled(QEvent):
 
     @staticmethod
     def type() -> QEvent.Type:
+        """Return event type"""
         return QEvent.Type(PrintCancelled.PrintCancelledEvent)
 
 
@@ -381,6 +398,7 @@ class PrintError(QEvent):
 
     @staticmethod
     def type() -> QEvent.Type:
+        """Return event type"""
         return QEvent.Type(PrintError.PrintErrorEvent)
 
 
@@ -401,6 +419,7 @@ class NetworkAdded(QEvent):
 
     @staticmethod
     def type() -> QEvent.Type:
+        """Return event type"""
         return QEvent.Type(NetworkAdded.NetworkAddedEvent)
 
 
@@ -423,6 +442,7 @@ class NetworkDeleted(QEvent):
 
     @staticmethod
     def type() -> QEvent.Type:
+        """Return event type"""
         return QEvent.Type(NetworkDeleted)
 
 
@@ -443,4 +463,5 @@ class NetworkScan(QEvent):
 
     @staticmethod
     def type() -> QEvent.Type:
+        """Return event type"""
         return QEvent.Type(NetworkScan.NetworkScanEvent)
