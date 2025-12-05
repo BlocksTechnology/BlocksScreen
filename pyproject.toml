@@ -33,7 +33,7 @@ license = { text = "GNU Affero General Public License v3.0 or later" }
 keywords = ["GUI", "klipper", "BlocksScreen", "BLOCKS"]
 
 [project.optional-dependencies]
-dev = ["ruff","pylint", "pytest", "pytest-cov", "docstr_coverage"]
+dev = ["ruff", "pylint", "pytest", "pytest-cov", "docstr_coverage"]
 stage = ["bandit"]
 full-dev = ["BlockScreen[dev,stage]"]
 
@@ -54,6 +54,17 @@ indent-style = "space"
 line-ending = 'auto'
 docstring-code-format = true
 docstring-code-line-length = 94
+
+[tool.pylint]
+fail-under = 7
+jobs = 16
+ignore = ["tests", "scripts", "ui", "extras"]
+ignore-paths = ["BlocksScreen/lib/ui"]
+py-version = "3.11"
+max-line-length = 88
+
+[tool.pytest.ini_options]
+addopts = "--cov=BlocksScreen --cov-report=html"
 
 [tool.bandit]
 exclude_dirs = ["tests", "BlocksScreen/lib/ui/resources/"]
