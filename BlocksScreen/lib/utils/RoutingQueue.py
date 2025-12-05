@@ -62,8 +62,8 @@ class RoutingQueue(queue.LifoQueue):
                 self._read_lines += 1
         except Exception as e:
             raise ValueError(
-                "Unexpected error while adding a command to queue, and argument "
-            )
+                "Unexpected error while adding a command to queue, and argument %s"
+            ) from e
 
     def get_command(self, block=True, timeout=None, resend=False):
         """
