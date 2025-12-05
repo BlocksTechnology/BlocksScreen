@@ -57,6 +57,7 @@ class MoonRest:
 
     @property
     def build_endpoint(self):
+        """Build connection endpoint"""
         return f"http://{self._host}:{self._port}"
 
     def get_oneshot_token(self):
@@ -93,11 +94,9 @@ class MoonRest:
         """
         return self.post_request(method="printer/firmware_restart")
 
-    def delete_request(self):
-        # TODO: Create a delete request, so the user is able to delete files from the pi, can also be made with websockets
-        pass
 
     def post_request(self, method, data=None, json=None, json_response=True):
+        """POST request"""
         return self._request(
             request_type="post",
             method=method,
@@ -107,6 +106,7 @@ class MoonRest:
         )
 
     def get_request(self, method, json=True, timeout=timeout):
+        """GET request"""
         return self._request(
             request_type="get",
             method=method,
@@ -123,8 +123,6 @@ class MoonRest:
         json_response=True,
         timeout=timeout,
     ):
-        # TODO: Need to check if the header is actually correct or not
-        # TEST: Test the reliability of this
         _url = f"{self.build_endpoint}/{method}"
         _headers = {"x-api-key": self._api_key} if self._api_key else {}
         try:
