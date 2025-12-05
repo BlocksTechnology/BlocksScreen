@@ -90,7 +90,6 @@ class BlocksCustomButton(QtWidgets.QAbstractButton):
             return
 
 
-        margin = _style.pixelMetric(_style.PixelMetric.PM_ButtonMargin, opt, self)
         # Determine background and text colors based on state
         if not self.isEnabled():
             bg_color_tuple = ButtonColors.DISABLED_BG.value
