@@ -1,5 +1,4 @@
 import enum
-import typing
 from functools import partial
 
 
