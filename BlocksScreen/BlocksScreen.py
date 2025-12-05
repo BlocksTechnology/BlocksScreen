@@ -26,7 +26,7 @@ def setup_working_dir(): ...
 
 
 def setup_app_loggers():
-    ql = logger.create_logger(name="logs/BlocksScreen.log", level=logging.DEBUG)
+    _ = logger.create_logger(name="logs/BlocksScreen.log", level=logging.DEBUG)
     _logger = logging.getLogger(name="logs/BlocksScreen.log")
     _logger.info("============ BlocksScreen Initializing ============")
 
