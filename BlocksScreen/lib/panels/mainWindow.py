@@ -35,6 +35,7 @@ def api_handler(func):
     """Decorator for methods that handle api responses"""
 
     def wrapper(*args, **kwargs):
+        """Decorator for api_handler"""
         try:
             result = func(*args, **kwargs)
             return result
@@ -156,25 +157,27 @@ class MainWindow(QtWidgets.QMainWindow):
             # @ Start websocket connection with moonraker
             self.bo_ws_startup.emit()
         self.reset_tab_indexes()
+
     @QtCore.pyqtSlot(name="on-cancel-print")
     def on_cancel_print(self):
-            self.enable_tab_bar()
-            self.ui.extruder_temp_display.clicked.disconnect()
-            self.ui.bed_temp_display.clicked.disconnect()
-            self.ui.filament_type_icon.setDisabled(False)
-            self.ui.nozzle_size_icon.setDisabled(False)
-            self.ui.extruder_temp_display.clicked.connect(
-                lambda: self.global_change_page(
-                    self.ui.main_content_widget.indexOf(self.ui.controlTab),
-                    self.controlPanel.indexOf(self.controlPanel.panel.temperature_page),
-                )
+        """Slot for cancel print signal"""
+        self.enable_tab_bar()
+        self.ui.extruder_temp_display.clicked.disconnect()
+        self.ui.bed_temp_display.clicked.disconnect()
+        self.ui.filament_type_icon.setDisabled(False)
+        self.ui.nozzle_size_icon.setDisabled(False)
+        self.ui.extruder_temp_display.clicked.connect(
+            lambda: self.global_change_page(
+                self.ui.main_content_widget.indexOf(self.ui.controlTab),
+                self.controlPanel.indexOf(self.controlPanel.panel.temperature_page),
             )
-            self.ui.bed_temp_display.clicked.connect(
-                lambda: self.global_change_page(
-                    self.ui.main_content_widget.indexOf(self.ui.controlTab),
-                    self.controlPanel.indexOf(self.controlPanel.panel.temperature_page),
-                )
+        )
+        self.ui.bed_temp_display.clicked.connect(
+            lambda: self.global_change_page(
+                self.ui.main_content_widget.indexOf(self.ui.controlTab),
+                self.controlPanel.indexOf(self.controlPanel.panel.temperature_page),
             )
+        )
 
     @QtCore.pyqtSlot(bool, name="update-available")
     def on_update_available(self, state: bool = False):
@@ -492,8 +495,8 @@ class MainWindow(QtWidgets.QMainWindow):
     @api_handler
     def _handle_notify_filelist_changed_message(self, method, data, metadata) -> None:
         """Handle websocket file list messages"""
-        ... 
-        
+        ...
+
     @api_handler
     def _handle_notify_service_state_changed_message(
         self, method, data, metadata
