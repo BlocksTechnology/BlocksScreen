@@ -59,7 +59,6 @@ class SensorsWindow(QtWidgets.QWidget):
         self, sensor_name: str, parameter: str, value: bool
     ) -> None:
         if sensor_name in self.sensor_list:
-            state = SensorWidget.FilamentState(value)
             _split = sensor_name.split(" ")
             _item = self.fs_sensors_list.findChild(
                 SensorWidget,
