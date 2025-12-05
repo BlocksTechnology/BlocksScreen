@@ -22,7 +22,7 @@ jobs:
       fail-fast: false
       matrix:
         python-version: ["3.11.2"]
-        test-type: [ruff, pylint, pytest, docstrcov]
+        test-type: [ruff, pylint, pytest, docstrcov, security]
 
     steps:
       - name: Checkout repo
@@ -40,7 +40,7 @@ jobs:
           echo "Installing dependencies"
           python -m pip install --upgrade pip
           pip install -r scripts/requirements-dev.txt
-
+      
       - name: Run Test ${{ matrix.test-type }}
         run: |
           echo "Starting test runs"
@@ -69,6 +69,12 @@ jobs:
             echo "Running docstring coverage test"
             docstr-coverage BlocksScreen/ --exclude .*/BlocksScreen/lib/ui/.*?$ --fail-under=80 --skip-magic --skip-init --skip-private --skip-property > docstr-cov-output.txt 2>&1
           fi
+          
+          if [ "${{matrix.test-type }}" == "security" ]; then
+            echo "Running bandit security test"
+            bandit -c pyproject.toml -r . > bandit-output.txt 2>&1
+          fi
+
 
       - name: Upload ruff artifact
         if: always() && matrix.test-type == 'ruff'
@@ -102,3 +108,10 @@ jobs:
         with:
           name: docstr-coverage
           path: docstr-cov-output.txt
+
+      - name: Upload bandit security report
+        if: always() && matrix.test-type == 'security'
+        uses: actions/upload-artifact@v4
+        with:
+          name: bandit-output
+          path: bandit-output.txt
