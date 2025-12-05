@@ -3,7 +3,7 @@ import logging
 from events import KlippyDisconnected, KlippyReady, KlippyShutdown
 from lib.moonrakerComm import MoonWebSocket
 from lib.ui.connectionWindow_ui import Ui_ConnectivityForm
-from PyQt6 import QtCore, QtWidgets, QtGui
+from PyQt6 import QtCore, QtWidgets
 
 
 class ConnectionPage(QtWidgets.QFrame):
