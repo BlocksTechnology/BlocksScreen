@@ -264,16 +264,8 @@ class BlocksLabel(QtWidgets.QLabel):
                     int(self.scroll_pos + self.text_width + self.label_width / 2),
                     0,
                 )
-                # Draw the main text instance
-                draw_rect = QtCore.QRectF(
-                    self.contentsRect().x() + self.scroll_pos,
-                    self.contentsRect().y(),
-                    self.text_width,
-                    self.contentsRect().height(),
-                )
                 qp.drawText(QtCore.QRectF(second_text_rect), self._text, text_option)
-
-                draw_rect2 = QtCore.QRectF(
+                draw_rect = QtCore.QRectF(
                     self.contentsRect().x()
                     + self.scroll_pos
                     + self.text_width
@@ -282,7 +274,7 @@ class BlocksLabel(QtWidgets.QLabel):
                     self.text_width,
                     self.contentsRect().height(),
                 )
-                qp.drawText(draw_rect2, self._text, text_option)
+                qp.drawText(draw_rect, self._text, text_option)
             else:
                 text_rect = self.contentsRect().toRectF()
                 qp.drawText(text_rect, self._text, text_option)
