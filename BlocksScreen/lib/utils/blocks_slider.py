@@ -1,5 +1,3 @@
-import sys
-
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 
@@ -69,16 +67,14 @@ class BlocksSlider(QtWidgets.QSlider):
             slider_start = self._groove_rect.x()
             pos_x = pos.x()
             new_val = (
-                min_val
-                + (max_val - min_val) * (pos_x - slider_start) // slider_length
+                min_val + (max_val - min_val) * (pos_x - slider_start) // slider_length
             )
         else:
             slider_length = self._groove_rect.height()
             slider_start = self._groove_rect.y()
             pos_y = pos.y()
             new_val = (
-                min_val
-                + (max_val - min_val) * (pos_y - slider_start) / slider_length
+                min_val + (max_val - min_val) * (pos_y - slider_start) / slider_length
             )
         self.setSliderPosition(int(round(new_val)))
         self.setValue(int(round(new_val)))
@@ -91,9 +87,7 @@ class BlocksSlider(QtWidgets.QSlider):
 
         # Clip the opt rect inside, so the handle and
         # groove doesn't exceed the limits
-        opt.rect = opt.rect.adjusted(
-            12, 10, -18, 20
-        )  # This is a bit hardcoded
+        opt.rect = opt.rect.adjusted(12, 10, -18, 20)  # This is a bit hardcoded
 
         self._groove_rect = _style.subControlRect(
             QtWidgets.QStyle.ComplexControl.CC_Slider,
@@ -162,9 +156,7 @@ class BlocksSlider(QtWidgets.QSlider):
         painter.setRenderHint(painter.RenderHint.TextAntialiasing, True)
         _color = QtGui.QColor(164, 164, 164)
         _color.setAlphaF(0.5)
-        painter.fillPath(
-            _groove_path, _color
-        )  # Primary groove background color
+        painter.fillPath(_groove_path, _color)  # Primary groove background color
 
         _color = QtGui.QColor(self.highlight_color)
         _color_1 = QtGui.QColor(self.highlight_color)
