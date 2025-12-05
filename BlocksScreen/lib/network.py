@@ -1,6 +1,5 @@
 import asyncio
 import enum
-import hashlib
 import logging
 import threading
 import typing
@@ -457,7 +456,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
             addr_data = addr_data_fut.result(timeout=2)
             return [address_data["address"][1] for address_data in addr_data][0]
         except IndexError as e:
-            logger.error(f"List out of index %s", e)
+            logger.error("List out of index %s", e)
         return ""
 
     async def _gather_primary_interface(
@@ -1408,4 +1407,4 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
             if password != self.hotspot_password and password:
                 self.hotspot_password = password
         except Exception as e:
-            logger.error(f"Caught Exception while updating network: %s", e)
+            logger.error("Caught Exception while updating network: %s", e)
