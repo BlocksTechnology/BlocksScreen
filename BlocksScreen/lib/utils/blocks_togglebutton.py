@@ -12,39 +12,41 @@ class NetworkWidgetbuttons(QtWidgets.QWidget):
         self.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
         self._icon_label = None
         self._text_label = None
-        self._text: str = ("la test")
+        self._text: str = "la test"
         self.icon_pixmap_fp: QtGui.QPixmap = QtGui.QPixmap(
             ":/filament_related/media/btn_icons/filament_sensor_turn_on.svg"
         )
-        
-        self.setupUI()
+
+        self._setupUI()
         self.tb = self.toggle_button
 
     def text(self) -> str:
+        """Button text"""
         return self._text
 
     def setText(self, new_text) -> None:
+        """Set widget text"""
         if self._text_label is not None:
             self._text_label.setText(f"{new_text}")
             self._text = new_text
 
-
-    def setPixmap(self,pixmap: QtGui.QPixmap):
+    def setPixmap(self, pixmap: QtGui.QPixmap):
+        """Set widget pixmap"""
         self.icon_pixmap_fp = pixmap
 
     def mousePressEvent(self, event: QtGui.QMouseEvent):
+        """Re-implemented method, handle mouse press events"""
         if self.toggle_button.geometry().contains(event.pos()):
             event.ignore()
             return
         if event.button() == QtCore.Qt.MouseButton.LeftButton:
             self.clicked.emit()
-        event.accept() 
+        event.accept()
 
     def paintEvent(self, a0: QtGui.QPaintEvent) -> None:
+        """Re-implemented method, paint widget"""
         style_painter = QtWidgets.QStylePainter(self)
-        style_painter.setRenderHint(
-            style_painter.RenderHint.Antialiasing, True
-        )
+        style_painter.setRenderHint(style_painter.RenderHint.Antialiasing, True)
         style_painter.setRenderHint(
             style_painter.RenderHint.SmoothPixmapTransform, True
         )
@@ -76,12 +78,13 @@ class NetworkWidgetbuttons(QtWidgets.QWidget):
         style_painter.end()
 
     def setDisabled(self, a0: bool) -> None:
+        """Re-implemented method, disable widget"""
         self.toggle_button.setDisabled(a0)
         self.repaint()
         self.toggle_button.repaint()
         return super().setDisabled(a0)
 
-    def setupUI(self):
+    def _setupUI(self):
         _policy = QtWidgets.QSizePolicy.Policy.MinimumExpanding
         size_policy = QtWidgets.QSizePolicy(_policy, _policy)
         size_policy.setHeightForWidth(self.sizePolicy().hasHeightForWidth())
@@ -90,29 +93,21 @@ class NetworkWidgetbuttons(QtWidgets.QWidget):
         self.sensor_horizontal_layout.setGeometry(self.rect())
         self.sensor_horizontal_layout.setObjectName("sensorHorizontalLayout")
         self._icon_label = BlocksLabel(self)
-        size_policy.setHeightForWidth(
-            self._icon_label.sizePolicy().hasHeightForWidth()
-        )
+        size_policy.setHeightForWidth(self._icon_label.sizePolicy().hasHeightForWidth())
         self._icon_label.setSizePolicy(size_policy)
         self._icon_label.setMinimumSize(60, 60)
         self._icon_label.setMaximumSize(60, 60)
-        self._icon_label.setPixmap(
-            self.icon_pixmap_fp
-        )
+        self._icon_label.setPixmap(self.icon_pixmap_fp)
         self.sensor_horizontal_layout.addWidget(self._icon_label)
         self._text_label = QtWidgets.QLabel(parent=self)
-        size_policy.setHeightForWidth(
-            self._text_label.sizePolicy().hasHeightForWidth()
-        )
+        size_policy.setHeightForWidth(self._text_label.sizePolicy().hasHeightForWidth())
         self._text_label.setMinimumSize(100, 60)
         self._text_label.setMaximumSize(500, 60)
         _font = QtGui.QFont()
         _font.setStyleStrategy(QtGui.QFont.StyleStrategy.PreferAntialias)
         _font.setPointSize(18)
         palette = self._text_label.palette()
-        palette.setColor(
-            palette.ColorRole.WindowText, QtGui.QColorConstants.White
-        )
+        palette.setColor(palette.ColorRole.WindowText, QtGui.QColorConstants.White)
         self._text_label.setPalette(palette)
         self._text_label.setFont(_font)
         self._text_label.setText(str(self._text))
