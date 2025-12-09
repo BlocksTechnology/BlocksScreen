@@ -54,6 +54,7 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
         self.pressed.connect(self.setup_animation)
 
     def resizeEvent(self, a0: QtGui.QResizeEvent) -> None:
+        """Re-implemented method, handle widget resize event"""
         self.handle_radius = (
             self.contentsRect().toRectF().normalized().height() * 0.80
         ) // 2
@@ -68,10 +69,12 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
         return super().resizeEvent(a0)
 
     def sizeHint(self) -> QtCore.QSize:
+        """Re-implemented method, widget size hint"""
         return QtCore.QSize(80, 40)
 
     @QtCore.pyqtProperty(int)
     def animation_speed(self) -> int:
+        """Widget property animation speed"""
         return self._animation_speed
 
     @animation_speed.setter
@@ -81,6 +84,7 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
 
     @property
     def state(self) -> State:
+        """Widget property, toggle state"""
         return self._state
 
     @state.setter
@@ -95,6 +99,7 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
 
     @QtCore.pyqtProperty(float)
     def handle_position(self) -> float:
+        """Widget property handle position"""
         return self._handle_position
 
     @handle_position.setter
@@ -104,6 +109,7 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
 
     @QtCore.pyqtProperty(QtGui.QColor)
     def backgroundColor(self) -> QtGui.QColor:
+        """Widget property background color"""
         return self._backgroundColor
 
     @backgroundColor.setter
@@ -113,6 +119,7 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
 
     @QtCore.pyqtProperty(QtGui.QColor)
     def handleColor(self) -> QtGui.QColor:
+        """Widget property handle color"""
         return self._handleColor
 
     @handleColor.setter
@@ -121,6 +128,7 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
         self.update()
 
     def showEvent(self, a0: QtGui.QShowEvent) -> None:
+        """Re-implemented method, widget show"""
         _rect = self.contentsRect()
         self.trailPath: QtGui.QPainterPath = QtGui.QPainterPath()
         self.handlePath: QtGui.QPainterPath = QtGui.QPainterPath()
@@ -149,12 +157,14 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
         return super().showEvent(a0)
 
     def setPixmap(self, pixmap: QtGui.QPixmap) -> None:
+        """Set widget pixmap"""
         self.icon_pixmap = pixmap
         # self.repaint()
         self.update()
 
     @QtCore.pyqtSlot(name="clicked")
     def setup_animation(self) -> None:
+        """Setup widget animation"""
         if not self.slide_animation.state == self.slide_animation.State.Running:
             self.slide_animation.setEndValue(
                 self._handle_ONPosition
@@ -164,6 +174,7 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
             self.slide_animation.start()
 
     def mousePressEvent(self, e: QtGui.QMouseEvent) -> None:
+        """Re-implemented method, handle mouse press events"""
         if self.trailPath:
             if self.trailPath.contains(e.pos().toPointF()) and self.underMouse():
                 if not self.slide_animation.state == self.slide_animation.State.Running:
@@ -173,6 +184,7 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
         e.ignore()
 
     def paintEvent(self, a0: QtGui.QPaintEvent) -> None:
+        """Re-implemented method, paint widget"""
         option = QtWidgets.QStyleOptionButton()
         option.initFrom(self)
         option.state |= QtWidgets.QStyle.StateFlag.State_Off
