@@ -21,7 +21,7 @@ class SensorsWindow(QtWidgets.QWidget):
 
     def __init__(self, parent):
         super(SensorsWindow, self).__init__(parent)
-        self.setupUi()
+        self._setupUi()
         self.setAttribute(
             QtCore.Qt.WidgetAttribute.WA_TranslucentBackground, True
         )
@@ -33,9 +33,11 @@ class SensorsWindow(QtWidgets.QWidget):
 
     @QtCore.pyqtSlot(dict, name="handle_available_fil_sensors")
     def handle_available_fil_sensors(self, sensors: dict) -> None:
+        """Handle available filament sensors, create `SensorWidget` for each detected
+        sensor
+        """
         if not isinstance(sensors, dict):
             return
-
         filtered_sensors = list(
         filter(
             lambda printer_obj: str(printer_obj).startswith("filament_switch_sensor")
@@ -43,7 +45,6 @@ class SensorsWindow(QtWidgets.QWidget):
             sensors.keys(),
             )
         )
-
         if filtered_sensors:
             self.fs_sensors_list.setRowHidden(self.fs_sensors_list.row(self.item), True)
             self.sensor_list = [
@@ -52,12 +53,11 @@ class SensorsWindow(QtWidgets.QWidget):
         else:
             self.fs_sensors_list.setRowHidden(self.fs_sensors_list.row(self.item), False)
 
-
-
     @QtCore.pyqtSlot(str, str, bool, name="handle_fil_state_change")
     def handle_fil_state_change(
         self, sensor_name: str, parameter: str, value: bool
     ) -> None:
+        """Handle filament state chage"""
         if sensor_name in self.sensor_list:
             _split = sensor_name.split(" ")
             _item = self.fs_sensors_list.findChild(
@@ -89,6 +89,7 @@ class SensorsWindow(QtWidgets.QWidget):
 
     @QtCore.pyqtSlot(QtWidgets.QListWidgetItem, name="handle_sensor_clicked")
     def handle_sensor_clicked(self, sensor: QtWidgets.QListWidgetItem) -> None:
+        """Handle filament sensor clicked"""
         _item = self.fs_sensors_list.itemWidget(sensor)
         # FIXME: This is just not working
         _item.toggle_button.state = ~_item.toggle_button.state
@@ -115,9 +116,8 @@ class SensorsWindow(QtWidgets.QWidget):
 
         return _item_widget
 
-    def paintEvent(self, a0: QtGui.QPaintEvent) -> None: ...
 
-    def setupUi(self):
+    def _setupUi(self):
         self.setObjectName("filament_sensors_page")
         sizePolicy = QtWidgets.QSizePolicy(
             QtWidgets.QSizePolicy.Policy.MinimumExpanding,
@@ -235,9 +235,9 @@ class SensorsWindow(QtWidgets.QWidget):
 
         self.content_vertical_layout.addSpacing(5)
         self.setLayout(self.content_vertical_layout)
-        self.retranslateUi()
+        self._retranslateUi()
 
-    def retranslateUi(self):
+    def _retranslateUi(self):
         _translate = QtCore.QCoreApplication.translate
         self.setWindowTitle(_translate("filament_sensors_page", "Form"))
         self.fs_page_title.setText(
