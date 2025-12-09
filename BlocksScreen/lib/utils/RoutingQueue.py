@@ -22,6 +22,7 @@ class RoutingQueue(queue.LifoQueue):
 
     @property
     def resend(self):
+        """Resend queue"""
         return self._resend
 
     @resend.setter
@@ -30,10 +31,12 @@ class RoutingQueue(queue.LifoQueue):
             self._resend = new_resend
 
     def block(self):
+        """Blocks queue"""
         # Sets the flag to false
         self._clear_to_move.clear()
 
     def unblock(self):
+        """Unblock queue"""
         # Sets the flag to True
         self._clear_to_move.set()
 
