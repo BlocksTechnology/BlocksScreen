@@ -12,8 +12,8 @@ class TuneWidget(QtWidgets.QWidget):
         name="request_back_page"
     )
 
-    request_sensorsPage: typing.ClassVar[QtCore.pyqtSignal] = (
-        QtCore.pyqtSignal(name="request_sensorsPage")
+    request_sensorsPage: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        name="request_sensorsPage"
     )
     request_bbpPage: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         name="request_bbpPage"
@@ -40,14 +40,12 @@ class TuneWidget(QtWidgets.QWidget):
     def __init__(self, parent) -> None:
         super().__init__(parent)
         self.setObjectName("tune_page")
-        self.setupUI()
+        self._setupUI()
         self.sensors_menu_btn.clicked.connect(self.request_sensorsPage.emit)
         self.tune_babystep_menu_btn.clicked.connect(self.request_bbpPage.emit)
         self.tune_back_btn.clicked.connect(self.request_back)
         self.bed_display.clicked.connect(
-            lambda: self.request_numpad[
-                str, int, "PyQt_PyObject", int, int
-            ].emit(
+            lambda: self.request_numpad[str, int, "PyQt_PyObject", int, int].emit(
                 "Bed",
                 int(round(self.bed_target)),
                 self.on_numpad_change,
@@ -56,9 +54,7 @@ class TuneWidget(QtWidgets.QWidget):
             )
         )
         self.extruder_display.clicked.connect(
-            lambda: self.request_numpad[
-                str, int, "PyQt_PyObject", int, int
-            ].emit(
+            lambda: self.request_numpad[str, int, "PyQt_PyObject", int, int].emit(
                 "Extruder",
                 int(round(self.extruder_target)),
                 self.on_numpad_change,
@@ -67,9 +63,7 @@ class TuneWidget(QtWidgets.QWidget):
             )
         )
         self.speed_display.clicked.connect(
-            lambda: self.request_sliderPage[
-                str, int, "PyQt_PyObject", int, int
-            ].emit(
+            lambda: self.request_sliderPage[str, int, "PyQt_PyObject", int, int].emit(
                 "Speed",
                 int(self.speed_factor_override * 100),
                 self.on_slider_change,
@@ -80,16 +74,16 @@ class TuneWidget(QtWidgets.QWidget):
 
     @QtCore.pyqtSlot(str, int, name="on_numpad_change")
     def on_numpad_change(self, name: str, new_value: int) -> None:
+        """Handle numpad value inserted"""
         if "bed" in name.lower():
             name = "heater_bed"
         elif "extruder" in name.lower():
             name = "extruder"
-        self.run_gcode.emit(
-            f"SET_HEATER_TEMPERATURE HEATER={name} TARGET={new_value}"
-        )
+        self.run_gcode.emit(f"SET_HEATER_TEMPERATURE HEATER={name} TARGET={new_value}")
 
     @QtCore.pyqtSlot(str, int, name="on_slider_change")
     def on_slider_change(self, name: str, new_value: int) -> None:
+        """Handle slider page value inserted"""
         if "speed" in name.lower():
             self.speed_factor_override = new_value / 100
             self.run_gcode.emit(f"M220 S{new_value}")
@@ -156,16 +150,12 @@ class TuneWidget(QtWidgets.QWidget):
                     )
                 else:
                     _new_display_button.setDisabled(True)
-                self.tune_display_vertical_child_layout_2.addWidget(
-                    _new_display_button
-                )
+                self.tune_display_vertical_child_layout_2.addWidget(_new_display_button)
             _display_button = self.tune_display_buttons.get(name)
             if not _display_button:
                 return
             _display_button.update({"speed": int(round(new_value * 100))})
-            _display_button.get("display_button").setText(
-                f"{new_value * 100:.0f}%"
-            )
+            _display_button.get("display_button").setText(f"{new_value * 100:.0f}%")
 
     def create_display_button(self, name: str) -> DisplayButton:
         """Create and return a DisplayButton
@@ -187,11 +177,10 @@ class TuneWidget(QtWidgets.QWidget):
 
     @QtCore.pyqtSlot(str, float, name="on_gcode_move_update")
     def on_gcode_move_update(self, field: str, value: float) -> None:
+        """Handle gcode move update"""
         if "speed_factor" in field:
             self.speed_factor_override = value
-            self.speed_display.setText(
-                str(f"{int(self.speed_factor_override * 100)}%")
-            )
+            self.speed_display.setText(str(f"{int(self.speed_factor_override * 100)}%"))
 
     @QtCore.pyqtSlot(str, str, float, name="on_extruder_update")
     def on_extruder_temperature_change(
@@ -226,12 +215,11 @@ class TuneWidget(QtWidgets.QWidget):
             self.bed_target = int(new_value)
 
     def paintEvent(self, a0: QtGui.QPaintEvent) -> None:
+        """Re-implemented method, paint widget"""
         if self.isVisible():
-            self.speed_display.setText(
-                str(f"{int(self.speed_factor_override * 100)}%")
-            )
+            self.speed_display.setText(str(f"{int(self.speed_factor_override * 100)}%"))
 
-    def setupUI(self) -> None:
+    def _setupUI(self) -> None:
         sizePolicy = QtWidgets.QSizePolicy(
             QtWidgets.QSizePolicy.Policy.MinimumExpanding,
             QtWidgets.QSizePolicy.Policy.MinimumExpanding,
@@ -259,9 +247,7 @@ class TuneWidget(QtWidgets.QWidget):
 
         self.tune_title_label.setFont(font)
         self.tune_title_label.setPalette(palette)
-        self.tune_title_label.setLayoutDirection(
-            QtCore.Qt.LayoutDirection.RightToLeft
-        )
+        self.tune_title_label.setLayoutDirection(QtCore.Qt.LayoutDirection.RightToLeft)
         self.tune_title_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self.tune_title_label.setObjectName("tune_title_label")
         self.tune_header.addWidget(
@@ -273,9 +259,7 @@ class TuneWidget(QtWidgets.QWidget):
         self.tune_back_btn.setMinimumSize(QtCore.QSize(60, 60))
         self.tune_back_btn.setMaximumSize(QtCore.QSize(60, 60))
         self.tune_back_btn.setFlat(True)
-        self.tune_back_btn.setPixmap(
-            QtGui.QPixmap(":/ui/media/btn_icons/back.svg")
-        )
+        self.tune_back_btn.setPixmap(QtGui.QPixmap(":/ui/media/btn_icons/back.svg"))
         self.tune_header.addWidget(
             self.tune_back_btn,
             0,
@@ -332,9 +316,7 @@ class TuneWidget(QtWidgets.QWidget):
         self.tune_change_filament_btn.setAutoDefault(False)
         self.tune_change_filament_btn.setFlat(True)
         self.tune_change_filament_btn.setPixmap(
-            QtGui.QPixmap(
-                ":/filament_related/media/btn_icons/change_filament.svg"
-            )
+            QtGui.QPixmap(":/filament_related/media/btn_icons/change_filament.svg")
         )
         self.tune_change_filament_btn.setObjectName("tune_change_filament_btn")
         self.tune_menu_buttons.addWidget(
@@ -355,46 +337,34 @@ class TuneWidget(QtWidgets.QWidget):
         self.sensors_menu_btn.setContextMenuPolicy(
             QtCore.Qt.ContextMenuPolicy.NoContextMenu
         )
-        self.sensors_menu_btn.setLayoutDirection(
-            QtCore.Qt.LayoutDirection.LeftToRight
-        )
+        self.sensors_menu_btn.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
         self.sensors_menu_btn.setAutoDefault(False)
         self.sensors_menu_btn.setFlat(True)
         self.sensors_menu_btn.setPixmap(
-            QtGui.QPixmap(
-                ":/filament_related/media/btn_icons/filament_sensor.svg"
-            )
+            QtGui.QPixmap(":/filament_related/media/btn_icons/filament_sensor.svg")
         )
         self.sensors_menu_btn.setObjectName("sensors_menu_btn")
         self.tune_menu_buttons.addWidget(self.sensors_menu_btn)
         self.tune_content.addLayout(self.tune_menu_buttons, 0)
         self.tune_display_horizontal_parent_layout = QtWidgets.QHBoxLayout()
-        self.tune_display_horizontal_parent_layout.setContentsMargins(
-            2, 0, 2, 2
-        )
+        self.tune_display_horizontal_parent_layout.setContentsMargins(2, 0, 2, 2)
         self.tune_display_horizontal_parent_layout.setObjectName(
             "tune_display_horizontal_parent_layout"
         )
         self.tune_display_vertical_child_layout_1 = QtWidgets.QVBoxLayout()
-        self.tune_display_vertical_child_layout_1.setContentsMargins(
-            2, 0, 2, 2
-        )
+        self.tune_display_vertical_child_layout_1.setContentsMargins(2, 0, 2, 2)
         self.tune_display_vertical_child_layout_1.setSpacing(5)
         self.tune_display_vertical_child_layout_1.setObjectName(
             "tune_display_vertical_parent_layout"
         )
         self.tune_display_vertical_child_layout_2 = QtWidgets.QVBoxLayout()
-        self.tune_display_vertical_child_layout_2.setContentsMargins(
-            2, 0, 2, 2
-        )
+        self.tune_display_vertical_child_layout_2.setContentsMargins(2, 0, 2, 2)
         self.tune_display_vertical_child_layout_2.setSpacing(5)
         self.tune_display_vertical_child_layout_2.setObjectName(
             "tune_display_vertical_parent_layout_2"
         )
         self.tune_display_vertical_child_layout_3 = QtWidgets.QVBoxLayout()
-        self.tune_display_vertical_child_layout_3.setContentsMargins(
-            2, 0, 2, 2
-        )
+        self.tune_display_vertical_child_layout_3.setContentsMargins(2, 0, 2, 2)
         self.tune_display_vertical_child_layout_3.setSpacing(5)
         self.tune_display_vertical_child_layout_3.setObjectName(
             "tune_display_vertical_parent_layout_3"
@@ -409,15 +379,11 @@ class TuneWidget(QtWidgets.QWidget):
             self.tune_display_vertical_child_layout_3
         )
         self.tune_display_horizontal_parent_layout.setSpacing(0)
-        self.tune_display_horizontal_parent_layout.setContentsMargins(
-            0, 0, 0, 0
-        )
+        self.tune_display_horizontal_parent_layout.setContentsMargins(0, 0, 0, 0)
         self.bed_display = DisplayButton(parent=self)
         sizePolicy.setHorizontalStretch(1)
         sizePolicy.setVerticalStretch(1)
-        sizePolicy.setHeightForWidth(
-            self.bed_display.sizePolicy().hasHeightForWidth()
-        )
+        sizePolicy.setHeightForWidth(self.bed_display.sizePolicy().hasHeightForWidth())
         self.bed_display.setSizePolicy(sizePolicy)
         self.bed_display.setMinimumSize(QtCore.QSize(150, 60))
         self.bed_display.setMaximumSize(QtCore.QSize(150, 60))
@@ -426,9 +392,7 @@ class TuneWidget(QtWidgets.QWidget):
         self.bed_display.setText("")
         self.bed_display.setFlat(True)
         self.bed_display.setPixmap(
-            QtGui.QPixmap(
-                ":/temperature_related/media/btn_icons/temperature_plate.svg"
-            )
+            QtGui.QPixmap(":/temperature_related/media/btn_icons/temperature_plate.svg")
         )
         self.bed_display.setObjectName("bed_display")
         self.tune_display_vertical_child_layout_1.addWidget(self.bed_display)
@@ -443,14 +407,10 @@ class TuneWidget(QtWidgets.QWidget):
         self.extruder_display.setText("")
         self.extruder_display.setFlat(True)
         self.extruder_display.setPixmap(
-            QtGui.QPixmap(
-                ":/temperature_related/media/btn_icons/temperature.svg"
-            )
+            QtGui.QPixmap(":/temperature_related/media/btn_icons/temperature.svg")
         )
         self.extruder_display.setObjectName("extruder_display")
-        self.tune_display_vertical_child_layout_1.addWidget(
-            self.extruder_display
-        )
+        self.tune_display_vertical_child_layout_1.addWidget(self.extruder_display)
         self.speed_display = DisplayButton(parent=self)
         self.speed_display.setFont(font)
         sizePolicy.setHeightForWidth(
@@ -466,9 +426,7 @@ class TuneWidget(QtWidgets.QWidget):
         )
         self.speed_display.setObjectName("speed_display")
         self.tune_display_vertical_child_layout_3.addWidget(self.speed_display)
-        self.tune_content.addLayout(
-            self.tune_display_horizontal_parent_layout, 1
-        )
+        self.tune_content.addLayout(self.tune_display_horizontal_parent_layout, 1)
         self.tune_display_horizontal_parent_layout.setStretch(0, 0)
         self.tune_display_horizontal_parent_layout.setStretch(1, 0)
         self.tune_display_horizontal_parent_layout.setStretch(2, 1)
@@ -478,9 +436,9 @@ class TuneWidget(QtWidgets.QWidget):
         self.tune_content.setContentsMargins(2, 0, 2, 0)
         self.setLayout(self.tune_content)
         self.setContentsMargins(2, 2, 2, 2)
-        self.retranslateUI()
+        self._retranslateUI()
 
-    def retranslateUI(self):
+    def _retranslateUI(self):
         _translate = QtCore.QCoreApplication.translate
         self.setWindowTitle(_translate("printStackedWidget", "StackedWidget"))
         self.tune_title_label.setText(_translate("printStackedWidget", "Tune"))
