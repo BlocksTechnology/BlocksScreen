@@ -1,0 +1,109 @@
+name: CI-dev-pipeline
+
+on:
+  pull_request:
+    branches:
+      - dev
+    paths-ignore:
+      - "scripts/**"
+      - "BlocksScreen/lib/ui/**"
+      - "extras/**"
+jobs:
+  ci-checks:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11.2"]
+        test-type: [ruff, pylint, pytest, docstrcov, security]
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: scripts/requirements-dev.txt
+
+      - name: Install dependencies
+        run: |
+          echo "Installing dependencies"
+          python -m pip install --upgrade pip
+          pip install -r scripts/requirements-dev.txt
+
+      - name: Run Test ${{ matrix.test-type }}
+        run: |
+          echo "Starting test runs"
+          if [ "${{ matrix.test-type }}" == "ruff" ]; then 
+            echo "Running Formatting Test"
+            ruff check --output-format=github --target-version=py311 --config=pyproject.toml > ruff-output.txt 2>&1
+            ruff format --diff --target-version=py311 --config=pyproject.toml >> ruff-output.txt 2>&1
+            echo "Ruff finished"
+          fi
+          if [ "${{ matrix.test-type }}" == "pylint" ]; then
+            echo "Running Pylint Code Test"
+            pylint -j$(nproc) --recursive=y BlocksScreen/ > pylint-output.txt 2>&1
+            echo "Pylint finished"
+          fi
+
+          if [ "${{ matrix.test-type }}" == "pytest" ]; then
+            if [ -d "tests/" ] && [ "$(ls -A tests/)" ]; then 
+              echo "Running Python unit tests"
+              pytest tests/ --doctest-modules --junitxml=junit/test-results.xml --cov=BlocksScreen/ --cov-report=xml --cov-report=html > pytest-output.txt 2>&1 
+            else
+              echo "No tests directory no need to proceed with tests"
+            fi
+          fi
+
+          if [ "${{ matrix.test-type }}" == "docstrcov" ]; then 
+            echo "Running docstring coverage test"
+            docstr-coverage BlocksScreen/ --exclude '.*/BlocksScreen/lib/ui/.*?$' --fail-under=80 --skip-magic --skip-init --skip-private --skip-property > docstr-cov-output.txt 2>&1
+          fi
+
+          if [ "${{matrix.test-type }}" == "security" ]; then
+            echo "Running bandit security test"
+            bandit -c pyproject.toml -r . -f json -o bandit-output.json 2>&1
+          fi
+
+      - name: Upload ruff artifact
+        if: always() && matrix.test-type == 'ruff'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ruff-results
+          path: ruff-output.txt
+
+      - name: Upload Pylint Artifacts
+        if: always() && matrix.test-type == 'pylint'
+        uses: actions/upload-artifact@v4
+        with:
+          name: pylint-results
+          path: pylint-output.txt
+
+      - name: Upload Pytest Artifacts
+        if: always() && matrix.test-type == 'pytest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-results
+          path: |
+            pytest-output.txt
+            junit/test-results.xml
+            coverage.xml
+            htmlcov/
+        continue-on-error: true
+
+      - name: Upload docstr coverage report
+        if: always() && matrix.test-type == 'docstrcov'
+        uses: actions/upload-artifact@v4
+        with:
+          name: docstr-coverage
+          path: docstr-cov-output.txt
+
+      - name: Upload bandit security report
+        if: always() && matrix.test-type == 'security'
+        uses: actions/upload-artifact@v4
+        with:
+          name: bandit-output
+          path: bandit-output.json
