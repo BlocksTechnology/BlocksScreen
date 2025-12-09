@@ -15,11 +15,8 @@ class BlocksSlider(QtWidgets.QSlider):
         self.setMinimum(0)
         self.setMaximum(100)
 
-    def setOrientation(self, a0: QtCore.Qt.Orientation) -> None:
-        return super().setOrientation(a0)
-
     def mousePressEvent(self, ev: QtGui.QMouseEvent) -> None:
-        """Handle mouse press events"""
+        """Re-implemented method, Handle mouse press events"""
         if (ev.button() == QtCore.Qt.MouseButton.LeftButton) and self.hit_test(
             ev.position().toPoint().toPointF()
         ):
@@ -81,6 +78,7 @@ class BlocksSlider(QtWidgets.QSlider):
         self.update()
 
     def paintEvent(self, ev: QtGui.QPaintEvent) -> None:
+        """Re-implemented method, paint widget"""
         opt = QtWidgets.QStyleOptionSlider()
         self.initStyleOption(opt)
         _style = self.style()
