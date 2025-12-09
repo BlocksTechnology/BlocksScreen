@@ -7,18 +7,22 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 
 class SensorWidget(QtWidgets.QWidget):
     class SensorType(enum.Enum):
+        """Filament sensor type"""
         SWITCH = enum.auto()
         MOTION = enum.auto()
 
     class SensorFlags(enum.Flag):
+        """Filament sensor flags"""
         CLICKABLE = enum.auto()
         DISPLAY = enum.auto()
 
     class FilamentState(enum.Enum):
+        """Current filament state, sensor has or does not have filament"""
         MISSING = 0
         PRESENT = 1
 
     class SensorState(enum.IntEnum):
+        """Current sensor filament state, if it's turned on or not"""
         OFF = False
         ON = True
 
@@ -55,10 +59,11 @@ class SensorWidget(QtWidgets.QWidget):
         self.icon_pixmap_fnp: QtGui.QPixmap = QtGui.QPixmap(
             ":/filament_related/media/btn_icons/filament_sensor_off.svg"
         )
-        self.setupUI()
+        self._setupUI()
 
     @property
     def type(self) -> SensorType:
+        """Sensor type"""
         return self._sensor_type
 
     @type.setter
@@ -67,6 +72,7 @@ class SensorWidget(QtWidgets.QWidget):
 
     @property
     def flags(self) -> SensorFlags:
+        """Current filament sensor flags"""
         return self._flags
 
     @flags.setter
@@ -75,6 +81,7 @@ class SensorWidget(QtWidgets.QWidget):
 
     @property
     def text(self) -> str:
+        """Filament sensor text"""
         return self._text
 
     @text.setter
@@ -85,13 +92,12 @@ class SensorWidget(QtWidgets.QWidget):
 
     @QtCore.pyqtSlot(bool, name="change_fil_sensor_state")
     def change_fil_sensor_state(self, state: FilamentState):
+        """Change filament sensor state"""
         if isinstance(state, SensorWidget.FilamentState):
             self.filament_state = state
 
-    def resizeEvent(self, a0: QtGui.QResizeEvent) -> None:
-        return super().resizeEvent(a0)
-
     def paintEvent(self, a0: QtGui.QPaintEvent) -> None:
+        """Re-implemented method, paint widget"""
         # if (
         #     self._scaled_select_on_pixmap is not None
         #     and self._scaled_select_off_pixmap is not None
@@ -142,6 +148,7 @@ class SensorWidget(QtWidgets.QWidget):
 
     @property
     def toggle_sensor_gcode_command(self) -> str:
+        """Toggle filament sensor"""
         self.sensor_state = (
             SensorWidget.SensorState.ON
             if self.sensor_state == SensorWidget.SensorState.OFF
@@ -151,7 +158,7 @@ class SensorWidget(QtWidgets.QWidget):
             f"SET_FILAMENT_SENSOR SENSOR={self.text} ENABLE={not self.sensor_state.value}"
         )
 
-    def setupUI(self):
+    def _setupUI(self):
         _policy = QtWidgets.QSizePolicy.Policy.MinimumExpanding
         size_policy = QtWidgets.QSizePolicy(_policy, _policy)
         size_policy.setHeightForWidth(self.sizePolicy().hasHeightForWidth())
