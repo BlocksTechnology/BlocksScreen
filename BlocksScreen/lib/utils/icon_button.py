@@ -16,21 +16,25 @@ class IconButton(QtWidgets.QPushButton):
 
     @property
     def name(self):
+        """Widget name"""
         return self._name
 
     def text(self) -> str:
+        """Widget text"""
         return self._text
 
     def setPixmap(self, pixmap: QtGui.QPixmap) -> None:
+        """Set widget pixmap"""
         self.icon_pixmap = pixmap
         self.repaint()
 
     def setText(self, text: str) -> None:
+        """Set widget text"""
         self._text = text
         self.update()
-        # super().setText(text)
 
     def paintEvent(self, a0: QtGui.QPaintEvent) -> None:
+        """Re-implemented method, paint widget"""
         opt = QtWidgets.QStyleOptionButton()
         self.initStyleOption(opt)
         painter = QtWidgets.QStylePainter(self)
@@ -53,9 +57,7 @@ class IconButton(QtWidgets.QPushButton):
 
         # * Build icon
         x = y = 15.0 if self.text_formatting else 5.0
-        _icon_rect = QtCore.QRectF(
-            0.0, 0.0, (self.width() - x), (self.height() - y)
-        )
+        _icon_rect = QtCore.QRectF(0.0, 0.0, (self.width() - x), (self.height() - y))
 
         _icon_scaled = self.icon_pixmap.scaled(
             _icon_rect.size().toSize(),
@@ -120,6 +122,7 @@ class IconButton(QtWidgets.QPushButton):
         painter.end()
 
     def setProperty(self, name: str, value: typing.Any) -> bool:
+        """Re-implemented method, set widget properties"""
         if name == "icon_pixmap":
             self.icon_pixmap = value
         elif name == "text_formatting":
