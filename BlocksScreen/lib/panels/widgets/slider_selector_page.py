@@ -27,26 +27,20 @@ class SliderPage(QtWidgets.QWidget):
         self.decrease_button_icon = QtGui.QPixmap(
             ":/arrow_icons/media/btn_icons/left_arrow.svg"
         )
-        self.background = QtGui.QPixmap(
-            ":/ui/background/media/1st_background.png"
-        )
+        self.background = QtGui.QPixmap(":/ui/background/media/1st_background.png")
         self.setStyleSheet(
             "#SliderPage{background-image: url(:/background/media/1st_background.png);}\n"
         )
         self.setObjectName("SliderPage")
-        self.setupUI()
+        self._setupUI()
         self.back_button.clicked.connect(self.request_back.emit)
         self.back_button.clicked.connect(self.value_selected.disconnect)
         self.slider.valueChanged.connect(self.on_slider_value_change)
         self.increase_button.pressed.connect(
-            lambda: (
-                self.slider.setSliderPosition(self.slider.sliderPosition() + 5)
-            )
+            lambda: (self.slider.setSliderPosition(self.slider.sliderPosition() + 5))
         )
         self.decrease_button.pressed.connect(
-            lambda: (
-                self.slider.setSliderPosition(self.slider.sliderPosition() - 5)
-            )
+            lambda: (self.slider.setSliderPosition(self.slider.sliderPosition() - 5))
         )
         self.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
 
@@ -64,9 +58,11 @@ class SliderPage(QtWidgets.QWidget):
         self.slider.setSliderPosition(int(value))
 
     def set_slider_minimum(self, value: int) -> None:
+        """Set slider minimum value"""
         self.slider.setMinimum(value)
 
     def set_slider_maximum(self, value: int) -> None:
+        """Set slider maximum value"""
         self.slider.setMaximum(value)
 
     def paintEvent(self, a0: QtGui.QPaintEvent) -> None:
@@ -78,21 +74,9 @@ class SliderPage(QtWidgets.QWidget):
         painter.drawPixmap(self.rect(), self.background, self.rect())
         self.current_value_label.setText(str(self.slider.value()) + " " + "%")
         self.object_name_label.setText(str(self.name))
-        # if "speed" in self.name.lower():
-        #     # REFACTOR: Change this, so it's not hardcoded to be with objects named "speed. "
-        #     # Range should increase however if a flag is set, if the maximum is above 100
-        #     # then increase the range of the slider after it is set to the maximum
-        #     if (
-        #         self.slider.maximum() <= self.max_value
-        #         and self.slider.sliderPosition() + 10 >= self.slider.maximum()
-        #     ):
-        #         self.slider.setMaximum(int(int(self.slider.maximum()) + 100))
-        #     elif self.slider.maximum() <= 100:
-        #         self.slider.setMaximum(100)
-
         painter.end()
 
-    def setupUI(self) -> None:
+    def _setupUI(self) -> None:
         """Setup the components for the widget"""
         self.setMinimumSize(QtCore.QSize(700, 410))
         self.setMaximumSize(QtCore.QSize(720, 420))
@@ -131,18 +115,13 @@ class SliderPage(QtWidgets.QWidget):
         self.object_name_label.setFont(font)
         self.object_name_label.setPalette(palette)
         self.object_name_label.setMinimumSize(QtCore.QSize(self.width(), 60))
-        self.object_name_label.setMaximumSize(
-            QtCore.QSize(self.width() - 60, 60)
-        )
+        self.object_name_label.setMaximumSize(QtCore.QSize(self.width() - 60, 60))
         self.object_name_label.setAlignment(
-            QtCore.Qt.AlignmentFlag.AlignHCenter
-            | QtCore.Qt.AlignmentFlag.AlignVCenter
+            QtCore.Qt.AlignmentFlag.AlignHCenter | QtCore.Qt.AlignmentFlag.AlignVCenter
         )
 
         self.back_button = IconButton(self)
-        self.back_button.setPixmap(
-            QtGui.QPixmap(":ui/media/btn_icons/back.svg")
-        )
+        self.back_button.setPixmap(QtGui.QPixmap(":ui/media/btn_icons/back.svg"))
         self.back_button.has_text = False
         self.back_button.setMinimumSize(QtCore.QSize(60, 60))
         self.back_button.setMaximumSize(QtCore.QSize(60, 60))
@@ -160,12 +139,9 @@ class SliderPage(QtWidgets.QWidget):
         self.current_value_label.setFont(font)
         self.current_value_label.setPalette(palette)
         self.current_value_label.setMinimumSize(QtCore.QSize(self.width(), 80))
-        self.current_value_label.setMaximumSize(
-            QtCore.QSize(self.width(), 300)
-        )
+        self.current_value_label.setMaximumSize(QtCore.QSize(self.width(), 300))
         self.current_value_label.setAlignment(
-            QtCore.Qt.AlignmentFlag.AlignHCenter
-            | QtCore.Qt.AlignmentFlag.AlignVCenter
+            QtCore.Qt.AlignmentFlag.AlignHCenter | QtCore.Qt.AlignmentFlag.AlignVCenter
         )
         self.middle_content_layout.addWidget(
             self.current_value_label,
@@ -189,8 +165,7 @@ class SliderPage(QtWidgets.QWidget):
         self.slider_layout.addWidget(
             self.slider,
             0,
-            QtCore.Qt.AlignmentFlag.AlignVCenter
-            | QtCore.Qt.AlignmentFlag.AlignHCenter,
+            QtCore.Qt.AlignmentFlag.AlignVCenter | QtCore.Qt.AlignmentFlag.AlignHCenter,
         )
         self.increase_button = IconButton(self)
         self.increase_button.setProperty(
