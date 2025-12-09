@@ -31,6 +31,7 @@ class RepeatedTimer(threading.Thread):
             self._function(*self._args, **self._kwargs)
 
     def startTimer(self):
+        """Start timer"""
         if self.running is False:
             try:
                 self._timer = threading.Timer(self._timeout, self._run)
@@ -47,6 +48,7 @@ class RepeatedTimer(threading.Thread):
             self.running = True
 
     def stopTimer(self):
+        """Stop timer"""
         if self._timer is None:
             return
         if self.running:
@@ -56,14 +58,3 @@ class RepeatedTimer(threading.Thread):
             self.stopEvent.clear()
             self.running = False
 
-    @staticmethod
-    def pauseTimer(self):
-        # TODO never tested
-        self.stopEvent.clear()
-        self.running = False
-
-    @staticmethod
-    def resumeTimer(self):
-        # TODO: never tested
-        self.stopEvent.set()
-        self.running = True
