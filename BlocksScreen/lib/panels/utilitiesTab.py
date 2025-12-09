@@ -613,7 +613,6 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
 
     def troubleshoot_request(self) -> None:
         """Show troubleshoot page"""
-        self.troubleshoot_page.geometry_calc()
         self.troubleshoot_page.show()
 
     def show_waiting_page(self, page_to_go_to: int, label: str, time_ms: int):
