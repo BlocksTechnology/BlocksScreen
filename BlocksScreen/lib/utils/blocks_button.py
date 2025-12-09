@@ -4,6 +4,8 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 
 
 class ButtonColors(enum.Enum):
+    """Standard button colors"""
+
     NORMAL_BG = (223, 223, 223)
     PRESSED_BG = (169, 169, 169)
     DISABLED_BG = (169, 169, 169)
@@ -33,6 +35,7 @@ class BlocksCustomButton(QtWidgets.QAbstractButton):
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_AcceptTouchEvents, True)
 
     def setShowNotification(self, show: bool) -> None:
+        """Set notification on button"""
         if self._show_notification != show:
             self._show_notification = show
             self.repaint()
@@ -40,6 +43,7 @@ class BlocksCustomButton(QtWidgets.QAbstractButton):
 
     @property
     def name(self):
+        """Button name"""
         return self._name
 
     @name.setter
@@ -48,18 +52,22 @@ class BlocksCustomButton(QtWidgets.QAbstractButton):
         self.setObjectName(new_name)
 
     def text(self) -> str | None:
+        """Button text"""
         return self._text
 
     def setText(self, text: str) -> None:
+        """Set button text"""
         self._text = text
         self.update()
         return
 
     def setPixmap(self, pixmap: QtGui.QPixmap) -> None:
+        """Set button pixmap"""
         self.icon_pixmap = pixmap
         self.repaint()
 
     def mousePressEvent(self, e: QtGui.QMouseEvent) -> None:
+        """Handle mouse press events"""
         if not self.isEnabled():
             e.ignore()
             return
@@ -75,6 +83,7 @@ class BlocksCustomButton(QtWidgets.QAbstractButton):
         return super().mousePressEvent(e)
 
     def paintEvent(self, e: typing.Optional[QtGui.QPaintEvent]):
+        """Re-implemented method, paint widget"""
         opt = QtWidgets.QStyleOptionButton()
         # self.initStyleOption(opt)
 
@@ -88,7 +97,6 @@ class BlocksCustomButton(QtWidgets.QAbstractButton):
 
         if _style is None or _rect is None:
             return
-
 
         # Determine background and text colors based on state
         if not self.isEnabled():
@@ -189,24 +197,18 @@ class BlocksCustomButton(QtWidgets.QAbstractButton):
             destination_point = adjusted_icon_rect.toRect().topLeft()
             painter.drawPixmap(destination_point, final_pixmap)
 
-
         if self.text():
             font_metrics = self.fontMetrics()
             self.text_width = font_metrics.horizontalAdvance(self._text)
             self.label_width = self.contentsRect().width()
 
-            margin = _style.pixelMetric(
-            _style.PixelMetric.PM_ButtonMargin, opt, self
-            )
-            
+            margin = _style.pixelMetric(_style.PixelMetric.PM_ButtonMargin, opt, self)
+
             _start_text_position = int(self.button_ellipse.width())
             _text_rect = _rect
 
-
             _text_rect2 = _rect
-            _text_rect2.setWidth(
-                    self.width() - int(self.button_ellipse.width())
-                )
+            _text_rect2.setWidth(self.width() - int(self.button_ellipse.width()))
             _text_rect2.setLeft(int(self.button_ellipse.width()))
 
             _text_rect.setWidth(self.width() - int(self.button_ellipse.width()))
@@ -217,13 +219,10 @@ class BlocksCustomButton(QtWidgets.QAbstractButton):
             _pen.setColor(current_text_color)
             painter.setPen(_pen)
 
-
             # if self.text_width < _text_rect2.width()*0.6:
-            _text_rect.setWidth(
-                self.width() - int(self.button_ellipse.width()*1.4)
-            )
+            _text_rect.setWidth(self.width() - int(self.button_ellipse.width() * 1.4))
             _text_rect.setLeft(int(self.button_ellipse.width()))
-            
+
             painter.drawText(
                 _text_rect,
                 QtCore.Qt.TextFlag.TextShowMnemonic
@@ -256,6 +255,7 @@ class BlocksCustomButton(QtWidgets.QAbstractButton):
         painter.end()
 
     def setProperty(self, name: str, value: typing.Any):
+        """Set widget properties"""
         if name == "icon_pixmap":
             self.icon_pixmap = value
         elif name == "name":
@@ -264,14 +264,8 @@ class BlocksCustomButton(QtWidgets.QAbstractButton):
             self.text_color = QtGui.QColor(value)
             self.update()
 
-    def handleTouchBegin(self, e: QtCore.QEvent): ...
-    def handleTouchUpdate(self, e: QtCore.QEvent): ...
-    def handleTouchEnd(self, e: QtCore.QEvent): ...
-    def handleTouchCancel(self, e: QtCore.QEvent): ...
-    def setAutoDefault(self, bool): ...
-    def setFlat(self, bool): ...
-
     def event(self, e: QtCore.QEvent) -> bool:
+        """Re-implemented method, filter events"""
         if e.type() == QtCore.QEvent.Type.TouchBegin:
             self.handleTouchBegin(e)
             return False
