@@ -7,7 +7,7 @@ from lib.utils.icon_button import IconButton
 from lib.utils.group_button import GroupButton
 from lib.utils.blocks_button import BlocksCustomButton
 
-from  lib.panels.widgets.loadPage import LoadScreen
+from lib.panels.widgets.loadPage import LoadScreen
 
 
 class ProbeHelper(QtWidgets.QWidget):
@@ -18,8 +18,8 @@ class ProbeHelper(QtWidgets.QWidget):
         str, name="run_gcode"
     )
 
-    query_printer_object: typing.ClassVar[QtCore.pyqtSignal] = (
-        QtCore.pyqtSignal(dict, name="query_object")
+    query_printer_object: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        dict, name="query_object"
     )
     subscribe_config: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         [
@@ -46,71 +46,47 @@ class ProbeHelper(QtWidgets.QWidget):
     z_offset_config_method: tuple = ()
     z_offset_calibration_speed: int = 100
 
-    
-
     def __init__(self, parent: QtWidgets.QWidget) -> None:
         super().__init__(parent)
-
         self.Loadscreen = LoadScreen(self)
-
         self.setObjectName("probe_offset_page")
-        self.setupUi()
-
+        self._setupUi()
         self.inductive_icon = QtGui.QPixmap(
             ":/z_levelling/media/btn_icons/inductive.svg"
         )
-        self.bltouch_icon = QtGui.QPixmap(
-            ":/z_levelling/media/btn_icons/bltouch.svg"
-        )
+        self.bltouch_icon = QtGui.QPixmap(":/z_levelling/media/btn_icons/bltouch.svg")
         self.endstop_icon = QtGui.QPixmap(
             ":/extruder_related/media/btn_icons/switch_zoom.svg"
         )
-        self.eddy_icon = QtGui.QPixmap(
-            ":/z_levelling/media/btn_icons/eddy_mech.svg"
-        )
-
+        self.eddy_icon = QtGui.QPixmap(":/z_levelling/media/btn_icons/eddy_mech.svg")
         self._toggle_tool_buttons(False)
         self._setup_move_option_buttons()
         self.move_option_1.toggled.connect(
-            lambda: self.handle_zhopHeight_change(
-                new_value=float(self.distances[0])
-            )
+            lambda: self.handle_zhopHeight_change(new_value=float(self.distances[0]))
         )
         self.move_option_2.toggled.connect(
-            lambda: self.handle_zhopHeight_change(
-                new_value=float(self.distances[1])
-            )
+            lambda: self.handle_zhopHeight_change(new_value=float(self.distances[1]))
         )
         self.move_option_3.toggled.connect(
-            lambda: self.handle_zhopHeight_change(
-                new_value=float(self.distances[2])
-            )
+            lambda: self.handle_zhopHeight_change(new_value=float(self.distances[2]))
         )
         self.move_option_4.toggled.connect(
-            lambda: self.handle_zhopHeight_change(
-                new_value=float(self.distances[3])
-            )
+            lambda: self.handle_zhopHeight_change(new_value=float(self.distances[3]))
         )
         self.move_option_5.toggled.connect(
-            lambda: self.handle_zhopHeight_change(
-                new_value=float(self.distances[4])
-            )
+            lambda: self.handle_zhopHeight_change(new_value=float(self.distances[4]))
         )
-        self.mb_raise_nozzle.clicked.connect(
-            lambda:self.handle_nozzle_move("raise")
-        )
-        self.mb_lower_nozzle.clicked.connect(
-            lambda:self.handle_nozzle_move("lower")
-        )
+        self.mb_raise_nozzle.clicked.connect(lambda: self.handle_nozzle_move("raise"))
+        self.mb_lower_nozzle.clicked.connect(lambda: self.handle_nozzle_move("lower"))
         self.po_back_button.clicked.connect(self.request_back)
         self.accept_button.clicked.connect(self.handle_accept)
         self.abort_button.clicked.connect(self.handle_abort)
         self.update()
-
         self.block_z = False
         self.block_list = False
 
     def on_klippy_status(self, state: str):
+        """Handle Klippy status event change"""
         if state.lower() == "standby":
             self.block_z = False
             self.block_list = False
@@ -138,9 +114,9 @@ class ProbeHelper(QtWidgets.QWidget):
                             if child_widget is not None:
                                 child_widget.setParent(None)
                                 child_widget.deleteLater()
-            return
 
     def handle_nozzle_move(self, direction: str):
+        """Handle move z buttons click"""
         if direction == "raise":
             self._pending_gcode = f"TESTZ Z={self._zhop_height}"
         elif direction == "lower":
@@ -177,7 +153,9 @@ class ProbeHelper(QtWidgets.QWidget):
             _card = OptionCard(self, _card_text, str(probe), _icon)  # type: ignore
             _card.setObjectName(str(probe))
             self.card_options.update({str(probe): _card})
-            self.main_content_horizontal_layout.addWidget(_card, alignment=QtCore.Qt.AlignmentFlag.AlignHCenter)
+            self.main_content_horizontal_layout.addWidget(
+                _card, alignment=QtCore.Qt.AlignmentFlag.AlignHCenter
+            )
             if not hasattr(self.card_options.get(probe), "continue_clicked"):
                 del _card
                 self.card_options.pop(probe)
@@ -194,22 +172,20 @@ class ProbeHelper(QtWidgets.QWidget):
     def _show_option_cards(self) -> None:
         list(map(lambda x: x[1].show(), self.card_options.items()))
 
-    def init_probe_config(self) -> None:
+    def _init_probe_config(self) -> None:
+        """Initialize internal probe tracking"""
         if not self.z_offset_config_method:
             return
-
         if self.z_offset_config_type != "endstop":
             self.z_offsets = tuple(
                 map(
-                    lambda axis: self.z_offset_config_method[1].get(
-                        f"{axis}_offset"
-                    ),
+                    lambda axis: self.z_offset_config_method[1].get(f"{axis}_offset"),
                     ["x", "y", "z"],
                 )
             )
-            self.z_offset_calibration_speed = self.z_offset_config_method[
-                1
-            ].get("speed")
+            self.z_offset_calibration_speed = self.z_offset_config_method[1].get(
+                "speed"
+            )
 
     @QtCore.pyqtSlot(list, name="on_object_config")
     @QtCore.pyqtSlot(dict, name="on_object_config")
@@ -224,29 +200,30 @@ class ProbeHelper(QtWidgets.QWidget):
             return
 
         # BUG: If i don't add if not self.probe_config i'll just receive the configuration a bunch of times
-        if isinstance(config, list):...
-            # if self.block_list:
-            #     return
-            # else:
-            #     self.block_list = True
-            
-            # _keys = []
-            # if not isinstance(config, list):
-            #     return
+        if isinstance(config, list):
+            ...
+        # if self.block_list:
+        #     return
+        # else:
+        #     self.block_list = True
 
-            # list(map(lambda item: _keys.extend(item.keys()), config))
+        # _keys = []
+        # if not isinstance(config, list):
+        #     return
 
-            # probe, *_ = config[0].items()
-            # self.z_offset_method_type = probe[0]  # The one found first
-            # self.z_offset_method_config = (
-            #     probe[1],
-            #     "PROBE_CALIBRATE",
-            #     "Z_OFFSET_APPLY_PROBE",
-            # )
-            # self.init_probe_config()
-            # if not _keys:
-            #     return
-            # self._configure_option_cards(_keys)
+        # list(map(lambda item: _keys.extend(item.keys()), config))
+
+        # probe, *_ = config[0].items()
+        # self.z_offset_method_type = probe[0]  # The one found first
+        # self.z_offset_method_config = (
+        #     probe[1],
+        #     "PROBE_CALIBRATE",
+        #     "Z_OFFSET_APPLY_PROBE",
+        # )
+        # self.init_probe_config()
+        # if not _keys:
+        #     return
+        # self._configure_option_cards(_keys)
 
         elif isinstance(config, dict):
             if config.get("stepper_z"):
@@ -254,14 +231,12 @@ class ProbeHelper(QtWidgets.QWidget):
                     return
                 else:
                     self.block_z = True
-                    
+
                 _virtual_endstop = "probe:z_virtual_endstop"
                 _config = config.get("stepper_z")
                 if not _config:
                     return
-                if (
-                    _config.get("endstop_pin") == _virtual_endstop
-                ):  # home with probe
+                if _config.get("endstop_pin") == _virtual_endstop:  # home with probe
                     return
                 self.z_offset_config_type = "endstop"
                 self.z_offset_config_method = (
@@ -304,6 +279,7 @@ class ProbeHelper(QtWidgets.QWidget):
 
     @QtCore.pyqtSlot(dict, name="on_printer_config")
     def on_printer_config(self, config: dict) -> None:
+        """Handle received printer config"""
         _probe_types = [
             "probe",
             "bltouch",
@@ -326,6 +302,7 @@ class ProbeHelper(QtWidgets.QWidget):
 
     @QtCore.pyqtSlot(dict, name="on_available_gcode_cmds")
     def on_available_gcode_cmds(self, gcode_cmds: dict) -> None:
+        """Setup available probe calibration commands"""
         _available_commands = gcode_cmds.keys()
         if "PROBE_CALIBRATE" in _available_commands:
             self._calibration_commands.append("PROBE_CALIBRATE")
@@ -411,7 +388,7 @@ class ProbeHelper(QtWidgets.QWidget):
         """
         if not sender:
             return
-        
+
         for i in self.card_options.values():
             i.setDisabled(True)
 
@@ -420,9 +397,7 @@ class ProbeHelper(QtWidgets.QWidget):
 
         if self.z_offset_safe_xy:
             self.run_gcode_signal.emit("G28\nM400")
-            self._move_to_pos(
-                self.z_offset_safe_xy[0], self.z_offset_safe_xy[1], 100
-            )
+            self._move_to_pos(self.z_offset_safe_xy[0], self.z_offset_safe_xy[1], 100)
         self.helper_initialize = True
         _timer = QtCore.QTimer()
         _timer.setSingleShot(True)
@@ -462,7 +437,7 @@ class ProbeHelper(QtWidgets.QWidget):
 
     @QtCore.pyqtSlot(str, list, name="on_gcode_move_update")
     def on_gcode_move_update(self, name: str, value: list) -> None:
-        # TODO: catch the z distances and update the values on the window
+        """Handle gcode move update"""
         if not value:
             return
 
@@ -477,6 +452,7 @@ class ProbeHelper(QtWidgets.QWidget):
 
     @QtCore.pyqtSlot(dict, name="on_manual_probe_update")
     def on_manual_probe_update(self, update: dict) -> None:
+        """Handle manual probe update"""
         if not update:
             return
 
@@ -492,13 +468,9 @@ class ProbeHelper(QtWidgets.QWidget):
             self._toggle_tool_buttons(True)
 
         if update.get("z_position_upper"):
-            self.old_offset_info.setText(
-                f"{update.get('z_position_upper'):.4f} mm"
-            )
+            self.old_offset_info.setText(f"{update.get('z_position_upper'):.4f} mm")
         if update.get("z_position"):
-            self.current_offset_info.setText(
-                f"{update.get('z_position'):.4f} mm"
-            )
+            self.current_offset_info.setText(f"{update.get('z_position'):.4f} mm")
 
     @QtCore.pyqtSlot(list, name="handle_gcode_response")
     def handle_gcode_response(self, data: list) -> None:
@@ -508,13 +480,9 @@ class ProbeHelper(QtWidgets.QWidget):
             data (list): A list containing the gcode that originated
                     the response and the response
         """
-        # TODO: Only check for messages if we are in the tool otherwise ignore them
         if self.isVisible():
             if data[0].startswith("!!"):  # An error occurred
-                if (
-                    "already in a manual z probe"
-                    in data[0].strip("!! ").lower()
-                ):
+                if "already in a manual z probe" in data[0].strip("!! ").lower():
                     self._hide_option_cards()
                     self.helper_start = True
                     self._toggle_tool_buttons(True)
@@ -527,6 +495,7 @@ class ProbeHelper(QtWidgets.QWidget):
 
     @QtCore.pyqtSlot(list, name="handle_error_response")
     def handle_error_response(self, data: list) -> None:
+        """Handle received error response"""
         ...
         # _data, _metadata, *extra = data + [None] * max(0, 2 - len(data))
 
@@ -534,12 +503,6 @@ class ProbeHelper(QtWidgets.QWidget):
         self.run_gcode_signal.emit(f"G91\nG1 Z5 F{10 * 60}\nM400")
         self.run_gcode_signal.emit(f"G90\nG1 X{x} Y{y} F{speed * 60}\nM400")
         return
-
-    ###############################################################################
-    ################################# UI RELATED ##################################
-    ###############################################################################
-    def show(self) -> None:
-        return super().show()
 
     def _setup_move_option_buttons(self) -> None:
         """Change move_option_x buttons text for configured
@@ -549,7 +512,6 @@ class ProbeHelper(QtWidgets.QWidget):
         """
         if self.distances:
             return
-
         self.move_option_1.setText(str(self.distances[0]))
         self.move_option_2.setText(str(self.distances[1]))
         self.move_option_3.setText(str(self.distances[2]))
@@ -579,7 +541,12 @@ class ProbeHelper(QtWidgets.QWidget):
             self.mb_raise_nozzle.show()
             self.mb_lower_nozzle.show()
             self.frame_2.show()
-            self.spacerItem.changeSize(40,20,QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Minimum)
+            self.spacerItem.changeSize(
+                40,
+                20,
+                QtWidgets.QSizePolicy.Policy.Expanding,
+                QtWidgets.QSizePolicy.Policy.Minimum,
+            )
 
         else:
             self.po_back_button.setEnabled(True)
@@ -594,13 +561,17 @@ class ProbeHelper(QtWidgets.QWidget):
             self.mb_raise_nozzle.hide()
             self.mb_lower_nozzle.hide()
             self.frame_2.hide()
-            self.spacerItem.changeSize(0,0,QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Minimum)
-        
+            self.spacerItem.changeSize(
+                0,
+                0,
+                QtWidgets.QSizePolicy.Policy.Minimum,
+                QtWidgets.QSizePolicy.Policy.Minimum,
+            )
+
         self.update()
         return
-    
-    def setupUi(self) -> None:
 
+    def _setupUi(self) -> None:
         self.bbp_offset_value_selector_group = QtWidgets.QButtonGroup(self)
         self.bbp_offset_value_selector_group.setExclusive(True)
         sizePolicy = QtWidgets.QSizePolicy(
@@ -656,9 +627,7 @@ class ProbeHelper(QtWidgets.QWidget):
         self.accept_button.setGeometry(QtCore.QRect(480, 340, 170, 60))
         self.accept_button.setText("Accept")
         self.accept_button.setObjectName("accept_button")
-        self.accept_button.setPixmap(
-            QtGui.QPixmap(":/dialog/media/btn_icons/yes.svg")
-        )
+        self.accept_button.setPixmap(QtGui.QPixmap(":/dialog/media/btn_icons/yes.svg"))
         self.accept_button.setVisible(False)
         font = QtGui.QFont()
         font.setPointSize(15)
@@ -668,9 +637,7 @@ class ProbeHelper(QtWidgets.QWidget):
         self.abort_button.setGeometry(QtCore.QRect(300, 340, 170, 60))
         self.abort_button.setText("Abort")
         self.abort_button.setObjectName("accept_button")
-        self.abort_button.setPixmap(
-            QtGui.QPixmap(":/dialog/media/btn_icons/no.svg")
-        )
+        self.abort_button.setPixmap(QtGui.QPixmap(":/dialog/media/btn_icons/no.svg"))
         self.abort_button.setVisible(False)
         font = QtGui.QFont()
         font.setPointSize(15)
@@ -698,16 +665,13 @@ class ProbeHelper(QtWidgets.QWidget):
         self.po_back_button.setMaximumSize(QtCore.QSize(60, 60))
         self.po_back_button.setText("")
         self.po_back_button.setFlat(True)
-        self.po_back_button.setPixmap(
-            QtGui.QPixmap(":/ui/media/btn_icons/back.svg")
-        )
+        self.po_back_button.setPixmap(QtGui.QPixmap(":/ui/media/btn_icons/back.svg"))
         self.po_back_button.setObjectName("po_back_button")
 
         self.bbp_header_layout.addWidget(
             self.po_back_button,
             0,
-            QtCore.Qt.AlignmentFlag.AlignRight
-            | QtCore.Qt.AlignmentFlag.AlignVCenter,
+            QtCore.Qt.AlignmentFlag.AlignRight | QtCore.Qt.AlignmentFlag.AlignVCenter,
         )
         self.bbp_header_layout.setStretch(0, 1)
         self.verticalLayout.addLayout(self.bbp_header_layout)
@@ -723,9 +687,6 @@ class ProbeHelper(QtWidgets.QWidget):
         self.separator_line.setFrameShadow(QtWidgets.QFrame.Shadow.Sunken)
         self.separator_line.setObjectName("separator_line")
         self.verticalLayout.addWidget(self.separator_line)
-
-
-    
 
         # Offset Steps Buttons Group Box (LEFT side of main_content_horizontal_layout)
         self.bbp_offset_steps_buttons_group_box = QtWidgets.QGroupBox(self)
@@ -748,9 +709,7 @@ class ProbeHelper(QtWidgets.QWidget):
         self.bbp_offset_steps_buttons.setObjectName("bbp_offset_steps_buttons")
 
         # 0.1mm button
-        self.move_option_1 = GroupButton(
-            parent=self.bbp_offset_steps_buttons_group_box
-        )
+        self.move_option_1 = GroupButton(parent=self.bbp_offset_steps_buttons_group_box)
         self.move_option_1.setMinimumSize(QtCore.QSize(100, 60))
         self.move_option_1.setMaximumSize(QtCore.QSize(100, 60))
         self.move_option_1.setText("0.01 mm")
@@ -763,22 +722,15 @@ class ProbeHelper(QtWidgets.QWidget):
         self.move_option_1.setFlat(True)
         self.move_option_1.setProperty("button_type", "")
         self.move_option_1.setObjectName("move_option_1")
-        self.bbp_offset_value_selector_group.addButton(
-            self.move_option_1
-        )
+        self.bbp_offset_value_selector_group.addButton(self.move_option_1)
         self.bbp_offset_steps_buttons.addWidget(
             self.move_option_1,
             0,
-            QtCore.Qt.AlignmentFlag.AlignHCenter
-            | QtCore.Qt.AlignmentFlag.AlignVCenter,
+            QtCore.Qt.AlignmentFlag.AlignHCenter | QtCore.Qt.AlignmentFlag.AlignVCenter,
         )
-
-
 
         # 0.01mm button
-        self.move_option_2 = GroupButton(
-            parent=self.bbp_offset_steps_buttons_group_box
-        )
+        self.move_option_2 = GroupButton(parent=self.bbp_offset_steps_buttons_group_box)
         self.move_option_2.setMinimumSize(QtCore.QSize(100, 60))
         self.move_option_2.setMaximumSize(
             QtCore.QSize(100, 60)
@@ -792,20 +744,15 @@ class ProbeHelper(QtWidgets.QWidget):
         self.move_option_2.setFlat(True)
         self.move_option_2.setProperty("button_type", "")
         self.move_option_2.setObjectName("move_option_2")
-        self.bbp_offset_value_selector_group.addButton(
-            self.move_option_2
-        )
+        self.bbp_offset_value_selector_group.addButton(self.move_option_2)
         self.bbp_offset_steps_buttons.addWidget(
             self.move_option_2,
             0,
-            QtCore.Qt.AlignmentFlag.AlignHCenter
-            | QtCore.Qt.AlignmentFlag.AlignVCenter,
+            QtCore.Qt.AlignmentFlag.AlignHCenter | QtCore.Qt.AlignmentFlag.AlignVCenter,
         )
 
         # 0.05mm button
-        self.move_option_3 = GroupButton(
-            parent=self.bbp_offset_steps_buttons_group_box
-        )
+        self.move_option_3 = GroupButton(parent=self.bbp_offset_steps_buttons_group_box)
         self.move_option_3.setMinimumSize(QtCore.QSize(100, 60))
         self.move_option_3.setMaximumSize(
             QtCore.QSize(100, 60)
@@ -819,20 +766,15 @@ class ProbeHelper(QtWidgets.QWidget):
         self.move_option_3.setFlat(True)
         self.move_option_3.setProperty("button_type", "")
         self.move_option_3.setObjectName("move_option_3")
-        self.bbp_offset_value_selector_group.addButton(
-            self.move_option_3
-        )
+        self.bbp_offset_value_selector_group.addButton(self.move_option_3)
         self.bbp_offset_steps_buttons.addWidget(
             self.move_option_3,
             0,
-            QtCore.Qt.AlignmentFlag.AlignHCenter
-            | QtCore.Qt.AlignmentFlag.AlignVCenter,
+            QtCore.Qt.AlignmentFlag.AlignHCenter | QtCore.Qt.AlignmentFlag.AlignVCenter,
         )
 
         # 0.025mm button
-        self.move_option_4 = GroupButton(
-            parent=self.bbp_offset_steps_buttons_group_box
-        )
+        self.move_option_4 = GroupButton(parent=self.bbp_offset_steps_buttons_group_box)
         self.move_option_4.setMinimumSize(QtCore.QSize(100, 60))
         self.move_option_4.setMaximumSize(
             QtCore.QSize(100, 60)
@@ -846,20 +788,15 @@ class ProbeHelper(QtWidgets.QWidget):
         self.move_option_4.setFlat(True)
         self.move_option_4.setProperty("button_type", "")
         self.move_option_4.setObjectName("move_option_4")
-        self.bbp_offset_value_selector_group.addButton(
-            self.move_option_4
-        )
+        self.bbp_offset_value_selector_group.addButton(self.move_option_4)
         self.bbp_offset_steps_buttons.addWidget(
             self.move_option_4,
             0,
-            QtCore.Qt.AlignmentFlag.AlignHCenter
-            | QtCore.Qt.AlignmentFlag.AlignVCenter,
+            QtCore.Qt.AlignmentFlag.AlignHCenter | QtCore.Qt.AlignmentFlag.AlignVCenter,
         )
 
-         # 0.01mm button
-        self.move_option_5 = GroupButton(
-            parent=self.bbp_offset_steps_buttons_group_box
-        )
+        # 0.01mm button
+        self.move_option_5 = GroupButton(parent=self.bbp_offset_steps_buttons_group_box)
         self.move_option_5.setMinimumSize(QtCore.QSize(100, 60))
         self.move_option_5.setMaximumSize(
             QtCore.QSize(100, 60)
@@ -873,22 +810,17 @@ class ProbeHelper(QtWidgets.QWidget):
         self.move_option_5.setFlat(True)
         self.move_option_5.setProperty("button_type", "")
         self.move_option_5.setObjectName("move_option_4")
-        self.bbp_offset_value_selector_group.addButton(
-            self.move_option_5
-        )
+        self.bbp_offset_value_selector_group.addButton(self.move_option_5)
         self.bbp_offset_steps_buttons.addWidget(
             self.move_option_5,
             0,
-            QtCore.Qt.AlignmentFlag.AlignHCenter
-            | QtCore.Qt.AlignmentFlag.AlignVCenter,
+            QtCore.Qt.AlignmentFlag.AlignHCenter | QtCore.Qt.AlignmentFlag.AlignVCenter,
         )
 
         # Line separator for 0.025mm - set size policy to expanding horizontally
 
         # Set the layout for the group box
-        self.bbp_offset_steps_buttons_group_box.setLayout(
-            self.bbp_offset_steps_buttons
-        )
+        self.bbp_offset_steps_buttons_group_box.setLayout(self.bbp_offset_steps_buttons)
         # Add the group box to the main content horizontal layout FIRST for left placement
         self.main_content_horizontal_layout.addWidget(
             self.bbp_offset_steps_buttons_group_box
@@ -896,9 +828,7 @@ class ProbeHelper(QtWidgets.QWidget):
 
         # Graphic and Current Value Frame (This will now be in the MIDDLE)
         self.frame_2 = QtWidgets.QFrame(parent=self)
-        sizePolicy.setHeightForWidth(
-            self.frame_2.sizePolicy().hasHeightForWidth()
-        )
+        sizePolicy.setHeightForWidth(self.frame_2.sizePolicy().hasHeightForWidth())
         self.frame_2.setSizePolicy(sizePolicy)
         self.frame_2.setMinimumSize(QtCore.QSize(350, 160))
         self.frame_2.setMaximumSize(QtCore.QSize(350, 160))
@@ -907,33 +837,25 @@ class ProbeHelper(QtWidgets.QWidget):
         self.frame_2.setObjectName("frame_2")
         self.tool_image = QtWidgets.QLabel(parent=self.frame_2)
         self.tool_image.setGeometry(QtCore.QRect(0, 30, 371, 121))
-        self.tool_image.setLayoutDirection(
-            QtCore.Qt.LayoutDirection.RightToLeft
-        )
+        self.tool_image.setLayoutDirection(QtCore.Qt.LayoutDirection.RightToLeft)
         self.tool_image.setPixmap(
             QtGui.QPixmap(":/graphics/media/graphics/babystep_graphic.png")
         )
         self.tool_image.setScaledContents(False)
-        self.tool_image.setAlignment(
-            QtCore.Qt.AlignmentFlag.AlignCenter
-        )
+        self.tool_image.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self.tool_image.setObjectName("tool_image")
 
         # === NEW LABEL ADDED HERE ===
         # This is the title label that appears above the red value box.
         self.old_offset_info = QtWidgets.QLabel(parent=self.frame_2)
         # Position it just above the red box. Red box is at y=70, so y=40 is appropriate.
-        self.old_offset_info.setGeometry(
-            QtCore.QRect(240, 95, 200, 60)
-        )
+        self.old_offset_info.setGeometry(QtCore.QRect(240, 95, 200, 60))
         font = QtGui.QFont()
         font.setPointSize(12)
 
         self.old_offset_info.setFont(font)
         # Set color to white to be visible on the dark background
-        self.old_offset_info.setStyleSheet(
-            "color: gray; background: transparent;"
-        )
+        self.old_offset_info.setStyleSheet("color: gray; background: transparent;")
         self.old_offset_info.setText("Z-Offset")
         self.old_offset_info.setObjectName("old_offset_info")
         self.old_offset_info.setText("0 mm")
@@ -941,9 +863,7 @@ class ProbeHelper(QtWidgets.QWidget):
         # === END OF NEW LABEL ===
 
         self.current_offset_info = BlocksLabel(parent=self.frame_2)
-        self.current_offset_info.setGeometry(
-            QtCore.QRect(100, 70, 200, 60)
-        )
+        self.current_offset_info.setGeometry(QtCore.QRect(100, 70, 200, 60))
         sizePolicy.setHeightForWidth(
             self.current_offset_info.sizePolicy().hasHeightForWidth()
         )
@@ -953,25 +873,18 @@ class ProbeHelper(QtWidgets.QWidget):
         font = QtGui.QFont()
         font.setPointSize(14)
         self.current_offset_info.setFont(font)
-        self.current_offset_info.setStyleSheet(
-            "background: transparent; color: white;"
-        )
+        self.current_offset_info.setStyleSheet("background: transparent; color: white;")
         self.current_offset_info.setText("Z:0mm")
         self.current_offset_info.setPixmap(
             QtGui.QPixmap(":/graphics/media/btn_icons/z_offset_adjust.svg")
         )
-        self.current_offset_info.setAlignment(
-            QtCore.Qt.AlignmentFlag.AlignCenter
-        )
-        self.current_offset_info.setObjectName(
-            "current_offset_info"
-        )
+        self.current_offset_info.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.current_offset_info.setObjectName("current_offset_info")
         # Add graphic frame AFTER the offset buttons group box
         self.main_content_horizontal_layout.addWidget(
             self.frame_2,
             0,
-            QtCore.Qt.AlignmentFlag.AlignHCenter
-            | QtCore.Qt.AlignmentFlag.AlignVCenter,
+            QtCore.Qt.AlignmentFlag.AlignHCenter | QtCore.Qt.AlignmentFlag.AlignVCenter,
         )
 
         # Move Buttons Layout (This will now be on the RIGHT)
@@ -1024,7 +937,6 @@ class ProbeHelper(QtWidgets.QWidget):
 
         # Add move buttons layout LAST for right placement
         self.main_content_horizontal_layout.addLayout(self.bbp_buttons_layout)
-
 
         self.main_content_horizontal_layout.addItem(self.spacerItem)
 
