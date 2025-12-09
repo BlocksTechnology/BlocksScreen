@@ -1,7 +1,13 @@
+from dataclasses import astuple
 import typing
+import logger
 
+from lib.panels.widgets.loadPage import LoadScreen
+from lib.utils.blocks_frame import BlocksCustomFrame
+from lib.utils.icon_button import IconButton
 from lib.panels.widgets.sensorWidget import SensorWidget
 from lib.utils.icon_button import IconButton
+from lib.utils.list_model import EntryDelegate, EntryListModel, ListItem
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 
@@ -19,14 +25,25 @@ class SensorsWindow(QtWidgets.QWidget):
 
     def __init__(self, parent):
         super(SensorsWindow, self).__init__(parent)
-        self._setupUi()
-        self.setAttribute(QtCore.Qt.WidgetAttribute.WA_TranslucentBackground, True)
+        self.model = EntryListModel()
+        self.entry_delegate = EntryDelegate()
+        self.sensor_tracking_widget = {}
+        self.current_widget = None
+        self.setupUi()
+        self.setAttribute(
+            QtCore.Qt.WidgetAttribute.WA_TranslucentBackground, True
+        )
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_AcceptTouchEvents, True)
         self.setTabletTracking(True)
-        self.fs_sensors_list.itemClicked.connect(self.handle_sensor_clicked)
-        self.fs_sensors_list.itemClicked
         self.fs_back_button.clicked.connect(self.request_back)
 
+    def reset_view_model(self) -> None:
+        """Clears items from ListView
+        (Resets `QAbstractListModel` by clearing entries)
+        """
+        self.model.clear()
+        self.entry_delegate.clear()
+        
     @QtCore.pyqtSlot(dict, name="handle_available_fil_sensors")
     def handle_available_fil_sensors(self, sensors: dict) -> None:
         """Handle available filament sensors, create `SensorWidget` for each detected
@@ -34,6 +51,7 @@ class SensorsWindow(QtWidgets.QWidget):
         """
         if not isinstance(sensors, dict):
             return
+        self.reset_view_model()
         filtered_sensors = list(
             filter(
                 lambda printer_obj: str(printer_obj).startswith(
@@ -44,51 +62,46 @@ class SensorsWindow(QtWidgets.QWidget):
             )
         )
         if filtered_sensors:
-            self.fs_sensors_list.setRowHidden(self.fs_sensors_list.row(self.item), True)
             self.sensor_list = [
                 self.create_sensor_widget(name=sensor) for sensor in filtered_sensors
             ]
         else:
-            self.fs_sensors_list.setRowHidden(
-                self.fs_sensors_list.row(self.item), False
-            )
+            self.no_update_placeholder.show()
+
+
 
     @QtCore.pyqtSlot(str, str, bool, name="handle_fil_state_change")
     def handle_fil_state_change(
         self, sensor_name: str, parameter: str, value: bool
     ) -> None:
-        """Handle filament state chage"""
-        if sensor_name in self.sensor_list:
-            _split = sensor_name.split(" ")
-            _item = self.fs_sensors_list.findChild(
-                SensorWidget,
-                name=_split[1],
-                options=QtCore.Qt.FindChildOption.FindChildrenRecursively,
-            )
+        _item = self.sensor_tracking_widget[sensor_name]
+        if _item:
             if parameter == "filament_detected":
-                if isinstance(_item, SensorWidget) and hasattr(
-                    _item, "change_fil_sensor_state"
-                ):
-                    _item.change_fil_sensor_state(SensorWidget.FilamentState.PRESENT)
-                    _item.repaint()
-            elif parameter == "filament_missing":
-                if isinstance(_item, SensorWidget) and hasattr(
-                    _item, "change_fil_sensor_state"
-                ):
-                    _item.change_fil_sensor_state(SensorWidget.FilamentState.MISSING)
-                    _item.repaint()
+                state = SensorWidget.FilamentState(not value) 
+                _item.change_fil_sensor_state(
+                        state
+                )
             elif parameter == "enabled":
-                if _item and isinstance(_item, SensorWidget):
-                    self.run_gcode_signal.emit(_item.toggle_sensor_gcode_command)
+                _item.toggle_button_state(SensorWidget.SensorState(bool(value)))
+                    
+    def showEvent(self, event: QtGui.QShowEvent | None) -> None:
+        """Re-add clients to update list"""
+        return super().showEvent(event)
+    
 
-    @QtCore.pyqtSlot(QtWidgets.QListWidgetItem, name="handle_sensor_clicked")
-    def handle_sensor_clicked(self, sensor: QtWidgets.QListWidgetItem) -> None:
-        """Handle filament sensor clicked"""
-        _item = self.fs_sensors_list.itemWidget(sensor)
-        # FIXME: This is just not working
-        _item.toggle_button.state = ~_item.toggle_button.state
-        if _item and isinstance(_item, SensorWidget):
-            self.run_gcode_signal.emit(_item.toggle_sensor_gcode_command)
+    @QtCore.pyqtSlot(ListItem, name="on-item-clicked")
+    def on_item_clicked(self, item: ListItem) -> None:
+        """Setup information for the currently clicked list item on the info box.
+        Keeps track of the list item
+        """
+        if not item:
+            return
+        
+        self.current_widget.hide()
+        name_id = item.text
+        self.current_widget = self.sensor_tracking_widget[name_id]
+        self.current_widget.show()
+
 
     def create_sensor_widget(self, name: str) -> SensorWidget:
         """Creates a sensor row to be added to the QListWidget
@@ -96,132 +109,278 @@ class SensorsWindow(QtWidgets.QWidget):
         Args:
             name (str): The name of the filament sensor object
         """
-        _item_widget = SensorWidget(self.fs_sensors_list, name)
-        _list_item = QtWidgets.QListWidgetItem()
-        _list_item.setFlags(~QtCore.Qt.ItemFlag.ItemIsEditable)
-        _list_item.setSizeHint(
-            QtCore.QSize(self.fs_sensors_list.contentsRect().width(), 80)
-        )
-        _item_widget.toggle_button.stateChange.connect(
-            lambda: self.fs_sensors_list.itemClicked.emit(_item_widget)
-        )
+        _item_widget = SensorWidget(self.infobox_frame, name)
+        self.info_box_layout.addWidget(_item_widget)
 
-        self.fs_sensors_list.setItemWidget(_list_item, _item_widget)
 
+        if self.current_widget:
+            _item_widget.hide()
+        else:
+            _item_widget.show()
+            self.current_widget = _item_widget
+            
+        name_id = str(name).split(" ")[1]
+
+
+        item = ListItem(
+            text=name_id,
+            right_text="",
+            right_icon=None,
+            left_icon=None,
+            callback= None,
+            selected=False,
+            allow_check=False,
+            _lfontsize=17,
+            _rfontsize=12,
+            height=80,
+            notificate=False
+        )
+        _item_widget.run_gcode_signal.connect(self.run_gcode_signal)
+        self.sensor_tracking_widget[name_id] = _item_widget
+        self.model.add_item(item)
+        
         return _item_widget
 
-    def _setupUi(self):
-        self.setObjectName("filament_sensors_page")
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
+    def paintEvent(self, a0: QtGui.QPaintEvent) -> None: ...
+    
+    def setupUi(self) -> None:
+        """Setup UI for updatePage"""
+        font_id = QtGui.QFontDatabase.addApplicationFont(
+            ":/font/media/fonts for text/Momcake-Bold.ttf"
         )
-        self.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
-        sizePolicy.setHorizontalStretch(0)
-        sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(self.sizePolicy().hasHeightForWidth())
-        self.setSizePolicy(sizePolicy)
-        self.setMinimumSize(QtCore.QSize(710, 410))
-        self.setMaximumSize(QtCore.QSize(720, 420))
-        self.content_vertical_layout = QtWidgets.QVBoxLayout()
-        self.content_vertical_layout.setObjectName("contentVerticalLayout")
-        self.fs_header_layout = QtWidgets.QHBoxLayout()
-        self.fs_header_layout.setContentsMargins(0, 0, 0, 0)
-        self.fs_header_layout.setObjectName("fs_header_layout")
-        self.fs_header_layout.setGeometry(QtCore.QRect(10, 10, 691, 71))
-        self.fs_page_title = QtWidgets.QLabel(parent=self)
-        sizePolicy.setHeightForWidth(
-            self.fs_page_title.sizePolicy().hasHeightForWidth()
-        )
-        self.fs_page_title.setSizePolicy(sizePolicy)
-        self.fs_page_title.setMinimumSize(QtCore.QSize(300, 71))
-        self.fs_page_title.setMaximumSize(QtCore.QSize(16777215, 71))
-        font = QtGui.QFont()
-        font.setPointSize(22)
-        palette = QtGui.QPalette()
-        palette.setColor(palette.ColorRole.WindowText, QtGui.QColorConstants.White)
-        self.fs_page_title.setPalette(palette)
-        self.fs_page_title.setFont(font)
-        self.fs_page_title.setObjectName("fs_page_title")
-        self.fs_header_layout.addWidget(self.fs_page_title, 0)
-        self.fs_back_button = IconButton(self)
-        sizePolicy.setHeightForWidth(
-            self.fs_back_button.sizePolicy().hasHeightForWidth()
-        )
-        self.fs_back_button.setSizePolicy(sizePolicy)
-        self.fs_back_button.setMinimumSize(QtCore.QSize(60, 60))
-        self.fs_back_button.setMaximumSize(QtCore.QSize(60, 60))
-        self.fs_back_button.setFlat(True)
-        self.fs_back_button.setPixmap(QtGui.QPixmap(":/ui/media/btn_icons/back.svg"))
-        self.fs_back_button.setObjectName("fs_back_button")
-        self.fs_header_layout.addWidget(
-            self.fs_back_button,
-            0,
-        )
-        self.content_vertical_layout.addLayout(self.fs_header_layout)
-        self.fs_sensors_list = QtWidgets.QListWidget(self)
+        font_family = QtGui.QFontDatabase.applicationFontFamilies(font_id)[0]
         sizePolicy = QtWidgets.QSizePolicy(
             QtWidgets.QSizePolicy.Policy.MinimumExpanding,
             QtWidgets.QSizePolicy.Policy.MinimumExpanding,
         )
         sizePolicy.setHorizontalStretch(1)
         sizePolicy.setVerticalStretch(1)
-        sizePolicy.setHeightForWidth(
-            self.fs_sensors_list.sizePolicy().hasHeightForWidth()
+        self.setSizePolicy(sizePolicy)
+        self.setMinimumSize(QtCore.QSize(710, 400))
+        self.setMaximumSize(QtCore.QSize(720, 420))
+        self.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
+        self.update_page_content_layout = QtWidgets.QVBoxLayout()
+        self.update_page_content_layout.setContentsMargins(15, 15, 2, 2)
+
+        self.header_content_layout = QtWidgets.QHBoxLayout()
+        self.header_content_layout.setAlignment(QtCore.Qt.AlignmentFlag.AlignTop)
+        self.fs_page_title = QtWidgets.QLabel(self)
+        self.fs_page_title.setMinimumSize(QtCore.QSize(100, 60))
+        self.fs_page_title.setMaximumSize(QtCore.QSize(16777215, 60))
+        font = QtGui.QFont()
+        font.setFamily(font_family)
+        font.setPointSize(24)
+        palette = self.fs_page_title.palette()
+        palette.setColor(palette.ColorRole.WindowText, QtGui.QColor("#FFFFFF"))
+        self.fs_page_title.setFont(font)
+        self.fs_page_title.setPalette(palette)
+        self.fs_page_title.setLayoutDirection(QtCore.Qt.LayoutDirection.RightToLeft)
+        self.fs_page_title.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.fs_page_title.setObjectName("fs_page_title")
+        self.fs_page_title.setText("Filament Sensors")
+        self.header_content_layout.addWidget(self.fs_page_title, 0)
+        self.fs_back_button = IconButton(self)
+        self.fs_back_button.setMinimumSize(QtCore.QSize(60, 60))
+        self.fs_back_button.setMaximumSize(QtCore.QSize(60, 60))
+        self.fs_back_button.setFlat(True)
+        self.fs_back_button.setPixmap(QtGui.QPixmap(":/ui/media/btn_icons/back.svg"))
+        self.header_content_layout.addWidget(self.fs_back_button, 0)
+        self.update_page_content_layout.addLayout(self.header_content_layout, 0)
+
+        self.main_content_layout = QtWidgets.QHBoxLayout()
+        self.main_content_layout.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+
+        self.sensor_buttons_frame = BlocksCustomFrame(self)
+
+        self.sensor_buttons_frame.setMinimumSize(QtCore.QSize(320, 300))
+        self.sensor_buttons_frame.setMaximumSize(QtCore.QSize(450, 500))
+
+        palette = QtGui.QPalette()
+        brush = QtGui.QBrush(QtGui.QColor(0, 0, 0, 0))
+        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Active,
+            QtGui.QPalette.ColorRole.Button,
+            brush,
         )
-        self.fs_sensors_list.setSizePolicy(sizePolicy)
-        self.fs_sensors_list.setMinimumSize(QtCore.QSize(650, 300))
-        self.fs_sensors_list.setMaximumSize(QtCore.QSize(700, 300))
-        self.fs_sensors_list.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
-        self.fs_sensors_list.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
-        self.fs_sensors_list.setObjectName("fs_sensors_list")
-        self.fs_sensors_list.setViewMode(self.fs_sensors_list.ViewMode.ListMode)
-        self.fs_sensors_list.setItemAlignment(
-            QtCore.Qt.AlignmentFlag.AlignHCenter | QtCore.Qt.AlignmentFlag.AlignVCenter
+        brush = QtGui.QBrush(QtGui.QColor(0, 0, 0))
+        brush.setStyle(QtCore.Qt.BrushStyle.NoBrush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Active,
+            QtGui.QPalette.ColorRole.Base,
+            brush,
         )
-        self.fs_sensors_list.setFlow(self.fs_sensors_list.Flow.TopToBottom)
-        self.fs_sensors_list.setFrameStyle(0)
-        palette = self.fs_sensors_list.palette()
-        palette.setColor(palette.ColorRole.Base, QtGui.QColorConstants.Transparent)
+        brush = QtGui.QBrush(QtGui.QColor(0, 0, 0, 0))
+        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Active,
+            QtGui.QPalette.ColorRole.Window,
+            brush,
+        )
+        brush = QtGui.QBrush(QtGui.QColor(0, 120, 215, 0))
+        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Active,
+            QtGui.QPalette.ColorRole.Highlight,
+            brush,
+        )
+        brush = QtGui.QBrush(QtGui.QColor(0, 0, 255, 0))
+        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Active,
+            QtGui.QPalette.ColorRole.Link,
+            brush,
+        )
+        brush = QtGui.QBrush(QtGui.QColor(0, 0, 0, 0))
+        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Inactive,
+            QtGui.QPalette.ColorRole.Button,
+            brush,
+        )
+        brush = QtGui.QBrush(QtGui.QColor(0, 0, 0))
+        brush.setStyle(QtCore.Qt.BrushStyle.NoBrush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Inactive,
+            QtGui.QPalette.ColorRole.Base,
+            brush,
+        )
+        brush = QtGui.QBrush(QtGui.QColor(0, 0, 0, 0))
+        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Inactive,
+            QtGui.QPalette.ColorRole.Window,
+            brush,
+        )
+        brush = QtGui.QBrush(QtGui.QColor(0, 120, 215, 0))
+        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Inactive,
+            QtGui.QPalette.ColorRole.Highlight,
+            brush,
+        )
+        brush = QtGui.QBrush(QtGui.QColor(0, 0, 255, 0))
+        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Inactive,
+            QtGui.QPalette.ColorRole.Link,
+            brush,
+        )
+        brush = QtGui.QBrush(QtGui.QColor(0, 0, 0, 0))
+        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Disabled,
+            QtGui.QPalette.ColorRole.Button,
+            brush,
+        )
+        brush = QtGui.QBrush(QtGui.QColor(0, 0, 0))
+        brush.setStyle(QtCore.Qt.BrushStyle.NoBrush)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Disabled,
+            QtGui.QPalette.ColorRole.Base,
+            brush,
+        )
+        brush = QtGui.QBrush(QtGui.QColor(0, 0, 0, 0))
+        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Disabled,
+            QtGui.QPalette.ColorRole.Window,
+            brush,
+        )
+        brush = QtGui.QBrush(QtGui.QColor(0, 120, 215, 0))
+        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Disabled,
+            QtGui.QPalette.ColorRole.Highlight,
+            brush,
+        )
+        brush = QtGui.QBrush(QtGui.QColor(0, 0, 255, 0))
+        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
+        palette.setBrush(
+            QtGui.QPalette.ColorGroup.Disabled,
+            QtGui.QPalette.ColorRole.Link,
+            brush,
+        )
+        self.fs_sensors_list = QtWidgets.QListView(self.sensor_buttons_frame)
+        self.fs_sensors_list.setModel(self.model)
+        self.fs_sensors_list.setItemDelegate(self.entry_delegate)
+        self.entry_delegate.item_selected.connect(self.on_item_clicked)
+        self.fs_sensors_list.setMouseTracking(True)
+        self.fs_sensors_list.setTabletTracking(True)
+        self.fs_sensors_list.setSpacing(7)
         self.fs_sensors_list.setPalette(palette)
-        self.fs_sensors_list.setDropIndicatorShown(False)
-        self.fs_sensors_list.setAcceptDrops(False)
-        self.fs_sensors_list.setProperty("showDropIndicator", False)
-        self.content_vertical_layout.setStretch(0, 0)
-        self.content_vertical_layout.setStretch(1, 1)
-        self.content_vertical_layout.addWidget(
-            self.fs_sensors_list,
-            1,
-            QtCore.Qt.AlignmentFlag.AlignHCenter | QtCore.Qt.AlignmentFlag.AlignVCenter,
+        self.fs_sensors_list.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
+        self.fs_sensors_list.setStyleSheet("background-color:transparent")
+        self.fs_sensors_list.setFrameShadow(QtWidgets.QFrame.Shadow.Sunken)
+        self.fs_sensors_list.setMinimumSize(self.sensor_buttons_frame.size())
+        self.fs_sensors_list.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
+        self.fs_sensors_list.setVerticalScrollBarPolicy(
+            QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff
         )
+        self.fs_sensors_list.setHorizontalScrollBarPolicy(
+            QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
+        self.fs_sensors_list.setSizeAdjustPolicy(
+            QtWidgets.QAbstractScrollArea.SizeAdjustPolicy.AdjustToContents
+        )
+        self.fs_sensors_list.setAutoScroll(False)
+        self.fs_sensors_list.setProperty("showDropIndicator", False)
+        self.fs_sensors_list.setDefaultDropAction(
+            QtCore.Qt.DropAction.IgnoreAction
+        )
+        self.fs_sensors_list.setAlternatingRowColors(False)
+        self.fs_sensors_list.setSelectionMode(
+            QtWidgets.QAbstractItemView.SelectionMode.NoSelection
+        )
+        self.fs_sensors_list.setSelectionBehavior(
+            QtWidgets.QAbstractItemView.SelectionBehavior.SelectItems
+        )
+        self.fs_sensors_list.setVerticalScrollMode(
+            QtWidgets.QAbstractItemView.ScrollMode.ScrollPerPixel
+        )
+        self.fs_sensors_list.setHorizontalScrollMode(
+            QtWidgets.QAbstractItemView.ScrollMode.ScrollPerPixel
+        )
+        QtWidgets.QScroller.grabGesture(
+            self.fs_sensors_list,
+            QtWidgets.QScroller.ScrollerGestureType.TouchGesture,
+        )
+        QtWidgets.QScroller.grabGesture(
+            self.fs_sensors_list,
+            QtWidgets.QScroller.ScrollerGestureType.LeftMouseButtonGesture,
+        )
+        self.sensor_buttons_layout = QtWidgets.QVBoxLayout()
+        self.sensor_buttons_layout.setContentsMargins(15, 20, 20, 5)
+        self.sensor_buttons_layout.addWidget(self.fs_sensors_list, 0)
+        self.sensor_buttons_frame.setLayout(self.sensor_buttons_layout)
+
+        self.main_content_layout.addWidget(self.sensor_buttons_frame, 0)
+        
+        self.infobox_frame = BlocksCustomFrame()
+        self.infobox_frame.setMinimumSize(QtCore.QSize(250, 300))
+        self.infobox_frame.setMaximumSize(QtCore.QSize(450, 500))
+
+        self.info_box_layout = QtWidgets.QVBoxLayout()
+        self.info_box_layout.setContentsMargins(0, 0, 0, 0)
 
         font = QtGui.QFont()
-        font.setPointSize(25)
-
-        self.item = QtWidgets.QListWidgetItem()
-        self.item.setSizeHint(
-            QtCore.QSize(self.fs_sensors_list.width(), self.fs_sensors_list.height())
+        font.setFamily(font_family)
+        font.setPointSize(20)
+        self.version_box = QtWidgets.QHBoxLayout()
+        self.no_update_placeholder = QtWidgets.QLabel(self)
+        self.no_update_placeholder.setMinimumSize(QtCore.QSize(200, 60))
+        self.no_update_placeholder.setMaximumSize(QtCore.QSize(300, 60))
+        self.no_update_placeholder.setFont(font)
+        self.no_update_placeholder.setPalette(palette)
+        self.no_update_placeholder.setSizePolicy(sizePolicy)
+        self.no_update_placeholder.setText("No Sensors Available")
+        self.no_update_placeholder.setWordWrap(True)
+        self.no_update_placeholder.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.info_box_layout.addWidget(
+            self.no_update_placeholder, 0, QtCore.Qt.AlignmentFlag.AlignBottom
         )
-
-        self.label = QtWidgets.QLabel("No sensors found")
-        self.label.setFont(font)
-        self.label.setStyleSheet("color: gray;")
-        self.label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
-        self.label.hide()
-
-        self.fs_sensors_list.addItem(self.item)
-        self.fs_sensors_list.setItemWidget(self.item, self.label)
-
-        self.content_vertical_layout.addSpacing(5)
-        self.setLayout(self.content_vertical_layout)
-        self._retranslateUi()
-
-    def _retranslateUi(self):
-        _translate = QtCore.QCoreApplication.translate
-        self.setWindowTitle(_translate("filament_sensors_page", "Form"))
-        self.fs_page_title.setText(
-            _translate("filament_sensors_page", "Filament Sensors")
-        )
-        self.fs_back_button.setProperty(
-            "button_type", _translate("filament_sensors_page", "icon")
-        )
+        self.no_update_placeholder.hide()
+        self.infobox_frame.setLayout(self.info_box_layout)
+        self.main_content_layout.addWidget(self.infobox_frame, 1)
+        self.update_page_content_layout.addLayout(self.main_content_layout, 1)
+        self.setLayout(self.update_page_content_layout) 
