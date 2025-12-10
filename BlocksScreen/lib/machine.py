@@ -2,35 +2,36 @@
 # Machine manager
 #
 import logging
+import shlex
 import subprocess
 import typing
 
-from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot
+from PyQt6 import QtCore
 
 
-class MachineControl(QObject):
-    service_restart = pyqtSignal(str, name="service-restart")
+class MachineControl(QtCore.QObject):
+    service_restart = QtCore.pyqtSignal(str, name="service-restart")
 
-    def __init__(self, parent: typing.Optional["QObject"]) -> None:
+    def __init__(self, parent: typing.Optional["QtCore.QObject"]) -> None:
         super(MachineControl, self).__init__(parent)
         self.setObjectName("MachineControl")
 
-    @pyqtSlot(name="machine_restart")
+    @QtCore.pyqtSlot(name="machine_restart")
     def machine_restart(self):
         """Reboot machine"""
         return self._run_command("sudo reboot now")
 
-    @pyqtSlot(name="machine_shutdown")
+    @QtCore.pyqtSlot(name="machine_shutdown")
     def machine_shutdown(self):
         """Shutdown machine"""
         return self._run_command("sudo shutdown now")
 
-    @pyqtSlot(name="restart_klipper_service")
+    @QtCore.pyqtSlot(name="restart_klipper_service")
     def restart_klipper_service(self):
         """Restart klipper service"""
         return self._run_command("sudo systemctl stop klipper.service")
 
-    @pyqtSlot(name="restart_moonraker_service")
+    @QtCore.pyqtSlot(name="restart_moonraker_service")
     def restart_moonraker_service(self):
         """Restart moonraker service"""
         return self._run_command("sudo systemctl restart moonraker.service")
@@ -48,7 +49,7 @@ class MachineControl(QObject):
             return None
         return self._run_command(f"systemctl is-active {service_name}")
 
-    def _run_command(self, command):
+    def _run_command(self, command: str):
         """Runs a shell command.
 
         Args:
@@ -59,10 +60,26 @@ class MachineControl(QObject):
 
         """
         try:
-            p = subprocess.Popen(
-                command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT
+            # Split command into a list of strings
+            cmd = shlex.split(command)
+            p = subprocess.run(
+                cmd, check=True, capture_output=True, text=True, timeout=5
             )
-            output, _ = p.communicate()
-            return output
-        except subprocess.SubprocessError:
-            logging.error("Error running commas : %s", command)
+            return p.stdout.strip() + "\n" + p.stderr.strip()
+        except ValueError as e:
+            logging.error("Failed to parse command string '%s': '%s'", command, e)
+            raise RuntimeError(f"Invalid command format: {e}") from e
+        except subprocess.CalledProcessError as e:
+            logging.error(
+                "Caught exception (exit code %d) failed to run command: %s \nStderr: %s",
+                e.returncode,
+                command,
+                e.stderr.strip(),
+            )
+            raise
+        except (
+            subprocess.SubprocessError,
+            subprocess.TimeoutExpired,
+            FileNotFoundError,
+        ):
+            logging.error("Caught exception failed to run command %s", command)

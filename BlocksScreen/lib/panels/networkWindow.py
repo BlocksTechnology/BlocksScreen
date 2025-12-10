@@ -1,4 +1,5 @@
 import logging
+import shlex
 import typing
 import subprocess
 from functools import partial
@@ -621,22 +622,28 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             f"ip a show {interface} | grep 'inet ' | awk '{{print $2}}' | cut -d/ -f1"
         )
         try:
+            cmd = shlex.split(command)
             result = subprocess.run(
-                command,
-                shell=True,
+                cmd,
                 capture_output=True,
                 text=True,
                 check=True,
                 timeout=5,
             )
-
             ip_addr = result.stdout.strip()
             if ip_addr and len(ip_addr.split(".")) == 4:
                 return ip_addr
-        except Exception as e:
-            print(f"An unexpected error occurred: {e}")
-
-        return None
+        except subprocess.CalledProcessError as e:
+            logging.error(
+                "Caught exception (exit code %d) failed to run command: %s \nStderr: %s",
+                e.returncode,
+                command,
+                e.stderr.strip(),
+            )
+            raise
+        except subprocess.TimeoutExpired as e:
+            logging.error("Caught exception, failed to run command %s", e)
+            raise
 
     def close(self) -> bool:
         """Close class, close network module"""
