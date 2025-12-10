@@ -27,7 +27,7 @@ class OptionCard(QtWidgets.QAbstractButton):
         self.card_text = text
         self.doubleT: bool = False
         self.setupUi(self)
-        
+
         self.setMode(False)
         self.set_card_icon(icon)
         self.set_card_text(text)
@@ -48,7 +48,7 @@ class OptionCard(QtWidgets.QAbstractButton):
             300,
             300,
             QtCore.Qt.AspectRatioMode.IgnoreAspectRatio,
-            QtCore.Qt.TransformationMode.SmoothTransformation
+            QtCore.Qt.TransformationMode.SmoothTransformation,
         )
         self.option_icon.setPixmap(scaled)
         self.repaint()
@@ -90,7 +90,7 @@ class OptionCard(QtWidgets.QAbstractButton):
         self.clicked.emit(self)
         self.update()
         return super().mousePressEvent(a0)
-    
+
     def setMode(self, double_mode: bool = False):
         """Set the mode of the layout: single or double text."""
         self.doubleT = double_mode
@@ -102,15 +102,13 @@ class OptionCard(QtWidgets.QAbstractButton):
             if widget is not None:
                 widget.setParent(None)
 
-
-
         if self.doubleT:
             self.verticalLayout.addWidget(
-            self.option_icon, 
-            0, 
-            QtCore.Qt.AlignmentFlag.AlignHCenter
-            | QtCore.Qt.AlignmentFlag.AlignBottom,
-        )
+                self.option_icon,
+                0,
+                QtCore.Qt.AlignmentFlag.AlignHCenter
+                | QtCore.Qt.AlignmentFlag.AlignBottom,
+            )
             self.verticalLayout.addWidget(
                 self.secondtext, 0, QtCore.Qt.AlignmentFlag.AlignHCenter
             )
@@ -131,7 +129,6 @@ class OptionCard(QtWidgets.QAbstractButton):
             self.verticalLayout.addWidget(self.continue_button)
 
         self.update()
-
 
     def paintEvent(self, a0: QtGui.QPaintEvent) -> None:
         """Re-implemented method, paint widget"""
@@ -218,9 +215,7 @@ class OptionCard(QtWidgets.QAbstractButton):
         self.secondtext.setFont(_button_font)
         self.secondtext.setObjectName("option_text")
         self.secondtext.setWordWrap(True)
-        self.secondtext.setAlignment(
-            QtCore.Qt.AlignmentFlag.AlignCenter
-        )
+        self.secondtext.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self.secondtext.hide()
         self.line_separator = QtWidgets.QFrame(parent=option_card)
         self.line_separator.setFrameShape(QtWidgets.QFrame.Shape.HLine)
@@ -238,9 +233,7 @@ class OptionCard(QtWidgets.QAbstractButton):
         self.option_text.setObjectName("option_text")
         self.option_text.setWordWrap(True)
         self.option_text.setStyleSheet("color:white")
-        self.option_text.setAlignment(
-            QtCore.Qt.AlignmentFlag.AlignCenter
-        )
+        self.option_text.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         _palette = self.option_text.palette()
         _palette.setColor(QtGui.QPalette.ColorRole.WindowText, self.text_color)
         self.option_text.setPalette(_palette)
