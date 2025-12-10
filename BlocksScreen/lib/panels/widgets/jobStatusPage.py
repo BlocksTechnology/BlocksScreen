@@ -12,6 +12,7 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 
 logger = logging.getLogger("logs/BlocksScreen.log")
 
+
 class ClickableGraphicsView(QtWidgets.QGraphicsView):
     """Re-implementation of QGraphicsView that adds clicked signal"""
 
@@ -298,13 +299,7 @@ class JobStatusWidget(QtWidgets.QWidget):
                 self.print_progress = value
                 self.printing_progress_bar.setValue(self.print_progress)
 
-    def _load_thumbnail(
-        self,
-        scene_attr: str,
-        view_widget,
-        filename: str,
-        size: int
-    ):
+    def _load_thumbnail(self, scene_attr: str, view_widget, filename: str, size: int):
         """
         Loads a thumbnail into a QGraphicsScene, creating the scene if needed.
         """
@@ -331,16 +326,14 @@ class JobStatusWidget(QtWidgets.QWidget):
                 scene.clear()
 
             scaled = pixmap.scaled(
-                size, size,
+                size,
+                size,
                 QtCore.Qt.AspectRatioMode.KeepAspectRatio,
                 QtCore.Qt.TransformationMode.SmoothTransformation,
             )
 
             item = QtWidgets.QGraphicsPixmapItem(scaled)
-            item.setOffset(
-                (size - scaled.width()) / 2,
-                (size - scaled.height()) / 2
-            )
+            item.setOffset((size - scaled.width()) / 2, (size - scaled.height()) / 2)
 
             scene.addItem(item)
             scene.setSceneRect(0, 0, size, size)
@@ -348,22 +341,11 @@ class JobStatusWidget(QtWidgets.QWidget):
         except Exception as e:
             logger.debug(f"Error loading thumbnail {size}px: {e}")
 
-
     def paintEvent(self, a0: QtGui.QPaintEvent) -> None:
         base_name = self._current_file_name[:-6]
 
-        self._load_thumbnail(
-            "_scene_small",
-            self.CBVSmallThumbnail,
-            base_name,
-            48
-        )
-        self._load_thumbnail(
-            "_scene_big",
-            self.CBVBigThumbnail,
-            base_name,
-            300
-        )
+        self._load_thumbnail("_scene_small", self.CBVSmallThumbnail, base_name, 48)
+        self._load_thumbnail("_scene_big", self.CBVBigThumbnail, base_name, 300)
 
     def _setupUI(self) -> None:
         """Setup widget ui"""
