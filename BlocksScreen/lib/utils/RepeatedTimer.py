@@ -57,4 +57,3 @@ class RepeatedTimer(threading.Thread):
             self._timer = None
             self.stopEvent.clear()
             self.running = False
-
