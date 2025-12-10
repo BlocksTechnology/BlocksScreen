@@ -104,7 +104,6 @@ class BlocksLabel(QtWidgets.QLabel):
 
     @marquee.setter
     def marquee(self, activate: bool) -> None:
-    def marquee(self, activate: bool) -> None:
         self._marquee = activate
         self.update_text_metrics()
 
@@ -165,8 +164,6 @@ class BlocksLabel(QtWidgets.QLabel):
         self.update()
 
     def start_scroll(self) -> None:
-        """Start or restart the scrolling."""
-        if not self.timer.isActive():
         """Start or restart the scrolling."""
         if not self.timer.isActive():
             self.scroll_pos = 0
