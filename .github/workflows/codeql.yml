@@ -12,11 +12,6 @@
 name: "CodeQL Advanced"
 
 on:
-  push:
-    paths-ignore:
-      - 'BlocksScreen/lib/ui/**'
-      - 'extras/**'
-      - 'scripts/**'
   pull_request:
     paths-ignore:
       - 'BlocksScreen/lib/ui/**'
