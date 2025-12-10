@@ -48,12 +48,10 @@ class SensorsWindow(QtWidgets.QWidget):
             return
         self.reset_view_model()
         filtered_sensors = list(
-            filter(
-                lambda printer_obj: str(printer_obj).startswith(
-                    "filament_switch_sensor"
-                )
-                or str(printer_obj).startswith("filament_motion_sensor"),
-                sensors.keys(),
+        filter(
+            lambda printer_obj: str(printer_obj).startswith("filament_switch_sensor")
+            or str(printer_obj).startswith("filament_motion_sensor") or str(printer_obj).startswith("cutter_sensor"),
+            sensors.keys(),
             )
         )
         if filtered_sensors:
@@ -118,14 +116,11 @@ class SensorsWindow(QtWidgets.QWidget):
         else:
             _item_widget.show()
             self.current_widget = _item_widget
-            
         name_id = str(name).split(" ")[1]
-
-
         item = ListItem(
             text=name_id,
             right_text="",
-            right_icon=None,
+            right_icon=self.pixmap,
             left_icon=None,
             callback= None,
             selected=False,
@@ -379,6 +374,7 @@ class SensorsWindow(QtWidgets.QWidget):
         self.info_box_layout.addWidget(
             self.no_update_placeholder, 0, QtCore.Qt.AlignmentFlag.AlignBottom
         )
+        self.pixmap = QtGui.QPixmap(":/ui/media/btn_icons/info.svg")
         self.no_update_placeholder.hide()
         self.infobox_frame.setLayout(self.info_box_layout)
         self.main_content_layout.addWidget(self.infobox_frame, 1)
