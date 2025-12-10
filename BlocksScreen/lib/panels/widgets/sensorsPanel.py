@@ -1,12 +1,8 @@
-from dataclasses import astuple
 import typing
-import logger
 
-from lib.panels.widgets.loadPage import LoadScreen
 from lib.utils.blocks_frame import BlocksCustomFrame
 from lib.utils.icon_button import IconButton
 from lib.panels.widgets.sensorWidget import SensorWidget
-from lib.utils.icon_button import IconButton
 from lib.utils.list_model import EntryDelegate, EntryListModel, ListItem
 from PyQt6 import QtCore, QtGui, QtWidgets
 
@@ -21,14 +17,13 @@ class SensorsWindow(QtWidgets.QWidget):
     request_back: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         name="request_back"
     )
-    sensor_list: list[SensorWidget] = []
-
     def __init__(self, parent):
         super(SensorsWindow, self).__init__(parent)
         self.model = EntryListModel()
         self.entry_delegate = EntryDelegate()
         self.sensor_tracking_widget = {}
         self.current_widget = None
+        self.sensor_list: list[SensorWidget] = []
         self.setupUi()
         self.setAttribute(
             QtCore.Qt.WidgetAttribute.WA_TranslucentBackground, True
@@ -74,7 +69,7 @@ class SensorsWindow(QtWidgets.QWidget):
     def handle_fil_state_change(
         self, sensor_name: str, parameter: str, value: bool
     ) -> None:
-        _item = self.sensor_tracking_widget[sensor_name]
+        _item = self.sensor_tracking_widget.get(sensor_name)
         if _item:
             if parameter == "filament_detected":
                 state = SensorWidget.FilamentState(not value) 
@@ -82,7 +77,7 @@ class SensorsWindow(QtWidgets.QWidget):
                         state
                 )
             elif parameter == "enabled":
-                _item.toggle_button_state(SensorWidget.SensorState(bool(value)))
+                _item.toggle_button_state(SensorWidget.SensorState(value))
                     
     def showEvent(self, event: QtGui.QShowEvent | None) -> None:
         """Re-add clients to update list"""
@@ -97,9 +92,14 @@ class SensorsWindow(QtWidgets.QWidget):
         if not item:
             return
         
-        self.current_widget.hide()
+        if self.current_widget:
+            self.current_widget.hide()
+        
         name_id = item.text
-        self.current_widget = self.sensor_tracking_widget[name_id]
+        current_widget = self.sensor_tracking_widget.get(name_id)
+        if current_widget is None:
+            return
+        self.current_widget = current_widget
         self.current_widget.show()
 
 

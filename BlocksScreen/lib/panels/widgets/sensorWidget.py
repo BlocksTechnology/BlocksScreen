@@ -1,4 +1,3 @@
-from ctypes import alignment
 import enum
 import typing
 
@@ -37,7 +36,7 @@ class SensorWidget(QtWidgets.QWidget):
     )
 
     def __init__(self, parent, sensor_name: str):
-        super(SensorWidget, self).__init__(parent)
+        super().__init__(parent)
         self.name = str(sensor_name).split(" ")[1]
         self.sensor_type: SensorWidget.SensorType = (
             self.SensorType.SWITCH
@@ -59,9 +58,7 @@ class SensorWidget(QtWidgets.QWidget):
         )
         self._icon_label = None
         self._text_label = None
-        self._text: str = (
-            f"{self.name}"
-        )
+        self._text = self.name
         self._item_rect: QtCore.QRect = QtCore.QRect()
         self.icon_pixmap_fp: QtGui.QPixmap = QtGui.QPixmap(
             ":/filament_related/media/btn_icons/filament_sensor_turn_on.svg"
@@ -70,7 +67,6 @@ class SensorWidget(QtWidgets.QWidget):
             ":/filament_related/media/btn_icons/filament_sensor_off.svg"
         )
         self.setupUI()
-        #self.toggle_button.stateChange.connect(self.toggle_button_state)
         self.toggle_button.stateChange.connect(self.toggle_sensor_state)
         
 
@@ -105,13 +101,10 @@ class SensorWidget(QtWidgets.QWidget):
             
     @QtCore.pyqtSlot(FilamentState, name="change_fil_sensor_state")
     def change_fil_sensor_state(self, state: FilamentState):
-        """Change filament sensor state"""
-        if isinstance(state, SensorWidget.FilamentState):
-            if state == SensorWidget.FilamentState.PRESENT:
-                self.filament_state = SensorWidget.FilamentState.MISSING
-            else:
-                self.filament_state = SensorWidget.FilamentState.PRESENT
-            self.update()
+        if not isinstance(state, SensorWidget.FilamentState):
+            return
+        self.filament_state = SensorWidget.FilamentState(not state.value)
+        self.update()
     
     
     def toggle_button_state(self, state: ToggleAnimatedButton.State) -> None:
@@ -150,17 +143,6 @@ class SensorWidget(QtWidgets.QWidget):
         style_painter.setRenderHint(
             style_painter.RenderHint.LosslessImageRendering, True
         )
-
-        if self.filament_state == SensorWidget.FilamentState.PRESENT:
-            _color = QtGui.QColor(2, 204, 59, 200)
-        else:
-            _color = QtGui.QColor(204, 50, 50, 200)
-        _brush = QtGui.QBrush()
-        _brush.setColor(_color)
-
-        _brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        pen = style_painter.pen()
-        pen.setStyle(QtCore.Qt.PenStyle.NoPen)
         if self._icon_label:
             self._icon_label.setPixmap(
                 self.icon_pixmap_fp
@@ -168,55 +150,48 @@ class SensorWidget(QtWidgets.QWidget):
                 else self.icon_pixmap_fnp
             )
         _font = QtGui.QFont()
-        _font.setStyleStrategy(QtGui.QFont.StyleStrategy.PreferAntialias)
         _font.setPointSize(20)
         style_painter.setFont(_font)
-        
-        if self.sensor_state == SensorWidget.SensorState.ON:
-            _color = QtGui.QColor(2, 204, 59, 200)
-        else:
-            _color = QtGui.QColor(204, 50, 50, 200)
-        
-        style_painter.setPen(_color)
 
         label_name = self._text_label_name_ 
         label_detected = self._text_label_detected 
         label_state = self._text_label_state 
 
         palette = label_name.palette()
-        palette.setColor(palette.ColorRole.WindowText,_color)
-        
+        palette.setColor(
+            palette.ColorRole.WindowText, QtGui.QColorConstants.White
+        )        
         style_painter.drawItemText(
             label_name.geometry(),
             label_name.alignment(),
             palette,
             True,
             label_name.text(),
+            QtGui.QPalette.ColorRole.WindowText
         )
         
-        palette_as_needed = label_detected.palette()
-        palette_as_needed.setColor(
-            palette_as_needed.ColorRole.WindowText, QtGui.QColorConstants.White
-        )
-        style_painter.setPen(QtGui.QColor("white"))
-
-        _font.setPointSize(15)
+        _font.setPointSize(16)
         style_painter.setFont(_font)
+        filament_text = self.filament_state.name.capitalize()
+        tab_spacer = 12 * "\t"
         style_painter.drawItemText(
             label_state.geometry(),
             label_state.alignment(),
-            palette_as_needed,
+            palette,
             True,
-            f"Filament: {self.filament_state.name}",
+            f"Filament: {tab_spacer}{filament_text}",
+            QtGui.QPalette.ColorRole.WindowText
         )
         
-        style_painter.setFont(_font)
+        sensor_state_text = self.sensor_state.name.capitalize()
+        tab_spacer += 3 * "\t"
         style_painter.drawItemText(
             label_detected.geometry(),
             label_detected.alignment(),
-            palette_as_needed,
+            palette,
             True,
-             f"Enable: {self.sensor_state.name}"
+            f"Enable: {tab_spacer}{sensor_state_text}",
+            QtGui.QPalette.ColorRole.WindowText
         )
         style_painter.end()
 
@@ -226,13 +201,16 @@ class SensorWidget(QtWidgets.QWidget):
         size_policy.setHeightForWidth(self.sizePolicy().hasHeightForWidth())
         self.setSizePolicy(size_policy)
         self.sensor_vertical_layout = QtWidgets.QVBoxLayout()
-        #self.sensor_vertical_layout.setGeometry(QtCore.QRect(0, 0, 640, 100))
         self.sensor_vertical_layout.setObjectName("sensorVerticalLayout")
         self._icon_label = BlocksLabel(self)
-        size_policy.setHeightForWidth(self._icon_label.sizePolicy().hasHeightForWidth())
+        size_policy.setHeightForWidth(
+            self._icon_label.sizePolicy().hasHeightForWidth()
+        )
+        parent_width = self.parentWidget().width()
         self._icon_label.setSizePolicy(size_policy)
-        self._icon_label.setMinimumSize(80, 80)
-        self._icon_label.setMaximumSize(80, 80)
+        self._icon_label.setMinimumSize(120, 100)
+        self._icon_label.setMinimumSize(120, 100)
+        
         self._icon_label.setPixmap(
             self.icon_pixmap_fp
             if self.filament_state == self.FilamentState.PRESENT
@@ -242,8 +220,7 @@ class SensorWidget(QtWidgets.QWidget):
         size_policy.setHeightForWidth(
             self._text_label_name_.sizePolicy().hasHeightForWidth()
         )
-        self._text_label_name_.setMinimumSize(self.rect().width(), 60)
-        self._text_label_name_.setMaximumSize(self.rect().width(), 60)
+        self._text_label_name_.setMinimumSize(self.rect().width(), 40)
         self._text_label_name_.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         palette = self._text_label_name_.palette()
         palette.setColor(
@@ -252,55 +229,38 @@ class SensorWidget(QtWidgets.QWidget):
         self._text_label_name_.setPalette(palette)
         self._text_label_name_.setText(str(self._text))
         self._icon_label.setSizePolicy(size_policy)
-        #LABEL 2 
+
         self._text_label_detected = QtWidgets.QLabel(parent=self)
         size_policy.setHeightForWidth(
             self._text_label_detected.sizePolicy().hasHeightForWidth()
         )
-        self._text_label_detected.setMinimumSize(self.rect().width(), 60)
-        self._text_label_detected.setMaximumSize(self.rect().width(), 60)
+        self._text_label_detected.setMinimumSize(parent_width, 20)
 
-        _font = QtGui.QFont()
-        _font.setStyleStrategy(QtGui.QFont.StyleStrategy.PreferAntialias)
-        _font.setPointSize(12)
-        palette_as_needed = self._text_label_detected.palette()
-        palette_as_needed.setColor(
-            palette_as_needed.ColorRole.WindowText, QtGui.QColorConstants.Transparent
-        )
-        filament_state = not self.filament_state
-        self._text_label_detected.setPalette(palette_as_needed)
-        self._text_label_detected.setFont(_font)
+
+        self._text_label_detected.setPalette(palette)
         self._text_label_detected.setText(f"Filament: {self.filament_state}")
         
-        #LABEL 3
         self._text_label_state = QtWidgets.QLabel(parent=self)
         size_policy.setHeightForWidth(
             self._text_label_state.sizePolicy().hasHeightForWidth()
         )
-        self._text_label_state.setMinimumSize(self.rect().width(), 60)
-        self._text_label_state.setMaximumSize(self.rect().width(), 60)
+        self._text_label_state.setMinimumSize(parent_width, 20)
 
-        self._text_label_state.setPalette(palette_as_needed)
-        self._text_label_state.setFont(_font)
+        self._text_label_state.setPalette(palette)
         self._text_label_state.setText(f"Enable: {self.sensor_state.name}")
-        
-        
-        self._text_label_name_.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
-        self._text_label_state.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
-        self._text_label_detected.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
-
-
         
         self._icon_label.setSizePolicy(size_policy)
         self.toggle_button = ToggleAnimatedButton(self)
-        self.toggle_button.setMaximumWidth(100)
+        self.toggle_button.setMinimumSize(100,50)
         self.toggle_button.state = ToggleAnimatedButton.State.ON
 
-        self._text_label_detected.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
-        self.sensor_vertical_layout.addWidget(self._icon_label,alignment=QtCore.Qt.AlignmentFlag.AlignCenter)
-        self.sensor_vertical_layout.addWidget(self._text_label_name_, alignment=QtCore.Qt.AlignmentFlag.AlignCenter)
-        self.sensor_vertical_layout.addWidget(self._text_label_state,alignment=QtCore.Qt.AlignmentFlag.AlignCenter)
-        self.sensor_vertical_layout.addWidget(self._text_label_detected,alignment=QtCore.Qt.AlignmentFlag.AlignCenter)
-        self.sensor_vertical_layout.addWidget(self.toggle_button)
+        self.sensor_vertical_layout.addWidget(self._icon_label, alignment=QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.sensor_vertical_layout.addWidget(self._text_label_name_,alignment=QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.sensor_vertical_layout.addStretch()
+        self.sensor_vertical_layout.addWidget(self._text_label_state,alignment=QtCore.Qt.AlignmentFlag.AlignLeft)
+        self.sensor_vertical_layout.addStretch()
+        self.sensor_vertical_layout.addWidget(self._text_label_detected,alignment=QtCore.Qt.AlignmentFlag.AlignLeft)
+        self.sensor_vertical_layout.addStretch()
+        self.sensor_vertical_layout.addWidget(self.toggle_button,alignment=QtCore.Qt.AlignmentFlag.AlignCenter)
         
         self.setLayout(self.sensor_vertical_layout)
