@@ -82,7 +82,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.ui.printTab, self.file_data, self.ws, self.printer
         )
         QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.CursorShape.BlankCursor)
-        
+
         self.filamentPanel = FilamentTab(self.ui.filamentTab, self.printer, self.ws)
         self.controlPanel = ControlTab(self.ui.controlTab, self.ws, self.printer)
         self.utilitiesPanel = UtilitiesTab(self.ui.utilitiesTab, self.ws, self.printer)
