@@ -190,6 +190,7 @@ class BlocksLabel(QtWidgets.QLabel):
                 self.scroll_pos = 0
 
         self.update()
+
     def paintEvent(self, a0: QtGui.QPaintEvent) -> None:
         qp = QtGui.QPainter(self)
         qp.setRenderHint(qp.RenderHint.Antialiasing, True)
@@ -225,10 +226,14 @@ class BlocksLabel(QtWidgets.QLabel):
             qp.setClipRect(rect)
             baseline_y = (
                 rect.y()
-                + (rect.height() + self.fontMetrics().ascent() - self.fontMetrics().descent())
+                + (
+                    rect.height()
+                    + self.fontMetrics().ascent()
+                    - self.fontMetrics().descent()
+                )
                 / 2
             )
-            
+
             if self.text_width > self.label_width:
                 qp.drawText(
                     QtCore.QPointF(rect.x() + self.scroll_pos, baseline_y), self._text
@@ -242,11 +247,8 @@ class BlocksLabel(QtWidgets.QLabel):
                 )
             else:
                 center_x = rect.x() + (rect.width() - self.text_width) / 2
-                
-                qp.drawText(
-                    QtCore.QPointF(center_x, baseline_y), 
-                    self._text
-                )
+
+                qp.drawText(QtCore.QPointF(center_x, baseline_y), self._text)
             qp.restore()
 
         qp.end()
