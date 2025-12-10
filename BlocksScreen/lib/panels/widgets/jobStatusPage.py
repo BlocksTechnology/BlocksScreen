@@ -309,7 +309,7 @@ class JobStatusWidget(QtWidgets.QWidget):
     @QtCore.pyqtSlot(str, float, name="virtual_sdcard_update")
     @QtCore.pyqtSlot(str, bool, name="virtual_sdcard_update")
     def virtual_sdcard_update(self, field: str, value: float | bool) -> None:
-        """Handle virtual sdcard 
+        """Handle virtual sdcard
 
         Args:
             field (str): Name of the updated field on the virtual_sdcard object

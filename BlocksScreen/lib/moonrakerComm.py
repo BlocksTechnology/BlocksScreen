@@ -791,7 +791,7 @@ class MoonAPI(QtCore.QObject):
     def history_list(self, limit, start, since, before, order):
         """Request Job history list"""
         raise NotImplementedError
-        
+
     def history_job_totals(self):
         """Request total job history"""
         raise NotImplementedError
@@ -807,4 +807,3 @@ class MoonAPI(QtCore.QObject):
     def history_delete_job(self, uid: str):
         """Request delete job history"""
         raise NotImplementedError
-

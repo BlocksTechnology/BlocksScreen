@@ -6,6 +6,7 @@ import enum
 
 class Filament:
     """Filament spool"""
+
     class SpoolBaseWeights(enum.Enum):  # XXX This enum will probably be unnecessary
         """Spool base weights"""
 

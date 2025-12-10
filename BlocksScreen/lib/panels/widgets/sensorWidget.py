@@ -8,21 +8,25 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 class SensorWidget(QtWidgets.QWidget):
     class SensorType(enum.Enum):
         """Filament sensor type"""
+
         SWITCH = enum.auto()
         MOTION = enum.auto()
 
     class SensorFlags(enum.Flag):
         """Filament sensor flags"""
+
         CLICKABLE = enum.auto()
         DISPLAY = enum.auto()
 
     class FilamentState(enum.Enum):
         """Current filament state, sensor has or does not have filament"""
+
         MISSING = 0
         PRESENT = 1
 
     class SensorState(enum.IntEnum):
         """Current sensor filament state, if it's turned on or not"""
+
         OFF = False
         ON = True
 
@@ -44,14 +48,10 @@ class SensorWidget(QtWidgets.QWidget):
         self.filament_state: SensorWidget.FilamentState = (
             SensorWidget.FilamentState.MISSING
         )
-        self.sensor_state: SensorWidget.SensorState = (
-            SensorWidget.SensorState.OFF
-        )
+        self.sensor_state: SensorWidget.SensorState = SensorWidget.SensorState.OFF
         self._icon_label = None
         self._text_label = None
-        self._text: str = (
-            str(self.sensor_type.name) + " Sensor: " + str(self.name)
-        )
+        self._text: str = str(self.sensor_type.name) + " Sensor: " + str(self.name)
         self._item_rect: QtCore.QRect = QtCore.QRect()
         self.icon_pixmap_fp: QtGui.QPixmap = QtGui.QPixmap(
             ":/filament_related/media/btn_icons/filament_sensor_turn_on.svg"
@@ -109,9 +109,7 @@ class SensorWidget(QtWidgets.QWidget):
         #     )
 
         style_painter = QtWidgets.QStylePainter(self)
-        style_painter.setRenderHint(
-            style_painter.RenderHint.Antialiasing, True
-        )
+        style_painter.setRenderHint(style_painter.RenderHint.Antialiasing, True)
         style_painter.setRenderHint(
             style_painter.RenderHint.SmoothPixmapTransform, True
         )
@@ -167,9 +165,7 @@ class SensorWidget(QtWidgets.QWidget):
         self.sensor_horizontal_layout.setGeometry(QtCore.QRect(0, 0, 640, 60))
         self.sensor_horizontal_layout.setObjectName("sensorHorizontalLayout")
         self._icon_label = BlocksLabel(self)
-        size_policy.setHeightForWidth(
-            self._icon_label.sizePolicy().hasHeightForWidth()
-        )
+        size_policy.setHeightForWidth(self._icon_label.sizePolicy().hasHeightForWidth())
         self._icon_label.setSizePolicy(size_policy)
         self._icon_label.setMinimumSize(60, 60)
         self._icon_label.setMaximumSize(60, 60)
@@ -180,18 +176,14 @@ class SensorWidget(QtWidgets.QWidget):
         )
         self.sensor_horizontal_layout.addWidget(self._icon_label)
         self._text_label = QtWidgets.QLabel(parent=self)
-        size_policy.setHeightForWidth(
-            self._text_label.sizePolicy().hasHeightForWidth()
-        )
+        size_policy.setHeightForWidth(self._text_label.sizePolicy().hasHeightForWidth())
         self._text_label.setMinimumSize(100, 60)
         self._text_label.setMaximumSize(500, 60)
         _font = QtGui.QFont()
         _font.setStyleStrategy(QtGui.QFont.StyleStrategy.PreferAntialias)
         _font.setPointSize(18)
         palette = self._text_label.palette()
-        palette.setColor(
-            palette.ColorRole.WindowText, QtGui.QColorConstants.White
-        )
+        palette.setColor(palette.ColorRole.WindowText, QtGui.QColorConstants.White)
         self._text_label.setPalette(palette)
         self._text_label.setFont(_font)
         self._text_label.setText(str(self._text))

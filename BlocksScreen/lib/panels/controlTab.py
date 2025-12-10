@@ -14,6 +14,7 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 
 from lib.panels.widgets.popupDialogWidget import Popup
 
+
 class ControlTab(QtWidgets.QStackedWidget):
     """Printer Control Stacked Widget"""
 
@@ -252,9 +253,7 @@ class ControlTab(QtWidgets.QStackedWidget):
             )
         )
 
-        self.panel.cp_z_tilt_btn.clicked.connect(
-            lambda: self.handle_ztilt()
-        )
+        self.panel.cp_z_tilt_btn.clicked.connect(lambda: self.handle_ztilt())
 
         self.printcores_page.pc_accept.clicked.connect(self.handle_swapcore)
 
@@ -268,9 +267,7 @@ class ControlTab(QtWidgets.QStackedWidget):
         self.panel.cooldown_btn.hide()
         self.panel.cp_switch_print_core_btn.hide()
 
-
-    def handle_printcoreupdate(self, value:dict):
-
+    def handle_printcoreupdate(self, value: dict):
         if value["swapping"] == "idle":
             return
 
@@ -283,13 +280,9 @@ class ControlTab(QtWidgets.QStackedWidget):
             )
         if value["swapping"] == "unloading":
             self.loadpage.set_status_message("Unloading print core")
-        
+
         if value["swapping"] == "cleaning":
             self.loadpage.set_status_message("Cleaning print core")
-
-        
-
-
 
     def _handle_gcode_response(self, messages: list):
         """Handle gcode response for Z-tilt adjustment"""
@@ -299,7 +292,11 @@ class ControlTab(QtWidgets.QStackedWidget):
             if not msg_list:
                 continue
 
-            if "Retries:" in msg_list and "range:" in msg_list and "tolerance:" in msg_list:
+            if (
+                "Retries:" in msg_list
+                and "range:" in msg_list
+                and "tolerance:" in msg_list
+            ):
                 print("Match candidate:", msg_list)
                 match = re.search(pattern, msg_list)
                 print("Regex match:", match)
@@ -320,7 +317,6 @@ class ControlTab(QtWidgets.QStackedWidget):
                     self.loadpage.set_status_message(
                         f"Retries: {retries_done}/{retries_total} | Range: {probed_range:.6f} | Tolerance: {tolerance:.6f}"
                     )
-
 
     def handle_ztilt(self):
         """Handle Z-Tilt Adjustment"""
@@ -344,7 +340,6 @@ class ControlTab(QtWidgets.QStackedWidget):
         self.run_gcode_signal.emit("CHANGE_PRINTCORES")
         self.loadpage.show()
         self.loadpage.set_status_message("Preparing to swap print core")
-
 
     def handle_swapcore(self):
         """Handle swap printcore routine finish"""
@@ -515,7 +510,7 @@ class ControlTab(QtWidgets.QStackedWidget):
             self.panel.mva_y_value_label.setText(f"{values[1]:.2f}")
             self.panel.mva_z_value_label.setText(f"{values[2]:.3f}")
 
-            if values[0] == "252,50" and values[1] == "250" and  values[2] == "50":
+            if values[0] == "252,50" and values[1] == "250" and values[2] == "50":
                 self.loadpage.hide
         self.toolhead_info.update({f"{field}": values})
 

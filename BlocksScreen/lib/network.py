@@ -428,7 +428,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
 
         Returns:
             str: ssid address
-        """        
+        """
         try:
             future = asyncio.run_coroutine_threadsafe(self._gather_ssid(), self.loop)
             return future.result(timeout=5)
@@ -1309,7 +1309,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
         Args:
             ssid (str, optional): Hotspot ssid. Defaults to "PrinterHotspot".
             password (str, optional): connection password. Defaults to "123456789".
-        """        
+        """
         if self.is_known(ssid):
             self.delete_network(ssid)
             logger.debug("old hotspot deleted")
@@ -1367,7 +1367,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
         Args:
             ssid (str): connection ssid
             priority (ConnectionPriority, optional): Priority. Defaults to ConnectionPriority.LOW.
-        """        
+        """
         if not self.nm:
             return
         if not self.is_known(ssid):

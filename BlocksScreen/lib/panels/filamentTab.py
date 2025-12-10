@@ -142,7 +142,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
 
     @QtCore.pyqtSlot(bool, name="on_load_filament")
     def on_load_filament(self, status: bool):
-        """Handle load filament object updated """
+        """Handle load filament object updated"""
         if self.loadignore:
             self.loadignore = False
             return
@@ -249,7 +249,6 @@ class FilamentTab(QtWidgets.QStackedWidget):
             self.panel.load_header_page_title.setText("Load Toolhead")
         if a0 is not None:
             return super().paintEvent(a0)
-
 
     def find_routine_objects(self):
         """Check if printer has load/unload printer objects"""

@@ -94,7 +94,6 @@ class MoonRest:
         """
         return self.post_request(method="printer/firmware_restart")
 
-
     def post_request(self, method, data=None, json=None, json_response=True):
         """POST request"""
         return self._request(
