@@ -3,7 +3,7 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 
 
 class BlocksCustomLinEdit(QtWidgets.QLineEdit):
-    clicked = QtCore.pyqtSignal() 
+    clicked = QtCore.pyqtSignal()
 
     def __init__(
         self,
@@ -17,11 +17,12 @@ class BlocksCustomLinEdit(QtWidgets.QLineEdit):
         self.placeholder_str = "Type here"
         self._name: str = ""
         self.text_color: QtGui.QColor = QtGui.QColor(0, 0, 0)
-        self.secret: bool = False  
+        self.secret: bool = False
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_AcceptTouchEvents, True)
 
     @property
     def name(self):
+        """Widget name"""
         return self._name
 
     @name.setter
@@ -30,18 +31,21 @@ class BlocksCustomLinEdit(QtWidgets.QLineEdit):
         self.setObjectName(new_name)
 
     def setText(self, text: str) -> None:
+        """Set widget text"""
         super().setText(text)
 
     def setHidden(self, hidden: bool) -> None:
+        """Hide widget text"""
         self.secret = hidden
         self.update()
 
     def mousePressEvent(self, event: QtGui.QMouseEvent) -> None:
-        self.clicked.emit() 
-        super().mousePressEvent(event)  
-
+        """Re-implemented method, handle mouse press events"""
+        self.clicked.emit()
+        super().mousePressEvent(event)
 
     def paintEvent(self, e: typing.Optional[QtGui.QPaintEvent]):
+        """Re-implemented method, paint widget"""
         painter = QtGui.QPainter(self)
         painter.setRenderHint(painter.RenderHint.Antialiasing, True)
 
@@ -51,7 +55,7 @@ class BlocksCustomLinEdit(QtWidgets.QLineEdit):
         painter.setPen(QtCore.Qt.PenStyle.NoPen)
         painter.drawRoundedRect(self.rect(), 8, 8)
 
-        margin = 5 
+        margin = 5
         display_text = self.text()
         if self.secret and display_text:
             display_text = "*" * len(display_text)

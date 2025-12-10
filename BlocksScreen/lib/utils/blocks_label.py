@@ -4,7 +4,7 @@ from PyQt6 import QtWidgets, QtGui, QtCore
 
 class BlocksLabel(QtWidgets.QLabel):
     def __init__(self, parent: QtWidgets.QWidget = None, *args, **kwargs):
-        super(BlocksLabel, self).__init__(parent, *args, **kwargs)
+        super().__init__(parent, *args, **kwargs)
 
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_AcceptTouchEvents, True)
         self.icon_pixmap: typing.Optional[QtGui.QPixmap] = None
@@ -44,10 +44,12 @@ class BlocksLabel(QtWidgets.QLabel):
         self.first_run = True
 
     def resizeEvent(self, a0: QtGui.QResizeEvent) -> None:
+        """Re-implemented method, handle widget resize event"""
         self.update_text_metrics()
         return super().resizeEvent(a0)
 
     def mousePressEvent(self, ev: QtGui.QMouseEvent) -> None:
+        """Re-implemented method, handle mouse press event"""
         if (
             ev.button() == QtCore.Qt.MouseButton.LeftButton
             and not self.timer.isActive()
@@ -56,16 +58,19 @@ class BlocksLabel(QtWidgets.QLabel):
             self.start_scroll()
 
     def setPixmap(self, a0: QtGui.QPixmap) -> None:
+        """Set widget pixmap"""
         self.icon_pixmap = a0
         self.update()
 
     def setText(self, text: str) -> None:
+        """Set widget text"""
         self._text = text
         self.scroll_pos = 0.0
         self.update_text_metrics()
 
     @property
     def background_color(self) -> typing.Optional[QtGui.QColor]:
+        """Widget background color"""
         return self._background_color
 
     @background_color.setter
@@ -74,6 +79,7 @@ class BlocksLabel(QtWidgets.QLabel):
 
     @property
     def border_color(self) -> typing.Optional[QtGui.QColor]:
+        """Widget border color"""
         return self._border_color
 
     @border_color.setter
@@ -82,6 +88,7 @@ class BlocksLabel(QtWidgets.QLabel):
 
     @property
     def rounded(self) -> bool:
+        """Widget rounded property"""
         return self._rounded
 
     @rounded.setter
@@ -90,6 +97,7 @@ class BlocksLabel(QtWidgets.QLabel):
 
     @property
     def marquee(self) -> bool:
+        """Widget enable marquee effect"""
         return self._marquee
 
     @marquee.setter
@@ -99,6 +107,7 @@ class BlocksLabel(QtWidgets.QLabel):
 
     @QtCore.pyqtProperty(int)
     def animation_speed(self) -> int:
+        """Widget animation speed property"""
         return self._animation_speed
 
     @animation_speed.setter
@@ -107,6 +116,7 @@ class BlocksLabel(QtWidgets.QLabel):
 
     @QtCore.pyqtProperty(QtGui.QColor)
     def glow_color(self) -> QtGui.QColor:
+        """Widget glow color property"""
         return self._glow_color
 
     @glow_color.setter
@@ -116,6 +126,7 @@ class BlocksLabel(QtWidgets.QLabel):
 
     @QtCore.pyqtSlot(name="start_glow_animation")
     def start_glow_animation(self) -> None:
+        """Start glow animation"""
         self.glow_animation.setDuration(self.animation_speed)
         start_color = QtGui.QColor("#00000000")
         end_color = QtGui.QColor("#E95757")
@@ -127,6 +138,7 @@ class BlocksLabel(QtWidgets.QLabel):
 
     @QtCore.pyqtSlot(name="change_glow_direction")
     def change_glow_direction(self) -> None:
+        """Handle Change glow direction"""
         current_direction = self.glow_animation.direction()
         if current_direction == self.glow_animation.Direction.Forward:
             self.glow_animation.setDirection(self.glow_animation.Direction.Backward)
@@ -179,6 +191,7 @@ class BlocksLabel(QtWidgets.QLabel):
 
         self.update()
     def paintEvent(self, a0: QtGui.QPaintEvent) -> None:
+        """Re-implemented method, paint widget"""
         qp = QtGui.QPainter(self)
         qp.setRenderHint(qp.RenderHint.Antialiasing, True)
         qp.setRenderHint(qp.RenderHint.SmoothPixmapTransform, True)
@@ -240,6 +253,7 @@ class BlocksLabel(QtWidgets.QLabel):
         qp.end()
 
     def setProperty(self, name: str, value: typing.Any) -> bool:
+        """Re-implemented method, set widget properties"""
         if name == "icon_pixmap":
             self.setPixmap(value)
         return super().setProperty(name, value)

@@ -464,7 +464,7 @@ class Printer(QtCore.QObject):
         # Associated with a heater, on when heater is active
         # Parameters same as a normal fan
         _names = ["heater_fan", fan_name]
-        object_name = " ".join(_names)
+        # object_name = " ".join(_names)
 
     def _idle_timeout_object_updated(
         self, value: dict, name: str = "idle_timeout"

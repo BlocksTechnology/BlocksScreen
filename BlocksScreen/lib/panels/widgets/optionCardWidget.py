@@ -25,30 +25,33 @@ class OptionCard(QtWidgets.QFrame):
         self.icon_background_color = QtGui.QColor(150, 150, 130, 80)
         self.name = name
         self.card_text = text
-        self.setupUi(self)
-        self.continue_button.clicked.connect(
-            lambda: self.continue_clicked.emit(self)
-        )
+        self._setupUi(self)
+        self.continue_button.clicked.connect(lambda: self.continue_clicked.emit(self))
         self.set_card_icon(icon)
         self.set_card_text(text)
 
     def disable_button(self) -> None:
+        """Disable widget button"""
         self.continue_button.setDisabled(True)
         self.repaint()
 
     def enable_button(self) -> None:
+        """Enable widget button"""
         self.continue_button.setEnabled(True)
         self.repaint()
 
     def set_card_icon(self, pixmap: QtGui.QPixmap) -> None:
+        """Set widget icon"""
         self.option_icon.setPixmap(pixmap)
         self.repaint()
 
     def set_card_text(self, text: str) -> None:
+        """Set widget text"""
         self.option_text.setText(text)
         self.repaint()
 
     def set_card_text_color(self, color: QtGui.QColor) -> None:
+        """Set widget text color"""
         self.text_color = color
         _palette = self.option_text.palette()
         _palette.setColor(QtGui.QPalette.ColorRole.WindowText, color)
@@ -56,32 +59,31 @@ class OptionCard(QtWidgets.QFrame):
         self.repaint()
 
     def set_background_color(self, color: QtGui.QColor) -> None:
+        """Set widget background color"""
         self.color = color
         self.repaint()
 
-    def sizeHint(self) -> QtCore.QSize:
-        return super().sizeHint()
-
-    def underMouse(self) -> bool:
-        return super().underMouse()
-
     def enterEvent(self, event: QtGui.QEnterEvent) -> None:
+        """Re-implemented method, highlight widget edges"""
         # Illuminate the edges to a lighter blue
         # To achieve this just Force update the widget
         self.update()
         return super().enterEvent(event)
 
     def leaveEvent(self, a0: QtCore.QEvent) -> None:
+        """Re-implemented method, disable widget edges highlight"""
         # Reset the color
         # Just as before force update the widget
         self.update()
         return super().leaveEvent(a0)
 
     def mousePressEvent(self, a0: QtGui.QMouseEvent) -> None:
+        """Re-implemented method, handle mouse press event"""
         self.update()
         return super().mousePressEvent(a0)
 
     def paintEvent(self, a0: QtGui.QPaintEvent) -> None:
+        """Re-implemented method, paint widget"""
         # Rounded background edges
         self.background_path = QtGui.QPainterPath()
         self.background_path.addRoundedRect(
@@ -136,7 +138,7 @@ class OptionCard(QtWidgets.QFrame):
 
         painter.end()
 
-    def setupUi(self, option_card):
+    def _setupUi(self, option_card):
         option_card.setObjectName("option_card")
         option_card.resize(200, 300)
         sizePolicy = QtWidgets.QSizePolicy(
@@ -145,9 +147,7 @@ class OptionCard(QtWidgets.QFrame):
         )
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(
-            option_card.sizePolicy().hasHeightForWidth()
-        )
+        sizePolicy.setHeightForWidth(option_card.sizePolicy().hasHeightForWidth())
         option_card.setSizePolicy(sizePolicy)
         option_card.setMinimumSize(QtCore.QSize(200, 300))
         option_card.setMaximumSize(QtCore.QSize(200, 300))
@@ -169,8 +169,7 @@ class OptionCard(QtWidgets.QFrame):
         self.verticalLayout.addWidget(
             self.line_separator,
             0,
-            QtCore.Qt.AlignmentFlag.AlignHCenter
-            | QtCore.Qt.AlignmentFlag.AlignVCenter,
+            QtCore.Qt.AlignmentFlag.AlignHCenter | QtCore.Qt.AlignmentFlag.AlignVCenter,
         )
         self.option_text = QtWidgets.QLabel(parent=option_card)
         self.option_text.setMinimumSize(QtCore.QSize(200, 50))
@@ -180,8 +179,7 @@ class OptionCard(QtWidgets.QFrame):
         )
         self.continue_button = IconButton(parent=option_card)
         self.option_text.setAlignment(
-            QtCore.Qt.AlignmentFlag.AlignHCenter
-            | QtCore.Qt.AlignmentFlag.AlignVCenter
+            QtCore.Qt.AlignmentFlag.AlignHCenter | QtCore.Qt.AlignmentFlag.AlignVCenter
         )
         self.option_text.setWordWrap(True)
         _button_font = QtGui.QFont()
@@ -211,10 +209,10 @@ class OptionCard(QtWidgets.QFrame):
         self.continue_button.setObjectName("continue_button")
         self.verticalLayout.addWidget(self.continue_button)
 
-        self.retranslateUi(option_card)
+        self._retranslateUi(option_card)
         QtCore.QMetaObject.connectSlotsByName(option_card)
 
-    def retranslateUi(self, option_card):
+    def _retranslateUi(self, option_card):
         _translate = QtCore.QCoreApplication.translate
         option_card.setWindowTitle(_translate("option_card", "Frame"))
         self.option_text.setText(_translate("option_card", "TextLabel"))

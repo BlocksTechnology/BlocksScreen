@@ -1,5 +1,4 @@
 import enum
-import typing
 from functools import partial
 
 
@@ -52,7 +51,6 @@ class FilamentTab(QtWidgets.QStackedWidget):
             partial(self.change_page, self.indexOf(self.panel.load_page))
         )
         self.panel.custom_filament_header_back_btn.clicked.connect(self.back_button)
-        # REFACTOR self.panel.load_custom_btn.clicked.connect(partial(self.change_page, 2))
         self.panel.load_custom_btn.hide()
         self.panel.load_header_back_button.clicked.connect(self.back_button)
         self.panel.load_pla_btn.clicked.connect(
@@ -95,9 +93,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
     @QtCore.pyqtSlot(str, float, name="on_print_stats_update")
     @QtCore.pyqtSlot(str, str, name="on_print_stats_update")
     def on_print_stats_update(self, field: str, value: dict | float | str) -> None:
-        """
-        unblocks tabs if on standby
-        """
+        """Handle print stats object update"""
         if isinstance(value, str):
             if "state" in field:
                 if value in ("standby"):
@@ -106,6 +102,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
 
     @QtCore.pyqtSlot(str, str, bool, name="on_filament_sensor_update")
     def on_filament_sensor_update(self, sensor_name: str, parameter: str, value: bool):
+        """Handle filament sensor object update"""
         if parameter == "filament_detected":
             if not isinstance(value, bool):
                 self._filament_state = self.FilamentStates.UNKNOWN
@@ -126,6 +123,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
     def on_extruder_update(
         self, extruder_name: str, field: str, new_value: float
     ) -> None:
+        """Handle extruder update"""
         if not self.isVisible:
             return
 
@@ -134,16 +132,17 @@ class FilamentTab(QtWidgets.QStackedWidget):
                 self.loadscreen.set_status_message("Extruder heated up \n Please wait")
                 return
             if field == "temperature":
-                self.current_temp = round(new_value, 0)  # somehow this works
+                self.current_temp = round(new_value, 0)
                 self.loadscreen.set_status_message(
                     f"Heating up ({new_value}/{self.target_temp}) \n Please wait"
                 )
         if field == "target":
-            self.target_temp = round(new_value, 0)  # somehow this works again
+            self.target_temp = round(new_value, 0)
             self.loadscreen.set_status_message("Heating up \n Please wait")
 
     @QtCore.pyqtSlot(bool, name="on_load_filament")
     def on_load_filament(self, status: bool):
+        """Handle load filament object updated"""
         if self.loadignore:
             self.loadignore = False
             return
@@ -160,6 +159,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
 
     @QtCore.pyqtSlot(bool, name="on_unload_filament")
     def on_unload_filament(self, status: bool):
+        """Handle unload filament object updated"""
         if self.unloadignore:
             self.unloadignore = False
             return
@@ -177,6 +177,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
 
     @QtCore.pyqtSlot(int, int, name="load_filament")
     def load_filament(self, toolhead: int = 0, temp: int = 220) -> None:
+        """Handle load filament buttons clicked"""
         if not self.isVisible:
             return
 
@@ -197,6 +198,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
 
     @QtCore.pyqtSlot(str, int, name="unload_filament")
     def unload_filament(self, toolhead: int = 0, temp: int = 220) -> None:
+        """Handle unload filament button clicked"""
         if not self.isVisible:
             return
 
@@ -218,6 +220,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self.run_gcode.emit(f"UNLOAD_FILAMENT TEMPERATURE={temp}")
 
     def handle_filament_state(self):
+        """Handle ui changes on filament states"""
         if self._filament_state == self.FilamentStates.LOADED:
             self.panel.filament_page_load_btn.setDisabled(True)
             self.panel.filament_page_load_btn.setDisabled(False)
@@ -233,29 +236,22 @@ class FilamentTab(QtWidgets.QStackedWidget):
         return self._filament_state
 
     def change_page(self, index):
+        """Issue a page change"""
         self.request_change_page.emit(1, index)
 
     def back_button(self):
+        """Go back a page"""
         self.request_back.emit()
 
-    def sizeHint(self) -> QtCore.QSize:
-        return super().sizeHint()
-
     def paintEvent(self, a0: QtGui.QPaintEvent | None) -> None:
+        """Widget painting"""
         if self.panel.load_page.isVisible() and self.toolhead_count == 1:
             self.panel.load_header_page_title.setText("Load Toolhead")
         if a0 is not None:
             return super().paintEvent(a0)
 
-    def removeWidget(self, w: QtWidgets.QWidget | None) -> None:
-        if w is not None:
-            return super().removeWidget(w)
-
-    def resizeEvent(self, a0: QtGui.QResizeEvent | None) -> None:
-        if a0 is not None:
-            return super().resizeEvent(a0)
-
     def find_routine_objects(self):
+        """Check if printer has load/unload printer objects"""
         if not self.printer:
             return
 

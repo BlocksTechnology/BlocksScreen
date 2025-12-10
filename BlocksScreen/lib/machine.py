@@ -1,45 +1,55 @@
+#
+# Machine manager
+#
 import logging
-import subprocess
+import shlex
+import subprocess  # nosec: B404
 import typing
 
-from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot
+from PyQt6 import QtCore
 
 
-class MachineControl(QObject):
-    service_restart = pyqtSignal(str, name="service-restart")
+class MachineControl(QtCore.QObject):
+    service_restart = QtCore.pyqtSignal(str, name="service-restart")
 
-    def __init__(self, parent: typing.Optional["QObject"]) -> None:
+    def __init__(self, parent: typing.Optional["QtCore.QObject"]) -> None:
         super(MachineControl, self).__init__(parent)
         self.setObjectName("MachineControl")
-    
-    @pyqtSlot(name="machine_restart")
+
+    @QtCore.pyqtSlot(name="machine_restart")
     def machine_restart(self):
+        """Reboot machine"""
         return self._run_command("sudo reboot now")
 
-    @pyqtSlot(name="machine_shutdown")
+    @QtCore.pyqtSlot(name="machine_shutdown")
     def machine_shutdown(self):
+        """Shutdown machine"""
         return self._run_command("sudo shutdown now")
 
-    @pyqtSlot(name="restart_klipper_service")
+    @QtCore.pyqtSlot(name="restart_klipper_service")
     def restart_klipper_service(self):
-        # self.service_restart.emit("restart-klipper-service")
+        """Restart klipper service"""
         return self._run_command("sudo systemctl stop klipper.service")
-    
-    @pyqtSlot(name="restart_moonraker_service")
+
+    @QtCore.pyqtSlot(name="restart_moonraker_service")
     def restart_moonraker_service(self):
-        # self.service_restart.emit("restart-moonraker-service")
+        """Restart moonraker service"""
         return self._run_command("sudo systemctl restart moonraker.service")
 
-    def restart_bo_service(self):
-        # TODO: Restart Blocks Screen service, implement it later on
-        pass
-
     def check_service_state(self, service_name: str):
+        """Check service status
+
+        Args:
+            service_name (str): service name
+
+        Returns:
+            _type_: output of the command `systemctl is-active <service name>`
+        """
         if service_name is None:
             return None
         return self._run_command(f"systemctl is-active {service_name}")
-    
-    def _run_command(self, command):
+
+    def _run_command(self, command: str):
         """Runs a shell command.
 
         Args:
@@ -50,18 +60,26 @@ class MachineControl(QObject):
 
         """
         try:
-            # REVIEW: Safe way to run bash commands 
-            # * Old way, it didn't let me use grep commands or use | on the command
-            # cmd = shlex.split(command,posix=False)
-            # exec = cmd[0]
-            # exec_options = cmd[1:]
-            # output = subprocess.run(
-            #     ([exec] + exec_options), capture_output=True)
-            # TEST: is this safe to use like this, or is it susceptible to attacks and stuff
-            p = subprocess.Popen(
-                command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT
+            # Split command into a list of strings
+            cmd = shlex.split(command)
+            p = subprocess.run(  # nosec: B603
+                cmd, check=True, capture_output=True, text=True, timeout=5
             )
-            output, e = p.communicate()
-            return output
-        except subprocess.SubprocessError:
-            logging.error("Error running commas : %s", command)
+            return p.stdout.strip() + "\n" + p.stderr.strip()
+        except ValueError as e:
+            logging.error("Failed to parse command string '%s': '%s'", command, e)
+            raise RuntimeError(f"Invalid command format: {e}") from e
+        except subprocess.CalledProcessError as e:
+            logging.error(
+                "Caught exception (exit code %d) failed to run command: %s \nStderr: %s",
+                e.returncode,
+                command,
+                e.stderr.strip(),
+            )
+            raise
+        except (
+            subprocess.SubprocessError,
+            subprocess.TimeoutExpired,
+            FileNotFoundError,
+        ):
+            logging.error("Caught exception failed to run command %s", command)
