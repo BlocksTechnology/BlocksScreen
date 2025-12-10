@@ -167,7 +167,6 @@ class BlocksCustomButton(QtWidgets.QAbstractButton):
             tinted_icon_pixmap = QtGui.QPixmap(_icon_scaled.size())
             tinted_icon_pixmap.fill(QtCore.Qt.GlobalColor.transparent)
 
-            margin = _style.pixelMetric(_style.PixelMetric.PM_ButtonMargin, opt, self)
 
             if not self.isEnabled():
                 tinted_icon_pixmap = QtGui.QPixmap(_icon_scaled.size())
