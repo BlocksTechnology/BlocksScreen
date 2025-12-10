@@ -1,5 +1,4 @@
 import logging
-import shlex
 import typing
 import subprocess
 from functools import partial
@@ -564,7 +563,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             return
 
         if hotspot_btn.state == hotspot_btn.State.ON:
-            ipv4_addr = self.get_hotspot_ip_via_shell("wlan0")
+            ipv4_addr = self.get_hotspot_ip_via_shell()
 
             self.panel.netlist_ssuid.setText(self.panel.hotspot_name_input_field.text())
 
@@ -609,22 +608,32 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
                 "Network connection required.\n\nConnect to Wi-Fi\nor\nTurn on Hotspot"
             )
 
-    def get_hotspot_ip_via_shell(self, interface: str):
+    def get_hotspot_ip_via_shell(self):
         """
         Executes a shell command to retrieve the IPv4 address for a specified interface.
-               Args:
-            interface: The name of the hotspot interface (e.g., 'wlan0').
 
         Returns:
             The IP address string (e.g., '10.42.0.1') or None if not found.
         """
-        command = (
-            f"ip a show {interface} | grep 'inet ' | awk '{{print $2}}' | cut -d/ -f1"
-        )
+        command = [
+            "ip",
+            "a",
+            "show",
+            "wlan0",
+            " |",
+            "grep",
+            " 'inet '",
+            "|",
+            "awk",
+            " '{{print $2}}'",
+            "|",
+            "cut",
+            "-d/",
+            "-f1",
+        ]
         try:
-            cmd = shlex.split(command)
-            result = subprocess.run(
-                cmd,
+            result = subprocess.run(  # nosec
+                command,
                 capture_output=True,
                 text=True,
                 check=True,
