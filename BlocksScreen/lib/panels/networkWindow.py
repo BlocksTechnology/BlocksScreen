@@ -1,6 +1,6 @@
 import logging
 import typing
-import subprocess
+import subprocess  # nosec: B404
 from functools import partial
 
 from lib.network import SdbusNetworkManagerAsync
@@ -632,7 +632,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             "-f1",
         ]
         try:
-            result = subprocess.run(  # nosec
+            result = subprocess.run(  # nosec: B603
                 command,
                 capture_output=True,
                 text=True,

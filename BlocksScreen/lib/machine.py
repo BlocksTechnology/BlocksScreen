@@ -3,7 +3,7 @@
 #
 import logging
 import shlex
-import subprocess
+import subprocess # nosec: B404
 import typing
 
 from PyQt6 import QtCore
@@ -62,7 +62,7 @@ class MachineControl(QtCore.QObject):
         try:
             # Split command into a list of strings
             cmd = shlex.split(command)
-            p = subprocess.run(
+            p = subprocess.run( # nosec: B603
                 cmd, check=True, capture_output=True, text=True, timeout=5
             )
             return p.stdout.strip() + "\n" + p.stderr.strip()
