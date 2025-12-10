@@ -319,9 +319,13 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.panel.network_details_btn.setPixmap(
             QtGui.QPixmap(":/ui/media/btn_icons/printer_settings.svg")
         )
-        
-        self.panel.snd_back.clicked.connect(lambda:self.setCurrentIndex(self.indexOf(self.panel.saved_connection_page)))
-        self.panel.network_details_btn.clicked.connect(lambda:self.setCurrentIndex(self.indexOf(self.panel.saved_details_page)))
+
+        self.panel.snd_back.clicked.connect(
+            lambda: self.setCurrentIndex(self.indexOf(self.panel.saved_connection_page))
+        )
+        self.panel.network_details_btn.clicked.connect(
+            lambda: self.setCurrentIndex(self.indexOf(self.panel.saved_details_page))
+        )
 
         self.panel.network_activate_btn.clicked.connect(
             lambda: self.saved_wifi_option_selected()
@@ -818,13 +822,10 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         elif checked_btn == self.panel.low_priorrity_btn:
             priority = 20
         else:
-            priority = 50 
+            priority = 50
 
         self.sdbus_network.update_connection_settings(
-            ssid=ssid,
-            password=password,
-            new_ssid=new_ssid,
-            priority=priority
+            ssid=ssid, password=password, new_ssid=new_ssid, priority=priority
         )
         QtCore.QTimer().singleShot(10000, lambda: self.network_list_worker.build())
         self.setCurrentIndex(self.indexOf(self.panel.network_list_page))
@@ -886,7 +887,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             else:
                 self.panel.network_activate_btn.setDisabled(True)
                 self.panel.sn_info.setText("Active Network")
-                
+
             self.panel.frame.repaint()
 
         else:
