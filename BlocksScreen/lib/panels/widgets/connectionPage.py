@@ -3,20 +3,16 @@ import logging
 from events import KlippyDisconnected, KlippyReady, KlippyShutdown
 from lib.moonrakerComm import MoonWebSocket
 from lib.ui.connectionWindow_ui import Ui_ConnectivityForm
-from PyQt6 import QtCore, QtWidgets, QtGui
+from PyQt6 import QtCore, QtWidgets
 
 
 class ConnectionPage(QtWidgets.QFrame):
     text_updated = QtCore.pyqtSignal(int, name="connection_text_updated")
-    retry_connection_clicked = QtCore.pyqtSignal(
-        name="retry_connection_clicked"
-    )
+    retry_connection_clicked = QtCore.pyqtSignal(name="retry_connection_clicked")
     wifi_button_clicked = QtCore.pyqtSignal(name="call_network_page")
     reboot_clicked = QtCore.pyqtSignal(name="reboot_clicked")
     restart_klipper_clicked = QtCore.pyqtSignal(name="restart_klipper_clicked")
-    firmware_restart_clicked = QtCore.pyqtSignal(
-        name="firmware_restart_clicked"
-    )
+    firmware_restart_clicked = QtCore.pyqtSignal(name="firmware_restart_clicked")
 
     def __init__(self, parent: QtWidgets.QWidget, ws: MoonWebSocket, /):
         super().__init__(parent)
@@ -31,7 +27,7 @@ class ConnectionPage(QtWidgets.QFrame):
         self.message = None
         self.dot_timer = QtCore.QTimer(self)
         self.dot_timer.setInterval(1000)
-        self.dot_timer.timeout.connect(self.add_dot)
+        self.dot_timer.timeout.connect(self._add_dot)
 
         self.installEventFilter(self.parent())
 
@@ -51,6 +47,7 @@ class ConnectionPage(QtWidgets.QFrame):
         self.ws.klippy_state_signal.connect(self.on_klippy_state)
 
     def show_panel(self, reason: str | None = None):
+        """Show widget"""
         self.show()
         if reason is not None:
             self.text_update(reason)
@@ -58,12 +55,9 @@ class ConnectionPage(QtWidgets.QFrame):
         self.text_update()
         return False
 
-    @QtCore.pyqtSlot(bool, name="klippy_connection")
-    def on_klippy_connection(self, state: bool):
-        pass
-
     @QtCore.pyqtSlot(str, name="on_klippy_state")
     def on_klippy_state(self, state: str):
+        """Handle klippy state changes"""
         if state == "error":
             self.panel.connectionTextBox.setText("Klipper Connection Error")
             if not self.isVisible():
@@ -87,22 +81,24 @@ class ConnectionPage(QtWidgets.QFrame):
     @QtCore.pyqtSlot(int, name="on_websocket_connecting")
     @QtCore.pyqtSlot(str, name="on_websocket_connecting")
     def on_websocket_connecting(self, attempt: int):
+        """Handle websocket connecting state"""
         self.text_update(attempt)
 
     @QtCore.pyqtSlot(name="on_websocket_connection_achieved")
     def on_websocket_connection_achieved(self):
-        self.panel.connectionTextBox.setText(
-            "Moonraker Connected\n Klippy not ready"
-        )
+        """Handle websocket connected state"""
+        self.panel.connectionTextBox.setText("Moonraker Connected\n Klippy not ready")
         self.hide()
 
     @QtCore.pyqtSlot(name="on_websocket_connection_lost")
     def on_websocket_connection_lost(self):
+        """Handle websocket connection lost state"""
         if not self.isVisible():
             self.show()
         self.text_update(text="Websocket lost")
 
     def text_update(self, text: int | str | None = None):
+        """Update widget text"""
         if self.state == "shutdown" and self.message is not None:
             return False
 
@@ -142,7 +138,7 @@ class ConnectionPage(QtWidgets.QFrame):
 
         return False
 
-    def add_dot(self):
+    def _add_dot(self):
         if self.state == "shutdown" and self.message is not None:
             self.dot_timer.stop()
             return False
@@ -156,13 +152,13 @@ class ConnectionPage(QtWidgets.QFrame):
 
     @QtCore.pyqtSlot(str, str, name="webhooks_update")
     def webhook_update(self, state: str, message: str):
+        """Handle websocket webhook updates"""
         self.state = state
         self.message = message
         self.text_update()
 
-    def eventFilter(
-        self, object: QtCore.QObject, event: QtCore.QEvent
-    ) -> bool:
+    def eventFilter(self, object: QtCore.QObject, event: QtCore.QEvent) -> bool:
+        """Re-implemented method, filter events"""
         if event.type() == KlippyDisconnected.type():
             if not self.isVisible():
                 self.panel.connectionTextBox.setText("Klippy Disconnected")

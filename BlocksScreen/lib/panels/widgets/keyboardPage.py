@@ -4,7 +4,7 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 
 
 class CustomQwertyKeyboard(QtWidgets.QWidget):
-    """A custom numpad for inserting integer values"""
+    """A custom keyboard for inserting integer values"""
 
     value_selected = QtCore.pyqtSignal(str, name="value_selected")
     request_back = QtCore.pyqtSignal(name="request_back")
@@ -14,7 +14,7 @@ class CustomQwertyKeyboard(QtWidgets.QWidget):
         parent,
     ) -> None:
         super().__init__(parent)
-        self.setupUi()
+        self._setupUi()
         self.current_value: str = ""
         self.symbolsrun = False
         self.setCursor(
@@ -54,8 +54,8 @@ class CustomQwertyKeyboard(QtWidgets.QWidget):
 
         self.inserted_value.setText("")
 
-        self.K_keychange.clicked.connect(self.handle_checkbuttons)
-        self.K_shift.clicked.connect(self.handle_checkbuttons)
+        self.K_keychange.clicked.connect(self.handle_keyboard_layout)
+        self.K_shift.clicked.connect(self.handle_keyboard_layout)
 
         self.numpad_back_btn.clicked.connect(lambda: self.request_back.emit())
 
@@ -75,9 +75,10 @@ class CustomQwertyKeyboard(QtWidgets.QWidget):
                 color: white;
             }
         """)
-        self.handle_checkbuttons()
+        self.handle_keyboard_layout()
 
-    def handle_checkbuttons(self):
+    def handle_keyboard_layout(self):
+        """Verifies if shift is toggled, changes layout accordingly"""
         shift = self.K_shift.isChecked()
         keychange = self.K_keychange.isChecked()
 
@@ -207,7 +208,7 @@ class CustomQwertyKeyboard(QtWidgets.QWidget):
             self.K_shift.setText("Shift")
 
     def value_inserted(self, value: str) -> None:
-        """Handle number insertion on the numpad
+        """Handle value insertion on the keyboard
 
         Args:
             value (int | str): value
@@ -235,10 +236,11 @@ class CustomQwertyKeyboard(QtWidgets.QWidget):
         self.inserted_value.setText(str(self.current_value))
 
     def set_value(self, value: str) -> None:
+        """Set keyboard value"""
         self.current_value = value
         self.inserted_value.setText(value)
 
-    def setupUi(self):
+    def _setupUi(self):
         self.setObjectName("self")
         self.setEnabled(True)
         self.resize(800, 480)

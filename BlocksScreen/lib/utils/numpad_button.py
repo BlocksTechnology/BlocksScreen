@@ -9,12 +9,15 @@ class NumpadButton(QtWidgets.QPushButton):
         self._position: str = ""
 
     def get_position(self):
+        """Get numpad button position"""
         return self._position
 
     def set_position(self, value):
+        """Set position"""
         self._position = str(value).lower()
 
     def paintEvent(self, e: QtGui.QPaintEvent | None):
+        """Re-implemented method, paint widget"""
         opt = QtWidgets.QStyleOptionButton()
         self.initStyleOption(opt)
 
@@ -28,9 +31,7 @@ class NumpadButton(QtWidgets.QPushButton):
 
         if _style is None or _rect is None:
             return
-        margin = _style.pixelMetric(
-            _style.PixelMetric.PM_ButtonMargin, opt, self
-        )
+        margin = _style.pixelMetric(_style.PixelMetric.PM_ButtonMargin, opt, self)
         bg_color = (
             QtGui.QColor(164, 164, 164)
             if self.isDown()
@@ -143,6 +144,7 @@ class NumpadButton(QtWidgets.QPushButton):
             painter.setPen(QtCore.Qt.PenStyle.NoPen)
 
     def setProperty(self, name: str, value: typing.Any):
+        """Re-implemented method, set widget properties"""
         if name == "position":
             self.set_position(value)
 

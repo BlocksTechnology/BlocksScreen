@@ -1,20 +1,23 @@
+# Class that represents a filament spool
+
 from typing import Optional
-
-
 import enum
 
 
-# typing.Optional[type()] == typing.Union[type(), None]
-
-
 class Filament:
+    """Filament spool"""
+
     class SpoolBaseWeights(enum.Enum):  # XXX This enum will probably be unnecessary
+        """Spool base weights"""
+
         MINI = 750
         BASE = 1000
         BIG = 3000
         JUMBO = 5000
 
     class SpoolMaterial(enum.Flag):
+        """Spool material types"""
+
         PLASTIC = enum.auto()
         PAPER = enum.auto()
         UNKNOWN = -1
@@ -80,10 +83,4 @@ class Filament:
                 raise ValueError(
                     "Spool Material type is invalid"
                 )  # Correct type but invalid option
-            else:
-                raise TypeError("")  # TODO: Finish this type raise
         self._spool_type = new
-
-    def calc_remaining_weight(self): ...  # TODO calculate remaining spool weight
-
-    def calc_initial_weight(self): ...  # TODO calculate initial spool weight

@@ -47,10 +47,14 @@ indentation_size = 4
 
 
 class Sentinel(enum.Enum):
+    """Sentinel value to signify missing condition, absence of value"""
+
     MISSING = object
 
 
 class ConfigError(Exception):
+    """Exception raised when Configfile errors exist"""
+
     def __init__(self, msg) -> None:
         super().__init__(msg)
         self.msg = msg
@@ -59,23 +63,9 @@ class ConfigError(Exception):
 class BlocksScreenConfig:
     config = configparser.ConfigParser(
         allow_no_value=True,
-        # interpolation=configparser.ExtendedInterpolation(),
-        # delimiters=(":"),
-        # inline_comment_prefixes=("#"),
-        # comment_prefixes=("#", "#~#"),
-        # empty_lines_in_values=True,
     )
-
     update_pending: bool = False
-
     _instance = None
-
-    # def __new__(
-    #     cls, *args, **kwargs
-    # ) -> BlocksScreenConfig:  # Singleton pattern
-    #     if not cls._instance:
-    #         cls._instance = super(BlocksScreenConfig, cls).__new__(cls)
-    #     return cls._instance
 
     def __init__(
         self, configfile: typing.Union[str, pathlib.Path], section: str
@@ -93,24 +83,41 @@ class BlocksScreenConfig:
         return key in self.config
 
     def sections(self) -> typing.List[str]:
+        """Returns list of all sections"""
         return self.config.sections()
 
     def get_section(
         self, section: str, fallback: typing.Optional[T] = None
     ) -> BlocksScreenConfig:
+        """Get configfile section"""
         if not self.config.has_section(section):
-            raise configparser.NoSectionError(
-                f"No section with name: {section}"
-            )
+            raise configparser.NoSectionError(f"No section with name: {section}")
         return BlocksScreenConfig(self.configfile, section)
 
     def get_options(self) -> list:
+        """Get section options"""
         return self.config.options(self.section)
 
     def has_section(self, section: str) -> bool:
+        """Check if config file has a section
+
+        Args:
+            section (str): section name
+
+        Returns:
+            bool: true if section exists, false otherwise
+        """
         return bool(self.config.has_section(section))
 
     def has_option(self, option: str) -> bool:
+        """Check if section has a option
+
+        Args:
+            option (str): option name
+
+        Returns:
+            bool: true if section exists, false otherwise
+        """
         return bool(self.config.has_option(self.section, option))
 
     def get(
@@ -119,10 +126,18 @@ class BlocksScreenConfig:
         parser: type = str,
         default: typing.Union[Sentinel, str, T] = Sentinel.MISSING,
     ) -> typing.Union[Sentinel, str]:
+        """Get option value
+
+        Args:
+            option (str): option name
+            parser (type, optional): bool, float, int. Defaults to str.
+            default (typing.Union[Sentinel, str, T], optional): Default value for specified option. Defaults to Sentinel.MISSING.
+
+        Returns:
+            typing.Union[Sentinel, str]: Requested option. Defaults to the specified default value
+        """
         return parser(
-            self.config.get(
-                section=self.section, option=option, fallback=default
-            )
+            self.config.get(section=self.section, option=option, fallback=default)
         )
 
     def getint(
@@ -130,15 +145,31 @@ class BlocksScreenConfig:
         option: str,
         default: typing.Union[Sentinel, int] = Sentinel.MISSING,
     ) -> typing.Union[Sentinel, int]:
-        return self.config.getint(
-            section=self.section, option=option, fallback=default
-        )
+        """Get option value
+
+        Args:
+            option (str): option name
+            default (typing.Union[Sentinel, int], optional): Default value for specified option. Defaults to Sentinel.MISSING.
+
+        Returns:
+            typing.Union[Sentinel, int]: Requested option.
+        """
+        return self.config.getint(section=self.section, option=option, fallback=default)
 
     def getfloat(
         self,
         option: str,
         default: typing.Union[Sentinel, float] = Sentinel.MISSING,
     ) -> typing.Union[Sentinel, float]:
+        """Get the value for the specified option
+
+        Args:
+            option (str): option name
+            default (typing.Union[Sentinel, float], optional): Default value for specified option. Defaults to Sentinel.MISSING.
+
+        Returns:
+            typing.Union[Sentinel, float]: _description_
+        """
         return self.config.getfloat(
             section=self.section, option=option, fallback=default
         )
@@ -148,6 +179,15 @@ class BlocksScreenConfig:
         option: str,
         default: typing.Union[Sentinel, bool] = Sentinel.MISSING,
     ) -> typing.Union[Sentinel, bool]:
+        """Get option value
+
+        Args:
+            option (str): option name
+            default (typing.Union[Sentinel, bool], optional): Default value for specified option. Defaults to Sentinel.MISSING.
+
+        Returns:
+            typing.Union[Sentinel, bool]: _description_
+        """
         return self.config.getboolean(
             section=self.section, option=option, fallback=default
         )
@@ -156,9 +196,7 @@ class BlocksScreenConfig:
         try:
             return self.raw_config.index("[" + section + "]")
         except ValueError as e:
-            raise configparser.Error(
-                f'Section "{section}" does not exist: {e}'
-            )
+            raise configparser.Error(f'Section "{section}" does not exist: {e}')
 
     def _find_section_limits(self, section: str) -> typing.Tuple:
         try:
@@ -189,6 +227,14 @@ class BlocksScreenConfig:
             )
 
     def add_section(self, section: str) -> None:
+        """Add a section to configuration file
+
+        Args:
+            section (str): section name
+
+        Raises:
+            configparser.DuplicateSectionError: Exception thrown when section is duplicated
+        """
         try:
             with self.file_lock:
                 sec_string = f"[{section}]"
@@ -209,9 +255,7 @@ class BlocksScreenConfig:
         except configparser.DuplicateSectionError as e:
             logging.error(f'Section "{section}" already exists. {e}')
         except configparser.Error as e:
-            logging.error(
-                f'Unable to add "{section}" section to configuration: {e}'
-            )
+            logging.error(f'Unable to add "{section}" section to configuration: {e}')
 
     def add_option(
         self,
@@ -219,6 +263,13 @@ class BlocksScreenConfig:
         option: str,
         value: typing.Union[str, None] = None,
     ) -> None:
+        """Add option with a value to a section
+
+        Args:
+            section (str): section name
+            option (str): option name
+            value (typing.Union[str, None], optional): value for the specified option. Defaults to None.
+        """
         try:
             with self.file_lock:
                 section_start, section_end = self._find_section_limits(section)
@@ -239,13 +290,12 @@ class BlocksScreenConfig:
             )
 
     def save_configuration(self) -> None:
+        """Save teh configuration to file"""
         try:
             if not self.update_pending:
                 return
             with self.file_lock:
-                self.configfile.write_text(
-                    "\n".join(self.raw_config), encoding="utf-8"
-                )
+                self.configfile.write_text("\n".join(self.raw_config), encoding="utf-8")
                 sio = io.StringIO()
                 sio.writelines(self.raw_config)
                 self.config.write(sio)
@@ -257,13 +307,8 @@ class BlocksScreenConfig:
         finally:
             self.update_pending = False
 
-    def _do_save(self, data) -> bool:
-        try:
-            return True
-        except Exception as e:
-            return False
-
     def load_config(self):
+        """Load configuration file"""
         try:
             self.raw_config.clear()
             self.config.clear()  # Reset configparser
@@ -330,6 +375,7 @@ class BlocksScreenConfig:
 
 
 def get_configparser() -> BlocksScreenConfig:
+    """Loads configuration from file and returns that configuration"""
     wanted_target = os.path.join(DEFAULT_CONFIGFILE_PATH, "BlocksScreen.cfg")
     fallback = os.path.join(WORKING_DIR, "BlocksScreen.cfg")
     configfile = (
@@ -337,13 +383,9 @@ def get_configparser() -> BlocksScreenConfig:
         if check_file_on_path(DEFAULT_CONFIGFILE_PATH, "BlocksScreen.cfg")
         else fallback
     )
-    try:
-        config_object = BlocksScreenConfig(
-            configfile=configfile, section="server"
-        )
-        config_object.load_config()
-        if not config_object.has_section("server"):
-            raise ConfigError("Section [server] is missing from configuration")
-    except ConfigError:
+    config_object = BlocksScreenConfig(configfile=configfile, section="server")
+    config_object.load_config()
+    if not config_object.has_section("server"):
         logging.error("Error loading configuration file for the application.")
+        raise ConfigError("Section [server] is missing from configuration")
     return BlocksScreenConfig(configfile=configfile, section="server")

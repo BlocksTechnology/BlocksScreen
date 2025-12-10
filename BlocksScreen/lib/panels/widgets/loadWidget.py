@@ -1,8 +1,7 @@
-
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 
-class LoadingOverlayWidget(QtWidgets.QLabel): 
+class LoadingOverlayWidget(QtWidgets.QLabel):
     def __init__(
         self,
         parent: QtWidgets.QWidget,
@@ -16,7 +15,7 @@ class LoadingOverlayWidget(QtWidgets.QLabel):
         self.max_length = 150.0
         self.length_step = 2.5
 
-        self.setupUI()
+        self._setupUI()
 
         self.timer = QtCore.QTimer(self)
         self.timer.timeout.connect(self._update_animation)
@@ -25,10 +24,11 @@ class LoadingOverlayWidget(QtWidgets.QLabel):
         self.repaint()
 
     def set_status_message(self, message: str) -> None:
+        """Set widget message"""
         self.label.setText(message)
 
-
     def close(self) -> bool:
+        """Re-implemented method, close widget"""
         self.timer.stop()
         self.label.setText("Loading...")
         self._angle = 0
@@ -48,19 +48,13 @@ class LoadingOverlayWidget(QtWidgets.QLabel):
                 self._is_span_growing = True
         self.update()
 
-
     def paintEvent(self, a0: QtGui.QPaintEvent) -> None:
+        """Re-implemented method, paint widget"""
         painter = QtGui.QPainter(self)
         painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing, True)
-        painter.setRenderHint(
-            QtGui.QPainter.RenderHint.LosslessImageRendering, True
-        )
-        painter.setRenderHint(
-            QtGui.QPainter.RenderHint.SmoothPixmapTransform, True
-        )
-        painter.setRenderHint(
-            QtGui.QPainter.RenderHint.TextAntialiasing, True
-        )
+        painter.setRenderHint(QtGui.QPainter.RenderHint.LosslessImageRendering, True)
+        painter.setRenderHint(QtGui.QPainter.RenderHint.SmoothPixmapTransform, True)
+        painter.setRenderHint(QtGui.QPainter.RenderHint.TextAntialiasing, True)
         pen = QtGui.QPen()
         pen.setWidth(8)
         pen.setColor(QtGui.QColor("#ffffff"))
@@ -74,35 +68,31 @@ class LoadingOverlayWidget(QtWidgets.QLabel):
         painter.translate(center_x, center_y)
         painter.rotate(self._angle)
 
-        arc_rect = QtCore.QRectF(
-            -arc_size / 2, -arc_size / 2, arc_size, arc_size
-        )
+        arc_rect = QtCore.QRectF(-arc_size / 2, -arc_size / 2, arc_size, arc_size)
         span_angle = int(self._span_angle * 16)
         painter.drawArc(arc_rect, 0, span_angle)
 
     def resizeEvent(self, event: QtGui.QResizeEvent) -> None:
+        """Re-implemented method, handle resize event"""
         super().resizeEvent(event)
-
         label_width = self.width()
         label_height = 100
         label_x = (self.width() - label_width) // 2
         label_y = int(self.height() * 0.65)
-
         margin = 20
         # Center the GIF
         gifshow_width = self.width() - margin * 2
         gifshow_height = self.height() - (self.height() - label_y) - margin
-
         self.gifshow.setGeometry(margin, margin, gifshow_width, gifshow_height)
-
         self.label.setGeometry(label_x, label_y, label_width, label_height)
 
     def show(self) -> None:
+        """Re-implemented method, show widget"""
         self.timer.start()
         self.repaint()
         return super().show()
 
-    def setupUI(self) -> None:
+    def _setupUI(self) -> None:
         self.gifshow = QtWidgets.QLabel("", self)
         self.gifshow.setObjectName("gifshow")
         self.gifshow.setStyleSheet("background: transparent;")

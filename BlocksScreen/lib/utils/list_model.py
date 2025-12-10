@@ -6,7 +6,7 @@ from PyQt6 import QtCore, QtGui, QtWidgets  # pylint: disable=import-error
 
 @dataclass
 class ListItem:
-    """Data for a list item"""
+    """List item data"""
 
     text: str
     right_text: str = ""

@@ -12,12 +12,16 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 
 
 class ClickableGraphicsView(QtWidgets.QGraphicsView):
+    """Re-implementation of QGraphicsView that adds clicked signal"""
+
     clicked = QtCore.pyqtSignal()
 
 
 def mousePressEvent(self, event: QtGui.QMouseEvent) -> None:
+    """Filter mouse press events"""
     if event.button() == QtCore.Qt.MouseButton.LeftButton:
         self.clicked.emit()
+        return True  # Issue event handled
     super(ClickableGraphicsView, self).mousePressEvent(event)
 
 
@@ -59,7 +63,7 @@ class JobStatusWidget(QtWidgets.QWidget):
         super().__init__(parent)
 
         self.canceldialog = dialogPage.DialogPage(self)
-        self.setupUI()
+        self._setupUI()
         self.tune_menu_btn.clicked.connect(self.tune_clicked.emit)
         self.pause_printing_btn.clicked.connect(self.pause_resume_print)
         self.stop_printing_btn.clicked.connect(self.handleCancel)
@@ -77,6 +81,7 @@ class JobStatusWidget(QtWidgets.QWidget):
         self.CBVBigThumbnail.installEventFilter(self)
 
     def eventFilter(self, source, event):
+        """Re-implemented method, filter events"""
         if (
             source == self.CBVSmallThumbnail
             and event.type() == QtCore.QEvent.Type.MouseButtonPress
@@ -95,6 +100,7 @@ class JobStatusWidget(QtWidgets.QWidget):
 
     @QtCore.pyqtSlot(name="show-thumbnail")
     def showthumbnail(self):
+        """Show print job fullscreen thumbnail"""
         self.contentWidget.hide()
         self.progressWidget.hide()
         self.headerWidget.hide()
@@ -104,6 +110,7 @@ class JobStatusWidget(QtWidgets.QWidget):
 
     @QtCore.pyqtSlot(name="hide-thumbnail")
     def hidethumbnail(self):
+        """Hide print job fullscreen thumbnail"""
         self.contentWidget.show()
         self.progressWidget.show()
         self.headerWidget.show()
@@ -113,7 +120,7 @@ class JobStatusWidget(QtWidgets.QWidget):
 
     @QtCore.pyqtSlot(name="handle-cancel")
     def handleCancel(self) -> None:
-        """Handle the cancel print job dialog"""
+        """Handle cancel print job dialog"""
         self.canceldialog.set_message(
             "Are you sure you \n want to cancel \n this print job?"
         )
@@ -159,6 +166,7 @@ class JobStatusWidget(QtWidgets.QWidget):
 
     @QtCore.pyqtSlot(dict, name="on_fileinfo")
     def on_fileinfo(self, fileinfo: dict) -> None:
+        """Handle received file information/metadata"""
         self.total_layers = str(fileinfo.get("layer_count", "?"))
         self.layer_display_button.setText("?")
         if (
@@ -175,6 +183,7 @@ class JobStatusWidget(QtWidgets.QWidget):
 
     @QtCore.pyqtSlot(name="pause_resume_print")
     def pause_resume_print(self) -> None:
+        """Handle pause/resume print job"""
         if not getattr(self, "_pause_locked", False):
             self._pause_locked = True
             self.pause_printing_btn.setEnabled(False)
@@ -233,7 +242,6 @@ class JobStatusWidget(QtWidgets.QWidget):
                     self.file_metadata.clear()
                     self.hide_request.emit()
 
-                    
                 if hasattr(events, str("Print" + value.capitalize())):
                     event_obj = getattr(events, str("Print" + value.capitalize()))
                     event = event_obj(self._current_file_name, self.file_metadata)
@@ -278,13 +286,7 @@ class JobStatusWidget(QtWidgets.QWidget):
 
     @QtCore.pyqtSlot(str, list, name="on_gcode_move_update")
     def on_gcode_move_update(self, field: str, value: list) -> None:
-        # """Processes the information that comes from the printer object "gcode_move"
-
-        # Args:
-        #     field (str): Name of the updated field
-        #     value (list): New value for the field
-        # """
-
+        """Handle gcode move"""
         if isinstance(value, list):
             if "gcode_position" in field:  # Without offsets
                 if self._internal_print_status == "printing":
@@ -307,7 +309,7 @@ class JobStatusWidget(QtWidgets.QWidget):
     @QtCore.pyqtSlot(str, float, name="virtual_sdcard_update")
     @QtCore.pyqtSlot(str, bool, name="virtual_sdcard_update")
     def virtual_sdcard_update(self, field: str, value: float | bool) -> None:
-        """Slot for incoming printer object virtual_sdcard information update
+        """Handle virtual sdcard
 
         Args:
             field (str): Name of the updated field on the virtual_sdcard object
@@ -321,6 +323,7 @@ class JobStatusWidget(QtWidgets.QWidget):
                 self.printing_progress_bar.setValue(self.print_progress)
 
     def paintEvent(self, a0: QtGui.QPaintEvent) -> None:
+        """Re-implemented method, paint widget"""
         _scene = QtWidgets.QGraphicsScene()
         if not self.smalthumbnail.isNull():
             _graphics_rect = self.CBVSmallThumbnail.rect().toRectF()
@@ -380,7 +383,8 @@ class JobStatusWidget(QtWidgets.QWidget):
             _scene.addItem(_item_scaled)
             self.CBVBigThumbnail.setScene(_scene)
 
-    def setupUI(self) -> None:
+    def _setupUI(self) -> None:
+        """Setup widget ui"""
         sizePolicy = QtWidgets.QSizePolicy(
             QtWidgets.QSizePolicy.Policy.Expanding,
             QtWidgets.QSizePolicy.Policy.Expanding,

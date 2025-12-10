@@ -2,31 +2,28 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 
 
 class DialogPage(QtWidgets.QDialog):
-    button_clicked = QtCore.pyqtSignal(
-        str
-    )  # Signal to emit which button was clicked
+    button_clicked = QtCore.pyqtSignal(str)  # Signal to emit which button was clicked
 
     def __init__(
         self,
         parent: QtWidgets.QWidget,
     ) -> None:
         super().__init__(parent)
-
         self.setWindowFlags(
-            QtCore.Qt.WindowType.Popup
-            | QtCore.Qt.WindowType.FramelessWindowHint
+            QtCore.Qt.WindowType.Popup | QtCore.Qt.WindowType.FramelessWindowHint
         )
         self.setAttribute(
             QtCore.Qt.WidgetAttribute.WA_TranslucentBackground, True
         )  # Make background transparent
-
-        self.setupUI()
+        self._setupUI()
         self.repaint()
 
     def set_message(self, message: str) -> None:
+        """Set dialog text message"""
         self.label.setText(message)
 
-    def geometry_calc(self) -> None:
+    def _geometry_calc(self) -> None:
+        """Calculate dialog widget position relative to the window"""
         app_instance = QtWidgets.QApplication.instance()
         main_window = app_instance.activeWindow() if app_instance else None
         if main_window is None and app_instance:
@@ -42,14 +39,13 @@ class DialogPage(QtWidgets.QDialog):
         self.testwidth = width
         self.testheight = height
         x = int(main_window.geometry().x() + (main_window.width() - width) / 2)
-        y = int(
-            main_window.geometry().y() + (main_window.height() - height) / 2
-        )
+        y = int(main_window.geometry().y() + (main_window.height() - height) / 2)
 
         self.setGeometry(x, y, width, height)
 
     def paintEvent(self, event: QtGui.QPaintEvent) -> None:
-        self.geometry_calc()
+        """Re-implemented method, paint widget"""
+        self._geometry_calc()
         painter = QtGui.QPainter(self)
         painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing, True)
 
@@ -74,10 +70,10 @@ class DialogPage(QtWidgets.QDialog):
         painter.end()
 
     def sizeHint(self) -> QtCore.QSize:
+        """Re-implemented method, widget size hint"""
         popup_width = int(self.geometry().width())
         popup_height = int(self.geometry().height())
         # Centering logic
-
         popup_x = self.x()
         popup_y = self.y() + (self.height() - popup_height) // 2
         self.move(popup_x, popup_y)
@@ -85,10 +81,8 @@ class DialogPage(QtWidgets.QDialog):
         self.setMinimumSize(popup_width, popup_height)
         return super().sizeHint()
 
-    def mousePressEvent(self, a0: QtGui.QMouseEvent) -> None:
-        return
-
     def resizeEvent(self, event: QtGui.QResizeEvent) -> None:
+        """Re-implemented method, handle resize event"""
         super().resizeEvent(event)
 
         label_width = self.testwidth
@@ -112,10 +106,11 @@ class DialogPage(QtWidgets.QDialog):
         )
 
     def show(self) -> None:
-        self.geometry_calc()
+        """Re-implemented method, show widget"""
+        self._geometry_calc()
         return super().show()
 
-    def setupUI(self) -> None:
+    def _setupUI(self) -> None:
         self.label = QtWidgets.QLabel("Test", self)
         font = QtGui.QFont()
         font.setPointSize(25)
@@ -166,17 +161,12 @@ class DialogPage(QtWidgets.QDialog):
         )
 
         # Connect button signals
-        self.confirm_button.clicked.connect(
-            lambda: self.on_button_clicked("Confirm")
-        )
-        self.cancel_button.clicked.connect(
-            lambda: self.on_button_clicked("Cancel")
-        )
+        self.confirm_button.clicked.connect(lambda: self.on_button_clicked("Confirm"))
+        self.cancel_button.clicked.connect(lambda: self.on_button_clicked("Cancel"))
 
     def on_button_clicked(self, button_name: str) -> None:
-        self.button_clicked.emit(
-            button_name
-        )  # Emit the signal with the button name
+        """Handle dialog buttons clicked"""
+        self.button_clicked.emit(button_name)  # Emit the signal with the button name
         if button_name == "Confirm":
             self.accept()  # Close the dialog with an accepted state
         elif button_name == "Cancel":
