@@ -43,6 +43,7 @@ class ConfirmWidget(QtWidgets.QWidget):
 
     @QtCore.pyqtSlot(str, dict, name="on_show_widget")
     def on_show_widget(self, text: str, filedata: dict | None = None) -> None:
+        """Handle widget show"""
         directory = os.path.dirname(text)
         filename = os.path.basename(text)
         self.directory = directory
@@ -101,11 +102,13 @@ class ConfirmWidget(QtWidgets.QWidget):
         return [days, hours, minutes, seconds]
 
     def hide(self):
+        """Hide widget"""
         self.directory = ""
         self.filename = ""
         return super().hide()
 
     def paintEvent(self, event: QtGui.QPaintEvent) -> None:
+        """Re-implemented method, paint widget"""
         if not self.isVisible():
             self.directory = ""
             self.filename = ""
@@ -144,14 +147,13 @@ class ConfirmWidget(QtWidgets.QWidget):
         self._scene.setSceneRect(graphics_rect)
 
     def showEvent(self, a0: QtGui.QShowEvent) -> None:
+        """Re-implemented method, Handle widget show event"""
         if not self.thumbnail:
             self.cf_thumbnail.close()
         return super().showEvent(a0)
 
-    def hideEvent(self, a0: QtGui.QHideEvent) -> None:
-        return super().hideEvent(a0)
-
     def setupUI(self) -> None:
+        """Setup widget ui"""
         sizePolicy = QtWidgets.QSizePolicy(
             QtWidgets.QSizePolicy.Policy.MinimumExpanding,
             QtWidgets.QSizePolicy.Policy.MinimumExpanding,

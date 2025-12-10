@@ -239,7 +239,7 @@ class UpdatePage(QtWidgets.QWidget):
         elif self.ongoing_update or complete:
             self.ongoing_update = False
             self.update_end.emit()
-            
+
         cli_version_info = message.get("version_info", None)
         if not cli_version_info:
             return

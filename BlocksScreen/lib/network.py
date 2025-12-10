@@ -1,6 +1,5 @@
 import asyncio
 import enum
-import hashlib
 import logging
 import threading
 import typing
@@ -133,7 +132,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
         self.loop.close()
 
     async def listener_monitor(self) -> None:
-        """Add state listener tasks to run loop"""
+        """Monitor for NetworkManager properties"""
         try:
             self._listeners_running = True
 
@@ -334,7 +333,36 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
             logger.error("Caught general exception while toggling wifi: %s", e)
 
     async def _toggle_networking(self, value: bool = True) -> None:
-        """Toggle Networking
+        if not self.primary_wifi_interface:
+            return
+        if self.primary_wifi_interface == "/":
+            return
+        results = asyncio.gather(
+            self.loop.create_task(self.nm.enable(value)),
+            return_exceptions=True,
+        )
+        for result in results:
+            if isinstance(result, Exception):
+                logger.error(f"Exception Caught when toggling network : {result}")
+
+    def disable_networking(self) -> None:
+        """Disable networking"""
+        if not (self.primary_wifi_interface and self.primary_wired_interface):
+            return
+        if self.primary_wifi_interface == "/" and self.primary_wired_interface == "/":
+            return
+        asyncio.run_coroutine_threadsafe(self._toggle_networking(False), self.loop)
+
+    def activate_networking(self) -> None:
+        """Activate networking"""
+        if not (self.primary_wifi_interface and self.primary_wired_interface):
+            return
+        if self.primary_wifi_interface == "/" and self.primary_wired_interface == "/":
+            return
+        asyncio.run_coroutine_threadsafe(self._toggle_networking(True), self.loop)
+
+    def toggle_hotspot(self, toggle: bool) -> None:
+        """Activate/Deactivate device hotspot
 
         Args:
             value (bool): Enable  or disable networking. Defaults to True.
@@ -490,8 +518,17 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
         return ""
 
     def get_current_ssid(self) -> str:
-        future = asyncio.run_coroutine_threadsafe(self._gather_ssid(), self.loop)
-        return future.result(timeout=5)
+        """Get current ssid
+
+        Returns:
+            str: ssid address
+        """
+        try:
+            future = asyncio.run_coroutine_threadsafe(self._gather_ssid(), self.loop)
+            return future.result(timeout=5)
+        except Exception as e:
+            logging.info(f"Unexpected error occurred: {e}")
+        return ""
 
     def get_current_ip_addr(self) -> str:
         """Get active connection ip address
@@ -583,7 +620,6 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
             If there is no wireless interface and no active connection return the first wired interface that is not (lo).
 
 
-            ### `TODO: Completely blocking and should be refactored`
         Returns:
             typing.List:
         """
@@ -682,6 +718,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
             return {}
 
     def get_available_networks(self) -> typing.Union[typing.Dict, None]:
+        """Get available networks"""
         future = asyncio.run_coroutine_threadsafe(
             self._get_available_networks(), self.loop
         )
@@ -1333,9 +1370,11 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
             logger.debug(f"Caught Exception while deleting network {ssid}: {e}")
 
     def get_hotspot_ssid(self) -> str:
+        """Get current hotspot ssid"""
         return self.hotspot_ssid
 
     def deactivate_connection(self, connection_path) -> None:
+        """Deactivate a connection, by connection path"""
         if not self.nm:
             return
         if not self.primary_wifi_interface:
@@ -1358,6 +1397,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
             )
 
     def deactivate_connection_by_ssid(self, ssid: str) -> None:
+        """Deactivate connection by ssid"""
         if not self.nm:
             return
         if not self.primary_wifi_interface:
@@ -1376,6 +1416,12 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
     def create_hotspot(
         self, ssid: str = "PrinterHotspot", password: str = "123456789"
     ) -> None:
+        """Create hostpot
+
+        Args:
+            ssid (str, optional): Hotspot ssid. Defaults to "PrinterHotspot".
+            password (str, optional): connection password. Defaults to "123456789".
+        """
         if self.is_known(ssid):
             self.delete_network(ssid)
             logger.debug("old hotspot deleted")
@@ -1428,6 +1474,12 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
     def set_network_priority(
         self, ssid: str, priority: ConnectionPriority = ConnectionPriority.LOW
     ) -> None:
+        """Set network priority
+
+        Args:
+            ssid (str): connection ssid
+            priority (ConnectionPriority, optional): Priority. Defaults to ConnectionPriority.LOW.
+        """
         if not self.nm:
             return
         if not self.is_known(ssid):
@@ -1497,4 +1549,4 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
             if password != self.hotspot_password and password:
                 self.hotspot_password = password
         except Exception as e:
-            logger.error(f"Caught Exception while updating network: %s", e)
+            logger.error("Caught Exception while updating network: %s", e)

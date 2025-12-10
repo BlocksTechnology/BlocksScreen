@@ -22,16 +22,15 @@ YELLOW = "\033[33m"
 RESET = "\033[0m"
 
 
-def setup_working_dir(): ...
-
-
 def setup_app_loggers():
-    ql = logger.create_logger(name="logs/BlocksScreen.log", level=logging.DEBUG)
+    """Setup logger"""
+    _ = logger.create_logger(name="logs/BlocksScreen.log", level=logging.DEBUG)
     _logger = logging.getLogger(name="logs/BlocksScreen.log")
     _logger.info("============ BlocksScreen Initializing ============")
 
 
 def show_splash(window: typing.Optional[QtWidgets.QWidget] = None):
+    """Show splash screen on app initialization"""
     logo = QtGui.QPixmap("BlocksScreen/BlocksScreen/lib/ui/resources/logoblocks.png")
     splash = QtWidgets.QSplashScreen(pixmap=logo)
     splash.setGeometry(QtCore.QRect(0, 0, 400, 200))
