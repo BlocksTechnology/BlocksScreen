@@ -84,9 +84,6 @@ class BlocksCustomButton(QtWidgets.QAbstractButton):
 
     def paintEvent(self, e: typing.Optional[QtGui.QPaintEvent]):
         """Re-implemented method, paint widget"""
-        opt = QtWidgets.QStyleOptionButton()
-        # self.initStyleOption(opt)
-
         painter = QtGui.QPainter(self)
         painter.setRenderHint(painter.RenderHint.Antialiasing, True)
         painter.setRenderHint(painter.RenderHint.SmoothPixmapTransform, True)
@@ -166,7 +163,6 @@ class BlocksCustomButton(QtWidgets.QAbstractButton):
 
             tinted_icon_pixmap = QtGui.QPixmap(_icon_scaled.size())
             tinted_icon_pixmap.fill(QtCore.Qt.GlobalColor.transparent)
-
 
             if not self.isEnabled():
                 tinted_icon_pixmap = QtGui.QPixmap(_icon_scaled.size())
