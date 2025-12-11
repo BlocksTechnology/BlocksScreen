@@ -1,23 +1,19 @@
+import os
 import typing
 
+import helper_methods
 from lib.utils.blocks_button import BlocksCustomButton
+from lib.utils.blocks_frame import BlocksCustomFrame
 from lib.utils.blocks_label import BlocksLabel
 from lib.utils.icon_button import IconButton
-from lib.utils.blocks_frame import BlocksCustomFrame
 from PyQt6 import QtCore, QtGui, QtWidgets
-
-import helper_methods
-
-
-import os
 
 
 class ConfirmWidget(QtWidgets.QWidget):
     on_accept: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         str, list, name="on_accept"
     )
-    on_reject: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(name="on_reject")
-
+    request_back: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(name="on_reject")
     on_delete: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         str, str, name="on_delete"
     )
@@ -36,7 +32,7 @@ class ConfirmWidget(QtWidgets.QWidget):
                 str(os.path.join(self.directory, self.filename)), self._thumbnails
             )
         )
-        self.back_btn.clicked.connect(self.on_reject.emit)
+        self.back_btn.clicked.connect(self.request_back.emit)
         self.reject_button.clicked.connect(
             lambda: self.on_delete.emit(self.directory, self.filename)
         )
