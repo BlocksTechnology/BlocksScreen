@@ -97,6 +97,11 @@ class DialogPage(QtWidgets.QDialog):
             70,
         )
 
+    def open(self):
+        """Re-implemented method, open widget"""
+        self._geometry_calc()
+        return super().open()
+
     def show(self) -> None:
         """Re-implemented method, show widget"""
         self._geometry_calc()
