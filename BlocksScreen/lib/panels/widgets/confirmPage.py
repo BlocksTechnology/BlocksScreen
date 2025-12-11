@@ -36,7 +36,7 @@ class ConfirmWidget(QtWidgets.QWidget):
         )
         self.back_btn.clicked.connect(self.request_back.emit)
         self.delete_file_button.clicked.connect(
-            lambda: self.on_delete.emit(self.directory, self.filename)
+            lambda: self.on_delete.emit(self.filename, self.directory)
         )
 
     @QtCore.pyqtSlot(str, dict, name="on_show_widget")

@@ -80,6 +80,15 @@ class Files(QtCore.QObject):
             self.on_file_list[list].emit(self.files)
             self.on_dirs[list].emit(self.directories)
 
+    @QtCore.pyqtSlot(str, name="on_request_delete_file")
+    def on_request_delete_file(self, filename: str) -> None:
+        """Requests deletion of a file
+
+        Args:
+            filename (str): file to delete
+        """
+        self.ws.api.delete_file(filename, "gcodes")  # Use the root directory 'gcodes'
+
     @QtCore.pyqtSlot(str, name="on_request_fileinfo")
     def on_request_fileinfo(self, filename: str) -> None:
         """Requests metadata for a file

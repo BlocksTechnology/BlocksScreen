@@ -167,19 +167,15 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.printer.print_stats_update[str, float].connect(
             self.jobStatusPage_widget.on_print_stats_update
         )
-
         self.printer.print_stats_update[str, str].connect(self.on_print_stats_update)
         self.printer.print_stats_update[str, dict].connect(self.on_print_stats_update)
         self.printer.print_stats_update[str, float].connect(self.on_print_stats_update)
-
         self.printer.gcode_move_update[str, list].connect(
             self.jobStatusPage_widget.on_gcode_move_update
         )
-
         self.babystepPage = BabystepPage(self)
         self.babystepPage.request_back.connect(self.back_button)
         self.addWidget(self.babystepPage)
-
         self.tune_page = TuneWidget(self)
         self.addWidget(self.tune_page)
         self.jobStatusPage_widget.tune_clicked.connect(
@@ -225,10 +221,8 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.tune_page.request_sensorsPage.connect(
             lambda: self.change_page(self.indexOf(self.sensorsPanel))
         )
-
         self.sensorsPanel = SensorsWindow(self)
         self.addWidget(self.sensorsPanel)
-
         self.printer.request_object_subscription_signal.connect(
             self.sensorsPanel.handle_available_fil_sensors
         )
@@ -245,11 +239,8 @@ class PrintTab(QtWidgets.QStackedWidget):
             partial(self.change_page, self.indexOf(self.filesPage_widget))
         )
         self.babystepPage.run_gcode.connect(self.ws.api.run_gcode)
-
         self.run_gcode_signal.connect(self.ws.api.run_gcode)
-
         self.confirmPage_widget.on_delete.connect(self.delete_file)
-
         self.change_page(self.indexOf(self.print_page))  # force set the initial page
 
     @QtCore.pyqtSlot(str, dict, name="on_print_stats_update")
@@ -301,21 +292,13 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.sliderPage.set_slider_maximum(max_value)
         self.change_page(self.indexOf(self.sliderPage))
 
-    def delete_file(self, direcotry: str, name: str):
+    def delete_file(self,filename: str, directory: str, ):
         """Handle Delete file button clicked"""
-        self.directory: str = direcotry
-        self.filename: str = name
         self.dialogPage.set_message("Are you sure you want to delete this file?")
-        self.dialogPage.button_clicked.connect(self.on_dialog_button_clicked)
-        self.dialogPage.show()
-
-    def on_dialog_button_clicked(self, button_name: str) -> None:
-        """Handle dialog button clicks"""
-        if button_name == "Confirm":
-            self.ws.api.delete_file(self.filename, self.directory)
-            self.dialogPage.hide()
-        else:
-            self.dialogPage.hide()
+        self.dialogPage.accepted.connect(
+            lambda: self.file_data.on_request_delete_file(filename, "gcodes")
+        )
+        self.dialogPage.open()
 
     def paintEvent(self, a0: QtGui.QPaintEvent) -> None:
         """Widget painting"""
@@ -349,6 +332,7 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.ws.api.cancel_print()
         self.on_cancel_print.emit()
         self.loadscreen.show()
+        self.loadscreen.setModal(True)
         self.loadscreen.set_status_message("Cancelling print...\nPlease wait")
 
     def change_page(self, index: int) -> None:

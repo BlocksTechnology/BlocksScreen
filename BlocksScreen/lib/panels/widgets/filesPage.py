@@ -74,11 +74,6 @@ class FilesPage(QtWidgets.QWidget):
         if self.isVisible():
             self._build_file_list()
 
-    @QtCore.pyqtSlot(str, name="on-delete-file")
-    def on_delete_file(self, filename: str) -> None:
-        """Handle file deleted"""
-        ...
-
     @QtCore.pyqtSlot(dict, name="on-fileinfo")
     def on_fileinfo(self, filedata: dict) -> None:
         """Handle receive file information/metadata"""
