@@ -27,11 +27,18 @@ class OptionCard(QtWidgets.QAbstractButton):
         self.card_text = text
         self.doubleT: bool = False
         self._setupUi(self)
-        self.option_icon.setAttribute(QtCore.Qt.WidgetAttribute.WA_TransparentForMouseEvents)
-        self.option_text.setAttribute(QtCore.Qt.WidgetAttribute.WA_TransparentForMouseEvents)
-        self.secondtext.setAttribute(QtCore.Qt.WidgetAttribute.WA_TransparentForMouseEvents)
-        self.line_separator.setAttribute(QtCore.Qt.WidgetAttribute.WA_TransparentForMouseEvents)
-
+        self.option_icon.setAttribute(
+            QtCore.Qt.WidgetAttribute.WA_TransparentForMouseEvents
+        )
+        self.option_text.setAttribute(
+            QtCore.Qt.WidgetAttribute.WA_TransparentForMouseEvents
+        )
+        self.secondtext.setAttribute(
+            QtCore.Qt.WidgetAttribute.WA_TransparentForMouseEvents
+        )
+        self.line_separator.setAttribute(
+            QtCore.Qt.WidgetAttribute.WA_TransparentForMouseEvents
+        )
 
         self.setMode(False)
         self.set_card_icon(icon)
