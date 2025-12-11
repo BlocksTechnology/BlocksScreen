@@ -543,9 +543,10 @@ class MoonAPI(QtCore.QObject):
     @QtCore.pyqtSlot(str, name="api-delete-file")
     def delete_file(self, filename: str, root_dir: str = "gcodes"):
         """Request file deletion"""
-        
+        print(f"Directory to delete : {root_dir} | Filename: {filename}")
         filepath = f"{root_dir}/{filename}"
-        print("filepath to delete:", filepath)
+        filepath = f"gcodes/{root_dir}/{filename}" if root_dir != "gcodes" else filepath
+        print(filepath)
         return self._ws.send_request(
             method="server.files.delete_file",
             params={"path": filepath},

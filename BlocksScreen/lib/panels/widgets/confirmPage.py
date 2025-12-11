@@ -27,7 +27,7 @@ class ConfirmWidget(QtWidgets.QWidget):
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_AcceptTouchEvents, True)
         self.thumbnail: QtGui.QImage = QtGui.QImage()
         self._thumbnails: typing.List = []
-        self.directory = ""
+        self.directory = "gcodes"
         self.filename = ""
         self.confirm_button.clicked.connect(
             lambda: self.on_accept.emit(

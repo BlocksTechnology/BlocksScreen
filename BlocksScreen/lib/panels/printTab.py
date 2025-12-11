@@ -126,7 +126,6 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.file_data.on_file_list.connect(self.filesPage_widget.on_file_list)
         self.jobStatusPage_widget = JobStatusWidget(self)
         self.addWidget(self.jobStatusPage_widget)
-
         self.confirmPage_widget.on_accept.connect(
             self.jobStatusPage_widget.on_print_start
         )
@@ -292,13 +291,22 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.sliderPage.set_slider_maximum(max_value)
         self.change_page(self.indexOf(self.sliderPage))
 
-    def delete_file(self,filename: str, directory: str, ):
-        """Handle Delete file button clicked"""
+    @QtCore.pyqtSlot(str, str, name="delete_file")
+    @QtCore.pyqtSlot(str, name="delete_file")
+    def delete_file(self, filename: str, directory: str = "gcodes") -> None:
+        """Handle Delete file signal, shows confirmation dialog"""
         self.dialogPage.set_message("Are you sure you want to delete this file?")
         self.dialogPage.accepted.connect(
-            lambda: self.file_data.on_request_delete_file(filename, "gcodes")
+            lambda: self._on_delete_file_confirmed(filename, directory)
         )
         self.dialogPage.open()
+
+    def _on_delete_file_confirmed(self, filename: str, directory: str) -> None:
+        """Handle confirmed file deletion after user accepted the dialog"""
+        self.file_data.on_request_delete_file(filename, directory)
+        self.request_back.emit()
+        self.filesPage_widget.reset_dir()
+        self.dialogPage.disconnect()
 
     def paintEvent(self, a0: QtGui.QPaintEvent) -> None:
         """Widget painting"""
