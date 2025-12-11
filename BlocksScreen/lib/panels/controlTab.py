@@ -310,7 +310,6 @@ class ControlTab(QtWidgets.QStackedWidget):
         else:
             name = name.removeprefix("fan_generic")
         fan_card = self.tune_display_buttons.get(name)
-        print(fan_card)
 
         if fan_card is None:
             icon_path = (
@@ -443,9 +442,7 @@ class ControlTab(QtWidgets.QStackedWidget):
                 and "range:" in msg_list
                 and "tolerance:" in msg_list
             ):
-                print("Match candidate:", msg_list)
                 match = re.search(pattern, msg_list)
-                print("Regex match:", match)
 
                 if match:
                     retries_done = int(match.group(1))
