@@ -33,7 +33,7 @@ class ConfirmWidget(QtWidgets.QWidget):
             )
         )
         self.back_btn.clicked.connect(self.request_back.emit)
-        self.reject_button.clicked.connect(
+        self.delete_file_button.clicked.connect(
             lambda: self.on_delete.emit(self.directory, self.filename)
         )
 
@@ -259,18 +259,18 @@ class ConfirmWidget(QtWidgets.QWidget):
             self.confirm_button, 0, QtCore.Qt.AlignmentFlag.AlignCenter
         )
 
-        self.reject_button = BlocksCustomButton(parent=self.info_frame)
-        self.reject_button.setMinimumSize(QtCore.QSize(250, 70))
-        self.reject_button.setMaximumSize(QtCore.QSize(250, 70))
-        self.reject_button.setFont(font)
-        self.reject_button.setFlat(True)
-        self.reject_button.setProperty(
+        self.delete_file_button = BlocksCustomButton(parent=self.info_frame)
+        self.delete_file_button.setMinimumSize(QtCore.QSize(250, 70))
+        self.delete_file_button.setMaximumSize(QtCore.QSize(250, 70))
+        self.delete_file_button.setFont(font)
+        self.delete_file_button.setFlat(True)
+        self.delete_file_button.setProperty(
             "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/garbage-icon.svg")
         )
-        self.reject_button.setText("Delete")
+        self.delete_file_button.setText("Delete")
         # 2. Align buttons to the right
         self.cf_confirm_layout.addWidget(
-            self.reject_button, 0, QtCore.Qt.AlignmentFlag.AlignCenter
+            self.delete_file_button, 0, QtCore.Qt.AlignmentFlag.AlignCenter
         )
 
         self.info_layout.addLayout(self.cf_confirm_layout)
