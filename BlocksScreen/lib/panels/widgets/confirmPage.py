@@ -13,7 +13,9 @@ class ConfirmWidget(QtWidgets.QWidget):
     on_accept: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         str, list, name="on_accept"
     )
-    request_back: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(name="on_reject")
+    request_back: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        name="request-back"
+    )
     on_delete: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         str, str, name="on_delete"
     )
