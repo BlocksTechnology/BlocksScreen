@@ -110,6 +110,14 @@ class DialogPage(QtWidgets.QDialog):
         self._geometry_calc()
         return super().show()
 
+    def on_button_clicked(self, button_name: str) -> None:
+        """Handle dialog buttons clicked"""
+        self.button_clicked.emit(button_name)  # Emit the signal with the button name
+        if button_name == "Confirm":
+            self.accept()  # Close the dialog with an accepted state
+        elif button_name == "Cancel":
+            self.reject()  # Close the dialog with a rejected state
+
     def _setupUI(self) -> None:
         self.label = QtWidgets.QLabel("Test", self)
         font = QtGui.QFont()
@@ -164,10 +172,4 @@ class DialogPage(QtWidgets.QDialog):
         self.confirm_button.clicked.connect(lambda: self.on_button_clicked("Confirm"))
         self.cancel_button.clicked.connect(lambda: self.on_button_clicked("Cancel"))
 
-    def on_button_clicked(self, button_name: str) -> None:
-        """Handle dialog buttons clicked"""
-        self.button_clicked.emit(button_name)  # Emit the signal with the button name
-        if button_name == "Confirm":
-            self.accept()  # Close the dialog with an accepted state
-        elif button_name == "Cancel":
-            self.reject()  # Close the dialog with a rejected state
+    
