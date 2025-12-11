@@ -346,11 +346,9 @@ class ControlTab(QtWidgets.QStackedWidget):
 
             self.tune_display_buttons[name] = card
             self.update()
-            fan_card = card  # reuse for next section
+            fan_card = card
 
-        # Update existing card value display
         if fan_card:
-            # Only multiply by 100 if it seems like a normalized value (0–1)
             value_percent = new_value * 100 if new_value <= 1 else new_value
             fan_card.secondtext.setText(f"{value_percent:.0f}%")
 

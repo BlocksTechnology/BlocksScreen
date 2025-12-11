@@ -37,10 +37,18 @@ class SliderPage(QtWidgets.QWidget):
         self.back_button.clicked.connect(self.value_selected.disconnect)
         self.slider.sliderReleased.connect(self.on_slider_value_change)
         self.increase_button.pressed.connect(
-            lambda: (self.slider.setSliderPosition(self.slider.sliderPosition() + 5))
+            lambda: {
+                (self.slider.setSliderPosition(self.slider.sliderPosition() + 5)),
+                self.on_slider_value_change(),
+            }
         )
         self.decrease_button.pressed.connect(
-            lambda: (self.slider.setSliderPosition(self.slider.sliderPosition() - 5))
+            lambda: {
+                (
+                    self.slider.setSliderPosition(self.slider.sliderPosition() - 5),
+                    self.on_slider_value_change(),
+                )
+            }
         )
         self.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
 
