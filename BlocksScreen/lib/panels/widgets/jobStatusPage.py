@@ -62,7 +62,7 @@ class JobStatusWidget(QtWidgets.QWidget):
     def __init__(self, parent) -> None:
         super().__init__(parent)
 
-        self.canceldialog = dialogPage.DialogPage(self)
+        self.cancel_print_dialog = dialogPage.DialogPage(self)
         self._setupUI()
         self.tune_menu_btn.clicked.connect(self.tune_clicked.emit)
         self.pause_printing_btn.clicked.connect(self.pause_resume_print)
@@ -121,18 +121,11 @@ class JobStatusWidget(QtWidgets.QWidget):
     @QtCore.pyqtSlot(name="handle-cancel")
     def handleCancel(self) -> None:
         """Handle cancel print job dialog"""
-        self.canceldialog.set_message(
+        self.cancel_print_dialog.set_message(
             "Are you sure you \n want to cancel \n this print job?"
         )
-        self.canceldialog.button_clicked.connect(self.on_dialog_button_clicked)
-        self.canceldialog.show()
-
-    def on_dialog_button_clicked(self, button_name: str) -> None:
-        """Handle dialog button clicks"""
-        if button_name == "Confirm":
-            self.print_cancel.emit()  # Emit the print_cancel signal
-        elif button_name == "Cancel":
-            pass
+        self.cancel_print_dialog.accepted.connect(self.print_cancel.emit)
+        self.cancel_print_dialog.open()
 
     @QtCore.pyqtSlot(str, list, name="on_print_start")
     def on_print_start(self, file: str, thumbnails: list) -> None:
