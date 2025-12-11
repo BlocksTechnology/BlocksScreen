@@ -265,7 +265,7 @@ class OptionCard(QtWidgets.QAbstractButton):
             QtWidgets.QSizePolicy.Policy.Minimum,
             QtWidgets.QSizePolicy.Policy.Expanding,
         )
-        self.retranslateUi(option_card)
+        self._retranslateUi(option_card)
         QtCore.QMetaObject.connectSlotsByName(option_card)
 
     def _retranslateUi(self, option_card):
