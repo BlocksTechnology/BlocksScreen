@@ -17,6 +17,7 @@ class SensorsWindow(QtWidgets.QWidget):
     request_back: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         name="request_back"
     )
+
     def __init__(self, parent):
         super(SensorsWindow, self).__init__(parent)
         self.model = EntryListModel()
@@ -24,10 +25,8 @@ class SensorsWindow(QtWidgets.QWidget):
         self.sensor_tracking_widget = {}
         self.current_widget = None
         self.sensor_list: list[SensorWidget] = []
-        self.setupUi()
-        self.setAttribute(
-            QtCore.Qt.WidgetAttribute.WA_TranslucentBackground, True
-        )
+        self._setupUi()
+        self.setAttribute(QtCore.Qt.WidgetAttribute.WA_TranslucentBackground, True)
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_AcceptTouchEvents, True)
         self.setTabletTracking(True)
         self.fs_back_button.clicked.connect(self.request_back)
@@ -38,20 +37,21 @@ class SensorsWindow(QtWidgets.QWidget):
         """
         self.model.clear()
         self.entry_delegate.clear()
-        
+
     @QtCore.pyqtSlot(dict, name="handle_available_fil_sensors")
     def handle_available_fil_sensors(self, sensors: dict) -> None:
-        """Handle available filament sensors, create `SensorWidget` for each detected
-        sensor
-        """
+        """Handle available filament sensors, create `SensorWidget` for each detected sensor"""
         if not isinstance(sensors, dict):
             return
         self.reset_view_model()
         filtered_sensors = list(
-        filter(
-            lambda printer_obj: str(printer_obj).startswith("filament_switch_sensor")
-            or str(printer_obj).startswith("filament_motion_sensor") or str(printer_obj).startswith("cutter_sensor"),
-            sensors.keys(),
+            filter(
+                lambda printer_obj: str(printer_obj).startswith(
+                    "filament_switch_sensor"
+                )
+                or str(printer_obj).startswith("filament_motion_sensor")
+                or str(printer_obj).startswith("cutter_sensor"),
+                sensors.keys(),
             )
         )
         if filtered_sensors:
@@ -61,26 +61,22 @@ class SensorsWindow(QtWidgets.QWidget):
         else:
             self.no_update_placeholder.show()
 
-
-
     @QtCore.pyqtSlot(str, str, bool, name="handle_fil_state_change")
     def handle_fil_state_change(
         self, sensor_name: str, parameter: str, value: bool
     ) -> None:
+        """Handle Klipper signals for filament sensor changes"""
         _item = self.sensor_tracking_widget.get(sensor_name)
         if _item:
             if parameter == "filament_detected":
-                state = SensorWidget.FilamentState(not value) 
-                _item.change_fil_sensor_state(
-                        state
-                )
+                state = SensorWidget.FilamentState(not value)
+                _item.change_fil_sensor_state(state)
             elif parameter == "enabled":
                 _item.toggle_button_state(SensorWidget.SensorState(value))
-                    
+
     def showEvent(self, event: QtGui.QShowEvent | None) -> None:
         """Re-add clients to update list"""
         return super().showEvent(event)
-    
 
     @QtCore.pyqtSlot(ListItem, name="on-item-clicked")
     def on_item_clicked(self, item: ListItem) -> None:
@@ -89,17 +85,16 @@ class SensorsWindow(QtWidgets.QWidget):
         """
         if not item:
             return
-        
+
         if self.current_widget:
             self.current_widget.hide()
-        
+
         name_id = item.text
         current_widget = self.sensor_tracking_widget.get(name_id)
         if current_widget is None:
             return
         self.current_widget = current_widget
         self.current_widget.show()
-
 
     def create_sensor_widget(self, name: str) -> SensorWidget:
         """Creates a sensor row to be added to the QListWidget
@@ -109,7 +104,6 @@ class SensorsWindow(QtWidgets.QWidget):
         """
         _item_widget = SensorWidget(self.infobox_frame, name)
         self.info_box_layout.addWidget(_item_widget)
-
 
         if self.current_widget:
             _item_widget.hide()
@@ -122,23 +116,21 @@ class SensorsWindow(QtWidgets.QWidget):
             right_text="",
             right_icon=self.pixmap,
             left_icon=None,
-            callback= None,
+            callback=None,
             selected=False,
             allow_check=False,
             _lfontsize=17,
             _rfontsize=12,
             height=80,
-            notificate=False
+            notificate=False,
         )
         _item_widget.run_gcode_signal.connect(self.run_gcode_signal)
         self.sensor_tracking_widget[name_id] = _item_widget
         self.model.add_item(item)
-        
+
         return _item_widget
 
-    def paintEvent(self, a0: QtGui.QPaintEvent) -> None: ...
-    
-    def setupUi(self) -> None:
+    def _setupUi(self) -> None:
         """Setup UI for updatePage"""
         font_id = QtGui.QFontDatabase.addApplicationFont(
             ":/font/media/fonts for text/Momcake-Bold.ttf"
@@ -320,9 +312,7 @@ class SensorsWindow(QtWidgets.QWidget):
         )
         self.fs_sensors_list.setAutoScroll(False)
         self.fs_sensors_list.setProperty("showDropIndicator", False)
-        self.fs_sensors_list.setDefaultDropAction(
-            QtCore.Qt.DropAction.IgnoreAction
-        )
+        self.fs_sensors_list.setDefaultDropAction(QtCore.Qt.DropAction.IgnoreAction)
         self.fs_sensors_list.setAlternatingRowColors(False)
         self.fs_sensors_list.setSelectionMode(
             QtWidgets.QAbstractItemView.SelectionMode.NoSelection
@@ -350,7 +340,7 @@ class SensorsWindow(QtWidgets.QWidget):
         self.sensor_buttons_frame.setLayout(self.sensor_buttons_layout)
 
         self.main_content_layout.addWidget(self.sensor_buttons_frame, 0)
-        
+
         self.infobox_frame = BlocksCustomFrame()
         self.infobox_frame.setMinimumSize(QtCore.QSize(250, 300))
         self.infobox_frame.setMaximumSize(QtCore.QSize(450, 500))
@@ -379,4 +369,4 @@ class SensorsWindow(QtWidgets.QWidget):
         self.infobox_frame.setLayout(self.info_box_layout)
         self.main_content_layout.addWidget(self.infobox_frame, 1)
         self.update_page_content_layout.addLayout(self.main_content_layout, 1)
-        self.setLayout(self.update_page_content_layout) 
+        self.setLayout(self.update_page_content_layout)
