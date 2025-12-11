@@ -1,4 +1,3 @@
-from ast import main
 import typing
 
 from PyQt6 import QtCore, QtGui, QtWidgets
@@ -10,40 +9,36 @@ class DialogPage(QtWidgets.QDialog):
     button_clicked: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         str
     )  # Signal to emit which button was clicked
+    x_offset: float = 0.7
+    y_offset: float = 0.7
 
     def __init__(
         self,
         parent: QtWidgets.QWidget,
     ) -> None:
         super().__init__(parent)
+        self._setupUI()
         self.setWindowFlags(
             QtCore.Qt.WindowType.Popup | QtCore.Qt.WindowType.FramelessWindowHint
         )
         self.setAttribute(
             QtCore.Qt.WidgetAttribute.WA_TranslucentBackground, True
         )  # Make background transparent
-        self._setupUI()
-        self.repaint()
+        self.setWindowModality(  # Force window modality to block input to other windows
+            QtCore.Qt.WindowModality.WindowModal
+        )
+        self.confirm_button.clicked.connect(lambda: self.on_button_clicked("Confirm"))
+        self.cancel_button.clicked.connect(lambda: self.on_button_clicked("Cancel"))
+        self.update()
 
     def set_message(self, message: str) -> None:
         """Set dialog text message"""
         self.label.setText(message)
 
-    def _geometry_calc(self) -> None:
-        """Calculate dialog widget position relative to the window"""
-        main_window = self._get_mainWindow_widget()
-        x_offset = 0.7
-        y_offset = 0.7
-        width = int(main_window.width() * x_offset)
-        height = int(main_window.height() * y_offset)
-        x = int(main_window.geometry().x() + (main_window.width() - width) / 2)
-        y = int(main_window.geometry().y() + (main_window.height() - height) / 2)
-        self.setGeometry(x, y, width, height)
-
     def _get_mainWindow_widget(self) -> typing.Optional[QtWidgets.QMainWindow]:
         """Get the main application window"""
         app_instance = QtWidgets.QApplication.instance()
-        if app_instance is None:
+        if not app_instance:
             return None
         main_window = app_instance.activeWindow()
         if main_window is None:
@@ -53,11 +48,19 @@ class DialogPage(QtWidgets.QDialog):
                     break
         return main_window if isinstance(main_window, QtWidgets.QMainWindow) else None
 
+    def _geometry_calc(self) -> None:
+        """Calculate dialog widget position relative to the window"""
+        main_window = self._get_mainWindow_widget()
+        width = int(main_window.width() * self.x_offset)
+        height = int(main_window.height() * self.y_offset)
+        x = int(main_window.geometry().x() + (main_window.width() - width) / 2)
+        y = int(main_window.geometry().y() + (main_window.height() - height) / 2)
+        self.setGeometry(x, y, width, height)
+
     def sizeHint(self) -> QtCore.QSize:
         """Re-implemented method, widget size hint"""
         popup_width = int(self.geometry().width())
         popup_height = int(self.geometry().height())
-        # Centering logic
         popup_x = self.x()
         popup_y = self.y() + (self.height() - popup_height) // 2
         self.move(popup_x, popup_y)
@@ -71,10 +74,8 @@ class DialogPage(QtWidgets.QDialog):
         main_window = self._get_mainWindow_widget()
         if main_window is None:
             return
-        x_offset = 0.7
-        y_offset = 0.7
-        width = int(main_window.width() * x_offset)
-        height = int(main_window.height() * y_offset)
+        width = int(main_window.width() * self.x_offset)
+        height = int(main_window.height() * self.y_offset)
         label_x = (self.width() - width) // 2
         label_y = int(height / 4) - 20  # Move the label to the top (adjust as needed)
         self.label.setGeometry(label_x, -label_y, width, height)
@@ -171,7 +172,3 @@ class DialogPage(QtWidgets.QDialog):
             int(self.width() / 2),
             70,
         )
-
-        # Connect button signals
-        self.confirm_button.clicked.connect(lambda: self.on_button_clicked("Confirm"))
-        self.cancel_button.clicked.connect(lambda: self.on_button_clicked("Cancel"))
