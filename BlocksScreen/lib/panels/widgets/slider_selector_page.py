@@ -121,8 +121,8 @@ class SliderPage(QtWidgets.QWidget):
         self.object_name_label = QtWidgets.QLabel(self)
         self.object_name_label.setFont(font)
         self.object_name_label.setPalette(palette)
-        self.object_name_label.setMinimumSize(QtCore.QSize(self.width(), 60))
-        self.object_name_label.setMaximumSize(QtCore.QSize(self.width() - 60, 60))
+        self.object_name_label.setMinimumSize(QtCore.QSize(self.width(), 80))
+        self.object_name_label.setMaximumSize(QtCore.QSize(self.width() - 60, 80))
         self.object_name_label.setAlignment(
             QtCore.Qt.AlignmentFlag.AlignHCenter | QtCore.Qt.AlignmentFlag.AlignVCenter
         )
