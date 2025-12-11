@@ -122,9 +122,9 @@ class JobStatusWidget(QtWidgets.QWidget):
     def handleCancel(self) -> None:
         """Handle cancel print job dialog"""
         self.cancel_print_dialog.set_message(
-            "Are you sure you \n want to cancel \n this print job?"
+            "Are you sure you \n want to cancel \n the current print job?"
         )
-        self.cancel_print_dialog.accepted.connect(self.print_cancel.emit)
+        self.cancel_print_dialog.accepted.connect(self.print_cancel)
         self.cancel_print_dialog.open()
 
     @QtCore.pyqtSlot(str, list, name="on_print_start")
