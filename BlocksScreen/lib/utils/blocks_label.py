@@ -176,22 +176,17 @@ class BlocksLabel(QtWidgets.QLabel):
         """Smoothly scroll the text leftwards."""
         if not self._marquee or self.paused:
             return
-
         p_to_m = self.scroll_speed * (self.scroll_animation_speed / 1000.0)
         self.scroll_pos -= p_to_m
-
         if self.scroll_pos <= -self.total_scroll_width:
             self.loop_count += 1
             if self.loop_count >= self.max_loops:
                 self.stop_scroll()
-                self.scroll_pos = 0
-                return
-            else:
-                self.scroll_pos = 0
-
+            self.scroll_pos = 0.0
         self.update()
 
     def paintEvent(self, a0: QtGui.QPaintEvent) -> None:
+        """Re-implemented method, paint widget"""
         qp = QtGui.QPainter(self)
         qp.setRenderHint(qp.RenderHint.Antialiasing, True)
         qp.setRenderHint(qp.RenderHint.SmoothPixmapTransform, True)
