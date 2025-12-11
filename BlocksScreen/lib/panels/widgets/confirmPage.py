@@ -17,7 +17,7 @@ class ConfirmWidget(QtWidgets.QWidget):
         name="request-back"
     )
     on_delete: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
-        str, str, name="on_delete"
+        str, str, name="delete_file"
     )
 
     def __init__(self, parent) -> None:
