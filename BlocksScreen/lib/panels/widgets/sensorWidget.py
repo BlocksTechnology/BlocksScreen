@@ -64,7 +64,7 @@ class SensorWidget(QtWidgets.QWidget):
         self.icon_pixmap_fnp: QtGui.QPixmap = QtGui.QPixmap(
             ":/filament_related/media/btn_icons/filament_sensor_off.svg"
         )
-        self.setupUI()
+        self._setupUI()
         self.toggle_button.stateChange.connect(self.toggle_sensor_state)
 
     @property
