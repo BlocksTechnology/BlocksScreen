@@ -26,7 +26,7 @@ class OptionCard(QtWidgets.QAbstractButton):
         self.name = name
         self.card_text = text
         self.doubleT: bool = False
-        self.setupUi(self)
+        self._setupUi(self)
 
         self.setMode(False)
         self.set_card_icon(icon)
