@@ -4,13 +4,20 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 
 
 class DialogPage(QtWidgets.QDialog):
-    """Simple confirmation dialog with custom message and Confirm/Back buttons"""
+    """Simple confirmation dialog with custom message and Confirm/Back buttons
 
-    button_clicked: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
-        str
-    )  # Signal to emit which button was clicked
+    To assert if the user accepted or rejected the dialog connect to the **accepted()** or **rejected()** signals.
+
+    The `finished()` signal can also be used to get the result of the dialog. This is emitted after
+    the accepted and rejected signals.
+
+
+    """
+
     x_offset: float = 0.7
     y_offset: float = 0.7
+    border_radius: int = 20
+    border_margin: int = 5
 
     def __init__(
         self,
@@ -27,8 +34,9 @@ class DialogPage(QtWidgets.QDialog):
         self.setWindowModality(  # Force window modality to block input to other windows
             QtCore.Qt.WindowModality.WindowModal
         )
-        self.confirm_button.clicked.connect(lambda: self.on_button_clicked("Confirm"))
-        self.cancel_button.clicked.connect(lambda: self.on_button_clicked("Cancel"))
+        self.confirm_button.clicked.connect(self.accept)
+        self.cancel_button.clicked.connect(self.reject)
+        self.setModal(True)
         self.update()
 
     def set_message(self, message: str) -> None:
@@ -79,7 +87,6 @@ class DialogPage(QtWidgets.QDialog):
         label_x = (self.width() - width) // 2
         label_y = int(height / 4) - 20  # Move the label to the top (adjust as needed)
         self.label.setGeometry(label_x, -label_y, width, height)
-        # Adjust button positions on resize
         self.confirm_button.setGeometry(
             int(0), self.height() - 70, int(self.width() / 2), 70
         )
@@ -95,32 +102,20 @@ class DialogPage(QtWidgets.QDialog):
         self._geometry_calc()
         return super().show()
 
-    def on_button_clicked(self, button_name: str) -> None:
-        """Handle dialog buttons clicked"""
-        self.button_clicked.emit(button_name)  # Emit the signal with the button name
-        if button_name == "Confirm":
-            self.accept()  # Close the dialog with an accepted state
-        elif button_name == "Cancel":
-            self.reject()  # Close the dialog with a rejected state
-
     def paintEvent(self, event: QtGui.QPaintEvent) -> None:
         """Re-implemented method, paint widget"""
         self._geometry_calc()
         painter = QtGui.QPainter(self)
         painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing, True)
         rect = self.rect()
-        radius = 20  # Adjust the radius for rounded corners
-        # Set background color
         painter.setBrush(
             QtGui.QBrush(QtGui.QColor(63, 63, 63))
         )  # Semi-transparent dark gray
-        # Set border color and width
         border_color = QtGui.QColor(128, 128, 128)  # Gray color
-        border_width = 5  # Reduced border thickness
         pen = QtGui.QPen()
         pen.setCapStyle(QtCore.Qt.PenCapStyle.RoundCap)
-        painter.setPen(QtGui.QPen(border_color, border_width))
-        painter.drawRoundedRect(rect, radius, radius)
+        painter.setPen(QtGui.QPen(border_color, self.border_margin))
+        painter.drawRoundedRect(rect, self.border_radius, self.border_radius)
         painter.end()
 
     def _setupUI(self) -> None:
@@ -131,18 +126,12 @@ class DialogPage(QtWidgets.QDialog):
         self.label.setStyleSheet("color: #ffffff; background: transparent;")
         self.label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self.label.setWordWrap(True)
-
-        # Create Confirm and Cancel buttons
         self.confirm_button = QtWidgets.QPushButton("Confirm", self)
         self.cancel_button = QtWidgets.QPushButton("Back", self)
-
-        # Set button styles
         button_font = QtGui.QFont()
         button_font.setPointSize(14)
         self.confirm_button.setFont(button_font)
         self.cancel_button.setFont(button_font)
-
-        # Apply styles for rounded corners
         self.confirm_button.setStyleSheet(
             """
             background-color: #4CAF50;
@@ -161,7 +150,6 @@ class DialogPage(QtWidgets.QDialog):
             padding: 10px;
             """
         )
-
         # Position buttons
         self.confirm_button.setGeometry(
             int(0), self.height() - 70, int(self.width() / 2), 70
