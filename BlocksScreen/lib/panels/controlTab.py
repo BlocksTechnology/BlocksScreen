@@ -301,28 +301,24 @@ class ControlTab(QtWidgets.QStackedWidget):
         if "speed" not in field:
             return
 
-        # Check if this fan already has a display button
+        if name == "fan_generic Auxiliary_Cooling_Fans":
+            name = "Auxiliary\ncooling fans"
+        elif name == "fan_generic CHAMBER_EXHAUST":
+            name = "Exhaust Fan"
+        elif name == "fan_generic Part_Cooling_Fan":
+            name = "Cooling fan"
+        else:
+            name = name.removeprefix("fan_generic")
         fan_card = self.tune_display_buttons.get(name)
+        print(fan_card)
 
-        # Create a new card if it doesn't exist
         if fan_card is None:
-            if not name.startswith(("fan", "fan_generic")):
-                return
-
             icon_path = (
                 ":/temperature_related/media/btn_icons/blower.svg"
                 if "blower" in name.lower()
                 else ":/temperature_related/media/btn_icons/fan.svg"
             )
             icon = QtGui.QPixmap(icon_path)
-            if name == "fan_generic Auxiliary_Cooling_Fans":
-                name = "Auxiliary\ncooling fans"
-            elif name == "fan_generic CHAMBER_EXHAUST":
-                name = "Exhaust"
-            elif name == "fan_generic Part_Cooling_Fan":
-                name = "Cooling fan"
-            else:
-                name = name.removeprefix("fan_generic")
 
             card = OptionCard(self, name, str(name), icon)  # type: ignore
             card.setObjectName(str(name))
@@ -382,15 +378,22 @@ class ControlTab(QtWidgets.QStackedWidget):
             self.speed_factor_override = new_value / 100
             self.run_gcode_signal.emit(f"M220 S{new_value}")
 
-        if "fan" in name.lower():
-            if name.lower() == "fan":
-                self.run_gcode_signal.emit(
-                    f"M106 S{int(round((normalize(float(new_value / 100), 0.0, 1.0, 0, 255))))}"
-                )  # [0, 255] Range
-            else:
-                self.run_gcode_signal.emit(
-                    f"SET_FAN_SPEED FAN={name} SPEED={float(new_value / 100.00)}"
-                )  # [0.0, 1.0] Range
+        if name == "Auxiliary\ncooling fans":
+            name = "Auxiliary_Cooling_Fans"
+        elif name == "Exhaust Fan":
+            name = "CHAMBER_EXHAUST"
+        elif name == "Cooling fan":
+            name = "Part_Cooling_Fan"
+        else:
+            ...
+        if name.lower() == "fan":
+            self.run_gcode_signal.emit(
+                f"M106 S{int(round((normalize(float(new_value / 100), 0.0, 1.0, 0, 255))))}"
+            )  # [0, 255] Range
+        else:
+            self.run_gcode_signal.emit(
+                f'SET_FAN_SPEED FAN="{name}" SPEED={float(new_value / 100.00)}'
+            )  # [0.0, 1.0] Range
 
     def create_display_button(self, name: str) -> DisplayButton:
         """Create and return a DisplayButton
