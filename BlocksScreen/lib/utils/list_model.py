@@ -142,12 +142,6 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
         rect = option.rect
         rect.setHeight(item.height)
         button = QtWidgets.QStyleOptionButton()
-        style = QtWidgets.QApplication.style()
-        if not style:
-            return
-        style.drawControl(
-            QtWidgets.QStyle.ControlElement.CE_PushButton, button, painter
-        )
         button.rect = rect
         painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing, True)
         painter.setRenderHint(QtGui.QPainter.RenderHint.SmoothPixmapTransform, True)
