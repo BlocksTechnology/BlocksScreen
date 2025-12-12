@@ -1,132 +1,221 @@
+import copy
 import logging
+import subprocess
 import typing
-import subprocess  # nosec: B404
 from functools import partial
+
+from PyQt6 import QtCore, QtGui, QtWidgets
+from PyQt6.QtCore import QRunnable, QThreadPool, QObject, pyqtSignal
 
 from lib.network import SdbusNetworkManagerAsync
 from lib.panels.widgets.popupDialogWidget import Popup
 from lib.ui.wifiConnectivityWindow_ui import Ui_wifi_stacked_page
-from lib.utils.list_button import ListCustomButton
 from lib.panels.widgets.keyboardPage import CustomQwertyKeyboard
-from PyQt6 import QtCore, QtGui, QtWidgets
+from lib.panels.widgets.loadPage import LoadScreen
+from lib.utils.list_model import EntryDelegate, EntryListModel, ListItem
+
 
 logger = logging.getLogger("logs/BlocksScreen.log")
 
 
-class BuildNetworkList(QtCore.QThread):
-    """Retrieves information from sdbus interface about scanned networks"""
+class NetworkScanRunnable(QRunnable):
+    """QRunnable task that performs network scanning using SdbusNetworkManagerAsync
 
-    scan_result: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
-        dict, name="scan-results"
-    )
-    finished_network_list_build: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
-        list, name="finished-network-list-build"
-    )
+    This runnable:
+      - Triggers a network rescan via SdbusNetworkManagerAsync
+      - collects SSIDs, signal strenght and saved status
+      - emits signal with raw scan data and a processed lisgs
 
-    def __init__(self) -> None:
+    Signals:
+        - scan_results (dict): Emitted with raw scan results mapping SSID to properties
+        - finished_network_list_build (list): Emitted with processed list of networks
+        - error (str): Emitted if an error occurs during scanning
+
+    """
+
+    class Signals(QObject):
+        scan_results = pyqtSignal(dict, name="scan-results")
+        finished_network_list_build = pyqtSignal(
+            list, name="finished-network-list-build"
+        )
+        error = pyqtSignal(str)
+
+    def __init__(self):
         super().__init__()
-        self.mutex = QtCore.QMutex()
-        self.condition = QtCore.QWaitCondition()
-        self.restart = False
-        self.mutex.unlock()
-        self.network_items_list = []
         self.nm = SdbusNetworkManagerAsync()
-        if not self.nm:
-            logger.error(
-                "Cannot scan for networks, parent does not have \
-                sdbus_network ('SdbusNetworkManagerAsync' instance class)"
-            )
-            return
-        logger.info("Network Scanner Thread Initiated")
+        self.signals = NetworkScanRunnable.Signals()
 
-    def build(self) -> None:
-        """Starts QThread"""
-        with QtCore.QMutexLocker(self.mutex):
-            if not self.isRunning():
-                self.start(QtCore.QThread.Priority.LowPriority)
-            else:
-                self.restart = True
-                self.condition.wakeOne()
-
-    def stop(self):
-        """Stops QThread execution"""
-        self.mutex.lock()
-        self.condition.wakeOne()
-        self.mutex.unlock()
-        self.deleteLater()
-
-    def run(self) -> None:
-        """BuildNetworkList main thread logic"""
-        logger.debug("Scanning and building network list")
-        while True:
-            self.mutex.lock()
-            self.network_items_list.clear()
+    def run(self):
+        try:
+            logger.debug("NetworkScanRunnable: scanning networks")
             self.nm.rescan_networks()
-            saved_ssids = self.nm.get_saved_ssid_names()
-            saved_networks = self.nm.get_saved_networks()
-            unsaved_networks = []
-            networks = []
-            if self.nm.check_wifi_interface():
-                available_networks = self.nm.get_available_networks()
-                if not available_networks:  # Skip everything if no networks exist
-                    logger.debug("No available networks after scan")
-                    self.finished_network_list_build.emit(self.network_items_list)
-                    return
-                for ssid_key in available_networks:
-                    properties = available_networks.get(ssid_key, {})
-                    signal = int(properties.get("signal_level", 0))
-                    networks.append(
-                        {
-                            "ssid": ssid_key if ssid_key else "UNKNOWN",
-                            "signal": signal,
-                            "is_saved": bool(ssid_key in saved_ssids),
-                        }
-                    )
-            if networks:
-                saved_networks = sorted(
-                    [n for n in networks if n["is_saved"]],
-                    key=lambda x: -x["signal"],
-                )
-                unsaved_networks = sorted(
-                    [n for n in networks if not n["is_saved"]],
-                    key=lambda x: -x["signal"],
-                )
-            elif saved_networks:
-                saved_networks = sorted([n for n in saved_networks], key=lambda x: -1)
-            if saved_networks:
-                for net in saved_networks:
-                    if "ap" in net.get("mode", ""):
-                        return
-                    ssid = net.get("ssid", "UNKNOWN")
-                    signal = (
-                        self.nm.get_connection_signal_by_ssid(ssid)
-                        if ssid != "UNKNOWN"
-                        else 0
-                    )
-                    if ssid == self.nm.get_current_ssid():
-                        self.network_items_list.append((ssid, signal, "Active"))
-                    else:
-                        self.network_items_list.append((ssid, signal, "Saved"))
-            if saved_networks and unsaved_networks:  # Separator
-                self.network_items_list.append("separator")
-            if unsaved_networks:
-                for net in unsaved_networks:
-                    ssid = net.get("ssid", "UNKNOWN")
-                    signal = (
-                        self.nm.get_connection_signal_by_ssid(ssid)
-                        if ssid != "UNKNOWN"
-                        else 0
-                    )
-                    self.network_items_list.append((ssid, signal, "Protected"))
-            # Add a dummy blank space at the end if there are any unsaved networks
-            if unsaved_networks:
-                self.network_items_list.append("blank")
+            saved = self.nm.get_saved_ssid_names()
+            available = (
+                self.nm.get_available_networks()
+                if self.nm.check_wifi_interface()
+                else {}
+            )
 
-            self.finished_network_list_build.emit(self.network_items_list)
-            if not self.restart:
-                self.condition.wait(self.mutex)
-            self.restart = False
-            self.mutex.unlock()
+            data_dict: dict[str, dict] = {}
+            for ssid, props in available.items():
+                signal = int(props.get("signal_level", 0))
+                data_dict[ssid] = {
+                    "signal_level": signal,
+                    "is_saved": ssid in saved,
+                }
+
+            # Emit scan_result (same name)
+            self.signals.scan_results.emit(data_dict)
+
+            # Transform into your “list of tuples + blank / separator” format
+            items: list[typing.Union[tuple[str, int, str], str]] = []
+            saved_nets = [
+                (ssid, info["signal_level"])
+                for ssid, info in data_dict.items()
+                if info["is_saved"]
+            ]
+            unsaved_nets = [
+                (ssid, info["signal_level"])
+                for ssid, info in data_dict.items()
+                if not info["is_saved"]
+            ]
+            saved_nets.sort(key=lambda x: -x[1])
+            unsaved_nets.sort(key=lambda x: -x[1])
+
+            # Build your list with statuses
+            for ssid, sig in saved_nets:
+                status = "Active" if ssid == self.nm.get_current_ssid() else "Saved"
+                items.append((ssid, sig, status))
+
+            for ssid, sig in unsaved_nets:
+                items.append((ssid, sig, "Protected"))
+
+            self.signals.finished_network_list_build.emit(items)
+
+        except Exception as e:
+            logger.error("Error scanning networks", exc_info=True)
+            self.signals.error.emit(str(e))
+
+
+class BuildNetworkList(QtCore.QObject):
+    """
+    Controller class that schedules and manages repeted network scans
+
+    Uses a QThreadPool to un NetworkScanRunnable tasks periodically. with a QTimer to trigger scans.
+    Prevents overlapping scans by tracking whether a scan is already in progress.
+
+    Args:
+        poll_interval_ms: (int) Milliseconds between scans (default: 10000)
+        _timer (QtCore.QTimer): Timer that schedules next scan
+        _is_scanning (bool): Flag indicating if a scan is currently in progress
+
+    Signals:
+        scan_results (dict): Emitted with raw scan results mapping SSID to properties
+        finished_network_list_build (list): Emitted with processed list of networks
+        error (str): Emitted if an error occurs during scanning
+    """
+
+    scan_results = pyqtSignal(dict, name="scan-results")
+    finished_network_list_build = pyqtSignal(list, name="finished-network-list-build")
+    error = pyqtSignal(str)
+
+    def __init__(self, poll_interval_ms: int = 10000):
+        super().__init__()
+        self.threadpool = QThreadPool.globalInstance()
+        self.poll_interval_ms = poll_interval_ms
+        self._is_scanning = False
+
+        self._timer = QtCore.QTimer(self)
+        self._timer.setSingleShot(True)
+        self._timer.timeout.connect(self._do_scan)
+
+    def start_polling(self):
+        self._schedule_next_scan()
+
+    def stop_polling(self):
+        self._timer.stop()
+
+    def build(self):
+        self._do_scan()
+
+    def _schedule_next_scan(self):
+        self._timer.start(self.poll_interval_ms)
+
+    def _on_task_finished(self, items):
+        self._is_scanning = False
+        self.finished_network_list_build.emit(items)
+        self._schedule_next_scan()
+
+    def _on_task_scan_results(self, data_dict):
+        self.scan_results.emit(data_dict)
+
+    def _on_task_error(self, err):
+        self._is_scanning = False
+        self.error.emit(err)
+        self._schedule_next_scan()
+
+    def _do_scan(self):
+        if self._is_scanning:
+            logger.debug("Already scanning, skip scheduling.")
+            self._schedule_next_scan()
+            return
+
+        self._is_scanning = True
+        task = NetworkScanRunnable()
+        task.signals.finished_network_list_build.connect(self._on_task_finished)
+        task.signals.scan_results.connect(self._on_task_scan_results)
+        task.signals.error.connect(self._on_task_error)
+
+        self.threadpool.start(task)
+        logger.debug("Submitted scan task to thread pool")
+
+
+class WifiIconProvider:
+    """Simple provider: loads QPixmap for WiFi bars + protection without caching."""
+
+    def __init__(self):
+        # Map from (bars, is_protected) to resource path
+        self.paths = {
+            ("no", False): ":/network/media/btn_icons/0bar_wifi.svg",
+            (4, False): ":/network/media/btn_icons/4bar_wifi.svg",
+            (3, False): ":/network/media/btn_icons/3bar_wifi.svg",
+            (2, False): ":/network/media/btn_icons/2bar_wifi.svg",
+            (1, False): ":/network/media/btn_icons/1bar_wifi.svg",
+            ("no", True): ":/network/media/btn_icons/0bar_wifi_protected.svg",
+            (4, True): ":/network/media/btn_icons/4bar_wifi_protected.svg",
+            (3, True): ":/network/media/btn_icons/3bar_wifi_protected.svg",
+            (2, True): ":/network/media/btn_icons/2bar_wifi_protected.svg",
+            (1, True): ":/network/media/btn_icons/1bar_wifi_protected.svg",
+        }
+
+    def get_pixmap(self, signal: int, state: str) -> QtGui.QPixmap:
+        """Return a QPixmap for the given signal (0-100) and state ("Protected" or not)."""
+        # Normalize signal
+        if signal <= 0:
+            bars = "no"
+        elif signal >= 75:
+            bars = 4
+        elif signal >= 50:
+            bars = 3
+        elif signal >= 25:
+            bars = 2
+        else:
+            bars = 1
+
+        is_protected = state == "Protected"
+        key = (bars, is_protected)
+
+        path = self.paths.get(key)
+        if path is None:
+            logger.warning(
+                f"No icon path for key {key}, falling back to no-signal unprotected"
+            )
+            path = self.paths[("no", False)]
+
+        pm = QtGui.QPixmap(path)
+        if pm.isNull():
+            logger.error(f"Failed to load pixmap from '{path}' for key {key}")
+        return pm
 
 
 class NetworkControlWindow(QtWidgets.QStackedWidget):
@@ -138,39 +227,49 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
     delete_network_signal = QtCore.pyqtSignal(str, name="delete-network")
 
     def __init__(self, parent: typing.Optional[QtWidgets.QWidget], /) -> None:
-        super(NetworkControlWindow, self).__init__(parent)
-        self.background: typing.Optional[QtGui.QPixmap] = None
+        if parent:
+            super().__init__(parent)
+        else:
+            super().__init__()
+
         self.panel = Ui_wifi_stacked_page()
         self.panel.setupUi(self)
+        self._provider = WifiIconProvider()
+        self.ongoing_update: bool = False
+
         self.popup = Popup(self)
         self.sdbus_network = SdbusNetworkManagerAsync()
         self.start: bool = True
-        self.saved_network = dict
+        self.saved_network = {}
+
+        self.load_popup: LoadScreen = LoadScreen(self)
+        self.repeated_request_status = QtCore.QTimer()
+        self.repeated_request_status.setInterval(2000)  # every 2 seconds
 
         self._load_timer = QtCore.QTimer()
         self._load_timer.setSingleShot(True)
         self._load_timer.timeout.connect(self._handle_load_timeout)
 
-        # Network Scan
-        self.network_list_widget = QtWidgets.QListWidget(
-            parent=self.panel.network_list_page
-        )
-        self.build_network_list()
+        # View Models and Delegates
+        self.model = EntryListModel()
+        self.model.setParent(self.panel.listView)
+        self.entry_delegate = EntryDelegate()
+        self.panel.listView.setModel(self.model)
+        self.panel.listView.setItemDelegate(self.entry_delegate)
+        self.entry_delegate.item_selected.connect(self.ssid_item_clicked)
 
+        # Network Scan
+        self.build_network_list()
         self.network_list_worker = BuildNetworkList()
         self.network_list_worker.finished_network_list_build.connect(
             self.handle_network_list
         )
-        self.panel.rescan_button.clicked.connect(
-            lambda: QtCore.QTimer.singleShot(100, self.network_list_worker.build)
-        )
+        self.network_list_worker.start_polling()
+        self.panel.rescan_button.clicked.connect(self.network_list_worker.build)
 
         self.sdbus_network.nm_state_change.connect(self.evaluate_network_state)
         self.panel.wifi_button.clicked.connect(
-            partial(
-                self.setCurrentIndex,
-                self.indexOf(self.panel.network_list_page),
-            )
+            partial(self.setCurrentIndex, self.indexOf(self.panel.network_list_page))
         )
         self.panel.hotspot_button.clicked.connect(
             partial(self.setCurrentIndex, self.indexOf(self.panel.hotspot_page))
@@ -182,6 +281,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.panel.wifi_button.setPixmap(
             QtGui.QPixmap(":/network/media/btn_icons/wifi_config.svg")
         )
+        self.right_icon = QtGui.QPixmap(":/arrow_icons/media/btn_icons/right_arrow.svg")
 
         self.panel.nl_back_button.clicked.connect(
             partial(
@@ -321,6 +421,14 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
 
         self.network_list_worker.build()
         self.request_network_scan.emit()
+        self.panel.listView.verticalScrollBar().valueChanged.connect(
+            self._handle_scrollbar
+        )
+        self.panel.verticalScrollBar.valueChanged.connect(self._handle_scrollbar)
+        self.panel.verticalScrollBar.valueChanged.connect(
+            lambda value: self.panel.listView.verticalScrollBar().setValue(value)
+        )
+        self.panel.verticalScrollBar.show()
         self.hide()
         self.info_box_load()
 
@@ -350,6 +458,61 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
                 self.panel.saved_connection_change_password_field,
             )
         )
+
+    def handle_update_end(self) -> None:
+        """Handles update end signal
+        (closes loading page, returns to normal operation)
+        """
+        if self.load_popup.isVisible():
+            self.load_popup.close()
+        self.repeated_request_status.stop()
+        self.request_network_scan.emit()
+        self.build_model_list()
+
+    def handle_ongoing_update(self) -> None:
+        """Handled ongoing update signal,
+        calls loading page (blocks user interaction)
+        """
+        self.load_popup.set_status_message("Updating...")
+        self.load_popup.show()
+        self.repeated_request_status.start(2000)
+
+    def reset_view_model(self) -> None:
+        """Clears items from ListView
+        (Resets `QAbstractListModel` by clearing entries)
+        """
+        self.model.clear()
+        self.entry_delegate.clear()
+
+    def deleteLater(self) -> None:
+        """Schedule the object for deletion, resets the list model first"""
+        self.reset_view_model()
+        return super().deleteLater()
+
+    def showEvent(self, event: QtGui.QShowEvent | None) -> None:
+        """Re-add clients to update list"""
+        # Block all touch events so multitouch is ignored
+        if event.type() in (
+            QtCore.QEvent.Type.TouchBegin,
+            QtCore.QEvent.Type.TouchUpdate,
+            QtCore.QEvent.Type.TouchEnd,
+        ):
+            return True  # ignore the event entirely
+
+        self.build_model_list()
+        return super().showEvent(event)
+
+    def build_model_list(self) -> None:
+        """Builds the model list (`self.model`) containing updatable clients"""
+        self.panel.listView.blockSignals(True)
+        self.reset_view_model()
+        saved_networks: dict = copy.copy(self.saved_network)
+        if saved_networks.items():
+            for ssid, (signal, is_saved) in saved_networks.items():
+                self.add_network_entry(ssid=ssid, signal=signal, is_saved=is_saved)
+            self._setup_scrollbar()
+
+        self.panel.listView.blockSignals(False)
 
     def saved_wifi_option_selected(self):
         """Handle connect/delete network button clicks"""
@@ -765,31 +928,28 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.panel.add_network_validation_button.repaint()
         self.popup.new_message(message_type=Popup.MessageType.ERROR, message=message)
 
-    @QtCore.pyqtSlot(QtWidgets.QListWidgetItem, name="ssid_item_clicked")
-    def ssid_item_clicked(self, item: QtWidgets.QListWidgetItem) -> None:
+    @QtCore.pyqtSlot(ListItem, name="ssid_item_clicked")
+    def ssid_item_clicked(self, item: ListItem) -> None:
         """Handles when a network is clicked on the QListWidget.
 
         Args:
             item (QListWidgetItem): The list entry that was clicked
         """
-        _current_item: QtWidgets.QWidget = (
-            self.panel.network_list_widget.itemWidget(item)  # type: ignore
-        )
-        if _current_item:
-            _current_ssid_name = _current_item.findChild(QtWidgets.QLabel).text()
+        if not item:
+            return
 
-            if (
-                _current_ssid_name in self.sdbus_network.get_saved_ssid_names()
-            ):  # Network already saved go to the information page
-                self.setCurrentIndex(self.indexOf(self.panel.saved_connection_page))
-                self.panel.saved_connection_network_name.setText(
-                    str(_current_ssid_name)
-                )
-            else:  # Network not saved go to the add network page
-                self.setCurrentIndex(self.indexOf(self.panel.add_network_page))
-                self.panel.add_network_network_label.setText(
-                    str(_current_ssid_name)
-                )  # Add the network name to the title
+        _current_ssid_name = item.text
+        self.selected_item = copy.copy(item)
+        if (
+            _current_ssid_name in self.sdbus_network.get_saved_ssid_names()
+        ):  # Network already saved go to the information page
+            self.setCurrentIndex(self.indexOf(self.panel.saved_connection_page))
+            self.panel.saved_connection_network_name.setText(str(_current_ssid_name))
+        else:  # Network not saved go to the add network page
+            self.setCurrentIndex(self.indexOf(self.panel.add_network_page))
+            self.panel.add_network_network_label.setText(
+                str(_current_ssid_name)
+            )  # Add the network name to the title
 
     def update_network(
         self,
@@ -812,27 +972,15 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
     @QtCore.pyqtSlot(list, name="finished-network-list-build")
     def handle_network_list(self, data: typing.List[typing.Tuple]) -> None:
         """Handle available network list update"""
-        scroll_bar_position = self.network_list_widget.verticalScrollBar().value()
-        self.network_list_widget.blockSignals(True)
-        self.network_list_widget.clear()
-        self.network_list_widget.setSpacing(35)
         for entry in data:
-            if entry == "separator":
-                self.separator_item()
-                continue
-            elif entry == "blank":
-                self.blank_space_item()
-                continue
             if entry[0] == self.sdbus_network.hotspot_ssid:
                 continue
-            self.network_button_item(*entry)
-
-        max_v = self.network_list_widget.verticalScrollBar().maximum()
-        if scroll_bar_position > max_v:
-            self.network_list_widget.verticalScrollBar().setValue(max_v)
-        else:
-            self.network_list_widget.verticalScrollBar().setValue(scroll_bar_position)
-        self.network_list_widget.verticalScrollBar().update()
+            if entry == "blank":
+                continue
+            if entry == "separator":
+                continue
+            self.saved_network[entry[0]] = (entry[1], entry[2])
+        self.build_model_list()
         self.evaluate_network_state()
         QtCore.QTimer().singleShot(10000, lambda: self.network_list_worker.build())
 
@@ -846,26 +994,10 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
                 self.panel.network_activate_btn.show()
             else:
                 self.panel.network_activate_btn.hide()
-            self.panel.frame.repaint()
 
         else:
             self.setCurrentIndex(self.indexOf(self.panel.add_network_page))
             self.panel.add_network_network_label.setText(str(ssid))
-
-    def event(self, event: QtCore.QEvent) -> bool:
-        """Receives PyQt eEvents, this method is reimplemented from the QEvent class
-
-        Args:
-            event (QtCore.QEvent)
-
-        Returns:
-            bool: Event has been handled or not 1
-        """
-        if event.type() == QtCore.QEvent.Type.ApplicationActivated:
-            # Request a networks scan right at the start of the application
-            self.request_network_scan.emit()
-            return False
-        return super().event(event)
 
     def setCurrentIndex(self, index: int):
         """Re-implementation of the QStackedWidget setCurrentIndex method
@@ -937,197 +1069,70 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.update()
         self.show()
 
+    def add_network_entry(self, ssid: str, signal: int, is_saved: str) -> None:
+        """Adds a new item to the list model"""
+
+        wifi_pixmap = self._provider.get_pixmap(signal=signal, state=is_saved)
+        ssid = ssid if ssid != "" else "UNKOWN"
+        item = ListItem(
+            text=ssid,
+            left_icon=wifi_pixmap,
+            right_text=is_saved,
+            right_icon=self.right_icon,
+            selected=False,
+            allow_check=False,
+            _lfontsize=17,
+            _rfontsize=12,
+            height=80,
+        )
+        self.model.add_item(item)
+
+    def _handle_scrollbar(self, value):
+        # Block signals to avoid recursion
+        self.panel.verticalScrollBar.blockSignals(True)
+        self.panel.verticalScrollBar.setValue(value)
+        self.panel.verticalScrollBar.blockSignals(False)
+
+    def _setup_scrollbar(self) -> None:
+        self.panel.verticalScrollBar.setMinimum(
+            self.panel.listView.verticalScrollBar().minimum()
+        )
+        self.panel.verticalScrollBar.setMaximum(
+            self.panel.listView.verticalScrollBar().maximum()
+        )
+        self.panel.verticalScrollBar.setPageStep(
+            self.panel.listView.verticalScrollBar().pageStep()
+        )
+
     def build_network_list(self) -> None:
-        """Build available/saved network list"""
+        """Build available/saved network list with optimized palette setup."""
+
+        def set_brush_for_all_groups(
+            palette, role, color, style=QtCore.Qt.BrushStyle.SolidPattern
+        ):
+            """Helper to set a brush for Active, Inactive, and Disabled states."""
+            brush = QtGui.QBrush(QtGui.QColor(*color))
+            brush.setStyle(style)
+            for group in [
+                QtGui.QPalette.ColorGroup.Active,
+                QtGui.QPalette.ColorGroup.Inactive,
+                QtGui.QPalette.ColorGroup.Disabled,
+            ]:
+                palette.setBrush(group, role, brush)
+
         palette = QtGui.QPalette()
-        brush = QtGui.QBrush(QtGui.QColor(0, 0, 0, 0))
-        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Active,
-            QtGui.QPalette.ColorRole.Button,
-            brush,
-        )
-        brush = QtGui.QBrush(QtGui.QColor(0, 0, 0))
-        brush.setStyle(QtCore.Qt.BrushStyle.NoBrush)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Active,
+
+        set_brush_for_all_groups(palette, QtGui.QPalette.ColorRole.Button, (0, 0, 0, 0))
+        set_brush_for_all_groups(palette, QtGui.QPalette.ColorRole.Window, (0, 0, 0, 0))
+
+        set_brush_for_all_groups(
+            palette,
             QtGui.QPalette.ColorRole.Base,
-            brush,
+            (0, 0, 0),
+            QtCore.Qt.BrushStyle.NoBrush,
         )
-        brush = QtGui.QBrush(QtGui.QColor(0, 0, 0, 0))
-        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Active,
-            QtGui.QPalette.ColorRole.Window,
-            brush,
+        set_brush_for_all_groups(
+            palette, QtGui.QPalette.ColorRole.Highlight, (0, 120, 215, 0)
         )
-        brush = QtGui.QBrush(QtGui.QColor(0, 120, 215, 0))
-        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Active,
-            QtGui.QPalette.ColorRole.Highlight,
-            brush,
-        )
-        brush = QtGui.QBrush(QtGui.QColor(0, 0, 255, 0))
-        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Active,
-            QtGui.QPalette.ColorRole.Link,
-            brush,
-        )
-        brush = QtGui.QBrush(QtGui.QColor(0, 0, 0, 0))
-        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Inactive,
-            QtGui.QPalette.ColorRole.Button,
-            brush,
-        )
-        brush = QtGui.QBrush(QtGui.QColor(0, 0, 0))
-        brush.setStyle(QtCore.Qt.BrushStyle.NoBrush)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Inactive,
-            QtGui.QPalette.ColorRole.Base,
-            brush,
-        )
-        brush = QtGui.QBrush(QtGui.QColor(0, 0, 0, 0))
-        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Inactive,
-            QtGui.QPalette.ColorRole.Window,
-            brush,
-        )
-        brush = QtGui.QBrush(QtGui.QColor(0, 120, 215, 0))
-        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Inactive,
-            QtGui.QPalette.ColorRole.Highlight,
-            brush,
-        )
-        brush = QtGui.QBrush(QtGui.QColor(0, 0, 255, 0))
-        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Inactive,
-            QtGui.QPalette.ColorRole.Link,
-            brush,
-        )
-        brush = QtGui.QBrush(QtGui.QColor(0, 0, 0, 0))
-        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Disabled,
-            QtGui.QPalette.ColorRole.Button,
-            brush,
-        )
-        brush = QtGui.QBrush(QtGui.QColor(0, 0, 0))
-        brush.setStyle(QtCore.Qt.BrushStyle.NoBrush)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Disabled,
-            QtGui.QPalette.ColorRole.Base,
-            brush,
-        )
-        brush = QtGui.QBrush(QtGui.QColor(0, 0, 0, 0))
-        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Disabled,
-            QtGui.QPalette.ColorRole.Window,
-            brush,
-        )
-        brush = QtGui.QBrush(QtGui.QColor(0, 120, 215, 0))
-        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Disabled,
-            QtGui.QPalette.ColorRole.Highlight,
-            brush,
-        )
-        brush = QtGui.QBrush(QtGui.QColor(0, 0, 255, 0))
-        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Disabled,
-            QtGui.QPalette.ColorRole.Link,
-            brush,
-        )
-        self.network_list_widget.setPalette(palette)
-        self.network_list_widget.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
-        self.network_list_widget.setStyleSheet("background-color:transparent")
-        self.network_list_widget.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
-        self.network_list_widget.setFrameShadow(QtWidgets.QFrame.Shadow.Sunken)
-        self.network_list_widget.setVerticalScrollBarPolicy(
-            QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff
-        )
-        self.network_list_widget.setHorizontalScrollBarPolicy(
-            QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff
-        )
-        self.network_list_widget.setSizeAdjustPolicy(
-            QtWidgets.QAbstractScrollArea.SizeAdjustPolicy.AdjustToContents
-        )
-        self.network_list_widget.setAutoScroll(False)
-        self.network_list_widget.setProperty("showDropIndicator", False)
-        self.network_list_widget.setDefaultDropAction(QtCore.Qt.DropAction.IgnoreAction)
-        self.network_list_widget.setAlternatingRowColors(False)
-        self.network_list_widget.setSelectionMode(
-            QtWidgets.QAbstractItemView.SelectionMode.NoSelection
-        )
-        self.network_list_widget.setSelectionBehavior(
-            QtWidgets.QAbstractItemView.SelectionBehavior.SelectItems
-        )
-        self.network_list_widget.setVerticalScrollMode(
-            QtWidgets.QAbstractItemView.ScrollMode.ScrollPerPixel
-        )
-        self.network_list_widget.setHorizontalScrollMode(
-            QtWidgets.QAbstractItemView.ScrollMode.ScrollPerPixel
-        )
-        QtWidgets.QScroller.grabGesture(
-            self.network_list_widget,
-            QtWidgets.QScroller.ScrollerGestureType.TouchGesture,
-        )
-        QtWidgets.QScroller.grabGesture(
-            self.network_list_widget,
-            QtWidgets.QScroller.ScrollerGestureType.LeftMouseButtonGesture,
-        )
-
-        self.network_list_widget.setObjectName("network_list_widget")
-        self.panel.nl_content_layout.addWidget(self.network_list_widget)
-
-    def separator_item(self) -> None:
-        """Add separator item to network list"""
-        separator_item = QtWidgets.QListWidgetItem()
-        separator_widget = QtWidgets.QLabel()
-        separator_widget.setStyleSheet(
-            "background-color: gray; margin: 1px 1px; min-height: 1px; max-height: 1px;"
-        )
-        separator_item.setSizeHint(QtCore.QSize(0, 2))  # Total vertical space: 2px
-        self.network_list_widget.addItem(separator_item)
-        self.network_list_widget.setItemWidget(separator_item, separator_widget)
-
-    def blank_space_item(self) -> None:
-        """Add blank space item to network list"""
-        spacer_item = QtWidgets.QListWidgetItem()
-        spacer_widget = QtWidgets.QWidget()
-        spacer_widget.setFixedHeight(10)  # Adjust height as needed
-        spacer_item.setSizeHint(spacer_widget.sizeHint())
-        self.network_list_widget.addItem(spacer_item)
-        self.network_list_widget.setItemWidget(spacer_item, spacer_widget)
-
-    def network_button_item(self, ssid, signal, right_text, /) -> None:
-        """Add a network entry to network list"""
-        wifi_pixmap = QtGui.QPixmap(":/network/media/btn_icons/no_wifi.svg")
-        if 70 <= signal <= 100:
-            wifi_pixmap = QtGui.QPixmap(":/network/media/btn_icons/3bar_wifi.svg")
-        elif signal >= 40:
-            wifi_pixmap = QtGui.QPixmap(":/network/media/btn_icons/2bar_wifi.svg")
-        elif 1 < signal < 40:
-            wifi_pixmap = QtGui.QPixmap(":/network/media/btn_icons/1bar_wifi.svg")
-
-        button = ListCustomButton(parent=self.network_list_widget)
-        button.setText(ssid)
-        button.setRightText(right_text)
-        button.setPixmap(QtGui.QPixmap(":/arrow_icons/media/btn_icons/right_arrow.svg"))
-        button.setSecondPixmap(wifi_pixmap)
-        button.setFixedHeight(80)
-        button.setLeftFontSize(17)
-        button.setRightFontSize(12)
-
-        button.clicked.connect(lambda checked, s=ssid: self.handle_button_click(s))
-        item = QtWidgets.QListWidgetItem()
-        item.setSizeHint(button.sizeHint())
-        self.network_list_widget.addItem(item)
-        self.network_list_widget.setItemWidget(item, button)
+        set_brush_for_all_groups(palette, QtGui.QPalette.ColorRole.Link, (0, 0, 255, 0))
+        self.panel.listView.setPalette(palette)
