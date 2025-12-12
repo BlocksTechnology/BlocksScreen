@@ -54,6 +54,7 @@ class Files(QtCore.QObject):
 
     @property
     def file_list(self):
+        """Get the current list of files"""
         return self.files
 
     def handle_message_received(self, method: str, data, params: dict) -> None:
@@ -79,6 +80,19 @@ class Files(QtCore.QObject):
             self.files = data.get("files", [])
             self.on_file_list[list].emit(self.files)
             self.on_dirs[list].emit(self.directories)
+
+    @QtCore.pyqtSlot(str, str, name="on_request_delete_file")
+    def on_request_delete_file(self, filename: str, directory: str = "gcodes") -> None:
+        """Requests deletion of a file
+
+        Args:
+            filename (str): file to delete
+            directory (str): root directory where the file is located
+        """
+        if not directory:
+            self.ws.api.delete_file(filename)
+            return
+        self.ws.api.delete_file(filename, directory)  # Use the root directory 'gcodes'
 
     @QtCore.pyqtSlot(str, name="on_request_fileinfo")
     def on_request_fileinfo(self, filename: str) -> None:
