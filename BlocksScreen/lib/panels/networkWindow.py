@@ -281,6 +281,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.panel.wifi_button.setPixmap(
             QtGui.QPixmap(":/network/media/btn_icons/wifi_config.svg")
         )
+        self.right_icon = QtGui.QPixmap(":/arrow_icons/media/btn_icons/right_arrow.svg")
 
         self.panel.nl_back_button.clicked.connect(
             partial(
@@ -1077,6 +1078,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             text=ssid,
             left_icon=wifi_pixmap,
             right_text=is_saved,
+            right_icon=self.right_icon,
             selected=False,
             allow_check=False,
             _lfontsize=17,
@@ -1120,23 +1122,17 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
 
         palette = QtGui.QPalette()
 
-        # Transparent backgrounds
         set_brush_for_all_groups(palette, QtGui.QPalette.ColorRole.Button, (0, 0, 0, 0))
         set_brush_for_all_groups(palette, QtGui.QPalette.ColorRole.Window, (0, 0, 0, 0))
 
-        # Base (black, no brush)
         set_brush_for_all_groups(
             palette,
             QtGui.QPalette.ColorRole.Base,
             (0, 0, 0),
             QtCore.Qt.BrushStyle.NoBrush,
         )
-
-        # Highlight & link
         set_brush_for_all_groups(
             palette, QtGui.QPalette.ColorRole.Highlight, (0, 120, 215, 0)
         )
         set_brush_for_all_groups(palette, QtGui.QPalette.ColorRole.Link, (0, 0, 255, 0))
-
-        # Apply palette
         self.panel.listView.setPalette(palette)
