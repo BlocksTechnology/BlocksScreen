@@ -58,6 +58,9 @@ class SensorsWindow(QtWidgets.QWidget):
             self.sensor_list = [
                 self.create_sensor_widget(name=sensor) for sensor in filtered_sensors
             ]
+            self.model.setData(
+                self.model.index(0), True, EntryListModel.EnableRole
+            )  
         else:
             self.no_update_placeholder.show()
 

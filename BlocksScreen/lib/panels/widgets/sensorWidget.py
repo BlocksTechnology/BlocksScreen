@@ -106,22 +106,23 @@ class SensorWidget(QtWidgets.QWidget):
 
     def toggle_button_state(self, state: ToggleAnimatedButton.State) -> None:
         """Called when the Klipper firmware reports an update to the filament sensor state"""
+        self.toggle_button.setDisabled(False)
         if state.value != self.sensor_state.value:
             self.sensor_state = self.SensorState(state.value)
             self.toggle_button.state = ToggleAnimatedButton.State(
                 self.sensor_state.value
             )
-            self.repaint()
+            self.update()
 
     @QtCore.pyqtSlot(ToggleAnimatedButton.State, name="state-change")
     def toggle_sensor_state(self, state: ToggleAnimatedButton.State) -> None:
         """Emit the appropriate G-Code command to change the filament sensor state."""
         if state.value != self.sensor_state.value:
-            self.sensor_state = self.SensorState(state.value)
+            self.toggle_button.setDisabled(True)
             self.run_gcode_signal.emit(
-                f"SET_FILAMENT_SENSOR SENSOR={self.text} ENABLE={int(self.sensor_state.value)}"
+                f"SET_FILAMENT_SENSOR SENSOR={self.text} ENABLE={int(state.value)}"
             )
-            self.repaint()
+            self.update()
 
     def resizeEvent(self, a0: QtGui.QResizeEvent) -> None:
         """Handle widget resize events."""
@@ -198,7 +199,6 @@ class SensorWidget(QtWidgets.QWidget):
         size_policy.setHeightForWidth(self._icon_label.sizePolicy().hasHeightForWidth())
         parent_width = self.parentWidget().width()
         self._icon_label.setSizePolicy(size_policy)
-        self._icon_label.setMinimumSize(120, 100)
         self._icon_label.setMinimumSize(120, 100)
 
         self._icon_label.setPixmap(
