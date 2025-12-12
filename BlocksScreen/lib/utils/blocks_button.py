@@ -17,13 +17,12 @@ class ButtonColors(enum.Enum):
 class BlocksCustomButton(QtWidgets.QAbstractButton):
     def __init__(
         self,
-        parent: QtWidgets.QWidget = None,
+        parent: QtWidgets.QWidget | None = None,
     ) -> None:
         if parent:
-            super(BlocksCustomButton, self).__init__(parent)
+            super().__init__(parent)
         else:
-            super(BlocksCustomButton, self).__init__()
-
+            super().__init__()
         self.icon_pixmap: QtGui.QPixmap = QtGui.QPixmap()
         self._icon_rect: QtCore.QRectF = QtCore.QRectF()
         self._is_flat: bool = False
@@ -39,12 +38,11 @@ class BlocksCustomButton(QtWidgets.QAbstractButton):
         """Set notification on button"""
         if self._show_notification != show:
             self._show_notification = show
-            self.repaint()
             self.update()
 
     @property
     def name(self):
-        """Button name"""
+        """Widget name"""
         return self._name
 
     @name.setter
@@ -60,28 +58,69 @@ class BlocksCustomButton(QtWidgets.QAbstractButton):
         """Set button text"""
         self._text = text
         self.update()
-        return
 
     def setPixmap(self, pixmap: QtGui.QPixmap) -> None:
         """Set button pixmap"""
         self.icon_pixmap = pixmap
-        self.repaint()
+        self.update()
 
     def mousePressEvent(self, e: QtGui.QMouseEvent) -> None:
         """Handle mouse press events"""
         if not self.isEnabled():
             e.ignore()
             return
-
-        if self.button_background is not None:
+        if self.button_background:
             pos_f = QtCore.QPointF(e.pos())
             if self.button_background.contains(pos_f):
                 super().mousePressEvent(e)
                 return
-            else:
-                e.ignore()
-                return
-        return super().mousePressEvent(e)
+            e.ignore()
+            return
+        super().mousePressEvent(e)
+
+    def setFlat(self, flat) -> None:
+        """Enable 'flat' appearance to the button"""
+        if self._is_flat != flat:
+            self._is_flat = flat
+            self.update()  # Schedule repaint
+
+    def isFlat(self) -> bool:
+        """Get flat property
+
+        Returns:
+            bool: Button has 'flat' appearance enabled
+        """
+        return self._is_flat
+
+    def setAutoDefault(self, _):
+        """Disable auto default behavior"""
+        return
+
+    def setProperty(self, name: str, value: typing.Any):
+        """Set widget properties"""
+        if name == "icon_pixmap":
+            self.icon_pixmap = value
+        if name == "name":
+            self._name = name
+        if name == "text_color":
+            self.text_color = QtGui.QColor(value)
+        self.update()
+
+    def event(self, e: QtCore.QEvent) -> bool:
+        """Re-implemented method, filter events"""
+        if e.type() == QtCore.QEvent.Type.TouchBegin:
+            self.handleTouchBegin(e)
+            return False  # Event not handled, propagate further
+        if e.type() == QtCore.QEvent.Type.TouchUpdate:
+            self.handleTouchUpdate(e)
+            return False  # Event not handled, propagate further
+        if e.type() == QtCore.QEvent.Type.TouchEnd:
+            self.handleTouchEnd(e)
+            return False  # Event not handled, propagate further
+        if e.type() == QtCore.QEvent.Type.TouchCancel:
+            self.handleTouchCancel(e)
+            return False  # Event not handled, propagate further
+        return super().event(e)
 
     def paintEvent(self, e: typing.Optional[QtGui.QPaintEvent]):
         """Re-implemented method, paint widget"""
@@ -91,8 +130,8 @@ class BlocksCustomButton(QtWidgets.QAbstractButton):
         painter.setRenderHint(painter.RenderHint.LosslessImageRendering, True)
         _rect = self.rect()
         _style = self.style()
-        # if not _style or not _rect:
-        #     return
+        if not _style or not _rect:
+            return
         # Flat button control
         opt = QtWidgets.QStyleOptionButton()
         draw_frame = (
@@ -233,45 +272,3 @@ class BlocksCustomButton(QtWidgets.QAbstractButton):
         painter.setPen(QtCore.Qt.PenStyle.NoPen)
         dot_rect = QtCore.QRectF(dot_x, 0, dot_diameter, dot_diameter)
         painter.drawEllipse(dot_rect)
-
-    def setFlat(self, flat) -> None:
-        """Add 'flat' appearance to the button"""
-        if self._is_flat != flat:
-            self._is_flat = flat
-            self.update()
-
-    def isFlat(self) -> bool:
-        """Get flat property
-
-        Returns:
-            bool: If the button has 'flat' appearance or not
-        """
-        return self._is_flat
-
-    def setAutoDefault(self, *args): ...
-
-    def setProperty(self, name: str, value: typing.Any):
-        """Set widget properties"""
-        if name == "icon_pixmap":
-            self.icon_pixmap = value
-        if name == "name":
-            self._name = name
-        if name == "text_color":
-            self.text_color = QtGui.QColor(value)
-            self.update()
-
-    def event(self, e: QtCore.QEvent) -> bool:
-        """Re-implemented method, filter events"""
-        if e.type() == QtCore.QEvent.Type.TouchBegin:
-            self.handleTouchBegin(e)
-            return False
-        if e.type() == QtCore.QEvent.Type.TouchUpdate:
-            self.handleTouchUpdate(e)
-            return False
-        if e.type() == QtCore.QEvent.Type.TouchEnd:
-            self.handleTouchEnd(e)
-            return False
-        if e.type() == QtCore.QEvent.Type.TouchCancel:
-            self.handleTouchCancel(e)
-            return False
-        return super().event(e)
