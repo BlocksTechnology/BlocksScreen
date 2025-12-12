@@ -28,19 +28,17 @@ class BlocksLabel(QtWidgets.QLabel):
             QtWidgets.QSizePolicy.Policy.MinimumExpanding,
             QtWidgets.QSizePolicy.Policy.MinimumExpanding,
         )
-
         self._glow_color: QtGui.QColor = QtGui.QColor("#E95757")
         self._animation_speed: int = 300
         self.glow_animation = QtCore.QPropertyAnimation(self, b"glow_color")
         self.glow_animation.setEasingCurve(QtCore.QEasingCurve().Type.InOutQuart)
         self.glow_animation.setDuration(self.animation_speed)
-
         self.glow_animation.finished.connect(self.change_glow_direction)
         self.glow_animation.finished.connect(self.repaint)
-
         self.total_scroll_width: float = 0.0
         self.text_width: float = 0.0
         self.label_width: float = 0.0
+        self.icon_margin: int = 5
         self.first_run = True
 
     def resizeEvent(self, a0: QtGui.QResizeEvent) -> None:
@@ -203,17 +201,46 @@ class BlocksLabel(QtWidgets.QLabel):
                 qp.fillRect(rect, self._background_color)
 
         if self.icon_pixmap:
-            icon_rect = QtCore.QRectF(0, 0, self.height(), self.height())
-            scaled = self.icon_pixmap.scaled(
+            icon_rect = QtCore.QRectF(
+                0.0 + self.icon_margin,
+                0.0 + self.icon_margin,
+                self.width() - self.icon_margin,
+                self.height() - self.icon_margin,
+            )
+            _icon_scaled = self.icon_pixmap.scaled(
                 icon_rect.size().toSize(),
                 QtCore.Qt.AspectRatioMode.KeepAspectRatio,
                 QtCore.Qt.TransformationMode.SmoothTransformation,
             )
-            qp.drawPixmap(icon_rect.toRect(), scaled)
+            scaled_width = _icon_scaled.width()
+            scaled_height = _icon_scaled.height()
+            adjusted_x = (icon_rect.width() - scaled_width) // 2.0
+            adjusted_y = (icon_rect.height() - scaled_height) // 2.0
+            adjusted_icon = QtCore.QRectF(
+                icon_rect.x() + adjusted_x,
+                icon_rect.y() + adjusted_y,
+                scaled_width,
+                scaled_height,
+            )
+            qp.drawPixmap(adjusted_icon, _icon_scaled, _icon_scaled.rect().toRectF())
         if self.glow_animation.state() == self.glow_animation.State.Running:
-            path = QtGui.QPainterPath()
-            path.addRoundedRect(QtCore.QRectF(rect), 10, 10)
-            qp.fillPath(path, self.glow_color)
+            big_rect = QtGui.QPainterPath()
+            rect = self.contentsRect().toRectF()
+            big_rect.addRoundedRect(rect, 10.0, 10.0, QtCore.Qt.SizeMode.AbsoluteSize)
+            sub_rect = QtCore.QRectF(
+                (rect.width() - rect.width() * 0.99) / 2,
+                (rect.height() - rect.height() * 0.85) / 2,
+                rect.width() * 0.99,
+                rect.height() * 0.85,
+            )
+            sub_path = QtGui.QPainterPath()
+            sub_path.addRoundedRect(
+                sub_rect, 10.0, 10.0, QtCore.Qt.SizeMode.AbsoluteSize
+            )
+            subtracted = big_rect.subtracted(sub_path)
+            qp.setCompositionMode(qp.CompositionMode.CompositionMode_SourceOver)
+            subtracted.setFillRule(QtCore.Qt.FillRule.OddEvenFill)
+            qp.fillPath(subtracted, self.glow_color)
         if self._text:
             text_option = QtGui.QTextOption(self.alignment())
             text_option.setWrapMode(QtGui.QTextOption.WrapMode.NoWrap)

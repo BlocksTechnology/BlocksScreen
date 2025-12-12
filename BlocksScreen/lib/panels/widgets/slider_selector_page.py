@@ -35,19 +35,26 @@ class SliderPage(QtWidgets.QWidget):
         self._setupUI()
         self.back_button.clicked.connect(self.request_back.emit)
         self.back_button.clicked.connect(self.value_selected.disconnect)
-        self.slider.valueChanged.connect(self.on_slider_value_change)
+        self.slider.sliderReleased.connect(self.on_slider_value_change)
         self.increase_button.pressed.connect(
-            lambda: (self.slider.setSliderPosition(self.slider.sliderPosition() + 5))
+            lambda: {
+                (self.slider.setSliderPosition(self.slider.sliderPosition() + 5)),
+                self.on_slider_value_change(),
+            }
         )
         self.decrease_button.pressed.connect(
-            lambda: (self.slider.setSliderPosition(self.slider.sliderPosition() - 5))
+            lambda: {
+                (
+                    self.slider.setSliderPosition(self.slider.sliderPosition() - 5),
+                    self.on_slider_value_change(),
+                )
+            }
         )
         self.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
 
-    @QtCore.pyqtSlot(int, name="valueChanged")
-    def on_slider_value_change(self, value) -> None:
+    def on_slider_value_change(self) -> None:
         """Handles slider position changes"""
-        self.value_selected.emit(self.name, value)
+        self.value_selected.emit(self.name, self.slider.value())
 
     def set_name(self, name: str) -> None:
         """Sets the header name for the page"""
@@ -114,8 +121,8 @@ class SliderPage(QtWidgets.QWidget):
         self.object_name_label = QtWidgets.QLabel(self)
         self.object_name_label.setFont(font)
         self.object_name_label.setPalette(palette)
-        self.object_name_label.setMinimumSize(QtCore.QSize(self.width(), 60))
-        self.object_name_label.setMaximumSize(QtCore.QSize(self.width() - 60, 60))
+        self.object_name_label.setMinimumSize(QtCore.QSize(self.width(), 80))
+        self.object_name_label.setMaximumSize(QtCore.QSize(self.width() - 60, 80))
         self.object_name_label.setAlignment(
             QtCore.Qt.AlignmentFlag.AlignHCenter | QtCore.Qt.AlignmentFlag.AlignVCenter
         )
