@@ -1,7 +1,6 @@
 import typing
 
 from PyQt6 import QtCore, QtGui, QtWidgets
-from lib.utils.blocks_label import BlocksLabel
 from lib.utils.icon_button import IconButton
 
 
@@ -214,10 +213,9 @@ class OptionCard(QtWidgets.QAbstractButton):
         self.verticalLayout = QtWidgets.QVBoxLayout(option_card)
         self.verticalLayout.setContentsMargins(0, 0, -1, -1)
         self.verticalLayout.setObjectName("verticalLayout")
-        self.option_icon = BlocksLabel(parent=option_card)
+        self.option_icon = IconButton(parent=option_card)
         self.option_icon.setMinimumSize(QtCore.QSize(200, 150))
         self.option_icon.setObjectName("option_icon")
-        self.option_icon.setScaledContents(True)
         _button_font = QtGui.QFont()
         _button_font.setBold(True)
         _button_font.setPointSize(20)
