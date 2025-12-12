@@ -145,8 +145,8 @@ class OptionCard(QtWidgets.QAbstractButton):
     def paintEvent(self, a0: QtGui.QPaintEvent) -> None:
         """Re-implemented method, paint widget"""
         # Rounded background edges
-        self.background_path = QtGui.QPainterPath()
-        self.background_path.addRoundedRect(
+        background_path = QtGui.QPainterPath()
+        background_path.addRoundedRect(
             self.rect().toRectF(), 20.0, 20.0, QtCore.Qt.SizeMode.AbsoluteSize
         )
 
@@ -168,7 +168,7 @@ class OptionCard(QtWidgets.QAbstractButton):
         painter.setRenderHint(painter.RenderHint.Antialiasing)
         painter.setRenderHint(painter.RenderHint.SmoothPixmapTransform)
         painter.setRenderHint(painter.RenderHint.LosslessImageRendering)
-        painter.fillPath(self.background_path, bg_color)
+        painter.fillPath(background_path, bg_color)
         if self.underMouse():
             _pen = QtGui.QPen()
             _pen.setStyle(QtCore.Qt.PenStyle.SolidLine)
@@ -194,7 +194,7 @@ class OptionCard(QtWidgets.QAbstractButton):
             _gradient.setColorAt(1, _color3)
             painter.setBrush(_gradient)
             painter.setPen(QtCore.Qt.PenStyle.NoPen)
-            painter.fillPath(self.background_path, painter.brush())
+            painter.fillPath(background_path, painter.brush())
 
         painter.end()
 
