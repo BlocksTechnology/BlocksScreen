@@ -2018,7 +2018,7 @@ Password</string>
              <item>
               <layout class="QHBoxLayout" name="horizontalLayout_4">
                <item>
-                <widget class="GroupButton" name="low_priorrity_btn">
+                <widget class="GroupButton" name="low_priority_btn">
                  <property name="minimumSize">
                   <size>
                    <width>100</width>
@@ -2053,12 +2053,12 @@ Password</string>
                   <pixmap>:/ui/media/btn_icons/indf_svg.svg</pixmap>
                  </property>
                  <attribute name="buttonGroup">
-                  <string notr="true">prioritbtngroup</string>
+                  <string notr="true">priority_btn_group</string>
                  </attribute>
                 </widget>
                </item>
                <item>
-                <widget class="GroupButton" name="med_priorrity_btn">
+                <widget class="GroupButton" name="med_priority_btn">
                  <property name="minimumSize">
                   <size>
                    <width>100</width>
@@ -2096,12 +2096,12 @@ Password</string>
                   <pixmap>:/ui/media/btn_icons/indf_svg.svg</pixmap>
                  </property>
                  <attribute name="buttonGroup">
-                  <string notr="true">prioritbtngroup</string>
+                  <string notr="true">priority_btn_group</string>
                  </attribute>
                 </widget>
                </item>
                <item>
-                <widget class="GroupButton" name="hig_priorrity_btn">
+                <widget class="GroupButton" name="high_priority_btn">
                  <property name="minimumSize">
                   <size>
                    <width>100</width>
@@ -2139,7 +2139,7 @@ Password</string>
                   <pixmap>:/ui/media/btn_icons/indf_svg.svg</pixmap>
                  </property>
                  <attribute name="buttonGroup">
-                  <string notr="true">prioritbtngroup</string>
+                  <string notr="true">priority_btn_group</string>
                  </attribute>
                 </widget>
                </item>
@@ -3093,7 +3093,7 @@ Password</string>
   <customwidget>
    <class>BlocksCustomLinEdit</class>
    <extends>QLineEdit</extends>
-   <header location="global">lib.utils.blocks_linedit</header>
+   <header>lib.utils.blocks_linedit</header>
   </customwidget>
   <customwidget>
    <class>NetworkWidgetbuttons</class>
@@ -3130,6 +3130,6 @@ Password</string>
  </resources>
  <connections/>
  <buttongroups>
-  <buttongroup name="prioritbtngroup"/>
+  <buttongroup name="priority_btn_group"/>
  </buttongroups>
 </ui>

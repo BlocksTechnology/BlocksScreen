@@ -816,10 +816,10 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         if not self.sdbus_network.is_known(ssid):
             return
 
-        checked_btn = self.panel.prioritbtngroup.checkedButton()
-        if checked_btn == self.panel.hig_priorrity_btn:
+        checked_btn = self.panel.priority_btn_group.checkedButton()
+        if checked_btn == self.panel.high_priority_btn:
             priority = 90
-        elif checked_btn == self.panel.low_priorrity_btn:
+        elif checked_btn == self.panel.low_priority_btn:
             priority = 20
         else:
             priority = 50
