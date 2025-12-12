@@ -1,79 +1,74 @@
+import typing
+
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 
 class DialogPage(QtWidgets.QDialog):
-    button_clicked = QtCore.pyqtSignal(str)  # Signal to emit which button was clicked
+    """Simple confirmation dialog with custom message and Confirm/Back buttons
+
+    To assert if the user accepted or rejected the dialog connect to the **accepted()** or **rejected()** signals.
+
+    The `finished()` signal can also be used to get the result of the dialog. This is emitted after
+    the accepted and rejected signals.
+
+
+    """
+
+    x_offset: float = 0.7
+    y_offset: float = 0.7
+    border_radius: int = 20
+    border_margin: int = 5
 
     def __init__(
         self,
         parent: QtWidgets.QWidget,
     ) -> None:
         super().__init__(parent)
+        self._setupUI()
         self.setWindowFlags(
             QtCore.Qt.WindowType.Popup | QtCore.Qt.WindowType.FramelessWindowHint
         )
         self.setAttribute(
             QtCore.Qt.WidgetAttribute.WA_TranslucentBackground, True
         )  # Make background transparent
-        self._setupUI()
-        self.repaint()
+        self.setWindowModality(  # Force window modality to block input to other windows
+            QtCore.Qt.WindowModality.WindowModal
+        )
+        self.confirm_button.clicked.connect(self.accept)
+        self.cancel_button.clicked.connect(self.reject)
+        self.setModal(True)
+        self.update()
 
     def set_message(self, message: str) -> None:
         """Set dialog text message"""
         self.label.setText(message)
 
-    def _geometry_calc(self) -> None:
-        """Calculate dialog widget position relative to the window"""
+    def _get_mainWindow_widget(self) -> typing.Optional[QtWidgets.QMainWindow]:
+        """Get the main application window"""
         app_instance = QtWidgets.QApplication.instance()
-        main_window = app_instance.activeWindow() if app_instance else None
-        if main_window is None and app_instance:
+        if not app_instance:
+            return None
+        main_window = app_instance.activeWindow()
+        if main_window is None:
             for widget in app_instance.allWidgets():
                 if isinstance(widget, QtWidgets.QMainWindow):
                     main_window = widget
+                    break
+        return main_window if isinstance(main_window, QtWidgets.QMainWindow) else None
 
-        x_offset = 0.7
-        y_offset = 0.7
-
-        width = int(main_window.width() * x_offset)
-        height = int(main_window.height() * y_offset)
-        self.testwidth = width
-        self.testheight = height
+    def _geometry_calc(self) -> None:
+        """Calculate dialog widget position relative to the window"""
+        main_window = self._get_mainWindow_widget()
+        width = int(main_window.width() * self.x_offset)
+        height = int(main_window.height() * self.y_offset)
         x = int(main_window.geometry().x() + (main_window.width() - width) / 2)
         y = int(main_window.geometry().y() + (main_window.height() - height) / 2)
-
         self.setGeometry(x, y, width, height)
-
-    def paintEvent(self, event: QtGui.QPaintEvent) -> None:
-        """Re-implemented method, paint widget"""
-        self._geometry_calc()
-        painter = QtGui.QPainter(self)
-        painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing, True)
-
-        rect = self.rect()
-        radius = 20  # Adjust the radius for rounded corners
-
-        # Set background color
-        painter.setBrush(
-            QtGui.QBrush(QtGui.QColor(63, 63, 63))
-        )  # Semi-transparent dark gray
-
-        # Set border color and width
-        border_color = QtGui.QColor(128, 128, 128)  # Gray color
-        border_width = 5  # Reduced border thickness
-
-        pen = QtGui.QPen()
-        pen.setCapStyle(QtCore.Qt.PenCapStyle.RoundCap)
-        painter.setPen(QtGui.QPen(border_color, border_width))
-
-        painter.drawRoundedRect(rect, radius, radius)
-
-        painter.end()
 
     def sizeHint(self) -> QtCore.QSize:
         """Re-implemented method, widget size hint"""
         popup_width = int(self.geometry().width())
         popup_height = int(self.geometry().height())
-        # Centering logic
         popup_x = self.x()
         popup_y = self.y() + (self.height() - popup_height) // 2
         self.move(popup_x, popup_y)
@@ -84,17 +79,14 @@ class DialogPage(QtWidgets.QDialog):
     def resizeEvent(self, event: QtGui.QResizeEvent) -> None:
         """Re-implemented method, handle resize event"""
         super().resizeEvent(event)
-
-        label_width = self.testwidth
-        label_height = self.testheight
-        label_x = (self.width() - label_width) // 2
-        label_y = (
-            int(label_height / 4) - 20
-        )  # Move the label to the top (adjust as needed)
-
-        self.label.setGeometry(label_x, -label_y, label_width, label_height)
-
-        # Adjust button positions on resize
+        main_window = self._get_mainWindow_widget()
+        if main_window is None:
+            return
+        width = int(main_window.width() * self.x_offset)
+        height = int(main_window.height() * self.y_offset)
+        label_x = (self.width() - width) // 2
+        label_y = int(height / 4) - 20  # Move the label to the top (adjust as needed)
+        self.label.setGeometry(label_x, -label_y, width, height)
         self.confirm_button.setGeometry(
             int(0), self.height() - 70, int(self.width() / 2), 70
         )
@@ -105,10 +97,31 @@ class DialogPage(QtWidgets.QDialog):
             70,
         )
 
+    def open(self):
+        """Re-implemented method, open widget"""
+        self._geometry_calc()
+        return super().open()
+
     def show(self) -> None:
         """Re-implemented method, show widget"""
         self._geometry_calc()
         return super().show()
+
+    def paintEvent(self, event: QtGui.QPaintEvent) -> None:
+        """Re-implemented method, paint widget"""
+        self._geometry_calc()
+        painter = QtGui.QPainter(self)
+        painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing, True)
+        rect = self.rect()
+        painter.setBrush(
+            QtGui.QBrush(QtGui.QColor(63, 63, 63))
+        )  # Semi-transparent dark gray
+        border_color = QtGui.QColor(128, 128, 128)  # Gray color
+        pen = QtGui.QPen()
+        pen.setCapStyle(QtCore.Qt.PenCapStyle.RoundCap)
+        painter.setPen(QtGui.QPen(border_color, self.border_margin))
+        painter.drawRoundedRect(rect, self.border_radius, self.border_radius)
+        painter.end()
 
     def _setupUI(self) -> None:
         self.label = QtWidgets.QLabel("Test", self)
@@ -118,18 +131,12 @@ class DialogPage(QtWidgets.QDialog):
         self.label.setStyleSheet("color: #ffffff; background: transparent;")
         self.label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self.label.setWordWrap(True)
-
-        # Create Confirm and Cancel buttons
         self.confirm_button = QtWidgets.QPushButton("Confirm", self)
         self.cancel_button = QtWidgets.QPushButton("Back", self)
-
-        # Set button styles
         button_font = QtGui.QFont()
         button_font.setPointSize(14)
         self.confirm_button.setFont(button_font)
         self.cancel_button.setFont(button_font)
-
-        # Apply styles for rounded corners
         self.confirm_button.setStyleSheet(
             """
             background-color: #4CAF50;
@@ -148,7 +155,6 @@ class DialogPage(QtWidgets.QDialog):
             padding: 10px;
             """
         )
-
         # Position buttons
         self.confirm_button.setGeometry(
             int(0), self.height() - 70, int(self.width() / 2), 70
@@ -159,15 +165,3 @@ class DialogPage(QtWidgets.QDialog):
             int(self.width() / 2),
             70,
         )
-
-        # Connect button signals
-        self.confirm_button.clicked.connect(lambda: self.on_button_clicked("Confirm"))
-        self.cancel_button.clicked.connect(lambda: self.on_button_clicked("Cancel"))
-
-    def on_button_clicked(self, button_name: str) -> None:
-        """Handle dialog buttons clicked"""
-        self.button_clicked.emit(button_name)  # Emit the signal with the button name
-        if button_name == "Confirm":
-            self.accept()  # Close the dialog with an accepted state
-        elif button_name == "Cancel":
-            self.reject()  # Close the dialog with a rejected state
