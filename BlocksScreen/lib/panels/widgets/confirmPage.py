@@ -1,44 +1,42 @@
+import os
 import typing
 
+import helper_methods
 from lib.utils.blocks_button import BlocksCustomButton
+from lib.utils.blocks_frame import BlocksCustomFrame
 from lib.utils.blocks_label import BlocksLabel
 from lib.utils.icon_button import IconButton
-from lib.utils.blocks_frame import BlocksCustomFrame
 from PyQt6 import QtCore, QtGui, QtWidgets
-
-import helper_methods
-
-
-import os
 
 
 class ConfirmWidget(QtWidgets.QWidget):
     on_accept: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         str, list, name="on_accept"
     )
-    on_reject: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(name="on_reject")
-
+    request_back: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        name="request-back"
+    )
     on_delete: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
-        str, str, name="on_delete"
+        str, str, name="delete_file"
     )
 
     def __init__(self, parent) -> None:
         super().__init__(parent)
-        self.setupUI()
+        self._setupUI()
         self.setMouseTracking(True)
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_AcceptTouchEvents, True)
         self.thumbnail: QtGui.QImage = QtGui.QImage()
         self._thumbnails: typing.List = []
-        self.directory = ""
+        self.directory = "gcodes"
         self.filename = ""
         self.confirm_button.clicked.connect(
             lambda: self.on_accept.emit(
                 str(os.path.join(self.directory, self.filename)), self._thumbnails
             )
         )
-        self.back_btn.clicked.connect(self.on_reject.emit)
-        self.reject_button.clicked.connect(
-            lambda: self.on_delete.emit(self.directory, self.filename)
+        self.back_btn.clicked.connect(self.request_back.emit)
+        self.delete_file_button.clicked.connect(
+            lambda: self.on_delete.emit(self.filename, self.directory)
         )
 
     @QtCore.pyqtSlot(str, dict, name="on_show_widget")
@@ -152,7 +150,7 @@ class ConfirmWidget(QtWidgets.QWidget):
             self.cf_thumbnail.close()
         return super().showEvent(a0)
 
-    def setupUI(self) -> None:
+    def _setupUI(self) -> None:
         """Setup widget ui"""
         sizePolicy = QtWidgets.QSizePolicy(
             QtWidgets.QSizePolicy.Policy.MinimumExpanding,
@@ -263,18 +261,18 @@ class ConfirmWidget(QtWidgets.QWidget):
             self.confirm_button, 0, QtCore.Qt.AlignmentFlag.AlignCenter
         )
 
-        self.reject_button = BlocksCustomButton(parent=self.info_frame)
-        self.reject_button.setMinimumSize(QtCore.QSize(250, 70))
-        self.reject_button.setMaximumSize(QtCore.QSize(250, 70))
-        self.reject_button.setFont(font)
-        self.reject_button.setFlat(True)
-        self.reject_button.setProperty(
+        self.delete_file_button = BlocksCustomButton(parent=self.info_frame)
+        self.delete_file_button.setMinimumSize(QtCore.QSize(250, 70))
+        self.delete_file_button.setMaximumSize(QtCore.QSize(250, 70))
+        self.delete_file_button.setFont(font)
+        self.delete_file_button.setFlat(True)
+        self.delete_file_button.setProperty(
             "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/garbage-icon.svg")
         )
-        self.reject_button.setText("Delete")
+        self.delete_file_button.setText("Delete")
         # 2. Align buttons to the right
         self.cf_confirm_layout.addWidget(
-            self.reject_button, 0, QtCore.Qt.AlignmentFlag.AlignCenter
+            self.delete_file_button, 0, QtCore.Qt.AlignmentFlag.AlignCenter
         )
 
         self.info_layout.addLayout(self.cf_confirm_layout)
