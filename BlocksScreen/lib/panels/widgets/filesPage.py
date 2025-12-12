@@ -89,9 +89,6 @@ class FilesPage(QtWidgets.QWidget):
         if self.isVisible():
             self._build_file_list()
 
-    @QtCore.pyqtSlot(str, name="on-delete-file")
-    def on_delete_file(self, filename: str) -> None: ...
-
     @QtCore.pyqtSlot(dict, name="on-fileinfo")
     def on_fileinfo(self, filedata: dict) -> None:
         """Method called per file to contruct file entry to the list"""
