@@ -6,7 +6,6 @@ from lib.utils.icon_button import IconButton
 from PyQt6 import QtCore, QtGui, QtWidgets
 from helper_methods import normalize
 
-
 class TuneWidget(QtWidgets.QWidget):
     request_back: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         name="request_back_page"
@@ -110,17 +109,26 @@ class TuneWidget(QtWidgets.QWidget):
             field (str): field name
             new_value (int | float): New value for field name
         """
+        
+        fields = name.split()
+        first_field = fields[0]
+        second_field = fields[1] if len(fields) > 1 else None
+        
         if "speed" in field:
-            if not self.tune_display_buttons.get(name, None):
+            if not self.tune_display_buttons.get(name, None) and first_field in ("fan", "fan_generic", "blower"):
                 _new_display_button = self.create_display_button(name)
                 _new_display_button.setParent(self)
-                if "blower" in name:
+                if "blower"==first_field or second_field=="Auxiliary_Cooling_Fans":
                     _new_display_button.icon_pixmap = QtGui.QPixmap(
-                        ":/temperature_related/media/btn_icons/blower.svg"
+                        ":/fan_related/media/btn_icons/blower.svg"
+                    )
+                elif "CHAMBER_EXHAUST"==second_field:
+                    _new_display_button.icon_pixmap = QtGui.QPixmap(
+                        ":/fan_related/media/btn_icons/fan_cage.svg"
                     )
                 else:
                     _new_display_button.icon_pixmap = QtGui.QPixmap(
-                        ":/temperature_related/media/btn_icons/fan.svg"
+                        ":/fan_related/media/btn_icons/fan.svg"
                     )
                 self.tune_display_buttons.update(
                     {
@@ -130,26 +138,21 @@ class TuneWidget(QtWidgets.QWidget):
                         }
                     }
                 )
-                if name in ("fan", "fan_generic"):
-                    _new_display_button.clicked.connect(
-                        lambda: self.request_sliderPage[
-                            str, int, "PyQt_PyObject", int, int
-                        ].emit(
-                            str(name),
-                            int(
-                                round(
-                                    self.tune_display_buttons.get(name).get(  # type:ignore
-                                        "speed", 0
-                                    )
-                                )
-                            ),
-                            self.on_slider_change,
-                            0,
-                            100,
-                        )
-                    )
-                else:
-                    _new_display_button.setDisabled(True)
+                _new_display_button.clicked.connect(
+                    lambda: self.request_sliderPage[
+                        str, int, "PyQt_PyObject", int, int
+                    ].emit(
+                        str(name),
+                        int(
+                            round(
+                                self.tune_display_buttons.get(name).get("speed", 0)
+                            )
+                        ),
+                        self.on_slider_change,
+                        0,
+                        100,
+                )
+                )
                 self.tune_display_vertical_child_layout_2.addWidget(_new_display_button)
             _display_button = self.tune_display_buttons.get(name)
             if not _display_button:
