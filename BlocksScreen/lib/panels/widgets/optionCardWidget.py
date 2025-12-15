@@ -216,7 +216,6 @@ class OptionCard(QtWidgets.QAbstractButton):
         self.option_icon = IconButton(parent=option_card)
         self.option_icon.setMinimumSize(QtCore.QSize(200, 150))
         self.option_icon.setObjectName("option_icon")
-        self.option_icon.setScaledContents(True)
         _button_font = QtGui.QFont()
         _button_font.setBold(True)
         _button_font.setPointSize(20)
