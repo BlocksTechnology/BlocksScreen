@@ -70,8 +70,8 @@ class JobStatusWidget(QtWidgets.QWidget):
         self.pause_printing_btn.clicked.connect(self.pause_resume_print)
         self.stop_printing_btn.clicked.connect(self.handleCancel)
 
-        self.CBVSmallThumbnail.clicked.connect(self.showthumbnail)
-        self.CBVBigThumbnail.clicked.connect(self.hidethumbnail)
+        self.CBVSmallThumbnail.clicked.connect(self.show_thumbnail)
+        self.CBVBigThumbnail.clicked.connect(self.hide_thumbnail)
 
         self.CBVSmallThumbnail.installEventFilter(self)
         self.CBVBigThumbnail.installEventFilter(self)
@@ -86,19 +86,19 @@ class JobStatusWidget(QtWidgets.QWidget):
             and event.type() == QtCore.QEvent.Type.MouseButtonPress
         ):
             if event.button() == QtCore.Qt.MouseButton.LeftButton:
-                self.showthumbnail()
+                self.show_thumbnail()
 
         if (
             source == self.CBVBigThumbnail
             and event.type() == QtCore.QEvent.Type.MouseButtonPress
         ):
             if event.button() == QtCore.Qt.MouseButton.LeftButton:
-                self.hidethumbnail()
+                self.hide_thumbnail()
 
         return super().eventFilter(source, event)
 
     @QtCore.pyqtSlot(name="show-thumbnail")
-    def showthumbnail(self):
+    def show_thumbnail(self):
         """Show print job fullscreen thumbnail"""
         self.contentWidget.hide()
         self.progressWidget.hide()
@@ -108,7 +108,7 @@ class JobStatusWidget(QtWidgets.QWidget):
         self.bigthumb_widget.show()
 
     @QtCore.pyqtSlot(name="hide-thumbnail")
-    def hidethumbnail(self):
+    def hide_thumbnail(self):
         """Hide print job fullscreen thumbnail"""
         self.contentWidget.show()
         self.progressWidget.show()
