@@ -43,7 +43,7 @@ class ConnectionPage(QtWidgets.QFrame):
             self.restart_klipper_clicked.emit
         )
         self.ws.connection_lost.connect(slot=self.show)
-        self.ws.klippy_connected_signal.connect(self.on_klippy_connection)
+        self.ws.klippy_connected_signal.connect(self.on_klippy_connected)
         self.ws.klippy_state_signal.connect(self.on_klippy_state)
 
     def show_panel(self, reason: str | None = None):
@@ -54,6 +54,17 @@ class ConnectionPage(QtWidgets.QFrame):
             return True
         self.text_update()
         return False
+
+    @QtCore.pyqtSlot(bool, name="on_klippy_connected")
+    def on_klippy_connection(self, connected: bool):
+        """Handle klippy connection state"""
+        self._klippy_connection = connected
+        if not connected:
+            self.panel.connectionTextBox.setText("Klipper Disconnected")
+            if not self.isVisible():
+                self.show()
+        else:
+            self.panel.connectionTextBox.setText("Klipper Connected")
 
     @QtCore.pyqtSlot(str, name="on_klippy_state")
     def on_klippy_state(self, state: str):
