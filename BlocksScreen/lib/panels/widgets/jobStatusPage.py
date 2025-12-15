@@ -87,13 +87,14 @@ class JobStatusWidget(QtWidgets.QWidget):
         ):
             if event.button() == QtCore.Qt.MouseButton.LeftButton:
                 self.show_thumbnail()
-
+                return True  # Issue event handled
         if (
             source == self.CBVBigThumbnail
             and event.type() == QtCore.QEvent.Type.MouseButtonPress
         ):
             if event.button() == QtCore.Qt.MouseButton.LeftButton:
                 self.hide_thumbnail()
+                return True  # Issue event handled
 
         return super().eventFilter(source, event)
 
