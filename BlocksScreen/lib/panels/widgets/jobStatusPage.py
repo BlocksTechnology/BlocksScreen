@@ -76,6 +76,9 @@ class JobStatusWidget(QtWidgets.QWidget):
         self.CBVSmallThumbnail.installEventFilter(self)
         self.CBVBigThumbnail.installEventFilter(self)
 
+        self.smallthumbnail: bool = False
+        self.bigthumbnail: bool = False
+
     def eventFilter(self, source, event):
         """Re-implemented method, filter events"""
         if (
@@ -303,6 +306,7 @@ class JobStatusWidget(QtWidgets.QWidget):
         """
         Loads a thumbnail into a QGraphicsScene, creating the scene if needed.
         """
+        print("loading widget")
         try:
             pixmap_path = os.path.expanduser(
                 f"~/printer_data/gcodes/.thumbs/{filename}-{size}x{size}.png"
@@ -338,14 +342,23 @@ class JobStatusWidget(QtWidgets.QWidget):
             scene.addItem(item)
             scene.setSceneRect(0, 0, size, size)
 
+            if scene_attr == "_scene_small":
+                self.smallthumbnail: bool = True
+            elif scene_attr == "_scene_big":
+                self.bigthumbnail: bool = True
+
         except Exception as e:
             logger.debug(f"Error loading thumbnail {size}px: {e}")
 
-    def paintEvent(self, a0: QtGui.QPaintEvent) -> None:
+    def paintEvent(self, a0: QtGui.QPaintEvent | None) -> None:
+        """Re-implemented method, paint widget"""
         base_name = self._current_file_name[:-6]
 
-        self._load_thumbnail("_scene_small", self.CBVSmallThumbnail, base_name, 48)
-        self._load_thumbnail("_scene_big", self.CBVBigThumbnail, base_name, 300)
+        if not self.smallthumbnail:
+            self._load_thumbnail("_scene_small", self.CBVSmallThumbnail, base_name, 48)
+
+        if not self.bigthumbnail:
+            self._load_thumbnail("_scene_big", self.CBVBigThumbnail, base_name, 300)
 
     def _setupUI(self) -> None:
         """Setup widget ui"""
