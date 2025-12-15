@@ -1073,7 +1073,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         """Adds a new item to the list model"""
 
         wifi_pixmap = self._provider.get_pixmap(signal=signal, state=is_saved)
-        ssid = ssid if ssid != "" else "UNKOWN"
+        ssid = ssid if ssid != "" else "UNKNOWN"
         item = ListItem(
             text=ssid,
             left_icon=wifi_pixmap,
