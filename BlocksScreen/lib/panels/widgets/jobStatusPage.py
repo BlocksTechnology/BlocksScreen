@@ -76,8 +76,8 @@ class JobStatusWidget(QtWidgets.QWidget):
         self.CBVSmallThumbnail.installEventFilter(self)
         self.CBVBigThumbnail.installEventFilter(self)
 
-        self.smallthumbnail: bool = False
-        self.bigthumbnail: bool = False
+        self.small_thumbnail: bool = False
+        self.big_thumbnail: bool = False
 
     def eventFilter(self, source, event):
         """Re-implemented method, filter events"""
@@ -343,9 +343,9 @@ class JobStatusWidget(QtWidgets.QWidget):
             scene.setSceneRect(0, 0, size, size)
 
             if scene_attr == "_scene_small":
-                self.smallthumbnail: bool = True
+                self.small_thumbnail: bool = True
             elif scene_attr == "_scene_big":
-                self.bigthumbnail: bool = True
+                self.big_thumbnail: bool = True
 
         except Exception as e:
             logger.debug(f"Error loading thumbnail {size}px: {e}")
@@ -354,10 +354,10 @@ class JobStatusWidget(QtWidgets.QWidget):
         """Re-implemented method, paint widget"""
         base_name = self._current_file_name[:-6]
 
-        if not self.smallthumbnail:
+        if not self.small_thumbnail:
             self._load_thumbnail("_scene_small", self.CBVSmallThumbnail, base_name, 48)
 
-        if not self.bigthumbnail:
+        if not self.big_thumbnail:
             self._load_thumbnail("_scene_big", self.CBVBigThumbnail, base_name, 300)
 
     def _setupUI(self) -> None:
