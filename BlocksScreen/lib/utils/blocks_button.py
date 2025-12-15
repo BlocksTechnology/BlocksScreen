@@ -106,22 +106,6 @@ class BlocksCustomButton(QtWidgets.QAbstractButton):
             self.text_color = QtGui.QColor(value)
         self.update()
 
-    def event(self, e: QtCore.QEvent) -> bool:
-        """Re-implemented method, filter events"""
-        if e.type() == QtCore.QEvent.Type.TouchBegin:
-            self.handleTouchBegin(e)
-            return False  # Event not handled, propagate further
-        if e.type() == QtCore.QEvent.Type.TouchUpdate:
-            self.handleTouchUpdate(e)
-            return False  # Event not handled, propagate further
-        if e.type() == QtCore.QEvent.Type.TouchEnd:
-            self.handleTouchEnd(e)
-            return False  # Event not handled, propagate further
-        if e.type() == QtCore.QEvent.Type.TouchCancel:
-            self.handleTouchCancel(e)
-            return False  # Event not handled, propagate further
-        return super().event(e)
-
     def paintEvent(self, e: typing.Optional[QtGui.QPaintEvent]):
         """Re-implemented method, paint widget"""
         painter = QtGui.QPainter(self)
