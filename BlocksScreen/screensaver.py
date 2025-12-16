@@ -1,8 +1,9 @@
-import helper_methods as helper_methods
+import helper_methods
 from PyQt6 import QtCore, QtWidgets
 
 
 class ScreenSaver(QtCore.QObject):
+    """Class to manage the screensaver and DPMS state"""
     timer = QtCore.QTimer()
     dpms_off_timeout = helper_methods.get_dpms_timeouts().get("off_timeout")
     dpms_suspend_timeout = helper_methods.get_dpms_timeouts().get("suspend_timeout")
@@ -27,6 +28,13 @@ class ScreenSaver(QtCore.QObject):
         self.timer.timeout.connect(self.check_dpms)
         self.timer.setInterval(self.blank_timeout)
         self.timer.start()
+
+    def deleteLater(self) -> None:
+        """Re-implemented method, cleanup on delete"""
+        self.timer.stop()
+        self.timer.deleteLater()
+        QtWidgets.QApplication.instance().removeEventFilter(self)
+        super().deleteLater()
 
     def eventFilter(self, object, event) -> bool:
         """Filter touch events considering DPMS Screen state"""
