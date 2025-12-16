@@ -4,6 +4,7 @@ from PyQt6 import QtCore, QtWidgets
 
 class ScreenSaver(QtCore.QObject):
     """Class to manage the screensaver and DPMS state"""
+
     timer = QtCore.QTimer()
     dpms_off_timeout = helper_methods.get_dpms_timeouts().get("off_timeout")
     dpms_suspend_timeout = helper_methods.get_dpms_timeouts().get("suspend_timeout")
@@ -39,7 +40,7 @@ class ScreenSaver(QtCore.QObject):
     def eventFilter(self, object, event) -> bool:
         """Filter touch events considering DPMS Screen state"""
 
-        if event.type() in (  # Block Touch Filter and Wake Touch Filter
+        if event.type() in (
             QtCore.QEvent.Type.TouchBegin,
             QtCore.QEvent.Type.TouchUpdate,
             QtCore.QEvent.Type.TouchEnd,
@@ -60,8 +61,7 @@ class ScreenSaver(QtCore.QObject):
                     self.touch_blocked = False
                     helper_methods.set_dpms_mode(helper_methods.DPMSState.ON)
                     self.timer.start(self.blank_timeout)
-                    return True  # filter out the event, block touch events on the application
-            else:
+                    return True
                 self.timer.stop()
                 self.timer.start()
         return False
