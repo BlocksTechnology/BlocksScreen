@@ -27,6 +27,7 @@ class GroupButton(QtWidgets.QPushButton):
 
     @property
     def name(self):
+        """Widget name"""
         return self._name
 
     @name.setter
@@ -35,18 +36,22 @@ class GroupButton(QtWidgets.QPushButton):
         self.setObjectName(new_name)
 
     def text(self) -> str | None:
+        """Widget text"""
         return self._text
 
     def setText(self, text: str) -> None:
+        """Set widget text"""
         self._text = text
         self.update()  # Force button update
         return
 
     def setPixmap(self, pixmap: QtGui.QPixmap) -> None:
+        """Set widget pixmap"""
         self.icon_pixmap = pixmap
         self.repaint()
 
     def paintEvent(self, e: typing.Optional[QtGui.QPaintEvent]):
+        """Re-implemented method, paint widget"""
         opt = QtWidgets.QStyleOptionButton()
         self.initStyleOption(opt)
 
@@ -117,28 +122,15 @@ class GroupButton(QtWidgets.QPushButton):
             painter.setPen(QtCore.Qt.PenStyle.NoPen)
 
     def setProperty(self, name: str, value: typing.Any):
+        """Re-implemented method, set widget properties"""
         if name == "name":
             self._name = name
         elif name == "text_color":
             self.text_color = QtGui.QColor(value)
         # return super().setProperty(name, value)
 
-    def handleTouchBegin(self, e: QtCore.QEvent):
-        ...
-        # if not self.button_background:
-        #     if self.button_background.contains(e.pos()):  # type: ignore
-        #         # super().mousePressEvent(e)
-        #         self.mousePressEvent(e)  # type: ignore
-        #         return
-        #     else:
-        #         e.ignore()
-        #         return
-
-    def handleTouchUpdate(self, e: QtCore.QEvent): ...
-    def handleTouchEnd(self, e: QtCore.QEvent): ...
-    def handleTouchCancel(self, e: QtCore.QEvent): ...
-
     def event(self, e: QtCore.QEvent) -> bool:
+        """Re-implemented method, filter events"""
         if e.type() == QtCore.QEvent.Type.TouchBegin:
             self.handleTouchBegin(e)
             return False

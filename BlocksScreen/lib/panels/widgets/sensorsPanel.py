@@ -9,10 +9,8 @@ class SensorsWindow(QtWidgets.QWidget):
     run_gcode_signal: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         str, name="run_gcode"
     )
-    change_fil_sensor_state: typing.ClassVar[QtCore.pyqtSignal] = (
-        QtCore.pyqtSignal(
-            SensorWidget.FilamentState, name="change_fil_sensor_state"
-        )
+    change_fil_sensor_state: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        SensorWidget.FilamentState, name="change_fil_sensor_state"
     )
     request_back: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         name="request_back"
@@ -21,10 +19,8 @@ class SensorsWindow(QtWidgets.QWidget):
 
     def __init__(self, parent):
         super(SensorsWindow, self).__init__(parent)
-        self.setupUi()
-        self.setAttribute(
-            QtCore.Qt.WidgetAttribute.WA_TranslucentBackground, True
-        )
+        self._setupUi()
+        self.setAttribute(QtCore.Qt.WidgetAttribute.WA_TranslucentBackground, True)
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_AcceptTouchEvents, True)
         self.setTabletTracking(True)
         self.fs_sensors_list.itemClicked.connect(self.handle_sensor_clicked)
@@ -33,33 +29,36 @@ class SensorsWindow(QtWidgets.QWidget):
 
     @QtCore.pyqtSlot(dict, name="handle_available_fil_sensors")
     def handle_available_fil_sensors(self, sensors: dict) -> None:
+        """Handle available filament sensors, create `SensorWidget` for each detected
+        sensor
+        """
         if not isinstance(sensors, dict):
             return
-
         filtered_sensors = list(
-        filter(
-            lambda printer_obj: str(printer_obj).startswith("filament_switch_sensor")
-            or str(printer_obj).startswith("filament_motion_sensor"),
-            sensors.keys(),
+            filter(
+                lambda printer_obj: str(printer_obj).startswith(
+                    "filament_switch_sensor"
+                )
+                or str(printer_obj).startswith("filament_motion_sensor"),
+                sensors.keys(),
             )
         )
-
         if filtered_sensors:
             self.fs_sensors_list.setRowHidden(self.fs_sensors_list.row(self.item), True)
             self.sensor_list = [
                 self.create_sensor_widget(name=sensor) for sensor in filtered_sensors
             ]
         else:
-            self.fs_sensors_list.setRowHidden(self.fs_sensors_list.row(self.item), False)
-
-
+            self.fs_sensors_list.setRowHidden(
+                self.fs_sensors_list.row(self.item), False
+            )
 
     @QtCore.pyqtSlot(str, str, bool, name="handle_fil_state_change")
     def handle_fil_state_change(
         self, sensor_name: str, parameter: str, value: bool
     ) -> None:
+        """Handle filament state chage"""
         if sensor_name in self.sensor_list:
-            state = SensorWidget.FilamentState(value)
             _split = sensor_name.split(" ")
             _item = self.fs_sensors_list.findChild(
                 SensorWidget,
@@ -70,26 +69,21 @@ class SensorsWindow(QtWidgets.QWidget):
                 if isinstance(_item, SensorWidget) and hasattr(
                     _item, "change_fil_sensor_state"
                 ):
-                    _item.change_fil_sensor_state(
-                        SensorWidget.FilamentState.PRESENT
-                    )
+                    _item.change_fil_sensor_state(SensorWidget.FilamentState.PRESENT)
                     _item.repaint()
             elif parameter == "filament_missing":
                 if isinstance(_item, SensorWidget) and hasattr(
                     _item, "change_fil_sensor_state"
                 ):
-                    _item.change_fil_sensor_state(
-                        SensorWidget.FilamentState.MISSING
-                    )
+                    _item.change_fil_sensor_state(SensorWidget.FilamentState.MISSING)
                     _item.repaint()
             elif parameter == "enabled":
                 if _item and isinstance(_item, SensorWidget):
-                    self.run_gcode_signal.emit(
-                        _item.toggle_sensor_gcode_command
-                    )
+                    self.run_gcode_signal.emit(_item.toggle_sensor_gcode_command)
 
     @QtCore.pyqtSlot(QtWidgets.QListWidgetItem, name="handle_sensor_clicked")
     def handle_sensor_clicked(self, sensor: QtWidgets.QListWidgetItem) -> None:
+        """Handle filament sensor clicked"""
         _item = self.fs_sensors_list.itemWidget(sensor)
         # FIXME: This is just not working
         _item.toggle_button.state = ~_item.toggle_button.state
@@ -116,9 +110,7 @@ class SensorsWindow(QtWidgets.QWidget):
 
         return _item_widget
 
-    def paintEvent(self, a0: QtGui.QPaintEvent) -> None: ...
-
-    def setupUi(self):
+    def _setupUi(self):
         self.setObjectName("filament_sensors_page")
         sizePolicy = QtWidgets.QSizePolicy(
             QtWidgets.QSizePolicy.Policy.MinimumExpanding,
@@ -147,9 +139,7 @@ class SensorsWindow(QtWidgets.QWidget):
         font = QtGui.QFont()
         font.setPointSize(22)
         palette = QtGui.QPalette()
-        palette.setColor(
-            palette.ColorRole.WindowText, QtGui.QColorConstants.White
-        )
+        palette.setColor(palette.ColorRole.WindowText, QtGui.QColorConstants.White)
         self.fs_page_title.setPalette(palette)
         self.fs_page_title.setFont(font)
         self.fs_page_title.setObjectName("fs_page_title")
@@ -162,9 +152,7 @@ class SensorsWindow(QtWidgets.QWidget):
         self.fs_back_button.setMinimumSize(QtCore.QSize(60, 60))
         self.fs_back_button.setMaximumSize(QtCore.QSize(60, 60))
         self.fs_back_button.setFlat(True)
-        self.fs_back_button.setPixmap(
-            QtGui.QPixmap(":/ui/media/btn_icons/back.svg")
-        )
+        self.fs_back_button.setPixmap(QtGui.QPixmap(":/ui/media/btn_icons/back.svg"))
         self.fs_back_button.setObjectName("fs_back_button")
         self.fs_header_layout.addWidget(
             self.fs_back_button,
@@ -184,24 +172,17 @@ class SensorsWindow(QtWidgets.QWidget):
         self.fs_sensors_list.setSizePolicy(sizePolicy)
         self.fs_sensors_list.setMinimumSize(QtCore.QSize(650, 300))
         self.fs_sensors_list.setMaximumSize(QtCore.QSize(700, 300))
-        self.fs_sensors_list.setLayoutDirection(
-            QtCore.Qt.LayoutDirection.LeftToRight
-        )
+        self.fs_sensors_list.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
         self.fs_sensors_list.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
         self.fs_sensors_list.setObjectName("fs_sensors_list")
-        self.fs_sensors_list.setViewMode(
-            self.fs_sensors_list.ViewMode.ListMode
-        )
+        self.fs_sensors_list.setViewMode(self.fs_sensors_list.ViewMode.ListMode)
         self.fs_sensors_list.setItemAlignment(
-            QtCore.Qt.AlignmentFlag.AlignHCenter
-            | QtCore.Qt.AlignmentFlag.AlignVCenter
+            QtCore.Qt.AlignmentFlag.AlignHCenter | QtCore.Qt.AlignmentFlag.AlignVCenter
         )
         self.fs_sensors_list.setFlow(self.fs_sensors_list.Flow.TopToBottom)
         self.fs_sensors_list.setFrameStyle(0)
         palette = self.fs_sensors_list.palette()
-        palette.setColor(
-            palette.ColorRole.Base, QtGui.QColorConstants.Transparent
-        )
+        palette.setColor(palette.ColorRole.Base, QtGui.QColorConstants.Transparent)
         self.fs_sensors_list.setPalette(palette)
         self.fs_sensors_list.setDropIndicatorShown(False)
         self.fs_sensors_list.setAcceptDrops(False)
@@ -211,34 +192,31 @@ class SensorsWindow(QtWidgets.QWidget):
         self.content_vertical_layout.addWidget(
             self.fs_sensors_list,
             1,
-            QtCore.Qt.AlignmentFlag.AlignHCenter
-            | QtCore.Qt.AlignmentFlag.AlignVCenter,
+            QtCore.Qt.AlignmentFlag.AlignHCenter | QtCore.Qt.AlignmentFlag.AlignVCenter,
         )
 
         font = QtGui.QFont()
         font.setPointSize(25)
 
-
         self.item = QtWidgets.QListWidgetItem()
-        self.item.setSizeHint(QtCore.QSize(self.fs_sensors_list.width(),self.fs_sensors_list.height())) 
-
+        self.item.setSizeHint(
+            QtCore.QSize(self.fs_sensors_list.width(), self.fs_sensors_list.height())
+        )
 
         self.label = QtWidgets.QLabel("No sensors found")
         self.label.setFont(font)
-        self.label.setStyleSheet("color: gray;")  
+        self.label.setStyleSheet("color: gray;")
         self.label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self.label.hide()
 
         self.fs_sensors_list.addItem(self.item)
-        self.fs_sensors_list.setItemWidget(self.item,self.label)
-
-
+        self.fs_sensors_list.setItemWidget(self.item, self.label)
 
         self.content_vertical_layout.addSpacing(5)
         self.setLayout(self.content_vertical_layout)
-        self.retranslateUi()
+        self._retranslateUi()
 
-    def retranslateUi(self):
+    def _retranslateUi(self):
         _translate = QtCore.QCoreApplication.translate
         self.setWindowTitle(_translate("filament_sensors_page", "Form"))
         self.fs_page_title.setText(

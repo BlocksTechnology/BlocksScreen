@@ -29,56 +29,66 @@ class ListCustomButton(QtWidgets.QPushButton):
         self.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
 
     def setText(self, text: str) -> None:
+        """Set widget text"""
         self._text = text
         self.update()
 
     def text(self) -> str:
+        """Widget text"""
         return self._text
 
     def setRightText(self, text: str) -> None:
+        """Set widget right text"""
         self._right_text = text
         self.update()
 
     def rightText(self) -> str:
+        """Widget right text"""
         return self._right_text
 
     def setLeftFontSize(self, size: int) -> None:
+        """Set widget left text font size"""
         self._lfontsize = size
         self.update()
 
     def setRightFontSize(self, size: int) -> None:
+        """Set widget right text font size"""
         self._rfontsize = size
         self.update()
 
     def setPixmap(self, pixmap: QtGui.QPixmap) -> None:
+        """Set widget pixmap"""
         self.icon_pixmap = pixmap
         self.update()
 
     def setSecondPixmap(self, pixmap: QtGui.QPixmap) -> None:
+        """Set widget secondary pixmap"""
         self.second_icon_pixmap = pixmap
         self.update()
 
     def mousePressEvent(self, event: QtGui.QMouseEvent) -> None:
+        """Re-implemented method, handle mouse press event"""
         self._is_pressed = True
         self.update()
         super().mousePressEvent(event)
 
     def mouseReleaseEvent(self, event: QtGui.QMouseEvent) -> None:
+        """Re-implemented method, handle mouse release event"""
         self._is_pressed = False
         self.update()
         super().mouseReleaseEvent(event)
 
     def leaveEvent(self, event: QtCore.QEvent) -> None:
+        """Re-implemented method, handle leave event"""
         self._is_hovered = False
         self.update()
         super().leaveEvent(event)
 
     def paintEvent(self, e: QtGui.QPaintEvent | None) -> None:
+        """Re-implemented method, paint widget"""
         painter = QtGui.QPainter(self)
         painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing, True)
-        painter.setRenderHint(
-            QtGui.QPainter.RenderHint.SmoothPixmapTransform, True
-        )
+        painter.setRenderHint(QtGui.QPainter.RenderHint.SmoothPixmapTransform, True)
 
         rect = self.rect()
         radius = rect.height() / 5.0
@@ -140,12 +150,9 @@ class ListCustomButton(QtWidgets.QPushButton):
                 QtCore.Qt.TransformationMode.SmoothTransformation,
             )
             # Center the icon in the ellipse
-            adjusted_x = (
-                icon_rect.x() + (icon_rect.width() - icon_scaled.width()) / 2.0
-            )
+            adjusted_x = icon_rect.x() + (icon_rect.width() - icon_scaled.width()) / 2.0
             adjusted_y = (
-                icon_rect.y()
-                + (icon_rect.height() - icon_scaled.height()) / 2.0
+                icon_rect.y() + (icon_rect.height() - icon_scaled.height()) / 2.0
             )
             adjusted_icon_rect = QtCore.QRectF(
                 adjusted_x,
@@ -185,9 +192,7 @@ class ListCustomButton(QtWidgets.QPushButton):
                 left_icon_scaled,
                 left_icon_scaled.rect().toRectF(),
             )
-            left_margin = (
-                left_icon_margin + left_icon_size + 8
-            )  # 8px gap after icon
+            left_margin = left_icon_margin + left_icon_size + 8  # 8px gap after icon
 
         # Draw text, area before the ellipse (adjusted for left icon)
         text_margin = int(
@@ -209,11 +214,7 @@ class ListCustomButton(QtWidgets.QPushButton):
         main_text_height = metrics.height()
 
         # Vertically center text
-        text_y = (
-            rect.top()
-            + (rect.height() + main_text_height) / 2
-            - metrics.descent()
-        )
+        text_y = rect.top() + (rect.height() + main_text_height) / 2 - metrics.descent()
 
         # Calculate where to start the right text: just left of the right icon ellipse
         gap = 10  # gap between right text and icon ellipse

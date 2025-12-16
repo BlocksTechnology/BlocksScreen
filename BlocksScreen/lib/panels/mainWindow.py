@@ -35,11 +35,12 @@ def api_handler(func):
     """Decorator for methods that handle api responses"""
 
     def wrapper(*args, **kwargs):
+        """Decorator for api_handler"""
         try:
             result = func(*args, **kwargs)
             return result
         except Exception as e:
-            _logger.error(f"Caught Exception in %s : %s ", func.__name__, e)
+            _logger.error("Caught Exception in %s : %s ", func.__name__, e)
             raise
 
     return wrapper
@@ -80,6 +81,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.printPanel = PrintTab(
             self.ui.printTab, self.file_data, self.ws, self.printer
         )
+        QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.CursorShape.BlankCursor)
+
         self.filamentPanel = FilamentTab(self.ui.filamentTab, self.printer, self.ws)
         self.controlPanel = ControlTab(self.ui.controlTab, self.ws, self.printer)
         self.utilitiesPanel = UtilitiesTab(self.ui.utilitiesTab, self.ws, self.printer)
@@ -92,6 +95,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ws.connection_lost.connect(self.conn_window.on_websocket_connection_lost)
         self.printer.webhooks_update.connect(self.conn_window.webhook_update)
         self.printPanel.request_back.connect(slot=self.global_back)
+        self.printPanel.on_cancel_print.connect(slot=self.on_cancel_print)
 
         self.printPanel.request_change_page.connect(slot=self.global_change_page)
         self.filamentPanel.request_back.connect(slot=self.global_back)
@@ -155,6 +159,27 @@ class MainWindow(QtWidgets.QMainWindow):
             # @ Start websocket connection with moonraker
             self.bo_ws_startup.emit()
         self.reset_tab_indexes()
+
+    @QtCore.pyqtSlot(name="on-cancel-print")
+    def on_cancel_print(self):
+        """Slot for cancel print signal"""
+        self.enable_tab_bar()
+        self.ui.extruder_temp_display.clicked.disconnect()
+        self.ui.bed_temp_display.clicked.disconnect()
+        self.ui.filament_type_icon.setDisabled(False)
+        self.ui.nozzle_size_icon.setDisabled(False)
+        self.ui.extruder_temp_display.clicked.connect(
+            lambda: self.global_change_page(
+                self.ui.main_content_widget.indexOf(self.ui.controlTab),
+                self.controlPanel.indexOf(self.controlPanel.panel.temperature_page),
+            )
+        )
+        self.ui.bed_temp_display.clicked.connect(
+            lambda: self.global_change_page(
+                self.ui.main_content_widget.indexOf(self.ui.controlTab),
+                self.controlPanel.indexOf(self.controlPanel.panel.temperature_page),
+            )
+        )
 
     @QtCore.pyqtSlot(bool, name="update-available")
     def on_update_available(self, state: bool = False):
@@ -472,14 +497,7 @@ class MainWindow(QtWidgets.QMainWindow):
     @api_handler
     def _handle_notify_filelist_changed_message(self, method, data, metadata) -> None:
         """Handle websocket file list messages"""
-        _file_change_list = data.get("params")
-        if _file_change_list:
-            fileaction = _file_change_list[0].get("action")
-            filepath = (
-                _file_change_list[0].get("item").get("path")
-            )  # TODO : NOTIFY_FILELIST_CHANGED, I DON'T KNOW IF I REALLY WANT TO SEND NOTIFICATIONS ON FILE CHANGES.
         ...
-        # self.file_data.request_file_list.emit()
 
     @api_handler
     def _handle_notify_service_state_changed_message(

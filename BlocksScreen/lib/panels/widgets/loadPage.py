@@ -5,9 +5,8 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 
 class LoadScreen(QtWidgets.QDialog):
     class AnimationGIF(enum.Enum):
-        # [x]: WATHERE ARE NO GIFS IN LOADSCREEN PLEASE REMEMBER THIS IM WARNING
+        """Animation type"""
 
-        # TODO : add more types into LoadScreen
         DEFAULT = None
         PLACEHOLDER = ""
 
@@ -31,10 +30,9 @@ class LoadScreen(QtWidgets.QDialog):
         )
 
         self.setWindowFlags(
-            QtCore.Qt.WindowType.Popup
-            | QtCore.Qt.WindowType.FramelessWindowHint
+            QtCore.Qt.WindowType.Popup | QtCore.Qt.WindowType.FramelessWindowHint
         )
-        self.setupUI()
+        self._setupUI()
         config: BlocksScreenConfig = get_configparser()
         try:
             if config:
@@ -61,10 +59,11 @@ class LoadScreen(QtWidgets.QDialog):
         self.repaint()
 
     def set_status_message(self, message: str) -> None:
+        """Set widget status message"""
         self.label.setText(message)
 
-    def geometry_calc(self) -> None:
-        # REFACTOR: find another way to get mainwindow geometry , this version consumes too much ram
+    def _geometry_calc(self) -> None:
+        """Calculate widget position relative to the screen"""
         app_instance = QtWidgets.QApplication.instance()
         main_window = app_instance.activeWindow() if app_instance else None
         if main_window is None and app_instance:
@@ -79,6 +78,7 @@ class LoadScreen(QtWidgets.QDialog):
         self.setGeometry(x, y, width, height)
 
     def close(self) -> bool:
+        """Re-implemented method, close widget"""
         self.timer.stop()
         self.label.setText("Loading...")
         self._angle = 0
@@ -102,10 +102,10 @@ class LoadScreen(QtWidgets.QDialog):
         self.update()
 
     def sizeHint(self) -> QtCore.QSize:
+        """Re-implemented method, size hint"""
         popup_width = int(self.geometry().width())
         popup_height = int(self.geometry().height())
         # Centering logic
-
         popup_x = self.x()
         popup_y = self.y() + (self.height() - popup_height) // 2
         self.move(popup_x, popup_y)
@@ -113,10 +113,8 @@ class LoadScreen(QtWidgets.QDialog):
         self.setMinimumSize(popup_width, popup_height)
         return super().sizeHint()
 
-    def mousePressEvent(self, a0: QtGui.QMouseEvent) -> None:
-        return
-
     def paintEvent(self, a0: QtGui.QPaintEvent) -> None:
+        """Re-implemented method, paint widget"""
         painter = QtGui.QPainter(self)
         # loading circle draw
         if self.anim_type == LoadScreen.AnimationGIF.DEFAULT:
@@ -124,12 +122,8 @@ class LoadScreen(QtWidgets.QDialog):
             painter.setRenderHint(
                 QtGui.QPainter.RenderHint.LosslessImageRendering, True
             )
-            painter.setRenderHint(
-                QtGui.QPainter.RenderHint.SmoothPixmapTransform, True
-            )
-            painter.setRenderHint(
-                QtGui.QPainter.RenderHint.TextAntialiasing, True
-            )
+            painter.setRenderHint(QtGui.QPainter.RenderHint.SmoothPixmapTransform, True)
+            painter.setRenderHint(QtGui.QPainter.RenderHint.TextAntialiasing, True)
             pen = QtGui.QPen()
             pen.setWidth(8)
             pen.setColor(QtGui.QColor("#ffffff"))
@@ -143,20 +137,17 @@ class LoadScreen(QtWidgets.QDialog):
             painter.translate(center_x, center_y)
             painter.rotate(self._angle)
 
-            arc_rect = QtCore.QRectF(
-                -arc_size / 2, -arc_size / 2, arc_size, arc_size
-            )
+            arc_rect = QtCore.QRectF(-arc_size / 2, -arc_size / 2, arc_size, arc_size)
             span_angle = int(self._span_angle * 16)
             painter.drawArc(arc_rect, 0, span_angle)
 
     def resizeEvent(self, event: QtGui.QResizeEvent) -> None:
+        """Re-implemented method, handle widget resize event"""
         super().resizeEvent(event)
-
         label_width = self.width()
         label_height = 100
         label_x = (self.width() - label_width) // 2
         label_y = int(self.height() * 0.65)
-
         margin = 20
         # Center the GIF
         gifshow_width = self.width() - margin * 2
@@ -167,14 +158,15 @@ class LoadScreen(QtWidgets.QDialog):
         self.label.setGeometry(label_x, label_y, label_width, label_height)
 
     def show(self) -> None:
-        self.geometry_calc()
+        """Re-implemented method, show widget"""
+        self._geometry_calc()
         # Start the animation timer only if no GIF is present
         if self.anim_type == LoadScreen.AnimationGIF.DEFAULT:
             self.timer.start()
         self.repaint()
         return super().show()
 
-    def setupUI(self) -> None:
+    def _setupUI(self) -> None:
         self.gifshow = QtWidgets.QLabel("", self)
         self.gifshow.setObjectName("gifshow")
         self.gifshow.setStyleSheet("background: transparent;")

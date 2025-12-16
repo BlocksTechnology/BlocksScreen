@@ -42,20 +42,24 @@ class PrintTab(QtWidgets.QStackedWidget):
 
     """
 
-    request_query_print_stats: typing.ClassVar[QtCore.pyqtSignal] = (
-        QtCore.pyqtSignal(dict, name="request_query_print_stats")
+    request_query_print_stats: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        dict, name="request_query_print_stats"
     )
 
     request_back: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         name="request-back"
     )
-    request_change_page: typing.ClassVar[QtCore.pyqtSignal] = (
-        QtCore.pyqtSignal(int, int, name="request_change_page")
+    request_change_page: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        int, int, name="request_change_page"
     )
 
     run_gcode_signal: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         str, name="run_gcode"
     )
+    on_cancel_print: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        name="on_cancel_print"
+    )
+
     _z_offset: float = 0.0
 
     def __init__(
@@ -75,7 +79,6 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.gcode_path = os.path.expanduser("~/printer_data/gcodes")
         self.setMouseTracking(True)
 
-        
         self.sliderPage = SliderPage(self)
         self.addWidget(self.sliderPage)
         self.sliderPage.request_back.connect(self.back_button)
@@ -90,7 +93,6 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.addWidget(self.filesPage_widget)
 
         self.dialogPage = DialogPage(self)
-
 
         self.confirmPage_widget = ConfirmWidget(self)
         self.addWidget(self.confirmPage_widget)
@@ -120,13 +122,10 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.filesPage_widget.request_dir_info[str].connect(
             self.file_data.request_dir_info[str]
         )
-        self.filesPage_widget.request_dir_info.connect(
-            self.file_data.request_dir_info
-        )
+        self.filesPage_widget.request_dir_info.connect(self.file_data.request_dir_info)
         self.file_data.on_file_list.connect(self.filesPage_widget.on_file_list)
         self.jobStatusPage_widget = JobStatusWidget(self)
         self.addWidget(self.jobStatusPage_widget)
-
         self.confirmPage_widget.on_accept.connect(
             self.jobStatusPage_widget.on_print_start
         )
@@ -142,12 +141,8 @@ class PrintTab(QtWidgets.QStackedWidget):
         )
         self.file_data.fileinfo.connect(self.jobStatusPage_widget.on_fileinfo)
         self.jobStatusPage_widget.print_start.connect(self.ws.api.start_print)
-        self.jobStatusPage_widget.print_resume.connect(
-            self.ws.api.resume_print
-        )
-        self.jobStatusPage_widget.print_cancel.connect(
-            self.handle_cancel_print
-        )
+        self.jobStatusPage_widget.print_resume.connect(self.ws.api.resume_print)
+        self.jobStatusPage_widget.print_cancel.connect(self.handle_cancel_print)
         self.jobStatusPage_widget.print_pause.connect(self.ws.api.pause_print)
         self.jobStatusPage_widget.request_query_print_stats.connect(
             self.ws.api.object_query
@@ -171,15 +166,15 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.printer.print_stats_update[str, float].connect(
             self.jobStatusPage_widget.on_print_stats_update
         )
-
+        self.printer.print_stats_update[str, str].connect(self.on_print_stats_update)
+        self.printer.print_stats_update[str, dict].connect(self.on_print_stats_update)
+        self.printer.print_stats_update[str, float].connect(self.on_print_stats_update)
         self.printer.gcode_move_update[str, list].connect(
             self.jobStatusPage_widget.on_gcode_move_update
         )
-
         self.babystepPage = BabystepPage(self)
         self.babystepPage.request_back.connect(self.back_button)
         self.addWidget(self.babystepPage)
-
         self.tune_page = TuneWidget(self)
         self.addWidget(self.tune_page)
         self.jobStatusPage_widget.tune_clicked.connect(
@@ -208,12 +203,12 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.tune_page.request_sliderPage[str, int, "PyQt_PyObject"].connect(
             self.on_slidePage_request
         )
-        self.tune_page.request_sliderPage[
-            str, int, "PyQt_PyObject", int, int
-        ].connect(self.on_slidePage_request)
-        self.tune_page.request_numpad[
-            str, int, "PyQt_PyObject", int, int
-        ].connect(self.on_numpad_request)
+        self.tune_page.request_sliderPage[str, int, "PyQt_PyObject", int, int].connect(
+            self.on_slidePage_request
+        )
+        self.tune_page.request_numpad[str, int, "PyQt_PyObject", int, int].connect(
+            self.on_numpad_request
+        )
         self.tune_page.request_numpad[
             str,
             int,
@@ -225,10 +220,8 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.tune_page.request_sensorsPage.connect(
             lambda: self.change_page(self.indexOf(self.sensorsPanel))
         )
-
         self.sensorsPanel = SensorsWindow(self)
         self.addWidget(self.sensorsPanel)
-
         self.printer.request_object_subscription_signal.connect(
             self.sensorsPanel.handle_available_fil_sensors
         )
@@ -245,22 +238,24 @@ class PrintTab(QtWidgets.QStackedWidget):
             partial(self.change_page, self.indexOf(self.filesPage_widget))
         )
         self.babystepPage.run_gcode.connect(self.ws.api.run_gcode)
-
         self.run_gcode_signal.connect(self.ws.api.run_gcode)
+        self.confirmPage_widget.on_delete.connect(self.delete_file)
+        self.change_page(self.indexOf(self.print_page))  # force set the initial page
 
-        self.confirmPage_widget.on_delete.connect(
-            self.delete_file
-        )
-
-
-        self.change_page(
-            self.indexOf(self.print_page)
-        )  # force set the initial page
+    @QtCore.pyqtSlot(str, dict, name="on_print_stats_update")
+    @QtCore.pyqtSlot(str, float, name="on_print_stats_update")
+    @QtCore.pyqtSlot(str, str, name="on_print_stats_update")
+    def on_print_stats_update(self, field: str, value: dict | float | str) -> None:
+        """
+        unblocks tabs if on standby
+        """
+        if isinstance(value, str):
+            if "state" in field:
+                if value in ("standby"):
+                    self.on_cancel_print.emit()
 
     @QtCore.pyqtSlot(str, int, "PyQt_PyObject", name="on_numpad_request")
-    @QtCore.pyqtSlot(
-        str, int, "PyQt_PyObject", int, int, name="on_numpad_request"
-    )
+    @QtCore.pyqtSlot(str, int, "PyQt_PyObject", int, int, name="on_numpad_request")
     def on_numpad_request(
         self,
         name: str,
@@ -269,6 +264,7 @@ class PrintTab(QtWidgets.QStackedWidget):
         min_value: int = 0,
         max_value: int = 100,
     ) -> None:
+        """Handle numpad request"""
         self.numpadPage.value_selected.connect(callback)
         self.numpadPage.set_name(name)
         self.numpadPage.set_value(current_value)
@@ -278,9 +274,7 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.change_page(self.indexOf(self.numpadPage))
 
     @QtCore.pyqtSlot(str, int, "PyQt_PyObject", name="on_slidePage_request")
-    @QtCore.pyqtSlot(
-        str, int, "PyQt_PyObject", int, int, name="on_slidePage_request"
-    )
+    @QtCore.pyqtSlot(str, int, "PyQt_PyObject", int, int, name="on_slidePage_request")
     def on_slidePage_request(
         self,
         name: str,
@@ -289,6 +283,7 @@ class PrintTab(QtWidgets.QStackedWidget):
         min_value: int = 0,
         max_value: int = 100,
     ) -> None:
+        """Handle slider page request"""
         self.sliderPage.value_selected.connect(callback)
         self.sliderPage.set_name(name)
         self.sliderPage.set_slider_position(int(current_value))
@@ -296,31 +291,25 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.sliderPage.set_slider_maximum(max_value)
         self.change_page(self.indexOf(self.sliderPage))
 
-    def delete_file(self,direcotry:str,name:str):
-        self.directory:str = direcotry
-        self.filename:str = name
+    @QtCore.pyqtSlot(str, str, name="delete_file")
+    @QtCore.pyqtSlot(str, name="delete_file")
+    def delete_file(self, filename: str, directory: str = "gcodes") -> None:
+        """Handle Delete file signal, shows confirmation dialog"""
         self.dialogPage.set_message("Are you sure you want to delete this file?")
-        self.dialogPage.button_clicked.connect(self.on_dialog_button_clicked)
-        self.dialogPage.show()
+        self.dialogPage.accepted.connect(
+            lambda: self._on_delete_file_confirmed(filename, directory)
+        )
+        self.dialogPage.open()
 
-    def on_dialog_button_clicked(self, button_name: str) -> None:
-        print(button_name)
-        """Handle dialog button clicks"""
-        if button_name == "Confirm":
-            self.ws.api.delete_file(self.filename,self.directory)
-            self.dialogPage.hide()
-        else:
-            self.dialogPage.hide()
-
-
-
-
+    def _on_delete_file_confirmed(self, filename: str, directory: str) -> None:
+        """Handle confirmed file deletion after user accepted the dialog"""
+        self.file_data.on_request_delete_file(filename, directory)
+        self.request_back.emit()
+        self.filesPage_widget.reset_dir()
+        self.dialogPage.disconnect()
 
     def paintEvent(self, a0: QtGui.QPaintEvent) -> None:
-        """
-        REFACTOR: Instead of using a background svg pixmap just draw the
-                background with with the correct styles and everything
-        """
+        """Widget painting"""
         if self.babystepPage.isVisible():
             _button_name_str = f"nozzle_offset_{self._z_offset}"
             if hasattr(self, _button_name_str):
@@ -345,11 +334,13 @@ class PrintTab(QtWidgets.QStackedWidget):
         if name == "backgroundPixmap":
             self.background = value
         return super().setProperty(name, value)
-    
+
     def handle_cancel_print(self) -> None:
         """Handles the print cancel action"""
         self.ws.api.cancel_print()
+        self.on_cancel_print.emit()
         self.loadscreen.show()
+        self.loadscreen.setModal(True)
         self.loadscreen.set_status_message("Cancelling print...\nPlease wait")
 
     def change_page(self, index: int) -> None:
@@ -366,6 +357,7 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.request_back.emit()
 
     def setupMainPrintPage(self) -> None:
+        """Setup UI for print page"""
         self.setObjectName("printStackedWidget")
         self.setWindowModality(QtCore.Qt.WindowModality.WindowModal)
         self.resize(710, 410)
@@ -381,9 +373,7 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.setMaximumSize(QtCore.QSize(720, 420))
         self.setProperty(
             "backgroundPixmap",
-            QtGui.QPixmap(
-                ":/background/media/graphics/scroll_list_window.svg"
-            ),
+            QtGui.QPixmap(":/background/media/graphics/scroll_list_window.svg"),
         )
         self.print_page = QtWidgets.QWidget()
         sizePolicy = QtWidgets.QSizePolicy(
@@ -392,9 +382,7 @@ class PrintTab(QtWidgets.QStackedWidget):
         )
         sizePolicy.setHorizontalStretch(1)
         sizePolicy.setVerticalStretch(1)
-        sizePolicy.setHeightForWidth(
-            self.print_page.sizePolicy().hasHeightForWidth()
-        )
+        sizePolicy.setHeightForWidth(self.print_page.sizePolicy().hasHeightForWidth())
         self.print_page.setSizePolicy(sizePolicy)
         self.print_page.setMinimumSize(QtCore.QSize(710, 400))
         self.print_page.setMaximumSize(QtCore.QSize(720, 420))
@@ -424,9 +412,7 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.main_print_btn.setContextMenuPolicy(
             QtCore.Qt.ContextMenuPolicy.NoContextMenu
         )
-        self.main_print_btn.setLayoutDirection(
-            QtCore.Qt.LayoutDirection.LeftToRight
-        )
+        self.main_print_btn.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
         self.main_print_btn.setStyleSheet("")
         self.main_print_btn.setAutoDefault(False)
         self.main_print_btn.setFlat(True)
@@ -453,9 +439,7 @@ class PrintTab(QtWidgets.QStackedWidget):
         font.setFamily("Montserrat")
         font.setPointSize(14)
         self.main_text_label.setFont(font)
-        self.main_text_label.setStyleSheet(
-            "background: transparent; color: white;"
-        )
+        self.main_text_label.setStyleSheet("background: transparent; color: white;")
         self.main_text_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self.main_text_label.setTextInteractionFlags(
             QtCore.Qt.TextInteractionFlag.NoTextInteraction
@@ -469,6 +453,4 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.main_print_btn.setProperty(
             "class", _translate("printStackedWidget", "menu_btn")
         )
-        self.main_text_label.setText(
-            _translate("printStackedWidget", "Printer ready")
-        )
+        self.main_text_label.setText(_translate("printStackedWidget", "Printer ready"))

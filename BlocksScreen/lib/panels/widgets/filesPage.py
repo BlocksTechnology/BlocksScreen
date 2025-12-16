@@ -27,8 +27,8 @@ class FilesPage(QtWidgets.QWidget):
     request_file_list: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         [], [str], name="api-get-files-list"
     )
-    request_file_metadata: typing.ClassVar[QtCore.pyqtSignal] = (
-        QtCore.pyqtSignal(str, name="api-get-gcode-metadata")
+    request_file_metadata: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        str, name="api-get-gcode-metadata"
     )
     file_list: list = []
     files_data: dict = {}
@@ -43,9 +43,7 @@ class FilesPage(QtWidgets.QWidget):
         self.ReloadButton.clicked.connect(
             lambda: self.request_dir_info[str].emit(self.curr_dir)
         )
-        self.listWidget.verticalScrollBar().valueChanged.connect(
-            self._handle_scrollbar
-        )
+        self.listWidget.verticalScrollBar().valueChanged.connect(self._handle_scrollbar)
         self.scrollbar.valueChanged.connect(self._handle_scrollbar)
         self.scrollbar.valueChanged.connect(
             lambda value: self.listWidget.verticalScrollBar().setValue(value)
@@ -54,31 +52,31 @@ class FilesPage(QtWidgets.QWidget):
 
     @QtCore.pyqtSlot(name="reset-dir")
     def reset_dir(self) -> None:
+        """Reset current directory"""
         self.curr_dir = ""
         self.request_dir_info[str].emit(self.curr_dir)
 
     def showEvent(self, a0: QtGui.QShowEvent) -> None:
+        """Re-implemented method, handle widget show event"""
         self._build_file_list()
         return super().showEvent(a0)
 
     @QtCore.pyqtSlot(list, name="on-file-list")
     def on_file_list(self, file_list: list) -> None:
+        """Handle receiving files list from websocket"""
         self.files_data.clear()
         self.file_list = file_list
-        # if self.isVisible(): # Only build the list when directories come
-        #     self._build_file_list()
 
     @QtCore.pyqtSlot(list, name="on-dirs")
     def on_directories(self, directories_data: list) -> None:
+        """Handle receiving available directories from websocket"""
         self.directories = directories_data
         if self.isVisible():
             self._build_file_list()
 
-    @QtCore.pyqtSlot(str, name="on-delete-file")
-    def on_delete_file(self, filename: str) -> None: ...
-
     @QtCore.pyqtSlot(dict, name="on-fileinfo")
     def on_fileinfo(self, filedata: dict) -> None:
+        """Handle receive file information/metadata"""
         if not filedata or not self.isVisible():
             return
         filename = filedata.get("filename", "")
@@ -86,11 +84,7 @@ class FilesPage(QtWidgets.QWidget):
             return
         self.files_data.update({f"{filename}": filedata})
         estimated_time = filedata.get("estimated_time", 0)
-        seconds = (
-            int(estimated_time)
-            if isinstance(estimated_time, (int, float))
-            else 0
-        )
+        seconds = int(estimated_time) if isinstance(estimated_time, (int, float)) else 0
         filament_type = (
             filedata.get("filament_type", "Unknown filament")
             if filedata.get("filament_type", "Unknown filament") != -1.0
@@ -110,9 +104,7 @@ class FilesPage(QtWidgets.QWidget):
             else:
                 time_str = f"{minutes}m"
 
-        list_items = [
-            self.listWidget.item(i) for i in range(self.listWidget.count())
-        ]
+        list_items = [self.listWidget.item(i) for i in range(self.listWidget.count())]
         if not list_items:
             return
         for list_item in list_items:
@@ -131,17 +123,13 @@ class FilesPage(QtWidgets.QWidget):
             widget = self.listWidget.itemWidget(item)
             for file in self.file_list:
                 path = (
-                    file.get("path")
-                    if "path" in file.keys()
-                    else file.get("filename")
+                    file.get("path") if "path" in file.keys() else file.get("filename")
                 )
                 if not path:
                     return
                 if widget.text() in path:
                     file_path = (
-                        path
-                        if not self.curr_dir
-                        else str(self.curr_dir + "/" + path)
+                        path if not self.curr_dir else str(self.curr_dir + "/" + path)
                     )
                     self.file_selected.emit(
                         str(file_path.removeprefix("/")),
@@ -151,9 +139,7 @@ class FilesPage(QtWidgets.QWidget):
                     )
 
     @QtCore.pyqtSlot(QtWidgets.QListWidgetItem, str, name="dir-item-clicked")
-    def _dirItemClicked(
-        self, item: QtWidgets.QListWidgetItem, directory: str
-    ) -> None:
+    def _dirItemClicked(self, item: QtWidgets.QListWidgetItem, directory: str) -> None:
         self.curr_dir = self.curr_dir + directory
         self.request_dir_info[str].emit(self.curr_dir)
 
@@ -172,9 +158,7 @@ class FilesPage(QtWidgets.QWidget):
                 if dir_data.get("dirname").startswith("."):
                     continue
                 self._add_directory_list_item(dir_data)
-        sorted_list = sorted(
-            self.file_list, key=lambda x: x["modified"], reverse=True
-        )
+        sorted_list = sorted(self.file_list, key=lambda x: x["modified"], reverse=True)
         for item in sorted_list:
             self._add_file_list_item(item)
         self._add_spacer()
@@ -188,9 +172,7 @@ class FilesPage(QtWidgets.QWidget):
             return
         button = ListCustomButton()
         button.setText(str(dir_data.get("dirname")))
-        button.setSecondPixmap(
-            QtGui.QPixmap(":/ui/media/btn_icons/folderIcon.svg")
-        )
+        button.setSecondPixmap(QtGui.QPixmap(":/ui/media/btn_icons/folderIcon.svg"))
         button.setMinimumSize(600, 80)
         button.setMaximumSize(700, 80)
         button.setLeftFontSize(17)
@@ -199,16 +181,12 @@ class FilesPage(QtWidgets.QWidget):
         list_item.setSizeHint(button.sizeHint())
         self.listWidget.addItem(list_item)
         self.listWidget.setItemWidget(list_item, button)
-        button.clicked.connect(
-            lambda: self._dirItemClicked(list_item, "/" + dir_name)
-        )
+        button.clicked.connect(lambda: self._dirItemClicked(list_item, "/" + dir_name))
 
     def _add_back_folder_entry(self) -> None:
         button = ListCustomButton()
         button.setText("Go Back")
-        button.setSecondPixmap(
-            QtGui.QPixmap(":/ui/media/btn_icons/back_folder.svg")
-        )
+        button.setSecondPixmap(QtGui.QPixmap(":/ui/media/btn_icons/back_folder.svg"))
         button.setMinimumSize(600, 80)
         button.setMaximumSize(700, 80)
         button.setLeftFontSize(17)
@@ -241,9 +219,7 @@ class FilesPage(QtWidgets.QWidget):
             return
         button = ListCustomButton()
         button.setText(name[:-6])
-        button.setPixmap(
-            QtGui.QPixmap(":/arrow_icons/media/btn_icons/right_arrow.svg")
-        )
+        button.setPixmap(QtGui.QPixmap(":/arrow_icons/media/btn_icons/right_arrow.svg"))
         button.setMinimumSize(600, 80)
         button.setMaximumSize(700, 80)
         button.setLeftFontSize(17)
@@ -274,8 +250,7 @@ class FilesPage(QtWidgets.QWidget):
         placeholder_label.setFont(font)
         placeholder_label.setStyleSheet("color: gray;")
         placeholder_label.setAlignment(
-            QtCore.Qt.AlignmentFlag.AlignHCenter
-            | QtCore.Qt.AlignmentFlag.AlignVCenter
+            QtCore.Qt.AlignmentFlag.AlignHCenter | QtCore.Qt.AlignmentFlag.AlignVCenter
         )
         placeholder_label.setMinimumSize(
             QtCore.QSize(self.listWidget.width(), self.listWidget.height())
@@ -295,15 +270,9 @@ class FilesPage(QtWidgets.QWidget):
         self.scrollbar.blockSignals(False)
 
     def _setup_scrollbar(self) -> None:
-        self.scrollbar.setMinimum(
-            self.listWidget.verticalScrollBar().minimum()
-        )
-        self.scrollbar.setMaximum(
-            self.listWidget.verticalScrollBar().maximum()
-        )
-        self.scrollbar.setPageStep(
-            self.listWidget.verticalScrollBar().pageStep()
-        )
+        self.scrollbar.setMinimum(self.listWidget.verticalScrollBar().minimum())
+        self.scrollbar.setMaximum(self.listWidget.verticalScrollBar().maximum())
+        self.scrollbar.setPageStep(self.listWidget.verticalScrollBar().pageStep())
         self.scrollbar.show()
 
     def _setupUI(self):
@@ -321,9 +290,7 @@ class FilesPage(QtWidgets.QWidget):
         self.setFont(font)
         self.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
         self.setAutoFillBackground(False)
-        self.setStyleSheet(
-            "#file_page{\n    background-color: transparent;\n}"
-        )
+        self.setStyleSheet("#file_page{\n    background-color: transparent;\n}")
         self.verticalLayout_5 = QtWidgets.QVBoxLayout(self)
         self.verticalLayout_5.setObjectName("verticalLayout_5")
         self.fp_header_layout = QtWidgets.QHBoxLayout()
