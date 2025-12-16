@@ -64,10 +64,8 @@ class NetworkScanRunnable(QRunnable):
                     "is_saved": ssid in saved,
                 }
 
-            # Emit scan_result (same name)
             self.signals.scan_results.emit(data_dict)
 
-            # Transform into your “list of tuples + blank / separator” format
             items: list[typing.Union[tuple[str, int, str], str]] = []
             saved_nets = [
                 (ssid, info["signal_level"])
@@ -82,7 +80,6 @@ class NetworkScanRunnable(QRunnable):
             saved_nets.sort(key=lambda x: -x[1])
             unsaved_nets.sort(key=lambda x: -x[1])
 
-            # Build your list with statuses
             for ssid, sig in saved_nets:
                 status = "Active" if ssid == self.nm.get_current_ssid() else "Saved"
                 items.append((ssid, sig, status))
@@ -174,7 +171,6 @@ class WifiIconProvider:
     """Simple provider: loads QPixmap for WiFi bars + protection without caching."""
 
     def __init__(self):
-        # Map from (bars, is_protected) to resource path
         self.paths = {
             (0, False): ":/network/media/btn_icons/0bar_wifi.svg",
             (4, False): ":/network/media/btn_icons/4bar_wifi.svg",
@@ -190,7 +186,6 @@ class WifiIconProvider:
 
     def get_pixmap(self, signal: int, state: str) -> QtGui.QPixmap:
         """Return a QPixmap for the given signal (0-100) and state ("Protected" or not)."""
-        # Normalize signal
         if signal <= 25:
             bars = 0
         elif signal >= 75:
@@ -244,13 +239,12 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
 
         self.load_popup: LoadScreen = LoadScreen(self)
         self.repeated_request_status = QtCore.QTimer()
-        self.repeated_request_status.setInterval(2000)  # every 2 seconds
+        self.repeated_request_status.setInterval(2000)
 
         self._load_timer = QtCore.QTimer()
         self._load_timer.setSingleShot(True)
         self._load_timer.timeout.connect(self._handle_load_timeout)
 
-        # View Models and Delegates
         self.model = EntryListModel()
         self.model.setParent(self.panel.listView)
         self.entry_delegate = EntryDelegate()
@@ -258,7 +252,6 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.panel.listView.setItemDelegate(self.entry_delegate)
         self.entry_delegate.item_selected.connect(self.ssid_item_clicked)
 
-        # Network Scan
         self.build_network_list()
         self.network_list_worker = BuildNetworkList()
         self.network_list_worker.finished_network_list_build.connect(
@@ -491,13 +484,12 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
 
     def showEvent(self, event: QtGui.QShowEvent | None) -> None:
         """Re-add clients to update list"""
-        # Block all touch events so multitouch is ignored
         if event.type() in (
             QtCore.QEvent.Type.TouchBegin,
             QtCore.QEvent.Type.TouchUpdate,
             QtCore.QEvent.Type.TouchEnd,
         ):
-            return True  # ignore the event entirely
+            return True
 
         self.build_model_list()
         return super().showEvent(event)
@@ -838,7 +830,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.panel.line_3.setVisible(not toggle)
         self.panel.netlist_security.setVisible(not toggle)
         self.panel.netlist_security_label.setVisible(not toggle)
-        # Align text
+
         self.panel.mn_info_box.setWordWrap(True)
         self.panel.mn_info_box.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
 
@@ -878,7 +870,6 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             - add_network_confirmation(pyqtSignal): Signal with a dict that contains the result of adding a new network to the machine.
 
         """
-        # Check if a password was inserted
 
         self.panel.add_network_validation_button.setEnabled(False)
         self.panel.add_network_validation_button.repaint()
@@ -898,7 +889,6 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         error_msg = result.get("error", "")
         self.panel.add_network_password_field.clear()
         if not error_msg:
-            # Assume it was a success
             QtCore.QTimer().singleShot(5000, self.network_list_worker.build)
             QtCore.QTimer().singleShot(
                 5000,
@@ -940,16 +930,12 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
 
         _current_ssid_name = item.text
         self.selected_item = copy.copy(item)
-        if (
-            _current_ssid_name in self.sdbus_network.get_saved_ssid_names()
-        ):  # Network already saved go to the information page
+        if _current_ssid_name in self.sdbus_network.get_saved_ssid_names():
             self.setCurrentIndex(self.indexOf(self.panel.saved_connection_page))
             self.panel.saved_connection_network_name.setText(str(_current_ssid_name))
-        else:  # Network not saved go to the add network page
+        else:
             self.setCurrentIndex(self.indexOf(self.panel.add_network_page))
-            self.panel.add_network_network_label.setText(
-                str(_current_ssid_name)
-            )  # Add the network name to the title
+            self.panel.add_network_network_label.setText(str(_current_ssid_name))
 
     def update_network(
         self,
@@ -1009,14 +995,12 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         if not self.isVisible():
             return
         _cur = self.currentIndex()
-        if index == self.indexOf(self.panel.add_network_page):  # Add network page 2
+        if index == self.indexOf(self.panel.add_network_page):
             self.panel.add_network_password_field.clear()
             self.panel.add_network_password_field.setPlaceholderText(
                 "Insert password here, press enter when finished."
             )
-        elif index == self.indexOf(
-            self.panel.saved_connection_page
-        ):  # Network information page 3
+        elif index == self.indexOf(self.panel.saved_connection_page):
             self.panel.saved_connection_change_password_field.clear()
             self.panel.saved_connection_change_password_field.setPlaceholderText(
                 "Change network password"
@@ -1088,7 +1072,6 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.model.add_item(item)
 
     def _handle_scrollbar(self, value):
-        # Block signals to avoid recursion
         self.panel.verticalScrollBar.blockSignals(True)
         self.panel.verticalScrollBar.setValue(value)
         self.panel.verticalScrollBar.blockSignals(False)
