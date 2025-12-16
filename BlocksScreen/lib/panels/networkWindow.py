@@ -176,12 +176,12 @@ class WifiIconProvider:
     def __init__(self):
         # Map from (bars, is_protected) to resource path
         self.paths = {
-            ("no", False): ":/network/media/btn_icons/0bar_wifi.svg",
+            (0, False): ":/network/media/btn_icons/0bar_wifi.svg",
             (4, False): ":/network/media/btn_icons/4bar_wifi.svg",
             (3, False): ":/network/media/btn_icons/3bar_wifi.svg",
             (2, False): ":/network/media/btn_icons/2bar_wifi.svg",
             (1, False): ":/network/media/btn_icons/1bar_wifi.svg",
-            ("no", True): ":/network/media/btn_icons/0bar_wifi_protected.svg",
+            (0, True): ":/network/media/btn_icons/0bar_wifi_protected.svg",
             (4, True): ":/network/media/btn_icons/4bar_wifi_protected.svg",
             (3, True): ":/network/media/btn_icons/3bar_wifi_protected.svg",
             (2, True): ":/network/media/btn_icons/2bar_wifi_protected.svg",
@@ -191,13 +191,13 @@ class WifiIconProvider:
     def get_pixmap(self, signal: int, state: str) -> QtGui.QPixmap:
         """Return a QPixmap for the given signal (0-100) and state ("Protected" or not)."""
         # Normalize signal
-        if signal <= 0:
-            bars = "no"
+        if signal <= 25:
+            bars = 0
         elif signal >= 75:
             bars = 4
         elif signal >= 50:
             bars = 3
-        elif signal >= 25:
+        elif signal > 25:
             bars = 2
         else:
             bars = 1
@@ -207,14 +207,14 @@ class WifiIconProvider:
 
         path = self.paths.get(key)
         if path is None:
-            logger.warning(
+            logger.debug(
                 f"No icon path for key {key}, falling back to no-signal unprotected"
             )
-            path = self.paths[("no", False)]
+            path = self.paths[(0, False)]
 
         pm = QtGui.QPixmap(path)
         if pm.isNull():
-            logger.error(f"Failed to load pixmap from '{path}' for key {key}")
+            logger.debug(f"Failed to load pixmap from '{path}' for key {key}")
         return pm
 
 
