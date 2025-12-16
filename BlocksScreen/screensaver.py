@@ -12,7 +12,10 @@ class ScreenSaver(QtCore.QObject):
     touch_blocked: bool = False
 
     def __init__(self, parent) -> None:
-        super().__init__()
+        if parent:
+            super().__init__(parent)
+        else:
+            super().__init__()
 
         self.screensaver_config = parent.config.get_section(
             "screensaver", fallback=None
