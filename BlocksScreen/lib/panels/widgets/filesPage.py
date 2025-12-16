@@ -54,37 +54,52 @@ class FilesPage(QtWidgets.QWidget):
         self.back_btn.clicked.connect(self.reset_dir)
 
         self.entry_delegate.item_selected.connect(self._on_item_selected)
+        self._refresh_one_and_half_sec_timer = QtCore.QTimer()
+        self._refresh_one_and_half_sec_timer.timeout.connect(
+            lambda: self.request_dir_info[str].emit(self.curr_dir)
+        )
+        self._refresh_one_and_half_sec_timer.start(1500)
 
     @QtCore.pyqtSlot(ListItem, name="on-item-selected")
     def _on_item_selected(self, item: ListItem) -> None:
         """Slot called when a list item is selected in the UI.
         This method is connected to the `item_selected` signal of the entry delegate.
-        It handles the selection of a `ListItem` and is intended to be overridden
-        or customized for each specific item type, allowing different behavior
-        depending on the item.
+        It handles the selection of a `ListItem` and process it accoding it with its type
         Args:
             item : ListItem The item that was selected by the user.
         """
-        logger.debug("Item Selected")
+        if not item.left_icon:
+            filename = self.curr_dir + "/" + item.text + ".gcode"
+            self._fileItemClicked(filename)
+        else:
+            if item.text == "Go Back":
+                go_back_path = os.path.dirname(self.curr_dir)
+                if go_back_path == "/":
+                    go_back_path = ""
+                self._on_goback_dir(go_back_path)
+            else:
+                self._dirItemClicked("/" + item.text)
 
     @QtCore.pyqtSlot(name="reset-dir")
     def reset_dir(self) -> None:
+        """Reset current directory"""
         self.curr_dir = ""
         self.request_dir_info[str].emit(self.curr_dir)
 
     def showEvent(self, a0: QtGui.QShowEvent) -> None:
+        """Re-implemented method, handle widget show event"""
         self._build_file_list()
         return super().showEvent(a0)
 
     @QtCore.pyqtSlot(list, name="on-file-list")
     def on_file_list(self, file_list: list) -> None:
+        """Handle receiving files list from websocket"""
         self.files_data.clear()
         self.file_list = file_list
-        # if self.isVisible(): # Only build the list when directories come
-        #    self._build_file_list()
 
     @QtCore.pyqtSlot(list, name="on-dirs")
     def on_directories(self, directories_data: list) -> None:
+        """Handle receiving available directories from websocket"""
         self.directories = directories_data
         if self.isVisible():
             self._build_file_list()
@@ -123,9 +138,9 @@ class FilesPage(QtWidgets.QWidget):
         item = ListItem(
             text=name[:-6],
             right_text=f"{filament_type} - {time_str}",
-            right_icon=QtGui.QPixmap(":/arrow_icons/media/btn_icons/right_arrow.svg"),
+            right_icon=self.path.get("right_arrow"),
             left_icon=None,
-            callback=lambda: self._fileItemClicked(filename),
+            callback=None,
             selected=False,
             allow_check=False,
             _lfontsize=17,
@@ -145,7 +160,7 @@ class FilesPage(QtWidgets.QWidget):
         """
         self.file_selected.emit(
             str(filename.removeprefix("/")),
-            self.files_data.get(filename.removeprefix("/")),  # Defaults to Nothing
+            self.files_data.get(filename.removeprefix("/")),
         )
 
     def _dirItemClicked(self, directory: str) -> None:
@@ -179,7 +194,7 @@ class FilesPage(QtWidgets.QWidget):
 
         self._setup_scrollbar()
         self.listWidget.blockSignals(False)
-        self.listWidget.repaint()
+        self.listWidget.update()
 
     def _add_directory_list_item(self, dir_data: dict) -> None:
         """Method that adds directories to the list"""
@@ -188,10 +203,10 @@ class FilesPage(QtWidgets.QWidget):
             return
         item = ListItem(
             text=str(dir_name),
-            left_icon=QtGui.QPixmap(":/ui/media/btn_icons/folderIcon.svg"),
+            left_icon=self.path.get("folderIcon"),
             right_text="",
             selected=False,
-            callback=lambda name=dir_name: self._dirItemClicked("/" + str(name)),
+            callback=None,
             allow_check=False,
             _lfontsize=17,
             _rfontsize=12,
@@ -209,8 +224,8 @@ class FilesPage(QtWidgets.QWidget):
             text="Go Back",
             right_text="",
             right_icon=None,
-            left_icon=QtGui.QPixmap(":/ui/media/btn_icons/back_folder.svg"),
-            callback=lambda: self._on_goback_dir(go_back_path),
+            left_icon=self.path.get("back_folder"),
+            callback=None,
             selected=False,
             allow_check=False,
             _lfontsize=17,
@@ -222,10 +237,12 @@ class FilesPage(QtWidgets.QWidget):
 
     @QtCore.pyqtSlot(str, str, name="on-goback-dir")
     def _on_goback_dir(self, directory) -> None:
+        """Go back behaviour"""
         self.request_dir_info[str].emit(directory)
         self.curr_dir = directory
 
     def _add_file_list_item(self, file_data_item) -> None:
+        """Request file information and metadata to create filelist"""
         if not file_data_item:
             return
 
@@ -235,7 +252,6 @@ class FilesPage(QtWidgets.QWidget):
             else file_data_item["filename"]
         )
         if not name.endswith(".gcode"):
-            # Only list .gcode files, all else ignore
             return
         file_path = (
             name if not self.curr_dir else str(self.curr_dir + "/" + name)
@@ -245,17 +261,19 @@ class FilesPage(QtWidgets.QWidget):
         self.request_file_info.emit(file_path.removeprefix("/"))
 
     def _add_placeholder(self) -> None:
+        """Shows placeholder when no items exist"""
         self.scrollbar.hide()
         self.listWidget.hide()
         self.label.show()
 
     def _handle_scrollbar(self, value):
-        # Block signals to avoid recursion
+        """Updates scrollbar value"""
         self.scrollbar.blockSignals(True)
         self.scrollbar.setValue(value)
         self.scrollbar.blockSignals(False)
 
     def _setup_scrollbar(self) -> None:
+        """Syncs the scrollbar with the list size"""
         self.scrollbar.setMinimum(self.listWidget.verticalScrollBar().minimum())
         self.scrollbar.setMaximum(self.listWidget.verticalScrollBar().maximum())
         self.scrollbar.setPageStep(self.listWidget.verticalScrollBar().pageStep())
@@ -327,7 +345,7 @@ class FilesPage(QtWidgets.QWidget):
         self.listWidget.setSelectionBehavior(
             QtWidgets.QAbstractItemView.SelectionBehavior.SelectItems
         )
-        self.listWidget.setHorizontalScrollBarPolicy(  # No horizontal scroll
+        self.listWidget.setHorizontalScrollBarPolicy(
             QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff
         )
         self.listWidget.setVerticalScrollMode(
@@ -352,11 +370,11 @@ class FilesPage(QtWidgets.QWidget):
         scroller_props = scroller_instance.scrollerProperties()
         scroller_props.setScrollMetric(
             QtWidgets.QScrollerProperties.ScrollMetric.DragVelocitySmoothingFactor,
-            0.05,  # Lower = more responsive
+            0.05,
         )
         scroller_props.setScrollMetric(
             QtWidgets.QScrollerProperties.ScrollMetric.DecelerationFactor,
-            0.4,  # higher = less inertia
+            0.4,
         )
         QtWidgets.QScroller.scroller(self.listWidget).setScrollerProperties(
             scroller_props
@@ -370,14 +388,24 @@ class FilesPage(QtWidgets.QWidget):
         self.label.setMinimumSize(
             QtCore.QSize(self.listWidget.width(), self.listWidget.height())
         )
-        self.label.setAlignment(
-            QtCore.Qt.AlignmentFlag.AlignHCenter | QtCore.Qt.AlignmentFlag.AlignVCenter
-        )
 
-        self.fp_content_layout.addWidget(self.listWidget)
-        self.fp_content_layout.addWidget(self.label)
         self.scrollbar = CustomScrollBar()
+
+        self.fp_content_layout.addWidget(
+            self.label,
+            alignment=QtCore.Qt.AlignmentFlag.AlignHCenter
+            | QtCore.Qt.AlignmentFlag.AlignVCenter,
+        )
+        self.fp_content_layout.addWidget(self.listWidget)
         self.fp_content_layout.addWidget(self.scrollbar)
         self.verticalLayout_5.addLayout(self.fp_content_layout)
         self.scrollbar.show()
         self.label.hide()
+
+        self.path = {
+            "back_folder": QtGui.QPixmap(":/ui/media/btn_icons/back_folder.svg"),
+            "folderIcon": QtGui.QPixmap(":/ui/media/btn_icons/folderIcon.svg"),
+            "right_arrow": QtGui.QPixmap(
+                ":/arrow_icons/media/btn_icons/right_arrow.svg"
+            ),
+        }
