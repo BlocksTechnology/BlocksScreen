@@ -1,7 +1,8 @@
 import copy
 import typing
 
-from lib.panels.widgets.loadPage import LoadScreen
+from lib.panels.widgets.basePopup import BasePopup
+from lib.panels.widgets.loadWidget import LoadingOverlayWidget
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_frame import BlocksCustomFrame
 from lib.utils.icon_button import IconButton
@@ -61,8 +62,11 @@ class UpdatePage(QtWidgets.QWidget):
         self.cli_tracking = {}
         self.selected_item: ListItem | None = None
         self.ongoing_update: bool = False
-
-        self.load_popup: LoadScreen = LoadScreen(self)
+        self.load_popup = BasePopup(self, floating=False, dialog=False)
+        self.loadwidget = LoadingOverlayWidget(
+            self, LoadingOverlayWidget.AnimationGIF.DEFAULT
+        )
+        self.load_popup.add_widget(self.loadwidget)
         self.repeated_request_status = QtCore.QTimer()
         self.repeated_request_status.setInterval(2000)  # every 2 seconds
         self.model = EntryListModel()
@@ -93,7 +97,7 @@ class UpdatePage(QtWidgets.QWidget):
         """Handled ongoing update signal,
         calls loading page (blocks user interaction)
         """
-        self.load_popup.set_status_message("Updating...")
+        self.loadwidget.set_status_message("Updating...")
         self.load_popup.show()
         self.repeated_request_status.start(2000)
 
@@ -151,10 +155,10 @@ class UpdatePage(QtWidgets.QWidget):
             else:
                 self.request_update_client.emit(cli_name)
 
-            self.load_popup.set_status_message(f"Updating {cli_name}")
+            self.loadwidget.set_status_message(f"Updating {cli_name}")
         else:
             self.request_recover_repo[str, bool].emit(cli_name, True)
-            self.load_popup.set_status_message(f"Recovering {cli_name}")
+            self.loadwidget.set_status_message(f"Recovering {cli_name}")
         self.load_popup.show()
         self.request_update_status.emit(False)
 

@@ -1,4 +1,5 @@
-from lib.panels.widgets.loadPage import LoadScreen
+from lib.panels.widgets.loadWidget import LoadingOverlayWidget
+from lib.panels.widgets.basePopup import BasePopup
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_frame import BlocksCustomFrame
 from lib.utils.icon_button import IconButton
@@ -7,11 +8,13 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 
 import typing
 
+
 class InputShaperPage(QtWidgets.QWidget):
     """Update GUI Page,
     retrieves from moonraker available clients and adds functionality
     for updating or recovering them
     """
+
     run_gcode_signal: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         str, name="run-gcode"
     )
@@ -26,7 +29,11 @@ class InputShaperPage(QtWidgets.QWidget):
         self.ongoing_update: bool = False
         self.type_dict: dict = {}
 
-        self.load_popup: LoadScreen = LoadScreen(self)
+        self.loadscreen = BasePopup(self, floating=False, dialog=False)
+        self.loadwidget = LoadingOverlayWidget(
+            self, LoadingOverlayWidget.AnimationGIF.DEFAULT
+        )
+        self.loadscreen.add_widget(self.loadwidget)
         self.repeated_request_status = QtCore.QTimer()
         self.repeated_request_status.setInterval(2000)  # every 2 seconds
         self.model = EntryListModel()
@@ -38,9 +45,6 @@ class InputShaperPage(QtWidgets.QWidget):
         self.update_back_btn.clicked.connect(self.reset_view_model)
 
         self.action_btn.clicked.connect(self.handle_ism_confirm)
-
-
-        
 
     def handle_update_end(self) -> None:
         """Handles update end signal
@@ -55,7 +59,7 @@ class InputShaperPage(QtWidgets.QWidget):
         """Handled ongoing update signal,
         calls loading page (blocks user interaction)
         """
-        self.load_popup.set_status_message("Updating...")
+        self.loadwidget.set_status_message("Updating...")
         self.load_popup.show()
         self.repeated_request_status.start(2000)
 
@@ -78,20 +82,16 @@ class InputShaperPage(QtWidgets.QWidget):
     def build_model_list(self) -> None:
         """Builds the model list (`self.model`) containing updatable clients"""
         self.update_buttons_list_widget.blockSignals(True)
-        self.model.setData(
-            self.model.index(0), True, EntryListModel.EnableRole
-        ) 
+        self.model.setData(self.model.index(0), True, EntryListModel.EnableRole)
         self.on_item_clicked(
             self.model.data(self.model.index(0), QtCore.Qt.ItemDataRole.UserRole)
-        )  
+        )
         self.update_buttons_list_widget.blockSignals(False)
 
-    
     def set_type_dictionary(self, dict) -> None:
         """Receives the dictionary of input shaper types from the utilities tab"""
         self.type_dict = dict
         return
-
 
     @QtCore.pyqtSlot(ListItem, name="on-item-clicked")
     def on_item_clicked(self, item: ListItem) -> None:
@@ -105,25 +105,29 @@ class InputShaperPage(QtWidgets.QWidget):
         if not current_info:
             return
 
-        self.vib_label.setText(str("%.0f" % current_info.get('vibration', 'N/A'))+ "%")
-        self.sug_accel_label.setText(str("%.0f" % current_info.get('max_accel', 'N/A'))+ "mm/s²")
+        self.vib_label.setText(str("%.0f" % current_info.get("vibration", "N/A")) + "%")
+        self.sug_accel_label.setText(
+            str("%.0f" % current_info.get("max_accel", "N/A")) + "mm/s²"
+        )
 
         self.action_btn.show()
 
-    def handle_ism_confirm(self)-> None:
+    def handle_ism_confirm(self) -> None:
         current_info = self.type_dict.get(self.currentItem.text, {})
-        frequency = current_info.get('frequency', 'N/A')
+        frequency = current_info.get("frequency", "N/A")
         if self.type_dict["Axis"] == "x":
-            self.run_gcode_signal.emit(f"SET_INPUT_SHAPER SHAPER_TYPE_X={self.currentItem.text} SHAPER_FREQ_X={frequency}")
+            self.run_gcode_signal.emit(
+                f"SET_INPUT_SHAPER SHAPER_TYPE_X={self.currentItem.text} SHAPER_FREQ_X={frequency}"
+            )
         elif self.type_dict["Axis"] == "y":
-            self.run_gcode_signal.emit(f"SET_INPUT_SHAPER SHAPER_TYPE_Y={self.currentItem.text} SHAPER_FREQ_Y={frequency}")
+            self.run_gcode_signal.emit(
+                f"SET_INPUT_SHAPER SHAPER_TYPE_Y={self.currentItem.text} SHAPER_FREQ_Y={frequency}"
+            )
 
         self.run_gcode_signal.emit("SAVE_CONFIG")
         self.reset_view_model()
 
-        
-
-    def add_type_entry(self, cli_name: str,recommended:str = "") -> None:
+    def add_type_entry(self, cli_name: str, recommended: str = "") -> None:
         """Adds a new item to the list model"""
         item = ListItem(
             text=cli_name,
@@ -386,15 +390,12 @@ class InputShaperPage(QtWidgets.QWidget):
         palette.setColor(palette.ColorRole.WindowText, QtGui.QColor("#FFFFFF"))
         self.vib_label.setFont(font)
         self.vib_label.setPalette(palette)
-        self.vib_label.setLayoutDirection(
-            QtCore.Qt.LayoutDirection.RightToLeft
-        )
+        self.vib_label.setLayoutDirection(QtCore.Qt.LayoutDirection.RightToLeft)
         self.vib_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self.vib_label.setObjectName("version-tracking")
 
         self.info_box.addWidget(self.vib_title_label, 0, 0)
         self.info_box.addWidget(self.vib_label, 0, 1)
-
 
         self.sug_accel_title_label = QtWidgets.QLabel(self)
         self.sug_accel_title_label.setText("Sugested Max Acceleration:")
@@ -413,7 +414,6 @@ class InputShaperPage(QtWidgets.QWidget):
             QtCore.Qt.LayoutDirection.RightToLeft
         )
 
-
         self.sug_accel_label = QtWidgets.QLabel(self)
         self.sug_accel_label.setMinimumSize(QtCore.QSize(100, 60))
         self.sug_accel_label.setMaximumSize(
@@ -430,8 +430,6 @@ class InputShaperPage(QtWidgets.QWidget):
 
         self.info_box_layout.addLayout(self.info_box, 1)
 
-        
-
         self.button_box = QtWidgets.QVBoxLayout()
         self.button_box.setContentsMargins(0, 0, 0, 0)
         self.button_box.addSpacing(-1)
@@ -444,11 +442,11 @@ class InputShaperPage(QtWidgets.QWidget):
         self.action_btn.setPalette(palette)
         self.action_btn.setSizePolicy(sizePolicy)
         self.action_btn.setText("Confirm")
-        self.action_btn.setPixmap(
-            QtGui.QPixmap(":/dialog/media/btn_icons/yes.svg")
-        )
+        self.action_btn.setPixmap(QtGui.QPixmap(":/dialog/media/btn_icons/yes.svg"))
         self.button_box.addWidget(
-            self.action_btn, 0, QtCore.Qt.AlignmentFlag.AlignRight | QtCore.Qt.AlignmentFlag.AlignBottom
+            self.action_btn,
+            0,
+            QtCore.Qt.AlignmentFlag.AlignRight | QtCore.Qt.AlignmentFlag.AlignBottom,
         )
 
         self.info_box_layout.addLayout(
