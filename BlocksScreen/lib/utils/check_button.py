@@ -26,11 +26,12 @@ class BlocksCustomCheckButton(QtWidgets.QAbstractButton):
     def setAutoDefault(self, _):
         """Disable auto default behavior"""
         return
-    def text(self) -> str :
+
+    def text(self) -> str:
         """returns Widget text"""
         return self._text
 
-    def setText(self, text: str|None) -> None:
+    def setText(self, text: str | None) -> None:
         """Set widget text"""
         if text is None:
             return
@@ -80,7 +81,7 @@ class BlocksCustomCheckButton(QtWidgets.QAbstractButton):
             painter.setPen(text_color)
             painter.setFont(QtGui.QFont("Momcake", 14))
             painter.drawText(
-                rect_f,  
+                rect_f,
                 QtCore.Qt.AlignmentFlag.AlignCenter,
                 str(self.text()),
             )

@@ -709,7 +709,9 @@ class ProbeHelper(QtWidgets.QWidget):
         self.bbp_offset_steps_buttons.setObjectName("bbp_offset_steps_buttons")
 
         # 0.1mm button
-        self.move_option_1 = BlocksCustomCheckButton(parent=self.bbp_offset_steps_buttons_group_box)
+        self.move_option_1 = BlocksCustomCheckButton(
+            parent=self.bbp_offset_steps_buttons_group_box
+        )
         self.move_option_1.setMinimumSize(QtCore.QSize(100, 60))
         self.move_option_1.setMaximumSize(QtCore.QSize(100, 60))
         self.move_option_1.setText("0.01 mm")
@@ -730,7 +732,9 @@ class ProbeHelper(QtWidgets.QWidget):
         )
 
         # 0.01mm button
-        self.move_option_2 = BlocksCustomCheckButton(parent=self.bbp_offset_steps_buttons_group_box)
+        self.move_option_2 = BlocksCustomCheckButton(
+            parent=self.bbp_offset_steps_buttons_group_box
+        )
         self.move_option_2.setMinimumSize(QtCore.QSize(100, 60))
         self.move_option_2.setMaximumSize(
             QtCore.QSize(100, 60)
@@ -752,7 +756,9 @@ class ProbeHelper(QtWidgets.QWidget):
         )
 
         # 0.05mm button
-        self.move_option_3 = BlocksCustomCheckButton(parent=self.bbp_offset_steps_buttons_group_box)
+        self.move_option_3 = BlocksCustomCheckButton(
+            parent=self.bbp_offset_steps_buttons_group_box
+        )
         self.move_option_3.setMinimumSize(QtCore.QSize(100, 60))
         self.move_option_3.setMaximumSize(
             QtCore.QSize(100, 60)
@@ -774,7 +780,9 @@ class ProbeHelper(QtWidgets.QWidget):
         )
 
         # 0.025mm button
-        self.move_option_4 = BlocksCustomCheckButton(parent=self.bbp_offset_steps_buttons_group_box)
+        self.move_option_4 = BlocksCustomCheckButton(
+            parent=self.bbp_offset_steps_buttons_group_box
+        )
         self.move_option_4.setMinimumSize(QtCore.QSize(100, 60))
         self.move_option_4.setMaximumSize(
             QtCore.QSize(100, 60)
@@ -796,7 +804,9 @@ class ProbeHelper(QtWidgets.QWidget):
         )
 
         # 0.01mm button
-        self.move_option_5 = BlocksCustomCheckButton(parent=self.bbp_offset_steps_buttons_group_box)
+        self.move_option_5 = BlocksCustomCheckButton(
+            parent=self.bbp_offset_steps_buttons_group_box
+        )
         self.move_option_5.setMinimumSize(QtCore.QSize(100, 60))
         self.move_option_5.setMaximumSize(
             QtCore.QSize(100, 60)
