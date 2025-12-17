@@ -489,7 +489,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             QtCore.QEvent.Type.TouchUpdate,
             QtCore.QEvent.Type.TouchEnd,
         ):
-            return True 
+            return True
 
         self.build_model_list()
         return super().showEvent(event)
@@ -930,16 +930,13 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
 
         _current_ssid_name = item.text
         self.selected_item = copy.copy(item)
-        if (
-            _current_ssid_name in self.sdbus_network.get_saved_ssid_names()
-        ):
+        if _current_ssid_name in self.sdbus_network.get_saved_ssid_names():
             self.setCurrentIndex(self.indexOf(self.panel.saved_connection_page))
             self.panel.saved_connection_network_name.setText(str(_current_ssid_name))
-        else: 
+        else:
             self.setCurrentIndex(self.indexOf(self.panel.add_network_page))
-            self.panel.add_network_network_label.setText(
-                str(_current_ssid_name)
-            ) 
+            self.panel.add_network_network_label.setText(str(_current_ssid_name))
+
     def update_network(
         self,
         ssid: str,
@@ -998,14 +995,12 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         if not self.isVisible():
             return
         _cur = self.currentIndex()
-        if index == self.indexOf(self.panel.add_network_page): 
+        if index == self.indexOf(self.panel.add_network_page):
             self.panel.add_network_password_field.clear()
             self.panel.add_network_password_field.setPlaceholderText(
                 "Insert password here, press enter when finished."
             )
-        elif index == self.indexOf(
-            self.panel.saved_connection_page
-        ):  
+        elif index == self.indexOf(self.panel.saved_connection_page):
             self.panel.saved_connection_change_password_field.clear()
             self.panel.saved_connection_change_password_field.setPlaceholderText(
                 "Change network password"
