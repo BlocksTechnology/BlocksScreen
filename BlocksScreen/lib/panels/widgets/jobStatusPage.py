@@ -13,20 +13,6 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 logger = logging.getLogger("logs/BlocksScreen.log")
 
 
-class ClickableGraphicsView(QtWidgets.QGraphicsView):
-    """Re-implementation of QGraphicsView that adds clicked signal"""
-
-    clicked = QtCore.pyqtSignal()
-
-
-def mousePressEvent(self, event: QtGui.QMouseEvent) -> None:
-    """Filter mouse press events"""
-    if event.button() == QtCore.Qt.MouseButton.LeftButton:
-        self.clicked.emit()
-        return True  # Issue event handled
-    super(ClickableGraphicsView, self).mousePressEvent(event)
-
-
 class JobStatusWidget(QtWidgets.QWidget):
     print_start: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         str, name="print_start"
@@ -69,57 +55,79 @@ class JobStatusWidget(QtWidgets.QWidget):
         self.tune_menu_btn.clicked.connect(self.tune_clicked.emit)
         self.pause_printing_btn.clicked.connect(self.pause_resume_print)
         self.stop_printing_btn.clicked.connect(self.handleCancel)
-        # self.thumbnail_view.installEventFilter(
-        #     self
-        # )  # Necessary for expanding thumbnail
+        self.printing_progress_bar.thumbnail_clicked.connect(
+            self.toggle_thumbnail_expansion
+        )
 
-    def eventFilter(self, source_object, event) -> bool:
-        """Filter QGraphicsView Mouse Press events"""
-        # if (
-        #     event.type() == QtCore.QEvent.Type.MouseButtonPress
-        #     and source_object == self.thumbnail_view
-        # ):
-        #     self.toggle_thumbnail_expansion()
-        #     return True
-        return super().eventFilter(source_object, event)
+    @QtCore.pyqtSlot(name="toggle-thumbnail-expansion")
+    def toggle_thumbnail_expansion(self) -> None:
+        """Toggle thumbnail expansion"""
+        if not self.thumbnail_view.isVisible():
+            self.thumbnail_view.show()
+            self.progressWidget.hide()
+            self.contentWidget.hide()
+            self.printing_progress_bar.hide()
+            self.btnWidget.hide()
+            self.headerWidget.hide()
+            return
+        self.thumbnail_view.hide()
+        self.progressWidget.show()
+        self.contentWidget.show()
+        self.printing_progress_bar.show()
+        self.btnWidget.show()
+        self.headerWidget.show()
+        self.show()
 
-    # @QtCore.pyqtSlot(name="toggle-thumbnail-expansion")
-    # def toggle_thumbnail_expansion(self) -> None:
-    #     """Toggle thumbnail expansion"""
-    #     curr_geom = self.thumbnail_view.geometry()
-    #     # self.thumbnail_view.setSceneRect(0, 0, size.width(), size.height())
-    #     # self.thumbnail_view.setScene(scene)
-    #     if curr_geom == (self.width(), self.height()):
-    #         # Restore to original size
-    #         self.thumbnail_view.setGeometry(QtCore.QRect(10, 170, 471, 241))
-    #         # Render small thumbnail 48x48
-    #         self.thumbnail_view.render()
-    #         return
-    #     self.thumbnail_view.setGeometry(QtCore.QRect(0, 0, self.width(), self.height()))
-        # Render big thumbnail full size 300x300
+    def eventFilter(self, sender_obj: QtCore.QObject, event: events.QEvent) -> bool:
+        """Filter events,
+
+        currently only filters events from `self.thumbnail_view` QGraphicsView widget
+        """
+        if (
+            sender_obj == self.thumbnail_view
+            and event.type() == QtCore.QEvent.Type.MouseButtonPress
+        ):
+            self.toggle_thumbnail_expansion()
+            return True
+        return super().eventFilter(sender_obj, event)
 
     def _load_thumbnails(self, *thumbnails) -> None:
         """Pre-load available thumbnails for the current print object"""
         if not thumbnails:
             logger.debug("Unable to load thumbnails, no thumbnails provided")
             return
-        for thumb in thumbnails:
-            # size = thumb.size()
-            # scene = QtWidgets.QGraphicsScene()
-            # scaled = QtGui.QPixmap(thumb).scaled(
-            #     size.width(),
-            #     size.height(),
-            #     QtCore.Qt.AspectRatioMode.KeepAspectRatio,
-            #     QtCore.Qt.TransformationMode.SmoothTransformation,
-            # )
-            # item = QtWidgets.QGraphicsPixmapItem(scaled)
-            # item.setOffset(
-            #     (size.width() - thumbnails[0].width()) // 2,
-            #     (size.height() - thumbnails[0].height()) // 2,
-            # )
-            # scene.addItem(item)
-            # self.thumbnail_graphics.append(scene)
-            self.thumbnail_graphics.append(QtGui.QPixmap(thumb))
+        self.thumbnail_graphics = [QtGui.QPixmap(thumb) for thumb in thumbnails]
+        self.create_thumbnail_widget()
+        self.thumbnail_view.installEventFilter(
+            self
+        )  # Filter events on this widget, for clicks
+        scene = QtWidgets.QGraphicsScene()
+
+        _biggest_thumb = self.thumbnail_graphics[-1]
+        self.thumbnail_view.setSceneRect(
+            QtCore.QRectF(
+                self.rect().x(),
+                self.rect().y(),
+                _biggest_thumb.width(),
+                _biggest_thumb.height(),
+            )
+        )
+        scaled = QtGui.QPixmap(_biggest_thumb).scaled(
+            _biggest_thumb.width(),
+            _biggest_thumb.height(),
+            QtCore.Qt.AspectRatioMode.KeepAspectRatio,
+            QtCore.Qt.TransformationMode.SmoothTransformation,
+        )
+        item = QtWidgets.QGraphicsPixmapItem(scaled)
+
+        # scene.addItem(background_item)
+        scene.addItem(item)
+        self.thumbnail_view.setFrameRect(
+            QtCore.QRect(
+                0, 0, self.contentsRect().width(), self.contentsRect().height()
+            )
+        )
+        self.thumbnail_view.setScene(scene)
 
     @QtCore.pyqtSlot(name="handle-cancel")
     def handleCancel(self) -> None:
@@ -161,7 +169,6 @@ class JobStatusWidget(QtWidgets.QWidget):
         self.layer_display_button.secondary_text = str(self.total_layers)
         self.file_metadata = fileinfo
         self._load_thumbnails(*fileinfo.get("thumbnail_images", []))
-
         self.printing_progress_bar.set_inner_pixmap(self.thumbnail_graphics[-1])
 
     @QtCore.pyqtSlot(name="pause_resume_print")
@@ -224,6 +231,8 @@ class JobStatusWidget(QtWidgets.QWidget):
                     self.total_layers = "?"
                     self.file_metadata.clear()
                     self.hide_request.emit()
+                    self.thumbnail_view.deleteLater()
+                    self.thumbnail_view_layout.deleteLater()
 
                 if hasattr(events, str("Print" + value.capitalize())):
                     event_obj = getattr(events, str("Print" + value.capitalize()))
@@ -304,13 +313,6 @@ class JobStatusWidget(QtWidgets.QWidget):
             if "progress" == field:
                 self.print_progress = value
                 self.printing_progress_bar.setValue(self.print_progress)
-
-    def paintEvent(self, a0):
-        painter = QtGui.QPainter(self)
-        painter.setPen(QtGui.QColor(255, 0, 0))
-        # painter.drawRect(self.thumbnail_view.rect())
-        painter.end()
-        return super().paintEvent(a0)
 
     def _setupUI(self) -> None:
         """Setup widget ui"""
@@ -467,37 +469,38 @@ class JobStatusWidget(QtWidgets.QWidget):
         )
         self.job_content_layout.addLayout(self.job_stats_display_layout)
 
-    # def create_thumbnail_widget(self) -> None:
-    #     """Create thumbnail graphics view widget"""
-    #     self.thumbnail_view = QtWidgets.QGraphicsView(self)
-    #     self.thumbnail_view.setMinimumSize(QtCore.QSize(48, 48))
-    #     self.thumbnail_view.setMaximumSize(QtCore.QSize(300, 300))
-    #     self.thumbnail_view.setAttribute(
-    #         QtCore.Qt.WidgetAttribute.WA_TranslucentBackground, True
-    #     )
-    #     self.thumbnail_view.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
-    #     self.thumbnail_view.setFrameShadow(QtWidgets.QFrame.Shadow.Plain)
-    #     self.thumbnail_view.setWindowFlags(QtCore.Qt.WindowType.FramelessWindowHint)
-    #     self.thumbnail_view.setObjectName("thumbnail_scene")
-    #     _thumbnail_palette = QtGui.QPalette()
-    #     _thumbnail_palette.setColor(
-    #         QtGui.QPalette.ColorRole.Window, QtGui.QColor(0, 0, 0, 0)
-    #     )
-    #     _thumbnail_palette.setColor(
-    #         QtGui.QPalette.ColorRole.Base, QtGui.QColor(0, 0, 0, 0)
-    #     )
-    #     self.thumbnail_view.setPalette(_thumbnail_palette)
-    #     _thumbnail_brush = QtGui.QBrush(QtGui.QColor(0, 0, 0, 0))
-    #     _thumbnail_brush.setStyle(QtCore.Qt.BrushStyle.NoBrush)
-    #     self.thumbnail_view.setBackgroundBrush(_thumbnail_brush)
-    #     self.thumbnail_view.setRenderHints(
-    #         QtGui.QPainter.RenderHint.Antialiasing
-    #         | QtGui.QPainter.RenderHint.SmoothPixmapTransform
-    #         | QtGui.QPainter.RenderHint.LosslessImageRendering
-    #     )
-    #     self.thumbnail_view.setViewportUpdateMode(
-    #         QtWidgets.QGraphicsView.ViewportUpdateMode.SmartViewportUpdate
-    #     )
-    #     self.thumbnail_view.setObjectName("thumbnail_scene")
-    #     self.thumbnail_view_layout = QtWidgets.QHBoxLayout(self)
-    #     self.thumbnail_view_layout.addWidget(self.thumbnail_view)
+    def create_thumbnail_widget(self) -> None:
+        """Create thumbnail graphics view widget"""
+        self.thumbnail_view = QtWidgets.QGraphicsView()
+        self.thumbnail_view.setMinimumSize(QtCore.QSize(48, 48))
+        # self.thumbnail_view.setMaximumSize(QtCore.QSize(300, 300))
+        self.thumbnail_view.setAttribute(
+            QtCore.Qt.WidgetAttribute.WA_TranslucentBackground, True
+        )
+        self.thumbnail_view.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
+        self.thumbnail_view.setFrameShadow(QtWidgets.QFrame.Shadow.Plain)
+        self.thumbnail_view.setWindowFlags(QtCore.Qt.WindowType.FramelessWindowHint)
+        self.thumbnail_view.setObjectName("thumbnail_scene")
+        _thumbnail_palette = QtGui.QPalette()
+        _thumbnail_palette.setColor(
+            QtGui.QPalette.ColorRole.Window, QtGui.QColor(0, 0, 0, 0)
+        )
+        _thumbnail_palette.setColor(
+            QtGui.QPalette.ColorRole.Base, QtGui.QColor(0, 0, 0, 0)
+        )
+        self.thumbnail_view.setPalette(_thumbnail_palette)
+        _thumbnail_brush = QtGui.QBrush(QtGui.QColor(0, 0, 0, 0))
+        _thumbnail_brush.setStyle(QtCore.Qt.BrushStyle.NoBrush)
+        self.thumbnail_view.setBackgroundBrush(_thumbnail_brush)
+        self.thumbnail_view.setRenderHints(
+            QtGui.QPainter.RenderHint.Antialiasing
+            | QtGui.QPainter.RenderHint.SmoothPixmapTransform
+            | QtGui.QPainter.RenderHint.LosslessImageRendering
+        )
+        self.thumbnail_view.setViewportUpdateMode(
+            QtWidgets.QGraphicsView.ViewportUpdateMode.SmartViewportUpdate
+        )
+        self.thumbnail_view.setObjectName("thumbnail_scene")
+        self.thumbnail_view_layout = QtWidgets.QHBoxLayout(self)
+        self.thumbnail_view_layout.addWidget(self.thumbnail_view)
+        self.thumbnail_view.hide()
