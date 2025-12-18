@@ -82,16 +82,22 @@ class CustomProgressBar(QtWidgets.QProgressBar):
         self._inner_rect = self._calculate_inner_geometry()
         return QtCore.QSize(100, 100)
 
-    def setValue(self, value):
-        """Set progress value"""
-        value *= 100
-        if 0 <= value <= 101:
-            self.progress_value = value
-            self.update()
-        else:
-            raise ValueError("Progress must be between 0.0 and 1.0.")
+    def setValue(self, value: int) -> None:
+        """Set progress value
 
-    def set_bar_color(self, red, green, blue):
+        Args:
+            value (int): Progress value
+
+        Raises:
+            ValueError: If provided value in not between 0 and 100
+        """
+        if not (0 <= value <= 100):
+            raise ValueError("Argument `value` expected value between 0 and 100. ")
+        value *= 100
+        self.progress_value = value
+        self.update()
+
+    def set_bar_color(self, red: int, green: int, blue: int) -> None:
         """Set widget bar color"""
         if 0 <= red <= 255 and 0 <= green <= 255 and 0 <= blue <= 255:
             self._bar_color = QtGui.QColor(red, green, blue)
