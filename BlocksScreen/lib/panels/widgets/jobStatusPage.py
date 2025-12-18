@@ -1,6 +1,5 @@
 import logging
 import typing
-import os
 import events
 from helper_methods import calculate_current_layer, estimate_print_time
 from lib.panels.widgets import dialogPage
@@ -14,6 +13,15 @@ logger = logging.getLogger("logs/BlocksScreen.log")
 
 
 class JobStatusWidget(QtWidgets.QWidget):
+    """Job status widget page, page shown when there is a active print job.
+
+    Enables mid print printer tuning and inspection of print progress.
+
+
+    Args:
+        QtWidgets (QtWidgets.QWidget): Parent widget
+    """
+
     print_start: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         str, name="print_start"
     )
@@ -279,24 +287,19 @@ class JobStatusWidget(QtWidgets.QWidget):
     @QtCore.pyqtSlot(str, list, name="on_gcode_move_update")
     def on_gcode_move_update(self, field: str, value: list) -> None:
         """Handle gcode move"""
-        if isinstance(value, list):
-            if "gcode_position" in field:  # Without offsets
-                if self._internal_print_status == "printing":
-                    _current_layer = calculate_current_layer(
-                        z_position=value[2],
-                        object_height=float(
-                            self.file_metadata.get("object_height", -1.0)
-                        ),
-                        layer_height=float(
-                            self.file_metadata.get("layer_height", -1.0)
-                        ),
-                        first_layer_height=float(
-                            self.file_metadata.get("first_layer_height", -1.0)
-                        ),
-                    )
-                    self.layer_display_button.setText(
-                        f"{int(_current_layer)}" if _current_layer != -1 else "?"
-                    )
+        if "gcode_position" in field:  # Without offsets
+            if self._internal_print_status == "printing":
+                _current_layer = calculate_current_layer(
+                    z_position=value[2],
+                    object_height=float(self.file_metadata.get("object_height", -1.0)),
+                    layer_height=float(self.file_metadata.get("layer_height", -1.0)),
+                    first_layer_height=float(
+                        self.file_metadata.get("first_layer_height", -1.0)
+                    ),
+                )
+                self.layer_display_button.setText(
+                    f"{int(_current_layer)}" if _current_layer != -1 else "?"
+                )
 
     @QtCore.pyqtSlot(str, float, name="virtual_sdcard_update")
     @QtCore.pyqtSlot(str, bool, name="virtual_sdcard_update")
@@ -308,11 +311,11 @@ class JobStatusWidget(QtWidgets.QWidget):
             value (float | bool): The updated information for the corresponding field
         """
         if isinstance(value, bool):
-            self.sdcard_read = value
-        elif isinstance(value, float):
-            if "progress" == field:
-                self.print_progress = value
-                self.printing_progress_bar.setValue(self.print_progress)
+            ...
+        if "progress" == field:
+            self.printing_progress_bar.setValue(value)
+        if "file_position" == field:
+            ...
 
     def _setupUI(self) -> None:
         """Setup widget ui"""
