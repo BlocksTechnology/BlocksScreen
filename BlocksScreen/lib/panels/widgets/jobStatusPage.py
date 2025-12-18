@@ -100,13 +100,15 @@ class JobStatusWidget(QtWidgets.QWidget):
 
     def _load_thumbnails(self, *thumbnails) -> None:
         """Pre-load available thumbnails for the current print object"""
-        if not thumbnails:
+        self.thumbnail_graphics = list(
+            filter(
+                lambda thumb: not thumb.isNull(),
+                [QtGui.QPixmap(thumb) for thumb in thumbnails],
+            )
+        )
+        if not self.thumbnail_graphics:
             logger.debug("Unable to load thumbnails, no thumbnails provided")
             return
-        if all([thumb.isNull() for thumb in thumbnails]):
-            logger.debug("Unable to load thumbnails, no thumbnails provided")
-            return
-        self.thumbnail_graphics = [QtGui.QPixmap(thumb) for thumb in thumbnails]
         self.create_thumbnail_widget()
         self.thumbnail_view.installEventFilter(
             self
