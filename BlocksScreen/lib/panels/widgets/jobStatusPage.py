@@ -63,13 +63,12 @@ class JobStatusWidget(QtWidgets.QWidget):
         self.tune_menu_btn.clicked.connect(self.tune_clicked.emit)
         self.pause_printing_btn.clicked.connect(self.pause_resume_print)
         self.stop_printing_btn.clicked.connect(self.handleCancel)
-        self.printing_progress_bar.thumbnail_clicked.connect(
-            self.toggle_thumbnail_expansion
-        )
 
     @QtCore.pyqtSlot(name="toggle-thumbnail-expansion")
     def toggle_thumbnail_expansion(self) -> None:
         """Toggle thumbnail expansion"""
+        if not self.thumbnail_view.scene():
+            return
         if not self.thumbnail_view.isVisible():
             self.thumbnail_view.show()
             self.progressWidget.hide()
@@ -104,13 +103,15 @@ class JobStatusWidget(QtWidgets.QWidget):
         if not thumbnails:
             logger.debug("Unable to load thumbnails, no thumbnails provided")
             return
+        if all([thumb.isNull() for thumb in thumbnails]):
+            logger.debug("Unable to load thumbnails, no thumbnails provided")
+            return
         self.thumbnail_graphics = [QtGui.QPixmap(thumb) for thumb in thumbnails]
         self.create_thumbnail_widget()
         self.thumbnail_view.installEventFilter(
             self
         )  # Filter events on this widget, for clicks
         scene = QtWidgets.QGraphicsScene()
-
         _biggest_thumb = self.thumbnail_graphics[-1]
         self.thumbnail_view.setSceneRect(
             QtCore.QRectF(
@@ -127,8 +128,6 @@ class JobStatusWidget(QtWidgets.QWidget):
             QtCore.Qt.TransformationMode.SmoothTransformation,
         )
         item = QtWidgets.QGraphicsPixmapItem(scaled)
-
-        # scene.addItem(background_item)
         scene.addItem(item)
         self.thumbnail_view.setFrameRect(
             QtCore.QRect(
@@ -136,6 +135,10 @@ class JobStatusWidget(QtWidgets.QWidget):
             )
         )
         self.thumbnail_view.setScene(scene)
+        self.printing_progress_bar.set_inner_pixmap(self.thumbnail_graphics[-1])
+        self.printing_progress_bar.thumbnail_clicked.connect(
+            self.toggle_thumbnail_expansion
+        )
 
     @QtCore.pyqtSlot(name="handle-cancel")
     def handleCancel(self) -> None:
@@ -177,7 +180,6 @@ class JobStatusWidget(QtWidgets.QWidget):
         self.layer_display_button.secondary_text = str(self.total_layers)
         self.file_metadata = fileinfo
         self._load_thumbnails(*fileinfo.get("thumbnail_images", []))
-        self.printing_progress_bar.set_inner_pixmap(self.thumbnail_graphics[-1])
 
     @QtCore.pyqtSlot(name="pause_resume_print")
     def pause_resume_print(self) -> None:
