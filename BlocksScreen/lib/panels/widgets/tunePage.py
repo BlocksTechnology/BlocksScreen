@@ -1,11 +1,11 @@
-import typing
 import re
+import typing
 
+from helper_methods import normalize
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.display_button import DisplayButton
 from lib.utils.icon_button import IconButton
 from PyQt6 import QtCore, QtGui, QtWidgets
-from helper_methods import normalize
 
 
 class TuneWidget(QtWidgets.QWidget):
@@ -124,15 +124,12 @@ class TuneWidget(QtWidgets.QWidget):
 
                 _new_display_button = self.create_display_button(name)
                 _new_display_button.setParent(self)
+                _new_display_button.icon_pixmap = self.path.get("fan")
                 if second_field:
                     if re.search(pattern_blower, second_field):
                         _new_display_button.icon_pixmap = self.path.get("blower")
                     elif re.search(pattern_exhaust, second_field):
                         _new_display_button.icon_pixmap = self.path.get("fan_cage")
-                    else:
-                        _new_display_button.icon_pixmap = self.path.get("fan")
-                else:
-                    _new_display_button.icon_pixmap = self.path.get("fan")
 
                 self.tune_display_buttons.update(
                     {
