@@ -243,9 +243,6 @@ class JobStatusWidget(QtWidgets.QWidget):
                     self.total_layers = "?"
                     self.file_metadata.clear()
                     self.hide_request.emit()
-                    self.thumbnail_view.deleteLater()
-                    self.thumbnail_view_layout.deleteLater()
-
                 if hasattr(events, str("Print" + value.capitalize())):
                     event_obj = getattr(events, str("Print" + value.capitalize()))
                     event = event_obj(self._current_file_name, self.file_metadata)
