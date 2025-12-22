@@ -131,7 +131,6 @@ class CustomProgressBar(QtWidgets.QProgressBar):
     ) -> None:
         """Internal method draw already scaled pixmap on the widget inner section"""
         if pixmap.isNull():
-            print("Pixmap is still null ")
             return
         scaled_width = pixmap.width()
         scaled_height = pixmap.height()
