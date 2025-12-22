@@ -153,6 +153,7 @@ class MainWindow(QtWidgets.QMainWindow):
         )
         self.controlPanel.disable_popups.connect(self.popup_toggle)
         self.on_update_message.connect(self.utilitiesPanel.on_update_message)
+        self.on_update_message.connect(self.conn_window.on_update_message)
         self.ui.extruder_temp_display.display_format = "upper_downer"
         self.ui.bed_temp_display.display_format = "upper_downer"
         if self.config.has_section("server"):

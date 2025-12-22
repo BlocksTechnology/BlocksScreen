@@ -9,6 +9,7 @@ from lib.utils.icon_button import IconButton
 from lib.utils.list_model import EntryDelegate, EntryListModel, ListItem
 from PyQt6 import QtCore, QtGui, QtWidgets
 
+from lib.panels.widgets.loadWidget import LoadingOverlayWidget
 
 class UpdatePage(QtWidgets.QWidget):
     """Update GUI Page,
@@ -82,6 +83,8 @@ class UpdatePage(QtWidgets.QWidget):
         self.repeated_request_status.timeout.connect(
             lambda: self.request_update_status.emit(False)
         )
+        self.setAttribute(QtCore.Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.show_loading(True)
 
     def handle_update_end(self) -> None:
         """Handles update end signal
@@ -116,6 +119,7 @@ class UpdatePage(QtWidgets.QWidget):
     def showEvent(self, event: QtGui.QShowEvent | None) -> None:
         """Re-add clients to update list"""
         self.build_model_list()
+        
         return super().showEvent(event)
 
     def build_model_list(self) -> None:
@@ -169,11 +173,13 @@ class UpdatePage(QtWidgets.QWidget):
         """
         if not item:
             return
+        self.show_loading(False)
         cli_data = self.cli_tracking.get(item.text, {})
         if not cli_data:
             self.version_tracking_info.setText("Missing, Cannot Update")
         self.selected_item = copy.copy(item)
         if item.text == "system":
+            self.no_update_placeholder.hide()
             self.remote_version_title.hide()
             self.remote_version_tracking.hide()
             updatable_packages = cli_data.get("package_count", 0)
@@ -228,6 +234,19 @@ class UpdatePage(QtWidgets.QWidget):
         self.no_update_placeholder.hide()
         self.action_btn.show()
 
+    def show_loading(self,loading:bool = False)->None:
+        """Show or hide loading overlay"""
+        self.loadwidget.setVisible(loading)
+        self.info_loadwidget.setVisible(loading)
+        self.info_loadwidget.setFixedSize(self.infobox_frame.size())
+        self.update_buttons_list_widget.setVisible(not loading)
+        self.remote_version_title.setVisible(not loading)
+        self.remote_version_tracking.setVisible(not loading)
+        self.version_tracking_info.setVisible(not loading)
+        self.version_title.setVisible(not loading)
+        self.action_btn.setVisible(not loading)
+        self.no_update_placeholder.setVisible(not loading)
+
     @QtCore.pyqtSlot(dict, name="handle-update-message")
     def handle_update_message(self, message: dict) -> None:
         """Handle receiving current state of each item update.
@@ -248,6 +267,7 @@ class UpdatePage(QtWidgets.QWidget):
         if not cli_version_info:
             return
         self.cli_tracking = cli_version_info
+        self.build_model_list()
         # Signal that updates exist (Used to render red dots)
         _update_avail = any(
             value
@@ -285,11 +305,19 @@ class UpdatePage(QtWidgets.QWidget):
         sizePolicy.setHorizontalStretch(1)
         sizePolicy.setVerticalStretch(1)
         self.setSizePolicy(sizePolicy)
-        self.setMinimumSize(QtCore.QSize(710, 400))
-        self.setMaximumSize(QtCore.QSize(720, 420))
+        self.setObjectName("updatePage")
+        self.setStyleSheet(
+            """#updatePage {
+                background-image: url(:/background/media/1st_background.png);
+            }
+            #updatePage,
+            #updatePage * {
+                border: 3px solid #ffffff;
+            }"""
+        )
         self.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
         self.update_page_content_layout = QtWidgets.QVBoxLayout()
-        self.update_page_content_layout.setContentsMargins(15, 15, 2, 2)
+        self.update_page_content_layout.setContentsMargins(15, 15, 15, 15)
 
         self.header_content_layout = QtWidgets.QHBoxLayout()
         self.header_content_layout.setAlignment(QtCore.Qt.AlignmentFlag.AlignTop)
@@ -476,17 +504,22 @@ class UpdatePage(QtWidgets.QWidget):
             QtWidgets.QScroller.ScrollerGestureType.LeftMouseButtonGesture,
         )
         self.update_buttons_layout = QtWidgets.QVBoxLayout()
-        self.update_buttons_layout.setContentsMargins(15, 20, 20, 5)
+        self.update_buttons_layout.setContentsMargins(10, 10, 10, 10)
         self.update_buttons_layout.addWidget(self.update_buttons_list_widget, 0)
+        self.update_buttons_list_widget.hide()
+        self.loadwidget = LoadingOverlayWidget(self)
+        self.loadwidget.setMinimumSize(self.update_buttons_frame.size())
+        self.update_buttons_layout.addWidget(self.loadwidget, 1)
         self.update_buttons_frame.setLayout(self.update_buttons_layout)
 
         self.main_content_layout.addWidget(self.update_buttons_frame, 0)
 
         self.infobox_frame = BlocksCustomFrame()
-        self.infobox_frame.setMinimumSize(QtCore.QSize(250, 300))
-
         self.info_box_layout = QtWidgets.QVBoxLayout()
-        self.info_box_layout.setContentsMargins(10, 0, 10, 0)
+        self.info_box_layout.setContentsMargins(10, 10, 10, 10)
+        self.infobox_frame.setLayout(self.info_box_layout)
+        self.info_loadwidget = LoadingOverlayWidget(self)
+        self.info_box_layout.addWidget(self.info_loadwidget, 0)
 
         font = QtGui.QFont()
         font.setFamily(font_family)
@@ -583,16 +616,14 @@ class UpdatePage(QtWidgets.QWidget):
         self.no_update_placeholder.setWordWrap(True)
         self.no_update_placeholder.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self.info_box_layout.addWidget(
-            self.no_update_placeholder, 0, QtCore.Qt.AlignmentFlag.AlignBottom
+            self.no_update_placeholder, 0, QtCore.Qt.AlignmentFlag.AlignCenter
         )
 
-        self.no_update_placeholder.hide()
 
         self.info_box_layout.addLayout(
             self.button_box,
             0,
         )
-        self.infobox_frame.setLayout(self.info_box_layout)
         self.main_content_layout.addWidget(self.infobox_frame, 1)
         self.update_page_content_layout.addLayout(self.main_content_layout, 1)
         self.setLayout(self.update_page_content_layout)
