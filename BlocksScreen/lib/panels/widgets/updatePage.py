@@ -83,6 +83,7 @@ class UpdatePage(QtWidgets.QWidget):
         self.repeated_request_status.timeout.connect(
             lambda: self.request_update_status.emit(False)
         )
+        self.reload_btn.clicked.connect(self.on_request_reload)
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_StyledBackground, True)
         self.show_loading(True)
 
@@ -93,7 +94,7 @@ class UpdatePage(QtWidgets.QWidget):
         if self.load_popup.isVisible():
             self.load_popup.close()
         self.repeated_request_status.stop()
-        self.request_refresh_update.emit()
+        self.on_request_reload()
         self.build_model_list()
 
     def handle_ongoing_update(self) -> None:
@@ -103,6 +104,14 @@ class UpdatePage(QtWidgets.QWidget):
         self.loadwidget.set_status_message("Updating...")
         self.load_popup.show()
         self.repeated_request_status.start(2000)
+
+    def on_request_reload(self, service: str | None = None) -> None:
+        """Handles reload button click, requests update status refresh"""
+        self.show_loading(True)
+        if service:
+            self.request_refresh_update.emit([service])
+        else:
+            self.request_refresh_update.emit()
 
     def reset_view_model(self) -> None:
         """Clears items from ListView
@@ -180,8 +189,8 @@ class UpdatePage(QtWidgets.QWidget):
         self.selected_item = copy.copy(item)
         if item.text == "system":
             self.no_update_placeholder.hide()
-            self.remote_version_title.hide()
-            self.remote_version_tracking.hide()
+            self.remote_version_title.setText("")
+            self.remote_version_tracking.setText("")
             updatable_packages = cli_data.get("package_count", 0)
             if updatable_packages == 0:
                 self.version_title.hide()
@@ -200,6 +209,7 @@ class UpdatePage(QtWidgets.QWidget):
             self.remote_version_tracking.hide()
         self.remote_version_title.show()
         self.remote_version_tracking.show()
+        self.remote_version_title.setText("Remote Version: ")
         self.remote_version_tracking.setText(_remote_version)
         _curr_version = cli_data.get("version", None)
         if not _curr_version:
@@ -237,8 +247,6 @@ class UpdatePage(QtWidgets.QWidget):
     def show_loading(self,loading:bool = False)->None:
         """Show or hide loading overlay"""
         self.loadwidget.setVisible(loading)
-        self.info_loadwidget.setVisible(loading)
-        self.info_loadwidget.setFixedSize(self.infobox_frame.size())
         self.update_buttons_list_widget.setVisible(not loading)
         self.remote_version_title.setVisible(not loading)
         self.remote_version_tracking.setVisible(not loading)
@@ -309,10 +317,6 @@ class UpdatePage(QtWidgets.QWidget):
         self.setStyleSheet(
             """#updatePage {
                 background-image: url(:/background/media/1st_background.png);
-            }
-            #updatePage,
-            #updatePage * {
-                border: 3px solid #ffffff;
             }"""
         )
         self.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
@@ -321,6 +325,14 @@ class UpdatePage(QtWidgets.QWidget):
 
         self.header_content_layout = QtWidgets.QHBoxLayout()
         self.header_content_layout.setAlignment(QtCore.Qt.AlignmentFlag.AlignTop)
+        self.reload_btn = IconButton(self)
+        self.reload_btn.setMinimumSize(QtCore.QSize(60, 60))
+        self.reload_btn.setMaximumSize(QtCore.QSize(60, 60))
+        self.reload_btn.setFlat(True)
+        self.reload_btn.setPixmap(QtGui.QPixmap(":/ui/media/btn_icons/refresh.svg"))
+        self.header_content_layout.addWidget(self.reload_btn)# alignment=QtCore.Qt.AlignmentFlag.AlignCenter)
+
+
         self.header_title = QtWidgets.QLabel(self)
         self.header_title.setMinimumSize(QtCore.QSize(100, 60))
         self.header_title.setMaximumSize(QtCore.QSize(16777215, 60))
@@ -332,16 +344,20 @@ class UpdatePage(QtWidgets.QWidget):
         self.header_title.setFont(font)
         self.header_title.setPalette(palette)
         self.header_title.setLayoutDirection(QtCore.Qt.LayoutDirection.RightToLeft)
-        self.header_title.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self.header_title.setObjectName("header-title")
         self.header_title.setText("Update Manager")
-        self.header_content_layout.addWidget(self.header_title, 0)
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Expanding,
+            QtWidgets.QSizePolicy.Policy.Expanding,
+        )
+        self.header_title.setSizePolicy(sizePolicy)
+        self.header_content_layout.addWidget(self.header_title, alignment=QtCore.Qt.AlignmentFlag.AlignCenter)
         self.update_back_btn = IconButton(self)
         self.update_back_btn.setMinimumSize(QtCore.QSize(60, 60))
         self.update_back_btn.setMaximumSize(QtCore.QSize(60, 60))
         self.update_back_btn.setFlat(True)
         self.update_back_btn.setPixmap(QtGui.QPixmap(":/ui/media/btn_icons/back.svg"))
-        self.header_content_layout.addWidget(self.update_back_btn, 0)
+        self.header_content_layout.addWidget(self.update_back_btn) #alignment=QtCore.Qt.AlignmentFlag.AlignCenter)
         self.update_page_content_layout.addLayout(self.header_content_layout, 0)
 
         self.main_content_layout = QtWidgets.QHBoxLayout()
@@ -518,8 +534,7 @@ class UpdatePage(QtWidgets.QWidget):
         self.info_box_layout = QtWidgets.QVBoxLayout()
         self.info_box_layout.setContentsMargins(10, 10, 10, 10)
         self.infobox_frame.setLayout(self.info_box_layout)
-        self.info_loadwidget = LoadingOverlayWidget(self)
-        self.info_box_layout.addWidget(self.info_loadwidget, 0)
+
 
         font = QtGui.QFont()
         font.setFamily(font_family)
@@ -593,7 +608,7 @@ class UpdatePage(QtWidgets.QWidget):
 
         self.action_btn = BlocksCustomButton()
         self.action_btn.setMinimumSize(QtCore.QSize(200, 60))
-        self.action_btn.setMaximumSize(QtCore.QSize(250, 60))
+        self.action_btn.setMaximumSize(QtCore.QSize(300, 60))
         font.setPointSize(20)
         self.action_btn.setFont(font)
         self.action_btn.setPalette(palette)
@@ -603,7 +618,7 @@ class UpdatePage(QtWidgets.QWidget):
             QtGui.QPixmap(":/system/media/btn_icons/update-software-icon.svg")
         )
         self.button_box.addWidget(
-            self.action_btn, 0, QtCore.Qt.AlignmentFlag.AlignHCenter
+            self.action_btn, 0, QtCore.Qt.AlignmentFlag.AlignCenter
         )
         self.no_update_placeholder = QtWidgets.QLabel(self)
         self.no_update_placeholder.setMinimumSize(QtCore.QSize(200, 60))
