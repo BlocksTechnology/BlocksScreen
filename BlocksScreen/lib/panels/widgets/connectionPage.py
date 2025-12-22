@@ -38,10 +38,8 @@ class ConnectionPage(QtWidgets.QFrame):
             lambda: {self.stack.setCurrentWidget(self.connection_widget)}
         )
         self.panel.updatepageButton.clicked.connect(
-            lambda: {
-                self.stack.setCurrentWidget(self.up),
-                self.ws.api.refresh_update_status(),
-            }
+            lambda: 
+                self.stack.setCurrentWidget(self.up)
         )
 
         self.ws = ws
@@ -97,6 +95,11 @@ class ConnectionPage(QtWidgets.QFrame):
         self.text_update()
         return False
 
+    def showEvent(self, a0: QtCore.QEvent|None):
+        """Handle show event"""
+        self.ws.api.refresh_update_status()
+        return super().showEvent(a0)
+    
     @QtCore.pyqtSlot(bool, name="on_klippy_connected")
     def on_klippy_connection(self, connected: bool):
         """Handle klippy connection state"""
