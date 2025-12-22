@@ -190,21 +190,57 @@ class JobStatusWidget(QtWidgets.QWidget):
 
     @QtCore.pyqtSlot(name="pause_resume_print")
     def pause_resume_print(self) -> None:
-        """Handle pause/resume print job"""
-        if not getattr(self, "_pause_locked", False):
-            self._pause_locked = True
-            self.pause_printing_btn.setEnabled(False)
-            if self._internal_print_status == "printing":
-                self.print_pause.emit()
-                self._internal_print_status = "paused"
-            elif self._internal_print_status == "paused":
-                self.print_resume.emit()
-                self._internal_print_status = "printing"
-        QtCore.QTimer.singleShot(5000, self._unlock_pause_button)
+        """Handle pause/resume print job button clicked"""
+        self.pause_printing_btn.setEnabled(False)
+        if self._internal_print_status == "printing":
+            self._internal_print_status = "paused"
+            self.print_pause.emit()
+        elif self._internal_print_status == "paused":
+            self._internal_print_status = "printing"
+            self.print_resume.emit()
 
-    def _unlock_pause_button(self) -> None:
-        self._pause_locked = False
-        self.pause_printing_btn.setEnabled(True)
+    def _handle_print_state(self, state: str) -> None:
+        valid_states = {"printing", "paused"}
+        invalid_states = {"cancelled", "complete", "error", "standby"}
+        lstate = state.lower()
+        if lstate in valid_states:
+            self._internal_print_status = lstate
+            if lstate == "paused":
+                self.pause_printing_btn.setText(" Resume")
+                self.pause_printing_btn.setPixmap(
+                    QtGui.QPixmap(":/ui/media/btn_icons/play.svg")
+                )
+            elif lstate == "printing":
+                self.pause_printing_btn.setText("Pause")
+                self.pause_printing_btn.setPixmap(
+                    QtGui.QPixmap(":/ui/media/btn_icons/pause.svg")
+                )
+            self.pause_printing_btn.setEnabled(True)
+            self.request_query_print_stats.emit({"print_stats": ["filename"]})
+            self.show_request.emit()
+            lstate = "start"
+        elif lstate in invalid_states:
+            self._current_file_name = ""
+            self._internal_print_status = ""
+            self.total_layers = "?"
+            self.file_metadata.clear()
+            self.hide_request.emit()
+            if hasattr(self, "thumbnail_view"):
+                getattr(self, "thumbnail_view").deleteLater()
+        if hasattr(events, str("Print" + lstate.capitalize())):
+            event_obj = getattr(events, str("Print" + lstate.capitalize()))
+            event = event_obj(self._current_file_name, self.file_metadata)
+            try:
+                instance = QtWidgets.QApplication.instance()
+                if instance:
+                    instance.postEvent(self.window(), event)
+                else:
+                    raise TypeError("QApplication.instance expected non None value")
+            except Exception as e:
+                logger.info(
+                    "Unexpected error while posting print job start event: %s",
+                    e,
+                )
 
     @QtCore.pyqtSlot(str, dict, name="on_print_stats_update")
     @QtCore.pyqtSlot(str, float, name="on_print_stats_update")
@@ -219,47 +255,7 @@ class JobStatusWidget(QtWidgets.QWidget):
         """
         if isinstance(value, str):
             if "state" in field:
-                valid_status = {"printing", "paused"}
-                invalid_status = {"cancelled", "complete", "error", "standby"}
-                if value.lower() in valid_status:
-                    self._internal_print_status = value
-                    if value == "paused":
-                        self.pause_printing_btn.setText(" Resume")
-                        self.pause_printing_btn.setPixmap(
-                            QtGui.QPixmap(":/ui/media/btn_icons/play.svg")
-                        )
-                    elif value == "printing":
-                        self.pause_printing_btn.setText("Pause")
-                        self.pause_printing_btn.setPixmap(
-                            QtGui.QPixmap(":/ui/media/btn_icons/pause.svg")
-                        )
-                    self.request_query_print_stats.emit({"print_stats": ["filename"]})
-                    self.show_request.emit()
-                    value = "start"
-                elif value.lower() in invalid_status:
-                    self._current_file_name = ""
-                    self._internal_print_status = ""
-                    self.total_layers = "?"
-                    self.file_metadata.clear()
-                    self.hide_request.emit()
-                    if hasattr(self, "thumbnail_view"):
-                        getattr(self, "thumbnail_view").deleteLater()
-                if hasattr(events, str("Print" + value.capitalize())):
-                    event_obj = getattr(events, str("Print" + value.capitalize()))
-                    event = event_obj(self._current_file_name, self.file_metadata)
-                    try:
-                        instance = QtWidgets.QApplication.instance()
-                        if instance:
-                            instance.postEvent(self.window(), event)
-                        else:
-                            raise TypeError(
-                                "QApplication.instance expected non None value"
-                            )
-                    except Exception as e:
-                        logger.info(
-                            "Unexpected error while posting print job start event: %s",
-                            e,
-                        )
+                self._handle_print_state(value)
             if "filename" in field:
                 self._current_file_name = value
                 if self.js_file_name_label.text().lower() != value.lower():
