@@ -41,7 +41,9 @@
    <bool>false</bool>
   </property>
   <property name="styleSheet">
-   <string notr="true">#ConnectivityForm{background-image: url(:/background/media/1st_background.png);}</string>
+   <string notr="true">#ConnectivityForm{
+background-image: url(:/background/media/1st_background.png);
+}</string>
   </property>
   <property name="class" stdset="0">
    <string/>
@@ -135,13 +137,13 @@
       </property>
       <property name="minimumSize">
        <size>
-        <width>154</width>
+        <width>100</width>
         <height>80</height>
        </size>
       </property>
       <property name="maximumSize">
        <size>
-        <width>154</width>
+        <width>100</width>
         <height>80</height>
        </size>
       </property>
@@ -333,13 +335,13 @@
       </property>
       <property name="minimumSize">
        <size>
-        <width>154</width>
+        <width>100</width>
         <height>80</height>
        </size>
       </property>
       <property name="maximumSize">
        <size>
-        <width>154</width>
+        <width>100</width>
         <height>80</height>
        </size>
       </property>
@@ -408,13 +410,13 @@
       </property>
       <property name="minimumSize">
        <size>
-        <width>154</width>
+        <width>100</width>
         <height>80</height>
        </size>
       </property>
       <property name="maximumSize">
        <size>
-        <width>154</width>
+        <width>100</width>
         <height>80</height>
        </size>
       </property>
@@ -483,13 +485,13 @@
       </property>
       <property name="minimumSize">
        <size>
-        <width>154</width>
+        <width>100</width>
         <height>80</height>
        </size>
       </property>
       <property name="maximumSize">
        <size>
-        <width>154</width>
+        <width>100</width>
         <height>80</height>
        </size>
       </property>
@@ -582,13 +584,13 @@
       </property>
       <property name="minimumSize">
        <size>
-        <width>154</width>
+        <width>100</width>
         <height>80</height>
        </size>
       </property>
       <property name="maximumSize">
        <size>
-        <width>154</width>
+        <width>100</width>
         <height>80</height>
        </size>
       </property>
@@ -657,13 +659,13 @@
       </property>
       <property name="minimumSize">
        <size>
-        <width>154</width>
+        <width>100</width>
         <height>80</height>
        </size>
       </property>
       <property name="maximumSize">
        <size>
-        <width>154</width>
+        <width>100</width>
         <height>80</height>
        </size>
       </property>
