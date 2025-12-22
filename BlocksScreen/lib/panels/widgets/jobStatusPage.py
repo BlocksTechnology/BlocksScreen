@@ -1,5 +1,4 @@
 import logging
-from turtle import isvisible
 import typing
 import events
 from helper_methods import calculate_current_layer, estimate_print_time
@@ -86,6 +85,11 @@ class JobStatusWidget(QtWidgets.QWidget):
         self.headerWidget.show()
         self.show()
 
+    def showEvent(self, a0) -> None:
+        """Reimplemented method, handle `show` Event"""
+        if self._current_file_name:
+            self.request_file_info.emit(self._current_file_name)
+
     def eventFilter(self, sender_obj: QtCore.QObject, event: events.QEvent) -> bool:
         """Filter events,
 
@@ -111,9 +115,7 @@ class JobStatusWidget(QtWidgets.QWidget):
             logger.debug("Unable to load thumbnails, no thumbnails provided")
             return
         self.create_thumbnail_widget()
-        self.thumbnail_view.installEventFilter(
-            self
-        )  # Filter events on this widget, for clicks
+        self.thumbnail_view.installEventFilter(self)
         scene = QtWidgets.QGraphicsScene()
         _biggest_thumb = self.thumbnail_graphics[-1]
         self.thumbnail_view.setSceneRect(
@@ -173,15 +175,13 @@ class JobStatusWidget(QtWidgets.QWidget):
             else:
                 raise TypeError("QApplication.instance expected non None value")
         except Exception as e:
-            logger.debug(f"Unexpected error while posting print job start event: {e}")
+            logger.debug("Unexpected error while posting print job start event: %s", e)
 
     @QtCore.pyqtSlot(dict, name="on_fileinfo")
     def on_fileinfo(self, fileinfo: dict) -> None:
         """Handle received file information/metadata"""
-            
-        # if not self.isVisible():
-        #     print("Received file info but it's not visible yet")
-            # return
+        if not self.isVisible():
+            return
         self.total_layers = str(fileinfo.get("layer_count", "?"))
         self.layer_display_button.setText("?")
         self.layer_display_button.secondary_text = str(self.total_layers)
@@ -202,7 +202,7 @@ class JobStatusWidget(QtWidgets.QWidget):
                 self._internal_print_status = "printing"
         QtCore.QTimer.singleShot(5000, self._unlock_pause_button)
 
-    def _unlock_pause_button(self):
+    def _unlock_pause_button(self) -> None:
         self._pause_locked = False
         self.pause_printing_btn.setEnabled(True)
 
@@ -218,13 +218,10 @@ class JobStatusWidget(QtWidgets.QWidget):
             value (dict | float | str): The value for the field.
         """
         if isinstance(value, str):
-            if "filename" in field:
-                self._current_file_name = value
-                if self.js_file_name_label.text().lower() != value.lower():
-                    self.js_file_name_label.setText(self._current_file_name)
-                    self.request_file_info.emit(value)  # Request file metadata
             if "state" in field:
-                if value.lower() == "printing" or value == "paused":
+                valid_status = {"printing", "paused"}
+                invalid_status = {"cancelled", "complete", "error", "standby"}
+                if value.lower() in valid_status:
                     self._internal_print_status = value
                     if value == "paused":
                         self.pause_printing_btn.setText(" Resume")
@@ -238,8 +235,8 @@ class JobStatusWidget(QtWidgets.QWidget):
                         )
                     self.request_query_print_stats.emit({"print_stats": ["filename"]})
                     self.show_request.emit()
-                    value = "start"  # This is for event compatibility
-                elif value in ("cancelled", "complete", "error", "standby"):
+                    value = "start"
+                elif value.lower() in invalid_status:
                     self._current_file_name = ""
                     self._internal_print_status = ""
                     self.total_layers = "?"
@@ -263,20 +260,24 @@ class JobStatusWidget(QtWidgets.QWidget):
                             "Unexpected error while posting print job start event: %s",
                             e,
                         )
-
+            if "filename" in field:
+                self._current_file_name = value
+                if self.js_file_name_label.text().lower() != value.lower():
+                    self.js_file_name_label.setText(self._current_file_name)
+                if self.isVisible():
+                    self.request_file_info.emit(value)
         if not self.file_metadata:
             return
         if not self.isVisible():
             return
         if isinstance(value, dict):
             if "total_layer" in value.keys():
-                self.total_layers = value["total_layer"]
+                self.total_layers = value.get("total_layer", "?")
                 self.layer_display_button.secondary_text = str(self.total_layers)
             if "current_layer" in value.keys():
-                if value["current_layer"] is not None:
-                    _current_layer = value["current_layer"]
-                    if _current_layer is not None:
-                        self.layer_display_button.setText(f"{int(_current_layer)}")
+                _current_layer = value.get("current_layer", None)
+                if _current_layer:
+                    self.layer_display_button.setText(f"{int(_current_layer)}")
         elif isinstance(value, float):
             if "total_duration" in field:
                 _time = estimate_print_time(int(value))
@@ -292,7 +293,7 @@ class JobStatusWidget(QtWidgets.QWidget):
         """Handle gcode move"""
         if not self.isVisible():
             return
-        if "gcode_position" in field:  # Without offsets
+        if "gcode_position" in field:
             if self._internal_print_status == "printing":
                 _current_layer = calculate_current_layer(
                     z_position=value[2],
