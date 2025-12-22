@@ -1,4 +1,5 @@
 import logging
+from turtle import isvisible
 import typing
 import events
 from helper_methods import calculate_current_layer, estimate_print_time
@@ -177,6 +178,10 @@ class JobStatusWidget(QtWidgets.QWidget):
     @QtCore.pyqtSlot(dict, name="on_fileinfo")
     def on_fileinfo(self, fileinfo: dict) -> None:
         """Handle received file information/metadata"""
+            
+        # if not self.isVisible():
+        #     print("Received file info but it's not visible yet")
+            # return
         self.total_layers = str(fileinfo.get("layer_count", "?"))
         self.layer_display_button.setText("?")
         self.layer_display_button.secondary_text = str(self.total_layers)
@@ -189,15 +194,12 @@ class JobStatusWidget(QtWidgets.QWidget):
         if not getattr(self, "_pause_locked", False):
             self._pause_locked = True
             self.pause_printing_btn.setEnabled(False)
-
             if self._internal_print_status == "printing":
                 self.print_pause.emit()
                 self._internal_print_status = "paused"
-
             elif self._internal_print_status == "paused":
                 self.print_resume.emit()
                 self._internal_print_status = "printing"
-
         QtCore.QTimer.singleShot(5000, self._unlock_pause_button)
 
     def _unlock_pause_button(self):
@@ -243,10 +245,8 @@ class JobStatusWidget(QtWidgets.QWidget):
                     self.total_layers = "?"
                     self.file_metadata.clear()
                     self.hide_request.emit()
-
                     if hasattr(self, "thumbnail_view"):
                         getattr(self, "thumbnail_view").deleteLater()
-
                 if hasattr(events, str("Print" + value.capitalize())):
                     event_obj = getattr(events, str("Print" + value.capitalize()))
                     event = event_obj(self._current_file_name, self.file_metadata)
@@ -260,10 +260,13 @@ class JobStatusWidget(QtWidgets.QWidget):
                             )
                     except Exception as e:
                         logger.info(
-                            f"Unexpected error while posting print job start event: {e}"
+                            "Unexpected error while posting print job start event: %s",
+                            e,
                         )
 
         if not self.file_metadata:
+            return
+        if not self.isVisible():
             return
         if isinstance(value, dict):
             if "total_layer" in value.keys():
@@ -276,22 +279,19 @@ class JobStatusWidget(QtWidgets.QWidget):
                         self.layer_display_button.setText(f"{int(_current_layer)}")
         elif isinstance(value, float):
             if "total_duration" in field:
-                self.print_total_duration = value
-                _time = estimate_print_time(int(self.print_total_duration))
+                _time = estimate_print_time(int(value))
                 _print_time_string = (
                     f"{_time[0]}Day {_time[1]}H {_time[2]}min {_time[3]} s"
                     if _time[0] != 0
                     else f"{_time[1]}H {_time[2]}min {_time[3]}s"
                 )
                 self.print_time_display_button.setText(_print_time_string)
-            elif "print_duration" in field:
-                self.current_print_duration_seconds = value
-            elif "filament_used" in field:
-                self.filament_used_mm = value
 
     @QtCore.pyqtSlot(str, list, name="on_gcode_move_update")
     def on_gcode_move_update(self, field: str, value: list) -> None:
         """Handle gcode move"""
+        if not self.isVisible():
+            return
         if "gcode_position" in field:  # Without offsets
             if self._internal_print_status == "printing":
                 _current_layer = calculate_current_layer(
@@ -315,12 +315,10 @@ class JobStatusWidget(QtWidgets.QWidget):
             field (str): Name of the updated field on the virtual_sdcard object
             value (float | bool): The updated information for the corresponding field
         """
-        if isinstance(value, bool):
-            ...
+        if not self.isVisible():
+            return
         if "progress" == field:
             self.printing_progress_bar.setValue(value)
-        if "file_position" == field:
-            ...
 
     def _setupUI(self) -> None:
         """Setup widget ui"""
@@ -331,8 +329,6 @@ class JobStatusWidget(QtWidgets.QWidget):
         sizePolicy.setHorizontalStretch(1)
         sizePolicy.setVerticalStretch(1)
         sizePolicy.setHeightForWidth(self.sizePolicy().hasHeightForWidth())
-        # ----------------------------------size policy
-
         self.setSizePolicy(sizePolicy)
         self.setMinimumSize(QtCore.QSize(710, 420))
         self.setMaximumSize(QtCore.QSize(720, 420))
@@ -370,7 +366,6 @@ class JobStatusWidget(QtWidgets.QWidget):
         font = QtGui.QFont()
         font.setFamily("Montserrat")
         font.setPointSize(14)
-        # ------------------------------Header
         self.js_file_name_icon = BlocksLabel(parent=self)
         self.js_file_name_icon.setSizePolicy(sizePolicy)
         self.js_file_name_icon.setMinimumSize(QtCore.QSize(60, 60))
@@ -384,7 +379,6 @@ class JobStatusWidget(QtWidgets.QWidget):
             QtGui.QPixmap(":/files/media/btn_icons/file_icon.svg"),
         )
         self.js_file_name_icon.setObjectName("js_file_name_icon")
-
         self.js_file_name_label = BlocksLabel(parent=self)
         self.js_file_name_label.setEnabled(True)
         self.js_file_name_label.setSizePolicy(sizePolicy)
@@ -396,7 +390,6 @@ class JobStatusWidget(QtWidgets.QWidget):
         self.js_file_name_label.setObjectName("js_file_name_label")
         self.job_status_header_layout.addWidget(self.js_file_name_icon)
         self.job_status_header_layout.addWidget(self.js_file_name_label)
-        # -----------------------------buttons
         font.setPointSize(18)
         self.pause_printing_btn = BlocksCustomButton(self)
         self.pause_printing_btn.setSizePolicy(sizePolicy)
@@ -431,45 +424,34 @@ class JobStatusWidget(QtWidgets.QWidget):
         self.tune_menu_btn.setText("Tune")
         self.stop_printing_btn.setText("Cancel")
         self.pause_printing_btn.setText("Pause")
-        # -----------------------------Progress bar
         self.printing_progress_bar = CustomProgressBar(self)
         self.printing_progress_bar.setMinimumHeight(150)
         self.printing_progress_bar.setObjectName("printing_progress_bar")
         self.printing_progress_bar.setSizePolicy(sizePolicy)
         self.job_status_progress_layout.addWidget(self.printing_progress_bar)
-
-        # -----------------------------display buttons
-
         self.layer_display_button = DisplayButton(self)
         self.layer_display_button.button_type = "display_secondary"
         self.layer_display_button.setEnabled(False)
         self.layer_display_button.setSizePolicy(sizePolicy)
-
         self.layer_display_button.setMinimumSize(QtCore.QSize(200, 80))
-
         self.layer_display_button.setProperty(
             "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/layers.svg")
         )
         self.layer_display_button.setObjectName("layer_display_button")
-
         self.print_time_display_button = DisplayButton(self)
         self.print_time_display_button.button_type = "normal"
         self.print_time_display_button.setEnabled(False)
         self.print_time_display_button.setSizePolicy(sizePolicy)
-
         self.print_time_display_button.setMinimumSize(QtCore.QSize(200, 80))
-
         self.print_time_display_button.setProperty(
             "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/time.svg")
         )
         self.print_time_display_button.setObjectName("print_time_display_button")
-
         self.job_stats_display_layout.addWidget(
             self.layer_display_button,
             0,
             QtCore.Qt.AlignmentFlag.AlignHCenter | QtCore.Qt.AlignmentFlag.AlignVCenter,
         )
-
         self.job_stats_display_layout.addWidget(
             self.print_time_display_button,
             0,
@@ -481,7 +463,6 @@ class JobStatusWidget(QtWidgets.QWidget):
         """Create thumbnail graphics view widget"""
         self.thumbnail_view = QtWidgets.QGraphicsView()
         self.thumbnail_view.setMinimumSize(QtCore.QSize(48, 48))
-        # self.thumbnail_view.setMaximumSize(QtCore.QSize(300, 300))
         self.thumbnail_view.setAttribute(
             QtCore.Qt.WidgetAttribute.WA_TranslucentBackground, True
         )
