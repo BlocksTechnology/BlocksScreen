@@ -247,17 +247,17 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
             lambda: self.handle_is("SHAPER_CALIBRATE")
         )
 
-        self.manuel_is = OptionCard(
+        self.manual_is = OptionCard(
             self,
-            "Manuel\nInput Shaper",
+            "Manual\nInput Shaper",
             "Manual Input Shaper",
             QtGui.QPixmap(":/input_shaper/media/btn_icons/input_shaper_manual.svg"),
         )  # type: ignore
-        self.manuel_is.setObjectName("Manual_IS_Card")
+        self.manual_is.setObjectName("Manual_IS_Card")
         self.panel.is_content_layout.addWidget(
-            self.manuel_is, alignment=QtCore.Qt.AlignmentFlag.AlignHCenter
+            self.manual_is, alignment=QtCore.Qt.AlignmentFlag.AlignHCenter
         )
-        self.manuel_is.continue_clicked.connect(lambda: self.handle_is(""))
+        self.manual_is.continue_clicked.connect(lambda: self.handle_is(""))
 
         self.is_types: dict = {}
         self.is_aut_types: dict = {}
@@ -363,7 +363,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
             self.aut = True
             self.run_gcode_signal.emit(gcode)
         if gcode == "":
-            print("Manuel Input Shaper Selected")
+            print("manual Input Shaper Selected")
             self.dialog_page.confirm_background_color("#dfdfdf")
             self.dialog_page.cancel_background_color("#dfdfdf")
             self.dialog_page.cancel_font_color("#000000")
