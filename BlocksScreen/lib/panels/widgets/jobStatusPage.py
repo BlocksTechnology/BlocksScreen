@@ -268,7 +268,7 @@ class JobStatusWidget(QtWidgets.QWidget):
                 self.total_layers = value["total_layer"]
                 if value["total_layer"] is not None:
                     self.layer_display_button.secondary_text = str(self.total_layers)
-                    
+
                 else:
                     self.total_layers = "---"
                     self.layer_fallback = True
@@ -313,7 +313,9 @@ class JobStatusWidget(QtWidgets.QWidget):
                         first_layer_height=first_layer_height,
                     )
 
-                    total_layer = (object_height ) / layer_height if layer_height > 0 else -1
+                    total_layer = (
+                        (object_height) / layer_height if layer_height > 0 else -1
+                    )
                     self.layer_display_button.secondary_text = (
                         f"{int(total_layer)}" if total_layer != -1 else "---"
                     )
