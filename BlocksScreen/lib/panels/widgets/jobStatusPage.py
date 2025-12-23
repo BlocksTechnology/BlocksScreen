@@ -58,6 +58,7 @@ class JobStatusWidget(QtWidgets.QWidget):
     def __init__(self, parent) -> None:
         super().__init__(parent)
         self.thumbnail_graphics = []
+        self.layer_fallback = False
         self._setupUI()
         self.cancel_print_dialog = dialogPage.DialogPage(self)
         self.tune_menu_btn.clicked.connect(self.tune_clicked.emit)
@@ -177,8 +178,8 @@ class JobStatusWidget(QtWidgets.QWidget):
     @QtCore.pyqtSlot(dict, name="on_fileinfo")
     def on_fileinfo(self, fileinfo: dict) -> None:
         """Handle received file information/metadata"""
-        self.total_layers = str(fileinfo.get("layer_count", "?"))
-        self.layer_display_button.setText("?")
+        self.total_layers = str(fileinfo.get("layer_count", "---"))
+        self.layer_display_button.setText("---")
         self.layer_display_button.secondary_text = str(self.total_layers)
         self.file_metadata = fileinfo
         self._load_thumbnails(*fileinfo.get("thumbnail_images", []))
@@ -240,7 +241,7 @@ class JobStatusWidget(QtWidgets.QWidget):
                 elif value in ("cancelled", "complete", "error", "standby"):
                     self._current_file_name = ""
                     self._internal_print_status = ""
-                    self.total_layers = "?"
+                    self.total_layers = "---"
                     self.file_metadata.clear()
                     self.hide_request.emit()
                     self.thumbnail_view.deleteLater()
@@ -261,18 +262,24 @@ class JobStatusWidget(QtWidgets.QWidget):
                         logger.info(
                             f"Unexpected error while posting print job start event: {e}"
                         )
-
-        if not self.file_metadata:
-            return
         if isinstance(value, dict):
+            self.layer_fallback = False
             if "total_layer" in value.keys():
                 self.total_layers = value["total_layer"]
-                self.layer_display_button.secondary_text = str(self.total_layers)
+                if value["total_layer"] is not None:
+                    self.layer_display_button.secondary_text = str(self.total_layers)
+                    
+                else:
+                    self.total_layers = "---"
+                    self.layer_fallback = True
+
             if "current_layer" in value.keys():
                 if value["current_layer"] is not None:
                     _current_layer = value["current_layer"]
-                    if _current_layer is not None:
-                        self.layer_display_button.setText(f"{int(_current_layer)}")
+                    self.layer_display_button.setText(f"{int(_current_layer)}")
+                else:
+                    self.layer_display_button.setText("---")
+                    self.layer_fallback = True
         elif isinstance(value, float):
             if "total_duration" in field:
                 self.print_total_duration = value
@@ -293,25 +300,26 @@ class JobStatusWidget(QtWidgets.QWidget):
         """Handle gcode move"""
         if "gcode_position" in field:  # Without offsets
             if self._internal_print_status == "printing":
-                object_height = float(self.file_metadata.get("object_height", -1.0))
-                layer_height = float(self.file_metadata.get("layer_height", -1.0))
-                first_layer_height = float(
-                    self.file_metadata.get("first_layer_height", -1.0)
-                )
-                _current_layer = calculate_current_layer(
-                    z_position=value[2],
-                    object_height=object_height,
-                    layer_height=layer_height,
-                    first_layer_height=first_layer_height,
-                )
+                if self.layer_fallback:
+                    object_height = float(self.file_metadata.get("object_height", -1.0))
+                    layer_height = float(self.file_metadata.get("layer_height", -1.0))
+                    first_layer_height = float(
+                        self.file_metadata.get("first_layer_height", -1.0)
+                    )
+                    _current_layer = calculate_current_layer(
+                        z_position=value[2],
+                        object_height=object_height,
+                        layer_height=layer_height,
+                        first_layer_height=first_layer_height,
+                    )
 
-                total_layer = (object_height ) / layer_height if layer_height > 0 else -1
-                self.layer_display_button.secondary_text = (
-                    f"{int(total_layer)}" if total_layer != -1 else "?"
-                 )
-                self.layer_display_button.setText(
-                    f"{int(_current_layer)}" if _current_layer != -1 else "?"
-                )
+                    total_layer = (object_height ) / layer_height if layer_height > 0 else -1
+                    self.layer_display_button.secondary_text = (
+                        f"{int(total_layer)}" if total_layer != -1 else "---"
+                    )
+                    self.layer_display_button.setText(
+                        f"{int(_current_layer)}" if _current_layer != -1 else "---"
+                    )
 
     @QtCore.pyqtSlot(str, float, name="virtual_sdcard_update")
     @QtCore.pyqtSlot(str, bool, name="virtual_sdcard_update")
