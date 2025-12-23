@@ -293,14 +293,22 @@ class JobStatusWidget(QtWidgets.QWidget):
         """Handle gcode move"""
         if "gcode_position" in field:  # Without offsets
             if self._internal_print_status == "printing":
+                object_height = float(self.file_metadata.get("object_height", -1.0))
+                layer_height = float(self.file_metadata.get("layer_height", -1.0))
+                first_layer_height = float(
+                    self.file_metadata.get("first_layer_height", -1.0)
+                )
                 _current_layer = calculate_current_layer(
                     z_position=value[2],
-                    object_height=float(self.file_metadata.get("object_height", -1.0)),
-                    layer_height=float(self.file_metadata.get("layer_height", -1.0)),
-                    first_layer_height=float(
-                        self.file_metadata.get("first_layer_height", -1.0)
-                    ),
+                    object_height=object_height,
+                    layer_height=layer_height,
+                    first_layer_height=first_layer_height,
                 )
+
+                total_layer = (object_height ) / layer_height if layer_height > 0 else -1
+                self.layer_display_button.secondary_text = (
+                    f"{int(total_layer)}" if total_layer != -1 else "?"
+                 )
                 self.layer_display_button.setText(
                     f"{int(_current_layer)}" if _current_layer != -1 else "?"
                 )

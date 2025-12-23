@@ -254,7 +254,7 @@ def calculate_current_layer(
     """
     if z_position == 0:
         return -1
-    _current_layer = 1 + (z_position - first_layer_height) / layer_height
+    _current_layer =(z_position) / layer_height
 
     return int(_current_layer)
 
