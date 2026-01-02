@@ -174,6 +174,10 @@ class DisplayButton(QtWidgets.QPushButton):
                         int(_mtl.width() / 2.0),
                         _rect.height(),
                     )
+                    font = QtGui.QFont()
+                    font.setPointSize(12)
+                    font.setFamily("Momcake-bold")
+                    painter.setFont(font)
                     painter.drawText(
                         _ptl_rect,
                         QtCore.Qt.TextFlag.TextShowMnemonic
@@ -240,6 +244,10 @@ class DisplayButton(QtWidgets.QPushButton):
                     )
 
             else:
+                font = QtGui.QFont()
+                font.setPointSize(12)
+                font.setFamily("Momcake-bold")
+                painter.setFont(font)
                 painter.drawText(
                     _mtl,
                     QtCore.Qt.TextFlag.TextShowMnemonic
