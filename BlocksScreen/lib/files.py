@@ -54,14 +54,12 @@ class Files(QtCore.QObject):
 
     @property
     def file_list(self):
-        """Get the current list of files"""
+        """Available files list"""
         return self.files
 
     def handle_message_received(self, method: str, data, params: dict) -> None:
         """Handle file related messages received by moonraker"""
         if "server.files.list" in method:
-            # Get all files in root and its subdirectories and
-            # request their metadata
             self.files.clear()
             self.files = data
             [self.request_file_metadata.emit(item["path"]) for item in self.files]
@@ -73,8 +71,6 @@ class Files(QtCore.QObject):
             else:
                 self.files_metadata[data["filename"]] = data
         elif "server.files.get_directory" in method:
-            # Emit here the files for each directory so the
-            # ui can build the files list
             self.directories = data.get("dirs", {})
             self.files.clear()
             self.files = data.get("files", [])
@@ -99,7 +95,7 @@ class Files(QtCore.QObject):
         """Requests metadata for a file
 
         Args:
-            filename (str): file
+            filename (str): file to get metadata from
         """
         _data: dict = {
             "thumbnail_images": list,
@@ -134,7 +130,6 @@ class Files(QtCore.QObject):
         )
         _thumbnail_images = list(map(lambda path: QtGui.QImage(path), _thumbnail_paths))
         _data.update({"thumbnail_images": _thumbnail_images})
-
         _data.update({"filament_total": _file_metadata.get("filament_total", "?")})
         _data.update({"estimated_time": _file_metadata.get("estimated_time", 0)})
         _data.update({"layer_count": _file_metadata.get("layer_count", -1.0)})
@@ -165,17 +160,14 @@ class Files(QtCore.QObject):
         self.fileinfo.emit(_data)
 
     def eventFilter(self, a0: QtCore.QObject, a1: QtCore.QEvent) -> bool:
-        """Filter Klippy related events"""
+        """Handle Websocket and Klippy events"""
+        if a1.type() == events.WebSocketOpen.type():
+            self.request_file_list.emit()
+            self.request_dir_info[str, bool].emit("", False)
+            return False
         if a1.type() == events.KlippyDisconnected.type():
             self.files_metadata.clear()
             self.files.clear()
-            return False
-        if a1.type() == events.KlippyReady.type():
-            # Request all files including in subdirectories
-            # in order to get all metadata
-            self.request_file_list.emit()
-            # List and directory build is depended only on this signal
-            self.request_dir_info[str, bool].emit("", False)
             return False
         return super().eventFilter(a0, a1)
 
