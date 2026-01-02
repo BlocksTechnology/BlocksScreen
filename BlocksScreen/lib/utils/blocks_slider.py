@@ -14,6 +14,7 @@ class BlocksSlider(QtWidgets.QSlider):
         self.setTickInterval(20)
         self.setMinimum(0)
         self.setMaximum(100)
+        self.setPageStep(0)
 
     def mousePressEvent(self, ev: QtGui.QMouseEvent) -> None:
         """Re-implemented method, Handle mouse press events"""
