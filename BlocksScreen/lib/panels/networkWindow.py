@@ -4,16 +4,14 @@ import subprocess
 import typing
 from functools import partial
 
-from PyQt6 import QtCore, QtGui, QtWidgets
-from PyQt6.QtCore import QRunnable, QThreadPool, QObject, pyqtSignal
-
 from lib.network import SdbusNetworkManagerAsync
-from lib.panels.widgets.popupDialogWidget import Popup
-from lib.ui.wifiConnectivityWindow_ui import Ui_wifi_stacked_page
 from lib.panels.widgets.keyboardPage import CustomQwertyKeyboard
 from lib.panels.widgets.loadPage import LoadScreen
+from lib.panels.widgets.popupDialogWidget import Popup
+from lib.ui.wifiConnectivityWindow_ui import Ui_wifi_stacked_page
 from lib.utils.list_model import EntryDelegate, EntryListModel, ListItem
-
+from PyQt6 import QtCore, QtGui, QtWidgets
+from PyQt6.QtCore import QObject, QRunnable, QThreadPool, pyqtSignal
 
 logger = logging.getLogger("logs/BlocksScreen.log")
 
@@ -186,7 +184,7 @@ class WifiIconProvider:
 
     def get_pixmap(self, signal: int, state: str) -> QtGui.QPixmap:
         """Return a QPixmap for the given signal (0-100) and state ("Protected" or not)."""
-        if signal <= 25:
+        if signal < 5:
             bars = 0
         elif signal >= 75:
             bars = 4
