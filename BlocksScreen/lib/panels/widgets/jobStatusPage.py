@@ -200,6 +200,9 @@ class JobStatusWidget(QtWidgets.QWidget):
             self.print_resume.emit()
 
     def _handle_print_state(self, state: str) -> None:
+        """Handle print state change received from
+        printer_status object updated
+        """
         valid_states = {"printing", "paused"}
         invalid_states = {"cancelled", "complete", "error", "standby"}
         lstate = state.lower()
@@ -227,20 +230,19 @@ class JobStatusWidget(QtWidgets.QWidget):
             self.hide_request.emit()
             if hasattr(self, "thumbnail_view"):
                 getattr(self, "thumbnail_view").deleteLater()
+        # Send Event on Print state
         if hasattr(events, str("Print" + lstate.capitalize())):
             event_obj = getattr(events, str("Print" + lstate.capitalize()))
             event = event_obj(self._current_file_name, self.file_metadata)
-            try:
-                instance = QtWidgets.QApplication.instance()
-                if instance:
-                    instance.postEvent(self.window(), event)
-                else:
-                    raise TypeError("QApplication.instance expected non None value")
-            except Exception as e:
-                logger.info(
-                    "Unexpected error while posting print job start event: %s",
-                    e,
-                )
+            instance = QtWidgets.QApplication.instance()
+            if instance:
+                instance.postEvent(self.window(), event)
+                return
+            logger.error(
+                "QApplication.instance expected non None value,\
+                    Unable to post event %s",
+                str("Print" + lstate.capitalize()),
+            )
 
     @QtCore.pyqtSlot(str, dict, name="on_print_stats_update")
     @QtCore.pyqtSlot(str, float, name="on_print_stats_update")
