@@ -11,7 +11,7 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 
 class ConfirmWidget(QtWidgets.QWidget):
     on_accept: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
-        str, list, name="on_accept"
+        str, name="on_accept"
     )
     request_back: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         name="request-back"
@@ -31,7 +31,7 @@ class ConfirmWidget(QtWidgets.QWidget):
         self.filename = ""
         self.confirm_button.clicked.connect(
             lambda: self.on_accept.emit(
-                str(os.path.join(self.directory, self.filename)), self._thumbnails
+                str(os.path.join(self.directory, self.filename))
             )
         )
         self.back_btn.clicked.connect(self.request_back.emit)
