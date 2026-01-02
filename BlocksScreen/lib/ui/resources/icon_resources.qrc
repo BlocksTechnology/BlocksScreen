@@ -36,6 +36,7 @@
   <qresource prefix="fan_related">
     <file>media/btn_icons/fan.svg</file>
     <file>media/btn_icons/fan_cage.svg</file>
+    <file>media/btn_icons/blower.svg</file>
   </qresource>
   <qresource prefix="temperature_related">
     <file>media/btn_icons/standart_temperature.svg</file>

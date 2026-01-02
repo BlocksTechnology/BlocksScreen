@@ -1,10 +1,11 @@
+import re
 import typing
 
+from helper_methods import normalize
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.display_button import DisplayButton
 from lib.utils.icon_button import IconButton
 from PyQt6 import QtCore, QtGui, QtWidgets
-from helper_methods import normalize
 
 
 class TuneWidget(QtWidgets.QWidget):
@@ -110,18 +111,26 @@ class TuneWidget(QtWidgets.QWidget):
             field (str): field name
             new_value (int | float): New value for field name
         """
+        fields = name.split()
+        first_field = fields[0]
+        second_field = fields[1].lower() if len(fields) > 1 else None
         if "speed" in field:
-            if not self.tune_display_buttons.get(name, None):
+            if not self.tune_display_buttons.get(name, None) and first_field in (
+                "fan",
+                "fan_generic",
+            ):
+                pattern_blower = r"(?:^|_)(?:blower|auxiliary)(?:_|$)"
+                pattern_exhaust = r"(?:^|_)exhaust(?:_|$)"
+
                 _new_display_button = self.create_display_button(name)
                 _new_display_button.setParent(self)
-                if "blower" in name:
-                    _new_display_button.icon_pixmap = QtGui.QPixmap(
-                        ":/temperature_related/media/btn_icons/blower.svg"
-                    )
-                else:
-                    _new_display_button.icon_pixmap = QtGui.QPixmap(
-                        ":/temperature_related/media/btn_icons/fan.svg"
-                    )
+                _new_display_button.icon_pixmap = self.path.get("fan")
+                if second_field:
+                    if re.search(pattern_blower, second_field):
+                        _new_display_button.icon_pixmap = self.path.get("blower")
+                    elif re.search(pattern_exhaust, second_field):
+                        _new_display_button.icon_pixmap = self.path.get("fan_cage")
+
                 self.tune_display_buttons.update(
                     {
                         name: {
@@ -130,26 +139,17 @@ class TuneWidget(QtWidgets.QWidget):
                         }
                     }
                 )
-                if name in ("fan", "fan_generic"):
-                    _new_display_button.clicked.connect(
-                        lambda: self.request_sliderPage[
-                            str, int, "PyQt_PyObject", int, int
-                        ].emit(
-                            str(name),
-                            int(
-                                round(
-                                    self.tune_display_buttons.get(name).get(  # type:ignore
-                                        "speed", 0
-                                    )
-                                )
-                            ),
-                            self.on_slider_change,
-                            0,
-                            100,
-                        )
+                _new_display_button.clicked.connect(
+                    lambda: self.request_sliderPage[
+                        str, int, "PyQt_PyObject", int, int
+                    ].emit(
+                        str(name),
+                        int(round(self.tune_display_buttons.get(name).get("speed", 0))),
+                        self.on_slider_change,
+                        0,
+                        100,
                     )
-                else:
-                    _new_display_button.setDisabled(True)
+                )
                 self.tune_display_vertical_child_layout_2.addWidget(_new_display_button)
             _display_button = self.tune_display_buttons.get(name)
             if not _display_button:
@@ -436,6 +436,12 @@ class TuneWidget(QtWidgets.QWidget):
         self.tune_content.setContentsMargins(2, 0, 2, 0)
         self.setLayout(self.tune_content)
         self.setContentsMargins(2, 2, 2, 2)
+
+        self.path = {
+            "fan_cage": QtGui.QPixmap(":/fan_related/media/btn_icons/fan_cage.svg"),
+            "blower": QtGui.QPixmap(":/fan_related/media/btn_icons/blower.svg"),
+            "fan": QtGui.QPixmap(":/fan_related/media/btn_icons/fan.svg"),
+        }
         self._retranslateUI()
 
     def _retranslateUI(self):

@@ -40,27 +40,29 @@ class CustomProgressBar(QtWidgets.QProgressBar):
         self._pen_width = value
         self.update()
 
-    def set_inner_pixmap(self, pixmap: QtGui.QPixmap) -> None:
-        """Set the inner icon pixmap on the progress bar
-        circumference.
-        """
-        self._pixmap = pixmap
-        self.update()
-
-    def resizeEvent(self, a0) -> None:
-        """Re-implemented method, handle widget resize Events
-
-        Currently rescales the set pixmap so it has the optimal
-        size.
-        """
+    def _scale_pixmap(self) -> None:
         self._inner_rect = self._calculate_inner_geometry()
         self._pixmap_cached = self._pixmap.scaled(
             self._inner_rect.size().toSize(),
             QtCore.Qt.AspectRatioMode.KeepAspectRatio,
             QtCore.Qt.TransformationMode.SmoothTransformation,
         )
+
+    def set_inner_pixmap(self, pixmap: QtGui.QPixmap) -> None:
+        """Set the inner icon pixmap on the progress bar
+        circumference.
+        """
+        self._pixmap = pixmap
+        self._scale_pixmap()
+
+    def resizeEvent(self, a0) -> None:
+        """Reimplemented method, handle widget resize Events
+
+        Currently rescales the set pixmap so it has the optimal
+        size.
+        """
+        self._scale_pixmap()
         self.update()
-        return super().resizeEvent(a0)
 
     def sizeHint(self) -> QtCore.QSize:
         """Re-implemented method, preferable widget size"""
