@@ -3,7 +3,7 @@ import typing
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_label import BlocksLabel
 from lib.utils.icon_button import IconButton
-from lib.utils.group_button import GroupButton
+from lib.utils.check_button import BlocksCustomCheckButton
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 
@@ -212,7 +212,7 @@ class BabystepPage(QtWidgets.QWidget):
         self.bbp_offset_steps_buttons.setObjectName("bbp_offset_steps_buttons")
 
         # 0.1mm button
-        self.bbp_nozzle_offset_1 = GroupButton(
+        self.bbp_nozzle_offset_1 = BlocksCustomCheckButton(
             parent=self.bbp_offset_steps_buttons_group_box
         )
         self.bbp_nozzle_offset_1.setMinimumSize(QtCore.QSize(100, 70))
@@ -237,7 +237,7 @@ class BabystepPage(QtWidgets.QWidget):
         # Line separator for 0.1mm - set size policy to expanding horizontally
 
         # 0.01mm button
-        self.bbp_nozzle_offset_01 = GroupButton(
+        self.bbp_nozzle_offset_01 = BlocksCustomCheckButton(
             parent=self.bbp_offset_steps_buttons_group_box
         )
         self.bbp_nozzle_offset_01.setMinimumSize(QtCore.QSize(100, 70))
@@ -261,7 +261,7 @@ class BabystepPage(QtWidgets.QWidget):
         )
 
         # 0.05mm button
-        self.bbp_nozzle_offset_05 = GroupButton(
+        self.bbp_nozzle_offset_05 = BlocksCustomCheckButton(
             parent=self.bbp_offset_steps_buttons_group_box
         )
         self.bbp_nozzle_offset_05.setMinimumSize(QtCore.QSize(100, 70))
@@ -285,7 +285,7 @@ class BabystepPage(QtWidgets.QWidget):
         )
 
         # 0.025mm button
-        self.bbp_nozzle_offset_025 = GroupButton(
+        self.bbp_nozzle_offset_025 = BlocksCustomCheckButton(
             parent=self.bbp_offset_steps_buttons_group_box
         )
         self.bbp_nozzle_offset_025.setMinimumSize(QtCore.QSize(100, 70))
