@@ -348,6 +348,7 @@ def get_file_name(filename: typing.Optional[str]) -> str:
     # Split and return the last path component
     return parts[-1] if filename else ""
 
+
 def is_process_running(process_name: str) -> bool:
     """Verify if `process_name` is running on the local machine
 
