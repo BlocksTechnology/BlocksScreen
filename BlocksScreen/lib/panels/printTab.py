@@ -6,11 +6,11 @@ from configfile import BlocksScreenConfig, get_configparser
 from lib.files import Files
 from lib.moonrakerComm import MoonWebSocket
 from lib.panels.widgets.babystepPage import BabystepPage
+from lib.panels.widgets.basePopup import BasePopup
 from lib.panels.widgets.confirmPage import ConfirmWidget
-from lib.panels.widgets.dialogPage import DialogPage
 from lib.panels.widgets.filesPage import FilesPage
 from lib.panels.widgets.jobStatusPage import JobStatusWidget
-from lib.panels.widgets.loadPage import LoadScreen
+from lib.panels.widgets.loadWidget import LoadingOverlayWidget
 from lib.panels.widgets.numpadPage import CustomNumpad
 from lib.panels.widgets.sensorsPanel import SensorsWindow
 from lib.panels.widgets.slider_selector_page import SliderPage
