@@ -85,14 +85,18 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.numpadPage = CustomNumpad(self)
         self.numpadPage.request_back.connect(self.back_button)
         self.addWidget(self.numpadPage)
-        self.loadscreen = LoadScreen(self, LoadScreen.AnimationGIF.DEFAULT)
-        self.addWidget(self.loadscreen)
+
+        self.loadscreen = BasePopup(self, floating=False, dialog=False)
+        self.loadwidget = LoadingOverlayWidget(
+            self, LoadingOverlayWidget.AnimationGIF.DEFAULT
+        )
+        self.loadscreen.add_widget(self.loadwidget)
 
         self.file_data: Files = file_data
         self.filesPage_widget = FilesPage(self)
         self.addWidget(self.filesPage_widget)
 
-        self.dialogPage = DialogPage(self)
+        self.BasePopup = BasePopup(self)
 
         self.confirmPage_widget = ConfirmWidget(self)
         self.addWidget(self.confirmPage_widget)
@@ -296,18 +300,18 @@ class PrintTab(QtWidgets.QStackedWidget):
     @QtCore.pyqtSlot(str, name="delete_file")
     def delete_file(self, filename: str, directory: str = "gcodes") -> None:
         """Handle Delete file signal, shows confirmation dialog"""
-        self.dialogPage.set_message("Are you sure you want to delete this file?")
-        self.dialogPage.accepted.connect(
+        self.BasePopup.set_message("Are you sure you want to delete this file?")
+        self.BasePopup.accepted.connect(
             lambda: self._on_delete_file_confirmed(filename, directory)
         )
-        self.dialogPage.open()
+        self.BasePopup.open()
 
     def _on_delete_file_confirmed(self, filename: str, directory: str) -> None:
         """Handle confirmed file deletion after user accepted the dialog"""
         self.file_data.on_request_delete_file(filename, directory)
         self.request_back.emit()
         self.filesPage_widget.reset_dir()
-        self.dialogPage.disconnect()
+        self.BasePopup.disconnect()
 
     def paintEvent(self, a0: QtGui.QPaintEvent) -> None:
         """Widget painting"""
@@ -342,7 +346,7 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.on_cancel_print.emit()
         self.loadscreen.show()
         self.loadscreen.setModal(True)
-        self.loadscreen.set_status_message("Cancelling print...\nPlease wait")
+        self.loadwidget.set_status_message("Cancelling print...\nPlease wait")
 
     def change_page(self, index: int) -> None:
         """Requests a page change page to the global manager
