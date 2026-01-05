@@ -3,10 +3,6 @@ from collections import deque
 from typing import Deque
 from PyQt6 import QtCore, QtGui, QtWidgets
 
-
-BASE_POPUP_TIMEOUT = 6000
-
-
 class Popup(QtWidgets.QDialog):
     class MessageType(enum.Enum):
         """Popup Message type (level)"""
@@ -25,9 +21,9 @@ class Popup(QtWidgets.QDialog):
 
     def __init__(self, parent) -> None:
         super().__init__(parent)
-        self.popup_timeout = BASE_POPUP_TIMEOUT
         self.timeout_timer = QtCore.QTimer(self)
         self.messages: Deque = deque()
+        self.isShown = False
         self.persistent_notifications: Deque = deque()
         self.message_type: Popup.MessageType = Popup.MessageType.INFO
         self.default_background_color = QtGui.QColor(164, 164, 164)
@@ -48,9 +44,13 @@ class Popup(QtWidgets.QDialog):
         self.slide_out_animation = QtCore.QPropertyAnimation(self, b"geometry")
         self.slide_out_animation.setDuration(200)
         self.slide_out_animation.setEasingCurve(QtCore.QEasingCurve.Type.InCubic)
-        self.slide_in_animation.finished.connect(self.on_slide_in_finished)
-        self.slide_out_animation.finished.connect(self.on_slide_out_finished)
-        self.timeout_timer.timeout.connect(self.slide_out_animation.start)
+
+        self.SingleTime = QtCore.QTimer(self)
+        self.SingleTime.setInterval(5000)
+        self.SingleTime.setSingleShot(True)
+        self.SingleTime.timeout.connect(self._add_popup)
+
+
 
     def on_slide_in_finished(self):
         """Handle slide in animation finished"""
@@ -59,6 +59,7 @@ class Popup(QtWidgets.QDialog):
     def on_slide_out_finished(self):
         """Handle slide out animation finished"""
         self.close()
+        self.isShown = False
         self._add_popup()
 
     def _calculate_target_geometry(self) -> QtCore.QRect:
@@ -90,6 +91,8 @@ class Popup(QtWidgets.QDialog):
     def mousePressEvent(self, a0: QtGui.QMouseEvent) -> None:
         """Re-implemented method, handle mouse press events"""
         self.timeout_timer.stop()
+        self.slide_out_animation.setStartValue(self.slide_in_animation.currentValue())
+        self.slide_in_animation.stop()
         self.slide_out_animation.start()
 
     def set_timeout(self, value: int) -> None:
@@ -102,7 +105,8 @@ class Popup(QtWidgets.QDialog):
         self,
         message_type: MessageType = MessageType.INFO,
         message: str = "",
-        timeout: int = 0,
+        timeout: int = 6000,
+        userInput: bool = True,
     ):
         """Create new popup message
 
@@ -117,10 +121,18 @@ class Popup(QtWidgets.QDialog):
         self.messages.append(
             {"message": message, "type": message_type, "timeout": timeout}
         )
+        self.userInput = userInput
         return self._add_popup()
 
     def _add_popup(self) -> None:
         """Add popup to queue"""
+        if self.isShown:
+            if self.SingleTime.isActive():
+                return
+            self.SingleTime.start()
+            return
+        
+
         if (
             self.messages
             and self.slide_in_animation.state()
@@ -131,7 +143,15 @@ class Popup(QtWidgets.QDialog):
             message_entry = self.messages.popleft()
             self.message_type = message_entry.get("type")
             message = message_entry.get("message")
+            
+            if message == self.text_label.text():
+                if self.SingleTime.isActive():
+                    return
+                self.SingleTime.start()
+                return
+
             self.text_label.setText(message)
+
             match self.message_type:
                 case Popup.MessageType.INFO:
                     self.icon_label.setPixmap(self.info_icon)
@@ -139,19 +159,31 @@ class Popup(QtWidgets.QDialog):
                     self.icon_label.setPixmap(self.warning_icon)
                 case Popup.MessageType.ERROR:
                     self.icon_label.setPixmap(self.error_icon)
-            self.timeout_timer.setInterval(self.popup_timeout)
+            
+
             end_rect = self._calculate_target_geometry()
-            start_rect = end_rect.translated(0, -end_rect.height())
+            start_rect = end_rect.translated(0, -end_rect.height()*2)
+
             self.slide_in_animation.setStartValue(start_rect)
             self.slide_in_animation.setEndValue(end_rect)
             self.slide_out_animation.setStartValue(end_rect)
             self.slide_out_animation.setEndValue(start_rect)
-            self.setGeometry(start_rect)
+            
+            if not self.userInput:
+                timeout = message_entry.get("timeout")
+                self.timeout_timer.setInterval(timeout)
+                self.slide_in_animation.finished.connect(self.on_slide_in_finished)
+                self.timeout_timer.timeout.connect(self.slide_out_animation.start)
+            
+            self.slide_out_animation.finished.connect(self.on_slide_out_finished)
+
+            self.setGeometry(end_rect)
             self.open()
 
     def showEvent(self, a0: QtGui.QShowEvent) -> None:
         """Re-implementation, widget show"""
         self.slide_in_animation.start()
+        self.isShown = True
         super().showEvent(a0)
 
     def resizeEvent(self, a0: QtGui.QResizeEvent) -> None:
