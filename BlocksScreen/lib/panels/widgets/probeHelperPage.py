@@ -7,7 +7,8 @@ from lib.utils.icon_button import IconButton
 from lib.utils.check_button import BlocksCustomCheckButton
 from lib.utils.blocks_button import BlocksCustomButton
 
-from lib.panels.widgets.loadPage import LoadScreen
+from lib.panels.widgets.loadWidget import LoadingOverlayWidget
+from lib.panels.widgets.basePopup import BasePopup
 
 
 class ProbeHelper(QtWidgets.QWidget):
@@ -48,7 +49,12 @@ class ProbeHelper(QtWidgets.QWidget):
 
     def __init__(self, parent: QtWidgets.QWidget) -> None:
         super().__init__(parent)
-        self.Loadscreen = LoadScreen(self)
+
+        self.Loadscreen = BasePopup(self)
+        self.loadwidget = LoadingOverlayWidget(
+            self, LoadingOverlayWidget.AnimationGIF.PLACEHOLDER
+        )
+        self.Loadscreen.add_widget(self.loadwidget)
         self.setObjectName("probe_offset_page")
         self._setupUi()
         self.inductive_icon = QtGui.QPixmap(
@@ -393,7 +399,7 @@ class ProbeHelper(QtWidgets.QWidget):
             i.setDisabled(True)
 
         self.Loadscreen.show()
-        self.Loadscreen.set_status_message("Homing Axes...")
+        self.loadwidget.set_status_message("Homing Axes...")
 
         if self.z_offset_safe_xy:
             self.run_gcode_signal.emit("G28\nM400")
