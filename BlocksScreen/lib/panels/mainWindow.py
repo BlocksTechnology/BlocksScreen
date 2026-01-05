@@ -323,7 +323,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 "Panel page index expected type int, %s", str(type(panel_index))
             )
 
-        self.printPanel.loadscreen.hide()
+        self.printPanel.load_screen.hide()
         current_page = [
             self.ui.main_content_widget.currentIndex(),
             self.current_panel_index(),

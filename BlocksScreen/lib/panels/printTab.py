@@ -85,8 +85,8 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.numpadPage = CustomNumpad(self)
         self.numpadPage.request_back.connect(self.back_button)
         self.addWidget(self.numpadPage)
-        self.loadscreen = LoadScreen(self, LoadScreen.AnimationGIF.DEFAULT)
-        self.addWidget(self.loadscreen)
+        self.load_screen = LoadScreen(self, LoadScreen.AnimationGIF.DEFAULT)
+        self.addWidget(self.load_screen)
 
         self.file_data: Files = file_data
         self.filesPage_widget = FilesPage(self)
@@ -339,9 +339,9 @@ class PrintTab(QtWidgets.QStackedWidget):
         """Handles the print cancel action"""
         self.ws.api.cancel_print()
         self.on_cancel_print.emit()
-        self.loadscreen.show()
-        self.loadscreen.setModal(True)
-        self.loadscreen.set_status_message("Cancelling print...\nPlease wait")
+        self.load_screen.show()
+        self.load_screen.setModal(True)
+        self.load_screen.set_status_message("Cancelling print...\nPlease wait")
 
     def change_page(self, index: int) -> None:
         """Requests a page change page to the global manager
