@@ -2,21 +2,21 @@ import os
 import typing
 from functools import partial
 
-from lib.panels.widgets.babystepPage import BabystepPage
-from lib.panels.widgets.tunePage import TuneWidget
+from configfile import BlocksScreenConfig, get_configparser
 from lib.files import Files
 from lib.moonrakerComm import MoonWebSocket
+from lib.panels.widgets.babystepPage import BabystepPage
 from lib.panels.widgets.confirmPage import ConfirmWidget
+from lib.panels.widgets.dialogPage import DialogPage
 from lib.panels.widgets.filesPage import FilesPage
 from lib.panels.widgets.jobStatusPage import JobStatusWidget
-from lib.panels.widgets.sensorsPanel import SensorsWindow
-from lib.printer import Printer
-from lib.panels.widgets.slider_selector_page import SliderPage
-from lib.utils.blocks_button import BlocksCustomButton
-from lib.panels.widgets.numpadPage import CustomNumpad
 from lib.panels.widgets.loadPage import LoadScreen
-from lib.panels.widgets.dialogPage import DialogPage
-from configfile import BlocksScreenConfig, get_configparser
+from lib.panels.widgets.numpadPage import CustomNumpad
+from lib.panels.widgets.sensorsPanel import SensorsWindow
+from lib.panels.widgets.slider_selector_page import SliderPage
+from lib.panels.widgets.tunePage import TuneWidget
+from lib.printer import Printer
+from lib.utils.blocks_button import BlocksCustomButton
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 
@@ -237,6 +237,7 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.main_print_btn.clicked.connect(
             partial(self.change_page, self.indexOf(self.filesPage_widget))
         )
+        self.main_print_btn.clicked.connect(self.file_data.check_usb_symlink_local)
         self.babystepPage.run_gcode.connect(self.ws.api.run_gcode)
         self.run_gcode_signal.connect(self.ws.api.run_gcode)
         self.confirmPage_widget.on_delete.connect(self.delete_file)

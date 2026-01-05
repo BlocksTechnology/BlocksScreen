@@ -7,13 +7,14 @@
 
 
 import ctypes
-import os
 import enum
+import hashlib
 import logging
+import os
 import pathlib
 import struct
+import subprocess
 import typing
-
 
 try:
     ctypes.cdll.LoadLibrary("libXext.so.6")
@@ -324,3 +325,35 @@ def check_file_on_path(
     """Check if file exists on path. Returns true if file exists on that specified directory"""
     _filepath = os.path.join(path, filename)
     return os.path.exists(_filepath)
+
+
+def is_process_running(process_name: str) -> bool:
+    """Verify if `process_name` is running on the local machine
+
+    Args:
+        process_name (str): Process Name
+
+    Returns:
+        bool: True if running, False otherwise
+    """
+    try:
+        subprocess.check_output(["pgrep", process_name])
+        return True
+    except subprocess.CalledProcessError:
+        return False
+
+
+def sha256_checksum(filepath: str) -> str:
+    """Calculates the `SHA256` of a given file
+
+    Args:
+        filepath (str): File location path
+
+    Returns:
+        str: SHA256 for a given file
+    """
+    h = hashlib.sha256()
+    with open(filepath, "rb") as f:
+        while chunk := f.read(8192):
+            h.update(chunk)
+    return h.hexdigest()

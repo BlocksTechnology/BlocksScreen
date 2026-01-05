@@ -3,13 +3,22 @@
 #
 from __future__ import annotations
 
+import configparser
+import getpass
+import logging
 import os
 import typing
+from pathlib import Path
+from typing import Optional
 
 import events
+from configfile import BlocksScreenConfig
 from events import ReceivedFileData
+from helper_methods import is_process_running
 from lib.moonrakerComm import MoonWebSocket
 from PyQt6 import QtCore, QtGui, QtWidgets
+
+_logger = logging.getLogger(name="logs/BlocksScreen.log")
 
 
 class Files(QtCore.QObject):
@@ -42,6 +51,8 @@ class Files(QtCore.QObject):
         self.files: list = []
         self.directories: list = []
         self.files_metadata: dict = {}
+        self._current_username: Optional[str] = None
+        self._udiskie_mouting_path: Optional[str] = None
         self.request_file_list.connect(slot=self.ws.api.get_file_list)
         self.request_file_list[str].connect(slot=self.ws.api.get_file_list)
         self.request_dir_info.connect(slot=self.ws.api.get_dir_information)
@@ -51,11 +62,34 @@ class Files(QtCore.QObject):
         self.request_files_thumbnails.connect(slot=self.ws.api.get_gcode_thumbnail)
         self.request_file_download.connect(slot=self.ws.api.download_file)
         QtWidgets.QApplication.instance().installEventFilter(self)  # type: ignore
+        self.parse_config(parent.config)
+        self.check_usb_symlink_local()
 
     @property
     def file_list(self):
         """Get the current list of files"""
         return self.files
+
+    def parse_config(self, config: BlocksScreenConfig) -> None:
+        """Parses the credential configs to get the user username"""
+        try:
+            self.credentials_config = config.get_section("credentials", fallback=None)
+            if self.credentials_config:
+                self._current_username = self.credentials_config.get(
+                    "username", parser=str, default=""
+                )
+        except configparser.NoSectionError as e:
+            _logger.info("Error: %s", e)
+            self._current_username = ""
+        try:
+            self.udiskie = config.get_section("udiskie", fallback=None)
+            if self.udiskie:
+                self._udiskie_mouting_path = self.udiskie.get(
+                    "mount_path", parser=str, default=""
+                )
+        except configparser.NoSectionError as e:
+            _logger.info("Error: %s", e)
+            self._udiskie_mouting_path = ""
 
     def handle_message_received(self, method: str, data, params: dict) -> None:
         """Handle file related messages received by moonraker"""
@@ -186,3 +220,53 @@ class Files(QtCore.QObject):
                 self.handle_message_received(a0.method, a0.data, a0.params)
                 return True
         return super().event(a0)
+
+    def check_usb_symlink_local(self) -> None:
+        """Check if the symlink from /media/<username> to
+        ~/printer_data/gcodes/USB/<username> exists and create it if not"""
+        username = self._current_username
+        if self._current_username == "":
+            try:
+                username = getpass.getuser()
+            except Exception as e:
+                _logger.info("Error retrieving username: %s", e)
+
+        home = Path.home()
+        if self._udiskie_mouting_path == "":
+            mouting_dir = Path("/media/") / username
+        else:
+            mouting_dir = Path(self._udiskie_mouting_path + username)
+
+        dir_path = home / "printer_data/gcodes/USB/"
+        symlink_src = dir_path / username
+        if not dir_path.exists():
+            try:
+                dir_path.mkdir(parents=True, exist_ok=True)
+            except PermissionError:
+                _logger.info(
+                    "Permission denied — adjust directory permissions or run with elevated privileges"
+                )
+            except Exception as e:
+                _logger.info("Error: %s", e.with_traceback)
+
+        if not mouting_dir.exists():
+            try:
+                mouting_dir.mkdir(parents=True, exist_ok=True)
+            except PermissionError:
+                _logger.info(
+                    "Permission denied — adjust directory permissions or run with elevated privileges"
+                )
+            except Exception as e:
+                _logger.info("Error: %s ", e.with_traceback)
+
+        if not os.path.islink(symlink_src) and not is_process_running("udiskie"):
+            try:
+                os.symlink(mouting_dir, symlink_src, target_is_directory=True)
+            except PermissionError:
+                _logger.info(
+                    "Permission denied — adjust directory permissions or run with elevated privileges"
+                )
+            except FileNotFoundError:
+                _logger.info("Directory not found")
+            except Exception as e:
+                _logger.info("Error: %s", e.with_traceback)
