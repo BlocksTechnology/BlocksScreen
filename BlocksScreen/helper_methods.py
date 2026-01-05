@@ -255,7 +255,10 @@ def calculate_current_layer(
     """
     if z_position == 0:
         return -1
-    _current_layer = 1 + (z_position - first_layer_height) / layer_height
+    if z_position <= first_layer_height:
+        return 1
+
+    _current_layer = (z_position) / layer_height
 
     return int(_current_layer)
 
@@ -326,6 +329,24 @@ def check_file_on_path(
     _filepath = os.path.join(path, filename)
     return os.path.exists(_filepath)
 
+
+def get_file_loc(filename) -> pathlib.Path: ...
+
+
+def get_file_name(filename: typing.Optional[str]) -> str:
+    # If filename is None or empty, return empty string instead of None
+    if not filename:
+        return ""
+    # Remove trailing slashes or backslashes
+    filename = filename.rstrip("/\\")
+
+    # Normalize Windows backslashes to forward slashes
+    filename = filename.replace("\\", "/")
+
+    parts = filename.split("/")
+
+    # Split and return the last path component
+    return parts[-1] if filename else ""
 
 def is_process_running(process_name: str) -> bool:
     """Verify if `process_name` is running on the local machine
