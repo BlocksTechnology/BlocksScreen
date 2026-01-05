@@ -86,11 +86,11 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.numpadPage.request_back.connect(self.back_button)
         self.addWidget(self.numpadPage)
 
-        self.loadscreen = BasePopup(self, floating=False, dialog=False)
-        self.loadwidget = LoadingOverlayWidget(
+        self.load_screen = BasePopup(self, floating=False, dialog=False)
+        self.load_widget = LoadingOverlayWidget(
             self, LoadingOverlayWidget.AnimationGIF.DEFAULT
         )
-        self.loadscreen.add_widget(self.loadwidget)
+        self.load_screen.add_widget(self.load_widget)
 
         self.file_data: Files = file_data
         self.filesPage_widget = FilesPage(self)
@@ -196,6 +196,9 @@ class PrintTab(QtWidgets.QStackedWidget):
         )
         self.printer.fan_update[str, str, int].connect(
             self.tune_page.on_fan_object_update
+        )
+        self.printer.print_stats_update[str, str].connect(
+            self.tune_page.on_print_stats_update
         )
         self.printer.gcode_move_update[str, float].connect(
             self.tune_page.on_gcode_move_update
@@ -343,9 +346,9 @@ class PrintTab(QtWidgets.QStackedWidget):
         """Handles the print cancel action"""
         self.ws.api.cancel_print()
         self.on_cancel_print.emit()
-        self.loadscreen.show()
-        self.loadscreen.setModal(True)
-        self.loadwidget.set_status_message("Cancelling print...\nPlease wait")
+        self.load_screen.show()
+        self.load_screen.setModal(True)
+        self.load_widget.set_status_message("Cancelling print...\nPlease wait")
 
     def change_page(self, index: int) -> None:
         """Requests a page change page to the global manager
