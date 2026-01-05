@@ -3,6 +3,7 @@ import typing
 
 from helper_methods import normalize
 from lib.utils.blocks_button import BlocksCustomButton
+from lib.panels.widgets.dialogPage import DialogPage
 from lib.utils.display_button import DisplayButton
 from lib.utils.icon_button import IconButton
 from PyQt6 import QtCore, QtGui, QtWidgets
@@ -33,6 +34,7 @@ class TuneWidget(QtWidgets.QWidget):
     run_gcode: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         str, name="run_gcode"
     )
+
     speed_factor_override: float = 1.0
     extruder_target: int = 0
     bed_target: int = 0
@@ -45,6 +47,7 @@ class TuneWidget(QtWidgets.QWidget):
         self.sensors_menu_btn.clicked.connect(self.request_sensorsPage.emit)
         self.tune_babystep_menu_btn.clicked.connect(self.request_bbpPage.emit)
         self.tune_back_btn.clicked.connect(self.request_back)
+        self.change_fil_dialog = DialogPage(self)
         self.bed_display.clicked.connect(
             lambda: self.request_numpad[str, int, "PyQt_PyObject", int, int].emit(
                 "Bed",
@@ -72,6 +75,38 @@ class TuneWidget(QtWidgets.QWidget):
                 300,
             )
         )
+        self.tune_change_filament_btn.clicked.connect(
+            self.handle_change_filament_clicked
+        )
+
+    @QtCore.pyqtSlot(name="handle-change-fil")
+    def _handle_change_fil(self) -> None:
+        # Check if the printer is actually printing,
+        # if it is printing then request a pause and wait for it to pause
+        # during this time, do a loading screen so there is a waitingin
+        # time, since the change_filament button was pressed
+        # we need to blocks user interaction
+        # if self.is_printing: 
+        # self.run_gcode.emit("PAUSE\nM400")
+        # self.load_page.open()
+
+        # if self.is_loaded:
+        # self.run_gcode.emit("UNLOAD_FILAMENT")k
+        # self.dialog.set_message("Please insert new filament and click proceed")
+        # self.dialog.set_btn_text("Proceed")
+        # self.dialog.open()
+        ...
+
+    @QtCore.pyqtSlot(name="handle-change-fil-btn-click")
+    def handle_change_filament_clicked(self) -> None:
+        """Handle `change_filament` button clicks"""
+        self.change_fil_dialog.set_message(
+            "Continue with Change Filament \n \
+            routine? The print will pause \n \
+            automatically."
+        )
+        self.change_fil_dialog.accepted.connect(self._handle_change_fil)
+        self.change_fil_dialog.open()
 
     @QtCore.pyqtSlot(str, int, name="on_numpad_change")
     def on_numpad_change(self, name: str, new_value: int) -> None:
