@@ -1,56 +1,22 @@
-import copy
-import typing
-
-from lib.panels.widgets.basePopup import BasePopup
 from lib.panels.widgets.loadWidget import LoadingOverlayWidget
+from lib.panels.widgets.basePopup import BasePopup
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_frame import BlocksCustomFrame
 from lib.utils.icon_button import IconButton
 from lib.utils.list_model import EntryDelegate, EntryListModel, ListItem
 from PyQt6 import QtCore, QtGui, QtWidgets
 
+import typing
 
-class UpdatePage(QtWidgets.QWidget):
+
+class InputShaperPage(QtWidgets.QWidget):
     """Update GUI Page,
     retrieves from moonraker available clients and adds functionality
     for updating or recovering them
     """
 
-    request_update_klipper: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
-        name="update-klipper"
-    )
-    request_update_moonraker: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
-        name="update-moonraker"
-    )
-    request_update_client: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
-        str, name="update-client"
-    )
-    request_update_system: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
-        name="update-system"
-    )
-    request_full_update: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
-        name="update-full"
-    )
-    request_update_status: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
-        bool, name="update-status"
-    )
-    request_refresh_update: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
-        [], [str], name="update-refresh"
-    )
-    request_recover_repo: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
-        [str], [str, bool], name="recover-repo"
-    )
-    request_rollback_update: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
-        str, name="rollback-update"
-    )
-    update_in_progress: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
-        name="update-in-progress"
-    )
-    update_end: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
-        name="update-end"
-    )
-    update_available: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
-        bool, name="update-available"
+    run_gcode_signal: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        str, name="run-gcode"
     )
 
     def __init__(self, parent=None) -> None:
@@ -59,14 +25,15 @@ class UpdatePage(QtWidgets.QWidget):
         else:
             super().__init__()
         self._setupUI()
-        self.cli_tracking = {}
         self.selected_item: ListItem | None = None
         self.ongoing_update: bool = False
-        self.load_popup = BasePopup(self, floating=False, dialog=False)
+        self.type_dict: dict = {}
+
+        self.loadscreen = BasePopup(self, floating=False, dialog=False)
         self.loadwidget = LoadingOverlayWidget(
             self, LoadingOverlayWidget.AnimationGIF.DEFAULT
         )
-        self.load_popup.add_widget(self.loadwidget)
+        self.loadscreen.add_widget(self.loadwidget)
         self.repeated_request_status = QtCore.QTimer()
         self.repeated_request_status.setInterval(2000)  # every 2 seconds
         self.model = EntryListModel()
@@ -75,13 +42,9 @@ class UpdatePage(QtWidgets.QWidget):
         self.update_buttons_list_widget.setModel(self.model)
         self.update_buttons_list_widget.setItemDelegate(self.entry_delegate)
         self.entry_delegate.item_selected.connect(self.on_item_clicked)
-        self.action_btn.clicked.connect(self.on_update_clicked)
         self.update_back_btn.clicked.connect(self.reset_view_model)
-        self.update_in_progress.connect(self.handle_ongoing_update)
-        self.update_end.connect(self.handle_update_end)
-        self.repeated_request_status.timeout.connect(
-            lambda: self.request_update_status.emit(False)
-        )
+
+        self.action_btn.clicked.connect(self.handle_ism_confirm)
 
     def handle_update_end(self) -> None:
         """Handles update end signal
@@ -90,7 +53,6 @@ class UpdatePage(QtWidgets.QWidget):
         if self.load_popup.isVisible():
             self.load_popup.close()
         self.repeated_request_status.stop()
-        self.request_refresh_update.emit()
         self.build_model_list()
 
     def handle_ongoing_update(self) -> None:
@@ -113,162 +75,70 @@ class UpdatePage(QtWidgets.QWidget):
         self.reset_view_model()
         return super().deleteLater()
 
-    def showEvent(self, event: QtGui.QShowEvent | None) -> None:
+    def showEvent(self, a0: QtGui.QShowEvent | None) -> None:
         """Re-add clients to update list"""
-        self.build_model_list()
-        return super().showEvent(event)
+        return super().showEvent(a0)
 
     def build_model_list(self) -> None:
         """Builds the model list (`self.model`) containing updatable clients"""
         self.update_buttons_list_widget.blockSignals(True)
-        self.reset_view_model()
-        for cli_name, _cli_info in self.cli_tracking.items():
-            if not _cli_info:
-                continue
-            if "system" in cli_name.lower():
-                _updatable = bool(_cli_info.get("package_count", 0))
-            else:
-                _updatable = bool(_cli_info.get("commits_behind", []))
-            self.add_update_entry(cli_name, _updatable)
-        self.model.setData(
-            self.model.index(0), True, EntryListModel.EnableRole
-        )  # Set the first item checked on startup
+        self.model.setData(self.model.index(0), True, EntryListModel.EnableRole)
         self.on_item_clicked(
             self.model.data(self.model.index(0), QtCore.Qt.ItemDataRole.UserRole)
-        )  # Bandage solution: simulate click for setting information on infobox
+        )
         self.update_buttons_list_widget.blockSignals(False)
 
-    @QtCore.pyqtSlot(name="on-update-clicked")
-    def on_update_clicked(self) -> None:
-        """Handle `update_btn` clicked event"""
-        mode = self.action_btn.text()
-        if not self.selected_item:
-            return
-        cli_name = self.selected_item.text
-        if mode == "Update":
-            if "system" in cli_name:
-                self.request_update_system.emit()
-            elif "klipper" in cli_name:
-                self.request_update_klipper.emit()
-            elif "moonraker" in cli_name:
-                self.request_update_moonraker.emit()
-            else:
-                self.request_update_client.emit(cli_name)
-
-            self.loadwidget.set_status_message(f"Updating {cli_name}")
-        else:
-            self.request_recover_repo[str, bool].emit(cli_name, True)
-            self.loadwidget.set_status_message(f"Recovering {cli_name}")
-        self.load_popup.show()
-        self.request_update_status.emit(False)
+    def set_type_dictionary(self, dict) -> None:
+        """Receives the dictionary of input shaper types from the utilities tab"""
+        self.type_dict = dict
+        return
 
     @QtCore.pyqtSlot(ListItem, name="on-item-clicked")
     def on_item_clicked(self, item: ListItem) -> None:
         """Setup information for the currently clicked list item on the info box.
         Keeps track of the list item
         """
+        self.currentItem: ListItem = item
         if not item:
             return
-        cli_data = self.cli_tracking.get(item.text, {})
-        if not cli_data:
-            self.version_tracking_info.setText("Missing, Cannot Update")
-        self.selected_item = copy.copy(item)
-        if item.text == "system":
-            self.remote_version_title.hide()
-            self.remote_version_tracking.hide()
-            updatable_packages = cli_data.get("package_count", 0)
-            if updatable_packages == 0:
-                self.version_title.hide()
-                self.version_tracking_info.hide()
-                self.action_btn.hide()
-                self.no_update_placeholder.show()
-                return
-            self.version_tracking_info.setText(
-                f"{updatable_packages} upgradable \n packages"
-            )
-            self.action_btn.show()
-            return
-        _remote_version = cli_data.get("remote_version", None)
-        if not _remote_version:
-            self.remote_version_title.hide()
-            self.remote_version_tracking.hide()
-        self.remote_version_title.show()
-        self.remote_version_tracking.show()
-        self.remote_version_tracking.setText(_remote_version)
-        _curr_version = cli_data.get("version", None)
-        if not _curr_version:
-            # There is no version information something is seriously wrong here
-            self.action_btn.setText("Recover")
-        self.version_title.show()
-        self.version_tracking_info.show()
-        self.version_tracking_info.setText(_curr_version)
-        _updatable = bool(
-            not (
-                cli_data.get("corrupt", False)
-                or cli_data.get("is_dirty", False)
-                or cli_data.get("detached", False)
-            )
-            and (cli_data.get("is_valid", False) and cli_data.get("commits_behind", []))
-        )
-        _recover = bool(
-            cli_data.get("corrupt", False)
-            or cli_data.get("is_dirty", False)
-            or cli_data.get("detached", False)
-        )
-        if _updatable and not _recover:
-            self.no_update_placeholder.hide()
-            self.action_btn.setText("Update")
-        elif _recover:
-            self.action_btn.setText("Recover")
-        else:
-            self.no_update_placeholder.show()
-            self.action_btn.hide()
+        current_info = self.type_dict.get(self.currentItem.text, {})
+        if not current_info:
             return
 
-        self.no_update_placeholder.hide()
+        self.vib_label.setText(str("%.0f" % current_info.get("vibration", "N/A")) + "%")
+        self.sug_accel_label.setText(
+            str("%.0f" % current_info.get("max_accel", "N/A")) + "mm/s²"
+        )
+
         self.action_btn.show()
 
-    @QtCore.pyqtSlot(dict, name="handle-update-message")
-    def handle_update_message(self, message: dict) -> None:
-        """Handle receiving current state of each item update.
-
-        Receives updates from moonraker `machine.update.status` request.
-        """
-        busy = message.get("busy", False)
-        complete = message.get("complete", False)
-        if busy:
-            self.update_in_progress.emit()
-            self.ongoing_update = True
-            return
-        elif self.ongoing_update or complete:
-            self.ongoing_update = False
-            self.update_end.emit()
-
-        cli_version_info = message.get("version_info", None)
-        if not cli_version_info:
-            return
-        self.cli_tracking = cli_version_info
-        # Signal that updates exist (Used to render red dots)
-        _update_avail = any(
-            value
-            and (
-                ("system" in key.lower() and value.get("package_count", 0))
-                or (value.get("commits_behind"))
+    def handle_ism_confirm(self) -> None:
+        current_info = self.type_dict.get(self.currentItem.text, {})
+        frequency = current_info.get("frequency", "N/A")
+        if self.type_dict["Axis"] == "x":
+            self.run_gcode_signal.emit(
+                f"SET_INPUT_SHAPER SHAPER_TYPE_X={self.currentItem.text} SHAPER_FREQ_X={frequency}"
             )
-            for key, value in cli_version_info.items()
-        )
-        self.update_available.emit(_update_avail)
+        elif self.type_dict["Axis"] == "y":
+            self.run_gcode_signal.emit(
+                f"SET_INPUT_SHAPER SHAPER_TYPE_Y={self.currentItem.text} SHAPER_FREQ_Y={frequency}"
+            )
 
-    def add_update_entry(self, cli_name: str, updatable: bool = False) -> None:
+        self.run_gcode_signal.emit("SAVE_CONFIG")
+        self.reset_view_model()
+
+    def add_type_entry(self, cli_name: str, recommended: str = "") -> None:
         """Adds a new item to the list model"""
         item = ListItem(
             text=cli_name,
-            right_icon=QtGui.QPixmap(":/ui/media/btn_icons/info.svg"),
+            right_text=recommended,
+            right_icon=QtGui.QPixmap(":/arrow_icons/media/btn_icons/right_arrow.svg"),
             selected=False,
             _lfontsize=17,
-            _rfontsize=12,
+            _rfontsize=9,
             height=60,
-            notificate=updatable,
+            allow_check=True,
+            notificate=False,
         )
         self.model.add_item(item)
 
@@ -293,6 +163,11 @@ class UpdatePage(QtWidgets.QWidget):
 
         self.header_content_layout = QtWidgets.QHBoxLayout()
         self.header_content_layout.setAlignment(QtCore.Qt.AlignmentFlag.AlignTop)
+
+        self.spacer_left = QtWidgets.QLabel(self)
+        self.spacer_left.setMinimumSize(QtCore.QSize(60, 60))
+        self.spacer_left.setMaximumSize(QtCore.QSize(60, 60))
+        self.header_content_layout.addWidget(self.spacer_left, 0)
         self.header_title = QtWidgets.QLabel(self)
         self.header_title.setMinimumSize(QtCore.QSize(100, 60))
         self.header_title.setMaximumSize(QtCore.QSize(16777215, 60))
@@ -306,7 +181,7 @@ class UpdatePage(QtWidgets.QWidget):
         self.header_title.setLayoutDirection(QtCore.Qt.LayoutDirection.RightToLeft)
         self.header_title.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self.header_title.setObjectName("header-title")
-        self.header_title.setText("Update Manager")
+        self.header_title.setText("Input Shaper")
         self.header_content_layout.addWidget(self.header_title, 0)
         self.update_back_btn = IconButton(self)
         self.update_back_btn.setMinimumSize(QtCore.QSize(60, 60))
@@ -321,8 +196,8 @@ class UpdatePage(QtWidgets.QWidget):
 
         self.update_buttons_frame = BlocksCustomFrame(self)
 
-        self.update_buttons_frame.setMinimumSize(QtCore.QSize(320, 300))
-        self.update_buttons_frame.setMaximumSize(QtCore.QSize(450, 500))
+        self.update_buttons_frame.setMinimumSize(QtCore.QSize(300, 300))
+        self.update_buttons_frame.setMaximumSize(QtCore.QSize(350, 500))
 
         palette = QtGui.QPalette()
         brush = QtGui.QBrush(QtGui.QColor(0, 0, 0, 0))
@@ -486,73 +361,74 @@ class UpdatePage(QtWidgets.QWidget):
         self.infobox_frame.setMinimumSize(QtCore.QSize(250, 300))
 
         self.info_box_layout = QtWidgets.QVBoxLayout()
-        self.info_box_layout.setContentsMargins(10, 0, 10, 0)
+        self.info_box_layout.setContentsMargins(10, 10, 10, 10)
 
         font = QtGui.QFont()
         font.setFamily(font_family)
         font.setPointSize(20)
-        self.version_box = QtWidgets.QHBoxLayout()
-        self.version_title = QtWidgets.QLabel(self)
-        self.version_title.setText("Current Version: ")
-        self.version_title.setMinimumSize(QtCore.QSize(60, 60))
-        self.version_title.setMaximumSize(
-            QtCore.QSize(int(self.infobox_frame.size().width() * 0.40), 60)
+        self.info_box = QtWidgets.QGridLayout()
+        self.info_box.setContentsMargins(0, 0, 0, 0)
+
+        self.vib_title_label = QtWidgets.QLabel(self)
+        self.vib_title_label.setText("Vibrations: ")
+        self.vib_title_label.setMinimumSize(QtCore.QSize(60, 60))
+        self.vib_title_label.setMaximumSize(
+            QtCore.QSize(int(self.infobox_frame.size().width() * 0.40), 9999)
         )
-        palette = self.version_title.palette()
+        palette = self.vib_title_label.palette()
         palette.setColor(palette.ColorRole.WindowText, QtGui.QColor("#FFFFFF"))
-        self.version_title.setAlignment(
+        self.vib_title_label.setAlignment(
             QtCore.Qt.AlignmentFlag.AlignLeft | QtCore.Qt.AlignmentFlag.AlignVCenter
         )
-        self.version_title.setFont(font)
-        self.version_title.setPalette(palette)
-        self.version_title.setLayoutDirection(QtCore.Qt.LayoutDirection.RightToLeft)
-        self.version_tracking_info = QtWidgets.QLabel(self)
-        self.version_tracking_info.setMinimumSize(QtCore.QSize(100, 60))
-        self.version_tracking_info.setMaximumSize(QtCore.QSize(16777215, 100))
-        palette = self.version_tracking_info.palette()
+        self.vib_title_label.setFont(font)
+        self.vib_title_label.setPalette(palette)
+        self.vib_title_label.setLayoutDirection(QtCore.Qt.LayoutDirection.RightToLeft)
+        self.vib_label = QtWidgets.QLabel(self)
+        self.vib_label.setMinimumSize(QtCore.QSize(100, 60))
+        self.vib_label.setMaximumSize(QtCore.QSize(16777215, 9999))
+        palette = self.vib_label.palette()
         palette.setColor(palette.ColorRole.WindowText, QtGui.QColor("#FFFFFF"))
-        self.version_tracking_info.setFont(font)
-        self.version_tracking_info.setPalette(palette)
-        self.version_tracking_info.setLayoutDirection(
-            QtCore.Qt.LayoutDirection.RightToLeft
-        )
-        self.version_tracking_info.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
-        self.version_tracking_info.setObjectName("version-tracking")
-        self.version_box.addWidget(self.version_title, 0)
-        self.version_box.addWidget(self.version_tracking_info, 0)
-        self.info_box_layout.addLayout(self.version_box, 1)
+        self.vib_label.setFont(font)
+        self.vib_label.setPalette(palette)
+        self.vib_label.setLayoutDirection(QtCore.Qt.LayoutDirection.RightToLeft)
+        self.vib_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.vib_label.setObjectName("version-tracking")
 
-        self.remote_version_box = QtWidgets.QHBoxLayout()
-        self.remote_version_title = QtWidgets.QLabel(self)
-        self.remote_version_title.setText("Remote Version: ")
-        self.remote_version_title.setMinimumSize(QtCore.QSize(60, 60))
-        self.remote_version_title.setMaximumSize(
-            QtCore.QSize(int(self.infobox_frame.size().width() * 0.40), 60)
+        self.info_box.addWidget(self.vib_title_label, 0, 0)
+        self.info_box.addWidget(self.vib_label, 0, 1)
+
+        self.sug_accel_title_label = QtWidgets.QLabel(self)
+        self.sug_accel_title_label.setText("Sugested Max Acceleration:")
+        self.sug_accel_title_label.setMinimumSize(QtCore.QSize(60, 60))
+        self.sug_accel_title_label.setMaximumSize(
+            QtCore.QSize(int(self.infobox_frame.size().width() * 0.40), 9999)
         )
-        palette = self.remote_version_title.palette()
+        palette = self.sug_accel_title_label.palette()
         palette.setColor(palette.ColorRole.WindowText, QtGui.QColor("#FFFFFF"))
-        self.remote_version_title.setAlignment(
+        self.sug_accel_title_label.setAlignment(
             QtCore.Qt.AlignmentFlag.AlignLeft | QtCore.Qt.AlignmentFlag.AlignVCenter
         )
-        self.remote_version_title.setFont(font)
-        self.remote_version_title.setPalette(palette)
-        self.remote_version_title.setLayoutDirection(
+        self.sug_accel_title_label.setFont(font)
+        self.sug_accel_title_label.setPalette(palette)
+        self.sug_accel_title_label.setLayoutDirection(
             QtCore.Qt.LayoutDirection.RightToLeft
         )
-        self.remote_version_box.addWidget(self.remote_version_title, 0)
 
-        self.remote_version_tracking = QtWidgets.QLabel(self)
-        self.remote_version_tracking.setMinimumSize(QtCore.QSize(100, 60))
-        self.remote_version_tracking.setMaximumSize(
-            QtCore.QSize(int(self.infobox_frame.size().width() * 0.60), 60)
+        self.sug_accel_label = QtWidgets.QLabel(self)
+        self.sug_accel_label.setMinimumSize(QtCore.QSize(100, 60))
+        self.sug_accel_label.setMaximumSize(
+            QtCore.QSize(int(self.infobox_frame.size().width() * 0.60), 9999)
         )
-        palette = self.remote_version_tracking.palette()
+        palette = self.sug_accel_label.palette()
         palette.setColor(palette.ColorRole.WindowText, QtGui.QColor("#FFFFFF"))
-        self.remote_version_tracking.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
-        self.remote_version_tracking.setFont(font)
-        self.remote_version_tracking.setPalette(palette)
-        self.remote_version_box.addWidget(self.remote_version_tracking, 0)
-        self.info_box_layout.addLayout(self.remote_version_box, 1)
+        self.sug_accel_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.sug_accel_label.setFont(font)
+        self.sug_accel_label.setPalette(palette)
+
+        self.info_box.addWidget(self.sug_accel_title_label, 1, 0)
+        self.info_box.addWidget(self.sug_accel_label, 1, 1)
+
+        self.info_box_layout.addLayout(self.info_box, 1)
 
         self.button_box = QtWidgets.QVBoxLayout()
         self.button_box.setContentsMargins(0, 0, 0, 0)
@@ -565,28 +441,13 @@ class UpdatePage(QtWidgets.QWidget):
         self.action_btn.setFont(font)
         self.action_btn.setPalette(palette)
         self.action_btn.setSizePolicy(sizePolicy)
-        self.action_btn.setText("Update")
-        self.action_btn.setPixmap(
-            QtGui.QPixmap(":/system/media/btn_icons/update-software-icon.svg")
-        )
+        self.action_btn.setText("Confirm")
+        self.action_btn.setPixmap(QtGui.QPixmap(":/dialog/media/btn_icons/yes.svg"))
         self.button_box.addWidget(
-            self.action_btn, 0, QtCore.Qt.AlignmentFlag.AlignHCenter
+            self.action_btn,
+            0,
+            QtCore.Qt.AlignmentFlag.AlignRight | QtCore.Qt.AlignmentFlag.AlignBottom,
         )
-        self.no_update_placeholder = QtWidgets.QLabel(self)
-        self.no_update_placeholder.setMinimumSize(QtCore.QSize(200, 60))
-        self.no_update_placeholder.setMaximumSize(QtCore.QSize(300, 60))
-        font.setPointSize(20)
-        self.no_update_placeholder.setFont(font)
-        self.no_update_placeholder.setPalette(palette)
-        self.no_update_placeholder.setSizePolicy(sizePolicy)
-        self.no_update_placeholder.setText("No Updates Available")
-        self.no_update_placeholder.setWordWrap(True)
-        self.no_update_placeholder.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
-        self.info_box_layout.addWidget(
-            self.no_update_placeholder, 0, QtCore.Qt.AlignmentFlag.AlignBottom
-        )
-
-        self.no_update_placeholder.hide()
 
         self.info_box_layout.addLayout(
             self.button_box,
