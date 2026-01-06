@@ -570,6 +570,9 @@ class MainWindow(QtWidgets.QMainWindow):
                 _msg_type = Popup.MessageType.ERROR
             elif _gcode_msg_type == "//":
                 _msg_type = Popup.MessageType.INFO
+
+            if _msg_type == Popup.MessageType.UNKNOWN:
+                return
             self.popup.new_message(message_type=_msg_type, message=str(_message))
 
     @api_handler
@@ -581,9 +584,15 @@ class MainWindow(QtWidgets.QMainWindow):
             return
         if self._popup_toggle:
             return
+        
+        text = data
+        if isinstance(data,dict):
+            text = f"{data['message']}"
+
         self.popup.new_message(
             message_type=Popup.MessageType.ERROR,
-            message=str(data),
+            message=str(text),
+            userInput= True,
         )
 
     @api_handler
