@@ -565,15 +565,10 @@ class MainWindow(QtWidgets.QMainWindow):
             if self._popup_toggle:
                 return
             _gcode_msg_type, _message = str(_gcode_response[0]).split(" ", maxsplit=1)
-            _msg_type = Popup.MessageType.UNKNOWN
-            if _gcode_msg_type == "!!":
+            popupWhitelist= ["filament runout","no filament"]
+            if _message.lower()  in popupWhitelist or _gcode_msg_type == "!!":
                 _msg_type = Popup.MessageType.ERROR
-            elif _gcode_msg_type == "//":
-                _msg_type = Popup.MessageType.INFO
-
-            if _msg_type == Popup.MessageType.UNKNOWN:
-                return
-            self.popup.new_message(message_type=_msg_type, message=str(_message))
+                self.popup.new_message(message_type=_msg_type, message=str(_message))
 
     @api_handler
     def _handle_error_message(self, method, data, metadata) -> None:
@@ -584,11 +579,12 @@ class MainWindow(QtWidgets.QMainWindow):
             return
         if self._popup_toggle:
             return
-        
         text = data
         if isinstance(data,dict):
-            text = f"{data['message']}"
-
+            try:
+                text = f"{data['message']}"
+            except:
+                text = data
         self.popup.new_message(
             message_type=Popup.MessageType.ERROR,
             message=str(text),
