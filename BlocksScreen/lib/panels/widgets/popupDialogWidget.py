@@ -62,8 +62,6 @@ class Popup(QtWidgets.QDialog):
         """Handle slide in animation finished"""
         if self.userInput:
             return
-        print(self.userInput)
-        print(self.text_label.text())
         self.timeout_timer.start()
 
     def on_slide_out_finished(self):
