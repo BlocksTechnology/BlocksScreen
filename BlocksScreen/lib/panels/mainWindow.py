@@ -585,9 +585,9 @@ class MainWindow(QtWidgets.QMainWindow):
             return
         text = data
         if isinstance(data, dict):
-            try:
+            if "message" in data:
                 text = f"{data['message']}"
-            except:
+            else:
                 text = data
         self.popup.new_message(
             message_type=Popup.MessageType.ERROR,
