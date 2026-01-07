@@ -18,7 +18,7 @@ class LoadingOverlayWidget(QtWidgets.QLabel):
     def __init__(
         self,
         parent: QtWidgets.QWidget,
-        initial_anim_type: AnimationGIF = AnimationGIF.PLACEHOLDER,
+        initial_anim_type: AnimationGIF = AnimationGIF.DEFAULT,
     ) -> None:
         super().__init__(parent)
 
