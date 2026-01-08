@@ -222,6 +222,36 @@ class JobStatusWidget(QtWidgets.QWidget):
             self.show_request.emit()
             lstate = "start"
         elif lstate in invalid_states:
+            if lstate == "complete":
+                try:
+                    instance = QtWidgets.QApplication.instance()
+                    if instance:
+                        instance.postEvent(self.window(), events.PrintComplete(data={}))
+                    else:
+                        raise TypeError("QApplication.instance expected non None value")
+                except Exception as e:
+                    logger.debug("Unexpected error while completing print job start event: %s", e)
+            # this one must stay bc of moonraker cancel there
+            if lstate == "cancelled":
+                print_cancel_event = events.PrintCancelled(data={})
+                try:
+                    instance = QtWidgets.QApplication.instance()
+                    if instance:
+                        instance.postEvent(self.window(), print_cancel_event)
+                    else:
+                        raise TypeError("QApplication.instance expected non None value")
+                except Exception as e:
+                    logger.debug("Unexpected error while completing print job start event: %s", e)
+            if lstate == "error":
+                print_error_event = events.PrintError(data={})
+                try:
+                    instance = QtWidgets.QApplication.instance()
+                    if instance:
+                        instance.postEvent(self.window(), print_error_event)
+                    else:
+                        raise TypeError("QApplication.instance expected non None value")
+                except Exception as e:
+                    logger.debug("Unexpected error while completing print job start event: %s", e)
             self._current_file_name = ""
             self._internal_print_status = ""
             self.total_layers = "?"

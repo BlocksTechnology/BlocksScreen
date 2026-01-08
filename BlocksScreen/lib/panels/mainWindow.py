@@ -86,7 +86,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.filamentPanel = FilamentTab(self.ui.filamentTab, self.printer, self.ws)
         self.controlPanel = ControlTab(self.ui.controlTab, self.ws, self.printer)
         self.utilitiesPanel = UtilitiesTab(self.ui.utilitiesTab, self.ws, self.printer)
-        self.networkPanel = NetworkControlWindow(self)
+        #self.networkPanel = NetworkControlWindow(self)
         self.bo_ws_startup.connect(slot=self.bo_start_websocket_connection)
         self.ws.connecting_signal.connect(self.conn_window.on_websocket_connecting)
         self.ws.connected_signal.connect(
@@ -620,7 +620,6 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.messageReceivedEvent(event)
                 return True
             return False
-
         if event.type() == events.PrintStart.type():
             self.disable_tab_bar()
             self.ui.extruder_temp_display.clicked.disconnect()
@@ -641,10 +640,10 @@ class MainWindow(QtWidgets.QMainWindow):
             )
             return False
 
-        if event.type() == (
-            events.PrintError.type()
-            or events.PrintComplete.type()
-            or events.PrintCancelled.type()
+        if event.type() in (
+            events.PrintError.type(),
+            events.PrintComplete.type(),
+            events.PrintCancelled.type()
         ):
             self.enable_tab_bar()
             self.ui.extruder_temp_display.clicked.disconnect()
