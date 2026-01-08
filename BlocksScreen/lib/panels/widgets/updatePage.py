@@ -9,7 +9,6 @@ from lib.utils.icon_button import IconButton
 from lib.utils.list_model import EntryDelegate, EntryListModel, ListItem
 from PyQt6 import QtCore, QtGui, QtWidgets
 
-from lib.panels.widgets.loadWidget import LoadingOverlayWidget
 
 class UpdatePage(QtWidgets.QWidget):
     """Update GUI Page,
@@ -246,7 +245,7 @@ class UpdatePage(QtWidgets.QWidget):
 
     def show_loading(self,loading:bool = False)->None:
         """Show or hide loading overlay"""
-        self.loadwidget.setVisible(loading)
+        self.loadwidget2.setVisible(loading)
         self.update_buttons_list_widget.setVisible(not loading)
         self.remote_version_title.setVisible(not loading)
         self.remote_version_tracking.setVisible(not loading)
@@ -523,9 +522,9 @@ class UpdatePage(QtWidgets.QWidget):
         self.update_buttons_layout.setContentsMargins(10, 10, 10, 10)
         self.update_buttons_layout.addWidget(self.update_buttons_list_widget, 0)
         self.update_buttons_list_widget.hide()
-        self.loadwidget = LoadingOverlayWidget(self)
-        self.loadwidget.setMinimumSize(self.update_buttons_frame.size())
-        self.update_buttons_layout.addWidget(self.loadwidget, 1)
+        self.loadwidget2 = LoadingOverlayWidget(self, LoadingOverlayWidget.AnimationGIF.DEFAULT)
+        self.loadwidget2.setMinimumSize(self.update_buttons_frame.size())
+        self.update_buttons_layout.addWidget(self.loadwidget2, 1)
         self.update_buttons_frame.setLayout(self.update_buttons_layout)
 
         self.main_content_layout.addWidget(self.update_buttons_frame, 0)
