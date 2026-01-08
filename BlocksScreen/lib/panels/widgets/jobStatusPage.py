@@ -230,7 +230,9 @@ class JobStatusWidget(QtWidgets.QWidget):
                     else:
                         raise TypeError("QApplication.instance expected non None value")
                 except Exception as e:
-                    logger.debug("Unexpected error while completing print job start event: %s", e)
+                    logger.debug(
+                        "Unexpected error while completing print job start event: %s", e
+                    )
             # this one must stay bc of moonraker cancel there
             if lstate == "cancelled":
                 print_cancel_event = events.PrintCancelled(data={})
@@ -241,7 +243,9 @@ class JobStatusWidget(QtWidgets.QWidget):
                     else:
                         raise TypeError("QApplication.instance expected non None value")
                 except Exception as e:
-                    logger.debug("Unexpected error while completing print job start event: %s", e)
+                    logger.debug(
+                        "Unexpected error while completing print job start event: %s", e
+                    )
             if lstate == "error":
                 print_error_event = events.PrintError(data={})
                 try:
@@ -251,7 +255,9 @@ class JobStatusWidget(QtWidgets.QWidget):
                     else:
                         raise TypeError("QApplication.instance expected non None value")
                 except Exception as e:
-                    logger.debug("Unexpected error while completing print job start event: %s", e)
+                    logger.debug(
+                        "Unexpected error while completing print job start event: %s", e
+                    )
             self._current_file_name = ""
             self._internal_print_status = ""
             self.total_layers = "?"
