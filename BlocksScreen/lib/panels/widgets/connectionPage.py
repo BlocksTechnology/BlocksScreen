@@ -4,7 +4,6 @@ import typing
 from events import KlippyDisconnected, KlippyReady, KlippyShutdown
 from lib.moonrakerComm import MoonWebSocket
 from lib.ui.connectionWindow_ui import Ui_ConnectivityForm
-from lib.panels.widgets.updatePage import UpdatePage
 from PyQt6 import QtCore, QtWidgets
 
 
@@ -15,31 +14,18 @@ class ConnectionPage(QtWidgets.QFrame):
     reboot_clicked = QtCore.pyqtSignal(name="reboot_clicked")
     restart_klipper_clicked = QtCore.pyqtSignal(name="restart_klipper_clicked")
     firmware_restart_clicked = QtCore.pyqtSignal(name="firmware_restart_clicked")
-    on_update_message: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
-        dict, name="handle-update-message"
-    )
+    update_button_clicked = QtCore.pyqtSignal(bool,name = "show-update-page")
 
     def __init__(self, parent: QtWidgets.QWidget, ws: MoonWebSocket, /):
         super().__init__(parent)
         self.setMinimumSize(QtCore.QSize(800, 480))
-        self.stack = QtWidgets.QStackedLayout(self)
-        self.connection_widget = QtWidgets.QFrame(self)
         self.panel = Ui_ConnectivityForm()
-        self.panel.setupUi(self.connection_widget)
-        self.up = UpdatePage(self)
-        self.stack.addWidget(self.connection_widget)
-        self.stack.addWidget(self.up)
+        self.panel.setupUi(self)
 
-        self.stack.currentChanged.connect(self.up.build_model_list)
 
-        self.stack.setCurrentWidget(self.connection_widget)
 
-        self.up.update_back_btn.clicked.connect(
-            lambda: {self.stack.setCurrentWidget(self.connection_widget)}
-        )
         self.panel.updatepageButton.clicked.connect(
-            lambda: 
-                self.stack.setCurrentWidget(self.up)
+            lambda: self.update_button_clicked[bool].emit(True)
         )
 
         self.ws = ws
@@ -70,21 +56,6 @@ class ConnectionPage(QtWidgets.QFrame):
         self.ws.klippy_connected_signal.connect(self.on_klippy_connected)
         self.ws.klippy_state_signal.connect(self.on_klippy_state)
 
-        self.on_update_message.connect(self.up.handle_update_message)
-        self.up.request_full_update.connect(self.ws.api.full_update)
-        self.up.request_recover_repo[str].connect(self.ws.api.recover_corrupt_repo)
-        self.up.request_recover_repo[str, bool].connect(
-            self.ws.api.recover_corrupt_repo
-        )
-        self.up.request_refresh_update.connect(self.ws.api.refresh_update_status)
-        self.up.request_refresh_update[str].connect(self.ws.api.refresh_update_status)
-
-        self.up.request_rollback_update.connect(self.ws.api.rollback_update)
-        self.up.request_update_client.connect(self.ws.api.update_client)
-        self.up.request_update_klipper.connect(self.ws.api.update_klipper)
-        self.up.request_update_moonraker.connect(self.ws.api.update_moonraker)
-        self.up.request_update_status.connect(self.ws.api.update_status)
-        self.up.request_update_system.connect(self.ws.api.update_system)
 
     def show_panel(self, reason: str | None = None):
         """Show widget"""

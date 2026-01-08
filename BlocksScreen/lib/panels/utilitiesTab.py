@@ -87,6 +87,11 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         bool, name="update-available"
     )
 
+    show_update_page: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        bool, name="show-update-page"
+    )
+
+
     def __init__(
         self, parent: QtWidgets.QWidget, ws: MoonWebSocket, printer: Printer
     ) -> None:
@@ -126,8 +131,10 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         )
         self.loadPage.add_widget(self.loadwidget)
 
-        self.update_page = UpdatePage(self)
-        self.addWidget(self.update_page)
+        self.panel.update_btn.clicked.connect(
+            lambda:self.show_update_page[bool].emit(False)
+        )
+
 
         self.is_page = InputShaperPage(self)
         self.addWidget(self.is_page)
@@ -142,14 +149,12 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
             self.panel.leds_slider_back_btn,
             self.panel.input_shaper_back_btn,
             self.panel.routine_check_back_btn,
-            self.update_page.update_back_btn,
             self.is_page.update_back_btn,
         ):
             button.clicked.connect(self.back_button)
 
         # --- Page Navigation ---
         self._connect_page_change(self.panel.utilities_axes_btn, self.panel.axes_page)
-        self._connect_page_change(self.panel.update_btn, self.update_page)
         self._connect_page_change(
             self.panel.utilities_input_shaper_btn, self.panel.input_shaper_page
         )
@@ -202,33 +207,6 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         self.printer.printer_config.connect(self.on_printer_config_received)
         self.printer.gcode_move_update.connect(self.on_gcode_move_update)
 
-        # ---- Websocket connections ----
-
-        self.on_update_message.connect(self.update_page.handle_update_message)
-        self.update_page.request_full_update.connect(self.ws.api.full_update)
-        self.update_page.request_recover_repo[str].connect(
-            self.ws.api.recover_corrupt_repo
-        )
-        self.update_page.request_recover_repo[str, bool].connect(
-            self.ws.api.recover_corrupt_repo
-        )
-        self.update_page.request_refresh_update.connect(
-            self.ws.api.refresh_update_status
-        )
-        self.update_page.request_refresh_update[str].connect(
-            self.ws.api.refresh_update_status
-        )
-        self.printer.gcode_response.connect(self.handle_gcode_response)
-        self.update_page.request_rollback_update.connect(self.ws.api.rollback_update)
-        self.update_page.request_update_client.connect(self.ws.api.update_client)
-        self.update_page.request_update_klipper.connect(self.ws.api.update_klipper)
-        self.update_page.request_update_moonraker.connect(self.ws.api.update_moonraker)
-        self.update_page.request_update_status.connect(self.ws.api.update_status)
-        self.update_page.request_update_system.connect(self.ws.api.update_system)
-        self.update_page.update_available.connect(self.update_available.emit)
-        self.update_page.update_available.connect(
-            self.panel.update_btn.setShowNotification
-        )
         self.panel.update_btn.setPixmap(
             QtGui.QPixmap(":/system/media/btn_icons/update-software-icon.svg")
         )
