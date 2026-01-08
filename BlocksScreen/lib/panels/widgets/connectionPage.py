@@ -1,5 +1,4 @@
 import logging
-import typing
 
 from events import KlippyDisconnected, KlippyReady, KlippyShutdown
 from lib.moonrakerComm import MoonWebSocket
@@ -14,15 +13,13 @@ class ConnectionPage(QtWidgets.QFrame):
     reboot_clicked = QtCore.pyqtSignal(name="reboot_clicked")
     restart_klipper_clicked = QtCore.pyqtSignal(name="restart_klipper_clicked")
     firmware_restart_clicked = QtCore.pyqtSignal(name="firmware_restart_clicked")
-    update_button_clicked = QtCore.pyqtSignal(bool,name = "show-update-page")
+    update_button_clicked = QtCore.pyqtSignal(bool, name="show-update-page")
 
     def __init__(self, parent: QtWidgets.QWidget, ws: MoonWebSocket, /):
         super().__init__(parent)
         self.setMinimumSize(QtCore.QSize(800, 480))
         self.panel = Ui_ConnectivityForm()
         self.panel.setupUi(self)
-
-
 
         self.panel.updatepageButton.clicked.connect(
             lambda: self.update_button_clicked[bool].emit(True)
@@ -56,7 +53,6 @@ class ConnectionPage(QtWidgets.QFrame):
         self.ws.klippy_connected_signal.connect(self.on_klippy_connected)
         self.ws.klippy_state_signal.connect(self.on_klippy_state)
 
-
     def show_panel(self, reason: str | None = None):
         """Show widget"""
         self.show()
@@ -66,11 +62,11 @@ class ConnectionPage(QtWidgets.QFrame):
         self.text_update()
         return False
 
-    def showEvent(self, a0: QtCore.QEvent|None):
+    def showEvent(self, a0: QtCore.QEvent | None):
         """Handle show event"""
         self.ws.api.refresh_update_status()
         return super().showEvent(a0)
-    
+
     @QtCore.pyqtSlot(bool, name="on_klippy_connected")
     def on_klippy_connection(self, connected: bool):
         """Handle klippy connection state"""

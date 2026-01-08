@@ -180,17 +180,19 @@ class MainWindow(QtWidgets.QMainWindow):
             self.bo_ws_startup.emit()
         self.reset_tab_indexes()
 
-    @QtCore.pyqtSlot(bool,name="show-update-page")
-    def show_update_page(self,fullscreen: bool ):
+    @QtCore.pyqtSlot(bool, name="show-update-page")
+    def show_update_page(self, fullscreen: bool):
         """Slot for displaying update Panel"""
         if not fullscreen:
             self.up.setParent(self.ui.main_content_widget)
             current_index = self.ui.main_content_widget.currentIndex()
             tab_rect = self.ui.main_content_widget.tabBar().tabRect(current_index)
             width = tab_rect.width()
-            _parent_size = self.up.parent().size() 
-            self.up.setGeometry(width, 0, _parent_size.width() - width, _parent_size.height())
-        else: 
+            _parent_size = self.up.parent().size()
+            self.up.setGeometry(
+                width, 0, _parent_size.width() - width, _parent_size.height()
+            )
+        else:
             self.up.setParent(self)
             self.up.setGeometry(0, 0, self.width(), self.height())
 

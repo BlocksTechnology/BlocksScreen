@@ -127,7 +127,7 @@ class UpdatePage(QtWidgets.QWidget):
     def showEvent(self, event: QtGui.QShowEvent | None) -> None:
         """Re-add clients to update list"""
         self.build_model_list()
-        
+
         return super().showEvent(event)
 
     def build_model_list(self) -> None:
@@ -243,7 +243,7 @@ class UpdatePage(QtWidgets.QWidget):
         self.no_update_placeholder.hide()
         self.action_btn.show()
 
-    def show_loading(self,loading:bool = False)->None:
+    def show_loading(self, loading: bool = False) -> None:
         """Show or hide loading overlay"""
         self.loadwidget2.setVisible(loading)
         self.update_buttons_list_widget.setVisible(not loading)
@@ -329,8 +329,9 @@ class UpdatePage(QtWidgets.QWidget):
         self.reload_btn.setMaximumSize(QtCore.QSize(60, 60))
         self.reload_btn.setFlat(True)
         self.reload_btn.setPixmap(QtGui.QPixmap(":/ui/media/btn_icons/refresh.svg"))
-        self.header_content_layout.addWidget(self.reload_btn)# alignment=QtCore.Qt.AlignmentFlag.AlignCenter)
-
+        self.header_content_layout.addWidget(
+            self.reload_btn
+        )  # alignment=QtCore.Qt.AlignmentFlag.AlignCenter)
 
         self.header_title = QtWidgets.QLabel(self)
         self.header_title.setMinimumSize(QtCore.QSize(100, 60))
@@ -350,13 +351,17 @@ class UpdatePage(QtWidgets.QWidget):
             QtWidgets.QSizePolicy.Policy.Expanding,
         )
         self.header_title.setSizePolicy(sizePolicy)
-        self.header_content_layout.addWidget(self.header_title, alignment=QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.header_content_layout.addWidget(
+            self.header_title, alignment=QtCore.Qt.AlignmentFlag.AlignCenter
+        )
         self.update_back_btn = IconButton(self)
         self.update_back_btn.setMinimumSize(QtCore.QSize(60, 60))
         self.update_back_btn.setMaximumSize(QtCore.QSize(60, 60))
         self.update_back_btn.setFlat(True)
         self.update_back_btn.setPixmap(QtGui.QPixmap(":/ui/media/btn_icons/back.svg"))
-        self.header_content_layout.addWidget(self.update_back_btn) #alignment=QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.header_content_layout.addWidget(
+            self.update_back_btn
+        )  # alignment=QtCore.Qt.AlignmentFlag.AlignCenter)
         self.update_page_content_layout.addLayout(self.header_content_layout, 0)
 
         self.main_content_layout = QtWidgets.QHBoxLayout()
@@ -522,7 +527,9 @@ class UpdatePage(QtWidgets.QWidget):
         self.update_buttons_layout.setContentsMargins(10, 10, 10, 10)
         self.update_buttons_layout.addWidget(self.update_buttons_list_widget, 0)
         self.update_buttons_list_widget.hide()
-        self.loadwidget2 = LoadingOverlayWidget(self, LoadingOverlayWidget.AnimationGIF.DEFAULT)
+        self.loadwidget2 = LoadingOverlayWidget(
+            self, LoadingOverlayWidget.AnimationGIF.DEFAULT
+        )
         self.loadwidget2.setMinimumSize(self.update_buttons_frame.size())
         self.update_buttons_layout.addWidget(self.loadwidget2, 1)
         self.update_buttons_frame.setLayout(self.update_buttons_layout)
@@ -533,7 +540,6 @@ class UpdatePage(QtWidgets.QWidget):
         self.info_box_layout = QtWidgets.QVBoxLayout()
         self.info_box_layout.setContentsMargins(10, 10, 10, 10)
         self.infobox_frame.setLayout(self.info_box_layout)
-
 
         font = QtGui.QFont()
         font.setFamily(font_family)
@@ -632,7 +638,6 @@ class UpdatePage(QtWidgets.QWidget):
         self.info_box_layout.addWidget(
             self.no_update_placeholder, 0, QtCore.Qt.AlignmentFlag.AlignCenter
         )
-
 
         self.info_box_layout.addLayout(
             self.button_box,
