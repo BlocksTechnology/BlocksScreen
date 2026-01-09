@@ -620,7 +620,6 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.messageReceivedEvent(event)
                 return True
             return False
-
         if event.type() == events.PrintStart.type():
             self.disable_tab_bar()
             self.ui.extruder_temp_display.clicked.disconnect()
@@ -641,10 +640,10 @@ class MainWindow(QtWidgets.QMainWindow):
             )
             return False
 
-        if event.type() == (
-            events.PrintError.type()
-            or events.PrintComplete.type()
-            or events.PrintCancelled.type()
+        if event.type() in (
+            events.PrintError.type(),
+            events.PrintComplete.type(),
+            events.PrintCancelled.type(),
         ):
             self.enable_tab_bar()
             self.ui.extruder_temp_display.clicked.disconnect()
