@@ -45,6 +45,7 @@ class BasePopup(QtWidgets.QDialog):
 
         if floating:
             self.setAttribute(QtCore.Qt.WidgetAttribute.WA_TranslucentBackground, True)
+            self.setWindowModality(QtCore.Qt.WindowModality.ApplicationModal)
         else:
             self.setStyleSheet(
                 """
