@@ -398,7 +398,7 @@ class InputShaperPage(QtWidgets.QWidget):
         self.info_box.addWidget(self.vib_label, 0, 1)
 
         self.sug_accel_title_label = QtWidgets.QLabel(self)
-        self.sug_accel_title_label.setText("Sugested Max Acceleration:")
+        self.sug_accel_title_label.setText("Sugested Max\nAcceleration:")
         self.sug_accel_title_label.setMinimumSize(QtCore.QSize(60, 60))
         self.sug_accel_title_label.setMaximumSize(
             QtCore.QSize(int(self.infobox_frame.size().width() * 0.40), 9999)
