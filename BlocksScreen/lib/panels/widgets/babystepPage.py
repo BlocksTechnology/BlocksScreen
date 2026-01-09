@@ -1,9 +1,8 @@
 import typing
 
-from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_label import BlocksLabel
-from lib.utils.icon_button import IconButton
 from lib.utils.check_button import BlocksCustomCheckButton
+from lib.utils.icon_button import IconButton
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 
@@ -33,8 +32,18 @@ class BabystepPage(QtWidgets.QWidget):
         self.bbp_nozzle_offset_025.toggled.connect(self.handle_z_offset_change)
         self.bbp_nozzle_offset_05.toggled.connect(self.handle_z_offset_change)
         self.bbp_nozzle_offset_1.toggled.connect(self.handle_z_offset_change)
+        self._baby_stepchange = False
 
-        self.savebutton.clicked.connect(self.save_value)
+    @property
+    def baby_stepchange(self):
+        """Returns if the babystep was changed during print"""
+        return self._baby_stepchange
+
+    @baby_stepchange.setter
+    def baby_stepchange(self, value: bool) -> None:
+        if not isinstance(value, bool):
+            raise ValueError("Value must be a bool")
+        self._baby_stepchange = value
 
     @QtCore.pyqtSlot(name="on_move_nozzle_close")
     def on_move_nozzle_close(self) -> None:
@@ -42,9 +51,9 @@ class BabystepPage(QtWidgets.QWidget):
         by the amount set in **` self._z_offset`**
         """
         self.run_gcode.emit(
-            f"SET_GCODE_OFFSET Z_ADJUST=-{self._z_offset}"  # Z_ADJUST adds the value to the existing offset
+            f"SET_GCODE_OFFSET Z_ADJUST=-{self._z_offset} MOVE=1"  # Z_ADJUST adds the value to the existing offset
         )
-        self.savebutton.setVisible(True)
+        self._baby_stepchange = True
 
     @QtCore.pyqtSlot(name="on_move_nozzle_away")
     def on_move_nozzle_away(self) -> None:
@@ -52,9 +61,9 @@ class BabystepPage(QtWidgets.QWidget):
         bed by **` self._z_offset`** amount
         """
         self.run_gcode.emit(
-            f"SET_GCODE_OFFSET Z_ADJUST=+{self._z_offset}"  # Z_ADJUST adds the value to the existing offset
+            f"SET_GCODE_OFFSET Z_ADJUST=+{self._z_offset} MOVE=1"  # Z_ADJUST adds the value to the existing offset
         )
-        self.savebutton.setVisible(True)
+        self._baby_stepchange = True
 
     @QtCore.pyqtSlot(name="handle_z_offset_change")
     def handle_z_offset_change(self) -> None:
@@ -67,17 +76,10 @@ class BabystepPage(QtWidgets.QWidget):
 
         Possible values are: 0.01, 0.025, 0.05, 0.1 **mm**
         """
-        _possible_z_values: typing.List = [0.01, 0.025, 0.05, 0.1]
         _sender: QtCore.QObject | None = self.sender()
         if self._z_offset == float(_sender.text()[:-3]):
             return
         self._z_offset = float(_sender.text()[:-3])
-
-    def save_value(self):
-        """Save new z offset value"""
-        self.run_gcode.emit("Z_OFFSET_APPLY_PROBE")
-        self.savebutton.setVisible(False)
-        self.bbp_z_offset_title_label.setText(self.bbp_z_offset_current_value.text())
 
     def on_gcode_move_update(self, name: str, value: list) -> None:
         """Handle gcode move updates"""
@@ -142,16 +144,6 @@ class BabystepPage(QtWidgets.QWidget):
         self.bbp_header_title.setText("Babystep")
         self.bbp_header_title.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self.bbp_header_title.setObjectName("bbp_header_title")
-
-        self.savebutton = BlocksCustomButton(self)
-        self.savebutton.setGeometry(QtCore.QRect(460, 340, 200, 60))
-        self.savebutton.setText("Save?")
-        self.savebutton.setObjectName("savebutton")
-        self.savebutton.setPixmap(QtGui.QPixmap(":/ui/media/btn_icons/save.svg"))
-        self.savebutton.setVisible(False)
-        font = QtGui.QFont()
-        font.setPointSize(15)
-        self.savebutton.setFont(font)
 
         spacerItem = QtWidgets.QSpacerItem(
             60,
@@ -399,7 +391,7 @@ class BabystepPage(QtWidgets.QWidget):
         self.bbp_mvup.setText("")
         self.bbp_mvup.setFlat(True)
         self.bbp_mvup.setPixmap(
-            QtGui.QPixmap(":/arrow_icons/media/btn_icons/up_arrow.svg")
+            QtGui.QPixmap(":/baby_step/media/btn_icons/move_nozzle_close.svg")
         )
         self.bbp_mvup.setObjectName("bbp_away_from_bed")
         self.bbp_option_button_group = QtWidgets.QButtonGroup(self)
@@ -416,7 +408,7 @@ class BabystepPage(QtWidgets.QWidget):
         self.bbp_mvdown.setText("")
         self.bbp_mvdown.setFlat(True)
         self.bbp_mvdown.setPixmap(
-            QtGui.QPixmap(":/arrow_icons/media/btn_icons/down_arrow.svg")
+            QtGui.QPixmap(":/baby_step/media/btn_icons/move_nozzle_away.svg")
         )
         self.bbp_mvdown.setObjectName("bbp_close_to_bed")
         self.bbp_option_button_group.addButton(self.bbp_mvdown)

@@ -1,5 +1,6 @@
 import logging
 import typing
+
 import events
 from helper_methods import calculate_current_layer, estimate_print_time
 from lib.panels.widgets.basePopup import BasePopup
@@ -33,6 +34,9 @@ class JobStatusWidget(QtWidgets.QWidget):
     )
     print_cancel: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         name="print_cancel"
+    )
+    print_finish: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        name="print_finish"
     )
     tune_clicked: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         name="tune_clicked"
@@ -222,6 +226,8 @@ class JobStatusWidget(QtWidgets.QWidget):
             self.show_request.emit()
             lstate = "start"
         elif lstate in invalid_states:
+            if lstate != "standby":
+                self.print_finish.emit()
             self._current_file_name = ""
             self._internal_print_status = ""
             self.total_layers = "?"
