@@ -120,7 +120,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
 
         # --- UI Setup ---
         self.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
-        self.loadPage = BasePopup(self,dialog = False)
+        self.loadPage = BasePopup(self, dialog=False)
         self.loadwidget = LoadingOverlayWidget(
             self, LoadingOverlayWidget.AnimationGIF.DEFAULT
         )
@@ -262,8 +262,12 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
 
         self.is_types: dict = {}
         self.is_aut_types: dict = {}
-        self.dialog_page.accepted.connect(lambda:self.handle_is("SHAPER_CALIBRATE AXIS=Y"))
-        self.dialog_page.rejected.connect(lambda:self.handle_is("SHAPER_CALIBRATE AXIS=X"))
+        self.dialog_page.accepted.connect(
+            lambda: self.handle_is("SHAPER_CALIBRATE AXIS=Y")
+        )
+        self.dialog_page.rejected.connect(
+            lambda: self.handle_is("SHAPER_CALIBRATE AXIS=X")
+        )
 
         self.is_page.action_btn.clicked.connect(
             lambda: self.change_page(self.indexOf(self.panel.input_shaper_page))

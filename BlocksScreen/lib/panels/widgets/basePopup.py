@@ -27,9 +27,9 @@ class BasePopup(QtWidgets.QDialog):
     ) -> None:
         super().__init__(parent)
         self.setWindowFlags(
-            QtCore.Qt.WindowType.Dialog | 
-            QtCore.Qt.WindowType.FramelessWindowHint |
-            QtCore.Qt.WindowType.CustomizeWindowHint
+            QtCore.Qt.WindowType.Dialog
+            | QtCore.Qt.WindowType.FramelessWindowHint
+            | QtCore.Qt.WindowType.CustomizeWindowHint
         )
         self.floating = floating
         self.dialog = dialog
@@ -59,8 +59,6 @@ class BasePopup(QtWidgets.QDialog):
         """Applies the current color variables and adds the central border to the stylesheets."""
         if not self.dialog:
             return
-
-
 
         if not self.floating:
             self.confirm_button.setStyleSheet(
