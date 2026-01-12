@@ -1,5 +1,6 @@
 import logging
 import typing
+
 import events
 from helper_methods import calculate_current_layer, estimate_print_time
 from lib.panels.widgets.basePopup import BasePopup
@@ -181,6 +182,8 @@ class JobStatusWidget(QtWidgets.QWidget):
     @QtCore.pyqtSlot(dict, name="on_fileinfo")
     def on_fileinfo(self, fileinfo: dict) -> None:
         """Handle received file information/metadata"""
+        if not self.isVisible():
+            return
         self.total_layers = str(fileinfo.get("layer_count", "---"))
         self.layer_display_button.setText("---")
         self.layer_display_button.secondary_text = str(self.total_layers)
