@@ -65,6 +65,7 @@ class PrintTab(QtWidgets.QStackedWidget):
     )
 
     _z_offset: float = 0.0
+    _active_z_offset: float = 0.0
     _finish_print_handled: bool = False
 
     def __init__(
@@ -317,15 +318,21 @@ class PrintTab(QtWidgets.QStackedWidget):
 
     def save_config(self) -> None:
         """Handle Save configuration behaviour, shows confirmation dialog"""
-        self.run_gcode_signal.emit("Z_OFFSET_APPLY_PROBE")
+        if self._finish_print_handled:
+            self.run_gcode_signal.emit("Z_OFFSET_APPLY_PROBE")
+            self._z_offset = self._active_z_offset
+            self.babystepPage.bbp_z_offset_title_label.setText(
+                f"Z: {self._z_offset:.3f}mm"
+            )
         self.BasePopup_z_offset.set_message(
-            f"There is a change in the Z-Offset of {self._z_offset:.3f} mm,\n do you wish to save it permanently?\nThe machine will restart"
+            f"There is a change in the Z-Offset of {self._active_z_offset:.3f} mm,\n do you wish to save it permanently?\nThe machine will restart"
         )
         self.BasePopup_z_offset.cancel_button_text("Later")
         self.BasePopup_z_offset.open()
 
     def update_configuration_file(self):
         """Runs the `SAVE_CONFIG` gcode"""
+        self.run_gcode_signal.emit("Z_OFFSET_APPLY_PROBE")
         self.run_gcode_signal.emit("SAVE_CONFIG")
         self.BasePopup_z_offset.disconnect()
 
@@ -336,7 +343,7 @@ class PrintTab(QtWidgets.QStackedWidget):
             return
 
         if name == "homing_origin":
-            self._z_offset = value[2]
+            self._active_z_offset = value[2]
             self.save_config_btn.setVisible(value[2] != 0)
 
     def _on_delete_file_confirmed(self, filename: str, directory: str) -> None:
@@ -345,19 +352,6 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.request_back.emit()
         self.filesPage_widget.reset_dir()
         self.BasePopup.disconnect()
-
-    def paintEvent(self, a0: QtGui.QPaintEvent) -> None:
-        """Widget painting"""
-        if self.babystepPage.isVisible():
-            _button_name_str = f"nozzle_offset_{self._z_offset}"
-            if hasattr(self, _button_name_str):
-                _button_attr = getattr(self, _button_name_str)
-                if callable(_button_attr) and isinstance(
-                    _button_attr, BlocksCustomButton
-                ):
-                    _button_attr.setChecked(True)
-
-        return super().paintEvent(a0)
 
     def setProperty(self, name: str, value: typing.Any) -> bool:
         """Intercept the set property method
@@ -405,9 +399,9 @@ class PrintTab(QtWidgets.QStackedWidget):
         """Behaviour when the print ends — but only once."""
         if self._finish_print_handled:
             return
-        if self._z_offset != 0 and self.babystepPage.baby_stepchange:
-            self._finish_print_handled = True
+        if self._active_z_offset != 0 and self.babystepPage.baby_stepchange:
             self.save_config()
+            self._finish_print_handled = True
 
     def setupMainPrintPage(self) -> None:
         """Setup UI for print page"""

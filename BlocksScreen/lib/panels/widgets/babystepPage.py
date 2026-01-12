@@ -89,8 +89,6 @@ class BabystepPage(QtWidgets.QWidget):
         if name == "homing_origin":
             self._z_offset_text = value[2]
             self.bbp_z_offset_current_value.setText(f"Z: {self._z_offset_text:.3f}mm")
-        if self.bbp_z_offset_title_label.text() == "smth":
-            self.bbp_z_offset_title_label.setText(f"Z: {self._z_offset_text:.3f}mm")
 
     def setupUI(self):
         """Setup babystep page ui"""
@@ -226,6 +224,30 @@ class BabystepPage(QtWidgets.QWidget):
             QtCore.Qt.AlignmentFlag.AlignHCenter | QtCore.Qt.AlignmentFlag.AlignVCenter,
         )
 
+        # 0.05mm button
+        self.bbp_nozzle_offset_05 = BlocksCustomCheckButton(
+            parent=self.bbp_offset_steps_buttons_group_box
+        )
+        self.bbp_nozzle_offset_05.setMinimumSize(QtCore.QSize(100, 70))
+        self.bbp_nozzle_offset_05.setMaximumSize(
+            QtCore.QSize(100, 70)
+        )  # Increased max width by 5 pixels
+        self.bbp_nozzle_offset_05.setText("0.05 mm")
+
+        font = QtGui.QFont()
+        font.setPointSize(14)
+        self.bbp_nozzle_offset_05.setFont(font)
+        self.bbp_nozzle_offset_05.setCheckable(True)
+        self.bbp_nozzle_offset_05.setFlat(True)
+        self.bbp_nozzle_offset_05.setProperty("button_type", "")
+        self.bbp_nozzle_offset_05.setObjectName("bbp_nozzle_offset_05")
+        self.bbp_offset_value_selector_group.addButton(self.bbp_nozzle_offset_05)
+        self.bbp_offset_steps_buttons.addWidget(
+            self.bbp_nozzle_offset_05,
+            0,
+            QtCore.Qt.AlignmentFlag.AlignHCenter | QtCore.Qt.AlignmentFlag.AlignVCenter,
+        )
+
         # Line separator for 0.1mm - set size policy to expanding horizontally
 
         # 0.01mm button
@@ -248,30 +270,6 @@ class BabystepPage(QtWidgets.QWidget):
         self.bbp_offset_value_selector_group.addButton(self.bbp_nozzle_offset_01)
         self.bbp_offset_steps_buttons.addWidget(
             self.bbp_nozzle_offset_01,
-            0,
-            QtCore.Qt.AlignmentFlag.AlignHCenter | QtCore.Qt.AlignmentFlag.AlignVCenter,
-        )
-
-        # 0.05mm button
-        self.bbp_nozzle_offset_05 = BlocksCustomCheckButton(
-            parent=self.bbp_offset_steps_buttons_group_box
-        )
-        self.bbp_nozzle_offset_05.setMinimumSize(QtCore.QSize(100, 70))
-        self.bbp_nozzle_offset_05.setMaximumSize(
-            QtCore.QSize(100, 70)
-        )  # Increased max width by 5 pixels
-        self.bbp_nozzle_offset_05.setText("0.05 mm")
-
-        font = QtGui.QFont()
-        font.setPointSize(14)
-        self.bbp_nozzle_offset_05.setFont(font)
-        self.bbp_nozzle_offset_05.setCheckable(True)
-        self.bbp_nozzle_offset_05.setFlat(True)
-        self.bbp_nozzle_offset_05.setProperty("button_type", "")
-        self.bbp_nozzle_offset_05.setObjectName("bbp_nozzle_offset_05")
-        self.bbp_offset_value_selector_group.addButton(self.bbp_nozzle_offset_05)
-        self.bbp_offset_steps_buttons.addWidget(
-            self.bbp_nozzle_offset_05,
             0,
             QtCore.Qt.AlignmentFlag.AlignHCenter | QtCore.Qt.AlignmentFlag.AlignVCenter,
         )
@@ -343,9 +341,8 @@ class BabystepPage(QtWidgets.QWidget):
         self.bbp_z_offset_title_label.setStyleSheet(
             "color: gray; background: transparent;"
         )
-        self.bbp_z_offset_title_label.setText("Z-Offset")
         self.bbp_z_offset_title_label.setObjectName("bbp_z_offset_title_label")
-        self.bbp_z_offset_title_label.setText("smth")
+        self.bbp_z_offset_title_label.setText("Z: 0.000mm")
         self.bbp_z_offset_title_label.setGeometry(420, 270, 200, 30)
 
         # === END OF NEW LABEL ===
