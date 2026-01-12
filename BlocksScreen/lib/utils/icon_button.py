@@ -13,7 +13,8 @@ class IconButton(QtWidgets.QPushButton):
         self._name: str = ""
         self.text_color: QtGui.QColor = QtGui.QColor(255, 255, 255)
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_AcceptTouchEvents, True)
-        self.pressed_bg_color = QtGui.QColor(223, 223, 223,70)  # Set to solid white
+        self.pressed_bg_color = QtGui.QColor(223, 223, 223, 70)  # Set to solid white
+
     @property
     def name(self):
         """Widget name"""
@@ -55,7 +56,9 @@ class IconButton(QtWidgets.QPushButton):
 
         y = 15.0 if self.text_formatting else 5.0
         if self.isDown():
-            _icon_rect = QtCore.QRectF(2.5, 2.5, (self.width() - 5 ), (self.height() - 5 - y))
+            _icon_rect = QtCore.QRectF(
+                2.5, 2.5, (self.width() - 5), (self.height() - 5 - y)
+            )
         else:
             _icon_rect = QtCore.QRectF(0.0, 0.0, (self.width()), (self.height() - y))
 
@@ -112,8 +115,7 @@ class IconButton(QtWidgets.QPushButton):
 
             painter.drawText(
                 adjusted_rectF,
-                QtCore.Qt.TextFlag.TextSingleLine
-                | QtCore.Qt.AlignmentFlag.AlignCenter,
+                QtCore.Qt.TextFlag.TextSingleLine | QtCore.Qt.AlignmentFlag.AlignCenter,
                 str(self.text()),
             )
 

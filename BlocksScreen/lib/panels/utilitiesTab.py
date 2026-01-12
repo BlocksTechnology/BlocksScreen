@@ -90,7 +90,6 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         bool, name="show-update-page"
     )
 
-
     def __init__(
         self, parent: QtWidgets.QWidget, ws: MoonWebSocket, printer: Printer
     ) -> None:
@@ -131,9 +130,8 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         self.loadPage.add_widget(self.loadwidget)
 
         self.panel.update_btn.clicked.connect(
-            lambda:self.show_update_page[bool].emit(False)
+            lambda: self.show_update_page[bool].emit(False)
         )
-
 
         self.is_page = InputShaperPage(self)
         self.addWidget(self.is_page)
