@@ -325,7 +325,9 @@ class PrintTab(QtWidgets.QStackedWidget):
                 f"Z: {self._z_offset:.3f}mm"
             )
         self.BasePopup_z_offset.set_message(
-            f"There is a change in the Z-Offset of {self._active_z_offset:.3f} mm,\n do you wish to save it permanently?\nThe machine will restart"
+            f"The Z‑Offset is now {self._active_z_offset:.3f} mm.\n"
+            "Would you like to save this change permanently?\n"
+            "The machine will restart."
         )
         self.BasePopup_z_offset.cancel_button_text("Later")
         self.BasePopup_z_offset.open()
