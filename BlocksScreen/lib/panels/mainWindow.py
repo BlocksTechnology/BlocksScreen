@@ -10,6 +10,7 @@ from lib.moonrakerComm import MoonWebSocket
 from lib.network import WifiIconKey
 from lib.panels.controlTab import ControlTab
 from lib.panels.filamentTab import FilamentTab
+from lib.panels.widgets.notificationPage import NotificationPage
 from lib.panels.networkWindow import NetworkControlWindow, PixmapCache
 from lib.panels.printTab import PrintTab
 from lib.panels.utilitiesTab import UtilitiesTab
@@ -96,6 +97,10 @@ class MainWindow(QtWidgets.QMainWindow):
     run_gcode_signal: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         str, name="run_gcode"
     )
+    show_notifications: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        str,str,int,name="show-notifications"
+    )
+
     call_load_panel = QtCore.pyqtSignal(bool, str, name="call-load-panel")
 
     def __init__(self):
@@ -109,6 +114,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui.main_content_widget.setCurrentIndex(0)
         self.popup = Popup(self)
         self.ws = MoonWebSocket(self)
+        self.notiPage = NotificationPage(self)
         self.mc = MachineControl(self)
         self.file_data = Files(self, self.ws)
         self.index_stack = deque(maxlen=4)
@@ -138,6 +144,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.printPanel.request_back.connect(slot=self.global_back)
         self.printPanel.on_cancel_print.connect(slot=self.on_cancel_print)
 
+        self.show_notifications.connect(self.notiPage.new_notication)
+
         self.printPanel.request_change_page.connect(slot=self.global_change_page)
         self.filamentPanel.request_back.connect(slot=self.global_back)
         self.filamentPanel.request_change_page.connect(slot=self.global_change_page)
@@ -146,6 +154,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.utilitiesPanel.request_back.connect(slot=self.global_back)
         self.utilitiesPanel.request_change_page.connect(slot=self.global_change_page)
         self.utilitiesPanel.update_available.connect(self.on_update_available)
+        self.ui.notification_btn.clicked.connect(self.notiPage.show)
         self.ui.extruder_temp_display.clicked.connect(
             lambda: self.global_change_page(
                 self.ui.main_content_widget.indexOf(self.ui.controlTab),
@@ -715,11 +724,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.printPanel.filesPage_widget.on_directory_error()
 
         # Show popup for all other errors (including directory errors)
-        self.popup.new_message(
-            message_type=Popup.MessageType.ERROR,
-            message=text,
-            userInput=True,
-        )
+        self.show_notifications.emit("mainwindow",str(data),3)
         _logger.error(text)
 
     @api_handler
@@ -731,6 +736,7 @@ class MainWindow(QtWidgets.QMainWindow):
             message_type=Popup.MessageType.WARNING,
             message=f"CPU THROTTLED: {data} | {metadata}",
         )
+        self.show_notifications.emit("mainwindow",data,2)
 
     @api_handler
     def _handle_notify_status_update_message(self, method, data, metadata) -> None:
