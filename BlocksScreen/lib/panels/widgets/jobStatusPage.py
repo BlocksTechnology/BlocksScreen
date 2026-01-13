@@ -1,8 +1,9 @@
 import logging
 import typing
+
 import events
 from helper_methods import calculate_current_layer, estimate_print_time
-from lib.panels.widgets import dialogPage
+from lib.panels.widgets.basePopup import BasePopup
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_label import BlocksLabel
 from lib.utils.blocks_progressbar import CustomProgressBar
@@ -60,7 +61,7 @@ class JobStatusWidget(QtWidgets.QWidget):
         self.thumbnail_graphics = []
         self.layer_fallback = False
         self._setupUI()
-        self.cancel_print_dialog = dialogPage.DialogPage(self)
+        self.cancel_print_dialog = BasePopup(self, floating=True)
         self.tune_menu_btn.clicked.connect(self.tune_clicked.emit)
         self.pause_printing_btn.clicked.connect(self.pause_resume_print)
         self.stop_printing_btn.clicked.connect(self.handleCancel)
@@ -181,6 +182,8 @@ class JobStatusWidget(QtWidgets.QWidget):
     @QtCore.pyqtSlot(dict, name="on_fileinfo")
     def on_fileinfo(self, fileinfo: dict) -> None:
         """Handle received file information/metadata"""
+        if not self.isVisible():
+            return
         self.total_layers = str(fileinfo.get("layer_count", "---"))
         self.layer_display_button.setText("---")
         self.layer_display_button.secondary_text = str(self.total_layers)

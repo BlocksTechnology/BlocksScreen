@@ -38,6 +38,9 @@ class OptionCard(QtWidgets.QAbstractButton):
         self.line_separator.setAttribute(
             QtCore.Qt.WidgetAttribute.WA_TransparentForMouseEvents
         )
+        self.continue_button.setAttribute(
+            QtCore.Qt.WidgetAttribute.WA_TransparentForMouseEvents
+        )
 
         self.setMode(False)
         self.set_card_icon(icon)

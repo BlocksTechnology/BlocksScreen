@@ -6,7 +6,8 @@ from lib.printer import Printer
 from lib.filament import Filament
 from lib.ui.filamentStackedWidget_ui import Ui_filamentStackedWidget
 
-from lib.panels.widgets.loadPage import LoadScreen
+from lib.panels.widgets.loadWidget import LoadingOverlayWidget
+from lib.panels.widgets.basePopup import BasePopup
 from lib.panels.widgets.popupDialogWidget import Popup
 from PyQt6 import QtCore, QtGui, QtWidgets
 
@@ -41,8 +42,11 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self.target_temp: int = 0
         self.current_temp: int = 0
         self.popup = Popup(self)
-        self.loadscreen = LoadScreen(self, LoadScreen.AnimationGIF.DEFAULT)
-        self.addWidget(self.loadscreen)
+        self.loadscreen = BasePopup(self, floating=False, dialog=False)
+        self.loadwidget = LoadingOverlayWidget(
+            self, LoadingOverlayWidget.AnimationGIF.DEFAULT
+        )
+        self.loadscreen.add_widget(self.loadwidget)
         self.has_load_unload_objects = None
         self._filament_state = self.FilamentStates.UNKNOWN
         self._sensor_states = {}
@@ -129,16 +133,16 @@ class FilamentTab(QtWidgets.QStackedWidget):
 
         if self.target_temp != 0:
             if self.current_temp == self.target_temp:
-                self.loadscreen.set_status_message("Extruder heated up \n Please wait")
+                self.loadwidget.set_status_message("Extruder heated up \n Please wait")
                 return
             if field == "temperature":
                 self.current_temp = round(new_value, 0)
-                self.loadscreen.set_status_message(
+                self.loadwidget.set_status_message(
                     f"Heating up ({new_value}/{self.target_temp}) \n Please wait"
                 )
         if field == "target":
             self.target_temp = round(new_value, 0)
-            self.loadscreen.set_status_message("Heating up \n Please wait")
+            self.loadwidget.set_status_message("Heating up \n Please wait")
 
     @QtCore.pyqtSlot(bool, name="on_load_filament")
     def on_load_filament(self, status: bool):

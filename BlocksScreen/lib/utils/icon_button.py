@@ -3,7 +3,7 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 
 
 class IconButton(QtWidgets.QPushButton):
-    def __init__(self, parent: QtWidgets.QWidget) -> None:
+    def __init__(self, parent: QtWidgets.QWidget = None) -> None:
         super().__init__(parent)
 
         self.icon_pixmap: QtGui.QPixmap = QtGui.QPixmap()
@@ -13,6 +13,7 @@ class IconButton(QtWidgets.QPushButton):
         self._name: str = ""
         self.text_color: QtGui.QColor = QtGui.QColor(255, 255, 255)
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_AcceptTouchEvents, True)
+        self.pressed_bg_color = QtGui.QColor(223, 223, 223, 70)  # Set to solid white
 
     @property
     def name(self):
@@ -42,6 +43,10 @@ class IconButton(QtWidgets.QPushButton):
         painter.setRenderHint(painter.RenderHint.SmoothPixmapTransform, True)
         painter.setRenderHint(painter.RenderHint.LosslessImageRendering, True)
 
+        if self.isDown():
+            painter.setBrush(QtGui.QBrush(self.pressed_bg_color))
+            painter.setPen(QtCore.Qt.PenStyle.NoPen)
+            painter.drawRoundedRect(self.rect().toRectF(), 6, 6)
         _pen = QtGui.QPen()
         _pen.setStyle(QtCore.Qt.PenStyle.NoPen)
         _pen.setColor(self.text_color)
@@ -49,38 +54,36 @@ class IconButton(QtWidgets.QPushButton):
 
         painter.setPen(_pen)
 
-        # bg_color = (
-        #     QtGui.QColor(164, 164, 164)
-        #     if self.isDown()
-        #     else QtGui.QColor(223, 223, 223)
-        # )
+        y = 15.0 if self.text_formatting else 5.0
+        if self.isDown():
+            _icon_rect = QtCore.QRectF(
+                2.5, 2.5, (self.width() - 5), (self.height() - 5 - y)
+            )
+        else:
+            _icon_rect = QtCore.QRectF(0.0, 0.0, (self.width()), (self.height() - y))
 
-        # * Build icon
-        x = y = 15.0 if self.text_formatting else 5.0
-        _icon_rect = QtCore.QRectF(0.0, 0.0, (self.width() - x), (self.height() - y))
+        if not self.icon_pixmap.isNull():
+            _icon_scaled = self.icon_pixmap.scaled(
+                _icon_rect.size().toSize(),
+                QtCore.Qt.AspectRatioMode.KeepAspectRatio,
+                QtCore.Qt.TransformationMode.SmoothTransformation,
+            )
+            scaled_width = _icon_scaled.width()
+            scaled_height = _icon_scaled.height()
+            adjusted_x = (_icon_rect.width() - scaled_width) / 2.0
+            adjusted_y = (_icon_rect.height() - scaled_height) / 2.0
+            adjusted_icon_rect = QtCore.QRectF(
+                _icon_rect.x() + adjusted_x,
+                _icon_rect.y() + adjusted_y,
+                scaled_width,
+                scaled_height,
+            )
 
-        _icon_scaled = self.icon_pixmap.scaled(
-            _icon_rect.size().toSize(),
-            QtCore.Qt.AspectRatioMode.KeepAspectRatio,
-            QtCore.Qt.TransformationMode.SmoothTransformation,
-        )
-        # Calculate the actual QRect for the scaled pixmap (centering it if needed)
-        scaled_width = _icon_scaled.width()
-        scaled_height = _icon_scaled.height()
-        adjusted_x = (_icon_rect.width() - scaled_width) / 2.0
-        adjusted_y = (_icon_rect.height() - scaled_height) / 2.0
-        adjusted_icon_rect = QtCore.QRectF(
-            _icon_rect.x() + adjusted_x,
-            _icon_rect.y() + adjusted_y,
-            scaled_width,
-            scaled_height,
-        )
-
-        painter.drawPixmap(
-            adjusted_icon_rect,  # Target area (center adjusted)
-            _icon_scaled,  # Scaled pixmap
-            _icon_scaled.rect().toRectF(),  # Entire source (scaled) pixmap
-        )
+            painter.drawPixmap(
+                adjusted_icon_rect,
+                _icon_scaled,
+                _icon_scaled.rect().toRectF(),
+            )
 
         if self.has_text:
             painter.setCompositionMode(
@@ -99,9 +102,9 @@ class IconButton(QtWidgets.QPushButton):
                     scaled_height,
                 )
             elif self.text_formatting == "bottom":
-                adjusted_x = (_icon_rect.width() - self.width() + 5.0) / 2.0
+                # adjusted_x = 0#(_icon_rect.width() - self.width() + 5.0) / 2.0
                 adjusted_rectF = QtCore.QRectF(
-                    _icon_rect.x() + adjusted_x,
+                    0,
                     _icon_rect.height(),
                     self.width(),
                     self.height() - _icon_rect.height(),
@@ -112,12 +115,9 @@ class IconButton(QtWidgets.QPushButton):
 
             painter.drawText(
                 adjusted_rectF,
-                QtCore.Qt.TextFlag.TextSingleLine
-                | QtCore.Qt.AlignmentFlag.AlignHCenter
-                | QtCore.Qt.AlignmentFlag.AlignVCenter,
+                QtCore.Qt.TextFlag.TextSingleLine | QtCore.Qt.AlignmentFlag.AlignCenter,
                 str(self.text()),
             )
-            painter.setPen(QtCore.Qt.PenStyle.NoPen)
 
         painter.end()
 

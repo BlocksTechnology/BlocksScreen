@@ -4,7 +4,8 @@ import typing
 from functools import partial
 import re
 from lib.moonrakerComm import MoonWebSocket
-from lib.panels.widgets.loadPage import LoadScreen
+from lib.panels.widgets.loadWidget import LoadingOverlayWidget
+from lib.panels.widgets.basePopup import BasePopup
 from lib.panels.widgets.numpadPage import CustomNumpad
 from lib.panels.widgets.printcorePage import SwapPrintcorePage
 from lib.panels.widgets.probeHelperPage import ProbeHelper
@@ -79,8 +80,12 @@ class ControlTab(QtWidgets.QStackedWidget):
         self.addWidget(self.probe_helper_page)
         self.printcores_page = SwapPrintcorePage(self)
         self.addWidget(self.printcores_page)
-        self.loadpage = LoadScreen(self, LoadScreen.AnimationGIF.DEFAULT)
-        self.addWidget(self.loadpage)
+
+        self.loadscreen = BasePopup(self, floating=False, dialog=False)
+        self.loadwidget = LoadingOverlayWidget(
+            self, LoadingOverlayWidget.AnimationGIF.DEFAULT
+        )
+        self.loadscreen.add_widget(self.loadwidget)
 
         self.sliderPage = SliderPage(self)
         self.addWidget(self.sliderPage)
@@ -415,17 +420,17 @@ class ControlTab(QtWidgets.QStackedWidget):
             return
 
         if value["swapping"] == "in_pos":
-            self.loadpage.hide()
+            self.loadscreen.hide()
             self.printcores_page.show()
             self.disable_popups.emit(True)
             self.printcores_page.setText(
                 "Please Insert Print Core \n \n Afterwards click continue"
             )
         if value["swapping"] == "unloading":
-            self.loadpage.set_status_message("Unloading print core")
+            self.loadwidget.set_status_message("Unloading print core")
 
         if value["swapping"] == "cleaning":
-            self.loadpage.set_status_message("Cleaning print core")
+            self.loadwidget.set_status_message("Cleaning print core")
 
     def _handle_gcode_response(self, messages: list):
         """Handle gcode response for Z-tilt adjustment"""
@@ -448,21 +453,23 @@ class ControlTab(QtWidgets.QStackedWidget):
                     probed_range = float(match.group(3))
                     tolerance = float(match.group(4))
                     if retries_done == retries_total:
-                        self.loadpage.hide()
+                        self.loadscreen.hide()
                         return
 
                     if probed_range < tolerance:
-                        self.loadpage.hide()
+                        self.loadscreen.hide()
                         return
 
-                    self.loadpage.set_status_message(
+                    self.loadwidget.set_status_message(
                         f"Retries: {retries_done}/{retries_total} | Range: {probed_range:.6f} | Tolerance: {tolerance:.6f}"
                     )
 
     def handle_ztilt(self):
         """Handle Z-Tilt Adjustment"""
-        self.loadpage.show()
-        self.loadpage.set_status_message("Please wait, performing Z-axis calibration.")
+        self.loadscreen.show()
+        self.loadwidget.set_status_message(
+            "Please wait, performing Z-axis calibration."
+        )
         self.run_gcode_signal.emit("G28\nM400\nZ_TILT_ADJUST")
 
     @QtCore.pyqtSlot(str, name="on-klippy-status")
@@ -479,8 +486,8 @@ class ControlTab(QtWidgets.QStackedWidget):
     def show_swapcore(self):
         """Show swap printcore"""
         self.run_gcode_signal.emit("CHANGE_PRINTCORES")
-        self.loadpage.show()
-        self.loadpage.set_status_message("Preparing to swap print core")
+        self.loadscreen.show()
+        self.loadwidget.set_status_message("Preparing to swap print core")
 
     def handle_swapcore(self):
         """Handle swap printcore routine finish"""
@@ -652,7 +659,7 @@ class ControlTab(QtWidgets.QStackedWidget):
             self.panel.mva_z_value_label.setText(f"{values[2]:.3f}")
 
             if values[0] == "252,50" and values[1] == "250" and values[2] == "50":
-                self.loadpage.hide
+                self.loadscreen.hide
         self.toolhead_info.update({f"{field}": values})
 
     @QtCore.pyqtSlot(str, str, float, name="on-extruder-update")
