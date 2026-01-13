@@ -84,7 +84,10 @@ class Popup(QtWidgets.QDialog):
         parent_rect = main_window.geometry()
 
         width = int(parent_rect.width() * 0.85)
-        height = min(self.text_label.rect().height(), self.icon_label.rect().height())
+        height = max(
+            self.text_label.height(),
+            self.icon_label.height(),
+        ) + 10
 
         x = parent_rect.x() + (parent_rect.width() - width) // 2
         y = parent_rect.y() + 20
@@ -161,8 +164,8 @@ class Popup(QtWidgets.QDialog):
                 )
                 return
             self.userInput = message_entry.get("userInput")
-
-            self.text_label.setText(message)
+            self.text_label.setFixedHeight(60)
+            self.text_label.setFixedWidth(500)
 
             match self.message_type:
                 case Popup.MessageType.INFO:
@@ -186,6 +189,10 @@ class Popup(QtWidgets.QDialog):
                     QtGui.QPixmap(":/arrow_icons/media/btn_icons/right_arrow.svg")
                 )
             self.setGeometry(end_rect)
+            self.text_label.setText(message)
+            self.text_label.setFixedHeight(
+                int(self.text_label.sizeHint().height() * 1.2)
+            )
             self.show()
 
     def showEvent(self, a0: QtGui.QShowEvent) -> None:
@@ -228,16 +235,13 @@ class Popup(QtWidgets.QDialog):
 
         self.icon_label = QtWidgets.QLabel(self)
         self.icon_label.setFixedSize(QtCore.QSize(60, 60))
+        self.icon_label.setMaximumSize(QtCore.QSize(60, 60))
         self.icon_label.setScaledContents(True)
 
-        self.horizontal_layout.addWidget(self.icon_label)
-
         self.text_label = QtWidgets.QLabel(self)
+        self.text_label.setStyleSheet("background: transparent; color:white")
+        self.text_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self.text_label.setWordWrap(True)
-        self.text_label.setAlignment(
-            QtCore.Qt.AlignmentFlag.AlignVCenter | QtCore.Qt.AlignmentFlag.AlignHCenter
-        )
-
         font = self.text_label.font()
         font.setPixelSize(18)
         font.setFamily("sans-serif")
@@ -248,9 +252,9 @@ class Popup(QtWidgets.QDialog):
         self.text_label.setPalette(palette)
         self.text_label.setFont(font)
 
-        self.spacer = QtWidgets.QSpacerItem(60, 60)
         self.actionbtn = IconButton(self)
         self.actionbtn.setMaximumSize(QtCore.QSize(60, 60))
 
+        self.horizontal_layout.addWidget(self.icon_label)
         self.horizontal_layout.addWidget(self.text_label)
         self.horizontal_layout.addWidget(self.actionbtn)
