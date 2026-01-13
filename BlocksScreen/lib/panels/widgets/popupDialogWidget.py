@@ -84,10 +84,13 @@ class Popup(QtWidgets.QDialog):
         parent_rect = main_window.geometry()
 
         width = int(parent_rect.width() * 0.85)
-        height = max(
-            self.text_label.height(),
-            self.icon_label.height(),
-        ) + 10
+        height = (
+            max(
+                self.text_label.height(),
+                self.icon_label.height(),
+            )
+            + 10
+        )
 
         x = parent_rect.x() + (parent_rect.width() - width) // 2
         y = parent_rect.y() + 20
