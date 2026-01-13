@@ -747,13 +747,16 @@ class MoonAPI(QtCore.QObject):
 
     @QtCore.pyqtSlot(name="update-refresh")
     @QtCore.pyqtSlot(str, name="update-refresh")
-    def refresh_update_status(self, name: str = "") -> bool:
+    def refresh_update_status(self, name: str = None) -> bool:
         """Refresh packages state"""
-        if not isinstance(name, str) or not name:
-            return False
-        return self._ws.send_request(
-            method="machine.update.refresh", params={"name": name}
-        )
+        if isinstance(name, str):
+            return self._ws.send_request(
+                method="machine.update.refresh", params={"name": name}
+            )
+        else:
+            return self._ws.send_request(
+                method="machine.update.refresh",
+            )
 
     @QtCore.pyqtSlot(name="update-full")
     def full_update(self) -> bool:
