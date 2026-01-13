@@ -42,12 +42,8 @@
   </property>
   <property name="styleSheet">
    <string notr="true">#ConnectivityForm{
-	background-image: url(:/background/media/1st_background.png);
-}
-
-
-
-</string>
+background-image: url(:/background/media/1st_background.png);
+}</string>
   </property>
   <property name="class" stdset="0">
    <string/>
@@ -115,551 +111,613 @@
    <property name="lineWidth">
     <number>0</number>
    </property>
-   <widget class="IconButton" name="RetryConnectionButton">
-    <property name="geometry">
-     <rect>
-      <x>623</x>
-      <y>10</y>
-      <width>154</width>
-      <height>80</height>
-     </rect>
-    </property>
-    <property name="sizePolicy">
-     <sizepolicy hsizetype="MinimumExpanding" vsizetype="Fixed">
-      <horstretch>0</horstretch>
-      <verstretch>0</verstretch>
-     </sizepolicy>
-    </property>
-    <property name="minimumSize">
-     <size>
-      <width>154</width>
-      <height>80</height>
-     </size>
-    </property>
-    <property name="maximumSize">
-     <size>
-      <width>154</width>
-      <height>80</height>
-     </size>
-    </property>
-    <property name="baseSize">
-     <size>
-      <width>80</width>
-      <height>80</height>
-     </size>
-    </property>
-    <property name="palette">
-     <palette>
-      <active/>
-      <inactive/>
-      <disabled/>
-     </palette>
-    </property>
-    <property name="font">
-     <font>
-      <pointsize>13</pointsize>
-     </font>
-    </property>
-    <property name="tabletTracking">
-     <bool>true</bool>
-    </property>
-    <property name="focusPolicy">
-     <enum>Qt::ClickFocus</enum>
-    </property>
-    <property name="autoFillBackground">
-     <bool>false</bool>
-    </property>
-    <property name="styleSheet">
-     <string notr="true"/>
-    </property>
-    <property name="text">
-     <string>Retry </string>
-    </property>
-    <property name="icon">
-     <iconset>
-      <normaloff>:/system_icons/media/btn_icons/retry_connection.svg</normaloff>:/system_icons/media/btn_icons/retry_connection.svg</iconset>
-    </property>
-    <property name="iconSize">
-     <size>
-      <width>16</width>
-      <height>16</height>
-     </size>
-    </property>
-    <property name="checkable">
-     <bool>false</bool>
-    </property>
-    <property name="autoRepeatDelay">
+   <layout class="QHBoxLayout" name="horizontalLayout">
+    <property name="spacing">
      <number>0</number>
     </property>
-    <property name="autoRepeatInterval">
+    <property name="leftMargin">
      <number>0</number>
     </property>
-    <property name="autoDefault">
-     <bool>false</bool>
+    <property name="topMargin">
+     <number>5</number>
     </property>
-    <property name="default">
-     <bool>false</bool>
-    </property>
-    <property name="flat">
-     <bool>true</bool>
-    </property>
-    <property name="text_formatting" stdset="0">
-     <string>bottom</string>
-    </property>
-    <property name="icon_pixmap" stdset="0">
-     <pixmap resource="resources/icon_resources.qrc">:/system/media/btn_icons/restart_printer.svg</pixmap>
-    </property>
-    <property name="text_color" stdset="0">
-     <color>
-      <red>255</red>
-      <green>255</green>
-      <blue>255</blue>
-     </color>
-    </property>
-    <property name="has_text" stdset="0">
-     <bool>true</bool>
-    </property>
-   </widget>
-   <widget class="IconButton" name="wifi_button">
-    <property name="geometry">
-     <rect>
-      <x>475</x>
-      <y>11</y>
-      <width>154</width>
-      <height>80</height>
-     </rect>
-    </property>
-    <property name="sizePolicy">
-     <sizepolicy hsizetype="MinimumExpanding" vsizetype="Fixed">
-      <horstretch>0</horstretch>
-      <verstretch>0</verstretch>
-     </sizepolicy>
-    </property>
-    <property name="minimumSize">
-     <size>
-      <width>154</width>
-      <height>80</height>
-     </size>
-    </property>
-    <property name="maximumSize">
-     <size>
-      <width>154</width>
-      <height>80</height>
-     </size>
-    </property>
-    <property name="baseSize">
-     <size>
-      <width>80</width>
-      <height>80</height>
-     </size>
-    </property>
-    <property name="tabletTracking">
-     <bool>true</bool>
-    </property>
-    <property name="focusPolicy">
-     <enum>Qt::NoFocus</enum>
-    </property>
-    <property name="contextMenuPolicy">
-     <enum>Qt::NoContextMenu</enum>
-    </property>
-    <property name="autoFillBackground">
-     <bool>false</bool>
-    </property>
-    <property name="text">
-     <string>Wifi Settings</string>
-    </property>
-    <property name="icon">
-     <iconset>
-      <normaloff>:/system_icons/media/btn_icons/retry_connection.svg</normaloff>:/system_icons/media/btn_icons/retry_connection.svg</iconset>
-    </property>
-    <property name="autoDefault">
-     <bool>false</bool>
-    </property>
-    <property name="default">
-     <bool>false</bool>
-    </property>
-    <property name="flat">
-     <bool>true</bool>
-    </property>
-    <property name="class" stdset="0">
-     <string>system_control_btn</string>
-    </property>
-    <property name="icon_pixmap" stdset="0">
-     <pixmap resource="resources/icon_resources.qrc">:/network/media/btn_icons/wifi_config.svg</pixmap>
-    </property>
-    <property name="has_text" stdset="0">
-     <bool>true</bool>
-    </property>
-    <property name="text_formatting" stdset="0">
-     <string>bottom</string>
-    </property>
-   </widget>
-   <widget class="IconButton" name="FirmwareRestartButton">
-    <property name="geometry">
-     <rect>
-      <x>315</x>
-      <y>10</y>
-      <width>154</width>
-      <height>80</height>
-     </rect>
-    </property>
-    <property name="sizePolicy">
-     <sizepolicy hsizetype="MinimumExpanding" vsizetype="Fixed">
-      <horstretch>0</horstretch>
-      <verstretch>0</verstretch>
-     </sizepolicy>
-    </property>
-    <property name="minimumSize">
-     <size>
-      <width>154</width>
-      <height>80</height>
-     </size>
-    </property>
-    <property name="maximumSize">
-     <size>
-      <width>154</width>
-      <height>80</height>
-     </size>
-    </property>
-    <property name="baseSize">
-     <size>
-      <width>160</width>
-      <height>80</height>
-     </size>
-    </property>
-    <property name="cursor">
-     <cursorShape>BlankCursor</cursorShape>
-    </property>
-    <property name="tabletTracking">
-     <bool>true</bool>
-    </property>
-    <property name="focusPolicy">
-     <enum>Qt::NoFocus</enum>
-    </property>
-    <property name="contextMenuPolicy">
-     <enum>Qt::NoContextMenu</enum>
-    </property>
-    <property name="autoFillBackground">
-     <bool>false</bool>
-    </property>
-    <property name="text">
-     <string>Firmware Restart</string>
-    </property>
-    <property name="icon">
-     <iconset>
-      <normaloff>:/system_icons/media/btn_icons/firmware_restart.svg</normaloff>:/system_icons/media/btn_icons/firmware_restart.svg</iconset>
-    </property>
-    <property name="autoDefault">
-     <bool>false</bool>
-    </property>
-    <property name="default">
-     <bool>false</bool>
-    </property>
-    <property name="flat">
-     <bool>true</bool>
-    </property>
-    <property name="icon_pixmap" stdset="0">
-     <pixmap resource="resources/icon_resources.qrc">:/system/media/btn_icons/restart_firmware.svg</pixmap>
-    </property>
-    <property name="has_text" stdset="0">
-     <bool>true</bool>
-    </property>
-    <property name="text_formatting" stdset="0">
-     <string>bottom</string>
-    </property>
-    <property name="text_color" stdset="0">
-     <color>
-      <red>255</red>
-      <green>255</green>
-      <blue>255</blue>
-     </color>
-    </property>
-   </widget>
-   <widget class="IconButton" name="RebootSystemButton">
-    <property name="geometry">
-     <rect>
-      <x>157</x>
-      <y>10</y>
-      <width>154</width>
-      <height>80</height>
-     </rect>
-    </property>
-    <property name="sizePolicy">
-     <sizepolicy hsizetype="MinimumExpanding" vsizetype="Fixed">
-      <horstretch>0</horstretch>
-      <verstretch>0</verstretch>
-     </sizepolicy>
-    </property>
-    <property name="minimumSize">
-     <size>
-      <width>154</width>
-      <height>80</height>
-     </size>
-    </property>
-    <property name="maximumSize">
-     <size>
-      <width>154</width>
-      <height>80</height>
-     </size>
-    </property>
-    <property name="baseSize">
-     <size>
-      <width>80</width>
-      <height>80</height>
-     </size>
-    </property>
-    <property name="cursor">
-     <cursorShape>BlankCursor</cursorShape>
-    </property>
-    <property name="tabletTracking">
-     <bool>true</bool>
-    </property>
-    <property name="focusPolicy">
-     <enum>Qt::NoFocus</enum>
-    </property>
-    <property name="contextMenuPolicy">
-     <enum>Qt::NoContextMenu</enum>
-    </property>
-    <property name="autoFillBackground">
-     <bool>false</bool>
-    </property>
-    <property name="text">
-     <string>Reboot</string>
-    </property>
-    <property name="icon">
-     <iconset>
-      <normaloff>:/system_icons/media/btn_icons/firmware_restart.svg</normaloff>:/system_icons/media/btn_icons/firmware_restart.svg</iconset>
-    </property>
-    <property name="autoDefault">
-     <bool>false</bool>
-    </property>
-    <property name="default">
-     <bool>false</bool>
-    </property>
-    <property name="flat">
-     <bool>true</bool>
-    </property>
-    <property name="icon_pixmap" stdset="0">
-     <pixmap resource="resources/icon_resources.qrc">:/system/media/btn_icons/reboot.svg</pixmap>
-    </property>
-    <property name="text_formatting" stdset="0">
-     <string>bottom</string>
-    </property>
-    <property name="text_color" stdset="0">
-     <color>
-      <red>255</red>
-      <green>255</green>
-      <blue>255</blue>
-     </color>
-    </property>
-    <property name="has_text" stdset="0">
-     <bool>true</bool>
-    </property>
-   </widget>
-   <widget class="IconButton" name="RestartKlipperButton">
-    <property name="geometry">
-     <rect>
-      <x>4</x>
-      <y>10</y>
-      <width>154</width>
-      <height>80</height>
-     </rect>
-    </property>
-    <property name="sizePolicy">
-     <sizepolicy hsizetype="MinimumExpanding" vsizetype="Fixed">
-      <horstretch>0</horstretch>
-      <verstretch>0</verstretch>
-     </sizepolicy>
-    </property>
-    <property name="minimumSize">
-     <size>
-      <width>154</width>
-      <height>80</height>
-     </size>
-    </property>
-    <property name="maximumSize">
-     <size>
-      <width>154</width>
-      <height>80</height>
-     </size>
-    </property>
-    <property name="baseSize">
-     <size>
-      <width>160</width>
-      <height>80</height>
-     </size>
-    </property>
-    <property name="palette">
-     <palette>
-      <active>
-       <colorrole role="WindowText">
-        <brush brushstyle="SolidPattern">
-         <color alpha="255">
-          <red>66</red>
-          <green>66</green>
-          <blue>66</blue>
-         </color>
-        </brush>
-       </colorrole>
-       <colorrole role="Text">
-        <brush brushstyle="SolidPattern">
-         <color alpha="255">
-          <red>66</red>
-          <green>66</green>
-          <blue>66</blue>
-         </color>
-        </brush>
-       </colorrole>
-       <colorrole role="ButtonText">
-        <brush brushstyle="SolidPattern">
-         <color alpha="255">
-          <red>66</red>
-          <green>66</green>
-          <blue>66</blue>
-         </color>
-        </brush>
-       </colorrole>
-      </active>
-      <inactive>
-       <colorrole role="WindowText">
-        <brush brushstyle="SolidPattern">
-         <color alpha="255">
-          <red>66</red>
-          <green>66</green>
-          <blue>66</blue>
-         </color>
-        </brush>
-       </colorrole>
-       <colorrole role="Text">
-        <brush brushstyle="SolidPattern">
-         <color alpha="255">
-          <red>66</red>
-          <green>66</green>
-          <blue>66</blue>
-         </color>
-        </brush>
-       </colorrole>
-       <colorrole role="ButtonText">
-        <brush brushstyle="SolidPattern">
-         <color alpha="255">
-          <red>66</red>
-          <green>66</green>
-          <blue>66</blue>
-         </color>
-        </brush>
-       </colorrole>
-      </inactive>
-      <disabled>
-       <colorrole role="WindowText">
-        <brush brushstyle="SolidPattern">
-         <color alpha="255">
-          <red>66</red>
-          <green>66</green>
-          <blue>66</blue>
-         </color>
-        </brush>
-       </colorrole>
-       <colorrole role="Text">
-        <brush brushstyle="SolidPattern">
-         <color alpha="255">
-          <red>66</red>
-          <green>66</green>
-          <blue>66</blue>
-         </color>
-        </brush>
-       </colorrole>
-       <colorrole role="ButtonText">
-        <brush brushstyle="SolidPattern">
-         <color alpha="255">
-          <red>66</red>
-          <green>66</green>
-          <blue>66</blue>
-         </color>
-        </brush>
-       </colorrole>
-      </disabled>
-     </palette>
-    </property>
-    <property name="font">
-     <font>
-      <strikeout>false</strikeout>
-      <stylestrategy>PreferAntialias</stylestrategy>
-      <kerning>false</kerning>
-     </font>
-    </property>
-    <property name="cursor">
-     <cursorShape>BlankCursor</cursorShape>
-    </property>
-    <property name="tabletTracking">
-     <bool>true</bool>
-    </property>
-    <property name="focusPolicy">
-     <enum>Qt::NoFocus</enum>
-    </property>
-    <property name="contextMenuPolicy">
-     <enum>Qt::NoContextMenu</enum>
-    </property>
-    <property name="layoutDirection">
-     <enum>Qt::LeftToRight</enum>
-    </property>
-    <property name="autoFillBackground">
-     <bool>false</bool>
-    </property>
-    <property name="styleSheet">
-     <string notr="true"/>
-    </property>
-    <property name="text">
-     <string>Restart Klipper</string>
-    </property>
-    <property name="icon">
-     <iconset>
-      <normalon>:/system_icons/media/btn_icons/restart_klipper.svg</normalon>
-     </iconset>
-    </property>
-    <property name="iconSize">
-     <size>
-      <width>46</width>
-      <height>42</height>
-     </size>
-    </property>
-    <property name="checkable">
-     <bool>false</bool>
-    </property>
-    <property name="autoRepeat">
-     <bool>false</bool>
-    </property>
-    <property name="autoExclusive">
-     <bool>false</bool>
-    </property>
-    <property name="autoRepeatDelay">
+    <property name="rightMargin">
      <number>0</number>
     </property>
-    <property name="autoRepeatInterval">
+    <property name="bottomMargin">
      <number>0</number>
     </property>
-    <property name="autoDefault">
-     <bool>false</bool>
-    </property>
-    <property name="flat">
-     <bool>true</bool>
-    </property>
-    <property name="icon_pixmap" stdset="0">
-     <pixmap resource="resources/icon_resources.qrc">:/system/media/btn_icons/restart_klipper.svg</pixmap>
-    </property>
-    <property name="has_text" stdset="0">
-     <bool>true</bool>
-    </property>
-    <property name="text_formatting" stdset="0">
-     <string>bottom</string>
-    </property>
-    <property name="text_color" stdset="0">
-     <color>
-      <red>255</red>
-      <green>255</green>
-      <blue>255</blue>
-     </color>
-    </property>
-   </widget>
+    <item alignment="Qt::AlignHCenter|Qt::AlignTop">
+     <widget class="IconButton" name="RestartKlipperButton">
+      <property name="sizePolicy">
+       <sizepolicy hsizetype="MinimumExpanding" vsizetype="Fixed">
+        <horstretch>0</horstretch>
+        <verstretch>0</verstretch>
+       </sizepolicy>
+      </property>
+      <property name="minimumSize">
+       <size>
+        <width>100</width>
+        <height>80</height>
+       </size>
+      </property>
+      <property name="maximumSize">
+       <size>
+        <width>100</width>
+        <height>80</height>
+       </size>
+      </property>
+      <property name="baseSize">
+       <size>
+        <width>160</width>
+        <height>80</height>
+       </size>
+      </property>
+      <property name="palette">
+       <palette>
+        <active>
+         <colorrole role="WindowText">
+          <brush brushstyle="SolidPattern">
+           <color alpha="255">
+            <red>66</red>
+            <green>66</green>
+            <blue>66</blue>
+           </color>
+          </brush>
+         </colorrole>
+         <colorrole role="Text">
+          <brush brushstyle="SolidPattern">
+           <color alpha="255">
+            <red>66</red>
+            <green>66</green>
+            <blue>66</blue>
+           </color>
+          </brush>
+         </colorrole>
+         <colorrole role="ButtonText">
+          <brush brushstyle="SolidPattern">
+           <color alpha="255">
+            <red>66</red>
+            <green>66</green>
+            <blue>66</blue>
+           </color>
+          </brush>
+         </colorrole>
+        </active>
+        <inactive>
+         <colorrole role="WindowText">
+          <brush brushstyle="SolidPattern">
+           <color alpha="255">
+            <red>66</red>
+            <green>66</green>
+            <blue>66</blue>
+           </color>
+          </brush>
+         </colorrole>
+         <colorrole role="Text">
+          <brush brushstyle="SolidPattern">
+           <color alpha="255">
+            <red>66</red>
+            <green>66</green>
+            <blue>66</blue>
+           </color>
+          </brush>
+         </colorrole>
+         <colorrole role="ButtonText">
+          <brush brushstyle="SolidPattern">
+           <color alpha="255">
+            <red>66</red>
+            <green>66</green>
+            <blue>66</blue>
+           </color>
+          </brush>
+         </colorrole>
+        </inactive>
+        <disabled>
+         <colorrole role="WindowText">
+          <brush brushstyle="SolidPattern">
+           <color alpha="255">
+            <red>66</red>
+            <green>66</green>
+            <blue>66</blue>
+           </color>
+          </brush>
+         </colorrole>
+         <colorrole role="Text">
+          <brush brushstyle="SolidPattern">
+           <color alpha="255">
+            <red>66</red>
+            <green>66</green>
+            <blue>66</blue>
+           </color>
+          </brush>
+         </colorrole>
+         <colorrole role="ButtonText">
+          <brush brushstyle="SolidPattern">
+           <color alpha="255">
+            <red>66</red>
+            <green>66</green>
+            <blue>66</blue>
+           </color>
+          </brush>
+         </colorrole>
+        </disabled>
+       </palette>
+      </property>
+      <property name="font">
+       <font>
+        <strikeout>false</strikeout>
+        <stylestrategy>PreferAntialias</stylestrategy>
+        <kerning>false</kerning>
+       </font>
+      </property>
+      <property name="cursor">
+       <cursorShape>BlankCursor</cursorShape>
+      </property>
+      <property name="tabletTracking">
+       <bool>true</bool>
+      </property>
+      <property name="focusPolicy">
+       <enum>Qt::NoFocus</enum>
+      </property>
+      <property name="contextMenuPolicy">
+       <enum>Qt::NoContextMenu</enum>
+      </property>
+      <property name="layoutDirection">
+       <enum>Qt::LeftToRight</enum>
+      </property>
+      <property name="autoFillBackground">
+       <bool>false</bool>
+      </property>
+      <property name="styleSheet">
+       <string notr="true"/>
+      </property>
+      <property name="text">
+       <string>Restart Klipper</string>
+      </property>
+      <property name="icon">
+       <iconset>
+        <normalon>:/system_icons/media/btn_icons/restart_klipper.svg</normalon>
+       </iconset>
+      </property>
+      <property name="iconSize">
+       <size>
+        <width>46</width>
+        <height>42</height>
+       </size>
+      </property>
+      <property name="checkable">
+       <bool>false</bool>
+      </property>
+      <property name="autoRepeat">
+       <bool>false</bool>
+      </property>
+      <property name="autoExclusive">
+       <bool>false</bool>
+      </property>
+      <property name="autoRepeatDelay">
+       <number>0</number>
+      </property>
+      <property name="autoRepeatInterval">
+       <number>0</number>
+      </property>
+      <property name="autoDefault">
+       <bool>false</bool>
+      </property>
+      <property name="flat">
+       <bool>true</bool>
+      </property>
+      <property name="icon_pixmap" stdset="0">
+       <pixmap resource="resources/icon_resources.qrc">:/system/media/btn_icons/restart_klipper.svg</pixmap>
+      </property>
+      <property name="has_text" stdset="0">
+       <bool>true</bool>
+      </property>
+      <property name="text_formatting" stdset="0">
+       <string>bottom</string>
+      </property>
+      <property name="text_color" stdset="0">
+       <color>
+        <red>255</red>
+        <green>255</green>
+        <blue>255</blue>
+       </color>
+      </property>
+     </widget>
+    </item>
+    <item alignment="Qt::AlignHCenter|Qt::AlignTop">
+     <widget class="IconButton" name="RebootSystemButton">
+      <property name="sizePolicy">
+       <sizepolicy hsizetype="MinimumExpanding" vsizetype="Fixed">
+        <horstretch>0</horstretch>
+        <verstretch>0</verstretch>
+       </sizepolicy>
+      </property>
+      <property name="minimumSize">
+       <size>
+        <width>100</width>
+        <height>80</height>
+       </size>
+      </property>
+      <property name="maximumSize">
+       <size>
+        <width>100</width>
+        <height>80</height>
+       </size>
+      </property>
+      <property name="baseSize">
+       <size>
+        <width>80</width>
+        <height>80</height>
+       </size>
+      </property>
+      <property name="cursor">
+       <cursorShape>BlankCursor</cursorShape>
+      </property>
+      <property name="tabletTracking">
+       <bool>true</bool>
+      </property>
+      <property name="focusPolicy">
+       <enum>Qt::NoFocus</enum>
+      </property>
+      <property name="contextMenuPolicy">
+       <enum>Qt::NoContextMenu</enum>
+      </property>
+      <property name="autoFillBackground">
+       <bool>false</bool>
+      </property>
+      <property name="text">
+       <string>Reboot</string>
+      </property>
+      <property name="icon">
+       <iconset>
+        <normaloff>:/system_icons/media/btn_icons/firmware_restart.svg</normaloff>:/system_icons/media/btn_icons/firmware_restart.svg</iconset>
+      </property>
+      <property name="autoDefault">
+       <bool>false</bool>
+      </property>
+      <property name="default">
+       <bool>false</bool>
+      </property>
+      <property name="flat">
+       <bool>true</bool>
+      </property>
+      <property name="icon_pixmap" stdset="0">
+       <pixmap resource="resources/icon_resources.qrc">:/system/media/btn_icons/reboot.svg</pixmap>
+      </property>
+      <property name="text_formatting" stdset="0">
+       <string>bottom</string>
+      </property>
+      <property name="text_color" stdset="0">
+       <color>
+        <red>255</red>
+        <green>255</green>
+        <blue>255</blue>
+       </color>
+      </property>
+      <property name="has_text" stdset="0">
+       <bool>true</bool>
+      </property>
+     </widget>
+    </item>
+    <item alignment="Qt::AlignHCenter|Qt::AlignTop">
+     <widget class="IconButton" name="FirmwareRestartButton">
+      <property name="sizePolicy">
+       <sizepolicy hsizetype="MinimumExpanding" vsizetype="Fixed">
+        <horstretch>0</horstretch>
+        <verstretch>0</verstretch>
+       </sizepolicy>
+      </property>
+      <property name="minimumSize">
+       <size>
+        <width>100</width>
+        <height>80</height>
+       </size>
+      </property>
+      <property name="maximumSize">
+       <size>
+        <width>100</width>
+        <height>80</height>
+       </size>
+      </property>
+      <property name="baseSize">
+       <size>
+        <width>160</width>
+        <height>80</height>
+       </size>
+      </property>
+      <property name="cursor">
+       <cursorShape>BlankCursor</cursorShape>
+      </property>
+      <property name="tabletTracking">
+       <bool>true</bool>
+      </property>
+      <property name="focusPolicy">
+       <enum>Qt::NoFocus</enum>
+      </property>
+      <property name="contextMenuPolicy">
+       <enum>Qt::NoContextMenu</enum>
+      </property>
+      <property name="autoFillBackground">
+       <bool>false</bool>
+      </property>
+      <property name="text">
+       <string>Firmware Restart</string>
+      </property>
+      <property name="icon">
+       <iconset>
+        <normaloff>:/system_icons/media/btn_icons/firmware_restart.svg</normaloff>:/system_icons/media/btn_icons/firmware_restart.svg</iconset>
+      </property>
+      <property name="autoDefault">
+       <bool>false</bool>
+      </property>
+      <property name="default">
+       <bool>false</bool>
+      </property>
+      <property name="flat">
+       <bool>true</bool>
+      </property>
+      <property name="icon_pixmap" stdset="0">
+       <pixmap resource="resources/icon_resources.qrc">:/system/media/btn_icons/restart_firmware.svg</pixmap>
+      </property>
+      <property name="has_text" stdset="0">
+       <bool>true</bool>
+      </property>
+      <property name="text_formatting" stdset="0">
+       <string>bottom</string>
+      </property>
+      <property name="text_color" stdset="0">
+       <color>
+        <red>255</red>
+        <green>255</green>
+        <blue>255</blue>
+       </color>
+      </property>
+     </widget>
+    </item>
+    <item alignment="Qt::AlignHCenter|Qt::AlignTop">
+     <widget class="IconButton" name="RetryConnectionButton">
+      <property name="sizePolicy">
+       <sizepolicy hsizetype="MinimumExpanding" vsizetype="Fixed">
+        <horstretch>0</horstretch>
+        <verstretch>0</verstretch>
+       </sizepolicy>
+      </property>
+      <property name="minimumSize">
+       <size>
+        <width>100</width>
+        <height>80</height>
+       </size>
+      </property>
+      <property name="maximumSize">
+       <size>
+        <width>100</width>
+        <height>80</height>
+       </size>
+      </property>
+      <property name="baseSize">
+       <size>
+        <width>80</width>
+        <height>80</height>
+       </size>
+      </property>
+      <property name="palette">
+       <palette>
+        <active/>
+        <inactive/>
+        <disabled/>
+       </palette>
+      </property>
+      <property name="font">
+       <font>
+        <pointsize>13</pointsize>
+       </font>
+      </property>
+      <property name="tabletTracking">
+       <bool>true</bool>
+      </property>
+      <property name="focusPolicy">
+       <enum>Qt::ClickFocus</enum>
+      </property>
+      <property name="autoFillBackground">
+       <bool>false</bool>
+      </property>
+      <property name="styleSheet">
+       <string notr="true"/>
+      </property>
+      <property name="text">
+       <string>Retry </string>
+      </property>
+      <property name="icon">
+       <iconset>
+        <normaloff>:/system_icons/media/btn_icons/retry_connection.svg</normaloff>:/system_icons/media/btn_icons/retry_connection.svg</iconset>
+      </property>
+      <property name="iconSize">
+       <size>
+        <width>16</width>
+        <height>16</height>
+       </size>
+      </property>
+      <property name="checkable">
+       <bool>false</bool>
+      </property>
+      <property name="autoRepeatDelay">
+       <number>0</number>
+      </property>
+      <property name="autoRepeatInterval">
+       <number>0</number>
+      </property>
+      <property name="autoDefault">
+       <bool>false</bool>
+      </property>
+      <property name="default">
+       <bool>false</bool>
+      </property>
+      <property name="flat">
+       <bool>true</bool>
+      </property>
+      <property name="text_formatting" stdset="0">
+       <string>bottom</string>
+      </property>
+      <property name="icon_pixmap" stdset="0">
+       <pixmap resource="resources/icon_resources.qrc">:/system/media/btn_icons/restart_printer.svg</pixmap>
+      </property>
+      <property name="text_color" stdset="0">
+       <color>
+        <red>255</red>
+        <green>255</green>
+        <blue>255</blue>
+       </color>
+      </property>
+      <property name="has_text" stdset="0">
+       <bool>true</bool>
+      </property>
+     </widget>
+    </item>
+    <item alignment="Qt::AlignHCenter|Qt::AlignTop">
+     <widget class="IconButton" name="updatepageButton">
+      <property name="sizePolicy">
+       <sizepolicy hsizetype="MinimumExpanding" vsizetype="Fixed">
+        <horstretch>0</horstretch>
+        <verstretch>0</verstretch>
+       </sizepolicy>
+      </property>
+      <property name="minimumSize">
+       <size>
+        <width>100</width>
+        <height>80</height>
+       </size>
+      </property>
+      <property name="maximumSize">
+       <size>
+        <width>100</width>
+        <height>80</height>
+       </size>
+      </property>
+      <property name="baseSize">
+       <size>
+        <width>80</width>
+        <height>80</height>
+       </size>
+      </property>
+      <property name="cursor">
+       <cursorShape>BlankCursor</cursorShape>
+      </property>
+      <property name="tabletTracking">
+       <bool>true</bool>
+      </property>
+      <property name="focusPolicy">
+       <enum>Qt::NoFocus</enum>
+      </property>
+      <property name="contextMenuPolicy">
+       <enum>Qt::NoContextMenu</enum>
+      </property>
+      <property name="autoFillBackground">
+       <bool>false</bool>
+      </property>
+      <property name="text">
+       <string>Update page</string>
+      </property>
+      <property name="icon">
+       <iconset>
+        <normaloff>:/system_icons/media/btn_icons/firmware_restart.svg</normaloff>:/system_icons/media/btn_icons/firmware_restart.svg</iconset>
+      </property>
+      <property name="autoDefault">
+       <bool>false</bool>
+      </property>
+      <property name="default">
+       <bool>false</bool>
+      </property>
+      <property name="flat">
+       <bool>true</bool>
+      </property>
+      <property name="icon_pixmap" stdset="0">
+       <pixmap resource="resources/icon_resources.qrc">:/system/media/btn_icons/update-software-icon.svg</pixmap>
+      </property>
+      <property name="text_formatting" stdset="0">
+       <string>bottom</string>
+      </property>
+      <property name="text_color" stdset="0">
+       <color>
+        <red>255</red>
+        <green>255</green>
+        <blue>255</blue>
+       </color>
+      </property>
+      <property name="has_text" stdset="0">
+       <bool>true</bool>
+      </property>
+     </widget>
+    </item>
+    <item alignment="Qt::AlignHCenter|Qt::AlignTop">
+     <widget class="IconButton" name="wifi_button">
+      <property name="sizePolicy">
+       <sizepolicy hsizetype="MinimumExpanding" vsizetype="Fixed">
+        <horstretch>0</horstretch>
+        <verstretch>0</verstretch>
+       </sizepolicy>
+      </property>
+      <property name="minimumSize">
+       <size>
+        <width>100</width>
+        <height>80</height>
+       </size>
+      </property>
+      <property name="maximumSize">
+       <size>
+        <width>100</width>
+        <height>80</height>
+       </size>
+      </property>
+      <property name="baseSize">
+       <size>
+        <width>80</width>
+        <height>80</height>
+       </size>
+      </property>
+      <property name="tabletTracking">
+       <bool>true</bool>
+      </property>
+      <property name="focusPolicy">
+       <enum>Qt::NoFocus</enum>
+      </property>
+      <property name="contextMenuPolicy">
+       <enum>Qt::NoContextMenu</enum>
+      </property>
+      <property name="autoFillBackground">
+       <bool>false</bool>
+      </property>
+      <property name="text">
+       <string>Wifi Settings</string>
+      </property>
+      <property name="icon">
+       <iconset>
+        <normaloff>:/system_icons/media/btn_icons/retry_connection.svg</normaloff>:/system_icons/media/btn_icons/retry_connection.svg</iconset>
+      </property>
+      <property name="autoDefault">
+       <bool>false</bool>
+      </property>
+      <property name="default">
+       <bool>false</bool>
+      </property>
+      <property name="flat">
+       <bool>true</bool>
+      </property>
+      <property name="class" stdset="0">
+       <string>system_control_btn</string>
+      </property>
+      <property name="icon_pixmap" stdset="0">
+       <pixmap resource="resources/icon_resources.qrc">:/network/media/btn_icons/wifi_config.svg</pixmap>
+      </property>
+      <property name="has_text" stdset="0">
+       <bool>true</bool>
+      </property>
+      <property name="text_formatting" stdset="0">
+       <string>bottom</string>
+      </property>
+     </widget>
+    </item>
+   </layout>
   </widget>
   <widget class="QFrame" name="cw_Frame">
    <property name="geometry">
@@ -690,6 +748,9 @@
    </property>
    <property name="autoFillBackground">
     <bool>false</bool>
+   </property>
+   <property name="styleSheet">
+    <string notr="true"/>
    </property>
    <property name="frameShape">
     <enum>QFrame::NoFrame</enum>
