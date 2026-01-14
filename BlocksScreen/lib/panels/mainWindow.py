@@ -308,6 +308,7 @@ class MainWindow(QtWidgets.QMainWindow):
         Used to grantee all tabs reset to their
         first page once the user leaves the tab
         """
+        self.up.hide()
         self.printPanel.setCurrentIndex(0)
         self.filamentPanel.setCurrentIndex(0)
         self.controlPanel.setCurrentIndex(0)
