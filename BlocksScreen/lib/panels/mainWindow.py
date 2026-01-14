@@ -567,13 +567,14 @@ class MainWindow(QtWidgets.QMainWindow):
                 return
             _gcode_msg_type, _message = str(_gcode_response[0]).split(" ", maxsplit=1)
             popupWhitelist = ["filament runout", "no filament"]
-            if _message.lower() in popupWhitelist or _gcode_msg_type == "!!":
-                _msg_type = Popup.MessageType.ERROR
-                self.popup.new_message(
-                    message_type=_msg_type,
-                    message=str(_message),
-                    userInput=True,
-                )
+            if _message.lower() not in popupWhitelist or _gcode_msg_type != "!!":
+                return
+
+            self.popup.new_message(
+                message_type=Popup.MessageType.ERROR,
+                message=str(_message),
+                userInput=True,
+            )
 
     @api_handler
     def _handle_error_message(self, method, data, metadata) -> None:
