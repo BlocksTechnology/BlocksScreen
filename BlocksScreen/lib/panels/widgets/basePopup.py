@@ -26,13 +26,13 @@ class BasePopup(QtWidgets.QDialog):
         dialog: bool = True,
     ) -> None:
         super().__init__(parent)
-
         self.setWindowFlags(
-            QtCore.Qt.WindowType.Popup | QtCore.Qt.WindowType.FramelessWindowHint
+            QtCore.Qt.WindowType.Dialog
+            | QtCore.Qt.WindowType.FramelessWindowHint
+            | QtCore.Qt.WindowType.CustomizeWindowHint
         )
         self.floating = floating
         self.dialog = dialog
-
         # Color Variables
         self.btns_text_color = "#ffffff"
         self.cancel_bk_color = "#F44336"
@@ -45,6 +45,7 @@ class BasePopup(QtWidgets.QDialog):
 
         if floating:
             self.setAttribute(QtCore.Qt.WidgetAttribute.WA_TranslucentBackground, True)
+            self.setWindowModality(QtCore.Qt.WindowModality.ApplicationModal)
         else:
             self.setStyleSheet(
                 """
@@ -58,9 +59,6 @@ class BasePopup(QtWidgets.QDialog):
         """Applies the current color variables and adds the central border to the stylesheets."""
         if not self.dialog:
             return
-
-        self.confirm_button.clicked.connect(self.accept)
-        self.cancel_button.clicked.connect(self.reject)
 
         if not self.floating:
             self.confirm_button.setStyleSheet(
@@ -252,5 +250,6 @@ class BasePopup(QtWidgets.QDialog):
             self.cancel_button.setStyleSheet("background: transparent;")
             self.hlauyout.addWidget(self.confirm_button)
             self.hlauyout.addWidget(self.cancel_button)
-
+            self.confirm_button.clicked.connect(self.accept)
+            self.cancel_button.clicked.connect(self.reject)
             self._update_button_style()

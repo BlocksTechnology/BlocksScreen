@@ -123,7 +123,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
 
         # --- UI Setup ---
         self.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
-        self.loadPage = BasePopup(self)
+        self.loadPage = BasePopup(self, dialog=False)
         self.loadwidget = LoadingOverlayWidget(
             self, LoadingOverlayWidget.AnimationGIF.DEFAULT
         )
@@ -208,6 +208,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
             QtGui.QPixmap(":/system/media/btn_icons/update-software-icon.svg")
         )
 
+        # ---- Input Shaper ----
         self.automatic_is = OptionCard(
             self,
             "Automatic\nInput Shaper",
@@ -236,6 +237,12 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
 
         self.is_types: dict = {}
         self.is_aut_types: dict = {}
+        self.dialog_page.accepted.connect(
+            lambda: self.handle_is("SHAPER_CALIBRATE AXIS=Y")
+        )
+        self.dialog_page.rejected.connect(
+            lambda: self.handle_is("SHAPER_CALIBRATE AXIS=X")
+        )
 
         self.is_page.action_btn.clicked.connect(
             lambda: self.change_page(self.indexOf(self.panel.input_shaper_page))
@@ -324,21 +331,12 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
             self.loadPage.hide()
             return
 
-    def on_dialog_button_clicked(self, button_name: str) -> None:
-        print(button_name)
-        """Handle dialog button clicks"""
-        if button_name == "Confirm":
-            self.handle_is("SHAPER_CALIBRATE AXIS=Y")
-        elif button_name == "Cancel":
-            self.handle_is("SHAPER_CALIBRATE AXIS=X")
-
     def handle_is(self, gcode: str) -> None:
         if gcode == "SHAPER_CALIBRATE":
             self.run_gcode_signal.emit("G28\nM400")
             self.aut = True
             self.run_gcode_signal.emit(gcode)
-        if gcode == "":
-            print("manual Input Shaper Selected")
+        elif gcode == "":
             self.dialog_page.confirm_background_color("#dfdfdf")
             self.dialog_page.cancel_background_color("#dfdfdf")
             self.dialog_page.cancel_font_color("#000000")
