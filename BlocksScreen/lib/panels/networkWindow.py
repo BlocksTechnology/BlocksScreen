@@ -6,7 +6,6 @@ from functools import partial
 
 from lib.network import SdbusNetworkManagerAsync
 from lib.panels.widgets.keyboardPage import CustomQwertyKeyboard
-from lib.panels.widgets.loadPage import LoadScreen
 from lib.panels.widgets.popupDialogWidget import Popup
 from lib.ui.wifiConnectivityWindow_ui import Ui_wifi_stacked_page
 from lib.utils.list_model import EntryDelegate, EntryListModel, ListItem
@@ -235,7 +234,6 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.start: bool = True
         self.saved_network = {}
 
-        self.load_popup: LoadScreen = LoadScreen(self)
         self.repeated_request_status = QtCore.QTimer()
         self.repeated_request_status.setInterval(2000)
 
@@ -469,8 +467,6 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         """Handles update end signal
         (closes loading page, returns to normal operation)
         """
-        if self.load_popup.isVisible():
-            self.load_popup.close()
         self.repeated_request_status.stop()
         self.request_network_scan.emit()
         self.build_model_list()
@@ -479,8 +475,6 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         """Handled ongoing update signal,
         calls loading page (blocks user interaction)
         """
-        self.load_popup.set_status_message("Updating...")
-        self.load_popup.show()
         self.repeated_request_status.start(2000)
 
     def reset_view_model(self) -> None:
@@ -979,10 +973,6 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         """Handle available network list update"""
         for entry in data:
             if entry[0] == self.sdbus_network.hotspot_ssid:
-                continue
-            if entry == "blank":
-                continue
-            if entry == "separator":
                 continue
             self.saved_network[entry[0]] = (entry[1], entry[2])
         self.build_model_list()
