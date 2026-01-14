@@ -2,9 +2,7 @@ import enum
 from collections import deque
 from typing import Deque
 from PyQt6 import QtCore, QtGui, QtWidgets
-
-
-BASE_POPUP_TIMEOUT = 6000
+from lib.utils.icon_button import IconButton
 
 
 class Popup(QtWidgets.QDialog):
@@ -25,9 +23,10 @@ class Popup(QtWidgets.QDialog):
 
     def __init__(self, parent) -> None:
         super().__init__(parent)
-        self.popup_timeout = BASE_POPUP_TIMEOUT
         self.timeout_timer = QtCore.QTimer(self)
+        self.timeout_timer.setSingleShot(True)
         self.messages: Deque = deque()
+        self.isShown = False
         self.persistent_notifications: Deque = deque()
         self.message_type: Popup.MessageType = Popup.MessageType.INFO
         self.default_background_color = QtGui.QColor(164, 164, 164)
@@ -48,20 +47,32 @@ class Popup(QtWidgets.QDialog):
         self.slide_out_animation = QtCore.QPropertyAnimation(self, b"geometry")
         self.slide_out_animation.setDuration(200)
         self.slide_out_animation.setEasingCurve(QtCore.QEasingCurve.Type.InCubic)
-        self.slide_in_animation.finished.connect(self.on_slide_in_finished)
+
+        self.SingleTime = QtCore.QTimer(self)
+        self.SingleTime.setInterval(5000)
+        self.SingleTime.setSingleShot(True)
+        self.SingleTime.timeout.connect(self._add_popup)
+
         self.slide_out_animation.finished.connect(self.on_slide_out_finished)
-        self.timeout_timer.timeout.connect(self.slide_out_animation.start)
+        self.slide_in_animation.finished.connect(self.on_slide_in_finished)
+        self.timeout_timer.timeout.connect(lambda: self.slide_out_animation.start())
+        self.actionbtn.clicked.connect(self.slide_out_animation.start)
 
     def on_slide_in_finished(self):
         """Handle slide in animation finished"""
+        if self.userInput:
+            return
         self.timeout_timer.start()
 
     def on_slide_out_finished(self):
         """Handle slide out animation finished"""
-        self.close()
+        self.hide()
+        self.isShown = False
+        self.timeout_timer.stop()
         self._add_popup()
 
     def _calculate_target_geometry(self) -> QtCore.QRect:
+        """Calculate on end posisition rect for popup"""
         app_instance = QtWidgets.QApplication.instance()
         main_window = app_instance.activeWindow() if app_instance else None
         if main_window is None and app_instance:
@@ -73,7 +84,13 @@ class Popup(QtWidgets.QDialog):
         parent_rect = main_window.geometry()
 
         width = int(parent_rect.width() * 0.85)
-        height = min(self.text_label.rect().height(), self.icon_label.rect().height())
+        height = (
+            max(
+                self.text_label.height(),
+                self.icon_label.height(),
+            )
+            + 10
+        )
 
         x = parent_rect.x() + (parent_rect.width() - width) // 2
         y = parent_rect.y() + 20
@@ -89,20 +106,19 @@ class Popup(QtWidgets.QDialog):
 
     def mousePressEvent(self, a0: QtGui.QMouseEvent) -> None:
         """Re-implemented method, handle mouse press events"""
+        if self.userInput:
+            return
         self.timeout_timer.stop()
+        self.slide_out_animation.setStartValue(self.slide_in_animation.currentValue())
+        self.slide_in_animation.stop()
         self.slide_out_animation.start()
-
-    def set_timeout(self, value: int) -> None:
-        """Set popup timeout"""
-        if not isinstance(value, int):
-            raise ValueError("Expected type int ")
-        self.popup_timeout = value
 
     def new_message(
         self,
         message_type: MessageType = MessageType.INFO,
         message: str = "",
-        timeout: int = 0,
+        timeout: int = 6000,
+        userInput: bool = False,
     ):
         """Create new popup message
 
@@ -110,17 +126,29 @@ class Popup(QtWidgets.QDialog):
             message_type (MessageType, optional): Message Level, See `MessageType` Types. Defaults to MessageType.INFO.
             message (str, optional): The message. Defaults to "".
             timeout (int, optional): How long the message stays for, in milliseconds. Defaults to 0.
+            userInput (bool,optional): If the user is required to click to make the popup disappear. Defaults to False.
 
         Returns:
             _type_: _description_
         """
         self.messages.append(
-            {"message": message, "type": message_type, "timeout": timeout}
+            {
+                "message": message,
+                "type": message_type,
+                "timeout": timeout,
+                "userInput": userInput,
+            }
         )
         return self._add_popup()
 
     def _add_popup(self) -> None:
         """Add popup to queue"""
+        if self.isShown:
+            if self.SingleTime.isActive():
+                return
+            self.SingleTime.start()
+            return
+
         if (
             self.messages
             and self.slide_in_animation.state()
@@ -131,7 +159,17 @@ class Popup(QtWidgets.QDialog):
             message_entry = self.messages.popleft()
             self.message_type = message_entry.get("type")
             message = message_entry.get("message")
-            self.text_label.setText(message)
+            timeout = message_entry.get("timeout")
+            self.timeout_timer.setInterval(timeout)
+            if message == self.text_label.text():
+                self.messages = deque(
+                    m for m in self.messages if m.get("message") != message
+                )
+                return
+            self.userInput = message_entry.get("userInput")
+            self.text_label.setFixedHeight(60)
+            self.text_label.setFixedWidth(500)
+
             match self.message_type:
                 case Popup.MessageType.INFO:
                     self.icon_label.setPixmap(self.info_icon)
@@ -139,19 +177,31 @@ class Popup(QtWidgets.QDialog):
                     self.icon_label.setPixmap(self.warning_icon)
                 case Popup.MessageType.ERROR:
                     self.icon_label.setPixmap(self.error_icon)
-            self.timeout_timer.setInterval(self.popup_timeout)
+
             end_rect = self._calculate_target_geometry()
-            start_rect = end_rect.translated(0, -end_rect.height())
+            start_rect = end_rect.translated(0, -end_rect.height() * 2)
+
             self.slide_in_animation.setStartValue(start_rect)
             self.slide_in_animation.setEndValue(end_rect)
             self.slide_out_animation.setStartValue(end_rect)
             self.slide_out_animation.setEndValue(start_rect)
-            self.setGeometry(start_rect)
-            self.open()
+            if not self.userInput:
+                self.actionbtn.clearPixmap()
+            else:
+                self.actionbtn.setPixmap(
+                    QtGui.QPixmap(":/arrow_icons/media/btn_icons/right_arrow.svg")
+                )
+            self.setGeometry(end_rect)
+            self.text_label.setText(message)
+            self.text_label.setFixedHeight(
+                int(self.text_label.sizeHint().height() * 1.2)
+            )
+            self.show()
 
     def showEvent(self, a0: QtGui.QShowEvent) -> None:
         """Re-implementation, widget show"""
         self.slide_in_animation.start()
+        self.isShown = True
         super().showEvent(a0)
 
     def resizeEvent(self, a0: QtGui.QResizeEvent) -> None:
@@ -183,22 +233,18 @@ class Popup(QtWidgets.QDialog):
         painter.drawRoundedRect(self.rect(), 10, 10)
 
     def _setupUI(self) -> None:
-        self.vertical_layout = QtWidgets.QVBoxLayout(self)
-        self.horizontal_layout = QtWidgets.QHBoxLayout()
+        self.horizontal_layout = QtWidgets.QHBoxLayout(self)
         self.horizontal_layout.setContentsMargins(5, 5, 5, 5)
 
         self.icon_label = QtWidgets.QLabel(self)
         self.icon_label.setFixedSize(QtCore.QSize(60, 60))
+        self.icon_label.setMaximumSize(QtCore.QSize(60, 60))
         self.icon_label.setScaledContents(True)
 
-        self.horizontal_layout.addWidget(self.icon_label)
-
         self.text_label = QtWidgets.QLabel(self)
+        self.text_label.setStyleSheet("background: transparent; color:white")
+        self.text_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self.text_label.setWordWrap(True)
-        self.text_label.setAlignment(
-            QtCore.Qt.AlignmentFlag.AlignVCenter | QtCore.Qt.AlignmentFlag.AlignHCenter
-        )
-
         font = self.text_label.font()
         font.setPixelSize(18)
         font.setFamily("sans-serif")
@@ -209,9 +255,9 @@ class Popup(QtWidgets.QDialog):
         self.text_label.setPalette(palette)
         self.text_label.setFont(font)
 
-        self.spacer = QtWidgets.QSpacerItem(60, 60)
+        self.actionbtn = IconButton(self)
+        self.actionbtn.setMaximumSize(QtCore.QSize(60, 60))
 
-        self.horizontal_layout.addWidget(self.text_label, 1)
-        self.horizontal_layout.addItem(self.spacer)
-
-        self.vertical_layout.addLayout(self.horizontal_layout)
+        self.horizontal_layout.addWidget(self.icon_label)
+        self.horizontal_layout.addWidget(self.text_label)
+        self.horizontal_layout.addWidget(self.actionbtn)

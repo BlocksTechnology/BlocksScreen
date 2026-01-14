@@ -185,6 +185,8 @@ class JobStatusWidget(QtWidgets.QWidget):
     @QtCore.pyqtSlot(dict, name="on_fileinfo")
     def on_fileinfo(self, fileinfo: dict) -> None:
         """Handle received file information/metadata"""
+        if not self.isVisible():
+            return
         self.total_layers = str(fileinfo.get("layer_count", "---"))
         self.layer_display_button.setText("---")
         self.layer_display_button.secondary_text = str(self.total_layers)
