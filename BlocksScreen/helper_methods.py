@@ -13,7 +13,7 @@ import logging
 import os
 import pathlib
 import struct
-import subprocess
+import subprocess  # nosec: B404
 import typing
 
 try:
@@ -349,7 +349,7 @@ def get_file_name(filename: typing.Optional[str]) -> str:
     return parts[-1] if filename else ""
 
 
-def is_process_running(process_name: str) -> bool:
+def is_udiskie_running() -> bool:
     """Verify if `process_name` is running on the local machine
 
     Args:
@@ -359,7 +359,7 @@ def is_process_running(process_name: str) -> bool:
         bool: True if running, False otherwise
     """
     try:
-        subprocess.check_output(["pgrep", process_name])
+        subprocess.check_output(["pgrep", "udiskie"])
         return True
     except subprocess.CalledProcessError:
         return False

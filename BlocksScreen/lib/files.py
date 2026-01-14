@@ -14,7 +14,7 @@ from typing import Optional
 import events
 from configfile import BlocksScreenConfig
 from events import ReceivedFileData
-from helper_methods import is_process_running
+from helper_methods import is_udiskie_running
 from lib.moonrakerComm import MoonWebSocket
 from PyQt6 import QtCore, QtGui, QtWidgets
 
@@ -251,7 +251,7 @@ class Files(QtCore.QObject):
             except Exception as e:
                 _logger.info("Error: %s ", e.with_traceback)
 
-        if not os.path.islink(symlink_src) and not is_process_running("udiskie"):
+        if not os.path.islink(symlink_src) and not is_udiskie_running():
             try:
                 os.symlink(mouting_dir, symlink_src, target_is_directory=True)
             except PermissionError:
