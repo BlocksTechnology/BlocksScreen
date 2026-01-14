@@ -10,6 +10,10 @@
     <file>media/btn_icons/no_wifi.svg</file>
     <file>media/btn_icons/retry_wifi.svg</file>
   </qresource>
+  <qresource prefix="baby_step">
+    <file>media/btn_icons/move_nozzle_away.svg</file>
+    <file>media/btn_icons/move_nozzle_close.svg</file>
+  </qresource>
   <qresource prefix="blocks">
     <file>media/btn_icons/blocks_contacts.svg</file>
     <file>media/btn_icons/logo_BLOCKS.svg</file>
