@@ -124,26 +124,33 @@ class BuildNetworkList(QtCore.QObject):
         self._timer.timeout.connect(self._do_scan)
 
     def start_polling(self):
+        """Schedule scan folowwing the `poll_interval_ms`"""
         self._schedule_next_scan()
 
     def stop_polling(self):
+        """Start Polling for future development"""
         self._timer.stop()
 
     def build(self):
+        """Method called by rescan button"""
         self._do_scan()
 
     def _schedule_next_scan(self):
+        """Start next rescan timer"""
         self._timer.start(self.poll_interval_ms)
 
     def _on_task_finished(self, items):
+        """Update data after scan finish, update saved networks list and schedule next scan"""
         self._is_scanning = False
         self.finished_network_list_build.emit(items)
         self._schedule_next_scan()
 
     def _on_task_scan_results(self, data_dict):
+        """Emit results to main thread"""
         self.scan_results.emit(data_dict)
 
     def _on_task_error(self, err):
+        """Emit errors to main thread"""
         self._is_scanning = False
         self.error.emit(err)
         self._schedule_next_scan()
