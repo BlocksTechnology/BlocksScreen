@@ -1006,12 +1006,11 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
                 priority = entry.get("priority")
 
                 if priority == 90:
-                    self.panel.hig_priorrity_btn.setChecked(True)
+                    self.panel.high_priority_btn.setChecked(True)
                 elif priority == 20:
-                    self.panel.low_priorrity_btn.setChecked(True)
+                    self.panel.low_priority_btn.setChecked(True)
                 else:
-                    self.panel.med_priorrity_btn.setChecked(True)
-
+                    self.panel.med_priority_btn.setChecked(True)
             _curr_ssid = self.sdbus_network.get_current_ssid()
             if _curr_ssid != str(ssid):
                 self.panel.network_activate_btn.setDisabled(False)

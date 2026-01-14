@@ -850,7 +850,7 @@ class Ui_wifi_stacked_page(object):
         self.verticalLayout_17.addItem(spacerItem8)
         self.horizontalLayout_4 = QtWidgets.QHBoxLayout()
         self.horizontalLayout_4.setObjectName("horizontalLayout_4")
-        self.low_priority_btn = GroupButton(parent=self.frame_12)
+        self.low_priority_btn = BlocksCustomCheckButton(parent=self.frame_12)
         self.low_priority_btn.setMinimumSize(QtCore.QSize(100, 100))
         self.low_priority_btn.setMaximumSize(QtCore.QSize(100, 100))
         self.low_priority_btn.setCheckable(True)
@@ -862,7 +862,7 @@ class Ui_wifi_stacked_page(object):
         self.priority_btn_group.setObjectName("priority_btn_group")
         self.priority_btn_group.addButton(self.low_priority_btn)
         self.horizontalLayout_4.addWidget(self.low_priority_btn)
-        self.med_priority_btn = GroupButton(parent=self.frame_12)
+        self.med_priority_btn = BlocksCustomCheckButton(parent=self.frame_12)
         self.med_priority_btn.setMinimumSize(QtCore.QSize(100, 100))
         self.med_priority_btn.setMaximumSize(QtCore.QSize(100, 100))
         self.med_priority_btn.setCheckable(True)
@@ -873,7 +873,7 @@ class Ui_wifi_stacked_page(object):
         self.med_priority_btn.setObjectName("med_priority_btn")
         self.priority_btn_group.addButton(self.med_priority_btn)
         self.horizontalLayout_4.addWidget(self.med_priority_btn)
-        self.high_priority_btn = GroupButton(parent=self.frame_12)
+        self.high_priority_btn = BlocksCustomCheckButton(parent=self.frame_12)
         self.high_priority_btn.setMinimumSize(QtCore.QSize(100, 100))
         self.high_priority_btn.setMaximumSize(QtCore.QSize(100, 100))
         self.high_priority_btn.setCheckable(True)
@@ -1297,5 +1297,5 @@ from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_frame import BlocksCustomFrame
 from lib.utils.blocks_linedit import BlocksCustomLinEdit
 from lib.utils.blocks_togglebutton import NetworkWidgetbuttons
-from lib.utils.group_button import GroupButton
+from lib.utils.check_button import BlocksCustomCheckButton
 from lib.utils.icon_button import IconButton
