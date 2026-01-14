@@ -1,23 +1,27 @@
+import logging
 import os
 import typing
 from functools import partial
 
-from lib.panels.widgets.babystepPage import BabystepPage
-from lib.panels.widgets.tunePage import TuneWidget
+from configfile import BlocksScreenConfig, get_configparser
 from lib.files import Files
 from lib.moonrakerComm import MoonWebSocket
+from lib.panels.widgets.babystepPage import BabystepPage
+from lib.panels.widgets.basePopup import BasePopup
 from lib.panels.widgets.confirmPage import ConfirmWidget
 from lib.panels.widgets.filesPage import FilesPage
 from lib.panels.widgets.jobStatusPage import JobStatusWidget
-from lib.panels.widgets.sensorsPanel import SensorsWindow
-from lib.printer import Printer
-from lib.panels.widgets.slider_selector_page import SliderPage
-from lib.utils.blocks_button import BlocksCustomButton
-from lib.panels.widgets.numpadPage import CustomNumpad
 from lib.panels.widgets.loadWidget import LoadingOverlayWidget
-from lib.panels.widgets.basePopup import BasePopup
-from configfile import BlocksScreenConfig, get_configparser
+from lib.panels.widgets.numpadPage import CustomNumpad
+from lib.panels.widgets.sensorsPanel import SensorsWindow
+from lib.panels.widgets.slider_selector_page import SliderPage
+from lib.panels.widgets.tunePage import TuneWidget
+from lib.printer import Printer
+from lib.utils.blocks_button import BlocksCustomButton
+from lib.utils.display_button import DisplayButton
 from PyQt6 import QtCore, QtGui, QtWidgets
+
+logger = logging.getLogger(name="logs/BlocksScreen.log")
 
 
 class PrintTab(QtWidgets.QStackedWidget):
@@ -61,6 +65,8 @@ class PrintTab(QtWidgets.QStackedWidget):
     )
 
     _z_offset: float = 0.0
+    _active_z_offset: float = 0.0
+    _finish_print_handled: bool = False
 
     def __init__(
         self,
@@ -97,6 +103,7 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.addWidget(self.filesPage_widget)
 
         self.BasePopup = BasePopup(self)
+        self.BasePopup_z_offset = BasePopup(self, floating=True)
 
         self.confirmPage_widget = ConfirmWidget(self)
         self.addWidget(self.confirmPage_widget)
@@ -137,7 +144,6 @@ class PrintTab(QtWidgets.QStackedWidget):
             lambda: self.change_page(self.indexOf(self.jobStatusPage_widget))
         )
         self.jobStatusPage_widget.hide_request.connect(
-            # lambda: self.change_page(self.indexOf(self.panel.print_page))
             lambda: self.change_page(self.indexOf(self.print_page))
         )
         self.jobStatusPage_widget.request_file_info.connect(
@@ -148,6 +154,7 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.jobStatusPage_widget.print_resume.connect(self.ws.api.resume_print)
         self.jobStatusPage_widget.print_cancel.connect(self.handle_cancel_print)
         self.jobStatusPage_widget.print_pause.connect(self.ws.api.pause_print)
+        self.jobStatusPage_widget.print_finish.connect(self.finish_print_signal)
         self.jobStatusPage_widget.request_query_print_stats.connect(
             self.ws.api.object_query
         )
@@ -176,6 +183,7 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.printer.gcode_move_update[str, list].connect(
             self.jobStatusPage_widget.on_gcode_move_update
         )
+        self.printer.request_available_objects_signal.connect(self.klipper_ready_signal)
         self.babystepPage = BabystepPage(self)
         self.babystepPage.request_back.connect(self.back_button)
         self.addWidget(self.babystepPage)
@@ -203,6 +211,7 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.printer.gcode_move_update[str, list].connect(
             self.babystepPage.on_gcode_move_update
         )
+        self.printer.gcode_move_update[str, list].connect(self.activate_save_button)
         self.tune_page.run_gcode.connect(self.ws.api.run_gcode)
         self.tune_page.request_sliderPage[str, int, "PyQt_PyObject"].connect(
             self.on_slidePage_request
@@ -245,6 +254,8 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.run_gcode_signal.connect(self.ws.api.run_gcode)
         self.confirmPage_widget.on_delete.connect(self.delete_file)
         self.change_page(self.indexOf(self.print_page))  # force set the initial page
+        self.save_config_btn.clicked.connect(self.save_config)
+        self.BasePopup_z_offset.accepted.connect(self.update_configuration_file)
 
     @QtCore.pyqtSlot(str, dict, name="on_print_stats_update")
     @QtCore.pyqtSlot(str, float, name="on_print_stats_update")
@@ -305,25 +316,44 @@ class PrintTab(QtWidgets.QStackedWidget):
         )
         self.BasePopup.open()
 
+    def save_config(self) -> None:
+        """Handle Save configuration behaviour, shows confirmation dialog"""
+        if self._finish_print_handled:
+            self.run_gcode_signal.emit("Z_OFFSET_APPLY_PROBE")
+            self._z_offset = self._active_z_offset
+            self.babystepPage.bbp_z_offset_title_label.setText(
+                f"Z: {self._z_offset:.3f}mm"
+            )
+        self.BasePopup_z_offset.set_message(
+            f"The Z‑Offset is now {self._active_z_offset:.3f} mm.\n"
+            "Would you like to save this change permanently?\n"
+            "The machine will restart."
+        )
+        self.BasePopup_z_offset.cancel_button_text("Later")
+        self.BasePopup_z_offset.open()
+
+    def update_configuration_file(self):
+        """Runs the `SAVE_CONFIG` gcode"""
+        self.run_gcode_signal.emit("Z_OFFSET_APPLY_PROBE")
+        self.run_gcode_signal.emit("SAVE_CONFIG")
+        self.BasePopup_z_offset.disconnect()
+
+    @QtCore.pyqtSlot(str, list, name="activate_save_button")
+    def activate_save_button(self, name: str, value: list) -> None:
+        """Sync the `Save config` popup with the save_config_pending state"""
+        if not value:
+            return
+
+        if name == "homing_origin":
+            self._active_z_offset = value[2]
+            self.save_config_btn.setVisible(value[2] != 0)
+
     def _on_delete_file_confirmed(self, filename: str, directory: str) -> None:
         """Handle confirmed file deletion after user accepted the dialog"""
         self.file_data.on_request_delete_file(filename, directory)
         self.request_back.emit()
         self.filesPage_widget.reset_dir()
         self.BasePopup.disconnect()
-
-    def paintEvent(self, a0: QtGui.QPaintEvent) -> None:
-        """Widget painting"""
-        if self.babystepPage.isVisible():
-            _button_name_str = f"nozzle_offset_{self._z_offset}"
-            if hasattr(self, _button_name_str):
-                _button_attr = getattr(self, _button_name_str)
-                if callable(_button_attr) and isinstance(
-                    _button_attr, BlocksCustomButton
-                ):
-                    _button_attr.setChecked(True)
-
-        return super().paintEvent(a0)
 
     def setProperty(self, name: str, value: typing.Any) -> bool:
         """Intercept the set property method
@@ -358,6 +388,21 @@ class PrintTab(QtWidgets.QStackedWidget):
     def back_button(self) -> None:
         """Goes back to the previous page"""
         self.request_back.emit()
+
+    @QtCore.pyqtSlot(name="klipper_ready_signal")
+    def klipper_ready_signal(self) -> None:
+        """React to klipper ready signal"""
+        self.babystepPage.baby_stepchange = False
+        self._finish_print_handled = False
+
+    @QtCore.pyqtSlot(name="finish_print_signal")
+    def finish_print_signal(self) -> None:
+        """Behaviour when the print ends — but only once."""
+        if self._finish_print_handled:
+            return
+        if self._active_z_offset != 0 and self.babystepPage.baby_stepchange:
+            self.save_config()
+            self._finish_print_handled = True
 
     def setupMainPrintPage(self) -> None:
         """Setup UI for print page"""
@@ -423,6 +468,27 @@ class PrintTab(QtWidgets.QStackedWidget):
             "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/print.svg")
         )
         self.main_print_btn.setObjectName("main_print_btn")
+        self.save_config_btn = DisplayButton(parent=self.print_page)
+        self.save_config_btn.setGeometry(QtCore.QRect(540, 20, 170, 50))
+        font.setPointSize(8)
+        font.setFamily("Montserrat")
+        self.save_config_btn.setFont(font)
+        self.save_config_btn.setMouseTracking(False)
+        self.save_config_btn.setTabletTracking(True)
+        self.save_config_btn.setContextMenuPolicy(
+            QtCore.Qt.ContextMenuPolicy.NoContextMenu
+        )
+        self.save_config_btn.setProperty(
+            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/save.svg")
+        )
+        self.save_config_btn.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
+        self.save_config_btn.setStyleSheet("")
+        self.save_config_btn.setAutoDefault(False)
+        self.save_config_btn.setFlat(True)
+        self.save_config_btn.setMinimumSize(QtCore.QSize(170, 50))
+        self.save_config_btn.setMaximumSize(QtCore.QSize(170, 50))
+        self.save_config_btn.setText("Save\nZ-Offset")
+        self.save_config_btn.hide()
         self.main_text_label = QtWidgets.QLabel(parent=self.print_page)
         self.main_text_label.setEnabled(True)
         self.main_text_label.setGeometry(QtCore.QRect(105, 180, 500, 200))
