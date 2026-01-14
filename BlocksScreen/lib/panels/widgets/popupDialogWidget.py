@@ -131,6 +131,9 @@ class Popup(QtWidgets.QDialog):
         Returns:
             _type_: _description_
         """
+        if len(self.messages) == 4:
+            return
+
         self.messages.append(
             {
                 "message": message,
