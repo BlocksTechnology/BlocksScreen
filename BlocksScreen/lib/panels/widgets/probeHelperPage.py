@@ -50,9 +50,9 @@ class ProbeHelper(QtWidgets.QWidget):
     def __init__(self, parent: QtWidgets.QWidget) -> None:
         super().__init__(parent)
 
-        self.Loadscreen = BasePopup(self)
+        self.Loadscreen = BasePopup(self, dialog=False)
         self.loadwidget = LoadingOverlayWidget(
-            self, LoadingOverlayWidget.AnimationGIF.PLACEHOLDER
+            self, LoadingOverlayWidget.AnimationGIF.DEFAULT
         )
         self.Loadscreen.add_widget(self.loadwidget)
         self.setObjectName("probe_offset_page")

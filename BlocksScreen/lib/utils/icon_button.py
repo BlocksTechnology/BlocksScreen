@@ -29,6 +29,11 @@ class IconButton(QtWidgets.QPushButton):
         self.icon_pixmap = pixmap
         self.repaint()
 
+    def clearPixmap(self) -> None:
+        """Clear widget pixmap"""
+        self.icon_pixmap = QtGui.QPixmap()
+        self.repaint()
+
     def setText(self, text: str) -> None:
         """Set widget text"""
         self._text = text
