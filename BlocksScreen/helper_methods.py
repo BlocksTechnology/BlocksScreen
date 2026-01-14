@@ -7,13 +7,12 @@
 
 
 import ctypes
-import os
 import enum
 import logging
+import os
 import pathlib
 import struct
 import typing
-
 
 try:
     ctypes.cdll.LoadLibrary("libXext.so.6")
