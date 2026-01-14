@@ -547,15 +547,13 @@ class MainWindow(QtWidgets.QMainWindow):
         """Handle websocket service messages"""
         entry = data.get("params")
         if entry:
-            if not self._popup_toggle:
+            if self._popup_toggle:
                 return
             service_entry: dict = entry[0]
             service_name, service_info = service_entry.popitem()
             self.popup.new_message(
                 message_type=Popup.MessageType.INFO,
-                message=f"""{service_name} service changed state to 
-                {service_info.get("sub_state")}
-                """,
+                message=f"{service_name} service changed state to \n{service_info.get('sub_state')}",
             )
 
     @api_handler
@@ -564,15 +562,17 @@ class MainWindow(QtWidgets.QMainWindow):
         _gcode_response = data.get("params")
         self.gcode_response[list].emit(_gcode_response)
         if _gcode_response:
-            if not self._popup_toggle:
+            if self._popup_toggle:
                 return
             _gcode_msg_type, _message = str(_gcode_response[0]).split(" ", maxsplit=1)
-            _msg_type = Popup.MessageType.UNKNOWN
-            if _gcode_msg_type == "!!":
+            popupWhitelist = ["filament runout", "no filament"]
+            if _message.lower() in popupWhitelist or _gcode_msg_type == "!!":
                 _msg_type = Popup.MessageType.ERROR
-            elif _gcode_msg_type == "//":
-                _msg_type = Popup.MessageType.INFO
-            self.popup.new_message(message_type=_msg_type, message=str(_message))
+                self.popup.new_message(
+                    message_type=_msg_type,
+                    message=str(_message),
+                    userInput=True,
+                )
 
     @api_handler
     def _handle_error_message(self, method, data, metadata) -> None:
@@ -581,17 +581,24 @@ class MainWindow(QtWidgets.QMainWindow):
         if "metadata" in data.get("message", "").lower():
             # Quick fix, don't care about no metadata errors
             return
-        if not self._popup_toggle:
+        if self._popup_toggle:
             return
+        text = data
+        if isinstance(data, dict):
+            if "message" in data:
+                text = f"{data['message']}"
+            else:
+                text = data
         self.popup.new_message(
             message_type=Popup.MessageType.ERROR,
-            message=str(data),
+            message=str(text),
+            userInput=True,
         )
 
     @api_handler
     def _handle_notify_cpu_throttled_message(self, method, data, metadata) -> None:
         """Handle websocket cpu throttled messages"""
-        if not self._popup_toggle:
+        if self._popup_toggle:
             return
         self.popup.new_message(
             message_type=Popup.MessageType.WARNING,
