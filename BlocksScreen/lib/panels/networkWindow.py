@@ -156,6 +156,7 @@ class BuildNetworkList(QtCore.QObject):
         self._schedule_next_scan()
 
     def _do_scan(self):
+        """Start wifi scanning threadpool"""
         if self._is_scanning:
             logger.debug("Already scanning, skip scheduling.")
             self._schedule_next_scan()
