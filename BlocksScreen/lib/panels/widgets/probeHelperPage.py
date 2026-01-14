@@ -52,7 +52,7 @@ class ProbeHelper(QtWidgets.QWidget):
 
         self.Loadscreen = BasePopup(self, dialog=False)
         self.loadwidget = LoadingOverlayWidget(
-            self, LoadingOverlayWidget.AnimationGIF.PLACEHOLDER
+            self, LoadingOverlayWidget.AnimationGIF.DEFAULT
         )
         self.Loadscreen.add_widget(self.loadwidget)
         self.setObjectName("probe_offset_page")
