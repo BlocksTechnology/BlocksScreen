@@ -5,35 +5,96 @@ description = "GUI for BLOCKS Printers running Klipper"
 authors = [
     { name = "Hugo do Carmo Costa", email = "hugo.santos.costa@gmail.com" },
 ]
+maintainers = [
+    { name = "Guilherme Costa", email = "guilherme.costa@blockstec.com" },
+    { name = "Roberto Martins ", email = "roberto.martins@blockstec.com" },
+]
 dependencies = [
     'altgraph==0.17.4',
-    'certifi==2024.7.4',
-    'charset-normalizer==3.3.2',
-    'idna==3.8',
-    'numpy==2.1.0',
-    'pefile==2023.2.7',
-    'PyQt6==6.7.1',
-    'PyQt6-Qt6==6.7.2',
-    'PyQt6_sip==13.8.0',
-    'requests==2.32.3',
-    'sdbus==0.12.0',
+    'certifi==2025.10.5',
+    'charset-normalizer==3.4.4',
+    'idna==3.11',
+    'numpy==2.3.4',
+    'pefile==2024.8.26',
+    'PyQt6==6.10.0',
+    'PyQt6-Qt6==6.10.0',
+    'PyQt6_sip==13.10.2',
+    'requests>=2.32.5',
+    'sdbus==0.14.1',
     'sdbus-networkmanager==2.0.0',
     'typing==3.7.4.3',
-    'websocket-client==1.8.0',
-    'opencv-python-headless==4.11.0.86',
-    'qrcode==8.2'
+    'websocket-client==1.9.0',
+    'qrcode==8.2',
 ]
-requires-python = ">=3.11.2"
+requires-python = "==3.11.2"
 readme = "README.md"
 license = { text = "GNU Affero General Public License v3.0 or later" }
 keywords = ["GUI", "klipper", "BlocksScreen", "BLOCKS"]
 
+[project.optional-dependencies]
+dev = ["ruff", "pylint", "pytest", "pytest-cov", "docstr_coverage"]
+stage = ["bandit"]
+full-dev = ["BlockScreen[dev,stage]"]
+
+
+[project.urls]
+Homepage = "https://blockstec.com"
+Issues = "https://github.com/BlocksTechnology/BlocksScreen/issues"
+
 [tool.ruff]
 line-length = 88
 indent-width = 4
+exclude = [
+    ".bzr",
+    ".direnv",
+    ".eggs",
+    ".git",
+    ".git-rewrite",
+    ".hg",
+    ".ipynb_checkpoints",
+    ".mypy_cache",
+    ".nox",
+    ".pants.d",
+    ".pyenv",
+    ".pytest_cache",
+    ".pytype",
+    ".ruff_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    ".vscode",
+    "__pypackages__",
+    "_build",
+    "buck-out",
+    "build",
+    "dist",
+    "node_modules",
+    "site-packages",
+    "venv",
+    "BlocksScreen/lib/ui",
+    "extras",
+    "tests"
+]
+
+[tool.ruff.lint]
+ignore = ["F403"]
 
 [tool.ruff.format]
 indent-style = "space"
 line-ending = 'auto'
 docstring-code-format = true
 docstring-code-line-length = 94
+
+[tool.pylint]
+fail-under = 7
+jobs = 16
+ignore = ["tests", "scripts", "ui", "extras"]
+ignore-paths = ["BlocksScreen/lib/ui"]
+py-version = "3.11"
+max-line-length = 88
+
+[tool.pytest.ini_options]
+addopts = "--cov=BlocksScreen --cov-report=html"
+
+[tool.bandit]
+exclude_dirs = ["tests", "BlocksScreen/lib/ui/resources/"]

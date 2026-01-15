@@ -1,0 +1,6 @@
+ruff
+pylint
+pytest
+pytest-cov
+docstr_coverage
+bandit

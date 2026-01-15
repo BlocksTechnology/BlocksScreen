@@ -1,9 +1,8 @@
 import typing
 
-from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_label import BlocksLabel
+from lib.utils.check_button import BlocksCustomCheckButton
 from lib.utils.icon_button import IconButton
-from lib.utils.group_button import GroupButton
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 
@@ -33,24 +32,38 @@ class BabystepPage(QtWidgets.QWidget):
         self.bbp_nozzle_offset_025.toggled.connect(self.handle_z_offset_change)
         self.bbp_nozzle_offset_05.toggled.connect(self.handle_z_offset_change)
         self.bbp_nozzle_offset_1.toggled.connect(self.handle_z_offset_change)
+        self._baby_stepchange = False
 
-        self.savebutton.clicked.connect(self.savevalue)
+    @property
+    def baby_stepchange(self):
+        """Returns if the babystep was changed during print"""
+        return self._baby_stepchange
+
+    @baby_stepchange.setter
+    def baby_stepchange(self, value: bool) -> None:
+        if not isinstance(value, bool):
+            raise ValueError("Value must be a bool")
+        self._baby_stepchange = value
 
     @QtCore.pyqtSlot(name="on_move_nozzle_close")
     def on_move_nozzle_close(self) -> None:
-        """Move the nozzle closer to the print plate by the amount set in **` self._z_offset`**"""
+        """Move the nozzle closer to the print plate
+        by the amount set in **` self._z_offset`**
+        """
         self.run_gcode.emit(
-            f"SET_GCODE_OFFSET Z_ADJUST=-{self._z_offset}"  # Z_ADJUST adds the value to the existing offset
+            f"SET_GCODE_OFFSET Z_ADJUST=-{self._z_offset} MOVE=1"  # Z_ADJUST adds the value to the existing offset
         )
-        self.savebutton.setVisible(True)
+        self._baby_stepchange = True
 
     @QtCore.pyqtSlot(name="on_move_nozzle_away")
     def on_move_nozzle_away(self) -> None:
-        """Slot for Babystep button to get far from the bed by **` self._z_offset`** amount"""
+        """Slot for Babystep button to get far from the
+        bed by **` self._z_offset`** amount
+        """
         self.run_gcode.emit(
-            f"SET_GCODE_OFFSET Z_ADJUST=+{self._z_offset}"  # Z_ADJUST adds the value to the existing offset
+            f"SET_GCODE_OFFSET Z_ADJUST=+{self._z_offset} MOVE=1"  # Z_ADJUST adds the value to the existing offset
         )
-        self.savebutton.setVisible(True)
+        self._baby_stepchange = True
 
     @QtCore.pyqtSlot(name="handle_z_offset_change")
     def handle_z_offset_change(self) -> None:
@@ -63,36 +76,22 @@ class BabystepPage(QtWidgets.QWidget):
 
         Possible values are: 0.01, 0.025, 0.05, 0.1 **mm**
         """
-        _possible_z_values: typing.List = [0.01, 0.025, 0.05, 0.1]
         _sender: QtCore.QObject | None = self.sender()
         if self._z_offset == float(_sender.text()[:-3]):
             return
         self._z_offset = float(_sender.text()[:-3])
 
-    def savevalue(self):
-        self.run_gcode.emit("Z_OFFSET_APPLY_PROBE")
-        self.savebutton.setVisible(False)
-        self.bbp_z_offset_title_label.setText(
-            self.bbp_z_offset_current_value.text()
-        )
-
-        return
-
     def on_gcode_move_update(self, name: str, value: list) -> None:
+        """Handle gcode move updates"""
         if not value:
             return
 
         if name == "homing_origin":
             self._z_offset_text = value[2]
-            self.bbp_z_offset_current_value.setText(
-                f"Z: {self._z_offset_text:.3f}mm"
-            )
-        if self.bbp_z_offset_title_label.text() == "smth":
-            self.bbp_z_offset_title_label.setText(
-                f"Z: {self._z_offset_text:.3f}mm"
-            )
+            self.bbp_z_offset_current_value.setText(f"Z: {self._z_offset_text:.3f}mm")
 
     def setupUI(self):
+        """Setup babystep page ui"""
         self.bbp_offset_value_selector_group = QtWidgets.QButtonGroup(self)
         self.bbp_offset_value_selector_group.setExclusive(True)
         sizePolicy = QtWidgets.QSizePolicy(
@@ -144,18 +143,6 @@ class BabystepPage(QtWidgets.QWidget):
         self.bbp_header_title.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self.bbp_header_title.setObjectName("bbp_header_title")
 
-        self.savebutton = BlocksCustomButton(self)
-        self.savebutton.setGeometry(QtCore.QRect(460, 340, 200, 60))
-        self.savebutton.setText("Save?")
-        self.savebutton.setObjectName("savebutton")
-        self.savebutton.setPixmap(
-            QtGui.QPixmap(":/ui/media/btn_icons/save.svg")
-        )
-        self.savebutton.setVisible(False)
-        font = QtGui.QFont()
-        font.setPointSize(15)
-        self.savebutton.setFont(font)
-
         spacerItem = QtWidgets.QSpacerItem(
             60,
             20,
@@ -178,16 +165,13 @@ class BabystepPage(QtWidgets.QWidget):
         self.babystep_back_btn.setMaximumSize(QtCore.QSize(60, 60))
         self.babystep_back_btn.setText("")
         self.babystep_back_btn.setFlat(True)
-        self.babystep_back_btn.setPixmap(
-            QtGui.QPixmap(":/ui/media/btn_icons/back.svg")
-        )
+        self.babystep_back_btn.setPixmap(QtGui.QPixmap(":/ui/media/btn_icons/back.svg"))
         self.babystep_back_btn.setObjectName("babystep_back_btn")
 
         self.bbp_header_layout.addWidget(
             self.babystep_back_btn,
             0,
-            QtCore.Qt.AlignmentFlag.AlignRight
-            | QtCore.Qt.AlignmentFlag.AlignVCenter,
+            QtCore.Qt.AlignmentFlag.AlignRight | QtCore.Qt.AlignmentFlag.AlignVCenter,
         )
         self.bbp_header_layout.setStretch(0, 1)
         self.verticalLayout.addLayout(self.bbp_header_layout)
@@ -218,7 +202,7 @@ class BabystepPage(QtWidgets.QWidget):
         self.bbp_offset_steps_buttons.setObjectName("bbp_offset_steps_buttons")
 
         # 0.1mm button
-        self.bbp_nozzle_offset_1 = GroupButton(
+        self.bbp_nozzle_offset_1 = BlocksCustomCheckButton(
             parent=self.bbp_offset_steps_buttons_group_box
         )
         self.bbp_nozzle_offset_1.setMinimumSize(QtCore.QSize(100, 70))
@@ -233,47 +217,15 @@ class BabystepPage(QtWidgets.QWidget):
         self.bbp_nozzle_offset_1.setFlat(True)
         self.bbp_nozzle_offset_1.setProperty("button_type", "")
         self.bbp_nozzle_offset_1.setObjectName("bbp_nozzle_offset_1")
-        self.bbp_offset_value_selector_group.addButton(
-            self.bbp_nozzle_offset_1
-        )
+        self.bbp_offset_value_selector_group.addButton(self.bbp_nozzle_offset_1)
         self.bbp_offset_steps_buttons.addWidget(
             self.bbp_nozzle_offset_1,
             0,
-            QtCore.Qt.AlignmentFlag.AlignHCenter
-            | QtCore.Qt.AlignmentFlag.AlignVCenter,
-        )
-
-        # Line separator for 0.1mm - set size policy to expanding horizontally
-
-        # 0.01mm button
-        self.bbp_nozzle_offset_01 = GroupButton(
-            parent=self.bbp_offset_steps_buttons_group_box
-        )
-        self.bbp_nozzle_offset_01.setMinimumSize(QtCore.QSize(100, 70))
-        self.bbp_nozzle_offset_01.setMaximumSize(
-            QtCore.QSize(100, 70)
-        )  # Increased max width by 5 pixels
-        self.bbp_nozzle_offset_01.setText("0.01 mm")
-
-        font = QtGui.QFont()
-        font.setPointSize(14)
-        self.bbp_nozzle_offset_01.setFont(font)
-        self.bbp_nozzle_offset_01.setCheckable(True)
-        self.bbp_nozzle_offset_01.setFlat(True)
-        self.bbp_nozzle_offset_01.setProperty("button_type", "")
-        self.bbp_nozzle_offset_01.setObjectName("bbp_nozzle_offset_01")
-        self.bbp_offset_value_selector_group.addButton(
-            self.bbp_nozzle_offset_01
-        )
-        self.bbp_offset_steps_buttons.addWidget(
-            self.bbp_nozzle_offset_01,
-            0,
-            QtCore.Qt.AlignmentFlag.AlignHCenter
-            | QtCore.Qt.AlignmentFlag.AlignVCenter,
+            QtCore.Qt.AlignmentFlag.AlignHCenter | QtCore.Qt.AlignmentFlag.AlignVCenter,
         )
 
         # 0.05mm button
-        self.bbp_nozzle_offset_05 = GroupButton(
+        self.bbp_nozzle_offset_05 = BlocksCustomCheckButton(
             parent=self.bbp_offset_steps_buttons_group_box
         )
         self.bbp_nozzle_offset_05.setMinimumSize(QtCore.QSize(100, 70))
@@ -289,18 +241,41 @@ class BabystepPage(QtWidgets.QWidget):
         self.bbp_nozzle_offset_05.setFlat(True)
         self.bbp_nozzle_offset_05.setProperty("button_type", "")
         self.bbp_nozzle_offset_05.setObjectName("bbp_nozzle_offset_05")
-        self.bbp_offset_value_selector_group.addButton(
-            self.bbp_nozzle_offset_05
-        )
+        self.bbp_offset_value_selector_group.addButton(self.bbp_nozzle_offset_05)
         self.bbp_offset_steps_buttons.addWidget(
             self.bbp_nozzle_offset_05,
             0,
-            QtCore.Qt.AlignmentFlag.AlignHCenter
-            | QtCore.Qt.AlignmentFlag.AlignVCenter,
+            QtCore.Qt.AlignmentFlag.AlignHCenter | QtCore.Qt.AlignmentFlag.AlignVCenter,
+        )
+
+        # Line separator for 0.1mm - set size policy to expanding horizontally
+
+        # 0.01mm button
+        self.bbp_nozzle_offset_01 = BlocksCustomCheckButton(
+            parent=self.bbp_offset_steps_buttons_group_box
+        )
+        self.bbp_nozzle_offset_01.setMinimumSize(QtCore.QSize(100, 70))
+        self.bbp_nozzle_offset_01.setMaximumSize(
+            QtCore.QSize(100, 70)
+        )  # Increased max width by 5 pixels
+        self.bbp_nozzle_offset_01.setText("0.01 mm")
+
+        font = QtGui.QFont()
+        font.setPointSize(14)
+        self.bbp_nozzle_offset_01.setFont(font)
+        self.bbp_nozzle_offset_01.setCheckable(True)
+        self.bbp_nozzle_offset_01.setFlat(True)
+        self.bbp_nozzle_offset_01.setProperty("button_type", "")
+        self.bbp_nozzle_offset_01.setObjectName("bbp_nozzle_offset_01")
+        self.bbp_offset_value_selector_group.addButton(self.bbp_nozzle_offset_01)
+        self.bbp_offset_steps_buttons.addWidget(
+            self.bbp_nozzle_offset_01,
+            0,
+            QtCore.Qt.AlignmentFlag.AlignHCenter | QtCore.Qt.AlignmentFlag.AlignVCenter,
         )
 
         # 0.025mm button
-        self.bbp_nozzle_offset_025 = GroupButton(
+        self.bbp_nozzle_offset_025 = BlocksCustomCheckButton(
             parent=self.bbp_offset_steps_buttons_group_box
         )
         self.bbp_nozzle_offset_025.setMinimumSize(QtCore.QSize(100, 70))
@@ -316,22 +291,17 @@ class BabystepPage(QtWidgets.QWidget):
         self.bbp_nozzle_offset_025.setFlat(True)
         self.bbp_nozzle_offset_025.setProperty("button_type", "")
         self.bbp_nozzle_offset_025.setObjectName("bbp_nozzle_offset_025")
-        self.bbp_offset_value_selector_group.addButton(
-            self.bbp_nozzle_offset_025
-        )
+        self.bbp_offset_value_selector_group.addButton(self.bbp_nozzle_offset_025)
         self.bbp_offset_steps_buttons.addWidget(
             self.bbp_nozzle_offset_025,
             0,
-            QtCore.Qt.AlignmentFlag.AlignHCenter
-            | QtCore.Qt.AlignmentFlag.AlignVCenter,
+            QtCore.Qt.AlignmentFlag.AlignHCenter | QtCore.Qt.AlignmentFlag.AlignVCenter,
         )
 
         # Line separator for 0.025mm - set size policy to expanding horizontally
 
         # Set the layout for the group box
-        self.bbp_offset_steps_buttons_group_box.setLayout(
-            self.bbp_offset_steps_buttons
-        )
+        self.bbp_offset_steps_buttons_group_box.setLayout(self.bbp_offset_steps_buttons)
         # Add the group box to the main content horizontal layout FIRST for left placement
         self.main_content_horizontal_layout.addWidget(
             self.bbp_offset_steps_buttons_group_box
@@ -339,9 +309,7 @@ class BabystepPage(QtWidgets.QWidget):
 
         # Graphic and Current Value Frame (This will now be in the MIDDLE)
         self.frame_2 = QtWidgets.QFrame(parent=self)
-        sizePolicy.setHeightForWidth(
-            self.frame_2.sizePolicy().hasHeightForWidth()
-        )
+        sizePolicy.setHeightForWidth(self.frame_2.sizePolicy().hasHeightForWidth())
         self.frame_2.setSizePolicy(sizePolicy)
         self.frame_2.setMinimumSize(QtCore.QSize(350, 160))
         self.frame_2.setMaximumSize(QtCore.QSize(350, 160))
@@ -357,18 +325,14 @@ class BabystepPage(QtWidgets.QWidget):
             QtGui.QPixmap(":/graphics/media/graphics/babystep_graphic.png")
         )
         self.bbp_babystep_graphic.setScaledContents(False)
-        self.bbp_babystep_graphic.setAlignment(
-            QtCore.Qt.AlignmentFlag.AlignCenter
-        )
+        self.bbp_babystep_graphic.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self.bbp_babystep_graphic.setObjectName("bbp_babystep_graphic")
 
         # === NEW LABEL ADDED HERE ===
         # This is the title label that appears above the red value box.
         self.bbp_z_offset_title_label = QtWidgets.QLabel(parent=self)
         # Position it just above the red box. Red box is at y=70, so y=40 is appropriate.
-        self.bbp_z_offset_title_label.setGeometry(
-            QtCore.QRect(100, 40, 200, 30)
-        )
+        self.bbp_z_offset_title_label.setGeometry(QtCore.QRect(100, 40, 200, 30))
         font = QtGui.QFont()
         font.setPointSize(12)
 
@@ -377,17 +341,14 @@ class BabystepPage(QtWidgets.QWidget):
         self.bbp_z_offset_title_label.setStyleSheet(
             "color: gray; background: transparent;"
         )
-        self.bbp_z_offset_title_label.setText("Z-Offset")
         self.bbp_z_offset_title_label.setObjectName("bbp_z_offset_title_label")
-        self.bbp_z_offset_title_label.setText("smth")
+        self.bbp_z_offset_title_label.setText("Z: 0.000mm")
         self.bbp_z_offset_title_label.setGeometry(420, 270, 200, 30)
 
         # === END OF NEW LABEL ===
 
         self.bbp_z_offset_current_value = BlocksLabel(parent=self.frame_2)
-        self.bbp_z_offset_current_value.setGeometry(
-            QtCore.QRect(100, 70, 200, 60)
-        )
+        self.bbp_z_offset_current_value.setGeometry(QtCore.QRect(100, 70, 200, 60))
         sizePolicy.setHeightForWidth(
             self.bbp_z_offset_current_value.sizePolicy().hasHeightForWidth()
         )
@@ -407,15 +368,12 @@ class BabystepPage(QtWidgets.QWidget):
         self.bbp_z_offset_current_value.setAlignment(
             QtCore.Qt.AlignmentFlag.AlignCenter
         )
-        self.bbp_z_offset_current_value.setObjectName(
-            "bbp_z_offset_current_value"
-        )
+        self.bbp_z_offset_current_value.setObjectName("bbp_z_offset_current_value")
         # Add graphic frame AFTER the offset buttons group box
         self.main_content_horizontal_layout.addWidget(
             self.frame_2,
             0,
-            QtCore.Qt.AlignmentFlag.AlignHCenter
-            | QtCore.Qt.AlignmentFlag.AlignVCenter,
+            QtCore.Qt.AlignmentFlag.AlignHCenter | QtCore.Qt.AlignmentFlag.AlignVCenter,
         )
 
         # Move Buttons Layout (This will now be on the RIGHT)
@@ -423,16 +381,14 @@ class BabystepPage(QtWidgets.QWidget):
         self.bbp_buttons_layout.setContentsMargins(5, 5, 5, 5)
         self.bbp_buttons_layout.setObjectName("bbp_buttons_layout")
         self.bbp_mvup = IconButton(parent=self)
-        sizePolicy.setHeightForWidth(
-            self.bbp_mvup.sizePolicy().hasHeightForWidth()
-        )
+        sizePolicy.setHeightForWidth(self.bbp_mvup.sizePolicy().hasHeightForWidth())
         self.bbp_mvup.setSizePolicy(sizePolicy)
         self.bbp_mvup.setMinimumSize(QtCore.QSize(80, 80))
         self.bbp_mvup.setMaximumSize(QtCore.QSize(80, 80))
         self.bbp_mvup.setText("")
         self.bbp_mvup.setFlat(True)
         self.bbp_mvup.setPixmap(
-            QtGui.QPixmap(":/arrow_icons/media/btn_icons/up_arrow.svg")
+            QtGui.QPixmap(":/baby_step/media/btn_icons/move_nozzle_close.svg")
         )
         self.bbp_mvup.setObjectName("bbp_away_from_bed")
         self.bbp_option_button_group = QtWidgets.QButtonGroup(self)
@@ -442,16 +398,14 @@ class BabystepPage(QtWidgets.QWidget):
             self.bbp_mvup, 0, QtCore.Qt.AlignmentFlag.AlignRight
         )
         self.bbp_mvdown = IconButton(parent=self)
-        sizePolicy.setHeightForWidth(
-            self.bbp_mvdown.sizePolicy().hasHeightForWidth()
-        )
+        sizePolicy.setHeightForWidth(self.bbp_mvdown.sizePolicy().hasHeightForWidth())
         self.bbp_mvdown.setSizePolicy(sizePolicy)
         self.bbp_mvdown.setMinimumSize(QtCore.QSize(80, 80))
         self.bbp_mvdown.setMaximumSize(QtCore.QSize(80, 80))
         self.bbp_mvdown.setText("")
         self.bbp_mvdown.setFlat(True)
         self.bbp_mvdown.setPixmap(
-            QtGui.QPixmap(":/arrow_icons/media/btn_icons/down_arrow.svg")
+            QtGui.QPixmap(":/baby_step/media/btn_icons/move_nozzle_away.svg")
         )
         self.bbp_mvdown.setObjectName("bbp_close_to_bed")
         self.bbp_option_button_group.addButton(self.bbp_mvdown)

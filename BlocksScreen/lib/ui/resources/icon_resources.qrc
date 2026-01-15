@@ -10,6 +10,10 @@
     <file>media/btn_icons/no_wifi.svg</file>
     <file>media/btn_icons/retry_wifi.svg</file>
   </qresource>
+  <qresource prefix="baby_step">
+    <file>media/btn_icons/move_nozzle_away.svg</file>
+    <file>media/btn_icons/move_nozzle_close.svg</file>
+  </qresource>
   <qresource prefix="blocks">
     <file>media/btn_icons/blocks_contacts.svg</file>
     <file>media/btn_icons/logo_BLOCKS.svg</file>
@@ -36,6 +40,7 @@
   <qresource prefix="fan_related">
     <file>media/btn_icons/fan.svg</file>
     <file>media/btn_icons/fan_cage.svg</file>
+    <file>media/btn_icons/blower.svg</file>
   </qresource>
   <qresource prefix="temperature_related">
     <file>media/btn_icons/standart_temperature.svg</file>
@@ -88,9 +93,9 @@
     <file>media/btn_icons/center_arrows.svg</file>
     <file>media/btn_icons/confirm_stl_window.svg</file>
     <file>media/btn_icons/horizontal_scroll_bar.svg</file>
-    <file>media/btn_icons/info.svg</file>
-    <file>media/btn_icons/error.svg</file>
     <file>media/btn_icons/info_prints.svg</file>
+    <file>media/btn_icons/error.svg</file>
+    <file>media/btn_icons/info.svg</file>
     <file>media/btn_icons/LCD_settings.svg</file>
     <file>media/btn_icons/LEDs.svg</file>
     <file>media/btn_icons/LEDs_off.svg</file>

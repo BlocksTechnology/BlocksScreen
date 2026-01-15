@@ -8,6 +8,7 @@ class CustomScrollBar(QtWidgets.QScrollBar):
         self.setFixedWidth(40)
 
     def paintEvent(self, event):
+        """Re-implemented method, paint widget"""
         painter = QtGui.QPainter(self)
         painter.setRenderHint(painter.RenderHint.Antialiasing, True)
         painter.setRenderHint(painter.RenderHint.SmoothPixmapTransform, True)
@@ -43,15 +44,10 @@ class CustomScrollBar(QtWidgets.QScrollBar):
                 / (max_val - min_val)
             )
         else:
-            val = (
-                np.interp((handle_percentage), [15, 85], [0, 100])
-                / 100
-                * max_val
-            )
+            val = np.interp((handle_percentage), [15, 85], [0, 100]) / 100 * max_val
 
             base_handle_length = int(
-                (groove.height() * page_step / (max_val - min_val + page_step))
-                + 40
+                (groove.height() * page_step / (max_val - min_val + page_step)) + 40
             )
             handle_pos = int(
                 (groove.height() - base_handle_length)

@@ -16,6 +16,7 @@ from lib.panels.widgets.connectionPage import ConnectionPage
 from lib.panels.widgets.popupDialogWidget import Popup
 from lib.printer import Printer
 from lib.ui.mainWindow_ui import Ui_MainWindow  # With header
+from lib.panels.widgets.updatePage import UpdatePage
 
 # from lib.ui.mainWindow_v2_ui import Ui_MainWindow # No header
 from lib.ui.resources.background_resources_rc import *
@@ -35,11 +36,12 @@ def api_handler(func):
     """Decorator for methods that handle api responses"""
 
     def wrapper(*args, **kwargs):
+        """Decorator for api_handler"""
         try:
             result = func(*args, **kwargs)
             return result
         except Exception as e:
-            _logger.error(f"Caught Exception in %s : %s ", func.__name__, e)
+            _logger.error("Caught Exception in %s : %s ", func.__name__, e)
             raise
 
     return wrapper
@@ -57,6 +59,7 @@ class MainWindow(QtWidgets.QMainWindow):
     gcode_response = QtCore.pyqtSignal(list, name="gcode_response")
     handle_error_response = QtCore.pyqtSignal(list, name="handle_error_response")
     call_network_panel = QtCore.pyqtSignal(name="call-network-panel")
+    call_update_panel = QtCore.pyqtSignal(name="call-update-panel")
     on_update_message: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         dict, name="on-update-message"
     )
@@ -76,10 +79,14 @@ class MainWindow(QtWidgets.QMainWindow):
         self.index_stack = deque(maxlen=4)
         self.printer = Printer(self, self.ws)
         self.conn_window = ConnectionPage(self, self.ws)
+        self.up = UpdatePage(self)
+        self.up.hide()
         self.installEventFilter(self.conn_window)
         self.printPanel = PrintTab(
             self.ui.printTab, self.file_data, self.ws, self.printer
         )
+        QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.CursorShape.BlankCursor)
+
         self.filamentPanel = FilamentTab(self.ui.filamentTab, self.printer, self.ws)
         self.controlPanel = ControlTab(self.ui.controlTab, self.ws, self.printer)
         self.utilitiesPanel = UtilitiesTab(self.ui.utilitiesTab, self.ws, self.printer)
@@ -149,32 +156,71 @@ class MainWindow(QtWidgets.QMainWindow):
             self.controlPanel.probe_helper_page.handle_error_response
         )
         self.controlPanel.disable_popups.connect(self.popup_toggle)
-        self.on_update_message.connect(self.utilitiesPanel.on_update_message)
+        self.on_update_message.connect(self.up.handle_update_message)
+        self.up.request_full_update.connect(self.ws.api.full_update)
+        self.up.request_recover_repo[str].connect(self.ws.api.recover_corrupt_repo)
+        self.up.request_recover_repo[str, bool].connect(
+            self.ws.api.recover_corrupt_repo
+        )
+        self.up.request_refresh_update.connect(self.ws.api.refresh_update_status)
+        self.up.request_refresh_update[str].connect(self.ws.api.refresh_update_status)
+        self.up.request_rollback_update.connect(self.ws.api.rollback_update)
+        self.up.request_update_client.connect(self.ws.api.update_client)
+        self.up.request_update_klipper.connect(self.ws.api.update_klipper)
+        self.up.request_update_moonraker.connect(self.ws.api.update_moonraker)
+        self.up.request_update_status.connect(self.ws.api.update_status)
+        self.up.request_update_system.connect(self.ws.api.update_system)
+        self.up.update_back_btn.clicked.connect(self.up.hide)
+        self.utilitiesPanel.show_update_page.connect(self.show_update_page)
+        self.conn_window.update_button_clicked.connect(self.show_update_page)
         self.ui.extruder_temp_display.display_format = "upper_downer"
         self.ui.bed_temp_display.display_format = "upper_downer"
         if self.config.has_section("server"):
             # @ Start websocket connection with moonraker
             self.bo_ws_startup.emit()
         self.reset_tab_indexes()
+
+    @QtCore.pyqtSlot(bool, name="show-update-page")
+    def show_update_page(self, fullscreen: bool):
+        """Slot for displaying update Panel"""
+        if not fullscreen:
+            self.up.setParent(self.ui.main_content_widget)
+            current_index = self.ui.main_content_widget.currentIndex()
+            tab_rect = self.ui.main_content_widget.tabBar().tabRect(current_index)
+            width = tab_rect.width()
+            _parent_size = self.up.parent().size()
+            self.up.setGeometry(
+                width, 0, _parent_size.width() - width, _parent_size.height()
+            )
+        else:
+            self.up.setParent(self)
+            self.up.setGeometry(0, 0, self.width(), self.height())
+
+        self.up.raise_()
+        self.up.updateGeometry()
+        self.up.repaint()
+        self.up.show()
+
     @QtCore.pyqtSlot(name="on-cancel-print")
     def on_cancel_print(self):
-            self.enable_tab_bar()
-            self.ui.extruder_temp_display.clicked.disconnect()
-            self.ui.bed_temp_display.clicked.disconnect()
-            self.ui.filament_type_icon.setDisabled(False)
-            self.ui.nozzle_size_icon.setDisabled(False)
-            self.ui.extruder_temp_display.clicked.connect(
-                lambda: self.global_change_page(
-                    self.ui.main_content_widget.indexOf(self.ui.controlTab),
-                    self.controlPanel.indexOf(self.controlPanel.panel.temperature_page),
-                )
+        """Slot for cancel print signal"""
+        self.enable_tab_bar()
+        self.ui.extruder_temp_display.clicked.disconnect()
+        self.ui.bed_temp_display.clicked.disconnect()
+        self.ui.filament_type_icon.setDisabled(False)
+        self.ui.nozzle_size_icon.setDisabled(False)
+        self.ui.extruder_temp_display.clicked.connect(
+            lambda: self.global_change_page(
+                self.ui.main_content_widget.indexOf(self.ui.controlTab),
+                self.controlPanel.indexOf(self.controlPanel.panel.temperature_page),
             )
-            self.ui.bed_temp_display.clicked.connect(
-                lambda: self.global_change_page(
-                    self.ui.main_content_widget.indexOf(self.ui.controlTab),
-                    self.controlPanel.indexOf(self.controlPanel.panel.temperature_page),
-                )
+        )
+        self.ui.bed_temp_display.clicked.connect(
+            lambda: self.global_change_page(
+                self.ui.main_content_widget.indexOf(self.ui.controlTab),
+                self.controlPanel.indexOf(self.controlPanel.panel.temperature_page),
             )
+        )
 
     @QtCore.pyqtSlot(bool, name="update-available")
     def on_update_available(self, state: bool = False):
@@ -262,6 +308,7 @@ class MainWindow(QtWidgets.QMainWindow):
         Used to grantee all tabs reset to their
         first page once the user leaves the tab
         """
+        self.up.hide()
         self.printPanel.setCurrentIndex(0)
         self.filamentPanel.setCurrentIndex(0)
         self.controlPanel.setCurrentIndex(0)
@@ -492,14 +539,7 @@ class MainWindow(QtWidgets.QMainWindow):
     @api_handler
     def _handle_notify_filelist_changed_message(self, method, data, metadata) -> None:
         """Handle websocket file list messages"""
-        _file_change_list = data.get("params")
-        if _file_change_list:
-            fileaction = _file_change_list[0].get("action")
-            filepath = (
-                _file_change_list[0].get("item").get("path")
-            )  # TODO : NOTIFY_FILELIST_CHANGED, I DON'T KNOW IF I REALLY WANT TO SEND NOTIFICATIONS ON FILE CHANGES.
         ...
-        # self.file_data.request_file_list.emit()
 
     @api_handler
     def _handle_notify_service_state_changed_message(
@@ -508,15 +548,13 @@ class MainWindow(QtWidgets.QMainWindow):
         """Handle websocket service messages"""
         entry = data.get("params")
         if entry:
-            if not self._popup_toggle:
+            if self._popup_toggle:
                 return
             service_entry: dict = entry[0]
             service_name, service_info = service_entry.popitem()
             self.popup.new_message(
                 message_type=Popup.MessageType.INFO,
-                message=f"""{service_name} service changed state to 
-                {service_info.get("sub_state")}
-                """,
+                message=f"{service_name} service changed state to \n{service_info.get('sub_state')}",
             )
 
     @api_handler
@@ -525,15 +563,18 @@ class MainWindow(QtWidgets.QMainWindow):
         _gcode_response = data.get("params")
         self.gcode_response[list].emit(_gcode_response)
         if _gcode_response:
-            if not self._popup_toggle:
+            if self._popup_toggle:
                 return
             _gcode_msg_type, _message = str(_gcode_response[0]).split(" ", maxsplit=1)
-            _msg_type = Popup.MessageType.UNKNOWN
-            if _gcode_msg_type == "!!":
-                _msg_type = Popup.MessageType.ERROR
-            elif _gcode_msg_type == "//":
-                _msg_type = Popup.MessageType.INFO
-            self.popup.new_message(message_type=_msg_type, message=str(_message))
+            popupWhitelist = ["filament runout", "no filament"]
+            if _message.lower() not in popupWhitelist or _gcode_msg_type != "!!":
+                return
+
+            self.popup.new_message(
+                message_type=Popup.MessageType.ERROR,
+                message=str(_message),
+                userInput=True,
+            )
 
     @api_handler
     def _handle_error_message(self, method, data, metadata) -> None:
@@ -542,17 +583,24 @@ class MainWindow(QtWidgets.QMainWindow):
         if "metadata" in data.get("message", "").lower():
             # Quick fix, don't care about no metadata errors
             return
-        if not self._popup_toggle:
+        if self._popup_toggle:
             return
+        text = data
+        if isinstance(data, dict):
+            if "message" in data:
+                text = f"{data['message']}"
+            else:
+                text = data
         self.popup.new_message(
             message_type=Popup.MessageType.ERROR,
-            message=str(data),
+            message=str(text),
+            userInput=True,
         )
 
     @api_handler
     def _handle_notify_cpu_throttled_message(self, method, data, metadata) -> None:
         """Handle websocket cpu throttled messages"""
-        if not self._popup_toggle:
+        if self._popup_toggle:
             return
         self.popup.new_message(
             message_type=Popup.MessageType.WARNING,
@@ -622,7 +670,6 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.messageReceivedEvent(event)
                 return True
             return False
-
         if event.type() == events.PrintStart.type():
             self.disable_tab_bar()
             self.ui.extruder_temp_display.clicked.disconnect()
@@ -643,10 +690,10 @@ class MainWindow(QtWidgets.QMainWindow):
             )
             return False
 
-        if event.type() == (
-            events.PrintError.type()
-            or events.PrintComplete.type()
-            or events.PrintCancelled.type()
+        if event.type() in (
+            events.PrintError.type(),
+            events.PrintComplete.type(),
+            events.PrintCancelled.type(),
         ):
             self.enable_tab_bar()
             self.ui.extruder_temp_display.clicked.disconnect()

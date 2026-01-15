@@ -4,15 +4,9 @@ from PyQt6 import QtCore, QtWidgets
 
 class ScreenSaver(QtCore.QObject):
     timer = QtCore.QTimer()
-
     dpms_off_timeout = helper_methods.get_dpms_timeouts().get("off_timeout")
-    dpms_suspend_timeout = helper_methods.get_dpms_timeouts().get(
-        "suspend_timeout"
-    )
-    dpms_standby_timeout = helper_methods.get_dpms_timeouts().get(
-        "standby_timeout"
-    )
-
+    dpms_suspend_timeout = helper_methods.get_dpms_timeouts().get("suspend_timeout")
+    dpms_standby_timeout = helper_methods.get_dpms_timeouts().get("standby_timeout")
     touch_blocked: bool = False
 
     def __init__(self, parent) -> None:
@@ -23,9 +17,7 @@ class ScreenSaver(QtCore.QObject):
         )
         if not self.screensaver_config:
             self.blank_timeout = (
-                self.dpms_standby_timeout
-                if self.dpms_standby_timeout
-                else 900000
+                self.dpms_standby_timeout if self.dpms_standby_timeout else 900000
             )
         else:
             self.blank_timeout = self.screensaver_config.getint(
@@ -65,9 +57,6 @@ class ScreenSaver(QtCore.QObject):
                 self.timer.stop()
                 self.timer.start()
         return False
-
-    def timerEvent(self, a0: QtCore.QTimerEvent) -> None:
-        return super().timerEvent(a0)
 
     def check_dpms(self) -> None:
         """Checks the X11 extension dpms for the status of the screen"""

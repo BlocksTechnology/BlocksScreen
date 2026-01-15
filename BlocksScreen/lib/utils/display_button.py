@@ -4,9 +4,7 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 
 
 class DisplayButton(QtWidgets.QPushButton):
-    def __init__(
-        self, parent: typing.Optional["QtWidgets.QWidget"] = None
-    ) -> None:
+    def __init__(self, parent: typing.Optional["QtWidgets.QWidget"] = None) -> None:
         if parent:
             super().__init__(parent=parent)
         else:
@@ -19,22 +17,23 @@ class DisplayButton(QtWidgets.QPushButton):
         self._text: str = ""
         self._secondary_text: str = ""
         self._name: str = ""
-        self.display_format: typing.Literal["normal", "upper_downer"] = (
-            "normal"
-        )
+        self.display_format: typing.Literal["normal", "upper_downer"] = "normal"
         self.text_color: QtGui.QColor = QtGui.QColor(0, 0, 0)
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_AcceptTouchEvents, True)
 
     @property
     def name(self):
+        """Widget name"""
         return self._name
 
     def setPixmap(self, pixmap: QtGui.QPixmap) -> None:
+        """Set widget pixmap"""
         self.icon_pixmap = pixmap
         self.repaint()
 
     @property
     def button_type(self) -> str:
+        """Widget button type"""
         return self._button_type
 
     @button_type.setter
@@ -44,29 +43,28 @@ class DisplayButton(QtWidgets.QPushButton):
         self._button_type = type
 
     def text(self) -> str:
+        """Widget text"""
         return self._text
 
     def setText(self, text: str) -> None:
+        """Set widget text"""
         self._text = text
         self.update()
         super().setText(text)
 
     @property
     def secondary_text(self) -> str:
+        """Widget secondary text"""
         return self._secondary_text
 
     @secondary_text.setter
     def secondary_text(self, text: str) -> None:
+        """Set secondary text"""
         self._secondary_text = text
         self.update()
 
-    def resizeEvent(self, a0: QtGui.QResizeEvent) -> None:
-        return super().resizeEvent(a0)
-
-    def mousePressEvent(self, e: QtGui.QMouseEvent) -> None:
-        return super().mousePressEvent(e)
-
     def paintEvent(self, a0: QtGui.QPaintEvent) -> None:
+        """Re-implemented method, paint widget"""
         opt = QtWidgets.QStyleOptionButton()
         self.initStyleOption(opt)
         painter = QtWidgets.QStylePainter(self)
@@ -78,9 +76,7 @@ class DisplayButton(QtWidgets.QPushButton):
 
         if not _style or _rect is None:
             return
-        margin = _style.pixelMetric(
-            _style.PixelMetric.PM_ButtonMargin, opt, self
-        )
+        margin = _style.pixelMetric(_style.PixelMetric.PM_ButtonMargin, opt, self)
         # Rounded background edges
         path = QtGui.QPainterPath()
         path.addRoundedRect(
@@ -119,13 +115,11 @@ class DisplayButton(QtWidgets.QPushButton):
             _pen.setBrush(_gradient)
             painter.fillPath(path, _pen.brush())
 
-        _icon_rect = (
-            QtCore.QRectF(  # x,y, width * size reduction factor, height
-                0.0,
-                0.0,
-                (_rect.width() * 0.3) - 5.0,
-                _rect.height() - 5,
-            )
+        _icon_rect = QtCore.QRectF(  # x,y, width * size reduction factor, height
+            0.0,
+            0.0,
+            (_rect.width() * 0.3) - 5.0,
+            _rect.height() - 5,
         )
 
         _icon_scaled = self.icon_pixmap.scaled(
@@ -180,6 +174,10 @@ class DisplayButton(QtWidgets.QPushButton):
                         int(_mtl.width() / 2.0),
                         _rect.height(),
                     )
+                    font = QtGui.QFont()
+                    font.setPointSize(12)
+                    font.setFamily("Momcake-bold")
+                    painter.setFont(font)
                     painter.drawText(
                         _ptl_rect,
                         QtCore.Qt.TextFlag.TextShowMnemonic
@@ -192,9 +190,7 @@ class DisplayButton(QtWidgets.QPushButton):
                         QtCore.Qt.TextFlag.TextShowMnemonic
                         | QtCore.Qt.AlignmentFlag.AlignHCenter
                         | QtCore.Qt.AlignmentFlag.AlignVCenter,
-                        str(self.secondary_text)
-                        if self.secondary_text
-                        else str("?"),
+                        str(self.secondary_text) if self.secondary_text else str("?"),
                     )
                     painter.drawText(
                         _mtl_rect,
@@ -205,9 +201,9 @@ class DisplayButton(QtWidgets.QPushButton):
                     )
                 elif self.display_format == "upper_downer":
                     _mtl = QtCore.QRectF(
-                        int(_icon_rect.width()) + margin ,
+                        int(_icon_rect.width()) + margin,
                         0.0,
-                        int(_rect.width() - _icon_rect.width() - margin ),
+                        int(_rect.width() - _icon_rect.width() - margin),
                         _rect.height(),
                     )
                     _upper_rect = QtCore.QRectF(
@@ -226,7 +222,9 @@ class DisplayButton(QtWidgets.QPushButton):
                     font.setPointSize(20)
                     font.setFamily("Momcake-bold")
                     painter.setFont(font)
-                    painter.setCompositionMode(painter.CompositionMode.CompositionMode_SourceAtop)
+                    painter.setCompositionMode(
+                        painter.CompositionMode.CompositionMode_SourceAtop
+                    )
                     painter.drawText(
                         _upper_rect,
                         # QtCore.Qt.AlignmentFlag.AlignCenter,
@@ -237,7 +235,7 @@ class DisplayButton(QtWidgets.QPushButton):
                     font.setPointSize(15)
                     painter.setPen(QtGui.QColor("#b6b0b0"))
                     painter.setFont(font)
-                    
+
                     painter.drawText(
                         _downer_rect,
                         QtCore.Qt.AlignmentFlag.AlignRight
@@ -246,6 +244,10 @@ class DisplayButton(QtWidgets.QPushButton):
                     )
 
             else:
+                font = QtGui.QFont()
+                font.setPointSize(12)
+                font.setFamily("Momcake-bold")
+                painter.setFont(font)
                 painter.drawText(
                     _mtl,
                     QtCore.Qt.TextFlag.TextShowMnemonic
@@ -258,6 +260,7 @@ class DisplayButton(QtWidgets.QPushButton):
         return
 
     def setProperty(self, name: str, value: typing.Any) -> bool:
+        """Re-implemented method, set widget properties"""
         if name == "icon_pixmap":
             self.icon_pixmap = value
         elif name == "button_type":

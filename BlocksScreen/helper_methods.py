@@ -1,23 +1,26 @@
+# Collection of useful methods
+#
 # This file contains some methods derived from KlipperScreen
 # Original source: https://github.com/KlipperScreen/KlipperScreen
 # License: GNU General Public License v3
-# Modifications made by Hugo Costa <h.costa@blockstec.com> (2025) for BlocksScreen 
+# Modifications made by Hugo Costa <h.costa@blockstec.com> (2025) for BlocksScreen
 
 
 import ctypes
-import os
 import enum
 import logging
+import os
 import pathlib
 import struct
 import typing
-
 
 try:
     ctypes.cdll.LoadLibrary("libXext.so.6")
     libxext = ctypes.CDLL("libXext.so.6")
 
     class DPMSState(enum.Enum):
+        """Available DPMS states"""
+
         FAIL = -1
         ON = 0
         STANDBY = 1
@@ -35,6 +38,7 @@ try:
     libxext.DPMSForceLevel.restype = ctypes.c_int
 
     def get_dpms_state():
+        """Gets and returns DPMS state"""
         _dpms_state = DPMSState.FAIL
         _display_name = ctypes.c_char_p(b":0")
         libxext.XOpenDisplay.restype = ctypes.c_void_p
@@ -59,6 +63,11 @@ try:
         return _dpms_state
 
     def set_dpms_mode(mode: DPMSState) -> None:
+        """Set DPMS state
+
+        Args:
+            mode (DPMSState): State to set DPMS. Check available state on `DPMSState`
+        """
         _display_name = ctypes.c_char_p(b":0")
         libxext.XOpenDisplay.restype = ctypes.c_void_p
         display = ctypes.c_void_p(
@@ -76,6 +85,7 @@ try:
                 libxext.XCloseDisplay(display)
 
     def get_dpms_timeouts() -> typing.Dict:
+        """Get current DPMS timeouts"""
         _display_name = ctypes.c_char_p(b":0")
         libxext.XOpenDisplay.restype = ctypes.c_void_p
         display = ctypes.c_void_p(
@@ -93,9 +103,7 @@ try:
                     suspend_p = ctypes.create_string_buffer(2)
                     off_p = ctypes.create_string_buffer(2)
 
-                    if libxext.DPMSGetTimeouts(
-                        display, standby_p, suspend_p, off_p
-                    ):
+                    if libxext.DPMSGetTimeouts(display, standby_p, suspend_p, off_p):
                         _standby_timeout = struct.unpack("H", standby_p.raw)[0]
                         _suspend_timeout = struct.unpack("H", suspend_p.raw)[0]
                         _off_timeout = struct.unpack("H", off_p.raw)[0]
@@ -111,6 +119,7 @@ try:
     def set_dpms_timeouts(
         suspend: int = 0, standby: int = 0, off: int = 0
     ) -> typing.Dict:
+        """Set DPMS timeout"""
         _display_name = ctypes.c_char_p(b":0")
         libxext.XOpenDisplay.restype = ctypes.c_void_p
         display = ctypes.c_void_p(
@@ -131,9 +140,7 @@ try:
                     suspend_p = ctypes.create_string_buffer(2)
                     off_p = ctypes.create_string_buffer(2)
 
-                    if libxext.DPMSGetTimeouts(
-                        display, standby_p, suspend_p, off_p
-                    ):
+                    if libxext.DPMSGetTimeouts(display, standby_p, suspend_p, off_p):
                         _standby_timeout = struct.unpack("H", standby_p.raw)[0]
                         _suspend_timeout = struct.unpack("H", suspend_p.raw)[0]
                         _off_timeout = struct.unpack("H", off_p.raw)[0]
@@ -147,6 +154,11 @@ try:
         }
 
     def get_dpms_info() -> typing.Dict:
+        """Get DPMS information
+
+        Returns:
+            typing.Dict: Dpms state
+        """
         _dpms_state = DPMSState.FAIL
         onoff = 0
         _display_name = ctypes.c_char_p(b":0")
@@ -176,6 +188,12 @@ try:
         return {"power_level": onoff, "state": DPMSState(_dpms_state)}
 
     def check_dpms_capable(display: int):
+        """Check if device has DPMS
+
+        Args:
+            display (int): Display index
+
+        """
         _display_name = ctypes.c_char_p(b":%d" % (display))
 
         libxext.XOpenDisplay.restype = ctypes.c_void_p
@@ -198,6 +216,7 @@ try:
         return _capable
 
     def disable_dpms() -> None:
+        """Disable DPMS"""
         set_dpms_mode(DPMSState.OFF)
 
 except OSError as e:
@@ -234,7 +253,10 @@ def calculate_current_layer(
     """
     if z_position == 0:
         return -1
-    _current_layer = 1 + (z_position - first_layer_height) / layer_height
+    if z_position <= first_layer_height:
+        return 1
+
+    _current_layer = (z_position) / layer_height
 
     return int(_current_layer)
 
@@ -255,6 +277,7 @@ def estimate_print_time(seconds: int) -> list:
 
 
 def normalize(value, r_min=0.0, r_max=1.0, t_min=0.0, t_max=100):
+    """Normalize values between a rage"""
     # https://stats.stackexchange.com/questions/281162/scale-a-number-between-a-range
     c1 = (value - r_min) / (r_max - r_min)
     c2 = (t_max - t_min) + t_min
@@ -290,6 +313,7 @@ def check_filepath_permission(filepath, access_type: int = os.R_OK) -> bool:
 def check_dir_existence(
     directory: typing.Union[str, pathlib.Path],
 ) -> bool:
+    """Check if a directory exists. Returns a true if it exists"""
     if isinstance(directory, pathlib.Path):
         return bool(directory.is_dir())
     return bool(os.path.isdir(directory))
@@ -299,12 +323,28 @@ def check_file_on_path(
     path: typing.Union[typing.LiteralString, pathlib.Path],
     filename: typing.Union[typing.LiteralString, pathlib.Path],
 ) -> bool:
+    """Check if file exists on path. Returns true if file exists on that specified directory"""
     _filepath = os.path.join(path, filename)
     return os.path.exists(_filepath)
 
 
-def get_file_loc(filename) -> pathlib.Path:
-    ...
+def get_file_loc(filename) -> pathlib.Path: ...
+
+
+def get_file_name(filename: typing.Optional[str]) -> str:
+    # If filename is None or empty, return empty string instead of None
+    if not filename:
+        return ""
+    # Remove trailing slashes or backslashes
+    filename = filename.rstrip("/\\")
+
+    # Normalize Windows backslashes to forward slashes
+    filename = filename.replace("\\", "/")
+
+    parts = filename.split("/")
+
+    # Split and return the last path component
+    return parts[-1] if filename else ""
 
 
 # def get_hash(data) -> hashlib._Hash:
@@ -312,7 +352,6 @@ def get_file_loc(filename) -> pathlib.Path:
 #     hash.update(data.encode())
 #     hash.digest()
 #     return hash
-
 
 
 def digest_hash() -> None: ...

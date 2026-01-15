@@ -1,18 +1,22 @@
-import csv
 import typing
 from dataclasses import dataclass
 from enum import Enum, auto
 from functools import partial
 
 from lib.moonrakerComm import MoonWebSocket
-from lib.panels.widgets.loadPage import LoadScreen
 from lib.panels.widgets.troubleshootPage import TroubleshootPage
-from lib.panels.widgets.updatePage import UpdatePage
 from lib.printer import Printer
 from lib.ui.utilitiesStackedWidget_ui import Ui_utilitiesStackedWidget
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.toggleAnimatedButton import ToggleAnimatedButton
 from PyQt6 import QtCore, QtGui, QtWidgets
+
+from lib.panels.widgets.optionCardWidget import OptionCard
+from lib.panels.widgets.inputshaperPage import InputShaperPage
+from lib.panels.widgets.basePopup import BasePopup
+from lib.panels.widgets.loadWidget import LoadingOverlayWidget
+
+import re
 
 
 @dataclass
@@ -82,6 +86,10 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         bool, name="update-available"
     )
 
+    show_update_page: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        bool, name="show-update-page"
+    )
+
     def __init__(
         self, parent: QtWidgets.QWidget, ws: MoonWebSocket, printer: Printer
     ) -> None:
@@ -111,31 +119,39 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         self.amount: int = 1
         self.tb: bool = False
         self.cg = None
+        self.aut: bool = False
 
         # --- UI Setup ---
         self.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
-        self.loadPage = LoadScreen(self)
-        self.addWidget(self.loadPage)
+        self.loadPage = BasePopup(self, dialog=False)
+        self.loadwidget = LoadingOverlayWidget(
+            self, LoadingOverlayWidget.AnimationGIF.DEFAULT
+        )
+        self.loadPage.add_widget(self.loadwidget)
 
-        self.update_page = UpdatePage(self)
-        self.addWidget(self.update_page)
-        
-        self.panel.utilities_input_shaper_btn.hide()
+        self.panel.update_btn.clicked.connect(
+            lambda: self.show_update_page[bool].emit(False)
+        )
+
+        self.is_page = InputShaperPage(self)
+        self.addWidget(self.is_page)
+
+        self.dialog_page = BasePopup(self, dialog=True, floating=True)
+        self.addWidget(self.dialog_page)
+
         # --- Back Buttons ---
         for button in (
-            self.panel.is_back_btn,
             self.panel.leds_back_btn,
             self.panel.info_back_btn,
             self.panel.leds_slider_back_btn,
             self.panel.input_shaper_back_btn,
             self.panel.routine_check_back_btn,
-            self.update_page.update_back_btn,
+            self.is_page.update_back_btn,
         ):
             button.clicked.connect(self.back_button)
 
         # --- Page Navigation ---
         self._connect_page_change(self.panel.utilities_axes_btn, self.panel.axes_page)
-        self._connect_page_change(self.panel.update_btn, self.update_page)
         self._connect_page_change(
             self.panel.utilities_input_shaper_btn, self.panel.input_shaper_page
         )
@@ -143,7 +159,6 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         self._connect_page_change(
             self.panel.utilities_routine_check_btn, self.panel.routines_page
         )
-        self._connect_page_change(self.panel.is_confirm_btn, self.panel.utilities_page)
         self._connect_page_change(self.panel.am_cancel, self.panel.utilities_page)
 
         self._connect_page_change(self.panel.axes_back_btn, self.panel.utilities_page)
@@ -166,20 +181,6 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         self.panel.axis_y_btn.clicked.connect(partial(self.axis_maintenance, "y"))
         self.panel.axis_z_btn.clicked.connect(partial(self.axis_maintenance, "z"))
 
-        # --- Input Shaper ---
-        self.panel.is_X_startis_btn.clicked.connect(
-            partial(self.run_resonance_test, "x")
-        )
-        self.panel.is_Y_startis_btn.clicked.connect(
-            partial(self.run_resonance_test, "y")
-        )
-        self.panel.am_confirm.clicked.connect(self.apply_input_shaper_selection)
-        self.panel.isc_btn_group.buttonClicked.connect(
-            lambda btn: setattr(self, "ammount", int(btn.text()))
-        )
-        self._connect_numpad_request(self.panel.isui_fq, "frequency", "Frequency")
-        self._connect_numpad_request(self.panel.isui_sm, "smoothing", "Smoothing")
-
         self.panel.toggle_led_button.state = ToggleAnimatedButton.State.ON
 
         # --- LEDs ---
@@ -191,6 +192,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
 
         # --- Websocket/Printer Signals ---
         self.run_gcode_signal.connect(self.ws.api.run_gcode)
+        self.is_page.run_gcode_signal.connect(self.ws.api.run_gcode)
         self.subscribe_config[str, "PyQt_PyObject"].connect(
             self.printer.on_subscribe_config
         )
@@ -202,38 +204,161 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         self.printer.printer_config.connect(self.on_printer_config_received)
         self.printer.gcode_move_update.connect(self.on_gcode_move_update)
 
-        # ---- Websocket connections ----
-
-        self.on_update_message.connect(self.update_page.handle_update_message)
-        self.update_page.request_full_update.connect(self.ws.api.full_update)
-        self.update_page.request_recover_repo[str].connect(
-            self.ws.api.recover_corrupt_repo
-        )
-        self.update_page.request_recover_repo[str, bool].connect(
-            self.ws.api.recover_corrupt_repo
-        )
-        self.update_page.request_refresh_update.connect(
-            self.ws.api.refresh_update_status
-        )
-        self.update_page.request_refresh_update[str].connect(
-            self.ws.api.refresh_update_status
-        )
-        self.update_page.request_rollback_update.connect(self.ws.api.rollback_update)
-        self.update_page.request_update_client.connect(self.ws.api.update_client)
-        self.update_page.request_update_klipper.connect(self.ws.api.update_klipper)
-        self.update_page.request_update_moonraker.connect(self.ws.api.update_moonraker)
-        self.update_page.request_update_status.connect(self.ws.api.update_status)
-        self.update_page.request_update_system.connect(self.ws.api.update_system)
-        self.update_page.update_available.connect(self.update_available.emit)
-        self.update_page.update_available.connect(
-            self.panel.update_btn.setShowNotification
-        )
         self.panel.update_btn.setPixmap(
             QtGui.QPixmap(":/system/media/btn_icons/update-software-icon.svg")
         )
 
+        # ---- Input Shaper ----
+        self.automatic_is = OptionCard(
+            self,
+            "Automatic\nInput Shaper",
+            "Automatic Input Shaper",
+            QtGui.QPixmap(":/input_shaper/media/btn_icons/input_shaper_auto.svg"),
+        )  # type: ignore
+        self.automatic_is.setObjectName("Automatic_IS_Card")
+        self.panel.is_content_layout.addWidget(
+            self.automatic_is, alignment=QtCore.Qt.AlignmentFlag.AlignHCenter
+        )
+        self.automatic_is.continue_clicked.connect(
+            lambda: self.handle_is("SHAPER_CALIBRATE")
+        )
+
+        self.manual_is = OptionCard(
+            self,
+            "Manual\nInput Shaper",
+            "Manual Input Shaper",
+            QtGui.QPixmap(":/input_shaper/media/btn_icons/input_shaper_manual.svg"),
+        )  # type: ignore
+        self.manual_is.setObjectName("Manual_IS_Card")
+        self.panel.is_content_layout.addWidget(
+            self.manual_is, alignment=QtCore.Qt.AlignmentFlag.AlignHCenter
+        )
+        self.manual_is.continue_clicked.connect(lambda: self.handle_is(""))
+
+        self.is_types: dict = {}
+        self.is_aut_types: dict = {}
+        self.dialog_page.accepted.connect(
+            lambda: self.handle_is("SHAPER_CALIBRATE AXIS=Y")
+        )
+        self.dialog_page.rejected.connect(
+            lambda: self.handle_is("SHAPER_CALIBRATE AXIS=X")
+        )
+
+        self.is_page.action_btn.clicked.connect(
+            lambda: self.change_page(self.indexOf(self.panel.input_shaper_page))
+        )
+
+    def handle_gcode_response(self, data: list[str]) -> None:
+        """
+        Parses a Klipper Input Shaper console message and updates self.is_types.
+        """
+
+        if not isinstance(data, list) or len(data) != 1 or not isinstance(data[0], str):
+            print(
+                f"WARNING: Invalid input format. Expected a list with one string. Received: {data}"
+            )
+            return
+
+        message = data[0]
+
+        pattern_fitted = re.compile(
+            r"Fitted shaper '(?P<name>\w+)' frequency = (?P<freq>[\d\.]+) Hz \(vibrations = (?P<vib>[\d\.]+)%"
+        )
+        match_fitted = pattern_fitted.search(message)
+
+        if match_fitted:
+            name = match_fitted.group("name")
+            freq = float(match_fitted.group("freq"))
+            vib = float(match_fitted.group("vib"))
+            current_data = self.is_types.get(name, {})
+            current_data.update(
+                {
+                    "frequency": freq,
+                    "vibration": vib,
+                    "max_accel": current_data.get("max_accel", 0.0),
+                }
+            )
+            self.is_types[name] = current_data
+
+            return
+        pattern_accel = re.compile(
+            r"To avoid too much smoothing with '(?P<name>\w+)', suggested max_accel <= (?P<accel>[\d\.]+) mm/sec\^2"
+        )
+        match_accel = pattern_accel.search(message)
+
+        if match_accel:
+            name = match_accel.group("name")
+            accel = float(match_accel.group("accel"))
+
+            if name in self.is_types and isinstance(self.is_types[name], dict):
+                self.is_types[name]["max_accel"] = accel
+            else:
+                self.is_types[name] = self.is_types.get(name, {})
+                self.is_types[name]["max_accel"] = accel
+            return
+
+        pattern_recommended = re.compile(
+            r"Recommended shaper_type_(?P<axis>[xy]) = (?P<type>\w+), shaper_freq_(?P=axis) = (?P<freq>[\d\.]+) Hz"
+        )
+        match_recommended = pattern_recommended.search(message)
+        if match_recommended:
+            axis = match_recommended.group("axis")
+            recommended_type = match_recommended.group("type")
+            self.is_types["Axis"] = axis
+            if self.aut:
+                self.is_aut_types[axis] = recommended_type
+                if len(self.is_aut_types) == 2:
+                    self.run_gcode_signal.emit("SAVE_CONFIG")
+                    self.loadPage.hide()
+                    self.aut = False
+                    return
+                return
+
+            reordered = {recommended_type: self.is_types[recommended_type]}
+            for key, value in self.is_types.items():
+                if key not in ("suggested_type", recommended_type, "Axis"):
+                    reordered[key] = value
+
+            self.is_page.set_type_dictionary(self.is_types)
+            first_key = next(iter(reordered.keys()), None)
+            for key in reordered.keys():
+                if key == first_key:
+                    self.is_page.add_type_entry(key, "Recommended type")
+                else:
+                    self.is_page.add_type_entry(key)
+
+            self.is_page.build_model_list()
+            self.loadPage.hide()
+            return
+
+    def handle_is(self, gcode: str) -> None:
+        if gcode == "SHAPER_CALIBRATE":
+            self.run_gcode_signal.emit("G28\nM400")
+            self.aut = True
+            self.run_gcode_signal.emit(gcode)
+        elif gcode == "":
+            self.dialog_page.confirm_background_color("#dfdfdf")
+            self.dialog_page.cancel_background_color("#dfdfdf")
+            self.dialog_page.cancel_font_color("#000000")
+            self.dialog_page.confirm_font_color("#000000")
+            self.dialog_page.cancel_button_text("X axis")
+            self.dialog_page.confirm_button_text("Y axis")
+            self.dialog_page.set_message(
+                "Select the axis you want to execute the input shaper on:"
+            )
+            self.dialog_page.show()
+            return
+        else:
+            self.run_gcode_signal.emit("G28\nM400")
+            self.run_gcode_signal.emit(gcode)
+            self.change_page(self.indexOf(self.is_page))
+
+        self.loadwidget.set_status_message("Running Input Shaper...")
+        self.loadPage.show()
+
     @QtCore.pyqtSlot(list, name="on_object_list")
     def on_object_list(self, object_list: list) -> None:
+        """Handle receiving printer object list"""
         self.cg = object_list
         for obj in self.cg:
             base_name = obj.split()[0]
@@ -246,6 +371,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
     @QtCore.pyqtSlot(dict, name="on_object_config")
     @QtCore.pyqtSlot(list, name="on_object_config")
     def on_object_config(self, config: typing.Union[dict, list]) -> None:
+        """Handle receiving printer object configurations"""
         if not config:
             return
         config_items = [config] if isinstance(config, dict) else config
@@ -269,6 +395,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
                         }
 
     def on_printer_config_received(self, config: dict) -> None:
+        """Handle printer configuration"""
         for axis in ("x", "y", "z"):
             self.subscribe_config[str, "PyQt_PyObject"].emit(
                 f"stepper_{axis}", self.on_object_config
@@ -276,26 +403,14 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
 
     @QtCore.pyqtSlot(str, list, name="on_gcode_move_update")
     def on_gcode_move_update(self, name: str, value: list) -> None:
+        """Handle gcode move"""
         if not value:
             return
         if name == "gcode_position":
             ...
 
-    def _connect_numpad_request(self, button: QtWidgets.QWidget, name: str, title: str):
-        if isinstance(button, QtWidgets.QPushButton):
-            button.clicked.connect(
-                lambda: self.request_numpad_signal.emit(
-                    3, name, title, self.handle_numpad_change, self
-                )
-            )
-
-    def handle_numpad_change(self, name: str, new_value: typing.Union[int, float]):
-        if name == "frequency":
-            self.panel.isui_fq.setText(f"Frequency: {new_value} Hz")
-        elif name == "smoothing":
-            self.panel.isui_sm.setText(f"Smoothing: {new_value}")
-
     def run_routine(self, process: Process):
+        """Run check routine for available processes"""
         self.current_process = process
         routine_configs = {
             Process.FAN: ("fans", "fan is spinning"),
@@ -325,8 +440,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
             message = "Please check if the temperature reaches 60°C. \n you may need to wait a few moments."
 
         self.set_routine_check_page(
-            f"Running routine for: {self.current_object}",
-            message
+            f"Running routine for: {self.current_object}", message
         )
         self.show_waiting_page(
             self.indexOf(self.panel.rc_page),
@@ -358,6 +472,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
             return True
 
     def on_routine_answer(self) -> None:
+        """Handle routine ongoing process"""
         if self.current_process is None or self.current_object is None:
             return
         if self.sender() == self.panel.rc_yes:
@@ -391,8 +506,10 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
                 if fan_name == "fan":
                     self.run_gcode_signal.emit("M106 S255\nM400")
                 else:
-                    self.run_gcode_signal.emit(f"SET_FAN_SPEED FAN={fan_name} SPEED=0.8\nM400")
-    
+                    self.run_gcode_signal.emit(
+                        f"SET_FAN_SPEED FAN={fan_name} SPEED=0.8\nM400"
+                    )
+
             return
 
         gcode_map = {
@@ -412,18 +529,16 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         if gcode := gcode_map.get(key):
             self.run_gcode_signal.emit(f"{gcode}\nM400")
 
-
     def set_routine_check_page(self, title: str, label: str):
+        """Set text on routine page"""
         self.panel.rc_tittle.setText(title)
         self.panel.rc_label.setText(label)
 
     def update_led_values(self) -> None:
+        """Update led state and color values"""
         if self.current_object not in self.objects["leds"]:
             return
         led_state: LedState = self.objects["leds"][self.current_object]
-        # led_state.red = self.panel.leds_r_slider.value()
-        # led_state.green = self.panel.leds_g_slider.value()
-        # led_state.blue = self.panel.leds_b_slider.value()
         led_state.white = int(self.panel.leds_w_slider.value() * 255 / 100)
         self.save_led_state()
 
@@ -469,10 +584,12 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
                 partial(self.handle_led_button, led_names[0])
             )
         else:
-            self._connect_page_change(self.panel.utilities_leds_btn, self.panel.leds_page)
-
+            self._connect_page_change(
+                self.panel.utilities_leds_btn, self.panel.leds_page
+            )
 
     def toggle_led_state(self) -> None:
+        """Toggle leds"""
         if self.current_object not in self.objects["leds"]:
             return
         led_state: LedState = self.objects["leds"][self.current_object]
@@ -485,96 +602,25 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         self.save_led_state()
 
     def handle_led_button(self, name: str) -> None:
+        """Handle led button clicked"""
         self.current_object = name
         led_state: LedState = self.objects["leds"].get(name)
         if not led_state:
             return
         is_rgb = led_state.led_type == "rgb"
-        # self.panel.leds_r_slider.setVisible(is_rgb)
-        # self.panel.leds_g_slider.setVisible(is_rgb)
-        # self.panel.leds_b_slider.setVisible(is_rgb)
         self.panel.leds_w_slider.setVisible(not is_rgb)
-        #self.panel.leds_slider_tittle_label.setText(name)
-        # self.panel.leds_r_slider.setValue(led_state.red)
-        # self.panel.leds_g_slider.setValue(led_state.green)
-        # self.panel.leds_b_slider.setValue(led_state.blue)
         self.panel.leds_w_slider.setValue(led_state.white)
         self.change_page(self.indexOf(self.panel.leds_slider_page))
 
     def save_led_state(self):
+        """Save led state"""
         if self.current_object:
             if self.current_object in self.objects["leds"]:
                 led_state: LedState = self.objects["leds"][self.current_object]
                 self.run_gcode_signal.emit(led_state.get_gcode(self.current_object))
 
-    # input shapper
-    def run_resonance_test(self, axis: str) -> None:
-        self.axis_in = axis
-        path_map = {
-            "x": "/tmp/resonances_x_axis_data.csv",
-            "y": "/tmp/resonances_y_axis_data.csv",
-        }
-        if not (csv_path := path_map.get(axis)):
-            return
-        self.run_gcode_signal.emit(f"SHAPER_CALIBRATE AXIS={axis.upper()}")
-        self.data = self._parse_shaper_csv(csv_path)
-        for entry in self.data:
-            shaper = entry["shaper"]
-            panel_attr = f"am_{shaper}"
-            if hasattr(self.panel, panel_attr):
-                text = (
-                    f"Shaper: {shaper}, Freq: {entry['frequency']}Hz, Vibrations: {entry['vibrations']}%\n"
-                    f"Smoothing: {entry['smoothing']}, Max Accel: {entry['max_accel']}mm/sec"
-                )
-                getattr(self.panel, panel_attr).setText(text)
-                self.x_inputshaper[panel_attr] = entry
-        self.change_page(self.indexOf(self.panel.is_page))
-
-    def _parse_shaper_csv(self, file_path: str) -> list: 
-        results = []
-        try:
-            with open(file_path, newline="") as csvfile:
-                reader = csv.DictReader(csvfile)
-                for row in reader:
-                    if row.get("shaper") and row.get("freq"):
-                        results.append(
-                            {
-                                k: row.get(v, "N/A")
-                                for k, v in {
-                                    "shaper": "shaper",
-                                    "frequency": "freq",
-                                    "vibrations": "vibrations",
-                                    "smoothing": "smoothing",
-                                    "max_accel": "max_accel",
-                                }.items()
-                            }
-                        )
-        except FileNotFoundError:
-            ...
-        except csv.Error as e:
-            ...
-        return results
-
-    def apply_input_shaper_selection(self) -> None:
-        if not (checked_button := self.panel.is_btn_group.checkedButton()):
-            return
-        selected_name = checked_button.objectName()
-        if selected_name == "am_user_input":
-            self.change_page(
-                self.indexOf(self.panel.input_shaper_page)
-            )  # TEST: CHANGED THIS FROM input_shaper_user_input
-            return
-        if not (shaper_data := self.x_inputshaper.get(selected_name)):
-            return
-        gcode = (
-            f"SET_INPUT_SHAPER SHAPER_TYPE={shaper_data['shaper']} "
-            f"SHAPER_FREQ_{self.axis_in.upper()}={shaper_data['frequency']} "
-            f"SHAPER_DAMPING_{self.axis_in.upper()}={shaper_data['smoothing']}"
-        )
-        self.run_gcode_signal.emit(gcode)
-        self.change_page(self.indexOf(self.panel.utilities_page))
-
     def axis_maintenance(self, axis: str) -> None:
+        """Routine, checks axis movement for printer debugging"""
         self.current_process = Process.AXIS_MAINTENANCE
         self.current_object = axis
         self.run_gcode_signal.emit(f"G28 {axis.upper()}\nM400")
@@ -605,11 +651,12 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
             self.change_page(self.indexOf(self.panel.axes_page))
 
     def troubleshoot_request(self) -> None:
-        self.troubleshoot_page.geometry_calc()
+        """Show troubleshoot page"""
         self.troubleshoot_page.show()
 
     def show_waiting_page(self, page_to_go_to: int, label: str, time_ms: int):
-        self.loadPage.label.setText(label)
+        """Show placeholder page"""
+        self.loadwidget.set_status_message(label)
         self.loadPage.show()
         QtCore.QTimer.singleShot(time_ms, lambda: self.change_page(page_to_go_to))
 
@@ -618,6 +665,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
             button.clicked.connect(lambda: self.change_page(self.indexOf(page)))
 
     def change_page(self, index: int):
+        """Request change page by index"""
         self.loadPage.hide()
         self.troubleshoot_page.hide()
         if index < self.count():
@@ -625,4 +673,5 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
 
     @QtCore.pyqtSlot(name="request-back")
     def back_button(self) -> None:
+        """Request back"""
         self.request_back.emit()

@@ -21,6 +21,7 @@ class QueueHandler(logging.Handler):
         self.setLevel(level)
 
     def emit(self, record):
+        """Emit logging record"""
         try:
             msg = self.format(record)
             record = copy.copy(record)
@@ -31,11 +32,8 @@ class QueueHandler(logging.Handler):
         except Exception:
             self.handleError(record)
 
-    def flush(self): ...
-
-    # TODO: Implement this
-
     def setFormatter(self, fmt: logging.Formatter | None) -> None:
+        """Set logging formatter"""
         return super().setFormatter(fmt)
 
 
@@ -44,12 +42,17 @@ class QueueListener(logging.handlers.TimedRotatingFileHandler):
 
     def __init__(self, filename, encoding="utf-8"):
         super(QueueListener, self).__init__(
-            filename=filename, when="MIDNIGHT", backupCount=10, encoding=encoding, delay=True
+            filename=filename,
+            when="MIDNIGHT",
+            backupCount=10,
+            encoding=encoding,
+            delay=True,
         )
         self.queue = queue.Queue()
-        self._thread = threading.Thread(name=f"log.{filename}",target=self._run, daemon=True)
+        self._thread = threading.Thread(
+            name=f"log.{filename}", target=self._run, daemon=True
+        )
         self._thread.start()
-        
 
     def _run(self):
         while True:
@@ -62,26 +65,23 @@ class QueueListener(logging.handlers.TimedRotatingFileHandler):
                 break
 
     def close(self):
+        """Close logger listener"""
         if self._thread is None:
             return
         self.queue.put_nowait(None)
         self._thread.join()
         self._thread = None
 
-    def doRollover(self) -> None: ...
-
-    # TODO: Implement this
-
-    def getFilesToDelete(self) -> list[str]: ...
-
-    # TODO: Delete files that one month old
 
 global MainLoggingHandler
+
+
 def create_logger(
     name: str = "log",
     level=logging.INFO,
     format: str = "'[%(levelname)s] | %(asctime)s | %(name)s | %(relativeCreated)6d | %(threadName)s : %(message)s",
 ):
+    """Create amd return logger"""
     global MainLoggingHandler
     logger = logging.getLogger(name)
     logger.setLevel(level)
@@ -89,13 +89,3 @@ def create_logger(
     MainLoggingHandler = QueueHandler(ql.queue, format, level)
     logger.addHandler(MainLoggingHandler)
     return ql
-
-
-def destroy_logger(name): ...  # TODO: Implement this 
-
-
-
-
-
-
-

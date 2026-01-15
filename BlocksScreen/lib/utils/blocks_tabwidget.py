@@ -2,17 +2,21 @@ from PyQt6 import QtWidgets, QtGui, QtCore
 
 
 class NotificationTabBar(QtWidgets.QTabBar):
+    """Re-implemented QTabBar so that the widget can have notifications"""
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self._notifications = {}  # {tab_index: bool}
 
     def setNotification(self, index: int, show: bool):
+        """Set notification"""
         if index < 0 or index >= self.count():
             return
         self._notifications[index] = show
         self.update(self.tabRect(index))  # repaint only that tab
 
     def paintEvent(self, event):
+        """Re-implemented method, paint widget"""
         super().paintEvent(event)
         painter = QtGui.QPainter(self)
         painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
@@ -31,10 +35,13 @@ class NotificationTabBar(QtWidgets.QTabBar):
 
 
 class NotificationQTabWidget(QtWidgets.QTabWidget):
+    """Re-implemented QTabWidget so that we can have notifications"""
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self._custom_tabbar = NotificationTabBar()
         self.setTabBar(self._custom_tabbar)
 
     def setNotification(self, index: int, show: bool):
+        """Set tab notification"""
         self._custom_tabbar.setNotification(index, show)
