@@ -8,7 +8,6 @@ from lib.network import SdbusNetworkManagerAsync
 from lib.panels.widgets.keyboardPage import CustomQwertyKeyboard
 from lib.panels.widgets.popupDialogWidget import Popup
 from lib.ui.wifiConnectivityWindow_ui import Ui_wifi_stacked_page
-from lib.utils.list_model import EntryDelegate, EntryListModel, ListItem
 from PyQt6 import QtCore, QtGui, QtWidgets
 from PyQt6.QtCore import QObject, QRunnable, QThreadPool, pyqtSignal
 
@@ -785,22 +784,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         Returns:
             The IP address string (e.g., '10.42.0.1') or None if not found.
         """
-        command = [
-            "ip",
-            "a",
-            "show",
-            "wlan0",
-            " |",
-            "grep",
-            " 'inet '",
-            "|",
-            "awk",
-            " '{{print $2}}'",
-            "|",
-            "cut",
-            "-d/",
-            "-f1",
-        ]
+        command = ["ip", "-4", "addr", "show", "wlan0"]
         try:
             result = subprocess.run(  # nosec: B603
                 command,
@@ -809,9 +793,6 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
                 check=True,
                 timeout=5,
             )
-            ip_addr = result.stdout.strip()
-            if ip_addr and len(ip_addr.split(".")) == 4:
-                return ip_addr
         except subprocess.CalledProcessError as e:
             logging.error(
                 "Caught exception (exit code %d) failed to run command: %s \nStderr: %s",
@@ -819,10 +800,21 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
                 command,
                 e.stderr.strip(),
             )
-            raise
+            return ""
+        except FileNotFoundError:
+            logging.error("Command not found")
+            return ""
         except subprocess.TimeoutExpired as e:
             logging.error("Caught exception, failed to run command %s", e)
-            raise
+            return ""
+
+        for line in result.stdout.splitlines():
+            line = line.strip()
+            if line.startswith("inet "):
+                ip_address = line.split()[1].split("/")[0]
+                return ip_address
+        logging.error("No IPv4 address found in output for wlan0")
+        return ""
 
     def close(self) -> bool:
         """Close class, close network module"""
