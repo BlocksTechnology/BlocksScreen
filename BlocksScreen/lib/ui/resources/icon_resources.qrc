@@ -172,6 +172,8 @@
     <file>media/btn_icons/input_shaper_manual_Y.svg</file>
   </qresource>
   <qresource prefix="arrow_icons">
+    <file>media/btn_icons/arrow_down.svg</file>
+    <file>media/btn_icons/arrow_right.svg</file>
     <file>media/btn_icons/left_arrow.svg</file>
     <file>media/btn_icons/right_arrow.svg</file>
     <file>media/btn_icons/down_arrow.svg</file>
