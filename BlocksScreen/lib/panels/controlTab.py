@@ -287,7 +287,7 @@ class ControlTab(QtWidgets.QStackedWidget):
         self.ws.klippy_state_signal.connect(self.probe_helper_page.on_klippy_status)
         self.printer.on_printcore_update.connect(self.handle_printcoreupdate)
         self.printer.gcode_response.connect(self._handle_gcode_response)
-
+        self.printer.z_tilt_update.connect(self._handle_z_tilt_object_update)
         # self.panel.cp_printer_settings_btn.hide()
         self.panel.temperature_cooldown_btn.hide()
         self.panel.cooldown_btn.hide()
@@ -295,6 +295,12 @@ class ControlTab(QtWidgets.QStackedWidget):
 
         self.printer.fan_update[str, str, float].connect(self.on_fan_object_update)
         self.printer.fan_update[str, str, int].connect(self.on_fan_object_update)
+
+    def _handle_z_tilt_object_update(self, value, state):
+        if state:
+            self.ztilt_state = state
+            if self.loadscreen.isVisible():
+                self.loadscreen.hide()
 
     @QtCore.pyqtSlot(str, str, float, name="on_fan_update")
     @QtCore.pyqtSlot(str, str, int, name="on_fan_update")
@@ -452,10 +458,6 @@ class ControlTab(QtWidgets.QStackedWidget):
                     probed_range = float(match.group(3))
                     tolerance = float(match.group(4))
                     if retries_done == retries_total:
-                        self.loadscreen.hide()
-                        return
-
-                    if probed_range < tolerance:
                         self.loadscreen.hide()
                         return
 
