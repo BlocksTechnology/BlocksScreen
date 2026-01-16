@@ -468,8 +468,7 @@ class Printer(QtCore.QObject):
         # object_name = " ".join(_names)
 
     def _z_tilt_object_updated(self, value: dict, name: str = "" ) -> None: 
-        
-        if "applied" in value["applied"]:
+        if value["applied"]:
             self.z_tilt_update[str, bool].emit("applied", value["applied"])
             
     

@@ -90,7 +90,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.filamentPanel = FilamentTab(self.ui.filamentTab, self.printer, self.ws)
         self.controlPanel = ControlTab(self.ui.controlTab, self.ws, self.printer)
         self.utilitiesPanel = UtilitiesTab(self.ui.utilitiesTab, self.ws, self.printer)
-        self.networkPanel = NetworkControlWindow(self)
+        #self.networkPanel = NetworkControlWindow(self)
         self.bo_ws_startup.connect(slot=self.bo_start_websocket_connection)
         self.ws.connecting_signal.connect(self.conn_window.on_websocket_connecting)
         self.ws.connected_signal.connect(
@@ -149,7 +149,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.printer.extruder_update.connect(self.on_extruder_update)
         self.printer.heater_bed_update.connect(self.on_heater_bed_update)
         self.ui.main_content_widget.currentChanged.connect(slot=self.reset_tab_indexes)
-        self.call_network_panel.connect(self.networkPanel.show_network_panel)
+        #self.call_network_panel.connect(self.networkPanel.show_network_panel)
         self.conn_window.wifi_button_clicked.connect(self.call_network_panel.emit)
         self.ui.wifi_button.clicked.connect(self.call_network_panel.emit)
         self.handle_error_response.connect(
@@ -313,7 +313,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.filamentPanel.setCurrentIndex(0)
         self.controlPanel.setCurrentIndex(0)
         self.utilitiesPanel.setCurrentIndex(0)
-        self.networkPanel.setCurrentIndex(0)
+        #self.networkPanel.setCurrentIndex(0)
 
     def current_panel_index(self) -> int:
         """Helper function to get the index of the current page in the current tab
@@ -575,6 +575,9 @@ class MainWindow(QtWidgets.QMainWindow):
                 message=str(_message),
                 userInput=True,
             )
+            if not self.controlPanel.ztilt_state:
+                if self.controlPanel.loadscreen.isVisible():
+                    self.controlPanel.loadscreen.hide()
 
     @api_handler
     def _handle_error_message(self, method, data, metadata) -> None:
@@ -596,6 +599,9 @@ class MainWindow(QtWidgets.QMainWindow):
             message=str(text),
             userInput=True,
         )
+        if not self.controlPanel.ztilt_state:
+            if self.controlPanel.loadscreen.isVisible():
+                self.controlPanel.loadscreen.hide()
 
     @api_handler
     def _handle_notify_cpu_throttled_message(self, method, data, metadata) -> None:
