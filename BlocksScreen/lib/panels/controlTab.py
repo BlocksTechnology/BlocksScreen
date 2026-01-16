@@ -295,14 +295,12 @@ class ControlTab(QtWidgets.QStackedWidget):
 
         self.printer.fan_update[str, str, float].connect(self.on_fan_object_update)
         self.printer.fan_update[str, str, int].connect(self.on_fan_object_update)
-    
 
     def _handle_z_tilt_object_update(self, value, state):
         if state:
             self.ztilt_state = state
             if self.loadscreen.isVisible():
                 self.loadscreen.hide()
-            
 
     @QtCore.pyqtSlot(str, str, float, name="on_fan_update")
     @QtCore.pyqtSlot(str, str, int, name="on_fan_update")

@@ -327,6 +327,7 @@ class Printer(QtCore.QObject):
                             _state_call,
                             e,
                         )
+
     def _gcode_move_object_updated(self, value: dict, name: str = "gcode_move") -> None:
         if "speed_factor" in value.keys():
             self.gcode_move_update[str, float].emit(
@@ -467,11 +468,10 @@ class Printer(QtCore.QObject):
         _names = ["heater_fan", fan_name]
         # object_name = " ".join(_names)
 
-    def _z_tilt_object_updated(self, value: dict, name: str = "" ) -> None: 
+    def _z_tilt_object_updated(self, value: dict, name: str = "") -> None:
         if value["applied"]:
             self.z_tilt_update[str, bool].emit("applied", value["applied"])
-            
-    
+
     def _idle_timeout_object_updated(
         self, value: dict, name: str = "idle_timeout"
     ) -> None:
