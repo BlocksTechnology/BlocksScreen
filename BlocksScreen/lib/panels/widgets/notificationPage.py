@@ -1,5 +1,5 @@
-from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_frame import BlocksCustomFrame
+from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.icon_button import IconButton
 from lib.utils.list_model import EntryDelegate, EntryListModel, ListItem
 from PyQt6 import QtCore, QtGui, QtWidgets
@@ -7,6 +7,10 @@ import typing
 
 from collections import deque
 from typing import Deque
+
+import time
+
+from lib.panels.widgets.popupDialogWidget import Popup
 
 class NotificationPage(QtWidgets.QWidget):
     """Update GUI Page,
@@ -23,9 +27,10 @@ class NotificationPage(QtWidgets.QWidget):
         else:
             super().__init__()
         self._setupUI()
-        self.cli_tracking: Deque = deque()
+        self.cli_tracking: Deque = deque() 
         self.selected_item: ListItem | None = None
         self.ongoing_update: bool = False
+        self.popup = Popup(self)
 
         self.model = EntryListModel()
         self.model.setParent(self.update_buttons_list_widget)
@@ -33,32 +38,33 @@ class NotificationPage(QtWidgets.QWidget):
         self.update_buttons_list_widget.setModel(self.model)
         self.update_buttons_list_widget.setItemDelegate(self.entry_delegate)
         self.entry_delegate.item_selected.connect(self.on_item_clicked)
+
         self.update_back_btn.clicked.connect(self.hide)
+        self.delete_btn.clicked.connect(self.delete_selected_item)
+        self.delete_all_btn.clicked.connect(self.reset_view_model)
 
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.hide()
 
+    def delete_selected_item(self) -> None:
+        """Deletes currently selected item from the list view"""
+        if self.selected_item is None:
+            return
+        self.model.remove_item(self.selected_item)
+        self.delete_btn.setEnabled(False)
+        self.selected_item = None
 
 
     def reset_view_model(self) -> None:
         """Clears items from ListView
         (Resets `QAbstractListModel` by clearing entries)
         """
-        ...
-
-    def deleteLater(self) -> None:
-        """Schedule the object for deletion, resets the list model first"""
-        self.reset_view_model()
-        return super().deleteLater()
-
-    def showEvent(self, event: QtGui.QShowEvent | None) -> None:
-        """Re-add clients to update list"""
-        # self.build_model_list()
-        return super().showEvent(event)
+        self.model.clear()
+        self.entry_delegate.clear()
 
     def build_model_list(self) -> None:
         """Builds the model list (`self.model`) containing updatable clients"""
         self.update_buttons_list_widget.blockSignals(True)
-        self.reset_view_model()
         message  , origin , priority = self.cli_tracking.popleft()
         match priority:
             case 1:
@@ -74,9 +80,6 @@ class NotificationPage(QtWidgets.QWidget):
         self.model.setData(
             self.model.index(0), True, EntryListModel.EnableRole
         )
-        self.on_item_clicked(
-            self.model.data(self.model.index(0), QtCore.Qt.ItemDataRole.UserRole)
-        )
         self.update_buttons_list_widget.blockSignals(False)
 
     @QtCore.pyqtSlot(ListItem, name="on-item-clicked")
@@ -84,7 +87,21 @@ class NotificationPage(QtWidgets.QWidget):
         """Setup information for the currently clicked list item on the info box.
         Keeps track of the list item
         """
-        ...
+        self.delete_btn.setEnabled(True)
+
+        match item.color:
+            case "#1A8FBF":
+                self.type_label.setText("Info")
+            case "#E7E147":
+                self.type_label.setText("Warning")
+            case "#CA4949":
+                self.type_label.setText("Error")
+            case _:
+                self.type_label.setText("Unknown")
+
+        self.time_label.setText(item._cache.get(-1, "N/A"))
+        self.selected_item = item
+
     
     @QtCore.pyqtSlot(str, str, int,name = "new-notication")
     def new_notication(self, origin: str | None = None, message: str = "", priority: int = 0):
@@ -95,6 +112,12 @@ class NotificationPage(QtWidgets.QWidget):
         :type priority: int
         """
         self.cli_tracking.append((message, origin, priority))
+
+        if priority == 2:
+            self.popup.new_message(message_type=Popup.MessageType.WARNING, message=message)
+        elif priority == 3:
+            self.popup.new_message(message_type=Popup.MessageType.ERROR, message=message,userInput=True)
+        
         self.build_model_list()
 
 
@@ -102,15 +125,19 @@ class NotificationPage(QtWidgets.QWidget):
         """Adds a new item to the list model"""
         item = ListItem(
             text=message,
-            right_icon=right_icon,
+            left_icon=right_icon,
             selected=False,
             _lfontsize=17,
             _rfontsize=12,
             color=color,
-            height=60,
+            height=80,
+            allow_expand=True,
             notificate=False,
         )
+        time = QtCore.QDateTime.currentDateTime().toString("hh:mm:ss")
+        item._cache[-1] = time
         self.model.add_item(item)
+    
 
     def _setupUI(self) -> None:
         """Setup UI for updatePage"""
@@ -138,14 +165,9 @@ class NotificationPage(QtWidgets.QWidget):
 
         self.header_content_layout = QtWidgets.QHBoxLayout()
         self.header_content_layout.setAlignment(QtCore.Qt.AlignmentFlag.AlignTop)
-        self.reload_btn = IconButton(self)
-        self.reload_btn.setMinimumSize(QtCore.QSize(60, 60))
-        self.reload_btn.setMaximumSize(QtCore.QSize(60, 60))
-        self.reload_btn.setFlat(True)
-        self.reload_btn.setPixmap(QtGui.QPixmap(":/ui/media/btn_icons/refresh.svg"))
-        self.header_content_layout.addWidget(
-            self.reload_btn
-        )  # alignment=QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.spacer = QtWidgets.QSpacerItem(60, 60 , QtWidgets.QSizePolicy.Policy.Fixed, QtWidgets.QSizePolicy.Policy.Fixed)
+        self.header_content_layout.addItem(self.spacer)
+
 
         self.header_title = QtWidgets.QLabel(self)
         self.header_title.setMinimumSize(QtCore.QSize(100, 60))
@@ -183,8 +205,8 @@ class NotificationPage(QtWidgets.QWidget):
 
         self.update_buttons_frame = BlocksCustomFrame(self)
 
-        self.update_buttons_frame.setMinimumSize(QtCore.QSize(420, 380))
-        self.update_buttons_frame.setMaximumSize(QtCore.QSize(450, 500))
+        self.update_buttons_frame.setMinimumSize(QtCore.QSize(500, 380))
+        self.update_buttons_frame.setMaximumSize(QtCore.QSize(560, 500))
 
         brush = QtGui.QBrush(QtGui.QColor(0, 0, 255, 0))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
@@ -239,16 +261,74 @@ class NotificationPage(QtWidgets.QWidget):
             QtWidgets.QScroller.ScrollerGestureType.LeftMouseButtonGesture,
         )
         self.update_buttons_layout = QtWidgets.QVBoxLayout()
-        self.update_buttons_layout.setContentsMargins(10, 10, 10, 10)
+        self.update_buttons_layout.setContentsMargins(0, 0, 0, 0)
         self.update_buttons_layout.addWidget(self.update_buttons_list_widget, 0)
         self.update_buttons_frame.setLayout(self.update_buttons_layout)
 
-        self.main_content_layout.addWidget(self.update_buttons_frame, 0)
+        self.main_content_layout.addWidget(self.update_buttons_frame)
 
-        self.infobox_frame = BlocksCustomFrame()
-        self.info_box_layout = QtWidgets.QVBoxLayout()
-        self.info_box_layout.setContentsMargins(10, 10, 10, 10)
-        self.infobox_frame.setLayout(self.info_box_layout)
+        self.vlayout = QtWidgets.QVBoxLayout()
+        self.vlayout.setContentsMargins(5, 5, 5, 5)
+
+
+        self.info_frame = BlocksCustomFrame()
+        self.info_frame.setMinimumSize(QtCore.QSize(200, 150))
+        self.info_frame.setProperty("text", "Notification info")
+
+        font = QtGui.QFont()
+        font.setFamily(font_family)
+        font.setPointSize(20)
+
+        self.spacer_item = QtWidgets.QSpacerItem(20, 20, QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Minimum)
+
+        self.info_box_layout = QtWidgets.QGridLayout(self.info_frame)
+        self.info_box_layout.setContentsMargins(0, 0, 0, 0)
+        
+        self.info_box_layout.addItem(self.spacer_item, 0, 0)
+
+
+        self.type_tittle = QtWidgets.QLabel(self.info_frame)
+        self.type_tittle.setText("Type:")
+        self.type_tittle.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.info_box_layout.addWidget(self.type_tittle, 1, 0)
+
+        self.type_label = QtWidgets.QLabel(self.info_frame)
+        self.type_label.setText("N/A")
+        self.type_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.info_box_layout.addWidget(self.type_label, 1, 1)
+
+        self.time_tittle = QtWidgets.QLabel(self.info_frame)
+        self.time_tittle.setText("Time:")
+        self.time_tittle.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.info_box_layout.addWidget(self.time_tittle, 2, 0)
+
+        self.time_label = QtWidgets.QLabel(self.info_frame)
+        self.time_label.setText("N/A")
+        self.time_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.info_box_layout.addWidget(self.time_label, 2, 1)
+
+        self.type_tittle.setFont(font)
+        self.type_tittle.setStyleSheet("color:#FFFFFF")
+
+        self.time_tittle.setFont(font)
+        self.time_tittle.setStyleSheet("color:#FFFFFF")
+        self.type_label.setStyleSheet("color:#FFFFFF")
+        self.time_label.setStyleSheet("color:#FFFFFF")
+
+
+
+        self.info_frame.setLayout(self.info_box_layout)
+
+
+
+        self.buttons_frame = BlocksCustomFrame()
+        self.buttons_frame.setMinimumSize(QtCore.QSize(200, 200))
+        self.buttons_frame.setMaximumSize(QtCore.QSize(300, 200))
+        self.buttons_frame.setProperty("text", "Actions")
+
+        self.button_box_layout = QtWidgets.QVBoxLayout()
+        self.button_box_layout.setContentsMargins(10, 10, 10, 10)
+        self.buttons_frame.setLayout(self.button_box_layout)
 
         font = QtGui.QFont()
         font.setFamily(font_family)
@@ -258,38 +338,49 @@ class NotificationPage(QtWidgets.QWidget):
         self.button_box.setContentsMargins(0, 0, 0, 0)
         self.button_box.addSpacing(-1)
 
-        self.action_btn = BlocksCustomButton()
-        self.action_btn.setMinimumSize(QtCore.QSize(200, 60))
-        self.action_btn.setMaximumSize(QtCore.QSize(300, 60))
+        
+        self.button_box.addItem(self.spacer_item)
+
+        self.delete_btn = BlocksCustomButton()
+        self.delete_btn.setMinimumSize(QtCore.QSize(200, 60))
+        self.delete_btn.setMaximumSize(QtCore.QSize(300, 60))
         font.setPointSize(20)
-        self.action_btn.setFont(font)
-        self.action_btn.setPalette(palette)
-        self.action_btn.setSizePolicy(sizePolicy)
-        self.action_btn.setText("Update")
-        self.action_btn.setPixmap(
-            QtGui.QPixmap(":/system/media/btn_icons/update-software-icon.svg")
+
+        self.delete_btn.setFont(font)
+        self.delete_btn.setPalette(palette)
+        self.delete_btn.setSizePolicy(sizePolicy)
+        self.delete_btn.setText("Delete")
+        self.delete_btn.setEnabled(False)
+        self.delete_btn.setPixmap(
+            QtGui.QPixmap(":/ui/media/btn_icons/garbage-icon.svg")
         )
         self.button_box.addWidget(
-            self.action_btn, 0, QtCore.Qt.AlignmentFlag.AlignCenter
-        )
-        self.no_update_placeholder = QtWidgets.QLabel(self)
-        self.no_update_placeholder.setMinimumSize(QtCore.QSize(200, 60))
-        self.no_update_placeholder.setMaximumSize(QtCore.QSize(300, 60))
-        font.setPointSize(20)
-        self.no_update_placeholder.setFont(font)
-        self.no_update_placeholder.setPalette(palette)
-        self.no_update_placeholder.setSizePolicy(sizePolicy)
-        self.no_update_placeholder.setText("No Updates Available")
-        self.no_update_placeholder.setWordWrap(True)
-        self.no_update_placeholder.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
-        self.info_box_layout.addWidget(
-            self.no_update_placeholder, 0, QtCore.Qt.AlignmentFlag.AlignCenter
+            self.delete_btn, 0, QtCore.Qt.AlignmentFlag.AlignCenter
         )
 
-        self.info_box_layout.addLayout(
+        self.delete_all_btn = BlocksCustomButton()
+        self.delete_all_btn.setMinimumSize(QtCore.QSize(200, 60))
+        self.delete_all_btn.setMaximumSize(QtCore.QSize(300, 60))
+        font.setPointSize(20)
+        self.delete_all_btn.setFont(font)
+        self.delete_all_btn.setPalette(palette)
+        self.delete_all_btn.setSizePolicy(sizePolicy)
+        self.delete_all_btn.setText("Delete all")
+        self.delete_all_btn.setPixmap(
+            QtGui.QPixmap(":/ui/media/btn_icons/garbage-icon.svg")
+        )
+        self.button_box.addWidget(
+            self.delete_all_btn, 0, QtCore.Qt.AlignmentFlag.AlignCenter
+        )
+
+        self.button_box_layout.addLayout(
             self.button_box,
             0,
         )
-        self.main_content_layout.addWidget(self.infobox_frame, 1)
+
+        self.vlayout.addWidget(self.info_frame)
+        self.vlayout.addWidget(self.buttons_frame)
+
+        self.main_content_layout.addLayout(self.vlayout)
         self.update_page_content_layout.addLayout(self.main_content_layout, 1)
         self.setLayout(self.update_page_content_layout)
