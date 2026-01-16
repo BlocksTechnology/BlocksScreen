@@ -76,7 +76,9 @@ class Printer(QtCore.QObject):
     configfile_update: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         dict, name="configfile_update"
     )
-
+    z_tilt_update: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        str, bool, name="z_tilt_update"
+    )
     config_subscription: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         [dict],
         [list],
@@ -325,7 +327,6 @@ class Printer(QtCore.QObject):
                             _state_call,
                             e,
                         )
-
     def _gcode_move_object_updated(self, value: dict, name: str = "gcode_move") -> None:
         if "speed_factor" in value.keys():
             self.gcode_move_update[str, float].emit(
@@ -466,6 +467,12 @@ class Printer(QtCore.QObject):
         _names = ["heater_fan", fan_name]
         # object_name = " ".join(_names)
 
+    def _z_tilt_object_updated(self, value: dict, name: str = "" ) -> None: 
+        
+        if "applied" in value["applied"]:
+            self.z_tilt_update[str, bool].emit("applied", value["applied"])
+            
+    
     def _idle_timeout_object_updated(
         self, value: dict, name: str = "idle_timeout"
     ) -> None:
