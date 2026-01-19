@@ -575,6 +575,9 @@ class MainWindow(QtWidgets.QMainWindow):
                 message=str(_message),
                 userInput=True,
             )
+            if not self.controlPanel.ztilt_state:
+                if self.controlPanel.loadscreen.isVisible():
+                    self.controlPanel.loadscreen.hide()
 
     @api_handler
     def _handle_error_message(self, method, data, metadata) -> None:
@@ -596,6 +599,9 @@ class MainWindow(QtWidgets.QMainWindow):
             message=str(text),
             userInput=True,
         )
+        if not self.controlPanel.ztilt_state:
+            if self.controlPanel.loadscreen.isVisible():
+                self.controlPanel.loadscreen.hide()
 
     @api_handler
     def _handle_notify_cpu_throttled_message(self, method, data, metadata) -> None:
