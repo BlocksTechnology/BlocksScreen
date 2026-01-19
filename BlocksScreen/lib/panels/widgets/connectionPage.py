@@ -44,9 +44,7 @@ class ConnectionPage(QtWidgets.QFrame):
             self.retry_connection_clicked.emit
         )
         self.panel.wifi_button.clicked.connect(self.wifi_button_clicked.emit)
-        self.panel.notification_btn.clicked.connect(
-            self.notification_btn_clicked.emit
-        )
+        self.panel.notification_btn.clicked.connect(self.notification_btn_clicked.emit)
         self.panel.FirmwareRestartButton.clicked.connect(
             self.firmware_restart_clicked.emit
         )

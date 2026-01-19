@@ -67,7 +67,7 @@ class MainWindow(QtWidgets.QMainWindow):
         dict, name="on-update-message"
     )
     show_notifications: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
-        str,str,int,name="show-notifications"
+        str, str, int, name="show-notifications"
     )
 
     call_load_panel = QtCore.pyqtSignal(bool, str, name="call-load-panel")
@@ -164,7 +164,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.call_network_panel.connect(self.networkPanel.show_network_panel)
         self.call_notification_panel.connect(self.notiPage.show_notification_panel)
         self.conn_window.wifi_button_clicked.connect(self.call_network_panel.emit)
-        self.conn_window.notification_btn_clicked.connect(self.call_notification_panel.emit)
+        self.conn_window.notification_btn_clicked.connect(
+            self.call_notification_panel.emit
+        )
         self.ui.wifi_button.clicked.connect(self.call_network_panel.emit)
         self.handle_error_response.connect(
             self.controlPanel.probe_helper_page.handle_error_response
@@ -601,7 +603,13 @@ class MainWindow(QtWidgets.QMainWindow):
                 return
             service_entry: dict = entry[0]
             service_name, service_info = service_entry.popitem()
-            self.show_notifications.emit("mainwindow",str(f"{service_name} service changed state to \n{service_info.get('sub_state')}"),1)
+            self.show_notifications.emit(
+                "mainwindow",
+                str(
+                    f"{service_name} service changed state to \n{service_info.get('sub_state')}"
+                ),
+                1,
+            )
 
     @api_handler
     def _handle_notify_gcode_response_message(self, method, data, metadata) -> None:
@@ -615,7 +623,10 @@ class MainWindow(QtWidgets.QMainWindow):
             popupWhitelist = ["filament runout", "no filament"]
             if _message.lower() not in popupWhitelist or _gcode_msg_type != "!!":
                 return
-            self.show_notifications.emit("mainwindow",_message,3)
+            if not self.controlPanel.ztilt_state:
+                if self.controlPanel.loadscreen.isVisible():
+                    self.controlPanel.loadscreen.hide()
+            self.show_notifications.emit("mainwindow", _message, 3)
 
     @api_handler
     def _handle_error_message(self, method, data, metadata) -> None:
@@ -635,14 +646,14 @@ class MainWindow(QtWidgets.QMainWindow):
         if not self.controlPanel.ztilt_state:
             if self.controlPanel.loadscreen.isVisible():
                 self.controlPanel.loadscreen.hide()
-        self.show_notifications.emit("mainwindow",str(text),3)
+        self.show_notifications.emit("mainwindow", str(text), 3)
 
     @api_handler
     def _handle_notify_cpu_throttled_message(self, method, data, metadata) -> None:
         """Handle websocket cpu throttled messages"""
         if self._popup_toggle:
             return
-        self.show_notifications.emit("mainwindow",data,2)
+        self.show_notifications.emit("mainwindow", data, 2)
 
     @api_handler
     def _handle_notify_status_update_message(self, method, data, metadata) -> None:

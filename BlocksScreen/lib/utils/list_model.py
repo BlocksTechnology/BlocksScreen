@@ -1,5 +1,5 @@
 import typing
-from dataclasses import dataclass , field
+from dataclasses import dataclass, field
 
 from PyQt6 import QtCore, QtGui, QtWidgets  # pylint: disable=import-error
 
@@ -12,13 +12,13 @@ class ListItem:
     right_text: str = ""
     _rfontsize: int = 0
     _lfontsize: int = 0
-    
+
     callback: typing.Optional[typing.Callable] = None
 
     color: str = "#dfdfdf"
     right_icon: typing.Optional[QtGui.QPixmap] = None
     left_icon: typing.Optional[QtGui.QPixmap] = None
-    
+
     selected: bool = False
     allow_check: bool = True
 
@@ -28,8 +28,8 @@ class ListItem:
 
     height: int = 60
     notificate: bool = False
-    
-    #stores width and heitgh of the button so we dont need to recalculate it every time
+
+    # stores width and heitgh of the button so we dont need to recalculate it every time
     _cache: typing.Dict[int, int] = field(default_factory=dict)
 
     def clear_cache(self):
@@ -66,7 +66,7 @@ class EntryListModel(QtCore.QAbstractListModel):
 
     def delete_duplicates(self) -> None:
         """
-        Removes items that have identical text, color, and 
+        Removes items that have identical text, color, and
         last time entry (get(-1)).
         """
         seen_identifiers: set[tuple[str, str, str]] = set()
@@ -127,7 +127,7 @@ class EntryListModel(QtCore.QAbstractListModel):
         if role == EntryListModel.ExpandRole:
             item = self.entries[index.row()]
             item.is_expanded = value
-            self.layoutChanged.emit() 
+            self.layoutChanged.emit()
             self.dataChanged.emit(index, index, [EntryListModel.ExpandRole])
         if role == QtCore.Qt.ItemDataRole.UserRole:
             self.dataChanged.emit(index, index, [QtCore.Qt.ItemDataRole.UserRole])
@@ -165,7 +165,9 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
         """Clears delegate indexing"""
         self.prev_index = 0
 
-    def sizeHint(self, option: QtWidgets.QStyleOptionViewItem, index: QtCore.QModelIndex):
+    def sizeHint(
+        self, option: QtWidgets.QStyleOptionViewItem, index: QtCore.QModelIndex
+    ):
         """
         Calculates size AND determines if expansion is needed.
         """
@@ -175,7 +177,7 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
         base_h = item.height
         ellipse_size = base_h * 0.8
 
-        right_reserved = base_h 
+        right_reserved = base_h
 
         left_reserved = 10
         if item.left_icon:
@@ -198,11 +200,11 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
             right_reserved += fmr.horizontalAdvance(item.right_text) + 10
 
         text_avail_width = target_width - left_reserved - right_reserved
-        if text_avail_width < 50: 
+        if text_avail_width < 50:
             text_avail_width = 50
 
         single_line_width = fm.horizontalAdvance(item.text)
-        
+
         item.needs_expansion = single_line_width > text_avail_width
 
         if not item.is_expanded:
@@ -211,13 +213,13 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
         text_rect = fm.boundingRect(
             QtCore.QRect(0, 0, int(text_avail_width), 0),
             QtCore.Qt.AlignmentFlag.AlignLeft | QtCore.Qt.TextFlag.TextWordWrap,
-            item.text
+            item.text,
         )
 
         final_height = max(item.height, text_rect.height() - 1)
         # Cache it
         item._cache[target_width] = final_height + 20
-        return QtCore.QSize(target_width, int(final_height*1.2))
+        return QtCore.QSize(target_width, int(final_height * 1.2))
 
     def paint(
         self,
@@ -232,17 +234,20 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
 
         item = index.data(QtCore.Qt.ItemDataRole.UserRole)
         rect = option.rect.adjusted(2, 2, -2, -2)
-        
+
         path = QtGui.QPainterPath()
         radius = 12
         path.addRoundedRect(QtCore.QRectF(rect), radius, radius)
 
-
         show_expand_arrow = item.allow_expand and item.needs_expansion
-        
+
         if show_expand_arrow:
-            item.right_icon = QtGui.QPixmap(":/arrow_icons/media/btn_icons/arrow_down.svg") if item.is_expanded else QtGui.QPixmap(":/arrow_icons/media/btn_icons/arrow_right.svg")
-        
+            item.right_icon = (
+                QtGui.QPixmap(":/arrow_icons/media/btn_icons/arrow_down.svg")
+                if item.is_expanded
+                else QtGui.QPixmap(":/arrow_icons/media/btn_icons/arrow_right.svg")
+            )
+
         # Background Color
         pressed_color = QtGui.QColor("#1A8FBF")
         pressed_color.setAlpha(90 if item.selected else 20)
@@ -272,7 +277,7 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
                 icon_scaled,
             )
 
-        left_margin = 10 
+        left_margin = 10
         if item.left_icon:
             left_icon_rect = QtCore.QRectF(
                 rect.left() + ellipse_margin,
@@ -290,14 +295,16 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
             tinted.fill(QtCore.Qt.GlobalColor.transparent)
             p2 = QtGui.QPainter(tinted)
             p2.drawPixmap(0, 0, l_icon_scaled)
-            p2.setCompositionMode(QtGui.QPainter.CompositionMode.CompositionMode_SourceIn)
+            p2.setCompositionMode(
+                QtGui.QPainter.CompositionMode.CompositionMode_SourceIn
+            )
             p2.fillRect(tinted.rect(), QtGui.QColor(item.color))
             p2.end()
             painter.drawPixmap(
                 left_icon_rect.toRect(),
                 tinted,
             )
-            left_margin = ellipse_margin + ellipse_size + 8  
+            left_margin = ellipse_margin + ellipse_size + 8
 
         text_margin = int(
             rect.right() - ellipse_size - ellipse_margin - rect.height() * 0.10
@@ -327,12 +334,10 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
         right_text_x = ellipse_rect.right() - right_text_width - left_margin
 
         # Adjust main text width based on right text
-        max_main_text_width = (
-            right_text_x - left_margin
-        ) 
-        
+        max_main_text_width = right_text_x - left_margin
+
         text = item.text
-        
+
         # Logic: If not expanded, OR if expansion is not needed, draw single line
         if not item.is_expanded:
             text = metrics.elidedText(
@@ -349,8 +354,9 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
             # Expanded mode
             painter.drawText(
                 text_rect,
-                QtCore.Qt.AlignmentFlag.AlignLeft | QtCore.Qt.AlignmentFlag.AlignTop |
-                QtCore.Qt.TextFlag.TextWordWrap,
+                QtCore.Qt.AlignmentFlag.AlignLeft
+                | QtCore.Qt.AlignmentFlag.AlignTop
+                | QtCore.Qt.TextFlag.TextWordWrap,
                 text,
             )
 
@@ -359,7 +365,10 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
             painter.setPen(QtGui.QColor(160, 160, 160))
             painter.drawText(
                 int(right_text_x),
-                int(ellipse_rect.top() + (ellipse_rect.height() + right_metrics.ascent()) / 2),
+                int(
+                    ellipse_rect.top()
+                    + (ellipse_rect.height() + right_metrics.ascent()) / 2
+                ),
                 item.right_text,
             )
 
@@ -371,7 +380,7 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
             painter.setPen(QtCore.Qt.PenStyle.NoPen)
             dot_rect = QtCore.QRectF(dot_x, rect.top(), dot_diameter, dot_diameter)
             painter.drawEllipse(dot_rect)
-            
+
         painter.restore()
 
     def editorEvent(
@@ -386,7 +395,7 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
         if event.type() == QtCore.QEvent.Type.MouseButtonPress:
             if item.callback and callable(item.callback):
                 item.callback()
-            
+
             if self.prev_index is None:
                 return False
 
@@ -399,10 +408,14 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
                 ellipse_size,
             )
             pos = event.position()
-            
+
             # --- Logic Check ---
             # Only allow toggle if allow_expand AND text actually needs expansion
-            if ellipse_rect.contains(pos) and item.allow_expand and item.needs_expansion:
+            if (
+                ellipse_rect.contains(pos)
+                and item.allow_expand
+                and item.needs_expansion
+            ):
                 new_state = not item.is_expanded
                 model.setData(index, new_state, EntryListModel.ExpandRole)
                 return True
@@ -412,7 +425,7 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
                 if prev_index.isValid():
                     model.setData(prev_index, False, EntryListModel.EnableRole)
                 self.prev_index = index.row()
-            
+
             model.setData(index, True, EntryListModel.EnableRole)
             self.item_selected.emit(item)
             return True
