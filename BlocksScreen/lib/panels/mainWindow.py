@@ -647,7 +647,7 @@ class MainWindow(QtWidgets.QMainWindow):
         if not self.controlPanel.ztilt_state:
             if self.controlPanel.loadscreen.isVisible():
                 self.controlPanel.loadscreen.hide()
-        self.show_notifications.emit("mainwindow", str(text), 3 , True)
+        self.show_notifications.emit("mainwindow", str(text), 3, True)
 
     @api_handler
     def _handle_notify_cpu_throttled_message(self, method, data, metadata) -> None:
