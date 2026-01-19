@@ -123,26 +123,36 @@ class NotificationPage(QtWidgets.QWidget):
         self.time_label.setText(item._cache.get(-1, "N/A"))
         self.selected_item = item
 
-    @QtCore.pyqtSlot(str, str, int, name="new-notication")
+    @QtCore.pyqtSlot(str, str, int, bool, name="new-notication")
     def new_notication(
-        self, origin: str | None = None, message: str = "", priority: int = 0
+        self, origin: str | None = None, message: str = "", priority: int = 0 , popup: bool = False
     ):
         """
         :param message: sets notification message
         :type message: str
         :param priority: sets notification priority from 0 to 3
         :type priority: int
+        :param popup: sets if notification should appear as popup
+        :type popup: bool
         """
         self.cli_tracking.append((message, origin, priority))
         self.model.delete_duplicates()
 
-        if priority == 2:
+        if popup:
+            ui = False
+            match priority:
+                case 3:
+                    type = Popup.MessageType.ERROR
+                    ui = True
+                case 2:
+                    type = Popup.MessageType.WARNING
+                case 1:
+                    type = Popup.MessageType.INFO
+                case _:
+                    type = Popup.MessageType.UNKNOWN
+                
             self.popup.new_message(
-                message_type=Popup.MessageType.WARNING, message=message
-            )
-        elif priority == 3:
-            self.popup.new_message(
-                message_type=Popup.MessageType.ERROR, message=message, userInput=True
+                message_type=type, message=message , userInput=ui
             )
 
         self.build_model_list()
