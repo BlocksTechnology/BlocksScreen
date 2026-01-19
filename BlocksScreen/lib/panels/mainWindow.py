@@ -67,7 +67,7 @@ class MainWindow(QtWidgets.QMainWindow):
         dict, name="on-update-message"
     )
     show_notifications: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
-        str, str, int, name="show-notifications"
+        str, str, int, bool, name="show-notifications"
     )
 
     call_load_panel = QtCore.pyqtSignal(bool, str, name="call-load-panel")
@@ -609,6 +609,7 @@ class MainWindow(QtWidgets.QMainWindow):
                     f"{service_name} service changed state to \n{service_info.get('sub_state')}"
                 ),
                 1,
+                False,
             )
 
     @api_handler
@@ -626,7 +627,7 @@ class MainWindow(QtWidgets.QMainWindow):
             if not self.controlPanel.ztilt_state:
                 if self.controlPanel.loadscreen.isVisible():
                     self.controlPanel.loadscreen.hide()
-            self.show_notifications.emit("mainwindow", _message, 3)
+            self.show_notifications.emit("mainwindow", _message, 3, True)
 
     @api_handler
     def _handle_error_message(self, method, data, metadata) -> None:
@@ -646,14 +647,14 @@ class MainWindow(QtWidgets.QMainWindow):
         if not self.controlPanel.ztilt_state:
             if self.controlPanel.loadscreen.isVisible():
                 self.controlPanel.loadscreen.hide()
-        self.show_notifications.emit("mainwindow", str(text), 3)
+        self.show_notifications.emit("mainwindow", str(text), 3 , True)
 
     @api_handler
     def _handle_notify_cpu_throttled_message(self, method, data, metadata) -> None:
         """Handle websocket cpu throttled messages"""
         if self._popup_toggle:
             return
-        self.show_notifications.emit("mainwindow", data, 2)
+        self.show_notifications.emit("mainwindow", data, 2, False)
 
     @api_handler
     def _handle_notify_status_update_message(self, method, data, metadata) -> None:
