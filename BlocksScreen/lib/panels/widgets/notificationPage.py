@@ -125,7 +125,11 @@ class NotificationPage(QtWidgets.QWidget):
 
     @QtCore.pyqtSlot(str, str, int, bool, name="new-notication")
     def new_notication(
-        self, origin: str | None = None, message: str = "", priority: int = 0 , popup: bool = False
+        self,
+        origin: str | None = None,
+        message: str = "",
+        priority: int = 0,
+        popup: bool = False,
     ):
         """
         :param message: sets notification message
@@ -150,10 +154,8 @@ class NotificationPage(QtWidgets.QWidget):
                     type = Popup.MessageType.INFO
                 case _:
                     type = Popup.MessageType.UNKNOWN
-                
-            self.popup.new_message(
-                message_type=type, message=message , userInput=ui
-            )
+
+            self.popup.new_message(message_type=type, message=message, userInput=ui)
 
         self.build_model_list()
 

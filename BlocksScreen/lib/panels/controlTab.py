@@ -66,7 +66,7 @@ class ControlTab(QtWidgets.QStackedWidget):
         self.printer: Printer = printer
         self.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
         self.timers = []
-        self.ztilt_state =  False
+        self.ztilt_state = False
         self.extruder_info: dict = {}
         self.bed_info: dict = {}
         self.toolhead_info: dict = {}
