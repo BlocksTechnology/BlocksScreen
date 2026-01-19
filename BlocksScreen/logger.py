@@ -2,6 +2,7 @@ import copy
 import logging
 import logging.config
 import logging.handlers
+import pathlib
 import queue
 import threading
 
@@ -41,6 +42,9 @@ class QueueListener(logging.handlers.TimedRotatingFileHandler):
     """Threaded listener watching for log records on the queue handler queue, passes them for processing"""
 
     def __init__(self, filename, encoding="utf-8"):
+        log_path = pathlib.Path(filename)
+        if log_path.parent != pathlib.Path("."):
+            log_path.parent.mkdir(parents=True, exist_ok=True)
         super(QueueListener, self).__init__(
             filename=filename,
             when="MIDNIGHT",
