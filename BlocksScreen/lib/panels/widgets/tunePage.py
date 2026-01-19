@@ -137,6 +137,7 @@ class TuneWidget(QtWidgets.QWidget):
                     f"M106 S{int(round((normalize(float(new_value / 100), 0.0, 1.0, 0, 255))))}"
                 )  # [0, 255] Range
             else:
+                name = name.replace(" ", "_")
                 self.run_gcode.emit(
                     f"SET_FAN_SPEED FAN={name} SPEED={float(new_value / 100.00)}"
                 )  # [0.0, 1.0] Range
@@ -155,7 +156,8 @@ class TuneWidget(QtWidgets.QWidget):
         """
         fields = name.split()
         first_field = fields[0]
-        second_field = fields[1].lower() if len(fields) > 1 else None
+        second_field = fields[1] if len(fields) > 1 else None
+        name = second_field.replace("_", " ") if second_field else name
         if "speed" in field:
             if not self.tune_display_buttons.get(name, None) and first_field in (
                 "fan",
@@ -168,6 +170,8 @@ class TuneWidget(QtWidgets.QWidget):
                 _new_display_button.setParent(self)
                 _new_display_button.icon_pixmap = self.path.get("fan")
                 if second_field:
+                    name = second_field.replace("_", " ")
+                    second_field = second_field.lower()
                     if re.search(pattern_blower, second_field):
                         _new_display_button.icon_pixmap = self.path.get("blower")
                     elif re.search(pattern_exhaust, second_field):

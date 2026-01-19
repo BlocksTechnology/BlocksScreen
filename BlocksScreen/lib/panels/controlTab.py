@@ -1,24 +1,23 @@
 from __future__ import annotations
 
+import re
 import typing
 from functools import partial
-import re
+
+from helper_methods import normalize
 from lib.moonrakerComm import MoonWebSocket
-from lib.panels.widgets.loadWidget import LoadingOverlayWidget
 from lib.panels.widgets.basePopup import BasePopup
+from lib.panels.widgets.loadWidget import LoadingOverlayWidget
 from lib.panels.widgets.numpadPage import CustomNumpad
+from lib.panels.widgets.optionCardWidget import OptionCard
+from lib.panels.widgets.popupDialogWidget import Popup
 from lib.panels.widgets.printcorePage import SwapPrintcorePage
 from lib.panels.widgets.probeHelperPage import ProbeHelper
+from lib.panels.widgets.slider_selector_page import SliderPage
 from lib.printer import Printer
 from lib.ui.controlStackedWidget_ui import Ui_controlStackedWidget
-from PyQt6 import QtCore, QtGui, QtWidgets
-
-from lib.panels.widgets.popupDialogWidget import Popup
 from lib.utils.display_button import DisplayButton
-from lib.panels.widgets.slider_selector_page import SliderPage
-
-from lib.panels.widgets.optionCardWidget import OptionCard
-from helper_methods import normalize
+from PyQt6 import QtCore, QtGui, QtWidgets
 
 
 class ControlTab(QtWidgets.QStackedWidget):
@@ -274,6 +273,12 @@ class ControlTab(QtWidgets.QStackedWidget):
             )
         )
 
+        self.path = {
+            "fan_cage": QtGui.QPixmap(":/fan_related/media/btn_icons/fan_cage.svg"),
+            "blower": QtGui.QPixmap(":/fan_related/media/btn_icons/blower.svg"),
+            "fan": QtGui.QPixmap(":/fan_related/media/btn_icons/fan.svg"),
+        }
+
         self.panel.cp_z_tilt_btn.clicked.connect(lambda: self.handle_ztilt())
 
         self.printcores_page.pc_accept.clicked.connect(self.handle_swapcore)
@@ -282,7 +287,7 @@ class ControlTab(QtWidgets.QStackedWidget):
         self.ws.klippy_state_signal.connect(self.probe_helper_page.on_klippy_status)
         self.printer.on_printcore_update.connect(self.handle_printcoreupdate)
         self.printer.gcode_response.connect(self._handle_gcode_response)
-
+        self.printer.z_tilt_update.connect(self._handle_z_tilt_object_update)
         # self.panel.cp_printer_settings_btn.hide()
         self.panel.temperature_cooldown_btn.hide()
         self.panel.cooldown_btn.hide()
@@ -290,6 +295,12 @@ class ControlTab(QtWidgets.QStackedWidget):
 
         self.printer.fan_update[str, str, float].connect(self.on_fan_object_update)
         self.printer.fan_update[str, str, int].connect(self.on_fan_object_update)
+
+    def _handle_z_tilt_object_update(self, value, state):
+        if state:
+            self.ztilt_state = state
+            if self.loadscreen.isVisible():
+                self.loadscreen.hide()
 
     @QtCore.pyqtSlot(str, str, float, name="on_fan_update")
     @QtCore.pyqtSlot(str, str, int, name="on_fan_update")
@@ -306,23 +317,25 @@ class ControlTab(QtWidgets.QStackedWidget):
         if "speed" not in field:
             return
 
-        if name == "fan_generic Auxiliary_Cooling_Fans":
-            name = "Auxiliary\ncooling fans"
-        elif name == "fan_generic CHAMBER_EXHAUST":
-            name = "Exhaust Fan"
-        elif name == "fan_generic Part_Cooling_Fan":
-            name = "Cooling fan"
-        else:
-            name = name.removeprefix("fan_generic")
-        fan_card = self.tune_display_buttons.get(name)
+        fields = name.split()
+        first_field = fields[0]
+        second_field = fields[1] if len(fields) > 1 else None
+        name = second_field.replace("_", " ") if second_field else name
 
-        if fan_card is None:
-            icon_path = (
-                ":/temperature_related/media/btn_icons/blower.svg"
-                if "blower" in name.lower()
-                else ":/temperature_related/media/btn_icons/fan.svg"
-            )
-            icon = QtGui.QPixmap(icon_path)
+        fan_card = self.tune_display_buttons.get(name)
+        if fan_card is None and first_field in (
+            "fan",
+            "fan_generic",
+        ):
+            icon = self.path.get("fan")
+            if second_field:
+                second_field = second_field.lower()
+                pattern_blower = r"(?:^|_)(?:blower|auxiliary)(?:_|$)"
+                pattern_exhaust = r"(?:^|_)exhaust(?:_|$)"
+                if re.search(pattern_blower, second_field):
+                    icon = self.path.get("blower")
+                elif re.search(pattern_exhaust, second_field):
+                    icon = self.path.get("fan_cage")
 
             card = OptionCard(self, name, str(name), icon)  # type: ignore
             card.setObjectName(str(name))
@@ -379,20 +392,12 @@ class ControlTab(QtWidgets.QStackedWidget):
         if "speed" in name.lower():
             self.speed_factor_override = new_value / 100
             self.run_gcode_signal.emit(f"M220 S{new_value}")
-
-        if name == "Auxiliary\ncooling fans":
-            name = "Auxiliary_Cooling_Fans"
-        elif name == "Exhaust Fan":
-            name = "CHAMBER_EXHAUST"
-        elif name == "Cooling fan":
-            name = "Part_Cooling_Fan"
-        else:
-            ...
         if name.lower() == "fan":
             self.run_gcode_signal.emit(
                 f"M106 S{int(round((normalize(float(new_value / 100), 0.0, 1.0, 0, 255))))}"
             )  # [0, 255] Range
         else:
+            name = name.replace(" ", "_")
             self.run_gcode_signal.emit(
                 f'SET_FAN_SPEED FAN="{name}" SPEED={float(new_value / 100.00)}'
             )  # [0.0, 1.0] Range
@@ -453,10 +458,6 @@ class ControlTab(QtWidgets.QStackedWidget):
                     probed_range = float(match.group(3))
                     tolerance = float(match.group(4))
                     if retries_done == retries_total:
-                        self.loadscreen.hide()
-                        return
-
-                    if probed_range < tolerance:
                         self.loadscreen.hide()
                         return
 
