@@ -199,6 +199,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         self.subscribe_config[list, "PyQt_PyObject"].connect(
             self.printer.on_subscribe_config
         )
+        self.printer.gcode_response.connect(self.handle_gcode_response)
 
         # --- Initialize Printer Communication ---
         self.printer.printer_config.connect(self.on_printer_config_received)
