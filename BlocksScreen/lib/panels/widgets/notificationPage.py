@@ -181,10 +181,6 @@ class NotificationPage(QtWidgets.QWidget):
 
     def _setupUI(self) -> None:
         """Setup UI for updatePage"""
-        font_id = QtGui.QFontDatabase.addApplicationFont(
-            ":/font/media/fonts for text/Momcake-Bold.ttf"
-        )
-        font_family = QtGui.QFontDatabase.applicationFontFamilies(font_id)[0]
         sizePolicy = QtWidgets.QSizePolicy(
             QtWidgets.QSizePolicy.Policy.MinimumExpanding,
             QtWidgets.QSizePolicy.Policy.MinimumExpanding,
