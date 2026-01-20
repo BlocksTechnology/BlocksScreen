@@ -10,6 +10,7 @@ from lib.utils.icon_button import IconButton
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 
+
 class ProbeHelper(QtWidgets.QWidget):
     request_back: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         name="request_back"
@@ -35,6 +36,7 @@ class ProbeHelper(QtWidgets.QWidget):
     request_page_view: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         name="request_page_view"
     )
+    call_load_panel = QtCore.pyqtSignal(bool, str, name="call-load-panel")
 
     distances = ["0.01", ".025", "0.1", "0.5", "1"]
     _calibration_commands: list = []
@@ -49,11 +51,6 @@ class ProbeHelper(QtWidgets.QWidget):
     def __init__(self, parent: QtWidgets.QWidget) -> None:
         super().__init__(parent)
 
-        self.Loadscreen = BasePopup(self, dialog=False)
-        self.loadwidget = LoadingOverlayWidget(
-            self, LoadingOverlayWidget.AnimationGIF.DEFAULT
-        )
-        self.Loadscreen.add_widget(self.loadwidget)
         self.setObjectName("probe_offset_page")
         self._setupUi()
         self.inductive_icon = QtGui.QPixmap(
@@ -397,9 +394,7 @@ class ProbeHelper(QtWidgets.QWidget):
         for i in self.card_options.values():
             i.setDisabled(True)
 
-        self.Loadscreen.show()
-        self.loadwidget.set_status_message("Homing Axes...")
-
+        self.call_load_panel.emit(True, "Homing Axes...")
         if self.z_offset_safe_xy:
             self.run_gcode_signal.emit("G28\nM400")
             self._move_to_pos(self.z_offset_safe_xy[0], self.z_offset_safe_xy[1], 100)
@@ -533,7 +528,7 @@ class ProbeHelper(QtWidgets.QWidget):
         if state:
             for i in self.card_options.values():
                 i.setDisabled(False)
-            self.Loadscreen.hide()
+            self.call_load_panel.emit(False, "")
             self.po_back_button.setEnabled(False)
             self.po_back_button.hide()
             self.po_header_title.setEnabled(False)

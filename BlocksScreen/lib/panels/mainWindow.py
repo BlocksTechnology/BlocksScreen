@@ -17,6 +17,8 @@ from lib.panels.widgets.popupDialogWidget import Popup
 from lib.printer import Printer
 from lib.ui.mainWindow_ui import Ui_MainWindow  # With header
 from lib.panels.widgets.updatePage import UpdatePage
+from lib.panels.widgets.basePopup import BasePopup
+from lib.panels.widgets.loadWidget import LoadingOverlayWidget
 
 # from lib.ui.mainWindow_v2_ui import Ui_MainWindow # No header
 from lib.ui.resources.background_resources_rc import *
@@ -63,6 +65,7 @@ class MainWindow(QtWidgets.QMainWindow):
     on_update_message: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         dict, name="on-update-message"
     )
+    call_load_panel = QtCore.pyqtSignal(bool, str, name="call-load-panel")
 
     def __init__(self):
         super(MainWindow, self).__init__()
@@ -140,6 +143,7 @@ class MainWindow(QtWidgets.QMainWindow):
             slot=self.mc.restart_klipper_service
         )
         self.conn_window.reboot_clicked.connect(slot=self.mc.machine_restart)
+
         self.printer_object_report_signal.connect(
             self.printer.on_object_report_received
         )
@@ -175,10 +179,45 @@ class MainWindow(QtWidgets.QMainWindow):
         self.conn_window.update_button_clicked.connect(self.show_update_page)
         self.ui.extruder_temp_display.display_format = "upper_downer"
         self.ui.bed_temp_display.display_format = "upper_downer"
+
+        self.controlPanel.call_load_panel.connect(self.show_LoadScreen)
+        self.filamentPanel.call_load_panel.connect(self.show_LoadScreen)
+        self.printPanel.call_load_panel.connect(self.show_LoadScreen)
+        self.utilitiesPanel.call_load_panel.connect(self.show_LoadScreen)
+        self.conn_window.call_load_panel.connect(self.show_LoadScreen)
+
+        self.loadscreen = BasePopup(self, floating=False, dialog=False)
+        self.loadwidget = LoadingOverlayWidget(
+            self, LoadingOverlayWidget.AnimationGIF.DEFAULT
+        )
+        self.loadscreen.add_widget(self.loadwidget)
         if self.config.has_section("server"):
             # @ Start websocket connection with moonraker
             self.bo_ws_startup.emit()
         self.reset_tab_indexes()
+
+    @QtCore.pyqtSlot(bool, str, name="show-load-page")
+    def show_LoadScreen(self, show: bool = True, msg: str = ""):
+        _sender = self.sender()
+
+        if _sender == self.filamentPanel:
+            if not self.filamentPanel.isVisible():
+                return
+        if _sender == self.controlPanel:
+            if not self.controlPanel.isVisible():
+                return
+        if _sender == self.printPanel:
+            if not self.printPanel.isVisible():
+                return
+        if _sender == self.utilitiesPanel:
+            if not self.utilitiesPanel.isVisible():
+                return
+
+        self.loadwidget.set_status_message(msg)
+        if show:
+            self.loadscreen.show()
+        else:
+            self.loadscreen.hide()
 
     @QtCore.pyqtSlot(bool, name="show-update-page")
     def show_update_page(self, fullscreen: bool):
@@ -365,7 +404,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 "Panel page index expected type int, %s", str(type(panel_index))
             )
 
-        self.printPanel.loadscreen.hide()
+        self.show_LoadScreen(False)
         current_page = [
             self.ui.main_content_widget.currentIndex(),
             self.current_panel_index(),
@@ -575,9 +614,6 @@ class MainWindow(QtWidgets.QMainWindow):
                 message=str(_message),
                 userInput=True,
             )
-            if not self.controlPanel.ztilt_state:
-                if self.controlPanel.loadscreen.isVisible():
-                    self.controlPanel.loadscreen.hide()
 
     @api_handler
     def _handle_error_message(self, method, data, metadata) -> None:
@@ -599,9 +635,6 @@ class MainWindow(QtWidgets.QMainWindow):
             message=str(text),
             userInput=True,
         )
-        if not self.controlPanel.ztilt_state:
-            if self.controlPanel.loadscreen.isVisible():
-                self.controlPanel.loadscreen.hide()
 
     @api_handler
     def _handle_notify_cpu_throttled_message(self, method, data, metadata) -> None:

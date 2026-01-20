@@ -11,7 +11,6 @@ from lib.panels.widgets.basePopup import BasePopup
 from lib.panels.widgets.confirmPage import ConfirmWidget
 from lib.panels.widgets.filesPage import FilesPage
 from lib.panels.widgets.jobStatusPage import JobStatusWidget
-from lib.panels.widgets.loadWidget import LoadingOverlayWidget
 from lib.panels.widgets.numpadPage import CustomNumpad
 from lib.panels.widgets.sensorsPanel import SensorsWindow
 from lib.panels.widgets.slider_selector_page import SliderPage
@@ -63,6 +62,7 @@ class PrintTab(QtWidgets.QStackedWidget):
     on_cancel_print: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         name="on_cancel_print"
     )
+    call_load_panel = QtCore.pyqtSignal(bool, str, name="call-load-panel")
 
     _z_offset: float = 0.0
     _active_z_offset: float = 0.0
@@ -91,12 +91,6 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.numpadPage = CustomNumpad(self)
         self.numpadPage.request_back.connect(self.back_button)
         self.addWidget(self.numpadPage)
-
-        self.loadscreen = BasePopup(self, floating=False, dialog=False)
-        self.loadwidget = LoadingOverlayWidget(
-            self, LoadingOverlayWidget.AnimationGIF.DEFAULT
-        )
-        self.loadscreen.add_widget(self.loadwidget)
 
         self.file_data: Files = file_data
         self.filesPage_widget = FilesPage(self)
@@ -372,9 +366,7 @@ class PrintTab(QtWidgets.QStackedWidget):
     def handle_cancel_print(self) -> None:
         """Handles the print cancel action"""
         self.ws.api.cancel_print()
-        self.loadscreen.show()
-        self.loadscreen.setModal(True)
-        self.loadwidget.set_status_message("Cancelling print...\nPlease wait")
+        self.call_load_panel.emit(True, "Cancelling print...\nPlease wait")
 
     def change_page(self, index: int) -> None:
         """Requests a page change page to the global manager
