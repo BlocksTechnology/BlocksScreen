@@ -65,7 +65,7 @@ class MainWindow(QtWidgets.QMainWindow):
     on_update_message: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         dict, name="on-update-message"
     )
-    call_load_panel = QtCore.pyqtSignal(bool,str,name="call-load-panel")
+    call_load_panel = QtCore.pyqtSignal(bool, str, name="call-load-panel")
 
     def __init__(self):
         super(MainWindow, self).__init__()
@@ -143,7 +143,7 @@ class MainWindow(QtWidgets.QMainWindow):
             slot=self.mc.restart_klipper_service
         )
         self.conn_window.reboot_clicked.connect(slot=self.mc.machine_restart)
-        
+
         self.printer_object_report_signal.connect(
             self.printer.on_object_report_received
         )
@@ -196,23 +196,22 @@ class MainWindow(QtWidgets.QMainWindow):
             self.bo_ws_startup.emit()
         self.reset_tab_indexes()
 
-    @QtCore.pyqtSlot(bool, str,name="show-load-page")
-    def show_LoadScreen(self, show : bool = True , msg: str = ""):
+    @QtCore.pyqtSlot(bool, str, name="show-load-page")
+    def show_LoadScreen(self, show: bool = True, msg: str = ""):
         _sender = self.sender()
 
         if _sender == self.filamentPanel:
-            if not self.filamentPanel.isVisible(): 
+            if not self.filamentPanel.isVisible():
                 return
         if _sender == self.controlPanel:
-            if not self.controlPanel.isVisible(): 
+            if not self.controlPanel.isVisible():
                 return
         if _sender == self.printPanel:
-            if not self.printPanel.isVisible(): 
+            if not self.printPanel.isVisible():
                 return
         if _sender == self.utilitiesPanel:
-            if not self.utilitiesPanel.isVisible(): 
+            if not self.utilitiesPanel.isVisible():
                 return
-
 
         self.loadwidget.set_status_message(msg)
         if show:

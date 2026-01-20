@@ -16,7 +16,7 @@ class InputShaperPage(QtWidgets.QWidget):
     run_gcode_signal: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         str, name="run-gcode"
     )
-    call_load_panel = QtCore.pyqtSignal(bool,str,name="call-load-panel")
+    call_load_panel = QtCore.pyqtSignal(bool, str, name="call-load-panel")
 
     def __init__(self, parent=None) -> None:
         if parent:
@@ -43,7 +43,7 @@ class InputShaperPage(QtWidgets.QWidget):
         """Handles update end signal
         (closes loading page, returns to normal operation)
         """
-        self.call_load_panel.emit(False,"Updating...")
+        self.call_load_panel.emit(False, "Updating...")
         self.repeated_request_status.stop()
         self.build_model_list()
 
@@ -51,7 +51,7 @@ class InputShaperPage(QtWidgets.QWidget):
         """Handled ongoing update signal,
         calls loading page (blocks user interaction)
         """
-        self.call_load_panel.emit(True,"Updating...")
+        self.call_load_panel.emit(True, "Updating...")
         self.repeated_request_status.start(2000)
 
     def reset_view_model(self) -> None:

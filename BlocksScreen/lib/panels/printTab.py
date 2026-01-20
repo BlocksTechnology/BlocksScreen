@@ -62,7 +62,7 @@ class PrintTab(QtWidgets.QStackedWidget):
     on_cancel_print: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         name="on_cancel_print"
     )
-    call_load_panel = QtCore.pyqtSignal(bool,str,name="call-load-panel")
+    call_load_panel = QtCore.pyqtSignal(bool, str, name="call-load-panel")
 
     _z_offset: float = 0.0
     _active_z_offset: float = 0.0
@@ -366,7 +366,7 @@ class PrintTab(QtWidgets.QStackedWidget):
     def handle_cancel_print(self) -> None:
         """Handles the print cancel action"""
         self.ws.api.cancel_print()
-        self.call_load_panel.emit(True,"Cancelling print...\nPlease wait")
+        self.call_load_panel.emit(True, "Cancelling print...\nPlease wait")
 
     def change_page(self, index: int) -> None:
         """Requests a page change page to the global manager

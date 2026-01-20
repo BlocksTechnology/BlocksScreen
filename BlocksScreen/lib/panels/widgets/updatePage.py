@@ -51,7 +51,7 @@ class UpdatePage(QtWidgets.QWidget):
     update_available: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         bool, name="update-available"
     )
-    call_load_panel = QtCore.pyqtSignal(bool,str,name="call-load-panel")
+    call_load_panel = QtCore.pyqtSignal(bool, str, name="call-load-panel")
 
     def __init__(self, parent=None) -> None:
         if parent:
@@ -85,7 +85,7 @@ class UpdatePage(QtWidgets.QWidget):
         """Handles update end signal
         (closes loading page, returns to normal operation)
         """
-        self.call_load_panel.emit(False,"")
+        self.call_load_panel.emit(False, "")
         self.repeated_request_status.stop()
         self.on_request_reload()
         self.build_model_list()
@@ -94,7 +94,7 @@ class UpdatePage(QtWidgets.QWidget):
         """Handled ongoing update signal,
         calls loading page (blocks user interaction)
         """
-        self.call_load_panel.emit(True,"Updating...")
+        self.call_load_panel.emit(True, "Updating...")
         self.repeated_request_status.start(2000)
 
     def on_request_reload(self, service: str | None = None) -> None:
@@ -159,10 +159,10 @@ class UpdatePage(QtWidgets.QWidget):
                 self.request_update_moonraker.emit()
             else:
                 self.request_update_client.emit(cli_name)
-            self.call_load_panel.emit(True,f"Updating {cli_name}")
+            self.call_load_panel.emit(True, f"Updating {cli_name}")
         else:
             self.request_recover_repo[str, bool].emit(cli_name, True)
-            self.call_load_panel.emit(True,f"Recovering {cli_name}")
+            self.call_load_panel.emit(True, f"Recovering {cli_name}")
         self.request_update_status.emit(False)
 
     @QtCore.pyqtSlot(ListItem, name="on-item-clicked")

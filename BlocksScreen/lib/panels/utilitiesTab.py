@@ -88,7 +88,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
     show_update_page: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         bool, name="show-update-page"
     )
-    call_load_panel = QtCore.pyqtSignal(bool,str,name="call-load-panel")
+    call_load_panel = QtCore.pyqtSignal(bool, str, name="call-load-panel")
 
     def __init__(
         self, parent: QtWidgets.QWidget, ws: MoonWebSocket, printer: Printer
@@ -305,7 +305,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
                 self.is_aut_types[axis] = recommended_type
                 if len(self.is_aut_types) == 2:
                     self.run_gcode_signal.emit("SAVE_CONFIG")
-                    self.call_load_panel.emit(False,"")
+                    self.call_load_panel.emit(False, "")
                     self.aut = False
                     return
                 return
@@ -324,7 +324,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
                     self.is_page.add_type_entry(key)
 
             self.is_page.build_model_list()
-            self.call_load_panel.emit(False,"")
+            self.call_load_panel.emit(False, "")
             return
 
     def handle_is(self, gcode: str) -> None:
@@ -349,7 +349,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
             self.run_gcode_signal.emit(gcode)
             self.change_page(self.indexOf(self.is_page))
 
-        self.call_load_panel.emit(True,"Running Input Shaper...")
+        self.call_load_panel.emit(True, "Running Input Shaper...")
 
     @QtCore.pyqtSlot(list, name="on_object_list")
     def on_object_list(self, object_list: list) -> None:
@@ -651,7 +651,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
 
     def show_waiting_page(self, page_to_go_to: int, label: str, time_ms: int):
         """Show placeholder page"""
-        self.call_load_panel.emit(True,label)
+        self.call_load_panel.emit(True, label)
         QtCore.QTimer.singleShot(time_ms, lambda: self.change_page(page_to_go_to))
 
     def _connect_page_change(self, button: QtWidgets.QWidget, page: QtWidgets.QWidget):
@@ -660,7 +660,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
 
     def change_page(self, index: int):
         """Request change page by index"""
-        self.call_load_panel.emit(False,"")
+        self.call_load_panel.emit(False, "")
         self.troubleshoot_page.hide()
         if index < self.count():
             self.request_change_page.emit(3, index)

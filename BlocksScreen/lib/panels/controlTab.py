@@ -45,7 +45,7 @@ class ControlTab(QtWidgets.QStackedWidget):
     request_file_info: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         str, name="request-file-info"
     )
-    call_load_panel = QtCore.pyqtSignal(bool,str,name="call-load-panel")
+    call_load_panel = QtCore.pyqtSignal(bool, str, name="call-load-panel")
     tune_display_buttons: dict = {}
     card_options: dict = {}
 
@@ -294,7 +294,7 @@ class ControlTab(QtWidgets.QStackedWidget):
     def _handle_z_tilt_object_update(self, value, state):
         if state:
             self.ztilt_state = state
-            self.call_load_panel.emit(False,"")
+            self.call_load_panel.emit(False, "")
 
     @QtCore.pyqtSlot(str, str, float, name="on_fan_update")
     @QtCore.pyqtSlot(str, str, int, name="on_fan_update")
@@ -419,16 +419,16 @@ class ControlTab(QtWidgets.QStackedWidget):
             return
 
         if value["swapping"] == "in_pos":
-            self.call_load_panel.emit(False,"")
+            self.call_load_panel.emit(False, "")
             self.printcores_page.show()
             self.disable_popups.emit(True)
             self.printcores_page.setText(
                 "Please Insert Print Core \n \n Afterwards click continue"
             )
         if value["swapping"] == "unloading":
-            self.call_load_panel.emit(True,"Unloading print core")
+            self.call_load_panel.emit(True, "Unloading print core")
         if value["swapping"] == "cleaning":
-            self.call_load_panel.emit(True,"Cleaning print core")
+            self.call_load_panel.emit(True, "Cleaning print core")
 
     def _handle_gcode_response(self, messages: list):
         """Handle gcode response for Z-tilt adjustment"""
@@ -451,14 +451,16 @@ class ControlTab(QtWidgets.QStackedWidget):
                     probed_range = float(match.group(3))
                     tolerance = float(match.group(4))
                     if retries_done == retries_total:
-                        self.call_load_panel.emit(False,"")
+                        self.call_load_panel.emit(False, "")
                         return
-                    self.call_load_panel.emit(True,f"Retries: {retries_done}/{retries_total} | Range: {probed_range:.6f} | Tolerance: {tolerance:.6f}")
-
+                    self.call_load_panel.emit(
+                        True,
+                        f"Retries: {retries_done}/{retries_total} | Range: {probed_range:.6f} | Tolerance: {tolerance:.6f}",
+                    )
 
     def handle_ztilt(self):
         """Handle Z-Tilt Adjustment"""
-        self.call_load_panel.emit(True,"Please wait, performing Z-axis calibration.")
+        self.call_load_panel.emit(True, "Please wait, performing Z-axis calibration.")
         self.run_gcode_signal.emit("Z_TILT_ADJUST")
 
     @QtCore.pyqtSlot(str, name="on-klippy-status")
@@ -475,7 +477,7 @@ class ControlTab(QtWidgets.QStackedWidget):
     def show_swapcore(self):
         """Show swap printcore"""
         self.run_gcode_signal.emit("CHANGE_PRINTCORES")
-        self.call_load_panel.emit(True,"Preparing to swap print core")
+        self.call_load_panel.emit(True, "Preparing to swap print core")
 
     def handle_swapcore(self):
         """Handle swap printcore routine finish"""
@@ -647,7 +649,7 @@ class ControlTab(QtWidgets.QStackedWidget):
             self.panel.mva_z_value_label.setText(f"{values[2]:.3f}")
 
             if values[0] == "252,50" and values[1] == "250" and values[2] == "50":
-                self.call_load_panel.emit(False,"")
+                self.call_load_panel.emit(False, "")
         self.toolhead_info.update({f"{field}": values})
 
     @QtCore.pyqtSlot(str, str, float, name="on-extruder-update")
