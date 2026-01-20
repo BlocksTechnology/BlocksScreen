@@ -1,5 +1,3 @@
-from lib.panels.widgets.loadWidget import LoadingOverlayWidget
-from lib.panels.widgets.basePopup import BasePopup
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_frame import BlocksCustomFrame
 from lib.utils.icon_button import IconButton
@@ -18,6 +16,7 @@ class InputShaperPage(QtWidgets.QWidget):
     run_gcode_signal: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         str, name="run-gcode"
     )
+    call_load_panel = QtCore.pyqtSignal(bool,str,name="call-load-panel")
 
     def __init__(self, parent=None) -> None:
         if parent:
@@ -28,12 +27,6 @@ class InputShaperPage(QtWidgets.QWidget):
         self.selected_item: ListItem | None = None
         self.ongoing_update: bool = False
         self.type_dict: dict = {}
-
-        self.loadscreen = BasePopup(self, floating=False, dialog=False)
-        self.loadwidget = LoadingOverlayWidget(
-            self, LoadingOverlayWidget.AnimationGIF.DEFAULT
-        )
-        self.loadscreen.add_widget(self.loadwidget)
         self.repeated_request_status = QtCore.QTimer()
         self.repeated_request_status.setInterval(2000)  # every 2 seconds
         self.model = EntryListModel()
@@ -50,8 +43,7 @@ class InputShaperPage(QtWidgets.QWidget):
         """Handles update end signal
         (closes loading page, returns to normal operation)
         """
-        if self.load_popup.isVisible():
-            self.load_popup.close()
+        self.call_load_panel.emit(False,"Updating...")
         self.repeated_request_status.stop()
         self.build_model_list()
 
@@ -59,8 +51,7 @@ class InputShaperPage(QtWidgets.QWidget):
         """Handled ongoing update signal,
         calls loading page (blocks user interaction)
         """
-        self.loadwidget.set_status_message("Updating...")
-        self.load_popup.show()
+        self.call_load_panel.emit(True,"Updating...")
         self.repeated_request_status.start(2000)
 
     def reset_view_model(self) -> None:

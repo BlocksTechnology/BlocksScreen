@@ -1,7 +1,6 @@
 import copy
 import typing
 
-from lib.panels.widgets.basePopup import BasePopup
 from lib.panels.widgets.loadWidget import LoadingOverlayWidget
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_frame import BlocksCustomFrame
@@ -52,6 +51,7 @@ class UpdatePage(QtWidgets.QWidget):
     update_available: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         bool, name="update-available"
     )
+    call_load_panel = QtCore.pyqtSignal(bool,str,name="call-load-panel")
 
     def __init__(self, parent=None) -> None:
         if parent:
@@ -62,11 +62,6 @@ class UpdatePage(QtWidgets.QWidget):
         self.cli_tracking = {}
         self.selected_item: ListItem | None = None
         self.ongoing_update: bool = False
-        self.load_popup = BasePopup(self, floating=False, dialog=False)
-        self.loadwidget = LoadingOverlayWidget(
-            self, LoadingOverlayWidget.AnimationGIF.DEFAULT
-        )
-        self.load_popup.add_widget(self.loadwidget)
         self.repeated_request_status = QtCore.QTimer()
         self.repeated_request_status.setInterval(2000)  # every 2 seconds
         self.model = EntryListModel()
@@ -90,8 +85,7 @@ class UpdatePage(QtWidgets.QWidget):
         """Handles update end signal
         (closes loading page, returns to normal operation)
         """
-        if self.load_popup.isVisible():
-            self.load_popup.close()
+        self.call_load_panel.emit(False,"")
         self.repeated_request_status.stop()
         self.on_request_reload()
         self.build_model_list()
@@ -100,8 +94,7 @@ class UpdatePage(QtWidgets.QWidget):
         """Handled ongoing update signal,
         calls loading page (blocks user interaction)
         """
-        self.loadwidget.set_status_message("Updating...")
-        self.load_popup.show()
+        self.call_load_panel.emit(True,"Updating...")
         self.repeated_request_status.start(2000)
 
     def on_request_reload(self, service: str | None = None) -> None:
@@ -166,12 +159,10 @@ class UpdatePage(QtWidgets.QWidget):
                 self.request_update_moonraker.emit()
             else:
                 self.request_update_client.emit(cli_name)
-
-            self.loadwidget.set_status_message(f"Updating {cli_name}")
+            self.call_load_panel.emit(True,f"Updating {cli_name}")
         else:
             self.request_recover_repo[str, bool].emit(cli_name, True)
-            self.loadwidget.set_status_message(f"Recovering {cli_name}")
-        self.load_popup.show()
+            self.call_load_panel.emit(True,f"Recovering {cli_name}")
         self.request_update_status.emit(False)
 
     @QtCore.pyqtSlot(ListItem, name="on-item-clicked")
