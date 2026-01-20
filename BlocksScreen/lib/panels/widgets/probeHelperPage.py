@@ -1,11 +1,14 @@
 import typing
 
+from lib.panels.widgets.basePopup import BasePopup
+from lib.panels.widgets.loadWidget import LoadingOverlayWidget
 from lib.panels.widgets.optionCardWidget import OptionCard
-from PyQt6 import QtCore, QtGui, QtWidgets
-from lib.utils.blocks_label import BlocksLabel
-from lib.utils.icon_button import IconButton
-from lib.utils.check_button import BlocksCustomCheckButton
 from lib.utils.blocks_button import BlocksCustomButton
+from lib.utils.blocks_label import BlocksLabel
+from lib.utils.check_button import BlocksCustomCheckButton
+from lib.utils.icon_button import IconButton
+from PyQt6 import QtCore, QtGui, QtWidgets
+
 
 
 class ProbeHelper(QtWidgets.QWidget):
@@ -881,7 +884,7 @@ class ProbeHelper(QtWidgets.QWidget):
         font.setPointSize(14)
         self.current_offset_info.setFont(font)
         self.current_offset_info.setStyleSheet("background: transparent; color: white;")
-        self.current_offset_info.setText("Z:0mm")
+        self.current_offset_info.setText("Z:0.000mm")
         self.current_offset_info.setPixmap(
             QtGui.QPixmap(":/graphics/media/btn_icons/z_offset_adjust.svg")
         )
@@ -908,7 +911,7 @@ class ProbeHelper(QtWidgets.QWidget):
         self.mb_lower_nozzle.setText("")
         self.mb_lower_nozzle.setFlat(True)
         self.mb_lower_nozzle.setPixmap(
-            QtGui.QPixmap(":/arrow_icons/media/btn_icons/up_arrow.svg")
+            QtGui.QPixmap(":/baby_step/media/btn_icons/move_nozzle_close.svg")
         )
         self.mb_lower_nozzle.setObjectName("bbp_away_from_bed")
         self.bbp_option_button_group = QtWidgets.QButtonGroup(self)
@@ -927,7 +930,7 @@ class ProbeHelper(QtWidgets.QWidget):
         self.mb_raise_nozzle.setText("")
         self.mb_raise_nozzle.setFlat(True)
         self.mb_raise_nozzle.setPixmap(
-            QtGui.QPixmap(":/arrow_icons/media/btn_icons/down_arrow.svg")
+            QtGui.QPixmap(":/baby_step/media/btn_icons/move_nozzle_away.svg")
         )
         self.mb_raise_nozzle.setObjectName("bbp_close_to_bed")
         self.bbp_option_button_group.addButton(self.mb_raise_nozzle)
