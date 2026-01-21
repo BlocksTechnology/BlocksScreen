@@ -69,7 +69,6 @@ class ControlTab(QtWidgets.QStackedWidget):
         self.extruder_info: dict = {}
         self.bed_info: dict = {}
         self.toolhead_info: dict = {}
-        self.ztilt_state = False
         self.extrude_length: int = 10
         self.extrude_feedrate: int = 2
         self.extrude_page_message: str = ""
@@ -293,7 +292,6 @@ class ControlTab(QtWidgets.QStackedWidget):
 
     def _handle_z_tilt_object_update(self, value, state):
         if state:
-            self.ztilt_state = state
             self.call_load_panel.emit(False, "")
 
     @QtCore.pyqtSlot(str, str, float, name="on_fan_update")
