@@ -14,7 +14,6 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 from lib.panels.widgets.optionCardWidget import OptionCard
 from lib.panels.widgets.inputshaperPage import InputShaperPage
 from lib.panels.widgets.basePopup import BasePopup
-from lib.panels.widgets.loadWidget import LoadingOverlayWidget
 
 import re
 
@@ -89,6 +88,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
     show_update_page: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         bool, name="show-update-page"
     )
+    call_load_panel = QtCore.pyqtSignal(bool, str, name="call-load-panel")
 
     def __init__(
         self, parent: QtWidgets.QWidget, ws: MoonWebSocket, printer: Printer
@@ -123,17 +123,12 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
 
         # --- UI Setup ---
         self.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
-        self.loadPage = BasePopup(self, dialog=False)
-        self.loadwidget = LoadingOverlayWidget(
-            self, LoadingOverlayWidget.AnimationGIF.DEFAULT
-        )
-        self.loadPage.add_widget(self.loadwidget)
-
         self.panel.update_btn.clicked.connect(
             lambda: self.show_update_page[bool].emit(False)
         )
 
         self.is_page = InputShaperPage(self)
+        self.is_page.call_load_panel.connect(self.call_load_panel)
         self.addWidget(self.is_page)
 
         self.dialog_page = BasePopup(self, dialog=True, floating=True)
@@ -310,7 +305,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
                 self.is_aut_types[axis] = recommended_type
                 if len(self.is_aut_types) == 2:
                     self.run_gcode_signal.emit("SAVE_CONFIG")
-                    self.loadPage.hide()
+                    self.call_load_panel.emit(False, "")
                     self.aut = False
                     return
                 return
@@ -329,7 +324,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
                     self.is_page.add_type_entry(key)
 
             self.is_page.build_model_list()
-            self.loadPage.hide()
+            self.call_load_panel.emit(False, "")
             return
 
     def handle_is(self, gcode: str) -> None:
@@ -354,8 +349,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
             self.run_gcode_signal.emit(gcode)
             self.change_page(self.indexOf(self.is_page))
 
-        self.loadwidget.set_status_message("Running Input Shaper...")
-        self.loadPage.show()
+        self.call_load_panel.emit(True, "Running Input Shaper...")
 
     @QtCore.pyqtSlot(list, name="on_object_list")
     def on_object_list(self, object_list: list) -> None:
@@ -657,8 +651,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
 
     def show_waiting_page(self, page_to_go_to: int, label: str, time_ms: int):
         """Show placeholder page"""
-        self.loadwidget.set_status_message(label)
-        self.loadPage.show()
+        self.call_load_panel.emit(True, label)
         QtCore.QTimer.singleShot(time_ms, lambda: self.change_page(page_to_go_to))
 
     def _connect_page_change(self, button: QtWidgets.QWidget, page: QtWidgets.QWidget):
@@ -667,7 +660,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
 
     def change_page(self, index: int):
         """Request change page by index"""
-        self.loadPage.hide()
+        self.call_load_panel.emit(False, "")
         self.troubleshoot_page.hide()
         if index < self.count():
             self.request_change_page.emit(3, index)
