@@ -8,10 +8,12 @@
 
 import ctypes
 import enum
+import hashlib
 import logging
 import os
 import pathlib
 import struct
+import subprocess  # nosec: B404
 import typing
 
 try:
@@ -347,11 +349,33 @@ def get_file_name(filename: typing.Optional[str]) -> str:
     return parts[-1] if filename else ""
 
 
-# def get_hash(data) -> hashlib._Hash:
-#     hash = hashlib.sha256()
-#     hash.update(data.encode())
-#     hash.digest()
-#     return hash
+def is_udiskie_running() -> bool:
+    """Verify if `process_name` is running on the local machine
+
+    Args:
+        process_name (str): Process Name
+
+    Returns:
+        bool: True if running, False otherwise
+    """
+    try:
+        subprocess.check_output(["pgrep", "udiskie"])
+        return True
+    except subprocess.CalledProcessError:
+        return False
 
 
-def digest_hash() -> None: ...
+def sha256_checksum(filepath: str) -> str:
+    """Calculates the `SHA256` of a given file
+
+    Args:
+        filepath (str): File location path
+
+    Returns:
+        str: SHA256 for a given file
+    """
+    h = hashlib.sha256()
+    with open(filepath, "rb") as f:
+        while chunk := f.read(8192):
+            h.update(chunk)
+    return h.hexdigest()
