@@ -1,0 +1,16 @@
+# 1. ADD: Mount and Create Symlink (For labeled drives)
+ACTION=="add", SUBSYSTEM=="block", KERNEL=="sd[a-z][0-9]", ENV{ID_FS_LABEL}!="", ENV{ID_FS_LABEL}!="NO_AUTOMOUNT", \
+  RUN+="/usr/bin/systemd-mount --no-block --collect --options=uid=1000,gid=1000,umask=000 /dev/%k /media/%E{ID_FS_LABEL}", \
+  RUN+="/usr/bin/ln -sfT /media/%E{ID_FS_LABEL} /home/blocks/printer_data/gcodes/%E{ID_FS_LABEL}"
+
+# 2. ADD: Fallback (For drives with NO label - uses device name like sdb1)
+ACTION=="add", SUBSYSTEM=="block", KERNEL=="sd[a-z][0-9]", ENV{ID_FS_LABEL}=="", \
+  RUN+="/usr/bin/systemd-mount --no-block --collect --options=uid=1000,gid=1000,umask=000 /dev/%k /media/%k", \
+  RUN+="/usr/bin/ln -sfT /media/%k /home/blocks/printer_data/gcodes/%k"
+
+# 3. REMOVE: Unmount, Delete Folder, and Delete Symlink
+# Note: We use the lazy unmount to ensure the path is freed immediately
+ACTION=="remove", SUBSYSTEM=="block", KERNEL=="sd[a-z][0-9]", \
+  RUN+="/usr/bin/systemd-umount --lazy /dev/%k", \
+  RUN+="/usr/bin/rm -rf /media/%E{ID_FS_LABEL} /media/%k", \
+  RUN+="/usr/bin/rm -f /home/blocks/printer_data/gcodes/%E{ID_FS_LABEL} /home/blocks/printer_data/gcodes/%k"
