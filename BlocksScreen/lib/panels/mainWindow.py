@@ -624,9 +624,6 @@ class MainWindow(QtWidgets.QMainWindow):
             popupWhitelist = ["filament runout", "no filament"]
             if _message.lower() not in popupWhitelist or _gcode_msg_type != "!!":
                 return
-            if not self.controlPanel.ztilt_state:
-                if self.controlPanel.loadscreen.isVisible():
-                    self.controlPanel.loadscreen.hide()
             self.show_notifications.emit("mainwindow", _message, 3, True)
 
     @api_handler
@@ -644,9 +641,6 @@ class MainWindow(QtWidgets.QMainWindow):
                 text = f"{data['message']}"
             else:
                 text = data
-        if not self.controlPanel.ztilt_state:
-            if self.controlPanel.loadscreen.isVisible():
-                self.controlPanel.loadscreen.hide()
         self.show_notifications.emit("mainwindow", str(text), 3, True)
 
     @api_handler
