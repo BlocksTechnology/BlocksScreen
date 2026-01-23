@@ -10,6 +10,8 @@ from lib.ui.wifiConnectivityWindow_ui import Ui_wifi_stacked_page
 from lib.utils.list_button import ListCustomButton
 from PyQt6 import QtCore, QtGui, QtWidgets
 
+from lib.qrcode_gen import generate_wifi_qrcode
+
 logger = logging.getLogger("logs/BlocksScreen.log")
 
 
@@ -249,17 +251,8 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.panel.hotspot_password_input_field.setPlaceholderText(
             "Defaults to: 123456789"
         )
-        self.panel.hotspot_change_confirm.clicked.connect(
-            lambda: self.setCurrentIndex(self.indexOf(self.panel.main_network_page))
-        )
+        self.panel.hotspot_change_confirm.clicked.connect(self.hotspot_activate_clicked)
 
-        self.panel.hotspot_password_input_field.setHidden(True)
-        self.panel.hotspot_password_view_button.pressed.connect(
-            partial(self.panel.hotspot_password_input_field.setHidden, False)
-        )
-        self.panel.hotspot_password_view_button.released.connect(
-            partial(self.panel.hotspot_password_input_field.setHidden, True)
-        )
         self.panel.hotspot_name_input_field.setText(
             str(self.sdbus_network.get_hotspot_ssid())
         )
@@ -290,16 +283,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
                 QtGui.QPixmap(":/ui/media/btn_icons/see.svg")
             )
         )
-        self.panel.hotspot_password_view_button.released.connect(
-            lambda: self.panel.hotspot_password_view_button.setPixmap(
-                QtGui.QPixmap(":/ui/media/btn_icons/unsee.svg")
-            )
-        )
-        self.panel.hotspot_password_view_button.pressed.connect(
-            lambda: self.panel.hotspot_password_view_button.setPixmap(
-                QtGui.QPixmap(":/ui/media/btn_icons/see.svg")
-            )
-        )
+        self.generate_qrcode()
 
         self.panel.add_network_password_field.setCursor(
             QtCore.Qt.CursorShape.BlankCursor
@@ -387,7 +371,26 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             self.sdbus_network.connect_network(
                 self.panel.saved_connection_network_name.text()
             )
+            self.panel.hotspot_change_confirm.setEnabled(True)
+
             self.info_box_load(True)
+
+    def hotspot_activate_clicked(self):
+        if self.panel.hotspot_change_confirm.text() == "Save":
+            self.panel.hotspot_change_confirm.setText("Activate")
+
+        self.panel.wifi_button.toggle_button.state = (
+            self.panel.wifi_button.toggle_button.State.OFF
+        )
+        self.panel.hotspot_button.toggle_button.state = (
+            self.panel.hotspot_button.toggle_button.State.ON
+        )
+        self.setCurrentIndex(self.indexOf(self.panel.main_network_page))
+
+        self.panel.hotspot_button.toggle_button.stateChange.emit(
+            self.panel.hotspot_button.toggle_button.state
+        )
+        self.panel.hotspot_change_confirm.setEnabled(False)
 
     def on_show_keyboard(self, panel: QtWidgets.QWidget, field: QtWidgets.QLineEdit):
         """Handle keyboard show"""
@@ -404,7 +407,38 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         """Handle keyboard value input"""
         self.setCurrentIndex(self.indexOf(self.previousPanel))
         if hasattr(self, "currentField") and self.currentField:
+            if (
+                self.currentField == self.panel.hotspot_name_input_field
+                or self.currentField == self.panel.hotspot_password_input_field
+            ):
+                if (
+                    self.panel.hotspot_button.toggle_button.state
+                    == self.panel.hotspot_button.toggle_button.State.ON
+                ):
+                    self.panel.hotspot_change_confirm.setEnabled(True)
+
+                    self.panel.hotspot_change_confirm.setText("Save")
+            self.generate_qrcode()
             self.currentField.setText(value)
+
+    def generate_qrcode(self):
+        if (
+            self.panel.hotspot_button.toggle_button.state
+            == self.panel.hotspot_button.toggle_button.State.ON
+        ):
+            self.panel.qrcode_img.setText("")
+            self.panel.qrcode_img.setPixmap(
+                QtGui.QPixmap.fromImage(
+                    generate_wifi_qrcode(
+                        self.panel.hotspot_name_input_field.text(),
+                        self.panel.hotspot_password_input_field.text(),
+                        "WPA",
+                    )
+                )
+            )
+        else:
+            self.panel.qrcode_img.clearPixmap()
+            self.panel.qrcode_img.setText("Hotspot not active")
 
     def info_box_load(self, toggle: bool = False) -> None:
         """
@@ -494,6 +528,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
 
                     except Exception as e:
                         logger.error(f"error when turning ON wifi on_toggle_state:{e}")
+                self.panel.hotspot_change_confirm.setEnabled(True)
 
         elif sender_button is hotspot_btn:
             if is_sender_now_on:
@@ -519,13 +554,15 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
                 self.sdbus_network.connect_network(
                     self.panel.hotspot_name_input_field.text()
                 )
-
+                self.panel.hotspot_change_confirm.setEnabled(False)
+        self.generate_qrcode()
         self.info_box_load(False)
         if (
             hotspot_btn.state == hotspot_btn.State.OFF
             and wifi_btn.state == wifi_btn.State.OFF
         ):
             self.evaluate_network_state()
+            self.panel.hotspot_change_confirm.setEnabled(True)
         else:
             self.info_box_load(True)
 
