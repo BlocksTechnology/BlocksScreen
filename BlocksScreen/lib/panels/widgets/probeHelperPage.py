@@ -1,7 +1,4 @@
 import typing
-
-from lib.panels.widgets.basePopup import BasePopup
-from lib.panels.widgets.loadWidget import LoadingOverlayWidget
 from lib.panels.widgets.optionCardWidget import OptionCard
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_label import BlocksLabel
