@@ -60,6 +60,11 @@ class BlocksLabel(QtWidgets.QLabel):
         self.icon_pixmap = a0
         self.update()
 
+    def clearPixmap(self) -> None:
+        """Clear widget pixmap"""
+        self.icon_pixmap = QtGui.QPixmap()
+        self.repaint()
+
     def setText(self, text: str) -> None:
         """Set widget text"""
         self._text = text

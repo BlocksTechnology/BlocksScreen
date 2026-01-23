@@ -26,7 +26,5 @@ def make_qrcode(data) -> ImageQt.ImageQt:
 def generate_wifi_qrcode(
     ssid: str, password: str, auth_type: str, hidden: bool = False
 ) -> ImageQt.ImageQt:
-    wifi_data = (
-        f"WIFI:T:{auth_type};S:{ssid};P:{password};{'H:true;' if hidden else ''};"
-    )
+    wifi_data = f"WIFI:T:{auth_type};S:{ssid};P:{password};H:{str(hidden).lower()};;"
     return make_qrcode(wifi_data)
