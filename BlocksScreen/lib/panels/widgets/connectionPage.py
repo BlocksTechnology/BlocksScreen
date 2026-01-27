@@ -15,6 +15,7 @@ class ConnectionPage(QtWidgets.QFrame):
     firmware_restart_clicked = QtCore.pyqtSignal(name="firmware_restart_clicked")
     update_button_clicked = QtCore.pyqtSignal(bool, name="show-update-page")
     call_load_panel = QtCore.pyqtSignal(bool, str, name="call-load-panel")
+    call_cancel_panel = QtCore.pyqtSignal(bool, name="call-load-panel")
 
     def __init__(self, parent: QtWidgets.QWidget, ws: MoonWebSocket, /):
         super().__init__(parent)
@@ -67,6 +68,7 @@ class ConnectionPage(QtWidgets.QFrame):
         """Handle show event"""
         self.ws.api.refresh_update_status()
         self.call_load_panel.emit(False, "")
+        self.call_cancel_panel.emit(False)
         return super().showEvent(a0)
 
     @QtCore.pyqtSlot(bool, name="on_klippy_connected")
