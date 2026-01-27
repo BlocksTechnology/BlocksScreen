@@ -1,6 +1,5 @@
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_frame import BlocksCustomFrame
-from lib.utils.icon_button import IconButton
 from lib.utils.blocks_label import BlocksLabel
 from PyQt6 import QtCore, QtGui, QtWidgets
 
@@ -75,14 +74,6 @@ class CancelPage(QtWidgets.QWidget):
         self.cf_header_title = QtWidgets.QHBoxLayout()
         self.cf_header_title.setObjectName("cf_header_title")
 
-        self.spacer = QtWidgets.QSpacerItem(
-            60,
-            60,
-            QtWidgets.QSizePolicy.Policy.Fixed,
-            QtWidgets.QSizePolicy.Policy.Fixed,
-        )
-        self.spacer.setGeometry(QtCore.QRect(0, 0, 60, 60))
-        self.cf_header_title.addItem(self.spacer)
         sizePolicy = QtWidgets.QSizePolicy(
             QtWidgets.QSizePolicy.Policy.Expanding,
             QtWidgets.QSizePolicy.Policy.Expanding,
@@ -100,17 +91,6 @@ class CancelPage(QtWidgets.QWidget):
         self.cf_file_name.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self.cf_file_name.setObjectName("cf_file_name")
         self.cf_header_title.addWidget(self.cf_file_name)
-
-        self.back_btn = IconButton(self)
-        self.back_btn.setMinimumSize(QtCore.QSize(60, 60))
-        self.back_btn.setMaximumSize(QtCore.QSize(60, 60))
-        self.back_btn.setFlat(True)
-        self.back_btn.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/back.svg")
-        )
-        self.cf_header_title.addWidget(
-            self.back_btn, 0, QtCore.Qt.AlignmentFlag.AlignLeft
-        )
 
         self.verticalLayout_4.addLayout(self.cf_header_title)
         self.cf_content_vertical_layout = QtWidgets.QHBoxLayout()
