@@ -89,16 +89,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.up = UpdatePage(self)
         self.up.hide()
 
-        self.cancelpage = CancelPage(self)
-        self.cancelpage.hide()
-        self.cancelpage.confirm_button.clicked.connect(
-            lambda: self.printPanel.print_start.emit(
-                self.printPanel.jobStatusPage_widget._current_file_name
-            )
-        )
-        self.cancelpage.refuse_button.clicked.connect(
-            lambda: self.handle_cancel_print(False)
-        )
+        self.conn_window.call_cancel_panel.connect(self.handle_cancel_print)
         self.installEventFilter(self.conn_window)
         self.printPanel = PrintTab(
             self.ui.printTab, self.file_data, self.ws, self.printer
@@ -208,16 +199,33 @@ class MainWindow(QtWidgets.QMainWindow):
             self, LoadingOverlayWidget.AnimationGIF.DEFAULT
         )
         self.loadscreen.add_widget(self.loadwidget)
+
+        self.cancelpage = CancelPage(self)
+        self.cancelpage.hide()
+        self.cancelpage.confirm_button.clicked.connect(
+            lambda: self.printPanel.print_start.emit(
+                self.printPanel.jobStatusPage_widget._current_file_name
+            )
+        )
+        self.cancelpage.refuse_button.clicked.connect(
+            lambda: self.run_gcode_signal.emit("SDCARD_RESET_FILE")
+        )
+        self.cancelpage.refuse_button.clicked.connect(
+            lambda: self.handle_cancel_print(False)
+        )
+
+        self.printPanel.call_cancel_panel.connect(self.handle_cancel_print)
+
         if self.config.has_section("server"):
             # @ Start websocket connection with moonraker
             self.bo_ws_startup.emit()
         self.reset_tab_indexes()
 
+    @QtCore.pyqtSlot(bool, name="show-cancel-page")
     def handle_cancel_print(self, show: bool = True):
         """Slot for displaying update Panel"""
         if not show:
             self.cancelpage.hide()
-            self.run_gcode_signal.emit("SDCARD_RESET_FILE")
             return
 
         self.cancelpage.setParent(self)
@@ -239,7 +247,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.cancelpage.set_file_name(
             self.printPanel.jobStatusPage_widget._current_file_name
         )
-        print("ASKHJDGAS")
         self.cancelpage.set_pixmap(last_thumb)
 
     @QtCore.pyqtSlot(bool, str, name="show-load-page")
