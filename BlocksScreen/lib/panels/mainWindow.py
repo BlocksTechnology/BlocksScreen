@@ -5,7 +5,7 @@ from collections import deque
 import events
 from configfile import BlocksScreenConfig, get_configparser
 from lib.files import Files
-from lib.machine import MachineControl
+from lib.system_manager.system import SystemManager
 from lib.moonrakerComm import MoonWebSocket
 from lib.panels.controlTab import ControlTab
 from lib.panels.filamentTab import FilamentTab
@@ -77,7 +77,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui.main_content_widget.setCurrentIndex(0)
         self.popup = Popup(self)
         self.ws = MoonWebSocket(self)
-        self.mc = MachineControl(self)
+        self.mc = SystemManager(self)
         self.file_data = Files(self, self.ws)
         self.index_stack = deque(maxlen=4)
         self.printer = Printer(self, self.ws)
@@ -140,9 +140,9 @@ class MainWindow(QtWidgets.QMainWindow):
             slot=self.ws.api.firmware_restart
         )
         self.conn_window.restart_klipper_clicked.connect(
-            slot=self.mc.restart_klipper_service
+            slot=self.mc.klipper_service_restart
         )
-        self.conn_window.reboot_clicked.connect(slot=self.mc.machine_restart)
+        self.conn_window.reboot_clicked.connect(slot=self.mc.ee)
 
         self.printer_object_report_signal.connect(
             self.printer.on_object_report_received
