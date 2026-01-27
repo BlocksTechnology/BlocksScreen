@@ -230,7 +230,6 @@ class JobStatusWidget(QtWidgets.QWidget):
         elif lstate in invalid_states:
             if lstate != "standby":
                 self.print_finish.emit()
-            self._current_file_name = ""
             self._internal_print_status = ""
             self.total_layers = "?"
             self.file_metadata.clear()
