@@ -55,6 +55,34 @@ class EntryListModel(QtCore.QAbstractListModel):
         self.entries.append(item)
         self.endInsertRows()
 
+    def remove_item_by_text(self, text: str) -> bool:
+        """Remove item from model by its text value.
+
+        Args:
+            text: The text value of the item to remove.
+
+        Returns:
+            True if item was found and removed, False otherwise.
+        """
+        for i, item in enumerate(self.entries):
+            if item.text == text:
+                self.beginRemoveRows(QtCore.QModelIndex(), i, i)
+                self.entries.pop(i)
+                self.endRemoveRows()
+                return True
+        return False
+
+    def insert_item(self, position: int, item: ListItem) -> None:
+        """Insert item at a specific position in the model."""
+        if position < 0:
+            position = 0
+        if position > len(self.entries):
+            position = len(self.entries)
+
+        self.beginInsertRows(QtCore.QModelIndex(), position, position)
+        self.entries.insert(position, item)
+        self.endInsertRows()
+
     def flags(self, index) -> QtCore.Qt.ItemFlag:
         """Models item flags, re-implemented method"""
         item = self.entries[index.row()]
