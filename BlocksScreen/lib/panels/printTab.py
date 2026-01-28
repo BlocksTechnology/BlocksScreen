@@ -64,6 +64,10 @@ class PrintTab(QtWidgets.QStackedWidget):
     )
     call_load_panel = QtCore.pyqtSignal(bool, str, name="call-load-panel")
 
+    print_start: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        str, name="print_start"
+    )
+    call_cancel_panel = QtCore.pyqtSignal(bool, name="call-load-panel")
     _z_offset: float = 0.0
     _active_z_offset: float = 0.0
     _finish_print_handled: bool = False
@@ -124,6 +128,7 @@ class PrintTab(QtWidgets.QStackedWidget):
             self.file_data.request_file_list
         )
         self.file_data.on_dirs.connect(self.filesPage_widget.on_directories)
+
         self.filesPage_widget.request_dir_info[str].connect(
             self.file_data.request_dir_info[str]
         )
@@ -137,6 +142,7 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.jobStatusPage_widget.show_request.connect(
             lambda: self.change_page(self.indexOf(self.jobStatusPage_widget))
         )
+        self.jobStatusPage_widget.call_cancel_panel.connect(self.call_cancel_panel)
         self.jobStatusPage_widget.hide_request.connect(
             lambda: self.change_page(self.indexOf(self.print_page))
         )
@@ -144,6 +150,7 @@ class PrintTab(QtWidgets.QStackedWidget):
             self.file_data.on_request_fileinfo
         )
         self.file_data.fileinfo.connect(self.jobStatusPage_widget.on_fileinfo)
+        self.print_start.connect(self.ws.api.start_print)
         self.jobStatusPage_widget.print_start.connect(self.ws.api.start_print)
         self.jobStatusPage_widget.print_resume.connect(self.ws.api.resume_print)
         self.jobStatusPage_widget.print_cancel.connect(self.handle_cancel_print)
