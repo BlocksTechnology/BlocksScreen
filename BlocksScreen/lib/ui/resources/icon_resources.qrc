@@ -84,6 +84,7 @@
     <file>media/btn_icons/unload_filament.svg</file>
   </qresource>
   <qresource prefix="ui">
+    <file>media/btn_icons/usb_icon.svg</file>
     <file>media/btn_icons/garbage-icon.svg</file>
     <file>media/btn_icons/back.svg</file>
     <file>media/btn_icons/refresh.svg</file>

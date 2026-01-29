@@ -12,13 +12,13 @@ from lib.panels.filamentTab import FilamentTab
 from lib.panels.networkWindow import NetworkControlWindow
 from lib.panels.printTab import PrintTab
 from lib.panels.utilitiesTab import UtilitiesTab
+from lib.panels.widgets.basePopup import BasePopup
 from lib.panels.widgets.connectionPage import ConnectionPage
+from lib.panels.widgets.loadWidget import LoadingOverlayWidget
 from lib.panels.widgets.popupDialogWidget import Popup
+from lib.panels.widgets.updatePage import UpdatePage
 from lib.printer import Printer
 from lib.ui.mainWindow_ui import Ui_MainWindow  # With header
-from lib.panels.widgets.updatePage import UpdatePage
-from lib.panels.widgets.basePopup import BasePopup
-from lib.panels.widgets.loadWidget import LoadingOverlayWidget
 
 # from lib.ui.mainWindow_v2_ui import Ui_MainWindow # No header
 from lib.ui.resources.background_resources_rc import *
@@ -578,7 +578,7 @@ class MainWindow(QtWidgets.QMainWindow):
     @api_handler
     def _handle_notify_filelist_changed_message(self, method, data, metadata) -> None:
         """Handle websocket file list messages"""
-        ...
+        self.file_data.handle_filelist_changed(data)
 
     @api_handler
     def _handle_notify_service_state_changed_message(
@@ -617,24 +617,34 @@ class MainWindow(QtWidgets.QMainWindow):
 
     @api_handler
     def _handle_error_message(self, method, data, metadata) -> None:
-        """Handle error messages"""
+        """Handle error messages from Moonraker API."""
         self.handle_error_response[list].emit([data, metadata])
-        if "metadata" in data.get("message", "").lower():
-            # Quick fix, don't care about no metadata errors
-            return
         if self._popup_toggle:
             return
-        text = data
-        if isinstance(data, dict):
-            if "message" in data:
-                text = f"{data['message']}"
-            else:
-                text = data
+
+        text = data.get("message", str(data)) if isinstance(data, dict) else str(data)
+        lower_text = text.lower()
+
+        # Metadata errors - silent, handled by files_manager
+        if "metadata" in lower_text:
+            self.file_data.handle_metadata_error(text)
+            return
+
+        # File not found - silent
+        if "file" in lower_text and "does not exist" in lower_text:
+            return
+
+        # Directory not found - navigate back + show popup
+        if "does not exist" in lower_text:
+            self.printPanel.filesPage_widget.back_btn.click()
+
+        # Show popup for all other errors (including directory errors)
         self.popup.new_message(
             message_type=Popup.MessageType.ERROR,
-            message=str(text),
+            message=text,
             userInput=True,
         )
+        _logger.error(text)
 
     @api_handler
     def _handle_notify_cpu_throttled_message(self, method, data, metadata) -> None:
