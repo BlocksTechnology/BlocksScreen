@@ -2,23 +2,67 @@ from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_frame import BlocksCustomFrame
 from lib.utils.blocks_label import BlocksLabel
 from PyQt6 import QtCore, QtGui, QtWidgets
+import typing
 
+from lib.moonrakerComm import MoonWebSocket
 
 class CancelPage(QtWidgets.QWidget):
     """Update GUI Page,
     retrieves from moonraker available clients and adds functionality
     for updating or recovering them
     """
+    request_file_info: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        str, name="request_file_info"
+    )
+    reprint_start: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        str, name="reprint_start"
+    )
+    run_gcode: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        str, name="run_gcode"
+    )
 
-    def __init__(self, parent=None) -> None:
-        if parent:
-            super().__init__(parent)
-        else:
-            super().__init__()
+    def __init__(self, parent: QtWidgets.QWidget , ws: MoonWebSocket) -> None:
+        super().__init__(parent)
+        self.ws: MoonWebSocket = ws
         self._setupUI()
-        self.confirm_button.clicked.connect(self.hide)
-        self.refuse_button.clicked.connect(self.hide)
+        self.filename = ""
+
+        self.reprint_start.connect(self.ws.api.start_print)
+
+        self.confirm_button.clicked.connect(lambda: self._handle_accept())
+
+        self.refuse_button.clicked.connect(lambda: self._handle_refuse())
+
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_StyledBackground, True)
+
+    def _handle_accept(self):
+        self.run_gcode.emit("SDCARD_RESET_FILE")
+        self.reprint_start.emit(self.filename)
+        self.close()
+        
+
+    def _handle_refuse(self):
+        self.close()
+        self.run_gcode.emit("SDCARD_RESET_FILE")
+        
+
+    @QtCore.pyqtSlot(str, dict, name="on_print_stats_update")
+    @QtCore.pyqtSlot(str, float, name="on_print_stats_update")
+    @QtCore.pyqtSlot(str, str, name="on_print_stats_update")
+    def on_print_stats_update(self, field: str, value: dict | float | str) -> None:
+        if isinstance(value, str):
+            if "filename" in field:
+                self.filename = value
+                if self.isVisible:
+                    self.set_file_name(value)
+
+
+    def show(self):
+        self.request_file_info.emit(self.filename)
+        
+        super().show()
+
+
 
     def set_pixmap(self, pixmap: QtGui.QPixmap) -> None:
         if not hasattr(self, "_scene"):
@@ -49,6 +93,24 @@ class CancelPage(QtWidgets.QWidget):
 
     def set_file_name(self, file_name: str) -> None:
         self.cf_file_name.setText(file_name)
+
+
+    def _show_screen_thumbnail(self,dict):
+        try:
+            thumbnails = dict["thumbnail_images"]
+
+            last_thumb = (QtGui.QPixmap.fromImage(thumbnails[-1]))
+
+            if last_thumb.isNull():
+                last_thumb = QtGui.QPixmap(
+                    "BlocksScreen/lib/ui/resources/media/logoblocks400x300.png"
+                )
+        except Exception as e:
+            print(e)
+            last_thumb = QtGui.QPixmap(
+                "BlocksScreen/lib/ui/resources/media/logoblocks400x300.png"
+            )
+        self.set_pixmap(last_thumb)
 
     def _setupUI(self) -> None:
         """Setup widget ui"""
