@@ -200,20 +200,13 @@ class MainWindow(QtWidgets.QMainWindow):
         )
         self.loadscreen.add_widget(self.loadwidget)
 
-        self.cancelpage = CancelPage(self)
-        self.cancelpage.hide()
-        self.cancelpage.confirm_button.clicked.connect(
-            lambda: self.printPanel.print_start.emit(
-                self.printPanel.jobStatusPage_widget._current_file_name
-            )
-        )
-        self.cancelpage.refuse_button.clicked.connect(
-            lambda: self.run_gcode_signal.emit("SDCARD_RESET_FILE")
-        )
-        self.cancelpage.refuse_button.clicked.connect(
-            lambda: self.handle_cancel_print(False)
-        )
-
+        self.cancelpage = CancelPage(self,ws=self.ws)
+        self.cancelpage.request_file_info.connect(self.file_data.on_request_fileinfo)
+        self.cancelpage.run_gcode.connect(self.ws.api.run_gcode)
+        self.printer.print_stats_update[str, str].connect(self.cancelpage.on_print_stats_update)
+        self.printer.print_stats_update[str, dict].connect(self.cancelpage.on_print_stats_update)
+        self.printer.print_stats_update[str, float].connect(self.cancelpage.on_print_stats_update)
+        self.file_data.fileinfo.connect(self.cancelpage._show_screen_thumbnail)
         self.printPanel.call_cancel_panel.connect(self.handle_cancel_print)
 
         if self.config.has_section("server"):
@@ -228,26 +221,12 @@ class MainWindow(QtWidgets.QMainWindow):
             self.cancelpage.hide()
             return
 
-        self.cancelpage.setParent(self)
         self.cancelpage.setGeometry(0, 0, self.width(), self.height())
-
         self.cancelpage.raise_()
         self.cancelpage.updateGeometry()
         self.cancelpage.repaint()
         self.cancelpage.show()
 
-        thumbnails = self.printPanel.jobStatusPage_widget.thumbnail_graphics
-        last_thumb = (
-            thumbnails[-1]
-            if len(thumbnails) > 0
-            else QtGui.QPixmap(
-                "BlocksScreen/lib/ui/resources/media/logoblocks400x300.png"
-            )
-        )
-        self.cancelpage.set_file_name(
-            self.printPanel.jobStatusPage_widget._current_file_name
-        )
-        self.cancelpage.set_pixmap(last_thumb)
 
     @QtCore.pyqtSlot(bool, str, name="show-load-page")
     def show_LoadScreen(self, show: bool = True, msg: str = ""):

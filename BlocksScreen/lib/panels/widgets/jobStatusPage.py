@@ -233,6 +233,7 @@ class JobStatusWidget(QtWidgets.QWidget):
             if lstate != "standby":
                 self.print_finish.emit()
             self._internal_print_status = ""
+            self._current_file_name = ""
             self.total_layers = "?"
             self.file_metadata.clear()
             self.hide_request.emit()
