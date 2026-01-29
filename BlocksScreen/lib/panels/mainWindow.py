@@ -13,6 +13,7 @@ from lib.panels.networkWindow import NetworkControlWindow
 from lib.panels.printTab import PrintTab
 from lib.panels.utilitiesTab import UtilitiesTab
 from lib.panels.widgets.connectionPage import ConnectionPage
+from lib.panels.widgets.cancelPage import CancelPage
 from lib.panels.widgets.popupDialogWidget import Popup
 from lib.printer import Printer
 from lib.ui.mainWindow_ui import Ui_MainWindow  # With header
@@ -65,6 +66,9 @@ class MainWindow(QtWidgets.QMainWindow):
     on_update_message: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         dict, name="on-update-message"
     )
+    run_gcode_signal: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        str, name="run_gcode"
+    )
     call_load_panel = QtCore.pyqtSignal(bool, str, name="call-load-panel")
 
     def __init__(self):
@@ -84,6 +88,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.conn_window = ConnectionPage(self, self.ws)
         self.up = UpdatePage(self)
         self.up.hide()
+
+        self.conn_window.call_cancel_panel.connect(self.handle_cancel_print)
         self.installEventFilter(self.conn_window)
         self.printPanel = PrintTab(
             self.ui.printTab, self.file_data, self.ws, self.printer
@@ -152,6 +158,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.query_object_list.connect(self.utilitiesPanel.on_object_list)
         self.printer.extruder_update.connect(self.on_extruder_update)
         self.printer.heater_bed_update.connect(self.on_heater_bed_update)
+        self.run_gcode_signal.connect(self.ws.api.run_gcode)
+
         self.ui.main_content_widget.currentChanged.connect(slot=self.reset_tab_indexes)
         self.call_network_panel.connect(self.networkPanel.show_network_panel)
         self.conn_window.wifi_button_clicked.connect(self.call_network_panel.emit)
@@ -191,10 +199,39 @@ class MainWindow(QtWidgets.QMainWindow):
             self, LoadingOverlayWidget.AnimationGIF.DEFAULT
         )
         self.loadscreen.add_widget(self.loadwidget)
+
+        self.cancelpage = CancelPage(self, ws=self.ws)
+        self.cancelpage.request_file_info.connect(self.file_data.on_request_fileinfo)
+        self.cancelpage.run_gcode.connect(self.ws.api.run_gcode)
+        self.printer.print_stats_update[str, str].connect(
+            self.cancelpage.on_print_stats_update
+        )
+        self.printer.print_stats_update[str, dict].connect(
+            self.cancelpage.on_print_stats_update
+        )
+        self.printer.print_stats_update[str, float].connect(
+            self.cancelpage.on_print_stats_update
+        )
+        self.file_data.fileinfo.connect(self.cancelpage._show_screen_thumbnail)
+        self.printPanel.call_cancel_panel.connect(self.handle_cancel_print)
+
         if self.config.has_section("server"):
             # @ Start websocket connection with moonraker
             self.bo_ws_startup.emit()
         self.reset_tab_indexes()
+
+    @QtCore.pyqtSlot(bool, name="show-cancel-page")
+    def handle_cancel_print(self, show: bool = True):
+        """Slot for displaying update Panel"""
+        if not show:
+            self.cancelpage.hide()
+            return
+
+        self.cancelpage.setGeometry(0, 0, self.width(), self.height())
+        self.cancelpage.raise_()
+        self.cancelpage.updateGeometry()
+        self.cancelpage.repaint()
+        self.cancelpage.show()
 
     @QtCore.pyqtSlot(bool, str, name="show-load-page")
     def show_LoadScreen(self, show: bool = True, msg: str = ""):
@@ -734,6 +771,8 @@ class MainWindow(QtWidgets.QMainWindow):
             events.PrintComplete.type(),
             events.PrintCancelled.type(),
         ):
+            if event.type() == events.PrintCancelled.type():
+                self.handle_cancel_print()
             self.enable_tab_bar()
             self.ui.extruder_temp_display.clicked.disconnect()
             self.ui.bed_temp_display.clicked.disconnect()
