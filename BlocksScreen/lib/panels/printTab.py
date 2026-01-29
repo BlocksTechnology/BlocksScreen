@@ -244,6 +244,7 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.main_print_btn.clicked.connect(
             partial(self.change_page, self.indexOf(self.filesPage_widget))
         )
+        self.main_print_btn.clicked.connect(self.file_data.check_usb_symlink_local)
         self.babystepPage.run_gcode.connect(self.ws.api.run_gcode)
         self.run_gcode_signal.connect(self.ws.api.run_gcode)
         self.confirmPage_widget.on_delete.connect(self.delete_file)

@@ -5,6 +5,7 @@ import logging.handlers
 import pathlib
 import queue
 import threading
+from pathlib import Path
 
 
 class QueueHandler(logging.Handler):
@@ -13,7 +14,7 @@ class QueueHandler(logging.Handler):
     def __init__(
         self,
         queue: queue.Queue,
-        format: str = "'[%(levelname)s] | %(asctime)s | %(name)s | %(relativeCreated)6d | %(threadName)s : %(message)s",
+        format: str = "[%(levelname)s] | %(asctime)s | %(name)s | %(relativeCreated)6d | %(threadName)s : %(message)s",
         level=logging.DEBUG,
     ):
         super(QueueHandler, self).__init__()
@@ -77,16 +78,16 @@ class QueueListener(logging.handlers.TimedRotatingFileHandler):
         self._thread = None
 
 
-global MainLoggingHandler
-
-
 def create_logger(
     name: str = "log",
     level=logging.INFO,
-    format: str = "'[%(levelname)s] | %(asctime)s | %(name)s | %(relativeCreated)6d | %(threadName)s : %(message)s",
+    format: str = "[%(levelname)s] | %(asctime)s | %(name)s | %(relativeCreated)6d | %(threadName)s : %(message)s",
 ):
     """Create amd return logger"""
-    global MainLoggingHandler
+    log_file_path = Path(name)
+    log_file_path.parent.mkdir(parents=True, exist_ok=True)
+    if not log_file_path.exists():
+        log_file_path.touch()
     logger = logging.getLogger(name)
     logger.setLevel(level)
     ql = QueueListener(filename=name)

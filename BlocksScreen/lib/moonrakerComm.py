@@ -69,6 +69,11 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
         self.klippy_state_signal.connect(self.api.request_printer_info)
         _logger.info("Websocket object initialized")
 
+    @property
+    def moonRest(self) -> MoonRest:
+        """Returns the current moonrestAPI object"""
+        return self._moonRest
+
     @QtCore.pyqtSlot(name="retry_wb_conn")
     def retry_wb_conn(self):
         """Retry websocket connection"""
@@ -123,7 +128,7 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
         )
         # TODO Handle if i cannot connect to moonraker, request server.info and see if i get a result
         try:
-            _oneshot_token = self._moonRest.get_oneshot_token()
+            _oneshot_token = self.moonRest.get_oneshot_token()
             if _oneshot_token is None:
                 raise OneShotTokenError("Unable to retrieve oneshot token")
         except Exception as e:
@@ -362,6 +367,10 @@ class MoonAPI(QtCore.QObject):
             params={"include_monitors": include_monitors},
         )
 
+    def request_server_info(self):
+        """Requested printer information"""
+        return self._ws.send_request(method="server.config")
+
     @QtCore.pyqtSlot(name="query_printer_info")
     def request_printer_info(self):
         """Requested printer information"""
@@ -445,6 +454,10 @@ class MoonAPI(QtCore.QObject):
         return self._ws.send_request(
             method="machine.services.restart", params={"service": service}
         )
+
+    def system_info(self):
+        """Returns a top level System Info object containing various attributes that report info"""
+        return self._ws.send_request(method="machine.system_info")
 
     @QtCore.pyqtSlot(name="firmware_restart")
     def firmware_restart(self):
@@ -560,12 +573,12 @@ class MoonAPI(QtCore.QObject):
             filename (str): file to download
 
         Returns:
-            _type_: _description_
+            dict: The body of the response contains the contents of the requested file.
         """
         if not isinstance(filename, str) or not isinstance(root, str):
             return False
 
-        return self._ws._moonRest.get_request(f"/server/files/{root}/{filename}")
+        return self._ws.moonRest.get_request(f"/server/files/{root}/{filename}")
 
     @QtCore.pyqtSlot(name="api-get-dir-info")
     @QtCore.pyqtSlot(str, name="api-get-dir-info")
@@ -791,6 +804,14 @@ class MoonAPI(QtCore.QObject):
         return self._ws.send_request(
             method="machine,update.rollback", params={"name": name}
         )
+
+    def get_user(self):
+        """Request current username"""
+        return self._ws.send_request(method="access.get_user")
+
+    def get_user_list(self):
+        """Request users list"""
+        return self._ws.send_request(method="access.users.list")
 
     def history_list(self, limit, start, since, before, order):
         """Request Job history list"""
