@@ -200,12 +200,18 @@ class MainWindow(QtWidgets.QMainWindow):
         )
         self.loadscreen.add_widget(self.loadwidget)
 
-        self.cancelpage = CancelPage(self,ws=self.ws)
+        self.cancelpage = CancelPage(self, ws=self.ws)
         self.cancelpage.request_file_info.connect(self.file_data.on_request_fileinfo)
         self.cancelpage.run_gcode.connect(self.ws.api.run_gcode)
-        self.printer.print_stats_update[str, str].connect(self.cancelpage.on_print_stats_update)
-        self.printer.print_stats_update[str, dict].connect(self.cancelpage.on_print_stats_update)
-        self.printer.print_stats_update[str, float].connect(self.cancelpage.on_print_stats_update)
+        self.printer.print_stats_update[str, str].connect(
+            self.cancelpage.on_print_stats_update
+        )
+        self.printer.print_stats_update[str, dict].connect(
+            self.cancelpage.on_print_stats_update
+        )
+        self.printer.print_stats_update[str, float].connect(
+            self.cancelpage.on_print_stats_update
+        )
         self.file_data.fileinfo.connect(self.cancelpage._show_screen_thumbnail)
         self.printPanel.call_cancel_panel.connect(self.handle_cancel_print)
 
@@ -226,7 +232,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.cancelpage.updateGeometry()
         self.cancelpage.repaint()
         self.cancelpage.show()
-
 
     @QtCore.pyqtSlot(bool, str, name="show-load-page")
     def show_LoadScreen(self, show: bool = True, msg: str = ""):
