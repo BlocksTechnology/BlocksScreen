@@ -578,7 +578,6 @@ class MainWindow(QtWidgets.QMainWindow):
     @api_handler
     def _handle_notify_filelist_changed_message(self, method, data, metadata) -> None:
         """Handle websocket file list messages"""
-        print(data)
         self.file_data.handle_filelist_changed(data)
 
     @api_handler
@@ -618,30 +617,31 @@ class MainWindow(QtWidgets.QMainWindow):
 
     @api_handler
     def _handle_error_message(self, method, data, metadata) -> None:
-        """Handle error messages"""
+        """Handle error messages from Moonraker API."""
         self.handle_error_response[list].emit([data, metadata])
         if self._popup_toggle:
             return
-        text = data
-        if isinstance(data, dict):
-            if "message" in data:
-                text = f"{data['message']}"
-            else:
-                text = data
+
+        text = data.get("message", str(data)) if isinstance(data, dict) else str(data)
         lower_text = text.lower()
+
+        # Metadata errors - silent, handled by files_manager
         if "metadata" in lower_text:
-            start = text.find("<") + 1
-            end = text.find(">", start)
-            path = text[start:end] if start > 0 and end > start else ""
-            self.printPanel.filesPage_widget.request_metadata(path)
+            self.file_data.handle_metadata_error(text)
             return
-        elif "does not exist" in lower_text:
-            if "file" in lower_text:
-                return
+
+        # File not found - silent
+        if "file" in lower_text and "does not exist" in lower_text:
+            return
+
+        # Directory not found - navigate back + show popup
+        if "does not exist" in lower_text:
             self.printPanel.filesPage_widget.back_btn.click()
+
+        # Show popup for all other errors (including directory errors)
         self.popup.new_message(
             message_type=Popup.MessageType.ERROR,
-            message=str(text),
+            message=text,
             userInput=True,
         )
         _logger.error(text)

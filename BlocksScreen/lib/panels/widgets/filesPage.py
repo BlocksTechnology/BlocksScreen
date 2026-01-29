@@ -1,3 +1,4 @@
+import json
 import logging
 import typing
 
@@ -7,7 +8,7 @@ from lib.utils.icon_button import IconButton
 from lib.utils.list_model import EntryDelegate, EntryListModel, ListItem
 from PyQt6 import QtCore, QtGui, QtWidgets
 
-logger = logging.getLogger("logs/BlocksScreen.log")
+logger = logging.getLogger(__name__)
 
 
 class FilesPage(QtWidgets.QWidget):
@@ -17,7 +18,6 @@ class FilesPage(QtWidgets.QWidget):
     This widget displays a list of gcode files and directories,
     allowing navigation and file selection. It receives updates
     from the Files manager via signals.
-
     Signals emitted:
     - request_back: User wants to go back (header button)
     - file_selected(str, dict): User selected a file
@@ -35,6 +35,7 @@ class FilesPage(QtWidgets.QWidget):
     )
     request_file_list = QtCore.pyqtSignal([], [str], name="api_get_files_list")
     request_file_metadata = QtCore.pyqtSignal(str, name="api_get_gcode_metadata")
+    request_scan_metadata = QtCore.pyqtSignal(str, name="api_scan_gcode_metadata")
 
     # Constants
     GCODE_EXTENSION = ".gcode"
@@ -43,7 +44,7 @@ class FilesPage(QtWidgets.QWidget):
     LEFT_FONT_SIZE = 17
     RIGHT_FONT_SIZE = 12
 
-    # Icon paths - centralized for easy modification
+    # Icon paths
     ICON_PATHS = {
         "back_folder": ":/ui/media/btn_icons/back_folder.svg",
         "folder": ":/ui/media/btn_icons/folderIcon.svg",
@@ -56,26 +57,24 @@ class FilesPage(QtWidgets.QWidget):
     def __init__(self, parent: typing.Optional[QtWidgets.QWidget] = None) -> None:
         super().__init__(parent)
 
-        # Instance data - NOT class-level to avoid sharing between instances
         self._file_list: list[dict] = []
         self._files_data: dict[str, dict] = {}  # filename -> metadata dict
         self._directories: list[dict] = []
         self._curr_dir: str = ""
         self._pending_action: bool = False
         self._pending_metadata_requests: set[str] = set()  # Track pending requests
-        self._metadata_retry_count: dict[str, int] = {}  # Track retry count per file
+        self._metadata_retry_count: dict[
+            str, int
+        ] = {}  # Track retry count per file (max 3)
         self._icons: dict[str, QtGui.QPixmap] = {}
 
-        # Model and delegate
         self._model = EntryListModel()
         self._entry_delegate = EntryDelegate()
 
-        # Setup UI
         self._setup_ui()
         self._load_icons()
         self._connect_signals()
 
-        # Widget attributes
         self.setMouseTracking(True)
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_AcceptTouchEvents, True)
 
@@ -91,6 +90,7 @@ class FilesPage(QtWidgets.QWidget):
 
     def reload_gcodes_folder(self) -> None:
         """Request reload of the gcodes folder from root."""
+        logger.debug("Reloading gcodes folder")
         self.request_dir_info[str].emit("")
 
     def clear_files_data(self) -> None:
@@ -99,43 +99,50 @@ class FilesPage(QtWidgets.QWidget):
         self._pending_metadata_requests.clear()
         self._metadata_retry_count.clear()
 
-    def request_metadata(self, file_path: str) -> bool:
+    def retry_metadata_request(self, file_path: str) -> bool:
         """
         Request metadata with a maximum of 3 retries per file.
-
-        Used by error handlers to retry metadata requests that failed.
-
         Args:
             file_path: Path to the file
-
         Returns:
-            True if request was made (under retry limit), False if limit reached
+            True if request was made, False if max retries reached
         """
         clean_path = file_path.removeprefix("/")
 
+        if not clean_path.lower().endswith(self.GCODE_EXTENSION):
+            return False
+
         current_count = self._metadata_retry_count.get(clean_path, 0)
-        if current_count < 3:
-            self._metadata_retry_count[clean_path] = current_count + 1
+
+        if current_count > 3:
+            # Maximum 3 force scan per file
+            logger.debug(f"Metadata retry limit reached for: {clean_path}")
+            return False
+
+        self._metadata_retry_count[clean_path] = current_count + 1
+
+        if current_count == 0:
+            # First attempt: regular metadata request
             self.request_file_metadata.emit(clean_path)
-            return True
+            logger.debug(f"Metadata request 1/3 for: {clean_path}")
+        else:
+            # Second and third attempts: force scan
+            self.request_scan_metadata.emit(clean_path)
+            logger.debug(f"Metadata scan {current_count + 1}/3 for: {clean_path}")
 
-        logger.warning("Metadata retry limit reached for: %s", clean_path)
-        return False
-
-    def reset_metadata_retry(self, file_path: str) -> None:
-        """Reset the retry counter for a specific file."""
-        clean_path = file_path.removeprefix("/")
-        self._metadata_retry_count.pop(clean_path, None)
+        return True
 
     @QtCore.pyqtSlot(list, name="on_file_list")
     def on_file_list(self, file_list: list) -> None:
         """Handle receiving full files list."""
         self._file_list = file_list.copy() if file_list else []
+        logger.debug(f"Received file list with {len(self._file_list)} files")
 
     @QtCore.pyqtSlot(list, name="on_dirs")
     def on_directories(self, directories_data: list) -> None:
         """Handle receiving full directories list."""
         self._directories = directories_data.copy() if directories_data else []
+        logger.debug(f"Received {len(self._directories)} directories")
 
         if self.isVisible():
             self._build_file_list()
@@ -145,22 +152,21 @@ class FilesPage(QtWidgets.QWidget):
         """
         Handle receiving file metadata.
 
-        This is called both during initial load and when new files are added.
-        Creates/updates the file entry in the list.
-        Inserts files in sorted position (by modification time, newest first).
+        Updates existing file entry in the list with better info (time, filament).
         """
         if not filedata or not self.isVisible():
             return
 
         filename = filedata.get("filename", "")
-        if not filename:
+        if not filename or not filename.lower().endswith(self.GCODE_EXTENSION):
             return
 
         # Cache the file data
         self._files_data[filename] = filedata
 
-        # Remove from pending requests
+        # Remove from pending requests and reset retry count (success)
         self._pending_metadata_requests.discard(filename)
+        self._metadata_retry_count.pop(filename, None)
 
         # Check if this file should be displayed in current view
         file_dir = self._get_parent_directory(filename)
@@ -170,22 +176,61 @@ class FilesPage(QtWidgets.QWidget):
         if file_dir != current:
             return
 
-        # Check if item already exists in model
         display_name = self._get_display_name(filename)
-        if self._model_contains_item(display_name):
-            # Item exists, update it by removing and re-adding
-            self._model.remove_item_by_text(display_name)
-
-        # Create the list item
         item = self._create_file_list_item(filedata)
-        if item:
-            # Find correct position (sorted by modification time, newest first)
-            insert_position = self._find_file_insert_position(
-                filedata.get("modified", 0)
-            )
-            self._model.insert_item(insert_position, item)
-            self._setup_scrollbar()
-            self._hide_placeholder()
+        if not item:
+            return
+
+        self._model.remove_item_by_text(display_name)
+
+        # Find correct position (sorted by modification time, newest first)
+        insert_position = self._find_file_insert_position(filedata.get("modified", 0))
+        self._model.insert_item(insert_position, item)
+
+        logger.debug(f"Updated file in list: {display_name}")
+
+    @QtCore.pyqtSlot(str, name="on_metadata_error")
+    def on_metadata_error(self, filename: str) -> None:
+        """
+        Handle metadata request failure.
+
+        Triggers retry with scan_gcode_metadata if under retry limit.
+        Called when metadata request fails.
+        """
+        if not filename:
+            return
+
+        clean_filename = filename.removeprefix("/")
+
+        if clean_filename not in self._pending_metadata_requests:
+            return
+
+        # Try again (will use force scan to the max  of 3 times)
+        if not self.retry_metadata_request(clean_filename):
+            # Max retries reached, remove from pending
+            self._pending_metadata_requests.discard(clean_filename)
+            logger.debug(f"Giving up on metadata for: {clean_filename}")
+
+    @QtCore.pyqtSlot(str, list, name="on_usb_files_loaded")
+    def on_usb_files_loaded(self, usb_path: str, files: list) -> None:
+        """
+        Handle preloaded USB files.
+
+        Called when USB files are preloaded in background.
+        If we're currently viewing this USB, update the display.
+
+        Args:
+            usb_path: The USB mount path
+            files: List of file dicts from the USB
+        """
+        current = self._curr_dir.removeprefix("/")
+
+        # If we're currently in this USB folder, update the file list
+        if current == usb_path:
+            self._file_list = files.copy()
+            if self.isVisible():
+                self._build_file_list()
+            logger.debug(f"Updated view with preloaded USB files: {usb_path}")
 
     def _find_file_insert_position(self, modified_time: float) -> int:
         """
@@ -213,7 +258,6 @@ class FilesPage(QtWidgets.QWidget):
                 continue
 
             # This is a file - check its modification time
-            # Get the filename from display name
             file_key = self._find_file_key_by_display_name(item.text)
             if file_key:
                 file_data = self._files_data.get(file_key, {})
@@ -240,9 +284,10 @@ class FilesPage(QtWidgets.QWidget):
         Handle a single file being added.
 
         Called when Moonraker sends notify_filelist_changed with create_file action.
+        Adds file to list immediately, metadata updates later.
         """
         path = file_data.get("path", file_data.get("filename", ""))
-        if not path or not path.lower().endswith(self.GCODE_EXTENSION):
+        if not path:
             return
 
         # Normalize paths
@@ -252,17 +297,49 @@ class FilesPage(QtWidgets.QWidget):
 
         # Check if file belongs to current directory
         if file_dir != current:
+            logger.debug(
+                f"File '{path}' (dir: '{file_dir}') not in current directory ('{current}'), skipping"
+            )
             return
 
         # Only update UI if visible
         if not self.isVisible():
+            logger.debug("Widget not visible, will refresh on show")
             return
 
-        # Request metadata - the file will be added when on_fileinfo is called
-        if path not in self._pending_metadata_requests:
-            self._pending_metadata_requests.add(path)
-            self.request_file_info.emit(path)
-            self.request_file_metadata.emit(path)
+        display_name = self._get_display_name(path)
+
+        if not self._model_contains_item(display_name):
+            # Create basic item with unknown info
+            modified = file_data.get("modified", 0)
+
+            item = ListItem(
+                text=display_name,
+                right_text="Unknown Filament - Unknown time",
+                right_icon=self._icons.get("right_arrow"),
+                left_icon=None,
+                callback=None,
+                selected=False,
+                allow_check=False,
+                _lfontsize=self.LEFT_FONT_SIZE,
+                _rfontsize=self.RIGHT_FONT_SIZE,
+                height=self.ITEM_HEIGHT,
+                notificate=False,
+            )
+
+            # Find correct position
+            insert_position = self._find_file_insert_position(modified)
+            self._model.insert_item(insert_position, item)
+            self._setup_scrollbar()
+            self._hide_placeholder()
+            logger.debug(f"Added new file to list: {display_name}")
+
+        # Request metadata for gcode files using retry mechanism
+        if path.lower().endswith(self.GCODE_EXTENSION):
+            if path not in self._pending_metadata_requests:
+                self._pending_metadata_requests.add(path)
+                self.retry_metadata_request(path)
+                logger.debug(f"Requested metadata for new file: {path}")
 
     @QtCore.pyqtSlot(str, name="on_file_removed")
     def on_file_removed(self, filepath: str) -> None:
@@ -285,6 +362,9 @@ class FilesPage(QtWidgets.QWidget):
             return
 
         if file_dir != current:
+            logger.debug(
+                f"Deleted file '{filepath}' not in current directory ('{current}'), skipping UI update"
+            )
             return
 
         filename = self._get_basename(filepath)
@@ -296,6 +376,7 @@ class FilesPage(QtWidgets.QWidget):
         if removed:
             self._setup_scrollbar()
             self._check_empty_state()
+            logger.debug(f"File removed from view: {filepath}")
 
     @QtCore.pyqtSlot(dict, name="on_file_modified")
     def on_file_modified(self, file_data: dict) -> None:
@@ -328,16 +409,20 @@ class FilesPage(QtWidgets.QWidget):
         if not dirname or dirname.startswith("."):
             return
 
-        # Determine parent directory
         path = path.removeprefix("/")
         parent_dir = self._get_parent_directory(path) if path else ""
         current = self._curr_dir.removeprefix("/")
 
         if parent_dir != current:
+            logger.debug(
+                f"Directory '{dirname}' (parent: '{parent_dir}') not in current directory ('{current}'), skipping"
+            )
             return
 
-        # Skip UI update if not visible
         if not self.isVisible():
+            logger.debug(
+                f"Widget not visible, skipping UI update for added dir: {dirname}"
+            )
             return
 
         # Check if already exists
@@ -373,6 +458,9 @@ class FilesPage(QtWidgets.QWidget):
 
         self._setup_scrollbar()
         self._hide_placeholder()
+        logger.debug(
+            f"Directory added to view at position {insert_position}: {dirname}"
+        )
 
     def _find_directory_insert_position(self, new_dirname: str) -> int:
         """
@@ -432,23 +520,28 @@ class FilesPage(QtWidgets.QWidget):
             else dirname_or_path
         )
 
-        if not dirname or not self.isVisible():
+        if not dirname:
             return
 
         # Check if user is currently inside the removed directory (e.g., USB removed)
         current = self._curr_dir.removeprefix("/")
         if current == dirname or current.startswith(dirname + "/"):
             logger.warning(
-                "Current directory '%s' was removed, returning to root", current
+                f"Current directory '{current}' was removed, returning to root"
             )
             self.on_directory_error()
-            self.back_btn.click()
             return
+
+        # Skip UI update if not visible
+        if not self.isVisible():
+            return
+
         removed = self._model.remove_item_by_text(dirname)
 
         if removed:
             self._setup_scrollbar()
             self._check_empty_state()
+            logger.debug(f"Directory removed from view: {dirname}")
 
     @QtCore.pyqtSlot(name="on_full_refresh_needed")
     def on_full_refresh_needed(self) -> None:
@@ -469,7 +562,7 @@ class FilesPage(QtWidgets.QWidget):
         Immediately navigates back to root gcodes folder.
         Call this from MainWindow when detecting USB removal or directory errors.
         """
-        logger.error("Directory Error - returning to root directory")
+        logger.info("Directory Error - returning to root directory")
 
         # Reset to root directory
         self._curr_dir = ""
@@ -523,6 +616,7 @@ class FilesPage(QtWidgets.QWidget):
         self._entry_delegate.clear()
         self._pending_action = False
         self._pending_metadata_requests.clear()
+        self._metadata_retry_count.clear()
 
         # Determine if we're in root directory
         is_root = not self._curr_dir or self._curr_dir == "/"
@@ -549,12 +643,62 @@ class FilesPage(QtWidgets.QWidget):
             if dirname and not dirname.startswith("."):
                 self._add_directory_list_item(dir_data)
 
-        # Add files (sorted by modification time, newest first)
+        # Add files immediately (sorted by modification time, newest first)
         sorted_files = sorted(
             self._file_list, key=lambda x: x.get("modified", 0), reverse=True
         )
         for file_item in sorted_files:
-            self._request_file_info(file_item)
+            filename = file_item.get("filename", file_item.get("path", ""))
+            if not filename:
+                continue
+
+            # Add file to list immediately with basic info
+            self._add_file_to_list(file_item)
+
+            # Request metadata for gcode files (will update display later)
+            if filename.lower().endswith(self.GCODE_EXTENSION):
+                self._request_file_info(file_item)
+
+        self._setup_scrollbar()
+        self._list_widget.blockSignals(False)
+        self._list_widget.update()
+
+    def _add_file_to_list(self, file_item: dict) -> None:
+        """Add a file entry to the list with basic info."""
+        filename = file_item.get("filename", file_item.get("path", ""))
+        if not filename or not filename.lower().endswith(self.GCODE_EXTENSION):
+            return
+
+        # Get display name
+        display_name = self._get_display_name(filename)
+
+        # Check if already in list
+        if self._model_contains_item(display_name):
+            return
+
+        # Use cached metadata if available, otherwise show unknown
+        full_path = self._build_filepath(filename)
+        cached = self._files_data.get(full_path)
+
+        if cached:
+            item = self._create_file_list_item(cached)
+        else:
+            item = ListItem(
+                text=display_name,
+                right_text="Unknown Filament - Unknown time",
+                right_icon=self._icons.get("right_arrow"),
+                left_icon=None,
+                callback=None,
+                selected=False,
+                allow_check=False,
+                _lfontsize=self.LEFT_FONT_SIZE,
+                _rfontsize=self.RIGHT_FONT_SIZE,
+                height=self.ITEM_HEIGHT,
+                notificate=False,
+            )
+
+        if item:
+            self._model.add_item(item)
 
         self._setup_scrollbar()
         self._list_widget.blockSignals(False)
@@ -573,10 +717,26 @@ class FilesPage(QtWidgets.QWidget):
 
         # Get filament type
         filament_type = filedata.get("filament_type")
-        if not filament_type or filament_type == -1.0 or filament_type == "Unknown":
-            filament_type = "Unknown filament"
+        if isinstance(filament_type, str):
+            text = filament_type.strip()
+            if text.startswith("[") and text.endswith("]"):
+                try:
+                    types = json.loads(text)
+                except json.JSONDecodeError:
+                    types = [text]
+            else:
+                types = [text]
+        else:
+            types = filament_type or []
 
-        # Get display name (without path and .gcode extension)
+        if not isinstance(types, list):
+            types = [types]
+
+        filament_type = ",".join(dict.fromkeys(types))
+
+        if not filament_type or filament_type == -1.0 or filament_type == "Unknown":
+            filament_type = "Unknown Filament"
+
         display_name = self._get_display_name(filename)
 
         return ListItem(
@@ -636,7 +796,7 @@ class FilesPage(QtWidgets.QWidget):
         self._model.add_item(item)
 
     def _request_file_info(self, file_data_item: dict) -> None:
-        """Request metadata for a file item."""
+        """Request metadata for a file item using retry mechanism."""
         if not file_data_item:
             return
 
@@ -650,8 +810,8 @@ class FilesPage(QtWidgets.QWidget):
         # Track pending request
         self._pending_metadata_requests.add(file_path)
 
-        self.request_file_info.emit(file_path)
-        self.request_file_metadata.emit(file_path)
+        # Use retry mechanism (first attempt uses get_gcode_metadata)
+        self.retry_metadata_request(file_path)
 
     def _on_file_item_clicked(self, filename: str) -> None:
         """Handle file item click."""
@@ -766,9 +926,9 @@ class FilesPage(QtWidgets.QWidget):
     def _format_print_time(seconds: int) -> str:
         """Format print time in human-readable form."""
         if seconds <= 0:
-            return "??"
+            return "Unknown time"
         if seconds < 60:
-            return "less than 1 minute"
+            return f"{seconds}m"
 
         days, hours, minutes, _ = helper_methods.estimate_print_time(seconds)
 

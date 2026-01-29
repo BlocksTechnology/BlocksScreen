@@ -46,11 +46,9 @@ class FileAction(Enum):
 @dataclass
 class FileMetadata:
     """
-    `Data class for file metadata.`
+    Data class for file metadata.
 
-    All data comes from Moonraker API - no local filesystem access.
-    Thumbnails are stored as ThumbnailInfo objects with paths that can
-    be fetched via Moonraker's /server/files/gcodes/<path> endpoint.
+    Thumbnails are stored as QImage objects when available.
     """
 
     filename: str = ""
@@ -155,40 +153,33 @@ class FileMetadata:
 
 class Files(QtCore.QObject):
     """
-    `Manages gcode files with event-driven updates.`
-
-    Architecture:
-    1. On WebSocket connection: requests full file list once via initial_load()
-    2. On notify_filelist_changed: updates internal state incrementally
-    3. Emits signals for UI components to react to changes
-
-    Signals emitted:
-    - on_dirs: Full directory list (for initial load)
-    - on_file_list: Full file list (for initial load)
-    - fileinfo: Single file metadata (when metadata is received)
-    - file_added: Single file was added
-    - file_removed: Single file was removed
-    - file_modified: Single file was modified
-    - dir_added: Single directory was added
-    - dir_removed: Single directory was removed
-    - full_refresh_needed: Root changed, need complete refresh
+        Manages gcode files with event-driven updates.
+    E
+        Signals emitted:
+        - on_dirs: Full directory list
+        - on_file_list: Full file list
+        - fileinfo: Single file metadata update
+        - file_added/removed/modified: Incremental updates
+        - dir_added/removed: Directory updates
+        - full_refresh_needed: Root changed
     """
 
-    # Signals for API requests (to Moonraker)
+    # Signals for API requests
     request_file_list = QtCore.pyqtSignal([], [str], name="api_get_files_list")
     request_dir_info = QtCore.pyqtSignal(
         [], [str], [str, bool], name="api_get_dir_info"
     )
     request_file_metadata = QtCore.pyqtSignal(str, name="get_file_metadata")
-    request_thumbnail = QtCore.pyqtSignal(str, name="request_thumbnail")
-    request_file_download = QtCore.pyqtSignal(str, str, name="file_download")
 
-    # Signals for UI updates (full refresh)
+    # Signals for UI updates
     on_dirs = QtCore.pyqtSignal(list, name="on_dirs")
     on_file_list = QtCore.pyqtSignal(list, name="on_file_list")
     fileinfo = QtCore.pyqtSignal(dict, name="fileinfo")
+    metadata_error = QtCore.pyqtSignal(
+        str, name="metadata_error"
+    )  # filename when metadata fails
 
-    # Signals for incremental updates (event-driven)
+    # Signals for incremental updates
     file_added = QtCore.pyqtSignal(dict, name="file_added")
     file_removed = QtCore.pyqtSignal(str, name="file_removed")
     file_modified = QtCore.pyqtSignal(dict, name="file_modified")
@@ -196,7 +187,10 @@ class Files(QtCore.QObject):
     dir_removed = QtCore.pyqtSignal(str, name="dir_removed")
     full_refresh_needed = QtCore.pyqtSignal(name="full_refresh_needed")
 
-    # Constants
+    # Signal for preloaded USB files
+    usb_files_loaded = QtCore.pyqtSignal(
+        str, list, name="usb_files_loaded"
+    )  # (usb_path, files)
     GCODE_EXTENSION = ".gcode"
     GCODE_PATH = "~/printer_data/gcodes"
 
@@ -204,17 +198,22 @@ class Files(QtCore.QObject):
         super().__init__(parent)
         self.ws = ws
 
-        # Internal state - use instance variables, not class variables!
-        self._files: dict[str, dict] = {}  # filename -> file data
-        self._directories: dict[str, dict] = {}  # dirname -> dir data
-        self._files_metadata: dict[str, FileMetadata] = {}  # filename -> metadata
+        # Internal state
+        self._files: dict[str, dict] = {}
+        self._directories: dict[str, dict] = {}
+        self._files_metadata: dict[str, FileMetadata] = {}
         self._current_directory: str = ""
         self._initial_load_complete: bool = False
-
-        self.gcode_path = os.path.expanduser("~/printer_data/gcodes")
+        self.gcode_path = os.path.expanduser(self.GCODE_PATH)
+        # USB preloaded files cache: usb_path -> list of files
+        self._usb_files_cache: dict[str, list[dict]] = {}
+        # Track pending USB preload requests
+        self._pending_usb_preloads: set[str] = set()
+        # Track the last USB preload request for response matching
+        self._last_usb_preload_request: str = ""
 
         self._connect_signals()
-        QtWidgets.QApplication.instance().installEventFilter(self)  # type: ignore
+        self._install_event_filter()
 
     def _connect_signals(self) -> None:
         """Connect internal signals to websocket API."""
@@ -224,8 +223,12 @@ class Files(QtCore.QObject):
         self.request_dir_info[str, bool].connect(self.ws.api.get_dir_information)
         self.request_dir_info[str].connect(self.ws.api.get_dir_information)
         self.request_file_metadata.connect(self.ws.api.get_gcode_metadata)
-        self.request_thumbnail.connect(self.ws.api.get_gcode_thumbnail)
-        self.request_file_download.connect(self.ws.api.download_file)
+
+    def _install_event_filter(self) -> None:
+        """Install event filter on application instance."""
+        app = QtWidgets.QApplication.instance()
+        if app:
+            app.installEventFilter(self)
 
     @property
     def file_list(self) -> list[dict]:
@@ -254,7 +257,7 @@ class Files(QtCore.QObject):
 
     def get_file_metadata(self, filename: str) -> typing.Optional[FileMetadata]:
         """Get cached metadata for a file."""
-        return self._files_metadata.get(filename)
+        return self._files_metadata.get(filename.removeprefix("/"))
 
     def get_file_data(self, filename: str) -> dict:
         """Get cached file data dict for a file."""
@@ -265,47 +268,29 @@ class Files(QtCore.QObject):
         return {}
 
     def refresh_directory(self, directory: str = "") -> None:
-        """
-        Force refresh of a specific directory.
-        Use sparingly - prefer event-driven updates.
-        """
+        """Force refresh of a specific directory."""
+        logger.debug(f"Refreshing directory: {directory or 'root'}")
         self._current_directory = directory
         self.request_dir_info[str, bool].emit(directory, True)
 
     def initial_load(self) -> None:
-        """Perform initial load of file list. Call once on connection."""
+        """Perform initial load of file list."""
         logger.info("Performing initial file list load")
         self._initial_load_complete = False
         self.request_dir_info[str, bool].emit("", True)
 
     def handle_filelist_changed(self, data: typing.Union[dict, list]) -> None:
-        """
-        Handle notify_filelist_changed from Moonraker.
-
-        This is the main entry point for event-driven updates.
-        Called from your websocket message handler when receiving
-        'notify_filelist_changed' notifications.
-
-        Args:
-            data: The notification data from Moonraker (various formats supported).
-        """
-        # Handle nested "params" key (full JSON-RPC envelope)
+        """Handle notify_filelist_changed from Moonraker."""
         if isinstance(data, dict) and "params" in data:
             data = data.get("params", [])
 
-        # Handle list format
         if isinstance(data, list):
             if len(data) > 0:
                 data = data[0]
             else:
-                logger.warning("Received empty list in filelist_changed")
                 return
 
-        # Validate we have a dict
         if not isinstance(data, dict):
-            logger.warning(
-                "Unexpected data type in filelist_changed: %s", type(data).__name__
-            )
             return
 
         action_str = data.get("action", "")
@@ -313,7 +298,7 @@ class Files(QtCore.QObject):
         item = data.get("item", {})
         source_item = data.get("source_item", {})
 
-        logger.debug("File list changed: action=%s, item=%s", action_str, item)
+        logger.debug(f"File list changed: action={action_str}, item={item}")
 
         handlers = {
             FileAction.CREATE_FILE: self._handle_file_created,
@@ -329,8 +314,6 @@ class Files(QtCore.QObject):
         handler = handlers.get(action)
         if handler:
             handler(item, source_item)
-        else:
-            logger.warning("Unknown file action: %s", action_str)
 
     def _handle_file_created(self, item: dict, _: dict) -> None:
         """Handle new file creation."""
@@ -338,26 +321,20 @@ class Files(QtCore.QObject):
         if not path:
             return
 
-        # Check if this is actually a USB mount (Moonraker reports USB as files)
-        # USB mounts: path like "USB-sda1" with no extension, at root level
         if self._is_usb_mount(path):
-            # Treat as directory instead
             item["dirname"] = path
             self._handle_dir_created(item, {})
             return
 
-        # Only process gcode files
         if not path.lower().endswith(self.GCODE_EXTENSION):
             return
 
-        # Add to internal state
         self._files[path] = item
-
-        # Emit signal for UI and request metadata
         self.file_added.emit(item)
-        self.request_file_metadata.emit(path.removeprefix("/"))
 
-        logger.info("File created: %s", path)
+        # Request metadata (will update later)
+        self.request_file_metadata.emit(path.removeprefix("/"))
+        logger.info(f"File created: {path}")
 
     def _handle_file_deleted(self, item: dict, _: dict) -> None:
         """Handle file deletion."""
@@ -365,19 +342,16 @@ class Files(QtCore.QObject):
         if not path:
             return
 
-        # Check if this is actually a USB mount being removed
         if self._is_usb_mount(path):
             item["dirname"] = path
             self._handle_dir_deleted(item, {})
             return
 
-        # Remove from internal state
         self._files.pop(path, None)
         self._files_metadata.pop(path.removeprefix("/"), None)
 
-        # Emit signal for UI
         self.file_removed.emit(path)
-        logger.info("File deleted: %s", path)
+        logger.info(f"File deleted: {path}")
 
     def _handle_file_modified(self, item: dict, _: dict) -> None:
         """Handle file modification."""
@@ -385,72 +359,63 @@ class Files(QtCore.QObject):
         if not path or not path.lower().endswith(self.GCODE_EXTENSION):
             return
 
-        # Update internal state
         self._files[path] = item
-
-        # Clear cached metadata and request fresh
         self._files_metadata.pop(path.removeprefix("/"), None)
 
-        # Emit signal and request new metadata
         self.request_file_metadata.emit(path.removeprefix("/"))
         self.file_modified.emit(item)
-        logger.info("File modified: %s", path)
+        logger.info(f"File modified: {path}")
 
     def _handle_file_moved(self, item: dict, source_item: dict) -> None:
         """Handle file move/rename."""
         old_path = source_item.get("path", "")
         new_path = item.get("path", "")
 
-        # Remove from old location
         if old_path:
             self._handle_file_deleted(source_item, {})
-
-        # Add to new location
         if new_path:
             self._handle_file_created(item, {})
-
-        logger.info("File moved: %s -> %s", old_path, new_path)
 
     def _handle_dir_created(self, item: dict, _: dict) -> None:
         """Handle directory creation."""
         path = item.get("path", "")
         dirname = item.get("dirname", "")
 
-        # Extract dirname from path if not provided
         if not dirname and path:
             dirname = path.rstrip("/").split("/")[-1]
 
         if not dirname or dirname.startswith("."):
             return
 
-        # Ensure dirname is in item for UI
         item["dirname"] = dirname
-
-        # Add to internal state
         self._directories[dirname] = item
-
-        # Emit signal for UI
         self.dir_added.emit(item)
-        logger.info("Directory created: %s", dirname)
+        logger.info(f"Directory created: {dirname}")
+
+        if self._is_usb_mount(dirname):
+            self._preload_usb_contents(dirname)
 
     def _handle_dir_deleted(self, item: dict, _: dict) -> None:
         """Handle directory deletion."""
         path = item.get("path", "")
         dirname = item.get("dirname", "")
 
-        # Extract dirname from path if not provided
         if not dirname and path:
             dirname = path.rstrip("/").split("/")[-1]
 
         if not dirname:
             return
 
-        # Remove from internal state
         self._directories.pop(dirname, None)
 
-        # Emit signal for UI
+        # Clear USB cache if this was a USB mount
+        if self._is_usb_mount(dirname):
+            self._usb_files_cache.pop(dirname, None)
+            self._pending_usb_preloads.discard(dirname)
+            logger.info(f"Cleared USB cache for: {dirname}")
+
         self.dir_removed.emit(dirname)
-        logger.info("Directory deleted: %s", dirname)
+        logger.info(f"Directory deleted: {dirname}")
 
     def _handle_dir_moved(self, item: dict, source_item: dict) -> None:
         """Handle directory move/rename."""
@@ -458,27 +423,15 @@ class Files(QtCore.QObject):
         self._handle_dir_created(item, {})
 
     def _handle_root_update(self, _: dict, __: dict) -> None:
-        """Handle root update - requires full refresh."""
+        """Handle root update."""
         logger.info("Root update detected, requesting full refresh")
         self.full_refresh_needed.emit()
         self.initial_load()
 
     @staticmethod
     def _is_usb_mount(path: str) -> bool:
-        """
-        Check if a path is a USB mount point.
-
-        Moonraker incorrectly reports USB mounts as files with create_file/delete_file.
-        USB mounts have paths like "USB-sda1" - starting with "USB-" and at root level.
-
-        Args:
-            path: The file path to check
-
-        Returns:
-            True if this appears to be a USB mount point
-        """
+        """Check if a path is a USB mount point."""
         path = path.removeprefix("/")
-        # USB mounts are at root level (no slashes) and start with "USB-"
         return "/" not in path and path.startswith("USB-")
 
     def handle_message_received(
@@ -500,20 +453,21 @@ class Files(QtCore.QObject):
             path = item.get("path", item.get("filename", ""))
             if path:
                 self._files[path] = item
-                # Request metadata for each file
-                self.request_file_metadata.emit(path.removeprefix("/"))
 
         self._initial_load_complete = True
         self.on_file_list.emit(self.file_list)
-        logger.info("Loaded %d files", len(self._files))
+        logger.info(f"Loaded {len(self._files)} files")
+        # Request metadata only for gcode files (async update)
+        for path in self._files:
+            if path.lower().endswith(self.GCODE_EXTENSION):
+                self.request_file_metadata.emit(path.removeprefix("/"))
 
     def _process_metadata(self, data: dict) -> None:
-        """Process file metadata response from Moonraker."""
+        """Process file metadata response."""
         filename = data.get("filename")
         if not filename:
             return
 
-        # Create metadata from Moonraker response (no local filesystem access)
         thumbnails = data.get("thumbnails", [])
         base_dir = os.path.dirname(os.path.join(self.gcode_path, filename))
         thumbnail_paths = [
@@ -531,41 +485,149 @@ class Files(QtCore.QObject):
 
         metadata = FileMetadata.from_dict(data, thumbnail_images)
         self._files_metadata[filename] = metadata
+
+        # Emit updated fileinfo
         self.fileinfo.emit(metadata.to_dict())
+        logger.debug(f"Metadata loaded for: {filename}")
+
+    def handle_metadata_error(self, error_data: typing.Union[str, dict]) -> None:
+        """
+        Handle metadata request error from Moonraker.
+
+        Parses the filename from the error message and emits metadata_error signal.
+        Called directly from MainWindow error handler.
+
+        Args:
+            error_data: The error message string or dict from Moonraker
+        """
+        if not error_data:
+            return
+
+        if isinstance(error_data, dict):
+            text = error_data.get("message", str(error_data))
+        else:
+            text = str(error_data)
+
+        if "metadata" not in text.lower():
+            return
+
+        # Parse filename from error message (format: <filename>)
+        start = text.find("<") + 1
+        end = text.find(">", start)
+
+        if start > 0 and end > start:
+            filename = text[start:end]
+            clean_filename = filename.removeprefix("/")
+            self.metadata_error.emit(clean_filename)
+            logger.debug(f"Metadata error for: {clean_filename}")
+
+    def _preload_usb_contents(self, usb_path: str) -> None:
+        """
+        Preload USB contents when USB is inserted.
+
+        Requests directory info for the USB mount so files are ready
+        when user navigates to it.
+
+        Args:
+            usb_path: The USB mount path (e.g., "USB-sda1")
+        """
+        logger.info(f"Preloading USB contents: {usb_path}")
+        self._pending_usb_preloads.add(usb_path)
+        # Store which USB we're preloading (for response matching)
+        self._last_usb_preload_request = usb_path
+        self.ws.api.get_dir_information(usb_path, True)
+
+    def get_cached_usb_files(self, usb_path: str) -> typing.Optional[list[dict]]:
+        """
+        Get cached files for a USB path if available.
+
+        Args:
+            usb_path: The USB mount path
+
+        Returns:
+            List of file dicts if cached, None otherwise
+        """
+        return self._usb_files_cache.get(usb_path.removeprefix("/"))
+
+    def _process_usb_directory_info(self, usb_path: str, data: dict) -> None:
+        """
+        Process preloaded USB directory info.
+
+        Caches the files and requests metadata for gcode files.
+
+        Args:
+            usb_path: The USB mount path
+            data: Directory info response from Moonraker
+        """
+        files = []
+        for file_data in data.get("files", []):
+            filename = file_data.get("filename", file_data.get("path", ""))
+            if filename:
+                files.append(file_data)
+
+                full_path = f"{usb_path}/{filename}"
+                if filename.lower().endswith(self.GCODE_EXTENSION):
+                    self.request_file_metadata.emit(full_path)
+
+        # Cache the files
+        self._usb_files_cache[usb_path] = files
+        self.usb_files_loaded.emit(usb_path, files)
+        logger.info(f"Preloaded {len(files)} files from USB: {usb_path}")
 
     def _process_directory_info(self, data: dict) -> None:
         """Process directory info response."""
+        # Check if this is a USB preload response
+        matched_usb = None
+
+        if self._pending_usb_preloads:
+            # Check if this response matches last USB preload request
+            if self._last_usb_preload_request in self._pending_usb_preloads:
+                matched_usb = self._last_usb_preload_request
+                self._last_usb_preload_request = ""
+            else:
+                # Fallback: check root_info for USB marker
+                root_info = data.get("root_info", {})
+                root_name = root_info.get("name", "")
+                for usb_path in list(self._pending_usb_preloads):
+                    if root_name.startswith("USB-") or usb_path in root_name:
+                        matched_usb = usb_path
+                        break
+
+        if matched_usb:
+            self._pending_usb_preloads.discard(matched_usb)
+            self._process_usb_directory_info(matched_usb, data)
+            return
+
         self._directories.clear()
         self._files.clear()
 
-        # Process directories
         for dir_data in data.get("dirs", []):
             dirname = dir_data.get("dirname", "")
             if dirname and not dirname.startswith("."):
                 self._directories[dirname] = dir_data
 
-        # Process files
         for file_data in data.get("files", []):
             filename = file_data.get("filename", file_data.get("path", ""))
             if filename:
                 self._files[filename] = file_data
 
-        # Emit signals for UI
         self.on_file_list.emit(self.file_list)
         self.on_dirs.emit(self.directories)
         self._initial_load_complete = True
 
         logger.info(
-            "Directory loaded: %d dirs, %d files",
-            len(self._directories),
-            len(self._files),
+            f"Directory loaded: {len(self._directories)} dirs, {len(self._files)} files"
         )
+
+        # Request metadata only for gcode files (async update)
+        for filename in self._files:
+            if filename.lower().endswith(self.GCODE_EXTENSION):
+                self.request_file_metadata.emit(filename.removeprefix("/"))
 
     @QtCore.pyqtSlot(str, str, name="on_request_delete_file")
     def on_request_delete_file(self, filename: str, directory: str = "gcodes") -> None:
         """Request deletion of a file."""
         if not filename:
-            logger.warning("Attempted to delete file with empty filename")
             return
 
         if directory:
@@ -573,7 +635,7 @@ class Files(QtCore.QObject):
         else:
             self.ws.api.delete_file(filename)
 
-        logger.info("Requested deletion of: %s", filename)
+        logger.info(f"Requested deletion of: {filename}")
 
     @QtCore.pyqtSlot(str, name="on_request_fileinfo")
     def on_request_fileinfo(self, filename: str) -> None:
@@ -592,11 +654,10 @@ class Files(QtCore.QObject):
     def get_dir_information(
         self, directory: str = "", extended: bool = True
     ) -> typing.Optional[list]:
-        """Get directory information - from cache or request from Moonraker."""
+        """Get directory information."""
         self._current_directory = directory
 
         if not extended and self._initial_load_complete:
-            # Return cached data if available and extended info not needed
             return self.directories
 
         return self.ws.api.get_dir_information(directory, extended)
@@ -626,5 +687,8 @@ class Files(QtCore.QObject):
         self._files.clear()
         self._directories.clear()
         self._files_metadata.clear()
+        self._usb_files_cache.clear()
+        self._pending_usb_preloads.clear()
+        self._last_usb_preload_request = ""
         self._initial_load_complete = False
         logger.info("All file data cleared")

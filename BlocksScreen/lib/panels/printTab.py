@@ -127,6 +127,10 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.filesPage_widget.request_dir_info[str].connect(
             self.file_data.request_dir_info[str]
         )
+        self.filesPage_widget.request_scan_metadata.connect(
+            self.ws.api.scan_gcode_metadata
+        )
+        self.file_data.metadata_error.connect(self.filesPage_widget.on_metadata_error)
         self.filesPage_widget.request_dir_info.connect(self.file_data.request_dir_info)
         self.file_data.on_file_list.connect(self.filesPage_widget.on_file_list)
         self.file_data.file_added.connect(self.filesPage_widget.on_file_added)
@@ -136,6 +140,9 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.file_data.dir_removed.connect(self.filesPage_widget.on_dir_removed)
         self.file_data.full_refresh_needed.connect(
             self.filesPage_widget.on_full_refresh_needed
+        )
+        self.file_data.usb_files_loaded.connect(
+            self.filesPage_widget.on_usb_files_loaded
         )
         self.jobStatusPage_widget = JobStatusWidget(self)
         self.addWidget(self.jobStatusPage_widget)
