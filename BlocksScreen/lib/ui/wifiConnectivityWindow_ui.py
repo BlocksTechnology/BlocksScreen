@@ -300,14 +300,83 @@ class Ui_wifi_stacked_page(object):
         self.nl_back_button.setObjectName("nl_back_button")
         self.nl_header_layout.addWidget(self.nl_back_button)
         self.verticalLayout_9.addLayout(self.nl_header_layout)
-        self.nl_content_layout = QtWidgets.QVBoxLayout()
-        self.nl_content_layout.setObjectName("nl_content_layout")
-        self.verticalLayout_9.addLayout(self.nl_content_layout)
+        self.horizontalLayout_2 = QtWidgets.QHBoxLayout()
+        self.horizontalLayout_2.setObjectName("horizontalLayout_2")
+        self.listView = QtWidgets.QListView(self.network_list_page)
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.MinimumExpanding, QtWidgets.QSizePolicy.Policy.MinimumExpanding)
+        sizePolicy.setHorizontalStretch(1)
+        sizePolicy.setVerticalStretch(1)
+        sizePolicy.setHeightForWidth(self.listView.sizePolicy().hasHeightForWidth())
+        self.listView.setSizePolicy(sizePolicy)
+        self.listView.setMinimumSize(QtCore.QSize(0, 0))
+        self.listView.setStyleSheet("background-color: rgba(255, 255, 255, 0);")
+        self.listView.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
+        self.listView.setFrameShadow(QtWidgets.QFrame.Shadow.Plain)
+        self.listView.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.listView.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.listView.setSelectionBehavior(
+            QtWidgets.QAbstractItemView.SelectionBehavior.SelectItems
+        )
+        self.listView.setHorizontalScrollBarPolicy(  # No horizontal scroll
+            QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
+        self.listView.setVerticalScrollMode(
+            QtWidgets.QAbstractItemView.ScrollMode.ScrollPerPixel
+        )
+        self.listView.setVerticalScrollBarPolicy(
+            QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
+        QtWidgets.QScroller.grabGesture(
+            self.listView,
+            QtWidgets.QScroller.ScrollerGestureType.TouchGesture,
+        )
+        QtWidgets.QScroller.grabGesture(
+            self.listView,
+            QtWidgets.QScroller.ScrollerGestureType.LeftMouseButtonGesture,
+        )
+        self.listView.setEditTriggers(
+            QtWidgets.QAbstractItemView.EditTrigger.NoEditTriggers
+        )
+
+        scroller_instance = QtWidgets.QScroller.scroller(self.listView)
+        scroller_props = scroller_instance.scrollerProperties()
+        scroller_props.setScrollMetric(
+            QtWidgets.QScrollerProperties.ScrollMetric.DragVelocitySmoothingFactor,
+            0.05,  # Lower = more responsive
+        )
+        scroller_props.setScrollMetric(
+            QtWidgets.QScrollerProperties.ScrollMetric.DecelerationFactor,
+            0.4,  # higher = less inertia
+        )
+        QtWidgets.QScroller.scroller(self.listView).setScrollerProperties(
+            scroller_props
+        )
+        self.verticalScrollBar = CustomScrollBar(parent=self.network_list_page)
+        self.listView.setVerticalScrollBar(self.verticalScrollBar)
+        self.listView.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.horizontalLayout_2.addWidget(self.listView)
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Fixed, QtWidgets.QSizePolicy.Policy.Minimum)
+        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setVerticalStretch(0)
+        sizePolicy.setHeightForWidth(self.verticalScrollBar.sizePolicy().hasHeightForWidth())
+        self.verticalScrollBar.setSizePolicy(sizePolicy)
+        self.verticalScrollBar.setOrientation(QtCore.Qt.Orientation.Vertical)
+        self.verticalScrollBar.setObjectName("verticalScrollBar")
+        self.listView.setVerticalScrollMode(QtWidgets.QAbstractItemView.ScrollMode.ScrollPerPixel)
+        self.listView.setUniformItemSizes(True)
+        #self.listView.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.listView.setSpacing(5)
+        self.horizontalLayout_2.addWidget(self.verticalScrollBar)
+        self.verticalLayout_9.addLayout(self.horizontalLayout_2)
         wifi_stacked_page.addWidget(self.network_list_page)
         self.add_network_page = QtWidgets.QWidget()
         self.add_network_page.setObjectName("add_network_page")
         self.verticalLayout_10 = QtWidgets.QVBoxLayout(self.add_network_page)
         self.verticalLayout_10.setObjectName("verticalLayout_10")
+        self.verticalScrollBar.setAttribute(
+            QtCore.Qt.WidgetAttribute.WA_TransparentForMouseEvents, True
+        )
+        self.scroller = QtWidgets.QScroller.scroller(self.listView)
         self.add_np_header_layout = QtWidgets.QHBoxLayout()
         self.add_np_header_layout.setObjectName("add_np_header_layout")
         spacerItem1 = QtWidgets.QSpacerItem(40, 60, QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Minimum)
@@ -1144,38 +1213,38 @@ class Ui_wifi_stacked_page(object):
         wifi_stacked_page.addWidget(self.hotspot_page)
 
         self.retranslateUi(wifi_stacked_page)
-        wifi_stacked_page.setCurrentIndex(4)
+        wifi_stacked_page.setCurrentIndex(2)
         QtCore.QMetaObject.connectSlotsByName(wifi_stacked_page)
 
     def retranslateUi(self, wifi_stacked_page):
         _translate = QtCore.QCoreApplication.translate
         wifi_stacked_page.setWindowTitle(_translate("wifi_stacked_page", "StackedWidget"))
-        self.network_main_title.setText(_translate("wifi_stacked_page", "Networks"))
-        self.netlist_strength_label.setText(_translate("wifi_stacked_page", "Signal\n"
-"Strength"))
-        self.netlist_strength.setText(_translate("wifi_stacked_page", "TextLabel"))
-        self.netlist_security_label.setText(_translate("wifi_stacked_page", "Security\n"
-"Type"))
-        self.netlist_security.setText(_translate("wifi_stacked_page", "TextLabel"))
-        self.mn_info_box.setText(_translate("wifi_stacked_page", "No network connection.\n"
+        self.network_main_title.setText("Networks")
+        self.netlist_strength_label.setText( "Signal\n"
+"Strength")
+        self.netlist_strength.setText( "TextLabel")
+        self.netlist_security_label.setText( "Security\n"
+"Type")
+        self.netlist_security.setText("TextLabel")
+        self.mn_info_box.setText( "No network connection.\n"
 "\n"
 "Try connecting to Wi-Fi \n"
 "or turn on the hotspot\n"
-"using the buttons on the side."))
-        self.wifi_button.setText(_translate("wifi_stacked_page", "Wi-Fi"))
-        self.hotspot_button.setText(_translate("wifi_stacked_page", "Hotspot"))
-        self.rescan_button.setText(_translate("wifi_stacked_page", "Reload"))
+"using the buttons on the side.")
+        self.wifi_button.setText( "Wi-Fi")
+        self.hotspot_button.setText( "Hotspot")
+        self.rescan_button.setText( "Reload")
         self.rescan_button.setProperty("button_type", _translate("wifi_stacked_page", "icon"))
-        self.network_list_title.setText(_translate("wifi_stacked_page", "Wi-Fi List"))
-        self.nl_back_button.setText(_translate("wifi_stacked_page", "Back"))
+        self.network_list_title.setText("Wi-Fi List")
+        self.nl_back_button.setText("Back")
         self.nl_back_button.setProperty("class", _translate("wifi_stacked_page", "back_btn"))
         self.nl_back_button.setProperty("button_type", _translate("wifi_stacked_page", "icon"))
-        self.add_network_network_label.setText(_translate("wifi_stacked_page", "TextLabel"))
-        self.add_network_page_backButton.setText(_translate("wifi_stacked_page", "Back"))
+        self.add_network_network_label.setText("TextLabel")
+        self.add_network_page_backButton.setText("Back")
         self.add_network_page_backButton.setProperty("class", _translate("wifi_stacked_page", "back_btn"))
         self.add_network_page_backButton.setProperty("button_type", _translate("wifi_stacked_page", "icon"))
-        self.add_network_password_label.setText(_translate("wifi_stacked_page", "Password"))
-        self.add_network_password_view.setText(_translate("wifi_stacked_page", "View"))
+        self.add_network_password_label.setText("Password")
+        self.add_network_password_view.setText("View")
         self.add_network_password_view.setProperty("class", _translate("wifi_stacked_page", "back_btn"))
         self.add_network_password_view.setProperty("button_type", _translate("wifi_stacked_page", "icon"))
         self.add_network_validation_button.setText(_translate("wifi_stacked_page", "Activate"))
@@ -1216,13 +1285,14 @@ class Ui_wifi_stacked_page(object):
         self.hotspot_back_button.setText(_translate("wifi_stacked_page", "Back"))
         self.hotspot_back_button.setProperty("class", _translate("wifi_stacked_page", "back_btn"))
         self.hotspot_back_button.setProperty("button_type", _translate("wifi_stacked_page", "icon"))
-        self.hotspot_info_name_label.setText(_translate("wifi_stacked_page", "Hotspot Name: "))
-        self.hotspot_info_password_label.setText(_translate("wifi_stacked_page", "Hotspot Password:"))
-        self.hotspot_password_view_button.setText(_translate("wifi_stacked_page", "View"))
+        self.hotspot_info_name_label.setText("Hotspot Name: ")
+        self.hotspot_info_password_label.setText("Hotspot Password:")
+        self.hotspot_password_view_button.setText("View")
         self.hotspot_password_view_button.setProperty("class", _translate("wifi_stacked_page", "back_btn"))
         self.hotspot_password_view_button.setProperty("button_type", _translate("wifi_stacked_page", "icon"))
-        self.hotspot_change_confirm.setText(_translate("wifi_stacked_page", "Save"))
+        self.hotspot_change_confirm.setText("Save")
 from lib.panels.widgets.loadWidget import LoadingOverlayWidget
+from lib.utils.blocks_Scrollbar import CustomScrollBar
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_frame import BlocksCustomFrame
 from lib.utils.blocks_linedit import BlocksCustomLinEdit
