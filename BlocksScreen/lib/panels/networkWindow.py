@@ -10,7 +10,7 @@ from lib.ui.wifiConnectivityWindow_ui import Ui_wifi_stacked_page
 from lib.utils.list_button import ListCustomButton
 from PyQt6 import QtCore, QtGui, QtWidgets
 
-logger = logging.getLogger("logs/BlocksScreen.log")
+logger = logging.getLogger(__name__)
 
 
 class BuildNetworkList(QtCore.QThread):

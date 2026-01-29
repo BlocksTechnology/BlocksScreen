@@ -10,7 +10,7 @@ from lib.utils.blocks_progressbar import CustomProgressBar
 from lib.utils.display_button import DisplayButton
 from PyQt6 import QtCore, QtGui, QtWidgets
 
-logger = logging.getLogger("logs/BlocksScreen.log")
+logger = logging.getLogger(__name__)
 
 
 class JobStatusWidget(QtWidgets.QWidget):
