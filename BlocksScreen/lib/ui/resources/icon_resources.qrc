@@ -43,6 +43,8 @@
     <file>media/btn_icons/blower.svg</file>
   </qresource>
   <qresource prefix="temperature_related">
+    <file>media/btn_icons/fan.svg</file>
+    <file>media/btn_icons/blower.svg</file>
     <file>media/btn_icons/standart_temperature.svg</file>
     <file>media/btn_icons/temperature.svg</file>
     <file>media/btn_icons/temperature_error.svg</file>
@@ -84,6 +86,8 @@
     <file>media/btn_icons/unload_filament.svg</file>
   </qresource>
   <qresource prefix="ui">
+    <file>media/btn_icons/notification.svg</file>
+    <file>media/btn_icons/notification_active.svg</file>
     <file>media/btn_icons/garbage-icon.svg</file>
     <file>media/btn_icons/back.svg</file>
     <file>media/btn_icons/refresh.svg</file>
@@ -168,6 +172,8 @@
     <file>media/btn_icons/input_shaper_manual_Y.svg</file>
   </qresource>
   <qresource prefix="arrow_icons">
+    <file>media/btn_icons/arrow_down.svg</file>
+    <file>media/btn_icons/arrow_right.svg</file>
     <file>media/btn_icons/left_arrow.svg</file>
     <file>media/btn_icons/right_arrow.svg</file>
     <file>media/btn_icons/down_arrow.svg</file>
