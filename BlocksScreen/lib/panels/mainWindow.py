@@ -9,16 +9,15 @@ from lib.machine import MachineControl
 from lib.moonrakerComm import MoonWebSocket
 from lib.panels.controlTab import ControlTab
 from lib.panels.filamentTab import FilamentTab
-from lib.panels.networkWindow import NetworkControlWindow
 from lib.panels.printTab import PrintTab
 from lib.panels.utilitiesTab import UtilitiesTab
+from lib.panels.widgets.basePopup import BasePopup
 from lib.panels.widgets.connectionPage import ConnectionPage
+from lib.panels.widgets.loadWidget import LoadingOverlayWidget
 from lib.panels.widgets.popupDialogWidget import Popup
+from lib.panels.widgets.updatePage import UpdatePage
 from lib.printer import Printer
 from lib.ui.mainWindow_ui import Ui_MainWindow  # With header
-from lib.panels.widgets.updatePage import UpdatePage
-from lib.panels.widgets.basePopup import BasePopup
-from lib.panels.widgets.loadWidget import LoadingOverlayWidget
 
 # from lib.ui.mainWindow_v2_ui import Ui_MainWindow # No header
 from lib.ui.resources.background_resources_rc import *
@@ -28,10 +27,11 @@ from lib.ui.resources.icon_resources_rc import *
 from lib.ui.resources.main_menu_resources_rc import *
 from lib.ui.resources.system_resources_rc import *
 from lib.ui.resources.top_bar_resources_rc import *
+from logger import LogManager
 from PyQt6 import QtCore, QtGui, QtWidgets
 from screensaver import ScreenSaver
 
-_logger = logging.getLogger(name="logs/BlocksScreen.log")
+_logger = logging.getLogger(__name__)
 
 
 def api_handler(func):
@@ -93,7 +93,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.filamentPanel = FilamentTab(self.ui.filamentTab, self.printer, self.ws)
         self.controlPanel = ControlTab(self.ui.controlTab, self.ws, self.printer)
         self.utilitiesPanel = UtilitiesTab(self.ui.utilitiesTab, self.ws, self.printer)
-        self.networkPanel = NetworkControlWindow(self)
+        # self.networkPanel = NetworkControlWindow(self)
         self.bo_ws_startup.connect(slot=self.bo_start_websocket_connection)
         self.ws.connecting_signal.connect(self.conn_window.on_websocket_connecting)
         self.ws.connected_signal.connect(
@@ -153,7 +153,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.printer.extruder_update.connect(self.on_extruder_update)
         self.printer.heater_bed_update.connect(self.on_heater_bed_update)
         self.ui.main_content_widget.currentChanged.connect(slot=self.reset_tab_indexes)
-        self.call_network_panel.connect(self.networkPanel.show_network_panel)
+        # self.call_network_panel.connect(self.networkPanel.show_network_panel)
         self.conn_window.wifi_button_clicked.connect(self.call_network_panel.emit)
         self.ui.wifi_button.clicked.connect(self.call_network_panel.emit)
         self.handle_error_response.connect(
@@ -352,7 +352,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.filamentPanel.setCurrentIndex(0)
         self.controlPanel.setCurrentIndex(0)
         self.utilitiesPanel.setCurrentIndex(0)
-        self.networkPanel.setCurrentIndex(0)
+        # self.networkPanel.setCurrentIndex(0)
 
     def current_panel_index(self) -> int:
         """Helper function to get the index of the current page in the current tab
@@ -687,14 +687,10 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def closeEvent(self, a0: typing.Optional[QtGui.QCloseEvent]) -> None:
         """Handles GUI closing"""
-        _loggers = [
-            logging.getLogger(name) for name in logging.root.manager.loggerDict
-        ]  # Get available logger handlers
-        for logger in _loggers:  # noqa: F402
-            if hasattr(logger, "cancel"):
-                _callback = getattr(logger, "cancel")
-                if callable(_callback):
-                    _callback()
+
+        # Shutdown logger (closes files, stops threads, restores streams)
+        LogManager.shutdown()
+
         self.ws.wb_disconnect()
         self.close()
         if a0 is None:

@@ -14,7 +14,7 @@ from lib.moonrest import MoonRest
 from lib.utils.RepeatedTimer import RepeatedTimer
 from PyQt6 import QtCore, QtWidgets
 
-_logger = logging.getLogger(name="logs/BlocksScreen.log")
+_logger = logging.getLogger(__name__)
 
 
 class OneShotTokenError(Exception):

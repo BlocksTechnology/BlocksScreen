@@ -9,7 +9,7 @@ import sdbus
 from PyQt6 import QtCore
 from sdbus_async import networkmanager as dbusNm
 
-logger = logging.getLogger("logs/BlocksScreen.log")
+logger = logging.getLogger(__name__)
 
 
 class NetworkManagerRescanError(Exception):
