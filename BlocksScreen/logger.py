@@ -485,6 +485,7 @@ def setup_logging(
         console_level,
     )
 
+
 def get_logger(
     name: str,
     filename: str | None = None,
