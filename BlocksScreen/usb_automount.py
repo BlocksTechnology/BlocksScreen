@@ -1,6 +1,7 @@
 import logging
+import sys
 import sdbus
-from PyQt6 import QtCore
+from PyQt6 import QtCore, QtWidgets
 import typing
 
 
@@ -9,25 +10,63 @@ class UDisksDBus(QtCore.QThread):
     usb_rem: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(str, name="usb-rem")
 
     def __init__(self, parent: QtCore.QObject) -> None:
-        # super().__init__(parent)
+        super().__init__(parent)
         self.system_bus: sdbus.SdBus = sdbus.sd_bus_open_system()
-        self.obj_manager: UDisks2Manager = UDisks2Manager(
-            "org.freedesktop.UDisks2", "/org/freedesktop/UDisks2", self.system_bus
-        )
         if not self.system_bus:
             self.close()
             return
         sdbus.set_default_bus(self.system_bus)
+        self.obj_manager: UDisks2Manager = UDisks2Manager(
+            "org.freedesktop.UDisks2", "/org/freedesktop/UDisks2", self.system_bus
+        )
+
+    def run(self) -> None:
+        # self.obj_manager.InterfacesAdded(obj path, dict entyry)
+        # self.obj_manager.InterfacesRemoved(obj path, dict entyr)
+        # self.obj_manager.interfaces_added.connect(self._on_interface_added)
+        print(self.obj_manager.get_managed_objects())
+        # self.obj_manager.interfaces_removed.connect(self._on_interface_removed)
+
+    def _on_interface_added(self, path, interfaces) -> None:
+        pass
+
+    def _on_interface_removed(self, path, interfaces) -> None:
+        pass
 
     def close(self) -> None:
         logging.info("Closing usb udisks2 dbus connection")
         self.system_bus.close()
+        self.quit()
+
+    def safe_remove(self, bus, drive_path) -> None:
+        pass
+
+    def create_symlink(self, bus, drive_path, directory) -> None:
+        pass
+
+    def power_off(self, bus, drive_path) -> None:
+        pass
+
+    def check_eject_support(sefl, bus, drive_path) -> None:
+        pass
+
+    def force_refresh(self, bus, drive_path) -> None:
+        pass
+
+    def get_clean_symlinks(self, bus, drive_path) -> None:
+        pass
 
 
 class UDisks2Manager(sdbus.DbusObjectManagerInterface):
     """subclassed Dbus object manager"""
 
-    pass
+    def __init__(
+        self,
+        service_name: str,
+        object_path: str,
+        bus: sdbus.SdBus | None = None,
+    ):
+        super().__init__(service_name, object_path, bus)
 
 
 class UDisks2FileSystemInterface(
@@ -138,43 +177,17 @@ class UDisks2DriveInterface(
         raise NotImplementedError
 
 
+class MainWindow(QtWidgets.QMainWindow):
+    def __init__(self) -> None:
+        super().__init__()
+        udisks = UDisksDBus(self)
+        udisks.start(priority=udisks.Priority.InheritPriority)
+
+        print(udisks.currentThreadId())
+
+
 if __name__ == "__main__":
-    bus = sdbus.sd_bus_open_system()
-    manager = UDisks2Manager("org.freedesktop.UDisks2", "/org/freedesktop/UDisks2", bus)
-    objects = manager.get_managed_objects()
-    for path, item in objects.items():
-        print(f" -> {path}")
-        # print(f"    ->{item.keys()}")
-    s = UDisks2BlockInterface(
-        service_name="org.freedesktop.UDisks2",
-        object_path="/org/freedesktop/UDisks2/block_devices/sdd1",
-        bus=bus,
-    )
-    f = UDisks2FileSystemInterface(
-        service_name="org.freedesktop.UDisks2",
-        object_path="/org/freedesktop/UDisks2/block_devices/sdd1",
-        bus=bus,
-    )
-    d = UDisks2DriveInterface(
-        service_name="org.freedesktop.UDisks2",
-        # object_path="/org/freedesktop/UDisks2/block_devices/sd",
-        object_path="/org/freedesktop/UDisks2/drives/ASolid_USB_25072833720072",
-        bus=bus,
-    )
-    print(f"File system size -> {f.size}")
-    print(f"file system mount points -> {f.mount_points}")
-    print(f"Block hint name -> {s.hint_name}")
-    print(f"Block device -> {s.device}")
-    print(f"Block id -> {s.id}")
-    print(f"Block id label -> {s.id_label}")
-    print(f"Block id uuid -> {s.id_UUID}")
-    print(f"Block id usage -> {s.id_usage}")
-    print(f"Block symlinks -> {s.symlinks}")
-    print(f"Block id type -> {s.id_type}")
-    print(f"Block device number -> {s.device_number}")
-    print(f"Drive can power off -> {d.can_power_off}")
-    print(f"Drive model -> {d.model}")
-    print(f"Drive serial -> {d.serial}")
-    print(f"Drive ejectable -> {d.ejectable}")
-    print(f"Drive time detected -> {d.time_detected}")
-    print(f"Drive removable -> {d.removable}")
+    app = QtWidgets.QApplication([])
+    main_window = MainWindow()
+    app.processEvents()
+    sys.exit(app.exec())
