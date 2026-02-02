@@ -1,4 +1,4 @@
-from ast import Not
+import os
 import logging
 import asyncio
 import sys
@@ -7,7 +7,7 @@ from PyQt6 import QtCore, QtWidgets, QtDBus
 import typing
 
 
-class UsbManager(QtCore.QObject):
+class USBManager(QtCore.QObject):
     usb_add: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         str, str, name="usb-add"
     )
@@ -15,13 +15,34 @@ class UsbManager(QtCore.QObject):
         str, str, name="usb-rem"
     )
 
-    def __init__(self, parent: QtCore.QObject) -> None:
+    def __init__(self, parent: QtCore.QObject, mnt_path: str, search_path: str) -> None:
         super().__init__(parent)
+        self.udisks: UDisksDBusAsync = UDisksDBusAsync(
+            parent=self, mnt_path=mnt_path, search_path=search_path
+        )
+        # self.udisks.finished.connect(self.restart)  # TODO: Implement thread restart
+        self.udisks.start(self.udisks.Priority.InheritPriority)
+
+    def close(self) -> None:
+        pass
+
+    def restart(self) -> None:
+        self.udisks.start(self.udisks.Priority.InheritPriority)
 
 
 class UDisksDBusAsync(QtCore.QThread):
-    def __init__(self, parent: QtCore.QObject) -> None:
+    device_added: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        str, dict, name="device-added"
+    )
+    device_removed: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        str, str, name="device-removed"
+    )
+
+    def __init__(self, parent: QtCore.QObject, mnt_path: str, search_path: str) -> None:
         super().__init__(parent)
+        self.task_stack = set()
+        self.mnt_path: str = mnt_path
+        self.search_path: str = search_path
         self.system_bus: sdbus.SdBus = sdbus.sd_bus_open_system()
         if not self.system_bus:
             self.close()
@@ -30,84 +51,106 @@ class UDisksDBusAsync(QtCore.QThread):
         self.obj_manager: UDisks2AsyncManager = UDisks2AsyncManager.new_proxy(
             "org.freedesktop.UDisks2", "/org/freedesktop/UDisks2", self.system_bus
         )
-
-    def _get_managed_objects(self):
-        return asyncio.run(self.obj_manager.get_managed_objects())
-
-    def _setup_asyncio_loop(self) -> None:
-        asyncio.new_event_loop()
-        pass
+        self.loop: asyncio.AbstractEventLoop | None = None
+        self.stop_event: asyncio.Event = asyncio.Event()
+        self.listener_running: bool = False
+        self.controlled_devs = {}
 
     def run(self) -> None:
+        """Start UDisks2 USB monitoring"""
+        self.stop_event.clear()
         try:
-            loop = self._setup_asyncio_loop()
-            asyncio.set_event_loop(loop)
-            loop.run_until_complete(asyncio.gather(self.async_listener_monitor()))
-        except:
-            logging.error("Caught exception on usb run loop")
-        pass
-
-    def close(self) -> None:
-        pass
-
-    async def async_listener_monitor(self) -> None:
-        pass
-
-
-class UDisksDBus(QtCore.QThread):
-    usb_add: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(str, name="usb-add")
-    usb_rem: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(str, name="usb-rem")
-
-    def __init__(self, parent: QtCore.QObject) -> None:
-        super().__init__(parent)
-        self.system_bus: sdbus.SdBus = sdbus.sd_bus_open_system()
-        if not self.system_bus:
+            self.loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(self.loop)
+            self.loop.run_until_complete(self.monitor_dbus())
+        except asyncio.CancelledError as err:
+            logging.error("Caught exception on udisks2 monitor, %s", err)
             self.close()
             return
-        sdbus.set_default_bus(self.system_bus)
-        self.obj_manager: UDisks2Manager = UDisks2Manager(
-            "org.freedesktop.UDisks2", "/org/freedesktop/UDisks2", self.system_bus
-        )
-        loop = asyncio.get_event_loop()
-        loop.run_until_complete(start())
-        udisks = UDisks2DBusAsync(loop)
-        loop.run_forever()
-
-    def run(self) -> None:
-        # self.obj_manager.InterfacesAdded(obj path, dict entyry)
-        # self.obj_manager.InterfacesRemoved(obj path, dict entyr)
-        # self.obj_manager.interfaces_added.connect(self._on_interface_added)
-        print(self.obj_manager.get_managed_objects())
-        # self.obj_manager.interfaces_removed.connect(self._on_interface_removed)
-
-    def _on_interface_added(self, path, interfaces) -> None:
-        pass
-
-    def _on_interface_removed(self, path, interfaces) -> None:
-        pass
 
     def close(self) -> None:
-        logging.info("Closing usb udisks2 dbus connection")
-        self.system_bus.close()
-        self.quit()
+        if not self.loop:
+            return  # TODO: Raise an exception or do something when the loop does not exist
+        try:
+            if self.loop.is_running():
+                self.stop_event.set()
+                self.loop.call_soon_threadsafe(self.loop.stop)
+            self.quit()
+            self.wait()
+            self.deleteLater()
+        except asyncio.CancelledError as e:
+            logging.error(
+                "Caught exception while trying to close Udisks2 monitor: %s", e
+            )
 
-    def safe_remove(self, bus, drive_path) -> None:
-        pass
+    async def monitor_dbus(self) -> None:
+        """Schedule coroutines for UDisks2 signals `interfaces_added` and `interfaces_removed`
+        Creates symlink upon device insertion and cleans up symlink on removal.
 
-    def create_symlink(self, bus, drive_path, directory) -> None:
-        pass
+        """
+        add_listener = asyncio.create_task(self._add_interface_listener())
+        rem_listener = asyncio.create_task(self._rem_interface_listener())
+        self.task_stack.add(add_listener)
+        self.task_stack.add(rem_listener)
+        while self.stop_event:
+            try:
+                await asyncio.gather(add_listener, rem_listener)
+                add_listener.add_done_callback(self.task_stack.discard(add_listener))
+                rem_listener.add_done_callback(self.task_stack.discard(rem_listener))
+            except asyncio.CancelledError:
+                add_listener.cancel()
+                rem_listener.cancel()
+                # TODO: Add logging here
 
-    def power_off(self, bus, drive_path) -> None:
-        pass
+    async def _add_interface_listener(self) -> None:
+        async for path, interfaces in self.obj_manager.interfaces_added:
+            if "org.freedesktop.UDisks2.Block" in interfaces:
+                self.device_added.emit(path, interfaces)
+                bdev = UDisks2BlockAsyncInterface.new_proxy(
+                    "org.freedesktop.UDisks2", path, self.system_bus
+                )
+                drive_path = await bdev.drive
+                if not drive_path:
+                    continue
+                ddev = UDisks2DriveAsyncInterface.new_proxy(
+                    "org.freedesktop.UDisks2", drive_path, self.system_bus
+                )
+                vendor_name = await ddev.vendor
+                con_bus, removable, media_removable = await asyncio.gather(
+                    ddev.connection_bus,
+                    ddev.removable,
+                    ddev.media_removable,
+                )
+                if con_bus.lower() == "usb":
+                    if removable and media_removable:
+                        self.add_symlink("/home/bugo/printer_data/gcodes/USB_PEN")
+                        print(
+                            f"MEDIA ADDED, {vendor_name}, {con_bus}, {removable}, {media_removable}"
+                        )
 
-    def check_eject_support(sefl, bus, drive_path) -> None:
-        pass
+    async def _rem_interface_listener(self) -> None:
+        async for path, interfaces in self.obj_manager.interfaces_removed:
+            if "org.freedesktop.UDisks2.Block" in interfaces:
+                os.rmdir("/home/bugo/printer_data/gcodes/USB_PEN")
 
-    def force_refresh(self, bus, drive_path) -> None:
-        pass
+    def add_symlink(self, path: str) -> None:
+        """Create symlink on `path`"""
+        if not (os.path.exists(path) or os.path.islink(path)):
+            os.symlink(
+                src="/media/bugo/BLOCKS",
+                dst="/home/bugo/printer_data/gcodes/USB_PEN",
+            )
 
-    def get_clean_symlinks(self, bus, drive_path) -> None:
-        pass
+    def rem_symlink(self, path: str) -> None:
+        """Remove symlink located in `path`"""
+        if os.path.islink(path) or os.path.exists(path):
+            try:
+                os.remove(path)
+                logging.info("Symlink cleaning done, removed %s", path)
+            except OSError as e:
+                logging.error(
+                    "Caught exception while trying to remove USB symlink: %s", e
+                )
 
 
 class UDisks2AsyncManager(sdbus.DbusObjectManagerInterfaceAsync):
@@ -218,6 +261,10 @@ class UDisks2BlockAsyncInterface(
     async def rescan(self, opts: dict) -> None:
         raise NotImplementedError
 
+    @sdbus.dbus_property_async(property_signature="o")
+    def drive(self) -> str:
+        raise NotImplementedError
+
 
 class UDisks2BlockInterface(
     sdbus.DbusInterfaceCommon, interface_name="org.freedesktop.UDisks2.Block"
@@ -278,6 +325,10 @@ class UDisks2DriveAsyncInterface(
         raise NotImplementedError
 
     @sdbus.dbus_property_async(property_signature="s")
+    def connection_bus(self) -> str:
+        raise NotImplementedError
+
+    @sdbus.dbus_property_async(property_signature="s")
     def serial(self) -> str:
         raise NotImplementedError
 
@@ -303,6 +354,18 @@ class UDisks2DriveAsyncInterface(
 
     @sdbus.dbus_property_async(property_signature="s")
     def media(self) -> str:
+        raise NotImplementedError
+
+    @sdbus.dbus_property_async(property_signature="b")
+    def media_removable(self) -> bool:
+        raise NotImplementedError
+
+    @sdbus.dbus_property_async(property_signature="s")
+    def id(self) -> str:
+        raise NotImplementedError
+
+    @sdbus.dbus_property_async(property_signature="s")
+    def vendor(self) -> str:
         raise NotImplementedError
 
     @sdbus.dbus_method_async(input_signature="a{sv}")
@@ -361,8 +424,11 @@ class MainWindow(QtWidgets.QMainWindow):
         # udisks.start(priority=udisks.Priority.InheritPriority)
 
         # print(udisks.currentThreadId())
-        udisks = UDisksDBusAsync(self)
-        udisks.start(priority=udisks.Priority.InheritPriority)
+        udisks = USBManager(
+            parent=self,
+            mnt_path="/home/bugo/printer_data/gcodes/",
+            search_path="/media/",
+        )
 
 
 # async def start() -> None:
