@@ -2,18 +2,25 @@ from __future__ import annotations
 
 import atexit
 import copy
+import faulthandler
 import logging
 import logging.handlers
+import os
 import pathlib
 import queue
 import sys
 import threading
+import traceback
+from datetime import datetime
 from typing import ClassVar, TextIO
 
 DEFAULT_FORMAT = (
     "[%(levelname)s] | %(asctime)s | %(name)s | "
     "%(relativeCreated)6d | %(threadName)s : %(message)s"
 )
+
+CRASH_LOG_PATH = "logs/blocksscreen_crash.log"
+FAULT_LOG_PATH = "logs/blocksscreen_fault.log"
 
 
 class StreamToLogger(TextIO):
@@ -268,6 +275,286 @@ class _ExcludeStreamLoggers(logging.Filter):
         return record.name not in ("stdout", "stderr")
 
 
+class CrashHandler:
+    """
+    Handles unhandled exceptions and C-level crashes.
+
+    Writes detailed crash information to log files including:
+    - Full traceback with line numbers
+    - Local variables at each frame
+    - Thread information
+    - Timestamp
+    """
+
+    _instance: ClassVar[CrashHandler | None] = None
+    _installed: ClassVar[bool] = False
+
+    def __init__(
+        self,
+        crash_log_path: str = CRASH_LOG_PATH,
+        fault_log_path: str = FAULT_LOG_PATH,
+        include_locals: bool = True,
+        exit_on_crash: bool = True,
+    ) -> None:
+        self._crash_log_path = pathlib.Path(crash_log_path)
+        self._fault_log_path = pathlib.Path(fault_log_path)
+        self._include_locals = include_locals
+        self._exit_on_crash = exit_on_crash
+        self._original_excepthook = sys.excepthook
+        self._original_threading_excepthook = getattr(threading, "excepthook", None)
+        self._fault_file: TextIO | None = None
+
+    @classmethod
+    def install(
+        cls,
+        crash_log_path: str = CRASH_LOG_PATH,
+        fault_log_path: str = FAULT_LOG_PATH,
+        include_locals: bool = True,
+        exit_on_crash: bool = True,
+    ) -> CrashHandler:
+        """
+        Install the crash handler.
+
+        Should be called as early as possible in the application startup.
+
+        Args:
+            crash_log_path: Path to write Python exception logs
+            fault_log_path: Path to write C-level fault logs (segfaults)
+            include_locals: Include local variables in traceback
+            exit_on_crash: Force exit after logging (for systemd restart)
+
+        Returns:
+            The CrashHandler instance
+        """
+        if cls._installed and cls._instance:
+            return cls._instance
+
+        handler = cls(crash_log_path, fault_log_path, include_locals, exit_on_crash)
+        handler._install()
+        cls._instance = handler
+        cls._installed = True
+
+        return handler
+
+    def _install(self) -> None:
+        """Install exception hooks."""
+        # Setup faulthandler for C-level crashes (segfaults, etc.)
+        try:
+            self._fault_file = open(self._fault_log_path, "w")
+            faulthandler.enable(file=self._fault_file, all_threads=True)
+
+            # Also dump traceback on SIGUSR1 (useful for debugging hangs)
+            try:
+                import signal
+
+                faulthandler.register(
+                    signal.SIGUSR1,
+                    file=self._fault_file,
+                    all_threads=True,
+                )
+            except (AttributeError, OSError):
+                pass  # Not available on all platforms
+
+        except Exception as e:
+            # Fall back to stderr
+            faulthandler.enable()
+            sys.stderr.write(f"Warning: Could not setup fault log file: {e}\n")
+
+        # Install Python exception hook
+        sys.excepthook = self._exception_hook
+
+        # Install threading exception hook (Python 3.8+)
+        if hasattr(threading, "excepthook"):
+            threading.excepthook = self._threading_exception_hook
+
+    def _format_exception_detailed(
+        self,
+        exc_type: type[BaseException],
+        exc_value: BaseException,
+        exc_tb: traceback,
+    ) -> str:
+        """Format exception with detailed information."""
+        lines: list[str] = []
+
+        # Header
+        lines.append("=" * 80)
+        lines.append("UNHANDLED EXCEPTION")
+        lines.append("=" * 80)
+        lines.append(f"Time: {datetime.now().isoformat()}")
+        lines.append(f"Thread: {threading.current_thread().name}")
+        lines.append(f"Exception Type: {exc_type.__module__}.{exc_type.__name__}")
+        lines.append(f"Exception Value: {exc_value}")
+        lines.append("")
+
+        # Full traceback with context
+        lines.append("-" * 80)
+        lines.append("TRACEBACK (most recent call last):")
+        lines.append("-" * 80)
+
+        # Extract frames for detailed info
+        tb_frames = traceback.extract_tb(exc_tb)
+
+        for i, frame in enumerate(tb_frames):
+            lines.append("")
+            lines.append(f"  Frame {i + 1}: {frame.filename}")
+            lines.append(f"    Line {frame.lineno} in {frame.name}()")
+            lines.append(f"    Code: {frame.line}")
+
+            # Try to get local variables if enabled
+            if self._include_locals and exc_tb:
+                try:
+                    # Navigate to the correct frame
+                    current_tb = exc_tb
+                    for _ in range(i):
+                        if current_tb.tb_next:
+                            current_tb = current_tb.tb_next
+
+                    frame_locals = current_tb.tb_frame.f_locals
+                    if frame_locals:
+                        lines.append("    Locals:")
+                        for name, value in frame_locals.items():
+                            # Skip private/dunder and limit value length
+                            if name.startswith("__"):
+                                continue
+                            try:
+                                value_str = repr(value)
+                                if len(value_str) > 200:
+                                    value_str = value_str[:200] + "..."
+                            except Exception:
+                                value_str = "<repr failed>"
+                            lines.append(f"      {name} = {value_str}")
+                except Exception:
+                    pass
+
+        # Standard traceback
+        lines.append("")
+        lines.append("-" * 80)
+        lines.append("STANDARD TRACEBACK:")
+        lines.append("-" * 80)
+        lines.append("".join(traceback.format_exception(exc_type, exc_value, exc_tb)))
+
+        # Thread info
+        lines.append("-" * 80)
+        lines.append("ACTIVE THREADS:")
+        lines.append("-" * 80)
+        for thread in threading.enumerate():
+            daemon_str = " (daemon)" if thread.daemon else ""
+            lines.append(
+                f"  - {thread.name}{daemon_str}: {'alive' if thread.is_alive() else 'dead'}"
+            )
+
+        lines.append("")
+        lines.append("=" * 80)
+
+        return "\n".join(lines)
+
+    def _write_crash_log(self, content: str) -> None:
+        """Write crash information to log file."""
+        try:
+            # Ensure directory exists
+            self._crash_log_path.parent.mkdir(parents=True, exist_ok=True)
+
+            # Write to crash log
+            with open(self._crash_log_path, "w") as f:
+                f.write(content)
+
+            # Also append to a history file
+            history_path = self._crash_log_path.with_suffix(".history.log")
+            with open(history_path, "a") as f:
+                f.write(content)
+                f.write("\n\n")
+
+        except Exception as e:
+            # Last resort: write to stderr
+            sys.stderr.write(f"Failed to write crash log: {e}\n")
+            sys.stderr.write(content)
+
+    def _exception_hook(
+        self,
+        exc_type: type[BaseException],
+        exc_value: BaseException,
+        exc_tb,
+    ) -> None:
+        """Handle uncaught exceptions."""
+        # Don't handle keyboard interrupt
+        if issubclass(exc_type, KeyboardInterrupt):
+            self._original_excepthook(exc_type, exc_value, exc_tb)
+            return
+
+        # Format detailed crash info
+        crash_info = self._format_exception_detailed(exc_type, exc_value, exc_tb)
+
+        # Write to crash log
+        self._write_crash_log(crash_info)
+
+        # Also log via logging if available
+        try:
+            logger = logging.getLogger("crash")
+            logger.critical(
+                "Unhandled exception - see %s for details", self._crash_log_path
+            )
+            logger.critical(crash_info)
+        except Exception:
+            pass
+
+        # Call original hook (prints traceback)
+        self._original_excepthook(exc_type, exc_value, exc_tb)
+
+        # Force exit if configured (for systemd restart)
+        if self._exit_on_crash:
+            os._exit(1)
+
+    def _threading_exception_hook(self, args: threading.ExceptHookArgs) -> None:
+        """Handle uncaught exceptions in threads."""
+        # Format detailed crash info
+        crash_info = self._format_exception_detailed(
+            args.exc_type, args.exc_value, args.exc_traceback
+        )
+
+        # Add thread context
+        thread_info = (
+            f"\nThread that crashed: {args.thread.name if args.thread else 'Unknown'}\n"
+        )
+        crash_info = crash_info.replace(
+            "UNHANDLED EXCEPTION", f"UNHANDLED THREAD EXCEPTION{thread_info}"
+        )
+
+        # Write to crash log
+        self._write_crash_log(crash_info)
+
+        # Log via logging
+        try:
+            logger = logging.getLogger("crash")
+            logger.critical("Unhandled thread exception - see %s", self._crash_log_path)
+        except Exception:
+            pass
+
+        # Call original hook if available
+        if self._original_threading_excepthook:
+            self._original_threading_excepthook(args)
+
+        # Force exit if configured (for systemd restart)
+        # Thread crashes might want different behavior
+        if self._exit_on_crash:
+            os._exit(1)
+
+    def uninstall(self) -> None:
+        """Restore original exception hooks."""
+        sys.excepthook = self._original_excepthook
+
+        if self._original_threading_excepthook and hasattr(threading, "excepthook"):
+            threading.excepthook = self._original_threading_excepthook
+
+        if self._fault_file:
+            try:
+                self._fault_file.close()
+            except Exception:
+                pass
+
+        CrashHandler._installed = False
+        CrashHandler._instance = None
+
+
 class LogManager:
     """
     Manages application logging.
@@ -280,6 +567,7 @@ class LogManager:
     _initialized: ClassVar[bool] = False
     _original_stdout: ClassVar[TextIO | None] = None
     _original_stderr: ClassVar[TextIO | None] = None
+    _crash_handler: ClassVar[CrashHandler | None] = None
 
     @classmethod
     def _ensure_initialized(cls) -> None:
@@ -291,13 +579,16 @@ class LogManager:
     @classmethod
     def setup(
         cls,
-        filename: str = "logs/app.log",
+        filename: str = "logs/BlocksScreen.log",
         level: int = logging.DEBUG,
         fmt: str = DEFAULT_FORMAT,
         capture_stdout: bool = False,
         capture_stderr: bool = True,
         console_output: bool = True,
         console_level: int | None = None,
+        enable_crash_handler: bool = True,
+        crash_log_path: str = CRASH_LOG_PATH,
+        include_locals_in_crash: bool = True,
     ) -> None:
         """
         Setup root logger for entire application.
@@ -313,7 +604,17 @@ class LogManager:
             capture_stderr: Redirect stderr to logger
             console_output: Also print logs to console
             console_level: Console log level (defaults to same as level)
+            enable_crash_handler: Enable crash handler for unhandled exceptions
+            crash_log_path: Path to write crash logs
+            include_locals_in_crash: Include local variables in crash logs
         """
+        # Install crash handler FIRST (before anything else can fail)
+        if enable_crash_handler:
+            cls._crash_handler = CrashHandler.install(
+                crash_log_path=crash_log_path,
+                include_locals=include_locals_in_crash,
+            )
+
         cls._ensure_initialized()
 
         # Store original streams before any redirection
@@ -348,6 +649,9 @@ class LogManager:
             cls.redirect_stdout()
         if capture_stderr:
             cls.redirect_stderr()
+
+        # Log startup
+        logging.info("Logging initialized - crash logs: %s", crash_log_path)
 
     @classmethod
     def _add_console_handler(cls, logger: logging.Logger, level: int, fmt: str) -> None:
@@ -449,6 +753,11 @@ class LogManager:
             handler.close()
         cls._handlers.clear()
 
+        # Uninstall crash handler
+        if cls._crash_handler:
+            cls._crash_handler.uninstall()
+            cls._crash_handler = None
+
 
 def setup_logging(
     filename: str = "logs/app.log",
@@ -458,6 +767,9 @@ def setup_logging(
     capture_stderr: bool = True,
     console_output: bool = True,
     console_level: int | None = None,
+    enable_crash_handler: bool = True,
+    crash_log_path: str = CRASH_LOG_PATH,
+    include_locals_in_crash: bool = True,
 ) -> None:
     """
     Setup logging for entire application.
@@ -474,6 +786,9 @@ def setup_logging(
         capture_stderr: Redirect stderr (X11 errors, warnings) to logger
         console_output: Also print logs to console/terminal
         console_level: Console log level (defaults to same as level)
+        enable_crash_handler: Enable crash handler for unhandled exceptions
+        crash_log_path: Path to write crash logs
+        include_locals_in_crash: Include local variables in crash logs
     """
     LogManager.setup(
         filename,
@@ -483,6 +798,9 @@ def setup_logging(
         capture_stderr,
         console_output,
         console_level,
+        enable_crash_handler,
+        crash_log_path,
+        include_locals_in_crash,
     )
 
 
@@ -505,3 +823,29 @@ def get_logger(
         Configured Logger instance
     """
     return LogManager.get_logger(name, filename, level, fmt)
+
+
+def install_crash_handler(
+    crash_log_path: str = CRASH_LOG_PATH,
+    fault_log_path: str = FAULT_LOG_PATH,
+    include_locals: bool = True,
+    exit_on_crash: bool = True,
+) -> CrashHandler:
+    """
+    Install crash handler without full logging setup.
+
+    Use this if you want crash handling before logging is configured.
+    Call at the very beginning of your main.py.
+
+    Args:
+        crash_log_path: Path to write Python exception logs
+        fault_log_path: Path to write C-level fault logs
+        include_locals: Include local variables in traceback
+        exit_on_crash: Force process exit after logging crash (for systemd restart)
+
+    Returns:
+        CrashHandler instance
+    """
+    return CrashHandler.install(
+        crash_log_path, fault_log_path, include_locals, exit_on_crash
+    )
