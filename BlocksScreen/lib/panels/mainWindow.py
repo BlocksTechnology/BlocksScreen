@@ -191,6 +191,9 @@ class MainWindow(QtWidgets.QMainWindow):
             self, LoadingOverlayWidget.AnimationGIF.DEFAULT
         )
         self.loadscreen.add_widget(self.loadwidget)
+
+        self.controlPanel.toggle_conn_page.connect(self.conn_window.set_toggle)
+
         if self.config.has_section("server"):
             # @ Start websocket connection with moonraker
             self.bo_ws_startup.emit()

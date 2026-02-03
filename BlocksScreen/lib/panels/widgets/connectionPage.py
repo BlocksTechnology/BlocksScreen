@@ -33,6 +33,7 @@ class ConnectionPage(QtWidgets.QFrame):
         self.state = "shutdown"
         self.dot_count = 0
         self.message = None
+        self.conn_toggle: bool = True
         self.dot_timer = QtCore.QTimer(self)
         self.dot_timer.setInterval(1000)
         self.dot_timer.timeout.connect(self._add_dot)
@@ -54,6 +55,11 @@ class ConnectionPage(QtWidgets.QFrame):
         self.ws.klippy_connected_signal.connect(self.on_klippy_connected)
         self.ws.klippy_state_signal.connect(self.on_klippy_state)
 
+    @QtCore.pyqtSlot(bool, name="toggle_connection_page")
+    def set_toggle(self, toggle: bool):
+        """Toggle connection page showing or not"""
+        self.conn_toggle = toggle
+
     def show_panel(self, reason: str | None = None):
         """Show widget"""
         self.show()
@@ -65,9 +71,10 @@ class ConnectionPage(QtWidgets.QFrame):
 
     def showEvent(self, a0: QtCore.QEvent | None):
         """Handle show event"""
-        self.ws.api.refresh_update_status()
-        self.call_load_panel.emit(False, "")
-        return super().showEvent(a0)
+        if self.conn_toggle:
+            self.ws.api.refresh_update_status()
+            self.call_load_panel.emit(False, "")
+            return super().showEvent(a0)
 
     @QtCore.pyqtSlot(bool, name="on_klippy_connected")
     def on_klippy_connection(self, connected: bool):
