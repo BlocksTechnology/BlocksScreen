@@ -8,24 +8,10 @@ from lib.utils.icon_button import IconButton
 from lib.utils.list_model import EntryDelegate, EntryListModel, ListItem
 from PyQt6 import QtCore, QtGui, QtWidgets
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("logs/BlocksScreen.log")
 
 
 class FilesPage(QtWidgets.QWidget):
-    """
-    Widget for displaying and navigating gcode files.
-
-    This widget displays a list of gcode files and directories,
-    allowing navigation and file selection. It receives updates
-    from the Files manager via signals.
-    Signals emitted:
-    - request_back: User wants to go back (header button)
-    - file_selected(str, dict): User selected a file
-    - request_file_info(str): Request metadata for a file
-    - request_dir_info(str): Request directory contents
-    - request_file_metadata(str): Request gcode metadata
-    """
-
     # Signals
     request_back = QtCore.pyqtSignal(name="request_back")
     file_selected = QtCore.pyqtSignal(str, dict, name="file_selected")
@@ -70,6 +56,10 @@ class FilesPage(QtWidgets.QWidget):
 
         self._model = EntryListModel()
         self._entry_delegate = EntryDelegate()
+
+        self._model.rowsInserted.connect(self._delayed_scrollbar_update)
+        self._model.rowsRemoved.connect(self._delayed_scrollbar_update)
+        self._model.modelReset.connect(self._delayed_scrollbar_update)
 
         self._setup_ui()
         self._load_icons()
@@ -330,7 +320,6 @@ class FilesPage(QtWidgets.QWidget):
             # Find correct position
             insert_position = self._find_file_insert_position(modified)
             self._model.insert_item(insert_position, item)
-            self._setup_scrollbar()
             self._hide_placeholder()
             logger.debug(f"Added new file to list: {display_name}")
 
@@ -374,7 +363,6 @@ class FilesPage(QtWidgets.QWidget):
         removed = self._model.remove_item_by_text(display_name)
 
         if removed:
-            self._setup_scrollbar()
             self._check_empty_state()
             logger.debug(f"File removed from view: {filepath}")
 
@@ -456,7 +444,6 @@ class FilesPage(QtWidgets.QWidget):
         # Insert at the correct position
         self._model.insert_item(insert_position, item)
 
-        self._setup_scrollbar()
         self._hide_placeholder()
         logger.debug(
             f"Directory added to view at position {insert_position}: {dirname}"
@@ -539,7 +526,6 @@ class FilesPage(QtWidgets.QWidget):
         removed = self._model.remove_item_by_text(dirname)
 
         if removed:
-            self._setup_scrollbar()
             self._check_empty_state()
             logger.debug(f"Directory removed from view: {dirname}")
 
@@ -659,9 +645,12 @@ class FilesPage(QtWidgets.QWidget):
             if filename.lower().endswith(self.GCODE_EXTENSION):
                 self._request_file_info(file_item)
 
-        self._setup_scrollbar()
         self._list_widget.blockSignals(False)
         self._list_widget.update()
+
+    def _delayed_scrollbar_update(self) -> None:
+        """Update scrollbar after model changes."""
+        QtCore.QTimer.singleShot(10, self._setup_scrollbar)
 
     def _add_file_to_list(self, file_item: dict) -> None:
         """Add a file entry to the list with basic info."""
@@ -699,10 +688,6 @@ class FilesPage(QtWidgets.QWidget):
 
         if item:
             self._model.add_item(item)
-
-        self._setup_scrollbar()
-        self._list_widget.blockSignals(False)
-        self._list_widget.update()
 
     def _create_file_list_item(self, filedata: dict) -> typing.Optional[ListItem]:
         """Create a ListItem from file metadata."""
@@ -843,7 +828,6 @@ class FilesPage(QtWidgets.QWidget):
         """Hide the placeholder and show the list."""
         self._label.hide()
         self._list_widget.show()
-        self._scrollbar.show()
 
     def _check_empty_state(self) -> None:
         """Check if list is empty and show placeholder if needed."""
