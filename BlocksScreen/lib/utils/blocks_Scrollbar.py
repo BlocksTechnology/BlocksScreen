@@ -1,5 +1,5 @@
-from PyQt6 import QtCore, QtGui, QtWidgets
 import numpy as np
+from PyQt6 import QtCore, QtGui, QtWidgets
 
 
 class CustomScrollBar(QtWidgets.QScrollBar):
@@ -26,34 +26,16 @@ class CustomScrollBar(QtWidgets.QScrollBar):
 
         handle_percentage = int((self.value() / max_val) * 100)
 
-        if handle_percentage < 15:
-            base_handle_length = int(
-                (groove.height() * page_step / (max_val - min_val + page_step))
-                + np.interp(handle_percentage, [0, 15], [0, 40])
-            )
-            handle_pos = 0
+        val = np.interp((handle_percentage), [15, 85], [0, 100]) / 100 * max_val
 
-        elif handle_percentage > 85:
-            base_handle_length = int(
-                (groove.height() * page_step / (max_val - min_val + page_step))
-                + np.interp(handle_percentage, [85, 100], [40, 0])
-            )
-            handle_pos = int(
-                (groove.height() - base_handle_length)
-                * (max_val - min_val)
-                / (max_val - min_val)
-            )
-        else:
-            val = np.interp((handle_percentage), [15, 85], [0, 100]) / 100 * max_val
-
-            base_handle_length = int(
-                (groove.height() * page_step / (max_val - min_val + page_step)) + 40
-            )
-            handle_pos = int(
-                (groove.height() - base_handle_length)
-                * (val - min_val)
-                / (max_val - min_val)
-            )
+        base_handle_length = int(
+            (groove.height() * page_step / (max_val - min_val + page_step)) + 40
+        )
+        handle_pos = int(
+            (groove.height() - base_handle_length)
+            * (val - min_val)
+            / (max_val - min_val)
+        )
 
         handle_rect = QtCore.QRect(
             groove.x(),
