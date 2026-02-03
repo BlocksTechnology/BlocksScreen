@@ -1,8 +1,9 @@
 import enum
 from collections import deque
 from typing import Deque
-from PyQt6 import QtCore, QtGui, QtWidgets
+
 from lib.utils.icon_button import IconButton
+from PyQt6 import QtCore, QtGui, QtWidgets
 
 
 class Popup(QtWidgets.QDialog):
@@ -188,12 +189,9 @@ class Popup(QtWidgets.QDialog):
             self.slide_in_animation.setEndValue(end_rect)
             self.slide_out_animation.setStartValue(end_rect)
             self.slide_out_animation.setEndValue(start_rect)
-            if not self.userInput:
-                self.actionbtn.clearPixmap()
-            else:
-                self.actionbtn.setPixmap(
-                    QtGui.QPixmap(":/arrow_icons/media/btn_icons/right_arrow.svg")
-                )
+            self.actionbtn.setPixmap(
+                QtGui.QPixmap(":/arrow_icons/media/btn_icons/right_arrow.svg")
+            )
             self.setGeometry(end_rect)
             self.text_label.setText(message)
             self.text_label.setFixedHeight(

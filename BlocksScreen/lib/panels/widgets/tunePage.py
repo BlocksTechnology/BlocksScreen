@@ -115,6 +115,7 @@ class TuneWidget(QtWidgets.QWidget):
         fields = name.split()
         first_field = fields[0]
         second_field = fields[1] if len(fields) > 1 else None
+        name = second_field.replace("_", " ") if second_field else name
         if "speed" in field:
             if not self.tune_display_buttons.get(name, None) and first_field in (
                 "fan",
