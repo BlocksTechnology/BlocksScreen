@@ -2239,7 +2239,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             # This prevents the dual panel visibility bug
             self._hide_all_info_elements()
             # Force UI update to ensure elements are hidden
-            QtWidgets.QApplication.processEvents()
+            self.repaint()
             # Now show loading
             self.loadingwidget.setVisible(True)
 
@@ -2265,7 +2265,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.loadingwidget.setVisible(False)
         self.mn_info_box.setVisible(False)
         # Force UI update
-        QtWidgets.QApplication.processEvents()
+        self.repaint()
 
         # Then show only the details
         self.netlist_ip.setVisible(True)
@@ -2284,7 +2284,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.loadingwidget.setVisible(False)
         self._hide_network_detail_labels()
         # Force UI update
-        QtWidgets.QApplication.processEvents()
+        self.repaint()
 
         # Then show info box
         self._configure_info_box_centered()
@@ -2436,7 +2436,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         # Show loading IMMEDIATELY when turning something on
         if is_sender_now_on:
             self._set_loading_state(True)
-            QtWidgets.QApplication.processEvents()
+            self.repaint()
 
         saved_networks = self._sdbus_network.get_saved_networks_with_for()
 
@@ -2852,7 +2852,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self._target_ssid = ssid
         # Show loading IMMEDIATELY
         self._set_loading_state(True)
-        QtWidgets.QApplication.processEvents()
+        self.repaint()
 
         self.setCurrentIndex(self.indexOf(self.main_network_page))
 
