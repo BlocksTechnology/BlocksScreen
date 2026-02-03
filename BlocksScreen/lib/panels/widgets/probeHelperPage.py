@@ -103,7 +103,6 @@ class ProbeHelper(QtWidgets.QWidget):
                 if value in ("standby"):
                     if self._eddy_calibration_state:
                         self.call_load_panel.emit(True, "Almost done...\nPlease wait")
-                        self.run_gcode_signal.emit("G28\nM400\nG1 X250 Y250 F6000")
                         self.run_gcode_signal.emit(self._eddy_command)
 
                         self.request_page_view.emit()
@@ -435,7 +434,6 @@ class ProbeHelper(QtWidgets.QWidget):
         self.run_gcode_signal.emit("G28\nM400")
         if "eddy" in sender.name:  # type:ignore
             self.call_load_panel.emit(True, "Preparing Eddy Current Calibration...")
-            self.run_gcode_signal.emit("G1 X250 Y250 Z20 F6000")
             self.toggle_conn_page.emit(False)
             self.run_gcode_signal.emit(
                 f"LDC_CALIBRATE_DRIVE_CURRENT CHIP={sender.name.split(' ')[1]}"  # type:ignore
@@ -451,7 +449,6 @@ class ProbeHelper(QtWidgets.QWidget):
                 self._move_to_pos(
                     self.z_offset_safe_xy[0], self.z_offset_safe_xy[1], 100
                 )
-
         self.run_gcode_signal.emit(_cmd)
 
     @QtCore.pyqtSlot(str, str, float, name="on_extruder_update")
