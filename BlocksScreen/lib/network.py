@@ -354,13 +354,15 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                 filter(
                     lambda path: path,
                     filter(
-                        lambda device: asyncio.run_coroutine_threadsafe(
-                            dbusNm.NetworkDeviceGeneric(
-                                bus=self.system_dbus, device_path=device
-                            ).device_type.get_async(),
-                            self.loop,
-                        ).result(timeout=2)
-                        == dbusNm.enums.DeviceType.ETHERNET,
+                        lambda device: (
+                            asyncio.run_coroutine_threadsafe(
+                                dbusNm.NetworkDeviceGeneric(
+                                    bus=self.system_dbus, device_path=device
+                                ).device_type.get_async(),
+                                self.loop,
+                            ).result(timeout=2)
+                            == dbusNm.enums.DeviceType.ETHERNET
+                        ),
                         devices,
                     ),
                 ),
@@ -386,13 +388,15 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                 filter(
                     lambda path: path,
                     filter(
-                        lambda device: asyncio.run_coroutine_threadsafe(
-                            dbusNm.NetworkDeviceGeneric(
-                                bus=self.system_dbus, device_path=device
-                            ).device_type.get_async(),
-                            self.loop,
-                        ).result(timeout=3)
-                        == dbusNm.enums.DeviceType.WIFI,
+                        lambda device: (
+                            asyncio.run_coroutine_threadsafe(
+                                dbusNm.NetworkDeviceGeneric(
+                                    bus=self.system_dbus, device_path=device
+                                ).device_type.get_async(),
+                                self.loop,
+                            ).result(timeout=3)
+                            == dbusNm.enums.DeviceType.WIFI
+                        ),
                         devices,
                     ),
                 ),
@@ -472,6 +476,68 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
             return [address_data["address"][1] for address_data in addr_data][0]
         except IndexError as e:
             logger.error("List out of index %s", e)
+        except Exception as e:
+            logger.error("Error getting current IP address: %s", e)
+        return ""
+
+    def get_device_ip_by_interface(self, interface_name: str = "wlan0") -> str:
+        """Get IPv4 address for a specific interface via NetworkManager D-Bus.
+
+        This method retrieves the IP address directly from a specific network
+        interface, useful for getting hotspot IP when it's the active connection
+        on that interface.
+
+        Args:
+            interface_name: The network interface name (e.g., "wlan0", "eth0")
+
+        Returns:
+            str: The IPv4 address or empty string if not found
+        """
+        if not self.nm:
+            return ""
+
+        try:
+            devices_future = asyncio.run_coroutine_threadsafe(
+                self.nm.get_devices(), self.loop
+            )
+            devices = devices_future.result(timeout=2)
+
+            for device_path in devices:
+                device = dbusNm.NetworkDeviceGeneric(
+                    bus=self.system_dbus, device_path=device_path
+                )
+
+                # Check if this is the interface we want
+                iface_future = asyncio.run_coroutine_threadsafe(
+                    device.interface.get_async(), self.loop
+                )
+                iface = iface_future.result(timeout=2)
+
+                if iface != interface_name:
+                    continue
+
+                # Get IP4Config path
+                ip4_path_future = asyncio.run_coroutine_threadsafe(
+                    device.ip4_config.get_async(), self.loop
+                )
+                ip4_path = ip4_path_future.result(timeout=2)
+
+                if not ip4_path or ip4_path == "/":
+                    return ""
+
+                # Get address data
+                ip4_config = dbusNm.IPv4Config(bus=self.system_dbus, ip4_path=ip4_path)
+                addr_data_future = asyncio.run_coroutine_threadsafe(
+                    ip4_config.address_data.get_async(), self.loop
+                )
+                addr_data = addr_data_future.result(timeout=2)
+
+                if addr_data and len(addr_data) > 0:
+                    return addr_data[0]["address"][1]
+
+        except Exception as e:
+            logger.error("Failed to get IP for interface %s: %s", interface_name, e)
+
         return ""
 
     async def _gather_primary_interface(
@@ -821,7 +887,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                 return []
             return list(
                 map(
-                    lambda saved_network: (saved_network.get("ssid", None)),
+                    lambda saved_network: saved_network.get("ssid", None),
                     _saved_networks,
                 )
             )

@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>800</width>
+    <width>852</width>
     <height>480</height>
    </rect>
   </property>
@@ -697,7 +697,61 @@ using the buttons on the side.</string>
      </layout>
     </item>
     <item>
-     <layout class="QVBoxLayout" name="nl_content_layout"/>
+     <layout class="QHBoxLayout" name="horizontalLayout_2">
+      <item>
+       <widget class="QListView" name="listView">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="MinimumExpanding" vsizetype="MinimumExpanding">
+          <horstretch>1</horstretch>
+          <verstretch>1</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="minimumSize">
+         <size>
+          <width>0</width>
+          <height>0</height>
+         </size>
+        </property>
+        <property name="cursor" stdset="0">
+         <cursorShape>BlankCursor</cursorShape>
+        </property>
+        <property name="styleSheet">
+         <string notr="true">background-color: rgba(255, 255, 255, 0);</string>
+        </property>
+        <property name="frameShape">
+         <enum>QFrame::NoFrame</enum>
+        </property>
+        <property name="frameShadow">
+         <enum>QFrame::Plain</enum>
+        </property>
+        <property name="verticalScrollBarPolicy">
+         <enum>Qt::ScrollBarAlwaysOff</enum>
+        </property>
+        <property name="horizontalScrollBarPolicy">
+         <enum>Qt::ScrollBarAlwaysOff</enum>
+        </property>
+        <property name="verticalScrollMode">
+         <enum>QAbstractItemView::ScrollPerPixel</enum>
+        </property>
+        <property name="horizontalScrollMode">
+         <enum>QAbstractItemView::ScrollPerPixel</enum>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="CustomScrollBar" name="verticalScrollBar">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Fixed" vsizetype="Minimum">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="orientation">
+         <enum>Qt::Vertical</enum>
+        </property>
+       </widget>
+      </item>
+     </layout>
     </item>
    </layout>
   </widget>
@@ -3115,11 +3169,6 @@ Password</string>
    <class>LoadingOverlayWidget</class>
    <extends>QLabel</extends>
    <header location="global">lib.panels.widgets.loadWidget</header>
-  </customwidget>
-  <customwidget>
-   <class>GroupButton</class>
-   <extends>QPushButton</extends>
-   <header location="global">lib.utils.group_button</header>
   </customwidget>
  </customwidgets>
  <resources>
