@@ -45,8 +45,11 @@ class SensorsWindow(QtWidgets.QWidget):
             return
         self.reset_view_model()
         filtered_sensors = [
-            sensor for sensor in sensors.keys()
-            if sensor.startswith(("filament_switch_sensor", "filament_motion_sensor", "cutter_sensor"))
+            sensor
+            for sensor in sensors.keys()
+            if sensor.startswith(
+                ("filament_switch_sensor", "filament_motion_sensor", "cutter_sensor")
+            )
         ]
         if filtered_sensors:
             self.sensor_list = [
