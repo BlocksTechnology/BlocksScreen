@@ -289,6 +289,40 @@ class BlocksScreenConfig:
                 f'Unable to add "{option}" option to section "{section}": {e} '
             )
 
+    def update_option(
+        self,
+        section: str,
+        option: str,
+        value: typing.Any,
+    ) -> None:
+        """Update an existing option's value in both raw tracking and configparser."""
+        try:
+            with self.file_lock:
+                if not self.config.has_section(section):
+                    self.add_section(section)
+
+                if not self.config.has_option(section, option):
+                    self.add_option(section, option, str(value))
+                    return
+
+                line_idx = self._find_option_line_index(section, option)
+                self.raw_config[line_idx] = f"{option}: {value}"
+                self.config.set(section, option, str(value))
+                self.update_pending = True
+        except Exception as e:
+            logging.error(
+                f'Unable to update option "{option}" in section "{section}": {e}'
+            )
+
+    def _find_option_line_index(self, section: str, option: str) -> int:
+        """Find the index of an option line within a specific section."""
+        start, end = self._find_section_limits(section)
+        opt_regex = re.compile(rf"^\s*{re.escape(option)}\s*[:=]")
+        for i in range(start + 1, end):
+            if opt_regex.match(self.raw_config[i]):
+                return i
+        raise configparser.Error(f'Option "{option}" not found in section "{section}"')
+
     def save_configuration(self) -> None:
         """Save teh configuration to file"""
         try:
