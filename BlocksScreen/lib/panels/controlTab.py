@@ -99,6 +99,7 @@ class ControlTab(QtWidgets.QStackedWidget):
         self.probe_helper_page.subscribe_config[list, "PyQt_PyObject"].connect(
             self.printer.on_subscribe_config
         )
+        self.printer.extruder_update.connect(self.probe_helper_page.on_extruder_update)
         self.printer.gcode_move_update.connect(
             self.probe_helper_page.on_gcode_move_update
         )
