@@ -354,13 +354,15 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                 filter(
                     lambda path: path,
                     filter(
-                        lambda device: asyncio.run_coroutine_threadsafe(
-                            dbusNm.NetworkDeviceGeneric(
-                                bus=self.system_dbus, device_path=device
-                            ).device_type.get_async(),
-                            self.loop,
-                        ).result(timeout=2)
-                        == dbusNm.enums.DeviceType.ETHERNET,
+                        lambda device: (
+                            asyncio.run_coroutine_threadsafe(
+                                dbusNm.NetworkDeviceGeneric(
+                                    bus=self.system_dbus, device_path=device
+                                ).device_type.get_async(),
+                                self.loop,
+                            ).result(timeout=2)
+                            == dbusNm.enums.DeviceType.ETHERNET
+                        ),
                         devices,
                     ),
                 ),
@@ -386,13 +388,15 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                 filter(
                     lambda path: path,
                     filter(
-                        lambda device: asyncio.run_coroutine_threadsafe(
-                            dbusNm.NetworkDeviceGeneric(
-                                bus=self.system_dbus, device_path=device
-                            ).device_type.get_async(),
-                            self.loop,
-                        ).result(timeout=3)
-                        == dbusNm.enums.DeviceType.WIFI,
+                        lambda device: (
+                            asyncio.run_coroutine_threadsafe(
+                                dbusNm.NetworkDeviceGeneric(
+                                    bus=self.system_dbus, device_path=device
+                                ).device_type.get_async(),
+                                self.loop,
+                            ).result(timeout=3)
+                            == dbusNm.enums.DeviceType.WIFI
+                        ),
                         devices,
                     ),
                 ),
@@ -883,7 +887,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                 return []
             return list(
                 map(
-                    lambda saved_network: (saved_network.get("ssid", None)),
+                    lambda saved_network: saved_network.get("ssid", None),
                     _saved_networks,
                 )
             )
