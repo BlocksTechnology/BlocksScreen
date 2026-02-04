@@ -1,78 +1,139 @@
 import typing
+
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 
 class BlocksCustomLinEdit(QtWidgets.QLineEdit):
     clicked = QtCore.pyqtSignal()
 
-    def __init__(
-        self,
-        parent: QtWidgets.QWidget,
-    ) -> None:
-        super(BlocksCustomLinEdit, self).__init__(parent)
+    # Layout constants
+    TEXT_MARGIN = 10
+    CORNER_RADIUS = 8
 
-        self.button_background = None
-        self.button_ellipse = None
-        self._text: str = ""
-        self.placeholder_str = "Type here"
-        self._name: str = ""
-        self.text_color: QtGui.QColor = QtGui.QColor(0, 0, 0)
-        self.secret: bool = False
+    def __init__(self, parent: typing.Optional[QtWidgets.QWidget] = None) -> None:
+        super().__init__(parent)
+
+        # State
+        self._placeholder_str = "Type here"
+        self._name = ""
+        self._secret = False  # True = show bullets, False = show text
+        self._show_toggle = False
+        self._is_password_visible = False
+
+        # Pre-allocated colors (avoid allocation in paint)
+        self._bg_color = QtGui.QColor(223, 223, 223)
+        self._bg_pressed_color = QtGui.QColor(200, 200, 200)
+        self._text_color = QtGui.QColor(0, 0, 0)
+        self._placeholder_color = QtGui.QColor(130, 130, 130)
+
+        # Touch support
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_AcceptTouchEvents, True)
 
+        # Cursor
+        self.setCursor(QtCore.Qt.CursorShape.BlankCursor)
+
     @property
-    def name(self):
-        """Widget name"""
+    def name(self) -> str:
+        """Widget name property."""
         return self._name
 
     @name.setter
-    def name(self, new_name) -> None:
-        self._name = new_name
-        self.setObjectName(new_name)
+    def name(self, value: str) -> None:
+        self._name = value
+        self.setObjectName(value)
 
-    def setText(self, text: str) -> None:
-        """Set widget text"""
-        super().setText(text)
+    def placeholderText(self) -> str:
+        """Get placeholder text."""
+        return self._placeholder_str
 
-    def setHidden(self, hidden: bool) -> None:
-        """Hide widget text"""
-        self.secret = hidden
+    def setPlaceholderText(self, text: str) -> None:
+        """Set placeholder text displayed when empty."""
+        self._placeholder_str = text
         self.update()
 
+    def showToggleButton(self) -> bool:
+        """Check if toggle button is enabled."""
+        return self._show_toggle
+
+    def setHidden(self, hidden: bool) -> None:
+        """
+        Set whether text is hidden (password mode).
+
+        Args:
+            hidden: True to show bullets, False to show actual text
+        """
+        if self._secret == hidden:
+            return
+
+        self._secret = hidden
+        self._is_password_visible = not hidden
+        self.update()
+
+    def isPasswordVisible(self) -> bool:
+        """Check if password is currently visible."""
+        return self._is_password_visible
+
+    def _get_text_rect(self) -> QtCore.QRect:
+        """Calculate the rectangle available for text rendering."""
+        left_margin = self.TEXT_MARGIN
+        right_margin = self.TEXT_MARGIN
+
+        return self.rect().adjusted(left_margin, 0, -right_margin, 0)
+
     def mousePressEvent(self, event: QtGui.QMouseEvent) -> None:
-        """Re-implemented method, handle mouse press events"""
+        """Handle mouse press"""
         self.clicked.emit()
         super().mousePressEvent(event)
 
-    def paintEvent(self, e: typing.Optional[QtGui.QPaintEvent]):
-        """Re-implemented method, paint widget"""
+    def mouseReleaseEvent(self, event: QtGui.QMouseEvent) -> None:
+        """Handle mouse release"""
+        super().mouseReleaseEvent(event)
+
+    def focusInEvent(self, event: QtGui.QFocusEvent) -> None:
+        """Handle focus in - emit clicked for virtual keyboard."""
+        self.clicked.emit()
+        super().focusInEvent(event)
+
+    def paintEvent(self, event: typing.Optional[QtGui.QPaintEvent]) -> None:
+        """Custom paint with embedded toggle button."""
         painter = QtGui.QPainter(self)
-        painter.setRenderHint(painter.RenderHint.Antialiasing, True)
+        painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing, True)
 
-        # Draw background
-        bg_color = QtGui.QColor(223, 223, 223)
-        painter.setBrush(bg_color)
+        # Background
+        painter.setBrush(self._bg_color)
         painter.setPen(QtCore.Qt.PenStyle.NoPen)
-        painter.drawRoundedRect(self.rect(), 8, 8)
+        painter.drawRoundedRect(self.rect(), self.CORNER_RADIUS, self.CORNER_RADIUS)
 
-        margin = 5
+        # Text
+        self._draw_text(painter)
+
+        painter.end()
+
+    def _draw_text(self, painter: QtGui.QPainter) -> None:
+        """Draw the text or placeholder."""
+        text_rect = self._get_text_rect()
         display_text = self.text()
-        if self.secret and display_text:
+
+        # Apply password masking
+        if self._secret and display_text:
             display_text = "*" * len(display_text)
 
-        if self.text():
-            painter.setPen(self.text_color)
+        if display_text:
+            painter.setPen(self._text_color)
+            painter.setFont(self.font())
             painter.drawText(
-                self.rect().adjusted(margin, 0, 0, 0),
+                text_rect,
                 QtCore.Qt.AlignmentFlag.AlignLeft
                 | QtCore.Qt.AlignmentFlag.AlignVCenter,
                 display_text,
             )
         else:
-            painter.setPen(QtGui.QColor(150, 150, 150))
+            # Placeholder text
+            painter.setPen(self._placeholder_color)
+            painter.setFont(self.font())
             painter.drawText(
-                self.rect().adjusted(margin, 0, 0, 0),
+                text_rect,
                 QtCore.Qt.AlignmentFlag.AlignLeft
                 | QtCore.Qt.AlignmentFlag.AlignVCenter,
-                self.placeholder_str,
+                self._placeholder_str,
             )
