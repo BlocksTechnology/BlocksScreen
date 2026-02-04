@@ -5,6 +5,8 @@ import threading
 import typing
 from uuid import uuid4
 
+from configfile import BlocksScreenConfig, get_configparser
+
 import sdbus
 from PyQt6 import QtCore
 from sdbus_async import networkmanager as dbusNm
@@ -59,8 +61,9 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
             logger.info(
                 f"Sdbus NetworkManager Monitor Thread {self.listener_thread.name} Running"
             )
-        self.hotspot_ssid: str = "PrinterHotspot"
-        self.hotspot_password: str = "123456789"
+
+        self.config: BlocksScreenConfig = get_configparser()
+        self.load_hotspot_configuration()
         self.check_connectivity()
         self.available_wired_interfaces = self.get_wired_interfaces()
         self.available_wireless_interfaces = self.get_wireless_interfaces()
@@ -78,9 +81,37 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
             wired_interfaces[0] if wired_interfaces else None
         )
 
-        self.create_hotspot(self.hotspot_ssid, self.hotspot_password)
         if self.primary_wifi_interface:
             self.rescan_networks()
+
+    def load_hotspot_configuration(self):
+        self.config.load_config()
+        if not self.config.has_section("hotspot"):
+            self.config.add_section("hotspot")
+            self.config.save_configuration()
+
+        self.hotspot_config = self.config.get_section("hotspot", fallback=None)
+
+        if self.hotspot_config.has_option("ssid"):
+            ssid = self.hotspot_config.get("ssid", parser=str, default="PrinterHotspot")
+            self.hotspot_ssid = ssid if isinstance(ssid, str) else "PrinterHotspot"
+        else:
+            self.config.add_option("hotspot", "ssid", "PrinterHotspot")
+            self.hotspot_ssid = "PrinterHotspot"
+
+        if self.hotspot_config.has_option("password"):
+            password = self.hotspot_config.get(
+                "password", parser=str, default="123456789"
+            )
+            self.hotspot_password = (
+                password if isinstance(password, str) else "123456789"
+            )
+        else:
+            self.config.add_option("hotspot", "password", "123456789")
+            self.hotspot_password = "123456789"
+
+        self.config.save_configuration()
+        self.create_hotspot(self.hotspot_ssid, self.hotspot_password)
 
     def _listener_run_loop(self) -> None:
         try:
@@ -1380,11 +1411,18 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
             password (str, optional): connection password. Defaults to "123456789".
         """
         if self.is_known(ssid):
-            self.delete_network(ssid)
+            self.delete_network(self.hotspot_ssid)
             logger.debug("old hotspot deleted")
         try:
-            self.delete_network(ssid)
+            self.delete_network(self.hotspot_ssid)
             # psk = hashlib.sha256(password.encode()).hexdigest()
+            self.config.update_option("hotspot", "ssid", ssid)
+            self.config.update_option("hotspot", "password", password)
+
+            self.hotspot_ssid = ssid
+            self.hotspot_password = password
+
+            self.config.save_configuration()
             _properties: dbusNm.NetworkManagerConnectionProperties = {
                 "connection": {
                     "id": ("s", str(ssid)),
@@ -1409,7 +1447,6 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                 },
                 "ipv6": {"method": ("s", "ignore")},
             }
-
             tasks = [
                 self.loop.create_task(
                     dbusNm.NetworkManagerSettings(bus=self.system_dbus).add_connection(
@@ -1503,7 +1540,13 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
 
             if ssid == self.hotspot_ssid and new_ssid:
                 self.hotspot_ssid = new_ssid
+                self.config.update_option("hotspot", "password", new_ssid)
             if password != self.hotspot_password and password:
                 self.hotspot_password = password
+                self.config.update_option("hotspot", "password", password)
+
+            logger.debug("ASDIUGASDIOASGDUIYASDGASD", new_ssid, password)
+
+            self.config.save_configuration()
         except Exception as e:
             logger.error("Caught Exception while updating network: %s", e)
