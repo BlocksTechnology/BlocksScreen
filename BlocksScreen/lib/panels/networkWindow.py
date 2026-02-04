@@ -2595,14 +2595,6 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
 
     def _handle_first_run_state(self) -> None:
         """Handle initial state on first run."""
-        saved_networks = self._sdbus_network.get_saved_networks_with_for()
-
-        old_hotspot = next(
-            (n for n in saved_networks if "ap" in str(n.get("mode", ""))), None
-        )
-        if old_hotspot:
-            self.hotspot_name_input_field.setText(old_hotspot["ssid"])
-
         connectivity = self._sdbus_network.check_connectivity()
         wifi_btn = self.wifi_button.toggle_button
         hotspot_btn = self.hotspot_button.toggle_button
