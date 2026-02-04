@@ -1545,8 +1545,6 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                 self.hotspot_password = password
                 self.config.update_option("hotspot", "password", password)
 
-            logger.debug("ASDIUGASDIOASGDUIYASDGASD", new_ssid, password)
-
             self.config.save_configuration()
         except Exception as e:
             logger.error("Caught Exception while updating network: %s", e)
