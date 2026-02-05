@@ -36,6 +36,9 @@ class Device:
     ) -> None:
         self.file_systems.update({path: data})
 
+    def update_paritions(self, path: str, data: UDisks2PartitionAsyncInterface) -> None:
+        self.partitions.update({path: data})
+
     def get_logical_blocks(self) -> dict[str, UDisks2BlockAsyncInterface]:
         return self.partitions
 
@@ -127,21 +130,27 @@ class UDisksDBusAsync(QtCore.QThread):
         add_listener = asyncio.create_task(self._add_interface_listener())
         rem_listener = asyncio.create_task(self._rem_interface_listener())
         pchange_listener = asyncio.create_task(self._properties_changed_listener())
-        self.task_stack.add(add_listener)
-        self.task_stack.add(rem_listener)
-        self.task_stack.add(pchange_listener)
+        # self.task_stack.add(add_listener)
+        # self.task_stack.add(rem_listener)
+        # self.task_stack.add(pchange_listener)
         while self.stop_event:
             try:
-                await asyncio.gather(add_listener, rem_listener, pchange_listener)
-                add_listener.add_done_callback(
-                    lambda _: self.task_stack.discard(add_listener)
+                response = await asyncio.gather(
+                    add_listener, rem_listener, pchange_listener
                 )
-                rem_listener.add_done_callback(
-                    lambda _: self.task_stack.discard(rem_listener)
-                )
-                pchange_listener.add_done_callback(
-                    lambda _: self.task_stack.discard(pchange_listener)
-                )
+                if response:
+                    for result in response:
+                        if isinstance(result, Exception):
+                            logging.error("Caught exception on asyncio loop")
+                # add_listener.add_done_callback(
+                #     lambda _: self.task_stack.discard(add_listener)
+                # )
+                # rem_listener.add_done_callback(
+                #     lambda _: self.task_stack.discard(rem_listener)
+                # )
+                # pchange_listener.add_done_callback(
+                #     lambda _: self.task_stack.discard(pchange_listener)
+                # )
             except asyncio.CancelledError as e:
                 _ = add_listener.cancel()
                 _ = rem_listener.cancel()
