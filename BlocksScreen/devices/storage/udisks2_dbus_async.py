@@ -5,14 +5,19 @@
 #
 # Hugo Costa hugo.santos.costa@gmail.com
 import sdbus
+import enum
 
-Interfaces: dict[str, str] = {
-    "Filesystem": "org.freedesktop.Filesystem",
-    "Drive": "org.freedesktop.Drive",
-    "Partition": "org.freedesktop.Partition",
-    "Block": "org.freedesktop.Block",
-    "PartitionTable": "org.freedesktop.PartitionTable",
-}
+
+class Interfaces(enum.Enum):
+    Filesystem = "org.freedesktop.UDisks2.Filesystem"
+    Drive = "org.freedesktop.UDisks2.Drive"
+    Partition = "org.freedesktop.UDisks2.Partition"
+    Block = "org.freedesktop.UDisks2.Block"
+    PartitionTable = "org.freedesktop.UDisks2.PartitionTable"
+
+    @classmethod
+    def has_value(cls, value) -> bool:
+        return value in (item.value for item in cls)
 
 
 class UDisks2AsyncManager(sdbus.DbusObjectManagerInterfaceAsync):
@@ -23,8 +28,7 @@ class UDisks2AsyncManager(sdbus.DbusObjectManagerInterfaceAsync):
 
 
 class UDisks2PartitionTableAsyncInterface(
-    sdbus.DbusInterfaceCommonAsync,
-    interface_name="org.freedesktop.UDisks2.PartitionTable",
+    sdbus.DbusInterfaceCommonAsync, interface_name=Interfaces.PartitionTable.value
 ):
     def __init__(self) -> None:
         super().__init__()
@@ -39,7 +43,7 @@ class UDisks2PartitionTableAsyncInterface(
 
 
 class UDisks2PartitionAsyncInterface(
-    sdbus.DbusInterfaceCommonAsync, interface_name="org.freedesktop.UDisks2.Partition"
+    sdbus.DbusInterfaceCommonAsync, interface_name=Interfaces.Partition.value
 ):
     def __init__(self) -> None:
         super().__init__()
@@ -98,7 +102,7 @@ class UDisks2PartitionAsyncInterface(
 
 
 class UDisks2FileSystemAsyncInterface(
-    sdbus.DbusInterfaceCommonAsync, interface_name="org.freedesktop.UDisks2.Filesystem"
+    sdbus.DbusInterfaceCommonAsync, interface_name=Interfaces.Filesystem.value
 ):
     def __init__(self) -> None:
         super().__init__()
@@ -121,7 +125,7 @@ class UDisks2FileSystemAsyncInterface(
 
 
 class UDisks2BlockAsyncInterface(
-    sdbus.DbusInterfaceCommonAsync, interface_name="org.freedesktop.UDisks2.Block"
+    sdbus.DbusInterfaceCommonAsync, interface_name=Interfaces.Block.value
 ):
     def __init__(self) -> None:
         super().__init__()
@@ -178,12 +182,28 @@ class UDisks2BlockAsyncInterface(
     def drive(self) -> str:
         raise NotImplementedError
 
+    @sdbus.dbus_property_async(property_signature="a(sa{sv})")
+    def configuration(self) -> list[any]:
+        raise NotImplementedError
+
 
 class UDisks2DriveAsyncInterface(
-    sdbus.DbusInterfaceCommonAsync, interface_name="org.freedesktop.UDisks2.Drive"
+    sdbus.DbusInterfaceCommonAsync, interface_name=Interfaces.Drive.value
 ):
     def __init__(self) -> None:
         super().__init__()
+
+    @sdbus.dbus_property_async(property_signature="s")
+    def revision(self) -> str:
+        raise NotImplementedError
+
+    @sdbus.dbus_property_async(property_signature="s")
+    def WWN(self) -> str:
+        raise NotImplementedError
+
+    @sdbus.dbus_property_async(property_signature="a{sv}")
+    def configuration(self) -> dict:
+        raise NotImplementedError
 
     @sdbus.dbus_property_async(property_signature="b")
     def can_power_off(self) -> bool:
@@ -206,7 +226,7 @@ class UDisks2DriveAsyncInterface(
         raise NotImplementedError
 
     @sdbus.dbus_property_async(property_signature="b")
-    def removable(self) -> bool:  # FIXME : MAYBE THIS IS BYTES INSTEAD OF BOOL
+    def removable(self) -> bool:
         raise NotImplementedError
 
     @sdbus.dbus_property_async(property_signature="t")
@@ -239,48 +259,4 @@ class UDisks2DriveAsyncInterface(
 
     @sdbus.dbus_method_async(input_signature="a{sv}")
     async def eject(self, opts: dict) -> None:
-        raise NotImplementedError
-
-
-class UDisks2DriveInterface(
-    sdbus.DbusInterfaceCommon, interface_name="org.freedesktop.UDisks2.Drive"
-):
-    @sdbus.dbus_property(property_signature="b")
-    def can_power_off(self) -> bool:
-        raise NotImplementedError
-
-    @sdbus.dbus_property(property_signature="s")
-    def model(self) -> str:
-        raise NotImplementedError
-
-    @sdbus.dbus_property(property_signature="s")
-    def serial(self) -> str:
-        raise NotImplementedError
-
-    @sdbus.dbus_property(property_signature="b")
-    def ejectable(self) -> bool:
-        raise NotImplementedError
-
-    @sdbus.dbus_property(property_signature="b")
-    def removable(self) -> bytes:
-        raise NotImplementedError
-
-    @sdbus.dbus_property(property_signature="t")
-    def time_detected(self) -> int:
-        raise NotImplementedError
-
-    @sdbus.dbus_property(property_signature="b")
-    def media_available(self) -> bytes:
-        raise NotImplementedError
-
-    @sdbus.dbus_property(property_signature="b")
-    def media_changed_detected(self) -> bytes:
-        raise NotImplementedError
-
-    @sdbus.dbus_property(property_signature="s")
-    def media(self) -> str:
-        raise NotImplementedError
-
-    @sdbus.dbus_method(input_signature="a{sv}")
-    def eject(self, opts: dict) -> None:
         raise NotImplementedError
