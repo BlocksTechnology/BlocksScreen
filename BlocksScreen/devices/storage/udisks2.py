@@ -1,81 +1,76 @@
-from PyQt6 import QtCore
-import sdbus
-
-from .udisks2_dbus_async import (
-    UDisks2BlockAsyncInterface,
-    UDisks2DriveAsyncInterface,
-    UDisks2AsyncManager,
-    UDisks2PartitionAsyncInterface,
-    UDisks2FileSystemAsyncInterface,
-    Interfaces,
-)
-import typing
 import asyncio
-import pathlib
 import logging
 import os
+import pathlib
+import typing
+from collections.abc import Coroutine
+
+import sdbus
+from PyQt6 import QtCore
+
+from .device import Device
+from .udisks2_dbus_async import (
+    Interfaces,
+    UDisks2AsyncManager,
+    UDisks2BlockAsyncInterface,
+    UDisks2DriveAsyncInterface,
+    UDisks2FileSystemAsyncInterface,
+    UDisks2PartitionAsyncInterface,
+    UDisks2PartitionTableAsyncInterface,
+)
 
 UDisks2_service: str = "org.freedesktop.UDisks2"
 UDisks2_obj_path: str = "org/freedesktop/UDisks2"
+USER_HOME_DIR: str = os.path.expanduser("~")
 
 
-class Device:
-    def __init__(self, path: str, DriveInterface: UDisks2DriveAsyncInterface) -> None:
-        self.path: str = path
-        self.driver_interface: UDisks2DriveAsyncInterface = DriveInterface
-        self.partitions: dict[str, UDisks2BlockAsyncInterface] = {}
-        self.raw_block: dict[str, UDisks2BlockAsyncInterface] = {}
-        self.file_systems: dict[str, UDisks2FileSystemAsyncInterface] = {}
-        self.partition_tables: dict[str, UDisks2FileSystemAsyncInterface] = {}
+_T = typing.TypeVar(name="_T")
 
-    def update_raw_block(self, path: str, data: UDisks2BlockAsyncInterface) -> None:
-        self.raw_block.update({path: data})
 
-    def update_file_system(
-        self, path: str, data: UDisks2FileSystemAsyncInterface
-    ) -> None:
-        self.file_systems.update({path: data})
+def fire_n_forget(
+    coro: Coroutine[typing.Any, typing.Any, typing.Any],
+    name: str,
+    task_stack: set[asyncio.Task[typing.Any]],
+) -> asyncio.Task[typing.Any]:
+    task: asyncio.Task[typing.Any] = asyncio.create_task(coro, name=name)
+    task_stack.add(task)
 
-    def update_paritions(self, path: str, data: UDisks2PartitionAsyncInterface) -> None:
-        self.partitions.update({path: data})
+    def cleanup(task: asyncio.Task[_T]) -> None:
+        task_stack.discard(task)
+        try:
+            task.result()
+        except asyncio.CancelledError:
+            task.cancel()
+            logging.error("Task %s was cancelled", task.get_name())
+        except Exception as e:
+            logging.error(
+                "Caught exception in %s : %s", task.get_name(), e, exc_info=True
+            )
 
-    def get_logical_blocks(self) -> dict[str, UDisks2BlockAsyncInterface]:
-        return self.partitions
-
-    def get_driver(self) -> UDisks2DriveAsyncInterface | None:
-        """Get current device driver"""
-        if not self.driver_interface:
-            return None
-        return self.driver_interface
-
-    def delete(self) -> None:
-        del self.driver_interface
-        for key in self.partitions.keys():
-            block: UDisks2BlockAsyncInterface = self.partitions.pop(key)
-            del block
-        for key in self.raw_block.keys():
-            raw_block: UDisks2BlockAsyncInterface = self.raw_block.pop(key)
-            del raw_block
-        for key in self.file_systems.keys():
-            file_system: UDisks2FileSystemAsyncInterface = self.file_systems.pop(key)
-            del file_system
-        for key in self.partition_tables.keys():
-            part_table: UDisks2PartitionAsyncInterface = self.partition_tables.pop(key)
-            del part_table
+    task.add_done_callback(cleanup)
+    return task
 
 
 class UDisksDBusAsync(QtCore.QThread):
+    hardware_detected: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        str, name="hardware-detected"
+    )
     device_added: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         str, dict, name="device-added"
     )
     device_removed: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         str, str, name="device-removed"
-    )
+    )  # device path
+    hardware_removed: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        str, name="hardware-removed"
+    )  # device path
+    device_mounted: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        str, str, name="device-mounted"
+    )  # device path, new symlink path
 
-    def __init__(self, parent: QtCore.QObject, mnt_dir: str, gcodes_dir: str) -> None:
+    def __init__(self, parent: QtCore.QObject, gcodes_dir: str) -> None:
         super().__init__(parent)
-        self.task_stack = set()
-        self.mnt_path: pathlib.Path = pathlib.Path(mnt_dir)
+        self.task_stack: set[asyncio.Task[typing.Any]] = set()
         self.gcodes_path: pathlib.Path = pathlib.Path(gcodes_dir)
         self.system_bus: sdbus.SdBus = sdbus.sd_bus_open_system()
         if not self.system_bus:
@@ -83,8 +78,8 @@ class UDisksDBusAsync(QtCore.QThread):
             return
         sdbus.set_default_bus(self.system_bus)
         self.obj_manager: UDisks2AsyncManager = UDisks2AsyncManager.new_proxy(
-            service_name=UDisks2_service,
-            object_path=UDisks2_obj_path,
+            service_name="org.freedesktop.UDisks2",
+            object_path="/org/freedesktop/UDisks2",
             bus=self.system_bus,
         )
         self.loop: asyncio.AbstractEventLoop | None = None
@@ -123,65 +118,92 @@ class UDisksDBusAsync(QtCore.QThread):
             )
 
     async def monitor_dbus(self) -> None:
-        """Schedule coroutines for UDisks2 signals `interfaces_added` and `interfaces_removed`
-        Creates symlink upon device insertion and cleans up symlink on removal.
+        """Schedule coroutines for UDisks2 signals `interfaces_added`, `interfaces_removed`
+        and `properties_changed`. Creates symlink upon device insertion and cleans up symlink on removal.
 
         """
-        add_listener = asyncio.create_task(self._add_interface_listener())
-        rem_listener = asyncio.create_task(self._rem_interface_listener())
-        pchange_listener = asyncio.create_task(self._properties_changed_listener())
-        # self.task_stack.add(add_listener)
-        # self.task_stack.add(rem_listener)
-        # self.task_stack.add(pchange_listener)
-        while self.stop_event:
-            try:
-                response = await asyncio.gather(
-                    add_listener, rem_listener, pchange_listener
-                )
-                if response:
-                    for result in response:
-                        if isinstance(result, Exception):
-                            logging.error("Caught exception on asyncio loop")
-                # add_listener.add_done_callback(
-                #     lambda _: self.task_stack.discard(add_listener)
-                # )
-                # rem_listener.add_done_callback(
-                #     lambda _: self.task_stack.discard(rem_listener)
-                # )
-                # pchange_listener.add_done_callback(
-                #     lambda _: self.task_stack.discard(pchange_listener)
-                # )
-            except asyncio.CancelledError as e:
-                _ = add_listener.cancel()
-                _ = rem_listener.cancel()
-                _ = pchange_listener.cancel()
-                logging.error(
-                    "Caught exception while starting UDisks2 interfaces listeners: %s",
-                    e,
-                )
+        tasks: dict[str, Coroutine[typing.Any, typing.Any, typing.Any]] = {
+            "add": self._add_interface_listener(),
+            "rem": self._rem_interface_listener(),
+            "prop": self._properties_changed_listener(),
+        }
+        _ = fire_n_forget(
+            coro=self.restore_tracked(),
+            name="Main-Restore-Discovery",
+            task_stack=self.task_stack,
+        )
+        managed_tasks: list[asyncio.Task[typing.Any]] = []
+        for name, coro in tasks.items():
+            t = asyncio.create_task(coro, name=name)
+            self.task_stack.add(t)
+            t.add_done_callback(lambda _: self.task_stack.discard(t))
+            managed_tasks.append(t)
+        try:
+            await asyncio.gather(*managed_tasks)
+        except asyncio.CancelledError as e:
+            for task in self.task_stack:
+                _ = task.cancel()
+            logging.info("UDisks2 Monitor stopped: %s", e)
+        except Exception as e:
+            logging.error("Caught exception UDisks2 listeners failed: %s", e)
+
+    async def restore_tracked(self) -> None:
+        """Get and restore controlled mass storage devices"""
+        info = await self.obj_manager.get_managed_objects()
+        for path, interfaces in info.items():
+            fire_n_forget(
+                coro=self._handle_new_device(path, interfaces),
+                name=f"Restore-Discovery-{path}",
+                task_stack=self.task_stack,
+            )
 
     async def _add_interface_listener(self) -> None:
-        """Add interface signal handler
+        """Handle add interface signal from UDisks2 DBus connection
 
         Adds the new device to internal traking, can be retrieved with device path
         Creates symlink onto specified directory configured on the class
-
         """
         async for path, interfaces in self.obj_manager.interfaces_added:
-            if Interfaces["Drive"] in interfaces:
+            fire_n_forget(
+                self._handle_new_device(path, interfaces),
+                name=f"UDisks-Discovery-{path}",
+                task_stack=self.task_stack,
+            )
+
+    async def _handle_new_device(self, path: str, interfaces) -> None:
+        """Handle new devices, can be used on `interfaces_added` signal and
+        when recovering states from `get_managed_objects`
+
+        """
+        try:
+            if Interfaces.Drive.value in interfaces:
                 ddev: UDisks2DriveAsyncInterface = UDisks2DriveAsyncInterface.new_proxy(
                     service_name=UDisks2_service,
                     object_path=path,
                     bus=self.system_bus,
                 )
+                hwbus: str = await ddev.connection_bus
                 logging.info(
                     "New Hardware device recognized type: %s \n  path: %s",
-                    await ddev.connection_bus,
+                    hwbus,
                     path,
                 )
-                device: Device = Device(path, ddev)
+                media_removable, ejectable, con_bus = await asyncio.gather(
+                    ddev.media_removable, ddev.ejectable, ddev.connection_bus
+                )
+                if not (media_removable and ejectable and con_bus == "usb"):
+                    # Only handle usb devices and remoble storage media
+                    return
+                device: Device = Device(
+                    path, DriveInterface=ddev, symlink_path=self.gcodes_path
+                )
                 self.controlled_devs.update({path: device})
-            if Interfaces["Block"] in interfaces:
+                self.hardware_detected[str].emit(path)
+            if Interfaces.Block.value in interfaces:
+                # NOTE: Here lies the Phase II and PhaseIII,
+                # Phase II -> dict[Block, PartitionTable] -> This tells me the size of the drive
+                # PhaseIII -> dict[Block, Partition, Filesystem] -> This i can mount and see the files
+                # We can see that the Block interface alwasy comes in these phases, so junst instantiate once
                 bdev: UDisks2BlockAsyncInterface = UDisks2BlockAsyncInterface.new_proxy(
                     service_name=UDisks2_service,
                     object_path=path,
@@ -192,14 +214,31 @@ class UDisksDBusAsync(QtCore.QThread):
                     bdev.hint_system, bdev.hint_ignore
                 )
                 if hint_sys or hint_ignore:
-                    continue  # Always ignore if these flags are set to true
-                if drv_path in self.controlled_devs:
-                    logging.info("Recognized Block for device %s", path)
-                    device: Device = self.controlled_devs[drv_path]
-                    if "org.freedesktop.UDisks2.PartitionTable" in interfaces:
-                        device.update_raw_block(path, bdev)
-                        continue
-                    if Interfaces["Filesystem"] in interfaces:
+                    # Always ignore if these flags are set
+                    return
+                if (
+                    drv_path in self.controlled_devs
+                ):  # Only continue if there is a drive on that block which is managed by us
+                    dev: Device = self.controlled_devs[drv_path]
+                    if all(
+                        phase in interfaces
+                        for phase in (
+                            Interfaces.PartitionTable.value,
+                            Interfaces.Block.value,
+                        )
+                    ):
+                        # NOTE: This is specifically Phase II, parent  physical drive
+                        devpt: UDisks2PartitionTableAsyncInterface = (
+                            UDisks2PartitionTableAsyncInterface.new_proxy(
+                                service_name=UDisks2_service,
+                                object_path=path,
+                                bus=self.system_bus,
+                            )
+                        )
+                        dev.update_raw_block(path, bdev)
+                        dev.update_part_table(path, devpt)
+                    if Interfaces.Filesystem.value in interfaces:
+                        # This is a child, try and mount.
                         devfs: UDisks2FileSystemAsyncInterface = (
                             UDisks2FileSystemAsyncInterface.new_proxy(
                                 service_name=UDisks2_service,
@@ -207,8 +246,11 @@ class UDisksDBusAsync(QtCore.QThread):
                                 bus=self.system_bus,
                             )
                         )
-                        device.update_file_system(path, devfs)
-                    if Interfaces["Partition"] in interfaces:
+                        dev.update_file_system(path, devfs)
+                        self.device_added.emit(path, interfaces)
+                        # dev.mount()
+                    if Interfaces.Partition.value in interfaces:
+                        # NOTE: This is specifically PhaseIII
                         devpart: UDisks2PartitionAsyncInterface = (
                             UDisks2PartitionAsyncInterface.new_proxy(
                                 service_name=UDisks2_service,
@@ -216,45 +258,122 @@ class UDisksDBusAsync(QtCore.QThread):
                                 bus=self.system_bus,
                             )
                         )
-                        device.update_partitions(path, devpart)
+                        dev.update_partitions(path, devpart)
+                    dev.update_logical_blocks(path, bdev)
+        except sdbus.dbus_exceptions.DbusUnknownMethodError as e:
+            logging.error(
+                "Caught exception on device inserted unknown method: %s",
+                e,
+                exc_info=True,
+            )
+        except sdbus.dbus_exceptions.DbusUnknownInterfaceError as e:
+            logging.error(
+                "Caught exception on device inserted unknown interface: %s",
+                e,
+                exc_info=True,
+            )
+        except Exception as e:
+            logging.error(
+                "Caught fatal exception during discovery process %s: %s",
+                path,
+                e,
+                exc_info=True,
+            )
 
     async def _properties_changed_listener(self) -> None:
-        """Properties changed signal handling
+        """Handle properties_changed signal from UDisks2 Dbus connection
 
         Updates tracked objects
         """
+        print("Some properties changed in here")
         async for (
             path,
             changed_properties,
             invalid_properties,
         ) in self.obj_manager.properties_changed:
-            print("PROPERTIES CHANGED HERE ")
-            print(path)
-            print(changed_properties)
-            print(invalid_properties)
+            pass
 
     async def _rem_interface_listener(self) -> None:
-        """Removed interfaces signal
+        """Handle device removal signals from UDisks2 Dbus connection
 
         Removes tracked interface and cleansup any left behing data
         """
         async for path, interfaces in self.obj_manager.interfaces_removed:
-            if INTERFACES["Block"] in interfaces:
-                os.rmdir("/home/bugo/printer_data/gcodes/USB_PEN")
-
-    def add_symlink(self, path: str, label: str | None) -> None:
-        """Create symlink on `path`"""
-        if not (os.path.exists(path) or os.path.islink(path)):
-            dstb = pathlib.Path(path).joinpath(label if label else "USB DRIVE")
-            os.symlink(src="/media/bugo/BLOCKS", dst=dstb)
-
-    def rem_symlink(self, path: str) -> None:
-        """Remove symlink located in `path`"""
-        if os.path.islink(path) or os.path.exists(path):
             try:
-                os.remove(path)
-                logging.info("Symlink cleaning done, removed %s", path)
-            except OSError as e:
+                if Interfaces.Drive.value in interfaces:
+                    if path in self.controlled_devs:
+                        device: Device = self.controlled_devs.pop(path)
+                        device.kill()
+                        del device
+                        self.hardware_removed[str].emit(path)
+            except sdbus.dbus_exceptions.DbusUnknownMethodError as e:
                 logging.error(
-                    "Caught exception while trying to remove USB symlink: %s", e
+                    "Caught exception on device removed unknown method: %s",
+                    e,
+                    exc_info=True,
                 )
+            except sdbus.dbus_exceptions.DbusUnknownInterfaceError as e:
+                logging.error(
+                    "Caught exception on device removed unknown interface %s",
+                    e,
+                    exc_info=True,
+                )
+            except Exception as e:
+                logging.error(
+                    "Caught fatal exception on removed device: %s, %s",
+                    path,
+                    e,
+                    exc_info=True,
+                )
+
+    def mount(self, device: Device):
+        """Mounts the devices mountpoints"""
+        fileqt: int = device.get_mountable()
+        filesys: list[UDisks2FileSystemAsyncInterface] = device.get_filesystems()
+
+    async def _mount_filesystem(
+        self, filesystem: UDisks2FileSystemAsyncInterface
+    ) -> str:
+        try:
+            opts: dict[str, tuple[str, typing.Any]] = {
+                "auto.no_user_interactions": ("b", True),
+                "fstype": ("s", "auto"),
+                "as-user": ("s", os.environ.get("USER")),
+                "options": ("s", "noexec,nosuid,nodev,rw,relatime,sync"),
+            }
+            return await filesystem.mount(opts)
+        except Exception as e:
+            logging.error(
+                "Caught exception while mounting file system %s : %s",
+                filesystem,
+                e,
+                exc_info=True,
+            )
+            return ""
+
+    # def mount_device(self, path: str) -> None:
+    #     dev: Device | None = self.controlled_devs.get(path)
+    #     if not dev:
+    #         return
+    #     _ = fire_n_forget(
+    #         coro=dev.mount(), name=f"Mount-Task-{path}", task_stack=self.task_stack
+    #     )
+    #
+    # def add_symlink(self, device: Device, path: str, label: str | None) -> None:
+    #     """Create symlink on `path`"""
+    #     dstb = pathlib.Path(path).joinpath(label if label else "USB DRIVE")
+    #     if not (os.path.exists(dstb) or os.path.islink(dstb)):
+    #         os.symlink(src="/media/{label}", dstb=dstb)
+    #         os.symlink
+    #
+    # def rem_symlink(self,device: Device path: str) -> None:
+    #     """Remove symlink located in `path`"""
+    #     if os.path.islink(path) or os.path.exists(path):
+    #         try:
+    #             os.remove(path)
+    #             logging.info("Symlink cleaning done, removed %s", path)
+    #         except OSError as e:
+    #             logging.error(
+    #                 "Caught exception while trying to remove USB symlink: %s", e
+    #             )
+    #
