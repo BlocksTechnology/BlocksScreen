@@ -5,6 +5,7 @@ from PyQt6 import QtCore
 
 from .udisks2 import UDisksDBusAsync
 
+
 class USBManager(QtCore.QObject):
     usb_add: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         str, str, name="usb-add"
@@ -34,4 +35,4 @@ class USBManager(QtCore.QObject):
 
     @QtCore.pyqtSlot(str, name="hardware_removed")
     def _handle_rem_hardware(self, path: str):
-        logging.("hardware  removed detected")
+        print("hardware  removed detected")

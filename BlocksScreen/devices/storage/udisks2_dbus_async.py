@@ -120,7 +120,7 @@ class UDisks2FileSystemAsyncInterface(
         raise NotImplementedError
 
     @sdbus.dbus_property_async(property_signature="ayy")
-    def mount_points(self) -> list[str]:
+    def mount_points(self) -> list[bytes]:
         raise NotImplementedError
 
 
