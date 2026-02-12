@@ -26,6 +26,7 @@ class Device:
         self.logical_blocks: dict[str, UDisks2BlockAsyncInterface] = {}
         self.file_systems: dict[str, UDisks2FileSystemAsyncInterface] = {}
         self.partition_tables: dict[str, UDisks2PartitionTableAsyncInterface] = {}
+        self.symlinks: list[str] = []
 
     def get_logical_blocks(self) -> dict[str, UDisks2BlockAsyncInterface]:
         return self.logical_blocks
@@ -65,7 +66,6 @@ class Device:
         Specialy used when devices were removed unsafely
         """
         self.delete()
-        # self.rem_symlink(self.symlink_path)
 
     def delete(self) -> None:
         del self.driver_interface
