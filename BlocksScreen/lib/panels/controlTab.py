@@ -460,6 +460,7 @@ class ControlTab(QtWidgets.QStackedWidget):
     def handle_ztilt(self):
         """Handle Z-Tilt Adjustment"""
         self.call_load_panel.emit(True, "Please wait, performing Z-axis calibration.")
+        self.run_gcode_signal.emit("G28\nM400")
         self.run_gcode_signal.emit("Z_TILT_ADJUST")
 
     @QtCore.pyqtSlot(str, name="on-klippy-status")
