@@ -56,6 +56,7 @@ def validate_label(label: str, strict: bool = True, max_length: int = 100) -> st
 
     dangerous_chars = {
         "\0",
+        "\x00",
         "/",
         "\\",
         ";",
@@ -353,7 +354,6 @@ class UDisksDBusAsync(QtCore.QThread):
 
         Updates tracked objects
         """
-        print("Some properties changed in here")
         async for (
             path,
             changed_properties,
@@ -370,10 +370,8 @@ class UDisksDBusAsync(QtCore.QThread):
             try:
                 if Interfaces.Drive.value in interfaces:
                     if path in self.controlled_devs:
-                        print("hardware_removed")
                         device: Device = self.controlled_devs.pop(path)
                         device.kill()
-                        # self._cleanup_symlinks()
                         del device
                         self.hardware_removed[str].emit(path)
             except sdbus.dbus_exceptions.DbusUnknownMethodError as e:
@@ -398,15 +396,13 @@ class UDisksDBusAsync(QtCore.QThread):
 
     def mount(self, device: Device):
         """Mounts the devices mountpoints"""
-        # fileqt: int = device.get_mountable()
-        # filesys: list[UDisks2FileSystemAsyncInterface] = device.get_filesystems()
         for path, filesystem in device.file_systems.items():
-            clean_path = str(path).strip("\x00")
-            task = fire_n_forget(
+            _ = fire_n_forget(
                 coro=self._mount_filesystem(filesystem),
-                name=f"Mount-filesystem-{clean_path}",
+                name=f"Mount-filesystem-{path}",
                 task_stack=self.task_stack,
             )
+        return
 
     def _finish_mount(self, task) -> None:
         self.task_stack.discard(task)
@@ -415,7 +411,7 @@ class UDisksDBusAsync(QtCore.QThread):
     async def _mount_filesystem(
         self, filesystem: UDisks2FileSystemAsyncInterface, label: str = ""
     ) -> str:
-        validated_label = validate_label(label)
+        val_label: str = validate_label(label)
         try:
             opts: dict[str, tuple[str, typing.Any]] = {
                 "auto.no_user_interactions": ("b", True),
@@ -424,27 +420,26 @@ class UDisksDBusAsync(QtCore.QThread):
                 "options": ("s", "rw,relatime,sync"),
             }
             mnt_path: str = await filesystem.mount(opts)
-            symres: str = self.add_symlink(
-                path=mnt_path,
-                label=validated_label,
-                dst_path=self.gcodes_path.as_posix(),
+            return self.add_symlink(
+                path=mnt_path, label=val_label, dst_path=self.gcodes_path.as_posix()
             )
-            return symres if mnt_path and symres else ""
         except sdbus.SdBusUnmappedMessageError as e:
             if AlreadyMountedException in e.args[0]:
                 logging.info(
                     "Device filesystem already mounted on %s, verifying gcodes symlink",
                     str(e.args[1]),
                 )
-                print("Device already mounted !!!!!")
                 mount_points: list[bytes] = await filesystem.mount_points
                 if not mount_points:
                     return ""
-                print(mount_points[0].decode("utf-8"))
+                # Clean path as it comes weird
+                mpoint: str = mount_points[0].decode("utf-8").strip("\x00")
+                if os.path.exists(mpoint):
+                    return ""
                 return self.add_symlink(
-                    path=str(mount_points[0].decode("utf-8")),
+                    path=mpoint,
                     dst_path=self.gcodes_path.as_posix(),
-                    label=validated_label,
+                    label=val_label,
                 )
         except Exception as e:
             logging.error(
@@ -473,54 +468,41 @@ class UDisksDBusAsync(QtCore.QThread):
         In case there is no `label` then the created `symlink` on `dst_path`
         will default to **USB DRIVE**. If *USB DRIVE* symlink already exists
         then it will create a variant of that fallback **USB DRIVE [1-254]**
+
+        Be carefull with the provided directories and labels. They must come
+        clean or else this methos won't work.
         """
-        print("ON ADD SYMLINK")
         if not _validated and label:
             label = validate_label(label, strict=True)
         fallback: str = "USB DRIVE" if _index == 0 else str(f"USB DRIVE {_index}")
         dstb = pathlib.Path(dst_path).joinpath(label if label else fallback)
         try:
-            # NOTE: Check if there is any symlink pointing to the same directory i want
-
-            self.gcodes_path.rglob("*")
-            thereis = any(
-                filter(
-                    lambda _: dstb.resolve().as_posix() == path,
-                    self.gcodes_path.rglob("*"),
-                )
-            )
-            for dir in self.gcodes_path.rglob("*"):
-                print(dir)
-            if not (os.path.exists(dstb) or os.path.islink(dstb)):
-                os.symlink(src=path, dst=dstb.resolve())
+            if not os.path.islink(dstb):
+                os.symlink(src=path, dst=dstb)
                 return dstb.as_posix() if os.path.exists(dstb) else ""
-            if os.path.exists(dstb) and os.path.islink(dstb):
+            # if os.path.exists(dstb) or os.path.islink(dstb):
+            if os.path.islink(dstb):
                 if dstb.resolve().as_posix() == pathlib.Path(path).as_posix():
                     return dstb.as_posix()
-                if not label:
-                    _index += 1
-                    if _index == 255:
-                        return ""
-                    return self.add_symlink(
-                        path, dst_path, label, _index, _validated=True
-                    )
-                if self.rem_symlink(path=dstb.as_posix()):
-                    return self.add_symlink(path, dst_path, label, _validated=True)
+            if not label:
+                _index += 1
+                if _index == 255:
+                    return ""
+                return self.add_symlink(path, dst_path, label, _index, _validated=True)
+            if self.rem_symlink(path=dstb.as_posix()):
+                return self.add_symlink(path, dst_path, label, _validated=True)
         except PermissionError:
             logging.error(
                 "Caught fatal exception no permissions, unable to create symlink on specified path"
             )
         except OSError as e:
-            logging.error("Caught fatal exception %s", e)
+            logging.error("Caught fatal exception OSERROR%s", e)
         return ""
 
     def rem_symlink(self, path: str | pathlib.Path) -> bool:
         """Remove `ONLY` symlinks located in `path` if it is allowed"""
-        print("ON REMOVE SYMLINK")
-        resolved_path = pathlib.Path(path).resolve()
-        print(resolved_path)
+        resolved_path = pathlib.Path(path)
         resolved_gcodes_path = pathlib.Path(self.gcodes_path).as_posix()
-        print(resolved_gcodes_path)
         try:
             _ = resolved_path.relative_to(resolved_gcodes_path)
         except ValueError:
@@ -553,3 +535,23 @@ class UDisksDBusAsync(QtCore.QThread):
         for dir in self.gcodes_path.rglob("*"):
             if os.path.islink(dir) and not os.path.exists(dir):
                 _ = self.rem_symlink(dir)
+
+    def _resolve_symlinks(
+        self, path: str | pathlib.Path, mount_path: str | pathlib.Path
+    ) -> bool:
+        """Checks if `gcodes directory` already has a symlink that
+        resolves to the same mount directory.
+
+
+        This method returns on the the first encounter. It does not
+        evaluate any other symlinks after that.
+        """
+        for dir in self.gcodes_path.rglob("*"):
+            if os.path.islink(dir):
+                if (
+                    pathlib.Path(path).resolve().as_posix()
+                    == pathlib.Path(mount_path).as_posix()
+                ):
+                    # This `path` resolves to the `mount_path`
+                    return True
+        return False
