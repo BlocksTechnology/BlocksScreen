@@ -268,10 +268,6 @@ class UDisksDBusAsync(QtCore.QThread):
                 self.controlled_devs.update({path: device})
                 self.hardware_detected[str].emit(path)
             if Interfaces.Block.value in interfaces:
-                # NOTE: Here lies the Phase II and PhaseIII,
-                # Phase II -> dict[Block, PartitionTable] -> This tells me the size of the drive
-                # PhaseIII -> dict[Block, Partition, Filesystem] -> This i can mount and see the files
-                # We can see that the Block interface alwasy comes in these phases, so junst instantiate once
                 bdev: UDisks2BlockAsyncInterface = UDisks2BlockAsyncInterface.new_proxy(
                     service_name=UDisks2_service,
                     object_path=path,
@@ -284,9 +280,7 @@ class UDisksDBusAsync(QtCore.QThread):
                 if hint_sys or hint_ignore:
                     # Always ignore if these flags are set
                     return
-                if (
-                    drv_path in self.controlled_devs
-                ):  # Only continue if there is a drive on that block which is managed by us
+                if drv_path in self.controlled_devs:
                     dev: Device = self.controlled_devs[drv_path]
                     if all(
                         phase in interfaces
@@ -295,7 +289,6 @@ class UDisksDBusAsync(QtCore.QThread):
                             Interfaces.Block.value,
                         )
                     ):
-                        # NOTE: This is specifically Phase II, parent  physical drive
                         devpt: UDisks2PartitionTableAsyncInterface = (
                             UDisks2PartitionTableAsyncInterface.new_proxy(
                                 service_name=UDisks2_service,
@@ -306,7 +299,6 @@ class UDisksDBusAsync(QtCore.QThread):
                         dev.update_raw_block(path, bdev)
                         dev.update_part_table(path, devpt)
                     if Interfaces.Filesystem.value in interfaces:
-                        # This is a child, try and mount.
                         devfs: UDisks2FileSystemAsyncInterface = (
                             UDisks2FileSystemAsyncInterface.new_proxy(
                                 service_name=UDisks2_service,
@@ -316,10 +308,8 @@ class UDisksDBusAsync(QtCore.QThread):
                         )
                         dev.update_file_system(path, devfs)
                         self.device_added.emit(path, interfaces)
-                        # dev.mount()
                         self.mount(dev)
                     if Interfaces.Partition.value in interfaces:
-                        # NOTE: This is specifically PhaseIII
                         devpart: UDisks2PartitionAsyncInterface = (
                             UDisks2PartitionAsyncInterface.new_proxy(
                                 service_name=UDisks2_service,
@@ -359,6 +349,7 @@ class UDisksDBusAsync(QtCore.QThread):
             changed_properties,
             invalid_properties,
         ) in self.obj_manager.properties_changed:
+            print("Properties changed")
             pass
 
     async def _rem_interface_listener(self) -> None:
@@ -374,6 +365,7 @@ class UDisksDBusAsync(QtCore.QThread):
                         device.kill()
                         del device
                         self.hardware_removed[str].emit(path)
+                self._cleanup_broken_symlinks()
             except sdbus.dbus_exceptions.DbusUnknownMethodError as e:
                 logging.error(
                     "Caught exception on device removed unknown method: %s",
@@ -402,11 +394,6 @@ class UDisksDBusAsync(QtCore.QThread):
                 name=f"Mount-filesystem-{path}",
                 task_stack=self.task_stack,
             )
-        return
-
-    def _finish_mount(self, task) -> None:
-        self.task_stack.discard(task)
-        task.result()
 
     async def _mount_filesystem(
         self, filesystem: UDisks2FileSystemAsyncInterface, label: str = ""
@@ -432,7 +419,6 @@ class UDisksDBusAsync(QtCore.QThread):
                 mount_points: list[bytes] = await filesystem.mount_points
                 if not mount_points:
                     return ""
-                # Clean path as it comes weird
                 mpoint: str = mount_points[0].decode("utf-8").strip("\x00")
                 if os.path.exists(mpoint):
                     return ""
