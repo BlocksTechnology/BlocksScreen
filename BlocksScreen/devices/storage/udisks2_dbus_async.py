@@ -6,6 +6,7 @@
 # Hugo Costa hugo.santos.costa@gmail.com
 import sdbus
 import enum
+import typing
 
 
 class Interfaces(enum.Enum):
@@ -57,7 +58,7 @@ class UDisks2PartitionAsyncInterface(
         raise NotImplementedError
 
     @sdbus.dbus_method_async(input_signature="a{sv}")
-    async def delete(self, opts: dict) -> None:
+    async def delete(self, opts: dict[str, typing.Any]) -> None:
         raise NotImplementedError
 
     @sdbus.dbus_property_async(property_signature="u")
@@ -175,7 +176,7 @@ class UDisks2BlockAsyncInterface(
         raise NotImplementedError
 
     @sdbus.dbus_method_async(input_signature="a{sv}")
-    async def rescan(self, opts: dict) -> None:
+    async def rescan(self, opts: dict[str, typing.Any]) -> None:
         raise NotImplementedError
 
     @sdbus.dbus_property_async(property_signature="o")
@@ -183,7 +184,7 @@ class UDisks2BlockAsyncInterface(
         raise NotImplementedError
 
     @sdbus.dbus_property_async(property_signature="a(sa{sv})")
-    def configuration(self) -> list[any]:
+    def configuration(self) -> list[typing.Any]:
         raise NotImplementedError
 
 
@@ -202,7 +203,7 @@ class UDisks2DriveAsyncInterface(
         raise NotImplementedError
 
     @sdbus.dbus_property_async(property_signature="a{sv}")
-    def configuration(self) -> dict:
+    def configuration(self) -> dict[str, typing.Any]:
         raise NotImplementedError
 
     @sdbus.dbus_property_async(property_signature="b")
@@ -258,5 +259,5 @@ class UDisks2DriveAsyncInterface(
         raise NotImplementedError
 
     @sdbus.dbus_method_async(input_signature="a{sv}")
-    async def eject(self, opts: dict) -> None:
+    async def eject(self, opts: dict[str, typing.Any]) -> None:
         raise NotImplementedError
