@@ -4,6 +4,7 @@
 #
 #
 # Hugo Costa hugo.santos.costa@gmail.com
+import typing
 import sdbus
 
 
@@ -79,7 +80,7 @@ class UDisks2BlockInterface(
         raise NotImplementedError
 
     @sdbus.dbus_method(input_signature="a{sv}")
-    def rescan(self, opts: dict) -> None:
+    def rescan(self, opts: dict[str, typing.Any]) -> None:
         raise NotImplementedError
 
 
@@ -123,5 +124,5 @@ class UDisks2DriveInterface(
         raise NotImplementedError
 
     @sdbus.dbus_method(input_signature="a{sv}")
-    def eject(self, opts: dict) -> None:
+    def eject(self, opts: dict[str, typing.Any]) -> None:
         raise NotImplementedError
