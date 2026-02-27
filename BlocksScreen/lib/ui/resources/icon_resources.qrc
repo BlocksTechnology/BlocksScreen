@@ -1,20 +1,19 @@
 <RCC>
   <qresource prefix="network">
-    <file>media/btn_icons/0bar_wifi.svg</file>
-    <file>media/btn_icons/0bar_wifi_protected.svg</file>
-    <file>media/btn_icons/1bar_wifi.svg</file>
-    <file>media/btn_icons/1bar_wifi_protected.svg</file>
-    <file>media/btn_icons/2bar_wifi.svg</file>
-    <file>media/btn_icons/2bar_wifi_protected.svg</file>
-    <file>media/btn_icons/3bar_wifi.svg</file>
-    <file>media/btn_icons/3bar_wifi_protected.svg</file>
-    <file>media/btn_icons/4bar_wifi.svg</file>
-    <file>media/btn_icons/4bar_wifi_protected.svg</file>
+    <file>media/btn_icons/network/static_ip.svg</file>
     <file>media/btn_icons/wifi_config.svg</file>
-    <file>media/btn_icons/wifi_locked.svg</file>
-    <file>media/btn_icons/wifi_unlocked.svg</file>
+    <file>media/btn_icons/network/0bar_wifi.svg</file>
+    <file>media/btn_icons/network/0bar_wifi_protected.svg</file>
+    <file>media/btn_icons/network/1bar_wifi.svg</file>
+    <file>media/btn_icons/network/1bar_wifi_protected.svg</file>
+    <file>media/btn_icons/network/2bar_wifi.svg</file>
+    <file>media/btn_icons/network/2bar_wifi_protected.svg</file>
+    <file>media/btn_icons/network/3bar_wifi.svg</file>
+    <file>media/btn_icons/network/3bar_wifi_protected.svg</file>
+    <file>media/btn_icons/network/4bar_wifi.svg</file>
+    <file>media/btn_icons/network/4bar_wifi_protected.svg</file>
+    <file>media/btn_icons/network/ethernet_connected.svg</file>
     <file>media/btn_icons/hotspot.svg</file>
-    <file>media/btn_icons/no_wifi.svg</file>
     <file>media/btn_icons/retry_wifi.svg</file>
   </qresource>
   <qresource prefix="baby_step">

@@ -7,20 +7,19 @@ from configfile import BlocksScreenConfig, get_configparser
 from lib.files import Files
 from lib.machine import MachineControl
 from lib.moonrakerComm import MoonWebSocket
+from lib.network import WifiIconKey
 from lib.panels.controlTab import ControlTab
 from lib.panels.filamentTab import FilamentTab
-from lib.panels.networkWindow import NetworkControlWindow
+from lib.panels.networkWindow import NetworkControlWindow, PixmapCache
 from lib.panels.printTab import PrintTab
 from lib.panels.utilitiesTab import UtilitiesTab
+from lib.panels.widgets.basePopup import BasePopup
 from lib.panels.widgets.connectionPage import ConnectionPage
+from lib.panels.widgets.loadWidget import LoadingOverlayWidget
 from lib.panels.widgets.popupDialogWidget import Popup
+from lib.panels.widgets.updatePage import UpdatePage
 from lib.printer import Printer
 from lib.ui.mainWindow_ui import Ui_MainWindow  # With header
-from lib.panels.widgets.updatePage import UpdatePage
-from lib.panels.widgets.basePopup import BasePopup
-from lib.panels.widgets.loadWidget import LoadingOverlayWidget
-
-# from lib.ui.mainWindow_v2_ui import Ui_MainWindow # No header
 from lib.ui.resources.background_resources_rc import *
 from lib.ui.resources.font_rc import *
 from lib.ui.resources.graphic_resources_rc import *
@@ -49,6 +48,34 @@ def api_handler(func):
     return wrapper
 
 
+class HeaderWifiIconProvider:
+    """Resolves WifiIconKey integer values to cached QPixmaps for the header bar."""
+
+    _WIFI_PATHS: dict[tuple[int, bool], str] = {
+        (
+            b,
+            p,
+        ): f":/network/media/btn_icons/network/{b}bar_wifi{'_protected' if p else ''}.svg"
+        for b in range(5)
+        for p in (False, True)
+    }
+    _ETHERNET_PATH = ":/network/media/btn_icons/network/ethernet_connected.svg"
+    _HOTSPOT_PATH = ":/network/media/btn_icons/hotspot.svg"
+
+    @classmethod
+    def get_pixmap(cls, icon_key: int) -> QtGui.QPixmap:
+        """Resolve an icon key to a QPixmap (cached via PixmapCache)."""
+        key = WifiIconKey(icon_key)
+        if key is WifiIconKey.ETHERNET:
+            return PixmapCache.get(cls._ETHERNET_PATH)
+        if key is WifiIconKey.HOTSPOT:
+            return PixmapCache.get(cls._HOTSPOT_PATH)
+        path = cls._WIFI_PATHS.get(
+            (key.bars, key.is_protected), cls._WIFI_PATHS[(0, False)]
+        )
+        return PixmapCache.get(path)
+
+
 class MainWindow(QtWidgets.QMainWindow):
     """GUI MainWindow, handles most of the app logic"""
 
@@ -68,6 +95,7 @@ class MainWindow(QtWidgets.QMainWindow):
     call_load_panel = QtCore.pyqtSignal(bool, str, name="call-load-panel")
 
     def __init__(self):
+        """Set up UI, instantiate subsystems, and wire all inter-component signals."""
         super(MainWindow, self).__init__()
         self.config: BlocksScreenConfig = get_configparser()
         self.ui = Ui_MainWindow()
@@ -154,6 +182,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.printer.heater_bed_update.connect(self.on_heater_bed_update)
         self.ui.main_content_widget.currentChanged.connect(slot=self.reset_tab_indexes)
         self.call_network_panel.connect(self.networkPanel.show_network_panel)
+        self.networkPanel.update_wifi_icon.connect(self.change_wifi_icon)
         self.conn_window.wifi_button_clicked.connect(self.call_network_panel.emit)
         self.ui.wifi_button.clicked.connect(self.call_network_panel.emit)
         self.handle_error_response.connect(
@@ -192,12 +221,12 @@ class MainWindow(QtWidgets.QMainWindow):
         )
         self.loadscreen.add_widget(self.loadwidget)
         if self.config.has_section("server"):
-            # @ Start websocket connection with moonraker
             self.bo_ws_startup.emit()
         self.reset_tab_indexes()
 
     @QtCore.pyqtSlot(bool, str, name="show-load-page")
     def show_LoadScreen(self, show: bool = True, msg: str = ""):
+        """Show or hide the loading overlay, guarded by the calling panel's visibility."""
         _sender = self.sender()
 
         if _sender == self.filamentPanel:
@@ -387,6 +416,15 @@ class MainWindow(QtWidgets.QMainWindow):
             case 3:
                 self.utilitiesPanel.setCurrentIndex(panel_index)
 
+    @QtCore.pyqtSlot(int)
+    def change_wifi_icon(self, icon_key: int) -> None:
+        """Change the icon of the netowrk by a key enum match
+
+        Args:
+            icon_key (int): WifiIconKey mapping for the current network state
+        """
+        self.ui.wifi_button.setPixmap(HeaderWifiIconProvider.get_pixmap(icon_key))
+
     @QtCore.pyqtSlot(int, int, name="request-change-page")
     def global_change_page(self, tab_index: int, panel_index: int) -> None:
         """Changes panels pages globally
@@ -470,6 +508,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     @api_handler
     def _handle_server_message(self, method, data, metadata) -> None:
+        """Route file-related WebSocket messages to the Files subsystem."""
         if "file" in method:
             file_data_event = events.ReceivedFileData(data, method, metadata)
             try:
@@ -485,8 +524,8 @@ class MainWindow(QtWidgets.QMainWindow):
 
     @api_handler
     def _handle_machine_message(self, method, data, metadata) -> None:
+        """Route machine-state WebSocket messages to the update signal."""
         if "ok" in data:
-            # Here capture if 'ok' if a request for an update was successful
             return
         if "update" in method:
             if ("status" or "refresh") in method:
@@ -620,7 +659,8 @@ class MainWindow(QtWidgets.QMainWindow):
         """Handle error messages"""
         self.handle_error_response[list].emit([data, metadata])
         if "metadata" in data.get("message", "").lower():
-            # Quick fix, don't care about no metadata errors
+            # Metadata fetch failures are benign (klipper couldn't read slicer
+            # metadata for a file) — suppress the error popup.
             return
         if self._popup_toggle:
             return
@@ -687,6 +727,11 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def closeEvent(self, a0: typing.Optional[QtGui.QCloseEvent]) -> None:
         """Handles GUI closing"""
+        try:
+            self.networkPanel.close()
+        except Exception as e:
+            _logger.warning("Network panel shutdown error: %s", e)
+
         _loggers = [
             logging.getLogger(name) for name in logging.root.manager.loggerDict
         ]  # Get available logger handlers
