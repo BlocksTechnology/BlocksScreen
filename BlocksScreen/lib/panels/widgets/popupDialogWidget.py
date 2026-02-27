@@ -31,9 +31,9 @@ class Popup(QtWidgets.QDialog):
         self.persistent_notifications: Deque = deque()
         self.message_type: Popup.MessageType = Popup.MessageType.INFO
         self.default_background_color = QtGui.QColor(164, 164, 164)
-        self.info_icon = QtGui.QPixmap(":ui/media/btn_icons/info.svg")
-        self.warning_icon = QtGui.QPixmap(":ui/media/btn_icons/warning.svg")
-        self.error_icon = QtGui.QPixmap(":ui/media/btn_icons/error.svg")
+        self.info_icon = QtGui.QPixmap(":/ui/media/btn_icons/info.svg")
+        self.warning_icon = QtGui.QPixmap(":/ui/media/btn_icons/warning.svg")
+        self.error_icon = QtGui.QPixmap(":/ui/media/btn_icons/error.svg")
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_TranslucentBackground, True)
         self.setMouseTracking(True)
         self.setWindowFlags(

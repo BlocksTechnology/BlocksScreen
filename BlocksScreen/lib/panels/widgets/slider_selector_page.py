@@ -128,7 +128,7 @@ class SliderPage(QtWidgets.QWidget):
         )
 
         self.back_button = IconButton(self)
-        self.back_button.setPixmap(QtGui.QPixmap(":ui/media/btn_icons/back.svg"))
+        self.back_button.setPixmap(QtGui.QPixmap(":/ui/media/btn_icons/back.svg"))
         self.back_button.has_text = False
         self.back_button.setMinimumSize(QtCore.QSize(60, 60))
         self.back_button.setMaximumSize(QtCore.QSize(60, 60))

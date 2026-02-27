@@ -165,7 +165,7 @@ class CustomNumpad(QtWidgets.QWidget):
         self.numpad_back_btn.setSizePolicy(sizePolicy)
         self.numpad_back_btn.setMinimumSize(QtCore.QSize(60, 60))
         self.numpad_back_btn.setMaximumSize(QtCore.QSize(60, 60))
-        self.numpad_back_btn.setPixmap(QtGui.QPixmap(":ui/media/btn_icons/back.svg"))
+        self.numpad_back_btn.setPixmap(QtGui.QPixmap(":/ui/media/btn_icons/back.svg"))
         self.numpad_back_btn.setObjectName("numpad_back_btn")
         self.header_layout.addWidget(
             self.numpad_back_btn,
