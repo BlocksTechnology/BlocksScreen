@@ -16,6 +16,7 @@ class ListItem:
     callback: typing.Optional[typing.Callable] = None
 
     color: str = "#dfdfdf"
+    color_left_icon: bool = False
     right_icon: typing.Optional[QtGui.QPixmap] = None
     left_icon: typing.Optional[QtGui.QPixmap] = None
 
@@ -30,13 +31,14 @@ class ListItem:
 
     height: int = 60
     notificate: bool = False
-    
-    #stores width and heitgh of the button so we dont need to recalculate it every time
+
+    # stores width and heitgh of the button so we dont need to recalculate it every time
     _cache: typing.Dict[int, int] = field(default_factory=dict)
 
     def clear_cache(self):
         """Call this if text or font size changes dynamically"""
         self._cache.clear()
+
 
 class EntryListModel(QtCore.QAbstractListModel):
     """List model Subclassed QAbstractListModel"""
@@ -367,6 +369,9 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
                 fmr = option.fontMetrics
             right_reserved += fmr.horizontalAdvance(item.right_text) + 10
 
+        if item.right_icon:
+            right_reserved += ellipse_size
+
         text_avail_width = target_width - left_reserved - right_reserved
         if text_avail_width < 50:
             text_avail_width = 50
@@ -404,17 +409,13 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
         rect = option.rect.adjusted(2, 2, -2, -2)
 
         path = QtGui.QPainterPath()
-        radius = 12
-        path.addRoundedRect(QtCore.QRectF(rect), radius, radius)
+        path.addRoundedRect(QtCore.QRectF(rect), 12, 12)
 
         if item.not_clickable:
             painter.restore()
             return
 
-
-        show_expand_arrow = item.allow_expand and item.needs_expansion
-
-        if show_expand_arrow:
+        if item.allow_expand and item.needs_expansion:
             item.right_icon = (
                 QtGui.QPixmap(":/arrow_icons/media/btn_icons/arrow_down.svg")
                 if item.is_expanded
@@ -430,6 +431,8 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
         painter.fillPath(path, pressed_color)
 
         # Geometry Calc
+
+        # ICON SPACEEE
         ellipse_size = item.height * 0.8
         ellipse_margin = (item.height - ellipse_size) / 2
         ellipse_rect = QtCore.QRectF(
@@ -451,76 +454,91 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
             )
 
         left_margin = 10
+        left_icon_rect = QtCore.QRectF(
+            rect.left() + ellipse_margin,
+            rect.top() + ellipse_margin,
+            ellipse_size,
+            ellipse_size,
+        )
+
         if item.left_icon:
-            left_icon_rect = QtCore.QRectF(
-                rect.left() + ellipse_margin,
-                rect.top() + ellipse_margin,
-                ellipse_size,
-                ellipse_size,
-            )
             l_icon_scaled = item.left_icon.scaled(
                 int(left_icon_rect.width()),
                 int(left_icon_rect.height()),
                 QtCore.Qt.AspectRatioMode.KeepAspectRatio,
                 QtCore.Qt.TransformationMode.SmoothTransformation,
             )
-            tinted = QtGui.QPixmap(l_icon_scaled.size())
-            tinted.fill(QtCore.Qt.GlobalColor.transparent)
-            p2 = QtGui.QPainter(tinted)
-            p2.drawPixmap(0, 0, l_icon_scaled)
-            p2.setCompositionMode(
-                QtGui.QPainter.CompositionMode.CompositionMode_SourceIn
-            )
-            p2.fillRect(tinted.rect(), QtGui.QColor(item.color))
-            p2.end()
-            painter.drawPixmap(
-                left_icon_rect.toRect(),
-                tinted,
-            )
-            left_margin = ellipse_margin + ellipse_size + 8
+
+            if item.color_left_icon:
+                tinted = QtGui.QPixmap(l_icon_scaled.size())
+                tinted.fill(QtCore.Qt.GlobalColor.transparent)
+                p2 = QtGui.QPainter(tinted)
+                p2.drawPixmap(0, 0, l_icon_scaled)
+                p2.setCompositionMode(
+                    QtGui.QPainter.CompositionMode.CompositionMode_SourceIn
+                )
+                p2.fillRect(tinted.rect(), QtGui.QColor(item.color))
+                p2.end()
+                painter.drawPixmap(
+                    left_icon_rect.toRect(),
+                    tinted,
+                )
+            else:
+                painter.drawPixmap(
+                    left_icon_rect.toRect(),
+                    l_icon_scaled,
+                )
 
         text_margin = int(
             rect.right() - ellipse_size - ellipse_margin - rect.height() * 0.10
         )
+
         text_rect = QtCore.QRectF(
-            rect.left() + left_margin,
+            rect.left()
+            + left_margin
+            + (left_icon_rect.width() if item.left_icon else 0),
             rect.top(),
-            text_margin - rect.left() - left_margin,
+            text_margin
+            - rect.left()
+            - left_margin
+            - (left_icon_rect.width() if item.left_icon else 0),
             rect.height(),
         )
 
         painter.setPen(QtGui.QColor(255, 255, 255))
+
         _font = painter.font()
         if item._lfontsize > 0:
             _font.setPointSize(item._lfontsize)
         painter.setFont(_font)
-        metrics = QtGui.QFontMetrics(_font)
-        main_text_height = metrics.height()
 
-        text_y = rect.top() + (rect.height() + main_text_height) / 2 - metrics.descent()
+        metrics = QtGui.QFontMetrics(_font)
 
         right_font = QtGui.QFont(_font)
         if item._rfontsize > 0:
             right_font.setPointSize(item._rfontsize)
+
         right_metrics = QtGui.QFontMetrics(right_font)
-        right_text_width = right_metrics.horizontalAdvance(item.right_text)
-        right_text_x = ellipse_rect.right() - right_text_width - left_margin
 
-        # Adjust main text width based on right text
-        max_main_text_width = right_text_x - left_margin
+        right_text_x = (
+            ellipse_rect.right()
+            - right_metrics.horizontalAdvance(item.right_text)
+            - left_icon_rect.width()
+            - left_margin
+        )
 
-        text = item.text
-
+        text = item.text.replace("\n", "")
         # Logic: If not expanded, OR if expansion is not needed, draw single line
         if not item.is_expanded:
+            max_main_text_width = right_text_x - left_margin
             text = metrics.elidedText(
                 text,
                 QtCore.Qt.TextElideMode.ElideRight,
                 int(max_main_text_width),
             )
             painter.drawText(
-                int(text_rect.left()),
-                int(text_y),
+                text_rect,
+                QtCore.Qt.AlignmentFlag.AlignVCenter,
                 text,
             )
         else:
@@ -528,7 +546,7 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
             painter.drawText(
                 text_rect,
                 QtCore.Qt.AlignmentFlag.AlignLeft
-                | QtCore.Qt.AlignmentFlag.AlignTop
+                | QtCore.Qt.AlignmentFlag.AlignVCenter
                 | QtCore.Qt.TextFlag.TextWordWrap,
                 text,
             )
@@ -566,10 +584,9 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
         """Capture view model events"""
         item = index.data(QtCore.Qt.ItemDataRole.UserRole)
         if event.type() == QtCore.QEvent.Type.MouseButtonPress:
-
             if item and item.not_clickable:
                 return True
-            
+
             if item.callback and callable(item.callback):
                 item.callback()
 
