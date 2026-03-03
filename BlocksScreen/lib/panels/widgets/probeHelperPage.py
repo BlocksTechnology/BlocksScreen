@@ -35,11 +35,17 @@ class ProbeHelper(QtWidgets.QWidget):
     )
     call_load_panel = QtCore.pyqtSignal(bool, str, name="call-load-panel")
 
+    toggle_conn_page = QtCore.pyqtSignal(bool, name="toggles-conn-panel")
+
+    disable_popups: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        bool, name="disable-popups"
+    )
+
     distances = ["0.01", ".025", "0.1", "0.5", "1"]
     _calibration_commands: list = []
     helper_start: bool = False
     helper_initialize: bool = False
-    _zhop_height: float = float(distances[4])
+    _zhop_height: float = float(distances[0])
     card_options: dict = {}
     z_offset_method_type: str = ""
     z_offset_config_method: tuple = ()
@@ -85,6 +91,26 @@ class ProbeHelper(QtWidgets.QWidget):
         self.block_list = False
         self.target_temp = 0
         self.current_temp = 0
+        self._eddy_calibration_state = False
+
+    @QtCore.pyqtSlot(str, dict, name="on_print_stats_update")
+    @QtCore.pyqtSlot(str, float, name="on_print_stats_update")
+    @QtCore.pyqtSlot(str, str, name="on_print_stats_update")
+    def on_print_stats_update(self, field: str, value: dict | float | str) -> None:
+        """Handle print stats object update"""
+        if isinstance(value, str):
+            if "state" in field:
+                if value in ("standby"):
+                    if self._eddy_calibration_state:
+                        self.call_load_panel.emit(True, "Almost done...\nPlease wait")
+                        self.run_gcode_signal.emit(self._eddy_command)
+
+                        self.request_page_view.emit()
+
+                        self.disable_popups.emit(False)
+                        self.toggle_conn_page.emit(True)
+
+                        self._eddy_calibration_state = False
 
     def on_klippy_status(self, state: str):
         """Handle Klippy status event change"""
@@ -202,29 +228,28 @@ class ProbeHelper(QtWidgets.QWidget):
 
         # BUG: If i don't add if not self.probe_config i'll just receive the configuration a bunch of times
         if isinstance(config, list):
-            ...
-        # if self.block_list:
-        #     return
-        # else:
-        #     self.block_list = True
+            if self.block_list:
+                return
+            else:
+                self.block_list = True
 
-        # _keys = []
-        # if not isinstance(config, list):
-        #     return
+            _keys = []
+            if not isinstance(config, list):
+                return
 
-        # list(map(lambda item: _keys.extend(item.keys()), config))
+            list(map(lambda item: _keys.extend(item.keys()), config))
 
-        # probe, *_ = config[0].items()
-        # self.z_offset_method_type = probe[0]  # The one found first
-        # self.z_offset_method_config = (
-        #     probe[1],
-        #     "PROBE_CALIBRATE",
-        #     "Z_OFFSET_APPLY_PROBE",
-        # )
-        # self.init_probe_config()
-        # if not _keys:
-        #     return
-        # self._configure_option_cards(_keys)
+            probe, *_ = config[0].items()
+            self.z_offset_method_type = probe[0]  # The one found first
+            self.z_offset_method_config = (
+                probe[1],
+                "PROBE_CALIBRATE",
+                "Z_OFFSET_APPLY_PROBE",
+            )
+            self._init_probe_config()
+            if not _keys:
+                return
+            self._configure_option_cards(_keys)
 
         elif isinstance(config, dict):
             if config.get("stepper_z"):
@@ -393,10 +418,6 @@ class ProbeHelper(QtWidgets.QWidget):
         for i in self.card_options.values():
             i.setDisabled(True)
 
-        self.call_load_panel.emit(True, "Homing Axes...")
-        if self.z_offset_safe_xy:
-            self.run_gcode_signal.emit("G28\nM400")
-            self._move_to_pos(self.z_offset_safe_xy[0], self.z_offset_safe_xy[1], 100)
         self.helper_initialize = True
         _timer = QtCore.QTimer()
         _timer.setSingleShot(True)
@@ -408,6 +429,26 @@ class ProbeHelper(QtWidgets.QWidget):
         _cmd = self._build_calibration_command(sender.name)  # type:ignore
         if not _cmd:
             return
+
+        self.disable_popups.emit(True)
+        self.run_gcode_signal.emit("G28\nM400")
+        if "eddy" in sender.name:  # type:ignore
+            self.call_load_panel.emit(True, "Preparing Eddy Current Calibration...")
+            self.toggle_conn_page.emit(False)
+            self.run_gcode_signal.emit(
+                f"LDC_CALIBRATE_DRIVE_CURRENT CHIP={sender.name.split(' ')[1]}"  # type:ignore
+            )
+            self.run_gcode_signal.emit("M400\nSAVE_CONFIG")
+
+            self._eddy_command = _cmd
+            self._eddy_calibration_state = True
+            return
+        else:
+            if self.z_offset_safe_xy:
+                self.call_load_panel.emit(True, "Homing Axes...")
+                self._move_to_pos(
+                    self.z_offset_safe_xy[0], self.z_offset_safe_xy[1], 100
+                )
         self.run_gcode_signal.emit(_cmd)
 
     @QtCore.pyqtSlot(str, str, float, name="on_extruder_update")
@@ -416,6 +457,8 @@ class ProbeHelper(QtWidgets.QWidget):
     ) -> None:
         """Handle extruder update"""
         if not self.helper_initialize:
+            return
+        if self._eddy_calibration_state:
             return
         if self.target_temp != 0:
             if self.current_temp == self.target_temp:
