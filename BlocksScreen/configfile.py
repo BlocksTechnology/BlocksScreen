@@ -326,7 +326,7 @@ class BlocksScreenConfig:
                 self.config.set(section, option, str(value))
                 self.update_pending = True
         except Exception as e:
-            logging.error(
+            logger.error(
                 f'Unable to update option "{option}" in section "{section}": {e}'
             )
 

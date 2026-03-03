@@ -14,6 +14,8 @@ import pathlib
 import struct
 import typing
 
+logger = logging.getLogger(__name__)
+
 try:
     ctypes.cdll.LoadLibrary("libXext.so.6")
     libxext = ctypes.CDLL("libXext.so.6")
@@ -220,9 +222,9 @@ try:
         set_dpms_mode(DPMSState.OFF)
 
 except OSError as e:
-    logging.exception(f"OSError couldn't load DPMS library: {e}")
+    logger.exception(f"OSError couldn't load DPMS library: {e}")
 except Exception as e:
-    logging.exception(f"Unexpected exception occurred {e}")
+    logger.exception(f"Unexpected exception occurred {e}")
 
 
 def convert_bytes_to_mb(self, bytes: int | float) -> float:

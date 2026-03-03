@@ -140,12 +140,10 @@ class QueueHandler(logging.Handler):
     def __init__(
         self,
         log_queue: queue.Queue,
-        fmt: str = DEFAULT_FORMAT,
         level: int = logging.DEBUG,
     ) -> None:
         super().__init__(level)
         self._queue = log_queue
-        self.setFormatter(logging.Formatter(fmt))
 
     def emit(self, record: logging.LogRecord) -> None:
         """Format and queue the log record."""
@@ -179,6 +177,7 @@ class ThreadedFileHandler(logging.handlers.TimedRotatingFileHandler):
         when: str = "midnight",
         backup_count: int = 10,
         encoding: str = "utf-8",
+        fmt: str = DEFAULT_FORMAT,
     ) -> None:
         self._log_path = pathlib.Path(filename)
 
@@ -193,6 +192,7 @@ class ThreadedFileHandler(logging.handlers.TimedRotatingFileHandler):
             encoding=encoding,
             delay=True,
         )
+        self.setFormatter(logging.Formatter(fmt))
 
         self._queue: queue.Queue[logging.LogRecord | None] = queue.Queue()
         self._stop_event = threading.Event()
@@ -649,11 +649,11 @@ class LogManager:
         root.setLevel(level)
 
         # Create async file handler
-        file_handler = ThreadedFileHandler(filename)
+        file_handler = ThreadedFileHandler(filename, fmt=fmt)
         cls._handlers["root"] = file_handler
 
         # Create queue handler that feeds the file handler
-        queue_handler = QueueHandler(file_handler.queue, fmt, level)
+        queue_handler = QueueHandler(file_handler.queue, level)
         root.addHandler(queue_handler)
 
         # Add console handler
@@ -724,11 +724,11 @@ class LogManager:
         if filename is None:
             filename = f"logs/{name}.log"
 
-        file_handler = ThreadedFileHandler(filename)
+        file_handler = ThreadedFileHandler(filename, fmt=fmt)
         cls._handlers[name] = file_handler
 
         # Create queue handler that feeds the file handler
-        queue_handler = QueueHandler(file_handler.queue, fmt, level)
+        queue_handler = QueueHandler(file_handler.queue, level)
         logger.addHandler(queue_handler)
 
         # Don't propagate to root (has its own file)
