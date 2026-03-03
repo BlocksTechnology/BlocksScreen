@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import logging
-import os
 import typing
+from collections import deque
 from dataclasses import dataclass, field
 from enum import Enum, auto
+from pathlib import Path
 
 import events
 from events import ReceivedFileData
@@ -204,13 +205,12 @@ class Files(QtCore.QObject):
         self._files_metadata: dict[str, FileMetadata] = {}
         self._current_directory: str = ""
         self._initial_load_complete: bool = False
-        self.gcode_path = os.path.expanduser(self.GCODE_PATH)
+        self.gcode_path = Path(self.GCODE_PATH).expanduser()
         # USB preloaded files cache: usb_path -> list of files
         self._usb_files_cache: dict[str, list[dict]] = {}
-        # Track pending USB preload requests
+        # Track pending USB preload requests (ordered FIFO queue)
         self._pending_usb_preloads: set[str] = set()
-        # Track the last USB preload request for response matching
-        self._last_usb_preload_request: str = ""
+        self._usb_preload_queue: deque[str] = deque()
 
         self._connect_signals()
         self._install_event_filter()
@@ -412,6 +412,8 @@ class Files(QtCore.QObject):
         if self._is_usb_mount(dirname):
             self._usb_files_cache.pop(dirname, None)
             self._pending_usb_preloads.discard(dirname)
+            if dirname in self._usb_preload_queue:
+                self._usb_preload_queue.remove(dirname)
             logger.info(f"Cleared USB cache for: {dirname}")
 
         self.dir_removed.emit(dirname)
@@ -469,9 +471,9 @@ class Files(QtCore.QObject):
             return
 
         thumbnails = data.get("thumbnails", [])
-        base_dir = os.path.dirname(os.path.join(self.gcode_path, filename))
+        base_dir = (self.gcode_path / filename).parent
         thumbnail_paths = [
-            os.path.join(base_dir, t.get("relative_path", ""))
+            str(base_dir / t.get("relative_path", ""))
             for t in thumbnails
             if isinstance(t.get("relative_path", None), str) and t["relative_path"]
         ]
@@ -533,8 +535,7 @@ class Files(QtCore.QObject):
         """
         logger.info(f"Preloading USB contents: {usb_path}")
         self._pending_usb_preloads.add(usb_path)
-        # Store which USB we're preloading (for response matching)
-        self._last_usb_preload_request = usb_path
+        self._usb_preload_queue.append(usb_path)
         self.ws.api.get_dir_information(usb_path, True)
 
     def get_cached_usb_files(self, usb_path: str) -> typing.Optional[list[dict]]:
@@ -576,22 +577,14 @@ class Files(QtCore.QObject):
 
     def _process_directory_info(self, data: dict) -> None:
         """Process directory info response."""
-        # Check if this is a USB preload response
+        # Check if this is a USB preload response.
+        # Match by FIFO queue — Moonraker responds to get_dir_information in order.
         matched_usb = None
 
-        if self._pending_usb_preloads:
-            # Check if this response matches last USB preload request
-            if self._last_usb_preload_request in self._pending_usb_preloads:
-                matched_usb = self._last_usb_preload_request
-                self._last_usb_preload_request = ""
-            else:
-                # Fallback: check root_info for USB marker
-                root_info = data.get("root_info", {})
-                root_name = root_info.get("name", "")
-                for usb_path in list(self._pending_usb_preloads):
-                    if root_name.startswith("USB-") or usb_path in root_name:
-                        matched_usb = usb_path
-                        break
+        if self._usb_preload_queue:
+            candidate = self._usb_preload_queue.popleft()
+            if candidate in self._pending_usb_preloads:
+                matched_usb = candidate
 
         if matched_usb:
             self._pending_usb_preloads.discard(matched_usb)
@@ -689,6 +682,6 @@ class Files(QtCore.QObject):
         self._files_metadata.clear()
         self._usb_files_cache.clear()
         self._pending_usb_preloads.clear()
-        self._last_usb_preload_request = ""
+        self._usb_preload_queue.clear()
         self._initial_load_complete = False
         logger.info("All file data cleared")

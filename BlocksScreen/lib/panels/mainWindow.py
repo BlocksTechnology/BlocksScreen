@@ -636,7 +636,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # Directory not found - navigate back + show popup
         if "does not exist" in lower_text:
-            self.printPanel.filesPage_widget.back_btn.click()
+            self.printPanel.filesPage_widget.on_directory_error()
 
         # Show popup for all other errors (including directory errors)
         self.popup.new_message(

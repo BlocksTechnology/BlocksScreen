@@ -8,7 +8,7 @@ from lib.utils.icon_button import IconButton
 from lib.utils.list_model import EntryDelegate, EntryListModel, ListItem
 from PyQt6 import QtCore, QtGui, QtWidgets
 
-logger = logging.getLogger("logs/BlocksScreen.log")
+logger = logging.getLogger(__name__)
 
 
 class FilesPage(QtWidgets.QWidget):
@@ -114,11 +114,13 @@ class FilesPage(QtWidgets.QWidget):
         if current_count == 0:
             # First attempt: regular metadata request
             self.request_file_metadata.emit(clean_path)
-            logger.debug(f"Metadata request 1/3 for: {clean_path}")
+            logger.debug(f"Metadata request (attempt 1) for: {clean_path}")
         else:
-            # Second and third attempts: force scan
+            # Subsequent attempts: force scan
             self.request_scan_metadata.emit(clean_path)
-            logger.debug(f"Metadata scan {current_count + 1}/3 for: {clean_path}")
+            logger.debug(
+                f"Metadata scan (attempt {current_count + 1}) for: {clean_path}"
+            )
 
         return True
 
@@ -912,7 +914,7 @@ class FilesPage(QtWidgets.QWidget):
         if seconds <= 0:
             return "Unknown time"
         if seconds < 60:
-            return f"{seconds}m"
+            return f"{seconds}s"
 
         days, hours, minutes, _ = helper_methods.estimate_print_time(seconds)
 
