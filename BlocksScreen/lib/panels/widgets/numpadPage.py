@@ -39,6 +39,10 @@ class CustomNumpad(QtWidgets.QWidget):
         self.numpad_back_btn.clicked.connect(self.back_button)
         self.start_glow_animation.connect(self.inserted_value.start_glow_animation)
 
+    def showEvent(self, a0: QtGui.QShowEvent | None) -> None:
+        self.firsttime = True
+        return super().showEvent(a0)
+
     def value_inserted(self, value: str) -> None:
         """Handle number insertion on the numpad
 
