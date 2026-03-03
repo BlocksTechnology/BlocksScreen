@@ -241,7 +241,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self, LoadingOverlayWidget.AnimationGIF.DEFAULT
         )
         self.loadscreen.add_widget(self.loadwidget)
-
+        self.controlPanel.toggle_conn_page.connect(self.conn_window.set_toggle)
         self.cancelpage = CancelPage(self, ws=self.ws)
         self.cancelpage.request_file_info.connect(self.file_data.on_request_fileinfo)
         self.cancelpage.run_gcode.connect(self.ws.api.run_gcode)
