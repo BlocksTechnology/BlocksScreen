@@ -7,7 +7,7 @@ import events
 from lib.moonrakerComm import MoonWebSocket
 from PyQt6 import QtCore, QtWidgets
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger(name="logs/BlocksScreen.logs")
 
 
 class Printer(QtCore.QObject):

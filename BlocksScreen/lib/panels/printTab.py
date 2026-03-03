@@ -20,7 +20,7 @@ from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.display_button import DisplayButton
 from PyQt6 import QtCore, QtGui, QtWidgets
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger(name="logs/BlocksScreen.log")
 
 
 class PrintTab(QtWidgets.QStackedWidget):
