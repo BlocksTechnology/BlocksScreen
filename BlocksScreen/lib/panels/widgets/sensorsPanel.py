@@ -1,8 +1,8 @@
 import typing
 
+from lib.panels.widgets.sensorWidget import SensorWidget
 from lib.utils.blocks_frame import BlocksCustomFrame
 from lib.utils.icon_button import IconButton
-from lib.panels.widgets.sensorWidget import SensorWidget
 from lib.utils.list_model import EntryDelegate, EntryListModel, ListItem
 from PyQt6 import QtCore, QtGui, QtWidgets
 
@@ -44,16 +44,13 @@ class SensorsWindow(QtWidgets.QWidget):
         if not isinstance(sensors, dict):
             return
         self.reset_view_model()
-        filtered_sensors = list(
-            filter(
-                lambda printer_obj: str(printer_obj).startswith(
-                    "filament_switch_sensor"
-                )
-                or str(printer_obj).startswith("filament_motion_sensor")
-                or str(printer_obj).startswith("cutter_sensor"),
-                sensors.keys(),
+        filtered_sensors = [
+            sensor
+            for sensor in sensors.keys()
+            if sensor.startswith(
+                ("filament_switch_sensor", "filament_motion_sensor", "cutter_sensor")
             )
-        )
+        ]
         if filtered_sensors:
             self.sensor_list = [
                 self.create_sensor_widget(name=sensor) for sensor in filtered_sensors
