@@ -25,7 +25,7 @@ from lib.utils.list_model import EntryDelegate, EntryListModel, ListItem
 from PyQt6 import QtCore, QtGui, QtWidgets
 from PyQt6.QtCore import QObject, QRunnable, QThreadPool, pyqtSignal
 
-logger = logging.getLogger("logs/BlocksScreen.log")
+logger = logging.getLogger(__name__)
 
 
 LOAD_TIMEOUT_MS = 30_000

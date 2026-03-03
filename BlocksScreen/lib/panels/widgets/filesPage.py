@@ -5,11 +5,10 @@ import typing
 import helper_methods
 from lib.utils.blocks_Scrollbar import CustomScrollBar
 from lib.utils.icon_button import IconButton
+from lib.utils.list_model import EntryDelegate, EntryListModel, ListItem
 from PyQt6 import QtCore, QtGui, QtWidgets
 
-from lib.utils.list_model import EntryDelegate, EntryListModel, ListItem
-
-logger = logging.getLogger("logs/BlocksScreen.log")
+logger = logging.getLogger(__name__)
 
 
 class FilesPage(QtWidgets.QWidget):
