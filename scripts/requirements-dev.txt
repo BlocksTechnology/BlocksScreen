@@ -3,6 +3,10 @@ ruff
 pylint
 pytest
 pytest-cov
+pytest-timeout
+pytest-qt
+pytest-asyncio
+PyQt6
 docstr_coverage
 bandit
 
