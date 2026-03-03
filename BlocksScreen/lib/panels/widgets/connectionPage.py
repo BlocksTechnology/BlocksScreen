@@ -1,11 +1,11 @@
 import logging
 
 from events import KlippyDisconnected, KlippyReady, KlippyShutdown
-
-logger = logging.getLogger(__name__)
 from lib.moonrakerComm import MoonWebSocket
 from lib.ui.connectionWindow_ui import Ui_ConnectivityForm
 from PyQt6 import QtCore, QtWidgets
+
+logger = logging.getLogger(__name__)
 
 
 class ConnectionPage(QtWidgets.QFrame):
