@@ -5,6 +5,8 @@ from lib.moonrakerComm import MoonWebSocket
 from lib.ui.connectionWindow_ui import Ui_ConnectivityForm
 from PyQt6 import QtCore, QtWidgets
 
+logger = logging.getLogger(__name__)
+
 
 class ConnectionPage(QtWidgets.QFrame):
     text_updated = QtCore.pyqtSignal(int, name="connection_text_updated")
@@ -14,7 +16,6 @@ class ConnectionPage(QtWidgets.QFrame):
     restart_klipper_clicked = QtCore.pyqtSignal(name="restart_klipper_clicked")
     firmware_restart_clicked = QtCore.pyqtSignal(name="firmware_restart_clicked")
     update_button_clicked = QtCore.pyqtSignal(bool, name="show-update-page")
-    notification_btn_clicked = QtCore.pyqtSignal(name="notification_btn_clicked")
     call_load_panel = QtCore.pyqtSignal(bool, str, name="call-load-panel")
     call_cancel_panel = QtCore.pyqtSignal(bool, name="call-load-panel")
 
@@ -45,7 +46,6 @@ class ConnectionPage(QtWidgets.QFrame):
             self.retry_connection_clicked.emit
         )
         self.panel.wifi_button.clicked.connect(self.wifi_button_clicked.emit)
-        self.panel.notification_btn.clicked.connect(self.notification_btn_clicked.emit)
         self.panel.FirmwareRestartButton.clicked.connect(
             self.firmware_restart_clicked.emit
         )
@@ -134,7 +134,7 @@ class ConnectionPage(QtWidgets.QFrame):
         if self.state == "shutdown" and self.message is not None:
             return False
         self.dot_timer.stop()
-        logging.debug(f"[ConnectionWindowPanel] text_update: {text}")
+        logger.debug(f"[ConnectionWindowPanel] text_update: {text}")
         if text == "wb lost":
             self.panel.connectionTextBox.setText("Moonraker connection lost")
         if text is None:
