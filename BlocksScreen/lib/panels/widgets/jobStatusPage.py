@@ -53,6 +53,7 @@ class JobStatusWidget(QtWidgets.QWidget):
     request_file_info: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         str, name="request_file_info"
     )
+    call_cancel_panel = QtCore.pyqtSignal(bool, name="call-load-panel")
 
     _internal_print_status: str = ""
     _current_file_name: str = ""
@@ -225,18 +226,19 @@ class JobStatusWidget(QtWidgets.QWidget):
                 )
             self.pause_printing_btn.setEnabled(True)
             self.request_query_print_stats.emit({"print_stats": ["filename"]})
+            self.call_cancel_panel.emit(False)
             self.show_request.emit()
             lstate = "start"
         elif lstate in invalid_states:
             if lstate != "standby":
                 self.print_finish.emit()
-            self._current_file_name = ""
             self._internal_print_status = ""
+            self._current_file_name = ""
             self.total_layers = "?"
             self.file_metadata.clear()
             self.hide_request.emit()
-            if hasattr(self, "thumbnail_view"):
-                getattr(self, "thumbnail_view").deleteLater()
+            # if hasattr(self, "thumbnail_view"):
+            #     getattr(self, "thumbnail_view").deleteLater()
         # Send Event on Print state
         if hasattr(events, str("Print" + lstate.capitalize())):
             event_obj = getattr(events, str("Print" + lstate.capitalize()))
