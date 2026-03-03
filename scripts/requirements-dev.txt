@@ -1,3 +1,4 @@
+# CI pipeline (mirrors .github/workflows/dev-ci.yml)
 ruff
 pylint
 pytest
@@ -8,5 +9,8 @@ pytest-asyncio
 PyQt6
 docstr_coverage
 bandit
-sphinx
-pre-commit
+
+# Test suite plugins
+pytest-qt
+pytest-asyncio
+
