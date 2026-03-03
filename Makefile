@@ -78,11 +78,11 @@ rcc-all: ## Force recompile all .qrc files
 # ─────────────────────────────────────────────────────────────────────────────
 
 lint: ## Run pylint
-	$(PYTHON) -m pylint $(SRC)
+	$(PYTHON) -m pylint -j$(shell nproc) --recursive=y $(SRC)/
 
-format-check: ## Verify formatting without modifying files (ruff-based)
-	$(PYTHON) -m ruff format --check $(SRC) $(TESTS)
-	$(PYTHON) -m ruff check $(SRC) $(TESTS)
+format-check: ## Verify formatting without modifying files (matches CI exactly)
+	$(PYTHON) -m ruff check --target-version=py311 --config=pyproject.toml
+	$(PYTHON) -m ruff format --diff --target-version=py311 --config=pyproject.toml
 
 security: ## Run bandit security scan
 	$(PYTHON) -m bandit -c pyproject.toml -r $(SRC)
@@ -145,11 +145,9 @@ docstrcov: ## Check docstring coverage (fail-under=80%, matches CI)
 # ─────────────────────────────────────────────────────────────────────────────
 
 clean: ## Remove build artefacts, caches, and coverage data
-	rm -rf dist/ build/ *.egg-info src/*.egg-info site/ htmlcov .coverage
-	find . -depth \
-	     \( -type f -name '*.py[co]' \
-	     -o -type d -name __pycache__ \
-	     -o -type d -name .pytest_cache \) -exec rm -rf {} +
+	rm -rf dist/ build/ *.egg-info src/*.egg-info site/ htmlcov/ .coverage .ruff_cache .mypy_cache
+	find . -type d \( -name __pycache__ -o -name .pytest_cache \) -exec rm -rf {} + 2>/dev/null || true
+	find . -type f -name '*.py[co]' -delete 2>/dev/null || true
 
 clean-venv: ## Remove the virtual environment (destructive!)
 	@echo "Removing $(VENV)..."
