@@ -224,7 +224,9 @@ class ThreadedFileHandler(logging.handlers.TimedRotatingFileHandler):
                 self.stream = self._open()
 
         except OSError as exc:
-            sys.__stderr__.write(f"[logger] Failed to recreate log file {self._log_path}: {exc}\n")
+            sys.__stderr__.write(
+                f"[logger] Failed to recreate log file {self._log_path}: {exc}\n"
+            )
 
     def emit(self, record: logging.LogRecord) -> None:
         """Emit a record, recovering if the log file was deleted."""
@@ -427,7 +429,9 @@ class CrashHandler:
                                 value_str = repr(value)
                                 if len(value_str) > 200:
                                     value_str = value_str[:200] + "..."
-                            except Exception:  # repr() may raise arbitrary errors on broken objects
+                            except (
+                                Exception
+                            ):  # repr() may raise arbitrary errors on broken objects
                                 value_str = "<repr failed>"
                             lines.append(f"      {name} = {value_str}")
                 except (AttributeError, TypeError):
