@@ -1,14 +1,7 @@
 import logging
 import threading
 from functools import partial
-from typing import (
-    Any,
-    Callable,
-    Dict,
-    List,
-    NamedTuple,
-    Optional,
-)
+from typing import Any, Callable, Dict, List, NamedTuple, Optional
 
 from lib.network import SdbusNetworkManagerAsync
 from lib.panels.widgets.keyboardPage import CustomQwertyKeyboard
@@ -2757,7 +2750,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
 
     def _handle_failed_network_add(self, error_msg: str) -> None:
         """Handle failed network addition."""
-        logging.error(error_msg)
+        logger.error(error_msg)
         error_messages = {
             "Invalid password": "Invalid password. Please try again",
             "Network connection properties error": (

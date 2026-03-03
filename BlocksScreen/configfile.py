@@ -37,6 +37,8 @@ import typing
 
 from helper_methods import check_file_on_path
 
+logger = logging.getLogger(__name__)
+
 HOME_DIR = os.path.expanduser("~/")
 WORKING_DIR = os.getcwd()
 DEFAULT_CONFIGFILE_PATH = pathlib.Path(HOME_DIR, "printer_data", "config")
@@ -253,9 +255,9 @@ class BlocksScreenConfig:
                 self.config.add_section(section)
                 self.update_pending = True
         except configparser.DuplicateSectionError as e:
-            logging.error(f'Section "{section}" already exists. {e}')
+            logger.error(f'Section "{section}" already exists. {e}')
         except configparser.Error as e:
-            logging.error(f'Unable to add "{section}" section to configuration: {e}')
+            logger.error(f'Unable to add "{section}" section to configuration: {e}')
 
     def add_option(
         self,
@@ -283,9 +285,9 @@ class BlocksScreenConfig:
                 self.config.set(section, option, value)
                 self.update_pending = True
         except configparser.DuplicateOptionError as e:
-            logging.error(f"Option {option} already present on {section}: {e}")
+            logger.error(f"Option {option} already present on {section}: {e}")
         except configparser.Error as e:
-            logging.error(
+            logger.error(
                 f'Unable to add "{option}" option to section "{section}": {e} '
             )
 
@@ -301,7 +303,7 @@ class BlocksScreenConfig:
                 self.config.write(sio)
                 sio.close()
         except Exception as e:
-            logging.error(
+            logger.error(
                 f"ERROR: Unable to save new configuration, something went wrong while saving updated configuration. {e}"
             )
         finally:
@@ -386,6 +388,6 @@ def get_configparser() -> BlocksScreenConfig:
     config_object = BlocksScreenConfig(configfile=configfile, section="server")
     config_object.load_config()
     if not config_object.has_section("server"):
-        logging.error("Error loading configuration file for the application.")
+        logger.error("Error loading configuration file for the application.")
         raise ConfigError("Section [server] is missing from configuration")
     return BlocksScreenConfig(configfile=configfile, section="server")

@@ -1,6 +1,8 @@
 import logging
 
 from events import KlippyDisconnected, KlippyReady, KlippyShutdown
+
+logger = logging.getLogger(__name__)
 from lib.moonrakerComm import MoonWebSocket
 from lib.ui.connectionWindow_ui import Ui_ConnectivityForm
 from PyQt6 import QtCore, QtWidgets
@@ -130,7 +132,7 @@ class ConnectionPage(QtWidgets.QFrame):
         if self.state == "shutdown" and self.message is not None:
             return False
         self.dot_timer.stop()
-        logging.debug(f"[ConnectionWindowPanel] text_update: {text}")
+        logger.debug(f"[ConnectionWindowPanel] text_update: {text}")
         if text == "wb lost":
             self.panel.connectionTextBox.setText("Moonraker connection lost")
         if text is None:

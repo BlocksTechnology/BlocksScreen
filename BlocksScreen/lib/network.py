@@ -87,7 +87,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
             asyncio.set_event_loop(self.loop)
             self.loop.run_until_complete(asyncio.gather(self.listener_monitor()))
         except Exception as e:
-            logging.error(f"Exception on loop coroutine: {e}")
+            logger.error(f"Exception on loop coroutine: {e}")
 
     async def _end_tasks(self) -> None:
         for task in self.listener_task_queue:
@@ -105,7 +105,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
         try:
             future.result(timeout=5)
         except Exception as e:
-            logging.info(f"Exception while ending loop tasks: {e}")
+            logger.info(f"Exception while ending loop tasks: {e}")
         self.stop_listener_event.set()
         self.loop.call_soon_threadsafe(self.loop.stop)
         self.listener_thread.join()
@@ -132,7 +132,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                 await self.stop_listener_event.wait()
 
         except Exception as e:
-            logging.error(f"Exception on listener monitor produced coroutine: {e}")
+            logger.error(f"Exception on listener monitor produced coroutine: {e}")
 
     async def _nm_state_listener(self) -> None:
         while self._listeners_running:
@@ -141,17 +141,17 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                     enum_state = dbusNm.NetworkManagerState(state)
                     self.nm_state_change.emit(enum_state.name)
             except Exception as e:
-                logging.error(f"Exception on Network Manager state listener: {e}")
+                logger.error(f"Exception on Network Manager state listener: {e}")
 
     async def _nm_properties_listener(self) -> None:
         while self._listeners_running:
             try:
-                logging.debug("Listening for Network Manager state change")
+                logger.debug("Listening for Network Manager state change")
                 async for properties in self.nm.properties_changed:
                     self.nm_properties_change.emit(properties)
 
             except Exception as e:
-                logging.error(f"Exception on Network Manager state listener: {e}")
+                logger.error(f"Exception on Network Manager state listener: {e}")
 
     def check_nm_state(self) -> typing.Union[str, None]:
         """Check NetworkManager state"""
@@ -162,7 +162,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
             state_value = future.result(timeout=2)
             return str(dbusNm.NetworkManagerState(state_value).name)
         except Exception as e:
-            logging.error(f"Exception while fetching Network Monitor State: {e}")
+            logger.error(f"Exception while fetching Network Monitor State: {e}")
             return None
 
     def check_connectivity(self) -> str:
@@ -191,7 +191,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
             connectivity = future.result(timeout=2)
             return dbusNm.NetworkManagerConnectivityState(connectivity).name
         except Exception as e:
-            logging.error(
+            logger.error(
                 f"Exception while fetching Network Monitor Connectivity State: {e}"
             )
             return ""
@@ -225,7 +225,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                 interfaces.append(interface_name)
             return interfaces
         except Exception as e:
-            logging.error(f"Exception on fetching available interfaces: {e}")
+            logger.error(f"Exception on fetching available interfaces: {e}")
 
     def wifi_enabled(self) -> bool:
         """Returns a boolean if wireless is enabled on the device.
@@ -321,7 +321,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                     dbusNm.NetworkManagerConnectivityState.FULL
                     | dbusNm.NetworkManagerConnectivityState.LIMITED
                 ):
-                    logging.debug(f"Hotspot AP {self.hotspot_ssid} up!")
+                    logger.debug(f"Hotspot AP {self.hotspot_ssid} up!")
 
                 return
             else:
@@ -329,7 +329,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                     self.connect_network(self.old_ssid)
                     return
         except Exception as e:
-            logging.error(f"Caught Exception while toggling hotspot to {toggle}: {e}")
+            logger.error(f"Caught Exception while toggling hotspot to {toggle}: {e}")
 
     def hotspot_enabled(self) -> typing.Optional["bool"]:
         """Returns a boolean indicating whether the device hotspot is on or not .
@@ -437,7 +437,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
             future = asyncio.run_coroutine_threadsafe(self._gather_ssid(), self.loop)
             return future.result(timeout=5)
         except Exception as e:
-            logging.info(f"Unexpected error occurred: {e}")
+            logger.info(f"Unexpected error occurred: {e}")
         return ""
 
     def get_current_ip_addr(self) -> str:
@@ -451,7 +451,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
             )
             primary_con = primary_con_fut.result(timeout=2)
             if primary_con == "/":
-                logging.info("There is no NetworkManager active connection.")
+                logger.info("There is no NetworkManager active connection.")
                 return ""
 
             _device_ip4_conf_path = dbusNm.ActiveConnection(
@@ -462,7 +462,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
             )
 
             if _device_ip4_conf_path == "/":
-                logging.info(
+                logger.info(
                     "NetworkManager reports no IP configuration for the interface"
                 )
                 return ""
@@ -1312,7 +1312,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
         if not isinstance(ssid, str):
             raise TypeError("SSID argument is of type string")
         if not self.is_known(ssid):
-            logging.debug(f"No known network with SSID {ssid}")
+            logger.debug(f"No known network with SSID {ssid}")
             return
         try:
             self.deactivate_connection_by_ssid(ssid)
@@ -1324,7 +1324,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                 if isinstance(result, Exception):
                     raise Exception(result)
         except Exception as e:
-            logging.debug(f"Caught Exception while deleting network {ssid}: {e}")
+            logger.debug(f"Caught Exception while deleting network {ssid}: {e}")
 
     def get_hotspot_ssid(self) -> str:
         """Get current hotspot ssid"""
@@ -1426,7 +1426,7 @@ class SdbusNetworkManagerAsync(QtCore.QObject):
                 self.loop.run_until_complete(task)
 
         except Exception as e:
-            logging.error(f"Caught Exception while creating hotspot: {e}")
+            logger.error(f"Caught Exception while creating hotspot: {e}")
 
     def set_network_priority(
         self, ssid: str, priority: ConnectionPriority = ConnectionPriority.LOW

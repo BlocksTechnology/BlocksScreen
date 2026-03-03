@@ -11,6 +11,7 @@ import queue
 import sys
 import threading
 import traceback
+import types
 from datetime import datetime
 from typing import ClassVar, TextIO
 
@@ -131,7 +132,7 @@ class QueueHandler(logging.Handler):
     Logging handler that sends records to a queue.
 
     Records are formatted before being placed on the queue,
-    then consumed by a QueueListener in a background thread.
+    then consumed by a ThreadedFileHandler worker in a background thread.
     """
 
     def __init__(
@@ -161,9 +162,9 @@ class QueueHandler(logging.Handler):
             self.handleError(record)
 
 
-class AsyncFileHandler(logging.handlers.TimedRotatingFileHandler):
+class ThreadedFileHandler(logging.handlers.TimedRotatingFileHandler):
     """
-    Async file handler using a background thread.
+    File handler that writes on a background thread.
 
     Wraps TimedRotatingFileHandler with a queue and worker thread
     for non-blocking log writes. Automatically recreates log file
@@ -193,7 +194,6 @@ class AsyncFileHandler(logging.handlers.TimedRotatingFileHandler):
 
         self._queue: queue.Queue[logging.LogRecord | None] = queue.Queue()
         self._stop_event = threading.Event()
-        self._lock = threading.Lock()
         self._thread = threading.Thread(
             name=f"logger-{self._log_path.stem}",
             target=self._worker,
@@ -225,10 +225,15 @@ class AsyncFileHandler(logging.handlers.TimedRotatingFileHandler):
             pass
 
     def emit(self, record: logging.LogRecord) -> None:
-        """Emit a record with file existence check."""
-        with self._lock:
-            self._ensure_file_exists()
+        """Emit a record, recovering if the log file was deleted."""
+        try:
             super().emit(record)
+        except (OSError, ValueError):
+            self._ensure_file_exists()
+            try:
+                super().emit(record)
+            except Exception:
+                pass
 
     def _worker(self) -> None:
         """Background worker that processes queued log records."""
@@ -237,7 +242,7 @@ class AsyncFileHandler(logging.handlers.TimedRotatingFileHandler):
                 record = self._queue.get(timeout=0.5)
                 if record is None:
                     break
-                self.handle(record)
+                self.emit(record)
             except queue.Empty:
                 continue
             except Exception:
@@ -371,7 +376,7 @@ class CrashHandler:
         self,
         exc_type: type[BaseException],
         exc_value: BaseException,
-        exc_tb: traceback,
+        exc_tb: types.TracebackType | None,
     ) -> str:
         """Format exception with detailed information."""
         lines: list[str] = []
@@ -473,7 +478,7 @@ class CrashHandler:
         self,
         exc_type: type[BaseException],
         exc_value: BaseException,
-        exc_tb,
+        exc_tb: types.TracebackType | None,
     ) -> None:
         """Handle uncaught exceptions."""
         # Don't handle keyboard interrupt
@@ -493,7 +498,6 @@ class CrashHandler:
             logger.critical(
                 "Unhandled exception - see %s for details", self._crash_log_path
             )
-            logger.critical(crash_info)
         except Exception:
             pass
 
@@ -534,9 +538,12 @@ class CrashHandler:
             self._original_threading_excepthook(args)
 
         # Force exit if configured (for systemd restart)
-        # Thread crashes might want different behavior
+        # Skip for daemon threads — transient errors in background workers
+        # (network, D-Bus) should not kill the whole process.
         if self._exit_on_crash:
-            os._exit(1)
+            thread = args.thread
+            if thread is None or not thread.daemon:
+                os._exit(1)
 
     def uninstall(self) -> None:
         """Restore original exception hooks."""
@@ -563,7 +570,7 @@ class LogManager:
     Ensures proper cleanup on application exit.
     """
 
-    _handlers: ClassVar[dict[str, AsyncFileHandler]] = {}
+    _handlers: ClassVar[dict[str, ThreadedFileHandler]] = {}
     _initialized: ClassVar[bool] = False
     _original_stdout: ClassVar[TextIO | None] = None
     _original_stderr: ClassVar[TextIO | None] = None
@@ -628,12 +635,15 @@ class LogManager:
 
         # Don't add duplicate handlers
         if root.handlers:
+            logging.getLogger(__name__).warning(
+                "Root logger already has handlers; skipping LogManager.setup()"
+            )
             return
 
         root.setLevel(level)
 
         # Create async file handler
-        file_handler = AsyncFileHandler(filename)
+        file_handler = ThreadedFileHandler(filename)
         cls._handlers["root"] = file_handler
 
         # Create queue handler that feeds the file handler
@@ -644,6 +654,10 @@ class LogManager:
         if console_output:
             cls._add_console_handler(root, console_level or level, fmt)
 
+        # Suppress verbose third-party library debug logs
+        for noisy in ("urllib3", "websocket", "PIL"):
+            logging.getLogger(noisy).setLevel(logging.WARNING)
+
         # Capture stdout/stderr (after console handler is set up)
         if capture_stdout:
             cls.redirect_stdout()
@@ -651,7 +665,9 @@ class LogManager:
             cls.redirect_stderr()
 
         # Log startup
-        logging.info("Logging initialized - crash logs: %s", crash_log_path)
+        logging.getLogger(__name__).info(
+            "Logging initialized - crash logs: %s", crash_log_path
+        )
 
     @classmethod
     def _add_console_handler(cls, logger: logging.Logger, level: int, fmt: str) -> None:
@@ -702,7 +718,7 @@ class LogManager:
         if filename is None:
             filename = f"logs/{name}.log"
 
-        file_handler = AsyncFileHandler(filename)
+        file_handler = ThreadedFileHandler(filename)
         cls._handlers[name] = file_handler
 
         # Create queue handler that feeds the file handler
@@ -791,16 +807,16 @@ def setup_logging(
         include_locals_in_crash: Include local variables in crash logs
     """
     LogManager.setup(
-        filename,
-        level,
-        fmt,
-        capture_stdout,
-        capture_stderr,
-        console_output,
-        console_level,
-        enable_crash_handler,
-        crash_log_path,
-        include_locals_in_crash,
+        filename=filename,
+        level=level,
+        fmt=fmt,
+        capture_stdout=capture_stdout,
+        capture_stderr=capture_stderr,
+        console_output=console_output,
+        console_level=console_level,
+        enable_crash_handler=enable_crash_handler,
+        crash_log_path=crash_log_path,
+        include_locals_in_crash=include_locals_in_crash,
     )
 
 
