@@ -235,7 +235,7 @@ QTabBar::tab{
      <enum>QTabWidget::Rounded</enum>
     </property>
     <property name="currentIndex">
-     <number>2</number>
+     <number>0</number>
     </property>
     <property name="iconSize">
      <size>
@@ -512,7 +512,7 @@ QPushButton:pressed{
     <property name="checkable">
      <bool>false</bool>
     </property>
-    <layout class="QHBoxLayout" name="header_main_layout" stretch="0,2,0">
+    <layout class="QHBoxLayout" name="header_main_layout" stretch="2,0,0">
      <property name="spacing">
       <number>0</number>
      </property>
@@ -531,64 +531,6 @@ QPushButton:pressed{
      <property name="bottomMargin">
       <number>0</number>
      </property>
-     <item alignment="Qt::AlignLeft|Qt::AlignTop">
-      <widget class="QGraphicsView" name="header_image_logo">
-       <property name="sizePolicy">
-        <sizepolicy hsizetype="MinimumExpanding" vsizetype="MinimumExpanding">
-         <horstretch>1</horstretch>
-         <verstretch>1</verstretch>
-        </sizepolicy>
-       </property>
-       <property name="minimumSize">
-        <size>
-         <width>60</width>
-         <height>60</height>
-        </size>
-       </property>
-       <property name="maximumSize">
-        <size>
-         <width>90</width>
-         <height>90</height>
-        </size>
-       </property>
-       <property name="sizeIncrement">
-        <size>
-         <width>1</width>
-         <height>1</height>
-        </size>
-       </property>
-       <property name="baseSize">
-        <size>
-         <width>60</width>
-         <height>60</height>
-        </size>
-       </property>
-       <property name="frameShape">
-        <enum>QFrame::StyledPanel</enum>
-       </property>
-       <property name="frameShadow">
-        <enum>QFrame::Plain</enum>
-       </property>
-       <property name="lineWidth">
-        <number>0</number>
-       </property>
-       <property name="verticalScrollBarPolicy">
-        <enum>Qt::ScrollBarAlwaysOff</enum>
-       </property>
-       <property name="horizontalScrollBarPolicy">
-        <enum>Qt::ScrollBarAlwaysOff</enum>
-       </property>
-       <property name="sizeAdjustPolicy">
-        <enum>QAbstractScrollArea::AdjustToContents</enum>
-       </property>
-       <property name="renderHints">
-        <set>QPainter::Antialiasing|QPainter::SmoothPixmapTransform</set>
-       </property>
-       <property name="viewportUpdateMode">
-        <enum>QGraphicsView::SmartViewportUpdate</enum>
-       </property>
-      </widget>
-     </item>
      <item alignment="Qt::AlignVCenter">
       <widget class="QFrame" name="header_display_layout">
        <property name="sizePolicy">
@@ -1278,6 +1220,46 @@ QPushButton:pressed{
        <zorder>nozzle_size_icon</zorder>
       </widget>
      </item>
+     <item>
+      <widget class="IconButton" name="notification_btn">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
+         <horstretch>1</horstretch>
+         <verstretch>1</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="minimumSize">
+        <size>
+         <width>60</width>
+         <height>60</height>
+        </size>
+       </property>
+       <property name="maximumSize">
+        <size>
+         <width>60</width>
+         <height>60</height>
+        </size>
+       </property>
+       <property name="text">
+        <string/>
+       </property>
+       <property name="iconSize">
+        <size>
+         <width>60</width>
+         <height>60</height>
+        </size>
+       </property>
+       <property name="flat">
+        <bool>true</bool>
+       </property>
+       <property name="icon_pixmap" stdset="0">
+        <pixmap resource="resources/icon_resources.qrc">:/ui/media/btn_icons/notification.svg</pixmap>
+       </property>
+       <property name="button_type" stdset="0">
+        <string>icon_text</string>
+       </property>
+      </widget>
+     </item>
      <item alignment="Qt::AlignRight|Qt::AlignTop">
       <widget class="IconButton" name="wifi_button">
        <property name="enabled">
@@ -1348,13 +1330,12 @@ QPushButton:pressed{
   <customwidget>
    <class>NotificationQTabWidget</class>
    <extends>QTabWidget</extends>
-   <header location="global">lib.utils.tabwidget_test</header>
+   <header location="global">lib.utils.blocks_tabwidget</header>
    <container>1</container>
   </customwidget>
  </customwidgets>
  <resources>
   <include location="resources/background_resources.qrc"/>
-  <include location="resources/button_resources.qrc"/>
   <include location="resources/font.qrc"/>
   <include location="resources/graphic_resources.qrc"/>
   <include location="resources/icon_resources.qrc"/>

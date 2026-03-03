@@ -10,6 +10,7 @@ from lib.moonrakerComm import MoonWebSocket
 from lib.network import WifiIconKey
 from lib.panels.controlTab import ControlTab
 from lib.panels.filamentTab import FilamentTab
+from lib.panels.widgets.notificationPage import NotificationPage
 from lib.panels.networkWindow import NetworkControlWindow, PixmapCache
 from lib.panels.printTab import PrintTab
 from lib.panels.utilitiesTab import UtilitiesTab
@@ -17,7 +18,6 @@ from lib.panels.widgets.basePopup import BasePopup
 from lib.panels.widgets.cancelPage import CancelPage
 from lib.panels.widgets.connectionPage import ConnectionPage
 from lib.panels.widgets.loadWidget import LoadingOverlayWidget
-from lib.panels.widgets.popupDialogWidget import Popup
 from lib.panels.widgets.updatePage import UpdatePage
 from lib.printer import Printer
 from lib.ui.mainWindow_ui import Ui_MainWindow  # With header
@@ -89,6 +89,7 @@ class MainWindow(QtWidgets.QMainWindow):
     gcode_response = QtCore.pyqtSignal(list, name="gcode_response")
     handle_error_response = QtCore.pyqtSignal(list, name="handle_error_response")
     call_network_panel = QtCore.pyqtSignal(name="call-network-panel")
+    call_notification_panel = QtCore.pyqtSignal(name="call-notification-panel")
     call_update_panel = QtCore.pyqtSignal(name="call-update-panel")
     on_update_message: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         dict, name="on-update-message"
@@ -96,6 +97,10 @@ class MainWindow(QtWidgets.QMainWindow):
     run_gcode_signal: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         str, name="run_gcode"
     )
+    show_notifications: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        str, str, int, bool, name="show-notifications"
+    )
+
     call_load_panel = QtCore.pyqtSignal(bool, str, name="call-load-panel")
 
     def __init__(self):
@@ -107,8 +112,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.screensaver = ScreenSaver(self)
         self._popup_toggle: bool = False
         self.ui.main_content_widget.setCurrentIndex(0)
-        self.popup = Popup(self)
         self.ws = MoonWebSocket(self)
+        self.notiPage = NotificationPage(self)
         self.mc = MachineControl(self)
         self.file_data = Files(self, self.ws)
         self.index_stack = deque(maxlen=4)
@@ -138,6 +143,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.printPanel.request_back.connect(slot=self.global_back)
         self.printPanel.on_cancel_print.connect(slot=self.on_cancel_print)
 
+        self.show_notifications.connect(self.notiPage.new_notication)
+
         self.printPanel.request_change_page.connect(slot=self.global_change_page)
         self.filamentPanel.request_back.connect(slot=self.global_back)
         self.filamentPanel.request_change_page.connect(slot=self.global_change_page)
@@ -146,6 +153,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.utilitiesPanel.request_back.connect(slot=self.global_back)
         self.utilitiesPanel.request_change_page.connect(slot=self.global_change_page)
         self.utilitiesPanel.update_available.connect(self.on_update_available)
+        self.ui.notification_btn.clicked.connect(self.notiPage.show_notification_panel)
         self.ui.extruder_temp_display.clicked.connect(
             lambda: self.global_change_page(
                 self.ui.main_content_widget.indexOf(self.ui.controlTab),
@@ -190,8 +198,12 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.ui.main_content_widget.currentChanged.connect(slot=self.reset_tab_indexes)
         self.call_network_panel.connect(self.networkPanel.show_network_panel)
+        self.call_notification_panel.connect(self.notiPage.show_notification_panel)
         self.networkPanel.update_wifi_icon.connect(self.change_wifi_icon)
         self.conn_window.wifi_button_clicked.connect(self.call_network_panel.emit)
+        self.conn_window.notification_btn_clicked.connect(
+            self.call_notification_panel.emit
+        )
         self.ui.wifi_button.clicked.connect(self.call_network_panel.emit)
         self.handle_error_response.connect(
             self.controlPanel.probe_helper_page.handle_error_response
@@ -667,9 +679,13 @@ class MainWindow(QtWidgets.QMainWindow):
                 return
             service_entry: dict = entry[0]
             service_name, service_info = service_entry.popitem()
-            self.popup.new_message(
-                message_type=Popup.MessageType.INFO,
-                message=f"{service_name} service changed state to \n{service_info.get('sub_state')}",
+            self.show_notifications.emit(
+                "mainwindow",
+                str(
+                    f"{service_name} service changed state to \n{service_info.get('sub_state')}"
+                ),
+                1,
+                False,
             )
 
     @api_handler
@@ -684,12 +700,7 @@ class MainWindow(QtWidgets.QMainWindow):
             popupWhitelist = ["filament runout", "no filament"]
             if _message.lower() not in popupWhitelist or _gcode_msg_type != "!!":
                 return
-
-            self.popup.new_message(
-                message_type=Popup.MessageType.ERROR,
-                message=str(_message),
-                userInput=True,
-            )
+            self.show_notifications.emit("mainwindow", _message, 3, True)
 
     @api_handler
     def _handle_error_message(self, method, data, metadata) -> None:
@@ -715,11 +726,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.printPanel.filesPage_widget.on_directory_error()
 
         # Show popup for all other errors (including directory errors)
-        self.popup.new_message(
-            message_type=Popup.MessageType.ERROR,
-            message=text,
-            userInput=True,
-        )
+        self.show_notifications.emit("mainwindow", str(text), 3, True)
         _logger.error(text)
 
     @api_handler
@@ -727,10 +734,7 @@ class MainWindow(QtWidgets.QMainWindow):
         """Handle websocket cpu throttled messages"""
         if self._popup_toggle:
             return
-        self.popup.new_message(
-            message_type=Popup.MessageType.WARNING,
-            message=f"CPU THROTTLED: {data} | {metadata}",
-        )
+        self.show_notifications.emit("mainwindow", data, 2, False)
 
     @api_handler
     def _handle_notify_status_update_message(self, method, data, metadata) -> None:
