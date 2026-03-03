@@ -18,7 +18,6 @@ from lib.panels.widgets.basePopup import BasePopup
 from lib.panels.widgets.cancelPage import CancelPage
 from lib.panels.widgets.connectionPage import ConnectionPage
 from lib.panels.widgets.loadWidget import LoadingOverlayWidget
-from lib.panels.widgets.popupDialogWidget import Popup
 from lib.panels.widgets.updatePage import UpdatePage
 from lib.printer import Printer
 from lib.ui.mainWindow_ui import Ui_MainWindow  # With header
@@ -727,7 +726,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.printPanel.filesPage_widget.on_directory_error()
 
         # Show popup for all other errors (including directory errors)
-        self.show_notifications.emit("mainwindow", str(text), 3 , True)
+        self.show_notifications.emit("mainwindow", str(text), 3, True)
         _logger.error(text)
 
     @api_handler
