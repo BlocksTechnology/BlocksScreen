@@ -22,6 +22,8 @@ class ListItem:
     selected: bool = False
     allow_check: bool = True
 
+    not_clickable: bool = False
+
     allow_expand: bool = False
     needs_expansion: bool = False
     is_expanded: bool = False
