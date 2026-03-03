@@ -49,8 +49,9 @@ class StreamToLogger(TextIO):
                 try:
                     self._original.write(message)
                     self._original.flush()
-                except Exception:
-                    pass
+                except OSError:
+                    # Original stream closed or broken pipe — continue logging
+                    self._original = None
 
             self._buffer += message
 
@@ -70,8 +71,9 @@ class StreamToLogger(TextIO):
         if self._original:
             try:
                 self._original.flush()
-            except Exception:
-                pass
+            except OSError:
+                # Original stream closed or broken pipe
+                self._original = None
 
     def fileno(self) -> int:
         """Return file descriptor for compatibility."""
@@ -213,16 +215,16 @@ class ThreadedFileHandler(logging.handlers.TimedRotatingFileHandler):
                 # Close old stream
                 try:
                     self.stream.close()
-                except Exception:
-                    pass
+                except OSError:
+                    pass  # Stream already closed; safe to discard
                 self.stream = None
 
             # Reopen stream if needed
             if self.stream is None:
                 self.stream = self._open()
 
-        except Exception:
-            pass
+        except OSError as exc:
+            sys.__stderr__.write(f"[logger] Failed to recreate log file {self._log_path}: {exc}\n")
 
     def emit(self, record: logging.LogRecord) -> None:
         """Emit a record, recovering if the log file was deleted."""
@@ -232,8 +234,8 @@ class ThreadedFileHandler(logging.handlers.TimedRotatingFileHandler):
             self._ensure_file_exists()
             try:
                 super().emit(record)
-            except Exception:
-                pass
+            except OSError as exc:
+                sys.__stderr__.write(f"[logger] Failed to write log record: {exc}\n")
 
     def _worker(self) -> None:
         """Background worker that processes queued log records."""
@@ -245,9 +247,9 @@ class ThreadedFileHandler(logging.handlers.TimedRotatingFileHandler):
                 self.emit(record)
             except queue.Empty:
                 continue
-            except Exception:
-                # Don't crash the worker thread
-                pass
+            except Exception as exc:
+                # Last resort: surface unexpected worker errors without crashing the thread
+                sys.__stderr__.write(f"[logger] Worker thread error: {exc}\n")
 
     @property
     def queue(self) -> queue.Queue:
@@ -425,11 +427,11 @@ class CrashHandler:
                                 value_str = repr(value)
                                 if len(value_str) > 200:
                                     value_str = value_str[:200] + "..."
-                            except Exception:
+                            except Exception:  # repr() may raise arbitrary errors on broken objects
                                 value_str = "<repr failed>"
                             lines.append(f"      {name} = {value_str}")
-                except Exception:
-                    pass
+                except (AttributeError, TypeError):
+                    lines.append("    Locals: <unavailable>")
 
         # Standard traceback
         lines.append("")
@@ -492,14 +494,13 @@ class CrashHandler:
         # Write to crash log
         self._write_crash_log(crash_info)
 
-        # Also log via logging if available
+        # Also log via logging if available (may fail if logging is not configured)
         try:
-            logger = logging.getLogger("crash")
-            logger.critical(
+            logging.getLogger("crash").critical(
                 "Unhandled exception - see %s for details", self._crash_log_path
             )
-        except Exception:
-            pass
+        except Exception as exc:
+            sys.__stderr__.write(f"[logger] Could not emit crash log record: {exc}\n")
 
         # Call original hook (prints traceback)
         self._original_excepthook(exc_type, exc_value, exc_tb)
@@ -526,12 +527,13 @@ class CrashHandler:
         # Write to crash log
         self._write_crash_log(crash_info)
 
-        # Log via logging
+        # Log via logging (may fail if logging is not configured)
         try:
-            logger = logging.getLogger("crash")
-            logger.critical("Unhandled thread exception - see %s", self._crash_log_path)
-        except Exception:
-            pass
+            logging.getLogger("crash").critical(
+                "Unhandled thread exception - see %s", self._crash_log_path
+            )
+        except Exception as exc:
+            sys.__stderr__.write(f"[logger] Could not emit crash log record: {exc}\n")
 
         # Call original hook if available
         if self._original_threading_excepthook:
@@ -555,8 +557,8 @@ class CrashHandler:
         if self._fault_file:
             try:
                 self._fault_file.close()
-            except Exception:
-                pass
+            except OSError:
+                pass  # File already closed; nothing to recover
 
         CrashHandler._installed = False
         CrashHandler._instance = None
