@@ -31,6 +31,8 @@ import logging
 import requests
 from requests import Request, Response
 
+logger = logging.getLogger(__name__)
+
 
 class UncallableError(Exception):
     """Raised when a method is not callable"""
@@ -145,4 +147,4 @@ class MoonRest:
                     return response.json() if json_response else response.content
 
         except Exception as e:
-            logging.info(f"Unexpected error while sending HTTP request: {e}")
+            logger.info(f"Unexpected error while sending HTTP request: {e}")

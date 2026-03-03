@@ -28,10 +28,11 @@ from lib.ui.resources.icon_resources_rc import *
 from lib.ui.resources.main_menu_resources_rc import *
 from lib.ui.resources.system_resources_rc import *
 from lib.ui.resources.top_bar_resources_rc import *
+from logger import LogManager
 from PyQt6 import QtCore, QtGui, QtWidgets
 from screensaver import ScreenSaver
 
-_logger = logging.getLogger(name="logs/BlocksScreen.log")
+_logger = logging.getLogger(__name__)
 
 
 def api_handler(func):
@@ -782,16 +783,8 @@ class MainWindow(QtWidgets.QMainWindow):
         except Exception as e:
             _logger.warning("Network panel shutdown error: %s", e)
 
-        _loggers = [
-            logging.getLogger(name) for name in logging.root.manager.loggerDict
-        ]  # Get available logger handlers
-        for logger in _loggers:  # noqa: F402
-            if hasattr(logger, "cancel"):
-                _callback = getattr(logger, "cancel")
-                if callable(_callback):
-                    _callback()
         self.ws.wb_disconnect()
-        self.close()
+        LogManager.shutdown()
         if a0 is None:
             return
         QtWidgets.QMainWindow.closeEvent(self, a0)
