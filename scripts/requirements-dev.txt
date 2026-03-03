@@ -1,6 +1,12 @@
+# CI pipeline (mirrors .github/workflows/dev-ci.yml)
 ruff
 pylint
 pytest
 pytest-cov
 docstr_coverage
 bandit
+
+# Test suite plugins
+pytest-qt
+pytest-asyncio
+
