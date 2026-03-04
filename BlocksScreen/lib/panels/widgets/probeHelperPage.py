@@ -527,11 +527,16 @@ class ProbeHelper(QtWidgets.QWidget):
         if update.get("is_active"):
             if not self.isVisible():
                 self.request_page_view.emit()
-
             self.helper_initialize = False
             self.helper_start = True
             self._hide_option_cards()
             self._toggle_tool_buttons(True)
+        else:
+            self._show_option_cards()
+            self._toggle_tool_buttons(False)
+            self.helper_initialize = False
+            self.helper_start = False
+
 
         if update.get("z_position_upper"):
             self.old_offset_info.setText(f"{update.get('z_position_upper'):.4f} mm")
