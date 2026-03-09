@@ -102,6 +102,11 @@ class ProbeHelper(QtWidgets.QWidget):
             if "state" in field:
                 if value in ("standby"):
                     if self._eddy_calibration_state:
+
+                        self.run_gcode_signal.emit("G28\nM400")
+                        self._move_to_pos(
+                            self.z_offset_safe_xy[0], self.z_offset_safe_xy[1], 100
+                        )
                         self.call_load_panel.emit(True, "Almost done...\nPlease wait")
                         self.run_gcode_signal.emit(self._eddy_command)
 
