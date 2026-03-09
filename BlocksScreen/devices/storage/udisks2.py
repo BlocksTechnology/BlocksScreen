@@ -22,8 +22,6 @@ from .udisks2_dbus_async import (
 
 UDisks2_service: str = "org.freedesktop.UDisks2"
 UDisks2_obj_path: str = "org/freedesktop/UDisks2"
-USER_HOME_DIR: str = os.path.expanduser("~")
-
 AlreadyMountedException = "org.freedesktop.UDisks2.Error.AlreadyMounted"
 
 _T = typing.TypeVar(name="_T")
