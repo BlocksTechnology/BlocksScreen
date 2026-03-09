@@ -1,10 +1,11 @@
 import logging
 import os
 import typing
-
 from PyQt6 import QtCore
 
 from .udisks2 import UDisksDBusAsync
+
+ResType: typing.TypeAlias = typing.Literal["always", "none"]
 
 
 class USBManager(QtCore.QObject):
@@ -29,7 +30,7 @@ class USBManager(QtCore.QObject):
         self.udisks: UDisksDBusAsync = UDisksDBusAsync(
             parent=self, gcodes_dir=self.gcodes_dir
         )
-        self.restart_type: str = "always"
+        self._restart_type: ResType = "always"
         self.udisks.start(self.udisks.Priority.InheritPriority)
         self.udisks.hardware_detected.connect(self.handle_new_hardware)
         self.udisks.hardware_removed.connect(self.handle_rem_hardware)
@@ -56,6 +57,18 @@ class USBManager(QtCore.QObject):
         if self.need_restart:
             self.udisks.start(self.udisks.Priority.InheritPriority)
             self.need_restart = False
+
+    @property
+    def restart_type(self) -> str:
+        return self._restart_type
+
+    @restart_type.setter
+    def restart_type(self, type: ResType) -> None:
+        if type not in ResType:
+            logging.info("Unknown restart type %s", (type,))
+        self._restart_type = type
+        if type == "always":
+            self.udisks.finished.connect(self._handle_monitor_finished)
 
     @QtCore.pyqtSlot(name="monitor-finished")
     def _handle_monitor_finished(self) -> None:
