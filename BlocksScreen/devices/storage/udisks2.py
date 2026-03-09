@@ -352,7 +352,6 @@ class UDisksDBusAsync(QtCore.QThread):
             changed_properties,
             invalid_properties,
         ) in self.obj_manager.properties_changed:
-            print("Properties changed")
             pass
 
     async def _rem_interface_listener(self) -> None:
@@ -469,7 +468,6 @@ class UDisksDBusAsync(QtCore.QThread):
             if not os.path.islink(dstb):
                 os.symlink(src=path, dst=dstb)
                 return dstb.as_posix() if os.path.exists(dstb) else ""
-            # if os.path.exists(dstb) or os.path.islink(dstb):
             if os.path.islink(dstb):
                 if dstb.resolve().as_posix() == pathlib.Path(path).as_posix():
                     return dstb.as_posix()
