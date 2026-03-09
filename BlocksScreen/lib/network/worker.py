@@ -164,7 +164,6 @@ class NetworkManagerWorker(QObject):
         self._iface_to_device_path.clear()
         self._saved_cache.clear()
 
-
         for task in list(self._background_tasks):
             if not task.done():
                 task.cancel()
