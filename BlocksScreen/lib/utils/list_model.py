@@ -19,6 +19,7 @@ class ListItem:
     _rfontsize: int = 0
     height: int = 60  # Change has needed
     notificate: bool = False  # render red dot
+    not_clickable: bool = False
 
 
 class EntryListModel(QtCore.QAbstractListModel):
@@ -59,6 +60,8 @@ class EntryListModel(QtCore.QAbstractListModel):
         """Models item flags, re-implemented method"""
         item = self.entries[index.row()]
         flags = QtCore.Qt.ItemFlag.ItemIsEnabled | QtCore.Qt.ItemFlag.ItemIsSelectable
+        if item.not_clickable:
+            return QtCore.Qt.ItemFlag.NoItemFlags
         if item.allow_check:
             flags |= QtCore.Qt.ItemFlag.ItemIsUserCheckable
         return flags
@@ -152,6 +155,10 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
         path.addRoundedRect(QtCore.QRectF(rect), radius, radius)
 
         # Gradient background (left to right)
+        if item.not_clickable:
+            painter.restore()
+            return
+
         if not item.selected:
             pressed_color = QtGui.QColor("#1A8FBF")
             pressed_color.setAlpha(20)
@@ -327,6 +334,8 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
         """Capture view model events, re-implemented method"""
         item = index.data(QtCore.Qt.ItemDataRole.UserRole)
         if event.type() == QtCore.QEvent.Type.MouseButtonPress:
+            if item and item.not_clickable:
+                return True
             if item.callback:
                 if callable(item.callback):
                     item.callback()

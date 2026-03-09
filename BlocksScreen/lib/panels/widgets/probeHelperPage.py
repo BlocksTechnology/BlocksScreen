@@ -1,14 +1,11 @@
 import typing
 
-from lib.panels.widgets.basePopup import BasePopup
-from lib.panels.widgets.loadWidget import LoadingOverlayWidget
 from lib.panels.widgets.optionCardWidget import OptionCard
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_label import BlocksLabel
 from lib.utils.check_button import BlocksCustomCheckButton
 from lib.utils.icon_button import IconButton
 from PyQt6 import QtCore, QtGui, QtWidgets
-
 
 
 class ProbeHelper(QtWidgets.QWidget):
@@ -86,6 +83,8 @@ class ProbeHelper(QtWidgets.QWidget):
         self.update()
         self.block_z = False
         self.block_list = False
+        self.target_temp = 0
+        self.current_temp = 0
 
     def on_klippy_status(self, state: str):
         """Handle Klippy status event change"""
@@ -410,6 +409,30 @@ class ProbeHelper(QtWidgets.QWidget):
         if not _cmd:
             return
         self.run_gcode_signal.emit(_cmd)
+
+    @QtCore.pyqtSlot(str, str, float, name="on_extruder_update")
+    def on_extruder_update(
+        self, extruder_name: str, field: str, new_value: float
+    ) -> None:
+        """Handle extruder update"""
+        if not self.helper_initialize:
+            return
+        if self.target_temp != 0:
+            if self.current_temp == self.target_temp:
+                if self.isVisible:
+                    self.call_load_panel.emit(True, "Extruder heated up \n Please wait")
+                return
+            if field == "temperature":
+                self.current_temp = round(new_value, 0)
+                if self.isVisible:
+                    self.call_load_panel.emit(
+                        True,
+                        f"Heating up ({new_value}/{self.target_temp}) \n Please wait",
+                    )
+        if field == "target":
+            self.target_temp = round(new_value, 0)
+            if self.isVisible:
+                self.call_load_panel.emit(True, "Cleaning the nozzle \n Please wait")
 
     @QtCore.pyqtSlot(name="handle_accept")
     def handle_accept(self) -> None:
