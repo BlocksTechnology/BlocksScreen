@@ -25,7 +25,7 @@ class ConfirmWidget(QtWidgets.QWidget):
         self._setupUI()
         self.setMouseTracking(True)
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_AcceptTouchEvents, True)
-        self.thumbnail: QtGui.QImage = QtGui.QImage()
+        self.thumbnail: QtGui.QImage = self._blocksthumbnail
         self._thumbnails: typing.List = []
         self.directory = "gcodes"
         self.filename = ""
@@ -42,17 +42,19 @@ class ConfirmWidget(QtWidgets.QWidget):
     @QtCore.pyqtSlot(str, dict, name="on_show_widget")
     def on_show_widget(self, text: str, filedata: dict | None = None) -> None:
         """Handle widget show"""
+        if not filedata:
+            return
         directory = os.path.dirname(text)
         filename = os.path.basename(text)
         self.directory = directory
         self.filename = filename
         self.cf_file_name.setText(self.filename)
-        if not filedata:
-            return
         self._thumbnails = filedata.get("thumbnail_images", [])
         if self._thumbnails:
             _biggest_thumbnail = self._thumbnails[-1]  # Show last which is biggest
             self.thumbnail = QtGui.QImage(_biggest_thumbnail)
+        else:
+            self.thumbnail = self._blocksthumbnail
         _total_filament = filedata.get("filament_weight_total")
         _estimated_time = filedata.get("estimated_time")
         if isinstance(_estimated_time, str):
@@ -113,12 +115,6 @@ class ConfirmWidget(QtWidgets.QWidget):
         if not hasattr(self, "_scene"):
             self._scene = QtWidgets.QGraphicsScene(self)
             self.cf_thumbnail.setScene(self._scene)
-
-        # Pick thumbnail or fallback logo
-        if self.thumbnail.isNull():
-            self.thumbnail = QtGui.QImage(
-                "BlocksScreen/lib/ui/resources/media/logoblocks400x300.png"
-            )
 
         # Scene rectangle (available display area)
         graphics_rect = self.cf_thumbnail.rect().toRectF()
@@ -323,3 +319,6 @@ class ConfirmWidget(QtWidgets.QWidget):
             QtCore.Qt.AlignmentFlag.AlignRight | QtCore.Qt.AlignmentFlag.AlignVCenter,
         )
         self.verticalLayout_4.addLayout(self.cf_content_vertical_layout)
+        self._blocksthumbnail = QtGui.QImage(
+            "BlocksScreen/lib/ui/resources/media/logoblocks400x300.png"
+        )

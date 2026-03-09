@@ -37,6 +37,8 @@ import typing
 
 from helper_methods import check_file_on_path
 
+logger = logging.getLogger(__name__)
+
 HOME_DIR = os.path.expanduser("~/")
 WORKING_DIR = os.getcwd()
 DEFAULT_CONFIGFILE_PATH = pathlib.Path(HOME_DIR, "printer_data", "config")
@@ -56,11 +58,19 @@ class ConfigError(Exception):
     """Exception raised when Configfile errors exist"""
 
     def __init__(self, msg) -> None:
+        """Store the error message on both the exception and the ``msg`` attribute."""
         super().__init__(msg)
         self.msg = msg
 
 
 class BlocksScreenConfig:
+    """Thread-safe wrapper around :class:`configparser.ConfigParser` with raw-text tracking.
+
+    Maintains a ``raw_config`` list that mirrors the on-disk file so that
+    ``add_section``, ``add_option``, and ``update_option`` can write back
+    changes without losing comments or formatting.
+    """
+
     config = configparser.ConfigParser(
         allow_no_value=True,
     )
@@ -70,6 +80,7 @@ class BlocksScreenConfig:
     def __init__(
         self, configfile: typing.Union[str, pathlib.Path], section: str
     ) -> None:
+        """Initialise with the path to the config file and the default section name."""
         self.configfile = pathlib.Path(configfile)
         self.section = section
         self.raw_config: typing.List[str] = []
@@ -77,9 +88,11 @@ class BlocksScreenConfig:
         self.file_lock = threading.Lock()  # Thread safety for future work
 
     def __getitem__(self, key: str) -> BlocksScreenConfig:
+        """Return a :class:`BlocksScreenConfig` for *key* section (same as ``get_section``)."""
         return self.get_section(key)
 
     def __contains__(self, key):
+        """Return True if *key* is a section in the underlying ConfigParser."""
         return key in self.config
 
     def sections(self) -> typing.List[str]:
@@ -193,12 +206,14 @@ class BlocksScreenConfig:
         )
 
     def _find_section_index(self, section: str) -> int:
+        """Return the index of the ``[section]`` header line in ``raw_config``."""
         try:
             return self.raw_config.index("[" + section + "]")
         except ValueError as e:
             raise configparser.Error(f'Section "{section}" does not exist: {e}')
 
     def _find_section_limits(self, section: str) -> typing.Tuple:
+        """Return ``(start_index, end_index)`` of *section* in ``raw_config``."""
         try:
             section_start = self._find_section_index(section)
             buffer = self.raw_config[section_start:]
@@ -212,6 +227,7 @@ class BlocksScreenConfig:
     def _find_option_index(
         self, section: str, option: str
     ) -> typing.Union[Sentinel, int, None]:
+        """Return the index of the *option* line within *section* in ``raw_config``."""
         try:
             start, end = self._find_section_limits(section)
             section_buffer = self.raw_config[start:][:end]
@@ -253,9 +269,9 @@ class BlocksScreenConfig:
                 self.config.add_section(section)
                 self.update_pending = True
         except configparser.DuplicateSectionError as e:
-            logging.error(f'Section "{section}" already exists. {e}')
+            logger.error(f'Section "{section}" already exists. {e}')
         except configparser.Error as e:
-            logging.error(f'Unable to add "{section}" section to configuration: {e}')
+            logger.error(f'Unable to add "{section}" section to configuration: {e}')
 
     def add_option(
         self,
@@ -283,11 +299,45 @@ class BlocksScreenConfig:
                 self.config.set(section, option, value)
                 self.update_pending = True
         except configparser.DuplicateOptionError as e:
-            logging.error(f"Option {option} already present on {section}: {e}")
+            logger.error(f"Option {option} already present on {section}: {e}")
         except configparser.Error as e:
-            logging.error(
+            logger.error(
                 f'Unable to add "{option}" option to section "{section}": {e} '
             )
+
+    def update_option(
+        self,
+        section: str,
+        option: str,
+        value: typing.Any,
+    ) -> None:
+        """Update an existing option's value in both raw tracking and configparser."""
+        try:
+            with self.file_lock:
+                if not self.config.has_section(section):
+                    self.add_section(section)
+
+                if not self.config.has_option(section, option):
+                    self.add_option(section, option, str(value))
+                    return
+
+                line_idx = self._find_option_line_index(section, option)
+                self.raw_config[line_idx] = f"{option}: {value}"
+                self.config.set(section, option, str(value))
+                self.update_pending = True
+        except Exception as e:
+            logger.error(
+                f'Unable to update option "{option}" in section "{section}": {e}'
+            )
+
+    def _find_option_line_index(self, section: str, option: str) -> int:
+        """Find the index of an option line within a specific section."""
+        start, end = self._find_section_limits(section)
+        opt_regex = re.compile(rf"^\s*{re.escape(option)}\s*[:=]")
+        for i in range(start + 1, end):
+            if opt_regex.match(self.raw_config[i]):
+                return i
+        raise configparser.Error(f'Option "{option}" not found in section "{section}"')
 
     def save_configuration(self) -> None:
         """Save teh configuration to file"""
@@ -301,7 +351,7 @@ class BlocksScreenConfig:
                 self.config.write(sio)
                 sio.close()
         except Exception as e:
-            logging.error(
+            logger.error(
                 f"ERROR: Unable to save new configuration, something went wrong while saving updated configuration. {e}"
             )
         finally:
@@ -319,6 +369,14 @@ class BlocksScreenConfig:
             raise configparser.Error(f"Error loading configuration file: {e}")
 
     def _parse_file(self) -> typing.Tuple[typing.List[str], typing.Dict]:
+        """Read and normalise the config file into a raw line list and a nested dict.
+
+        Strips comments, normalises ``=`` to ``:`` separators, deduplicates
+        sections/options, and ensures the buffer ends with an empty line.
+
+        Returns:
+            A tuple of (raw_lines, dict_representation).
+        """
         buffer = []
         dict_buff: typing.Dict = {}
         curr_sec: typing.Union[Sentinel, str] = Sentinel.MISSING
@@ -336,7 +394,7 @@ class BlocksScreenConfig:
                     if not line:
                         continue
                 # remove leading and trailing white spaces
-                line = re.sub(r"\s*([:=])\s*", r"\1", line)
+                line = re.sub(r"\s*([:=])\s*", r"\1 ", line)
                 line = re.sub(r"=", r":", line)
                 # find the beginning of sections
                 section_match = re.compile(r"[^\s]*\[([^]]+)\]")
@@ -344,9 +402,10 @@ class BlocksScreenConfig:
                 if match_sec:
                     sec_name = re.sub(r"[\[*\]]", r"", line)
                     if sec_name not in dict_buff.keys():
-                        buffer.extend(
-                            [""]
-                        )  # REFACTOR: Just add some line separation between sections
+                        if buffer:
+                            buffer.extend(
+                                [""]
+                            )  # REFACTOR: Just add some line separation between sections
                         dict_buff.update({sec_name: {}})
                         curr_sec = sec_name
                     else:
@@ -386,6 +445,6 @@ def get_configparser() -> BlocksScreenConfig:
     config_object = BlocksScreenConfig(configfile=configfile, section="server")
     config_object.load_config()
     if not config_object.has_section("server"):
-        logging.error("Error loading configuration file for the application.")
+        logger.error("Error loading configuration file for the application.")
         raise ConfigError("Section [server] is missing from configuration")
-    return BlocksScreenConfig(configfile=configfile, section="server")
+    return config_object

@@ -46,6 +46,7 @@ class ControlTab(QtWidgets.QStackedWidget):
         str, name="request-file-info"
     )
     call_load_panel = QtCore.pyqtSignal(bool, str, name="call-load-panel")
+    toggle_conn_page = QtCore.pyqtSignal(bool, name="call-load-panel")
     tune_display_buttons: dict = {}
     card_options: dict = {}
 
@@ -66,6 +67,7 @@ class ControlTab(QtWidgets.QStackedWidget):
         self.printer: Printer = printer
         self.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
         self.timers = []
+        self.ztilt_state = False
         self.extruder_info: dict = {}
         self.bed_info: dict = {}
         self.toolhead_info: dict = {}
@@ -75,6 +77,8 @@ class ControlTab(QtWidgets.QStackedWidget):
         self.move_length: float = 1.0
         self.move_speed: float = 25.0
         self.probe_helper_page = ProbeHelper(self)
+        self.probe_helper_page.toggle_conn_page.connect(self.toggle_conn_page)
+        self.probe_helper_page.disable_popups.connect(self.disable_popups)
         self.addWidget(self.probe_helper_page)
         self.probe_helper_page.call_load_panel.connect(self.call_load_panel)
         self.printcores_page = SwapPrintcorePage(self)
@@ -90,6 +94,15 @@ class ControlTab(QtWidgets.QStackedWidget):
         self.probe_helper_page.query_printer_object.connect(self.ws.api.object_query)
         self.probe_helper_page.run_gcode_signal.connect(self.ws.api.run_gcode)
         self.probe_helper_page.request_back.connect(self.back_button)
+        self.printer.print_stats_update[str, str].connect(
+            self.probe_helper_page.on_print_stats_update
+        )
+        self.printer.print_stats_update[str, dict].connect(
+            self.probe_helper_page.on_print_stats_update
+        )
+        self.printer.print_stats_update[str, float].connect(
+            self.probe_helper_page.on_print_stats_update
+        )
         self.printer.available_gcode_cmds.connect(
             self.probe_helper_page.on_available_gcode_cmds
         )
@@ -460,6 +473,7 @@ class ControlTab(QtWidgets.QStackedWidget):
     def handle_ztilt(self):
         """Handle Z-Tilt Adjustment"""
         self.call_load_panel.emit(True, "Please wait, performing Z-axis calibration.")
+        self.run_gcode_signal.emit("G28\nM400")
         self.run_gcode_signal.emit("Z_TILT_ADJUST")
 
     @QtCore.pyqtSlot(str, name="on-klippy-status")

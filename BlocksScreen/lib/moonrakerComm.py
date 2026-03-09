@@ -14,7 +14,7 @@ from lib.moonrest import MoonRest
 from lib.utils.RepeatedTimer import RepeatedTimer
 from PyQt6 import QtCore, QtWidgets
 
-_logger = logging.getLogger(name="logs/BlocksScreen.log")
+logger = logging.getLogger(__name__)
 
 
 class OneShotTokenError(Exception):
@@ -67,7 +67,7 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
         )
 
         self.klippy_state_signal.connect(self.api.request_printer_info)
-        _logger.info("Websocket object initialized")
+        logger.info("Websocket object initialized")
 
     @QtCore.pyqtSlot(name="retry_wb_conn")
     def retry_wb_conn(self):
@@ -102,10 +102,10 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
                 else:
                     raise TypeError("QApplication.instance expected ad non-None value")
             except Exception as e:
-                _logger.error(
+                logger.error(
                     f"Error on sending Event {unable_to_connect_event.__class__.__name__} | Error message: {e}"
                 )
-            _logger.info(
+            logger.info(
                 "Maximum number of connection retries reached, Unable to establish connection with Moonraker"
             )
             return False
@@ -114,11 +114,11 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
     def connect(self) -> bool:
         """Connect to websocket"""
         if self.connected:
-            _logger.info("Connection established")
+            logger.info("Connection established")
             return True
         self._reconnect_count += 1
         self.connecting_signal[int].emit(int(self._reconnect_count))
-        _logger.debug(
+        logger.debug(
             f"Establishing connection to Moonraker...\n Try number {self._reconnect_count}"
         )
         # TODO Handle if i cannot connect to moonraker, request server.info and see if i get a result
@@ -127,7 +127,7 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
             if _oneshot_token is None:
                 raise OneShotTokenError("Unable to retrieve oneshot token")
         except Exception as e:
-            _logger.info(
+            logger.info(
                 f"Unexpected error occurred when trying to acquire oneshot token: {e}"
             )
             return False
@@ -148,11 +148,11 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
             daemon=True,
         )
         try:
-            _logger.info("Websocket Start...")
-            _logger.debug(self.ws.url)
+            logger.info("Websocket Start...")
+            logger.debug(self.ws.url)
             self._wst.start()
         except Exception as e:
-            _logger.info(f"Unexpected while starting websocket {self._wst.name}: {e}")
+            logger.info(f"Unexpected while starting websocket {self._wst.name}: {e}")
             return False
         return True
 
@@ -162,14 +162,14 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
             self.ws.close()
             if self._wst.is_alive():
                 self._wst.join()
-            _logger.info("Websocket closed")
+            logger.info("Websocket closed")
 
     def on_error(self, *args) -> None:
         """Websocket error callback"""
         # First argument is ws second is error message
         # TODO: Handle error messages
         _error = args[1] if len(args) == 2 else args[0]
-        _logger.info(f"Websocket error, disconnected: {_error}")
+        logger.info(f"Websocket error, disconnected: {_error}")
         self.connected = False
         self.disconnected = True
 
@@ -199,11 +199,11 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
             else:
                 raise TypeError("QApplication.instance expected non None value")
         except Exception as e:
-            _logger.info(
+            logger.info(
                 f"Unexpected error when sending websocket close_event on disconnection: {e}"
             )
 
-        _logger.info(
+        logger.info(
             f"Websocket closed, code: {_close_status_code}, message: {_close_message}"
         )
 
@@ -231,11 +231,11 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
             else:
                 raise TypeError("QApplication.instance expected non None value")
         except Exception as e:
-            _logger.info(f"Unexpected error opening websocket: {e}")
+            logger.info(f"Unexpected error opening websocket: {e}")
 
         self.connected_signal.emit()
         self._retry_timer.stopTimer()
-        _logger.info(f"Connection to websocket achieved on {_ws}")
+        logger.info(f"Connection to websocket achieved on {_ws}")
 
     def on_message(self, *args) -> None:
         """Websocket on message callback
@@ -300,9 +300,7 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
             else:
                 raise TypeError("QApplication.instance expected non None value")
         except Exception as e:
-            _logger.info(
-                f"Unexpected error while creating websocket message event: {e}"
-            )
+            logger.info(f"Unexpected error while creating websocket message event: {e}")
 
     def send_request(self, method: str, params: dict = {}) -> bool:
         """Send a request over the websocket

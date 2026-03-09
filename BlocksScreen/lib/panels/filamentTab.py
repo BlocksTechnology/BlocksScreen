@@ -147,14 +147,14 @@ class FilamentTab(QtWidgets.QStackedWidget):
     @QtCore.pyqtSlot(bool, name="on_load_filament")
     def on_load_filament(self, status: bool):
         """Handle load filament object updated"""
-        if self.loadignore:
-            self.loadignore = False
-            return
         if not self.isVisible:
+            return
+        if self.loadignore:
             return
         if status:
             self.call_load_panel.emit(True, "Loading Filament")
         else:
+            self.loadignore = True
             self.target_temp = 0
             self.call_load_panel.emit(False, "")
             self._filament_state = self.FilamentStates.LOADED
@@ -163,14 +163,14 @@ class FilamentTab(QtWidgets.QStackedWidget):
     @QtCore.pyqtSlot(bool, name="on_unload_filament")
     def on_unload_filament(self, status: bool):
         """Handle unload filament object updated"""
-        if self.unloadignore:
-            self.unloadignore = False
-            return
         if not self.isVisible:
+            return
+        if self.unloadignore:
             return
         if status:
             self.call_load_panel.emit(True, "Unloading Filament")
         else:
+            self.unloadignore = True
             self.call_load_panel.emit(False, "")
             self.target_temp = 0
             self._filament_state = self.FilamentStates.UNLOADED
@@ -218,7 +218,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
             return
 
         self.find_routine_objects()
-        self.unload_filament = False
+        self.unloadignore = False
         self.call_load_panel.emit(True, "Unloading Filament")
         self.run_gcode.emit(f"UNLOAD_FILAMENT TEMPERATURE={temp}")
 
