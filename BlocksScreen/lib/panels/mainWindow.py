@@ -313,7 +313,7 @@ class MainWindow(QtWidgets.QMainWindow):
             current_index = self.ui.main_content_widget.currentIndex()
             tab_rect = self.ui.main_content_widget.tabBar().tabRect(current_index)
             width = tab_rect.width()
-            _parent_size = self.up.parent().size()
+            _parent_size = self.update_page.parent().size()
             self.update_page.setGeometry(
                 width, 0, _parent_size.width() - width, _parent_size.height()
             )
@@ -324,7 +324,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.update_page.raise_()
         self.update_page.updateGeometry()
         self.update_page.repaint()
-        self.updatep_page.show()
+        self.update_page.show()
 
     @QtCore.pyqtSlot(name="on-cancel-print")
     def on_cancel_print(self):
