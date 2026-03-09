@@ -143,6 +143,7 @@ class UDisksDBusAsync(QtCore.QThread):
         self.task_stack: set[asyncio.Task[typing.Any]] = set()
         self.gcodes_path: pathlib.Path = pathlib.Path(gcodes_dir)
         self.system_bus: sdbus.SdBus = sdbus.sd_bus_open_system()
+        self._active: bool = False
         if not self.system_bus:
             self.close()
             return
@@ -158,11 +159,16 @@ class UDisksDBusAsync(QtCore.QThread):
         self.controlled_devs: dict[str, Device] = {}
         self._cleanup_broken_symlinks()
 
+    @property
+    def active(self) -> bool:
+        return self._active
+
     def run(self) -> None:
         """Start UDisks2 USB monitoring"""
         self.stop_event.clear()
         try:
             self.loop = asyncio.new_event_loop()
+            self._active = True
             asyncio.set_event_loop(self.loop)
             self.loop.run_until_complete(self.monitor_dbus())
         except asyncio.CancelledError as err:
@@ -171,18 +177,20 @@ class UDisksDBusAsync(QtCore.QThread):
             return
 
     def close(self) -> None:
+        """Close usb devices monitoring thread and run loop"""
         try:
             if not self.loop:
                 return
             if self.loop.is_running():
                 self.stop_event.set()
                 self.loop.call_soon_threadsafe(self.loop.stop)
-            self.quit()
             _ = self.wait()
-            self.deleteLater()
+            self._active = False
             for path in self.controlled_devs.keys():
                 dev: Device = self.controlled_devs.pop(path)
                 dev.delete()
+            self.terminate()
+            self.deleteLater()
         except asyncio.CancelledError as e:
             logging.error(
                 "Caught exception while trying to close Udisks2 monitor: %s", e
@@ -215,8 +223,10 @@ class UDisksDBusAsync(QtCore.QThread):
             for task in self.task_stack:
                 _ = task.cancel()
             logging.info("UDisks2 Monitor stopped: %s", e)
+            self._active = False
         except Exception as e:
             logging.error("Caught exception UDisks2 listeners failed: %s", e)
+            self._active = False
 
     async def restore_tracked(self) -> None:
         """Get and restore controlled mass storage devices"""
