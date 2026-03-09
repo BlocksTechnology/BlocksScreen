@@ -13,6 +13,12 @@ class USBManager(QtCore.QObject):
     usb_rem: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         str, str, name="usb-rem"
     )
+    usb_monitor_started: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        name="usb-monitor-started"
+    )
+    usb_monitor_finished: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        name="usb-monitor-finished"
+    )
 
     def __init__(self, parent: QtCore.QObject, gcodes_dir: str) -> None:
         super().__init__(parent)
@@ -30,9 +36,14 @@ class USBManager(QtCore.QObject):
         self.udisks.device_mounted.connect(self.handle_mounted_device)
         self.udisks.device_unmounted.connect(self.handle_unmounted_device)
         self.udisks.finished.connect(self._handle_monitor_finished)
+        self.udisks.started.connect(self.usb_monitor_started)
+        self.udisks.finished.connect(self.usb_monitor_finished)
 
     def restart(self) -> None:
-        self.udisks.start(self.udisks.Priority.InheritPriority)
+        if not self.udisks.active:
+            self.udisks.start(self.udisks.Priority.InheritPriority)
+            return
+        logging.info("Ignoring USB monitor restart, still running")
 
     @QtCore.pyqtSlot(name="finished")
     def _handle_monitor_finished(self) -> None:
