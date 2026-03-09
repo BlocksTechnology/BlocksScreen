@@ -91,7 +91,6 @@ class NetworkManagerWorker(QObject):
         self._consecutive_dbus_errors: int = 0
 
         self._background_tasks: set[asyncio.Task] = set()
-        self._deleted_vlan_ids: set[int] = set()
 
         self._signal_nm: dbus_nm.NetworkManager | None = None
         self._signal_wifi: dbus_nm.NetworkDeviceWireless | None = None
@@ -164,7 +163,6 @@ class NetworkManagerWorker(QObject):
         self._primary_wired_iface = ""
         self._iface_to_device_path.clear()
         self._saved_cache.clear()
-        self._deleted_vlan_ids.clear()
 
         for task in list(self._background_tasks):
             if not task.done():
@@ -1758,11 +1756,9 @@ class NetworkManagerWorker(QObject):
         dns1: str,
         dns2: str,
     ) -> None:
-        """Create and activate a VLAN connection on the primary wired interface.
+        """Create and activate a VLAN connection with a static IP on the primary wired interface.
 
-        If *ip_address* is empty the VLAN uses DHCP and waits up to 45 s for a
-        lease; otherwise a static configuration is applied.  Emits
-        connection_result and state_changed when done.
+        Emits connection_result and state_changed when done.
         """
         if not self._primary_wired_path:
             self.error_occurred.emit("create_vlan", "No wired device")
@@ -1827,7 +1823,14 @@ class NetworkManagerWorker(QObject):
             await self._delete_all_connections_by_id(vlan_conn_id)
             await asyncio.sleep(0.5)
 
-            use_dhcp = not ip_address
+            prefix = self._mask_to_prefix(subnet_mask)
+            ip_uint = self._ip_to_nm_uint32(ip_address)
+            gw_uint = self._ip_to_nm_uint32(gateway) if gateway else 0
+            dns_list: list[int] = []
+            if dns1:
+                dns_list.append(self._ip_to_nm_uint32(dns1))
+            if dns2:
+                dns_list.append(self._ip_to_nm_uint32(dns2))
 
             conn_props: dict[str, object] = {
                 "connection": {
@@ -1840,24 +1843,7 @@ class NetworkManagerWorker(QObject):
                     "id": ("u", vlan_id),
                     "parent": ("s", iface),
                 },
-                "ipv6": {"method": ("s", "ignore")},
-            }
-
-            if use_dhcp:
-                conn_props["ipv4"] = {
-                    "method": ("s", "auto"),
-                    "route-metric": ("i", 500),
-                }
-            else:
-                prefix = self._mask_to_prefix(subnet_mask)
-                ip_uint = self._ip_to_nm_uint32(ip_address)
-                gw_uint = self._ip_to_nm_uint32(gateway) if gateway else 0
-                dns_list: list[int] = []
-                if dns1:
-                    dns_list.append(self._ip_to_nm_uint32(dns1))
-                if dns2:
-                    dns_list.append(self._ip_to_nm_uint32(dns2))
-                conn_props["ipv4"] = {
+                "ipv4": {
                     "method": ("s", "manual"),
                     "addresses": (
                         "aau",
@@ -1866,50 +1852,14 @@ class NetworkManagerWorker(QObject):
                     "gateway": ("s", gateway or ""),
                     "dns": ("au", dns_list),
                     "route-metric": ("i", 500),
-                }
+                },
+                "ipv6": {"method": ("s", "ignore")},
+            }
 
             conn_path = await self._nm_settings().add_connection(conn_props)
-
-            if use_dhcp:
-                vlan_iface = f"{iface}.{vlan_id}"
-                ok, _msg = await self._async_activate_vlan_with_timeout(
-                    conn_path, vlan_id, vlan_iface, timeout=45.0
-                )
-                if not ok:
-                    if vlan_id in self._deleted_vlan_ids:
-                        self._deleted_vlan_ids.discard(vlan_id)
-                        logger.info(
-                            "VLAN %d was manually deleted during DHCP "
-                            "activation — skipping cleanup",
-                            vlan_id,
-                        )
-                        self.connection_result.emit(
-                            ConnectionResult(
-                                False,
-                                f"VLAN {vlan_id} was removed during DHCP activation.",
-                                "vlan_dhcp_timeout",
-                            )
-                        )
-                        return
-                    await self._delete_all_connections_by_id(vlan_conn_id)
-                    logger.info(
-                        "Deleted VLAN %d profile after DHCP failure",
-                        vlan_id,
-                    )
-                    self.connection_result.emit(
-                        ConnectionResult(
-                            False,
-                            "There isn't a DHCP VLAN server.\n"
-                            "Use a static IP address for this VLAN.",
-                            "vlan_dhcp_timeout",
-                        )
-                    )
-                    self.state_changed.emit(await self._build_current_state())
-                    return
-            else:
-                await self._nm().activate_connection(conn_path, "/", "/")
-                self.state_changed.emit(await self._build_current_state())
-                await asyncio.sleep(1.5)
+            await self._nm().activate_connection(conn_path, "/", "/")
+            self.state_changed.emit(await self._build_current_state())
+            await asyncio.sleep(1.5)
 
             self.connection_result.emit(
                 ConnectionResult(True, f"VLAN {vlan_id} connected")
@@ -1923,7 +1873,6 @@ class NetworkManagerWorker(QObject):
     async def _async_delete_vlan(self, vlan_id: int) -> None:
         """Delete all NM connection profiles for *vlan_id* and emit connection_result."""
         try:
-            self._deleted_vlan_ids.add(vlan_id)
             deleted = await self._delete_all_connections_by_id(f"VLAN {vlan_id}")
             logger.info(
                 "Deleted %d VLAN profile(s) for VLAN %d",
@@ -1937,123 +1886,6 @@ class NetworkManagerWorker(QObject):
         except Exception as exc:
             logger.error("Failed to delete VLAN %d: %s", vlan_id, exc)
             self.error_occurred.emit("delete_vlan", str(exc))
-
-    async def _async_activate_vlan_with_timeout(
-        self,
-        conn_path: str,
-        vlan_id: int,
-        iface: str,
-        timeout: float = 45.0,
-    ) -> tuple[bool, str]:
-        """Activate a VLAN and wait for DHCP via D-Bus ``state_changed`` signal.
-
-        Subscribes to ``ActiveConnection.state_changed`` (signature ``'uu'``)
-        which fires ``(ConnectionState, ConnectionStateReason)`` on every NM
-        transition.  This replaces the old poll-and-sleep loop, cutting
-        latency from ~2 s per poll to near-instant and eliminating
-        unnecessary D-Bus round-trips on resource-constrained Pi hardware.
-
-        .. note:: The old code used ``_NM_ACTIVATED = 4`` which was
-           actually ``DEACTIVATED`` — DHCP success was never detected
-           via state polling.  This version uses the correct enum values.
-        """
-        try:
-            active_path = await self._nm().activate_connection(conn_path, "/", "/")
-        except Exception as exc:
-            return (
-                False,
-                f"VLAN {vlan_id}: activation request failed — {exc}",
-            )
-
-        # Fresh proxy for signal subscription lifetime.
-        ac = dbus_nm.ActiveConnection(bus=self._system_bus, connection_path=active_path)
-
-        try:
-            async with asyncio.timeout(timeout):
-                # state_changed signature 'uu' -> (state: int, reason: int)
-                async for ac_state, ac_reason in ac.state_changed:
-                    if not self._running:
-                        return False, "Worker shutting down"
-
-                    try:
-                        state_name = dbus_nm.ConnectionState(ac_state).name
-                    except ValueError:
-                        state_name = str(ac_state)
-                    try:
-                        reason_name = dbus_nm.ConnectionStateReason(ac_reason).name
-                    except ValueError:
-                        reason_name = str(ac_reason)
-
-                    logger.debug(
-                        "VLAN %d AC: state=%s reason=%s",
-                        vlan_id,
-                        state_name,
-                        reason_name,
-                    )
-
-                    if ac_state == dbus_nm.ConnectionState.ACTIVATED:
-                        logger.info(
-                            "VLAN %d DHCP activated on %s",
-                            vlan_id,
-                            iface,
-                        )
-                        return True, ""
-
-                    if ac_state in (
-                        dbus_nm.ConnectionState.DEACTIVATING,
-                        dbus_nm.ConnectionState.DEACTIVATED,
-                    ):
-                        logger.warning(
-                            "VLAN %d DHCP failed: %s/%s on %s",
-                            vlan_id,
-                            state_name,
-                            reason_name,
-                            iface,
-                        )
-                        return (
-                            False,
-                            f"VLAN {vlan_id}: no DHCP server "
-                            f"responded on {iface}.\n"
-                            "Use a static IP or connect a "
-                            "DHCP server to this segment.",
-                        )
-
-        except TimeoutError:
-            logger.warning(
-                "VLAN %d DHCP timed out after %.0f s — "
-                "deactivating to stop NM retry loop",
-                vlan_id,
-                timeout,
-            )
-            try:
-                await self._nm().deactivate_connection(active_path)
-            except Exception as exc:
-                logger.debug("VLAN deactivation after DHCP timeout ignored: %s", exc)
-            return (
-                False,
-                f"VLAN {vlan_id}: DHCP timed out after "
-                f"{int(timeout)} s.\nNo DHCP server responded "
-                "on this network segment.\n"
-                "Use a static IP address instead.",
-            )
-
-        except Exception as exc:
-            err_str = str(exc)
-            if "does not exist" in err_str or "No such" in err_str:
-                logger.debug(
-                    "VLAN %d active connection gone (%s) — signal iterator ended",
-                    vlan_id,
-                    err_str,
-                )
-                return (
-                    False,
-                    f"VLAN {vlan_id}: connection was removed externally.",
-                )
-            raise
-
-        # Signal iterator ended without a terminal state (shouldn't
-        # happen, but defensive).
-        return False, f"VLAN {vlan_id}: unexpected end of state stream."
 
     async def _get_active_vlans(self) -> tuple[VlanInfo, ...]:
         """Return a tuple of VlanInfo for all currently active VLAN connections."""
