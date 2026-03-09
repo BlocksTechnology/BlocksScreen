@@ -40,7 +40,6 @@ from PyQt6.QtCore import QTimer, pyqtSlot
 logger = logging.getLogger(__name__)
 
 LOAD_TIMEOUT_MS = 30_000
-VLAN_DHCP_TIMEOUT_MS = 50_000  # Generous: worker has 45 s, UI needs headroom
 STATUS_CHECK_INTERVAL_MS = 2_000
 
 
@@ -402,13 +401,6 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
                     return
                 return
 
-            # VLAN DHCP: keep loading visible.
-            if self._pending_operation == PendingOperation.VLAN_DHCP:
-                # Update display behind the loading overlay so state is
-                # current when loading is eventually cleared.
-                self._sync_ethernet_panel(state)
-                return
-
             # Wi-Fi static IP / DHCP reset: complete when we have the right IP.
             if self._pending_operation == PendingOperation.WIFI_STATIC_IP:
                 ip = state.current_ip or ""
@@ -546,22 +538,13 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
                 # Loading cleared by state machine (IP appears) or reconnect_complete.
                 # No popup — the updated IP in the header is the confirmation.
                 pass
-            elif self._pending_operation == PendingOperation.VLAN_DHCP:
-                # Worker confirmed VLAN DHCP success — clear loading and
-                # refresh the display to show the new VLAN interface.
-                self._clear_loading()
-                state = self._nm.current_state
-                self._display_connected_state(state)
-                self._emit_status_icon(state)
-                self._show_info_popup(result.message)
             else:
                 self._show_info_popup(result.message)
         else:
             msg_lower = result.message.lower()
 
-            # DHCP VLAN / Wi-Fi static-IP errors: clear loading and show the
-            # reason without the generic error prefix.
-            if result.error_code in ("vlan_dhcp_timeout", "duplicate_vlan"):
+            # Duplicate VLAN: clear loading and show the reason.
+            if result.error_code == "duplicate_vlan":
                 self._clear_loading()
                 self._show_error_popup(result.message)
                 return
@@ -967,18 +950,6 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             self._display_connected_state(state)
             return
 
-        # VLAN DHCP — the 50 s UI timer expired before the worker's 45 s
-        # D-Bus signal timeout.  Clear loading and show a specific message.
-        if self._pending_operation == PendingOperation.VLAN_DHCP:
-            self._clear_loading()
-            self._display_connected_state(state)
-            self._show_error_popup(
-                "VLAN DHCP timed out.\n"
-                "No DHCP server responded.\n"
-                "Use a static IP for this VLAN."
-            )
-            return
-
         # Static IP / DHCP reset — if a state with an IP has arrived, accept it.
         if self._pending_operation == PendingOperation.WIFI_STATIC_IP:
             if state.current_ip:
@@ -1249,40 +1220,35 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         dns1 = self.vlan_dns1_field.text().strip()
         dns2 = self.vlan_dns2_field.text().strip()
 
-        # When IP is empty -> DHCP mode (no validation needed)
-        use_dhcp = not ip_addr
-
-        if not use_dhcp:
-            if not self.vlan_ip_field.is_valid():
-                self._show_error_popup("Invalid IP address.")
-                return
-            if not self.vlan_mask_field.is_valid_mask():
-                self._show_error_popup("Invalid subnet mask.")
-                return
-            if gateway and not self.vlan_gateway_field.is_valid():
-                self._show_error_popup("Invalid gateway address.")
-                return
-            if dns1 and not self.vlan_dns1_field.is_valid():
-                self._show_error_popup("Invalid primary DNS.")
-                return
-            if dns2 and not self.vlan_dns2_field.is_valid():
-                self._show_error_popup("Invalid secondary DNS.")
-                return
+        if not ip_addr:
+            self._show_error_popup("IP address is required.")
+            return
+        if not self.vlan_ip_field.is_valid():
+            self._show_error_popup("Invalid IP address.")
+            return
+        if not self.vlan_mask_field.is_valid_mask():
+            self._show_error_popup("Invalid subnet mask.")
+            return
+        if gateway and not self.vlan_gateway_field.is_valid():
+            self._show_error_popup("Invalid gateway address.")
+            return
+        if dns1 and not self.vlan_dns1_field.is_valid():
+            self._show_error_popup("Invalid primary DNS.")
+            return
+        if dns2 and not self.vlan_dns2_field.is_valid():
+            self._show_error_popup("Invalid secondary DNS.")
+            return
 
         self.setCurrentIndex(self.indexOf(self.main_network_page))
-        if use_dhcp:
-            self._pending_operation = PendingOperation.VLAN_DHCP
-            self._set_loading_state(True, timeout_ms=VLAN_DHCP_TIMEOUT_MS)
-        else:
-            self._pending_operation = PendingOperation.ETHERNET_ON
-            self._set_loading_state(True)
+        self._pending_operation = PendingOperation.ETHERNET_ON
+        self._set_loading_state(True)
         self._nm.create_vlan_connection(
             vlan_id,
-            ip_addr,  # empty -> DHCP
-            mask if not use_dhcp else "",
-            gateway if not use_dhcp else "",
-            dns1 if not use_dhcp else "",
-            dns2 if not use_dhcp else "",
+            ip_addr,
+            mask,
+            gateway,
+            dns1,
+            dns2,
         )
         self._nm.request_state_soon(delay_ms=3000)
 
@@ -3386,7 +3352,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         content_layout.addWidget(_make_row("VLAN ID", self.vlan_id_spinbox))
 
         self.vlan_ip_field = IPAddressLineEdit(
-            parent=self.vlan_page, placeholder="192.168.1.100 (empty = DHCP)"
+            parent=self.vlan_page, placeholder="192.168.1.100"
         )
         content_layout.addWidget(_make_row("IP Address", self.vlan_ip_field))
 

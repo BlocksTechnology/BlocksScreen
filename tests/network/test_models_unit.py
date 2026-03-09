@@ -116,7 +116,7 @@ class TestConnectionPriority:
 
 class TestPendingOperation:
     def test_all_members_exist(self):
-        assert len(PendingOperation) == 10
+        assert len(PendingOperation) == 9
 
     def test_is_int_enum(self):
         """PendingOperation values are plain ints (memory-efficient)."""
@@ -160,7 +160,6 @@ class TestPendingOperation:
             "ETHERNET_ON",
             "ETHERNET_OFF",
             "WIFI_STATIC_IP",
-            "VLAN_DHCP",
         }
 
     def test_ethernet_on_value(self):
