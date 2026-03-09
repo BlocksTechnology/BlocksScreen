@@ -33,11 +33,11 @@ def show_splash(window: typing.Optional[QtWidgets.QWidget] = None):
 if __name__ == "__main__":
     setup_logging(
         filename="logs/BlocksScreen.log",
-        level=logging.DEBUG,  # File gets DEBUG+
-        console_output=True,  # Print to terminal
-        console_level=logging.DEBUG,  # Console gets DEBUG+
-        capture_stderr=True,  # Capture X11 errors
-        capture_stdout=False,  # Don't capture print()
+        level=logging.DEBUG,
+        console_output=True,
+        console_level=logging.DEBUG,
+        capture_stderr=True,
+        capture_stdout=False,
     )
     _logger = logging.getLogger(__name__)
     _logger.info("============ BlocksScreen Initializing ============")
