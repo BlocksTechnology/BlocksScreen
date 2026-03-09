@@ -53,6 +53,10 @@ class USBManager(QtCore.QObject):
         self.udisks.close()
         self.need_restart = True
 
+    def close(self) -> None:
+        self.udisks.close()
+        self.deleteLater()
+
     def _handle_full_restart(self) -> None:
         if self.need_restart:
             self.udisks.start(self.udisks.Priority.InheritPriority)

@@ -3,7 +3,7 @@ import sys
 import typing
 
 from lib.panels.mainWindow import MainWindow
-from logger import setup_logging
+from logger import setup_logging, LogManager
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 QtGui.QGuiApplication.setAttribute(
@@ -30,6 +30,11 @@ def show_splash(window: typing.Optional[QtWidgets.QWidget] = None):
         splash.finish(window)
 
 
+def on_quit() -> None:
+    logging.info("Final exit cleanup")
+    LogManager.shutdown()
+
+
 if __name__ == "__main__":
     setup_logging(
         filename="logs/BlocksScreen.log",
@@ -47,5 +52,6 @@ if __name__ == "__main__":
     BlocksScreen.setDesktopFileName("BlocksScreen")
     main_window = MainWindow()
     BlocksScreen.processEvents()
+    BlocksScreen.aboutToQuit.connect(on_quit)
     main_window.show()
     sys.exit(BlocksScreen.exec())

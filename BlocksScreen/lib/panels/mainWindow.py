@@ -29,7 +29,6 @@ from lib.ui.resources.icon_resources_rc import *
 from lib.ui.resources.main_menu_resources_rc import *
 from lib.ui.resources.system_resources_rc import *
 from lib.ui.resources.top_bar_resources_rc import *
-from logger import LogManager
 from PyQt6 import QtCore, QtGui, QtWidgets
 from screensaver import ScreenSaver
 
@@ -786,15 +785,14 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui.nozzle_size_icon.setText(f"{diam}mm")
         self.ui.nozzle_size_icon.update()
 
-    def closeEvent(self, a0: typing.Optional[QtGui.QCloseEvent]) -> None:
+    def closeEvent(self, a0: QtGui.QCloseEvent | None) -> None:
         """Handles GUI closing"""
         try:
             self.networkPanel.close()
+            self.usb_manager.close()
         except Exception as e:
-            _logger.warning("Network panel shutdown error: %s", e)
-
+            _logger.warning("Error shutting down: %s", e)
         self.ws.wb_disconnect()
-        LogManager.shutdown()
         if a0 is None:
             return
         QtWidgets.QMainWindow.closeEvent(self, a0)
