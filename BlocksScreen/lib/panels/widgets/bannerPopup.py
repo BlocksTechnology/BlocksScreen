@@ -1,6 +1,5 @@
 import enum
 from collections import deque
-from typing import Deque
 
 from lib.utils.icon_button import IconButton
 from PyQt6 import QtCore, QtGui, QtWidgets
@@ -19,17 +18,17 @@ class BannerPopup(QtWidgets.QWidget):
         super().__init__(parent)
         self.timeout_timer = QtCore.QTimer(self)
         self.timeout_timer.setSingleShot(True)
-        self.messages: Deque = deque()
+        self.messages: deque = deque()
         self.isShown = False
         self.default_background_color = QtGui.QColor(164, 164, 164)
 
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_TranslucentBackground, True)
-        
+
         self.setMouseTracking(True)
         self.setWindowFlags(
-            QtCore.Qt.WindowType.FramelessWindowHint |
-            QtCore.Qt.WindowType.Tool |
-            QtCore.Qt.WindowType.X11BypassWindowManagerHint
+            QtCore.Qt.WindowType.FramelessWindowHint
+            | QtCore.Qt.WindowType.Tool
+            | QtCore.Qt.WindowType.X11BypassWindowManagerHint
         )
 
         self._setupUI()
@@ -39,26 +38,23 @@ class BannerPopup(QtWidgets.QWidget):
         self.slide_out_animation = QtCore.QPropertyAnimation(self, b"geometry")
         self.slide_out_animation.setDuration(200)
         self.slide_out_animation.setEasingCurve(QtCore.QEasingCurve.Type.InCubic)
-
-        self.SingleTime = QtCore.QTimer(self)
-        self.SingleTime.setInterval(5000)
-        self.SingleTime.setSingleShot(True)
-        self.SingleTime.timeout.connect(self._add_popup)
-
+        self.oneshot = QtCore.QTimer(self)
+        self.oneshot.setInterval(5000)
+        self.oneshot.setSingleShot(True)
+        self.oneshot.timeout.connect(self._add_popup)
         self.timeout_timer.setInterval(4000)
-
         self.slide_out_animation.finished.connect(self.on_slide_out_finished)
         self.slide_in_animation.finished.connect(self.on_slide_in_finished)
         self.timeout_timer.timeout.connect(lambda: self.slide_out_animation.start())
         self.actionbtn.clicked.connect(self.slide_out_animation.start)
 
     def event(self, a0):
-        if a0.type() in (
-            QtCore.QEvent.Type.MouseButtonPress,
-        ):
+        if a0.type() in (QtCore.QEvent.Type.MouseButtonPress,):
             if self.rect().contains(a0.position().toPoint()):
                 self.timeout_timer.stop()
-                self.slide_out_animation.setStartValue(self.slide_in_animation.currentValue())
+                self.slide_out_animation.setStartValue(
+                    self.slide_in_animation.currentValue()
+                )
                 self.slide_in_animation.stop()
                 self.slide_out_animation.start()
 
@@ -84,16 +80,11 @@ class BannerPopup(QtWidgets.QWidget):
                 if isinstance(widget, QtWidgets.QMainWindow):
                     main_window = widget
                     break
-
         parent_rect = main_window.geometry()
-
         width = int(parent_rect.width() * 0.35)
-        height = (80
-        )
-
+        height = 80
         x = parent_rect.x() + parent_rect.width() - width + 50
         y = parent_rect.y() + 30
-
         return QtCore.QRect(x, y, width, height)
 
     def updateMask(self) -> None:
@@ -131,9 +122,9 @@ class BannerPopup(QtWidgets.QWidget):
     def _add_popup(self) -> None:
         """Add popup to queue"""
         if self.isShown:
-            if self.SingleTime.isActive():
+            if self.oneshot.isActive():
                 return
-            self.SingleTime.start()
+            self.oneshot.start()
             return
         if (
             self.messages
@@ -144,23 +135,23 @@ class BannerPopup(QtWidgets.QWidget):
         ):
             message_entry = self.messages.popleft()
             message_type = message_entry.get("type")
-            
-            message = "Unknown Event"
-            icon= ":ui/media/btn_icons/info.svg"
 
-            #TODO: missing usb icons
+            message = "Unknown Event"
+            icon = ":ui/media/btn_icons/info.svg"
+
+            # TODO: missing usb icons
             match message_type:
                 case BannerPopup.MessageType.CONNECT:
-                     message = "Usb Connected"
-                     #icon = ""
+                    message = "Usb Connected"
+                    # icon = ""
                 case BannerPopup.MessageType.DISCONNECT:
-                     message = "Usb Disconnected"
-                     #icon = ""
+                    message = "Usb Disconnected"
+                    # icon = ""
                 case BannerPopup.MessageType.CORRUPTED:
-                     message = "Usb Corrupted"
-                     icon = ":/ui/media/btn_icons/troubleshoot.svg"
+                    message = "Usb Corrupted"
+                    icon = ":/ui/media/btn_icons/troubleshoot.svg"
             end_rect = self._calculate_target_geometry()
-            start_rect = end_rect.translated(end_rect.width() * 2,0) 
+            start_rect = end_rect.translated(end_rect.width() * 2, 0)
 
             self.icon_label.setPixmap(QtGui.QPixmap(icon))
 
@@ -172,7 +163,7 @@ class BannerPopup(QtWidgets.QWidget):
             self.text_label.setText(message)
             self.show()
 
-    def showEvent(self, a0: QtGui.QShowEvent|None) -> None:
+    def showEvent(self, a0: QtGui.QShowEvent | None) -> None:
         """Re-implementation, widget show"""
         self.slide_in_animation.start()
         self.isShown = True
