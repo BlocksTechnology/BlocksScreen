@@ -60,7 +60,7 @@ def _make_worker(qapp, *, running=True, with_wifi=True, with_wired=False):
     w._is_hotspot_active = False
     w._consecutive_dbus_errors = 0
     w._background_tasks = set()
-    w._deleted_vlan_ids = set()
+
 
     # Signal-reactive architecture: persistent signal proxies
     w._signal_nm = None
@@ -97,7 +97,7 @@ def _bare_worker(qapp):
     w._is_hotspot_active = False
     w._consecutive_dbus_errors = 0
     w._background_tasks = set()
-    w._deleted_vlan_ids = set()
+
     w._signal_nm = None
     w._signal_wifi = None
     w._signal_wired = None
@@ -128,7 +128,7 @@ def _make(qapp, *, running=True, wifi=True, wired=True):
     w._is_hotspot_active = False
     w._consecutive_dbus_errors = 0
     w._background_tasks = set()
-    w._deleted_vlan_ids = set()
+
     w._signal_nm = None
     w._signal_wifi = None
     w._signal_wired = None
@@ -2569,182 +2569,6 @@ class TestResetWifiToDhcp:
 
 
 
-class _FakeSignal:
-    """Async iterable that yields pre-programmed (state, reason) tuples."""
-
-    def __init__(self, events: list[tuple[int, int]]):
-        self._events = events
-
-    def __aiter__(self):
-        return self
-
-    async def __anext__(self):
-        if not self._events:
-            raise StopAsyncIteration
-        return self._events.pop(0)
-
-
-class TestActivateVlanWithTimeout:
-    """Tests for the signal-reactive _async_activate_vlan_with_timeout."""
-
-    def _patch_ac(self, w, events):
-        """Patch dbus_nm.ActiveConnection to return a mock with a fake signal."""
-        mock_ac = MagicMock()
-        mock_ac.state_changed = _FakeSignal(events)
-        return patch.object(
-            _worker_mod.dbus_nm, "ActiveConnection", return_value=mock_ac
-        )
-
-    def test_activated_returns_success(self, qapp):
-        w = _make(qapp)
-        nm = AsyncProxyMock()
-        nm.activate_connection = AsyncMock(return_value="/active/1")
-        _wire(w, nm=nm)
-
-        # ConnectionState.ACTIVATING=1, then ACTIVATED=2
-        events = [(1, 1), (2, 1)]
-        with self._patch_ac(w, events):
-            ok, msg = _run(
-                w._async_activate_vlan_with_timeout(
-                    "/path/vlan", 100, "eth0.100", timeout=5.0
-                )
-            )
-        assert ok is True
-        assert msg == ""
-
-    def test_deactivated_returns_failure(self, qapp):
-        w = _make(qapp)
-        nm = AsyncProxyMock()
-        nm.activate_connection = AsyncMock(return_value="/active/2")
-        _wire(w, nm=nm)
-
-        # ACTIVATING then DEACTIVATED (DHCP failed)
-        events = [(1, 1), (4, 6)]  # reason 6 = CONNECT_TIMEOUT
-        with self._patch_ac(w, events):
-            ok, msg = _run(
-                w._async_activate_vlan_with_timeout(
-                    "/path/vlan", 200, "eth0.200", timeout=5.0
-                )
-            )
-        assert ok is False
-        assert "no DHCP server" in msg
-
-    def test_deactivating_returns_failure(self, qapp):
-        w = _make(qapp)
-        nm = AsyncProxyMock()
-        nm.activate_connection = AsyncMock(return_value="/active/3")
-        _wire(w, nm=nm)
-
-        events = [(1, 1), (3, 5)]  # DEACTIVATING, reason=IP_CONFIG_INVALID
-        with self._patch_ac(w, events):
-            ok, msg = _run(
-                w._async_activate_vlan_with_timeout(
-                    "/path/vlan", 300, "eth0.300", timeout=5.0
-                )
-            )
-        assert ok is False
-
-    def test_activation_request_failure(self, qapp):
-        w = _make(qapp)
-        nm = AsyncProxyMock()
-        nm.activate_connection = AsyncMock(side_effect=RuntimeError("boom"))
-        _wire(w, nm=nm)
-
-        ok, msg = _run(
-            w._async_activate_vlan_with_timeout(
-                "/path/vlan", 400, "eth0.400", timeout=5.0
-            )
-        )
-        assert ok is False
-        assert "activation request failed" in msg
-
-    def test_object_destroyed_returns_failure(self, qapp):
-        w = _make(qapp)
-        nm = AsyncProxyMock()
-        nm.activate_connection = AsyncMock(return_value="/active/4")
-        _wire(w, nm=nm)
-
-        # Simulate object destruction — signal iterator raises
-        class _DestroyedSignal:
-            def __aiter__(self):
-                return self
-
-            async def __anext__(self):
-                raise Exception("Object does not exist at path")
-
-        mock_ac = MagicMock()
-        mock_ac.state_changed = _DestroyedSignal()
-        with patch.object(
-            _worker_mod.dbus_nm, "ActiveConnection", return_value=mock_ac
-        ):
-            ok, msg = _run(
-                w._async_activate_vlan_with_timeout(
-                    "/path/vlan", 500, "eth0.500", timeout=5.0
-                )
-            )
-        assert ok is False
-        assert "removed externally" in msg
-
-    def test_timeout_deactivates_and_returns_failure(self, qapp):
-        w = _make(qapp)
-        nm = AsyncProxyMock()
-        nm.activate_connection = AsyncMock(return_value="/active/5")
-        nm.deactivate_connection = AsyncMock()
-        _wire(w, nm=nm)
-
-        # Signal that never reaches terminal state — just stays ACTIVATING
-        class _SlowSignal:
-            async def __aiter__(self):
-                while True:
-                    await asyncio.sleep(0.5)
-                    yield (1, 1)  # ACTIVATING, NONE
-
-        mock_ac = MagicMock()
-        mock_ac.state_changed = _SlowSignal()
-        with patch.object(
-            _worker_mod.dbus_nm, "ActiveConnection", return_value=mock_ac
-        ):
-            ok, msg = _run(
-                w._async_activate_vlan_with_timeout(
-                    "/path/vlan", 600, "eth0.600", timeout=1.5
-                )
-            )
-        assert ok is False
-        assert "timed out" in msg
-        nm.deactivate_connection.assert_awaited_once()
-
-    def test_worker_shutdown_during_wait(self, qapp):
-        w = _make(qapp)
-        nm = AsyncProxyMock()
-        nm.activate_connection = AsyncMock(return_value="/active/6")
-        _wire(w, nm=nm)
-
-        class _ShutdownSignal:
-            def __init__(self, worker):
-                self._w = worker
-
-            def __aiter__(self):
-                return self
-
-            async def __anext__(self):
-                self._w._running = False
-                return (1, 1)
-
-        mock_ac = MagicMock()
-        mock_ac.state_changed = _ShutdownSignal(w)
-        with patch.object(
-            _worker_mod.dbus_nm, "ActiveConnection", return_value=mock_ac
-        ):
-            ok, msg = _run(
-                w._async_activate_vlan_with_timeout(
-                    "/path/vlan", 700, "eth0.700", timeout=5.0
-                )
-            )
-        assert ok is False
-        assert "shutting down" in msg
-
-
-
 class TestCreateVlan:
     def test_no_wired_device_emits_error(self, qapp):
         w = _make(qapp, wired=False)
@@ -2753,58 +2577,7 @@ class TestCreateVlan:
         _run(w._async_create_vlan(100, "10.0.0.1", "255.255.255.0", "10.0.0.1", "", ""))
         assert errors == ["create_vlan"]
 
-    def test_happy_path_dhcp(self, qapp):
-        w = _make(qapp)
-        nm = AsyncProxyMock(wireless_enabled=False)
-        nm.activate_connection = AsyncMock(return_value="/active/path")
-        _wire(w, nm=nm)
-        wifi = AsyncProxyMock()
-        wifi.disconnect = AsyncMock()
-        _wire(w, wifi_proxy=wifi)
-        settings = AsyncProxyMock()
-        settings.add_connection = AsyncMock(return_value="/path/vlan")
-        settings.list_connections = AsyncMock(return_value=[])
-        _wire(w, settings=settings)
-        w._is_ethernet_connected = AsyncMock(return_value=True)
-        w._wait_for_wifi_radio = AsyncMock(return_value=True)
-        w._deactivate_connection_by_id = AsyncMock(return_value=False)
-        w._delete_all_connections_by_id = AsyncMock()
-        w._build_current_state = AsyncMock(return_value=NetworkState())
-        w._async_activate_vlan_with_timeout = AsyncMock(return_value=(True, ""))
-
-        results = []
-        w.connection_result.connect(results.append)
-        # DHCP mode — empty ip_address
-        _run(w._async_create_vlan(100, "", "255.255.255.0", "", "", ""))
-        settings.add_connection.assert_awaited_once()
-        w._async_activate_vlan_with_timeout.assert_awaited_once()
-        assert any(r.success for r in results)
-
-    def test_dhcp_failure_emits_error_and_cleans_up(self, qapp):
-        w = _make(qapp)
-        nm = AsyncProxyMock(wireless_enabled=False)
-        nm.activate_connection = AsyncMock(return_value="/active/path")
-        _wire(w, nm=nm)
-        settings = AsyncProxyMock()
-        settings.add_connection = AsyncMock(return_value="/path/vlan")
-        settings.list_connections = AsyncMock(return_value=[])
-        _wire(w, settings=settings)
-        w._is_ethernet_connected = AsyncMock(return_value=True)
-        w._deactivate_connection_by_id = AsyncMock(return_value=False)
-        w._delete_all_connections_by_id = AsyncMock()
-        w._build_current_state = AsyncMock(return_value=NetworkState())
-        w._async_activate_vlan_with_timeout = AsyncMock(
-            return_value=(False, "No DHCP server")
-        )
-
-        results = []
-        w.connection_result.connect(results.append)
-        _run(w._async_create_vlan(100, "", "", "", "", ""))
-        # Profile should be cleaned up on failure
-        assert w._delete_all_connections_by_id.await_count >= 1
-        assert any(not r.success for r in results)
-
-    def test_static_ip_skips_signal_wait(self, qapp):
+    def test_static_ip_happy_path(self, qapp):
         w = _make(qapp)
         nm = AsyncProxyMock(wireless_enabled=False)
         nm.activate_connection = AsyncMock()
@@ -2837,7 +2610,6 @@ class TestDeleteVlan:
         _run(w._async_delete_vlan(100))
         w._delete_all_connections_by_id.assert_awaited_once()
         assert results[0].success is True
-        assert 100 in w._deleted_vlan_ids
 
     def test_exception_emits_error(self, qapp):
         w = _make(qapp)

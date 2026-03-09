@@ -65,8 +65,7 @@ class PendingOperation(IntEnum):
     CONNECT = 5
     ETHERNET_ON = 6
     ETHERNET_OFF = 7
-    WIFI_STATIC_IP = 8  # static IP or resetting to DHCP on a Wi-Fi profile
-    VLAN_DHCP = 9  # VLAN with DHCP (long-running, up to 45 s)
+    WIFI_STATIC_IP = 8  # VLAN with DHCP (long-running, up to 45 s)
 
 
 class NetworkStatus(IntEnum):

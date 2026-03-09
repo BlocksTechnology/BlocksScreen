@@ -528,14 +528,18 @@ class ProbeHelper(QtWidgets.QWidget):
 
         # if update.get("z_position_lower"):
         # f"{update.get('z_position_lower'):.4f} mm"
-        if update.get("is_active"):
-            if not self.isVisible():
-                self.request_page_view.emit()
-
-            self.helper_initialize = False
-            self.helper_start = True
+        is_active = update.get("is_active", False)
+        if is_active and not self.isVisible():
+            self.request_page_view.emit()
+        # Shared state updates
+        self.helper_initialize = False
+        self.helper_start = is_active
+        # UI updates
+        self._toggle_tool_buttons(is_active)
+        if is_active:
             self._hide_option_cards()
-            self._toggle_tool_buttons(True)
+        else:
+            self._show_option_cards()
 
         if update.get("z_position_upper"):
             self.old_offset_info.setText(f"{update.get('z_position_upper'):.4f} mm")

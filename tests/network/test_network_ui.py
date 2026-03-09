@@ -601,26 +601,6 @@ class TestLoadingStateMachine:
         w._on_network_state_changed(state)
         assert w._is_connecting
 
-    def test_vlan_dhcp_keeps_loading_even_with_ethernet(self, win):
-        """VLAN DHCP must NOT clear loading when ethernet is already connected.
-
-        This is the core fix — the old code used ETHERNET_ON which
-        cleared immediately because ethernet was already up.
-        """
-        w, _ = win
-        self._start_loading(w, PendingOperation.VLAN_DHCP)
-        w._on_network_state_changed(_eth_state())
-        # Loading MUST stay visible — VLAN DHCP is still in progress
-        assert w._is_connecting
-        assert w.loadingwidget.isVisible()
-
-    def test_vlan_dhcp_syncs_ethernet_panel(self, win):
-        """While VLAN DHCP loading is visible, the ethernet panel must update."""
-        w, _ = win
-        self._start_loading(w, PendingOperation.VLAN_DHCP)
-        with patch.object(w, "_sync_ethernet_panel") as mock_sync:
-            w._on_network_state_changed(_eth_state())
-            mock_sync.assert_called()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -700,51 +680,6 @@ class TestOnOperationComplete:
         result = ConnectionResult(success=False, message="Failed", error_code="err")
         w._on_operation_complete(result)
         assert not w.loadingwidget.isVisible()
-
-    def test_vlan_dhcp_timeout_shows_error(self, win):
-        w, _ = win
-        w._is_first_run = False
-        result = ConnectionResult(
-            success=False,
-            message="No DHCP server",
-            error_code="vlan_dhcp_timeout",
-        )
-        with patch.object(w, "_show_error_popup") as mock_err:
-            w._on_operation_complete(result)
-            mock_err.assert_called_once()
-
-    def test_vlan_dhcp_timeout_clears_loading(self, win):
-        """VLAN DHCP timeout must clear loading state."""
-        w, _ = win
-        w._is_first_run = False
-        w._is_connecting = True
-        w._pending_operation = PendingOperation.VLAN_DHCP
-        w.loadingwidget.setVisible(True)
-        result = ConnectionResult(
-            success=False,
-            message="No DHCP server",
-            error_code="vlan_dhcp_timeout",
-        )
-        w._on_operation_complete(result)
-        assert not w.loadingwidget.isVisible()
-        assert not w._is_connecting
-
-    def test_vlan_dhcp_success_clears_loading(self, win):
-        """Successful VLAN DHCP must clear loading and update display."""
-        w, nm = win
-        w._is_first_run = False
-        w._is_connecting = True
-        w._pending_operation = PendingOperation.VLAN_DHCP
-        w.loadingwidget.setVisible(True)
-        nm.current_state = _eth_state()
-        result = ConnectionResult(success=True, message="VLAN 100 connected")
-        with patch.object(w, "_display_connected_state") as mock_disp:
-            with patch.object(w, "_show_info_popup") as mock_info:
-                w._on_operation_complete(result)
-                mock_disp.assert_called_once()
-                mock_info.assert_called_once_with("VLAN 100 connected")
-        assert not w.loadingwidget.isVisible()
-        assert not w._is_connecting
 
     def test_transient_mismatch_retries(self, win, qapp):
         """NM device-mismatch error during Wi-Fi connect -> retry scheduled."""
@@ -950,15 +885,6 @@ class TestHandleLoadTimeout:
             mock_err.assert_called_once()
         assert not w.loadingwidget.isVisible()
 
-    def test_vlan_dhcp_timeout_shows_specific_error(self, win):
-        """50 s UI timer fires before worker's 45 s signal timeout."""
-        w, nm = win
-        self._setup(w, nm, PendingOperation.VLAN_DHCP, _eth_state())
-        with patch.object(w, "_show_error_popup") as mock_err:
-            w._handle_load_timeout()
-            mock_err.assert_called_once()
-            assert "VLAN DHCP" in mock_err.call_args[0][0]
-        assert not w.loadingwidget.isVisible()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -967,36 +893,27 @@ class TestHandleLoadTimeout:
 
 
 class TestOnVlanApply:
-    """Verify _on_vlan_apply routes DHCP -> VLAN_DHCP and static -> ETHERNET_ON."""
+    """Verify _on_vlan_apply requires static IP and sets ETHERNET_ON."""
 
-    def test_dhcp_mode_sets_vlan_dhcp_pending(self, win):
+    def test_empty_ip_shows_error(self, win):
         w, nm = win
         w._is_first_run = False
         w.vlan_id_spinbox.setValue(100)
-        w.vlan_ip_field.setText("")  # empty IP -> DHCP
-        w._on_vlan_apply()
-        assert w._pending_operation == PendingOperation.VLAN_DHCP
-        assert w._is_connecting
-        nm.create_vlan_connection.assert_called_once_with(100, "", "", "", "", "")
+        w.vlan_ip_field.setText("")
+        with patch.object(w, "_show_error_popup") as mock_err:
+            w._on_vlan_apply()
+            mock_err.assert_called_once_with("IP address is required.")
+        nm.create_vlan_connection.assert_not_called()
 
     def test_static_ip_mode_sets_ethernet_on_pending(self, win):
         w, nm = win
         w._is_first_run = False
         w.vlan_ip_field.setText("10.0.0.1")
         w.vlan_mask_field.setText("255.255.255.0")
-        # Mock validation to pass
         w.vlan_ip_field.is_valid = MagicMock(return_value=True)
         w.vlan_mask_field.is_valid_mask = MagicMock(return_value=True)
         w._on_vlan_apply()
         assert w._pending_operation == PendingOperation.ETHERNET_ON
-
-    def test_dhcp_mode_uses_longer_timeout(self, win):
-        """VLAN DHCP loading must use VLAN_DHCP_TIMEOUT_MS (50 s)."""
-        w, nm = win
-        w._is_first_run = False
-        w.vlan_ip_field.setText("")  # DHCP
-        w._on_vlan_apply()
-        assert w._load_timer.interval() == 50000
 
 
 class TestOnNetworkError:
