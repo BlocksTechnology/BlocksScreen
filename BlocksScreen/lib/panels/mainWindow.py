@@ -114,6 +114,11 @@ class MainWindow(QtWidgets.QMainWindow):
         self.screensaver = ScreenSaver(self)
         self._popup_toggle: bool = False
         self.ui.main_content_widget.setCurrentIndex(0)
+
+        usb_config = self.config.get_section("usb_manager")
+        self.usb_manager: USBManager = USBManager(
+            parent=self, gcodes_dir=usb_config.get("gcodes_dir", None)
+        )
         self.ws = MoonWebSocket(self)
         self.notiPage = NotificationPage(self)
         self.mc = MachineControl(self)
@@ -123,14 +128,12 @@ class MainWindow(QtWidgets.QMainWindow):
         self.conn_window = ConnectionPage(self, self.ws)
         self.update_page = UpdatePage(self)
         self.update_page.hide()
-
         self.conn_window.call_cancel_panel.connect(self.handle_cancel_print)
         self.installEventFilter(self.conn_window)
         self.printPanel = PrintTab(
             self.ui.printTab, self.file_data, self.ws, self.printer
         )
         QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.CursorShape.BlankCursor)
-
         self.filamentPanel = FilamentTab(self.ui.filamentTab, self.printer, self.ws)
         self.controlPanel = ControlTab(self.ui.controlTab, self.ws, self.printer)
         self.utilitiesPanel = UtilitiesTab(self.ui.utilitiesTab, self.ws, self.printer)
