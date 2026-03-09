@@ -25,9 +25,29 @@ class USBManager(QtCore.QObject):
         self.udisks.start(self.udisks.Priority.InheritPriority)
         self.udisks.hardware_detected.connect(self._handle_new_hardware)
         self.udisks.hardware_removed.connect(self._handle_rem_hardware)
+        self.udisks.device_added.connect(self._handle_new_device)
+        self.udisks.device_removed.connect(self._handle_rem_device)
+        self.udisks.device_mounted.connect(self._handle_mounted_device)
+        self.udisks.device_unmounted.connect(self._handle_unmounted_device)
 
     def restart(self) -> None:
         self.udisks.start(self.udisks.Priority.InheritPriority)
+
+    @QtCore.pyqtSlot(str, str, name="device-mounted")
+    def _handle_mounted_device(self, path, symlink) -> None:
+        pass
+
+    @QtCore.pyqtSlot(str, name="device-unmounted")
+    def _handle_unmounted_device(self, path) -> None:
+        pass
+
+    @QtCore.pyqtSlot(str, dict, name="device-added")
+    def _handle_new_device(self, path, interface) -> None:
+        pass
+
+    @QtCore.pyqtSlot(str, name="device-removed")
+    def _handle_rem_device(self, path) -> None:
+        pass
 
     @QtCore.pyqtSlot(str, name="hardware_detected")
     def _handle_new_hardware(self, path: str):

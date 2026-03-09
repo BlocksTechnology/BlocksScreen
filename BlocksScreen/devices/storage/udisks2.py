@@ -134,6 +134,9 @@ class UDisksDBusAsync(QtCore.QThread):
     device_mounted: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         str, str, name="device-mounted"
     )  # device path, new symlink path
+    device_unmounted: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        str, name="device-unmounted"
+    )
 
     def __init__(self, parent: QtCore.QObject, gcodes_dir: str) -> None:
         super().__init__(parent)
