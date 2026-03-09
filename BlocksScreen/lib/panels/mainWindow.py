@@ -114,10 +114,12 @@ class MainWindow(QtWidgets.QMainWindow):
         self._popup_toggle: bool = False
         self.ui.main_content_widget.setCurrentIndex(0)
 
-        usb_config = self.config.get_section("usb_manager")
-        self.usb_manager: USBManager = USBManager(
-            parent=self, gcodes_dir=usb_config.get("gcodes_dir", None)
-        )
+        usb_config = self.config.get_section("usb_manager", fallback=None)
+        gdir = None
+        if usb_config:
+            gdir = usb_config.get("gcodes_dir", default=None)
+
+        self.usb_manager: USBManager = USBManager(parent=self, gcodes_dir=gdir)
         self.ws = MoonWebSocket(self)
         self.notiPage = NotificationPage(self)
         self.mc = MachineControl(self)
