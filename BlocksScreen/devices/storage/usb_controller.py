@@ -96,7 +96,7 @@ class USBManager(QtCore.QObject):
             - `always` - restarts the tool every time it stops
             - `none` - doesn't restart the tool at all
         """
-        if type not in ResType:
+        if type not in ("always", "none"):
             logging.info("Unknown restart type %s", (type,))
         if type == "always":
             if not self._restart_type == "always":

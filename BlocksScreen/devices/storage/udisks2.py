@@ -35,7 +35,6 @@ def validate_label(label: str, strict: bool = True, max_length: int = 100) -> st
         label: Raw input label to validate
         strict: If True, returns empty string for any invalid input
         max_length: Maximum allowed length in bytes
-        allow_unicode: If False, converts to ASCII only
 
     Returns:
         Sanitized and validated label safe for filesystem use
@@ -242,7 +241,7 @@ class UDisksDBusAsync(QtCore.QThread):
     async def _add_interface_listener(self) -> None:
         """Handle add interface signal from UDisks2 DBus connection
 
-        Adds the new device to internal traking, can be retrieved with device path
+        Adds the new device to internal tracking, can be retrieved with device path
         Creates symlink onto specified directory configured on the class
         """
         async for path, interfaces in self.obj_manager.interfaces_added:
@@ -274,10 +273,10 @@ class UDisksDBusAsync(QtCore.QThread):
                     ddev.media_removable, ddev.ejectable, ddev.connection_bus
                 )
                 if not (media_removable and ejectable and con_bus == "usb"):
-                    # Only handle usb devices and remoble storage media
+                    # Only handle usb devices and removable storage media
                     return
                 device: Device = Device(
-                    path, DriveInterface=ddev, symlink_path=self.gcodes_path
+                    path, DriveInterface=ddev, symlink_path=self.gcodes_path.as_posix()
                 )
                 self.controlled_devs.update({path: device})
                 self.hardware_detected[str].emit(path)
@@ -496,7 +495,7 @@ class UDisksDBusAsync(QtCore.QThread):
                 "Caught fatal exception no permissions, unable to create symlink on specified path"
             )
         except OSError as e:
-            logging.error("Caught fatal exception OSERROR%s", e)
+            logging.error("Caught fatal exception OSERROR %s", e)
         return ""
 
     def rem_symlink(self, path: str | pathlib.Path) -> bool:
@@ -523,7 +522,7 @@ class UDisksDBusAsync(QtCore.QThread):
         """Cleanup all symlinks on gcodes directory
 
         This method is private, if used outside of it's intended purpose
-        devices will lose track of what symlinks are assiciated with them
+        devices will lose track of what symlinks are associated with them
 
         USE WITH CARE
         """
@@ -543,7 +542,7 @@ class UDisksDBusAsync(QtCore.QThread):
         resolves to the same mount directory.
 
 
-        This method returns on the the first encounter. It does not
+        This method returns on the first encounter. It does not
         evaluate any other symlinks after that.
         """
         for dir in self.gcodes_path.rglob("*"):

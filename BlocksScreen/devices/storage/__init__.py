@@ -3,8 +3,8 @@ from .usb_controller import USBManager
 __doc__ = """
 
 The storage package contains a tool that monitors 
-plugable usb devices via python-sdbus library. 
-While offering a automounting option.
+pluggable usb devices via python-sdbus library. 
+While offering an automounting option.
 The package is also capable of creating a symlink that 
 points directly to the mounted usb drive on the gcodes
 directory. 

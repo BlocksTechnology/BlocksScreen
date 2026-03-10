@@ -291,7 +291,7 @@ class UDisks2BlockAsyncInterface(
 
     @sdbus.dbus_property_async(property_signature="s")
     def id(self) -> str:
-        """Unique persistend identifier for the device
+        """Unique persistent identifier for the device
         blank if no such identifier is available
 
         Returns:
@@ -400,8 +400,8 @@ class UDisks2BlockAsyncInterface(
             - device (type 'ay') - The special device
             - passphrase-path (type 'ay') - Either empty to specify
                 that no password is set, otherwise a path to a file
-                containing the ecnryption password. This may also point
-                to a special devicde file in /dev such as /dev/random
+                containing the encryption password. This may also point
+                to a special device file in /dev such as /dev/random
             - options (type 'ay') - Options
         """
         raise NotImplementedError
@@ -550,7 +550,7 @@ class UDisks2DriveAsyncInterface(
 
     @sdbus.dbus_property_async(property_signature="s")
     def vendor(self) -> str:
-        """Name for the vendor of the dirve or blank if
+        """Name for the vendor of the drive or blank if
         unknown
 
         Returns:
