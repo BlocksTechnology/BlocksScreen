@@ -4,6 +4,7 @@ import typing
 from PyQt6 import QtCore
 
 from .udisks2 import UDisksDBusAsync
+from lib.panels.widgets.bannerPopup import BannerPopup
 
 ResType: typing.TypeAlias = typing.Literal["always", "none"]
 
@@ -30,6 +31,7 @@ class USBManager(QtCore.QObject):
         self.udisks: UDisksDBusAsync = UDisksDBusAsync(
             parent=self, gcodes_dir=self.gcodes_dir
         )
+        self.banner = BannerPopup(self)
         self._restart_type: ResType = "always"
         self.udisks.start(self.udisks.Priority.InheritPriority)
         self.udisks.hardware_detected.connect(self.handle_new_hardware)
@@ -102,9 +104,9 @@ class USBManager(QtCore.QObject):
     @QtCore.pyqtSlot(str, name="hardware_detected")
     def handle_new_hardware(self, path: str):
         """Handle new usb device hardware"""
-        pass
+        self.banner.new_message(self.banner.MessageType.CONNECT)
 
     @QtCore.pyqtSlot(str, name="hardware_removed")
     def handle_rem_hardware(self, path: str):
         """Handle usb device hardware removed"""
-        pass
+        self.banner.new_message(self.banner.MessageType.DISCONNECT)
