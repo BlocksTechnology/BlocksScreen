@@ -8,8 +8,6 @@ from .udisks2_dbus_async import (
 import typing
 import pathlib
 
-_T = typing.TypeVar(name="_T")
-
 
 class Device:
     def __init__(
