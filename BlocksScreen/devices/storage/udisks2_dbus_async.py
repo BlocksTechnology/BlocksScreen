@@ -331,27 +331,78 @@ class UDisks2BlockAsyncInterface(
         -----
         If blank no known signature was detected. It doesn't
         necessarily mean the device contains no structured data;
-        it only means that probing failed"""
+        it only means that probing failed
+
+        Returns:
+            usage (str): usage signature"""
         raise NotImplementedError
 
     @sdbus.dbus_property_async(property_signature="s")
     def id_type(self) -> str:
+        """Property that contains more information about
+        the probing result of the blocks device. It depends
+        on the IdUsage property
+            - filesystem -> The mountable file system that was detected (e.g. vfat).
+            - crypto -> Encrypted data. Known values include crypto_LUKS.
+            - raid -> RAID or similar. Known values include LVM2_member (for LVM2 components), linux_raid_member (for MD-RAID components.)
+            - other -> Something else. Known values include swap (for swap space), suspend (data used when resuming from suspend-to-disk).
+        """
         raise NotImplementedError
 
     @sdbus.dbus_property_async(property_signature="ayy")
     def symlinks(self) -> list[bytes]:
+        """Known symlinks in `/dev` that point to the device
+        in the file **Device** property.
+
+        Returns:
+            symlinks (list[bytes]): available symlinks
+        """
         raise NotImplementedError
 
     @sdbus.dbus_method_async(input_signature="a{sv}")
     async def rescan(self, opts: dict[str, typing.Any]) -> None:
+        """Request that the kernel and core OS rescans the
+        contents of the device and update their state to reflect
+        this
+
+        Args:
+            options: unused
+        """
         raise NotImplementedError
 
     @sdbus.dbus_property_async(property_signature="o")
     def drive(self) -> str:
+        """The org.freedesktop.UDisks2.Drive object that the
+        block device belongs to, or '/' if no such object
+        exits
+
+        Returns:
+            drive (str): path
+        """
         raise NotImplementedError
 
     @sdbus.dbus_property_async(property_signature="a(sa{sv})")
     def configuration(self) -> list[typing.Any]:
+        """The configuration for the device
+        This is an array of pairs (type, details), where `type` is
+        a string identifying the configuration source and the
+        `details` has the actual configuration data.
+        For entries of type `fstab` known configurations are:
+            - fsname (type 'ay') - The special device
+            - dir (type 'ay') - The mount point
+            - type (type 'ay') - The filesystem type
+            - opts (type 'ay') - Options
+            - freq (type 'i') - Dump frequency in days
+            - passno (type 'i') - Pass number of parallel fsck
+        For entries of type `crypttab` known configurations are:
+            - name (type 'ay') - The name to set the device up as
+            - device (type 'ay') - The special device
+            - passphrase-path (type 'ay') - Either empty to specify
+                that no password is set, otherwise a path to a file
+                containing the ecnryption password. This may also point
+                to a special devicde file in /dev such as /dev/random
+            - options (type 'ay') - Options
+        """
         raise NotImplementedError
 
 
