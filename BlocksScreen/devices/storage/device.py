@@ -5,8 +5,6 @@ from .udisks2_dbus_async import (
     UDisks2FileSystemAsyncInterface,
     UDisks2PartitionTableAsyncInterface,
 )
-import typing
-import pathlib
 
 
 class Device:
