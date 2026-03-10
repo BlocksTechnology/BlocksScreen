@@ -262,7 +262,7 @@ class UDisksDBusAsync(QtCore.QThread):
                     bus=self.system_bus,
                 )
                 hwbus: str = await ddev.connection_bus
-                logging.info(
+                logging.debug(
                     "New Hardware device recognized type: %s \n  path: %s",
                     hwbus,
                     path,
@@ -288,8 +288,9 @@ class UDisksDBusAsync(QtCore.QThread):
                 hint_sys, hint_ignore = await asyncio.gather(
                     bdev.hint_system, bdev.hint_ignore
                 )
+                dev_name = await bdev.hint_name or await bdev.id_label
                 if hint_sys or hint_ignore:
-                    # Always ignore if these flags are set
+                    # Always ignore device if these flags are set
                     return
                 if drv_path in self.controlled_devs:
                     dev: Device = self.controlled_devs[drv_path]
@@ -319,7 +320,8 @@ class UDisksDBusAsync(QtCore.QThread):
                         )
                         dev.update_file_system(path, devfs)
                         self.device_added.emit(path, interfaces)
-                        self.mount(dev)
+                        _label = dev_name or ""
+                        self.mount(dev, _label)
                     if Interfaces.Partition.value in interfaces:
                         devpart: UDisks2PartitionAsyncInterface = (
                             UDisks2PartitionAsyncInterface.new_proxy(
@@ -396,11 +398,11 @@ class UDisksDBusAsync(QtCore.QThread):
                     exc_info=True,
                 )
 
-    def mount(self, device: Device):
+    def mount(self, device: Device, label: str = ""):
         """Mounts the devices mountpoints"""
         for path, filesystem in device.file_systems.items():
             _ = fire_n_forget(
-                coro=self._mount_filesystem(filesystem),
+                coro=self._mount_filesystem(filesystem, label),
                 name=f"Mount-filesystem-{path}",
                 task_stack=self.task_stack,
             )
@@ -422,7 +424,7 @@ class UDisksDBusAsync(QtCore.QThread):
             )
         except sdbus.SdBusUnmappedMessageError as e:
             if AlreadyMountedException in e.args[0]:
-                logging.info(
+                logging.debug(
                     "Device filesystem already mounted on %s, verifying gcodes symlink",
                     str(e.args[1]),
                 )
