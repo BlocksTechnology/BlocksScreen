@@ -201,18 +201,45 @@ class UDisks2FileSystemAsyncInterface(
 
     @sdbus.dbus_method_async(input_signature="a{sv}", result_signature="s")
     async def mount(self, opts) -> str:
+        """Mounts the filesystem
+
+        Args:
+            options dict[str, tuple[str, any]]: Options to mount the filesystem
+
+        Returns:
+            path (str): mount path
+        """
         raise NotImplementedError
 
     @sdbus.dbus_method_async(input_signature="a{sv}")
     async def unmount(self, opts) -> None:
+        """Unmount a mounted device
+
+        Args:
+            options dict[str, any]: Known options (in addition to the standart options) include `force` (of type `b`)
+        """
         raise NotImplementedError
 
     @sdbus.dbus_property_async(property_signature="t")
     def size(self) -> int:
+        """Size of the filesystem. This is the amount
+        of bytes used on the block device representing an outer
+        fileysstem boundary
+
+        Returns:
+            size (int): Size of the filesystem
+        """
         raise NotImplementedError
 
     @sdbus.dbus_property_async(property_signature="ayy")
     def mount_points(self) -> list[bytes]:
+        """An array of filesystem paths for where the
+        file system on the device is mounted. If the
+        device is not mounted, this array will be empty
+
+        Returns
+            mount_points (list[bytes]): Array of filesystem paths
+        """
         raise NotImplementedError
 
 
