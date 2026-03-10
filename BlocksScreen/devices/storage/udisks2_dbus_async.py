@@ -251,38 +251,87 @@ class UDisks2BlockAsyncInterface(
 
     @sdbus.dbus_property_async(property_signature="s")
     def hint_name(self) -> str:
+        """Hint name, if not blank, the name to
+        that presents the device
+
+        Returns:
+            name (str): name of the device"""
         raise NotImplementedError
 
     @sdbus.dbus_property_async(property_signature="b")
     def hint_system(self) -> bool:
+        """If the device is considered a system device
+        True if it is. System devices are devices that
+        require additional permissions to access
+
+        Returns
+            hint system (bool): If device is `system device`"""
         raise NotImplementedError
 
     @sdbus.dbus_property_async(property_signature="b")
-    def hint_ignore(self) -> None:
+    def hint_ignore(self) -> bool:
+        """If the device should be hidden from users
+        Returns
+            ignore (bool): True if the system should be ignored"""
         raise NotImplementedError
 
     @sdbus.dbus_property_async(property_signature="ay")
-    def device(self) -> str:
+    def device(self) -> list[int] | bytes:
+        """Special device file for the block device
+
+        Returns:
+            file path (list[int] | bytes): The file path"""
         raise NotImplementedError
 
     @sdbus.dbus_property_async(property_signature="t")
     def device_number(self) -> int:
+        """Device `dev_t` of the block device"""
         raise NotImplementedError
 
     @sdbus.dbus_property_async(property_signature="s")
     def id(self) -> str:
+        """Unique persistend identifier for the device
+        blank if no such identifier is available
+
+        Returns:
+            id (str): unique identifier"""
         raise NotImplementedError
 
     @sdbus.dbus_property_async(property_signature="s")
     def id_label(self) -> str:
+        """Label for the filesystem or other structured
+        data on the block device.
+        If the property is blank there is no label or
+        it is unknown
+
+        Returns:
+            label (str): filesystem label for the block"""
         raise NotImplementedError
 
     @sdbus.dbus_property_async(property_signature="s")
     def id_UUID(self) -> str:
+        """UUID of the filesystem or other structured
+        data on the block device. Do not make any
+        assumptions about the UUID as its format
+        depends on what kind of data is on the device
+
+        Returns:
+            uuid (str): uuid"""
         raise NotImplementedError
 
     @sdbus.dbus_property_async(property_signature="s")
     def id_usage(self) -> str:
+        """Result of probing for signatures on the block device
+        Known values include
+            - filesystem -> Used for mountable filesystems
+            - crypto -> Used for e.g. LUKS devices
+            - raid -> Used for e.g. RAID members
+            - other -> Something else was detected
+
+        -----
+        If blank no known signature was detected. It doesn't
+        necessarily mean the device contains no structured data;
+        it only means that probing failed"""
         raise NotImplementedError
 
     @sdbus.dbus_property_async(property_signature="s")
