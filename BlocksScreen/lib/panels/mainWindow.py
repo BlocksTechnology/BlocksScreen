@@ -4,7 +4,7 @@ from collections import deque
 
 import events
 from configfile import BlocksScreenConfig, get_configparser
-from devices.storage.usb_controller import USBManager
+from devices.storage import USBManager
 from lib.files import Files
 from lib.machine import MachineControl
 from lib.moonrakerComm import MoonWebSocket
