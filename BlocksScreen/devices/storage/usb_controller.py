@@ -16,11 +16,24 @@ class USBManager(QtCore.QObject):
     usb_rem: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         str, str, name="usb-rem"
     )
+    usb_hardware_detected: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        str, name="hardware-detected"
+    )
+    usb_hardware_removed: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        str, name="hardware-removed"
+    )
     usb_monitor_started: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         name="usb-monitor-started"
     )
     usb_monitor_finished: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         name="usb-monitor-finished"
+    )
+    usb_mounted: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        str, str, name="device-mounted"
+    )
+
+    usb_unmounted: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        str, name="device-unmounted"
     )
 
     def __init__(self, parent: QtCore.QObject, gcodes_dir: str | None) -> None:
@@ -35,11 +48,17 @@ class USBManager(QtCore.QObject):
         self._restart_type: ResType = "always"
         self.udisks.start(self.udisks.Priority.InheritPriority)
         self.udisks.hardware_detected.connect(self.handle_new_hardware)
+        self.udisks.hardware_detected.connect(self.usb_hardware_detected)
         self.udisks.hardware_removed.connect(self.handle_rem_hardware)
+        self.udisks.hardware_removed.connect(self.usb_hardware_removed)
         self.udisks.device_added.connect(self.handle_new_device)
+        self.udisks.device_added.connect(self.usb_add)
         self.udisks.device_removed.connect(self.handle_rem_device)
+        self.udisks.device_removed.connect(self.usb_rem)
         self.udisks.device_mounted.connect(self.handle_mounted_device)
+        self.udisks.device_mounted.connect(self.usb_mounted)
         self.udisks.device_unmounted.connect(self.handle_unmounted_device)
+        self.udisks.device_unmounted.connect(self.usb_unmounted)
         self.udisks.started.connect(self.usb_monitor_started)
         self.udisks.finished.connect(self.usb_monitor_finished)
         self.need_restart: bool = False
@@ -66,7 +85,7 @@ class USBManager(QtCore.QObject):
             self.need_restart = False
 
     @property
-    def restart_type(self) -> str:
+    def restart_type(self) -> ResType:
         return self._restart_type
 
     @restart_type.setter
@@ -74,14 +93,20 @@ class USBManager(QtCore.QObject):
         """Tool restart type, currently there are only two
         options available.
 
-            - `always` - restarts the tool everytime it stops
+            - `always` - restarts the tool every time it stops
             - `none` - doesn't restart the tool at all
         """
         if type not in ResType:
             logging.info("Unknown restart type %s", (type,))
-        self._restart_type = type
         if type == "always":
-            self.udisks.finished.connect(self._handle_monitor_finished)
+            if not self._restart_type == "always":
+                self.udisks.finished.connect(self._handle_monitor_finished)
+        else:
+            try:
+                self.udisks.finished.disconnect(self._handle_monitor_finished)
+            except TypeError:
+                pass
+        self._restart_type = type
 
     @QtCore.pyqtSlot(name="monitor-finished")
     def _handle_monitor_finished(self) -> None:
@@ -95,7 +120,6 @@ class USBManager(QtCore.QObject):
 
     @QtCore.pyqtSlot(str, name="device-unmounted")
     def handle_unmounted_device(self, path) -> None:
-        """Handle unmounted device"""
         pass
 
     @QtCore.pyqtSlot(str, dict, name="device-added")

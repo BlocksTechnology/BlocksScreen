@@ -174,10 +174,10 @@ class UDisks2PartitionAsyncInterface(
 
     @sdbus.dbus_property_async(property_signature="b")
     def is_container(self) -> bool:
-        """Set to True if the partition itself is acontainer for other partitions
+        """Set to True if the partition itself is a container for other partitions
 
-        For example, for dos partition tables, this applies to socalled extended
-        partition (partitions of type 0x05, 0x0f or 0x85) containing socalled logical partitions.
+        For example, for dos partition tables, this applies to so-called extended
+        partition (partitions of type 0x05, 0x0f or 0x85) containing so-called logical partitions.
 
 
         Returns:
@@ -186,7 +186,7 @@ class UDisks2PartitionAsyncInterface(
         raise NotImplementedError
 
     @sdbus.dbus_property_async(property_signature="b")
-    def is_contained(self) -> bytes:
+    def is_contained(self) -> bool:
         """Set to True if the partition is contained in another partition
         Returns:
             is_contained (bool): if it's contained
@@ -225,7 +225,7 @@ class UDisks2FileSystemAsyncInterface(
     def size(self) -> int:
         """Size of the filesystem. This is the amount
         of bytes used on the block device representing an outer
-        fileysstem boundary
+        filesystem boundary
 
         Returns:
             size (int): Size of the filesystem
@@ -431,7 +431,7 @@ class UDisks2DriveAsyncInterface(
 
     @sdbus.dbus_property_async(property_signature="a{sv}")
     def configuration(self) -> dict[str, typing.Any]:
-        """Confituration directives applied to theh drive when
+        """Configuration directives applied to the drive when
         its connected.
 
         Returns:
@@ -508,19 +508,19 @@ class UDisks2DriveAsyncInterface(
         raise NotImplementedError
 
     @sdbus.dbus_property_async(property_signature="b")
-    def media_available(self) -> bytes:
+    def media_available(self) -> bool:
         """This is always True if `MediaChangeDetected` is False
         Returns:
-            media available (bytes): True if media change detected is false
+            media available (bool): True if media change detected is false
         """
         raise NotImplementedError
 
     @sdbus.dbus_property_async(property_signature="b")
-    def media_changed_detected(self) -> bytes:
+    def media_changed_detected(self) -> bool:
         """Set to true only if media changes are detected
 
         Returns:
-            media change detected (bytes): True if media changes are detected"""
+            media change detected (bool): True if media changes are detected"""
         raise NotImplementedError
 
     @sdbus.dbus_property_async(property_signature="s")
@@ -536,7 +536,7 @@ class UDisks2DriveAsyncInterface(
         """Whether the media can be removed from the drive
 
         Returns:
-            media_removable (bool): Wheter it can be removed"""
+            media_removable (bool): Whether it can be removed"""
         raise NotImplementedError
 
     @sdbus.dbus_property_async(property_signature="s")

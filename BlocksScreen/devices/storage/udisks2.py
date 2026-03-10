@@ -222,6 +222,9 @@ class UDisksDBusAsync(QtCore.QThread):
                 _ = task.cancel()
             logging.info("UDisks2 Monitor stopped: %s", e)
             self._active = False
+        except sdbus.SdBusBaseError as e:
+            logging.error("Caught generic fatal Sdbus exception: %s", e, exc_info=True)
+            self.close()
         except Exception as e:
             logging.error("Caught exception UDisks2 listeners failed: %s", e)
             self._active = False
@@ -367,7 +370,7 @@ class UDisksDBusAsync(QtCore.QThread):
     async def _rem_interface_listener(self) -> None:
         """Handle device removal signals from UDisks2 Dbus connection
 
-        Removes tracked interface and cleansup any left behing data
+        Removes tracked interface and cleans up any left behind data
         """
         async for path, interfaces in self.obj_manager.interfaces_removed:
             try:
@@ -467,8 +470,8 @@ class UDisksDBusAsync(QtCore.QThread):
         will default to **USB DRIVE**. If *USB DRIVE* symlink already exists
         then it will create a variant of that fallback **USB DRIVE [1-254]**
 
-        Be carefull with the provided directories and labels. They must come
-        clean or else this methos won't work.
+        Be careful with the provided directories and labels. They must come
+        clean or else this method won't work.
         """
         if not _validated and label:
             label = validate_label(label, strict=True)

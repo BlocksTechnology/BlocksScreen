@@ -105,3 +105,4 @@ class Device:
         self.raw_block.clear()
         self.file_systems.clear()
         self.partition_tables.clear()
+        self.symlinks.clear()

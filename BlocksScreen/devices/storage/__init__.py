@@ -10,9 +10,9 @@ points directly to the mounted usb drive on the gcodes
 directory. 
 
 
-There is still alot of functionality missing, that may 
+There is still a lot of functionality missing, that may 
 be added in the future, but for now it just automounts, 
-creates symlinks, cleanus up broken symlinks on the 
+creates symlinks, cleans up broken symlinks on the 
 gcodes directory.
 
 
