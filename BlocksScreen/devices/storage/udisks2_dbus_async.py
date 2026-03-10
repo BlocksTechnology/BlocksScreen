@@ -4,9 +4,10 @@
 #
 #
 # Hugo Costa hugo.santos.costa@gmail.com
-import sdbus
 import enum
 import typing
+
+import sdbus
 
 
 class Interfaces(enum.Enum):
@@ -414,68 +415,153 @@ class UDisks2DriveAsyncInterface(
 
     @sdbus.dbus_property_async(property_signature="s")
     def revision(self) -> str:
+        """Firmware revision or blank if unknown
+        Returns:
+            revision (str): revision or blank
+        """
         raise NotImplementedError
 
     @sdbus.dbus_property_async(property_signature="s")
     def WWN(self) -> str:
+        """The World Wide Name of the drive or blank if unknown
+        Returns:
+            wwn (str) : wwn or none
+        """
         raise NotImplementedError
 
     @sdbus.dbus_property_async(property_signature="a{sv}")
     def configuration(self) -> dict[str, typing.Any]:
+        """Confituration directives applied to theh drive when
+        its connected.
+
+        Returns:
+            configurations (dict): applied configurations
+        """
         raise NotImplementedError
 
     @sdbus.dbus_property_async(property_signature="b")
     def can_power_off(self) -> bool:
+        """Whether the drive can be safely removed/powered off
+
+        Returns:
+            can_power_off (bool): whether it can be removed or powered off"""
         raise NotImplementedError
 
     @sdbus.dbus_property_async(property_signature="s")
     def model(self) -> str:
+        """Name for the model of the drive
+
+        Returns:
+            model (str): name of the model, blank if unknown"""
         raise NotImplementedError
 
     @sdbus.dbus_property_async(property_signature="s")
     def connection_bus(self) -> str:
+        """Physical connection bus for the drive, as seen
+        by the user
+
+        Returns:
+            connection bus (str): physical connection bus ['usb', 'sdio', 'ieee1394']
+        """
         raise NotImplementedError
 
     @sdbus.dbus_property_async(property_signature="s")
     def serial(self) -> str:
+        """Serial number
+
+        Returns:
+            serial (str): serial number blank if unknown
+        """
         raise NotImplementedError
 
     @sdbus.dbus_property_async(property_signature="b")
     def ejectable(self) -> bool:
+        """Whether the media can be ejected from the drive of the
+        drive accepts the `eject` command to switch its state
+        so that the it displays 'Safe To Remove'
+
+        *This is only a guess*
+        Returns:
+            ejectable (bool): can be ejected
+        """
         raise NotImplementedError
 
     @sdbus.dbus_property_async(property_signature="b")
     def removable(self) -> bool:
+        """Hint whether the drive and/or its media is considered
+        removable by the user.
+
+        *This is only a guess*
+
+        Returns:
+            removable (bool): whether the drive is considered removable
+        """
         raise NotImplementedError
 
     @sdbus.dbus_property_async(property_signature="t")
     def time_detected(self) -> int:
+        """The time the drive was first detected
+
+        Returns:
+            time (int): time it was first detected
+        """
         raise NotImplementedError
 
     @sdbus.dbus_property_async(property_signature="b")
     def media_available(self) -> bytes:
+        """This is always True if `MediaChangeDetected` is False
+        Returns:
+            media available (bytes): True if media change detected is false
+        """
         raise NotImplementedError
 
     @sdbus.dbus_property_async(property_signature="b")
     def media_changed_detected(self) -> bytes:
+        """Set to true only if media changes are detected
+
+        Returns:
+            media change detected (bytes): True if media changes are detected"""
         raise NotImplementedError
 
     @sdbus.dbus_property_async(property_signature="s")
     def media(self) -> str:
+        """The kind of media
+
+        Returns:
+            media (str): The kind of media, blank if unknown"""
         raise NotImplementedError
 
     @sdbus.dbus_property_async(property_signature="b")
     def media_removable(self) -> bool:
+        """Whether the media can be removed from the drive
+
+        Returns:
+            media_removable (bool): Wheter it can be removed"""
         raise NotImplementedError
 
     @sdbus.dbus_property_async(property_signature="s")
     def id(self) -> str:
+        """Unique persistent identifier for the device or
+        blank if not available
+
+        Returns:
+            id (str): Identifier e.g “ST32000542AS-6XW00W51”"""
         raise NotImplementedError
 
     @sdbus.dbus_property_async(property_signature="s")
     def vendor(self) -> str:
+        """Name for the vendor of the dirve or blank if
+        unknown
+
+        Returns:
+            vendor (str): Name of the vendor or blank"""
         raise NotImplementedError
 
     @sdbus.dbus_method_async(input_signature="a{sv}")
     async def eject(self, opts: dict[str, typing.Any]) -> None:
+        """Ejects the media from the drive
+
+        Args:
+            options (dict): currently unused"""
+
         raise NotImplementedError
