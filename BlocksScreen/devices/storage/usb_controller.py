@@ -56,6 +56,7 @@ class USBManager(QtCore.QObject):
         self.need_restart = True
 
     def close(self) -> None:
+        """Close usb monitoring tool"""
         self.udisks.close()
         self.deleteLater()
 
@@ -70,6 +71,12 @@ class USBManager(QtCore.QObject):
 
     @restart_type.setter
     def restart_type(self, type: ResType) -> None:
+        """Tool restart type, currently there are only two
+        options available.
+
+            - `always` - restarts the tool everytime it stops
+            - `none` - doesn't restart the tool at all
+        """
         if type not in ResType:
             logging.info("Unknown restart type %s", (type,))
         self._restart_type = type

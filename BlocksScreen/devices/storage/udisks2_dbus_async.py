@@ -562,6 +562,7 @@ class UDisks2DriveAsyncInterface(
         """Ejects the media from the drive
 
         Args:
-            options (dict): currently unused"""
+            options (dict): currently unused
+        """
 
         raise NotImplementedError
