@@ -36,10 +36,22 @@ class UDisks2PartitionTableAsyncInterface(
 
     @sdbus.dbus_property_async(property_signature="ao")
     def partitions(self) -> list[str]:
+        """Get list of object paths of the `org.freedesktop.Udisks2.Partitions`
+
+        Returns:
+            list[str]: list of object paths
+        """
         raise NotImplementedError
 
     @sdbus.dbus_property_async(property_signature="s")
     def type(self) -> str:
+        """Get the type of partition table detected
+
+        If blank the partition table was detected but it's unknown
+        Returns:
+            str: Known values ['dos', 'gpt', '']
+
+        """
         raise NotImplementedError
 
 
@@ -51,54 +63,133 @@ class UDisks2PartitionAsyncInterface(
 
     @sdbus.dbus_method_async(input_signature="s")
     async def set_type(self, type: str) -> None:
+        """Set new partition type
+
+        Args:
+            type (str): New partition type
+        """
         raise NotImplementedError
 
     @sdbus.dbus_method_async(input_signature="s")
     async def set_name(self, name: str) -> None:
+        """Set partition name
+
+        Args:
+            name (str): new partition name
+        """
         raise NotImplementedError
 
     @sdbus.dbus_method_async(input_signature="a{sv}")
     async def delete(self, opts: dict[str, typing.Any]) -> None:
+        """Deletes the partition
+
+        Args:
+            options (dict[str, any])
+        """
         raise NotImplementedError
 
     @sdbus.dbus_property_async(property_signature="u")
     def number(self) -> int:
+        """Number of the partition on the partition table
+
+        Returns:
+            number (int): partition number
+        """
         raise NotImplementedError
 
     @sdbus.dbus_property_async(property_signature="s")
     def type(self) -> str:
+        """Partition type
+
+        Returns:
+            type (str): The partition type. For `dos` partition
+            tables this string is a hexadecimal code (0x83, 0xfd).
+            For `gpt` partition tables this is the UUID"""
         raise NotImplementedError
 
     @sdbus.dbus_property_async(property_signature="t")
     def flags(self) -> int:
+        """Flags describing the partition.
+        ---------------
+        For `dos` partitions:
+            - Bit 7 - The partition is marked as bootable
+        ---------------
+        For `gpt` partitions :
+            - Bit 0 - System Partition
+            - Bit 2 - Legacy BIOS bootable
+            - Bit 60 - Read-only
+            - Bit 62 - Hidden
+            - Bit 63 - Do not automount
+
+
+        Returns:
+            flags (int): current flags
+        """
         raise NotImplementedError
 
     @sdbus.dbus_property_async(property_signature="t")
     def offset(self) -> int:
+        """Offset of the partition in bytes
+
+        Returns:
+            Offset (int): partition offset
+        """
         raise NotImplementedError
 
     @sdbus.dbus_property_async(property_signature="t")
     def size(self) -> int:
+        """Partition size, in bytes
+
+        Returns:
+            Size (int): partition size
+        """
         raise NotImplementedError
 
     @sdbus.dbus_property_async(property_signature="s")
     def name(self) -> str:
+        """Partition name
+        Returns:
+            name (str): partition name
+        """
         raise NotImplementedError
 
     @sdbus.dbus_property_async(property_signature="s")
     def uuid(self) -> str:
+        """Partition UUID
+        Returns:
+            uuid (str): partition uuid
+        """
         raise NotImplementedError
 
     @sdbus.dbus_property_async(property_signature="o")
     def table(self) -> str:
+        """Object path of the `org.freedesktop.Udisks2.PartitionTable` object that
+        the partition belongs to.
+
+        Returns:
+            table (str): path
+        """
         raise NotImplementedError
 
     @sdbus.dbus_property_async(property_signature="b")
-    def is_container(self) -> bytes:
+    def is_container(self) -> bool:
+        """Set to True if the partition itself is acontainer for other partitions
+
+        For example, for dos partition tables, this applies to socalled extended
+        partition (partitions of type 0x05, 0x0f or 0x85) containing socalled logical partitions.
+
+
+        Returns:
+            is_container (bool): if it is a container
+        """
         raise NotImplementedError
 
     @sdbus.dbus_property_async(property_signature="b")
     def is_contained(self) -> bytes:
+        """Set to True if the partition is contained in another partition
+        Returns:
+            is_contained (bool): if it's contained
+        """
         raise NotImplementedError
 
 
