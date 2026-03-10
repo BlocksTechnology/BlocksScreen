@@ -133,11 +133,11 @@ class USBManager(QtCore.QObject):
         pass
 
     @QtCore.pyqtSlot(str, name="hardware_detected")
-    def handle_new_hardware(self, path: str):
+    def handle_new_hardware(self, path: str) -> None:
         """Handle new usb device hardware"""
         self.banner.new_message(self.banner.MessageType.CONNECT)
 
     @QtCore.pyqtSlot(str, name="hardware_removed")
-    def handle_rem_hardware(self, path: str):
+    def handle_rem_hardware(self, path: str) -> None:
         """Handle usb device hardware removed"""
         self.banner.new_message(self.banner.MessageType.DISCONNECT)
