@@ -98,8 +98,16 @@ def fire_n_forget(
 ) -> asyncio.Task[typing.Any]:
     task: asyncio.Task[typing.Any] = asyncio.create_task(coro, name=name)
     task_stack.add(task)
+    """Create a task for a specified coroutine and run it
+
+    Args: 
+        coro (Coroutine): coroutine to create task 
+        name (str): Name for the task 
+        task_stack (set): Task stack that keeps track of currently running tasks
+    """
 
     def cleanup(task: asyncio.Task[_T]) -> None:
+        """Cleanup task"""
         task_stack.discard(task)
         try:
             task.result()
