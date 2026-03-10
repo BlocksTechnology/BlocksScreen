@@ -16,10 +16,10 @@ class Device:
         self,
         path: str,
         DriveInterface: UDisks2DriveAsyncInterface,
-        symlink_path: str | pathlib.Path,
+        symlink_path: str,
     ) -> None:
         self.path: str = path
-        self.symlink_path: str = path
+        self.symlink_path: str = symlink_path
         self.driver_interface: UDisks2DriveAsyncInterface = DriveInterface
         self.partitions: dict[str, UDisks2PartitionAsyncInterface] = {}
         self.raw_block: dict[str, UDisks2BlockAsyncInterface] = {}
@@ -94,7 +94,7 @@ class Device:
     def kill(self) -> None:
         """Delete the device and removes any track of it
 
-        Specialy used when devices were removed unsafely
+        Especially used when devices were removed unsafely
         """
         self.delete()
 
