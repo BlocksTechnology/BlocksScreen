@@ -4,13 +4,13 @@ from collections import deque
 
 import events
 from configfile import BlocksScreenConfig, get_configparser
+from devices.storage import USBManager
 from lib.files import Files
 from lib.machine import MachineControl
 from lib.moonrakerComm import MoonWebSocket
 from lib.network import WifiIconKey
 from lib.panels.controlTab import ControlTab
 from lib.panels.filamentTab import FilamentTab
-from lib.panels.widgets.notificationPage import NotificationPage
 from lib.panels.networkWindow import NetworkControlWindow, PixmapCache
 from lib.panels.printTab import PrintTab
 from lib.panels.utilitiesTab import UtilitiesTab
@@ -18,6 +18,7 @@ from lib.panels.widgets.basePopup import BasePopup
 from lib.panels.widgets.cancelPage import CancelPage
 from lib.panels.widgets.connectionPage import ConnectionPage
 from lib.panels.widgets.loadWidget import LoadingOverlayWidget
+from lib.panels.widgets.notificationPage import NotificationPage
 from lib.panels.widgets.updatePage import UpdatePage
 from lib.printer import Printer
 from lib.ui.mainWindow_ui import Ui_MainWindow  # With header
@@ -28,7 +29,6 @@ from lib.ui.resources.icon_resources_rc import *
 from lib.ui.resources.main_menu_resources_rc import *
 from lib.ui.resources.system_resources_rc import *
 from lib.ui.resources.top_bar_resources_rc import *
-from logger import LogManager
 from PyQt6 import QtCore, QtGui, QtWidgets
 from screensaver import ScreenSaver
 
@@ -113,6 +113,13 @@ class MainWindow(QtWidgets.QMainWindow):
         self.screensaver = ScreenSaver(self)
         self._popup_toggle: bool = False
         self.ui.main_content_widget.setCurrentIndex(0)
+
+        usb_config = self.config.get_section("usb_manager", fallback=None)
+        gdir = None
+        if usb_config:
+            gdir = usb_config.get("gcodes_dir", default=None)
+
+        self.usb_manager: USBManager = USBManager(parent=self, gcodes_dir=gdir)
         self.ws = MoonWebSocket(self)
         self.notiPage = NotificationPage(self)
         self.mc = MachineControl(self)
@@ -120,16 +127,14 @@ class MainWindow(QtWidgets.QMainWindow):
         self.index_stack = deque(maxlen=4)
         self.printer = Printer(self, self.ws)
         self.conn_window = ConnectionPage(self, self.ws)
-        self.up = UpdatePage(self)
-        self.up.hide()
-
+        self.update_page = UpdatePage(self)
+        self.update_page.hide()
         self.conn_window.call_cancel_panel.connect(self.handle_cancel_print)
         self.installEventFilter(self.conn_window)
         self.printPanel = PrintTab(
             self.ui.printTab, self.file_data, self.ws, self.printer
         )
         QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.CursorShape.BlankCursor)
-
         self.filamentPanel = FilamentTab(self.ui.filamentTab, self.printer, self.ws)
         self.controlPanel = ControlTab(self.ui.controlTab, self.ws, self.printer)
         self.utilitiesPanel = UtilitiesTab(self.ui.utilitiesTab, self.ws, self.printer)
@@ -210,21 +215,27 @@ class MainWindow(QtWidgets.QMainWindow):
             self.controlPanel.probe_helper_page.handle_error_response
         )
         self.controlPanel.disable_popups.connect(self.popup_toggle)
-        self.on_update_message.connect(self.up.handle_update_message)
-        self.up.request_full_update.connect(self.ws.api.full_update)
-        self.up.request_recover_repo[str].connect(self.ws.api.recover_corrupt_repo)
-        self.up.request_recover_repo[str, bool].connect(
+        self.on_update_message.connect(self.update_page.handle_update_message)
+        self.update_page.request_full_update.connect(self.ws.api.full_update)
+        self.update_page.request_recover_repo[str].connect(
             self.ws.api.recover_corrupt_repo
         )
-        self.up.request_refresh_update.connect(self.ws.api.refresh_update_status)
-        self.up.request_refresh_update[str].connect(self.ws.api.refresh_update_status)
-        self.up.request_rollback_update.connect(self.ws.api.rollback_update)
-        self.up.request_update_client.connect(self.ws.api.update_client)
-        self.up.request_update_klipper.connect(self.ws.api.update_klipper)
-        self.up.request_update_moonraker.connect(self.ws.api.update_moonraker)
-        self.up.request_update_status.connect(self.ws.api.update_status)
-        self.up.request_update_system.connect(self.ws.api.update_system)
-        self.up.update_back_btn.clicked.connect(self.up.hide)
+        self.update_page.request_recover_repo[str, bool].connect(
+            self.ws.api.recover_corrupt_repo
+        )
+        self.update_page.request_refresh_update.connect(
+            self.ws.api.refresh_update_status
+        )
+        self.update_page.request_refresh_update[str].connect(
+            self.ws.api.refresh_update_status
+        )
+        self.update_page.request_rollback_update.connect(self.ws.api.rollback_update)
+        self.update_page.request_update_client.connect(self.ws.api.update_client)
+        self.update_page.request_update_klipper.connect(self.ws.api.update_klipper)
+        self.update_page.request_update_moonraker.connect(self.ws.api.update_moonraker)
+        self.update_page.request_update_status.connect(self.ws.api.update_status)
+        self.update_page.request_update_system.connect(self.ws.api.update_system)
+        self.update_page.update_back_btn.clicked.connect(self.update_page.hide)
         self.utilitiesPanel.show_update_page.connect(self.show_update_page)
         self.conn_window.update_button_clicked.connect(self.show_update_page)
         self.ui.extruder_temp_display.display_format = "upper_downer"
@@ -302,22 +313,22 @@ class MainWindow(QtWidgets.QMainWindow):
     def show_update_page(self, fullscreen: bool):
         """Slot for displaying update Panel"""
         if not fullscreen:
-            self.up.setParent(self.ui.main_content_widget)
+            self.update_page.setParent(self.ui.main_content_widget)
             current_index = self.ui.main_content_widget.currentIndex()
             tab_rect = self.ui.main_content_widget.tabBar().tabRect(current_index)
             width = tab_rect.width()
-            _parent_size = self.up.parent().size()
-            self.up.setGeometry(
+            _parent_size = self.update_page.parent().size()
+            self.update_page.setGeometry(
                 width, 0, _parent_size.width() - width, _parent_size.height()
             )
         else:
-            self.up.setParent(self)
-            self.up.setGeometry(0, 0, self.width(), self.height())
+            self.update_page.setParent(self)
+            self.update_page.setGeometry(0, 0, self.width(), self.height())
 
-        self.up.raise_()
-        self.up.updateGeometry()
-        self.up.repaint()
-        self.up.show()
+        self.update_page.raise_()
+        self.update_page.updateGeometry()
+        self.update_page.repaint()
+        self.update_page.show()
 
     @QtCore.pyqtSlot(name="on-cancel-print")
     def on_cancel_print(self):
@@ -426,7 +437,7 @@ class MainWindow(QtWidgets.QMainWindow):
         Used to grantee all tabs reset to their
         first page once the user leaves the tab
         """
-        self.up.hide()
+        self.update_page.hide()
         self.printPanel.setCurrentIndex(0)
         self.filamentPanel.setCurrentIndex(0)
         self.controlPanel.setCurrentIndex(0)
@@ -776,15 +787,14 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui.nozzle_size_icon.setText(f"{diam}mm")
         self.ui.nozzle_size_icon.update()
 
-    def closeEvent(self, a0: typing.Optional[QtGui.QCloseEvent]) -> None:
+    def closeEvent(self, a0: QtGui.QCloseEvent | None) -> None:
         """Handles GUI closing"""
         try:
             self.networkPanel.close()
+            self.usb_manager.close()
         except Exception as e:
-            _logger.warning("Network panel shutdown error: %s", e)
-
+            _logger.warning("Error shutting down: %s", e)
         self.ws.wb_disconnect()
-        LogManager.shutdown()
         if a0 is None:
             return
         QtWidgets.QMainWindow.closeEvent(self, a0)
