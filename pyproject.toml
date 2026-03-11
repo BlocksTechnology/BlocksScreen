@@ -25,6 +25,7 @@ dependencies = [
     'typing==3.7.4.3',
     'websocket-client==1.9.0',
     'qrcode==8.2',
+    'pillow==12.1.1',
 ]
 requires-python = "==3.11.2"
 readme = "README.md"

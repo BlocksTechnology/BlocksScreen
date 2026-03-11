@@ -104,7 +104,7 @@ class BlocksScreenConfig:
     ) -> BlocksScreenConfig:
         """Get configfile section"""
         if not self.config.has_section(section):
-            raise configparser.NoSectionError(f"No section with name: {section}")
+            return fallback
         return BlocksScreenConfig(self.configfile, section)
 
     def get_options(self) -> list:
