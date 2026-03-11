@@ -14,23 +14,23 @@ class BannerPopup(QtWidgets.QWidget):
         CORRUPTED = enum.auto()
         UNKNOWN = enum.auto()
 
-    def __init__(self, parent) -> None:
-        super().__init__(parent)
+    def __init__(self, parent=None) -> None:
+        if parent:
+            super().__init__(parent)
+        else:
+            super().__init__()
         self.timeout_timer = QtCore.QTimer(self)
         self.timeout_timer.setSingleShot(True)
         self.messages: deque = deque()
         self.isShown = False
         self.default_background_color = QtGui.QColor(164, 164, 164)
-
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_TranslucentBackground, True)
-
         self.setMouseTracking(True)
         self.setWindowFlags(
             QtCore.Qt.WindowType.FramelessWindowHint
             | QtCore.Qt.WindowType.Tool
             | QtCore.Qt.WindowType.X11BypassWindowManagerHint
         )
-
         self._setupUI()
         self.slide_in_animation = QtCore.QPropertyAnimation(self, b"geometry")
         self.slide_in_animation.setDuration(1000)
