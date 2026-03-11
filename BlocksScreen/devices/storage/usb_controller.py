@@ -11,7 +11,7 @@ ResType: typing.TypeAlias = typing.Literal["always", "none"]
 
 class USBManager(QtCore.QObject):
     usb_add: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
-        str, str, name="usb-add"
+        str, dict, name="usb-add"
     )
     usb_rem: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         str, str, name="usb-rem"
@@ -44,7 +44,8 @@ class USBManager(QtCore.QObject):
         self.udisks: UDisksDBusAsync = UDisksDBusAsync(
             parent=self, gcodes_dir=self.gcodes_dir
         )
-        self.banner = BannerPopup(self)
+        # self.banner = BannerPopup(self)
+        self.banner = BannerPopup()
         self._restart_type: ResType = "always"
         self.udisks.start(self.udisks.Priority.InheritPriority)
         self.udisks.hardware_detected.connect(self.handle_new_hardware)
