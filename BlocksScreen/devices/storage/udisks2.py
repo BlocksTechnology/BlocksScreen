@@ -2,7 +2,6 @@ import asyncio
 import logging
 import os
 import pathlib
-from tkinter import Label
 import typing
 from collections.abc import Coroutine
 import unicodedata
