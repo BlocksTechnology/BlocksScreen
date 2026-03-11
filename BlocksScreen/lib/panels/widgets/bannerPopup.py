@@ -90,7 +90,7 @@ class BannerPopup(QtWidgets.QWidget):
     def updateMask(self) -> None:
         """Update widget mask properties"""
         path = QtGui.QPainterPath()
-        path.addRoundedRect(self.rect().toRectF(), 10, 10)
+        path.addRoundedRect(self.rect().toRectF(), 50, 70)
         region = QtGui.QRegion(path.toFillPolygon(QtGui.QTransform()).toPolygon())
         self.setMask(region)
 
