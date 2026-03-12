@@ -3845,3 +3845,4 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.repaint()
         self.show()
         self._nm.scan_networks()
+

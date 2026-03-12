@@ -91,6 +91,7 @@ class ProbeHelper(QtWidgets.QWidget):
         self.block_list = False
         self.target_temp = 0
         self.current_temp = 0
+<<<<<<< HEAD
         self._eddy_calibration_state = False
 
     @QtCore.pyqtSlot(str, dict, name="on_print_stats_update")
@@ -115,6 +116,8 @@ class ProbeHelper(QtWidgets.QWidget):
                         self.toggle_conn_page.emit(True)
 
                         self._eddy_calibration_state = False
+=======
+>>>>>>> origin/main
 
     def on_klippy_status(self, state: str):
         """Handle Klippy status event change"""
@@ -462,8 +465,11 @@ class ProbeHelper(QtWidgets.QWidget):
         """Handle extruder update"""
         if not self.helper_initialize:
             return
+<<<<<<< HEAD
         if self._eddy_calibration_state:
             return
+=======
+>>>>>>> origin/main
         if self.target_temp != 0:
             if self.current_temp == self.target_temp:
                 if self.isVisible:

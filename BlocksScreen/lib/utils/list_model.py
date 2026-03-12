@@ -414,7 +414,6 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
         if item.not_clickable:
             painter.restore()
             return
-
         if item.allow_expand and item.needs_expansion:
             item.right_icon = (
                 QtGui.QPixmap(":/arrow_icons/media/btn_icons/arrow_down.svg")
