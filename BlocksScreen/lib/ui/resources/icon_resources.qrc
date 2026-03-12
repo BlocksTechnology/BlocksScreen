@@ -1,20 +1,19 @@
 <RCC>
   <qresource prefix="network">
-    <file>media/btn_icons/0bar_wifi.svg</file>
-    <file>media/btn_icons/0bar_wifi_protected.svg</file>
-    <file>media/btn_icons/1bar_wifi.svg</file>
-    <file>media/btn_icons/1bar_wifi_protected.svg</file>
-    <file>media/btn_icons/2bar_wifi.svg</file>
-    <file>media/btn_icons/2bar_wifi_protected.svg</file>
-    <file>media/btn_icons/3bar_wifi.svg</file>
-    <file>media/btn_icons/3bar_wifi_protected.svg</file>
-    <file>media/btn_icons/4bar_wifi.svg</file>
-    <file>media/btn_icons/4bar_wifi_protected.svg</file>
+    <file>media/btn_icons/network/static_ip.svg</file>
     <file>media/btn_icons/wifi_config.svg</file>
-    <file>media/btn_icons/wifi_locked.svg</file>
-    <file>media/btn_icons/wifi_unlocked.svg</file>
+    <file>media/btn_icons/network/0bar_wifi.svg</file>
+    <file>media/btn_icons/network/0bar_wifi_protected.svg</file>
+    <file>media/btn_icons/network/1bar_wifi.svg</file>
+    <file>media/btn_icons/network/1bar_wifi_protected.svg</file>
+    <file>media/btn_icons/network/2bar_wifi.svg</file>
+    <file>media/btn_icons/network/2bar_wifi_protected.svg</file>
+    <file>media/btn_icons/network/3bar_wifi.svg</file>
+    <file>media/btn_icons/network/3bar_wifi_protected.svg</file>
+    <file>media/btn_icons/network/4bar_wifi.svg</file>
+    <file>media/btn_icons/network/4bar_wifi_protected.svg</file>
+    <file>media/btn_icons/network/ethernet_connected.svg</file>
     <file>media/btn_icons/hotspot.svg</file>
-    <file>media/btn_icons/no_wifi.svg</file>
     <file>media/btn_icons/retry_wifi.svg</file>
   </qresource>
   <qresource prefix="baby_step">
@@ -91,6 +90,9 @@
     <file>media/btn_icons/unload_filament.svg</file>
   </qresource>
   <qresource prefix="ui">
+    <file>media/btn_icons/notification.svg</file>
+    <file>media/btn_icons/notification_active.svg</file>
+    <file>media/btn_icons/usb_icon.svg</file>
     <file>media/btn_icons/garbage-icon.svg</file>
     <file>media/btn_icons/back.svg</file>
     <file>media/btn_icons/refresh.svg</file>
@@ -175,6 +177,8 @@
     <file>media/btn_icons/input_shaper_manual_Y.svg</file>
   </qresource>
   <qresource prefix="arrow_icons">
+    <file>media/btn_icons/arrow_down.svg</file>
+    <file>media/btn_icons/arrow_right.svg</file>
     <file>media/btn_icons/left_arrow.svg</file>
     <file>media/btn_icons/right_arrow.svg</file>
     <file>media/btn_icons/down_arrow.svg</file>

@@ -20,7 +20,7 @@ from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.display_button import DisplayButton
 from PyQt6 import QtCore, QtGui, QtWidgets
 
-logger = logging.getLogger(name="logs/BlocksScreen.log")
+logger = logging.getLogger(__name__)
 
 
 class PrintTab(QtWidgets.QStackedWidget):
@@ -64,6 +64,7 @@ class PrintTab(QtWidgets.QStackedWidget):
     )
     call_load_panel = QtCore.pyqtSignal(bool, str, name="call-load-panel")
 
+    call_cancel_panel = QtCore.pyqtSignal(bool, name="call-load-panel")
     _z_offset: float = 0.0
     _active_z_offset: float = 0.0
     _finish_print_handled: bool = False
@@ -124,11 +125,27 @@ class PrintTab(QtWidgets.QStackedWidget):
             self.file_data.request_file_list
         )
         self.file_data.on_dirs.connect(self.filesPage_widget.on_directories)
+
         self.filesPage_widget.request_dir_info[str].connect(
             self.file_data.request_dir_info[str]
         )
+        self.filesPage_widget.request_scan_metadata.connect(
+            self.ws.api.scan_gcode_metadata
+        )
+        self.file_data.metadata_error.connect(self.filesPage_widget.on_metadata_error)
         self.filesPage_widget.request_dir_info.connect(self.file_data.request_dir_info)
         self.file_data.on_file_list.connect(self.filesPage_widget.on_file_list)
+        self.file_data.file_added.connect(self.filesPage_widget.on_file_added)
+        self.file_data.file_removed.connect(self.filesPage_widget.on_file_removed)
+        self.file_data.file_modified.connect(self.filesPage_widget.on_file_modified)
+        self.file_data.dir_added.connect(self.filesPage_widget.on_dir_added)
+        self.file_data.dir_removed.connect(self.filesPage_widget.on_dir_removed)
+        self.file_data.full_refresh_needed.connect(
+            self.filesPage_widget.on_full_refresh_needed
+        )
+        self.file_data.usb_files_loaded.connect(
+            self.filesPage_widget.on_usb_files_loaded
+        )
         self.jobStatusPage_widget = JobStatusWidget(self)
         self.addWidget(self.jobStatusPage_widget)
         self.confirmPage_widget.on_accept.connect(
@@ -137,6 +154,7 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.jobStatusPage_widget.show_request.connect(
             lambda: self.change_page(self.indexOf(self.jobStatusPage_widget))
         )
+        self.jobStatusPage_widget.call_cancel_panel.connect(self.call_cancel_panel)
         self.jobStatusPage_widget.hide_request.connect(
             lambda: self.change_page(self.indexOf(self.print_page))
         )

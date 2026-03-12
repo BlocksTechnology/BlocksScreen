@@ -1,9 +1,13 @@
 import typing
-from PyQt6 import QtWidgets, QtGui, QtCore
+
+from PyQt6 import QtCore, QtGui, QtWidgets
 
 
 class BlocksLabel(QtWidgets.QLabel):
+    """Custom QLabel with marquee scrolling, glow animation, and icon overlay support."""
+
     def __init__(self, parent: QtWidgets.QWidget = None, *args, **kwargs):
+        """Initialise the label and configure default scroll/animation state."""
         super().__init__(parent, *args, **kwargs)
 
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_AcceptTouchEvents, True)
@@ -58,6 +62,11 @@ class BlocksLabel(QtWidgets.QLabel):
     def setPixmap(self, a0: QtGui.QPixmap) -> None:
         """Set widget pixmap"""
         self.icon_pixmap = a0
+        self.update()
+
+    def clearPixmap(self) -> None:
+        """Clear the current pixmap."""
+        self.icon_pixmap = None
         self.update()
 
     def setText(self, text: str) -> None:

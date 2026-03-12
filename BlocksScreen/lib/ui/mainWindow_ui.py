@@ -1,4 +1,4 @@
-# Form implementation generated from reading ui file 'BlocksScreen/lib/ui/mainWindow.ui'
+# Form implementation generated from reading ui file '/home/levi/BlocksScreen/BlocksScreen/lib/ui/mainWindow.ui'
 #
 # Created by: PyQt6 UI code generator 6.7.1
 #
@@ -226,26 +226,6 @@ class Ui_MainWindow(object):
         self.header_main_layout.setContentsMargins(0, 0, 0, 0)
         self.header_main_layout.setSpacing(0)
         self.header_main_layout.setObjectName("header_main_layout")
-        self.header_image_logo = QtWidgets.QGraphicsView(parent=self.main_header_layout)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.MinimumExpanding, QtWidgets.QSizePolicy.Policy.MinimumExpanding)
-        sizePolicy.setHorizontalStretch(1)
-        sizePolicy.setVerticalStretch(1)
-        sizePolicy.setHeightForWidth(self.header_image_logo.sizePolicy().hasHeightForWidth())
-        self.header_image_logo.setSizePolicy(sizePolicy)
-        self.header_image_logo.setMinimumSize(QtCore.QSize(60, 60))
-        self.header_image_logo.setMaximumSize(QtCore.QSize(90, 90))
-        self.header_image_logo.setSizeIncrement(QtCore.QSize(1, 1))
-        self.header_image_logo.setBaseSize(QtCore.QSize(60, 60))
-        self.header_image_logo.setFrameShape(QtWidgets.QFrame.Shape.StyledPanel)
-        self.header_image_logo.setFrameShadow(QtWidgets.QFrame.Shadow.Plain)
-        self.header_image_logo.setLineWidth(0)
-        self.header_image_logo.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self.header_image_logo.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self.header_image_logo.setSizeAdjustPolicy(QtWidgets.QAbstractScrollArea.SizeAdjustPolicy.AdjustToContents)
-        self.header_image_logo.setRenderHints(QtGui.QPainter.RenderHint.Antialiasing|QtGui.QPainter.RenderHint.SmoothPixmapTransform)
-        self.header_image_logo.setViewportUpdateMode(QtWidgets.QGraphicsView.ViewportUpdateMode.SmartViewportUpdate)
-        self.header_image_logo.setObjectName("header_image_logo")
-        self.header_main_layout.addWidget(self.header_image_logo, 0, QtCore.Qt.AlignmentFlag.AlignLeft|QtCore.Qt.AlignmentFlag.AlignTop)
         self.header_display_layout = QtWidgets.QFrame(parent=self.main_header_layout)
         sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.MinimumExpanding, QtWidgets.QSizePolicy.Policy.MinimumExpanding)
         sizePolicy.setHorizontalStretch(1)
@@ -481,6 +461,20 @@ class Ui_MainWindow(object):
         self.bed_temp_display.raise_()
         self.nozzle_size_icon.raise_()
         self.header_main_layout.addWidget(self.header_display_layout, 0, QtCore.Qt.AlignmentFlag.AlignVCenter)
+        self.notification_btn = IconButton(parent=self.main_header_layout)
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Fixed)
+        sizePolicy.setHorizontalStretch(1)
+        sizePolicy.setVerticalStretch(1)
+        sizePolicy.setHeightForWidth(self.notification_btn.sizePolicy().hasHeightForWidth())
+        self.notification_btn.setSizePolicy(sizePolicy)
+        self.notification_btn.setMinimumSize(QtCore.QSize(60, 60))
+        self.notification_btn.setMaximumSize(QtCore.QSize(60, 60))
+        self.notification_btn.setText("")
+        self.notification_btn.setIconSize(QtCore.QSize(60, 60))
+        self.notification_btn.setFlat(True)
+        self.notification_btn.setProperty("icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/notification.svg"))
+        self.notification_btn.setObjectName("notification_btn")
+        self.header_main_layout.addWidget(self.notification_btn)
         self.wifi_button = IconButton(parent=self.main_header_layout)
         self.wifi_button.setEnabled(True)
         sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.MinimumExpanding, QtWidgets.QSizePolicy.Policy.MinimumExpanding)
@@ -499,11 +493,11 @@ class Ui_MainWindow(object):
         self.wifi_button.setProperty("icon_pixmap", QtGui.QPixmap(":/network/media/btn_icons/3bar_wifi.svg"))
         self.wifi_button.setObjectName("wifi_button")
         self.header_main_layout.addWidget(self.wifi_button, 0, QtCore.Qt.AlignmentFlag.AlignRight|QtCore.Qt.AlignmentFlag.AlignTop)
-        self.header_main_layout.setStretch(1, 2)
+        self.header_main_layout.setStretch(0, 2)
         MainWindow.setCentralWidget(self.main_widget)
 
         self.retranslateUi(MainWindow)
-        self.main_content_widget.setCurrentIndex(2)
+        self.main_content_widget.setCurrentIndex(0)
         QtCore.QMetaObject.connectSlotsByName(MainWindow)
 
     def retranslateUi(self, MainWindow):
@@ -516,7 +510,8 @@ class Ui_MainWindow(object):
         self.nozzle_size_icon.setProperty("button_type", _translate("MainWindow", "icon_text"))
         self.bed_temp_display.setProperty("name", _translate("MainWindow", "bed_temperature_display"))
         self.bed_temp_display.setProperty("button_type", _translate("MainWindow", "secondary_display"))
+        self.notification_btn.setProperty("button_type", _translate("MainWindow", "icon_text"))
         self.wifi_button.setProperty("button_type", _translate("MainWindow", "icon"))
+from lib.utils.blocks_tabwidget import NotificationQTabWidget
 from lib.utils.display_button import DisplayButton
 from lib.utils.icon_button import IconButton
-from lib.utils.blocks_tabwidget import NotificationQTabWidget

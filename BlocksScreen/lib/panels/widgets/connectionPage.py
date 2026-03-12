@@ -5,6 +5,8 @@ from lib.moonrakerComm import MoonWebSocket
 from lib.ui.connectionWindow_ui import Ui_ConnectivityForm
 from PyQt6 import QtCore, QtWidgets
 
+logger = logging.getLogger(__name__)
+
 
 class ConnectionPage(QtWidgets.QFrame):
     text_updated = QtCore.pyqtSignal(int, name="connection_text_updated")
@@ -14,7 +16,9 @@ class ConnectionPage(QtWidgets.QFrame):
     restart_klipper_clicked = QtCore.pyqtSignal(name="restart_klipper_clicked")
     firmware_restart_clicked = QtCore.pyqtSignal(name="firmware_restart_clicked")
     update_button_clicked = QtCore.pyqtSignal(bool, name="show-update-page")
+    notification_btn_clicked = QtCore.pyqtSignal(name="notification_btn_clicked")
     call_load_panel = QtCore.pyqtSignal(bool, str, name="call-load-panel")
+    call_cancel_panel = QtCore.pyqtSignal(bool, name="call-load-panel")
 
     def __init__(self, parent: QtWidgets.QWidget, ws: MoonWebSocket, /):
         super().__init__(parent)
@@ -33,6 +37,7 @@ class ConnectionPage(QtWidgets.QFrame):
         self.state = "shutdown"
         self.dot_count = 0
         self.message = None
+        self.conn_toggle: bool = True
         self.dot_timer = QtCore.QTimer(self)
         self.dot_timer.setInterval(1000)
         self.dot_timer.timeout.connect(self._add_dot)
@@ -43,6 +48,7 @@ class ConnectionPage(QtWidgets.QFrame):
             self.retry_connection_clicked.emit
         )
         self.panel.wifi_button.clicked.connect(self.wifi_button_clicked.emit)
+        self.panel.notification_btn.clicked.connect(self.notification_btn_clicked.emit)
         self.panel.FirmwareRestartButton.clicked.connect(
             self.firmware_restart_clicked.emit
         )
@@ -53,6 +59,11 @@ class ConnectionPage(QtWidgets.QFrame):
         self.ws.connection_lost.connect(slot=self.show)
         self.ws.klippy_connected_signal.connect(self.on_klippy_connected)
         self.ws.klippy_state_signal.connect(self.on_klippy_state)
+
+    @QtCore.pyqtSlot(bool, name="toggle_connection_page")
+    def set_toggle(self, toggle: bool):
+        """Toggle connection page showing or not"""
+        self.conn_toggle = toggle
 
     def show_panel(self, reason: str | None = None):
         """Show widget"""
@@ -65,9 +76,11 @@ class ConnectionPage(QtWidgets.QFrame):
 
     def showEvent(self, a0: QtCore.QEvent | None):
         """Handle show event"""
-        self.ws.api.refresh_update_status()
-        self.call_load_panel.emit(False, "")
-        return super().showEvent(a0)
+        if self.conn_toggle:
+            self.ws.api.refresh_update_status()
+            self.call_load_panel.emit(False, "")
+            self.call_cancel_panel.emit(False)
+            return super().showEvent(a0)
 
     @QtCore.pyqtSlot(bool, name="on_klippy_connected")
     def on_klippy_connection(self, connected: bool):
@@ -130,7 +143,7 @@ class ConnectionPage(QtWidgets.QFrame):
         if self.state == "shutdown" and self.message is not None:
             return False
         self.dot_timer.stop()
-        logging.debug(f"[ConnectionWindowPanel] text_update: {text}")
+        logger.debug(f"[ConnectionWindowPanel] text_update: {text}")
         if text == "wb lost":
             self.panel.connectionTextBox.setText("Moonraker connection lost")
         if text is None:

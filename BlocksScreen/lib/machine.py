@@ -8,6 +8,8 @@ import typing
 
 from PyQt6 import QtCore
 
+logger = logging.getLogger(__name__)
+
 
 class MachineControl(QtCore.QObject):
     service_restart = QtCore.pyqtSignal(str, name="service-restart")
@@ -67,10 +69,10 @@ class MachineControl(QtCore.QObject):
             )
             return p.stdout.strip() + "\n" + p.stderr.strip()
         except ValueError as e:
-            logging.error("Failed to parse command string '%s': '%s'", command, e)
+            logger.error("Failed to parse command string '%s': '%s'", command, e)
             raise RuntimeError(f"Invalid command format: {e}") from e
         except subprocess.CalledProcessError as e:
-            logging.error(
+            logger.error(
                 "Caught exception (exit code %d) failed to run command: %s \nStderr: %s",
                 e.returncode,
                 command,
@@ -82,4 +84,4 @@ class MachineControl(QtCore.QObject):
             subprocess.TimeoutExpired,
             FileNotFoundError,
         ):
-            logging.error("Caught exception failed to run command %s", command)
+            logger.error("Caught exception failed to run command %s", command)

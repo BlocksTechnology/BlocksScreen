@@ -4,23 +4,24 @@ from collections import deque
 
 import events
 from configfile import BlocksScreenConfig, get_configparser
+from devices.storage import USBManager
 from lib.files import Files
 from lib.machine import MachineControl
 from lib.moonrakerComm import MoonWebSocket
+from lib.network import WifiIconKey
 from lib.panels.controlTab import ControlTab
 from lib.panels.filamentTab import FilamentTab
-from lib.panels.networkWindow import NetworkControlWindow
+from lib.panels.networkWindow import NetworkControlWindow, PixmapCache
 from lib.panels.printTab import PrintTab
 from lib.panels.utilitiesTab import UtilitiesTab
+from lib.panels.widgets.basePopup import BasePopup
+from lib.panels.widgets.cancelPage import CancelPage
 from lib.panels.widgets.connectionPage import ConnectionPage
-from lib.panels.widgets.popupDialogWidget import Popup
+from lib.panels.widgets.loadWidget import LoadingOverlayWidget
+from lib.panels.widgets.notificationPage import NotificationPage
+from lib.panels.widgets.updatePage import UpdatePage
 from lib.printer import Printer
 from lib.ui.mainWindow_ui import Ui_MainWindow  # With header
-from lib.panels.widgets.updatePage import UpdatePage
-from lib.panels.widgets.basePopup import BasePopup
-from lib.panels.widgets.loadWidget import LoadingOverlayWidget
-
-# from lib.ui.mainWindow_v2_ui import Ui_MainWindow # No header
 from lib.ui.resources.background_resources_rc import *
 from lib.ui.resources.font_rc import *
 from lib.ui.resources.graphic_resources_rc import *
@@ -31,7 +32,7 @@ from lib.ui.resources.top_bar_resources_rc import *
 from PyQt6 import QtCore, QtGui, QtWidgets
 from screensaver import ScreenSaver
 
-_logger = logging.getLogger(name="logs/BlocksScreen.log")
+_logger = logging.getLogger(__name__)
 
 
 def api_handler(func):
@@ -49,6 +50,34 @@ def api_handler(func):
     return wrapper
 
 
+class HeaderWifiIconProvider:
+    """Resolves WifiIconKey integer values to cached QPixmaps for the header bar."""
+
+    _WIFI_PATHS: dict[tuple[int, bool], str] = {
+        (
+            b,
+            p,
+        ): f":/network/media/btn_icons/network/{b}bar_wifi{'_protected' if p else ''}.svg"
+        for b in range(5)
+        for p in (False, True)
+    }
+    _ETHERNET_PATH = ":/network/media/btn_icons/network/ethernet_connected.svg"
+    _HOTSPOT_PATH = ":/network/media/btn_icons/hotspot.svg"
+
+    @classmethod
+    def get_pixmap(cls, icon_key: int) -> QtGui.QPixmap:
+        """Resolve an icon key to a QPixmap (cached via PixmapCache)."""
+        key = WifiIconKey(icon_key)
+        if key is WifiIconKey.ETHERNET:
+            return PixmapCache.get(cls._ETHERNET_PATH)
+        if key is WifiIconKey.HOTSPOT:
+            return PixmapCache.get(cls._HOTSPOT_PATH)
+        path = cls._WIFI_PATHS.get(
+            (key.bars, key.is_protected), cls._WIFI_PATHS[(0, False)]
+        )
+        return PixmapCache.get(path)
+
+
 class MainWindow(QtWidgets.QMainWindow):
     """GUI MainWindow, handles most of the app logic"""
 
@@ -61,13 +90,22 @@ class MainWindow(QtWidgets.QMainWindow):
     gcode_response = QtCore.pyqtSignal(list, name="gcode_response")
     handle_error_response = QtCore.pyqtSignal(list, name="handle_error_response")
     call_network_panel = QtCore.pyqtSignal(name="call-network-panel")
+    call_notification_panel = QtCore.pyqtSignal(name="call-notification-panel")
     call_update_panel = QtCore.pyqtSignal(name="call-update-panel")
     on_update_message: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         dict, name="on-update-message"
     )
+    run_gcode_signal: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        str, name="run_gcode"
+    )
+    show_notifications: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        str, str, int, bool, name="show-notifications"
+    )
+
     call_load_panel = QtCore.pyqtSignal(bool, str, name="call-load-panel")
 
     def __init__(self):
+        """Set up UI, instantiate subsystems, and wire all inter-component signals."""
         super(MainWindow, self).__init__()
         self.config: BlocksScreenConfig = get_configparser()
         self.ui = Ui_MainWindow()
@@ -75,21 +113,28 @@ class MainWindow(QtWidgets.QMainWindow):
         self.screensaver = ScreenSaver(self)
         self._popup_toggle: bool = False
         self.ui.main_content_widget.setCurrentIndex(0)
-        self.popup = Popup(self)
+
+        usb_config = self.config.get_section("usb_manager", fallback=None)
+        gdir = None
+        if usb_config:
+            gdir = usb_config.get("gcodes_dir", default=None)
+
+        self.usb_manager: USBManager = USBManager(parent=self, gcodes_dir=gdir)
         self.ws = MoonWebSocket(self)
+        self.notiPage = NotificationPage(self)
         self.mc = MachineControl(self)
         self.file_data = Files(self, self.ws)
         self.index_stack = deque(maxlen=4)
         self.printer = Printer(self, self.ws)
         self.conn_window = ConnectionPage(self, self.ws)
-        self.up = UpdatePage(self)
-        self.up.hide()
+        self.update_page = UpdatePage(self)
+        self.update_page.hide()
+        self.conn_window.call_cancel_panel.connect(self.handle_cancel_print)
         self.installEventFilter(self.conn_window)
         self.printPanel = PrintTab(
             self.ui.printTab, self.file_data, self.ws, self.printer
         )
         QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.CursorShape.BlankCursor)
-
         self.filamentPanel = FilamentTab(self.ui.filamentTab, self.printer, self.ws)
         self.controlPanel = ControlTab(self.ui.controlTab, self.ws, self.printer)
         self.utilitiesPanel = UtilitiesTab(self.ui.utilitiesTab, self.ws, self.printer)
@@ -104,6 +149,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.printPanel.request_back.connect(slot=self.global_back)
         self.printPanel.on_cancel_print.connect(slot=self.on_cancel_print)
 
+        self.show_notifications.connect(self.notiPage.new_notication)
+
         self.printPanel.request_change_page.connect(slot=self.global_change_page)
         self.filamentPanel.request_back.connect(slot=self.global_back)
         self.filamentPanel.request_change_page.connect(slot=self.global_change_page)
@@ -112,6 +159,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.utilitiesPanel.request_back.connect(slot=self.global_back)
         self.utilitiesPanel.request_change_page.connect(slot=self.global_change_page)
         self.utilitiesPanel.update_available.connect(self.on_update_available)
+        self.ui.notification_btn.clicked.connect(self.notiPage.show_notification_panel)
         self.ui.extruder_temp_display.clicked.connect(
             lambda: self.global_change_page(
                 self.ui.main_content_widget.indexOf(self.ui.controlTab),
@@ -152,29 +200,42 @@ class MainWindow(QtWidgets.QMainWindow):
         self.query_object_list.connect(self.utilitiesPanel.on_object_list)
         self.printer.extruder_update.connect(self.on_extruder_update)
         self.printer.heater_bed_update.connect(self.on_heater_bed_update)
+        self.run_gcode_signal.connect(self.ws.api.run_gcode)
+
         self.ui.main_content_widget.currentChanged.connect(slot=self.reset_tab_indexes)
         self.call_network_panel.connect(self.networkPanel.show_network_panel)
+        self.call_notification_panel.connect(self.notiPage.show_notification_panel)
+        self.networkPanel.update_wifi_icon.connect(self.change_wifi_icon)
         self.conn_window.wifi_button_clicked.connect(self.call_network_panel.emit)
+        self.conn_window.notification_btn_clicked.connect(
+            self.call_notification_panel.emit
+        )
         self.ui.wifi_button.clicked.connect(self.call_network_panel.emit)
         self.handle_error_response.connect(
             self.controlPanel.probe_helper_page.handle_error_response
         )
         self.controlPanel.disable_popups.connect(self.popup_toggle)
-        self.on_update_message.connect(self.up.handle_update_message)
-        self.up.request_full_update.connect(self.ws.api.full_update)
-        self.up.request_recover_repo[str].connect(self.ws.api.recover_corrupt_repo)
-        self.up.request_recover_repo[str, bool].connect(
+        self.on_update_message.connect(self.update_page.handle_update_message)
+        self.update_page.request_full_update.connect(self.ws.api.full_update)
+        self.update_page.request_recover_repo[str].connect(
             self.ws.api.recover_corrupt_repo
         )
-        self.up.request_refresh_update.connect(self.ws.api.refresh_update_status)
-        self.up.request_refresh_update[str].connect(self.ws.api.refresh_update_status)
-        self.up.request_rollback_update.connect(self.ws.api.rollback_update)
-        self.up.request_update_client.connect(self.ws.api.update_client)
-        self.up.request_update_klipper.connect(self.ws.api.update_klipper)
-        self.up.request_update_moonraker.connect(self.ws.api.update_moonraker)
-        self.up.request_update_status.connect(self.ws.api.update_status)
-        self.up.request_update_system.connect(self.ws.api.update_system)
-        self.up.update_back_btn.clicked.connect(self.up.hide)
+        self.update_page.request_recover_repo[str, bool].connect(
+            self.ws.api.recover_corrupt_repo
+        )
+        self.update_page.request_refresh_update.connect(
+            self.ws.api.refresh_update_status
+        )
+        self.update_page.request_refresh_update[str].connect(
+            self.ws.api.refresh_update_status
+        )
+        self.update_page.request_rollback_update.connect(self.ws.api.rollback_update)
+        self.update_page.request_update_client.connect(self.ws.api.update_client)
+        self.update_page.request_update_klipper.connect(self.ws.api.update_klipper)
+        self.update_page.request_update_moonraker.connect(self.ws.api.update_moonraker)
+        self.update_page.request_update_status.connect(self.ws.api.update_status)
+        self.update_page.request_update_system.connect(self.ws.api.update_system)
+        self.update_page.update_back_btn.clicked.connect(self.update_page.hide)
         self.utilitiesPanel.show_update_page.connect(self.show_update_page)
         self.conn_window.update_button_clicked.connect(self.show_update_page)
         self.ui.extruder_temp_display.display_format = "upper_downer"
@@ -191,13 +252,42 @@ class MainWindow(QtWidgets.QMainWindow):
             self, LoadingOverlayWidget.AnimationGIF.DEFAULT
         )
         self.loadscreen.add_widget(self.loadwidget)
+        self.controlPanel.toggle_conn_page.connect(self.conn_window.set_toggle)
+        self.cancelpage = CancelPage(self, ws=self.ws)
+        self.cancelpage.request_file_info.connect(self.file_data.on_request_fileinfo)
+        self.cancelpage.run_gcode.connect(self.ws.api.run_gcode)
+        self.printer.print_stats_update[str, str].connect(
+            self.cancelpage.on_print_stats_update
+        )
+        self.printer.print_stats_update[str, dict].connect(
+            self.cancelpage.on_print_stats_update
+        )
+        self.printer.print_stats_update[str, float].connect(
+            self.cancelpage.on_print_stats_update
+        )
+        self.file_data.fileinfo.connect(self.cancelpage._show_screen_thumbnail)
+        self.printPanel.call_cancel_panel.connect(self.handle_cancel_print)
+
         if self.config.has_section("server"):
-            # @ Start websocket connection with moonraker
             self.bo_ws_startup.emit()
         self.reset_tab_indexes()
 
+    @QtCore.pyqtSlot(bool, name="show-cancel-page")
+    def handle_cancel_print(self, show: bool = True):
+        """Slot for displaying update Panel"""
+        if not show:
+            self.cancelpage.hide()
+            return
+
+        self.cancelpage.setGeometry(0, 0, self.width(), self.height())
+        self.cancelpage.raise_()
+        self.cancelpage.updateGeometry()
+        self.cancelpage.repaint()
+        self.cancelpage.show()
+
     @QtCore.pyqtSlot(bool, str, name="show-load-page")
     def show_LoadScreen(self, show: bool = True, msg: str = ""):
+        """Show or hide the loading overlay, guarded by the calling panel's visibility."""
         _sender = self.sender()
 
         if _sender == self.filamentPanel:
@@ -223,22 +313,22 @@ class MainWindow(QtWidgets.QMainWindow):
     def show_update_page(self, fullscreen: bool):
         """Slot for displaying update Panel"""
         if not fullscreen:
-            self.up.setParent(self.ui.main_content_widget)
+            self.update_page.setParent(self.ui.main_content_widget)
             current_index = self.ui.main_content_widget.currentIndex()
             tab_rect = self.ui.main_content_widget.tabBar().tabRect(current_index)
             width = tab_rect.width()
-            _parent_size = self.up.parent().size()
-            self.up.setGeometry(
+            _parent_size = self.update_page.parent().size()
+            self.update_page.setGeometry(
                 width, 0, _parent_size.width() - width, _parent_size.height()
             )
         else:
-            self.up.setParent(self)
-            self.up.setGeometry(0, 0, self.width(), self.height())
+            self.update_page.setParent(self)
+            self.update_page.setGeometry(0, 0, self.width(), self.height())
 
-        self.up.raise_()
-        self.up.updateGeometry()
-        self.up.repaint()
-        self.up.show()
+        self.update_page.raise_()
+        self.update_page.updateGeometry()
+        self.update_page.repaint()
+        self.update_page.show()
 
     @QtCore.pyqtSlot(name="on-cancel-print")
     def on_cancel_print(self):
@@ -347,7 +437,7 @@ class MainWindow(QtWidgets.QMainWindow):
         Used to grantee all tabs reset to their
         first page once the user leaves the tab
         """
-        self.up.hide()
+        self.update_page.hide()
         self.printPanel.setCurrentIndex(0)
         self.filamentPanel.setCurrentIndex(0)
         self.controlPanel.setCurrentIndex(0)
@@ -386,6 +476,15 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.controlPanel.setCurrentIndex(panel_index)
             case 3:
                 self.utilitiesPanel.setCurrentIndex(panel_index)
+
+    @QtCore.pyqtSlot(int)
+    def change_wifi_icon(self, icon_key: int) -> None:
+        """Change the icon of the netowrk by a key enum match
+
+        Args:
+            icon_key (int): WifiIconKey mapping for the current network state
+        """
+        self.ui.wifi_button.setPixmap(HeaderWifiIconProvider.get_pixmap(icon_key))
 
     @QtCore.pyqtSlot(int, int, name="request-change-page")
     def global_change_page(self, tab_index: int, panel_index: int) -> None:
@@ -470,6 +569,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     @api_handler
     def _handle_server_message(self, method, data, metadata) -> None:
+        """Route file-related WebSocket messages to the Files subsystem."""
         if "file" in method:
             file_data_event = events.ReceivedFileData(data, method, metadata)
             try:
@@ -485,8 +585,8 @@ class MainWindow(QtWidgets.QMainWindow):
 
     @api_handler
     def _handle_machine_message(self, method, data, metadata) -> None:
+        """Route machine-state WebSocket messages to the update signal."""
         if "ok" in data:
-            # Here capture if 'ok' if a request for an update was successful
             return
         if "update" in method:
             if ("status" or "refresh") in method:
@@ -578,7 +678,7 @@ class MainWindow(QtWidgets.QMainWindow):
     @api_handler
     def _handle_notify_filelist_changed_message(self, method, data, metadata) -> None:
         """Handle websocket file list messages"""
-        ...
+        self.file_data.handle_filelist_changed(data)
 
     @api_handler
     def _handle_notify_service_state_changed_message(
@@ -591,9 +691,13 @@ class MainWindow(QtWidgets.QMainWindow):
                 return
             service_entry: dict = entry[0]
             service_name, service_info = service_entry.popitem()
-            self.popup.new_message(
-                message_type=Popup.MessageType.INFO,
-                message=f"{service_name} service changed state to \n{service_info.get('sub_state')}",
+            self.show_notifications.emit(
+                "mainwindow",
+                str(
+                    f"{service_name} service changed state to \n{service_info.get('sub_state')}"
+                ),
+                1,
+                False,
             )
 
     @api_handler
@@ -608,43 +712,41 @@ class MainWindow(QtWidgets.QMainWindow):
             popupWhitelist = ["filament runout", "no filament"]
             if _message.lower() not in popupWhitelist or _gcode_msg_type != "!!":
                 return
-
-            self.popup.new_message(
-                message_type=Popup.MessageType.ERROR,
-                message=str(_message),
-                userInput=True,
-            )
+            self.show_notifications.emit("mainwindow", _message, 3, True)
 
     @api_handler
     def _handle_error_message(self, method, data, metadata) -> None:
-        """Handle error messages"""
+        """Handle error messages from Moonraker API."""
         self.handle_error_response[list].emit([data, metadata])
-        if "metadata" in data.get("message", "").lower():
-            # Quick fix, don't care about no metadata errors
-            return
         if self._popup_toggle:
             return
-        text = data
-        if isinstance(data, dict):
-            if "message" in data:
-                text = f"{data['message']}"
-            else:
-                text = data
-        self.popup.new_message(
-            message_type=Popup.MessageType.ERROR,
-            message=str(text),
-            userInput=True,
-        )
+
+        text = data.get("message", str(data)) if isinstance(data, dict) else str(data)
+        lower_text = text.lower()
+
+        # Metadata errors - silent, handled by files_manager
+        if "metadata" in lower_text:
+            self.file_data.handle_metadata_error(text)
+            return
+
+        # File not found - silent
+        if "file" in lower_text and "does not exist" in lower_text:
+            return
+
+        # Directory not found - navigate back + show popup
+        if "does not exist" in lower_text:
+            self.printPanel.filesPage_widget.on_directory_error()
+
+        # Show popup for all other errors (including directory errors)
+        self.show_notifications.emit("mainwindow", str(text), 3, True)
+        _logger.error(text)
 
     @api_handler
     def _handle_notify_cpu_throttled_message(self, method, data, metadata) -> None:
         """Handle websocket cpu throttled messages"""
         if self._popup_toggle:
             return
-        self.popup.new_message(
-            message_type=Popup.MessageType.WARNING,
-            message=f"CPU THROTTLED: {data} | {metadata}",
-        )
+        self.show_notifications.emit("mainwindow", data, 2, False)
 
     @api_handler
     def _handle_notify_status_update_message(self, method, data, metadata) -> None:
@@ -685,18 +787,14 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui.nozzle_size_icon.setText(f"{diam}mm")
         self.ui.nozzle_size_icon.update()
 
-    def closeEvent(self, a0: typing.Optional[QtGui.QCloseEvent]) -> None:
+    def closeEvent(self, a0: QtGui.QCloseEvent | None) -> None:
         """Handles GUI closing"""
-        _loggers = [
-            logging.getLogger(name) for name in logging.root.manager.loggerDict
-        ]  # Get available logger handlers
-        for logger in _loggers:  # noqa: F402
-            if hasattr(logger, "cancel"):
-                _callback = getattr(logger, "cancel")
-                if callable(_callback):
-                    _callback()
+        try:
+            self.networkPanel.close()
+            self.usb_manager.close()
+        except Exception as e:
+            _logger.warning("Error shutting down: %s", e)
         self.ws.wb_disconnect()
-        self.close()
         if a0 is None:
             return
         QtWidgets.QMainWindow.closeEvent(self, a0)
@@ -734,6 +832,8 @@ class MainWindow(QtWidgets.QMainWindow):
             events.PrintComplete.type(),
             events.PrintCancelled.type(),
         ):
+            if event.type() == events.PrintCancelled.type():
+                self.handle_cancel_print()
             self.enable_tab_bar()
             self.ui.extruder_temp_display.clicked.disconnect()
             self.ui.bed_temp_display.clicked.disconnect()
