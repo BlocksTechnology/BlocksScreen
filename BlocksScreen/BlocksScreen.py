@@ -2,9 +2,27 @@ import logging
 import sys
 import typing
 
-from lib.panels.mainWindow import MainWindow
-from logger import setup_logging, LogManager
-from PyQt6 import QtCore, QtGui, QtWidgets
+from logger import CrashHandler, LogManager, install_crash_handler, setup_logging
+
+install_crash_handler()
+
+from lib.panels.mainWindow import MainWindow  # noqa: E402
+from PyQt6 import QtCore, QtGui, QtWidgets  # noqa: E402
+
+
+class BlocksScreenApp(QtWidgets.QApplication):
+    """QApplication subclass that routes unhandled slot exceptions to CrashHandler."""
+
+    def notify(self, a0: QtCore.QObject, a1: QtCore.QEvent) -> bool:  # type: ignore[override]
+        try:
+            return super().notify(a0, a1)
+        except Exception:
+            exc_type, exc_value, exc_tb = sys.exc_info()
+            handler = CrashHandler._instance
+            if handler is not None and exc_type is not None and exc_value is not None:
+                handler._exception_hook(exc_type, exc_value, exc_tb)
+            return False
+
 
 QtGui.QGuiApplication.setAttribute(
     QtCore.Qt.ApplicationAttribute.AA_SynthesizeMouseForUnhandledTouchEvents,
@@ -46,7 +64,7 @@ if __name__ == "__main__":
     )
     _logger = logging.getLogger(__name__)
     _logger.info("============ BlocksScreen Initializing ============")
-    BlocksScreen = QtWidgets.QApplication([])
+    BlocksScreen = BlocksScreenApp([])
     BlocksScreen.setApplicationName("BlocksScreen")
     BlocksScreen.setApplicationDisplayName("BlocksScreen")
     BlocksScreen.setDesktopFileName("BlocksScreen")
