@@ -570,8 +570,12 @@ class UDisksDBusAsync(QtCore.QThread):
         """Removes legacy directory that contained symlinks
         for all mounted USB devices on the machine
         """
-        legacy_dir = self.gcodes_path.joinpath("USB")
-        if legacy_dir.is_dir() and not (
-            legacy_dir.is_symlink() or legacy_dir.is_file()
-        ):
-            shutil.rmtree(legacy_dir)
+        try:
+            legacy_dir = self.gcodes_path.joinpath("USB")
+            if legacy_dir.is_dir() and not (
+                legacy_dir.is_symlink() or legacy_dir.is_file()
+            ):
+                shutil.rmtree(legacy_dir)
+        except Exception:
+            logging.debug("Failed to remove legacy dir")
+            return
