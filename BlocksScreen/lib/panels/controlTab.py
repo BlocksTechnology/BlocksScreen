@@ -2,20 +2,23 @@ from __future__ import annotations
 
 import re
 import typing
-from functools import partial
 
-from helper_methods import normalize
 from lib.moonrakerComm import MoonWebSocket
 from lib.panels.widgets.numpadPage import CustomNumpad
-from lib.panels.widgets.optionCardWidget import OptionCard
-from lib.panels.widgets.popupDialogWidget import Popup
+from lib.panels.widgets.slider_selector_page import SliderPage
+
 from lib.panels.widgets.printcorePage import SwapPrintcorePage
 from lib.panels.widgets.probeHelperPage import ProbeHelper
-from lib.panels.widgets.slider_selector_page import SliderPage
+from lib.panels.widgets.fansPage import FansPage
+from lib.panels.widgets.axisPage import AxisPage
+from lib.panels.widgets.extruderPage import ExtruderPage
+from lib.panels.widgets.temperaturePage import TemperaturePage
+
 from lib.printer import Printer
-from lib.ui.controlStackedWidget_ui import Ui_controlStackedWidget
-from lib.utils.display_button import DisplayButton
+
 from PyQt6 import QtCore, QtGui, QtWidgets
+from lib.utils.blocks_button import BlocksCustomButton
+from lib.utils.icon_button import IconButton
 
 
 class ControlTab(QtWidgets.QStackedWidget):
@@ -47,8 +50,6 @@ class ControlTab(QtWidgets.QStackedWidget):
     )
     call_load_panel = QtCore.pyqtSignal(bool, str, name="call-load-panel")
     toggle_conn_page = QtCore.pyqtSignal(bool, name="call-load-panel")
-    tune_display_buttons: dict = {}
-    card_options: dict = {}
 
     def __init__(
         self,
@@ -58,42 +59,58 @@ class ControlTab(QtWidgets.QStackedWidget):
         /,
     ) -> None:
         super().__init__(parent)
-        self.panel = Ui_controlStackedWidget()
-        self.panel.setupUi(self)
+        self.setupUi()
 
-        self.popup = Popup(self)
-
+        self.back_button.clicked.connect(lambda: self._button_change(False))
         self.ws: MoonWebSocket = ws
         self.printer: Printer = printer
         self.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
         self.timers = []
         self.ztilt_state = False
-        self.extruder_info: dict = {}
-        self.bed_info: dict = {}
-        self.toolhead_info: dict = {}
-        self.extrude_length: int = 10
-        self.extrude_feedrate: int = 2
-        self.extrude_page_message: str = ""
-        self.move_length: float = 1.0
-        self.move_speed: float = 25.0
+
         self.probe_helper_page = ProbeHelper(self)
+        self.addWidget(self.probe_helper_page)
         self.probe_helper_page.toggle_conn_page.connect(self.toggle_conn_page)
         self.probe_helper_page.disable_popups.connect(self.disable_popups)
-        self.addWidget(self.probe_helper_page)
         self.probe_helper_page.call_load_panel.connect(self.call_load_panel)
+
         self.printcores_page = SwapPrintcorePage(self)
         self.addWidget(self.printcores_page)
 
+        self.fans_page = FansPage(self)
+        self.addWidget(self.fans_page)
+        self.fans_page.request_back_button.connect(self.request_back_button)
+        self.fans_page.run_gcode_signal.connect(self.run_gcode_signal)
+        self.fans_page.request_slider_page.connect(self.on_slidePage_request)
+
         self.sliderPage = SliderPage(self)
         self.addWidget(self.sliderPage)
-        self.sliderPage.request_back.connect(self.back_button)
+        self.sliderPage.request_back.connect(self.request_back_button)
+
+        self.axis_page = AxisPage(self)
+        self.addWidget(self.axis_page)
+        self.axis_page.request_back.connect(self.request_back_button)
+
+        self.extruder_page = ExtruderPage(self, printer)
+        self.addWidget(self.extruder_page)
+        self.extruder_page.request_back.connect(self.request_back_button)
+
+        self.temperature_page = TemperaturePage(self)
+        self.addWidget(self.temperature_page)
+        self.temperature_page.request_back.connect(self.request_back_button)
+        self.temperature_page.request_numpad.connect(self.on_numpad_request)
+        self.temperature_page.run_gcode_signal.connect(self.run_gcode_signal)
+
+        self.numpadPage = CustomNumpad(self)
+        self.numpadPage.request_back.connect(self.request_back_button)
+        self.addWidget(self.numpadPage)
 
         self.probe_helper_page.request_page_view.connect(
-            partial(self.change_page, self.indexOf(self.probe_helper_page))
+            lambda: self.change_page(self.indexOf(self.probe_helper_page))
         )
         self.probe_helper_page.query_printer_object.connect(self.ws.api.object_query)
         self.probe_helper_page.run_gcode_signal.connect(self.ws.api.run_gcode)
-        self.probe_helper_page.request_back.connect(self.back_button)
+        self.probe_helper_page.request_back.connect(self.request_back_button)
         self.printer.print_stats_update[str, str].connect(
             self.probe_helper_page.on_print_stats_update
         )
@@ -123,172 +140,13 @@ class ControlTab(QtWidgets.QStackedWidget):
         self.printer.gcode_response.connect(
             self.probe_helper_page.handle_gcode_response
         )
-        self.printer.toolhead_update[str, list].connect(self.on_toolhead_update)
-        self.printer.extruder_update.connect(self.on_extruder_update)
-        self.printer.heater_bed_update.connect(self.on_heater_bed_update)
-        self.panel.cp_motion_btn.clicked.connect(
-            partial(self.change_page, self.indexOf(self.panel.motion_page))
+        self.printer.extruder_update.connect(self.temperature_page.on_extruder_update)
+        self.printer.heater_bed_update.connect(
+            self.temperature_page.on_heater_bed_update
         )
-        self.panel.cp_temperature_btn.clicked.connect(
-            partial(self.change_page, self.indexOf(self.panel.temperature_page))
-        )
-        self.panel.cp_fans_btn.clicked.connect(
-            partial(self.change_page, self.indexOf(self.panel.fans_page))
-        )
-        self.panel.fans_back_btn.clicked.connect(self.back_button)
-        self.panel.cp_switch_print_core_btn.clicked.connect(self.show_swapcore)
-        self.panel.cp_nozzles_calibration_btn.clicked.connect(
-            partial(self.change_page, self.indexOf(self.probe_helper_page))
-        )
-        self.panel.motion_extrude_btn.clicked.connect(
-            partial(self.change_page, self.indexOf(self.panel.extrude_page))
-        )
-        self.panel.motion_move_axis_btn.clicked.connect(
-            partial(self.change_page, self.indexOf(self.panel.move_axis_page))
-        )
-        self.panel.mp_back_btn.clicked.connect(self.back_button)
-        self.panel.motion_auto_home_btn.clicked.connect(
-            partial(self.run_gcode_signal.emit, "G28\nM400")
-        )
-        self.panel.motion_disable_steppers_btn.clicked.connect(
-            partial(self.run_gcode_signal.emit, "M84\nM400")
-        )
-        self.panel.exp_back_btn.clicked.connect(self.back_button)
-        self.panel.extrude_select_length_10_btn.toggled.connect(
-            partial(
-                self.handle_toggle_extrude_length,
-                caller=self.panel.extrude_select_length_10_btn,
-                value=10,
-            )
-        )
-        self.panel.extrude_select_length_50_btn.toggled.connect(
-            partial(
-                self.handle_toggle_extrude_length,
-                caller=self.panel.extrude_select_length_50_btn,
-                value=50,
-            )
-        )
-        self.panel.extrude_select_length_100_btn.toggled.connect(
-            partial(
-                self.handle_toggle_extrude_length,
-                caller=self.panel.extrude_select_length_100_btn,
-                value=100,
-            )
-        )
-        self.panel.extrude_select_feedrate_2_btn.toggled.connect(
-            partial(
-                self.handle_toggle_extrude_feedrate,
-                caller=self.panel.extrude_select_feedrate_2_btn,
-                value=2,
-            )
-        )
-        self.panel.extrude_select_feedrate_5_btn.toggled.connect(
-            partial(
-                self.handle_toggle_extrude_feedrate,
-                caller=self.panel.extrude_select_feedrate_5_btn,
-                value=5,
-            )
-        )
-        self.panel.extrude_select_feedrate_10_btn.toggled.connect(
-            partial(
-                self.handle_toggle_extrude_feedrate,
-                caller=self.panel.extrude_select_feedrate_10_btn,
-                value=10,
-            )
-        )
-        self.panel.mva_select_length_1_btn.toggled.connect(
-            partial(self.handle_select_move_length, value=1.0)
-        )
-        self.panel.mva_select_length_10_btn.toggled.connect(
-            partial(self.handle_select_move_length, value=10.0)
-        )
-        self.panel.mva_select_length_100_btn.toggled.connect(
-            partial(self.handle_select_move_length, value=100.0)
-        )
-        self.panel.mva_select_speed_25_btn.toggled.connect(
-            partial(self.handle_select_move_speed, value=25.0)
-        )
-        self.panel.mva_select_speed_50_btn.toggled.connect(
-            partial(self.handle_select_move_speed, value=50.0)
-        )
-        self.panel.mva_select_speed_100_btn.toggled.connect(
-            partial(self.handle_select_move_speed, value=100.0)
-        )
-        self.panel.exp_extrude_btn.clicked.connect(
-            partial(self.handle_extrusion, True)
-        )  # True for extrusion
-        self.panel.exp_unextrude_btn.clicked.connect(
-            partial(self.handle_extrusion, False)
-        )  # False for retraction
-        # Move Axis
-        self.panel.mva_back_btn.clicked.connect(self.back_button)
-        self.panel.mva_home_x_btn.clicked.connect(
-            partial(self.run_gcode_signal.emit, "G28 X\nM400")
-        )
-        self.panel.mva_home_y_btn.clicked.connect(
-            partial(self.run_gcode_signal.emit, "G28 Y\nM400")
-        )
-        self.panel.mva_home_z_btn.clicked.connect(
-            partial(self.run_gcode_signal.emit, "G28 Z\nM400")
-        )
-        self.panel.mva_home_all_btn.clicked.connect(
-            partial(self.run_gcode_signal.emit, "G28\nM400")
-        )
-        self.panel.mva_up_btn.clicked.connect(partial(self.handle_move_axis, "Y"))
-        self.panel.mva_down_btn.clicked.connect(partial(self.handle_move_axis, "Y-"))
-        self.panel.mva_right_btn.clicked.connect(partial(self.handle_move_axis, "X"))
-        self.panel.mva_left_btn.clicked.connect(partial(self.handle_move_axis, "X-"))
-        self.panel.mva_z_up.clicked.connect(
-            partial(self.handle_move_axis, "Z-")  # Move nozzle closer to bed
-        )
-        self.panel.mva_z_down.clicked.connect(
-            partial(self.handle_move_axis, "Z")  # Move nozzle away from bed
-        )
-        self.panel.temp_back_button.clicked.connect(self.back_button)
-        self.panel.printer_settings_back_btn.clicked.connect(self.back_button)
+
         self.run_gcode_signal.connect(self.ws.api.run_gcode)
-        # @ object temperature change clicked
-        self.numpadPage = CustomNumpad(self)
-        self.numpadPage.request_back.connect(self.request_back_button)
-        self.addWidget(self.numpadPage)
-
-        self.panel.extruder_temp_display.clicked.connect(
-            lambda: self.request_numpad[str, int, "PyQt_PyObject", int, int].emit(
-                "Extruder Temperature",
-                int(round(float(self.panel.extruder_temp_display.secondary_text))),
-                self.on_numpad_change,
-                0,
-                300,  # TODO: Get this value from printer objects
-            )
-        )
-        self.panel.bed_temp_display.clicked.connect(
-            lambda: self.request_numpad[str, int, "PyQt_PyObject", int, int].emit(
-                "Bed Temperature",
-                int(round(float(self.panel.bed_temp_display.secondary_text))),
-                self.on_numpad_change,
-                0,
-                120,  # TODO: Get this value from printer objects
-            )
-        )
-        self.request_numpad[str, int, "PyQt_PyObject", int, int].connect(
-            self.on_numpad_request
-        )
-
-        self.panel.cooldown_btn.clicked.connect(
-            lambda: self.run_gcode_signal.emit(
-                "SET_HEATER_TEMPERATURE HEATER=heater_bed TARGET=0\n\
-                SET_HEATER_TEMPERATURE HEATER=extruder TARGET=0"
-            )
-        )
-
-        self.path = {
-            "fan_cage": QtGui.QPixmap(":/fan_related/media/btn_icons/fan_cage.svg"),
-            "blower": QtGui.QPixmap(":/fan_related/media/btn_icons/blower.svg"),
-            "fan": QtGui.QPixmap(":/fan_related/media/btn_icons/fan.svg"),
-        }
-
-        self.panel.cp_z_tilt_btn.clicked.connect(lambda: self.handle_ztilt())
-
+        # # @ object temperature change clicked
         self.printcores_page.pc_accept.clicked.connect(self.handle_swapcore)
 
         self.ws.klippy_state_signal.connect(self.on_klippy_status)
@@ -296,85 +154,117 @@ class ControlTab(QtWidgets.QStackedWidget):
         self.printer.on_printcore_update.connect(self.handle_printcoreupdate)
         self.printer.gcode_response.connect(self._handle_gcode_response)
         self.printer.z_tilt_update.connect(self._handle_z_tilt_object_update)
-        # self.panel.cp_printer_settings_btn.hide()
-        self.panel.temperature_cooldown_btn.hide()
-        self.panel.cooldown_btn.hide()
-        self.panel.cp_switch_print_core_btn.hide()
 
-        self.printer.fan_update[str, str, float].connect(self.on_fan_object_update)
-        self.printer.fan_update[str, str, int].connect(self.on_fan_object_update)
+        self.cp_button_6.hide()
+
+        self.printer.fan_update[str, str, float].connect(
+            self.fans_page.on_fan_object_update
+        )
+        self.printer.fan_update[str, str, int].connect(
+            self.fans_page.on_fan_object_update
+        )
+        self._button_change(False)
+
+    def _button_change(self, active: bool):
+        for btn in [
+            self.cp_button_1,
+            self.cp_button_2,
+            self.cp_button_3,
+            self.cp_button_4,
+            self.cp_button_5,
+            self.cp_button_6,
+        ]:
+            try:
+                btn.clicked.disconnect()
+            except TypeError:
+                pass
+        if active:
+            self.cp_header_title.setText("Montion")
+            self.cp_button_1.setText("Auto Home")
+
+            self.cp_button_1.setPixmap(
+                QtGui.QPixmap(":/motion/media/btn_icons/home_all.svg")
+            )
+            self.cp_button_1.clicked.connect(
+                lambda: self.run_gcode_signal.emit("G28\nM400")
+            )
+            self.cp_button_2.setText("Disable\nSteppers")
+            self.cp_button_2.clicked.connect(
+                lambda: self.run_gcode_signal.emit("M84\nM400")
+            )
+            self.cp_button_2.setPixmap(
+                QtGui.QPixmap(":/motion/media/btn_icons/disable_steppers.svg")
+            )
+            self.cp_button_3.setText("Axis")
+            self.cp_button_3.clicked.connect(
+                lambda: self.change_page(self.indexOf(self.axis_page))
+            )
+            self.cp_button_3.setPixmap(
+                QtGui.QPixmap(":/motion/media/btn_icons/axis_maintenance.svg")
+            )
+            self.cp_button_4.setText("Extruder")
+            self.cp_button_4.setPixmap(
+                QtGui.QPixmap(":/extruder_related/media/btn_icons/extrude.svg")
+            )
+            self.cp_button_4.clicked.connect(
+                lambda: self.change_page(self.indexOf(self.extruder_page))
+            )
+
+            self.back_button.show()
+            self.Hblank.show()
+
+            self.cp_content_layout.addWidget(self.blank)
+            self.cp_button_5.hide()
+        else:
+            self.cp_header_title.setText("Control")
+
+            self.cp_button_1.setText("Motion\nControl")
+            self.cp_button_1.setPixmap(
+                QtGui.QPixmap(":/motion/media/btn_icons/axis_maintenance.svg")
+            )
+            self.cp_button_1.clicked.connect(lambda: self._button_change(True))
+
+            self.cp_button_2.setText("Temp.\nControl")
+            self.cp_button_2.setPixmap(
+                QtGui.QPixmap(":/temperature_related/media/btn_icons/temperature.svg")
+            )
+            self.cp_button_2.clicked.connect(
+                lambda: self.change_page(self.indexOf(self.temperature_page))
+            )
+
+            self.cp_button_3.setText("Nozzle\nCalibration")
+            self.cp_button_3.setPixmap(
+                QtGui.QPixmap(":/z_levelling/media/btn_icons/bed_levelling.svg")
+            )
+            self.cp_button_3.clicked.connect(
+                lambda: self.change_page(self.indexOf(self.probe_helper_page))
+            )
+
+            self.cp_button_4.setText("Z-Tilt")
+            self.cp_button_4.setPixmap(
+                QtGui.QPixmap(":/z_levelling/media/btn_icons/bed_levelling.svg")
+            )
+            self.cp_button_4.clicked.connect(lambda: self.handle_ztilt())
+
+            self.cp_button_5.setText("Fans")
+            self.cp_button_5.setPixmap(
+                QtGui.QPixmap(":/temperature_related/media/btn_icons/fan.svg")
+            )
+            self.cp_button_5.clicked.connect(
+                lambda: self.change_page(self.indexOf(self.fans_page))
+            )
+
+            self.cp_button_6.clicked.connect(self.show_swapcore)
+
+            self.back_button.hide()
+            self.Hblank.hide()
+            self.cp_content_layout.removeWidget(self.blank)
+            self.cp_button_5.show()
+            self.retranslateUi()
 
     def _handle_z_tilt_object_update(self, value, state):
         if state:
             self.call_load_panel.emit(False, "")
-
-    @QtCore.pyqtSlot(str, str, float, name="on_fan_update")
-    @QtCore.pyqtSlot(str, str, int, name="on_fan_update")
-    def on_fan_object_update(
-        self, name: str, field: str, new_value: int | float
-    ) -> None:
-        """Slot that receives updates from fan objects.
-
-        Args:
-            name (str): Fan object name
-            field (str): Field name
-            new_value (int | float): New value for the field
-        """
-        if "speed" not in field:
-            return
-
-        fields = name.split()
-        first_field = fields[0]
-        second_field = fields[1] if len(fields) > 1 else None
-        name = second_field.replace("_", " ") if second_field else name
-
-        fan_card = self.tune_display_buttons.get(name)
-        if fan_card is None and first_field in (
-            "fan",
-            "fan_generic",
-        ):
-            icon = self.path.get("fan")
-            if second_field:
-                second_field = second_field.lower()
-                pattern_blower = r"(?:^|_)(?:blower|auxiliary)(?:_|$)"
-                pattern_exhaust = r"(?:^|_)exhaust(?:_|$)"
-                if re.search(pattern_blower, second_field):
-                    icon = self.path.get("blower")
-                elif re.search(pattern_exhaust, second_field):
-                    icon = self.path.get("fan_cage")
-
-            card = OptionCard(self, name, str(name), icon)  # type: ignore
-            card.setObjectName(str(name))
-
-            # Add card to layout and record reference
-            self.card_options[name] = card
-            self.panel.fans_content_layout.addWidget(card)
-
-            # If the card doesn't have expected UI properties, discard it
-            if not hasattr(card, "continue_clicked"):
-                del card
-                self.card_options.pop(name, None)
-                return
-
-            card.setMode(True)
-            card.secondtext.setText(f"{new_value}%")
-            card.continue_clicked.connect(
-                lambda: self.on_slidePage_request(
-                    str(name),
-                    card.secondtext.text().replace("%", ""),
-                    self.on_slider_change,
-                    0,
-                    100,
-                )
-            )
-
-            self.tune_display_buttons[name] = card
-            self.update()
-            fan_card = card
-
-        if fan_card:
-            value_percent = new_value * 100 if new_value <= 1 else new_value
-            fan_card.secondtext.setText(f"{value_percent:.0f}%")
 
     @QtCore.pyqtSlot(str, int, "PyQt_PyObject", name="on_slidePage_request")
     @QtCore.pyqtSlot(str, int, "PyQt_PyObject", int, int, name="on_slidePage_request")
@@ -386,45 +276,16 @@ class ControlTab(QtWidgets.QStackedWidget):
         min_value: int = 0,
         max_value: int = 100,
     ) -> None:
+        try:
+            self.sliderPage.value_selected.disconnect()
+        except:
+            pass
         self.sliderPage.value_selected.connect(callback)
         self.sliderPage.set_name(name)
         self.sliderPage.set_slider_position(int(current_value))
         self.sliderPage.set_slider_minimum(min_value)
         self.sliderPage.set_slider_maximum(max_value)
         self.change_page(self.indexOf(self.sliderPage))
-
-    @QtCore.pyqtSlot(str, int, name="on_slider_change")
-    def on_slider_change(self, name: str, new_value: int) -> None:
-        if "speed" in name.lower():
-            self.speed_factor_override = new_value / 100
-            self.run_gcode_signal.emit(f"M220 S{new_value}")
-        if name.lower() == "fan":
-            self.run_gcode_signal.emit(
-                f"M106 S{int(round((normalize(float(new_value / 100), 0.0, 1.0, 0, 255))))}"
-            )  # [0, 255] Range
-        else:
-            name = name.replace(" ", "_")
-            self.run_gcode_signal.emit(
-                f'SET_FAN_SPEED FAN="{name}" SPEED={float(new_value / 100.00)}'
-            )  # [0.0, 1.0] Range
-
-    def create_display_button(self, name: str) -> DisplayButton:
-        """Create and return a DisplayButton
-
-        Args:
-            name (str): Name for the display button
-
-        Returns:
-            DisplayButton: The created DisplayButton object
-        """
-        display_button = DisplayButton()
-        display_button.setObjectName(str(name + "_display"))
-        display_button.setMinimumSize(QtCore.QSize(150, 50))
-        display_button.setMaximumSize(QtCore.QSize(150, 80))
-        font = QtGui.QFont()
-        font.setPointSize(16)
-        display_button.setFont(font)
-        return display_button
 
     def handle_printcoreupdate(self, value: dict):
         if value["swapping"] == "idle":
@@ -515,178 +376,181 @@ class ControlTab(QtWidgets.QStackedWidget):
         self.numpadPage.set_max_value(max_value)
         self.change_page(self.indexOf(self.numpadPage))
 
-    @QtCore.pyqtSlot(str, int, name="on-numpad-change")
-    def on_numpad_change(self, name: str, new_value: int) -> None:
-        """Handles inputted numpad values"""
-        if "bed" in name.lower():
-            name = "heater_bed"
-        elif "extruder" in name.lower():
-            name = "extruder"
-        self.run_gcode_signal.emit(
-            f"SET_HEATER_TEMPERATURE HEATER={name} TARGET={new_value}"
-        )
-
     def change_page(self, index):
         """Handles changing page"""
         self.request_change_page.emit(2, index)
 
-    def back_button(self):
-        """Handle back button click"""
-        self.request_back_button.emit()
+    def setupUi(self):
+        self.resize(710, 410)
+        self.blank = QtWidgets.QWidget()
+        self.blank.setMinimumSize(QtCore.QSize(250, 80))
+        self.blank.setMaximumSize(QtCore.QSize(250, 80))
 
-    def register_timed_callback(self, time: int, callback: callable) -> None:
-        """Registers timed callback and starts the timeout"""
-        _timer = QtCore.QTimer()
-        _timer.setSingleShot(True)
-        _timer.timeout.connect(callback)
-        _timer.start(int(time))
-        self.timers.append(_timer)
+        self.Hblank = QtWidgets.QWidget(parent=self)
+        self.Hblank.setMinimumSize(QtCore.QSize(60, 60))
+        self.Hblank.setMaximumSize(QtCore.QSize(60, 60))
 
-    @QtCore.pyqtSlot(bool, "PyQt_PyObject", int, name="select-extrude-feedrate")
-    def handle_toggle_extrude_feedrate(self, checked: bool, caller, value: int) -> None:
-        """Slot to change the extruder feedrate, mainly used for toggle buttons
+        widget = QtWidgets.QWidget()
+        widget.setMinimumSize(QtCore.QSize(710, 410))
+        widget.setMaximumSize(QtCore.QSize(710, 410))
+        self.setObjectName("control_page")
+        self.verticalLayout = QtWidgets.QVBoxLayout()
+        self.verticalLayout.setObjectName("verticalLayout")
+        self.cp_header_layout = QtWidgets.QHBoxLayout()
+        self.cp_header_layout.setObjectName("cp_header_layout")
 
-        Args:
-            checked (bool): Button checked state
-            caller (PyQtObject): The button that called this slot
-            value (int): New value for the extruder feedrate
-        """
-        if value == self.extrude_feedrate:
-            return
-        self.extrude_feedrate = value
-
-    @QtCore.pyqtSlot(bool, "PyQt_PyObject", int, name="select-extrude-length")
-    def handle_toggle_extrude_length(self, checked: bool, caller, value: int) -> None:
-        """Slot that changes the extrude length, mainly used for toggle buttons
-
-        Args:
-            checked (bool): Button checked state
-            caller (PyQtObject): The button that called this slot
-            value (int): New value for the extrude length
-        """
-        if self.extrude_length == value:
-            return
-        self.extrude_length = value
-
-    @QtCore.pyqtSlot(bool, float, name="handle-select-move-speed")
-    def handle_select_move_speed(self, checked: bool, value: float) -> None:
-        """Slot that changes the move speed of manual move commands, mainly used
-        for toggle buttons
-
-        Args:
-            checked (bool): Button checked state
-            value (float): New move speed value
-        """
-        if self.move_speed == value:
-            return
-        self.move_speed = value
-
-    @QtCore.pyqtSlot(bool, float, name="handle-select-move-length")
-    def handle_select_move_length(self, checked: bool, value: float) -> None:
-        """Slot that changes the move length of manual move commands,
-        mainly used for toggle buttons
-
-
-        Args:
-            checked (bool): Button checked state
-            value (float): New length value
-        """
-        if self.move_length == value:
-            return
-        self.move_length = value
-
-    @QtCore.pyqtSlot(str, name="handle-extrusion")
-    def handle_extrusion(self, extrude: bool) -> None:
-        """Slot that requests an extrusion/unextrusion move
-
-        Args:
-            extrude (bool): If True extrudes otherwise unextrudes.
-        """
-        can_extrude = bool(self.printer.heaters_object["extruder"]["can_extrude"])
-        if not can_extrude:
-            self.extrude_page_message = "Temperature too cold to extrude"
-            self.panel.exp_info_label.setText(self.extrude_page_message)
-            return
-        if extrude:
-            self.run_gcode_signal.emit(
-                f"M83\nG1 E{self.extrude_length} F{self.extrude_feedrate * 60}\nM82\nM400"
-            )
-            self.extrude_page_message = "Extruding"
-            self.panel.exp_info_label.setText(self.extrude_page_message)
-        else:
-            self.run_gcode_signal.emit(
-                f"M83\nG1 E-{self.extrude_length} F{self.extrude_feedrate * 60}\nM82\nM400"
-            )
-            self.extrude_page_message = "Retracting"
-            self.panel.exp_info_label.setText(self.extrude_page_message)
-        # This block of code schedules a method to be called in x amount of milliseconds
-        _sch_time_s = float(
-            self.extrude_length / self.extrude_feedrate
-        )  # calculate the amount of time it'll take for the operation
-        self.extrude_page_message = "Ready"
-        self.register_timed_callback(
-            int(_sch_time_s + 2.0) * 1000,  # In milliseconds
-            lambda: self.panel.exp_info_label.setText(self.extrude_page_message),
+        self.cp_header_layout.addWidget(self.Hblank)
+        self.cp_header_title = QtWidgets.QLabel(parent=self)
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
+            QtWidgets.QSizePolicy.Policy.Fixed,
         )
-
-    @QtCore.pyqtSlot(str, name="handle-move-axis")
-    def handle_move_axis(self, axis: str) -> None:
-        """Slot that requests manual move command
-
-        Args:
-            axis (str): String that contains one of the following axis `
-                ['X',
-                'X-'
-                ,'Y'
-                ,'Y-'
-                ,'Z'
-                ,'Z-']`. [^1]
-
-        ---
-
-        [^1]: The **-** symbol indicates the negative direction for that axis
-
-        """
-        if axis not in ["X", "X-", "Y", "Y-", "Z", "Z-"]:
-            return
-        self.run_gcode_signal.emit(
-            f"G91\nG0 {axis}{float(self.move_length)} F{float(self.move_speed * 60)}\nG90\nM400"
+        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setVerticalStretch(0)
+        sizePolicy.setHeightForWidth(
+            self.cp_header_title.sizePolicy().hasHeightForWidth()
         )
+        self.cp_header_title.setSizePolicy(sizePolicy)
+        self.cp_header_title.setMinimumSize(QtCore.QSize(300, 60))
+        self.cp_header_title.setMaximumSize(QtCore.QSize(16777215, 60))
+        font = QtGui.QFont()
+        font.setFamily("Momcake")
+        font.setPointSize(24)
+        font.setBold(True)
+        font.setWeight(75)
+        self.cp_header_title.setFont(font)
+        self.cp_header_title.setStyleSheet("background: transparent; color: white;")
+        self.cp_header_title.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.cp_header_title.setObjectName("cp_header_title")
+        self.cp_header_layout.addWidget(self.cp_header_title)
 
-    @QtCore.pyqtSlot(str, list, name="on-toolhead-update")
-    def on_toolhead_update(self, field: str, values: list) -> None:
-        """Handles updated from toolhead printer object"""
-        if field == "position":
-            self.panel.mva_x_value_label.setText(f"{values[0]:.2f}")
-            self.panel.mva_y_value_label.setText(f"{values[1]:.2f}")
-            self.panel.mva_z_value_label.setText(f"{values[2]:.3f}")
+        self.back_button = IconButton(parent=self)
+        self.back_button.setPixmap(QtGui.QPixmap(":/ui/media/btn_icons/back.svg"))
+        self.back_button.setMinimumSize(QtCore.QSize(60, 60))
+        self.back_button.setMaximumSize(QtCore.QSize(60, 60))
+        self.cp_header_layout.addWidget(self.back_button)
 
-            if values[0] == "252,50" and values[1] == "250" and values[2] == "50":
-                self.call_load_panel.emit(False, "")
-        self.toolhead_info.update({f"{field}": values})
+        self.verticalLayout.addLayout(self.cp_header_layout)
+        self.cp_content_layout = QtWidgets.QGridLayout()
+        self.cp_content_layout.setObjectName("cp_content_layout")
 
-    @QtCore.pyqtSlot(str, str, float, name="on-extruder-update")
-    def on_extruder_update(
-        self, extruder_name: str, field: str, new_value: float
-    ) -> None:
-        """Handles updates from extruder printer object"""
-        if extruder_name == "extruder" and field == "temperature":
-            self.panel.extruder_temp_display.setText(f"{new_value:.1f}")
-        if extruder_name == "extruder" and field == "target":
-            self.panel.extruder_temp_display.secondary_text = f"{new_value:.1f}"
-        self.extruder_info.update({f"{extruder_name}": {f"{field}": new_value}})
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Fixed
+        )
+        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setVerticalStretch(0)
 
-    @QtCore.pyqtSlot(str, str, float, name="on-heater-bed-update")
-    def on_heater_bed_update(self, name: str, field: str, new_value: float) -> None:
-        """Handles updated from heater_bed printer object"""
-        if field == "temperature":
-            self.panel.bed_temp_display.setText(f"{new_value:.1f}")
-        if field == "target":
-            self.panel.bed_temp_display.secondary_text = f"{new_value:.1f}"
-        self.bed_info.update({f"{name}": {f"{field}": new_value}})
+        font = QtGui.QFont()
+        font.setFamily("Momcake")
+        font.setPointSize(19)
+        font.setItalic(False)
+        font.setStyleStrategy(QtGui.QFont.StyleStrategy.PreferAntialias)
 
-    def paintEvent(self, a0: QtGui.QPaintEvent) -> None:
-        """Handles ControlTab Widget painting"""
-        if self.panel.extrude_page.isVisible():
-            self.panel.exp_info_label.setText(self.extrude_page_message)
-        return super().paintEvent(a0)
+        self.cp_button_1 = BlocksCustomButton(parent=self)
+        self.cp_button_1.setSizePolicy(sizePolicy)
+        self.cp_button_1.setMinimumSize(QtCore.QSize(250, 80))
+        self.cp_button_1.setMaximumSize(QtCore.QSize(250, 80))
+        self.cp_button_1.setFont(font)
+        self.cp_button_1.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.NoContextMenu)
+        self.cp_button_1.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
+        self.cp_button_1.setProperty(
+            "icon_pixmap",
+            QtGui.QPixmap(":/motion/media/btn_icons/axis_maintenance.svg"),
+        )
+        self.cp_button_1.setObjectName("cp_button_1")
+
+        self.cp_content_layout.addWidget(self.cp_button_1, 0, 0, 1, 1)
+
+        self.cp_button_2 = BlocksCustomButton(parent=self)
+        self.cp_button_2.setSizePolicy(sizePolicy)
+        self.cp_button_2.setMinimumSize(QtCore.QSize(10, 80))
+        self.cp_button_2.setMaximumSize(QtCore.QSize(250, 80))
+        self.cp_button_2.setFont(font)
+        self.cp_button_2.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.NoContextMenu)
+        self.cp_button_2.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
+        self.cp_button_2.setProperty(
+            "icon_pixmap",
+            QtGui.QPixmap(":/temperature_related/media/btn_icons/temperature.svg"),
+        )
+        self.cp_button_2.setObjectName("cp_button_2")
+
+        self.cp_content_layout.addWidget(self.cp_button_2, 0, 1, 1, 1)
+
+        self.cp_button_3 = BlocksCustomButton(parent=self)
+        self.cp_button_3.setSizePolicy(sizePolicy)
+        self.cp_button_3.setMinimumSize(QtCore.QSize(10, 80))
+        self.cp_button_3.setMaximumSize(QtCore.QSize(250, 80))
+        self.cp_button_3.setFont(font)
+        self.cp_button_3.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.NoContextMenu)
+        self.cp_button_3.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
+        self.cp_button_3.setProperty(
+            "icon_pixmap",
+            QtGui.QPixmap(":/z_levelling/media/btn_icons/bed_levelling.svg"),
+        )
+        self.cp_button_3.setObjectName("cp_button_3")
+
+        self.cp_content_layout.addWidget(self.cp_button_3, 1, 0, 1, 1)
+
+        self.cp_button_4 = BlocksCustomButton(parent=self)
+        self.cp_button_4.setSizePolicy(sizePolicy)
+        self.cp_button_4.setMinimumSize(QtCore.QSize(10, 80))
+        self.cp_button_4.setMaximumSize(QtCore.QSize(250, 80))
+        self.cp_button_4.setFont(font)
+        self.cp_button_4.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.NoContextMenu)
+        self.cp_button_4.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
+        self.cp_button_4.setProperty(
+            "icon_pixmap",
+            QtGui.QPixmap(":/z_levelling/media/btn_icons/bed_levelling.svg"),
+        )
+        self.cp_button_4.setObjectName("cp_button_4")
+
+        self.cp_content_layout.addWidget(self.cp_button_4, 1, 1, 1, 1)
+
+        self.cp_button_5 = BlocksCustomButton(parent=self)
+        self.cp_button_5.setSizePolicy(sizePolicy)
+        self.cp_button_5.setMinimumSize(QtCore.QSize(10, 80))
+        self.cp_button_5.setMaximumSize(QtCore.QSize(250, 80))
+        self.cp_button_5.setFont(font)
+        self.cp_button_5.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.NoContextMenu)
+        self.cp_button_5.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
+        self.cp_button_5.setProperty(
+            "icon_pixmap",
+            QtGui.QPixmap(":/temperature_related/media/btn_icons/fan.svg"),
+        )
+        self.cp_button_5.setObjectName("cp_button_5")
+
+        self.cp_content_layout.addWidget(self.cp_button_5, 2, 0, 1, 1)
+
+        self.cp_button_6 = BlocksCustomButton(parent=self)
+        self.cp_button_6.setSizePolicy(sizePolicy)
+        self.cp_button_6.setMinimumSize(QtCore.QSize(10, 80))
+        self.cp_button_6.setMaximumSize(QtCore.QSize(250, 80))
+        self.cp_button_6.setFont(font)
+        self.cp_button_6.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.NoContextMenu)
+        self.cp_button_6.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
+        self.cp_button_6.setProperty(
+            "icon_pixmap",
+            QtGui.QPixmap(":/extruder_related/media/btn_icons/switch_print_core.svg"),
+        )
+        self.cp_button_6.setObjectName("cp_button_6")
+
+        self.cp_content_layout.addWidget(self.cp_button_6, 2, 1, 1, 1)
+        self.verticalLayout.addLayout(self.cp_content_layout)
+        widget.setLayout(self.verticalLayout)
+        self.addWidget(widget)
+
+        self.retranslateUi()
+
+    def retranslateUi(self):
+        _translate = QtCore.QCoreApplication.translate
+        self.setWindowTitle(_translate("controlStackedWidget", "StackedWidget"))
+        self.cp_header_title.setText(_translate("controlStackedWidget", "Control"))
+
+        self.cp_button_1.setText(_translate("controlStackedWidget", "Motion\nControl"))
+        self.cp_button_2.setText(_translate("controlStackedWidget", "Temp.\nControl"))
+        self.cp_button_3.setText(
+            _translate("controlStackedWidget", "Nozzle\nCalibration")
+        )
+        self.cp_button_4.setText(_translate("controlStackedWidget", "Z-Tilt"))
+        self.cp_button_5.setText(_translate("controlStackedWidget", "Fans"))
+        self.cp_button_6.setText(_translate("controlStackedWidget", "Swap\nPrint Core"))
