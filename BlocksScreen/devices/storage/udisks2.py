@@ -482,7 +482,7 @@ class UDisksDBusAsync(QtCore.QThread):
         """
         if not _validated and label:
             label = validate_label(label, strict=True)
-            label = "USB " + label
+            label = "USB-" + label
         fallback: str = "USB DRIVE" if _index == 0 else str(f"USB DRIVE {_index}")
         dstb = pathlib.Path(dst_path).joinpath(label if label else fallback)
         try:
