@@ -2,6 +2,7 @@ import asyncio
 import logging
 import os
 import pathlib
+import shutil
 import typing
 from collections.abc import Coroutine
 import unicodedata
@@ -163,6 +164,7 @@ class UDisksDBusAsync(QtCore.QThread):
         self.listener_running: bool = False
         self.controlled_devs: dict[str, Device] = {}
         self._cleanup_broken_symlinks()
+        self._cleanup_legacy_dir()
 
     @property
     def active(self) -> bool:
@@ -563,3 +565,13 @@ class UDisksDBusAsync(QtCore.QThread):
                     # This `path` resolves to the `mount_path`
                     return True
         return False
+
+    def _cleanup_legacy_dir(self) -> None:
+        """Removes legacy directory that contained symlinks
+        for all mounted USB devices on the machine
+        """
+        legacy_dir = self.gcodes_path.joinpath("USB")
+        if legacy_dir.is_dir() and not (
+            legacy_dir.is_symlink() or legacy_dir.is_file()
+        ):
+            shutil.rmtree(legacy_dir)
