@@ -746,7 +746,24 @@ class MainWindow(QtWidgets.QMainWindow):
         """Handle websocket cpu throttled messages"""
         if self._popup_toggle:
             return
-        self.show_notifications.emit("mainwindow", data, 2, False)
+        try:
+            flags = {
+                "Under-Voltage Detected": 1 << 0,
+                "Frequency Capped": 1 << 1,
+                "Currently Throttled": 1 << 2,
+                "Temperature Limit Active": 1 << 3,
+            }
+            _bits = data.get("bits", None)
+            if not _bits:
+                self.show_notifications.emit(
+                    "mainWindow", "Cpu throttled unknown reason", 2, False
+                )
+                return
+            _active_flags = [name for name, mask in flags.items() if _bits & mask]
+            self.show_notifications.emit("mainwindow", str(_active_flags), 2, False)
+        except Exception:
+            logging.debug("Error emitting notification for cpu throttled notification.")
+            return
 
     @api_handler
     def _handle_notify_status_update_message(self, method, data, metadata) -> None:
