@@ -1,21 +1,19 @@
 import typing
 from dataclasses import dataclass
 from enum import Enum, auto
-from functools import partial
 
 from lib.moonrakerComm import MoonWebSocket
 from lib.panels.widgets.troubleshootPage import TroubleshootPage
 from lib.printer import Printer
-from lib.ui.utilitiesStackedWidget_ui import Ui_utilitiesStackedWidget
+
+# from lib.ui.utilitiesStackedWidget_ui import Ui_utilitiesStackedWidget
 from lib.utils.blocks_button import BlocksCustomButton
-from lib.utils.toggleAnimatedButton import ToggleAnimatedButton
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 from lib.panels.widgets.optionCardWidget import OptionCard
-from lib.panels.widgets.inputshaperPage import InputShaperPage
-from lib.panels.widgets.basePopup import BasePopup
 
-import re
+
+from lib.panels.widgets.infoPage import InfoPage
 
 
 @dataclass
@@ -95,8 +93,9 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
     ) -> None:
         super().__init__(parent)
 
-        self.panel = Ui_utilitiesStackedWidget()
-        self.panel.setupUi(self)
+        # self.panel = Ui_utilitiesStackedWidget()
+        # self.panel.setupUi(self)
+        self._setupUi()
 
         self.ws = ws
         self.printer: Printer = printer
@@ -123,231 +122,236 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
 
         # --- UI Setup ---
         self.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
-        self.panel.update_btn.clicked.connect(
-            lambda: self.show_update_page[bool].emit(False)
-        )
 
-        self.is_page = InputShaperPage(self)
-        self.is_page.call_load_panel.connect(self.call_load_panel)
-        self.addWidget(self.is_page)
+        self.info_page = InfoPage(self)
+        self.addWidget(self.info_page)
 
-        self.dialog_page = BasePopup(self, dialog=True, floating=True)
-        self.addWidget(self.dialog_page)
 
-        # --- Back Buttons ---
-        for button in (
-            self.panel.leds_back_btn,
-            self.panel.info_back_btn,
-            self.panel.leds_slider_back_btn,
-            self.panel.input_shaper_back_btn,
-            self.panel.routine_check_back_btn,
-            self.is_page.update_back_btn,
-        ):
-            button.clicked.connect(self.back_button)
+        # self.panel.update_btn.clicked.connect(
+        #     lambda: self.show_update_page[bool].emit(False)
+        # )
 
-        # --- Page Navigation ---
-        self._connect_page_change(self.panel.utilities_axes_btn, self.panel.axes_page)
-        self._connect_page_change(
-            self.panel.utilities_input_shaper_btn, self.panel.input_shaper_page
-        )
-        self._connect_page_change(self.panel.utilities_info_btn, self.panel.info_page)
-        self._connect_page_change(
-            self.panel.utilities_routine_check_btn, self.panel.routines_page
-        )
-        self._connect_page_change(self.panel.am_cancel, self.panel.utilities_page)
+        # self.is_page = InputShaperPage(self)
+        # self.is_page.call_load_panel.connect(self.call_load_panel)
+        # self.addWidget(self.is_page)
 
-        self._connect_page_change(self.panel.axes_back_btn, self.panel.utilities_page)
-        self._connect_page_change(
-            self.troubleshoot_page.tb_back_btn, self.panel.utilities_page
-        )
+        # self.dialog_page = BasePopup(self, dialog=True, floating=True)
+        # self.addWidget(self.dialog_page)
 
-        # --- Routines ---
-        self.panel.rc_fans.clicked.connect(partial(self.run_routine, Process.FAN))
-        self.panel.rc_bheat.clicked.connect(
-            partial(self.run_routine, Process.BED_HEATER)
-        )
-        self.panel.rc_ext.clicked.connect(partial(self.run_routine, Process.EXTRUDER))
-        self.panel.rc_axis.clicked.connect(partial(self.run_routine, Process.AXIS))
-        self.panel.rc_no.clicked.connect(self.on_routine_answer)
-        self.panel.rc_yes.clicked.connect(self.on_routine_answer)
+        # # --- Back Buttons ---
+        # for button in (
+        #     self.panel.leds_back_btn,
+        #     self.panel.info_back_btn,
+        #     self.panel.leds_slider_back_btn,
+        #     self.panel.input_shaper_back_btn,
+        #     self.panel.routine_check_back_btn,
+        #     self.is_page.update_back_btn,
+        # ):
+        #     button.clicked.connect(self.back_button)
 
-        # --- Axis Maintenance ---
-        self.panel.axis_x_btn.clicked.connect(partial(self.axis_maintenance, "x"))
-        self.panel.axis_y_btn.clicked.connect(partial(self.axis_maintenance, "y"))
-        self.panel.axis_z_btn.clicked.connect(partial(self.axis_maintenance, "z"))
+        # # --- Page Navigation ---
+        # self._connect_page_change(self.panel.utilities_axes_btn, self.panel.axes_page)
+        # self._connect_page_change(
+        #     self.panel.utilities_input_shaper_btn, self.panel.input_shaper_page
+        # )
+        self._connect_page_change(self.utilities_info_btn, self.info_page)
+        # self._connect_page_change(
+        #     self.panel.utilities_routine_check_btn, self.panel.routines_page
+        # )
+        # self._connect_page_change(self.panel.am_cancel, self.panel.utilities_page)
 
-        self.panel.toggle_led_button.state = ToggleAnimatedButton.State.ON
+        # self._connect_page_change(self.panel.axes_back_btn, self.panel.utilities_page)
+        # self._connect_page_change(
+        #     self.troubleshoot_page.tb_back_btn, self.panel.utilities_page
+        # )
 
-        # --- LEDs ---
-        # self.panel.leds_r_slider.sliderReleased.connect(self.update_led_values)
-        # self.panel.leds_g_slider.sliderReleased.connect(self.update_led_values)
-        # self.panel.leds_b_slider.sliderReleased.connect(self.update_led_values)
-        self.panel.leds_w_slider.sliderReleased.connect(self.update_led_values)
-        self.panel.toggle_led_button.clicked.connect(self.toggle_led_state)
+        # # --- Routines ---
+        # self.panel.rc_fans.clicked.connect(partial(self.run_routine, Process.FAN))
+        # self.panel.rc_bheat.clicked.connect(
+        #     partial(self.run_routine, Process.BED_HEATER)
+        # )
+        # self.panel.rc_ext.clicked.connect(partial(self.run_routine, Process.EXTRUDER))
+        # self.panel.rc_axis.clicked.connect(partial(self.run_routine, Process.AXIS))
+        # self.panel.rc_no.clicked.connect(self.on_routine_answer)
+        # self.panel.rc_yes.clicked.connect(self.on_routine_answer)
+
+        # # --- Axis Maintenance ---
+        # self.panel.axis_x_btn.clicked.connect(partial(self.axis_maintenance, "x"))
+        # self.panel.axis_y_btn.clicked.connect(partial(self.axis_maintenance, "y"))
+        # self.panel.axis_z_btn.clicked.connect(partial(self.axis_maintenance, "z"))
+
+        # self.panel.toggle_led_button.state = ToggleAnimatedButton.State.ON
+
+        # # --- LEDs ---
+        # # self.panel.leds_r_slider.sliderReleased.connect(self.update_led_values)
+        # # self.panel.leds_g_slider.sliderReleased.connect(self.update_led_values)
+        # # self.panel.leds_b_slider.sliderReleased.connect(self.update_led_values)
+        # self.panel.leds_w_slider.sliderReleased.connect(self.update_led_values)
+        # self.panel.toggle_led_button.clicked.connect(self.toggle_led_state)
 
         # --- Websocket/Printer Signals ---
         self.run_gcode_signal.connect(self.ws.api.run_gcode)
-        self.is_page.run_gcode_signal.connect(self.ws.api.run_gcode)
+        # self.is_page.run_gcode_signal.connect(self.ws.api.run_gcode)
         self.subscribe_config[str, "PyQt_PyObject"].connect(
             self.printer.on_subscribe_config
         )
         self.subscribe_config[list, "PyQt_PyObject"].connect(
             self.printer.on_subscribe_config
         )
-        self.printer.gcode_response.connect(self.handle_gcode_response)
+        # self.printer.gcode_response.connect(self.handle_gcode_response)
 
         # --- Initialize Printer Communication ---
         self.printer.printer_config.connect(self.on_printer_config_received)
         self.printer.gcode_move_update.connect(self.on_gcode_move_update)
 
-        self.panel.update_btn.setPixmap(
-            QtGui.QPixmap(":/system/media/btn_icons/update-software-icon.svg")
-        )
+        # self.panel.update_btn.setPixmap(
+        #     QtGui.QPixmap(":/system/media/btn_icons/update-software-icon.svg")
+        # )
 
         # ---- Input Shaper ----
-        self.automatic_is = OptionCard(
-            self,
-            "Automatic\nInput Shaper",
-            "Automatic Input Shaper",
-            QtGui.QPixmap(":/input_shaper/media/btn_icons/input_shaper_auto.svg"),
-        )  # type: ignore
-        self.automatic_is.setObjectName("Automatic_IS_Card")
-        self.panel.is_content_layout.addWidget(
-            self.automatic_is, alignment=QtCore.Qt.AlignmentFlag.AlignHCenter
-        )
-        self.automatic_is.continue_clicked.connect(
-            lambda: self.handle_is("SHAPER_CALIBRATE")
-        )
+        # self.automatic_is = OptionCard(
+        #     self,
+        #     "Automatic\nInput Shaper",
+        #     "Automatic Input Shaper",
+        #     QtGui.QPixmap(":/input_shaper/media/btn_icons/input_shaper_auto.svg"),
+        # )  # type: ignore
+        # self.automatic_is.setObjectName("Automatic_IS_Card")
+        # # self.panel.is_content_layout.addWidget(
+        # #     self.automatic_is, alignment=QtCore.Qt.AlignmentFlag.AlignHCenter
+        # # )
+        # # self.automatic_is.continue_clicked.connect(
+        # #     lambda: self.handle_is("SHAPER_CALIBRATE")
+        # # )
 
-        self.manual_is = OptionCard(
-            self,
-            "Manual\nInput Shaper",
-            "Manual Input Shaper",
-            QtGui.QPixmap(":/input_shaper/media/btn_icons/input_shaper_manual.svg"),
-        )  # type: ignore
-        self.manual_is.setObjectName("Manual_IS_Card")
-        self.panel.is_content_layout.addWidget(
-            self.manual_is, alignment=QtCore.Qt.AlignmentFlag.AlignHCenter
-        )
-        self.manual_is.continue_clicked.connect(lambda: self.handle_is(""))
+        # self.manual_is = OptionCard(
+        #     self,
+        #     "Manual\nInput Shaper",
+        #     "Manual Input Shaper",
+        #     QtGui.QPixmap(":/input_shaper/media/btn_icons/input_shaper_manual.svg"),
+        # )  # type: ignore
+        # self.manual_is.setObjectName("Manual_IS_Card")
+        # # self.panel.is_content_layout.addWidget(
+        #     self.manual_is, alignment=QtCore.Qt.AlignmentFlag.AlignHCenter
+        # )
+        # self.manual_is.continue_clicked.connect(lambda: self.handle_is(""))
 
-        self.is_types: dict = {}
-        self.is_aut_types: dict = {}
-        self.dialog_page.accepted.connect(
-            lambda: self.handle_is("SHAPER_CALIBRATE AXIS=Y")
-        )
-        self.dialog_page.rejected.connect(
-            lambda: self.handle_is("SHAPER_CALIBRATE AXIS=X")
-        )
+        # self.is_types: dict = {}
+        # self.is_aut_types: dict = {}
+        # self.dialog_page.accepted.connect(
+        #     lambda: self.handle_is("SHAPER_CALIBRATE AXIS=Y")
+        # )
+        # self.dialog_page.rejected.connect(
+        #     lambda: self.handle_is("SHAPER_CALIBRATE AXIS=X")
+        # )
 
-        self.is_page.action_btn.clicked.connect(
-            lambda: self.change_page(self.indexOf(self.panel.input_shaper_page))
-        )
+        # self.is_page.action_btn.clicked.connect(
+        #     lambda: self.change_page(self.indexOf(self.panel.input_shaper_page))
+        # )
 
-    def handle_gcode_response(self, data: list[str]) -> None:
-        """
-        Parses a Klipper Input Shaper console message and updates self.is_types.
-        """
+        # def handle_gcode_response(self, data: list[str]) -> None:
+        #     """
+        #     Parses a Klipper Input Shaper console message and updates self.is_types.
+        #     """
 
-        if not isinstance(data, list) or len(data) != 1 or not isinstance(data[0], str):
-            print(
-                f"WARNING: Invalid input format. Expected a list with one string. Received: {data}"
-            )
-            return
+        #     if not isinstance(data, list) or len(data) != 1 or not isinstance(data[0], str):
+        #         print(
+        #             f"WARNING: Invalid input format. Expected a list with one string. Received: {data}"
+        #         )
+        #         return
 
-        message = data[0]
+        #     message = data[0]
 
-        pattern_fitted = re.compile(
-            r"Fitted shaper '(?P<name>\w+)' frequency = (?P<freq>[\d\.]+) Hz \(vibrations = (?P<vib>[\d\.]+)%"
-        )
-        match_fitted = pattern_fitted.search(message)
+        #     pattern_fitted = re.compile(
+        #         r"Fitted shaper '(?P<name>\w+)' frequency = (?P<freq>[\d\.]+) Hz \(vibrations = (?P<vib>[\d\.]+)%"
+        #     )
+        #     match_fitted = pattern_fitted.search(message)
 
-        if match_fitted:
-            name = match_fitted.group("name")
-            freq = float(match_fitted.group("freq"))
-            vib = float(match_fitted.group("vib"))
-            current_data = self.is_types.get(name, {})
-            current_data.update(
-                {
-                    "frequency": freq,
-                    "vibration": vib,
-                    "max_accel": current_data.get("max_accel", 0.0),
-                }
-            )
-            self.is_types[name] = current_data
+        #     if match_fitted:
+        #         name = match_fitted.group("name")
+        #         freq = float(match_fitted.group("freq"))
+        #         vib = float(match_fitted.group("vib"))
+        #         current_data = self.is_types.get(name, {})
+        #         current_data.update(
+        #             {
+        #                 "frequency": freq,
+        #                 "vibration": vib,
+        #                 "max_accel": current_data.get("max_accel", 0.0),
+        #             }
+        #         )
+        #         self.is_types[name] = current_data
 
-            return
-        pattern_accel = re.compile(
-            r"To avoid too much smoothing with '(?P<name>\w+)', suggested max_accel <= (?P<accel>[\d\.]+) mm/sec\^2"
-        )
-        match_accel = pattern_accel.search(message)
+        #         return
+        #     pattern_accel = re.compile(
+        #         r"To avoid too much smoothing with '(?P<name>\w+)', suggested max_accel <= (?P<accel>[\d\.]+) mm/sec\^2"
+        #     )
+        #     match_accel = pattern_accel.search(message)
 
-        if match_accel:
-            name = match_accel.group("name")
-            accel = float(match_accel.group("accel"))
+        #     if match_accel:
+        #         name = match_accel.group("name")
+        #         accel = float(match_accel.group("accel"))
 
-            if name in self.is_types and isinstance(self.is_types[name], dict):
-                self.is_types[name]["max_accel"] = accel
-            else:
-                self.is_types[name] = self.is_types.get(name, {})
-                self.is_types[name]["max_accel"] = accel
-            return
+        #         if name in self.is_types and isinstance(self.is_types[name], dict):
+        #             self.is_types[name]["max_accel"] = accel
+        #         else:
+        #             self.is_types[name] = self.is_types.get(name, {})
+        #             self.is_types[name]["max_accel"] = accel
+        #         return
 
-        pattern_recommended = re.compile(
-            r"Recommended shaper_type_(?P<axis>[xy]) = (?P<type>\w+), shaper_freq_(?P=axis) = (?P<freq>[\d\.]+) Hz"
-        )
-        match_recommended = pattern_recommended.search(message)
-        if match_recommended:
-            axis = match_recommended.group("axis")
-            recommended_type = match_recommended.group("type")
-            self.is_types["Axis"] = axis
-            if self.aut:
-                self.is_aut_types[axis] = recommended_type
-                if len(self.is_aut_types) == 2:
-                    self.run_gcode_signal.emit("SAVE_CONFIG")
-                    self.call_load_panel.emit(False, "")
-                    self.aut = False
-                    return
-                return
+        #     pattern_recommended = re.compile(
+        #         r"Recommended shaper_type_(?P<axis>[xy]) = (?P<type>\w+), shaper_freq_(?P=axis) = (?P<freq>[\d\.]+) Hz"
+        #     )
+        #     match_recommended = pattern_recommended.search(message)
+        #     if match_recommended:
+        #         axis = match_recommended.group("axis")
+        #         recommended_type = match_recommended.group("type")
+        #         self.is_types["Axis"] = axis
+        #         if self.aut:
+        #             self.is_aut_types[axis] = recommended_type
+        #             if len(self.is_aut_types) == 2:
+        #                 self.run_gcode_signal.emit("SAVE_CONFIG")
+        #                 self.call_load_panel.emit(False, "")
+        #                 self.aut = False
+        #                 return
+        #             return
 
-            reordered = {recommended_type: self.is_types[recommended_type]}
-            for key, value in self.is_types.items():
-                if key not in ("suggested_type", recommended_type, "Axis"):
-                    reordered[key] = value
+        #         reordered = {recommended_type: self.is_types[recommended_type]}
+        #         for key, value in self.is_types.items():
+        #             if key not in ("suggested_type", recommended_type, "Axis"):
+        #                 reordered[key] = value
 
-            self.is_page.set_type_dictionary(self.is_types)
-            first_key = next(iter(reordered.keys()), None)
-            for key in reordered.keys():
-                if key == first_key:
-                    self.is_page.add_type_entry(key, "Recommended type")
-                else:
-                    self.is_page.add_type_entry(key)
+        #         self.is_page.set_type_dictionary(self.is_types)
+        #         first_key = next(iter(reordered.keys()), None)
+        #         for key in reordered.keys():
+        #             if key == first_key:
+        #                 self.is_page.add_type_entry(key, "Recommended type")
+        #             else:
+        #                 self.is_page.add_type_entry(key)
 
-            self.is_page.build_model_list()
-            self.call_load_panel.emit(False, "")
-            return
+        #         self.is_page.build_model_list()
+        #         self.call_load_panel.emit(False, "")
+        #         return
 
-    def handle_is(self, gcode: str) -> None:
-        if gcode == "SHAPER_CALIBRATE":
-            self.run_gcode_signal.emit("G28\nM400")
-            self.aut = True
-            self.run_gcode_signal.emit(gcode)
-        elif gcode == "":
-            self.dialog_page.confirm_background_color("#dfdfdf")
-            self.dialog_page.cancel_background_color("#dfdfdf")
-            self.dialog_page.cancel_font_color("#000000")
-            self.dialog_page.confirm_font_color("#000000")
-            self.dialog_page.cancel_button_text("X axis")
-            self.dialog_page.confirm_button_text("Y axis")
-            self.dialog_page.set_message(
-                "Select the axis you want to execute the input shaper on:"
-            )
-            self.dialog_page.show()
-            return
-        else:
-            self.run_gcode_signal.emit("G28\nM400")
-            self.run_gcode_signal.emit(gcode)
-            self.change_page(self.indexOf(self.is_page))
+        # def handle_is(self, gcode: str) -> None:
+        #     if gcode == "SHAPER_CALIBRATE":
+        #         self.run_gcode_signal.emit("G28\nM400")
+        #         self.aut = True
+        #         self.run_gcode_signal.emit(gcode)
+        #     elif gcode == "":
+        #         self.dialog_page.confirm_background_color("#dfdfdf")
+        #         self.dialog_page.cancel_background_color("#dfdfdf")
+        #         self.dialog_page.cancel_font_color("#000000")
+        #         self.dialog_page.confirm_font_color("#000000")
+        #         self.dialog_page.cancel_button_text("X axis")
+        #         self.dialog_page.confirm_button_text("Y axis")
+        #         self.dialog_page.set_message(
+        #             "Select the axis you want to execute the input shaper on:"
+        #         )
+        #         self.dialog_page.show()
+        #         return
+        #     else:
+        #         self.run_gcode_signal.emit("G28\nM400")
+        #         self.run_gcode_signal.emit(gcode)
+        #         self.change_page(self.indexOf(self.is_page))
 
         self.call_load_panel.emit(True, "Running Input Shaper...")
 
@@ -361,7 +365,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
             # Only accept 'fan_generic' or 'fan'
             if base_name == "fan_generic" or base_name == "fan":
                 self.objects["fans"][obj] = "indef"
-        self._update_leds_from_config()
+        # self._update_leds_from_config()
 
     @QtCore.pyqtSlot(dict, name="on_object_config")
     @QtCore.pyqtSlot(list, name="on_object_config")
@@ -422,7 +426,8 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
                 self.troubleshoot_request()
                 self.tb = False
             else:
-                self.change_page(self.indexOf(self.panel.utilities_page))
+                ...
+                # self.change_page(self.indexOf(self.panel.utilities_page))
 
             if process == Process.FAN:
                 self.run_gcode_signal.emit("M107")
@@ -434,15 +439,15 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         elif process in [Process.BED_HEATER, Process.EXTRUDER]:
             message = "Please check if the temperature reaches 60°C. \n you may need to wait a few moments."
 
-        self.set_routine_check_page(
-            f"Running routine for: {self.current_object}", message
-        )
-        self.show_waiting_page(
-            self.indexOf(self.panel.rc_page),
-            f"Please check if the {message}",
-            10000 if process == Process.AXIS else 0,
-        )
-        self._send_routine_gcode()
+        # self.set_routine_check_page(
+        #     f"Running routine for: {self.current_object}", message
+        # )
+        # self.show_waiting_page(
+        #     self.indexOf(self.panel.rc_page),
+        #     f"Please check if the {message}",
+        #     10000 if process == Process.AXIS else 0,
+        # )
+        # self._send_routine_gcode()
 
     def _advance_routine_object(self, obj_list: list) -> bool:
         if not obj_list:
@@ -466,32 +471,32 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
             self.current_object = obj_list[0]
             return True
 
-    def on_routine_answer(self) -> None:
-        """Handle routine ongoing process"""
-        if self.current_process is None or self.current_object is None:
-            return
-        if self.sender() == self.panel.rc_yes:
-            answer = "yes"
-        else:
-            answer = "no"
-            self.tb = True
-        process_map = {
-            Process.FAN: ("fans", self.current_object),
-            Process.AXIS: ("axis", self.current_object),
-            Process.BED_HEATER: ("bheat", "Bed_Heater"),
-            Process.EXTRUDER: ("extrude", "extruder"),
-        }
-        if self.current_process in process_map:
-            obj_key, item_key = process_map[self.current_process]
-            self.objects[obj_key][item_key] = answer
-            if self.current_process in [Process.BED_HEATER, Process.EXTRUDER]:
-                self.run_gcode_signal.emit("TURN_OFF_HEATERS")
-            self.run_routine(self.current_process)
-        elif self.current_process == Process.AXIS_MAINTENANCE:
-            if answer == "yes":
-                self._run_axis_maintenance_gcode(self.current_object)
-            else:
-                self.change_page(self.indexOf(self.panel.axes_page))
+    # def on_routine_answer(self) -> None:
+    #     """Handle routine ongoing process"""
+    #     if self.current_process is None or self.current_object is None:
+    #         return
+    #     if self.sender() == self.panel.rc_yes:
+    #         answer = "yes"
+    #     else:
+    #         answer = "no"
+    #         self.tb = True
+    #     process_map = {
+    #         Process.FAN: ("fans", self.current_object),
+    #         Process.AXIS: ("axis", self.current_object),
+    #         Process.BED_HEATER: ("bheat", "Bed_Heater"),
+    #         Process.EXTRUDER: ("extrude", "extruder"),
+    #     }
+    #     if self.current_process in process_map:
+    #         obj_key, item_key = process_map[self.current_process]
+    #         self.objects[obj_key][item_key] = answer
+    #         if self.current_process in [Process.BED_HEATER, Process.EXTRUDER]:
+    #             self.run_gcode_signal.emit("TURN_OFF_HEATERS")
+    #         self.run_routine(self.current_process)
+    #     elif self.current_process == Process.AXIS_MAINTENANCE:
+    #         if answer == "yes":
+    #             self._run_axis_maintenance_gcode(self.current_object)
+    #         else:
+    #             self.change_page(self.indexOf(self.panel.axes_page))
 
     def _send_routine_gcode(self):
         """Send the correct G-code for the current process and object."""
@@ -524,88 +529,88 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         if gcode := gcode_map.get(key):
             self.run_gcode_signal.emit(f"{gcode}\nM400")
 
-    def set_routine_check_page(self, title: str, label: str):
-        """Set text on routine page"""
-        self.panel.rc_tittle.setText(title)
-        self.panel.rc_label.setText(label)
+    # def set_routine_check_page(self, title: str, label: str):
+    #     """Set text on routine page"""
+    #     self.panel.rc_tittle.setText(title)
+    #     self.panel.rc_label.setText(label)
 
-    def update_led_values(self) -> None:
-        """Update led state and color values"""
-        if self.current_object not in self.objects["leds"]:
-            return
-        led_state: LedState = self.objects["leds"][self.current_object]
-        led_state.white = int(self.panel.leds_w_slider.value() * 255 / 100)
-        self.save_led_state()
+    # def update_led_values(self) -> None:
+    #     """Update led state and color values"""
+    #     if self.current_object not in self.objects["leds"]:
+    #         return
+    #     led_state: LedState = self.objects["leds"][self.current_object]
+    #     led_state.white = int(self.panel.leds_w_slider.value() * 255 / 100)
+    #     self.save_led_state()
 
-    def _update_leds_from_config(self):
-        layout = self.panel.leds_content_layout
+    # def _update_leds_from_config(self):
+    #     layout = self.panel.leds_content_layout
 
-        while layout.count():
-            if (child := layout.takeAt(0)) and child.widget():
-                child.widget().deleteLater()  # type: ignore
+    #     while layout.count():
+    #         if (child := layout.takeAt(0)) and child.widget():
+    #             child.widget().deleteLater()  # type: ignore
 
-        led_names = []
-        if not self.cg:
-            return
+    #     led_names = []
+    #     if not self.cg:
+    #         return
 
-        # Collect LED names
-        for obj in self.cg:
-            if "led" in obj:
-                try:
-                    name = obj.split()[1]
-                    led_names.append(name)
-                    self.objects["leds"][name] = LedState(led_type="white")
-                except IndexError:
-                    pass
+    #     # Collect LED names
+    #     for obj in self.cg:
+    #         if "led" in obj:
+    #             try:
+    #                 name = obj.split()[1]
+    #                 led_names.append(name)
+    #                 self.objects["leds"][name] = LedState(led_type="white")
+    #             except IndexError:
+    #                 pass
 
-        max_columns = 3
-        buttons = []  # store references to created buttons
+    #     max_columns = 3
+    #     buttons = []  # store references to created buttons
 
-        # Create LED buttons
-        for i, name in enumerate(led_names):
-            if self.panel.leds_widget:
-                button = BlocksCustomButton()
-                button.setFixedSize(200, 70)
-                button.setText(name)
-                button.setProperty("class", "menu_btn")
-                button.setPixmap(QtGui.QPixmap(":/ui/media/btn_icons/LEDs.svg"))
-                row, col = divmod(i, max_columns)
-                layout.addWidget(button, row, col)
-                button.clicked.connect(partial(self.handle_led_button, name))
-                buttons.append(button)
+    #     # Create LED buttons
+    #     for i, name in enumerate(led_names):
+    #         if self.panel.leds_widget:
+    #             button = BlocksCustomButton()
+    #             button.setFixedSize(200, 70)
+    #             button.setText(name)
+    #             button.setProperty("class", "menu_btn")
+    #             button.setPixmap(QtGui.QPixmap(":/ui/media/btn_icons/LEDs.svg"))
+    #             row, col = divmod(i, max_columns)
+    #             layout.addWidget(button, row, col)
+    #             button.clicked.connect(partial(self.handle_led_button, name))
+    #             buttons.append(button)
 
-        if len(buttons) == 1:
-            self.panel.utilities_leds_btn.clicked.connect(
-                partial(self.handle_led_button, led_names[0])
-            )
-        else:
-            self._connect_page_change(
-                self.panel.utilities_leds_btn, self.panel.leds_page
-            )
+    #     if len(buttons) == 1:
+    #         self.panel.utilities_leds_btn.clicked.connect(
+    #             partial(self.handle_led_button, led_names[0])
+    #         )
+    #     else:
+    #         self._connect_page_change(
+    #             self.panel.utilities_leds_btn, self.panel.leds_page
+    #         )
 
-    def toggle_led_state(self) -> None:
-        """Toggle leds"""
-        if self.current_object not in self.objects["leds"]:
-            return
-        led_state: LedState = self.objects["leds"][self.current_object]
-        if led_state.state == "off":
-            led_state.state = "on"
-            self.panel.toggle_led_button.state = ToggleAnimatedButton.State.ON
-        else:
-            led_state.state = "off"
-            self.panel.toggle_led_button.state = ToggleAnimatedButton.State.OFF
-        self.save_led_state()
+    # def toggle_led_state(self) -> None:
+    #     """Toggle leds"""
+    #     if self.current_object not in self.objects["leds"]:
+    #         return
+    #     led_state: LedState = self.objects["leds"][self.current_object]
+    #     if led_state.state == "off":
+    #         led_state.state = "on"
+    #         self.panel.toggle_led_button.state = ToggleAnimatedButton.State.ON
+    #     else:
+    #         led_state.state = "off"
+    #         self.panel.toggle_led_button.state = ToggleAnimatedButton.State.OFF
+    #     self.save_led_state()
 
-    def handle_led_button(self, name: str) -> None:
-        """Handle led button clicked"""
-        self.current_object = name
-        led_state: LedState = self.objects["leds"].get(name)
-        if not led_state:
-            return
-        is_rgb = led_state.led_type == "rgb"
-        self.panel.leds_w_slider.setVisible(not is_rgb)
-        self.panel.leds_w_slider.setValue(led_state.white)
-        self.change_page(self.indexOf(self.panel.leds_slider_page))
+    # def handle_led_button(self, name: str) -> None:
+    #     """Handle led button clicked"""
+    #     self.current_object = name
+    #     led_state: LedState = self.objects["leds"].get(name)
+    #     if not led_state:
+    #         return
+    #     is_rgb = led_state.led_type == "rgb"
+    #     self.panel.leds_w_slider.setVisible(not is_rgb)
+    #     self.panel.leds_w_slider.setValue(led_state.white)
+    #     self.change_page(self.indexOf(self.panel.leds_slider_page))
 
     def save_led_state(self):
         """Save led state"""
@@ -614,36 +619,36 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
                 led_state: LedState = self.objects["leds"][self.current_object]
                 self.run_gcode_signal.emit(led_state.get_gcode(self.current_object))
 
-    def axis_maintenance(self, axis: str) -> None:
-        """Routine, checks axis movement for printer debugging"""
-        self.current_process = Process.AXIS_MAINTENANCE
-        self.current_object = axis
-        self.run_gcode_signal.emit(f"G28 {axis.upper()}\nM400")
-        self.set_routine_check_page(
-            "Axis Maintenance",
-            f"Insert oil on the {axis.upper()} axis before confirming.",
-        )
-        self.show_waiting_page(
-            self.indexOf(self.panel.rc_page),
-            f"Homing {axis.upper()} axis...",
-            5000,
-        )
+    # def axis_maintenance(self, axis: str) -> None:
+    #     """Routine, checks axis movement for printer debugging"""
+    #     self.current_process = Process.AXIS_MAINTENANCE
+    #     self.current_object = axis
+    #     self.run_gcode_signal.emit(f"G28 {axis.upper()}\nM400")
+    #     self.set_routine_check_page(
+    #         "Axis Maintenance",
+    #         f"Insert oil on the {axis.upper()} axis before confirming.",
+    #     )
+    #     self.show_waiting_page(
+    #         self.indexOf(self.panel.rc_page),
+    #         f"Homing {axis.upper()} axis...",
+    #         5000,
+    #     )
 
-    def _run_axis_maintenance_gcode(self, axis: str):
-        stepper_key = f"stepper_{axis}"
-        if stepper_key in self.stepper_limits:
-            max_pos = self.stepper_limits[stepper_key].get("max", 20)
-            distance = int(max_pos) - 20
-            self.run_gcode_signal.emit(
-                f"G1 {axis.upper()}{distance} F3000\nM400\nG28 {axis.upper()}\nM400"
-            )
-            self.show_waiting_page(
-                self.indexOf(self.panel.axes_page),
-                f"Running maintenance cycle on {axis.upper()} axis...",
-                5000,
-            )
-        else:
-            self.change_page(self.indexOf(self.panel.axes_page))
+    # def _run_axis_maintenance_gcode(self, axis: str):
+    #     stepper_key = f"stepper_{axis}"
+    #     if stepper_key in self.stepper_limits:
+    #         max_pos = self.stepper_limits[stepper_key].get("max", 20)
+    #         distance = int(max_pos) - 20
+    #         self.run_gcode_signal.emit(
+    #             f"G1 {axis.upper()}{distance} F3000\nM400\nG28 {axis.upper()}\nM400"
+    #         )
+    #         self.show_waiting_page(
+    #             self.indexOf(self.panel.axes_page),
+    #             f"Running maintenance cycle on {axis.upper()} axis...",
+    #             5000,
+    #         )
+    #     else:
+    #         self.change_page(self.indexOf(self.panel.axes_page))
 
     def troubleshoot_request(self) -> None:
         """Show troubleshoot page"""
@@ -669,3 +674,158 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
     def back_button(self) -> None:
         """Request back"""
         self.request_back.emit()
+
+    def _setupUi(self):
+        self.resize(710, 410)
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Preferred, QtWidgets.QSizePolicy.Policy.Minimum
+        )
+        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setVerticalStretch(0)
+        sizePolicy.setHeightForWidth(self.sizePolicy().hasHeightForWidth())
+        self.setSizePolicy(sizePolicy)
+        self.setMinimumSize(QtCore.QSize(710, 410))
+        self.setMaximumSize(QtCore.QSize(710, 410))
+
+        self.utilities_page = QtWidgets.QWidget()
+        self.utilities_page.setObjectName("utilities_page")
+        self.verticalLayout = QtWidgets.QVBoxLayout(self.utilities_page)
+        self.verticalLayout.setObjectName("verticalLayout")
+
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Minimum
+        )
+        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setVerticalStretch(0)
+
+        font = QtGui.QFont()
+        font.setFamily("Momcake")
+        font.setPointSize(24)
+        font.setBold(True)
+        font.setWeight(75)
+
+        self.utilities_header_layout = QtWidgets.QHBoxLayout()
+        self.utilities_header_layout.setObjectName("utilities_header_layout")
+
+        self.utilities_title_label = QtWidgets.QLabel(parent=self.utilities_page)
+        self.utilities_title_label.setSizePolicy(sizePolicy)
+        self.utilities_title_label.setMinimumSize(QtCore.QSize(0, 60))
+        self.utilities_title_label.setMaximumSize(QtCore.QSize(16777215, 60))
+        self.utilities_title_label.setFont(font)
+        self.utilities_title_label.setStyleSheet(
+            "background: transparent; color: white;"
+        )
+        self.utilities_title_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.utilities_title_label.setObjectName("utilities_title_label")
+
+        self.utilities_header_layout.addWidget(self.utilities_title_label)
+        self.verticalLayout.addLayout(self.utilities_header_layout)
+        self.utilities_content_layout = QtWidgets.QGridLayout()
+
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Expanding,
+            QtWidgets.QSizePolicy.Policy.Expanding,
+        )
+        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setVerticalStretch(0)
+
+        font = QtGui.QFont()
+        font.setFamily("Momcake")
+        font.setPointSize(19)
+
+        self.utilities_content_layout.setObjectName("utilities_content_layout")
+        self.utilities_axes_btn = BlocksCustomButton(parent=self.utilities_page)
+        self.utilities_axes_btn.setSizePolicy(sizePolicy)
+        self.utilities_axes_btn.setMinimumSize(QtCore.QSize(250, 80))
+        self.utilities_axes_btn.setMaximumSize(QtCore.QSize(250, 80))
+        self.utilities_axes_btn.setFont(font)
+        self.utilities_axes_btn.setProperty(
+            "icon_pixmap",
+            QtGui.QPixmap(":/motion/media/btn_icons/axis_maintenance.svg"),
+        )
+        self.utilities_axes_btn.setObjectName("utilities_axes_btn")
+
+        self.utilities_content_layout.addWidget(self.utilities_axes_btn, 1, 1, 1, 1)
+
+        self.update_btn = BlocksCustomButton(parent=self.utilities_page)
+        self.update_btn.setSizePolicy(sizePolicy)
+        self.update_btn.setMinimumSize(QtCore.QSize(250, 80))
+        self.update_btn.setMaximumSize(QtCore.QSize(250, 80))
+        self.update_btn.setFont(font)
+        self.update_btn.setProperty(
+            "icon_pixmap", QtGui.QPixmap(":/system/media/btn_icons/update-software-icon.svg")
+        )
+
+        self.update_btn.setObjectName("update_btn")
+
+        self.utilities_content_layout.addWidget(self.update_btn, 2, 0, 1, 1)
+        self.utilities_routine_check_btn = BlocksCustomButton(
+            parent=self.utilities_page
+        )
+        self.utilities_routine_check_btn.setSizePolicy(sizePolicy)
+        self.utilities_routine_check_btn.setMinimumSize(QtCore.QSize(250, 80))
+        self.utilities_routine_check_btn.setMaximumSize(QtCore.QSize(250, 80))
+        self.utilities_routine_check_btn.setFont(font)
+        self.utilities_routine_check_btn.setProperty(
+            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/routine.svg")
+        )
+        self.utilities_routine_check_btn.setObjectName("utilities_routine_check_btn")
+
+        self.utilities_content_layout.addWidget(
+            self.utilities_routine_check_btn, 1, 0, 1, 1
+        )
+
+        self.utilities_input_shaper_btn = BlocksCustomButton(parent=self.utilities_page)
+        self.utilities_input_shaper_btn.setSizePolicy(sizePolicy)
+        self.utilities_input_shaper_btn.setMinimumSize(QtCore.QSize(250, 80))
+        self.utilities_input_shaper_btn.setMaximumSize(QtCore.QSize(250, 80))
+        self.utilities_input_shaper_btn.setFont(font)
+        self.utilities_input_shaper_btn.setProperty(
+            "icon_pixmap",
+            QtGui.QPixmap(":/input_shaper/media/btn_icons/input_shaper.svg"),
+        )
+        self.utilities_input_shaper_btn.setObjectName("utilities_input_shaper_btn")
+
+        self.utilities_content_layout.addWidget(
+            self.utilities_input_shaper_btn, 2, 1, 1, 1
+        )
+
+        self.utilities_info_btn = BlocksCustomButton(parent=self.utilities_page)
+        self.utilities_info_btn.setSizePolicy(sizePolicy)
+        self.utilities_info_btn.setMinimumSize(QtCore.QSize(250, 80))
+        self.utilities_info_btn.setMaximumSize(QtCore.QSize(250, 80))
+        self.utilities_info_btn.setFont(font)
+        self.utilities_info_btn.setProperty(
+            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/info.svg")
+        )
+
+        self.utilities_info_btn.setObjectName("utilities_info_btn")
+
+        self.utilities_content_layout.addWidget(self.utilities_info_btn, 0, 0, 1, 1)
+        self.utilities_leds_btn = BlocksCustomButton(parent=self.utilities_page)
+        self.utilities_leds_btn.setSizePolicy(sizePolicy)
+        self.utilities_leds_btn.setMinimumSize(QtCore.QSize(250, 80))
+        self.utilities_leds_btn.setMaximumSize(QtCore.QSize(250, 80))
+        self.utilities_leds_btn.setFont(font)
+        self.utilities_leds_btn.setProperty(
+            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/LEDs.svg")
+        )
+        self.utilities_leds_btn.setObjectName("utilities_leds_btn")
+        self.utilities_content_layout.addWidget(self.utilities_leds_btn, 0, 1, 1, 1)
+
+        self.verticalLayout.addLayout(self.utilities_content_layout)
+
+        self.addWidget(self.utilities_page)
+
+        self.retranslateUi()
+
+    def retranslateUi(self):
+        _translate = QtCore.QCoreApplication.translate
+        self.setWindowTitle(_translate("self", "StackedWidget"))
+        self.utilities_title_label.setText(_translate("self", "Utilities"))
+        self.utilities_axes_btn.setText(_translate("self", "Axis\nMaint."))
+        self.update_btn.setText(_translate("self", "Update"))
+        self.utilities_routine_check_btn.setText(_translate("self", "Routine\nCheck"))
+        self.utilities_input_shaper_btn.setText(_translate("self", "Input\nShaper"))
+        self.utilities_info_btn.setText(_translate("self", "Info"))
+        self.utilities_leds_btn.setText(_translate("self", "LED's"))
