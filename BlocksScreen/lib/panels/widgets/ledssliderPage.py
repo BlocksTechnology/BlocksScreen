@@ -1,29 +1,22 @@
 import typing
-import re
 from lib.utils.icon_button import IconButton
-from helper_methods import normalize
 
 from PyQt6 import QtCore, QtGui, QtWidgets
 
-from lib.panels.widgets.optionCardWidget import OptionCard
-
-
-from lib.utils.blocks_button import BlocksCustomButton
-from lib.utils.blocks_frame import BlocksCustomFrame
 from lib.utils.blocks_slider import BlocksSlider
-from lib.utils.check_button import BlocksCustomCheckButton
-from lib.utils.icon_button import IconButton
 from lib.utils.toggleAnimatedButton import ToggleAnimatedButton
-
-from lib.panels.utilitiesTab import LedState
 
 
 class LedsSliderPage(QtWidgets.QWidget):
-
-    request_back_button = QtCore.pyqtSignal(name="request-back-button")
+    request_back: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        name="request_back"
+    )
 
     run_gcode_signal: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         str, name="run-gcode"
+    )
+    request_change_page: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        int, name="request-change-page"
     )
 
     def __init__(
@@ -32,12 +25,14 @@ class LedsSliderPage(QtWidgets.QWidget):
     ) -> None:
         super(LedsSliderPage, self).__init__(parent)
 
-        self.leds_w_slider.sliderReleased.connect(self.update_led_values)
-        self.request_back_button.connect(self.request_back_button.emit)
-
-
         self._setup_ui()
 
+        self.leds_w_slider.sliderReleased.connect(self.update_led_values)
+        self.leds_slider_back_btn.clicked.connect(self.handle_back)
+
+        self.toggle_led_button.state = ToggleAnimatedButton.State.ON
+        self.toggle_led_button.repaint()
+        self.toggle_led_button.clicked.connect(self.toggle_led_state)
 
     def update_led_values(self) -> None:
         """Update led state and color values"""
@@ -46,43 +41,44 @@ class LedsSliderPage(QtWidgets.QWidget):
         self.current_object.white = int(self.leds_w_slider.value() * 255 / 100)
         self.save_led_state()
 
-
-    def set_slider(self,led_state:LedState,name:str):
+    def set_slider(self, led_state: any, name: str, single: bool):
         self.leds_w_slider.setValue(led_state.white)
         self.leds_slider_tittle_label.setText(name)
-        
+
         self.led_name = name
         self.current_object = led_state
+        self.singleled = single
 
+    def handle_back(self):
+        print(self.singleled)
+        if self.singleled:
+            self.request_change_page.emit(0)
+        else:
+            self.request_back.emit()
 
     def toggle_led_state(self) -> None:
         """Toggle leds"""
         if not self.current_object:
             return
-        led_state = self.current_object.state
-        if led_state == "off":
-            led_state = "on"
+
+        led_state = self.current_object
+        if led_state.state == "off":
+            led_state.state = "on"
             self.toggle_led_button.state = ToggleAnimatedButton.State.ON
         else:
-            led_state = "off"
+            led_state.state = "off"
             self.toggle_led_button.state = ToggleAnimatedButton.State.OFF
         self.save_led_state()
 
-    
     def save_led_state(self):
         """Save led state"""
-        if self.current_object:
-                self.run_gcode_signal.emit(self.current_object.get_gcode(self.led_name))
-
-
-
-
+        self.run_gcode_signal.emit(self.current_object.get_gcode(self.led_name))
 
     def _setup_ui(self) -> None:
         self.setObjectName("leds_slider_page")
         widget = QtWidgets.QWidget(parent=self)
         widget.setGeometry(QtCore.QRect(0, 0, 720, 420))
-        
+
         self.toggle_led_button = ToggleAnimatedButton(parent=self)
         self.toggle_led_button.setGeometry(QtCore.QRect(70, 120, 100, 50))
         self.toggle_led_button.setMinimumSize(QtCore.QSize(100, 50))
@@ -114,14 +110,22 @@ class LedsSliderPage(QtWidgets.QWidget):
         self.leds_slider_header_layout = QtWidgets.QHBoxLayout(self.layoutWidget)
         self.leds_slider_header_layout.setContentsMargins(0, 0, 0, 0)
         self.leds_slider_header_layout.setObjectName("leds_slider_header_layout")
-        spacerItem19 = QtWidgets.QSpacerItem(60, 20, QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Minimum)
+        spacerItem19 = QtWidgets.QSpacerItem(
+            60,
+            20,
+            QtWidgets.QSizePolicy.Policy.Minimum,
+            QtWidgets.QSizePolicy.Policy.Minimum,
+        )
         self.leds_slider_header_layout.addItem(spacerItem19)
-        
+
         font = QtGui.QFont()
         font.setFamily("Momcake")
         font.setPointSize(24)
 
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Preferred)
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Expanding,
+            QtWidgets.QSizePolicy.Policy.Preferred,
+        )
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
 
@@ -130,7 +134,9 @@ class LedsSliderPage(QtWidgets.QWidget):
         self.leds_slider_tittle_label.setMinimumSize(QtCore.QSize(0, 60))
         self.leds_slider_tittle_label.setMaximumSize(QtCore.QSize(16777215, 60))
         self.leds_slider_tittle_label.setFont(font)
-        self.leds_slider_tittle_label.setStyleSheet("background: transparent; color: white;")
+        self.leds_slider_tittle_label.setStyleSheet(
+            "background: transparent; color: white;"
+        )
         self.leds_slider_tittle_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self.leds_slider_tittle_label.setObjectName("leds_slider_tittle_label")
         self.leds_slider_header_layout.addWidget(self.leds_slider_tittle_label)
@@ -141,18 +147,22 @@ class LedsSliderPage(QtWidgets.QWidget):
         font.setItalic(False)
         font.setStyleStrategy(QtGui.QFont.StyleStrategy.PreferAntialias)
 
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.MinimumExpanding, QtWidgets.QSizePolicy.Policy.MinimumExpanding)
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
+            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
+        )
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(self.leds_slider_back_btn.sizePolicy().hasHeightForWidth())
 
         self.leds_slider_back_btn = IconButton(parent=self.layoutWidget)
         self.leds_slider_back_btn.setSizePolicy(sizePolicy)
         self.leds_slider_back_btn.setMinimumSize(QtCore.QSize(60, 60))
         self.leds_slider_back_btn.setMaximumSize(QtCore.QSize(60, 60))
         self.leds_slider_back_btn.setFont(font)
-        self.leds_slider_back_btn.setProperty("icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/back.svg"))
-        self.leds_slider_back_btn.setObjectName("leds_slider_back_btn") 
+        self.leds_slider_back_btn.setProperty(
+            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/back.svg")
+        )
+        self.leds_slider_back_btn.setObjectName("leds_slider_back_btn")
         self.leds_slider_header_layout.addWidget(self.leds_slider_back_btn)
 
         self.layoutWidget1 = QtWidgets.QWidget(parent=self)
@@ -162,7 +172,9 @@ class LedsSliderPage(QtWidgets.QWidget):
         self.verticalLayout.setContentsMargins(0, 0, 0, 0)
         self.verticalLayout.setObjectName("verticalLayout")
 
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Expanding)
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Expanding
+        )
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
 
@@ -174,15 +186,31 @@ class LedsSliderPage(QtWidgets.QWidget):
         self.leds_w_slider.setProperty("value", 100)
         self.leds_w_slider.setOrientation(QtCore.Qt.Orientation.Horizontal)
         self.leds_w_slider.setObjectName("leds_w_slider")
-        self.verticalLayout.addWidget(self.leds_w_slider, 0, QtCore.Qt.AlignmentFlag.AlignHCenter)
+        self.verticalLayout.addWidget(
+            self.leds_w_slider, 0, QtCore.Qt.AlignmentFlag.AlignHCenter
+        )
 
         widget.setLayout(self.verticalLayout)
 
         self.retranslateUi()
 
-
-
-
     def retranslateUi(self):
         _translate = QtCore.QCoreApplication.translate
-
+        self.toggle_led_button.setText(
+            _translate("utilitiesStackedWidget", "PushButton")
+        )
+        self.label_4.setText(_translate("utilitiesStackedWidget", "On"))
+        self.label_5.setText(_translate("utilitiesStackedWidget", "Off"))
+        self.leds_slider_tittle_label.setText(
+            _translate("utilitiesStackedWidget", "LED's")
+        )
+        self.leds_slider_tittle_label.setProperty(
+            "class", _translate("utilitiesStackedWidget", "title_text")
+        )
+        self.leds_slider_back_btn.setText(_translate("utilitiesStackedWidget", "Back"))
+        self.leds_slider_back_btn.setProperty(
+            "class", _translate("utilitiesStackedWidget", "menu_btn")
+        )
+        self.leds_slider_back_btn.setProperty(
+            "button_type", _translate("utilitiesStackedWidget", "icon")
+        )

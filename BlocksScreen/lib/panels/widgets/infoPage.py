@@ -7,8 +7,9 @@ from lib.utils.icon_button import IconButton
 
 
 class InfoPage(QtWidgets.QWidget):
-    request_back_button = QtCore.pyqtSignal(name="request-back-button")
-
+    request_back: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        name="request_back"
+    )
     def __init__(
         self,
         parent: typing.Optional["QtWidgets.QWidget"],
@@ -17,7 +18,7 @@ class InfoPage(QtWidgets.QWidget):
 
         self._setup_ui()
 
-        self.info_back_btn.clicked.connect(self.request_back_button.emit)
+        self.info_back_btn.clicked.connect(self.request_back.emit)
 
     def _setup_ui(self) -> None:
         self.setObjectName("info_page")
