@@ -2,6 +2,7 @@ from __future__ import annotations
 import re
 import typing
 from functools import partial
+import logging
 
 from helper_methods import normalize
 from lib.moonrakerComm import MoonWebSocket
@@ -20,6 +21,9 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 class ControlTab(QtWidgets.QStackedWidget):
     """Printer Control Stacked Widget"""
 
+    E_DEFAULT_MIN = B_DEFAULT_MIN = 0
+    E_DEFAULT_MAX = 300
+    B_DEFAULT_MAX = 100
     request_back_button = QtCore.pyqtSignal(name="request-back-button")
     request_change_page = QtCore.pyqtSignal(int, int, name="request-change-page")
     request_numpad_signal = QtCore.pyqtSignal(
@@ -453,29 +457,32 @@ class ControlTab(QtWidgets.QStackedWidget):
                         f"Retries: {retries_done}/{retries_total} | Range: {probed_range:.6f} | Tolerance: {tolerance:.6f}",
                     )
 
-    def on_printer_config(self, config: dict):
+    @QtCore.pyqtSlot(dict, name="printer_config")
+    def on_printer_config(self, config: dict) -> None:
         """Slot that receives the full printer configuration,
 
         Additionally, this method configures the signal connections
         between controllable heaters and numpad calls
         """
-        e_default_min = b_default_min = 0
-        e_default_max = 350
-        b_default_max = 100
+        try:
+            self.panel.extruder_temp_display.clicked.disconnect()
+            self.panel.bed_temp_display.clicked.disconnect()
+        except Exception:
+            logging.debug("Signals were not connected")
         extruder = config.get("extruder", None) or {}
         bed = config.get("heater_bed", None) or {}
-        e_min_temp = extruder.get("min_temp", e_default_min)
-        e_max_temp = extruder.get("max_temp", e_default_max)
-        b_max_temp = bed.get("max_temp", b_default_max)
-        b_min_temp = bed.get("min_temp", b_default_min)
+        e_min_temp = extruder.get("min_temp", 0)
+        e_max_temp = extruder.get("max_temp", 300)
+        b_max_temp = bed.get("max_temp", 100)
+        b_min_temp = bed.get("min_temp", 0)
         # Configure numpads
         self.panel.extruder_temp_display.clicked.connect(
             lambda: self.request_numpad[str, int, "PyQt_PyObject", int, int].emit(
                 "Extruder Temperature",
                 int(round(float(self.panel.extruder_temp_display.secondary_text))),
                 self.on_numpad_change,
-                e_min_temp,
-                e_max_temp,
+                int(e_min_temp),
+                int(e_max_temp),
             )
         )
         self.panel.bed_temp_display.clicked.connect(
@@ -483,8 +490,8 @@ class ControlTab(QtWidgets.QStackedWidget):
                 "Bed Temperature",
                 int(round(float(self.panel.bed_temp_display.secondary_text))),
                 self.on_numpad_change,
-                b_min_temp,
-                b_max_temp,
+                int(b_min_temp),
+                int(b_max_temp),
             )
         )
 

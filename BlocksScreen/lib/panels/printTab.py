@@ -268,6 +268,7 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.change_page(self.indexOf(self.print_page))  # force set the initial page
         self.save_config_btn.clicked.connect(self.save_config)
         self.BasePopup_z_offset.accepted.connect(self.update_configuration_file)
+        self.printer.printer_config.connect(self.tune_page.on_printer_config)
 
     @QtCore.pyqtSlot(str, dict, name="on_print_stats_update")
     @QtCore.pyqtSlot(str, float, name="on_print_stats_update")
