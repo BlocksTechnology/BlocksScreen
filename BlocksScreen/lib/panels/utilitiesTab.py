@@ -20,6 +20,7 @@ from lib.panels.widgets.UtilitiesTab.ledssliderPage import LedsSliderPage
 from lib.panels.widgets.UtilitiesTab.troubleshootPage import TroubleshootPage
 from lib.panels.widgets.UtilitiesTab.inputshaperPage import InputShaperPage
 from lib.panels.widgets.UtilitiesTab.inputshaperResultPage import InputShaperResultsPage
+from lib.panels.widgets.UtilitiesTab.axismaintPage import AxisMaintenancePage
 
 
 class Process(Enum):
@@ -141,8 +142,15 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         self.input_shaper_page.call_load_panel.connect(self.call_load_panel)
         self.input_shaper_page.set_aut.connect(self.is_page.set_aut)
 
+        self.axis_page = AxisMaintenancePage(self)
+        self.addWidget(self.axis_page)
+        self.axis_page.set_dialog_popup.connect(self.set_dialog_axismaintenace_popup)
+        self.axis_page.show_waiting_page.connect(self.show_waiting_page)
+        self.axis_page.call_load_panel.connect(self.call_load_panel)
+
         self.utilities_info_btn.clicked.connect(lambda:self.change_page(self.indexOf(self.info_page)))
         self.utilities_leds_btn.clicked.connect(lambda:self.change_page(self.indexOf(self.leds_page)))
+        self.utilities_axes_btn.clicked.connect(lambda:self.change_page(self.indexOf(self.axis_page)))
         self.utilities_input_shaper_btn.clicked.connect(lambda:self.change_page(self.indexOf(self.input_shaper_page)))
 
         # self.panel.update_btn.clicked.connect(
@@ -152,6 +160,10 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         self.is_page.action_btn.clicked.connect(
             lambda: self.change_page(self.indexOf(self.input_shaper_page))
         )
+
+
+        self.dialogpopup = BasePopup(self,False,True)
+        self.addWidget(self.dialogpopup)
 
         # # --- Back Buttons ---
         # for button in (
@@ -395,10 +407,26 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         if gcode := gcode_map.get(key):
             self.run_gcode_signal.emit(f"{gcode}\nM400")
 
-    # def set_routine_check_page(self, title: str, label: str):
-    #     """Set text on routine page"""
-    #     self.panel.rc_tittle.setText(title)
-    #     self.panel.rc_label.setText(label)
+    @QtCore.pyqtSlot(str,"PyQt_PyObject",name="set-dialog-popup")
+    def set_dialog_axismaintenace_popup(self,label: str,accept:"PyQt_PyObject",):
+        """Set text on routine page"""
+        self.dialogpopup.set_message(label)
+        self.dialogpopup.accepted.connect(lambda:
+            accept
+        )
+
+
+    @QtCore.pyqtSlot(int,str,int,bool,name="show-waiting-page")
+    def show_waiting_page(self, page_to_go_to: int, label: str, time_ms: int , popup:bool):
+        """Show placeholder page"""
+        self.call_load_panel.emit(True, label)
+        if popup:
+            QtCore.QTimer.singleShot(time_ms, lambda: self.dialogpopup.show())
+        else:
+            QtCore.QTimer.singleShot(time_ms, lambda: self.change_page(page_to_go_to))
+
+
+
 
 
 
@@ -437,10 +465,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         """Show troubleshoot page"""
         self.troubleshoot_page.show()
 
-    def show_waiting_page(self, page_to_go_to: int, label: str, time_ms: int):
-        """Show placeholder page"""
-        self.call_load_panel.emit(True, label)
-        QtCore.QTimer.singleShot(time_ms, lambda: self.change_page(page_to_go_to))
+
 
     def change_page(self, index: int):
         """Request change page by index"""
