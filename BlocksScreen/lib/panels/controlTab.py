@@ -1,5 +1,5 @@
 from __future__ import annotations
-
+import logging
 import re
 import typing
 from functools import partial
@@ -252,24 +252,6 @@ class ControlTab(QtWidgets.QStackedWidget):
         self.numpadPage.request_back.connect(self.request_back_button)
         self.addWidget(self.numpadPage)
 
-        self.panel.extruder_temp_display.clicked.connect(
-            lambda: self.request_numpad[str, int, "PyQt_PyObject", int, int].emit(
-                "Extruder Temperature",
-                int(round(float(self.panel.extruder_temp_display.secondary_text))),
-                self.on_numpad_change,
-                0,
-                370,  # TODO: Get this value from printer objects
-            )
-        )
-        self.panel.bed_temp_display.clicked.connect(
-            lambda: self.request_numpad[str, int, "PyQt_PyObject", int, int].emit(
-                "Bed Temperature",
-                int(round(float(self.panel.bed_temp_display.secondary_text))),
-                self.on_numpad_change,
-                0,
-                120,  # TODO: Get this value from printer objects
-            )
-        )
         self.request_numpad[str, int, "PyQt_PyObject", int, int].connect(
             self.on_numpad_request
         )
@@ -303,6 +285,8 @@ class ControlTab(QtWidgets.QStackedWidget):
 
         self.printer.fan_update[str, str, float].connect(self.on_fan_object_update)
         self.printer.fan_update[str, str, int].connect(self.on_fan_object_update)
+
+        self.printer.printer_config.connect(self.on_printer_config)
 
     def _handle_z_tilt_object_update(self, value, state):
         if state:
@@ -469,6 +453,41 @@ class ControlTab(QtWidgets.QStackedWidget):
                         True,
                         f"Retries: {retries_done}/{retries_total} | Range: {probed_range:.6f} | Tolerance: {tolerance:.6f}",
                     )
+
+    def on_printer_config(self, config: dict):
+        """Slot that receives the full printer configuration,
+
+        Additionally, this method configures the signal connections
+        between controllable heaters and numpad calls
+        """
+        e_default_min = b_default_min = 0
+        e_default_max = 350
+        b_default_max = 100
+        extruder = config.get("extruder", None) or {}
+        bed = config.get("heater_bed", None) or {}
+        e_min_temp = extruder.get("min_temp", e_default_min)
+        e_max_temp = extruder.get("max_temp", e_default_max)
+        b_max_temp = bed.get("max_temp", b_default_max)
+        b_min_temp = bed.get("min_temp", b_default_min)
+        # Configure numpads
+        self.panel.extruder_temp_display.clicked.connect(
+            lambda: self.request_numpad[str, int, "PyQt_PyObject", int, int].emit(
+                "Extruder Temperature",
+                int(round(float(self.panel.extruder_temp_display.secondary_text))),
+                self.on_numpad_change,
+                e_min_temp,
+                e_max_temp,
+            )
+        )
+        self.panel.bed_temp_display.clicked.connect(
+            lambda: self.request_numpad[str, int, "PyQt_PyObject", int, int].emit(
+                "Bed Temperature",
+                int(round(float(self.panel.bed_temp_display.secondary_text))),
+                self.on_numpad_change,
+                b_min_temp,
+                b_max_temp,
+            )
+        )
 
     def handle_ztilt(self):
         """Handle Z-Tilt Adjustment"""
