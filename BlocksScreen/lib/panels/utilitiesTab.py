@@ -21,8 +21,7 @@ from lib.panels.widgets.UtilitiesTab.troubleshootPage import TroubleshootPage
 from lib.panels.widgets.UtilitiesTab.inputshaperPage import InputShaperPage
 from lib.panels.widgets.UtilitiesTab.inputshaperResultPage import InputShaperResultsPage
 from lib.panels.widgets.UtilitiesTab.axismaintPage import AxisMaintenancePage
-
-
+from lib.panels.widgets.UtilitiesTab.routineCheckPage import RoutineCheckPage
 class Process(Enum):
     FAN = auto()
     AXIS = auto()
@@ -144,18 +143,25 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
 
         self.axis_page = AxisMaintenancePage(self)
         self.addWidget(self.axis_page)
+        self.axis_page.request_back_button.connect(self.request_back_button)
         self.axis_page.set_dialog_popup.connect(self.set_dialog_axismaintenace_popup)
         self.axis_page.show_waiting_page.connect(self.show_waiting_page)
         self.axis_page.call_load_panel.connect(self.call_load_panel)
 
+
+        self.routine_check_page = RoutineCheckPage(self)
+        self.addWidget(self.routine_check_page)
+        self.routine_check_page.request_back_button.connect(self.request_back_button)
+
         self.utilities_info_btn.clicked.connect(lambda:self.change_page(self.indexOf(self.info_page)))
         self.utilities_leds_btn.clicked.connect(lambda:self.change_page(self.indexOf(self.leds_page)))
         self.utilities_axes_btn.clicked.connect(lambda:self.change_page(self.indexOf(self.axis_page)))
+        self.utilities_routine_check_btn.clicked.connect(lambda: self.change_page(self.indexOf(self.routine_check_page)))
         self.utilities_input_shaper_btn.clicked.connect(lambda:self.change_page(self.indexOf(self.input_shaper_page)))
 
-        # self.panel.update_btn.clicked.connect(
-        #     lambda: self.show_update_page[bool].emit(False)
-        # )
+        self.update_btn.clicked.connect(
+            lambda: self.show_update_page[bool].emit(False)
+        )
 
         self.is_page.action_btn.clicked.connect(
             lambda: self.change_page(self.indexOf(self.input_shaper_page))
@@ -165,32 +171,8 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         self.dialogpopup = BasePopup(self,False,True)
         self.addWidget(self.dialogpopup)
 
-        # # --- Back Buttons ---
-        # for button in (
-        #     self.panel.leds_back_btn,
-        #     self.panel.info_back_btn,
-        #     self.panel.leds_slider_back_btn,
-        #     self.panel.input_shaper_back_btn,
-        #     self.panel.routine_check_back_btn,
-        #     self.is_page.update_back_btn,
-        # ):
-        #     button.clicked.connect(self.back_button)
 
-        # # --- Page Navigation ---
-        # self._connect_page_change(self.panel.utilities_axes_btn, self.panel.axes_page)
-        # self._connect_page_change(
-        #     self.panel.utilities_input_shaper_btn, self.panel.input_shaper_page
-        # )
 
-        # self._connect_page_change(
-        #     self.panel.utilities_routine_check_btn, self.panel.routines_page
-        # )
-        # self._connect_page_change(self.panel.am_cancel, self.panel.utilities_page)
-
-        # self._connect_page_change(self.panel.axes_back_btn, self.panel.utilities_page)
-        # self._connect_page_change(
-        #     self.troubleshoot_page.tb_back_btn, self.panel.utilities_page
-        # )
 
         # # --- Routines ---
         # self.panel.rc_fans.clicked.connect(partial(self.run_routine, Process.FAN))
@@ -222,9 +204,6 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         self.printer.printer_config.connect(self.on_printer_config_received)
         self.printer.gcode_move_update.connect(self.on_gcode_move_update)
 
-        # self.panel.update_btn.setPixmap(
-        #     QtGui.QPixmap(":/system/media/btn_icons/update-software-icon.svg")
-        # )
 
 
     def on_leds_slider_request(self,led: any,name=str,single=bool):
