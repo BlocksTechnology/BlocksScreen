@@ -2,7 +2,7 @@ import typing
 from enum import Enum, auto
 
 from lib.moonrakerComm import MoonWebSocket
-from lib.panels.widgets.troubleshootPage import TroubleshootPage
+from lib.panels.widgets.UtilitiesTab.troubleshootPage import TroubleshootPage
 from lib.printer import Printer
 
 # from lib.ui.utilitiesStackedWidget_ui import Ui_utilitiesStackedWidget
@@ -12,9 +12,9 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 from lib.panels.widgets.optionCardWidget import OptionCard
 
 
-from lib.panels.widgets.infoPage import InfoPage
-from lib.panels.widgets.ledsPage import LedsPage
-from lib.panels.widgets.ledssliderPage import LedsSliderPage
+from lib.panels.widgets.UtilitiesTab.infoPage import InfoPage
+from lib.panels.widgets.UtilitiesTab.ledsPage import LedsPage
+from lib.panels.widgets.UtilitiesTab.ledssliderPage import LedsSliderPage
 
 
 class Process(Enum):

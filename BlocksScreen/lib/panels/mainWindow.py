@@ -15,11 +15,11 @@ from lib.panels.networkWindow import NetworkControlWindow, PixmapCache
 from lib.panels.printTab import PrintTab
 from lib.panels.utilitiesTab import UtilitiesTab
 from lib.panels.widgets.basePopup import BasePopup
-from lib.panels.widgets.cancelPage import CancelPage
-from lib.panels.widgets.connectionPage import ConnectionPage
+from lib.panels.widgets.MainWindow.cancelPage import CancelPage
+from lib.panels.widgets.MainWindow.connectionPage import ConnectionPage
 from lib.panels.widgets.loadWidget import LoadingOverlayWidget
-from lib.panels.widgets.notificationPage import NotificationPage
-from lib.panels.widgets.updatePage import UpdatePage
+from lib.panels.widgets.MainWindow.notificationPage import NotificationPage
+from lib.panels.widgets.MainWindow.updatePage import UpdatePage
 from lib.printer import Printer
 from lib.ui.mainWindow_ui import Ui_MainWindow  # With header
 from lib.ui.resources.background_resources_rc import *

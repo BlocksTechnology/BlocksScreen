@@ -7,7 +7,7 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 import typing
 
 
-class InputShaperPage(QtWidgets.QWidget):
+class InputShaperListPage(QtWidgets.QWidget):
     """Update GUI Page,
     retrieves from moonraker available clients and adds functionality
     for updating or recovering them

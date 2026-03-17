@@ -7,13 +7,13 @@ from lib.moonrakerComm import MoonWebSocket
 from lib.panels.widgets.numpadPage import CustomNumpad
 from lib.panels.widgets.slider_selector_page import SliderPage
 
-from lib.panels.widgets.printcorePage import SwapPrintcorePage
-from lib.panels.widgets.probeHelperPage import ProbeHelper
-from lib.panels.widgets.fansPage import FansPage
-from lib.panels.widgets.axisPage import AxisPage
-from lib.panels.widgets.extruderPage import ExtruderPage
-from lib.panels.widgets.temperaturePage import TemperaturePage
+from lib.panels.widgets.ControlTab.printcorePage import SwapPrintcorePage
+from lib.panels.widgets.ControlTab.probeHelperPage import ProbeHelper
+from lib.panels.widgets.ControlTab.fansPage import FansPage
+from lib.panels.widgets.ControlTab.temperaturePage import TemperaturePage
 
+from lib.panels.widgets.ControlTab.axisPage import AxisPage
+from lib.panels.widgets.ControlTab.extruderPage import ExtruderPage
 from lib.printer import Printer
 
 from PyQt6 import QtCore, QtGui, QtWidgets
