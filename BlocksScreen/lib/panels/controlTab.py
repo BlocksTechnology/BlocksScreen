@@ -24,9 +24,6 @@ _logger = logging.getLogger(__name__)
 class ControlTab(QtWidgets.QStackedWidget):
     """Printer Control Stacked Widget"""
 
-    E_DEFAULT_MIN = B_DEFAULT_MIN = 0
-    E_DEFAULT_MAX = 300
-    B_DEFAULT_MAX = 100
     request_back_button = QtCore.pyqtSignal(name="request-back-button")
     request_change_page = QtCore.pyqtSignal(int, int, name="request-change-page")
     request_numpad_signal = QtCore.pyqtSignal(
