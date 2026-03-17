@@ -1,8 +1,9 @@
 import typing
 from enum import Enum, auto
 
+
 from lib.moonrakerComm import MoonWebSocket
-from lib.panels.widgets.UtilitiesTab.troubleshootPage import TroubleshootPage
+
 from lib.printer import Printer
 
 # from lib.ui.utilitiesStackedWidget_ui import Ui_utilitiesStackedWidget
@@ -10,11 +11,15 @@ from lib.utils.blocks_button import BlocksCustomButton
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 from lib.panels.widgets.optionCardWidget import OptionCard
+from lib.panels.widgets.basePopup import BasePopup
 
 
 from lib.panels.widgets.UtilitiesTab.infoPage import InfoPage
 from lib.panels.widgets.UtilitiesTab.ledsPage import LedsPage
 from lib.panels.widgets.UtilitiesTab.ledssliderPage import LedsSliderPage
+from lib.panels.widgets.UtilitiesTab.troubleshootPage import TroubleshootPage
+from lib.panels.widgets.UtilitiesTab.inputshaperPage import InputShaperPage
+from lib.panels.widgets.UtilitiesTab.inputshaperResultPage import InputShaperResultsPage
 
 
 class Process(Enum):
@@ -104,13 +109,11 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
 
         self.info_page = InfoPage(self)
         self.addWidget(self.info_page)
-
         self.info_page.request_back.connect(self.request_back_button)
 
 
         self.leds_slider_page = LedsSliderPage(self)
         self.addWidget(self.leds_slider_page)
-
         self.leds_slider_page.run_gcode_signal.connect(self.run_gcode_signal)
         self.leds_slider_page.request_back.connect(lambda:self.request_back_button.emit())
         self.leds_slider_page.request_change_page.connect(self.change_page)
@@ -118,28 +121,37 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
 
         self.leds_page = LedsPage(self)
         self.addWidget(self.leds_page)
-
-
         self.on_object_list.connect(self.leds_page.on_object_list)
         self.leds_page.request_ledslider_page.connect(self.on_leds_slider_request)
         self.leds_page.request_back.connect(lambda:self.request_back_button.emit())
 
 
+        self.is_page = InputShaperResultsPage(self)
+        self.addWidget(self.is_page)
+        self.printer.gcode_response.connect(self.is_page.handle_gcode_response)
+        self.is_page.call_load_panel.connect(self.call_load_panel)
+        self.is_page.run_gcode_signal.connect(self.run_gcode_signal)
+
+
+        self.input_shaper_page = InputShaperPage(self)
+        self.addWidget(self.input_shaper_page)
+        self.input_shaper_page.request_is_results_page.connect(lambda:self.change_page(self.indexOf(self.is_page)))
+        self.input_shaper_page.request_back_button.connect(lambda:self.change_page(0))
+        self.input_shaper_page.run_gcode_signal.connect(self.run_gcode_signal)
+        self.input_shaper_page.call_load_panel.connect(self.call_load_panel)
+        self.input_shaper_page.set_aut.connect(self.is_page.set_aut)
+
         self.utilities_info_btn.clicked.connect(lambda:self.change_page(self.indexOf(self.info_page)))
         self.utilities_leds_btn.clicked.connect(lambda:self.change_page(self.indexOf(self.leds_page)))
-
-        
+        self.utilities_input_shaper_btn.clicked.connect(lambda:self.change_page(self.indexOf(self.input_shaper_page)))
 
         # self.panel.update_btn.clicked.connect(
         #     lambda: self.show_update_page[bool].emit(False)
         # )
 
-        # self.is_page = InputShaperPage(self)
-        # self.is_page.call_load_panel.connect(self.call_load_panel)
-        # self.addWidget(self.is_page)
-
-        # self.dialog_page = BasePopup(self, dialog=True, floating=True)
-        # self.addWidget(self.dialog_page)
+        self.is_page.action_btn.clicked.connect(
+            lambda: self.change_page(self.indexOf(self.input_shaper_page))
+        )
 
         # # --- Back Buttons ---
         # for button in (
@@ -193,7 +205,6 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         self.subscribe_config[list, "PyQt_PyObject"].connect(
             self.printer.on_subscribe_config
         )
-        # self.printer.gcode_response.connect(self.handle_gcode_response)
 
         # --- Initialize Printer Communication ---
         self.printer.printer_config.connect(self.on_printer_config_received)
@@ -202,153 +213,6 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         # self.panel.update_btn.setPixmap(
         #     QtGui.QPixmap(":/system/media/btn_icons/update-software-icon.svg")
         # )
-
-        # ---- Input Shaper ----
-        # self.automatic_is = OptionCard(
-        #     self,
-        #     "Automatic\nInput Shaper",
-        #     "Automatic Input Shaper",
-        #     QtGui.QPixmap(":/input_shaper/media/btn_icons/input_shaper_auto.svg"),
-        # )  # type: ignore
-        # self.automatic_is.setObjectName("Automatic_IS_Card")
-        # # self.panel.is_content_layout.addWidget(
-        # #     self.automatic_is, alignment=QtCore.Qt.AlignmentFlag.AlignHCenter
-        # # )
-        # # self.automatic_is.continue_clicked.connect(
-        # #     lambda: self.handle_is("SHAPER_CALIBRATE")
-        # # )
-
-        # self.manual_is = OptionCard(
-        #     self,
-        #     "Manual\nInput Shaper",
-        #     "Manual Input Shaper",
-        #     QtGui.QPixmap(":/input_shaper/media/btn_icons/input_shaper_manual.svg"),
-        # )  # type: ignore
-        # self.manual_is.setObjectName("Manual_IS_Card")
-        # # self.panel.is_content_layout.addWidget(
-        #     self.manual_is, alignment=QtCore.Qt.AlignmentFlag.AlignHCenter
-        # )
-        # self.manual_is.continue_clicked.connect(lambda: self.handle_is(""))
-
-        # self.is_types: dict = {}
-        # self.is_aut_types: dict = {}
-        # self.dialog_page.accepted.connect(
-        #     lambda: self.handle_is("SHAPER_CALIBRATE AXIS=Y")
-        # )
-        # self.dialog_page.rejected.connect(
-        #     lambda: self.handle_is("SHAPER_CALIBRATE AXIS=X")
-        # )
-
-        # self.is_page.action_btn.clicked.connect(
-        #     lambda: self.change_page(self.indexOf(self.panel.input_shaper_page))
-        # )
-
-        # def handle_gcode_response(self, data: list[str]) -> None:
-        #     """
-        #     Parses a Klipper Input Shaper console message and updates self.is_types.
-        #     """
-
-        #     if not isinstance(data, list) or len(data) != 1 or not isinstance(data[0], str):
-        #         print(
-        #             f"WARNING: Invalid input format. Expected a list with one string. Received: {data}"
-        #         )
-        #         return
-
-        #     message = data[0]
-
-        #     pattern_fitted = re.compile(
-        #         r"Fitted shaper '(?P<name>\w+)' frequency = (?P<freq>[\d\.]+) Hz \(vibrations = (?P<vib>[\d\.]+)%"
-        #     )
-        #     match_fitted = pattern_fitted.search(message)
-
-        #     if match_fitted:
-        #         name = match_fitted.group("name")
-        #         freq = float(match_fitted.group("freq"))
-        #         vib = float(match_fitted.group("vib"))
-        #         current_data = self.is_types.get(name, {})
-        #         current_data.update(
-        #             {
-        #                 "frequency": freq,
-        #                 "vibration": vib,
-        #                 "max_accel": current_data.get("max_accel", 0.0),
-        #             }
-        #         )
-        #         self.is_types[name] = current_data
-
-        #         return
-        #     pattern_accel = re.compile(
-        #         r"To avoid too much smoothing with '(?P<name>\w+)', suggested max_accel <= (?P<accel>[\d\.]+) mm/sec\^2"
-        #     )
-        #     match_accel = pattern_accel.search(message)
-
-        #     if match_accel:
-        #         name = match_accel.group("name")
-        #         accel = float(match_accel.group("accel"))
-
-        #         if name in self.is_types and isinstance(self.is_types[name], dict):
-        #             self.is_types[name]["max_accel"] = accel
-        #         else:
-        #             self.is_types[name] = self.is_types.get(name, {})
-        #             self.is_types[name]["max_accel"] = accel
-        #         return
-
-        #     pattern_recommended = re.compile(
-        #         r"Recommended shaper_type_(?P<axis>[xy]) = (?P<type>\w+), shaper_freq_(?P=axis) = (?P<freq>[\d\.]+) Hz"
-        #     )
-        #     match_recommended = pattern_recommended.search(message)
-        #     if match_recommended:
-        #         axis = match_recommended.group("axis")
-        #         recommended_type = match_recommended.group("type")
-        #         self.is_types["Axis"] = axis
-        #         if self.aut:
-        #             self.is_aut_types[axis] = recommended_type
-        #             if len(self.is_aut_types) == 2:
-        #                 self.run_gcode_signal.emit("SAVE_CONFIG")
-        #                 self.call_load_panel.emit(False, "")
-        #                 self.aut = False
-        #                 return
-        #             return
-
-        #         reordered = {recommended_type: self.is_types[recommended_type]}
-        #         for key, value in self.is_types.items():
-        #             if key not in ("suggested_type", recommended_type, "Axis"):
-        #                 reordered[key] = value
-
-        #         self.is_page.set_type_dictionary(self.is_types)
-        #         first_key = next(iter(reordered.keys()), None)
-        #         for key in reordered.keys():
-        #             if key == first_key:
-        #                 self.is_page.add_type_entry(key, "Recommended type")
-        #             else:
-        #                 self.is_page.add_type_entry(key)
-
-        #         self.is_page.build_model_list()
-        #         self.call_load_panel.emit(False, "")
-        #         return
-
-        # def handle_is(self, gcode: str) -> None:
-        #     if gcode == "SHAPER_CALIBRATE":
-        #         self.run_gcode_signal.emit("G28\nM400")
-        #         self.aut = True
-        #         self.run_gcode_signal.emit(gcode)
-        #     elif gcode == "":
-        #         self.dialog_page.confirm_background_color("#dfdfdf")
-        #         self.dialog_page.cancel_background_color("#dfdfdf")
-        #         self.dialog_page.cancel_font_color("#000000")
-        #         self.dialog_page.confirm_font_color("#000000")
-        #         self.dialog_page.cancel_button_text("X axis")
-        #         self.dialog_page.confirm_button_text("Y axis")
-        #         self.dialog_page.set_message(
-        #             "Select the axis you want to execute the input shaper on:"
-        #         )
-        #         self.dialog_page.show()
-        #         return
-        #     else:
-        #         self.run_gcode_signal.emit("G28\nM400")
-        #         self.run_gcode_signal.emit(gcode)
-        #         self.change_page(self.indexOf(self.is_page))
-
-        self.call_load_panel.emit(True, "Running Input Shaper...")
 
 
     def on_leds_slider_request(self,led: any,name=str,single=bool):

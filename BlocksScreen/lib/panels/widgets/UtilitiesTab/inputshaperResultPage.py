@@ -2,12 +2,15 @@ from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_frame import BlocksCustomFrame
 from lib.utils.icon_button import IconButton
 from lib.utils.list_model import EntryDelegate, EntryListModel, ListItem
+
+import re
+
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 import typing
 
 
-class InputShaperListPage(QtWidgets.QWidget):
+class InputShaperResultsPage(QtWidgets.QWidget):
     """Update GUI Page,
     retrieves from moonraker available clients and adds functionality
     for updating or recovering them
@@ -25,10 +28,7 @@ class InputShaperListPage(QtWidgets.QWidget):
             super().__init__()
         self._setupUI()
         self.selected_item: ListItem | None = None
-        self.ongoing_update: bool = False
         self.type_dict: dict = {}
-        self.repeated_request_status = QtCore.QTimer()
-        self.repeated_request_status.setInterval(2000)  # every 2 seconds
         self.model = EntryListModel()
         self.model.setParent(self.update_buttons_list_widget)
         self.entry_delegate = EntryDelegate()
@@ -39,20 +39,99 @@ class InputShaperListPage(QtWidgets.QWidget):
 
         self.action_btn.clicked.connect(self.handle_ism_confirm)
 
-    def handle_update_end(self) -> None:
-        """Handles update end signal
-        (closes loading page, returns to normal operation)
-        """
-        self.call_load_panel.emit(False, "Updating...")
-        self.repeated_request_status.stop()
-        self.build_model_list()
+        self.is_types: dict = {}
+        self.is_aut_types: dict = {}
+        self.aut = True
 
-    def handle_ongoing_update(self) -> None:
-        """Handled ongoing update signal,
-        calls loading page (blocks user interaction)
+
+    @QtCore.pyqtSlot(bool, name="set-aut")
+    def set_aut(self,aut: bool):
+        self.aut = aut
+
+
+    def handle_gcode_response(self, data: list[str]) -> None:
         """
-        self.call_load_panel.emit(True, "Updating...")
-        self.repeated_request_status.start(2000)
+        Parses a Klipper Input Shaper console message and updates self.is_types.
+        """
+        if not self.isVisible():
+            return
+        if not isinstance(data, list) or len(data) != 1 or not isinstance(data[0], str):
+            print(
+                f"WARNING: Invalid input format. Expected a list with one string. Received: {data}"
+            )
+            return
+
+        message = data[0]
+
+        pattern_fitted = re.compile(
+            r"Fitted shaper '(?P<name>\w+)' frequency = (?P<freq>[\d\.]+) Hz \(vibrations = (?P<vib>[\d\.]+)%"
+        )
+        match_fitted = pattern_fitted.search(message)
+
+        if match_fitted:
+            name = match_fitted.group("name")
+            freq = float(match_fitted.group("freq"))
+            vib = float(match_fitted.group("vib"))
+            current_data = self.is_types.get(name, {})
+            current_data.update(
+                {
+                    "frequency": freq,
+                    "vibration": vib,
+                    "max_accel": current_data.get("max_accel", 0.0),
+                }
+            )
+            self.is_types[name] = current_data
+
+            return
+        pattern_accel = re.compile(
+            r"To avoid too much smoothing with '(?P<name>\w+)', suggested max_accel <= (?P<accel>[\d\.]+) mm/sec\^2"
+        )
+        match_accel = pattern_accel.search(message)
+
+        if match_accel:
+            name = match_accel.group("name")
+            accel = float(match_accel.group("accel"))
+
+            if name in self.is_types and isinstance(self.is_types[name], dict):
+                self.is_types[name]["max_accel"] = accel
+            else:
+                self.is_types[name] = self.is_types.get(name, {})
+                self.is_types[name]["max_accel"] = accel
+            return
+
+        pattern_recommended = re.compile(
+            r"Recommended shaper_type_(?P<axis>[xy]) = (?P<type>\w+), shaper_freq_(?P=axis) = (?P<freq>[\d\.]+) Hz"
+        )
+        match_recommended = pattern_recommended.search(message)
+        if match_recommended:
+            axis = match_recommended.group("axis")
+            recommended_type = match_recommended.group("type")
+            self.is_types["Axis"] = axis
+            if self.aut:
+                self.is_aut_types[axis] = recommended_type
+                if len(self.is_aut_types) == 2:
+                    self.run_gcode_signal.emit("SAVE_CONFIG")
+                    self.call_load_panel.emit(False, "")
+                    self.aut = False
+                    return
+                return
+
+            reordered = {recommended_type: self.is_types[recommended_type]}
+            for key, value in self.is_types.items():
+                if key not in ("suggested_type", recommended_type, "Axis"):
+                    reordered[key] = value
+
+            self.set_type_dictionary(self.is_types)
+            first_key = next(iter(reordered.keys()), None)
+            for key in reordered.keys():
+                if key == first_key:
+                    self.add_type_entry(key, "Recommended type")
+                else:
+                    self.add_type_entry(key)
+
+            self.build_model_list()
+            self.call_load_panel.emit(False, "")
+            return
 
     def reset_view_model(self) -> None:
         """Clears items from ListView
@@ -65,10 +144,6 @@ class InputShaperListPage(QtWidgets.QWidget):
         """Schedule the object for deletion, resets the list model first"""
         self.reset_view_model()
         return super().deleteLater()
-
-    def showEvent(self, a0: QtGui.QShowEvent | None) -> None:
-        """Re-add clients to update list"""
-        return super().showEvent(a0)
 
     def build_model_list(self) -> None:
         """Builds the model list (`self.model`) containing updatable clients"""
