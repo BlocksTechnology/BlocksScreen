@@ -18,6 +18,9 @@ from lib.utils.display_button import DisplayButton
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 
+_logger = logging.getLogger(__name__)
+
+
 class ControlTab(QtWidgets.QStackedWidget):
     """Printer Control Stacked Widget"""
 
@@ -468,7 +471,7 @@ class ControlTab(QtWidgets.QStackedWidget):
             self.panel.extruder_temp_display.clicked.disconnect()
             self.panel.bed_temp_display.clicked.disconnect()
         except Exception:
-            logging.debug("Signals were not connected")
+            _logger.debug("Signals were not connected")
         extruder = config.get("extruder", None) or {}
         bed = config.get("heater_bed", None) or {}
         e_min_temp = extruder.get("min_temp", 0)
