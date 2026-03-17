@@ -90,10 +90,13 @@ class ControlTab(QtWidgets.QStackedWidget):
         self.axis_page = AxisPage(self)
         self.addWidget(self.axis_page)
         self.axis_page.request_back.connect(self.request_back_button)
+        self.axis_page.run_gcode_signal.connect(self.run_gcode_signal)
+        self.axis_page.call_load_panel.connect(self.call_load_panel)
 
         self.extruder_page = ExtruderPage(self, printer)
         self.addWidget(self.extruder_page)
         self.extruder_page.request_back.connect(self.request_back_button)
+        self.extruder_page.run_gcode_signal.connect(self.run_gcode_signal)
 
         self.temperature_page = TemperaturePage(self)
         self.addWidget(self.temperature_page)
@@ -215,6 +218,7 @@ class ControlTab(QtWidgets.QStackedWidget):
 
             self.cp_content_layout.addWidget(self.blank)
             self.cp_button_5.hide()
+            self.blank.show()
         else:
             self.cp_header_title.setText("Control")
 
@@ -258,9 +262,16 @@ class ControlTab(QtWidgets.QStackedWidget):
 
             self.back_button.hide()
             self.Hblank.hide()
-            self.cp_content_layout.removeWidget(self.blank)
             self.cp_button_5.show()
-            self.retranslateUi()
+            self.cp_content_layout.removeWidget(self.blank)
+            self.blank.hide()     
+        self.repaint()
+            
+
+    def showEvent(self, a0: QtGui.QShowEvent | None) -> None:
+        self._button_change(False)
+        return super().showEvent(a0)
+
 
     def _handle_z_tilt_object_update(self, value, state):
         if state:

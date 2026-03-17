@@ -10,12 +10,9 @@ class AxisPage(QtWidgets.QWidget):
     run_gcode_signal: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         str, name="run_gcode"
     )
-
-    request_slider_page: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
-        str, int, "PyQt_PyObject", int, int, name="request_slider_page"
-    )
-
     request_back = QtCore.pyqtSignal(name="request_back")
+
+    call_load_panel = QtCore.pyqtSignal(bool, str, name="call-load-panel")
 
     def __init__(self, parent: QtWidgets.QWidget) -> None:
         super().__init__(parent)
@@ -122,6 +119,18 @@ class AxisPage(QtWidgets.QWidget):
         self.run_gcode_signal.emit(
             f"G91\nG0 {axis}{float(self.move_length)} F{float(self.move_speed * 60)}\nG90\nM400"
         )
+
+    
+    @QtCore.pyqtSlot(str, list, name="on-toolhead-update")
+    def on_toolhead_update(self, field: str, values: list) -> None:
+        """Handles updated from toolhead printer object"""
+        if field == "position":
+            self.panel.mva_x_value_label.setText(f"{values[0]:.2f}")
+            self.panel.mva_y_value_label.setText(f"{values[1]:.2f}")
+            self.panel.mva_z_value_label.setText(f"{values[2]:.3f}")
+
+            if values[0] == "252,50" and values[1] == "250" and values[2] == "50":
+                self.call_load_panel.emit(False, "")
 
     def _setupUi(self) -> None:
         widget = QtWidgets.QWidget(parent=self)
@@ -254,13 +263,18 @@ class AxisPage(QtWidgets.QWidget):
         self.horizontalLayout_3 = QtWidgets.QHBoxLayout()
         self.horizontalLayout_3.setObjectName("horizontalLayout_3")
 
+        self.axis_select_length_group = QtWidgets.QButtonGroup(self)
+        self.axis_select_length_group.setObjectName("extrude_select_length_group")
+
         self.mva_select_length_1_btn = BlocksCustomCheckButton(parent=self)
         self.mva_select_length_1_btn.setMinimumSize(QtCore.QSize(90, 90))
         self.mva_select_length_1_btn.setMaximumSize(QtCore.QSize(90, 90))
         self.mva_select_length_1_btn.setFont(font)
         self.mva_select_length_1_btn.setCheckable(True)
         self.mva_select_length_1_btn.setChecked(True)
+        self.mva_select_length_1_btn.setAutoExclusive(True)
         self.mva_select_length_1_btn.setObjectName("mva_select_length_1_btn")
+        self.axis_select_length_group.addButton(self.mva_select_length_1_btn)
         self.horizontalLayout_3.addWidget(self.mva_select_length_1_btn)
 
         self.mva_select_length_10_btn = BlocksCustomCheckButton(parent=self)
@@ -268,15 +282,19 @@ class AxisPage(QtWidgets.QWidget):
         self.mva_select_length_10_btn.setMaximumSize(QtCore.QSize(90, 90))
         self.mva_select_length_10_btn.setFont(font)
         self.mva_select_length_10_btn.setCheckable(True)
+        self.mva_select_length_10_btn.setAutoExclusive(True)
         self.mva_select_length_10_btn.setObjectName("mva_select_length_10_btn")
+        self.axis_select_length_group.addButton(self.mva_select_length_10_btn)
         self.horizontalLayout_3.addWidget(self.mva_select_length_10_btn)
 
         self.mva_select_length_100_btn = BlocksCustomCheckButton(parent=self)
         self.mva_select_length_100_btn.setMinimumSize(QtCore.QSize(90, 90))
         self.mva_select_length_100_btn.setMaximumSize(QtCore.QSize(90, 90))
         self.mva_select_length_100_btn.setFont(font)
+        self.mva_select_length_100_btn.setAutoExclusive(True)
         self.mva_select_length_100_btn.setCheckable(True)
         self.mva_select_length_100_btn.setObjectName("mva_select_length_100_btn")
+        self.axis_select_length_group.addButton(self.mva_select_length_100_btn)
         self.horizontalLayout_3.addWidget(self.mva_select_length_100_btn)
 
         self.verticalLayout_6.addLayout(self.horizontalLayout_3)
@@ -297,13 +315,19 @@ class AxisPage(QtWidgets.QWidget):
         self.horizontalLayout_4 = QtWidgets.QHBoxLayout()
         self.horizontalLayout_4.setObjectName("horizontalLayout_4")
 
+        self.axis_select_speed_group = QtWidgets.QButtonGroup(self)
+        self.axis_select_speed_group.setObjectName("extrude_select_length_group")
+        
+
         self.mva_select_speed_25_btn = BlocksCustomCheckButton(parent=self)
         self.mva_select_speed_25_btn.setMinimumSize(QtCore.QSize(90, 90))
         self.mva_select_speed_25_btn.setMaximumSize(QtCore.QSize(90, 90))
         self.mva_select_speed_25_btn.setFont(font)
         self.mva_select_speed_25_btn.setCheckable(True)
         self.mva_select_speed_25_btn.setChecked(True)
+        self.mva_select_speed_25_btn.setAutoExclusive(True)
         self.mva_select_speed_25_btn.setObjectName("mva_select_speed_25_btn")
+        self.axis_select_speed_group.addButton(self.mva_select_speed_25_btn)
         self.horizontalLayout_4.addWidget(self.mva_select_speed_25_btn)
 
         self.mva_select_speed_50_btn = BlocksCustomCheckButton(parent=self)
@@ -311,7 +335,9 @@ class AxisPage(QtWidgets.QWidget):
         self.mva_select_speed_50_btn.setMaximumSize(QtCore.QSize(90, 90))
         self.mva_select_speed_50_btn.setFont(font)
         self.mva_select_speed_50_btn.setCheckable(True)
+        self.mva_select_speed_50_btn.setAutoExclusive(True)
         self.mva_select_speed_50_btn.setObjectName("mva_select_speed_50_btn")
+        self.axis_select_speed_group.addButton(self.mva_select_speed_50_btn)
         self.horizontalLayout_4.addWidget(self.mva_select_speed_50_btn)
 
         self.mva_select_speed_100_btn = BlocksCustomCheckButton(parent=self)
@@ -319,7 +345,9 @@ class AxisPage(QtWidgets.QWidget):
         self.mva_select_speed_100_btn.setMaximumSize(QtCore.QSize(90, 90))
         self.mva_select_speed_100_btn.setFont(font)
         self.mva_select_speed_100_btn.setCheckable(True)
+        self.mva_select_speed_100_btn.setAutoExclusive(True)
         self.mva_select_speed_100_btn.setObjectName("mva_select_speed_100_btn")
+        self.axis_select_speed_group.addButton(self.mva_select_speed_100_btn)
         self.horizontalLayout_4.addWidget(self.mva_select_speed_100_btn)
 
         self.verticalLayout_6.addLayout(self.horizontalLayout_4)

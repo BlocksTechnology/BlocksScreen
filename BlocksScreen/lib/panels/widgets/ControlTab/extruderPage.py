@@ -30,6 +30,9 @@ class ExtruderPage(QtWidgets.QWidget):
 
         self.printer: Printer = printer
         self.timers = []
+        self.extrude_length: int = 10
+        self.extrude_feedrate: int = 2
+        self.extrude_page_message: str = ""
 
         self.exp_extrude_btn.clicked.connect(
             lambda: self.handle_extrusion(True)
@@ -113,7 +116,7 @@ class ExtruderPage(QtWidgets.QWidget):
         self.timers.append(_timer)
 
     @QtCore.pyqtSlot(bool, "PyQt_PyObject", int, name="select-extrude-feedrate")
-    def handle_toggle_extrude_feedrate(self, checked: bool, caller, value: int) -> None:
+    def handle_toggle_extrude_feedrate(self, caller, value: int) -> None:
         """Slot to change the extruder feedrate, mainly used for toggle buttons
 
         Args:
@@ -126,7 +129,7 @@ class ExtruderPage(QtWidgets.QWidget):
         self.extrude_feedrate = value
 
     @QtCore.pyqtSlot(bool, "PyQt_PyObject", int, name="select-extrude-length")
-    def handle_toggle_extrude_length(self, checked: bool, caller, value: int) -> None:
+    def handle_toggle_extrude_length(self, caller, value: int) -> None:
         """Slot that changes the extrude length, mainly used for toggle buttons
 
         Args:
