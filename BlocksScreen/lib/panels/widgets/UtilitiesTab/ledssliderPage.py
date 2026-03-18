@@ -165,23 +165,21 @@ class LedsSliderPage(QtWidgets.QWidget):
         self.leds_slider_back_btn.setObjectName("leds_slider_back_btn")
         self.leds_slider_header_layout.addWidget(self.leds_slider_back_btn)
 
-        self.layoutWidget1 = QtWidgets.QWidget(parent=self)
-        self.layoutWidget1.setGeometry(QtCore.QRect(10, 200, 688, 101))
-        self.layoutWidget1.setObjectName("layoutWidget1")
-        self.verticalLayout = QtWidgets.QVBoxLayout(self.layoutWidget1)
+
+        self.verticalLayout = QtWidgets.QVBoxLayout(self)
         self.verticalLayout.setContentsMargins(0, 0, 0, 0)
         self.verticalLayout.setObjectName("verticalLayout")
 
         sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Expanding
+            QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Expanding
         )
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
 
-        self.leds_w_slider = BlocksSlider(parent=self.layoutWidget1)
+        self.leds_w_slider = BlocksSlider(parent=self)
         self.leds_w_slider.setSizePolicy(sizePolicy)
-        self.leds_w_slider.setMinimumSize(QtCore.QSize(600, 90))
-        self.leds_w_slider.setMaximumSize(QtCore.QSize(600, 90))
+        self.leds_w_slider.setMinimumSize(QtCore.QSize(600, 100))
+        self.leds_w_slider.setMaximumSize(QtCore.QSize(600, 100))
         self.leds_w_slider.setMaximum(100)
         self.leds_w_slider.setProperty("value", 100)
         self.leds_w_slider.setOrientation(QtCore.Qt.Orientation.Horizontal)
