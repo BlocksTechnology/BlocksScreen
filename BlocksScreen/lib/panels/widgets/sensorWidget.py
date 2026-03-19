@@ -37,10 +37,11 @@ class SensorWidget(QtWidgets.QWidget):
 
     def __init__(self, parent, sensor_name: str):
         super().__init__(parent)
-        self.name = str(sensor_name).split(" ")[1]
+        _parts = str(sensor_name).split(" ", 1)
+        self.name = _parts[1] if len(_parts) > 1 else _parts[0]
         self.sensor_type: SensorWidget.SensorType = (
             self.SensorType.SWITCH
-            if "switch" in str(sensor_name).split(" ")[0].lower()
+            if "switch" in _parts[0].lower()
             else self.SensorType.MOTION
         )
 
@@ -96,13 +97,13 @@ class SensorWidget(QtWidgets.QWidget):
             self._text_label.setText(f"{new_text}")
             self._text = new_text
 
-    @QtCore.pyqtSlot(FilamentState, name="change_fil_sensor_state")
-    def change_fil_sensor_state(self, state: FilamentState):
-        """Invert the filament state in response to a Klipper update"""
+    def set_filament_state(self, state: FilamentState) -> None:
+        """Set the filament state directly from a Klipper update."""
         if not isinstance(state, SensorWidget.FilamentState):
             return
-        self.filament_state = SensorWidget.FilamentState(not state.value)
-        self.update()
+        if self.filament_state != state:
+            self.filament_state = state
+            self.update()
 
     def toggle_button_state(self, state: ToggleAnimatedButton.State) -> None:
         """Called when the Klipper firmware reports an update to the filament sensor state"""

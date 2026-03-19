@@ -8,7 +8,6 @@ from enum import Enum, auto
 from pathlib import Path
 
 import events
-from events import ReceivedFileData
 from lib.moonrakerComm import MoonWebSocket
 from PyQt6 import QtCore, QtGui, QtWidgets
 
@@ -54,7 +53,7 @@ class FileMetadata:
 
     filename: str = ""
     thumbnail_images: list[QtGui.QImage] = field(default_factory=list)
-    filament_total: typing.Union[dict, str, float] = field(default_factory=dict)
+    filament_total: dict | str | float = field(default_factory=dict)
     estimated_time: int = 0
     layer_count: int = -1
     total_layer: int = -1
@@ -74,8 +73,8 @@ class FileMetadata:
     slicer_version: str = "Unknown"
     gcode_start_byte: int = 0
     gcode_end_byte: int = 0
-    print_start_time: typing.Optional[float] = None
-    job_id: typing.Optional[str] = None
+    print_start_time: float | None = None
+    job_id: str | None = None
 
     def to_dict(self) -> dict:
         """Convert to dictionary for signal emission."""
@@ -255,7 +254,7 @@ class Files(QtCore.QObject):
         """Check if initial load is complete."""
         return self._initial_load_complete
 
-    def get_file_metadata(self, filename: str) -> typing.Optional[FileMetadata]:
+    def get_file_metadata(self, filename: str) -> FileMetadata | None:
         """Get cached metadata for a file."""
         return self._files_metadata.get(filename.removeprefix("/"))
 
@@ -279,7 +278,7 @@ class Files(QtCore.QObject):
         self._initial_load_complete = False
         self.request_dir_info[str, bool].emit("", True)
 
-    def handle_filelist_changed(self, data: typing.Union[dict, list]) -> None:
+    def handle_filelist_changed(self, data: dict | list) -> None:
         """Handle notify_filelist_changed from Moonraker."""
         if isinstance(data, dict) and "params" in data:
             data = data.get("params", [])
@@ -492,7 +491,7 @@ class Files(QtCore.QObject):
         self.fileinfo.emit(metadata.to_dict())
         logger.debug(f"Metadata loaded for: {filename}")
 
-    def handle_metadata_error(self, error_data: typing.Union[str, dict]) -> None:
+    def handle_metadata_error(self, error_data: str | dict) -> None:
         """
         Handle metadata request error from Moonraker.
 
@@ -538,7 +537,7 @@ class Files(QtCore.QObject):
         self._usb_preload_queue.append(usb_path)
         self.ws.api.get_dir_information(usb_path, True)
 
-    def get_cached_usb_files(self, usb_path: str) -> typing.Optional[list[dict]]:
+    def get_cached_usb_files(self, usb_path: str) -> list[dict] | None:
         """
         Get cached files for a USB path if available.
 
@@ -646,7 +645,7 @@ class Files(QtCore.QObject):
     @QtCore.pyqtSlot(str, bool, name="get_dir_info")
     def get_dir_information(
         self, directory: str = "", extended: bool = True
-    ) -> typing.Optional[list]:
+    ) -> list | None:
         """Get directory information."""
         self._current_directory = directory
 
@@ -669,8 +668,8 @@ class Files(QtCore.QObject):
 
     def event(self, event: QtCore.QEvent) -> bool:
         """Handle object-level events."""
-        if event.type() == ReceivedFileData.type():
-            if isinstance(event, ReceivedFileData):
+        if event.type() == events.ReceivedFileData.type():
+            if isinstance(event, events.ReceivedFileData):
                 self.handle_message_received(event.method, event.data, event.params)
                 return True
         return super().event(event)

@@ -1,3 +1,4 @@
+import logging
 import os
 import typing
 
@@ -8,8 +9,12 @@ from lib.utils.blocks_label import BlocksLabel
 from lib.utils.icon_button import IconButton
 from PyQt6 import QtCore, QtGui, QtWidgets
 
+logger = logging.getLogger(__name__)
+
 
 class ConfirmWidget(QtWidgets.QWidget):
+    """Widget displayed when a user selects a file to print."""
+
     on_accept: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         str, name="on_accept"
     )
@@ -26,7 +31,6 @@ class ConfirmWidget(QtWidgets.QWidget):
         self.setMouseTracking(True)
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_AcceptTouchEvents, True)
         self.thumbnail: QtGui.QImage = self._blocksthumbnail
-        self._thumbnails: typing.List = []
         self.directory = "gcodes"
         self.filename = ""
         self.confirm_button.clicked.connect(
@@ -39,32 +43,34 @@ class ConfirmWidget(QtWidgets.QWidget):
             lambda: self.on_delete.emit(self.filename, self.directory)
         )
 
-    @QtCore.pyqtSlot(str, dict, name="on_show_widget")
-    def on_show_widget(self, text: str, filedata: dict | None = None) -> None:
-        """Handle widget show"""
-        if not filedata:
-            return
+    @QtCore.pyqtSlot(str, object, name="on_show_widget")
+    def on_show_widget(self, text: str, metadata: dict | None = None) -> None:
+        """Handle widget show."""
         directory = os.path.dirname(text)
         filename = os.path.basename(text)
         self.directory = directory
         self.filename = filename
         self.cf_file_name.setText(self.filename)
-        self._thumbnails = filedata.get("thumbnail_images", [])
-        if self._thumbnails:
-            _biggest_thumbnail = self._thumbnails[-1]  # Show last which is biggest
-            self.thumbnail = QtGui.QImage(_biggest_thumbnail)
-        else:
+        if metadata is None:
             self.thumbnail = self._blocksthumbnail
-        _total_filament = filedata.get("filament_weight_total")
-        _estimated_time = filedata.get("estimated_time")
-        if isinstance(_estimated_time, str):
-            seconds = 0
-        else:
-            seconds = _estimated_time
+            self.cf_info_tf.setText("Total Filament: loading...")
+            self.cf_info_tr.setText("Slicer time: loading...")
+            self.update()
+            return
+        self._update_metadata_labels(metadata)
+        self.update()
+
+    def _update_metadata_labels(self, metadata: dict) -> None:
+        """Update thumbnail and text labels from metadata."""
+        self._apply_thumbnail(metadata)
+        raw_weight = metadata.get("filament_weight_total", 0)
+        _total_filament: float | str = raw_weight if raw_weight > 0 else 0
+        seconds = metadata.get("estimated_time", 0)
+        seconds = seconds if seconds > 0 else 0
 
         days, hours, minutes, _ = helper_methods.estimate_print_time(seconds)
         if seconds <= 0:
-            time_str = "??"
+            time_str = "Unknown"
         elif seconds < 60:
             time_str = "less than 1 minute"
         else:
@@ -83,9 +89,39 @@ class ConfirmWidget(QtWidgets.QWidget):
             _total_filament = str("%.2f" % _total_filament) + "g"
         filament_label = f"Total Filament: {_total_filament}"
         time_label = f"Slicer time: {time_str}"
-        self.cf_info_tf.setText(f"{filament_label}")
-        self.cf_info_tr.setText(f"{time_label}")
-        self.repaint()
+        self.cf_info_tf.setText(filament_label)
+        self.cf_info_tr.setText(time_label)
+
+    def _apply_thumbnail(self, metadata: dict) -> None:
+        """Set self.thumbnail from metadata, falling back to the logo."""
+        thumbnails = metadata.get("thumbnail_images", [])
+        if thumbnails:
+            last = thumbnails[-1]
+            if isinstance(last, QtGui.QImage) and not last.isNull():
+                self.thumbnail = last
+                return
+        self.thumbnail = self._blocksthumbnail
+
+    @QtCore.pyqtSlot(dict, name="on_fileinfo")
+    def on_fileinfo(self, metadata: dict) -> None:
+        """Update thumbnail and metadata labels when new data arrives."""
+        if not metadata or not self.filename:
+            return
+        incoming = metadata.get("filename", "")
+        current = (
+            f"{self.directory}/{self.filename}" if self.directory else self.filename
+        )
+        # Also accept bare-filename match for USB files: Moonraker may strip the
+        # USB directory prefix from the returned filename.
+        is_usb_bare_match = (
+            incoming == self.filename
+            and self.directory.startswith("USB-")
+            and incoming == os.path.basename(incoming)
+        )
+        if incoming != current and not is_usb_bare_match:
+            return
+        self._update_metadata_labels(metadata)
+        self.update()
 
     def estimate_print_time(self, seconds: int) -> list:
         """Convert time in seconds format to days, hours, minutes, seconds.
@@ -142,8 +178,8 @@ class ConfirmWidget(QtWidgets.QWidget):
 
     def showEvent(self, a0: QtGui.QShowEvent) -> None:
         """Re-implemented method, Handle widget show event"""
-        if not self.thumbnail:
-            self.cf_thumbnail.close()
+        if self.thumbnail.isNull():
+            self.cf_thumbnail.hide()
         return super().showEvent(a0)
 
     def _setupUI(self) -> None:
@@ -252,7 +288,6 @@ class ConfirmWidget(QtWidgets.QWidget):
             "icon_pixmap", QtGui.QPixmap(":/dialog/media/btn_icons/yes.svg")
         )
         self.confirm_button.setText("Print")
-        # 2. Align buttons to the right
         self.cf_confirm_layout.addWidget(
             self.confirm_button, 0, QtCore.Qt.AlignmentFlag.AlignCenter
         )
@@ -266,7 +301,6 @@ class ConfirmWidget(QtWidgets.QWidget):
             "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/garbage-icon.svg")
         )
         self.delete_file_button.setText("Delete")
-        # 2. Align buttons to the right
         self.cf_confirm_layout.addWidget(
             self.delete_file_button, 0, QtCore.Qt.AlignmentFlag.AlignCenter
         )

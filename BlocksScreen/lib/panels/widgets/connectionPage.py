@@ -57,7 +57,7 @@ class ConnectionPage(QtWidgets.QFrame):
             self.restart_klipper_clicked.emit
         )
         self.ws.connection_lost.connect(slot=self.show)
-        self.ws.klippy_connected_signal.connect(self.on_klippy_connected)
+        self.ws.klippy_connected_signal.connect(self.on_klippy_connection)
         self.ws.klippy_state_signal.connect(self.on_klippy_state)
 
     @QtCore.pyqtSlot(bool, name="toggle_connection_page")
@@ -82,7 +82,7 @@ class ConnectionPage(QtWidgets.QFrame):
             self.call_cancel_panel.emit(False)
             return super().showEvent(a0)
 
-    @QtCore.pyqtSlot(bool, name="on_klippy_connected")
+    @QtCore.pyqtSlot(bool, name="on_klippy_connection")
     def on_klippy_connection(self, connected: bool):
         """Handle klippy connection state"""
         self.dot_timer.stop()
@@ -143,15 +143,13 @@ class ConnectionPage(QtWidgets.QFrame):
         if self.state == "shutdown" and self.message is not None:
             return False
         self.dot_timer.stop()
-        logger.debug(f"[ConnectionWindowPanel] text_update: {text}")
+        logger.debug("[ConnectionWindowPanel] text_update: %r", text)
         if text == "wb lost":
             self.panel.connectionTextBox.setText("Moonraker connection lost")
         if text is None:
-            self.panel.connectionTextBox.setText(
-                """
+            self.panel.connectionTextBox.setText("""
                 Not connected to Moonraker Websocket
-                """
-            )
+                """)
             return True
         if isinstance(text, str):
             self.panel.connectionTextBox.setText(
@@ -208,7 +206,7 @@ class ConnectionPage(QtWidgets.QFrame):
         elif event.type() == KlippyShutdown.type():
             self.dot_timer.stop()
             if not self.isVisible():
-                self.panel.connectionTextBox.setText(f"{self.message}")
+                self.panel.connectionTextBox.setText(self.message or "")
                 self.show()
                 return True
 

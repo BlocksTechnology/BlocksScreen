@@ -1,10 +1,10 @@
 from __future__ import annotations
 
+import logging
 import re
 import typing
 from functools import partial
 
-from helper_methods import normalize
 from lib.moonrakerComm import MoonWebSocket
 from lib.panels.widgets.numpadPage import CustomNumpad
 from lib.panels.widgets.optionCardWidget import OptionCard
@@ -16,6 +16,8 @@ from lib.printer import Printer
 from lib.ui.controlStackedWidget_ui import Ui_controlStackedWidget
 from lib.utils.display_button import DisplayButton
 from PyQt6 import QtCore, QtGui, QtWidgets
+
+logger = logging.getLogger(__name__)
 
 
 class ControlTab(QtWidgets.QStackedWidget):
@@ -386,6 +388,11 @@ class ControlTab(QtWidgets.QStackedWidget):
         min_value: int = 0,
         max_value: int = 100,
     ) -> None:
+        """Configure and navigate to the slider page with the given name, value, and callback."""
+        try:
+            self.sliderPage.value_selected.disconnect()
+        except (RuntimeError, TypeError):
+            pass  # no connections yet
         self.sliderPage.value_selected.connect(callback)
         self.sliderPage.set_name(name)
         self.sliderPage.set_slider_position(int(current_value))
@@ -395,18 +402,16 @@ class ControlTab(QtWidgets.QStackedWidget):
 
     @QtCore.pyqtSlot(str, int, name="on_slider_change")
     def on_slider_change(self, name: str, new_value: int) -> None:
-        if "speed" in name.lower():
-            self.speed_factor_override = new_value / 100
-            self.run_gcode_signal.emit(f"M220 S{new_value}")
-        if name.lower() == "fan":
-            self.run_gcode_signal.emit(
-                f"M106 S{int(round((normalize(float(new_value / 100), 0.0, 1.0, 0, 255))))}"
-            )  # [0, 255] Range
-        else:
-            name = name.replace(" ", "_")
-            self.run_gcode_signal.emit(
-                f'SET_FAN_SPEED FAN="{name}" SPEED={float(new_value / 100.00)}'
-            )  # [0.0, 1.0] Range
+        """Handle slider value change for fan controls.
+
+        In controlTab, only fan_generic cards invoke this slot — the "speed"
+        and "fan" branches are kept for parity with tunePage but should never
+        match here.
+        """
+        gcode_name = name.replace(" ", "_")
+        self.run_gcode_signal.emit(
+            f"SET_FAN_SPEED FAN={gcode_name} SPEED={float(new_value / 100.00)}"
+        )  # [0.0, 1.0] Range
 
     def create_display_button(self, name: str) -> DisplayButton:
         """Create and return a DisplayButton
@@ -427,19 +432,20 @@ class ControlTab(QtWidgets.QStackedWidget):
         return display_button
 
     def handle_printcoreupdate(self, value: dict):
-        if value["swapping"] == "idle":
+        _swapping = value.get("swapping")
+        if _swapping is None or _swapping == "idle":
             return
 
-        if value["swapping"] == "in_pos":
+        if _swapping == "in_pos":
             self.call_load_panel.emit(False, "")
             self.printcores_page.show()
             self.disable_popups.emit(True)
             self.printcores_page.setText(
                 "Please Insert Print Core \n \n Afterwards click continue"
             )
-        if value["swapping"] == "unloading":
+        if _swapping == "unloading":
             self.call_load_panel.emit(True, "Unloading print core")
-        if value["swapping"] == "cleaning":
+        if _swapping == "cleaning":
             self.call_load_panel.emit(True, "Cleaning print core")
 
     def _handle_gcode_response(self, messages: list):
@@ -508,6 +514,10 @@ class ControlTab(QtWidgets.QStackedWidget):
         max_value: int = 100,
     ) -> None:
         """Handles numpad widget request"""
+        try:
+            self.numpadPage.value_selected.disconnect()
+        except (RuntimeError, TypeError):
+            pass  # no connections yet
         self.numpadPage.value_selected.connect(callback)
         self.numpadPage.set_name(name)
         self.numpadPage.set_value(current_value)

@@ -1,5 +1,6 @@
-import typing
 import enum
+import typing
+
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 
@@ -106,7 +107,7 @@ class BlocksCustomButton(QtWidgets.QAbstractButton):
             self.text_color = QtGui.QColor(value)
         self.update()
 
-    def paintEvent(self, e: typing.Optional[QtGui.QPaintEvent]):
+    def paintEvent(self, e: QtGui.QPaintEvent | None):
         """Re-implemented method, paint widget"""
         painter = QtGui.QPainter(self)
         painter.setRenderHint(painter.RenderHint.Antialiasing, True)
@@ -116,17 +117,7 @@ class BlocksCustomButton(QtWidgets.QAbstractButton):
         _style = self.style()
         if not _style or not _rect:
             return
-        # Flat button control
         opt = QtWidgets.QStyleOptionButton()
-        draw_frame = (
-            not self._is_flat
-            or self.underMouse()
-            or opt.state & QtWidgets.QStyle.StateFlag.State_Sunken
-        )
-        if draw_frame:
-            _style.drawControl(
-                QtWidgets.QStyle.ControlElement.CE_PushButtonLabel, opt, painter, self
-            )
         _style.drawControl(
             QtWidgets.QStyle.ControlElement.CE_PushButtonLabel, opt, painter, self
         )

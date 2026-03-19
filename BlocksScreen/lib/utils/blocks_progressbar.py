@@ -1,5 +1,6 @@
 import typing
-from PyQt6 import QtWidgets, QtGui, QtCore
+
+from PyQt6 import QtCore, QtGui, QtWidgets
 
 
 class CustomProgressBar(QtWidgets.QProgressBar):
@@ -29,6 +30,12 @@ class CustomProgressBar(QtWidgets.QProgressBar):
         self._bar_color = QtGui.QColor(223, 223, 223)
         self.setMinimumSize(100, 100)
         self._inner_rect: QtCore.QRectF = QtCore.QRectF()
+
+    def reset(self) -> None:
+        """Reset progress to zero."""
+        self.progress_value = 0
+        super().reset()
+        self.update()
 
     def set_padding(self, value) -> None:
         """Set widget padding"""
@@ -93,8 +100,8 @@ class CustomProgressBar(QtWidgets.QProgressBar):
         Raises:
             ValueError: If provided value in not between 0.0 and 1.0
         """
-        if not (0 <= value <= 100):
-            raise ValueError("Argument `value` expected value between 0.0 and 1.0 ")
+        if not (0.0 <= value <= 1.0):
+            raise ValueError("Argument `value` expected value between 0.0 and 1.0")
         value *= 100
         self.progress_value = value
         self.update()
@@ -159,7 +166,7 @@ class CustomProgressBar(QtWidgets.QProgressBar):
         bg_pen.setCapStyle(QtCore.Qt.PenCapStyle.RoundCap)
         painter.setPen(bg_pen)
         painter.drawArc(arc_rect, arc_start, arc_span)
-        if self.progress_value is not None:
+        if self.progress_value is not None and self.progress_value > 0:
             gradient = QtGui.QConicalGradient(arc_rect.center(), -90)
             gradient.setColorAt(0.0, self._bar_color)
             gradient.setColorAt(1.0, QtGui.QColor(100, 100, 100))

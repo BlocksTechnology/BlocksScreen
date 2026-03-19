@@ -101,7 +101,7 @@ class UpdatePage(QtWidgets.QWidget):
         """Handles reload button click, requests update status refresh"""
         self.show_loading(True)
         if service:
-            self.request_refresh_update.emit([service])
+            self.request_refresh_update[str].emit(service)
         else:
             self.request_refresh_update.emit()
 
@@ -197,14 +197,16 @@ class UpdatePage(QtWidgets.QWidget):
         if not _remote_version:
             self.remote_version_title.hide()
             self.remote_version_tracking.hide()
-        self.remote_version_title.show()
-        self.remote_version_tracking.show()
-        self.remote_version_title.setText("Remote Version: ")
-        self.remote_version_tracking.setText(_remote_version)
+        else:
+            self.remote_version_title.show()
+            self.remote_version_tracking.show()
+            self.remote_version_title.setText("Remote Version: ")
+            self.remote_version_tracking.setText(_remote_version)
         _curr_version = cli_data.get("version", None)
         if not _curr_version:
             # There is no version information something is seriously wrong here
             self.action_btn.setText("Recover")
+            return
         self.version_title.show()
         self.version_tracking_info.show()
         self.version_tracking_info.setText(_curr_version)
@@ -295,7 +297,8 @@ class UpdatePage(QtWidgets.QWidget):
         font_id = QtGui.QFontDatabase.addApplicationFont(
             ":/font/media/fonts for text/Momcake-Bold.ttf"
         )
-        font_family = QtGui.QFontDatabase.applicationFontFamilies(font_id)[0]
+        _families = QtGui.QFontDatabase.applicationFontFamilies(font_id)
+        font_family = _families[0] if _families else ""
         sizePolicy = QtWidgets.QSizePolicy(
             QtWidgets.QSizePolicy.Policy.MinimumExpanding,
             QtWidgets.QSizePolicy.Policy.MinimumExpanding,
@@ -304,11 +307,9 @@ class UpdatePage(QtWidgets.QWidget):
         sizePolicy.setVerticalStretch(1)
         self.setSizePolicy(sizePolicy)
         self.setObjectName("updatePage")
-        self.setStyleSheet(
-            """#updatePage {
+        self.setStyleSheet("""#updatePage {
                 background-image: url(:/background/media/1st_background.png);
-            }"""
-        )
+            }""")
         self.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
         self.update_page_content_layout = QtWidgets.QVBoxLayout()
         self.update_page_content_layout.setContentsMargins(15, 15, 15, 15)

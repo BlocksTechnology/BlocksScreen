@@ -1,9 +1,14 @@
+import logging
+import re
 import typing
 from dataclasses import dataclass
 from enum import Enum, auto
 from functools import partial
 
 from lib.moonrakerComm import MoonWebSocket
+from lib.panels.widgets.basePopup import BasePopup
+from lib.panels.widgets.inputshaperPage import InputShaperPage
+from lib.panels.widgets.optionCardWidget import OptionCard
 from lib.panels.widgets.troubleshootPage import TroubleshootPage
 from lib.printer import Printer
 from lib.ui.utilitiesStackedWidget_ui import Ui_utilitiesStackedWidget
@@ -11,11 +16,7 @@ from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.toggleAnimatedButton import ToggleAnimatedButton
 from PyQt6 import QtCore, QtGui, QtWidgets
 
-from lib.panels.widgets.optionCardWidget import OptionCard
-from lib.panels.widgets.inputshaperPage import InputShaperPage
-from lib.panels.widgets.basePopup import BasePopup
-
-import re
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -113,8 +114,8 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         self.x_inputshaper: dict = {}
         self.stepper_limits: dict = {}
 
-        self.current_object: typing.Optional[str] = None
-        self.current_process: typing.Optional[Process] = None
+        self.current_object: str | None = None
+        self.current_process: Process | None = None
         self.axis_in: str = "x"
         self.amount: int = 1
         self.tb: bool = False
@@ -250,8 +251,9 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         """
 
         if not isinstance(data, list) or len(data) != 1 or not isinstance(data[0], str):
-            print(
-                f"WARNING: Invalid input format. Expected a list with one string. Received: {data}"
+            logger.warning(
+                "handle_gcode_response: invalid input format. Expected list[str], received: %r",
+                data,
             )
             return
 
@@ -317,7 +319,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
 
             self.is_page.set_type_dictionary(self.is_types)
             first_key = next(iter(reordered.keys()), None)
-            for key in reordered.keys():
+            for key in reordered:
                 if key == first_key:
                     self.is_page.add_type_entry(key, "Recommended type")
                 else:
@@ -365,7 +367,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
 
     @QtCore.pyqtSlot(dict, name="on_object_config")
     @QtCore.pyqtSlot(list, name="on_object_config")
-    def on_object_config(self, config: typing.Union[dict, list]) -> None:
+    def on_object_config(self, config: dict | list) -> None:
         """Handle receiving printer object configurations"""
         if not config:
             return
@@ -381,12 +383,12 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
                     pos_max = value.get("position_max")
                     if pos_min is not None or pos_max is not None:
                         self.stepper_limits[key] = {
-                            "min": float(pos_min)
-                            if pos_min is not None
-                            else -float("inf"),
-                            "max": float(pos_max)
-                            if pos_max is not None
-                            else float("inf"),
+                            "min": (
+                                float(pos_min) if pos_min is not None else -float("inf")
+                            ),
+                            "max": (
+                                float(pos_max) if pos_max is not None else float("inf")
+                            ),
                         }
 
     def on_printer_config_received(self, config: dict) -> None:
