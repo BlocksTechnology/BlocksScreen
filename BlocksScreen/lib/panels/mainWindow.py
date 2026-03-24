@@ -158,7 +158,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.controlPanel.request_change_page.connect(slot=self.global_change_page)
         self.utilitiesPanel.request_back_button.connect(slot=self.global_back)
         self.utilitiesPanel.request_change_page.connect(slot=self.global_change_page)
-        self.utilitiesPanel.update_available.connect(self.on_update_available)
         self.ui.notification_btn.clicked.connect(self.notiPage.show_notification_panel)
         self.ui.extruder_temp_display.clicked.connect(
             lambda: self.global_change_page(

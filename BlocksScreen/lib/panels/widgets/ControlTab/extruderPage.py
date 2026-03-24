@@ -141,6 +141,11 @@ class ExtruderPage(QtWidgets.QWidget):
             return
         self.extrude_length = value
 
+    def paintEvent(self, a0: QtGui.QPaintEvent | None) -> None:
+        if self.extrude_page.isVisible():
+            self.exp_info_label.setText(self.extrude_page_message)
+        return super().paintEvent(a0)
+
     def _setupUi(self) -> None:
         widget = QtWidgets.QWidget(parent=self)
         widget.setMinimumSize(QtCore.QSize(710, 410))
@@ -226,6 +231,7 @@ class ExtruderPage(QtWidgets.QWidget):
         self.exp_length_group_box.setMinimumSize(QtCore.QSize(0, 80))
         self.exp_length_group_box.setMaximumSize(QtCore.QSize(16777215, 16777215))
         self.exp_length_group_box.setFont(font)
+        self.exp_length_group_box.setStyleSheet("color:white")
         self.exp_length_group_box.setAlignment(
             QtCore.Qt.AlignmentFlag.AlignLeading
             | QtCore.Qt.AlignmentFlag.AlignLeft
@@ -298,6 +304,7 @@ class ExtruderPage(QtWidgets.QWidget):
         self.exp_feedrate_group_box = QtWidgets.QGroupBox(parent=self.extrude_page)
         self.exp_feedrate_group_box.setMinimumSize(QtCore.QSize(0, 80))
         self.exp_feedrate_group_box.setFont(font)
+        self.exp_feedrate_group_box.setStyleSheet("color:white")
         self.exp_feedrate_group_box.setObjectName("exp_feedrate_group_box")
 
         self.layoutWidget1 = QtWidgets.QWidget(parent=self.exp_feedrate_group_box)

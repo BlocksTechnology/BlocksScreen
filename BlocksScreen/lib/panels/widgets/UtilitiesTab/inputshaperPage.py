@@ -73,6 +73,7 @@ class InputShaperPage(QtWidgets.QWidget):
                 self.run_gcode_signal.emit("G28\nM400")
                 self.set_aut.emit(True)
                 self.run_gcode_signal.emit(gcode)
+                self.request_is_results_page.emit()
             elif gcode == "":
                 self.dialog_page.confirm_background_color("#dfdfdf")
                 self.dialog_page.cancel_background_color("#dfdfdf")
