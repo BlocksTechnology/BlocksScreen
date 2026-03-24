@@ -82,8 +82,9 @@ class MMUState:
             scalar_fields = {
                 k: v for k, v in diff.items() if k in MMUState.__dataclass_fields__
             }
+            if "ttg_map" in scalar_fields:
+                scalar_fields["ttg_map"] = tuple(scalar_fields["ttg_map"])
             return dataclasses.replace(self, **scalar_fields)
-
         # Gate arrays changed — need full rebuild, but we lost the raw arrays
         # Pass current gate data + diff into from_status
         gate_data = {
