@@ -14,7 +14,7 @@ class AxisMaintenancePage(QtWidgets.QWidget):
     )
     set_dialog_popup = QtCore.pyqtSignal(str, "PyQt_PyObject", name="set-dialog-popup")
 
-    show_waiting_page = QtCore.pyqtSignal(int, str, int, bool, name="show-waiting-page")
+    show_waiting_page = QtCore.pyqtSignal(str, int, bool, name="show-waiting-page")
 
     call_load_panel = QtCore.pyqtSignal(bool, str, name="call-load-panel")
 
@@ -30,20 +30,65 @@ class AxisMaintenancePage(QtWidgets.QWidget):
         self.axis_y_btn.clicked.connect(lambda: self.axis_maintenance("y"))
         self.axis_z_btn.clicked.connect(lambda: self.axis_maintenance("z"))
 
+        self.stepper_limits: dict = {}
+
+    @QtCore.pyqtSlot(dict, name="on_object_config")
+    @QtCore.pyqtSlot(list, name="on_object_config")
+    def on_object_config(self, config: typing.Union[dict, list]) -> None:
+        """Handle receiving printer object configurations"""
+        if not config:
+            return
+        config_items = [config] if isinstance(config, dict) else config
+        for item in config_items:
+            for key, value in item.items():
+                if (
+                    key.startswith("stepper_")
+                    and isinstance(value, dict)
+                    and key not in self.stepper_limits
+                ):
+                    pos_min = value.get("position_min")
+                    pos_max = value.get("position_max")
+                    if pos_min is not None or pos_max is not None:
+                        self.stepper_limits[key] = {
+                            "min": float(pos_min)
+                            if pos_min is not None
+                            else -float("inf"),
+                            "max": float(pos_max)
+                            if pos_max is not None
+                            else float("inf"),
+                        }
+        print(self.stepper_limits)
+
     def axis_maintenance(self, axis: str) -> None:
         """Routine, checks axis movement for printer debugging"""
-        # self.current_process = Process.AXIS_MAINTENANCE
-        self.current_object = axis
-        self.run_gcode_signal.emit(f"G28 {axis.upper()}\nM400")
+        self.c_axis = axis
+        self.run_gcode_signal.emit("G28\nM400")
         self.set_dialog_popup.emit(
             f"Insert oil on the {axis.upper()} axis before confirming.",
             self.dialog_asnwer,
         )
-        self.show_waiting_page.emit(-1, f"Homing {axis.upper()} axis...", 5000, True)
+        self.show_waiting_page.emit(f"Homing {axis.upper()} axis...", 5000, True)
 
     def dialog_asnwer(self):
-        print("." * 999)
         self.call_load_panel.emit(False, "")
+
+
+        stepper_key = f"stepper_{self.c_axis}"
+        if stepper_key in self.stepper_limits:
+            max_pos = self.stepper_limits[stepper_key].get("max", 20)
+            distance = int(max_pos) - 20
+            self.run_gcode_signal.emit("G90")
+            if self.c_axis != "x":
+                self.run_gcode_signal.emit("G1 X20 F3000\nM400")
+
+            if self.c_axis == "y":
+                self.run_gcode_signal.emit(
+                    f"G1 {self.c_axis.upper()}10 F3000\nM400\nG28\nM400"
+                )
+            else:
+                self.run_gcode_signal.emit(
+                    f"G1 {self.c_axis.upper()}{distance-10} F3000\nM400\nG28\nM400"
+                )
 
     def _setup_ui(self) -> None:
         self.setObjectName("axes_page")

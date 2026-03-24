@@ -528,8 +528,15 @@ class ProbeHelper(QtWidgets.QWidget):
 
         # if update.get("z_position_lower"):
         # f"{update.get('z_position_lower'):.4f} mm"
-        is_active = update.get("is_active", False)
-        if is_active and not self.isVisible():
+        is_active = update.get("is_active", None)
+        if update.get("z_position_upper"):
+            self.old_offset_info.setText(f"{update.get('z_position_upper'):.4f} mm")
+        if update.get("z_position"):
+            self.current_offset_info.setText(f"{update.get('z_position'):.4f} mm")
+
+        if not is_active: 
+            return
+        if not self.isVisible():
             self.request_page_view.emit()
         # Shared state updates
         self.helper_initialize = False
@@ -540,11 +547,6 @@ class ProbeHelper(QtWidgets.QWidget):
             self._hide_option_cards()
         else:
             self._show_option_cards()
-
-        if update.get("z_position_upper"):
-            self.old_offset_info.setText(f"{update.get('z_position_upper'):.4f} mm")
-        if update.get("z_position"):
-            self.current_offset_info.setText(f"{update.get('z_position'):.4f} mm")
 
     @QtCore.pyqtSlot(list, name="handle_gcode_response")
     def handle_gcode_response(self, data: list) -> None:
