@@ -19,6 +19,11 @@ class GateInfo:
     color_rgb: tuple[float, float, float]
     spool_id: int
 
+    @property
+    def is_available(self) -> bool:
+        """Return True if the gate has filament available to load."""
+        return self.status in (GateStatus.AVAILABLE, GateStatus.AVAILABLE_FROM_BUFFER)
+
 
 @dataclass(frozen=True, slots=True)
 class MMUState:
@@ -34,8 +39,28 @@ class MMUState:
     gates: tuple[GateInfo, ...]
     ttg_map: tuple[int, ...]
 
+    @property
+    def is_paused(self) -> bool:
+        """Return True if the MMU is in a paused/error state."""
+        return self.print_state == "pause"
+
+    @property
+    def current_gate_info(self) -> GateInfo | None:
+        """Return the GateInfo for the currently selected gate, or None if no gate is selected."""
+        if 0 <= self.gate < len(self.gates):
+            return self.gates[self.gate]
+        return None
+
     @classmethod
     def from_status(cls, data: dict) -> "MMUState":
+        """Build an MMUState from a full Moonraker mmu status dict.
+
+        Args:
+            data (dict): Full status dict from printer.objects.query or the initial notify_status_update payload.
+
+        Returns:
+            MMUState: New instance populated from *data*
+        """
         num_gates = data.get("num_gates", 0)
 
         statuses = data.get("gate_status", [GateStatus.UNKNOWN] * num_gates)
@@ -69,7 +94,21 @@ class MMUState:
             ttg_map=tuple(data.get("ttg_map", [])),
         )
 
+    def gate_for_tool(self, tool: int) -> int:
+        """Returns the gate mapped to *tool*, or -1 if unmapped."""
+        if 0 <= tool < len(self.ttg_map):
+            return self.ttg_map[tool]
+        return -1
+
     def apply_diff(self, diff: dict) -> "MMUState":
+        """Apply a Moonraker status diff and return an updated MMUState.
+
+        Args:
+            diff (dict): Partial status dict from notify_status_update.
+
+        Returns:
+            MMUState: New instance with updated fields
+        """
         gate_keys: set[str] = {
             "gate_status",
             "gate_material",
