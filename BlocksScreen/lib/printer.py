@@ -81,6 +81,10 @@ class Printer(QtCore.QObject):
     z_tilt_update: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         str, bool, name="z_tilt_update"
     )
+    mmu_updated: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        object, name="mmu-updated"
+    )
+    
     config_subscription: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         [dict],
         [list],
@@ -745,3 +749,6 @@ class Printer(QtCore.QObject):
 
     def _load_filament_object_updated(self, values: dict, name: str) -> None:
         self.load_filament_update[dict].emit(values)
+
+    def _mmu_object_updated(self, values: dict, name: str = "") -> None:
+        self.mmu_updated.emit(values)

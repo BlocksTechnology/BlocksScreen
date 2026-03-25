@@ -43,15 +43,11 @@ class AMUManager(QtCore.QObject):
         self.__setup_configfile()
 
     def __setup_configfile(self) -> None:
-        """
-        Sets up local configfile variable
-
-        Raises:
-            FileNotFoundError: File Not Found
-        """
-        self._config_filename = CONFIG_PATH
+        """Sets up local configfile variable"""
+        self._config_filename: Path | None = CONFIG_PATH
         if not self._config_filename.exists():
-            raise FileNotFoundError(("Config file not found %s", self._config_filename))
+            logger.warning("Config file not found %s", self._config_filename)
+            self._config_filename = None
 
     def _apply_patterns(self, state: bool) -> bool:
         """Method that comments/uncomments the AMU_FILES from the printer.cfg according with state value
@@ -62,6 +58,10 @@ class AMUManager(QtCore.QObject):
         Returns:
             bool: True: Success, False: Failed
         """
+        if self._config_filename is None:
+            logger.warning("_apply_patterns called but no config file available")
+            return False
+
         if self._amu_state == state:
             return False
 
@@ -122,7 +122,9 @@ class AMUManager(QtCore.QObject):
             color (str): Filament color as hex string, e.g. ``"ff56e0"``.
             spool_id (int): Spoolman spool ID, or -1 if not tracked.
         """
-        ...
+        self.run_gcode_signal.emit(
+            f"MMU_GATE_MAP gate={gate} MATERIAL={material} COLOR={color} SPOOLID={spool_id}"
+        )
 
     def set_gate_material(self, gate: int, material: str) -> None:
         """Set the `material` at the gate `gate`
@@ -131,6 +133,7 @@ class AMUManager(QtCore.QObject):
             gate (int): Gate index (0-based).
             material (str): Filament material name, e.g. ``"PLA"``.
         """
+        self.run_gcode_signal.emit(f"MMU_GATE_MAP gate={gate} MATERIAL={material}")
 
     def set_gate_color(self, gate: int, color: str) -> None:
         """Set the `color` at the gate `gate`
@@ -139,6 +142,7 @@ class AMUManager(QtCore.QObject):
             gate (int): Gate index (0-based).
             color (str): Filament color, e.g. ``"ff56e0"``.
         """
+        self.run_gcode_signal.emit(f"MMU_GATE_MAP gate={gate} COLOR={color}")
 
     def set_gate_spool(self, gate: int, spool_id: int) -> None:
         """Set the `spool_id` at the gate `gate`
@@ -147,12 +151,15 @@ class AMUManager(QtCore.QObject):
             gate (int): Gate index (0-based).
             spool_id (int): Spoolman spool ID, or -1 to clear.
         """
+        self.run_gcode_signal.emit(f"MMU_GATE_MAP gate={gate} SPOOLID={spool_id}")
 
     def home_mmu(self) -> None:
         """Home the MMU selector by sending MMU_HOME."""
+        self.run_gcode_signal.emit("MMU_HOME")
 
     def reset_mmu(self) -> None:
         """Reset the MMU and clear any pause or error state by sending MMU_RESET."""
+        self.run_gcode_signal.emit("MMU_RESET")
 
     def load_gate(self, gate: int) -> None:
         """Load filament from the specified gate by sending MMU_LOAD
@@ -160,10 +167,29 @@ class AMUManager(QtCore.QObject):
         Args:
             gate (int): Gate index to select (0-based)
         """
+        self.run_gcode_signal.emit(f"MMU_SELECT gate={gate}\nMMU_LOAD")
 
     def unload(self) -> None:
         """Unload the currently loaded filament by sending MMU_UNLOAD."""
         ...
+        self.run_gcode_signal.emit("MMU_UNLOAD")
+
+    def eject_gate(self, gate: int) -> None:
+        """Fully eject filament from gate, releasing from MMU gear.
+
+        Args:
+            gate: Gate index to eject from, on None to use currently selected gate.
+        """
+        self.run_gcode_signal.emit(f"MMU_EJECT GATE={gate}")
+
+    def eject_all_gates(self, num_gates: int) -> None:
+        """Fully eject filament from all gates sequentially(amu_manager.get_state().num_gates)
+
+        Args:
+           num_gates: Total number of gates(from MMUState.num_gates)
+        """
+        cmd = "\n".join(f"MMU_EJECT GATE={i}" for i in range(num_gates))
+        self.run_gcode_signal.emit(cmd)
 
     def select_tool(self, tool: int) -> None:
         """Select a tool, triggering a filament change if needed.
@@ -171,7 +197,7 @@ class AMUManager(QtCore.QObject):
         Args:
             tool (int): Tool index to select (0-based).
         """
-        ...
+        self.run_gcode_signal.emit(f"MMU_CHANGE_TOOL TOOL={tool}")
 
     @QtCore.pyqtSlot(dict, name="update_mmu_state")
     def update_mmu_state(self, data: dict) -> None:
@@ -184,7 +210,11 @@ class AMUManager(QtCore.QObject):
         Args:
             data (dict): Raw MMU status or diff dict from Moonraker
         """
-        ...
+        if self._mmu_state is None:
+            self._mmu_state = MMUState.from_status(data)
+        else:
+            self._mmu_state = self._mmu_state.apply_diff(data)
+        self.mmu_state_changed.emit(self._mmu_state)
 
 
 if __name__ == "__main__":
