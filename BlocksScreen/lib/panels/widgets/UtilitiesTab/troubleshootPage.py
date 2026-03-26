@@ -24,7 +24,7 @@ class TroubleshootPage(QtWidgets.QDialog):
         self.label_4.setText(
             "For more information check our website \n www.blockstec.com \n or \nsupport@blockstec.com"
         )
-        self.tb_back_btn.clicked.connect(lambda:self.hide())
+        self.tb_back_btn.clicked.connect(lambda: self.hide())
         self.repaint()
 
     def _geometry_calc(self) -> None:

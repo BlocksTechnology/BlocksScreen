@@ -50,7 +50,6 @@ class LedsSliderPage(QtWidgets.QWidget):
         self.singleled = single
 
     def handle_back(self):
-        print(self.singleled)
         if self.singleled:
             self.request_change_page.emit(0)
         else:
@@ -165,13 +164,13 @@ class LedsSliderPage(QtWidgets.QWidget):
         self.leds_slider_back_btn.setObjectName("leds_slider_back_btn")
         self.leds_slider_header_layout.addWidget(self.leds_slider_back_btn)
 
-
         self.verticalLayout = QtWidgets.QVBoxLayout(self)
         self.verticalLayout.setContentsMargins(0, 0, 0, 0)
         self.verticalLayout.setObjectName("verticalLayout")
 
         sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Expanding
+            QtWidgets.QSizePolicy.Policy.Expanding,
+            QtWidgets.QSizePolicy.Policy.Expanding,
         )
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)

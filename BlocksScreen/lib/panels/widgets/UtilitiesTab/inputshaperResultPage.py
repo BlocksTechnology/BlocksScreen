@@ -2,12 +2,14 @@ from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_frame import BlocksCustomFrame
 from lib.utils.icon_button import IconButton
 from lib.utils.list_model import EntryDelegate, EntryListModel, ListItem
+import logging
 
 import re
 
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 import typing
+logger = logging.getLogger(__name__)
 
 
 class InputShaperResultsPage(QtWidgets.QWidget):
@@ -43,11 +45,9 @@ class InputShaperResultsPage(QtWidgets.QWidget):
         self.is_aut_types: dict = {}
         self.aut = True
 
-
     @QtCore.pyqtSlot(bool, name="set-aut")
-    def set_aut(self,aut: bool):
+    def set_aut(self, aut: bool):
         self.aut = aut
-
 
     def handle_gcode_response(self, data: list[str]) -> None:
         """
@@ -56,9 +56,10 @@ class InputShaperResultsPage(QtWidgets.QWidget):
         if not self.isVisible():
             return
         if not isinstance(data, list) or len(data) != 1 or not isinstance(data[0], str):
-            print(
+            logger.error(
                 f"WARNING: Invalid input format. Expected a list with one string. Received: {data}"
             )
+
             return
 
         message = data[0]

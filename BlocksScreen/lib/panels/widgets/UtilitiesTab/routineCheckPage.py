@@ -1,13 +1,10 @@
 import typing
-import re
 from enum import Enum, auto
 from lib.utils.icon_button import IconButton
-from helper_methods import normalize
 
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 from lib.utils.blocks_button import BlocksCustomButton
-
 
 
 class Process(Enum):
@@ -28,15 +25,14 @@ class RoutineCheckPage(QtWidgets.QWidget):
     )
     show_waiting_page = QtCore.pyqtSignal(str, int, bool, name="show-waiting-page")
 
-    set_rc_page = QtCore.pyqtSignal(str,str,name="set-rc-page")
-
+    set_rc_page = QtCore.pyqtSignal(str, str, name="set-rc-page")
 
     def __init__(
         self,
         parent: typing.Optional["QtWidgets.QWidget"],
     ) -> None:
         super(RoutineCheckPage, self).__init__(parent)
-        
+
         self.objects: dict = {
             "fans": {},
             "axis": {"x": "indf", "y": "indf", "z": "indf"},
@@ -51,12 +47,10 @@ class RoutineCheckPage(QtWidgets.QWidget):
         self.current_object: typing.Optional[str] = None
         self.routine_check_back_btn.clicked.connect(self.request_back_button)
 
-        self.rc_fans.clicked.connect(lambda:self.run_routine(Process.FAN))
-        self.rc_bheat.clicked.connect(
-            lambda:self.run_routine(Process.BED_HEATER)
-        )
-        self.rc_ext.clicked.connect(lambda:self.run_routine(Process.EXTRUDER))
-        self.rc_axis.clicked.connect(lambda:self.run_routine(Process.AXIS))
+        self.rc_fans.clicked.connect(lambda: self.run_routine(Process.FAN))
+        self.rc_bheat.clicked.connect(lambda: self.run_routine(Process.BED_HEATER))
+        self.rc_ext.clicked.connect(lambda: self.run_routine(Process.EXTRUDER))
+        self.rc_axis.clicked.connect(lambda: self.run_routine(Process.AXIS))
 
     @QtCore.pyqtSlot(list, name="on_object_list")
     def on_object_list(self, object_list: list) -> None:
@@ -98,26 +92,21 @@ class RoutineCheckPage(QtWidgets.QWidget):
         elif process in [Process.BED_HEATER, Process.EXTRUDER]:
             message = "Please check if the temperature reaches 60°C. \n you may need to wait a few moments."
 
-        
-        self.set_rc_page.emit(
-            f"Running routine for: {self.current_object}", message
-        )
+        self.set_rc_page.emit(f"Running routine for: {self.current_object}", message)
         self.show_waiting_page.emit(
             f"Please check if the {message}",
             10000 if process == Process.AXIS else 0,
-            False
+            False,
         )
         self._send_routine_gcode()
 
-    @QtCore.pyqtSlot(str,name = "on_rc_asnwer")
-    def on_routine_answer(self,answer:str) -> None:
+    @QtCore.pyqtSlot(str, name="on_rc_asnwer")
+    def on_routine_answer(self, answer: str) -> None:
         """Handle routine ongoing process"""
         if self.current_process is None or self.current_object is None:
             return
         if answer == "no":
             self.tb = True
-
-
 
         process_map = {
             Process.FAN: ("fans", self.current_object),
@@ -130,15 +119,13 @@ class RoutineCheckPage(QtWidgets.QWidget):
             self.objects[obj_key][item_key] = answer
             if self.current_process in [Process.BED_HEATER, Process.EXTRUDER]:
                 self.run_gcode_signal.emit("TURN_OFF_HEATERS")
-            
+
             if self.current_process is Process.FAN:
                 for i in self.objects["fans"]:
                     self.run_gcode_signal.emit(f"SET_FAN_SPEED FAN={i} SPEED=0\nM400")
-            
 
             self.run_routine(self.current_process)
 
-    
     def _advance_routine_object(self, obj_list: list) -> bool:
         if not obj_list:
             is_first_run = self.current_object is None
@@ -162,7 +149,6 @@ class RoutineCheckPage(QtWidgets.QWidget):
             self.current_object = obj_list[0]
             return True
 
-
     def _send_routine_gcode(self):
         """Send the correct G-code for the current process and object."""
         if self.current_process == Process.FAN:
@@ -171,7 +157,6 @@ class RoutineCheckPage(QtWidgets.QWidget):
                 if fan_name == "fan":
                     self.run_gcode_signal.emit("M106 S255\nM400")
                 else:
-                    print(fan_name)
                     self.run_gcode_signal.emit(
                         f"SET_FAN_SPEED FAN={fan_name} SPEED=0.8\nM400"
                     )
@@ -195,8 +180,6 @@ class RoutineCheckPage(QtWidgets.QWidget):
         if gcode := gcode_map.get(key):
             self.run_gcode_signal.emit(f"{gcode}\nM400")
 
- 
-
     def _setup_ui(self) -> None:
         self.setObjectName("fans_page")
         widget = QtWidgets.QWidget(parent=self)
@@ -206,18 +189,34 @@ class RoutineCheckPage(QtWidgets.QWidget):
         self.routines_page.setObjectName("routines_page")
         self.verticalLayout = QtWidgets.QVBoxLayout(self.routines_page)
         self.verticalLayout.setObjectName("verticalLayout")
-        spacerItem6 = QtWidgets.QSpacerItem(20, 24, QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Minimum)
+        spacerItem6 = QtWidgets.QSpacerItem(
+            20,
+            24,
+            QtWidgets.QSizePolicy.Policy.Minimum,
+            QtWidgets.QSizePolicy.Policy.Minimum,
+        )
         self.verticalLayout.addItem(spacerItem6)
         self.routines_header_layout = QtWidgets.QHBoxLayout()
-        self.routines_header_layout.setSizeConstraint(QtWidgets.QLayout.SizeConstraint.SetMinimumSize)
+        self.routines_header_layout.setSizeConstraint(
+            QtWidgets.QLayout.SizeConstraint.SetMinimumSize
+        )
         self.routines_header_layout.setObjectName("routines_header_layout")
-        spacerItem7 = QtWidgets.QSpacerItem(60, 20, QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Minimum)
+        spacerItem7 = QtWidgets.QSpacerItem(
+            60,
+            20,
+            QtWidgets.QSizePolicy.Policy.Minimum,
+            QtWidgets.QSizePolicy.Policy.Minimum,
+        )
         self.routines_header_layout.addItem(spacerItem7)
         self.routines_page_title = QtWidgets.QLabel(parent=self.routines_page)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Minimum)
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Minimum
+        )
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(self.routines_page_title.sizePolicy().hasHeightForWidth())
+        sizePolicy.setHeightForWidth(
+            self.routines_page_title.sizePolicy().hasHeightForWidth()
+        )
         self.routines_page_title.setSizePolicy(sizePolicy)
         font = QtGui.QFont()
         font.setFamily("Momcake")
@@ -228,7 +227,9 @@ class RoutineCheckPage(QtWidgets.QWidget):
         self.routines_page_title.setObjectName("routines_page_title")
         self.routines_header_layout.addWidget(self.routines_page_title)
 
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Minimum)
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Minimum
+        )
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
 
@@ -236,18 +237,28 @@ class RoutineCheckPage(QtWidgets.QWidget):
         self.routine_check_back_btn.setSizePolicy(sizePolicy)
         self.routine_check_back_btn.setMinimumSize(QtCore.QSize(60, 60))
         self.routine_check_back_btn.setMaximumSize(QtCore.QSize(60, 60))
-        self.routine_check_back_btn.setProperty("icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/back.svg"))
+        self.routine_check_back_btn.setProperty(
+            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/back.svg")
+        )
         self.routine_check_back_btn.setObjectName("routine_check_back_btn")
         self.routines_header_layout.addWidget(self.routine_check_back_btn)
         self.verticalLayout.addLayout(self.routines_header_layout)
 
-        spacerItem8 = QtWidgets.QSpacerItem(20, 60, QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Minimum)
+        spacerItem8 = QtWidgets.QSpacerItem(
+            20,
+            60,
+            QtWidgets.QSizePolicy.Policy.Minimum,
+            QtWidgets.QSizePolicy.Policy.Minimum,
+        )
         self.verticalLayout.addItem(spacerItem8)
         self.routines_content_layout = QtWidgets.QGridLayout()
         self.routines_content_layout.setVerticalSpacing(20)
         self.routines_content_layout.setObjectName("routines_content_layout")
 
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Expanding)
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Expanding,
+            QtWidgets.QSizePolicy.Policy.Expanding,
+        )
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
 
@@ -262,7 +273,12 @@ class RoutineCheckPage(QtWidgets.QWidget):
         self.rc_bheat.setFont(font)
         self.rc_bheat.setMinimumSize(QtCore.QSize(250, 80))
         self.rc_bheat.setMaximumSize(QtCore.QSize(250, 80))
-        self.rc_bheat.setProperty("icon_pixmap", QtGui.QPixmap(":/temperature_related/media/btn_icons/temperature_plate.svg"))
+        self.rc_bheat.setProperty(
+            "icon_pixmap",
+            QtGui.QPixmap(
+                ":/temperature_related/media/btn_icons/temperature_plate.svg"
+            ),
+        )
         self.rc_bheat.setObjectName("rc_bheat")
         self.routines_content_layout.addWidget(self.rc_bheat, 0, 1, 1, 1)
 
@@ -271,7 +287,9 @@ class RoutineCheckPage(QtWidgets.QWidget):
         self.rc_fans.setFont(font)
         self.rc_fans.setMinimumSize(QtCore.QSize(250, 80))
         self.rc_fans.setMaximumSize(QtCore.QSize(250, 80))
-        self.rc_fans.setProperty("icon_pixmap", QtGui.QPixmap(":/fan_related/media/btn_icons/fan_cage.svg"))
+        self.rc_fans.setProperty(
+            "icon_pixmap", QtGui.QPixmap(":/fan_related/media/btn_icons/fan_cage.svg")
+        )
         self.rc_fans.setObjectName("rc_fans")
         self.routines_content_layout.addWidget(self.rc_fans, 0, 0, 1, 1)
 
@@ -280,7 +298,10 @@ class RoutineCheckPage(QtWidgets.QWidget):
         self.rc_axis.setFont(font)
         self.rc_axis.setMinimumSize(QtCore.QSize(250, 80))
         self.rc_axis.setMaximumSize(QtCore.QSize(250, 80))
-        self.rc_axis.setProperty("icon_pixmap", QtGui.QPixmap(":/motion/media/btn_icons/axis_maintenance.svg"))
+        self.rc_axis.setProperty(
+            "icon_pixmap",
+            QtGui.QPixmap(":/motion/media/btn_icons/axis_maintenance.svg"),
+        )
         self.rc_axis.setObjectName("rc_axis")
         self.routines_content_layout.addWidget(self.rc_axis, 1, 1, 1, 1)
 
@@ -289,13 +310,20 @@ class RoutineCheckPage(QtWidgets.QWidget):
         self.rc_ext.setFont(font)
         self.rc_ext.setMinimumSize(QtCore.QSize(250, 80))
         self.rc_ext.setMaximumSize(QtCore.QSize(250, 80))
-        self.rc_ext.setProperty("icon_pixmap", QtGui.QPixmap(":/extruder_related/media/btn_icons/nozzle.svg"))
+        self.rc_ext.setProperty(
+            "icon_pixmap",
+            QtGui.QPixmap(":/extruder_related/media/btn_icons/nozzle.svg"),
+        )
         self.rc_ext.setObjectName("rc_ext")
         self.routines_content_layout.addWidget(self.rc_ext, 1, 0, 1, 1)
         self.verticalLayout.addLayout(self.routines_content_layout)
-        spacerItem9 = QtWidgets.QSpacerItem(20, 40, QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Expanding)
+        spacerItem9 = QtWidgets.QSpacerItem(
+            20,
+            40,
+            QtWidgets.QSizePolicy.Policy.Minimum,
+            QtWidgets.QSizePolicy.Policy.Expanding,
+        )
         self.verticalLayout.addItem(spacerItem9)
-
 
         widget.setLayout(self.verticalLayout)
 
@@ -303,18 +331,34 @@ class RoutineCheckPage(QtWidgets.QWidget):
 
     def retranslateUi(self):
         _translate = QtCore.QCoreApplication.translate
-        self.routines_page_title.setText(_translate("utilitiesStackedWidget", "Routine Check"))
-        self.routines_page_title.setProperty("class", _translate("utilitiesStackedWidget", "title_text"))
-        self.routine_check_back_btn.setText(_translate("utilitiesStackedWidget", "Back"))
-        self.routine_check_back_btn.setProperty("class", _translate("utilitiesStackedWidget", "menu_btn"))
-        self.routine_check_back_btn.setProperty("button_type", _translate("utilitiesStackedWidget", "icon"))
+        self.routines_page_title.setText(
+            _translate("utilitiesStackedWidget", "Routine Check")
+        )
+        self.routines_page_title.setProperty(
+            "class", _translate("utilitiesStackedWidget", "title_text")
+        )
+        self.routine_check_back_btn.setText(
+            _translate("utilitiesStackedWidget", "Back")
+        )
+        self.routine_check_back_btn.setProperty(
+            "class", _translate("utilitiesStackedWidget", "menu_btn")
+        )
+        self.routine_check_back_btn.setProperty(
+            "button_type", _translate("utilitiesStackedWidget", "icon")
+        )
         self.rc_bheat.setText(_translate("utilitiesStackedWidget", "Bed Heater"))
-        self.rc_bheat.setProperty("class", _translate("utilitiesStackedWidget", "menu_btn"))
+        self.rc_bheat.setProperty(
+            "class", _translate("utilitiesStackedWidget", "menu_btn")
+        )
         self.rc_fans.setText(_translate("utilitiesStackedWidget", "Fans"))
-        self.rc_fans.setProperty("class", _translate("utilitiesStackedWidget", "menu_btn"))
+        self.rc_fans.setProperty(
+            "class", _translate("utilitiesStackedWidget", "menu_btn")
+        )
         self.rc_axis.setText(_translate("utilitiesStackedWidget", "Axis"))
-        self.rc_axis.setProperty("class", _translate("utilitiesStackedWidget", "menu_btn"))
+        self.rc_axis.setProperty(
+            "class", _translate("utilitiesStackedWidget", "menu_btn")
+        )
         self.rc_ext.setText(_translate("utilitiesStackedWidget", "Extruder"))
-        self.rc_ext.setProperty("class", _translate("utilitiesStackedWidget", "menu_btn"))
-
-
+        self.rc_ext.setProperty(
+            "class", _translate("utilitiesStackedWidget", "menu_btn")
+        )

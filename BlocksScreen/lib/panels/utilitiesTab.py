@@ -15,6 +15,7 @@ from lib.panels.widgets.UtilitiesTab.axismaintPage import AxisMaintenancePage
 from lib.panels.widgets.UtilitiesTab.routineCheckPage import RoutineCheckPage
 from lib.panels.widgets.UtilitiesTab.rc_page import RoutineCheckAnswerPage
 
+
 class Process(Enum):
     FAN = auto()
     AXIS = auto()
@@ -40,8 +41,9 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
     show_update_page: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         bool, name="show-update-page"
     )
-    on_object_list  = QtCore.pyqtSignal(list, name="on-object-list")
+    on_object_list = QtCore.pyqtSignal(list, name="on-object-list")
     call_load_panel = QtCore.pyqtSignal(bool, str, name="call-load-panel")
+
     def __init__(
         self, parent: QtWidgets.QWidget, ws: MoonWebSocket, printer: Printer
     ) -> None:
@@ -64,15 +66,16 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         self.leds_slider_page = LedsSliderPage(self)
         self.addWidget(self.leds_slider_page)
         self.leds_slider_page.run_gcode_signal.connect(self.run_gcode_signal)
-        self.leds_slider_page.request_back.connect(lambda:self.request_back_button.emit())
+        self.leds_slider_page.request_back.connect(
+            lambda: self.request_back_button.emit()
+        )
         self.leds_slider_page.request_change_page.connect(self.change_page)
 
         self.leds_page = LedsPage(self)
         self.addWidget(self.leds_page)
         self.on_object_list.connect(self.leds_page.on_object_list)
         self.leds_page.request_ledslider_page.connect(self.on_leds_slider_request)
-        self.leds_page.request_back.connect(lambda:self.request_back_button.emit())
-
+        self.leds_page.request_back.connect(lambda: self.request_back_button.emit())
 
         self.is_page = InputShaperResultsPage(self)
         self.addWidget(self.is_page)
@@ -82,8 +85,10 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
 
         self.input_shaper_page = InputShaperPage(self)
         self.addWidget(self.input_shaper_page)
-        self.input_shaper_page.request_is_results_page.connect(lambda:self.change_page(self.indexOf(self.is_page)))
-        self.input_shaper_page.request_back_button.connect(lambda:self.change_page(0))
+        self.input_shaper_page.request_is_results_page.connect(
+            lambda: self.change_page(self.indexOf(self.is_page))
+        )
+        self.input_shaper_page.request_back_button.connect(lambda: self.change_page(0))
         self.input_shaper_page.run_gcode_signal.connect(self.run_gcode_signal)
         self.input_shaper_page.call_load_panel.connect(self.call_load_panel)
         self.input_shaper_page.set_aut.connect(self.is_page.set_aut)
@@ -103,28 +108,38 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         self.on_object_list.connect(self.routine_check_page.on_object_list)
         self.routine_check_page.set_rc_page.connect(self.set_rc_page)
         self.routine_check_page.show_waiting_page.connect(self.show_waiting_page)
-        self.routine_check_page.request_troubleshoot_page.connect(self.troubleshoot_request)
+        self.routine_check_page.request_troubleshoot_page.connect(
+            self.troubleshoot_request
+        )
 
         self.rc_page = RoutineCheckAnswerPage(self)
         self.addWidget(self.rc_page)
         self.rc_page.on_rc_asnwer.connect(self.routine_check_page.on_routine_answer)
         self.rc_page.request_back_button.connect(self.request_back_button)
 
-        self.utilities_info_btn.clicked.connect(lambda:self.change_page(self.indexOf(self.info_page)))
-        self.utilities_leds_btn.clicked.connect(lambda:self.change_page(self.indexOf(self.leds_page)))
-        self.utilities_axes_btn.clicked.connect(lambda:self.change_page(self.indexOf(self.axis_page)))
-        self.utilities_routine_check_btn.clicked.connect(lambda: self.change_page(self.indexOf(self.routine_check_page)))
-        self.utilities_input_shaper_btn.clicked.connect(lambda:self.change_page(self.indexOf(self.input_shaper_page)))
-
-        self.update_btn.clicked.connect(
-            lambda: self.show_update_page[bool].emit(False)
+        self.utilities_info_btn.clicked.connect(
+            lambda: self.change_page(self.indexOf(self.info_page))
         )
+        self.utilities_leds_btn.clicked.connect(
+            lambda: self.change_page(self.indexOf(self.leds_page))
+        )
+        self.utilities_axes_btn.clicked.connect(
+            lambda: self.change_page(self.indexOf(self.axis_page))
+        )
+        self.utilities_routine_check_btn.clicked.connect(
+            lambda: self.change_page(self.indexOf(self.routine_check_page))
+        )
+        self.utilities_input_shaper_btn.clicked.connect(
+            lambda: self.change_page(self.indexOf(self.input_shaper_page))
+        )
+
+        self.update_btn.clicked.connect(lambda: self.show_update_page[bool].emit(False))
 
         self.is_page.action_btn.clicked.connect(
             lambda: self.change_page(self.indexOf(self.input_shaper_page))
         )
 
-        self.dialogpopup = BasePopup(self,False,True)
+        self.dialogpopup = BasePopup(self, False, True)
         self.addWidget(self.dialogpopup)
 
         self.subscribe_config[str, "PyQt_PyObject"].connect(
@@ -136,10 +151,9 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
 
         self.printer.printer_config.connect(self.on_printer_config_received)
 
-    def on_leds_slider_request(self,led: any,name=str,single=bool):
+    def on_leds_slider_request(self, led: any, name=str, single=bool):
         self.change_page(self.indexOf(self.leds_slider_page))
-        print(led,name)
-        self.leds_slider_page.set_slider(led_state=led,name=name,single=single)
+        self.leds_slider_page.set_slider(led_state=led, name=name, single=single)
 
     def on_printer_config_received(self, config: dict) -> None:
         """Handle printer configuration"""
@@ -147,12 +161,13 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
             self.subscribe_config[str, "PyQt_PyObject"].emit(
                 f"stepper_{axis}", self.axis_page.on_object_config
             )
-    def set_rc_page(self,title:str,message:str):
+
+    def set_rc_page(self, title: str, message: str):
         self.rc_page.setTitle(title)
         self.rc_page.setMessage(message)
 
-    @QtCore.pyqtSlot(str,"PyQt_PyObject",name="set-dialog-popup")
-    def set_dialog_axismaintenace_popup(self,label: str,accept:"PyQt_PyObject"):
+    @QtCore.pyqtSlot(str, "PyQt_PyObject", name="set-dialog-popup")
+    def set_dialog_axismaintenace_popup(self, label: str, accept: "PyQt_PyObject"):
         """Set text on routine page"""
         self.dialogpopup.set_message(label)
         try:
@@ -161,25 +176,25 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
             pass
         self.dialogpopup.accepted.connect(accept)
 
-    @QtCore.pyqtSlot(str,int,bool,name="show-waiting-page")
-    def show_waiting_page(self, label: str, time_ms: int , popup:bool):
+    @QtCore.pyqtSlot(str, int, bool, name="show-waiting-page")
+    def show_waiting_page(self, label: str, time_ms: int, popup: bool):
         """Show placeholder page"""
         self.call_load_panel.emit(True, label)
         if popup:
             QtCore.QTimer.singleShot(time_ms, lambda: self.dialogpopup.open())
         else:
-            QtCore.QTimer.singleShot(time_ms, lambda: self.change_page(self.indexOf(self.rc_page)))
+            QtCore.QTimer.singleShot(
+                time_ms, lambda: self.change_page(self.indexOf(self.rc_page))
+            )
 
     @QtCore.pyqtSlot(name="request-troubleshoot-page")
     def troubleshoot_request(self) -> None:
         """Show troubleshoot page"""
         self.troubleshoot_page.show()
 
-
     def change_page(self, index: int):
         """Request change page by index"""
         self.request_change_page.emit(3, index)
-
 
     def _setupUi(self):
         self.resize(710, 410)
@@ -192,7 +207,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         self.setSizePolicy(sizePolicy)
         self.setMinimumSize(QtCore.QSize(710, 410))
         self.setMaximumSize(QtCore.QSize(710, 410))
-        
+
         widget = QtWidgets.QWidget()
         widget.setMinimumSize(QtCore.QSize(710, 410))
         widget.setMaximumSize(QtCore.QSize(710, 410))
@@ -261,15 +276,14 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         self.update_btn.setMaximumSize(QtCore.QSize(250, 80))
         self.update_btn.setFont(font)
         self.update_btn.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/system/media/btn_icons/update-software-icon.svg")
+            "icon_pixmap",
+            QtGui.QPixmap(":/system/media/btn_icons/update-software-icon.svg"),
         )
 
         self.update_btn.setObjectName("update_btn")
 
         self.utilities_content_layout.addWidget(self.update_btn, 2, 0, 1, 1)
-        self.utilities_routine_check_btn = BlocksCustomButton(
-            parent=self
-        )
+        self.utilities_routine_check_btn = BlocksCustomButton(parent=self)
         self.utilities_routine_check_btn.setSizePolicy(sizePolicy)
         self.utilities_routine_check_btn.setMinimumSize(QtCore.QSize(250, 80))
         self.utilities_routine_check_btn.setMaximumSize(QtCore.QSize(250, 80))
@@ -322,7 +336,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         self.utilities_content_layout.addWidget(self.utilities_leds_btn, 0, 1, 1, 1)
 
         self.verticalLayout.addLayout(self.utilities_content_layout)
-        
+
         widget.setLayout(self.verticalLayout)
         self.addWidget(widget)
 

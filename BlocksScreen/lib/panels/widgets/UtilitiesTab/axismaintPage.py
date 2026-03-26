@@ -57,8 +57,6 @@ class AxisMaintenancePage(QtWidgets.QWidget):
                             if pos_max is not None
                             else float("inf"),
                         }
-        print(self.stepper_limits)
-
     def axis_maintenance(self, axis: str) -> None:
         """Routine, checks axis movement for printer debugging"""
         self.c_axis = axis
@@ -71,7 +69,6 @@ class AxisMaintenancePage(QtWidgets.QWidget):
 
     def dialog_asnwer(self):
         self.call_load_panel.emit(False, "")
-
 
         stepper_key = f"stepper_{self.c_axis}"
         if stepper_key in self.stepper_limits:
@@ -87,7 +84,7 @@ class AxisMaintenancePage(QtWidgets.QWidget):
                 )
             else:
                 self.run_gcode_signal.emit(
-                    f"G1 {self.c_axis.upper()}{distance-10} F3000\nM400\nG28\nM400"
+                    f"G1 {self.c_axis.upper()}{distance - 10} F3000\nM400\nG28\nM400"
                 )
 
     def _setup_ui(self) -> None:

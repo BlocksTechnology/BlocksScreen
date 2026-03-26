@@ -439,9 +439,7 @@ class ProbeHelper(QtWidgets.QWidget):
         if "eddy" in sender.name:  # type:ignore
             self.call_load_panel.emit(True, "Preparing Eddy Current Calibration...")
             self.toggle_conn_page.emit(False)
-            self._move_to_pos(
-                self.z_offset_safe_xy[0], self.z_offset_safe_xy[1], 100
-            )
+            self._move_to_pos(self.z_offset_safe_xy[0], self.z_offset_safe_xy[1], 100)
             self.run_gcode_signal.emit(
                 f"LDC_CALIBRATE_DRIVE_CURRENT CHIP={sender.name.split(' ')[1]}"  # type:ignore
             )
@@ -537,7 +535,7 @@ class ProbeHelper(QtWidgets.QWidget):
         if update.get("z_position"):
             self.current_offset_info.setText(f"{update.get('z_position'):.4f} mm")
 
-        if not is_active: 
+        if not is_active:
             return
         if not self.isVisible():
             self.request_page_view.emit()

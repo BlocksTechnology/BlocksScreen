@@ -120,7 +120,6 @@ class AxisPage(QtWidgets.QWidget):
             f"G91\nG0 {axis}{float(self.move_length)} F{float(self.move_speed * 60)}\nG90\nM400"
         )
 
-    
     @QtCore.pyqtSlot(str, list, name="on-toolhead-update")
     def on_toolhead_update(self, field: str, values: list) -> None:
         """Handles updated from toolhead printer object"""
@@ -317,7 +316,6 @@ class AxisPage(QtWidgets.QWidget):
 
         self.axis_select_speed_group = QtWidgets.QButtonGroup(self)
         self.axis_select_speed_group.setObjectName("extrude_select_length_group")
-        
 
         self.mva_select_speed_25_btn = BlocksCustomCheckButton(parent=self)
         self.mva_select_speed_25_btn.setMinimumSize(QtCore.QSize(90, 90))
