@@ -57,6 +57,7 @@ class AxisMaintenancePage(QtWidgets.QWidget):
                             if pos_max is not None
                             else float("inf"),
                         }
+
     def axis_maintenance(self, axis: str) -> None:
         """Routine, checks axis movement for printer debugging"""
         self.c_axis = axis

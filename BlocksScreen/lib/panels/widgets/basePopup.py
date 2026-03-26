@@ -105,37 +105,74 @@ class BasePopup(QtWidgets.QDialog):
             )
 
     def set_message(self, message: str) -> None:
+        """Sets Main Message
+
+        Args:
+            message (str): a message
+        """
         self.label.setText(message)
 
     def cancel_button_text(self, text: str) -> None:
+        """Sets Cancel button text
+
+        Args:
+            text (str): a string
+        """
+
         if not self.dialog:
             return
         self.cancel_button.setText(text)
 
     def confirm_button_text(self, text: str) -> None:
+        """Sets Confirm button text
+
+        Args:
+            text (str): a string
+        """
         if not self.dialog:
             return
         self.confirm_button.setText(text)
 
     def cancel_background_color(self, color: str) -> None:
+        """Sets Cancel button color
+
+        Args:
+            color (str): a string containing a hex color
+        """
+
         if not self.dialog:
             return
         self.cancel_bk_color = color
         self._update_button_style()
 
     def confirm_background_color(self, color: str) -> None:
+        """Sets Confirm button color
+
+        Args:
+            color (str): a string containing a hex color
+        """
         if not self.dialog:
             return
         self.confirm_bk_color = color
         self._update_button_style()
 
     def cancel_font_color(self, color: str) -> None:
+        """Sets cancel font color
+
+        Args:
+            color (str): a string containing a hex color
+        """
         if not self.dialog:
             return
         self.cancel_ft_color = color
         self._update_button_style()
 
     def confirm_font_color(self, color: str) -> None:
+        """Sets confirm font color
+
+        Args:
+            color (str): a string containing a hex color
+        """
         if not self.dialog:
             return
         self.confirm_ft_color = color
