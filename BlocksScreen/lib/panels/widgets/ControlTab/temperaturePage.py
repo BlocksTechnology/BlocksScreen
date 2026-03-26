@@ -41,7 +41,7 @@ class TemperaturePage(QtWidgets.QWidget):
                 int(round(float(self.extruder_temp_display.secondary_text))),
                 self.on_numpad_change,
                 0,
-                300,  # TODO: Get this value from printer objects
+                370,  # TODO: Get this value from printer objects
             )
         )
         self.bed_temp_display.clicked.connect(
