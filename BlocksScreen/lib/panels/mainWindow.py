@@ -211,6 +211,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.printer.extruder_update.connect(self.on_extruder_update)
         self.printer.heater_bed_update.connect(self.on_heater_bed_update)
         self.printer.register_callback("mmu", self.amu_manager.update_mmu_state)
+        self.printer.register_callback("filament_switch_sensor", self.amu_manager.on_pre_gate_update)
+        self.printer.register_klippy_callback(self.amu_manager.on_klippy_state)
         self.amu_manager.run_gcode_signal.connect(self.ws.api.run_gcode)
         self.run_gcode_signal.connect(self.ws.api.run_gcode)
 

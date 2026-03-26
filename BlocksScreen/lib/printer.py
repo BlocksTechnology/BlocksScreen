@@ -129,6 +129,7 @@ class Printer(QtCore.QObject):
         self.request_available_objects_signal.connect(self.ws.api.get_available_objects)
         self.request_object_subscription_signal.connect(self.ws.api.object_subscription)
         self.query_printer_object.connect(self.ws.api.object_query)
+        self._klippy_callback: typing.Callable[[str], None] | None = None
         self._callbacks: dict[str, typing.Callable[[dict, str], None]] = {}
 
     def clear_printer_objs(self) -> None:
@@ -171,6 +172,17 @@ class Printer(QtCore.QObject):
         """
         self.__inject_callback(object_type, callback)
 
+    def register_klippy_callback(self, callback: typing.Callable[[str], None]) -> None:
+        """Register a callback for klippy lifecycle state changes.
+
+        Args:
+            callback:  Callable with signature  ``(state: str) -> None``.
+        """
+        if not callable(callback):
+            logger.warning("register_klippy_callback: not callable")
+            return
+        self._klippy_callback = callback
+
     @QtCore.pyqtSlot(str, name="on_klippy_status")
     def on_klippy_status(self, state: str):
         """Handles klippy update status
@@ -185,7 +197,11 @@ class Printer(QtCore.QObject):
                 "virtual_sdcard": None,
             }
             self.query_printer_object.emit(_query_request)
+            if self._klippy_callback is not None:
+                self._klippy_callback(state)
             return
+        if self._klippy_callback is not None:
+            self._klippy_callback(state)
         self.clear_printer_objs()  # All other states clear it
 
     @QtCore.pyqtSlot(list, name="on_object_list")
@@ -305,7 +321,6 @@ class Printer(QtCore.QObject):
             _object_name = name
         if _object_type in self._callbacks:
             self._callbacks[_object_type](values, _object_name)
-            return True
         if hasattr(self, f"_{_object_type}_object_updated"):
             _callback = getattr(self, f"_{_object_type}_object_updated")
             if callable(_callback):

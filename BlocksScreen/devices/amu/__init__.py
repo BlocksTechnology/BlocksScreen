@@ -10,16 +10,20 @@ Architecture:
 
 from .manager import AMUManager
 from .models import (
+    FilamentPos,
     GateInfo,
     GateStatus,
     MMUState,
+    SpoolmanSupport,
 )
 
 __all__: list[str] = [
     # manager
     "AMUManager",
     # models
+    "FilamentPos",
     "GateInfo",
     "GateStatus",
     "MMUState",
+    "SpoolmanSupport",
 ]

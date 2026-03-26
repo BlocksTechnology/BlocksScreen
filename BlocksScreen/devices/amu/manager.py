@@ -36,10 +36,15 @@ class AMUManager(QtCore.QObject):
         bool, name="amu-toggled"
     )
 
+    pre_gate_changed: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        int, bool, name="pre-gate-changed"
+    )
+
     def __init__(self, parent: QtCore.QObject | None = None) -> None:
         super().__init__(parent)
         self._amu_state = False
         self._mmu_state: MMUState | None = None
+        self._pre_gate_sensors: dict[int, bool] = {}
         self.__setup_configfile()
 
     def __setup_configfile(self) -> None:
@@ -107,6 +112,9 @@ class AMUManager(QtCore.QObject):
         """
         return self._mmu_state
 
+    def get_pre_gate_sensors(self) -> dict[int, bool]:
+        return dict(self._pre_gate_sensors)
+
     def is_amu_active(self) -> bool:
         """Returns whether AMU includes are currently uncommented in printer.cfg"""
         return self._amu_state
@@ -171,7 +179,6 @@ class AMUManager(QtCore.QObject):
 
     def unload(self) -> None:
         """Unload the currently loaded filament by sending MMU_UNLOAD."""
-        ...
         self.run_gcode_signal.emit("MMU_UNLOAD")
 
     def eject_gate(self, gate: int) -> None:
@@ -188,7 +195,7 @@ class AMUManager(QtCore.QObject):
         Args:
            num_gates: Total number of gates(from MMUState.num_gates)
         """
-        cmd = "\n".join(f"MMU_EJECT GATE={i}" for i in range(num_gates))
+        cmd: str = "\n".join(f"MMU_EJECT GATE={i}" for i in range(num_gates))
         self.run_gcode_signal.emit(cmd)
 
     def select_tool(self, tool: int) -> None:
@@ -198,6 +205,18 @@ class AMUManager(QtCore.QObject):
             tool (int): Tool index to select (0-based).
         """
         self.run_gcode_signal.emit(f"MMU_CHANGE_TOOL TOOL={tool}")
+
+    def on_pre_gate_update(self, values: dict, name: str) -> None:
+        if not name.startswith("Mmu Pre Gate "):
+            return
+        try:
+            gate = int(name.removeprefix("Mmu Pre Gate "))
+        except ValueError:
+            logger.error("Failed to parse Pre-Gate: %s", name)
+            return
+        detected = bool(values.get("filament_detected", False))
+        self._pre_gate_sensors[gate] = detected
+        self.pre_gate_changed.emit(gate, detected)
 
     def update_mmu_state(self, data: dict, name: str = "") -> None:
         """Receive an MMU status dict from Moonraker and update internal state.
@@ -216,7 +235,7 @@ class AMUManager(QtCore.QObject):
             self._mmu_state = self._mmu_state.apply_diff(data)
         self.mmu_state_changed.emit(self._mmu_state)
 
-
-if __name__ == "__main__":
-    manager = AMUManager()
-    print(manager.toggle_amu_system(True))
+    def on_klippy_state(self, state: str) -> None:
+        """React to changes in klippy states"""
+        if state.lower() != "ready":
+            self._mmu_state = None
