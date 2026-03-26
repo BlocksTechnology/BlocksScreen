@@ -10,10 +10,16 @@ class InfoPage(QtWidgets.QWidget):
     request_back: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         name="request_back"
     )
+
     def __init__(
         self,
         parent: typing.Optional["QtWidgets.QWidget"],
     ) -> None:
+        """info page for utilities tab
+
+        Args:
+            parent (typing.Optional[&quot;QtWidgets.QWidget&quot;]): Parent
+        """
         super(InfoPage, self).__init__(parent)
 
         self._setup_ui()

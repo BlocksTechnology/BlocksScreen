@@ -14,6 +14,9 @@ from lib.panels.widgets.UtilitiesTab.inputshaperResultPage import InputShaperRes
 from lib.panels.widgets.UtilitiesTab.axismaintPage import AxisMaintenancePage
 from lib.panels.widgets.UtilitiesTab.routineCheckPage import RoutineCheckPage
 from lib.panels.widgets.UtilitiesTab.rc_page import RoutineCheckAnswerPage
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class Process(Enum):
@@ -151,9 +154,18 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
 
         self.printer.printer_config.connect(self.on_printer_config_received)
 
-    def on_leds_slider_request(self, led: any, name=str, single=bool):
+    def on_leds_slider_request(self, led, name=str, single=bool):
+        """request leds slider page to show
+
+        Args:
+            led (_type_): led
+            name (_type_, optional): Leds name. Defaults to str.
+            single (_type_, optional): if its only 1 led. Defaults to bool.
+        """
         self.change_page(self.indexOf(self.leds_slider_page))
-        self.leds_slider_page.set_slider(led_state=led, name=name, single=single)
+        self.leds_slider_page.set_slider(
+            led_state=led, name=str(name), single=bool(single)
+        )
 
     def on_printer_config_received(self, config: dict) -> None:
         """Handle printer configuration"""
@@ -163,18 +175,24 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
             )
 
     def set_rc_page(self, title: str, message: str):
+        """sets routine check title and message
+
+        Args:
+            title (str): The title
+            message (str): message
+        """
         self.rc_page.setTitle(title)
         self.rc_page.setMessage(message)
 
     @QtCore.pyqtSlot(str, "PyQt_PyObject", name="set-dialog-popup")
-    def set_dialog_axismaintenace_popup(self, label: str, accept: "PyQt_PyObject"):
+    def set_dialog_axismaintenace_popup(self, label: str, callback):
         """Set text on routine page"""
         self.dialogpopup.set_message(label)
         try:
             self.dialogpopup.disconnect()
-        except:
-            pass
-        self.dialogpopup.accepted.connect(accept)
+        except Exception as e:
+            logger.error(e)
+        self.dialogpopup.accepted.connect(callback)
 
     @QtCore.pyqtSlot(str, int, bool, name="show-waiting-page")
     def show_waiting_page(self, label: str, time_ms: int, popup: bool):

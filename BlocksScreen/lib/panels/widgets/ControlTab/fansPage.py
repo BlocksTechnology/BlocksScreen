@@ -106,6 +106,12 @@ class FansPage(QtWidgets.QWidget):
 
     @QtCore.pyqtSlot(str, int, name="on_slider_change")
     def on_slider_change(self, name: str, new_value: int) -> None:
+        """
+            Slider change handler
+        Args:
+            name (str): fan name
+            new_value (int): value from 0 to 255 to set fans speed
+        """
         if "speed" in name.lower():
             self.speed_factor_override = new_value / 100
             self.run_gcode_signal.emit(f"M220 S{new_value}")

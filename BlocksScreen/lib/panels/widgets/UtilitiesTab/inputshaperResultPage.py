@@ -9,6 +9,7 @@ import re
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 import typing
+
 logger = logging.getLogger(__name__)
 
 
@@ -47,6 +48,11 @@ class InputShaperResultsPage(QtWidgets.QWidget):
 
     @QtCore.pyqtSlot(bool, name="set-aut")
     def set_aut(self, aut: bool):
+        """Sets if its automatic input shapper or not
+
+        Args:
+            aut (bool): Toggle Aut
+        """
         self.aut = aut
 
     def handle_gcode_response(self, data: list[str]) -> None:
@@ -180,6 +186,7 @@ class InputShaperResultsPage(QtWidgets.QWidget):
         self.action_btn.show()
 
     def handle_ism_confirm(self) -> None:
+        """Handles action button"""
         current_info = self.type_dict.get(self.currentItem.text, {})
         frequency = current_info.get("frequency", "N/A")
         if self.type_dict["Axis"] == "x":

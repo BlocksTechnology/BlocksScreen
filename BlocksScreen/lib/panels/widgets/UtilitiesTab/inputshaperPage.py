@@ -64,6 +64,11 @@ class InputShaperPage(QtWidgets.QWidget):
         )
 
     def handle_is(self, gcode: str) -> None:
+        """handles choosed input shapper
+
+        Args:
+            gcode (str): gcode to run
+        """
         if gcode == "SHAPER_CALIBRATE":
             self.run_gcode_signal.emit("G28\nM400")
             self.set_aut.emit(True)

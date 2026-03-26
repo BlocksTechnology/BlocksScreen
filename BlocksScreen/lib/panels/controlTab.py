@@ -19,6 +19,9 @@ from lib.printer import Printer
 from PyQt6 import QtCore, QtGui, QtWidgets
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.icon_button import IconButton
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class ControlTab(QtWidgets.QStackedWidget):
@@ -182,8 +185,8 @@ class ControlTab(QtWidgets.QStackedWidget):
         ]:
             try:
                 btn.clicked.disconnect()
-            except TypeError:
-                pass
+            except Exception as e:
+                logger.error(e)
         if active:
             self.cp_header_title.setText("Montion")
             self.cp_button_1.setText("Auto Home")
@@ -290,8 +293,8 @@ class ControlTab(QtWidgets.QStackedWidget):
     ) -> None:
         try:
             self.sliderPage.value_selected.disconnect()
-        except:
-            pass
+        except Exception as e:
+            logger.error(e)
         self.sliderPage.value_selected.connect(callback)
         self.sliderPage.set_name(name)
         self.sliderPage.set_slider_position(int(current_value))
