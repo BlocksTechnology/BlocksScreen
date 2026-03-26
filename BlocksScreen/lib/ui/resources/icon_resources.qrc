@@ -75,6 +75,11 @@
     <file>media/btn_icons/speed.svg</file>
   </qresource>
   <qresource prefix="filament_related">
+    <file>media/btn_icons/edit.svg</file>
+    <file>media/btn_icons/eject.svg</file>
+    <file>media/btn_icons/humity_and_temp.svg</file>
+    <file>media/btn_icons/humity.svg</file>
+    <file>media/btn_icons/spoll.svg</file>
     <file>media/topbar/abs_filament_topbar.svg</file>
     <file>media/topbar/custom_filament_topbar.svg</file>
     <file>media/topbar/hips_filament_topbar.svg</file>
