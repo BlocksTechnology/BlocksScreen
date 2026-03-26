@@ -199,16 +199,16 @@ class AMUManager(QtCore.QObject):
         """
         self.run_gcode_signal.emit(f"MMU_CHANGE_TOOL TOOL={tool}")
 
-    @QtCore.pyqtSlot(dict, name="update_mmu_state")
-    def update_mmu_state(self, data: dict) -> None:
+    def update_mmu_state(self, data: dict, name: str = "") -> None:
         """Receive an MMU status dict from Moonraker and update internal state.
 
         Called with either a full status response (on connect) or a diff
         (from notify_status_update). Builds or updates the MMUState and
-        emits mmu_state_changed
+        emits mmu_state_changed.
 
         Args:
-            data (dict): Raw MMU status or diff dict from Moonraker
+            data: Raw MMU status or diff dict from Moonraker.
+            name: Moonraker object name suffix (always empty for ``mmu``).
         """
         if self._mmu_state is None:
             self._mmu_state = MMUState.from_status(data)

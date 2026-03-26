@@ -210,7 +210,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.query_object_list.connect(self.utilitiesPanel.on_object_list)
         self.printer.extruder_update.connect(self.on_extruder_update)
         self.printer.heater_bed_update.connect(self.on_heater_bed_update)
-        self.printer.mmu_updated.connect(self.amu_manager.update_mmu_state)
+        self.printer.register_callback("mmu", self.amu_manager.update_mmu_state)
         self.amu_manager.run_gcode_signal.connect(self.ws.api.run_gcode)
         self.run_gcode_signal.connect(self.ws.api.run_gcode)
 

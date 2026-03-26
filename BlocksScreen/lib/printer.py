@@ -81,10 +81,6 @@ class Printer(QtCore.QObject):
     z_tilt_update: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         str, bool, name="z_tilt_update"
     )
-    mmu_updated: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
-        object, name="mmu-updated"
-    )
-    
     config_subscription: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         [dict],
         [list],
@@ -109,6 +105,7 @@ class Printer(QtCore.QObject):
     printer_busy: bool = False
     current_loaded_file: str = ""
     current_loaded_file_metadata: str = ""
+    
 
     def __init__(self, parent: QtCore.QObject, ws: MoonWebSocket, /) -> None:
         super(Printer, self).__init__(parent)
@@ -132,6 +129,7 @@ class Printer(QtCore.QObject):
         self.request_available_objects_signal.connect(self.ws.api.get_available_objects)
         self.request_object_subscription_signal.connect(self.ws.api.object_subscription)
         self.query_printer_object.connect(self.ws.api.object_query)
+        self._callbacks: dict[str, typing.Callable[[dict, str], None]] = {}
 
     def clear_printer_objs(self) -> None:
         """Clear all tracking of printer object"""
@@ -144,6 +142,34 @@ class Printer(QtCore.QObject):
         self.printer_busy = False
         self.current_loaded_file = ""
         self.current_loaded_file_metadata = ""
+
+
+    def __inject_callback(
+        self, object_type: str, callback: typing.Callable[[dict, str], None]
+    ) -> None:
+        """Internal: insert a validated callback into the dispatch table."""
+        if not object_type or not callable(callback):
+            logger.warning(
+                "register_callback: invalid args object_type=%r callable=%s",
+                object_type,
+                callable(callback),
+            )
+            return
+        self._callbacks[object_type] = callback
+
+    def register_callback(
+        self, object_type: str, callback: typing.Callable[[dict, str], None]
+    ) -> None:
+        """Register an external callback for a Moonraker object type.
+
+        When Moonraker sends an update for ``object_type``, ``callback(values, name)``
+        is called directly — no intermediate signal required.
+
+        Args:
+            object_type: Moonraker object key, e.g. ``"mmu"`` or ``"filament_switch_sensor"``.
+            callback: Callable with signature ``(values: dict, name: str) -> None``.
+        """
+        self.__inject_callback(object_type, callback)
 
     @QtCore.pyqtSlot(str, name="on_klippy_status")
     def on_klippy_status(self, state: str):
@@ -277,6 +303,9 @@ class Printer(QtCore.QObject):
         _object_type, _object_name = tuple(_split + [""] * max(0, 2 - len(_split)))
         if name.startswith("extruder"):
             _object_name = name
+        if _object_type in self._callbacks:
+            self._callbacks[_object_type](values, _object_name)
+            return True
         if hasattr(self, f"_{_object_type}_object_updated"):
             _callback = getattr(self, f"_{_object_type}_object_updated")
             if callable(_callback):
@@ -748,7 +777,8 @@ class Printer(QtCore.QObject):
         self.unload_filament_update[dict].emit(values)
 
     def _load_filament_object_updated(self, values: dict, name: str) -> None:
-        self.load_filament_update[dict].emit(values)
-
+        if "state" in values.keys():
+            self.load_filament_update[dict].emit(values)
+    
     def _mmu_object_updated(self, values: dict, name: str = "") -> None:
         self.mmu_updated.emit(values)

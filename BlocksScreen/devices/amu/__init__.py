@@ -1,4 +1,4 @@
-"""Network Manager Package
+"""AMU / HAPPY-Hare MMU package
 
 Architecture:
     AMUManager (manager.py)
