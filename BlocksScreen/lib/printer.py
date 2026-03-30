@@ -177,17 +177,6 @@ class Printer(QtCore.QObject):
         """
         self.__inject_callback(object_type, callback)
 
-    def register_klippy_callback(self, callback: typing.Callable[[str], None]) -> None:
-        """Register a callback for klippy lifecycle state changes.
-
-        Args:
-            callback:  Callable with signature  ``(state: str) -> None``.
-        """
-        if not callable(callback):
-            logger.warning("register_klippy_callback: not callable")
-            return
-        self._klippy_callback = callback
-
     @QtCore.pyqtSlot(str, name="on_klippy_status")
     def on_klippy_status(self, state: str):
         """Handles klippy update status

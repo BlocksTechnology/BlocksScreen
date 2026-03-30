@@ -4,7 +4,7 @@ from collections import deque
 
 import events
 from configfile import BlocksScreenConfig, get_configparser
-from devices.amu.manager import AMUManager
+from devices.amu import AMUManager
 from devices.storage import USBManager
 from lib.files import Files
 from lib.klipper_message_filter import (  # noqa: F405
@@ -210,11 +210,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.query_object_list.connect(self.utilitiesPanel.on_object_list)
         self.printer.extruder_update.connect(self.on_extruder_update)
         self.printer.heater_bed_update.connect(self.on_heater_bed_update)
-        self.printer.register_callback("mmu", self.amu_manager.update_mmu_state)
-        self.printer.register_callback(
-            "filament_switch_sensor", self.amu_manager.on_pre_gate_update
-        )
-        self.printer.register_klippy_callback(self.amu_manager.on_klippy_state)
+        self.printer.object_updated.connect(self.amu_manager.on_object_updated)
         self.amu_manager.run_gcode_signal.connect(self.ws.api.run_gcode)
         self.run_gcode_signal.connect(self.ws.api.run_gcode)
 

@@ -6,8 +6,7 @@ from pathlib import Path
 
 from PyQt6 import QtCore
 
-from BlocksScreen.devices.amu.config_toggler import ConfigToggler
-
+from .config_toggler import ConfigToggler
 from .models import MMUState, SpoolmanSupport
 
 if typing.TYPE_CHECKING:
@@ -217,6 +216,15 @@ class AMUManager(QtCore.QObject):
         else:
             self._mmu_state = self._mmu_state.apply_diff(data)
         self.mmu_state_changed.emit(self._mmu_state)
+
+    def on_object_updated(
+        self, object_type: str, object_name: str, values: dict
+    ) -> None:
+        """Route object_updated signal from Printer to the appropriate handler."""
+        if object_type == "mmu":
+            self.update_mmu_state(values)
+        elif object_type == "filament_switch_detected":
+            self.on_pre_gate_update(values, object_name)
 
     def on_klippy_state(self, state: str) -> None:
         """React to changes in klippy states"""
