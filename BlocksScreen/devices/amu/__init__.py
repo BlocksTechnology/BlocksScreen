@@ -16,10 +16,13 @@ from .models import (
     MMUState,
     SpoolmanSupport,
 )
+from .config_toggler import ConfigToggler
 
 __all__: list[str] = [
     # manager
     "AMUManager",
+    # config_toggler
+    "ConfigToggler",
     # models
     "FilamentPos",
     "GateInfo",

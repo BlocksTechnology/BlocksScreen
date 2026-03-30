@@ -267,6 +267,15 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
                 self.klippy_state_signal.emit(response["result"]["klippy_state"])
                 return
             else:
+                _callback = _entry[2] if len(_entry) > 2 else None
+                if _callback is not None:
+                    if "error" not in response:
+                        _callback(response.get("result"))
+                    else:
+                        logger.error(
+                            "WS request %s error: %s", _entry[0], response.get("error")
+                        )
+                    return
                 if "error" in response:
                     message_event = WebSocketMessageReceived(
                         method="error",
@@ -303,13 +312,15 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
         except Exception as e:
             logger.info(f"Unexpected error while creating websocket message event: {e}")
 
-    def send_request(self, method: str, params: dict = {}) -> bool:
+    def send_request(self, method: str, params: dict = {}, callback=None) -> bool:
         """Send a request over the websocket
 
         Args:
             method (str): Websocket method name
             params (dict, optional): parameters for the websocket method. Defaults to {}.
-
+            callback (callable, optional): Called with ``response["result"]`` when the
+            response arrives. If None, the response is routed as a
+            ``WebSocketMessageReceived`` event to the parent widget. Defaults to None.
         Returns:
             bool: Whether the method finished and a request was sent
         """
@@ -317,7 +328,7 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
             return False
 
         self._request_id += 1
-        self.request_table[self._request_id] = [method, params]
+        self.request_table[self._request_id] = [method, params, callback]
         packet = {
             "jsonrpc": "2.0",
             "method": method,
@@ -810,3 +821,13 @@ class MoonAPI(QtCore.QObject):
     def history_delete_job(self, uid: str):
         """Request delete job history"""
         raise NotImplementedError
+
+    #   ---------------------------------AMU----------------------------------
+
+    def get_spool(self, spool_id: int, callback) -> bool:
+        """Request spool data from Moonraker's Spoolman proxy"""
+        return self._ws.send_request(
+            method="server.spoolman.get_spool",
+            params={"spool_id": spool_id},
+            callback=callback,
+        )

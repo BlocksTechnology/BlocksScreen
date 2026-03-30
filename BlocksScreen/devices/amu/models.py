@@ -44,6 +44,8 @@ class GateInfo:
     color: str
     color_rgb: tuple[float, float, float]
     spool_id: int
+    weight_g: float | None = None
+    mid_usage: bool = False
 
     @property
     def is_available(self) -> bool:

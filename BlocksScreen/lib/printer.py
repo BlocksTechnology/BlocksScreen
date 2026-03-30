@@ -74,7 +74,6 @@ class Printer(QtCore.QObject):
     printer_config: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         dict, name="printer_config"
     )
-
     configfile_update: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         dict, name="configfile_update"
     )
@@ -95,6 +94,14 @@ class Printer(QtCore.QObject):
     gcode_response: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         list, name="gcode_response"
     )
+
+    klippy_state_changed: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        str, name="klippy-state-changed"
+    )
+    object_updated: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        str, str, dict, name="object-updated"
+    )
+
     extruder_number: int = 0
     available_gcode_commands: dict = {}
     available_objects: dict = {}
@@ -105,7 +112,6 @@ class Printer(QtCore.QObject):
     printer_busy: bool = False
     current_loaded_file: str = ""
     current_loaded_file_metadata: str = ""
-    
 
     def __init__(self, parent: QtCore.QObject, ws: MoonWebSocket, /) -> None:
         super(Printer, self).__init__(parent)
@@ -143,7 +149,6 @@ class Printer(QtCore.QObject):
         self.printer_busy = False
         self.current_loaded_file = ""
         self.current_loaded_file_metadata = ""
-
 
     def __inject_callback(
         self, object_type: str, callback: typing.Callable[[dict, str], None]
@@ -199,9 +204,11 @@ class Printer(QtCore.QObject):
             self.query_printer_object.emit(_query_request)
             if self._klippy_callback is not None:
                 self._klippy_callback(state)
+            self.klippy_state_changed.emit(state)
             return
         if self._klippy_callback is not None:
             self._klippy_callback(state)
+        self.klippy_state_changed.emit(state)
         self.clear_printer_objs()  # All other states clear it
 
     @QtCore.pyqtSlot(list, name="on_object_list")
@@ -321,6 +328,7 @@ class Printer(QtCore.QObject):
             _object_name = name
         if _object_type in self._callbacks:
             self._callbacks[_object_type](values, _object_name)
+        self.object_updated.emit(_object_type, _object_name, values)
         if hasattr(self, f"_{_object_type}_object_updated"):
             _callback = getattr(self, f"_{_object_type}_object_updated")
             if callable(_callback):
@@ -795,5 +803,5 @@ class Printer(QtCore.QObject):
         if "state" in values.keys():
             self.load_filament_update[dict].emit(values)
     
-    def _mmu_object_updated(self, values: dict, name: str = "") -> None:
-        self.mmu_updated.emit(values)
+
+    

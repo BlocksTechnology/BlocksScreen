@@ -1,24 +1,22 @@
+from __future__ import annotations
+
 import logging
-import re
 import typing
 from pathlib import Path
 
 from PyQt6 import QtCore
 
-from .models import MMUState
+from BlocksScreen.devices.amu.config_toggler import ConfigToggler
+
+from .models import MMUState, SpoolmanSupport
+
+if typing.TYPE_CHECKING:
+    from BlocksScreen.lib.moonrakerComm import MoonWebSocket
+
 
 logger: logging.Logger = logging.getLogger(__name__)
 
 CONFIG_PATH: Path = Path("~/printer_data/config/printer.cfg").expanduser()
-AMU_FILES: list[str] = [
-    "mmu/base/*.cfg",
-    "mmu/optional/client_macros.cfg",
-    "filament_manager.cfg",
-]
-
-AMU_PATTERNS: list[re.Pattern[str]] = [
-    re.compile(rf"^(#?)(\[include {re.escape(f)}\])", re.MULTILINE) for f in AMU_FILES
-]
 
 
 class AMUManager(QtCore.QObject):
@@ -39,55 +37,17 @@ class AMUManager(QtCore.QObject):
     pre_gate_changed: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         int, bool, name="pre-gate-changed"
     )
+    spool_fetched: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        int, dict, name="spool-fetched"
+    )
 
-    def __init__(self, parent: QtCore.QObject | None = None) -> None:
+    def __init__(self, ws: MoonWebSocket, parent: QtCore.QObject | None = None) -> None:
         super().__init__(parent)
+        self._config_toggler = ConfigToggler(CONFIG_PATH)
         self._amu_state = False
+        self._ws = ws
         self._mmu_state: MMUState | None = None
         self._pre_gate_sensors: dict[int, bool] = {}
-        self.__setup_configfile()
-
-    def __setup_configfile(self) -> None:
-        """Sets up local configfile variable"""
-        self._config_filename: Path | None = CONFIG_PATH
-        if not self._config_filename.exists():
-            logger.warning("Config file not found %s", self._config_filename)
-            self._config_filename = None
-
-    def _apply_patterns(self, state: bool) -> bool:
-        """Method that comments/uncomments the AMU_FILES from the printer.cfg according with state value
-
-        Args:
-            state (bool): True: Uncomment, False: Comment
-
-        Returns:
-            bool: True: Success, False: Failed
-        """
-        if self._config_filename is None:
-            logger.warning("_apply_patterns called but no config file available")
-            return False
-
-        if self._amu_state == state:
-            return False
-
-        replacement = r"\2"
-        if not state:
-            replacement = r"#\2"
-        try:
-            text: str = self._config_filename.read_text()
-            for file in AMU_PATTERNS:
-                text = file.sub(replacement, text)
-            self._config_filename.write_text(text)
-            self._amu_state = state
-            return True
-        except OSError as e:
-            logger.error(
-                "Failed to apply(state=%s) AMU System: could not read/write %s\n%s",
-                state,
-                self._config_filename,
-                e,
-            )
-            return False
 
     def toggle_amu_system(self, activate: bool) -> None:
         """Enable or disable the AMU system by commenting/uncommenting config includes.
@@ -99,8 +59,10 @@ class AMUManager(QtCore.QObject):
             activate (bool): True to enable the AMU, False to disable it.
 
         """
-        result: bool = self._apply_patterns(activate)
+        result: bool = self._config_toggler.toggle(activate)
         self.amu_toggled.emit(result)
+        if result:
+            self.run_gcode_signal.emit("FIRMWARE_RESTART")
 
     def get_state(self) -> MMUState | None:
         """Returns current MMU state, None if not yet received.
@@ -115,9 +77,30 @@ class AMUManager(QtCore.QObject):
     def get_pre_gate_sensors(self) -> dict[int, bool]:
         return dict(self._pre_gate_sensors)
 
+    def is_amu_configured(self) -> bool:
+        """Return True if AMU includes are uncommented in printer.cfg."""
+        return self._config_toggler.is_configured()
+
     def is_amu_active(self) -> bool:
         """Returns whether AMU includes are currently uncommented in printer.cfg"""
-        return self._amu_state
+        return self.is_amu_configured() and self._mmu_state is not None
+
+    def fetch_spool(self, gate: int, spool_id: int) -> None:
+        """Request spool data from Moonraker via WebSocket.
+
+        No-op if MMU state not received or spoolman_support is OFF.
+        Emits spool_fetched(gate, data) on sucess; logs and emits nothing on error.
+        """
+        if self._mmu_state is None:
+            return
+        if self._mmu_state.spoolman_support is SpoolmanSupport.OFF:
+            return
+
+        def _on_result(result: dict | None) -> None:
+            if result is not None:
+                self.spool_fetched.emit(gate, result)
+
+        self._ws.api.get_spool(spool_id, _on_result)
 
     def set_gate_info(
         self, gate: int, material: str, color: str, spool_id: int
@@ -239,3 +222,4 @@ class AMUManager(QtCore.QObject):
         """React to changes in klippy states"""
         if state.lower() != "ready":
             self._mmu_state = None
+            self._pre_gate_sensors = {}
