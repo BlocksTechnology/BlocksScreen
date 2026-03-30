@@ -34,7 +34,7 @@ class Spoll_button(QtWidgets.QAbstractButton):
         self.status  = FilamentStates.UNKNOWN
         self.slot_id = ""
         self.setCheckable(True)
-        self.setFixedSize(100, 100)
+        self.setMinimumSize(100, 100)
         self._icon = QtGui.QPixmap("/home/levi/Downloads/WhatSie/loadicon.svg")
 
     def setColor(self, c: QtGui.QColor):  self.color = c;    self.update()
@@ -102,7 +102,7 @@ class Spoll_button(QtWidgets.QAbstractButton):
 
         # Draw icon centered
         icon_size = 80
-        scaled = self.loadedspool.scaled(
+        scaled = self._icon.scaled(
             icon_size, icon_size,
             QtCore.Qt.AspectRatioMode.KeepAspectRatio,
             QtCore.Qt.TransformationMode.SmoothTransformation,
@@ -233,48 +233,6 @@ class BlocksCustomFrame(QtWidgets.QFrame):
 
             painter.fillRect(big_rect, QtGui.QColor("white"))
 
-
-
-# ──────────────────────────────────────────────────────────────────────────────
-# Arrow button
-# ──────────────────────────────────────────────────────────────────────────────
-class ArrowButton(QtWidgets.QAbstractButton):
-    def __init__(self, direction: str, parent=None):
-        super().__init__(parent)
-        self.direction = direction   # "left" | "right"
-        self.setFixedSize(60,60)
-        self._hovered  = False
-        self._pressed  = False
-        self.setMouseTracking(True)
-
-    def enterEvent(self, e): self._hovered = True;  self.update()
-    def leaveEvent(self, e): self._hovered = False; self.update()
-    def mousePressEvent(self, e):   self._pressed = True;  super().mousePressEvent(e)
-    def mouseReleaseEvent(self, e): self._pressed = False; super().mouseReleaseEvent(e)
-
-    def paintEvent(self, _):
-        p = QtGui.QPainter(self)
-        p.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
-        r = self.rect()
-
-
-        # Arrow chevron
-        arrow_alpha = 255 if self._hovered else 160
-        p.setPen(QtGui.QPen(QtGui.QColor(255,255,255, arrow_alpha), 2,
-                            QtCore.Qt.PenStyle.SolidLine,
-                            QtCore.Qt.PenCapStyle.RoundCap,
-                            QtCore.Qt.PenJoinStyle.RoundJoin))
-        cx, cy = r.width()//2, r.height()//2
-        arm = 8
-        if self.direction == "left":
-            p.drawLine(cx+arm//2, cy-arm, cx-arm//2, cy)
-            p.drawLine(cx-arm//2, cy,     cx+arm//2, cy+arm)
-        else:
-            p.drawLine(cx-arm//2, cy-arm, cx+arm//2, cy)
-            p.drawLine(cx+arm//2, cy,     cx-arm//2, cy+arm)
-        p.end()
-
-
 # ──────────────────────────────────────────────────────────────────────────────
 # Operation button
 # ──────────────────────────────────────────────────────────────────────────────
@@ -328,32 +286,32 @@ class SpoolCarousel(QtWidgets.QWidget):
         self._build_ui()
 
     def _build_ui(self):
-        self.setFixedHeight(120)
         root = QtWidgets.QHBoxLayout(self)
-        root.setContentsMargins(0,0,0,0)
-        root.setSpacing(4)
 
         self.left_arrow = IconButton(self)
-        self.left_arrow.setPixmap(QtGui.QPixmap(""))
+        self.left_arrow.setPixmap(QtGui.QPixmap(":/arrow_icons/media/btn_icons/arrow_left.svg"))
         self.right_arrow = IconButton(self)
         self.right_arrow.setPixmap(QtGui.QPixmap(":/arrow_icons/media/btn_icons/arrow_right.svg"))
 
         self.right_arrow.setFixedWidth(60)
         self.left_arrow.setFixedWidth(60)
 
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Expanding)
-        self.right_arrow.setSizePolicy(sizePolicy)
+        # sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Expanding)
+        # self.right_arrow.setSizePolicy(sizePolicy)
+        # self.left_arrow.setSizePolicy(sizePolicy)
 
 
         self.left_arrow.clicked.connect(self._scroll_left)
         self.right_arrow.clicked.connect(self._scroll_right)
 
         self._slot_area = QtWidgets.QWidget()
-        self._slot_area.setFixedHeight(110)
         self._slot_layout = QtWidgets.QHBoxLayout(self._slot_area)
 
+        self.left_arrow.setFixedHeight(100)
+        self.right_arrow.setFixedHeight(100)
+
         root.addWidget(self.left_arrow)
-        root.addWidget(self._slot_area, 1)
+        root.addWidget(self._slot_area)
         root.addWidget(self.right_arrow)
 
         self._update_arrows()
