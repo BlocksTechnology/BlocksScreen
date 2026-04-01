@@ -146,6 +146,7 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.file_data.usb_files_loaded.connect(
             self.filesPage_widget.on_usb_files_loaded
         )
+        self.file_data.fileinfo.connect(self.confirmPage_widget.on_fileinfo)
         self.jobStatusPage_widget = JobStatusWidget(self)
         self.addWidget(self.jobStatusPage_widget)
         self.confirmPage_widget.on_accept.connect(
@@ -267,7 +268,6 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.confirmPage_widget.on_delete.connect(self.delete_file)
         self.change_page(self.indexOf(self.print_page))  # force set the initial page
         self.save_config_btn.clicked.connect(self.save_config)
-        self.BasePopup_z_offset.accepted.connect(self.update_configuration_file)
 
     @QtCore.pyqtSlot(str, dict, name="on_print_stats_update")
     @QtCore.pyqtSlot(str, float, name="on_print_stats_update")
@@ -321,7 +321,7 @@ class PrintTab(QtWidgets.QStackedWidget):
     @QtCore.pyqtSlot(str, str, name="delete_file")
     @QtCore.pyqtSlot(str, name="delete_file")
     def delete_file(self, filename: str, directory: str = "gcodes") -> None:
-        """Handle Delete file signal, shows confirmation dialog"""
+        """Handle Delete file signal, shows confirmation dialog."""
         self.BasePopup.set_message("Are you sure you want to delete this file?")
         self.BasePopup.accepted.connect(
             lambda: self._on_delete_file_confirmed(filename, directory)
@@ -342,13 +342,22 @@ class PrintTab(QtWidgets.QStackedWidget):
             "The machine will restart."
         )
         self.BasePopup_z_offset.cancel_button_text("Later")
+        try:
+            self.BasePopup_z_offset.accepted.disconnect(self.update_configuration_file)
+        except (RuntimeError, TypeError):
+            pass
+        self.BasePopup_z_offset.accepted.connect(self.update_configuration_file)
         self.BasePopup_z_offset.open()
 
-    def update_configuration_file(self):
-        """Runs the `SAVE_CONFIG` gcode"""
+    def update_configuration_file(self) -> None:
+        """Run ``Z_OFFSET_APPLY_PROBE`` followed by ``SAVE_CONFIG``."""
+        try:
+            self.BasePopup_z_offset.accepted.disconnect(self.update_configuration_file)
+        except (RuntimeError, TypeError):
+            pass
         self.run_gcode_signal.emit("Z_OFFSET_APPLY_PROBE")
         self.run_gcode_signal.emit("SAVE_CONFIG")
-        self.BasePopup_z_offset.disconnect()
+        self.save_config_btn.setVisible(False)
 
     @QtCore.pyqtSlot(str, list, name="activate_save_button")
     def activate_save_button(self, name: str, value: list) -> None:
@@ -357,15 +366,19 @@ class PrintTab(QtWidgets.QStackedWidget):
             return
 
         if name == "homing_origin":
-            self._active_z_offset = value[2]
-            self.save_config_btn.setVisible(value[2] != 0)
+            if len(value) > 2:
+                self._active_z_offset = value[2]
+                self.save_config_btn.setVisible(value[2] != 0)
 
     def _on_delete_file_confirmed(self, filename: str, directory: str) -> None:
-        """Handle confirmed file deletion after user accepted the dialog"""
+        """Handle confirmed file deletion after user accepted the dialog."""
         self.file_data.on_request_delete_file(filename, directory)
         self.request_back.emit()
         self.filesPage_widget.reset_dir()
-        self.BasePopup.disconnect()
+        try:
+            self.BasePopup.accepted.disconnect()
+        except (RuntimeError, TypeError):
+            pass
 
     def setProperty(self, name: str, value: typing.Any) -> bool:
         """Intercept the set property method
