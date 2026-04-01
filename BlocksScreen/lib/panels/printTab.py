@@ -146,7 +146,6 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.file_data.usb_files_loaded.connect(
             self.filesPage_widget.on_usb_files_loaded
         )
-        self.file_data.fileinfo.connect(self.confirmPage_widget.on_fileinfo)
         self.jobStatusPage_widget = JobStatusWidget(self)
         self.addWidget(self.jobStatusPage_widget)
         self.confirmPage_widget.on_accept.connect(
