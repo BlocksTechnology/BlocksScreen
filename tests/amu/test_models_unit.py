@@ -93,6 +93,12 @@ class TestGateInfo:
         assert gate.weight_g == 245.5
         assert gate.mid_usage is True
 
+    def test_gate_info_default_filament_name(self) -> None:
+        assert self._make(GateStatus.AVAILABLE).filament_name == ""
+
+    def test_gate_info_default_temperature_is_none(self) -> None:
+        assert self._make(GateStatus.AVAILABLE).temperature is None
+
 
 class TestMMUState:
     def _full_status(self, num_gates=2) -> dict:
@@ -115,6 +121,20 @@ class TestMMUState:
             "gate_color_rgb": [(1.0, 0.0, 0.0), (0.0, 0.0, 0.0)],
             "gate_spool_id": [42, -1],
             "ttg_map": [0, 1],
+        }
+
+    def _full_status_extended(self, num_gates: int = 2) -> dict:
+        """Full status including all new HH fields."""
+        return {
+            **self._full_status(num_gates),
+            "gate_filament_name": ["Bambu PLA Basic", ""],
+            "gate_temperature": [215.0, 0.0],
+            "pending_spool_id": 7,
+            "operation": "loading",
+            "sensors": {
+                "pre_gate_0": True,
+                "gate": False,
+            },
         }
 
     def test_from_status_builds_correctly(self) -> None:
@@ -197,3 +217,41 @@ class TestMMUState:
         state: MMUState = MMUState.from_status(self._full_status())
         updated: MMUState = state.apply_diff({"gate_status": [1, 1]})
         assert updated.gates[1].status == GateStatus.AVAILABLE
+
+    def test_from_status_parse_gate_filament_name(self) -> None:
+        state = MMUState.from_status(self._full_status_extended())
+        assert state.gates[0].filament_name == "Bambu PLA Basic"
+        assert state.gates[1].filament_name == ""
+
+    def test_from_status_parse_gate_temperature(self) -> None:
+        state = MMUState.from_status(self._full_status_extended())
+        assert state.gates[0].temperature == 215.0
+
+    def test_from_status_parses_pending_spool_id(self) -> None:
+        state = MMUState.from_status(self._full_status_extended())
+        assert state.pending_spool_id == 7
+
+    def test_from_status_parses_operation(self) -> None:
+        state = MMUState.from_status(self._full_status_extended())
+        assert state.operation == "loading"
+
+    def test_from_status_parse_sensors(self) -> None:
+        state = MMUState.from_status(self._full_status_extended())
+        assert state.sensors == {"pre_gate_0": True, "gate": False}
+
+    def test_from_status_new_field_defaults(self) -> None:
+        state = MMUState.from_status(self._full_status())
+        assert state.pending_spool_id == -1
+        assert state.operation == ""
+        assert state.sensors == {}
+
+    def test_apply_diff_updates_gate_filament_name(self) -> None:
+        state = MMUState.from_status(self._full_status_extended())
+        updated = state.apply_diff({"gate_filament_name": ["Updated PLA", ""]})
+        assert updated.gates[0].filament_name == "Updated PLA"
+
+    def test_apply_diff_replaces_sensors(self) -> None:
+        state = MMUState.from_status(self._full_status_extended())
+
+        updated = state.apply_diff({"sensors": {"pre_gate_0": False}})
+        assert updated.sensors == {"pre_gate_0": False}

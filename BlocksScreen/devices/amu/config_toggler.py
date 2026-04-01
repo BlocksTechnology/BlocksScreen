@@ -1,6 +1,5 @@
 import logging
 import re
-
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -34,7 +33,8 @@ class ConfigToggler:
             return False
         try:
             text = self._path.read_text()
-            return all(re.search(rf"^\[include {re.escape(f)}\]", text, re.MULTILINE)
+            return all(
+                re.search(rf"^\[include {re.escape(f)}\]", text, re.MULTILINE)
                 for f in AMU_FILES
             )
         except OSError:
@@ -57,10 +57,10 @@ class ConfigToggler:
             return True
         except OSError as e:
             logger.error(
-                "ConfigToggler.toggle(activate=%s): read/write failed: %s", activate,e
+                "ConfigToggler.toggle(activate=%s): read/write failed: %s", activate, e
             )
             return False
-    
+
     def is_configured(self) -> bool:
         """Return True if AMU includes are currently uncommented"""
         return self._state

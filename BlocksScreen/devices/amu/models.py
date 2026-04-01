@@ -44,8 +44,12 @@ class GateInfo:
     color: str
     color_rgb: tuple[float, float, float]
     spool_id: int
+    filament_name: str = ""
+    temperature: float | None = None
     weight_g: float | None = None
     mid_usage: bool = False
+    remaining_weight: float | None = None
+    bed_temp: int | None = None
 
     @property
     def is_available(self) -> bool:
@@ -69,6 +73,10 @@ class MMUState:
     spoolman_support: SpoolmanSupport
     gates: tuple[GateInfo, ...]
     ttg_map: tuple[int, ...]
+    pending_spool_id: int = -1
+    operation: str = ""
+    sensors: dict = dataclasses.field(default_factory=dict)
+    gate_speed_override: tuple[float, ...] = dataclasses.field(default_factory=tuple)
 
     @property
     def is_paused(self) -> bool:
@@ -99,6 +107,9 @@ class MMUState:
         colors = data.get("gate_color", [""] * num_gates)
         rgbs = data.get("gate_color_rgb", [(0.0, 0.0, 0.0)] * num_gates)
         spool_ids = data.get("gate_spool_id", [-1] * num_gates)
+        filament_name = data.get("gate_filament_name", [""] * num_gates)
+        temperature = data.get("gate_temperature", [None] * num_gates)
+        speed_override = data.get("gate_speed_override", [])
 
         gates: tuple[GateInfo, ...] = tuple(
             GateInfo(
@@ -108,6 +119,8 @@ class MMUState:
                 color=colors[i],
                 color_rgb=tuple(rgbs[i]),
                 spool_id=spool_ids[i],
+                filament_name=filament_name[i],
+                temperature=temperature[i],
             )
             for i in range(num_gates)
         )
@@ -123,9 +136,15 @@ class MMUState:
             print_state=data.get("print_state", ""),
             reason_for_pause=data.get("reason_for_pause", ""),
             has_bypass=data.get("has_bypass", False),
-            spoolman_support=SpoolmanSupport(data.get("spoolman_support", SpoolmanSupport.OFF)),
+            spoolman_support=SpoolmanSupport(
+                data.get("spoolman_support", SpoolmanSupport.OFF)
+            ),
             gates=gates,
             ttg_map=tuple(data.get("ttg_map", [])),
+            pending_spool_id=data.get("pending_spool_id", -1),
+            operation=data.get("operation", ""),
+            sensors=dict(data.get("sensors", {})),
+            gate_speed_override=tuple(speed_override),
         )
 
     def gate_for_tool(self, tool: int) -> int:
@@ -149,6 +168,9 @@ class MMUState:
             "gate_color",
             "gate_color_rgb",
             "gate_spool_id",
+            "gate_filament_name",
+            "gate_temperature",
+            "gate_speed_override",
         }
         if gate_keys.isdisjoint(diff):
             # No gate array changes
@@ -158,9 +180,13 @@ class MMUState:
             if "ttg_map" in scalar_fields:
                 scalar_fields["ttg_map"] = tuple(scalar_fields["ttg_map"])
             if "filament_pos" in scalar_fields:
-                scalar_fields["filament_pos"] = FilamentPos(scalar_fields["filament_pos"])
+                scalar_fields["filament_pos"] = FilamentPos(
+                    scalar_fields["filament_pos"]
+                )
             if "spoolman_support" in scalar_fields:
-                scalar_fields["spoolman_support"] = SpoolmanSupport(scalar_fields["spoolman_support"])
+                scalar_fields["spoolman_support"] = SpoolmanSupport(
+                    scalar_fields["spoolman_support"]
+                )
             return dataclasses.replace(self, **scalar_fields)
         # Gate arrays changed — need full rebuild, but we lost the raw arrays
         # Pass current gate data + diff into from_status
@@ -170,6 +196,9 @@ class MMUState:
             "gate_color": [g.color for g in self.gates],
             "gate_color_rgb": [g.color_rgb for g in self.gates],
             "gate_spool_id": [g.spool_id for g in self.gates],
+            "gate_filament_name": [g.filament_name for g in self.gates],
+            "gate_speed_override": list(self.gate_speed_override),
+            "gate_temperature": [g.temperature for g in self.gates],
         }
         merged = {**dataclasses.asdict(self), **gate_data, **diff}
         return MMUState.from_status(merged)

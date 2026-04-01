@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 import logging
 import typing
 from pathlib import Path
@@ -14,6 +15,15 @@ if typing.TYPE_CHECKING:
 
 
 logger: logging.Logger = logging.getLogger(__name__)
+
+# Spool Weight threshold for heavy-filament speed profile (grams)
+HEAVY_SPOOL_THRESHOLD_G: float = 1000.0
+# Absolute target speed (mm/s) for heavy spools - used to calculate SPEED % for MMU_GATE_MAP
+HEAVY_SPEED_MM_S: float = 100.0
+# Base gear stepper max_velocity (mm/s) - must match mmu_gear max_velocity in printer.cfg
+BASE_GEAR_SPEED_MM_S: float = 300.0
+# Precomputed speed percentage for heavy spools (avoids repeated division at runtime)
+_HEAVY_SPEED_PERCENT: int = max(1, round(HEAVY_SPEED_MM_S / BASE_GEAR_SPEED_MM_S * 100))
 
 CONFIG_PATH: Path = Path("~/printer_data/config/printer.cfg").expanduser()
 
@@ -39,14 +49,74 @@ class AMUManager(QtCore.QObject):
     spool_fetched: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         int, dict, name="spool-fetched"
     )
+    gate_weight_updated: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        int, float, name="gate-weight-updated"
+    )
 
     def __init__(self, ws: MoonWebSocket, parent: QtCore.QObject | None = None) -> None:
         super().__init__(parent)
         self._config_toggler = ConfigToggler(CONFIG_PATH)
-        self._amu_state = False
         self._ws = ws
         self._mmu_state: MMUState | None = None
         self._pre_gate_sensors: dict[int, bool] = {}
+        self.spool_fetched.connect(self._apply_spool_data)
+
+    def _apply_spool_data(self, gate: int, data: dict) -> None:
+        """Apply Spoolman spool data to local gate state and sync to Klipper.
+
+        Extracts material, color, weight from the Spoolman response dict,
+        emits MMU_GATE_MAP gcode to sync Klipper, and updates the local GateInfo weight.
+        """
+        filament = data.get("filament", {})
+        material = filament.get("material", "")
+        color = filament.get("color_hex", "")
+        filament_name = filament.get("name", "")
+        temperature = filament.get("settings_extruder_temp")
+        bed_temp = filament.get("settings_bed_temp")
+        spool_id = data.get("id", -1)
+        weight = data.get("used_weight")
+        remaining_weight = data.get("remaining_weight")
+        self.set_gate_info(
+            gate,
+            material,
+            color,
+            spool_id,
+            filament_name=filament_name,
+            temperature=temperature,
+        )
+        if self._mmu_state is not None:
+            if gate >= len(self._mmu_state.gates):
+                logger.warning(
+                    "Gate index %d out of range (%d gates)",
+                    gate,
+                    len(self._mmu_state.gates),
+                )
+                return
+            gates = list(self._mmu_state.gates)
+            updates = {}
+            if weight is not None:
+                updates["weight_g"] = float(weight)
+            if remaining_weight is not None:
+                updates["remaining_weight"] = float(remaining_weight)
+                self._emit_speed_gcode(gate, remaining_weight)
+            if filament_name:
+                updates["filament_name"] = filament_name
+            if temperature is not None:
+                updates["temperature"] = float(temperature)
+            if bed_temp is not None:
+                updates["bed_temp"] = int(bed_temp)
+            if updates:
+                gates[gate] = dataclasses.replace(gates[gate], **updates)
+                self._mmu_state = dataclasses.replace(
+                    self._mmu_state, gates=tuple(gates)
+                )
+
+    def _emit_speed_gcode(self, gate: int, remaining_weight: float) -> None:
+        """Emit MMU_GATE_MAP SPEED=x for the gate based on the spool weight profile."""
+        if remaining_weight > HEAVY_SPOOL_THRESHOLD_G:
+            self.run_gcode_signal.emit(
+                f"MMU_GATE_MAP gate={gate} SPEED={_HEAVY_SPEED_PERCENT}"
+            )
 
     def toggle_amu_system(self, activate: bool) -> None:
         """Enable or disable the AMU system by commenting/uncommenting config includes.
@@ -88,11 +158,14 @@ class AMUManager(QtCore.QObject):
         """Request spool data from Moonraker via WebSocket.
 
         No-op if MMU state not received or spoolman_support is OFF.
-        Emits spool_fetched(gate, data) on sucess; logs and emits nothing on error.
+        Emits spool_fetched(gate, data) on success; logs and emits nothing on error.
         """
+
         if self._mmu_state is None:
             return
         if self._mmu_state.spoolman_support is SpoolmanSupport.OFF:
+            return
+        if spool_id == -1:
             return
 
         def _on_result(result: dict | None) -> None:
@@ -102,7 +175,13 @@ class AMUManager(QtCore.QObject):
         self._ws.api.get_spool(spool_id, _on_result)
 
     def set_gate_info(
-        self, gate: int, material: str, color: str, spool_id: int
+        self,
+        gate: int,
+        material: str,
+        color: str,
+        spool_id: int,
+        filament_name: str = "",
+        temperature: int | None = None,
     ) -> None:
         """Sets all gate attributes for a single MMU_GATE
 
@@ -111,10 +190,15 @@ class AMUManager(QtCore.QObject):
             material (str): Filament material name, e.g. ``"PLA"``.
             color (str): Filament color as hex string, e.g. ``"ff56e0"``.
             spool_id (int): Spoolman spool ID, or -1 if not tracked.
+            filament_name (str): Filament display name from Spoolman.
+            temperature (int | None): Extruder temperature, omitted if None.
         """
-        self.run_gcode_signal.emit(
-            f"MMU_GATE_MAP gate={gate} MATERIAL={material} COLOR={color} SPOOLID={spool_id}"
-        )
+        gcode = f"MMU_GATE_MAP gate={gate} MATERIAL={material} COLOR={color} SPOOLID={spool_id}"
+        if filament_name:
+            gcode = f"MMU_GATE_MAP gate={gate} NAME={filament_name} MATERIAL={material} COLOR={color} SPOOLID={spool_id}"
+        if temperature is not None:
+            gcode += f" TEMP={temperature}"
+        self.run_gcode_signal.emit(gcode)
 
     def set_gate_material(self, gate: int, material: str) -> None:
         """Set the `material` at the gate `gate`
@@ -142,6 +226,8 @@ class AMUManager(QtCore.QObject):
             spool_id (int): Spoolman spool ID, or -1 to clear.
         """
         self.run_gcode_signal.emit(f"MMU_GATE_MAP gate={gate} SPOOLID={spool_id}")
+        if spool_id != -1:
+            self.fetch_spool(gate, spool_id)
 
     def home_mmu(self) -> None:
         """Home the MMU selector by sending MMU_HOME."""
@@ -188,18 +274,6 @@ class AMUManager(QtCore.QObject):
         """
         self.run_gcode_signal.emit(f"MMU_CHANGE_TOOL TOOL={tool}")
 
-    def on_pre_gate_update(self, values: dict, name: str) -> None:
-        if not name.startswith("Mmu Pre Gate "):
-            return
-        try:
-            gate = int(name.removeprefix("Mmu Pre Gate "))
-        except ValueError:
-            logger.error("Failed to parse Pre-Gate: %s", name)
-            return
-        detected = bool(values.get("filament_detected", False))
-        self._pre_gate_sensors[gate] = detected
-        self.pre_gate_changed.emit(gate, detected)
-
     def update_mmu_state(self, data: dict, name: str = "") -> None:
         """Receive an MMU status dict from Moonraker and update internal state.
 
@@ -223,8 +297,45 @@ class AMUManager(QtCore.QObject):
         """Route object_updated signal from Printer to the appropriate handler."""
         if object_type == "mmu":
             self.update_mmu_state(values)
-        elif object_type == "filament_switch_detected":
+        elif object_type == "filament_switch_sensor":
             self.on_pre_gate_update(values, object_name)
+        elif object_type == "load_cell":
+            self.on_load_cell_update(values, object_name)
+
+    def on_pre_gate_update(self, values: dict, name: str) -> None:
+        if not name.startswith("Mmu Pre Gate "):
+            return
+        try:
+            gate = int(name.removeprefix("Mmu Pre Gate "))
+        except ValueError:
+            logger.error("Failed to parse Pre-Gate: %s", name)
+            return
+        detected = bool(values.get("filament_detected", False))
+        self._pre_gate_sensors[gate] = detected
+        self.pre_gate_changed.emit(gate, detected)
+
+    def on_load_cell_update(self, values: dict, name: str) -> None:
+        """Update gate weight from a Klipper load_cell sensor reading"""
+        if self._mmu_state is None:
+            return
+        try:
+            gate = int(name.removeprefix("load_cell_mmu_"))
+        except ValueError:
+            logger.error("Failed parsing %s Load cell", name)
+            return
+
+        weight = float(values.get("force", 0))
+        if gate >= len(self._mmu_state.gates):
+            logger.warning(
+                "Gate index %d out of range (%d gates)",
+                gate,
+                len(self._mmu_state.gates),
+            )
+            return
+        gates = list(self._mmu_state.gates)
+        gates[gate] = dataclasses.replace(gates[gate], weight_g=weight)
+        self._mmu_state = dataclasses.replace(self._mmu_state, gates=tuple(gates))
+        self.gate_weight_updated.emit(gate, weight)
 
     def on_klippy_state(self, state: str) -> None:
         """React to changes in klippy states"""

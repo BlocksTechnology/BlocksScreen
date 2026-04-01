@@ -38,6 +38,19 @@ _FULL_STATUS_WITH_SPOOLMAN: dict = {
     "spoolman_support": "push",
 }
 
+_SPOOL_DATA: dict = {
+    "id": 42,
+    "used_weight": 50.0,
+    "remaining_weight": 950.0,
+    "filament": {
+        "name": "PLA Basic",
+        "material": "PLA",
+        "color_hex": "ff0000",
+        "settings_extruder_temp": 215,
+        "settings_bed_temp": 60,
+    },
+}
+
 
 @pytest.fixture
 def manager(tmp_path, qapp):
@@ -134,6 +147,15 @@ class TestUpdateMMUState:
         with qtbot.waitSignal(manager.mmu_state_changed):
             manager.update_mmu_state({"tool": 1})
 
+    def test_from_status_parses_gate_speed_override(self, manager) -> None:
+        data = {**_FULL_STATUS, "gate_speed_override": [0.5, 1.0]}
+        manager.update_mmu_state(data)
+        assert manager.get_state().gate_speed_override == (0.5, 1.0)
+
+    def test_from_status_gate_speed_override_defaults_to_empty(self, manager) -> None:
+        manager.update_mmu_state(_FULL_STATUS)
+        assert manager.get_state().gate_speed_override == ()
+
 
 class TestGcodeSignals:
     def test_set_gate_info(self, manager, qtbot) -> None:
@@ -141,6 +163,27 @@ class TestGcodeSignals:
             manager.set_gate_info(0, "PLA", "ff0000", 42)
         assert blocker.args == [
             "MMU_GATE_MAP gate=0 MATERIAL=PLA COLOR=ff0000 SPOOLID=42"
+        ]
+
+    def test_set_gate_info_with_temperature(self, manager, qtbot) -> None:
+        with qtbot.waitSignal(manager.run_gcode_signal) as blocker:
+            manager.set_gate_info(
+                1,
+                "PETG",
+                "00ff00",
+                7,
+                filament_name="PETG Transparent",
+                temperature=240,
+            )
+        assert blocker.args == [
+            "MMU_GATE_MAP gate=1 NAME=PETG Transparent MATERIAL=PETG COLOR=00ff00 SPOOLID=7 TEMP=240"
+        ]
+
+    def test_set_gate_info_withouth_temp(self, manager, qtbot) -> None:
+        with qtbot.waitSignal(manager.run_gcode_signal) as blocker:
+            manager.set_gate_info(2, "ABS", "0000ff", 3, filament_name="ABS BLACK")
+        assert blocker.args == [
+            "MMU_GATE_MAP gate=2 NAME=ABS BLACK MATERIAL=ABS COLOR=0000ff SPOOLID=3"
         ]
 
     def test_set_gate_material(self, manager, qtbot) -> None:
@@ -211,7 +254,7 @@ class TestGcodeSignals:
         manager.update_mmu_state(_FULL_STATUS)
         assert manager.get_state() is not None
 
-    def test_acivate_emits_firmware_restart(self, manager_with_cfg, qtbot) -> None:
+    def test_activate_emits_firmware_restart(self, manager_with_cfg, qtbot) -> None:
         mgr, _ = manager_with_cfg
         with qtbot.waitSignal(mgr.run_gcode_signal) as blocker:
             mgr.toggle_amu_system(True)
@@ -323,3 +366,120 @@ class TestSpoolManFetch:
         callback = manager._ws.api.get_spool.call_args.args[1]
         with qtbot.assertNotEmitted(manager.spool_fetched):
             callback(None)
+
+
+class TestLoadCellUpdate:
+    def test_noop_when_mmu_state_none(self, manager) -> None:
+        manager.on_load_cell_update({"force": 150.0}, "load_cell_mmu_0")
+        assert manager.get_state() is None
+
+    def test_updates_gate_weight(self, manager) -> None:
+        manager.update_mmu_state(_FULL_STATUS)
+        manager.on_load_cell_update({"force": 150.0}, "load_cell_mmu_0")
+        assert manager.get_state().gates[0].weight_g == 150.0
+
+    def test_ignores_unkown_name(self, manager) -> None:
+        manager.update_mmu_state(_FULL_STATUS)
+        manager.on_load_cell_update({"force": 150.0}, "other_sensor_mmu_0")
+        assert manager.get_state().gates[0].weight_g is None
+
+    def test_emits_gate_weight_updated(self, manager, qtbot) -> None:
+        manager.update_mmu_state(_FULL_STATUS)
+        with qtbot.waitSignal(manager.gate_weight_updated) as blocker:
+            manager.on_load_cell_update({"force": 200.0}, "load_cell_mmu_0")
+        assert blocker.args == [0, 200.0]
+
+    def test_routed_via_on_object_updated(self, manager, qtbot) -> None:
+        manager.update_mmu_state(_FULL_STATUS)
+        with qtbot.waitSignal(manager.gate_weight_updated):
+            manager.on_object_updated("load_cell", "load_cell_mmu_0", {"force": 100.0})
+
+
+class TestApplySpoolData:
+    def test_emits_gcode_with_spool_fields(self, manager, qtbot) -> None:
+        manager.update_mmu_state(_FULL_STATUS_WITH_SPOOLMAN)
+        with qtbot.waitSignal(manager.run_gcode_signal) as blocker:
+            manager._apply_spool_data(0, _SPOOL_DATA)
+        assert blocker.args == [
+            "MMU_GATE_MAP gate=0 NAME=PLA Basic MATERIAL=PLA COLOR=ff0000 SPOOLID=42 TEMP=215"
+        ]
+
+    def test_updates_local_weight(self, manager) -> None:
+        manager.update_mmu_state(_FULL_STATUS_WITH_SPOOLMAN)
+        manager._apply_spool_data(0, _SPOOL_DATA)
+        assert manager.get_state().gates[0].weight_g == 50.0
+
+    def test_triggered_by_spool_fetched_signal(self, manager, qtbot) -> None:
+        manager.update_mmu_state(_FULL_STATUS_WITH_SPOOLMAN)
+        manager.fetch_spool(0, 42)
+        callback = manager._ws.api.get_spool.call_args.args[1]
+        with qtbot.waitSignal(manager.run_gcode_signal):
+            callback(_SPOOL_DATA)
+
+    def test_updates_local_remaining_weight(self, manager) -> None:
+        manager.update_mmu_state(_FULL_STATUS_WITH_SPOOLMAN)
+        manager._apply_spool_data(0, _SPOOL_DATA)
+        assert manager.get_state().gates[0].remaining_weight == 950.0
+
+    def test_updates_local_bed_temp(self, manager) -> None:
+        manager.update_mmu_state(_FULL_STATUS_WITH_SPOOLMAN)
+        manager._apply_spool_data(0, _SPOOL_DATA)
+        assert manager.get_state().gates[0].bed_temp == 60
+
+    def test_mid_usage_spool_no_remaining_weight(self, manager) -> None:
+        manager.update_mmu_state(_FULL_STATUS_WITH_SPOOLMAN)
+        data = {k: v for k, v in _SPOOL_DATA.items() if k != "remaining_weight"}
+        manager._apply_spool_data(0, data)
+        assert manager.get_state().gates[0].remaining_weight is None
+        assert manager.get_state().gates[0].bed_temp == 60
+
+    def test_speed_gcode_emitted_for_heavy_spool(self, manager) -> None:
+        manager.update_mmu_state(_FULL_STATUS_WITH_SPOOLMAN)
+        heavy_data = {**_SPOOL_DATA, "remaining_weight": 1500.0}
+        signals = []
+        manager.run_gcode_signal.connect(signals.append)
+        manager._apply_spool_data(0, heavy_data)
+        speed_gcodes = [s for s in signals if "SPEED" in s]
+        assert len(speed_gcodes) == 1
+        assert "SPEED=33" in speed_gcodes[0]
+
+    def test_no_speed_gcode_for_normal_spool(self, manager) -> None:
+        manager.update_mmu_state(_FULL_STATUS_WITH_SPOOLMAN)
+        signals = []
+        manager.run_gcode_signal.connect(signals.append)
+        manager._apply_spool_data(0, _SPOOL_DATA)
+        speed_gcodes = [s for s in signals if "SPEED" in s]
+        assert len(speed_gcodes) == 0
+
+    def test_no_speed_gcode_when_no_remaining_weight(self, manager) -> None:
+        manager.update_mmu_state(_FULL_STATUS_WITH_SPOOLMAN)
+        data_no_weight = {
+            k: v for k, v in _SPOOL_DATA.items() if k != "remaining_weight"
+        }
+        signals = []
+        manager.run_gcode_signal.connect(signals.append)
+        manager._apply_spool_data(0, data_no_weight)
+        speed_gcodes = [s for s in signals if "SPEED" in s]
+        assert len(speed_gcodes) == 0
+
+
+class TestSetGateSpoolAutoFetch:
+    def test_calls_fetch_spool_when_activate(self, manager) -> None:
+        manager.update_mmu_state(_FULL_STATUS_WITH_SPOOLMAN)
+        manager.set_gate_spool(0, 42)
+        manager._ws.api.get_spool.assert_called_once()
+
+    def test_skips_fetch_when_spool_id_minus_one(self, manager) -> None:
+        manager.update_mmu_state(_FULL_STATUS_WITH_SPOOLMAN)
+        manager.set_gate_spool(0, -1)
+        manager._ws.api.get_spool.assert_not_called()
+
+    def test_skips_fetch_when_no_state(self, manager) -> None:
+        manager.set_gate_spool(0, 42)
+        manager._ws.api.get_spool.assert_not_called()
+
+    def test_skips_fetch_when_spoolman_off(self, manager) -> None:
+        status = {**_FULL_STATUS_WITH_SPOOLMAN, "spoolman_support": "off"}
+        manager.update_mmu_state(status)
+        manager.set_gate_spool(0, 42)
+        manager._ws.api.get_spool.assert_not_called()
