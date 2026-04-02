@@ -334,7 +334,9 @@ class PrintTab(QtWidgets.QStackedWidget):
     def save_config(self) -> None:
         """Handle Save configuration behaviour, shows confirmation dialog"""
 
-        self.babystepPage.bbp_z_offset_title_label.setText(f"Z: {self._active_z_offset:.3f}mm")
+        self.babystepPage.bbp_z_offset_title_label.setText(
+            f"Z: {self._active_z_offset:.3f}mm"
+        )
         self.BasePopup_z_offset.set_message(
             f"The Z-Offset is now {self._active_z_offset:.3f} mm.\n"
             "Would you like to save this change permanently?\n"
