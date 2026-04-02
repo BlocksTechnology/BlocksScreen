@@ -78,6 +78,7 @@ class PrintTab(QtWidgets.QStackedWidget):
         self._active_z_offset: float = 0.0
         self._finish_print_handled: bool = False
         self._pending_save_offset: float = 0.0
+        self._z_apply_command: str = "Z_OFFSET_APPLY_ENDSTOP"
 
         self.setupMainPrintPage()
         self.ws: MoonWebSocket = ws
@@ -359,7 +360,7 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.run_gcode_signal.emit(
             f"SET_GCODE_OFFSET Z={self._pending_save_offset:.3f} MOVE=0"
         )
-        self.run_gcode_signal.emit("Z_OFFSET_APPLY_ENDSTOP")
+        self.run_gcode_signal.emit(self._z_apply_command)
         self.run_gcode_signal.emit("SAVE_CONFIG")
         self.save_config_btn.setVisible(False)
 
@@ -421,6 +422,17 @@ class PrintTab(QtWidgets.QStackedWidget):
         """React to klipper ready signal"""
         self.babystepPage.baby_stepchange = False
         self._finish_print_handled = False
+        self.printer.on_subscribe_config("stepper_z", self._on_stepper_z_config)
+
+    def _on_stepper_z_config(self, config: dict | list) -> None:
+        """Select the correct Z-offset apply command based on endstop type."""
+        if not isinstance(config, dict):
+            return
+        stepper_z = config.get("stepper_z", {})
+        if stepper_z.get("endstop_pin") == "probe:z_virtual_endstop":
+            self._z_apply_command = "Z_OFFSET_APPLY_PROBE"
+        else:
+            self._z_apply_command = "Z_OFFSET_APPLY_ENDSTOP"
 
     @QtCore.pyqtSlot(name="finish_print_signal")
     def finish_print_signal(self) -> None:
