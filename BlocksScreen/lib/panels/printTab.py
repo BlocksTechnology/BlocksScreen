@@ -76,7 +76,6 @@ class PrintTab(QtWidgets.QStackedWidget):
         super().__init__(parent)
         self._active_z_offset: float = 0.0
         self._finish_print_handled: bool = False
-        self._pending_save_offset: float = 0.0
         self._z_apply_command: str = "Z_OFFSET_APPLY_ENDSTOP"
 
         self.setupMainPrintPage()
@@ -334,8 +333,8 @@ class PrintTab(QtWidgets.QStackedWidget):
 
     def save_config(self) -> None:
         """Handle Save configuration behaviour, shows confirmation dialog"""
-        self._pending_save_offset = self._active_z_offset
-        self.babystepPage.bbp_z_offset_title_label.setText(f"Z: {self._pending_save_offset:.3f}mm")
+
+        self.babystepPage.bbp_z_offset_title_label.setText(f"Z: {self._active_z_offset:.3f}mm")
         self.BasePopup_z_offset.set_message(
             f"The Z-Offset is now {self._active_z_offset:.3f} mm.\n"
             "Would you like to save this change permanently?\n"
@@ -356,7 +355,7 @@ class PrintTab(QtWidgets.QStackedWidget):
         except (RuntimeError, TypeError):
             pass
         self.run_gcode_signal.emit(
-            f"SET_GCODE_OFFSET Z={self._pending_save_offset:.3f} MOVE=0"
+            f"SET_GCODE_OFFSET Z={self._active_z_offset:.3f} MOVE=0"
         )
         self.run_gcode_signal.emit(self._z_apply_command)
         self.run_gcode_signal.emit("SAVE_CONFIG")
