@@ -65,9 +65,6 @@ class PrintTab(QtWidgets.QStackedWidget):
     call_load_panel = QtCore.pyqtSignal(bool, str, name="call-load-panel")
 
     call_cancel_panel = QtCore.pyqtSignal(bool, name="call-load-panel")
-    _z_offset: float = 0.0
-    _active_z_offset: float = 0.0
-    _finish_print_handled: bool = False
 
     def __init__(
         self,
@@ -77,6 +74,9 @@ class PrintTab(QtWidgets.QStackedWidget):
         printer: Printer,
     ) -> None:
         super().__init__(parent)
+        self._active_z_offset: float = 0.0
+        self._finish_print_handled: bool = False
+        self._z_apply_command: str = "Z_OFFSET_APPLY_ENDSTOP"
 
         self.setupMainPrintPage()
         self.ws: MoonWebSocket = ws
@@ -267,7 +267,6 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.confirmPage_widget.on_delete.connect(self.delete_file)
         self.change_page(self.indexOf(self.print_page))  # force set the initial page
         self.save_config_btn.clicked.connect(self.save_config)
-        self.BasePopup_z_offset.accepted.connect(self.update_configuration_file)
 
     @QtCore.pyqtSlot(str, dict, name="on_print_stats_update")
     @QtCore.pyqtSlot(str, float, name="on_print_stats_update")
@@ -321,8 +320,12 @@ class PrintTab(QtWidgets.QStackedWidget):
     @QtCore.pyqtSlot(str, str, name="delete_file")
     @QtCore.pyqtSlot(str, name="delete_file")
     def delete_file(self, filename: str, directory: str = "gcodes") -> None:
-        """Handle Delete file signal, shows confirmation dialog"""
+        """Handle Delete file signal, shows confirmation dialog."""
         self.BasePopup.set_message("Are you sure you want to delete this file?")
+        try:
+            self.BasePopup.accepted.disconnect()
+        except (RuntimeError, TypeError):
+            pass
         self.BasePopup.accepted.connect(
             lambda: self._on_delete_file_confirmed(filename, directory)
         )
@@ -330,25 +333,35 @@ class PrintTab(QtWidgets.QStackedWidget):
 
     def save_config(self) -> None:
         """Handle Save configuration behaviour, shows confirmation dialog"""
-        if self._finish_print_handled:
-            self.run_gcode_signal.emit("Z_OFFSET_APPLY_PROBE")
-            self._z_offset = self._active_z_offset
-            self.babystepPage.bbp_z_offset_title_label.setText(
-                f"Z: {self._z_offset:.3f}mm"
-            )
+
+        self.babystepPage.bbp_z_offset_title_label.setText(
+            f"Z: {self._active_z_offset:.3f}mm"
+        )
         self.BasePopup_z_offset.set_message(
-            f"The Z‑Offset is now {self._active_z_offset:.3f} mm.\n"
+            f"The Z-Offset is now {self._active_z_offset:.3f} mm.\n"
             "Would you like to save this change permanently?\n"
             "The machine will restart."
         )
         self.BasePopup_z_offset.cancel_button_text("Later")
+        try:
+            self.BasePopup_z_offset.accepted.disconnect(self.update_configuration_file)
+        except (RuntimeError, TypeError):
+            pass
+        self.BasePopup_z_offset.accepted.connect(self.update_configuration_file)
         self.BasePopup_z_offset.open()
 
-    def update_configuration_file(self):
-        """Runs the `SAVE_CONFIG` gcode"""
-        self.run_gcode_signal.emit("Z_OFFSET_APPLY_PROBE")
+    def update_configuration_file(self) -> None:
+        """Restore the captured offset, apply it to the probe config, then save."""
+        try:
+            self.BasePopup_z_offset.accepted.disconnect(self.update_configuration_file)
+        except (RuntimeError, TypeError):
+            pass
+        self.run_gcode_signal.emit(
+            f"SET_GCODE_OFFSET Z={self._active_z_offset:.3f} MOVE=0"
+        )
+        self.run_gcode_signal.emit(self._z_apply_command)
         self.run_gcode_signal.emit("SAVE_CONFIG")
-        self.BasePopup_z_offset.disconnect()
+        self.save_config_btn.setVisible(False)
 
     @QtCore.pyqtSlot(str, list, name="activate_save_button")
     def activate_save_button(self, name: str, value: list) -> None:
@@ -357,15 +370,19 @@ class PrintTab(QtWidgets.QStackedWidget):
             return
 
         if name == "homing_origin":
-            self._active_z_offset = value[2]
-            self.save_config_btn.setVisible(value[2] != 0)
+            if len(value) > 2:
+                self._active_z_offset = value[2]
+                self.save_config_btn.setVisible(value[2] != 0)
 
     def _on_delete_file_confirmed(self, filename: str, directory: str) -> None:
-        """Handle confirmed file deletion after user accepted the dialog"""
+        """Handle confirmed file deletion after user accepted the dialog."""
         self.file_data.on_request_delete_file(filename, directory)
         self.request_back.emit()
         self.filesPage_widget.reset_dir()
-        self.BasePopup.disconnect()
+        try:
+            self.BasePopup.accepted.disconnect()
+        except (RuntimeError, TypeError):
+            pass
 
     def setProperty(self, name: str, value: typing.Any) -> bool:
         """Intercept the set property method
@@ -404,6 +421,17 @@ class PrintTab(QtWidgets.QStackedWidget):
         """React to klipper ready signal"""
         self.babystepPage.baby_stepchange = False
         self._finish_print_handled = False
+        self.printer.on_subscribe_config("stepper_z", self._on_stepper_z_config)
+
+    def _on_stepper_z_config(self, config: dict | list) -> None:
+        """Select the correct Z-offset apply command based on endstop type."""
+        if not isinstance(config, dict):
+            return
+        stepper_z = config.get("stepper_z", {})
+        if stepper_z.get("endstop_pin") == "probe:z_virtual_endstop":
+            self._z_apply_command = "Z_OFFSET_APPLY_PROBE"
+        else:
+            self._z_apply_command = "Z_OFFSET_APPLY_ENDSTOP"
 
     @QtCore.pyqtSlot(name="finish_print_signal")
     def finish_print_signal(self) -> None:
