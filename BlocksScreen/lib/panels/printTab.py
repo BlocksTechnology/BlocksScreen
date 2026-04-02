@@ -65,9 +65,6 @@ class PrintTab(QtWidgets.QStackedWidget):
     call_load_panel = QtCore.pyqtSignal(bool, str, name="call-load-panel")
 
     call_cancel_panel = QtCore.pyqtSignal(bool, name="call-load-panel")
-    _z_offset: float = 0.0
-    _active_z_offset: float = 0.0
-    _finish_print_handled: bool = False
 
     def __init__(
         self,
@@ -77,6 +74,10 @@ class PrintTab(QtWidgets.QStackedWidget):
         printer: Printer,
     ) -> None:
         super().__init__(parent)
+        self._z_offset: float = 0.0
+        self._active_z_offset: float = 0.0
+        self._finish_print_handled: bool = False
+        self._pending_save_offset: float = 0.0
 
         self.setupMainPrintPage()
         self.ws: MoonWebSocket = ws
@@ -322,6 +323,10 @@ class PrintTab(QtWidgets.QStackedWidget):
     def delete_file(self, filename: str, directory: str = "gcodes") -> None:
         """Handle Delete file signal, shows confirmation dialog."""
         self.BasePopup.set_message("Are you sure you want to delete this file?")
+        try:
+            self.BasePopup.accepted.disconnect()
+        except (RuntimeError, TypeError):
+            pass
         self.BasePopup.accepted.connect(
             lambda: self._on_delete_file_confirmed(filename, directory)
         )
@@ -329,14 +334,11 @@ class PrintTab(QtWidgets.QStackedWidget):
 
     def save_config(self) -> None:
         """Handle Save configuration behaviour, shows confirmation dialog"""
-        if self._finish_print_handled:
-            self.run_gcode_signal.emit("Z_OFFSET_APPLY_PROBE")
-            self._z_offset = self._active_z_offset
-            self.babystepPage.bbp_z_offset_title_label.setText(
-                f"Z: {self._z_offset:.3f}mm"
-            )
+        self._pending_save_offset = self._active_z_offset
+        self._z_offset = self._active_z_offset
+        self.babystepPage.bbp_z_offset_title_label.setText(f"Z: {self._z_offset:.3f}mm")
         self.BasePopup_z_offset.set_message(
-            f"The Z‑Offset is now {self._active_z_offset:.3f} mm.\n"
+            f"The Z-Offset is now {self._active_z_offset:.3f} mm.\n"
             "Would you like to save this change permanently?\n"
             "The machine will restart."
         )
@@ -349,12 +351,15 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.BasePopup_z_offset.open()
 
     def update_configuration_file(self) -> None:
-        """Run ``Z_OFFSET_APPLY_PROBE`` followed by ``SAVE_CONFIG``."""
+        """Restore the captured offset, apply it to the probe config, then save."""
         try:
             self.BasePopup_z_offset.accepted.disconnect(self.update_configuration_file)
         except (RuntimeError, TypeError):
             pass
-        self.run_gcode_signal.emit("Z_OFFSET_APPLY_PROBE")
+        self.run_gcode_signal.emit(
+            f"SET_GCODE_OFFSET Z={self._pending_save_offset:.3f} MOVE=0"
+        )
+        self.run_gcode_signal.emit("Z_OFFSET_APPLY_ENDSTOP")
         self.run_gcode_signal.emit("SAVE_CONFIG")
         self.save_config_btn.setVisible(False)
 
