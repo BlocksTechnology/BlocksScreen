@@ -30,6 +30,8 @@ class Printer(QtCore.QObject):
         [str, float], [str, str], name="idle_timeout_update"
     )
 
+    save_variables_update = QtCore.pyqtSignal(dict, name="save_variables_update")
+
     gcode_move_update = QtCore.pyqtSignal(
         [str, list], [str, float], [str, bool], name="gcode_move_update"
     )
@@ -327,6 +329,11 @@ class Printer(QtCore.QObject):
                             _state_call,
                             e,
                         )
+
+    def _save_variables_object_updated(
+        self, value: dict, name: str = "saved_variables"
+    ) -> None:
+        self.save_variables_update.emit(value)
 
     def _gcode_move_object_updated(self, value: dict, name: str = "gcode_move") -> None:
         if "speed_factor" in value.keys():
