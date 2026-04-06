@@ -44,6 +44,10 @@ class Printer(QtCore.QObject):
     print_stats_update = QtCore.pyqtSignal(
         [str, dict], [str, float], [str, str], name="print_stats_update"
     )
+    mmu_update = QtCore.pyqtSignal(
+        [str, dict], [str, list], [str, int], [str, str], name="mmu_update"
+    )
+
     display_update = QtCore.pyqtSignal([str, str], [str, float], name="display_update")
     temperature_sensor_update = QtCore.pyqtSignal(
         str, str, float, name="temperature_sensor_update"
@@ -379,6 +383,25 @@ class Printer(QtCore.QObject):
         self, value: dict, name: str = "saved_variables"
     ) -> None:
         self.save_variables_update.emit(value)
+
+    def _mmu_object_updated(self, value: dict, name: str = "mmu") -> None:
+        if "action" in value:
+            self.mmu_update[str, str].emit("action", value["action"])
+
+        if "filament" in value:
+            self.mmu_update[str, str].emit(
+                "filament", value["filament"]
+            )  # THIS IS EXTRUDER SENSOR ONLY
+
+        if "gate" in value:
+            self.mmu_update[str, int].emit("gate", value["gate"])
+
+        if "active_filament" in value:
+            self.mmu_update[str, dict].emit("active_filament", value["active_filament"])
+
+        if "gate_status" in value:
+            self.mmu_update[str, list].emit("gate_status", value["gate_status"])
+        # i only putted the most relevant ones, there are some other parameters that can be added later if needed
 
     def _gcode_move_object_updated(self, value: dict, name: str = "gcode_move") -> None:
         if "speed_factor" in value.keys():
