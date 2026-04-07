@@ -79,6 +79,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self.panel.filament_page_unload_btn.clicked.connect(
             lambda: self.unload_filament(toolhead=0, temp=250)
         )
+        self.panel.load_header_back_button_2.clicked.connect(self.back_button)
         self.run_gcode.connect(self.ws.api.run_gcode)
         self.printer.extruder_update.connect(self.on_extruder_update)
         self.printer.unload_filament_update.connect(self.on_unload_filament)
@@ -113,9 +114,15 @@ class FilamentTab(QtWidgets.QStackedWidget):
         """Handle print stats object update"""
         if isinstance(value, str):
             if "state" in field:
+                if value in ("printing", "pausing", "paused", "resuming"):
+                    self.panel.load_header_back_button_2.show()
+                    self.panel.spacerItem1.changeSize(60, 0, QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Minimum)
                 if value in ("standby"):
                     self.loadignore = True
                     self.unloadignore = True
+                    self.panel.load_header_back_button_2.hide()
+                    self.panel.spacerItem1.changeSize(0, 0, QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Minimum)
+
 
     @QtCore.pyqtSlot(str, str, bool, name="on_filament_sensor_update")
     def on_filament_sensor_update(self, sensor_name: str, parameter: str, value: bool):

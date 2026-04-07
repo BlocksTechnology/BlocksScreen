@@ -268,6 +268,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.file_data.fileinfo.connect(self.cancelpage._show_screen_thumbnail)
         self.printPanel.call_cancel_panel.connect(self.handle_cancel_print)
 
+        self.print_status = "idle"
+
         if self.config.has_section("server"):
             self.bo_ws_startup.emit()
         self.reset_tab_indexes()
@@ -367,9 +369,6 @@ class MainWindow(QtWidgets.QMainWindow):
         """
 
         self.ui.main_content_widget.setTabEnabled(
-            self.ui.main_content_widget.indexOf(self.ui.filamentTab), True
-        )
-        self.ui.main_content_widget.setTabEnabled(
             self.ui.main_content_widget.indexOf(self.ui.controlTab), True
         )
         self.ui.main_content_widget.setTabEnabled(
@@ -378,9 +377,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui.header_main_layout.setEnabled(True)
         return all(
             [
-                not self.ui.main_content_widget.isTabEnabled(
-                    self.ui.main_content_widget.indexOf(self.ui.filamentTab)
-                ),
                 not self.ui.main_content_widget.isTabEnabled(
                     self.ui.main_content_widget.indexOf(self.ui.controlTab)
                 ),
@@ -403,9 +399,6 @@ class MainWindow(QtWidgets.QMainWindow):
             boolean: True if the TabBar was disabled
         """
         self.ui.main_content_widget.setTabEnabled(
-            self.ui.main_content_widget.indexOf(self.ui.filamentTab), False
-        )
-        self.ui.main_content_widget.setTabEnabled(
             self.ui.main_content_widget.indexOf(self.ui.controlTab), False
         )
         self.ui.main_content_widget.setTabEnabled(
@@ -414,9 +407,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui.header_main_layout.setEnabled(False)
         return all(
             [
-                not self.ui.main_content_widget.isTabEnabled(
-                    self.ui.main_content_widget.indexOf(self.ui.filamentTab)
-                ),
                 not self.ui.main_content_widget.isTabEnabled(
                     self.ui.main_content_widget.indexOf(self.ui.controlTab)
                 ),
@@ -437,6 +427,8 @@ class MainWindow(QtWidgets.QMainWindow):
         Used to grantee all tabs reset to their
         first page once the user leaves the tab
         """
+        if self.print_status == "printing":
+            return
         self.update_page.hide()
         self.printPanel.setCurrentIndex(0)
         self.filamentPanel.setCurrentIndex(0)
@@ -825,6 +817,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 return True
             return False
         if event.type() == events.PrintStart.type():
+            self.print_status = "printing"
             self.disable_tab_bar()
             self.ui.extruder_temp_display.clicked.disconnect()
             self.ui.bed_temp_display.clicked.disconnect()
@@ -849,6 +842,7 @@ class MainWindow(QtWidgets.QMainWindow):
             events.PrintComplete.type(),
             events.PrintCancelled.type(),
         ):
+            self.print_status = "idle"
             if event.type() == events.PrintCancelled.type():
                 self.handle_cancel_print()
             self.enable_tab_bar()
