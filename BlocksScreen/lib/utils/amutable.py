@@ -1,13 +1,15 @@
 from PyQt6 import QtCore, QtGui, QtWidgets
 import enum
-import typing
 
 import sys
 import os
+
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
 
 from lib.utils.icon_button import IconButton
+from lib.utils.blocks_button import BlocksCustomButton
+from lib.utils.blocks_frame import BlocksCustomFrame
 
 
 from lib.ui.resources.background_resources_rc import *
@@ -17,6 +19,7 @@ from lib.ui.resources.icon_resources_rc import *
 from lib.ui.resources.main_menu_resources_rc import *
 from lib.ui.resources.system_resources_rc import *
 from lib.ui.resources.top_bar_resources_rc import *
+
 
 class FilamentStates(enum.Enum):
     LOADED = enum.auto()
@@ -30,16 +33,24 @@ class FilamentStates(enum.Enum):
 class Spoll_button(QtWidgets.QAbstractButton):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.color   = QtGui.QColor(0, 0, 0)
-        self.status  = FilamentStates.UNKNOWN
+        self.color = QtGui.QColor(0, 0, 0)
+        self.status = FilamentStates.UNKNOWN
         self.slot_id = ""
         self.setCheckable(True)
         self.setMinimumSize(100, 100)
         self._icon = QtGui.QPixmap("/home/levi/Downloads/WhatSie/loadicon.svg")
 
-    def setColor(self, c: QtGui.QColor):  self.color = c;    self.update()
-    def setStatus(self, s: FilamentStates): self.status = s; self.update()
-    def setSlotId(self, s: str):           self.slot_id = s; self.update()
+    def setColor(self, c: QtGui.QColor):
+        self.color = c
+        self.update()
+
+    def setStatus(self, s: FilamentStates):
+        self.status = s
+        self.update()
+
+    def setSlotId(self, s: str):
+        self.slot_id = s
+        self.update()
 
     def paintEvent(self, e: QtGui.QPaintEvent | None) -> None:
         painter = QtGui.QPainter(self)
@@ -48,12 +59,10 @@ class Spoll_button(QtWidgets.QAbstractButton):
         painter.setRenderHint(painter.RenderHint.LosslessImageRendering)
 
         # # Selected: draw a colored border
-        if self.isChecked():
-            border_pen = QtGui.QPen(QtGui.QColor(255, 255, 255))
-            border_pen.setWidth(2)
-            painter.setPen(border_pen)
-        else:
-            painter.setPen(QtCore.Qt.PenStyle.NoPen)
+        # if self.isChecked():
+        #     border_pen = QtGui.QPen(QtGui.QColor(255, 255, 255))
+        #     border_pen.setWidth(2)
+        #     painter.setPen(border_pen)
 
         # Gradient background
         gradient = QtGui.QLinearGradient(
@@ -61,21 +70,19 @@ class Spoll_button(QtWidgets.QAbstractButton):
             QtCore.QPointF(self.rect().topLeft()),
         )
 
-        white = QtGui.QColor(255,255,255)
+        white = QtGui.QColor(255, 255, 255)
         color1 = QtGui.QColor(white)
         color1.setAlpha(165)
         color2 = QtGui.QColor(white)
         color2.setAlpha(165)
         color3 = QtGui.QColor(white)
         color3.setAlpha(0)
-        
+
         gradient.setColorAt(0.0, color1)
         gradient.setColorAt(0.1, color2)
         gradient.setColorAt(0.11, color3)
         painter.setBrush(gradient)
         painter.drawRect(self.rect())
-        
-
 
         color1 = QtGui.QColor(self.color)
         color1.setAlpha(255)
@@ -83,155 +90,76 @@ class Spoll_button(QtWidgets.QAbstractButton):
         color2.setAlpha(255)
         color3 = QtGui.QColor(self.color)
         color3.setAlpha(0)
-        
+
         gradient.setColorAt(0.0, color1)
         gradient.setColorAt(0.1, color2)
         gradient.setColorAt(0.11, color3)
         painter.setBrush(gradient)
         painter.drawRect(self.rect().adjusted(1, 1, -1, -1))
-        
+
         gradient2 = QtGui.QLinearGradient(
             QtCore.QPointF(self.rect().bottomLeft()),
             QtCore.QPointF(self.rect().topLeft()),
         )
-        
+
         gradient2.setColorAt(0.0, color1)
-        color2 = QtGui.QColor(QtGui.QColor(255,255,255))
+        color2 = QtGui.QColor(QtGui.QColor(255, 255, 255))
         color2.setAlpha(255)
         gradient2.setColorAt(1, color2)
 
         # Draw icon centered
         icon_size = 80
         scaled = self._icon.scaled(
-            icon_size, icon_size,
+            icon_size,
+            icon_size,
             QtCore.Qt.AspectRatioMode.KeepAspectRatio,
             QtCore.Qt.TransformationMode.SmoothTransformation,
         )
         x = (self.width() - scaled.width()) // 2
         y = (self.height() - scaled.height()) // 2
 
-
-        # Darken overlay when not selected
-
-        
         tinted = QtGui.QPixmap(scaled.size())
         tinted.fill(QtCore.Qt.GlobalColor.transparent)
         p2 = QtGui.QPainter(tinted)
         p2.drawPixmap(0, 0, scaled)
-        p2.setCompositionMode(
-            QtGui.QPainter.CompositionMode.CompositionMode_SourceIn
-        )
+        p2.setCompositionMode(QtGui.QPainter.CompositionMode.CompositionMode_SourceIn)
         p2.fillRect(tinted.rect(), gradient2)
         p2.end()
-        painter.drawPixmap(x,y,tinted)
-
+        painter.drawPixmap(x, y, tinted)
 
         tinted = QtGui.QPixmap(scaled.size())
         tinted.fill(QtCore.Qt.GlobalColor.transparent)
-        
+
         p2 = QtGui.QPainter(tinted)
-        p2.setCompositionMode(
-            QtGui.QPainter.CompositionMode.CompositionMode_SourceIn
+        p2.setCompositionMode(QtGui.QPainter.CompositionMode.CompositionMode_SourceIn)
+        p2.fillRect(
+            tinted.rect(),
+            QtGui.QColor(255, 255, 255) if self.isChecked() else QtGui.QColor(0, 0, 0),
         )
-        p2.fillRect(tinted.rect(), QtGui.QColor(255,255,255) if self.isChecked() else QtGui.QColor(0,0,0))
         p2.drawPixmap(x, y, scaled)
 
+        font = painter.font()
+        font.setPointSize(12)
+        font.setBold(True)
+        painter.setFont(font)
+
+        _text_rect = self.rect()
+        _text_rect.setTop(int(self.rect().height() / 9))
+
+        _text_rect.setBottom(int(self.rect().height() / 4))
+
+        _text_rect.setLeft(int(self.rect().width() - self.rect().width() * 1.6))
+        _text_rect.setRight(int(self.rect().width()))
+
+        painter.drawText(
+            _text_rect,
+            QtCore.Qt.TextFlag.TextShowMnemonic | QtCore.Qt.AlignmentFlag.AlignCenter,
+            str(self.slot_id),
+        )
+        painter.setPen(QtCore.Qt.PenStyle.NoPen)
         p2.end()
         painter.end()
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Frosted frame (reused as "table" panel)
-# ──────────────────────────────────────────────────────────────────────────────
-class BlocksCustomFrame(QtWidgets.QFrame):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-
-        self._radius = 10
-        self._left_line_width = 15
-        self._is_centered = False
-        self.text = ""
-
-        self.setMinimumHeight(40)
-        self.setMinimumWidth(300)
-
-    def setRadius(self, radius: int):
-        """Set widget frame radius"""
-        self._radius = radius
-        self.update()
-
-    def setLeftLineWidth(self, width: int):
-        """Set widget left line  width"""
-        self._left_line_width = width
-        self.update()
-
-    def setCentered(self, centered: bool):
-        """Set if text is centered or left-aligned"""
-        self._is_centered = centered
-        self.update()
-
-    def setProperty(self, name: str | None, value: typing.Any) -> bool:
-        if name == "text":
-            self.text = value
-            self.update()
-            return True
-        return super().setProperty(name, value)
-
-    def paintEvent(self, a0):
-        painter = QtGui.QPainter(self)
-        painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
-
-        rect = QtCore.QRectF(self.rect())
-        pen = QtGui.QPen(QtGui.QColor(20, 20, 20, 70))
-        pen.setWidth(2)
-        painter.setPen(pen)
-        painter.setBrush(QtGui.QBrush(QtGui.QColor(50, 50, 50, 100)))
-        painter.drawRoundedRect(rect.adjusted(1, 1, -1, -1), self._radius, self._radius)
-
-        if self.text:
-            painter.setPen(QtGui.QColor("white"))
-            font = QtGui.QFont()
-            font.setPointSize(12)
-            painter.setFont(font)
-            fm = painter.fontMetrics()
-            text_width = fm.horizontalAdvance(self.text)
-            baseline = fm.ascent()
-
-            margin = 10
-            spacing = 8
-            line_center_y = margin + baseline // 2
-
-            if self._is_centered:
-                left_line_width = self._left_line_width
-                right_line_width = self._left_line_width
-
-                total_content_width = (
-                    left_line_width + spacing + text_width + spacing + right_line_width
-                )
-
-                start_x = (self.width() - total_content_width) // 2
-                x = max(margin, start_x)
-
-            else:
-                left_line_width = self._left_line_width
-                x = margin
-                right_line_width = 0
-
-            small_rect = QtCore.QRect(x, line_center_y - 1, left_line_width, 3)
-            painter.fillRect(small_rect, QtGui.QColor("white"))
-            x += left_line_width + spacing
-
-            painter.drawText(x, margin + baseline, self.text)
-            x += text_width + spacing
-
-            if self._is_centered:
-                big_rect_width = right_line_width
-            else:
-                remaining_width = self.width() - x - margin
-                big_rect_width = max(0, remaining_width)
-
-            big_rect = QtCore.QRect(x, line_center_y - 1, big_rect_width, 3)
-
-            painter.fillRect(big_rect, QtGui.QColor("white"))
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Operation button
@@ -239,28 +167,37 @@ class BlocksCustomFrame(QtWidgets.QFrame):
 class OpButton(QtWidgets.QPushButton):
     def __init__(self, label: str, accent: QtGui.QColor, parent=None):
         super().__init__(label, parent)
-        self._accent  = accent
+        self._accent = accent
         self._hovered = False
         self.setFixedHeight(34)
         self.setMinimumWidth(80)
         self.setCursor(QtGui.QCursor(QtCore.Qt.CursorShape.PointingHandCursor))
         self.setFlat(True)
 
-    def enterEvent(self, e): self._hovered = True;  self.update()
-    def leaveEvent(self, e): self._hovered = False; self.update()
+    def enterEvent(self, e):
+        self._hovered = True
+        self.update()
+
+    def leaveEvent(self, e):
+        self._hovered = False
+        self.update()
 
     def paintEvent(self, _):
         p = QtGui.QPainter(self)
         p.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
         r = self.rect()
         alpha = 200 if self._hovered else 120
-        ac = QtGui.QColor(self._accent); ac.setAlpha(alpha)
+        ac = QtGui.QColor(self._accent)
+        ac.setAlpha(alpha)
         p.setPen(QtGui.QPen(ac, 1))
-        fill = QtGui.QColor(self._accent); fill.setAlpha(40 if self._hovered else 20)
+        fill = QtGui.QColor(self._accent)
+        fill.setAlpha(40 if self._hovered else 20)
         p.setBrush(fill)
-        p.drawRoundedRect(r.adjusted(1,1,-1,-1), 6, 6)
+        p.drawRoundedRect(r.adjusted(1, 1, -1, -1), 6, 6)
         p.setPen(QtGui.QColor(255, 255, 255, 220 if self._hovered else 180))
-        font = p.font(); font.setPointSize(9); font.setBold(True)
+        font = p.font()
+        font.setPointSize(9)
+        font.setBold(True)
         p.setFont(font)
         p.drawText(r, QtCore.Qt.AlignmentFlag.AlignCenter, self.text())
         p.end()
@@ -270,16 +207,16 @@ class OpButton(QtWidgets.QPushButton):
 # Carousel (scrollable spool row)
 # ──────────────────────────────────────────────────────────────────────────────
 class SpoolCarousel(QtWidgets.QWidget):
-    selectionChanged = QtCore.pyqtSignal(int)   # emits selected slot index (0-based)
+    selectionChanged = QtCore.pyqtSignal(int)  # emits selected slot index (0-based)
 
-    VISIBLE = 4   # how many spools show at once
+    VISIBLE = 4  # how many spools show at once
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.buttons: list[Spoll_button] = []
         self.button_group = QtWidgets.QButtonGroup(self)
         self.button_group.setExclusive(True)
-        self._offset = 0   # first visible index
+        self._offset = 0  # first visible index
 
         self._anim_group: QtCore.QParallelAnimationGroup | None = None
 
@@ -289,9 +226,13 @@ class SpoolCarousel(QtWidgets.QWidget):
         root = QtWidgets.QHBoxLayout(self)
 
         self.left_arrow = IconButton(self)
-        self.left_arrow.setPixmap(QtGui.QPixmap(":/arrow_icons/media/btn_icons/arrow_left.svg"))
+        self.left_arrow.setPixmap(
+            QtGui.QPixmap(":/arrow_icons/media/btn_icons/arrow_left.svg")
+        )
         self.right_arrow = IconButton(self)
-        self.right_arrow.setPixmap(QtGui.QPixmap(":/arrow_icons/media/btn_icons/arrow_right.svg"))
+        self.right_arrow.setPixmap(
+            QtGui.QPixmap(":/arrow_icons/media/btn_icons/arrow_right.svg")
+        )
 
         self.right_arrow.setFixedWidth(60)
         self.left_arrow.setFixedWidth(60)
@@ -299,7 +240,6 @@ class SpoolCarousel(QtWidgets.QWidget):
         # sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Expanding)
         # self.right_arrow.setSizePolicy(sizePolicy)
         # self.left_arrow.setSizePolicy(sizePolicy)
-
 
         self.left_arrow.clicked.connect(self._scroll_left)
         self.right_arrow.clicked.connect(self._scroll_right)
@@ -316,8 +256,12 @@ class SpoolCarousel(QtWidgets.QWidget):
 
         self._update_arrows()
 
-    def addSpool(self, color: QtGui.QColor, slot_id: str,
-                 status: FilamentStates = FilamentStates.UNKNOWN):
+    def addSpool(
+        self,
+        color: QtGui.QColor,
+        slot_id: str,
+        status: FilamentStates = FilamentStates.UNKNOWN,
+    ):
         btn = Spoll_button()
         btn.setColor(color)
         btn.setSlotId(slot_id)
@@ -339,7 +283,7 @@ class SpoolCarousel(QtWidgets.QWidget):
                 item.widget().setParent(None)
 
         end = min(self._offset + self.VISIBLE, len(self.buttons))
-        for btn in self.buttons[self._offset:end]:
+        for btn in self.buttons[self._offset : end]:
             self._slot_layout.addWidget(btn)
             btn.show()
 
@@ -385,10 +329,10 @@ class SpoolCarousel(QtWidgets.QWidget):
 # Info table panel (BlocksCustomFrame + detail grid + op buttons)
 # ──────────────────────────────────────────────────────────────────────────────
 class SpoolInfoPanel(BlocksCustomFrame):
-    loadRequested   = QtCore.pyqtSignal(int)
+    loadRequested = QtCore.pyqtSignal(int)
     unloadRequested = QtCore.pyqtSignal(int)
-    purgeRequested  = QtCore.pyqtSignal(int)
-    cutRequested    = QtCore.pyqtSignal(int)
+    purgeRequested = QtCore.pyqtSignal(int)
+    cutRequested = QtCore.pyqtSignal(int)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -409,7 +353,7 @@ class SpoolInfoPanel(BlocksCustomFrame):
         # ── Info grid ──
         grid_widget = QtWidgets.QWidget()
         grid = QtWidgets.QGridLayout(grid_widget)
-        grid.setContentsMargins(0,0,0,0)
+        grid.setContentsMargins(0, 0, 0, 0)
         grid.setHorizontalSpacing(12)
         grid.setVerticalSpacing(4)
 
@@ -420,23 +364,25 @@ class SpoolInfoPanel(BlocksCustomFrame):
 
         def make_val(text="—"):
             l = QtWidgets.QLabel(text)
-            l.setStyleSheet("color: rgba(255,255,255,220); font-size: 10px; font-weight: bold;")
+            l.setStyleSheet(
+                "color: rgba(255,255,255,220); font-size: 10px; font-weight: bold;"
+            )
             return l
 
-        self._lbl_slot   = make_val()
+        self._lbl_slot = make_val()
         self._lbl_status = make_val()
-        self._lbl_color  = make_val()
-        self._lbl_mat    = make_val("PLA")
+        self._lbl_color = make_val()
+        self._lbl_mat = make_val("PLA")
 
         rows = [
-            ("Slot",    self._lbl_slot),
-            ("Status",  self._lbl_status),
-            ("Color",   self._lbl_color),
-            ("Material",self._lbl_mat),
+            ("Slot", self._lbl_slot),
+            ("Status", self._lbl_status),
+            ("Color", self._lbl_color),
+            ("Material", self._lbl_mat),
         ]
         for i, (key, val) in enumerate(rows):
             grid.addWidget(make_key(key), i, 0)
-            grid.addWidget(val,           i, 1)
+            grid.addWidget(val, i, 1)
 
         root.addWidget(grid_widget, 1)
 
@@ -450,20 +396,39 @@ class SpoolInfoPanel(BlocksCustomFrame):
         btn_col = QtWidgets.QVBoxLayout()
         btn_col.setSpacing(6)
 
-        teal   = QtGui.QColor(46,  196, 160)
-        pink   = QtGui.QColor(232, 68,  90 )
-        yellow = QtGui.QColor(255, 186, 8  )
-        grey   = QtGui.QColor(160, 160, 160)
+        self._btn_load = BlocksCustomButton(self)
+        self._btn_load.setText("Load")
+        self._btn_load.setFixedSize(160, 60)
+        self._btn_load.setPixmap(
+            QtGui.QPixmap(":/filament_related/media/btn_icons/load_filament.svg")
+        )
+        self._btn_unload = BlocksCustomButton(self)
+        self._btn_unload.setText("Unload")
+        self._btn_unload.setPixmap(
+            QtGui.QPixmap(":/filament_related/media/btn_icons/unload_filament.svg")
+        )
+        self._btn_unload.setFixedSize(160, 60)
+        self._btn_purge = BlocksCustomButton(self)
+        self._btn_purge.setText("Eject")
+        self._btn_purge.setPixmap(
+            QtGui.QPixmap(":/filament_related/media/btn_icons/eject.svg")
+        )
+        self._btn_purge.setFixedSize(160, 60)
+        self._btn_cut = BlocksCustomButton(self)
+        self._btn_cut.setPixmap(QtGui.QPixmap(":/load_icons/media/btn_icons/cut.svg"))
+        self._btn_cut.setText("Check Gates")
+        self._btn_cut.setFixedSize(160, 60)
 
-        self._btn_load   = OpButton("⬇  LOAD",   teal,   self)
-        self._btn_unload = OpButton("⬆  UNLOAD", pink,   self)
-        self._btn_purge  = OpButton("↺  PURGE",  yellow, self)
-        self._btn_cut    = OpButton("✂  CUT",    grey,   self)
-
-        self._btn_load.clicked.connect(  lambda: self.loadRequested.emit(self._slot_index))
-        self._btn_unload.clicked.connect(lambda: self.unloadRequested.emit(self._slot_index))
-        self._btn_purge.clicked.connect( lambda: self.purgeRequested.emit(self._slot_index))
-        self._btn_cut.clicked.connect(   lambda: self.cutRequested.emit(self._slot_index))
+        self._btn_load.clicked.connect(
+            lambda: self.loadRequested.emit(self._slot_index)
+        )
+        self._btn_unload.clicked.connect(
+            lambda: self.unloadRequested.emit(self._slot_index)
+        )
+        self._btn_purge.clicked.connect(
+            lambda: self.purgeRequested.emit(self._slot_index)
+        )
+        self._btn_cut.clicked.connect(lambda: self.cutRequested.emit(self._slot_index))
 
         top_row = QtWidgets.QHBoxLayout()
         top_row.setSpacing(6)
@@ -494,9 +459,27 @@ class SpoolInfoPanel(BlocksCustomFrame):
         self._lbl_slot.setText(btn.slot_id)
 
         status_map = {
-            FilamentStates.LOADED:   ("<span style='color:#2ec4a0'>● LOADED</span>",   True,  True,  True,  True),
-            FilamentStates.UNLOADED: ("<span style='color:#e8445a'>○ UNLOADED</span>", True,  False, False, False),
-            FilamentStates.UNKNOWN:  ("<span style='color:#aaa'>? UNKNOWN</span>",     True,  True,  False, False),
+            FilamentStates.LOADED: (
+                "<span style='color:#2ec4a0'>● LOADED</span>",
+                True,
+                True,
+                True,
+                True,
+            ),
+            FilamentStates.UNLOADED: (
+                "<span style='color:#e8445a'>○ UNLOADED</span>",
+                True,
+                False,
+                False,
+                False,
+            ),
+            FilamentStates.UNKNOWN: (
+                "<span style='color:#aaa'>? UNKNOWN</span>",
+                True,
+                True,
+                False,
+                False,
+            ),
         }
         text, en_load, en_unload, en_purge, en_cut = status_map[status]
         self._lbl_status.setText(text)
@@ -522,8 +505,9 @@ class AMUWidget(QtWidgets.QWidget):
     def _build_ui(self):
         root = QtWidgets.QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Minimum)
-
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Minimum
+        )
 
         # Carousel inside its own BlocksCustomFrame
         carousel_frame = BlocksCustomFrame(self)
@@ -532,7 +516,9 @@ class AMUWidget(QtWidgets.QWidget):
         cf_layout = QtWidgets.QVBoxLayout(carousel_frame)
         cf_layout.setContentsMargins(0, 0, 0, 0)
 
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Minimum)
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Minimum
+        )
 
         self.carousel = SpoolCarousel(carousel_frame)
         self.carousel.selectionChanged.connect(self._on_selection)
@@ -542,12 +528,19 @@ class AMUWidget(QtWidgets.QWidget):
 
         # Info / operation panel
         self.info_panel = SpoolInfoPanel(self)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Expanding)
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Expanding,
+            QtWidgets.QSizePolicy.Policy.Expanding,
+        )
         self.info_panel.setSizePolicy(sizePolicy)
         root.addWidget(self.info_panel)
 
-    def addSpool(self, color: QtGui.QColor, slot_id: str,
-                 status: FilamentStates = FilamentStates.UNKNOWN):
+    def addSpool(
+        self,
+        color: QtGui.QColor,
+        slot_id: str,
+        status: FilamentStates = FilamentStates.UNKNOWN,
+    ):
         self.carousel.addSpool(color, slot_id, status)
 
     def _on_selection(self, idx: int):
@@ -584,16 +577,15 @@ if __name__ == "__main__":
     layout.setSpacing(16)
 
     spools = [
-        (QtGui.QColor(10,  10,  10 ), "S01", FilamentStates.LOADED),
-        (QtGui.QColor(46,  196, 160), "S02", FilamentStates.LOADED),
-        (QtGui.QColor(255, 186, 8  ), "S03", FilamentStates.UNLOADED),
+        (QtGui.QColor(10, 10, 10), "S01", FilamentStates.LOADED),
+        (QtGui.QColor(46, 196, 160), "S02", FilamentStates.LOADED),
+        (QtGui.QColor(255, 186, 8), "S03", FilamentStates.UNLOADED),
         (QtGui.QColor(255, 255, 255), "S04", FilamentStates.UNLOADED),
-        (QtGui.QColor(232, 68,  90 ), "S05", FilamentStates.LOADED),
-        (QtGui.QColor(80,  120, 220), "S06", FilamentStates.UNKNOWN),
-        (QtGui.QColor(180, 80,  220), "S07", FilamentStates.UNKNOWN),
-        (QtGui.QColor(220, 130, 60 ), "S08", FilamentStates.LOADED),
+        (QtGui.QColor(232, 68, 90), "S05", FilamentStates.LOADED),
+        (QtGui.QColor(80, 120, 220), "S06", FilamentStates.UNKNOWN),
+        (QtGui.QColor(180, 80, 220), "S07", FilamentStates.UNKNOWN),
+        (QtGui.QColor(220, 130, 60), "S08", FilamentStates.LOADED),
     ]
-
 
     amu = AMUWidget(amu_id=1, parent=window)
     for color, sid, status in spools:
@@ -601,7 +593,7 @@ if __name__ == "__main__":
     amu.selectFirst()
     layout.addWidget(amu)
 
-    window.setMaximumSize(710,410)
-    window.setMinimumSize(710,410)
+    window.setMaximumSize(710, 410)
+    window.setMinimumSize(710, 410)
     window.show()
     sys.exit(app.exec())
