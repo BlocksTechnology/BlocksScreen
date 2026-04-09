@@ -247,6 +247,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.utilitiesPanel.call_load_panel.connect(self.show_LoadScreen)
         self.conn_window.call_load_panel.connect(self.show_LoadScreen)
 
+        self.filamentPanel.request_change_tab.connect(self.global_change_tab)
+        self.printPanel.request_change_tab.connect(self.global_change_tab)
+
         self.loadscreen = BasePopup(self, floating=False, dialog=False)
         self.loadwidget = LoadingOverlayWidget(
             self, LoadingOverlayWidget.AnimationGIF.DEFAULT
@@ -509,6 +512,22 @@ class MainWindow(QtWidgets.QMainWindow):
         self.set_current_panel_index(panel_index)
         _logger.debug(
             f"Requested page change -> Tab index : {requested_page[0]} | panel index : {requested_page[1]}",
+        )
+
+    def global_change_tab(self, tab_index: int) -> None:
+        """Changes the current tab while keeping the current panel page index if possible
+
+        Args:
+            tab_index (int): The index of the tab to change to
+        """
+        if not isinstance(tab_index, int):
+            _logger.debug(
+                "Tab index argument expected type int, got %s", str(type(tab_index))
+            )
+            return
+        self.ui.main_content_widget.setCurrentIndex(tab_index)
+        _logger.debug(
+            f"Requested tab change -> Tab index : {tab_index}",
         )
 
     @QtCore.pyqtSlot(name="request-back")

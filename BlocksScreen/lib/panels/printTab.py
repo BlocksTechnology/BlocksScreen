@@ -56,6 +56,10 @@ class PrintTab(QtWidgets.QStackedWidget):
         int, int, name="request_change_page"
     )
 
+    request_change_tab: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        int, name="request_change_tab"
+    )
+
     run_gcode_signal: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         str, name="run_gcode"
     )
@@ -202,7 +206,7 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.tune_page = TuneWidget(self)
         self.addWidget(self.tune_page)
         self.tune_page.tune_change_filament_btn.clicked.connect(
-            lambda: self.change_page(0,1)
+            lambda: self.request_change_tab.emit(1)
         )
         self.jobStatusPage_widget.tune_clicked.connect(
             lambda: self.change_page(self.indexOf(self.tune_page))
@@ -407,13 +411,13 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.ws.api.cancel_print()
         self.call_load_panel.emit(True, "Cancelling print...\nPlease wait")
 
-    def change_page(self, index: int , tab: int = 0) -> None:
+    def change_page(self, index: int) -> None:
         """Requests a page change page to the global manager
 
         Args:
             index (int): page index
         """
-        self.request_change_page.emit(tab, index)
+        self.request_change_page.emit(0, index)
 
     @QtCore.pyqtSlot(name="request-back")
     def back_button(self) -> None:
