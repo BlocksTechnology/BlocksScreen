@@ -639,8 +639,8 @@ class TestGetConfigparser:
         cfg_file = tmp_path / "BlocksScreen.cfg"
         cfg_file.write_text("[server]\nhost: localhost\n", encoding="utf-8")
 
-        monkeypatch.setattr(cfmod, "DEFAULT_CONFIGFILE_PATH", tmp_path / "nonexistent")
-        monkeypatch.setattr(cfmod, "FALLBACK_CONFIGFILE_PATH", tmp_path)
+        monkeypatch.setattr(cfmod, "_DEFAULT_CONFIG", tmp_path / "nonexistent" / "BlocksScreen.cfg")
+        monkeypatch.setattr(cfmod, "_FALLBACK_CONFIG", cfg_file)
 
         cfg = get_configparser()
         assert cfg.has_section("server")
@@ -651,8 +651,8 @@ class TestGetConfigparser:
         cfg_file = tmp_path / "BlocksScreen.cfg"
         cfg_file.write_text("[display]\nwidth: 800\n", encoding="utf-8")
 
-        monkeypatch.setattr(cfmod, "DEFAULT_CONFIGFILE_PATH", tmp_path / "nonexistent")
-        monkeypatch.setattr(cfmod, "FALLBACK_CONFIGFILE_PATH", tmp_path)
+        monkeypatch.setattr(cfmod, "_DEFAULT_CONFIG", tmp_path / "nonexistent" / "BlocksScreen.cfg")
+        monkeypatch.setattr(cfmod, "_FALLBACK_CONFIG", cfg_file)
 
         with pytest.raises(ConfigError, match=r"\[server\]"):
             get_configparser()
@@ -661,8 +661,8 @@ class TestGetConfigparser:
         cfg_file = tmp_path / "BlocksScreen.cfg"
         cfg_file.write_text("[server]\nhost: localhost\n", encoding="utf-8")
 
-        monkeypatch.setattr(cfmod, "DEFAULT_CONFIGFILE_PATH", tmp_path / "nonexistent")
-        monkeypatch.setattr(cfmod, "FALLBACK_CONFIGFILE_PATH", tmp_path)
+        monkeypatch.setattr(cfmod, "_DEFAULT_CONFIG", tmp_path / "nonexistent" / "BlocksScreen.cfg")
+        monkeypatch.setattr(cfmod, "_FALLBACK_CONFIG", cfg_file)
 
         assert get_configparser() is get_configparser()
 
