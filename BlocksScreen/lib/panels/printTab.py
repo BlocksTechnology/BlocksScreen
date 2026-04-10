@@ -211,6 +211,7 @@ class PrintTab(QtWidgets.QStackedWidget):
             lambda: self.change_page(self.indexOf(self.tune_page))
         )
         self.tune_page.request_back.connect(self.back_button)
+        self.printer.printer_config.connect(self.tune_page.on_printer_config)
         self.printer.extruder_update.connect(
             self.tune_page.on_extruder_temperature_change
         )
