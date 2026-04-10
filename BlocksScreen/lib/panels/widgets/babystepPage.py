@@ -62,7 +62,9 @@ class BabystepPage(QtWidgets.QWidget):
         """Move the nozzle closer to the print plate."""
         self.run_gcode.emit(f"SET_GCODE_OFFSET Z_ADJUST=-{self._z_offset} MOVE=1")
         self._pending_z_offset -= self._z_offset
-        self.bbp_z_offset_current_value.setText(f"Z: {round(self._pending_z_offset, 3) or 0.0:.3f} mm")
+        self.bbp_z_offset_current_value.setText(
+            f"Z: {round(self._pending_z_offset, 3) or 0.0:.3f} mm"
+        )
         self._baby_stepchange = True
 
     @QtCore.pyqtSlot(name="on_move_nozzle_away")
@@ -70,7 +72,9 @@ class BabystepPage(QtWidgets.QWidget):
         """Move the nozzle away from the print plate."""
         self.run_gcode.emit(f"SET_GCODE_OFFSET Z_ADJUST=+{self._z_offset} MOVE=1")
         self._pending_z_offset += self._z_offset
-        self.bbp_z_offset_current_value.setText(f"Z: {round(self._pending_z_offset, 3) or 0.0:.3f} mm")
+        self.bbp_z_offset_current_value.setText(
+            f"Z: {round(self._pending_z_offset, 3) or 0.0:.3f} mm"
+        )
         self._baby_stepchange = True
 
     @QtCore.pyqtSlot(str, str, name="on_print_state_update")
@@ -95,10 +99,14 @@ class BabystepPage(QtWidgets.QWidget):
         if name == "homing_origin" and len(value) > 2:
             confirmed = value[2]
             self._z_offset_text = confirmed
-            self.bbp_z_offset_title_label.setText(f"Z: {round(confirmed, 3) or 0.0:.3f} mm")
+            self.bbp_z_offset_title_label.setText(
+                f"Z: {round(confirmed, 3) or 0.0:.3f} mm"
+            )
             # Always sync pending offset to Klipper's confirmed value
             self._pending_z_offset = confirmed
-            self.bbp_z_offset_current_value.setText(f"Z: {round(confirmed, 3) or 0.0:.3f} mm")
+            self.bbp_z_offset_current_value.setText(
+                f"Z: {round(confirmed, 3) or 0.0:.3f} mm"
+            )
 
     def _create_offset_button(
         self,
@@ -231,7 +239,9 @@ class BabystepPage(QtWidgets.QWidget):
         self.bbp_z_offset_title_label.setStyleSheet(
             "color: gray; background: transparent;"
         )
-        self.bbp_z_offset_title_label.setText(f"Z: {round(self._z_offset_text, 3) or 0.0:.3f} mm")
+        self.bbp_z_offset_title_label.setText(
+            f"Z: {round(self._z_offset_text, 3) or 0.0:.3f} mm"
+        )
         self.bbp_z_offset_title_label.setGeometry(420, 270, 200, 30)
 
         white_font = QtGui.QFont()
@@ -245,7 +255,9 @@ class BabystepPage(QtWidgets.QWidget):
         self.bbp_z_offset_current_value.setStyleSheet(
             "background: transparent; color: white;"
         )
-        self.bbp_z_offset_current_value.setText(f"Z: {round(self._pending_z_offset, 3) or 0.0:.3f} mm")
+        self.bbp_z_offset_current_value.setText(
+            f"Z: {round(self._pending_z_offset, 3) or 0.0:.3f} mm"
+        )
         self.bbp_z_offset_current_value.setPixmap(
             QtGui.QPixmap(":/graphics/media/btn_icons/z_offset_adjust.svg")
         )
