@@ -27,7 +27,13 @@ if str(_BLOCKSSCREEN) not in sys.path:
 sys.modules.pop("configfile", None)
 
 import configfile as cfmod  # noqa: E402
-from configfile import BlocksScreenConfig, ConfigError, Sentinel, get_configparser  # noqa: E402
+from configfile import (
+    BlocksScreenConfig,
+    ConfigError,
+    Sentinel,
+    get_configparser,
+    reset_configparser,
+)  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -35,7 +41,9 @@ from configfile import BlocksScreenConfig, ConfigError, Sentinel, get_configpars
 # ---------------------------------------------------------------------------
 
 
-def _make_cfg(tmp_path: pathlib.Path, content: str, section: str = "server") -> BlocksScreenConfig:
+def _make_cfg(
+    tmp_path: pathlib.Path, content: str, section: str = "server"
+) -> BlocksScreenConfig:
     """Write *content* to a temp file, load it, and return the config object."""
     cfg_file = tmp_path / "test.cfg"
     cfg_file.write_text(textwrap.dedent(content).strip(), encoding="utf-8")
@@ -67,92 +75,125 @@ class TestSentinel:
 @pytest.mark.unit
 class TestParsing:
     def test_basic_section_and_option(self, tmp_path):
-        cfg = _make_cfg(tmp_path, """
+        cfg = _make_cfg(
+            tmp_path,
+            """
             [server]
             host: localhost
-        """)
+        """,
+        )
         assert cfg.has_section("server")
         assert cfg.get("host") == "localhost"
 
     def test_equals_separator_normalised_to_colon(self, tmp_path):
-        cfg = _make_cfg(tmp_path, """
+        cfg = _make_cfg(
+            tmp_path,
+            """
             [server]
             host = localhost
-        """)
+        """,
+        )
         assert cfg.get("host") == "localhost"
 
     def test_full_line_hash_comment_ignored(self, tmp_path):
-        cfg = _make_cfg(tmp_path, """
+        cfg = _make_cfg(
+            tmp_path,
+            """
             # this is a comment
             [server]
             host: localhost
-        """)
+        """,
+        )
         assert cfg.has_section("server")
         assert not cfg.has_section("# this is a comment")
 
     def test_full_line_semicolon_comment_ignored(self, tmp_path):
-        cfg = _make_cfg(tmp_path, """
+        cfg = _make_cfg(
+            tmp_path,
+            """
             ; this is also a comment
             [server]
             host: localhost
-        """)
+        """,
+        )
         assert cfg.has_section("server")
         assert not cfg.has_section("; this is also a comment")
 
     def test_inline_hash_comment_stripped(self, tmp_path):
-        cfg = _make_cfg(tmp_path, """
+        cfg = _make_cfg(
+            tmp_path,
+            """
             [server]
             host: localhost  # inline comment
-        """)
+        """,
+        )
         assert cfg.get("host") == "localhost"
 
     def test_inline_semicolon_comment_stripped(self, tmp_path):
-        cfg = _make_cfg(tmp_path, """
+        cfg = _make_cfg(
+            tmp_path,
+            """
             [server]
             host: localhost  ; inline comment
-        """)
+        """,
+        )
         assert cfg.get("host") == "localhost"
 
     def test_hash_in_value_without_leading_space_preserved(self, tmp_path):
         """#ff0000 has no space before # so must not be stripped as a comment."""
-        cfg = _make_cfg(tmp_path, """
+        cfg = _make_cfg(
+            tmp_path,
+            """
             [server]
             color: #ff0000
-        """)
+        """,
+        )
         assert cfg.get("color") == "#ff0000"
 
     def test_duplicate_section_uses_first_occurrence(self, tmp_path):
-        cfg = _make_cfg(tmp_path, """
+        cfg = _make_cfg(
+            tmp_path,
+            """
             [server]
             host: first
             [server]
             host: second
-        """)
+        """,
+        )
         assert cfg.get("host") == "first"
 
     def test_duplicate_option_uses_first_occurrence(self, tmp_path):
-        cfg = _make_cfg(tmp_path, """
+        cfg = _make_cfg(
+            tmp_path,
+            """
             [server]
             host: first
             host: second
-        """)
+        """,
+        )
         assert cfg.get("host") == "first"
 
     def test_multiple_sections_all_loaded(self, tmp_path):
-        cfg = _make_cfg(tmp_path, """
+        cfg = _make_cfg(
+            tmp_path,
+            """
             [server]
             host: localhost
             [display]
             width: 800
-        """)
+        """,
+        )
         assert cfg.has_section("server")
         assert cfg.has_section("display")
 
     def test_raw_config_always_ends_with_empty_line(self, tmp_path):
-        cfg = _make_cfg(tmp_path, """
+        cfg = _make_cfg(
+            tmp_path,
+            """
             [server]
             host: localhost
-        """)
+        """,
+        )
         assert cfg.raw_config[-1] == ""
 
     def test_load_config_resets_previous_state(self, tmp_path):
@@ -168,26 +209,36 @@ class TestParsing:
 
     def test_value_with_embedded_colon_preserved(self, tmp_path):
         """Values containing ':' after the key separator must not be mangled (e.g. URLs)."""
-        cfg = _make_cfg(tmp_path, """
+        cfg = _make_cfg(
+            tmp_path,
+            """
             [server]
             url: http://localhost:7125
-        """)
+        """,
+        )
         assert cfg.get("url") == "http://localhost:7125"
 
     def test_value_with_embedded_equals_preserved(self, tmp_path):
         """Values containing '=' after the key separator must not be mangled (e.g. tokens)."""
-        cfg = _make_cfg(tmp_path, """
+        cfg = _make_cfg(
+            tmp_path,
+            """
             [server]
             token: abc=def==ghi
-        """)
+        """,
+        )
         assert cfg.get("token") == "abc=def==ghi"
 
     def test_section_name_with_colon_preserved(self, tmp_path):
         """Section names containing ':' must not be mangled by separator normalisation."""
-        cfg = _make_cfg(tmp_path, """
+        cfg = _make_cfg(
+            tmp_path,
+            """
             [fan:heater_fan]
             pin: PA8
-        """, section="fan:heater_fan")
+        """,
+            section="fan:heater_fan",
+        )
         assert cfg.has_section("fan:heater_fan")
         assert cfg.get("pin") == "PA8"
 
@@ -201,13 +252,16 @@ class TestParsing:
 class TestReadMethods:
     @pytest.fixture
     def cfg(self, tmp_path):
-        return _make_cfg(tmp_path, """
+        return _make_cfg(
+            tmp_path,
+            """
             [server]
             host: localhost
             port: 7125
             ratio: 1.5
             enabled: true
-        """)
+        """,
+        )
 
     def test_has_section_present(self, cfg):
         assert cfg.has_section("server") is True
@@ -232,19 +286,25 @@ class TestReadMethods:
 
     def test_get_with_bool_parser_false_value(self, tmp_path):
         """get(parser=bool) must not treat 'false' as True (bool('false') pitfall)."""
-        cfg = _make_cfg(tmp_path, """
+        cfg = _make_cfg(
+            tmp_path,
+            """
             [server]
             host: localhost
             flag: false
-        """)
+        """,
+        )
         assert cfg.get("flag", parser=bool) is False
 
     def test_get_with_bool_parser_true_value(self, tmp_path):
-        cfg = _make_cfg(tmp_path, """
+        cfg = _make_cfg(
+            tmp_path,
+            """
             [server]
             host: localhost
             flag: true
-        """)
+        """,
+        )
         assert cfg.get("flag", parser=bool) is True
 
     def test_getint(self, cfg):
@@ -304,12 +364,15 @@ class TestReadMethods:
 class TestGetSection:
     @pytest.fixture
     def cfg(self, tmp_path):
-        return _make_cfg(tmp_path, """
+        return _make_cfg(
+            tmp_path,
+            """
             [server]
             host: localhost
             [display]
             width: 800
-        """)
+        """,
+        )
 
     def test_view_reads_actual_values(self, cfg):
         view = cfg.get_section("server")
@@ -349,7 +412,9 @@ class TestGetSection:
     def test_view_raw_config_stays_valid_after_reload(self, tmp_path):
         """load_config must update raw_config in-place so existing views remain valid."""
         cfg_file = tmp_path / "test.cfg"
-        cfg_file.write_text("[server]\nhost: first\n[display]\nwidth: 800\n", encoding="utf-8")
+        cfg_file.write_text(
+            "[server]\nhost: first\n[display]\nwidth: 800\n", encoding="utf-8"
+        )
         cfg = BlocksScreenConfig(cfg_file, "server")
         cfg.load_config()
         view = cfg.get_section("display")
@@ -357,7 +422,9 @@ class TestGetSection:
         assert view.raw_config is cfg.raw_config  # same list object
 
         # Reload with new content — view must reflect the updated list
-        cfg_file.write_text("[server]\nhost: second\n[display]\nwidth: 1024\n", encoding="utf-8")
+        cfg_file.write_text(
+            "[server]\nhost: second\n[display]\nwidth: 1024\n", encoding="utf-8"
+        )
         cfg.load_config()
         assert view.raw_config is cfg.raw_config  # still the same list object
         assert any("1024" in line for line in view.raw_config)
@@ -372,10 +439,13 @@ class TestGetSection:
 class TestAddSection:
     @pytest.fixture
     def cfg(self, tmp_path):
-        return _make_cfg(tmp_path, """
+        return _make_cfg(
+            tmp_path,
+            """
             [server]
             host: localhost
-        """)
+        """,
+        )
 
     def test_section_becomes_visible_after_add(self, cfg):
         cfg.add_section("display")
@@ -411,10 +481,13 @@ class TestAddSection:
 class TestAddOption:
     @pytest.fixture
     def cfg(self, tmp_path):
-        return _make_cfg(tmp_path, """
+        return _make_cfg(
+            tmp_path,
+            """
             [server]
             host: localhost
-        """)
+        """,
+        )
 
     def test_option_becomes_visible_after_add(self, cfg):
         cfg.add_option("server", "port", "7125")
@@ -458,11 +531,14 @@ class TestAddOption:
 class TestUpdateOption:
     @pytest.fixture
     def cfg(self, tmp_path):
-        return _make_cfg(tmp_path, """
+        return _make_cfg(
+            tmp_path,
+            """
             [server]
             host: localhost
             port: 7125
-        """)
+        """,
+        )
 
     def test_updates_existing_option_value(self, cfg):
         cfg.update_option("server", "host", "remotehost")
@@ -552,6 +628,13 @@ class TestSaveConfiguration:
 
 @pytest.mark.unit
 class TestGetConfigparser:
+    @pytest.fixture(autouse=True)
+    def _reset_singleton(self):
+        """Reset the module-level singleton before and after each test."""
+        reset_configparser()
+        yield
+        reset_configparser()
+
     def test_loads_from_fallback_path(self, tmp_path, monkeypatch):
         cfg_file = tmp_path / "BlocksScreen.cfg"
         cfg_file.write_text("[server]\nhost: localhost\n", encoding="utf-8")
@@ -562,7 +645,9 @@ class TestGetConfigparser:
         cfg = get_configparser()
         assert cfg.has_section("server")
 
-    def test_raises_config_error_when_server_section_missing(self, tmp_path, monkeypatch):
+    def test_raises_config_error_when_server_section_missing(
+        self, tmp_path, monkeypatch
+    ):
         cfg_file = tmp_path / "BlocksScreen.cfg"
         cfg_file.write_text("[display]\nwidth: 800\n", encoding="utf-8")
 
@@ -571,6 +656,15 @@ class TestGetConfigparser:
 
         with pytest.raises(ConfigError, match=r"\[server\]"):
             get_configparser()
+
+    def test_returns_same_instance_on_repeated_calls(self, tmp_path, monkeypatch):
+        cfg_file = tmp_path / "BlocksScreen.cfg"
+        cfg_file.write_text("[server]\nhost: localhost\n", encoding="utf-8")
+
+        monkeypatch.setattr(cfmod, "DEFAULT_CONFIGFILE_PATH", tmp_path / "nonexistent")
+        monkeypatch.setattr(cfmod, "FALLBACK_CONFIGFILE_PATH", tmp_path)
+
+        assert get_configparser() is get_configparser()
 
 
 # ---------------------------------------------------------------------------
@@ -594,7 +688,9 @@ class TestThreadSafety:
             except Exception as exc:
                 errors.append(exc)
 
-        threads = [threading.Thread(target=updater, args=(f"host{i}",)) for i in range(20)]
+        threads = [
+            threading.Thread(target=updater, args=(f"host{i}",)) for i in range(20)
+        ]
         for t in threads:
             t.start()
         for t in threads:

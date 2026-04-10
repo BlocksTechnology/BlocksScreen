@@ -33,15 +33,18 @@ import re
 import threading
 from typing import Any
 
-from helper_methods import check_file_on_path
-
 logger = logging.getLogger(__name__)
 
 DEFAULT_CONFIGFILE_PATH = pathlib.Path.home() / "printer_data" / "config"
 FALLBACK_CONFIGFILE_PATH = pathlib.Path.cwd()
+_DEFAULT_CONFIG = DEFAULT_CONFIGFILE_PATH / "BlocksScreen.cfg"
+_FALLBACK_CONFIG = FALLBACK_CONFIGFILE_PATH / "BlocksScreen.cfg"
+
+_singleton: BlocksScreenConfig | None = None
+_singleton_lock = threading.Lock()
 
 _RE_SECTION = re.compile(r"^\s*\[([^]]+)\]")
-_RE_OPTION = re.compile(r"^(\w+)[=:]")
+_RE_OPTION = re.compile(r"^(\w+):")
 _RE_INLINE_COMMENT = re.compile(r"(?<=\w)\s+[#;]")
 _RE_SEP_NORMALIZE = re.compile(r"\s*[:=]\s*")
 
@@ -77,6 +80,7 @@ class BlocksScreenConfig:
             allow_no_value=True,
             comment_prefixes=("#", ";"),
             inline_comment_prefixes=None,  # handled manually in _parse_file
+            delimiters=(":",),
         )
         self.update_pending: bool = False
         self.raw_config: list[str] = []
@@ -330,7 +334,7 @@ class BlocksScreenConfig:
     def _find_option_line_index(self, section: str, option: str) -> int:
         """Find the index of an option line within a specific section."""
         start, end = self._find_section_limits(section)
-        opt_regex = re.compile(rf"^\s*{re.escape(option)}\s*[:=]")
+        opt_regex = re.compile(rf"^\s*{re.escape(option)}\s*:")
         for i in range(start + 1, end):
             if opt_regex.match(self.raw_config[i]):
                 return i
@@ -441,17 +445,30 @@ class BlocksScreenConfig:
 
 
 def get_configparser() -> BlocksScreenConfig:
-    """Loads configuration from file and returns that configuration"""
-    wanted_target = DEFAULT_CONFIGFILE_PATH / "BlocksScreen.cfg"
-    fallback = FALLBACK_CONFIGFILE_PATH / "BlocksScreen.cfg"
-    configfile = (
-        wanted_target
-        if check_file_on_path(DEFAULT_CONFIGFILE_PATH, "BlocksScreen.cfg")
-        else fallback
-    )
-    config_object = BlocksScreenConfig(configfile=configfile, section="server")
-    config_object.load_config()
-    if not config_object.has_section("server"):
-        logger.error("Error loading configuration file for the application.")
-        raise ConfigError("Section [server] is missing from configuration")
-    return config_object
+    """Return the singleton :class:`BlocksScreenConfig`, creating it on first call.
+
+    Subsequent calls return the same instance so that only one
+    :class:`configparser.ConfigParser` is ever created for the application.
+    Thread-safe via double-checked locking.
+    """
+    global _singleton
+    if _singleton is not None:
+        return _singleton
+    with _singleton_lock:
+        if _singleton is not None:
+            return _singleton
+        configfile = _DEFAULT_CONFIG if _DEFAULT_CONFIG.exists() else _FALLBACK_CONFIG
+        config_object = BlocksScreenConfig(configfile=configfile, section="server")
+        config_object.load_config()
+        if not config_object.has_section("server"):
+            logger.error("Error loading configuration file for the application.")
+            raise ConfigError("Section [server] is missing from configuration")
+        _singleton = config_object
+    return _singleton
+
+
+def reset_configparser() -> None:
+    """Reset the singleton instance — for use in tests only."""
+    global _singleton
+    with _singleton_lock:
+        _singleton = None
