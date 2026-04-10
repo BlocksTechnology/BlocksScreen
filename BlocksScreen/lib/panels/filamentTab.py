@@ -1,13 +1,15 @@
 import enum
 from functools import partial
 
-
+import logging
 from lib.printer import Printer
 from lib.filament import Filament
 from lib.ui.filamentStackedWidget_ui import Ui_filamentStackedWidget
-
+from configfile import get_configparser
 from lib.panels.widgets.popupDialogWidget import Popup
 from PyQt6 import QtCore, QtGui, QtWidgets
+
+logger = logging.getLogger(__name__)
 
 
 class FilamentTypes(enum.Enum):
@@ -51,8 +53,14 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self.popup = Popup(self)
         self.has_load_unload_objects = None
         self._filament_state = self.FilamentStates.UNKNOWN
-        self._sensor_states = {}
         self.filament_type = FilamentTypes.UNKNOWN
+
+        cfg = get_configparser()
+        if cfg.has_section("filament_presence"):
+            i = cfg.get_section("filament_presence", None)
+            self.filament_sensor = i.get("name", str, None)
+        else:
+            self.filament_sensor = None
         self.panel.filament_page_load_btn.clicked.connect(
             partial(self.change_page, self.indexOf(self.panel.load_page))
         )
@@ -144,16 +152,13 @@ class FilamentTab(QtWidgets.QStackedWidget):
                 self._filament_state = self.FilamentStates.UNKNOWN
                 self.handle_filament_state()
                 return
-            self._sensor_states[sensor_name] = value
-            if not self._sensor_states:
-                new_state = self.FilamentStates.UNKNOWN
-            elif all(self._sensor_states.values()):
-                new_state = self.FilamentStates.LOADED
-            else:
-                new_state = self.FilamentStates.UNLOADED
-            if self._filament_state != new_state:
-                self._filament_state = new_state
-                self.handle_filament_state()
+            if sensor_name == self.filament_sensor:
+                if value:
+                    self._filament_state = self.FilamentStates.LOADED
+                else:
+                    self._filament_state = self.FilamentStates.UNLOADED
+                return
+        self.handle_filament_state()
 
     @QtCore.pyqtSlot(str, str, float, name="on_extruder_update")
     def on_extruder_update(
