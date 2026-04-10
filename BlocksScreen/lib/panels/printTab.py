@@ -77,7 +77,6 @@ class PrintTab(QtWidgets.QStackedWidget):
         printer: Printer,
     ) -> None:
         super().__init__(parent)
-        self._z_offset: float = 0.0
         self._active_z_offset: float = 0.0
         self._pending_save_offset: float = 0.0
         self._finish_print_handled: bool = False
@@ -291,6 +290,7 @@ class PrintTab(QtWidgets.QStackedWidget):
                 self._active_z_offset = self._cancel_z_snapshot
                 self.save_config()
                 self._finish_print_handled = True
+                self.save_config_btn.setVisible(True)
             self._cancel_z_snapshot = 0.0
 
     @QtCore.pyqtSlot(str, int, "PyQt_PyObject", name="on_numpad_request")
@@ -379,21 +379,18 @@ class PrintTab(QtWidgets.QStackedWidget):
         )
         self.run_gcode_signal.emit(self._z_apply_command)
         self.run_gcode_signal.emit("SAVE_CONFIG")
-        self._z_offset = self._pending_save_offset
         self.babystepPage.bbp_z_offset_title_label.setText(
-            f"Z: {self._z_offset + 0.0:.3f}mm"
+            f"Z: {self._pending_save_offset + 0.0:.3f}mm"
         )
         self.save_config_btn.setVisible(False)
 
     @QtCore.pyqtSlot(str, list, name="activate_save_button")
     def activate_save_button(self, name: str, value: list) -> None:
         """Sync the `Save config` popup with the save_config_pending state"""
-        if not value:
+        if not value or name != "homing_origin" or len(value) <= 2:
             return
-
-        if name == "homing_origin" and len(value) > 2:
-            self._active_z_offset = value[2]
-            self.save_config_btn.setVisible(round(value[2], 3) != 0)
+        self._active_z_offset = value[2]
+        self.save_config_btn.setVisible(round(value[2], 3) != 0)
 
     def _on_delete_file_confirmed(self, filename: str, directory: str) -> None:
         """Handle confirmed file deletion after user accepted the dialog."""
@@ -469,6 +466,7 @@ class PrintTab(QtWidgets.QStackedWidget):
         if self._active_z_offset != 0 and self.babystepPage.baby_stepchange:
             self.save_config()
             self._finish_print_handled = True
+        self.save_config_btn.setVisible(round(self._active_z_offset, 3) != 0)
 
     def setupMainPrintPage(self) -> None:
         """Setup UI for print page"""
