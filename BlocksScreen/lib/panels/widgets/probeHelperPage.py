@@ -1,3 +1,5 @@
+import enum
+import logging
 import typing
 
 from lib.panels.widgets.optionCardWidget import OptionCard
@@ -6,6 +8,36 @@ from lib.utils.blocks_label import BlocksLabel
 from lib.utils.check_button import BlocksCustomCheckButton
 from lib.utils.icon_button import IconButton
 from PyQt6 import QtCore, QtGui, QtWidgets
+
+logger = logging.getLogger(__name__)
+
+_PROBE_MOVE_STEPS: list[tuple[str, float, str, bool]] = [
+    ("0.010 mm", 0.010, "move_option_1", True),
+    ("0.025 mm", 0.025, "move_option_2", False),
+    ("0.100 mm", 0.100, "move_option_3", False),
+    ("0.500 mm", 0.500, "move_option_4", False),
+    ("1.000 mm", 1.000, "move_option_5", False),
+]
+
+_TRACKED_GCODES: frozenset[str] = frozenset(
+    {
+        "PROBE_CALIBRATE",
+        "PROBE_EDDY_CURRENT_CALIBRATE",
+        "LDC_CALIBRATE_DRIVE_CURRENT",
+        "Z_ENDSTOP_CALIBRATE",
+        "MANUAL_PROBE",
+        "CLEAN_NOZZLE",
+    }
+)
+
+
+class _CalibPhase(enum.Enum):
+    IDLE = "idle"
+    PROBE_ACTIVE = "probe_active"  # non-eddy: CLEAN_NOZZLE/homing before probe session
+    EDDY_PHASE1 = "eddy_phase1"  # LDC drive-current calibration → first SAVE_CONFIG
+    EDDY_PHASE1_RESTART = "eddy_phase1_restart"  # post-Phase1 restart, awaiting standby
+    EDDY_PHASE2 = "eddy_phase2"  # Z offset calibration → second SAVE_CONFIG
+    SAVE_RESTART = "save_restart"  # non-eddy SAVE_CONFIG restart
 
 
 class ProbeHelper(QtWidgets.QWidget):
@@ -33,26 +65,36 @@ class ProbeHelper(QtWidgets.QWidget):
     request_page_view: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         name="request_page_view"
     )
-    call_load_panel = QtCore.pyqtSignal(bool, str, name="call-load-panel")
-
-    toggle_conn_page = QtCore.pyqtSignal(bool, name="toggles-conn-panel")
+    call_load_panel: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        bool, str, name="call-load-panel"
+    )
+    toggle_conn_page: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        bool, name="toggles-conn-panel"
+    )
 
     disable_popups: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         bool, name="disable-popups"
     )
-
-    distances = ["0.01", ".025", "0.1", "0.5", "1"]
-    _calibration_commands: list = []
-    helper_start: bool = False
-    helper_initialize: bool = False
-    _zhop_height: float = float(distances[0])
-    card_options: dict = {}
-    z_offset_method_type: str = ""
-    z_offset_config_method: tuple = ()
-    z_offset_calibration_speed: int = 100
+    lock_ui: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        bool, name="lock-ui"
+    )
+    show_notifications: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        str, str, int, bool, name="show-notifications"
+    )
 
     def __init__(self, parent: QtWidgets.QWidget) -> None:
         super().__init__(parent)
+        self.helper_start: bool = False
+        self.helper_initialize: bool = False
+        self._zhop_height: float = _PROBE_MOVE_STEPS[0][1]
+        self.z_offset_method_type: str = ""
+        self.z_offset_config_method: tuple = ()
+        self.z_offset_calibration_speed: int = 100
+        self.z_offsets: tuple = ()
+        self._calibration_commands: set = set()
+        self.card_options: dict = {}
+        self.z_offset_config_type: str = ""
+        self._eddy_command: str = ""
 
         self.setObjectName("probe_offset_page")
         self._setupUi()
@@ -65,97 +107,108 @@ class ProbeHelper(QtWidgets.QWidget):
         )
         self.eddy_icon = QtGui.QPixmap(":/z_levelling/media/btn_icons/eddy_mech.svg")
         self._toggle_tool_buttons(False)
-        self._setup_move_option_buttons()
-        self.move_option_1.toggled.connect(
-            lambda: self.handle_zhopHeight_change(new_value=float(self.distances[0]))
-        )
-        self.move_option_2.toggled.connect(
-            lambda: self.handle_zhopHeight_change(new_value=float(self.distances[1]))
-        )
-        self.move_option_3.toggled.connect(
-            lambda: self.handle_zhopHeight_change(new_value=float(self.distances[2]))
-        )
-        self.move_option_4.toggled.connect(
-            lambda: self.handle_zhopHeight_change(new_value=float(self.distances[3]))
-        )
-        self.move_option_5.toggled.connect(
-            lambda: self.handle_zhopHeight_change(new_value=float(self.distances[4]))
-        )
         self.mb_raise_nozzle.clicked.connect(lambda: self.handle_nozzle_move("raise"))
         self.mb_lower_nozzle.clicked.connect(lambda: self.handle_nozzle_move("lower"))
         self.po_back_button.clicked.connect(self.request_back)
         self.accept_button.clicked.connect(self.handle_accept)
         self.abort_button.clicked.connect(self.handle_abort)
-        self.update()
         self.block_z = False
         self.block_list = False
         self.target_temp = 0
         self.current_temp = 0
-        self._eddy_calibration_state = False
+        self._calib_phase = _CalibPhase.IDLE
+        self._active_calibration_tool: str = ""
 
     @QtCore.pyqtSlot(str, dict, name="on_print_stats_update")
     @QtCore.pyqtSlot(str, float, name="on_print_stats_update")
     @QtCore.pyqtSlot(str, str, name="on_print_stats_update")
     def on_print_stats_update(self, field: str, value: dict | float | str) -> None:
         """Handle print stats object update"""
-        if isinstance(value, str):
-            if "state" in field:
-                if value in ("standby"):
-                    if self._eddy_calibration_state:
-                        self.run_gcode_signal.emit("G28\nM400")
-                        self._move_to_pos(
-                            self.z_offset_safe_xy[0], self.z_offset_safe_xy[1], 100
-                        )
-                        self.call_load_panel.emit(True, "Almost done...\nPlease wait")
-                        self.run_gcode_signal.emit(self._eddy_command)
+        if isinstance(value, str) and "state" in field and value == "standby":
+            if self._calib_phase in (
+                _CalibPhase.EDDY_PHASE1,
+                _CalibPhase.EDDY_PHASE1_RESTART,
+            ):
+                self.call_load_panel.emit(
+                    True, "Running Z offset calibration\nMoving to position..."
+                )
+                self.run_gcode_signal.emit(self._eddy_command)
+                self.request_page_view.emit()
+                self.disable_popups.emit(False)
+                self.toggle_conn_page.emit(True)
+                self._calib_phase = _CalibPhase.IDLE
+            elif self._calib_phase in (
+                _CalibPhase.EDDY_PHASE2,
+                _CalibPhase.SAVE_RESTART,
+            ):
+                self._calib_phase = _CalibPhase.IDLE
+                self.run_gcode_signal.emit("G28")
+                self.request_page_view.emit()
+                self._restore_ui()
 
-                        self.request_page_view.emit()
-
-                        self.disable_popups.emit(False)
-                        self.toggle_conn_page.emit(True)
-
-                        self._eddy_calibration_state = False
-
-    def on_klippy_status(self, state: str):
+    def on_klippy_status(self, state: str) -> None:
         """Handle Klippy status event change"""
-        if state.lower() == "standby":
+        _state = state.lower()
+        if _state == "disconnected":
+            if self._calib_phase in (
+                _CalibPhase.EDDY_PHASE1,
+                _CalibPhase.EDDY_PHASE1_RESTART,
+                _CalibPhase.EDDY_PHASE2,
+                _CalibPhase.SAVE_RESTART,
+            ):
+                self.helper_start = False
+                self.helper_initialize = False
+                match self._calib_phase:
+                    case _CalibPhase.EDDY_PHASE2:
+                        msg = "Saving calibration data\nRestarting Klipper..."
+                    case _CalibPhase.SAVE_RESTART:
+                        msg = "Saving configuration\nRestarting Klipper..."
+                    case _:
+                        msg = "Restarting Klipper..."
+                self.call_load_panel.emit(True, msg)
+            else:
+                self._cancel_calibration()
+        elif _state == "ready":
+            match self._calib_phase:
+                case _CalibPhase.EDDY_PHASE1:
+                    self._calib_phase = _CalibPhase.EDDY_PHASE1_RESTART
+                    self.call_load_panel.emit(
+                        True,
+                        "Wait for the machine to park\nSlide a sheet of paper under the nozzle"
+                        "\nAdjust until you feel slight resistance when pulling",
+                    )
+                case _CalibPhase.EDDY_PHASE2:
+                    self.call_load_panel.emit(
+                        True, "Calibration saved\nHoming printer..."
+                    )
+                case _CalibPhase.SAVE_RESTART:
+                    self.call_load_panel.emit(
+                        True, "Configuration saved\nHoming printer..."
+                    )
+        elif _state == "shutdown":
+            if self._calib_phase != _CalibPhase.IDLE:
+                self._cancel_calibration()
+        elif _state == "standby":
             self.block_z = False
             self.block_list = False
-            # Safely remove all items (widgets, spacers, sub-layouts) from the layout.
-            layout = self.main_content_horizontal_layout
-            if layout is not None:
-                while layout.count():
-                    item = layout.takeAt(0)
-                    if item is None:
-                        continue
-                    widget = item.widget()
-                    if widget is not None:
-                        # Remove widget from layout and schedule for deletion
-                        widget.setParent(None)
-                        widget.deleteLater()
-                        continue
-                    child_layout = item.layout()
-                    if child_layout is not None:
-                        # Clear child layouts recursively
-                        while child_layout.count():
-                            child_item = child_layout.takeAt(0)
-                            if child_item is None:
-                                continue
-                            child_widget = child_item.widget()
-                            if child_widget is not None:
-                                child_widget.setParent(None)
-                                child_widget.deleteLater()
+            for card in list(self.card_options.values()):
+                self.main_content_horizontal_layout.removeWidget(card)
+                card.setParent(None)
+                card.deleteLater()
+            self.card_options.clear()
 
-    def handle_nozzle_move(self, direction: str):
+    def handle_nozzle_move(self, direction: str) -> None:
         """Handle move z buttons click"""
         if direction == "raise":
-            self._pending_gcode = f"TESTZ Z={self._zhop_height}"
+            _gcode = f"TESTZ Z={self._zhop_height}"
         elif direction == "lower":
-            self._pending_gcode = f"TESTZ Z=-{self._zhop_height}"
+            _gcode = f"TESTZ Z=-{self._zhop_height}"
+        else:
+            return
 
         self.accept_button.show()
         self.abort_button.show()
-        self.run_gcode_signal.emit(self._pending_gcode)
+        self.run_gcode_signal.emit(_gcode)
         self.update()
 
     def _configure_option_cards(self, probes_list: list[str]) -> None:
@@ -181,27 +234,28 @@ class ProbeHelper(QtWidgets.QWidget):
                 _card_text = "Endstop Calibration"
                 _icon = self.endstop_icon
 
-            _card = OptionCard(self, _card_text, str(probe), _icon)  # type: ignore
-            _card.setObjectName(str(probe))
-            self.card_options.update({str(probe): _card})
+            _card = OptionCard(self, _card_text, probe, _icon)  # type: ignore
+            if not hasattr(_card, "continue_clicked"):
+                _card.deleteLater()
+                continue
+            _card.setObjectName(probe)
+            self.card_options[probe] = _card
             self.main_content_horizontal_layout.addWidget(
                 _card, alignment=QtCore.Qt.AlignmentFlag.AlignHCenter
             )
-            if not hasattr(self.card_options.get(probe), "continue_clicked"):
-                del _card
-                self.card_options.pop(probe)
-                return
-
-            self.card_options.get(probe).continue_clicked.connect(  # type: ignore
-                self.handle_start_tool
-            )
-            self.update()
+            _card.continue_clicked.connect(self.handle_start_tool)  # type: ignore
+        self.update()
 
     def _hide_option_cards(self) -> None:
-        list(map(lambda x: x[1].hide(), self.card_options.items()))
+        """Hide all probe option cards."""
+        for card in self.card_options.values():
+            card.hide()
 
     def _show_option_cards(self) -> None:
-        list(map(lambda x: x[1].show(), self.card_options.items()))
+        """Show and re-enable all probe option cards."""
+        for card in self.card_options.values():
+            card.setEnabled(True)
+            card.show()
 
     def _init_probe_config(self) -> None:
         """Initialize internal probe tracking"""
@@ -209,12 +263,10 @@ class ProbeHelper(QtWidgets.QWidget):
             return
         if self.z_offset_config_type != "endstop":
             self.z_offsets = tuple(
-                map(
-                    lambda axis: self.z_offset_config_method[1].get(f"{axis}_offset"),
-                    ["x", "y", "z"],
-                )
+                self.z_offset_config_method[0].get(f"{axis}_offset")
+                for axis in ("x", "y", "z")
             )
-            self.z_offset_calibration_speed = self.z_offset_config_method[1].get(
+            self.z_offset_calibration_speed = self.z_offset_config_method[0].get(
                 "speed"
             )
 
@@ -230,22 +282,16 @@ class ProbeHelper(QtWidgets.QWidget):
         if not config:
             return
 
-        # BUG: If i don't add if not self.probe_config i'll just receive the configuration a bunch of times
         if isinstance(config, list):
             if self.block_list:
                 return
-            else:
-                self.block_list = True
+            self.block_list = True
 
-            _keys = []
-            if not isinstance(config, list):
-                return
-
-            list(map(lambda item: _keys.extend(item.keys()), config))
+            _keys = [k for item in config for k in item]
 
             probe, *_ = config[0].items()
             self.z_offset_method_type = probe[0]  # The one found first
-            self.z_offset_method_config = (
+            self.z_offset_config_method = (
                 probe[1],
                 "PROBE_CALIBRATE",
                 "Z_OFFSET_APPLY_PROBE",
@@ -256,16 +302,12 @@ class ProbeHelper(QtWidgets.QWidget):
             self._configure_option_cards(_keys)
 
         elif isinstance(config, dict):
-            if config.get("stepper_z"):
+            if _config := config.get("stepper_z"):
                 if self.block_z:
                     return
-                else:
-                    self.block_z = True
+                self.block_z = True
 
                 _virtual_endstop = "probe:z_virtual_endstop"
-                _config = config.get("stepper_z")
-                if not _config:
-                    return
                 if _config.get("endstop_pin") == _virtual_endstop:  # home with probe
                     return
                 self.z_offset_config_type = "endstop"
@@ -276,39 +318,8 @@ class ProbeHelper(QtWidgets.QWidget):
                 )
                 self._configure_option_cards(["endstop"])
 
-            if config.get("safe_z_home"):
-                _config = config.get("safe_z_home")
-                if not _config:
-                    return
-                if _config.get("home_xy_position"):
-                    if not _config.get("home_xy_position"):
-                        return
-                    self.z_offset_safe_xy = tuple(
-                        map(
-                            lambda value: float(value),
-                            _config.get("home_xy_position").split(","),
-                        )
-                    )
-                return
-            if config.get("bed_mesh"):
-                # TODO: This configuration needs to be prioritized over the safe_z_home
-                # If available always use the zero reference xy
-                # position for the probe calibration
-                _config = config.get("bed_mesh")
-                if not _config:
-                    return
-                if not _config.get("zero_reference_position"):
-                    return
-                self.z_offset_safe_xy = tuple(
-                    map(
-                        lambda value: float(value),
-                        _config.get("zero_reference_position").split(","),
-                    )
-                )
-                return
-
     @QtCore.pyqtSlot(dict, name="on_printer_config")
-    def on_printer_config(self, config: dict) -> None:
+    def on_printer_config(self, _config: dict) -> None:
         """Handle received printer config"""
         _probe_types = [
             "probe",
@@ -321,29 +332,13 @@ class ProbeHelper(QtWidgets.QWidget):
             _probe_types, self.on_object_config
         )
         self.subscribe_config[str, "PyQt_PyObject"].emit(
-            str("stepper_z"), self.on_object_config
-        )
-        self.subscribe_config[str, "PyQt_PyObject"].emit(
-            str("safe_z_home"), self.on_object_config
-        )
-        self.subscribe_config[str, "PyQt_PyObject"].emit(
-            str("bed_mesh"), self.on_object_config
+            "stepper_z", self.on_object_config
         )
 
     @QtCore.pyqtSlot(dict, name="on_available_gcode_cmds")
     def on_available_gcode_cmds(self, gcode_cmds: dict) -> None:
         """Setup available probe calibration commands"""
-        _available_commands = gcode_cmds.keys()
-        if "PROBE_CALIBRATE" in _available_commands:
-            self._calibration_commands.append("PROBE_CALIBRATE")
-        if "PROBE_EDDY_CURRENT_CALIBRATE" in _available_commands:
-            self._calibration_commands.append("PROBE_EDDY_CURRENT_CALIBRATE")
-        if "LDC_CALIBRATE_DRIVE_CURRENT" in _available_commands:
-            self._calibration_commands.append("LDC_CALIBRATE_DRIVE_CURRENT")
-        if "Z_ENDSTOP_CALIBRATE" in _available_commands:
-            self._calibration_commands.append("Z_ENDSTOP_CALIBRATE")
-        if "MANUAL_PROBE" in _available_commands:
-            self._calibration_commands.append("MANUAL_PROBE")
+        self._calibration_commands = gcode_cmds.keys() & _TRACKED_GCODES
 
     def _verify_gcode(self, gcode: str) -> bool:
         """Check if the specified gcode exists
@@ -360,29 +355,23 @@ class ProbeHelper(QtWidgets.QWidget):
         return gcode in self._calibration_commands
 
     def _build_calibration_command(self, tool: str) -> str:
+        """Return the calibration gcode command for the given tool name, or empty string if unavailable."""
         if not tool:
             return ""
         if tool == "endstop":
             if self._verify_gcode("Z_ENDSTOP_CALIBRATE"):
                 return "Z_ENDSTOP_CALIBRATE"
         elif "eddy" in tool:
-            if self._verify_gcode("PROBE_EDDY_CURRENT_CALIBRATE"):
-                _name = tool.split(" ")[1]
-                # if not _name:
-                #     return ""
-                # return (
-                #     f"PROBE_EDDY_CURRENT_CALIBRATE CHIP={tool.split(' ')[1]}"
-                # )
-                return (
-                    f"PROBE_EDDY_CURRENT_CALIBRATE CHIP={tool.split(' ')[1]}"
-                    * bool(_name)
-                ) + ("" * ~bool(_name))
-
-        elif "probe" in tool or "bltouch" in tool:
+            parts = tool.split(" ", 1)
+            if len(parts) < 2 or not parts[1]:
+                return ""
+            if self._verify_gcode("LDC_CALIBRATE_DRIVE_CURRENT"):
+                return f"LDC_CALIBRATE_DRIVE_CURRENT CHIP={parts[1]}"
+        elif "probe" in tool or "bltouch" in tool or "smart_effector" in tool:
             if self._verify_gcode("PROBE_CALIBRATE"):
-                return "PROBE_CALIBRATE" + (
-                    str(" ") + f"SPEED={self.z_offset_calibration_speed}"
-                ) * bool(self.z_offset_calibration_speed)
+                if self.z_offset_calibration_speed:
+                    return f"PROBE_CALIBRATE SPEED={self.z_offset_calibration_speed}"
+                return "PROBE_CALIBRATE"
         return ""
 
     @QtCore.pyqtSlot(float, name="handle_zhopHeight_change")
@@ -403,7 +392,7 @@ class ProbeHelper(QtWidgets.QWidget):
         self._zhop_height = new_value
 
     @QtCore.pyqtSlot("PyQt_PyObject", name="handle_start_tool")
-    def handle_start_tool(self, sender: typing.Type[OptionCard]) -> None:
+    def handle_start_tool(self, sender: OptionCard) -> None:
         """Handle probe tool helper start by sending
         the correct gcode command according to the
         clicked option card. This is achieved by
@@ -414,73 +403,83 @@ class ProbeHelper(QtWidgets.QWidget):
         sender.
 
         Args:
-            sender (typing.Type[OptionCard]): The clicked OptionCard object
+            sender (OptionCard): The clicked OptionCard instance
         """
         if not sender:
             return
 
-        for i in self.card_options.values():
-            i.setDisabled(True)
-
-        self.helper_initialize = True
-        _timer = QtCore.QTimer()
-        _timer.setSingleShot(True)
-        _timer.timeout.connect(
-            lambda: self.query_printer_object.emit({"manual_probe": None})
-        )
-        _timer.start(int(300))
-        # self.query_printer_object.emit({"manual_probe": None})
-        _cmd = self._build_calibration_command(sender.name)  # type:ignore
+        _name: str = sender.name  # type: ignore
+        _cmd = self._build_calibration_command(_name)
         if not _cmd:
             return
 
+        self._active_calibration_tool = _name
+        for i in self.card_options.values():
+            i.setDisabled(True)
+        self.helper_initialize = True
+        QtCore.QTimer.singleShot(
+            300, lambda: self.query_printer_object.emit({"manual_probe": None})
+        )
         self.disable_popups.emit(True)
-        self.run_gcode_signal.emit("G28\nM400")
-        if "eddy" in sender.name:  # type:ignore
-            self.call_load_panel.emit(True, "Preparing Eddy Current Calibration...")
-            self.toggle_conn_page.emit(False)
-            self._move_to_pos(self.z_offset_safe_xy[0], self.z_offset_safe_xy[1], 100)
-            self.run_gcode_signal.emit(
-                f"LDC_CALIBRATE_DRIVE_CURRENT CHIP={sender.name.split(' ')[1]}"  # type:ignore
-            )
-            self.run_gcode_signal.emit("M400\nSAVE_CONFIG")
-
-            self._eddy_command = _cmd
-            self._eddy_calibration_state = True
-            return
-        else:
-            if self.z_offset_safe_xy:
-                self.call_load_panel.emit(True, "Homing Axes...")
-                self._move_to_pos(
-                    self.z_offset_safe_xy[0], self.z_offset_safe_xy[1], 100
+        self.lock_ui.emit(True)
+        _clean_nozzle = self._verify_gcode("CLEAN_NOZZLE")
+        if "eddy" in _name:
+            _name_parts = _name.split(" ", 1)
+            if len(_name_parts) < 2:
+                return
+            if _clean_nozzle:
+                self.call_load_panel.emit(True, "Cleaning nozzle...\nPlease wait")
+                self.run_gcode_signal.emit("CLEAN_NOZZLE")
+            else:
+                self.call_load_panel.emit(
+                    True, "Calibrating drive current\nHoming axes..."
                 )
+            self.toggle_conn_page.emit(False)
+            self.run_gcode_signal.emit(_cmd)
+            self._eddy_command = f"PROBE_EDDY_CURRENT_CALIBRATE CHIP={_name_parts[1]}"
+            self._calib_phase = _CalibPhase.EDDY_PHASE1
+            return
+        if _clean_nozzle and _cmd != "Z_ENDSTOP_CALIBRATE":
+            self.call_load_panel.emit(True, "Cleaning nozzle...\nPlease wait")
+            self.run_gcode_signal.emit("CLEAN_NOZZLE")
+        else:
+            self.call_load_panel.emit(True, "Starting calibration\nHoming axes...")
+        self._calib_phase = _CalibPhase.PROBE_ACTIVE
         self.run_gcode_signal.emit(_cmd)
 
     @QtCore.pyqtSlot(str, str, float, name="on_extruder_update")
     def on_extruder_update(
-        self, extruder_name: str, field: str, new_value: float
+        self, _extruder_name: str, field: str, new_value: float
     ) -> None:
         """Handle extruder update"""
-        if not self.helper_initialize:
+        if self._calib_phase == _CalibPhase.IDLE:
             return
-        if self._eddy_calibration_state:
+        if field == "target":
+            prev_temp = self.target_temp
+            self.target_temp = round(new_value, 0)
+            if self.isVisible():
+                if self.target_temp > 0:
+                    self.call_load_panel.emit(
+                        True, "Heating nozzle\nCleaning before calibration..."
+                    )
+                elif prev_temp > 0:
+                    # Heater turned off — brushing is starting
+                    self.call_load_panel.emit(True, "Cleaning nozzle...\nPlease wait")
             return
         if self.target_temp != 0:
             if self.current_temp == self.target_temp:
-                if self.isVisible:
-                    self.call_load_panel.emit(True, "Extruder heated up \n Please wait")
+                if self.isVisible():
+                    self.call_load_panel.emit(
+                        True, "Nozzle at temperature\nCleaning nozzle..."
+                    )
                 return
             if field == "temperature":
                 self.current_temp = round(new_value, 0)
-                if self.isVisible:
+                if self.isVisible():
                     self.call_load_panel.emit(
                         True,
-                        f"Heating up ({new_value}/{self.target_temp}) \n Please wait",
+                        f"Heating nozzle ({new_value}/{self.target_temp}°C)\nPlease wait...",
                     )
-        if field == "target":
-            self.target_temp = round(new_value, 0)
-            if self.isVisible:
-                self.call_load_panel.emit(True, "Cleaning the nozzle \n Please wait")
 
     @QtCore.pyqtSlot(name="handle_accept")
     def handle_accept(self) -> None:
@@ -489,37 +488,51 @@ class ProbeHelper(QtWidgets.QWidget):
             return
         self.helper_start = False
         self._toggle_tool_buttons(False)
-        self._show_option_cards()
-        self.run_gcode_signal.emit(self.z_offset_config_method[2])
-        self.run_gcode_signal.emit("M400")
-        self.run_gcode_signal.emit(
-            "SAVE_CONFIG"
-        )  # Immediately save the new value and restart the host
+        if "eddy" in self.z_offset_method_type.lower():
+            self._calib_phase = _CalibPhase.EDDY_PHASE2
+            self.call_load_panel.emit(
+                True,
+                "Finalising Eddy calibration...\nThis may take a few minutes",
+            )
+        else:
+            self._show_option_cards()
+            self._calib_phase = _CalibPhase.SAVE_RESTART
+            self.call_load_panel.emit(
+                True, "Saving configuration...\nMachine will restart"
+            )
+        self.toggle_conn_page.emit(False)
+        self.run_gcode_signal.emit("ACCEPT")
+        self.run_gcode_signal.emit("SAVE_CONFIG")
 
     @QtCore.pyqtSlot(name="handle_abort")
     def handle_abort(self) -> None:
         """Aborts the calibration procedure"""
         if not self.helper_start:
             return
-        self.helper_start = False
-        self._toggle_tool_buttons(False)
-        self._show_option_cards()
+        self._cancel_calibration()
         self.run_gcode_signal.emit("ABORT")
 
     @QtCore.pyqtSlot(str, list, name="on_gcode_move_update")
-    def on_gcode_move_update(self, name: str, value: list) -> None:
-        """Handle gcode move update"""
-        if not value:
+    def on_gcode_move_update(self, _name: str, _value: list) -> None:
+        """Update loading message once homing completes after nozzle cleaning."""
+        if (
+            self._calib_phase
+            not in (
+                _CalibPhase.EDDY_PHASE1,
+                _CalibPhase.PROBE_ACTIVE,
+            )
+            or self.target_temp != 0
+        ):
             return
-
-        _fields = [
-            "absolute_coordinates",
-            "absolute_extrude",
-            "homing_origin",
-            "position",
-            "gcode_position",
-        ]
-        ...
+        if _name == "homing_origin" and self.isVisible():
+            if self._calib_phase == _CalibPhase.EDDY_PHASE1:
+                self.call_load_panel.emit(
+                    True, "Calibrating drive current\nPlease wait..."
+                )
+            else:
+                self.call_load_panel.emit(
+                    True, "Moving to calibration position\nPlease wait..."
+                )
 
     @QtCore.pyqtSlot(dict, name="on_manual_probe_update")
     def on_manual_probe_update(self, update: dict) -> None:
@@ -527,27 +540,31 @@ class ProbeHelper(QtWidgets.QWidget):
         if not update:
             return
 
-        # if update.get("z_position_lower"):
-        # f"{update.get('z_position_lower'):.4f} mm"
-
         is_active = update.get("is_active", None)
-        if update.get("z_position_upper"):
-            self.old_offset_info.setText(f"{update.get('z_position_upper'):.4f} mm")
-        if update.get("z_position"):
-            self.current_offset_info.setText(f"{update.get('z_position'):.4f} mm")
+        if (z_upper := update.get("z_position_upper")) is not None:
+            self.old_offset_info.setText(f"{round(z_upper, 3) or 0.0:.3f} mm")
+        if (z_pos := update.get("z_position")) is not None:
+            self.current_offset_info.setText(f"{round(z_pos, 3) or 0.0:.3f} mm")
 
-        if not is_active:
+        if is_active is None:
             return
         if not self.isVisible():
             self.request_page_view.emit()
         # Shared state updates
         self.helper_initialize = False
+        _was_active = self.helper_start
         self.helper_start = is_active
+        if is_active and self._calib_phase == _CalibPhase.PROBE_ACTIVE:
+            # Probe session started — CLEAN_NOZZLE/homing phase is over.
+            self._calib_phase = _CalibPhase.IDLE
+        elif not is_active and _was_active:
+            # A manual probe session ended (external abort or normal completion).
+            self._calib_phase = _CalibPhase.IDLE
         # UI updates
         self._toggle_tool_buttons(is_active)
         if is_active:
             self._hide_option_cards()
-        else:
+        elif self._calib_phase == _CalibPhase.IDLE:
             self._show_option_cards()
 
     @QtCore.pyqtSlot(list, name="handle_gcode_response")
@@ -558,6 +575,8 @@ class ProbeHelper(QtWidgets.QWidget):
             data (list): A list containing the gcode that originated
                     the response and the response
         """
+        if not data:
+            return
         if self.isVisible():
             if data[0].startswith("!!"):  # An error occurred
                 if "already in a manual z probe" in data[0].strip("!! ").lower():
@@ -568,35 +587,60 @@ class ProbeHelper(QtWidgets.QWidget):
                 self._show_option_cards()
                 self.helper_start = False
                 self._toggle_tool_buttons(False)
-
-            # elif data[0].startswith("// "): ...
+                error_msg = data[0].removeprefix("!! ")
+                self.show_notifications.emit("probe_helper", error_msg, 3, True)
 
     @QtCore.pyqtSlot(list, name="handle_error_response")
     def handle_error_response(self, data: list) -> None:
         """Handle received error response"""
-        ...
-        # _data, _metadata, *extra = data + [None] * max(0, 2 - len(data))
-
-    def _move_to_pos(self, x, y, speed) -> None:
-        self.run_gcode_signal.emit(f"G91\nG1 Z5 F{10 * 60}\nM400")
-        self.run_gcode_signal.emit(f"G90\nG1 X{x} Y{y} F{speed * 60}\nM400")
-        return
-
-    def _setup_move_option_buttons(self) -> None:
-        """Change move_option_x buttons text for configured
-        zhop values in stored in the class variable `distances`
-
-        `distances` Has the values from lowest to maximum zhop
-        """
-        if self.distances:
+        if not data:
             return
-        self.move_option_1.setText(str(self.distances[0]))
-        self.move_option_2.setText(str(self.distances[1]))
-        self.move_option_3.setText(str(self.distances[2]))
-        self.move_option_4.setText(str(self.distances[3]))
-        self.move_option_5.setText(str(self.distances[4]))
+        raw = data[0]
+        if isinstance(raw, dict):
+            error_msg = raw.get("message", "Unknown error")
+        else:
+            error_msg = str(raw)
+        # Eddy phase 1 and phase 2 both end with SAVE_CONFIG which restarts Klipper.
+        if (
+            not self.helper_start
+            and self._calib_phase != _CalibPhase.IDLE
+            and (self._calib_phase != _CalibPhase.EDDY_PHASE1 or self._eddy_command)
+        ):
+            logger.debug(
+                "Suppressing error during eddy phase-1 SAVE_CONFIG restart: %s",
+                error_msg,
+            )
+            return
+        logger.error("Error Response: %s", error_msg)
+        self._cancel_calibration()
+        self.show_notifications.emit("probe_helper", error_msg, 3, True)
+
+    def _reset_calibration_state(self) -> None:
+        """Reset all calibration state and temp tracking to idle."""
+        self.helper_start = False
+        self.helper_initialize = False
+        self._calib_phase = _CalibPhase.IDLE
+        self._eddy_command = ""
+        self._active_calibration_tool = ""
+        self.target_temp = 0
+        self.current_temp = 0
+
+    def _restore_ui(self) -> None:
+        """Dismiss loading overlay and re-enable navigation."""
+        self._show_option_cards()
+        self.call_load_panel.emit(False, "")
+        self.disable_popups.emit(False)
+        self.lock_ui.emit(False)
+        self.toggle_conn_page.emit(True)
+
+    def _cancel_calibration(self) -> None:
+        """Full reset: clear state, hide tool buttons, restore UI."""
+        self._reset_calibration_state()
+        self._toggle_tool_buttons(False)
+        self._restore_ui()
 
     def _toggle_tool_buttons(self, state: bool) -> None:
+        """Show/hide and enable/disable calibration tool buttons based on active state."""
         self.mb_lower_nozzle.setEnabled(state)
         self.mb_raise_nozzle.setEnabled(state)
         self.accept_button.setEnabled(state)
@@ -606,6 +650,7 @@ class ProbeHelper(QtWidgets.QWidget):
         if state:
             for i in self.card_options.values():
                 i.setDisabled(False)
+            self.lock_ui.emit(True)
             self.call_load_panel.emit(False, "")
             self.po_back_button.setEnabled(False)
             self.po_back_button.hide()
@@ -615,6 +660,7 @@ class ProbeHelper(QtWidgets.QWidget):
             self.old_offset_info.show()
             self.bbp_offset_steps_buttons_group_box.show()
             self.current_offset_info.show()
+            self.abort_button.show()
             self.tool_image.show()
             self.mb_raise_nozzle.show()
             self.mb_lower_nozzle.show()
@@ -633,7 +679,9 @@ class ProbeHelper(QtWidgets.QWidget):
             self.po_header_title.show()
             self.separator_line.show()
             self.bbp_offset_steps_buttons_group_box.hide()
+            self.old_offset_info.setText("0.000 mm")
             self.old_offset_info.hide()
+            self.current_offset_info.setText("0.000 mm")
             self.current_offset_info.hide()
             self.tool_image.hide()
             self.mb_raise_nozzle.hide()
@@ -647,9 +695,30 @@ class ProbeHelper(QtWidgets.QWidget):
             )
 
         self.update()
-        return
+
+    def _create_move_button(
+        self,
+        parent: QtWidgets.QWidget,
+        label: str,
+        obj_name: str,
+        checked: bool,
+        font: QtGui.QFont,
+    ) -> BlocksCustomCheckButton:
+        """Create a single move-step check button."""
+        btn = BlocksCustomCheckButton(parent=parent)
+        btn.setMinimumSize(QtCore.QSize(100, 60))
+        btn.setMaximumSize(QtCore.QSize(100, 60))
+        btn.setText(label)
+        btn.setFont(font)
+        btn.setCheckable(True)
+        btn.setChecked(checked)
+        btn.setFlat(True)
+        btn.setProperty("button_type", "")
+        btn.setObjectName(obj_name)
+        return btn
 
     def _setupUi(self) -> None:
+        """Build and lay out all UI elements for the probe helper page."""
         self.bbp_offset_value_selector_group = QtWidgets.QButtonGroup(self)
         self.bbp_offset_value_selector_group.setExclusive(True)
         sizePolicy = QtWidgets.QSizePolicy(
@@ -714,7 +783,7 @@ class ProbeHelper(QtWidgets.QWidget):
         self.abort_button = BlocksCustomButton(self)
         self.abort_button.setGeometry(QtCore.QRect(300, 340, 170, 60))
         self.abort_button.setText("Abort")
-        self.abort_button.setObjectName("accept_button")
+        self.abort_button.setObjectName("abort_button")
         self.abort_button.setPixmap(QtGui.QPixmap(":/dialog/media/btn_icons/no.svg"))
         self.abort_button.setVisible(False)
         font = QtGui.QFont()
@@ -786,126 +855,27 @@ class ProbeHelper(QtWidgets.QWidget):
         self.bbp_offset_steps_buttons.setContentsMargins(9, 9, 9, 9)
         self.bbp_offset_steps_buttons.setObjectName("bbp_offset_steps_buttons")
 
-        # 0.1mm button
-        self.move_option_1 = BlocksCustomCheckButton(
-            parent=self.bbp_offset_steps_buttons_group_box
+        move_font = QtGui.QFont()
+        move_font.setPointSize(14)
+        center = (
+            QtCore.Qt.AlignmentFlag.AlignHCenter | QtCore.Qt.AlignmentFlag.AlignVCenter
         )
-        self.move_option_1.setMinimumSize(QtCore.QSize(100, 60))
-        self.move_option_1.setMaximumSize(QtCore.QSize(100, 60))
-        self.move_option_1.setText("0.01 mm")
-
-        font = QtGui.QFont()
-        font.setPointSize(14)
-        self.move_option_1.setFont(font)
-        self.move_option_1.setCheckable(True)
-        self.move_option_1.setChecked(True)  # Set as initially checked
-        self.move_option_1.setFlat(True)
-        self.move_option_1.setProperty("button_type", "")
-        self.move_option_1.setObjectName("move_option_1")
-        self.bbp_offset_value_selector_group.addButton(self.move_option_1)
-        self.bbp_offset_steps_buttons.addWidget(
-            self.move_option_1,
-            0,
-            QtCore.Qt.AlignmentFlag.AlignHCenter | QtCore.Qt.AlignmentFlag.AlignVCenter,
-        )
-
-        # 0.01mm button
-        self.move_option_2 = BlocksCustomCheckButton(
-            parent=self.bbp_offset_steps_buttons_group_box
-        )
-        self.move_option_2.setMinimumSize(QtCore.QSize(100, 60))
-        self.move_option_2.setMaximumSize(
-            QtCore.QSize(100, 60)
-        )  # Increased max width by 5 pixels
-        self.move_option_2.setText("0.25 mm")
-
-        font = QtGui.QFont()
-        font.setPointSize(14)
-        self.move_option_2.setFont(font)
-        self.move_option_2.setCheckable(True)
-        self.move_option_2.setFlat(True)
-        self.move_option_2.setProperty("button_type", "")
-        self.move_option_2.setObjectName("move_option_2")
-        self.bbp_offset_value_selector_group.addButton(self.move_option_2)
-        self.bbp_offset_steps_buttons.addWidget(
-            self.move_option_2,
-            0,
-            QtCore.Qt.AlignmentFlag.AlignHCenter | QtCore.Qt.AlignmentFlag.AlignVCenter,
-        )
-
-        # 0.05mm button
-        self.move_option_3 = BlocksCustomCheckButton(
-            parent=self.bbp_offset_steps_buttons_group_box
-        )
-        self.move_option_3.setMinimumSize(QtCore.QSize(100, 60))
-        self.move_option_3.setMaximumSize(
-            QtCore.QSize(100, 60)
-        )  # Increased max width by 5 pixels
-        self.move_option_3.setText("0.1 mm")
-
-        font = QtGui.QFont()
-        font.setPointSize(14)
-        self.move_option_3.setFont(font)
-        self.move_option_3.setCheckable(True)
-        self.move_option_3.setFlat(True)
-        self.move_option_3.setProperty("button_type", "")
-        self.move_option_3.setObjectName("move_option_3")
-        self.bbp_offset_value_selector_group.addButton(self.move_option_3)
-        self.bbp_offset_steps_buttons.addWidget(
-            self.move_option_3,
-            0,
-            QtCore.Qt.AlignmentFlag.AlignHCenter | QtCore.Qt.AlignmentFlag.AlignVCenter,
-        )
-
-        # 0.025mm button
-        self.move_option_4 = BlocksCustomCheckButton(
-            parent=self.bbp_offset_steps_buttons_group_box
-        )
-        self.move_option_4.setMinimumSize(QtCore.QSize(100, 60))
-        self.move_option_4.setMaximumSize(
-            QtCore.QSize(100, 60)
-        )  # Increased max width by 5 pixels
-        self.move_option_4.setText("0.5 mm")
-
-        font = QtGui.QFont()
-        font.setPointSize(14)
-        self.move_option_4.setFont(font)
-        self.move_option_4.setCheckable(True)
-        self.move_option_4.setFlat(True)
-        self.move_option_4.setProperty("button_type", "")
-        self.move_option_4.setObjectName("move_option_4")
-        self.bbp_offset_value_selector_group.addButton(self.move_option_4)
-        self.bbp_offset_steps_buttons.addWidget(
-            self.move_option_4,
-            0,
-            QtCore.Qt.AlignmentFlag.AlignHCenter | QtCore.Qt.AlignmentFlag.AlignVCenter,
-        )
-
-        # 0.01mm button
-        self.move_option_5 = BlocksCustomCheckButton(
-            parent=self.bbp_offset_steps_buttons_group_box
-        )
-        self.move_option_5.setMinimumSize(QtCore.QSize(100, 60))
-        self.move_option_5.setMaximumSize(
-            QtCore.QSize(100, 60)
-        )  # Increased max width by 5 pixels
-        self.move_option_5.setText("1 mm")
-
-        font = QtGui.QFont()
-        font.setPointSize(14)
-        self.move_option_5.setFont(font)
-        self.move_option_5.setCheckable(True)
-        self.move_option_5.setFlat(True)
-        self.move_option_5.setProperty("button_type", "")
-        self.move_option_5.setObjectName("move_option_4")
-        self.bbp_offset_value_selector_group.addButton(self.move_option_5)
-        self.bbp_offset_steps_buttons.addWidget(
-            self.move_option_5,
-            0,
-            QtCore.Qt.AlignmentFlag.AlignHCenter | QtCore.Qt.AlignmentFlag.AlignVCenter,
-        )
-
-        # Line separator for 0.025mm - set size policy to expanding horizontally
+        for label, value, obj_name, checked in _PROBE_MOVE_STEPS:
+            btn = self._create_move_button(
+                self.bbp_offset_steps_buttons_group_box,
+                label,
+                obj_name,
+                checked,
+                move_font,
+            )
+            btn.toggled.connect(
+                lambda checked_state, v=value: (
+                    checked_state and self.handle_zhopHeight_change(new_value=v)
+                )
+            )
+            setattr(self, obj_name, btn)
+            self.bbp_offset_value_selector_group.addButton(btn)
+            self.bbp_offset_steps_buttons.addWidget(btn, 0, center)
 
         # Set the layout for the group box
         self.bbp_offset_steps_buttons_group_box.setLayout(self.bbp_offset_steps_buttons)
@@ -944,7 +914,6 @@ class ProbeHelper(QtWidgets.QWidget):
         self.old_offset_info.setFont(font)
         # Set color to white to be visible on the dark background
         self.old_offset_info.setStyleSheet("color: gray; background: transparent;")
-        self.old_offset_info.setText("Z-Offset")
         self.old_offset_info.setObjectName("old_offset_info")
         self.old_offset_info.setText("0 mm")
 
@@ -1021,8 +990,6 @@ class ProbeHelper(QtWidgets.QWidget):
             QtWidgets.QSizePolicy.Policy.Expanding,
             QtWidgets.QSizePolicy.Policy.Minimum,
         )
-        self.main_content_horizontal_layout.addItem(self.spacerItem)
-
         # Add move buttons layout LAST for right placement
         self.main_content_horizontal_layout.addLayout(self.bbp_buttons_layout)
 

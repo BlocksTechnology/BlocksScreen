@@ -62,9 +62,12 @@ class PrintTab(QtWidgets.QStackedWidget):
     on_cancel_print: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         name="on_cancel_print"
     )
-    call_load_panel = QtCore.pyqtSignal(bool, str, name="call-load-panel")
-
-    call_cancel_panel = QtCore.pyqtSignal(bool, name="call-load-panel")
+    call_load_panel: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        bool, str, name="call-load-panel"
+    )
+    call_cancel_panel: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        bool, name="call-load-panel"
+    )
 
     def __init__(
         self,
@@ -74,7 +77,9 @@ class PrintTab(QtWidgets.QStackedWidget):
         printer: Printer,
     ) -> None:
         super().__init__(parent)
+        self._z_offset: float = 0.0
         self._active_z_offset: float = 0.0
+        self._pending_save_offset: float = 0.0
         self._finish_print_handled: bool = False
         self._z_apply_command: str = "Z_OFFSET_APPLY_ENDSTOP"
 
@@ -223,6 +228,9 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.printer.gcode_move_update[str, list].connect(
             self.babystepPage.on_gcode_move_update
         )
+        self.printer.print_stats_update[str, str].connect(
+            self.babystepPage.on_print_state_update
+        )
         self.printer.gcode_move_update[str, list].connect(self.activate_save_button)
         self.tune_page.run_gcode.connect(self.ws.api.run_gcode)
         self.tune_page.request_sliderPage[str, int, "PyQt_PyObject"].connect(
@@ -275,10 +283,8 @@ class PrintTab(QtWidgets.QStackedWidget):
         """
         unblocks tabs if on standby
         """
-        if isinstance(value, str):
-            if "state" in field:
-                if value in ("standby"):
-                    self.on_cancel_print.emit()
+        if isinstance(value, str) and "state" in field and value == "standby":
+            self.on_cancel_print.emit()
 
     @QtCore.pyqtSlot(str, int, "PyQt_PyObject", name="on_numpad_request")
     @QtCore.pyqtSlot(str, int, "PyQt_PyObject", int, int, name="on_numpad_request")
@@ -291,6 +297,10 @@ class PrintTab(QtWidgets.QStackedWidget):
         max_value: int = 100,
     ) -> None:
         """Handle numpad request"""
+        try:
+            self.numpadPage.value_selected.disconnect()
+        except (RuntimeError, TypeError):
+            pass
         self.numpadPage.value_selected.connect(callback)
         self.numpadPage.set_name(name)
         self.numpadPage.set_value(current_value)
@@ -310,6 +320,10 @@ class PrintTab(QtWidgets.QStackedWidget):
         max_value: int = 100,
     ) -> None:
         """Handle slider page request"""
+        try:
+            self.sliderPage.value_selected.disconnect()
+        except (RuntimeError, TypeError):
+            pass
         self.sliderPage.value_selected.connect(callback)
         self.sliderPage.set_name(name)
         self.sliderPage.set_slider_position(int(current_value))
@@ -333,12 +347,9 @@ class PrintTab(QtWidgets.QStackedWidget):
 
     def save_config(self) -> None:
         """Handle Save configuration behaviour, shows confirmation dialog"""
-
-        self.babystepPage.bbp_z_offset_title_label.setText(
-            f"Z: {self._active_z_offset:.3f}mm"
-        )
+        self._pending_save_offset = self._active_z_offset
         self.BasePopup_z_offset.set_message(
-            f"The Z-Offset is now {self._active_z_offset:.3f} mm.\n"
+            f"The Z-Offset is now {self._pending_save_offset + 0.0:.3f} mm.\n"
             "Would you like to save this change permanently?\n"
             "The machine will restart."
         )
@@ -351,16 +362,20 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.BasePopup_z_offset.open()
 
     def update_configuration_file(self) -> None:
-        """Restore the captured offset, apply it to the probe config, then save."""
+        """Runs the `SAVE_CONFIG` gcode"""
         try:
             self.BasePopup_z_offset.accepted.disconnect(self.update_configuration_file)
         except (RuntimeError, TypeError):
             pass
         self.run_gcode_signal.emit(
-            f"SET_GCODE_OFFSET Z={self._active_z_offset:.3f} MOVE=0"
+            f"SET_GCODE_OFFSET Z={self._pending_save_offset:.3f} MOVE=0"
         )
         self.run_gcode_signal.emit(self._z_apply_command)
         self.run_gcode_signal.emit("SAVE_CONFIG")
+        self._z_offset = self._pending_save_offset
+        self.babystepPage.bbp_z_offset_title_label.setText(
+            f"Z: {self._z_offset + 0.0:.3f}mm"
+        )
         self.save_config_btn.setVisible(False)
 
     @QtCore.pyqtSlot(str, list, name="activate_save_button")
@@ -369,10 +384,9 @@ class PrintTab(QtWidgets.QStackedWidget):
         if not value:
             return
 
-        if name == "homing_origin":
-            if len(value) > 2:
-                self._active_z_offset = value[2]
-                self.save_config_btn.setVisible(value[2] != 0)
+        if name == "homing_origin" and len(value) > 2:
+            self._active_z_offset = value[2]
+            self.save_config_btn.setVisible(round(value[2], 3) != 0)
 
     def _on_delete_file_confirmed(self, filename: str, directory: str) -> None:
         """Handle confirmed file deletion after user accepted the dialog."""
