@@ -174,8 +174,8 @@ class ProbeHelper(QtWidgets.QWidget):
                     self._calib_phase = _CalibPhase.EDDY_PHASE1_RESTART
                     self.call_load_panel.emit(
                         True,
-                        "Wait for the machine to park\nSlide a sheet of paper under the nozzle"
-                        "\nAdjust until you feel slight resistance when pulling",
+                        "Wait for the toolhead to park.\nPlace a sheet of paper under the nozzle."
+                        "\nAdjust until it drags slightly.",
                     )
                 case _CalibPhase.EDDY_PHASE2:
                     self.call_load_panel.emit(

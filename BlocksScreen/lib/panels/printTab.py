@@ -81,6 +81,7 @@ class PrintTab(QtWidgets.QStackedWidget):
         self._active_z_offset: float = 0.0
         self._pending_save_offset: float = 0.0
         self._finish_print_handled: bool = False
+        self._cancel_z_snapshot: float = 0.0
         self._z_apply_command: str = "Z_OFFSET_APPLY_ENDSTOP"
 
         self.setupMainPrintPage()
@@ -285,6 +286,11 @@ class PrintTab(QtWidgets.QStackedWidget):
         """
         if isinstance(value, str) and "state" in field and value == "standby":
             self.on_cancel_print.emit()
+            if not self._finish_print_handled and self._cancel_z_snapshot != 0:
+                self._active_z_offset = self._cancel_z_snapshot
+                self.save_config()
+                self._finish_print_handled = True
+            self._cancel_z_snapshot = 0.0
 
     @QtCore.pyqtSlot(str, int, "PyQt_PyObject", name="on_numpad_request")
     @QtCore.pyqtSlot(str, int, "PyQt_PyObject", int, int, name="on_numpad_request")
@@ -414,6 +420,12 @@ class PrintTab(QtWidgets.QStackedWidget):
 
     def handle_cancel_print(self) -> None:
         """Handles the print cancel action"""
+        if (
+            not self._finish_print_handled
+            and self._active_z_offset != 0
+            and self.babystepPage.baby_stepchange
+        ):
+            self._cancel_z_snapshot = self._active_z_offset
         self.ws.api.cancel_print()
         self.call_load_panel.emit(True, "Cancelling print...\nPlease wait")
 
@@ -435,6 +447,7 @@ class PrintTab(QtWidgets.QStackedWidget):
         """React to klipper ready signal"""
         self.babystepPage.baby_stepchange = False
         self._finish_print_handled = False
+        self._cancel_z_snapshot = 0.0
         self.printer.on_subscribe_config("stepper_z", self._on_stepper_z_config)
 
     def _on_stepper_z_config(self, config: dict | list) -> None:
