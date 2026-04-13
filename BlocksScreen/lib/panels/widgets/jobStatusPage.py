@@ -64,6 +64,21 @@ class JobStatusWidget(QtWidgets.QWidget):
     file_metadata: dict | None = None
     total_layers = "?"
     _print_duration: float = 0.0
+    _VALID_STATES: typing.ClassVar[frozenset[str]] = frozenset({"printing", "paused"})
+    _INVALID_STATES: typing.ClassVar[frozenset[str]] = frozenset(
+        {"cancelled", "complete", "error", "standby"}
+    )
+
+    def _post_event(self, event: QtCore.QEvent) -> None:
+        """Post a QEvent to the top-level window via QApplication."""
+        instance = QtWidgets.QApplication.instance()
+        if instance:
+            instance.postEvent(self.window(), event)
+        else:
+            logger.error(
+                "QApplication.instance() is None — cannot post %s",
+                type(event).__name__,
+            )
 
     def __init__(self, parent) -> None:
         super().__init__(parent)
@@ -94,7 +109,6 @@ class JobStatusWidget(QtWidgets.QWidget):
         self.printing_progress_bar.show()
         self.btnWidget.show()
         self.headerWidget.show()
-        self.show()
 
     def showEvent(self, a0) -> None:
         """Reimplemented method, handle `show` Event"""
@@ -116,12 +130,9 @@ class JobStatusWidget(QtWidgets.QWidget):
 
     def _load_thumbnails(self, *thumbnails) -> None:
         """Pre-load available thumbnails for the current print object."""
-        loaded = []
-        for thumb in thumbnails:
-            px = QtGui.QPixmap(thumb)
-            if not px.isNull():
-                loaded.append(px)
-        self.thumbnail_graphics = loaded
+        self.thumbnail_graphics = [
+            px for thumb in thumbnails if not (px := QtGui.QPixmap(thumb)).isNull()
+        ]
         if not self.thumbnail_graphics:
             logger.debug("Unable to load thumbnails, no thumbnails provided")
             return
@@ -136,13 +147,7 @@ class JobStatusWidget(QtWidgets.QWidget):
                 _biggest_thumb.height(),
             )
         )
-        scaled = QtGui.QPixmap(_biggest_thumb).scaled(
-            _biggest_thumb.width(),
-            _biggest_thumb.height(),
-            QtCore.Qt.AspectRatioMode.KeepAspectRatio,
-            QtCore.Qt.TransformationMode.SmoothTransformation,
-        )
-        item = QtWidgets.QGraphicsPixmapItem(scaled)
+        item = QtWidgets.QGraphicsPixmapItem(_biggest_thumb)
         scene.addItem(item)
         self.thumbnail_view.setFrameRect(
             QtCore.QRect(
@@ -177,17 +182,7 @@ class JobStatusWidget(QtWidgets.QWidget):
         self._internal_print_status = "printing"
         self.request_file_info.emit(file)
         self.print_start.emit(file)
-        print_start_event = events.PrintStart(
-            self._current_file_name, self.file_metadata
-        )
-        try:
-            instance = QtWidgets.QApplication.instance()
-            if instance:
-                instance.postEvent(self.window(), print_start_event)
-            else:
-                raise TypeError("QApplication.instance expected non None value")
-        except Exception as e:
-            logger.debug("Unexpected error while posting print job start event: %s", e)
+        self._post_event(events.PrintStart(self._current_file_name, self.file_metadata))
 
     @QtCore.pyqtSlot(dict, name="on_fileinfo")
     def on_fileinfo(self, metadata: dict) -> None:
@@ -199,7 +194,7 @@ class JobStatusWidget(QtWidgets.QWidget):
         layer_count = metadata.get("layer_count", -1)
         self.total_layers = str(layer_count) if layer_count >= 0 else "---"
         self.layer_display_button.setText("0")
-        self.layer_display_button.secondary_text = str(self.total_layers)
+        self.layer_display_button.secondary_text = self.total_layers
         self.file_metadata = metadata
         self._load_thumbnails(*metadata.get("thumbnail_images", ()))
 
@@ -218,11 +213,10 @@ class JobStatusWidget(QtWidgets.QWidget):
         """Handle print state change received from
         printer_status object updated
         """
-        valid_states = {"printing", "paused"}
-        invalid_states = {"cancelled", "complete", "error", "standby"}
         lstate = state.lower()
         event_state = lstate
-        if lstate in valid_states:
+        is_invalid = lstate in self._INVALID_STATES
+        if lstate in self._VALID_STATES:
             self._internal_print_status = lstate
             if lstate == "paused":
                 self.pause_printing_btn.setText(" Resume")
@@ -240,14 +234,14 @@ class JobStatusWidget(QtWidgets.QWidget):
             self.request_query_print_stats.emit({"print_stats": ["filename"]})
             self.call_cancel_panel.emit(False)
             self.show_request.emit()
-        elif lstate in invalid_states:
+        elif is_invalid:
             if lstate == "complete":
                 self.print_finish.emit()
             self.hide_request.emit()
         # Capture state before clearing so the event carries the real data.
         _event_file = self._current_file_name
         _event_meta = self.file_metadata
-        if lstate in invalid_states:
+        if is_invalid:
             self._internal_print_status = ""
             self._current_file_name = ""
             self.total_layers = "?"
@@ -256,16 +250,8 @@ class JobStatusWidget(QtWidgets.QWidget):
         # Send Event on Print state
         event_class_name = "Print" + event_state.capitalize()
         if hasattr(events, event_class_name):
-            event_obj = getattr(events, event_class_name)
-            event = event_obj(_event_file, _event_meta)
-            instance = QtWidgets.QApplication.instance()
-            if instance:
-                instance.postEvent(self.window(), event)
-                return
-            logger.error(
-                "QApplication.instance expected non None value,"
-                " Unable to post event %s",
-                event_class_name,
+            self._post_event(
+                getattr(events, event_class_name)(_event_file, _event_meta)
             )
 
     @QtCore.pyqtSlot(str, dict, name="on_print_stats_update")
@@ -281,7 +267,7 @@ class JobStatusWidget(QtWidgets.QWidget):
         if isinstance(value, str):
             if "state" in field:
                 self._handle_print_state(value)
-            if "filename" in field:
+            elif "filename" in field:
                 self._current_file_name = value
                 if self.js_file_name_label.text().lower() != value.lower():
                     self.js_file_name_label.setText(self._current_file_name)
@@ -289,7 +275,7 @@ class JobStatusWidget(QtWidgets.QWidget):
                     self.request_file_info.emit(value)
         # Layer info must be processed regardless of visibility so
         # Klipper's runtime values always override metadata defaults.
-        if isinstance(value, dict):
+        elif isinstance(value, dict):
             if "total_layer" in value:
                 if value["total_layer"] is not None:
                     self.total_layers = value["total_layer"]
@@ -304,13 +290,11 @@ class JobStatusWidget(QtWidgets.QWidget):
                 else:
                     self.layer_display_button.setText("---")
                     self.layer_fallback = True
-        # print_duration is tracked regardless of visibility (gates Z fallback)
-        if isinstance(value, float) and "print_duration" in field:
-            self._print_duration = value
-        if not self.isVisible():
-            return
-        if isinstance(value, float):
-            if "total_duration" in field:
+        elif isinstance(value, float):
+            # print_duration tracked regardless of visibility (gates Z fallback)
+            if "print_duration" in field:
+                self._print_duration = value
+            if self.isVisible() and "total_duration" in field:
                 _time = estimate_print_time(int(value))
                 _print_time_string = (
                     f"{_time[0]}Day {_time[1]}H {_time[2]}min {_time[3]} s"
@@ -330,18 +314,14 @@ class JobStatusWidget(QtWidgets.QWidget):
         prevents layer updates during pre-print procedures (heating,
         nozzle cleaning).
         """
-        if not self.isVisible():
-            return
-        if "gcode_position" not in field:
-            return
-        if self._internal_print_status != "printing":
-            return
-        if not self.layer_fallback:
-            return
-        # Mainsail: only calculate layers when print_duration > 0
-        if self._print_duration <= 0:
-            return
-        if len(value) <= 2:
+        if (
+            not self.isVisible()
+            or "gcode_position" not in field
+            or self._internal_print_status != "printing"
+            or not self.layer_fallback
+            or self._print_duration <= 0  # Mainsail: skip during pre-print procedures
+            or len(value) <= 2
+        ):
             return
         meta = self.file_metadata
         if not meta:
@@ -376,7 +356,7 @@ class JobStatusWidget(QtWidgets.QWidget):
         """
         if not self.isVisible():
             return
-        if "progress" == field:
+        if field == "progress":
             self.printing_progress_bar.setValue(value)
 
     def _setupUI(self) -> None:
