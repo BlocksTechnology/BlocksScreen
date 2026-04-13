@@ -1,15 +1,12 @@
-from lib.utils.blocks_frame import BlocksCustomFrame
+import typing
+from collections import deque
+
+from lib.panels.widgets.popupDialogWidget import Popup
 from lib.utils.blocks_button import BlocksCustomButton
+from lib.utils.blocks_frame import BlocksCustomFrame
 from lib.utils.icon_button import IconButton
 from lib.utils.list_model import EntryDelegate, EntryListModel, ListItem
 from PyQt6 import QtCore, QtGui, QtWidgets
-import typing
-
-from collections import deque
-from typing import Deque
-
-
-from lib.panels.widgets.popupDialogWidget import Popup
 
 
 class NotificationPage(QtWidgets.QWidget):
@@ -28,7 +25,7 @@ class NotificationPage(QtWidgets.QWidget):
         else:
             super().__init__()
         self._setupUI()
-        self.cli_tracking: Deque = deque()
+        self.cli_tracking: deque = deque()
         self.selected_item: ListItem | None = None
         self.ongoing_update: bool = False
         self.popup = Popup(self)
@@ -78,6 +75,8 @@ class NotificationPage(QtWidgets.QWidget):
 
     def build_model_list(self) -> None:
         """Builds the model list (`self.model`) containing updatable clients"""
+        if not self.cli_tracking:
+            return
         self.update_buttons_list_widget.blockSignals(True)
         message, origin, priority = self.cli_tracking.popleft()
         match priority:
@@ -194,11 +193,9 @@ class NotificationPage(QtWidgets.QWidget):
         font.setPointSize(20)
         self.setSizePolicy(sizePolicy)
         self.setObjectName("updatePage")
-        self.setStyleSheet(
-            """#updatePage {
+        self.setStyleSheet("""#updatePage {
                 background-image: url(:/background/media/1st_background.png);
-            }"""
-        )
+            }""")
         self.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
         self.update_page_content_layout = QtWidgets.QVBoxLayout()
         self.setMinimumSize(800, 480)
@@ -347,10 +344,10 @@ class NotificationPage(QtWidgets.QWidget):
         self.time_title.setFont(font)
         self.time_title.setStyleSheet("color:#FFFFFF")
 
-        self.time_title.setFont(font)
+        self.type_label.setFont(font)
         self.type_label.setStyleSheet("color:#FFFFFF")
 
-        self.time_title.setFont(font)
+        self.time_label.setFont(font)
         self.time_label.setStyleSheet("color:#FFFFFF")
 
         self.info_frame.setLayout(self.info_box_layout)

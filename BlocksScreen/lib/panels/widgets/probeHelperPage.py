@@ -42,7 +42,6 @@ class ProbeHelper(QtWidgets.QWidget):
     )
 
     distances = ["0.01", ".025", "0.1", "0.5", "1"]
-    _calibration_commands: list = []
     helper_start: bool = False
     helper_initialize: bool = False
     _zhop_height: float = float(distances[0])
@@ -52,6 +51,7 @@ class ProbeHelper(QtWidgets.QWidget):
     z_offset_calibration_speed: int = 100
 
     def __init__(self, parent: QtWidgets.QWidget) -> None:
+        """Initialize the probe helper widget and connect internal signals."""
         super().__init__(parent)
 
         self.setObjectName("probe_offset_page")
@@ -92,6 +92,7 @@ class ProbeHelper(QtWidgets.QWidget):
         self.target_temp = 0
         self.current_temp = 0
         self._eddy_calibration_state = False
+        self._calibration_commands: list = []
 
     @QtCore.pyqtSlot(str, dict, name="on_print_stats_update")
     @QtCore.pyqtSlot(str, float, name="on_print_stats_update")
@@ -281,8 +282,6 @@ class ProbeHelper(QtWidgets.QWidget):
                 if not _config:
                     return
                 if _config.get("home_xy_position"):
-                    if not _config.get("home_xy_position"):
-                        return
                     self.z_offset_safe_xy = tuple(
                         map(
                             lambda value: float(value),
@@ -333,6 +332,7 @@ class ProbeHelper(QtWidgets.QWidget):
     @QtCore.pyqtSlot(dict, name="on_available_gcode_cmds")
     def on_available_gcode_cmds(self, gcode_cmds: dict) -> None:
         """Setup available probe calibration commands"""
+        self._calibration_commands.clear()
         _available_commands = gcode_cmds.keys()
         if "PROBE_CALIBRATE" in _available_commands:
             self._calibration_commands.append("PROBE_CALIBRATE")
@@ -367,16 +367,11 @@ class ProbeHelper(QtWidgets.QWidget):
                 return "Z_ENDSTOP_CALIBRATE"
         elif "eddy" in tool:
             if self._verify_gcode("PROBE_EDDY_CURRENT_CALIBRATE"):
-                _name = tool.split(" ")[1]
-                # if not _name:
-                #     return ""
-                # return (
-                #     f"PROBE_EDDY_CURRENT_CALIBRATE CHIP={tool.split(' ')[1]}"
-                # )
-                return (
-                    f"PROBE_EDDY_CURRENT_CALIBRATE CHIP={tool.split(' ')[1]}"
-                    * bool(_name)
-                ) + ("" * ~bool(_name))
+                _parts = tool.split(" ", 1)
+                if len(_parts) < 2:
+                    return ""
+                _name = _parts[1]
+                return f"PROBE_EDDY_CURRENT_CALIBRATE CHIP={_name}" if _name else ""
 
         elif "probe" in tool or "bltouch" in tool:
             if self._verify_gcode("PROBE_CALIBRATE"):
@@ -403,7 +398,7 @@ class ProbeHelper(QtWidgets.QWidget):
         self._zhop_height = new_value
 
     @QtCore.pyqtSlot("PyQt_PyObject", name="handle_start_tool")
-    def handle_start_tool(self, sender: typing.Type[OptionCard]) -> None:
+    def handle_start_tool(self, sender: OptionCard) -> None:
         """Handle probe tool helper start by sending
         the correct gcode command according to the
         clicked option card. This is achieved by
@@ -414,7 +409,7 @@ class ProbeHelper(QtWidgets.QWidget):
         sender.
 
         Args:
-            sender (typing.Type[OptionCard]): The clicked OptionCard object
+            sender (OptionCard): The clicked OptionCard instance
         """
         if not sender:
             return
@@ -429,19 +424,21 @@ class ProbeHelper(QtWidgets.QWidget):
             lambda: self.query_printer_object.emit({"manual_probe": None})
         )
         _timer.start(int(300))
-        # self.query_printer_object.emit({"manual_probe": None})
-        _cmd = self._build_calibration_command(sender.name)  # type:ignore
+        _cmd = self._build_calibration_command(sender.name)  # type: ignore
         if not _cmd:
             return
 
         self.disable_popups.emit(True)
         self.run_gcode_signal.emit("G28\nM400")
-        if "eddy" in sender.name:  # type:ignore
+        if "eddy" in sender.name:  # type: ignore
             self.call_load_panel.emit(True, "Preparing Eddy Current Calibration...")
             self.toggle_conn_page.emit(False)
             self._move_to_pos(self.z_offset_safe_xy[0], self.z_offset_safe_xy[1], 100)
+            _name_parts = sender.name.split(" ", 1)  # type: ignore
+            if len(_name_parts) < 2:
+                return
             self.run_gcode_signal.emit(
-                f"LDC_CALIBRATE_DRIVE_CURRENT CHIP={sender.name.split(' ')[1]}"  # type:ignore
+                f"LDC_CALIBRATE_DRIVE_CURRENT CHIP={_name_parts[1]}"
             )
             self.run_gcode_signal.emit("M400\nSAVE_CONFIG")
 
@@ -467,19 +464,19 @@ class ProbeHelper(QtWidgets.QWidget):
             return
         if self.target_temp != 0:
             if self.current_temp == self.target_temp:
-                if self.isVisible:
+                if self.isVisible():
                     self.call_load_panel.emit(True, "Extruder heated up \n Please wait")
                 return
             if field == "temperature":
                 self.current_temp = round(new_value, 0)
-                if self.isVisible:
+                if self.isVisible():
                     self.call_load_panel.emit(
                         True,
                         f"Heating up ({new_value}/{self.target_temp}) \n Please wait",
                     )
         if field == "target":
             self.target_temp = round(new_value, 0)
-            if self.isVisible:
+            if self.isVisible():
                 self.call_load_panel.emit(True, "Cleaning the nozzle \n Please wait")
 
     @QtCore.pyqtSlot(name="handle_accept")
@@ -523,32 +520,32 @@ class ProbeHelper(QtWidgets.QWidget):
 
     @QtCore.pyqtSlot(dict, name="on_manual_probe_update")
     def on_manual_probe_update(self, update: dict) -> None:
-        """Handle manual probe update"""
+        """Handle manual probe update.
+
+        Only process ``is_active`` state transitions when the key is
+        actually present in the update dict.  Klipper sends partial
+        updates (e.g. only position data after TESTZ) and defaulting
+        ``is_active`` to False on those would reset the entire UI.
+        """
         if not update:
             return
 
-        # if update.get("z_position_lower"):
-        # f"{update.get('z_position_lower'):.4f} mm"
+        if "is_active" in update:
+            is_active = update["is_active"]
+            if is_active and not self.isVisible():
+                self.request_page_view.emit()
+            self.helper_initialize = False
+            self.helper_start = is_active
+            self._toggle_tool_buttons(is_active)
+            if is_active:
+                self._hide_option_cards()
+            else:
+                self._show_option_cards()
 
-        is_active = update.get("is_active", None)
-        if update.get("z_position_upper"):
-            self.old_offset_info.setText(f"{update.get('z_position_upper'):.4f} mm")
-        if update.get("z_position"):
-            self.current_offset_info.setText(f"{update.get('z_position'):.4f} mm")
-
-        if not is_active:
-            return
-        if not self.isVisible():
-            self.request_page_view.emit()
-        # Shared state updates
-        self.helper_initialize = False
-        self.helper_start = is_active
-        # UI updates
-        self._toggle_tool_buttons(is_active)
-        if is_active:
-            self._hide_option_cards()
-        else:
-            self._show_option_cards()
+        if update.get("z_position_upper") is not None:
+            self.old_offset_info.setText(f"{update['z_position_upper']:.4f} mm")
+        if update.get("z_position") is not None:
+            self.current_offset_info.setText(f"{update['z_position']:.4f} mm")
 
     @QtCore.pyqtSlot(list, name="handle_gcode_response")
     def handle_gcode_response(self, data: list) -> None:
@@ -558,6 +555,8 @@ class ProbeHelper(QtWidgets.QWidget):
             data (list): A list containing the gcode that originated
                     the response and the response
         """
+        if not data:
+            return
         if self.isVisible():
             if data[0].startswith("!!"):  # An error occurred
                 if "already in a manual z probe" in data[0].strip("!! ").lower():

@@ -19,7 +19,7 @@ class SensorsWindow(QtWidgets.QWidget):
     )
 
     def __init__(self, parent):
-        super(SensorsWindow, self).__init__(parent)
+        super().__init__(parent)
         self.model = EntryListModel()
         self.entry_delegate = EntryDelegate()
         self.sensor_tracking_widget = {}
@@ -32,11 +32,15 @@ class SensorsWindow(QtWidgets.QWidget):
         self.fs_back_button.clicked.connect(self.request_back)
 
     def reset_view_model(self) -> None:
-        """Clears items from ListView
-        (Resets `QAbstractListModel` by clearing entries)
-        """
+        """Clears items from ListView and removes existing sensor widgets."""
         self.model.clear()
         self.entry_delegate.clear()
+        for widget in self.sensor_tracking_widget.values():
+            self.info_box_layout.removeWidget(widget)
+            widget.deleteLater()
+        self.sensor_tracking_widget.clear()
+        self.sensor_list.clear()
+        self.current_widget = None
 
     @QtCore.pyqtSlot(dict, name="handle_available_fil_sensors")
     def handle_available_fil_sensors(self, sensors: dict) -> None:
@@ -46,7 +50,7 @@ class SensorsWindow(QtWidgets.QWidget):
         self.reset_view_model()
         filtered_sensors = [
             sensor
-            for sensor in sensors.keys()
+            for sensor in sensors
             if sensor.startswith(
                 ("filament_switch_sensor", "filament_motion_sensor", "cutter_sensor")
             )
@@ -63,14 +67,20 @@ class SensorsWindow(QtWidgets.QWidget):
     def handle_fil_state_change(
         self, sensor_name: str, parameter: str, value: bool
     ) -> None:
-        """Handle Klipper signals for filament sensor changes"""
+        """Handle Klipper signals for filament sensor changes."""
         _item = self.sensor_tracking_widget.get(sensor_name)
-        if _item:
-            if parameter == "filament_detected":
-                state = SensorWidget.FilamentState(not value)
-                _item.change_fil_sensor_state(state)
-            elif parameter == "enabled":
-                _item.toggle_button_state(SensorWidget.SensorState(value))
+        if not _item:
+            return
+        if parameter == "filament_detected":
+            # filament_detected=True means filament IS present
+            state = (
+                SensorWidget.FilamentState.PRESENT
+                if value
+                else SensorWidget.FilamentState.MISSING
+            )
+            _item.set_filament_state(state)
+        elif parameter == "enabled":
+            _item.toggle_button_state(SensorWidget.SensorState(value))
 
     def showEvent(self, event: QtGui.QShowEvent | None) -> None:
         """Re-add clients to update list"""
@@ -108,7 +118,8 @@ class SensorsWindow(QtWidgets.QWidget):
         else:
             _item_widget.show()
             self.current_widget = _item_widget
-        name_id = str(name).split(" ")[1]
+        _parts = str(name).split(" ", 1)
+        name_id = _parts[1] if len(_parts) > 1 else _parts[0]
         item = ListItem(
             text=name_id,
             right_text="",
@@ -133,7 +144,8 @@ class SensorsWindow(QtWidgets.QWidget):
         font_id = QtGui.QFontDatabase.addApplicationFont(
             ":/font/media/fonts for text/Momcake-Bold.ttf"
         )
-        font_family = QtGui.QFontDatabase.applicationFontFamilies(font_id)[0]
+        _families = QtGui.QFontDatabase.applicationFontFamilies(font_id)
+        font_family = _families[0] if _families else ""
         sizePolicy = QtWidgets.QSizePolicy(
             QtWidgets.QSizePolicy.Policy.MinimumExpanding,
             QtWidgets.QSizePolicy.Policy.MinimumExpanding,

@@ -105,7 +105,7 @@ class Printer(QtCore.QObject):
     current_loaded_file_metadata: str = ""
 
     def __init__(self, parent: QtCore.QObject, ws: MoonWebSocket, /) -> None:
-        super(Printer, self).__init__(parent)
+        super().__init__(parent)
 
         self.ws = ws
         self.active_extruder_name: str = ""
@@ -138,6 +138,18 @@ class Printer(QtCore.QObject):
         self.printer_busy = False
         self.current_loaded_file = ""
         self.current_loaded_file_metadata = ""
+        _heater_attributes: dict = {
+            "current_temperature": 0.0,
+            "target_temperature": 0.0,
+            "can_extrude": False,
+        }
+        self.heaters_object = {
+            "extruder": _heater_attributes.copy(),
+            "bed": _heater_attributes.copy(),
+        }
+        self.active_extruder_name = ""
+        self.available_filament_sensors = {}
+        self.has_chamber = False
 
     @QtCore.pyqtSlot(str, name="on_klippy_status")
     def on_klippy_status(self, state: str):
@@ -224,7 +236,7 @@ class Printer(QtCore.QObject):
         return _config[0].get(section_name, {})
 
     def search_config_list(
-        self, search_list: list[str], _objects: typing.Optional[list] = None
+        self, search_list: list[str], _objects: list | None = None
     ) -> list:
         """
         Search a list of printer objects recursively
@@ -295,7 +307,7 @@ class Printer(QtCore.QObject):
         self.gcode_response.emit(report)
 
     def _webhook_printcore_updated(self, value: dict):
-        self.on_printcore_update[dict].emit(value)
+        self.on_printcore_update.emit(value)
 
     def _webhooks_object_updated(self, value: dict, name: str = "webhooks") -> None:
         """Sends an event type according to the received state
@@ -305,7 +317,7 @@ class Printer(QtCore.QObject):
             value (dict): _description_
             name (str, optional): _description_. Defaults to "".
         """
-        if "state" in value.keys() and "state_message" in value.keys():
+        if "state" in value and "state_message" in value:
             self.webhooks_update.emit(value["state"], value["state_message"])
             logger.debug("Webhooks message received")
             _state: str = value["state"]
@@ -318,71 +330,71 @@ class Printer(QtCore.QObject):
                         event = _event_callback(value["state"], value["state_message"])
                         instance = QtWidgets.QApplication.instance()
                         if instance is not None and isinstance(event, QtCore.QEvent):
-                            instance.sendEvent(self.parent(), event)
+                            instance.postEvent(self.parent(), event)
                         else:
                             raise TypeError("QApplication.instance is None type.")
                     except Exception as e:
                         logger.debug(
-                            "Unable to send internal Klippy %s notification : %e",
+                            "Unable to send internal Klippy %s notification : %s",
                             _state_call,
                             e,
                         )
 
     def _gcode_move_object_updated(self, value: dict, name: str = "gcode_move") -> None:
-        if "speed_factor" in value.keys():
+        if "speed_factor" in value:
             self.gcode_move_update[str, float].emit(
                 "speed_factor", value["speed_factor"]
             )
-        if "speed" in value.keys():
+        if "speed" in value:
             self.gcode_move_update[str, float].emit("speed", value["speed"])
-        if "extrude_factor" in value.keys():
+        if "extrude_factor" in value:
             self.gcode_move_update[str, float].emit(
                 "extruder_factor", value["extrude_factor"]
             )
-        if "absolute_coordinates" in value.keys():
+        if "absolute_coordinates" in value:
             self.gcode_move_update[str, bool].emit(
                 "absolute_coordinates", value["absolute_coordinates"]
             )
-        if "absolute_extrude" in value.keys():
+        if "absolute_extrude" in value:
             self.gcode_move_update[str, bool].emit(
                 "absolute_extrude", value["absolute_extrude"]
             )
-        if "homing_origin" in value.keys():
+        if "homing_origin" in value:
             self.gcode_move_update[str, list].emit(
                 "homing_origin", value["homing_origin"]
             )
-        if "position" in value.keys():
+        if "position" in value:
             self.gcode_move_update[str, list].emit("position", value["position"])
-        if "gcode_position" in value.keys():
+        if "gcode_position" in value:
             self.gcode_move_update[str, list].emit(
                 "gcode_position", value["gcode_position"]
             )
 
     def _toolhead_object_updated(self, values: dict, name: str = "toolhead") -> None:
-        if "homed_axes" in values.keys():
+        if "homed_axes" in values:
             self.toolhead_update[str, str].emit("homed_axes", values["homed_axes"])
-        if "print_time" in values.keys():
+        if "print_time" in values:
             self.toolhead_update[str, float].emit("print_time", values["print_time"])
-        if "estimated_print_time" in values.keys():
+        if "estimated_print_time" in values:
             self.toolhead_update[str, float].emit(
                 "estimated_print_time", values["estimated_print_time"]
             )
-        if "extruder" in values.keys():
+        if "extruder" in values:
             self.toolhead_update[str, str].emit("extruder", values["extruder"])
             self.active_extruder_name = values["extruder"]
-        if "position" in values.keys():
+        if "position" in values:
             self.toolhead_update[str, list].emit("position", values["position"])
-        if "max_velocity" in values.keys():
+        if "max_velocity" in values:
             self.toolhead_update[str, float].emit(
                 "max_velocity", values["max_velocity"]
             )
-        if "max_accel" in values.keys():
+        if "max_accel" in values:
             self.toolhead_update[str, float].emit("max_accel", values["max_accel"])
-        if "max_accel_to_decel" in values.keys():
+        if "max_accel_to_decel" in values:
             self.toolhead_update[str, float].emit(
                 "max_accel_to_decel", values["max_accel_to_decel"]
             )
-        if "square_corner_velocity" in values.keys():
+        if "square_corner_velocity" in values:
             self.toolhead_update[str, float].emit(
                 "square_corner_velocity", values["square_corner_velocity"]
             )
@@ -390,76 +402,79 @@ class Printer(QtCore.QObject):
     def _extruder_object_updated(
         self, value: dict, extruder_name: str = "extruder"
     ) -> None:
-        if "temperature" in value.keys():
+        """Handle extruder object updates and emit corresponding signals."""
+        if extruder_name not in self.heaters_object:
+            self.heaters_object[extruder_name] = {}
+        if "temperature" in value:
             self.extruder_update.emit(
                 extruder_name, "temperature", value["temperature"]
             )
             self.heaters_object[f"{extruder_name}"]["actual_temperature"] = value[
                 "temperature"
             ]
-        if "target" in value.keys():
+        if "target" in value:
             self.extruder_update.emit(extruder_name, "target", value["target"])
             self.heaters_object[f"{extruder_name}"]["target_temperature"] = value[
                 "target"
             ]
-        if "can_extrude" in value.keys():
+        if "can_extrude" in value:
             self.heaters_object[f"{extruder_name}"]["can_extrude"] = value[
                 "can_extrude"
             ]
-        if "power" in value.keys():
+        if "power" in value:
             self.extruder_update.emit(extruder_name, "power", value["power"])
-        if "pressure_advance" in value.keys():
+        if "pressure_advance" in value:
             self.extruder_update.emit(
                 extruder_name, "pressure_advance", value["pressure_advance"]
             )
-        if "smooth_time" in value.keys():
+        if "smooth_time" in value:
             self.extruder_update.emit(
                 extruder_name, "smooth_time", value["smooth_time"]
             )
-        if "can_extrude" in value.keys():
+        if "can_extrude" in value:
             pass
 
     def _heater_bed_object_updated(
         self, value: dict, heater_name: str = "heater_bed"
     ) -> None:
-        if "temperature" in value.keys():
+        if "temperature" in value:
             self.heater_bed_update.emit(
                 heater_name, "temperature", value["temperature"]
             )
             self.heaters_object["bed"]["actual_temperature"] = value["temperature"]
-        if "target" in value.keys():
+        if "target" in value:
             self.heater_bed_update.emit(heater_name, "target", value["target"])
             self.heaters_object["bed"]["target_temperature"] = value["target"]
-        if "power" in value.keys():
+        if "power" in value:
             self.heater_bed_update.emit(heater_name, "power", value["power"])
 
     def _chamber_object_updated(self, value: dict, heater_name: str = "chamber"):
         self.has_chamber = True
 
     def _fan_object_updated(self, value: dict, fan_name: str = "fan") -> None:
-        if "speed" in value.keys():
+        if "speed" in value:
             self.fan_update[str, str, float].emit("fan", "speed", value["speed"])
-        if "rpm" in value.keys():
+        if "rpm" in value:
             self.fan_update[str, str, int].emit("fan", "rpm", value["rpm"])
 
     def _fan_generic_object_updated(self, value: dict, fan_name: str = "") -> None:
         _names = ["fan_generic", fan_name]
         object_name = " ".join(_names)
-        if "speed" in value.keys():
+        if "speed" in value:
             self.fan_update[str, str, float].emit(
                 object_name, "speed", value.get("speed")
             )
-        if "rpm" in value.keys():
+        if "rpm" in value:
             self.fan_update[str, str, int].emit(object_name, "rpm", value.get("rpm"))
 
     def _controller_fan_object_updated(self, value: dict, fan_name: str = "") -> None:
         _names = ["controller_fan", fan_name]
         object_name = " ".join(_names)
-        if "speed" in value.keys():
+        if "speed" in value:
             self.fan_update[str, str, float].emit(
                 object_name, "speed", value.get("speed")
             )
-        elif "rpm" in value.keys():
+        elif "rpm" in value:
             self.fan_update[str, str, int].emit(object_name, "rpm", value.get("rpm"))
 
     def _heater_fan_object_updated(self, value: dict, fan_name: str = "") -> None:
@@ -469,20 +484,20 @@ class Printer(QtCore.QObject):
         # object_name = " ".join(_names)
 
     def _z_tilt_object_updated(self, value: dict, name: str = "") -> None:
-        if value["applied"]:
+        if value.get("applied"):
             self.z_tilt_update[str, bool].emit("applied", value["applied"])
 
     def _idle_timeout_object_updated(
         self, value: dict, name: str = "idle_timeout"
     ) -> None:
-        if "state" in value.keys():
+        if "state" in value:
             self.idle_timeout_update[str, str].emit("state", value["state"])
             if "printing" in value["state"]:
                 self.printer_busy = True
             elif self.printing_state != "printing" and value["state"] != "printing":
                 # It's also busy if the printer is printing or paused
                 self.printer_busy = False
-        if "printing_time" in value.keys():
+        if "printing_time" in value:
             self.idle_timeout_update[str, float].emit(
                 "printing_time", value["printing_time"]
             )
@@ -490,11 +505,11 @@ class Printer(QtCore.QObject):
     def _virtual_sdcard_object_updated(
         self, values: dict, name: str = "virtual_sdcard"
     ) -> None:
-        if "progress" in values.keys():
+        if "progress" in values:
             self.virtual_sdcard_update[str, float].emit("progress", values["progress"])
-        if "is_active" in values.keys():
+        if "is_active" in values:
             self.virtual_sdcard_update[str, bool].emit("is_active", values["is_active"])
-        if "file_position" in values.keys():
+        if "file_position" in values:
             self.virtual_sdcard_update[str, float].emit(
                 "file_position", float(values["file_position"])
             )
@@ -508,6 +523,8 @@ class Printer(QtCore.QObject):
         Raises:
             TypeError: Thrown when QApplication is None
         """
+        if not event:
+            return
         _print_state_upper = event[0].upper()
         _print_state_call = f"{_print_state_upper}{event[1:]}"
         if hasattr(events, f"Print{_print_state_call}"):
@@ -516,15 +533,16 @@ class Printer(QtCore.QObject):
                 _print_state_call,
                 f"Print{_print_state_call}",
             )
-            _event_callback: QtCore.QEvent = getattr(
-                events, f"Print{_print_state_call}"
-            )
+            _event_callback = getattr(events, f"Print{_print_state_call}")
             if callable(_event_callback):
                 try:
                     instance = QtWidgets.QApplication.instance()
-                    if instance:
-                        instance.postEvent(self.window(), _event_callback)
-                    else:
+                    # Printer is a QObject, not QWidget — use parent()
+                    # to reach the MainWindow (which has the event handler).
+                    target = self.parent()
+                    if instance and target:
+                        instance.postEvent(target, _event_callback())
+                    elif not instance:
                         raise TypeError("QApplication.instance expected non None value")
                 except Exception as e:
                     logger.info(
@@ -534,24 +552,24 @@ class Printer(QtCore.QObject):
     def _print_stats_object_updated(
         self, values: dict, name: str = "print_stats"
     ) -> None:
-        if "filename" in values.keys():
+        if "filename" in values:
             self.print_stats_update[str, str].emit("filename", values["filename"])
             self.print_file_loaded = True
-        if "total_duration" in values.keys():
+        if "total_duration" in values:
             self.print_stats_update[str, float].emit(
                 "total_duration", values["total_duration"]
             )
-        if "print_duration" in values.keys():
+        if "print_duration" in values:
             self.print_stats_update[str, float].emit(
                 "print_duration", values["print_duration"]
             )
-        if "filament_used" in values.keys():
+        if "filament_used" in values:
             self.print_stats_update[str, float].emit(
                 "filament_used", values["filament_used"]
             )
-        if "state" in values.keys():
+        if "state" in values:
             self.print_stats_update[str, str].emit("state", values["state"])
-            self.printing_state = values.get("state", None)
+            self.printing_state = values.get("state") or ""
             if not self.printing_state:
                 return
             self.send_print_event(self.printing_state)
@@ -562,33 +580,33 @@ class Printer(QtCore.QObject):
                 self.print_file_loaded = True
                 if values["state"] == "printing" or values["state"] == "pause":
                     self.printing = True
-        if "message" in values.keys():
+        if "message" in values:
             self.print_stats_update[str, str].emit("message", values["message"])
-        if "info" in values.keys():
+        if "info" in values:
             self.print_stats_update[str, dict].emit("info", values["info"])
 
     def _display_status_object_updated(
         self, values: dict, name: str = "display_status"
     ) -> None:
-        if "message" in values.keys():
+        if "message" in values:
             self.display_update[str, str].emit("message", values["message"])
-        if "progress" in values.keys():
+        if "progress" in values:
             self.display_update[str, float].emit("progress", values["progress"])
 
     def _temperature_sensor_object_updated(
         self, values: dict, temperature_sensor_name: str
     ) -> None:
-        if "temperature" in values.keys():
+        if "temperature" in values:
             self.temperature_sensor_update.emit(
                 temperature_sensor_name, "temperature", values["temperature"]
             )
-        if "measured_min_temp" in values.keys():
+        if "measured_min_temp" in values:
             self.temperature_sensor_update.emit(
                 temperature_sensor_name,
                 "measured_min_temp",
                 values["measured_min_temp"],
             )
-        if "measured_max_temp" in values.keys():
+        if "measured_max_temp" in values:
             self.temperature_sensor_update.emit(
                 temperature_sensor_name,
                 "measured_max_temp",
@@ -600,19 +618,19 @@ class Printer(QtCore.QObject):
     ) -> None:
         _names = ["temperature_fan", temperature_fan_name]
         object_name = " ".join(_names)
-        if "speed" in values.keys():
+        if "speed" in values:
             self.temperature_fan_update.emit(
                 object_name,
                 "speed",
                 values["speed"],
             )
-        if "temperature" in values.keys():
+        if "temperature" in values:
             self.temperature_fan_update.emit(
                 object_name,
                 "temperature",
                 values["temperature"],
             )
-        if "target" in values.keys():
+        if "target" in values:
             self.temperature_fan_update.emit(
                 object_name,
                 "target",
@@ -622,14 +640,14 @@ class Printer(QtCore.QObject):
     def _filament_switch_sensor_object_updated(
         self, values: dict, filament_switch_name: str
     ) -> None:
-        if "filament_detected" in values.keys():
+        if "filament_detected" in values:
             self.filament_switch_sensor_update.emit(
                 filament_switch_name,
                 "filament_detected",
                 values["filament_detected"],
             )
             self.available_filament_sensors.update({f"{filament_switch_name}": values})
-        if "enabled" in values.keys():
+        if "enabled" in values:
             self.filament_switch_sensor_update.emit(
                 filament_switch_name, "enabled", values["enabled"]
             )
@@ -638,7 +656,7 @@ class Printer(QtCore.QObject):
     def _filament_motion_sensor_object_updated(
         self, values: dict, filament_motion_name: str
     ) -> None:
-        if "filament_detected" in values.keys():
+        if "filament_detected" in values:
             self.filament_motion_sensor_update.emit(
                 filament_motion_name,
                 "filament_detected",
@@ -648,18 +666,18 @@ class Printer(QtCore.QObject):
                 {f"{filament_motion_name}": values["filament_detected"]}
             )
 
-        if "enabled" in values.keys():
+        if "enabled" in values:
             self.filament_motion_sensor_update.emit(
                 filament_motion_name, "enabled", values["enabled"]
             )
             self.available_filament_sensors.update({f"{filament_motion_name}": values})
 
     def _cutter_sensor_object_updated(self, values: dict, cutter_name: str) -> None:
-        if "filament_detected" in values.keys():
+        if "filament_detected" in values:
             self.filament_switch_sensor_update.emit(
                 cutter_name, "filament_detected", values["filament_detected"]
             )
-        if "enabled" in values.keys():
+        if "enabled" in values:
             self.filament_switch_sensor_update.emit(
                 cutter_name, "enabled", values["enabled"]
             )
@@ -667,7 +685,7 @@ class Printer(QtCore.QObject):
         self.available_filament_sensors.update({f"{cutter_name}": values})
 
     def _output_pin_object_updated(self, values: dict, output_pin_name: str) -> None:
-        if "value" in values.keys():
+        if "value" in values:
             self.output_pin_update.emit(output_pin_name, "value", values["value"])
 
     def _bed_mesh_object_updated(self, values: dict, name: str = "bed_mesh") -> None:
@@ -684,17 +702,17 @@ class Printer(QtCore.QObject):
         self, values: dict, name: str = "configfile"
     ) -> None:
         self.configfile.update(values)
-        if "config" in values.keys():
+        if "config" in values:
             self.printer_config.emit(values["config"])
-        if "settings" in values.keys():
+        if "settings" in values:
             # TODO
             ...
-        if "save_config_pending" in values.keys():
+        if "save_config_pending" in values:
             self.save_config_pending.emit()
-        if "save_config_pending_items" in values.keys():
+        if "save_config_pending_items" in values:
             # TODO
             ...
-        if "warnings" in values.keys():
+        if "warnings" in values:
             # TODO
             ...
 
@@ -734,9 +752,9 @@ class Printer(QtCore.QObject):
 
     # TODO: testing needed here idk if does work
     def _unload_filament_object_updated(self, values: dict, name: str) -> None:
-        if "state" in values.keys():
+        if "state" in values:
             self.unload_filament_update[bool].emit(values["state"])
 
     def _load_filament_object_updated(self, values: dict, name: str) -> None:
-        if "state" in values.keys():
+        if "state" in values:
             self.load_filament_update[bool].emit(values["state"])

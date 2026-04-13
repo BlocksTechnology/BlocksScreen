@@ -1,12 +1,11 @@
 import enum
+import typing
 from functools import partial
 
-
-from lib.printer import Printer
 from lib.filament import Filament
-from lib.ui.filamentStackedWidget_ui import Ui_filamentStackedWidget
-
 from lib.panels.widgets.popupDialogWidget import Popup
+from lib.printer import Printer
+from lib.ui.filamentStackedWidget_ui import Ui_filamentStackedWidget
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 
@@ -18,6 +17,9 @@ class FilamentTab(QtWidgets.QStackedWidget):
     request_toolhead_count = QtCore.pyqtSignal(int, name="toolhead_number_received")
     run_gcode = QtCore.pyqtSignal(str, name="run_gcode")
     call_load_panel = QtCore.pyqtSignal(bool, str, name="call-load-panel")
+    filament_type_changed: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        str, name="filament-type-changed"
+    )
 
     class FilamentTypes(enum.Enum):
         PLA = Filament(name="PLA", temperature=220)
@@ -44,6 +46,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self.has_load_unload_objects = None
         self._filament_state = self.FilamentStates.UNKNOWN
         self._sensor_states = {}
+        self._loaded_filament_name: str = ""
         self.filament_type: Filament | None = None
         self.panel.filament_page_load_btn.clicked.connect(
             partial(self.change_page, self.indexOf(self.panel.load_page))
@@ -52,22 +55,22 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self.panel.load_custom_btn.hide()
         self.panel.load_header_back_button.clicked.connect(self.back_button)
         self.panel.load_pla_btn.clicked.connect(
-            partial(self.load_filament, toolhead=0, temp=220)
+            partial(self.load_filament, toolhead=0, temp=220, name="PLA")
         )
         self.panel.load_petg_btn.clicked.connect(
-            partial(self.load_filament, toolhead=0, temp=240)
+            partial(self.load_filament, toolhead=0, temp=240, name="PETG")
         )
         self.panel.load_abs_btn.clicked.connect(
-            partial(self.load_filament, toolhead=0, temp=250)
+            partial(self.load_filament, toolhead=0, temp=250, name="ABS")
         )
         self.panel.load_hips_btn.clicked.connect(
-            partial(self.load_filament, toolhead=0, temp=250)
+            partial(self.load_filament, toolhead=0, temp=250, name="HIPS")
         )
         self.panel.load_nylon_btn.clicked.connect(
-            partial(self.load_filament, toolhead=0, temp=270)
+            partial(self.load_filament, toolhead=0, temp=270, name="Nylon")
         )
         self.panel.load_tpu_btn.clicked.connect(
-            partial(self.load_filament, toolhead=0, temp=230)
+            partial(self.load_filament, toolhead=0, temp=230, name="TPU")
         )
         self.panel.filament_page_unload_btn.clicked.connect(
             lambda: self.unload_filament(toolhead=0, temp=250)
@@ -122,32 +125,32 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self, extruder_name: str, field: str, new_value: float
     ) -> None:
         """Handle extruder update"""
-        if not self.isVisible:
+        if not self.isVisible():
             return
         if not self.loadignore or not self.unloadignore:
             if self.target_temp != 0:
                 if self.current_temp == self.target_temp:
-                    if self.isVisible:
+                    if self.isVisible():
                         self.call_load_panel.emit(
                             True, "Extruder heated up \n Please wait"
                         )
                     return
                 if field == "temperature":
                     self.current_temp = round(new_value, 0)
-                    if self.isVisible:
+                    if self.isVisible():
                         self.call_load_panel.emit(
                             True,
                             f"Heating up ({new_value}/{self.target_temp}) \n Please wait",
                         )
             if field == "target":
                 self.target_temp = round(new_value, 0)
-                if self.isVisible:
+                if self.isVisible():
                     self.call_load_panel.emit(True, "Heating up \n Please wait")
 
     @QtCore.pyqtSlot(bool, name="on_load_filament")
     def on_load_filament(self, status: bool):
         """Handle load filament object updated"""
-        if not self.isVisible:
+        if not self.isVisible():
             return
         if self.loadignore:
             return
@@ -158,12 +161,14 @@ class FilamentTab(QtWidgets.QStackedWidget):
             self.target_temp = 0
             self.call_load_panel.emit(False, "")
             self._filament_state = self.FilamentStates.LOADED
+            if self._loaded_filament_name:
+                self.filament_type_changed.emit(self._loaded_filament_name)
         self.handle_filament_state()
 
     @QtCore.pyqtSlot(bool, name="on_unload_filament")
     def on_unload_filament(self, status: bool):
         """Handle unload filament object updated"""
-        if not self.isVisible:
+        if not self.isVisible():
             return
         if self.unloadignore:
             return
@@ -174,12 +179,19 @@ class FilamentTab(QtWidgets.QStackedWidget):
             self.call_load_panel.emit(False, "")
             self.target_temp = 0
             self._filament_state = self.FilamentStates.UNLOADED
+            self._loaded_filament_name = ""
         self.handle_filament_state()
 
-    @QtCore.pyqtSlot(int, int, name="load_filament")
-    def load_filament(self, toolhead: int = 0, temp: int = 220) -> None:
-        """Handle load filament buttons clicked"""
-        if not self.isVisible:
+    @QtCore.pyqtSlot(int, int, str, name="load_filament")
+    def load_filament(self, toolhead: int = 0, temp: int = 220, name: str = "") -> None:
+        """Handle load filament buttons clicked.
+
+        Args:
+            toolhead: Toolhead index.
+            temp: Target temperature for loading.
+            name: Filament type name (e.g. "PLA", "PETG").
+        """
+        if not self.isVisible():
             return
 
         if self._filament_state == self.FilamentStates.UNKNOWN:
@@ -194,6 +206,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
                 message="Filament is already loaded.",
             )
             return
+        self._loaded_filament_name = name
         self.loadignore = False
         self.call_load_panel.emit(True, "Loading Filament")
         self.run_gcode.emit(f"LOAD_FILAMENT TOOLHEAD=load_toolhead TEMPERATURE={temp}")
@@ -201,7 +214,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
     @QtCore.pyqtSlot(str, int, name="unload_filament")
     def unload_filament(self, toolhead: int = 0, temp: int = 220) -> None:
         """Handle unload filament button clicked"""
-        if not self.isVisible:
+        if not self.isVisible():
             return
 
         if self._filament_state == self.FilamentStates.UNKNOWN:
@@ -260,15 +273,15 @@ class FilamentTab(QtWidgets.QStackedWidget):
 
         _available_objects = self.printer.available_objects.copy()
 
-        if "load_filament" in _available_objects.keys():
+        if "load_filament" in _available_objects:
             self.has_load_unload_objects = True
             return True
-        if "unload_filament" in _available_objects.keys():
+        if "unload_filament" in _available_objects:
             self.has_load_unload_objects = True
             return True
-        if "gcode_macro LOAD_FILAMENT" in _available_objects.keys():
+        if "gcode_macro LOAD_FILAMENT" in _available_objects:
             return True
-        if "gcode_macro UNLOAD_FILAMENT" in _available_objects.keys():
+        if "gcode_macro UNLOAD_FILAMENT" in _available_objects:
             return True
 
         return False

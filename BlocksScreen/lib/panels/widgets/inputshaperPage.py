@@ -1,10 +1,10 @@
+import typing
+
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_frame import BlocksCustomFrame
 from lib.utils.icon_button import IconButton
 from lib.utils.list_model import EntryDelegate, EntryListModel, ListItem
 from PyQt6 import QtCore, QtGui, QtWidgets
-
-import typing
 
 
 class InputShaperPage(QtWidgets.QWidget):
@@ -24,6 +24,7 @@ class InputShaperPage(QtWidgets.QWidget):
         else:
             super().__init__()
         self._setupUI()
+        self.currentItem: ListItem | None = None
         self.selected_item: ListItem | None = None
         self.ongoing_update: bool = False
         self.type_dict: dict = {}
@@ -96,21 +97,26 @@ class InputShaperPage(QtWidgets.QWidget):
         if not current_info:
             return
 
-        self.vib_label.setText(str("%.0f" % current_info.get("vibration", "N/A")) + "%")
+        _vib = current_info.get("vibration")
+        self.vib_label.setText(f"{float(_vib):.0f}%" if _vib is not None else "N/A%")
+        _accel = current_info.get("max_accel")
         self.sug_accel_label.setText(
-            str("%.0f" % current_info.get("max_accel", "N/A")) + "mm/s²"
+            f"{float(_accel):.0f}mm/s²" if _accel is not None else "N/Amm/s²"
         )
 
         self.action_btn.show()
 
     def handle_ism_confirm(self) -> None:
+        """Apply the selected input shaper type to the printer and save the config."""
+        if self.currentItem is None:
+            return
         current_info = self.type_dict.get(self.currentItem.text, {})
         frequency = current_info.get("frequency", "N/A")
-        if self.type_dict["Axis"] == "x":
+        if self.type_dict.get("Axis") == "x":
             self.run_gcode_signal.emit(
                 f"SET_INPUT_SHAPER SHAPER_TYPE_X={self.currentItem.text} SHAPER_FREQ_X={frequency}"
             )
-        elif self.type_dict["Axis"] == "y":
+        elif self.type_dict.get("Axis") == "y":
             self.run_gcode_signal.emit(
                 f"SET_INPUT_SHAPER SHAPER_TYPE_Y={self.currentItem.text} SHAPER_FREQ_Y={frequency}"
             )
@@ -138,7 +144,8 @@ class InputShaperPage(QtWidgets.QWidget):
         font_id = QtGui.QFontDatabase.addApplicationFont(
             ":/font/media/fonts for text/Momcake-Bold.ttf"
         )
-        font_family = QtGui.QFontDatabase.applicationFontFamilies(font_id)[0]
+        _families = QtGui.QFontDatabase.applicationFontFamilies(font_id)
+        font_family = _families[0] if _families else ""
         sizePolicy = QtWidgets.QSizePolicy(
             QtWidgets.QSizePolicy.Policy.MinimumExpanding,
             QtWidgets.QSizePolicy.Policy.MinimumExpanding,

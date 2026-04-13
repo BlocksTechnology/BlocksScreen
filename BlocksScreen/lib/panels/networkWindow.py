@@ -35,7 +35,6 @@ from lib.utils.check_button import BlocksCustomCheckButton
 from lib.utils.icon_button import IconButton
 from lib.utils.list_model import EntryDelegate, EntryListModel, ListItem
 from PyQt6 import QtCore, QtGui, QtWidgets
-from PyQt6.QtCore import QTimer, pyqtSlot
 
 logger = logging.getLogger(__name__)
 
@@ -255,7 +254,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             except OSError:
                 continue
 
-    @pyqtSlot()
+    @QtCore.pyqtSlot()
     def _on_reconnect_complete(self) -> None:
         """Navigate back to the main panel after a static-IP or DHCP-reset operation."""
         logger.debug("reconnect_complete received — navigating to main_network_page")
@@ -263,7 +262,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
 
     def _init_timers(self) -> None:
         """Initialize timers."""
-        self._load_timer = QTimer(self)
+        self._load_timer = QtCore.QTimer(self)
         self._load_timer.setSingleShot(True)
         self._load_timer.timeout.connect(self._handle_load_timeout)
 
@@ -277,7 +276,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self._entry_delegate.item_selected.connect(self._on_ssid_item_clicked)
         self._configure_list_view_palette()
 
-    @pyqtSlot(NetworkState)
+    @QtCore.pyqtSlot(NetworkState)
     def _on_network_state_changed(self, state: NetworkState) -> None:
         """React to a NetworkState update: sync toggles, populate header and connection info."""
         logger.debug(
@@ -438,7 +437,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self._emit_status_icon(state)
         self._sync_active_network_list_icon(state)
 
-    @pyqtSlot(list)
+    @QtCore.pyqtSlot(list)
     def _on_scan_complete(self, networks: list[NetworkInfo]) -> None:
         """Receive scan results, filter/sort them, and rebuild the SSID list view.
 
@@ -457,9 +456,11 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             # Stamp the connected AP as ACTIVE so the list is correct on first
             # render even when the scan ran before the connection fully settled.
             filtered = [
-                replace(net, network_status=NetworkStatus.ACTIVE)
-                if net.ssid == current_ssid
-                else net
+                (
+                    replace(net, network_status=NetworkStatus.ACTIVE)
+                    if net.ssid == current_ssid
+                    else net
+                )
                 for net in filtered
             ]
             active = next((n for n in filtered if n.ssid == current_ssid), None)
@@ -478,12 +479,12 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             state = self._nm.current_state
             self._emit_status_icon(state)
 
-    @pyqtSlot(list)
+    @QtCore.pyqtSlot(list)
     def _on_saved_networks_loaded(self, networks: list[SavedNetwork]) -> None:
         """Receive saved-network data and update the priority spinbox for the active SSID."""
         logger.debug("Loaded %d saved networks", len(networks))
 
-    @pyqtSlot(ConnectionResult)
+    @QtCore.pyqtSlot(ConnectionResult)
     def _on_operation_complete(self, result: ConnectionResult) -> None:
         """Handle network operation completion."""
         logger.debug("Operation: success=%s, msg=%s", result.success, result.message)
@@ -570,7 +571,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
                     result.message,
                 )
                 ssid = self._target_ssid
-                QTimer.singleShot(
+                QtCore.QTimer.singleShot(
                     2000, lambda _ssid=ssid: self._nm.connect_network(_ssid)
                 )
                 return  # Keep loading visible; state machine handles completion
@@ -578,7 +579,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             self._clear_loading()
             self._show_error_popup(result.message)
 
-    @pyqtSlot(str, str)
+    @QtCore.pyqtSlot(str, str)
     def _on_network_error(self, operation: str, message: str) -> None:
         """Log network errors and surface critical failures in the info box."""
         logger.error("Network error [%s]: %s", operation, message)
@@ -658,13 +659,15 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
 
         # Update the cached entry with the authoritative signal and status
         updated = [
-            replace(
-                net,
-                signal_strength=self._active_signal,
-                network_status=NetworkStatus.ACTIVE,
+            (
+                replace(
+                    net,
+                    signal_strength=self._active_signal,
+                    network_status=NetworkStatus.ACTIVE,
+                )
+                if net.ssid == state.current_ssid
+                else net
             )
-            if net.ssid == state.current_ssid
-            else net
             for net in self._cached_scan_networks
         ]
 
@@ -1063,7 +1066,9 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         # Non-blocking: disable hotspot then connect
         self._nm.toggle_hotspot(False)
         _ssid_to_connect = self._target_ssid
-        QTimer.singleShot(500, lambda: self._nm.connect_network(_ssid_to_connect))
+        QtCore.QTimer.singleShot(
+            500, lambda: self._nm.connect_network(_ssid_to_connect)
+        )
 
     def _handle_hotspot_toggle(self, is_on: bool) -> None:
         """Enable or disable the hotspot, enforcing the ethernet/Wi-Fi mutual-exclusion rule."""
