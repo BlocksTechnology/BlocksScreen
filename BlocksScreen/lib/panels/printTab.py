@@ -276,6 +276,7 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.confirmPage_widget.on_delete.connect(self.delete_file)
         self.change_page(self.indexOf(self.print_page))  # force set the initial page
         self.save_config_btn.clicked.connect(self.save_config)
+        self.ws.klippy_state_signal.connect(self.on_klippy_state)
 
     @QtCore.pyqtSlot(str, dict, name="on_print_stats_update")
     @QtCore.pyqtSlot(str, float, name="on_print_stats_update")
@@ -383,6 +384,15 @@ class PrintTab(QtWidgets.QStackedWidget):
             f"Z: {self._pending_save_offset + 0.0:.3f}mm"
         )
         self.save_config_btn.setVisible(False)
+
+    @QtCore.pyqtSlot(str, name="on_klippy_state")
+    def on_klippy_state(self, state: str) -> None:
+        """Dismiss the Z-offset save popup and reset save state on unexpected shutdown."""
+        if state in ("ready", "startup"):
+            return
+        self.BasePopup_z_offset.reject()
+        self.save_config_btn.setVisible(False)
+        self.babystepPage.baby_stepchange = False
 
     @QtCore.pyqtSlot(str, list, name="activate_save_button")
     def activate_save_button(self, name: str, value: list) -> None:
