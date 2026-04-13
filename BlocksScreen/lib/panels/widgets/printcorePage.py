@@ -34,6 +34,8 @@ class SwapPrintcorePage(QtWidgets.QDialog):
             for widget in app_instance.allWidgets():
                 if isinstance(widget, QtWidgets.QMainWindow):
                     main_window = widget
+        if main_window is None:
+            return
         x = main_window.geometry().x()
         y = main_window.geometry().y()
         width = main_window.width()

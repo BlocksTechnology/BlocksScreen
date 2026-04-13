@@ -1,5 +1,6 @@
 import enum
 import typing
+
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 
@@ -33,6 +34,7 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
             - self.handle_radius * 2
         )
 
+        self.trailPath: QtGui.QPainterPath | None = None
         self.icon_pixmap: QtGui.QPixmap = QtGui.QPixmap()
         self._backgroundColor: QtGui.QColor = QtGui.QColor(223, 223, 223)
         self._handleColor: QtGui.QColor = QtGui.QColor(255, 100, 10)
@@ -179,7 +181,7 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
 
     def mousePressEvent(self, e: QtGui.QMouseEvent) -> None:
         """Re-implemented method, handle mouse press events"""
-        if self.trailPath:
+        if self.trailPath is not None:
             if self.trailPath.contains(e.pos().toPointF()) and self.underMouse():
                 if not self.slide_animation.state == self.slide_animation.State.Running:
                     self._state = ToggleAnimatedButton.State(not self._state.value)
@@ -214,7 +216,10 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
         rect_norm = _rect.toRectF().normalized()
         min_x = rect_norm.x()
         max_x = rect_norm.x() + rect_norm.width() - rect_norm.height() * 0.80
-        progress = (self._handle_position - min_x) / (max_x - min_x)
+        denominator = max_x - min_x
+        if denominator == 0:
+            return
+        progress = (self._handle_position - min_x) / denominator
         progress = max(0.0, min(1.0, progress))
 
         # Inline color interpolation (no separate functions)
@@ -237,6 +242,8 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
 
         self.handleColor = QtGui.QColor(int(r), int(g), int(b), int(a))
 
+        if self.trailPath is None:
+            return
         painter.fillPath(
             self.trailPath,
             bg_color if self.isEnabled() else self.disable_bg_color,

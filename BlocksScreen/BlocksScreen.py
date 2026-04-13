@@ -1,6 +1,5 @@
 import logging
 import sys
-import typing
 
 from logger import CrashHandler, LogManager, install_crash_handler, setup_logging
 
@@ -39,7 +38,7 @@ YELLOW = "\033[33m"
 RESET = "\033[0m"
 
 
-def show_splash(window: typing.Optional[QtWidgets.QWidget] = None):
+def show_splash(window: QtWidgets.QWidget | None = None):
     """Show splash screen on app initialization"""
     logo = QtGui.QPixmap("BlocksScreen/BlocksScreen/lib/ui/resources/logoblocks.png")
     splash = QtWidgets.QSplashScreen(pixmap=logo)

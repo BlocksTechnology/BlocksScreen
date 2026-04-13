@@ -1,7 +1,6 @@
-from lib.utils.icon_button import IconButton
 from lib.utils.blocks_label import BlocksLabel
+from lib.utils.icon_button import IconButton
 from lib.utils.numpad_button import NumpadButton
-
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 
