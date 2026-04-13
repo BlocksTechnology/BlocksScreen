@@ -433,6 +433,7 @@ class ProbeHelper(QtWidgets.QWidget):
         if "eddy" in sender.name:  # type: ignore
             self.call_load_panel.emit(True, "Preparing Eddy Current Calibration...")
             self.toggle_conn_page.emit(False)
+            self._move_to_pos(self.z_offset_safe_xy[0], self.z_offset_safe_xy[1], 100)
             _name_parts = sender.name.split(" ", 1)  # type: ignore
             if len(_name_parts) < 2:
                 return

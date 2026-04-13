@@ -1,10 +1,14 @@
 import re
 import typing
+import logging
 
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.display_button import DisplayButton
 from lib.utils.icon_button import IconButton
 from PyQt6 import QtCore, QtGui, QtWidgets
+
+
+_logger = logging.getLogger(__name__)
 
 
 class TuneWidget(QtWidgets.QWidget):
@@ -44,24 +48,6 @@ class TuneWidget(QtWidgets.QWidget):
         self.sensors_menu_btn.clicked.connect(self.request_sensorsPage.emit)
         self.tune_babystep_menu_btn.clicked.connect(self.request_bbpPage.emit)
         self.tune_back_btn.clicked.connect(self.request_back)
-        self.bed_display.clicked.connect(
-            lambda: self.request_numpad[str, int, "PyQt_PyObject", int, int].emit(
-                "Bed",
-                int(round(self.bed_target)),
-                self.on_numpad_change,
-                0,
-                120,  # TODO: Get this value from printer objects
-            )
-        )
-        self.extruder_display.clicked.connect(
-            lambda: self.request_numpad[str, int, "PyQt_PyObject", int, int].emit(
-                "Extruder",
-                int(round(self.extruder_target)),
-                self.on_numpad_change,
-                0,
-                300,  # TODO: Get this value from printer objects
-            )
-        )
         self.speed_display.clicked.connect(
             lambda: self.request_sliderPage[str, int, "PyQt_PyObject", int, int].emit(
                 "Speed",
@@ -69,6 +55,44 @@ class TuneWidget(QtWidgets.QWidget):
                 self._on_speed_slider_change,
                 10,
                 300,
+            )
+        )
+
+    @QtCore.pyqtSlot(dict, name="printer_config")
+    def on_printer_config(self, config: dict) -> None:
+        """Slot that receives the full printer configuration,
+
+        Additionally, this method configures the signal connections
+        between controllable heaters and numpad calls
+        """
+        try:
+            self.extruder_display.clicked.disconnect()
+            self.bed_display.clicked.disconnect()
+        except Exception:
+            _logger.debug("Signals were not connected")
+        extruder = config.get("extruder", None) or {}
+        bed = config.get("heater_bed", None) or {}
+        e_min_temp = extruder.get("min_temp", 0)
+        e_max_temp = extruder.get("max_temp", 300)
+        b_max_temp = bed.get("max_temp", 100)
+        b_min_temp = bed.get("min_temp", 0)
+        # Configure numpads
+        self.extruder_display.clicked.connect(
+            lambda: self.request_numpad[str, int, "PyQt_PyObject", int, int].emit(
+                "Extruder",
+                int(round(self.extruder_target)),
+                self.on_numpad_change,
+                int(e_min_temp),
+                int(e_max_temp),
+            )
+        )
+        self.bed_display.clicked.connect(
+            lambda: self.request_numpad[str, int, "PyQt_PyObject", int, int].emit(
+                "Bed",
+                int(round(self.bed_target)),
+                self.on_numpad_change,
+                int(b_min_temp),
+                int(b_max_temp),
             )
         )
 

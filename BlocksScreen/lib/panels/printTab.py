@@ -65,9 +65,6 @@ class PrintTab(QtWidgets.QStackedWidget):
     call_load_panel = QtCore.pyqtSignal(bool, str, name="call-load-panel")
 
     call_cancel_panel = QtCore.pyqtSignal(bool, name="call-load-panel")
-    _z_offset: float = 0.0
-    _active_z_offset: float = 0.0
-    _finish_print_handled: bool = False
 
     def __init__(
         self,
@@ -77,6 +74,9 @@ class PrintTab(QtWidgets.QStackedWidget):
         printer: Printer,
     ) -> None:
         super().__init__(parent)
+        self._active_z_offset: float = 0.0
+        self._finish_print_handled: bool = False
+        self._z_apply_command: str = "Z_OFFSET_APPLY_ENDSTOP"
 
         self.setupMainPrintPage()
         self.ws: MoonWebSocket = ws
@@ -206,6 +206,7 @@ class PrintTab(QtWidgets.QStackedWidget):
             lambda: self.change_page(self.indexOf(self.tune_page))
         )
         self.tune_page.request_back.connect(self.back_button)
+        self.printer.printer_config.connect(self.tune_page.on_printer_config)
         self.printer.extruder_update.connect(
             self.tune_page.on_extruder_temperature_change
         )
@@ -342,14 +343,12 @@ class PrintTab(QtWidgets.QStackedWidget):
 
     def save_config(self) -> None:
         """Handle Save configuration behaviour, shows confirmation dialog"""
-        if self._finish_print_handled:
-            self.run_gcode_signal.emit("Z_OFFSET_APPLY_PROBE")
-            self._z_offset = self._active_z_offset
-            self.babystepPage.bbp_z_offset_title_label.setText(
-                f"Z: {self._z_offset:.3f}mm"
-            )
+
+        self.babystepPage.bbp_z_offset_title_label.setText(
+            f"Z: {self._active_z_offset:.3f}mm"
+        )
         self.BasePopup_z_offset.set_message(
-            f"The Z‑Offset is now {self._active_z_offset:.3f} mm.\n"
+            f"The Z-Offset is now {self._active_z_offset:.3f} mm.\n"
             "Would you like to save this change permanently?\n"
             "The machine will restart."
         )
@@ -362,13 +361,17 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.BasePopup_z_offset.open()
 
     def update_configuration_file(self) -> None:
-        """Run ``Z_OFFSET_APPLY_PROBE`` followed by ``SAVE_CONFIG``."""
+        """Restore the captured offset, apply it to the probe config, then save."""
         try:
             self.BasePopup_z_offset.accepted.disconnect(self.update_configuration_file)
         except (RuntimeError, TypeError):
             pass
-        self.run_gcode_signal.emit("Z_OFFSET_APPLY_PROBE")
+        self.run_gcode_signal.emit(
+            f"SET_GCODE_OFFSET Z={self._active_z_offset:.3f} MOVE=0"
+        )
+        self.run_gcode_signal.emit(self._z_apply_command)
         self.run_gcode_signal.emit("SAVE_CONFIG")
+        self.save_config_btn.setVisible(False)
 
     @QtCore.pyqtSlot(str, list, name="activate_save_button")
     def activate_save_button(self, name: str, value: list) -> None:
@@ -428,6 +431,17 @@ class PrintTab(QtWidgets.QStackedWidget):
         """React to klipper ready signal"""
         self.babystepPage.baby_stepchange = False
         self._finish_print_handled = False
+        self.printer.on_subscribe_config("stepper_z", self._on_stepper_z_config)
+
+    def _on_stepper_z_config(self, config: dict | list) -> None:
+        """Select the correct Z-offset apply command based on endstop type."""
+        if not isinstance(config, dict):
+            return
+        stepper_z = config.get("stepper_z", {})
+        if stepper_z.get("endstop_pin") == "probe:z_virtual_endstop":
+            self._z_apply_command = "Z_OFFSET_APPLY_PROBE"
+        else:
+            self._z_apply_command = "Z_OFFSET_APPLY_ENDSTOP"
 
     @QtCore.pyqtSlot(name="finish_print_signal")
     def finish_print_signal(self) -> None:
