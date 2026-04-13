@@ -10,6 +10,7 @@ class RepeatedTimer(threading.Thread):
         *args,
         **kwargs,
     ):
+        """Initialize a repeating timer that invokes callback every timeout seconds."""
         super().__init__(daemon=True)
         self.name = name
         self._timeout = timeout
@@ -17,6 +18,7 @@ class RepeatedTimer(threading.Thread):
         self._args = args
         self._kwargs = kwargs
 
+        self._lock = threading.Lock()
         self.running = False
         self.timeoutEvent = threading.Event()
         self.stopEvent = threading.Event()
@@ -24,36 +26,42 @@ class RepeatedTimer(threading.Thread):
         self.startTimer()
 
     def _run(self):
-        self.running = False
-        self.startTimer()
-        self.stopEvent.wait()
+        """Invoke the callback and restart the timer loop, unless stopped."""
+        with self._lock:
+            self.running = False
+        if self.stopEvent.is_set():
+            return
         if callable(self._function):
             self._function(*self._args, **self._kwargs)
+        self.startTimer()
 
     def startTimer(self):
         """Start timer"""
-        if self.running is False:
+        with self._lock:
+            if self.running:
+                return
+            self.stopEvent.clear()
             try:
-                self._timer = threading.Timer(self._timeout, self._run)
-                self._timer.daemon = True
-                self._timer.start()
-                if not self.stopEvent.is_set():
-                    self.stopEvent.set()
+                timer = threading.Timer(self._timeout, self._run)
+                timer.daemon = True
+                self._timer = timer
+                self.running = True
             except Exception as e:
+                self.running = False
                 raise Exception(
                     f"RepeatedTimer {self.name} error while starting timer, error: {e}"
-                )
-            finally:
-                self.running = False
-            self.running = True
+                ) from e
+        # Start outside the lock to avoid holding it during thread creation
+        timer.start()
 
     def stopTimer(self):
         """Stop timer"""
-        if self._timer is None:
-            return
-        if self.running:
-            self._timer.cancel()
-            self._timer.join()
+        with self._lock:
+            if self._timer is None or not self.running:
+                return
+            timer = self._timer
             self._timer = None
-            self.stopEvent.clear()
             self.running = False
+        self.stopEvent.set()
+        timer.cancel()
+        timer.join()
