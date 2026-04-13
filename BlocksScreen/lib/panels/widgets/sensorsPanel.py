@@ -11,9 +11,6 @@ class SensorsWindow(QtWidgets.QWidget):
     run_gcode_signal: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         str, name="run_gcode"
     )
-    change_fil_sensor_state: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
-        SensorWidget.FilamentState, name="change_fil_sensor_state"
-    )
     request_back: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         name="request_back"
     )

@@ -104,6 +104,13 @@ class SensorWidget(QtWidgets.QWidget):
         self.filament_state = SensorWidget.FilamentState(not state.value)
         self.update()
 
+    def set_filament_state(self, state: FilamentState) -> None:
+        """Set filament state directly without inversion."""
+        if not isinstance(state, SensorWidget.FilamentState):
+            return
+        self.filament_state = state
+        self.update()
+
     def toggle_button_state(self, state: ToggleAnimatedButton.State) -> None:
         """Called when the Klipper firmware reports an update to the filament sensor state"""
         self.toggle_button.setDisabled(False)
