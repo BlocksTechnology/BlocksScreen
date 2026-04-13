@@ -29,8 +29,8 @@ class RepeatedTimer(threading.Thread):
         """Invoke the callback and restart the timer loop, unless stopped."""
         with self._lock:
             self.running = False
-        if self.stopEvent.is_set():
-            return
+            if self.stopEvent.is_set():
+                return
         if callable(self._function):
             self._function(*self._args, **self._kwargs)
         self.startTimer()
@@ -62,6 +62,6 @@ class RepeatedTimer(threading.Thread):
             timer = self._timer
             self._timer = None
             self.running = False
-        self.stopEvent.set()
+            self.stopEvent.set()
         timer.cancel()
         timer.join()
