@@ -9,10 +9,10 @@
 import ctypes
 import enum
 import logging
-import math
 import os
 import pathlib
 import struct
+import typing
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +21,7 @@ try:
     libxext = ctypes.CDLL("libXext.so.6")
 
     class DPMSState(enum.Enum):
-        """Available DPMS states."""
+        """Available DPMS states"""
 
         FAIL = -1
         ON = 0
@@ -86,7 +86,7 @@ try:
             finally:
                 libxext.XCloseDisplay(display)
 
-    def get_dpms_timeouts() -> dict:
+    def get_dpms_timeouts() -> typing.Dict:
         """Get current DPMS timeouts"""
         _display_name = ctypes.c_char_p(b":0")
         libxext.XOpenDisplay.restype = ctypes.c_void_p
@@ -118,7 +118,9 @@ try:
             "off_seconds": _off_timeout,
         }
 
-    def set_dpms_timeouts(suspend: int = 0, standby: int = 0, off: int = 0) -> dict:
+    def set_dpms_timeouts(
+        suspend: int = 0, standby: int = 0, off: int = 0
+    ) -> typing.Dict:
         """Set DPMS timeout"""
         _display_name = ctypes.c_char_p(b":0")
         libxext.XOpenDisplay.restype = ctypes.c_void_p
@@ -153,11 +155,11 @@ try:
             "off_seconds": _off_timeout,
         }
 
-    def get_dpms_info() -> dict:
+    def get_dpms_info() -> typing.Dict:
         """Get DPMS information
 
         Returns:
-            dict: Dpms state
+            typing.Dict: Dpms state
         """
         _dpms_state = DPMSState.FAIL
         onoff = 0
@@ -225,122 +227,133 @@ except Exception as e:
     logger.exception(f"Unexpected exception occurred {e}")
 
 
-def convert_bytes_to_mb(size_bytes: int | float) -> float:
-    """Converts byte size to megabyte size.
+def convert_bytes_to_mb(self, bytes: int | float) -> float:
+    """Converts byte size to megabyte size
 
     Args:
-        size_bytes: Value in bytes.
+        bytes (int | float): bytes
 
     Returns:
-        Equivalent value in megabytes.
+        mb: float that represents the number of mb
     """
     _relation = 2 ** (-20)
-    return size_bytes * _relation
+    return bytes * _relation
 
 
 def calculate_current_layer(
     z_position: float,
-    layer_height: float,
-    first_layer_height: float,
-    max_layers: int = 0,
-) -> int:
-    """Calculate current layer from Z position (fallback when Klipper
-    does not provide ``print_stats.info.current_layer``).
-
-    Formula ported from Mainsail ``getPrintCurrentLayer`` getter:
-    ``src/store/printer/getters.ts`` in ``mainsail-crew/mainsail``.
-
-    Uses ``ceil((z - first_layer_height) / layer_height + 1)``
-    and clamps the result to ``[0, max_layers]``.
-
-    Returns:
-        int: Current layer number (0 when not yet printing).
-    """
-    if layer_height <= 0 or first_layer_height < 0:
-        return 0
-
-    layer = math.ceil((z_position - first_layer_height) / layer_height + 1)
-    if max_layers > 0 and layer > max_layers:
-        return max_layers
-    return layer if layer > 0 else 0
-
-
-def calculate_max_layers(
     object_height: float,
     layer_height: float,
     first_layer_height: float,
 ) -> int:
-    """Calculate total layers from metadata dimensions (fallback when
-    Klipper does not provide ``print_stats.info.total_layer``).
-
-    Formula ported from Mainsail ``getPrintMaxLayers`` getter:
-    ``src/store/printer/getters.ts`` in ``mainsail-crew/mainsail``.
-
-    Uses ``ceil((object_height - first_layer_height) / layer_height + 1)``.
+    """Calculated the current printing layer given the GCODE z position received by the
+        gcode_move object update.
+        Also updates the label where the current layer should be displayed
 
     Returns:
-        int: Total layer count, or 0 if metadata is insufficient.
+        int: Current layer
     """
-    if layer_height <= 0 or object_height <= 0:
-        return 0
-    return max(1, math.ceil((object_height - first_layer_height) / layer_height + 1))
+    if z_position == 0:
+        return -1
+    if z_position <= first_layer_height:
+        return 1
+
+    _current_layer = (z_position) / layer_height
+
+    return int(_current_layer)
 
 
-def estimate_print_time(seconds: int) -> list[int]:
-    """Convert *seconds* to ``[days, hours, minutes, seconds]``."""
-    num_min, secs = divmod(seconds, 60)
-    num_hours, mins = divmod(num_min, 60)
-    days, hours = divmod(num_hours, 24)
-    return [days, hours, mins, secs]
-
-
-def normalize(
-    value: float,
-    r_min: float = 0.0,
-    r_max: float = 1.0,
-    t_min: float = 0.0,
-    t_max: float = 100.0,
-) -> float:
-    """Scale *value* from range [r_min, r_max] into [t_min, t_max]."""
-    return (value - r_min) / (r_max - r_min) * (t_max - t_min) + t_min
-
-
-def check_filepath_permission(
-    filepath: str | pathlib.Path, access_type: int = os.R_OK
-) -> bool:
-    """Check whether *filepath* exists and has the requested access.
+def estimate_print_time(seconds: int) -> list:
+    """Convert time in seconds format to days, hours, minutes, seconds.
 
     Args:
-        filepath: Path to file.
-        access_type: ``os.F_OK`` (existence), ``os.R_OK`` (read),
-            ``os.W_OK`` (write), or ``os.X_OK`` (execute).
+        seconds (int): Seconds
 
     Returns:
-        ``True`` if the file exists and satisfies *access_type*.
+        list: list that contains the converted information [days, hours, minutes, seconds]
     """
-    path = pathlib.Path(filepath)
-    return path.is_file() and os.access(path, access_type)
+    num_min, seconds = divmod(seconds, 60)
+    num_hours, minutes = divmod(num_min, 60)
+    days, hours = divmod(num_hours, 24)
+    return [days, hours, minutes, seconds]
 
 
-def check_dir_existence(directory: str | pathlib.Path) -> bool:
-    """Return ``True`` if *directory* exists and is a directory."""
-    return pathlib.Path(directory).is_dir()
+def normalize(value, r_min=0.0, r_max=1.0, t_min=0.0, t_max=100):
+    """Normalize values between a rage"""
+    # https://stats.stackexchange.com/questions/281162/scale-a-number-between-a-range
+    c1 = (value - r_min) / (r_max - r_min)
+    c2 = (t_max - t_min) + t_min
+    return c1 * c2
+
+
+def check_filepath_permission(filepath, access_type: int = os.R_OK) -> bool:
+    # if not isinstance(filepath, pathlib.Path):
+    """Checks for file path access
+
+    Args:
+        filepath (str | pathlib.Path): path to file
+        access_type (int, optional): _description_. Defaults to os.R_OK.
+
+    ***
+
+    #### **Access type can be:**
+
+     - F_OK -> Checks file existence on path
+     - R_OK -> Checks if file is readable
+     - W_OK -> Checks if file is Writable
+     - X_OK -> Checks if file can be executed
+
+    ***
+    Returns:
+        bool: _description_
+    """  #     return False
+    if not os.path.isfile(filepath):
+        return False
+    return os.access(filepath, access_type)
+
+
+def check_dir_existence(
+    directory: typing.Union[str, pathlib.Path],
+) -> bool:
+    """Check if a directory exists. Returns a true if it exists"""
+    if isinstance(directory, pathlib.Path):
+        return bool(directory.is_dir())
+    return bool(os.path.isdir(directory))
 
 
 def check_file_on_path(
-    path: str | pathlib.Path,
-    filename: str | pathlib.Path,
+    path: typing.Union[typing.LiteralString, pathlib.Path],
+    filename: typing.Union[typing.LiteralString, pathlib.Path],
 ) -> bool:
-    """Return ``True`` if *filename* exists under *path*."""
-    return (pathlib.Path(path) / filename).exists()
+    """Check if file exists on path. Returns true if file exists on that specified directory"""
+    _filepath = os.path.join(path, filename)
+    return os.path.exists(_filepath)
 
 
-def get_file_name(filename: str | None) -> str:
-    """Extract the basename from a file path (handles ``/`` and ``\\``).
+def get_file_loc(filename) -> pathlib.Path: ...
 
-    Returns:
-        The last path component, or ``""`` if *filename* is falsy.
-    """
+
+def get_file_name(filename: typing.Optional[str]) -> str:
+    # If filename is None or empty, return empty string instead of None
     if not filename:
         return ""
-    return pathlib.PurePosixPath(filename.replace("\\", "/")).name
+    # Remove trailing slashes or backslashes
+    filename = filename.rstrip("/\\")
+
+    # Normalize Windows backslashes to forward slashes
+    filename = filename.replace("\\", "/")
+
+    parts = filename.split("/")
+
+    # Split and return the last path component
+    return parts[-1] if filename else ""
+
+
+# def get_hash(data) -> hashlib._Hash:
+#     hash = hashlib.sha256()
+#     hash.update(data.encode())
+#     hash.digest()
+#     return hash
+
+
+def digest_hash() -> None: ...
