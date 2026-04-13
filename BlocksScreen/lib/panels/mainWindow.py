@@ -714,6 +714,8 @@ class MainWindow(QtWidgets.QMainWindow):
             if self._popup_toggle:
                 return
             service_entry: dict = entry[0]
+            if not service_entry:
+                return
             service_name, service_info = next(iter(service_entry.items()))
             self.show_notifications.emit(
                 "mainwindow",

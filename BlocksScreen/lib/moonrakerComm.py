@@ -370,7 +370,8 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
             params = {}
         with self._state_lock:
             _connected = self.connected
-        if not _connected or self.ws is None:
+            _ws = self.ws
+        if not _connected or _ws is None:
             return False
 
         with self._request_lock:
@@ -384,7 +385,7 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
             "params": params,
             "id": _rid,
         }
-        self.ws.send(json.dumps(packet))
+        _ws.send(json.dumps(packet))
         return True
 
 
