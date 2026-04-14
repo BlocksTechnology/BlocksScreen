@@ -48,7 +48,7 @@ class Spoll_button(QtWidgets.QAbstractButton):
         self.status = s
         self.update()
 
-    def setSlotId(self, s: str):
+    def setGateId(self, s: str):
         self.slot_id = s
         self.update()
 
@@ -58,85 +58,14 @@ class Spoll_button(QtWidgets.QAbstractButton):
         painter.setRenderHint(painter.RenderHint.SmoothPixmapTransform)
         painter.setRenderHint(painter.RenderHint.LosslessImageRendering)
 
-        # # Selected: draw a colored border
-        # if self.isChecked():
-        #     border_pen = QtGui.QPen(QtGui.QColor(255, 255, 255))
-        #     border_pen.setWidth(2)
-        #     painter.setPen(border_pen)
 
-        # Gradient background
-        gradient = QtGui.QLinearGradient(
-            QtCore.QPointF(self.rect().bottomLeft()),
-            QtCore.QPointF(self.rect().topLeft()),
-        )
-
+        color = QtGui.QColor(self.color)
         white = QtGui.QColor(255, 255, 255)
-        color1 = QtGui.QColor(white)
-        color1.setAlpha(165)
-        color2 = QtGui.QColor(white)
-        color2.setAlpha(165)
-        color3 = QtGui.QColor(white)
-        color3.setAlpha(0)
 
-        gradient.setColorAt(0.0, color1)
-        gradient.setColorAt(0.1, color2)
-        gradient.setColorAt(0.11, color3)
-        painter.setBrush(gradient)
-        painter.drawRect(self.rect())
 
-        color1 = QtGui.QColor(self.color)
-        color1.setAlpha(255)
-        color2 = QtGui.QColor(self.color)
-        color2.setAlpha(255)
-        color3 = QtGui.QColor(self.color)
-        color3.setAlpha(0)
-
-        gradient.setColorAt(0.0, color1)
-        gradient.setColorAt(0.1, color2)
-        gradient.setColorAt(0.11, color3)
-        painter.setBrush(gradient)
-        painter.drawRect(self.rect().adjusted(1, 1, -1, -1))
-
-        gradient2 = QtGui.QLinearGradient(
-            QtCore.QPointF(self.rect().bottomLeft()),
-            QtCore.QPointF(self.rect().topLeft()),
-        )
-
-        gradient2.setColorAt(0.0, color1)
-        color2 = QtGui.QColor(QtGui.QColor(255, 255, 255))
-        color2.setAlpha(255)
-        gradient2.setColorAt(1, color2)
-
-        # Draw icon centered
-        icon_size = 80
-        scaled = self._icon.scaled(
-            icon_size,
-            icon_size,
-            QtCore.Qt.AspectRatioMode.KeepAspectRatio,
-            QtCore.Qt.TransformationMode.SmoothTransformation,
-        )
-        x = (self.width() - scaled.width()) // 2
-        y = (self.height() - scaled.height()) // 2
-
-        tinted = QtGui.QPixmap(scaled.size())
-        tinted.fill(QtCore.Qt.GlobalColor.transparent)
-        p2 = QtGui.QPainter(tinted)
-        p2.drawPixmap(0, 0, scaled)
-        p2.setCompositionMode(QtGui.QPainter.CompositionMode.CompositionMode_SourceIn)
-        p2.fillRect(tinted.rect(), gradient2)
-        p2.end()
-        painter.drawPixmap(x, y, tinted)
-
-        tinted = QtGui.QPixmap(scaled.size())
-        tinted.fill(QtCore.Qt.GlobalColor.transparent)
-
-        p2 = QtGui.QPainter(tinted)
-        p2.setCompositionMode(QtGui.QPainter.CompositionMode.CompositionMode_SourceIn)
-        p2.fillRect(
-            tinted.rect(),
-            QtGui.QColor(255, 255, 255) if self.isChecked() else QtGui.QColor(0, 0, 0),
-        )
-        p2.drawPixmap(x, y, scaled)
+        pen = QtGui.QPen(white)
+        pen.setWidth(2)
+        painter.setPen(pen)
 
         font = painter.font()
         font.setPointSize(12)
@@ -156,8 +85,49 @@ class Spoll_button(QtWidgets.QAbstractButton):
             QtCore.Qt.TextFlag.TextShowMnemonic | QtCore.Qt.AlignmentFlag.AlignCenter,
             str(self.slot_id),
         )
-        painter.setPen(QtCore.Qt.PenStyle.NoPen)
+
+
+        if not self.isChecked():
+            white.setAlpha(130)
+            color.setAlpha(130)
+        
+
+        rect = self.rect().adjusted(1, 1, -1, -1)
+        rect.setY(int(rect.height()- rect.height() * 0.15))
+        painter.fillRect(rect, color)
+
+
+        pen = QtGui.QPen(white)
+        pen.setWidth(2)
+        painter.setPen(pen)
+        rect = self.rect().adjusted(1, 1, -1, -1)
+        rect.setY(int(rect.height()- rect.height() * 0.15))
+        painter.drawRect(rect)
+
+        # Draw icon centered
+        icon_size = 80
+        scaled = self._icon.scaled(
+            icon_size,
+            icon_size,
+            QtCore.Qt.AspectRatioMode.KeepAspectRatio,
+            QtCore.Qt.TransformationMode.SmoothTransformation,
+        )
+        x = (self.width() - scaled.width()) // 2
+        y = (self.height() - scaled.height()) // 2
+
+        tinted = QtGui.QPixmap(scaled.size())
+        tinted.fill(QtCore.Qt.GlobalColor.transparent)
+        p2 = QtGui.QPainter(tinted)
+        p2.drawPixmap(0, 0, scaled)
+        p2.setCompositionMode(QtGui.QPainter.CompositionMode.CompositionMode_SourceIn)
+        p2.fillRect(tinted.rect(), white)
         p2.end()
+        painter.drawPixmap(x, y, tinted)
+
+        tinted = QtGui.QPixmap(scaled.size())
+        tinted.fill(QtCore.Qt.GlobalColor.transparent)
+
+        painter.setPen(QtCore.Qt.PenStyle.NoPen)
         painter.end()
 
 
@@ -264,7 +234,7 @@ class SpoolCarousel(QtWidgets.QWidget):
     ):
         btn = Spoll_button()
         btn.setColor(color)
-        btn.setSlotId(slot_id)
+        btn.setGateId(slot_id)
         btn.setStatus(status)
         self.button_group.addButton(btn, len(self.buttons))
         btn.clicked.connect(lambda checked, b=btn: self._on_btn_clicked(b))
@@ -577,14 +547,14 @@ if __name__ == "__main__":
     layout.setSpacing(16)
 
     spools = [
-        (QtGui.QColor(10, 10, 10), "S01", FilamentStates.LOADED),
-        (QtGui.QColor(46, 196, 160), "S02", FilamentStates.LOADED),
-        (QtGui.QColor(255, 186, 8), "S03", FilamentStates.UNLOADED),
-        (QtGui.QColor(255, 255, 255), "S04", FilamentStates.UNLOADED),
-        (QtGui.QColor(232, 68, 90), "S05", FilamentStates.LOADED),
-        (QtGui.QColor(80, 120, 220), "S06", FilamentStates.UNKNOWN),
-        (QtGui.QColor(180, 80, 220), "S07", FilamentStates.UNKNOWN),
-        (QtGui.QColor(220, 130, 60), "S08", FilamentStates.LOADED),
+        (QtGui.QColor(10, 10, 10), "Gate 1", FilamentStates.LOADED),
+        (QtGui.QColor(46, 196, 160), "Gate 2", FilamentStates.LOADED),
+        (QtGui.QColor(255, 186, 8), "Gate 3", FilamentStates.UNLOADED),
+        (QtGui.QColor(255, 255, 255), "Gate 4", FilamentStates.UNLOADED),
+        (QtGui.QColor(232, 68, 90), "Gate 5", FilamentStates.LOADED),
+        (QtGui.QColor(80, 120, 220), "Gate 6", FilamentStates.UNKNOWN),
+        (QtGui.QColor(180, 80, 220), "Gate 7", FilamentStates.UNKNOWN),
+        (QtGui.QColor(220, 130, 60), "Gate 8", FilamentStates.LOADED),
     ]
 
     amu = AMUWidget(amu_id=1, parent=window)
