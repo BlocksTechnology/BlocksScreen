@@ -102,7 +102,6 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self.printer.print_stats_update[str, dict].connect(self.on_print_stats_update)
         self.printer.print_stats_update[str, float].connect(self.on_print_stats_update)
 
-
         self.printer.save_variables_update.connect(self.on_save_variables_update)
         self.state = "standby"
 
@@ -157,7 +156,6 @@ class FilamentTab(QtWidgets.QStackedWidget):
                 return
         self.handle_filament_state()
 
-
     @QtCore.pyqtSlot(dict, name="on_load_filament")
     def on_load_filament(self, status: dict):
         """Handle load filament object updated"""
@@ -168,7 +166,9 @@ class FilamentTab(QtWidgets.QStackedWidget):
                 if self.state == "printing":
                     self.request_change_tab.emit(0)
                 return
-        self.call_load_panel.emit(True, f"Loading Filament\n{status['step'].capitalize()}")
+        self.call_load_panel.emit(
+            True, f"Loading Filament\n{status['step'].capitalize()}"
+        )
         self.handle_filament_state()
 
     @QtCore.pyqtSlot(dict, name="on_unload_filament")
@@ -179,7 +179,9 @@ class FilamentTab(QtWidgets.QStackedWidget):
                 self.target_temp = 0
                 self.call_load_panel.emit(False, "")
                 return
-        self.call_load_panel.emit(True, f"Unloading Filament\n{status['step'].capitalize()}")
+        self.call_load_panel.emit(
+            True, f"Unloading Filament\n{status['step'].capitalize()}"
+        )
         self.handle_filament_state()
 
     @QtCore.pyqtSlot(int, int, name="load_filament")

@@ -426,15 +426,15 @@ class MainWindow(QtWidgets.QMainWindow):
         self.filamentPanel.setCurrentIndex(0)
 
         if self.print_status == "printing":
-            self.printPanel.setCurrentIndex(self.printPanel.indexOf(self.printPanel.jobStatusPage_widget))
+            self.printPanel.setCurrentIndex(
+                self.printPanel.indexOf(self.printPanel.jobStatusPage_widget)
+            )
             return
         self.printPanel.setCurrentIndex(0)
         self.controlPanel.setCurrentIndex(0)
         self.utilitiesPanel.setCurrentIndex(0)
-        self.networkPanel.setCurrentIndex(0)     
+        self.networkPanel.setCurrentIndex(0)
         self.update_page.hide()
-        
-
 
     def current_panel_index(self) -> int:
         """Helper function to get the index of the current page in the current tab
