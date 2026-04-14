@@ -183,7 +183,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui.filament_type_icon.clicked.connect(
             lambda: self.global_change_page(
                 self.ui.main_content_widget.indexOf(self.ui.filamentTab),
-                self.filamentPanel.indexOf(self.filamentPanel.panel.load_page),
+                self.filamentPanel.indexOf(self.filamentPanel),
             )
         )
         self.ui.filament_type_icon.setText("PLA")
@@ -253,11 +253,14 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui.extruder_temp_display.display_format = "upper_downer"
         self.ui.bed_temp_display.display_format = "upper_downer"
 
-        self.controlPanel.call_load_panel.connect(self.show_LoadScreen)
-        self.filamentPanel.call_load_panel.connect(self.show_LoadScreen)
-        self.printPanel.call_load_panel.connect(self.show_LoadScreen)
-        self.utilitiesPanel.call_load_panel.connect(self.show_LoadScreen)
-        self.conn_window.call_load_panel.connect(self.show_LoadScreen)
+        self.controlPanel.call_load_panel.connect(self.show_loadscreen)
+        self.filamentPanel.call_load_panel.connect(self.show_loadscreen)
+        self.printPanel.call_load_panel.connect(self.show_loadscreen)
+        self.utilitiesPanel.call_load_panel.connect(self.show_loadscreen)
+        self.conn_window.call_load_panel.connect(self.show_loadscreen)
+
+        self.filamentPanel.request_change_tab.connect(self.global_change_tab)
+        self.printPanel.request_change_tab.connect(self.global_change_tab)
 
         self.loadscreen = BasePopup(self, floating=False, dialog=False)
         self.loadwidget = LoadingOverlayWidget(
@@ -280,6 +283,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.file_data.fileinfo.connect(self.cancelpage._show_screen_thumbnail)
         self.printPanel.call_cancel_panel.connect(self.handle_cancel_print)
 
+        self.print_status = "idle"
+
         if self.config.has_section("server"):
             self.bo_ws_startup.emit()
         self.reset_tab_indexes()
@@ -298,13 +303,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.cancelpage.show()
 
     @QtCore.pyqtSlot(bool, str, name="show-load-page")
-    def show_LoadScreen(self, show: bool = True, msg: str = ""):
+    def show_loadscreen(self, show: bool = True, msg: str = ""):
         """Show or hide the loading overlay, guarded by the calling panel's visibility."""
         _sender = self.sender()
-
-        if _sender == self.filamentPanel:
-            if not self.filamentPanel.isVisible():
-                return
         if _sender == self.controlPanel:
             if not self.controlPanel.isVisible():
                 return
@@ -314,7 +315,6 @@ class MainWindow(QtWidgets.QMainWindow):
         if _sender == self.utilitiesPanel:
             if not self.utilitiesPanel.isVisible():
                 return
-
         self.loadwidget.set_status_message(msg)
         if show:
             self.loadscreen.show()
@@ -348,8 +348,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.enable_tab_bar()
         self.ui.extruder_temp_display.clicked.disconnect()
         self.ui.bed_temp_display.clicked.disconnect()
-        self.ui.filament_type_icon.setDisabled(False)
-        self.ui.nozzle_size_icon.setDisabled(False)
         self.ui.extruder_temp_display.clicked.connect(
             lambda: self.global_change_page(
                 self.ui.main_content_widget.indexOf(self.ui.controlTab),
@@ -379,9 +377,6 @@ class MainWindow(QtWidgets.QMainWindow):
         """
 
         self.ui.main_content_widget.setTabEnabled(
-            self.ui.main_content_widget.indexOf(self.ui.filamentTab), True
-        )
-        self.ui.main_content_widget.setTabEnabled(
             self.ui.main_content_widget.indexOf(self.ui.controlTab), True
         )
         self.ui.main_content_widget.setTabEnabled(
@@ -390,9 +385,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui.header_main_layout.setEnabled(True)
         return all(
             [
-                not self.ui.main_content_widget.isTabEnabled(
-                    self.ui.main_content_widget.indexOf(self.ui.filamentTab)
-                ),
                 not self.ui.main_content_widget.isTabEnabled(
                     self.ui.main_content_widget.indexOf(self.ui.controlTab)
                 ),
@@ -415,9 +407,6 @@ class MainWindow(QtWidgets.QMainWindow):
             boolean: True if the TabBar was disabled
         """
         self.ui.main_content_widget.setTabEnabled(
-            self.ui.main_content_widget.indexOf(self.ui.filamentTab), False
-        )
-        self.ui.main_content_widget.setTabEnabled(
             self.ui.main_content_widget.indexOf(self.ui.controlTab), False
         )
         self.ui.main_content_widget.setTabEnabled(
@@ -426,9 +415,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui.header_main_layout.setEnabled(False)
         return all(
             [
-                not self.ui.main_content_widget.isTabEnabled(
-                    self.ui.main_content_widget.indexOf(self.ui.filamentTab)
-                ),
                 not self.ui.main_content_widget.isTabEnabled(
                     self.ui.main_content_widget.indexOf(self.ui.controlTab)
                 ),
@@ -467,12 +453,18 @@ class MainWindow(QtWidgets.QMainWindow):
         Used to grantee all tabs reset to their
         first page once the user leaves the tab
         """
-        self.update_page.hide()
-        self.printPanel.setCurrentIndex(0)
         self.filamentPanel.setCurrentIndex(0)
+
+        if self.print_status == "printing":
+            self.printPanel.setCurrentIndex(
+                self.printPanel.indexOf(self.printPanel.jobStatusPage_widget)
+            )
+            return
+        self.printPanel.setCurrentIndex(0)
         self.controlPanel.setCurrentIndex(0)
         self.utilitiesPanel.setCurrentIndex(0)
         self.networkPanel.setCurrentIndex(0)
+        self.update_page.hide()
 
     def current_panel_index(self) -> int:
         """Helper function to get the index of the current page in the current tab
@@ -533,7 +525,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 "Panel page index expected type int, %s", str(type(panel_index))
             )
 
-        self.show_LoadScreen(False)
+        self.show_loadscreen(False)
         current_page = [
             self.ui.main_content_widget.currentIndex(),
             self.current_panel_index(),
@@ -547,6 +539,22 @@ class MainWindow(QtWidgets.QMainWindow):
         self.set_current_panel_index(panel_index)
         _logger.debug(
             f"Requested page change -> Tab index : {requested_page[0]} | panel index : {requested_page[1]}",
+        )
+
+    def global_change_tab(self, tab_index: int) -> None:
+        """Changes the current tab while keeping the current panel page index if possible
+
+        Args:
+            tab_index (int): The index of the tab to change to
+        """
+        if not isinstance(tab_index, int):
+            _logger.debug(
+                "Tab index argument expected type int, got %s", str(type(tab_index))
+            )
+            return
+        self.ui.main_content_widget.setCurrentIndex(tab_index)
+        _logger.debug(
+            f"Requested tab change -> Tab index : {tab_index}",
         )
 
     @QtCore.pyqtSlot(name="request-back")
@@ -868,11 +876,10 @@ class MainWindow(QtWidgets.QMainWindow):
                 return True
             return False
         if event.type() == events.PrintStart.type():
+            self.print_status = "printing"
             self.disable_tab_bar()
             self.ui.extruder_temp_display.clicked.disconnect()
             self.ui.bed_temp_display.clicked.disconnect()
-            self.ui.filament_type_icon.setDisabled(True)
-            self.ui.nozzle_size_icon.setDisabled(True)
             self.ui.extruder_temp_display.clicked.connect(
                 lambda: self.global_change_page(
                     self.ui.main_content_widget.indexOf(self.ui.printTab),
@@ -892,13 +899,12 @@ class MainWindow(QtWidgets.QMainWindow):
             events.PrintComplete.type(),
             events.PrintCancelled.type(),
         ):
+            self.print_status = "idle"
             if event.type() == events.PrintCancelled.type():
                 self.handle_cancel_print()
             self.enable_tab_bar()
             self.ui.extruder_temp_display.clicked.disconnect()
             self.ui.bed_temp_display.clicked.disconnect()
-            self.ui.filament_type_icon.setDisabled(False)
-            self.ui.nozzle_size_icon.setDisabled(False)
             self.ui.extruder_temp_display.clicked.connect(
                 lambda: self.global_change_page(
                     self.ui.main_content_widget.indexOf(self.ui.controlTab),
