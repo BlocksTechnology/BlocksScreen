@@ -208,7 +208,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
             f"""SAVE_VARIABLE VARIABLE=filament_type VALUE='"{filament.value.name}"'"""
         )
         self.run_gcode.emit(
-            f"LOAD_FILAMENT TOOLHEAD=load_toolhead TEMPERATURE={filament.value.temperature}"
+            f"LOAD_FILAMENT TEMPERATURE={filament.value.temperature}"
         )
 
     @QtCore.pyqtSlot(str, int, name="unload_filament")
