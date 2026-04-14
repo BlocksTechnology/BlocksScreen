@@ -92,7 +92,6 @@ class FilamentTab(QtWidgets.QStackedWidget):
             lambda: self.request_change_tab.emit(0)
         )
         self.run_gcode.connect(self.ws.api.run_gcode)
-        self.printer.extruder_update.connect(self.on_extruder_update)
         self.printer.unload_filament_update.connect(self.on_unload_filament)
         self.printer.load_filament_update.connect(self.on_load_filament)
         self.printer.filament_switch_sensor_update.connect(
@@ -103,10 +102,9 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self.printer.print_stats_update[str, dict].connect(self.on_print_stats_update)
         self.printer.print_stats_update[str, float].connect(self.on_print_stats_update)
 
-        self.loadignore = True
-        self.unloadignore = True
 
         self.printer.save_variables_update.connect(self.on_save_variables_update)
+        self.state = "standby"
 
     def on_save_variables_update(self, save_variables: dict):
         """Handle query response"""
@@ -125,6 +123,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
         """Handle print stats object update"""
         if isinstance(value, str):
             if "state" in field:
+                self.state = value
                 if value in ("printing", "pausing", "paused", "resuming"):
                     self.panel.main_back_button.show()
                     self.panel.spacerItem1.changeSize(
@@ -134,8 +133,6 @@ class FilamentTab(QtWidgets.QStackedWidget):
                         QtWidgets.QSizePolicy.Policy.Minimum,
                     )
                 if value in ("standby"):
-                    self.loadignore = True
-                    self.unloadignore = True
                     self.panel.main_back_button.hide()
                     self.panel.spacerItem1.changeSize(
                         0,
@@ -160,63 +157,29 @@ class FilamentTab(QtWidgets.QStackedWidget):
                 return
         self.handle_filament_state()
 
-    @QtCore.pyqtSlot(str, str, float, name="on_extruder_update")
-    def on_extruder_update(
-        self, extruder_name: str, field: str, new_value: float
-    ) -> None:
-        """Handle extruder update"""
-        if not self.isVisible:
-            return
-        if not self.loadignore or not self.unloadignore:
-            if self.target_temp != 0:
-                if self.current_temp == self.target_temp:
-                    if self.isVisible:
-                        self.call_load_panel.emit(
-                            True, "Extruder heated up \n Please wait"
-                        )
-                    return
-                if field == "temperature":
-                    self.current_temp = round(new_value, 0)
-                    if self.isVisible:
-                        self.call_load_panel.emit(
-                            True,
-                            f"Heating up ({new_value}/{self.target_temp}) \n Please wait",
-                        )
-            if field == "target":
-                self.target_temp = round(new_value, 0)
-                if self.isVisible:
-                    self.call_load_panel.emit(True, "Heating up \n Please wait")
 
-    @QtCore.pyqtSlot(bool, name="on_load_filament")
-    def on_load_filament(self, status: bool):
+    @QtCore.pyqtSlot(dict, name="on_load_filament")
+    def on_load_filament(self, status: dict):
         """Handle load filament object updated"""
-        if not self.isVisible:
-            return
-        if self.loadignore:
-            return
-        if status:
-            self.call_load_panel.emit(True, "Loading Filament")
-        else:
-            self.loadignore = True
-            self.target_temp = 0
-            self.call_load_panel.emit(False, "")
-            self._filament_state = self.FilamentStates.LOADED
+        if "state" in status.keys():
+            if not status["state"]:
+                self.target_temp = 0
+                self.call_load_panel.emit(False, "")
+                if self.state == "printing":
+                    self.request_change_tab.emit(0)
+                return
+        self.call_load_panel.emit(True, f"Loading Filament\n{status['step'].capitalize()}")
         self.handle_filament_state()
 
-    @QtCore.pyqtSlot(bool, name="on_unload_filament")
-    def on_unload_filament(self, status: bool):
+    @QtCore.pyqtSlot(dict, name="on_unload_filament")
+    def on_unload_filament(self, status: dict):
         """Handle unload filament object updated"""
-        if not self.isVisible:
-            return
-        if self.unloadignore:
-            return
-        if status:
-            self.call_load_panel.emit(True, "Unloading Filament")
-        else:
-            self.unloadignore = True
-            self.call_load_panel.emit(False, "")
-            self.target_temp = 0
-            self._filament_state = self.FilamentStates.UNLOADED
+        if "state" in status.keys():
+            if not status["state"]:
+                self.target_temp = 0
+                self.call_load_panel.emit(False, "")
+                return
+        self.call_load_panel.emit(True, f"Unloading Filament\n{status['step'].capitalize()}")
         self.handle_filament_state()
 
     @QtCore.pyqtSlot(int, int, name="load_filament")
@@ -239,7 +202,6 @@ class FilamentTab(QtWidgets.QStackedWidget):
                 message="Filament is already loaded.",
             )
             return
-        self.loadignore = False
         self.call_load_panel.emit(True, "Loading Filament")
         self.run_gcode.emit(
             f"""SAVE_VARIABLE VARIABLE=filament_type VALUE='"{filament.value.name}"'"""
@@ -268,7 +230,6 @@ class FilamentTab(QtWidgets.QStackedWidget):
             return
 
         self.find_routine_objects()
-        self.unloadignore = False
         self.call_load_panel.emit(True, "Unloading Filament")
         self.run_gcode.emit(
             f"""SAVE_VARIABLE VARIABLE=filament_type VALUE='"{FilamentTypes.UNKNOWN.value.name}"'"""

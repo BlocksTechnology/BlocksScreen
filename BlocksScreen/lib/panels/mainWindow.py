@@ -175,7 +175,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui.filament_type_icon.clicked.connect(
             lambda: self.global_change_page(
                 self.ui.main_content_widget.indexOf(self.ui.filamentTab),
-                self.filamentPanel.indexOf(self.filamentPanel.panel.load_page),
+                self.filamentPanel.indexOf(self.filamentPanel),
             )
         )
         self.ui.filament_type_icon.setText("PLA")
@@ -294,10 +294,6 @@ class MainWindow(QtWidgets.QMainWindow):
     def show_LoadScreen(self, show: bool = True, msg: str = ""):
         """Show or hide the loading overlay, guarded by the calling panel's visibility."""
         _sender = self.sender()
-
-        if _sender == self.filamentPanel:
-            if not self.filamentPanel.isVisible():
-                return
         if _sender == self.controlPanel:
             if not self.controlPanel.isVisible():
                 return
@@ -307,7 +303,6 @@ class MainWindow(QtWidgets.QMainWindow):
         if _sender == self.utilitiesPanel:
             if not self.utilitiesPanel.isVisible():
                 return
-
         self.loadwidget.set_status_message(msg)
         if show:
             self.loadscreen.show()
@@ -341,8 +336,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.enable_tab_bar()
         self.ui.extruder_temp_display.clicked.disconnect()
         self.ui.bed_temp_display.clicked.disconnect()
-        self.ui.filament_type_icon.setDisabled(False)
-        self.ui.nozzle_size_icon.setDisabled(False)
         self.ui.extruder_temp_display.clicked.connect(
             lambda: self.global_change_page(
                 self.ui.main_content_widget.indexOf(self.ui.controlTab),
@@ -430,14 +423,18 @@ class MainWindow(QtWidgets.QMainWindow):
         Used to grantee all tabs reset to their
         first page once the user leaves the tab
         """
-        if self.print_status == "printing":
-            return
-        self.update_page.hide()
-        self.printPanel.setCurrentIndex(0)
         self.filamentPanel.setCurrentIndex(0)
+
+        if self.print_status == "printing":
+            self.printPanel.setCurrentIndex(self.printPanel.indexOf(self.printPanel.jobStatusPage_widget))
+            return
+        self.printPanel.setCurrentIndex(0)
         self.controlPanel.setCurrentIndex(0)
         self.utilitiesPanel.setCurrentIndex(0)
-        self.networkPanel.setCurrentIndex(0)
+        self.networkPanel.setCurrentIndex(0)     
+        self.update_page.hide()
+        
+
 
     def current_panel_index(self) -> int:
         """Helper function to get the index of the current page in the current tab
@@ -840,8 +837,6 @@ class MainWindow(QtWidgets.QMainWindow):
             self.disable_tab_bar()
             self.ui.extruder_temp_display.clicked.disconnect()
             self.ui.bed_temp_display.clicked.disconnect()
-            self.ui.filament_type_icon.setDisabled(True)
-            self.ui.nozzle_size_icon.setDisabled(True)
             self.ui.extruder_temp_display.clicked.connect(
                 lambda: self.global_change_page(
                     self.ui.main_content_widget.indexOf(self.ui.printTab),
@@ -867,8 +862,6 @@ class MainWindow(QtWidgets.QMainWindow):
             self.enable_tab_bar()
             self.ui.extruder_temp_display.clicked.disconnect()
             self.ui.bed_temp_display.clicked.disconnect()
-            self.ui.filament_type_icon.setDisabled(False)
-            self.ui.nozzle_size_icon.setDisabled(False)
             self.ui.extruder_temp_display.clicked.connect(
                 lambda: self.global_change_page(
                     self.ui.main_content_widget.indexOf(self.ui.controlTab),
