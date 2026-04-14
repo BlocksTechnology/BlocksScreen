@@ -34,6 +34,12 @@ from screensaver import ScreenSaver
 
 _logger = logging.getLogger(__name__)
 
+_GCODE_POPUP_MESSAGES: tuple[tuple[str, str], ...] = (
+    ("filament runout", "Filament Runout"),
+    ("no filament", "No Filament Detected"),
+    ("sensor not in valid range", "Eddy Current Sensor:\nnot in valid range"),
+)
+
 
 def api_handler(func):
     """Decorator for methods that handle api responses"""
@@ -112,6 +118,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui.setupUi(self)
         self.screensaver = ScreenSaver(self)
         self._popup_toggle: bool = False
+        self._klippy_ready: bool = False
         self.ui.main_content_widget.setCurrentIndex(0)
 
         usb_config = self.config.get_section("usb_manager", fallback=None)
@@ -145,6 +152,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.conn_window.on_websocket_connection_achieved
         )
         self.ws.connection_lost.connect(self.conn_window.on_websocket_connection_lost)
+        self.ws.klippy_state_signal.connect(self._on_klippy_state)
         self.printer.webhooks_update.connect(self.conn_window.webhook_update)
         self.printPanel.request_back.connect(slot=self.global_back)
         self.printPanel.on_cancel_print.connect(slot=self.on_cancel_print)
@@ -214,7 +222,11 @@ class MainWindow(QtWidgets.QMainWindow):
         self.handle_error_response.connect(
             self.controlPanel.probe_helper_page.handle_error_response
         )
+        self.controlPanel.probe_helper_page.show_notifications.connect(
+            self.notiPage.new_notication
+        )
         self.controlPanel.disable_popups.connect(self.popup_toggle)
+        self.controlPanel.lock_ui.connect(self.set_ui_lock)
         self.on_update_message.connect(self.update_page.handle_update_message)
         self.update_page.request_full_update.connect(self.ws.api.full_update)
         self.update_page.request_recover_repo[str].connect(
@@ -417,6 +429,24 @@ class MainWindow(QtWidgets.QMainWindow):
     def popup_toggle(self, toggle: bool) -> None:
         """Toggles app popups"""
         self._popup_toggle = toggle
+
+    @QtCore.pyqtSlot(bool, name="set-ui-lock")
+    def set_ui_lock(self, locked: bool) -> None:
+        """Lock or unlock navigation during calibration.
+
+        Disables all tabs except controlTab (where calibration lives) and
+        the header, so the user cannot navigate away mid-calibration.
+        """
+        for tab in (self.ui.printTab, self.ui.filamentTab, self.ui.utilitiesTab):
+            self.ui.main_content_widget.setTabEnabled(
+                self.ui.main_content_widget.indexOf(tab), not locked
+            )
+        self.ui.header_main_layout.setEnabled(not locked)
+
+    @QtCore.pyqtSlot(str, name="on-klippy-state")
+    def _on_klippy_state(self, state: str) -> None:
+        """Track Klippy readiness to suppress spurious error popups during disconnect."""
+        self._klippy_ready = state == "ready"
 
     def reset_tab_indexes(self):
         """
@@ -717,16 +747,29 @@ class MainWindow(QtWidgets.QMainWindow):
             if self._popup_toggle:
                 return
             _gcode_msg_type, _message = str(_gcode_response[0]).split(" ", maxsplit=1)
-            popupWhitelist = ["filament runout", "no filament"]
-            if _message.lower() not in popupWhitelist or _gcode_msg_type != "!!":
+            _msg_lower = _message.lower()
+            _display = next(
+                (
+                    fmt
+                    for pattern, fmt in _GCODE_POPUP_MESSAGES
+                    if pattern in _msg_lower
+                ),
+                None,
+            )
+            if _gcode_msg_type != "!!" or _display is None:
                 return
-            self.show_notifications.emit("mainwindow", _message, 3, True)
+            self.show_notifications.emit("mainwindow", _display, 3, True)
 
     @api_handler
     def _handle_error_message(self, method, data, metadata) -> None:
         """Handle error messages from Moonraker API."""
         self.handle_error_response[list].emit([data, metadata])
         if self._popup_toggle:
+            return
+
+        # Suppress error popups while Klippy is disconnected/shutting down.
+        # Those errors are side-effects of the disconnect, not actionable by the user.
+        if not self._klippy_ready:
             return
 
         text = data.get("message", str(data)) if isinstance(data, dict) else str(data)
@@ -880,4 +923,4 @@ class MainWindow(QtWidgets.QMainWindow):
     def sizeHint(self) -> QtCore.QSize:
         """Sets default size for the widget"""
         self.adjustSize()
-        return super().sizeHint(QtCore.QSize(800, 480))
+        return QtCore.QSize(800, 480)
