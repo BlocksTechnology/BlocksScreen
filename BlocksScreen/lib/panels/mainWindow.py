@@ -241,11 +241,11 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui.extruder_temp_display.display_format = "upper_downer"
         self.ui.bed_temp_display.display_format = "upper_downer"
 
-        self.controlPanel.call_load_panel.connect(self.show_LoadScreen)
-        self.filamentPanel.call_load_panel.connect(self.show_LoadScreen)
-        self.printPanel.call_load_panel.connect(self.show_LoadScreen)
-        self.utilitiesPanel.call_load_panel.connect(self.show_LoadScreen)
-        self.conn_window.call_load_panel.connect(self.show_LoadScreen)
+        self.controlPanel.call_load_panel.connect(self.show_loadscreen)
+        self.filamentPanel.call_load_panel.connect(self.show_loadscreen)
+        self.printPanel.call_load_panel.connect(self.show_loadscreen)
+        self.utilitiesPanel.call_load_panel.connect(self.show_loadscreen)
+        self.conn_window.call_load_panel.connect(self.show_loadscreen)
 
         self.filamentPanel.request_change_tab.connect(self.global_change_tab)
         self.printPanel.request_change_tab.connect(self.global_change_tab)
@@ -291,7 +291,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.cancelpage.show()
 
     @QtCore.pyqtSlot(bool, str, name="show-load-page")
-    def show_LoadScreen(self, show: bool = True, msg: str = ""):
+    def show_loadscreen(self, show: bool = True, msg: str = ""):
         """Show or hide the loading overlay, guarded by the calling panel's visibility."""
         _sender = self.sender()
         if _sender == self.controlPanel:
@@ -495,7 +495,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 "Panel page index expected type int, %s", str(type(panel_index))
             )
 
-        self.show_LoadScreen(False)
+        self.show_loadscreen(False)
         current_page = [
             self.ui.main_content_widget.currentIndex(),
             self.current_panel_index(),
