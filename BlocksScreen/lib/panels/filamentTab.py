@@ -5,7 +5,6 @@ import logging
 from lib.printer import Printer
 from lib.filament import Filament
 from lib.ui.filamentStackedWidget_ui import Ui_filamentStackedWidget
-from configfile import get_configparser
 from lib.panels.widgets.popupDialogWidget import Popup
 from PyQt6 import QtCore, QtGui, QtWidgets
 
@@ -55,7 +54,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self._filament_state = self.FilamentStates.UNKNOWN
         self.filament_type = FilamentTypes.UNKNOWN
 
-        cfg = get_configparser()
+        cfg = parent.config
         if cfg.has_section("filament_presence"):
             i = cfg.get_section("filament_presence", None)
             self.filament_sensor = i.get("name", str, None)
