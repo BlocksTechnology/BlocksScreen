@@ -156,6 +156,20 @@ class TestUpdateMMUState:
         manager.update_mmu_state(_FULL_STATUS)
         assert manager.get_state().gate_speed_override == ()
 
+    def test_from_status_parses_endless_spool_groups(self, manager) -> None:
+        data = {**_FULL_STATUS, "endless_spool_groups": [0, 1, 3,0]}
+        manager.update_mmu_state(data)
+        assert manager.get_state().endless_spool_groups == (0, 1, 3, 0)
+
+    def test_from_status_endless_spool_groups_defaults_to_empty(self, manager) -> None:
+        manager.update_mmu_state(_FULL_STATUS)
+        assert manager.get_state().endless_spool_groups == ()
+
+    def test_apply_diff_updates_endless_spool_groups(self, manager) -> None:
+        manager.update_mmu_state(_FULL_STATUS)
+        manager.update_mmu_state({"endless_spool_groups": [0, 0, 1, 1]})
+        assert manager.get_state().endless_spool_groups == (0, 0, 1, 1)
+
 
 class TestGcodeSignals:
     def test_set_gate_info(self, manager, qtbot) -> None:
@@ -265,15 +279,15 @@ class TestPregateSensors:
     def test_pre_gate_happy_path(self, manager) -> None:
         manager.update_mmu_state(_FULL_STATUS)
         data: dict[str, bool] = {"filament_detected": True}
-        manager.on_pre_gate_update(data, "Mmu Pre Gate 0")
-        manager.on_pre_gate_update(data, "Mmu Pre Gate 1")
-        manager.on_pre_gate_update(data, "Mmu Pre Gate 2")
-        manager.on_pre_gate_update(data, "Mmu Pre Gate 3")
+        manager.on_pre_gate_update(data, "mmu_pre_gate_0")
+        manager.on_pre_gate_update(data, "mmu_pre_gate_1")
+        manager.on_pre_gate_update(data, "mmu_pre_gate_2")
+        manager.on_pre_gate_update(data, "mmu_pre_gate_3")
         assert manager.get_pre_gate_sensors() == {0: True, 1: True, 2: True, 3: True}
 
     def test_pre_gate_emits_signal(self, manager, qtbot) -> None:
         with qtbot.waitSignal(manager.pre_gate_changed) as blocker:
-            manager.on_pre_gate_update({"filament_detected": True}, "Mmu Pre Gate 0")
+            manager.on_pre_gate_update({"filament_detected": True}, "mmu_pre_gate_0")
         assert blocker.args == [0, True]
 
     def test_non_mmu_sensor_ignored(self, manager, qtbot) -> None:
@@ -281,14 +295,14 @@ class TestPregateSensors:
             manager.on_pre_gate_update({"filament_detected": True}, "Toolhead Sensor")
 
     def test_pre_gate_stores_state(self, manager) -> None:
-        manager.on_pre_gate_update({"filament_detected": True}, "Mmu Pre Gate 2")
+        manager.on_pre_gate_update({"filament_detected": True}, "mmu_pre_gate_2")
         assert manager.get_pre_gate_sensors() == {2: True}
 
     def test_pre_gate_filament_not_detected(self, manager) -> None:
-        manager.on_pre_gate_update({"filament_detected": True}, "Mmu Pre Gate 0")
-        manager.on_pre_gate_update({"filament_detected": False}, "Mmu Pre Gate 1")
-        manager.on_pre_gate_update({"filament_detected": True}, "Mmu Pre Gate 2")
-        manager.on_pre_gate_update({"filament_detected": False}, "Mmu Pre Gate 3")
+        manager.on_pre_gate_update({"filament_detected": True}, "mmu_pre_gate_0")
+        manager.on_pre_gate_update({"filament_detected": False}, "mmu_pre_gate_1")
+        manager.on_pre_gate_update({"filament_detected": True}, "mmu_pre_gate_2")
+        manager.on_pre_gate_update({"filament_detected": False}, "mmu_pre_gate_3")
         assert manager.get_pre_gate_sensors() == {0: True, 1: False, 2: True, 3: False}
 
     def test_pre_gate_empty(self, manager) -> None:
@@ -296,23 +310,23 @@ class TestPregateSensors:
 
     def test_pre_gate_multiple_emits(self, manager, qtbot) -> None:
         with qtbot.waitSignal(manager.pre_gate_changed) as blocker:
-            manager.on_pre_gate_update({"filament_detected": False}, "Mmu Pre Gate 0")
+            manager.on_pre_gate_update({"filament_detected": False}, "mmu_pre_gate_0")
         assert blocker.args == [0, False]
         with qtbot.waitSignal(manager.pre_gate_changed) as blocker:
-            manager.on_pre_gate_update({"filament_detected": True}, "Mmu Pre Gate 1")
+            manager.on_pre_gate_update({"filament_detected": True}, "mmu_pre_gate_1")
         assert blocker.args == [1, True]
         with qtbot.waitSignal(manager.pre_gate_changed) as blocker:
-            manager.on_pre_gate_update({"filament_detected": False}, "Mmu Pre Gate 2")
+            manager.on_pre_gate_update({"filament_detected": False}, "mmu_pre_gate_2")
         assert blocker.args == [2, False]
         with qtbot.waitSignal(manager.pre_gate_changed) as blocker:
-            manager.on_pre_gate_update({"filament_detected": True}, "Mmu Pre Gate 3")
+            manager.on_pre_gate_update({"filament_detected": True}, "mmu_pre_gate_3")
         assert blocker.args == [3, True]
 
     def test_pre_gate_update_is_dict(self, manager) -> None:
         assert isinstance(manager.get_pre_gate_sensors(), dict)
 
     def test_klippy_disconnect_clears_pre_gate_sensors(self, manager) -> None:
-        manager.on_pre_gate_update({"filament_detected": True}, "Mmu Pre Gate 0")
+        manager.on_pre_gate_update({"filament_detected": True}, "mmu_pre_gate_0")
         manager.on_klippy_state("disconnect")
         assert manager.get_pre_gate_sensors() == {}
 

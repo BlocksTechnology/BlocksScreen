@@ -77,6 +77,7 @@ class MMUState:
     operation: str = ""
     sensors: dict = dataclasses.field(default_factory=dict)
     gate_speed_override: tuple[float, ...] = dataclasses.field(default_factory=tuple)
+    endless_spool_groups: tuple[int, ...] = dataclasses.field(default_factory=tuple)
 
     @property
     def is_paused(self) -> bool:
@@ -110,6 +111,10 @@ class MMUState:
         filament_name = data.get("gate_filament_name", [""] * num_gates)
         temperature = data.get("gate_temperature", [None] * num_gates)
         speed_override = data.get("gate_speed_override", [])
+        weight_g = data.get("gate_weight_g", [None] * num_gates)
+        remaining_weight_list = data.get("gate_remaining_weight", [None] * num_gates)
+        bed_temperature_list = data.get("gate_bed_temp", [None] * num_gates)
+        mid_usage_list = data.get("gate_mid_usage", [False] * num_gates)
 
         gates: tuple[GateInfo, ...] = tuple(
             GateInfo(
@@ -121,6 +126,10 @@ class MMUState:
                 spool_id=spool_ids[i],
                 filament_name=filament_name[i],
                 temperature=temperature[i],
+                weight_g=weight_g[i],
+                remaining_weight=remaining_weight_list[i],
+                bed_temp=bed_temperature_list[i],
+                mid_usage=mid_usage_list[i],
             )
             for i in range(num_gates)
         )
@@ -145,6 +154,7 @@ class MMUState:
             operation=data.get("operation", ""),
             sensors=dict(data.get("sensors", {})),
             gate_speed_override=tuple(speed_override),
+            endless_spool_groups=tuple(data.get("endless_spool_groups", [])),
         )
 
     def gate_for_tool(self, tool: int) -> int:
@@ -187,6 +197,10 @@ class MMUState:
                 scalar_fields["spoolman_support"] = SpoolmanSupport(
                     scalar_fields["spoolman_support"]
                 )
+            if "endless_spool_groups" in scalar_fields:
+                scalar_fields["endless_spool_groups"] = tuple(
+                    scalar_fields["endless_spool_groups"]
+                )
             return dataclasses.replace(self, **scalar_fields)
         # Gate arrays changed — need full rebuild, but we lost the raw arrays
         # Pass current gate data + diff into from_status
@@ -199,6 +213,10 @@ class MMUState:
             "gate_filament_name": [g.filament_name for g in self.gates],
             "gate_speed_override": list(self.gate_speed_override),
             "gate_temperature": [g.temperature for g in self.gates],
+            "gate_weight_g": [g.weight_g for g in self.gates],
+            "gate_remaining_weight": [g.remaining_weight for g in self.gates],
+            "gate_bed_temp": [g.bed_temp for g in self.gates],
+            "gate_mid_usage": [g.mid_usage for g in self.gates],
         }
         merged = {**dataclasses.asdict(self), **gate_data, **diff}
         return MMUState.from_status(merged)

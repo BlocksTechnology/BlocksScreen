@@ -67,6 +67,8 @@ class AMUManager(QtCore.QObject):
         Extracts material, color, weight from the Spoolman response dict,
         emits MMU_GATE_MAP gcode to sync Klipper, and updates the local GateInfo weight.
         """
+        if self._mmu_state is None:
+            return
         filament = data.get("filament", {})
         material = filament.get("material", "")
         color = filament.get("color_hex", "")
@@ -84,32 +86,25 @@ class AMUManager(QtCore.QObject):
             filament_name=filament_name,
             temperature=temperature,
         )
-        if self._mmu_state is not None:
-            if gate >= len(self._mmu_state.gates):
-                logger.warning(
-                    "Gate index %d out of range (%d gates)",
-                    gate,
-                    len(self._mmu_state.gates),
-                )
-                return
-            gates = list(self._mmu_state.gates)
-            updates = {}
-            if weight is not None:
-                updates["weight_g"] = float(weight)
-            if remaining_weight is not None:
-                updates["remaining_weight"] = float(remaining_weight)
-                self._emit_speed_gcode(gate, remaining_weight)
-            if filament_name:
-                updates["filament_name"] = filament_name
-            if temperature is not None:
-                updates["temperature"] = float(temperature)
-            if bed_temp is not None:
-                updates["bed_temp"] = int(bed_temp)
-            if updates:
-                gates[gate] = dataclasses.replace(gates[gate], **updates)
-                self._mmu_state = dataclasses.replace(
-                    self._mmu_state, gates=tuple(gates)
-                )
+        gates = list(self._mmu_state.gates)
+        if gate >= len(gates):
+            logger.warning("Gate index %d out of range (%d gate)", gate, len(gates))
+            return
+        updates = {}
+        if weight is not None:
+            updates["weight_g"] = float(weight)
+        if remaining_weight is not None:
+            updates["remaining_weight"] = float(remaining_weight)
+            self._emit_speed_gcode(gate, remaining_weight)
+        if filament_name:
+            updates["filament_name"] = filament_name
+        if temperature is not None:
+            updates["temperature"] = float(temperature)
+        if bed_temp is not None:
+            updates["bed_temp"] = int(bed_temp)
+        if updates:
+            gates[gate] = dataclasses.replace(gates[gate], **updates)
+            self._mmu_state = dataclasses.replace(self._mmu_state, gates=tuple(gates))
 
     def _emit_speed_gcode(self, gate: int, remaining_weight: float) -> None:
         """Emit MMU_GATE_MAP SPEED=x for the gate based on the spool weight profile."""
@@ -258,7 +253,7 @@ class AMUManager(QtCore.QObject):
         self.run_gcode_signal.emit(f"MMU_EJECT GATE={gate}")
 
     def eject_all_gates(self, num_gates: int) -> None:
-        """Fully eject filament from all gates sequentially(amu_manager.get_state().num_gates)
+        """Fully eject filament from all gates sequentially
 
         Args:
            num_gates: Total number of gates(from MMUState.num_gates)
@@ -303,10 +298,10 @@ class AMUManager(QtCore.QObject):
             self.on_load_cell_update(values, object_name)
 
     def on_pre_gate_update(self, values: dict, name: str) -> None:
-        if not name.startswith("Mmu Pre Gate "):
+        if not name.startswith("mmu_pre_gate_"):
             return
         try:
-            gate = int(name.removeprefix("Mmu Pre Gate "))
+            gate = int(name.removeprefix("mmu_pre_gate_"))
         except ValueError:
             logger.error("Failed to parse Pre-Gate: %s", name)
             return
@@ -316,7 +311,7 @@ class AMUManager(QtCore.QObject):
 
     def on_load_cell_update(self, values: dict, name: str) -> None:
         """Update gate weight from a Klipper load_cell sensor reading"""
-        if self._mmu_state is None:
+        if self._mmu_state is None or not name.startswith("load_cell_mmu_"):
             return
         try:
             gate = int(name.removeprefix("load_cell_mmu_"))
@@ -324,7 +319,7 @@ class AMUManager(QtCore.QObject):
             logger.error("Failed parsing %s Load cell", name)
             return
 
-        weight = float(values.get("force", 0))
+        weight = float(values.get("force") or 0)
         if gate >= len(self._mmu_state.gates):
             logger.warning(
                 "Gate index %d out of range (%d gates)",
