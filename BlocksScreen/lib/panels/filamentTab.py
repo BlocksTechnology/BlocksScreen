@@ -39,7 +39,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
         def __repr__(self) -> str:
             return "<%s.%s>" % (self.__class__.__name__, self._name_)
 
-    def __init__(self, parent: QtWidgets.QWidget, printer: Printer, ws, /) -> None:
+    def __init__(self, parent, printer: Printer, ws, config, /) -> None:
         super().__init__(parent)
         self.panel = Ui_filamentStackedWidget()
         self.panel.setupUi(self)
@@ -54,7 +54,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self._filament_state = self.FilamentStates.UNKNOWN
         self.filament_type = FilamentTypes.UNKNOWN
 
-        cfg = parent.config
+        cfg = config
         if cfg.has_section("filament_presence"):
             i = cfg.get_section("filament_presence", None)
             self.filament_sensor = i.get("name", str, None)
