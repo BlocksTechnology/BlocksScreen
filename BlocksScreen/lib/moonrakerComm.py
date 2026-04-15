@@ -280,9 +280,10 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
                         metadata=_entry,
                     )
         elif "method" in response:
-            if (
-                str(response["method"]).lower() == "notify_klippy_disconnected"
-            ):  # Checkout for notify_klippy_disconnect
+            if str(response["method"]).lower() in (
+                "notify_klippy_disconnected",
+                "notify_klippy_shutdown",
+            ):
                 self.evaluate_klippy_status()
 
             message_event = (
