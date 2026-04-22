@@ -601,6 +601,12 @@ class Printer(QtCore.QObject):
                 "measured_max_temp",
                 values["measured_max_temp"],
             )
+        if "humidity" in values.keys(): 
+            self.temperature_sensor_update.emit(
+                    temperature_sensor_name, 
+                    "humidity", 
+                    values["humidity"]
+            )
 
     def _temperature_fan_object_updated(
         self, values: dict, temperature_fan_name: str = ""
