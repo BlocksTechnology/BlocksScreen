@@ -252,13 +252,17 @@ class AMUManager(QtCore.QObject):
         """
         self.run_gcode_signal.emit(f"MMU_SELECT Gate={tool}")
 
-    def eject_gate(self, gate: int) -> None:
+    def eject_gate(self) -> None:
         """Fully eject filament from gate, releasing from MMU gear.
 
         Args:
             gate: Gate index to eject from, on None to use currently selected gate.
         """
         self.run_gcode_signal.emit("MMU_EJECT")
+
+    def check_gate(self) -> None:
+        """Check the current gate for filament presence by sending MMU_CHECK_GATE."""
+        self.run_gcode_signal.emit("MMU_CHECK_GATE")
 
     def eject_all_gates(self, num_gates: int) -> None:
         """Fully eject filament from all gates sequentially
