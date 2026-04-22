@@ -72,7 +72,7 @@ def _make_key_font(size: int = 29) -> QtGui.QFont:
     return font
 
 
-class CustomQwertyKeyboard(QtWidgets.QWidget):
+class CustomQwertyKeyboard(QtWidgets.QDialog):
     """Custom on-screen QWERTY keyboard for touch input."""
 
     value_selected: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
@@ -90,6 +90,9 @@ class CustomQwertyKeyboard(QtWidgets.QWidget):
 
         self._setup_ui()
         self.setCursor(QtCore.Qt.CursorShape.BlankCursor)
+        self.setWindowFlags(
+            QtCore.Qt.WindowType.Popup | QtCore.Qt.WindowType.FramelessWindowHint
+        )
 
         for btn in self._key_buttons:
             btn.clicked.connect(lambda _, b=btn: self.value_inserted(b.text()))
@@ -104,7 +107,12 @@ class CustomQwertyKeyboard(QtWidgets.QWidget):
 
         self.inserted_value.setText("")
 
+        self.setObjectName("MyParent")
+
         self.setStyleSheet(
+            "#MyParent {"
+            "  background-image: url(:/background/media/1st_background.png);"
+            "}"
             "QPushButton {"
             "  background-color: #dfdfdf;"
             "  border-radius: 10px;"
@@ -121,6 +129,36 @@ class CustomQwertyKeyboard(QtWidgets.QWidget):
             "}"
         )
         self.handle_keyboard_layout()
+
+    def _get_mainWindow_widget(self) -> typing.Optional[QtWidgets.QMainWindow]:
+        """Get the main application window"""
+        app_instance = QtWidgets.QApplication.instance()
+        if not app_instance:
+            return None
+        main_window = app_instance.activeWindow()
+        if main_window is None:
+            for widget in app_instance.allWidgets():
+                if isinstance(widget, QtWidgets.QMainWindow):
+                    main_window = widget
+                    break
+        return main_window if isinstance(main_window, QtWidgets.QMainWindow) else None
+
+    def _geometry_calc(self) -> None:
+        """Calculate dialog widget position relative to the window"""
+        main_window = self._get_mainWindow_widget()
+        if main_window is None:
+            return
+
+        x = main_window.geometry().x()
+        y = main_window.geometry().y()
+        width = main_window.width()
+        height = main_window.height()
+
+        self.setGeometry(x, y, width, height)
+
+    def show(self) -> None:
+        self._geometry_calc()
+        return super().show()
 
     def handle_keyboard_layout(self) -> None:
         """Update key labels based on current shift/keychange state."""
