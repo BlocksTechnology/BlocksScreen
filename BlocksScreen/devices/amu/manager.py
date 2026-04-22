@@ -232,17 +232,25 @@ class AMUManager(QtCore.QObject):
         """Reset the MMU and clear any pause or error state by sending MMU_RESET."""
         self.run_gcode_signal.emit("MMU_RESET")
 
-    def load_gate(self, gate: int) -> None:
+    def load_gate(self) -> None:
         """Load filament from the specified gate by sending MMU_LOAD
 
         Args:
             gate (int): Gate index to select (0-based)
         """
-        self.run_gcode_signal.emit(f"MMU_SELECT gate={gate}\nMMU_LOAD")
+        self.run_gcode_signal.emit("MMU_LOAD")
 
     def unload(self) -> None:
         """Unload the currently loaded filament by sending MMU_UNLOAD."""
         self.run_gcode_signal.emit("MMU_UNLOAD")
+
+    def select_tool(self, tool: int) -> None:
+        """Change to the specified tool by sending MMU_CHANGE_TOOL
+
+        Args:
+            tool (int): Tool index to select (0-based)
+        """
+        self.run_gcode_signal.emit(f"MMU_SELECT Gate={tool}")
 
     def eject_gate(self, gate: int) -> None:
         """Fully eject filament from gate, releasing from MMU gear.
@@ -250,7 +258,7 @@ class AMUManager(QtCore.QObject):
         Args:
             gate: Gate index to eject from, on None to use currently selected gate.
         """
-        self.run_gcode_signal.emit(f"MMU_EJECT GATE={gate}")
+        self.run_gcode_signal.emit("MMU_EJECT")
 
     def eject_all_gates(self, num_gates: int) -> None:
         """Fully eject filament from all gates sequentially
@@ -261,7 +269,7 @@ class AMUManager(QtCore.QObject):
         cmd: str = "\n".join(f"MMU_EJECT GATE={i}" for i in range(num_gates))
         self.run_gcode_signal.emit(cmd)
 
-    def select_tool(self, tool: int) -> None:
+    def change_tool(self, tool: int) -> None:
         """Select a tool, triggering a filament change if needed.
 
         Args:
