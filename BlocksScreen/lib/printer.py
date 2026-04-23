@@ -589,6 +589,10 @@ class Printer(QtCore.QObject):
             self.temperature_sensor_update.emit(
                 temperature_sensor_name, "temperature", values["temperature"]
             )
+        if "humidity" in values.keys():
+            self.temperature_sensor_update.emit(
+                temperature_sensor_name, "humidity", values["humidity"]
+            )
         if "measured_min_temp" in values.keys():
             self.temperature_sensor_update.emit(
                 temperature_sensor_name,
