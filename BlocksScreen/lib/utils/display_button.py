@@ -11,13 +11,14 @@ class DisplayButton(QtWidgets.QPushButton):
             super().__init__()
 
         self.icon_pixmap: QtGui.QPixmap = QtGui.QPixmap()
+        self.icon_pixmap_secondary: QtGui.QPixmap = QtGui.QPixmap()
         self.highlight_color = "#2AC9F9"
         self._button_type = "display"
         self.text_formatting: str = ""
         self._text: str = ""
         self._secondary_text: str = ""
         self._name: str = ""
-        self.display_format: typing.Literal["normal", "upper_downer"] = "normal"
+        self.display_format: typing.Literal["normal", "upper_downer", "dual"] = "normal"
         self.text_color: QtGui.QColor = QtGui.QColor(0, 0, 0)
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_AcceptTouchEvents, True)
 
@@ -29,6 +30,11 @@ class DisplayButton(QtWidgets.QPushButton):
     def setPixmap(self, pixmap: QtGui.QPixmap) -> None:
         """Set widget pixmap"""
         self.icon_pixmap = pixmap
+        self.repaint()
+
+    def setSecondaryPixmap(self, pixmap: QtGui.QPixmap) -> None:
+        """Set secondary widget pixmap"""
+        self.icon_pixmap_secondary = pixmap
         self.repaint()
 
     @property
@@ -225,7 +231,7 @@ class DisplayButton(QtWidgets.QPushButton):
                     painter.setCompositionMode(
                         painter.CompositionMode.CompositionMode_SourceAtop
                     )
-                    painter.drawText(
+                    _ = painter.drawText(
                         _upper_rect,
                         # QtCore.Qt.AlignmentFlag.AlignCenter,
                         QtCore.Qt.AlignmentFlag.AlignRight
@@ -236,11 +242,101 @@ class DisplayButton(QtWidgets.QPushButton):
                     painter.setPen(QtGui.QColor("#b6b0b0"))
                     painter.setFont(font)
 
-                    painter.drawText(
+                    _ = painter.drawText(
                         _downer_rect,
                         QtCore.Qt.AlignmentFlag.AlignRight
                         | QtCore.Qt.AlignmentFlag.AlignVCenter,
                         self.secondary_text,
+                    )
+                elif self.display_format == "dual":
+                    _icon_size = (_rect.width() * 0.15) - 5.0
+                    _text_area_start = int(_icon_rect.width()) + margin
+                    _text_area_width = int(
+                        _rect.width() - _icon_rect.width() - margin * 2 - _icon_size * 2
+                    )
+
+                    _first_icon_rect = QtCore.QRectF(
+                        _text_area_start,
+                        (_rect.height() - _icon_size) / 2.0,
+                        _icon_size,
+                        _icon_size,
+                    )
+                    _first_icon_scaled = self.icon_pixmap.scaled(
+                        int(_icon_size),
+                        int(_icon_size),
+                        QtCore.Qt.AspectRatioMode.KeepAspectRatio,
+                        QtCore.Qt.TransformationMode.SmoothTransformation,
+                    )
+                    _first_icon_x = (_icon_size - _first_icon_scaled.width()) / 2.0
+                    _first_icon_y = (_icon_size - _first_icon_scaled.height()) / 2.0
+                    _first_adjusted_icon_rect = QtCore.QRectF(
+                        _first_icon_rect.x() + _first_icon_x,
+                        _first_icon_rect.y() + _first_icon_y,
+                        _first_icon_scaled.width(),
+                        _first_icon_scaled.height(),
+                    )
+                    painter.drawPixmap(_first_adjusted_icon_rect, _first_icon_scaled)
+
+                    _first_text_rect = QtCore.QRectF(
+                        _text_area_start + _icon_size + 5,
+                        0.0,
+                        _text_area_width / 2.0 - 5,
+                        _rect.height(),
+                    )
+
+                    font = QtGui.QFont()
+                    font.setPointSize(11)
+                    font.setFamily("Momcake-bold")
+                    painter.setFont(font)
+                    painter.drawText(
+                        _first_text_rect,
+                        QtCore.Qt.TextFlag.TextShowMnemonic
+                        | QtCore.Qt.AlignmentFlag.AlignLeft
+                        | QtCore.Qt.AlignmentFlag.AlignVCenter,
+                        str(self.text()) if self.text() else str("?"),
+                    )
+
+                    _second_icon_x = (
+                        _text_area_start + _text_area_width / 2.0 + _icon_size + 5
+                    )
+                    _second_icon_rect = QtCore.QRectF(
+                        _second_icon_x,
+                        (_rect.height() - _icon_size) / 2.0,
+                        _icon_size,
+                        _icon_size,
+                    )
+                    _second_icon_scaled = self.icon_pixmap_secondary.scaled(
+                        int(_icon_size),
+                        int(_icon_size),
+                        QtCore.Qt.AspectRatioMode.KeepAspectRatio,
+                        QtCore.Qt.TransformationMode.SmoothTransformation,
+                    )
+                    _second_icon_x_offset = (
+                        _icon_size - _second_icon_scaled.width()
+                    ) / 2.0
+                    _second_icon_y_offset = (
+                        _icon_size - _second_icon_scaled.height()
+                    ) / 2.0
+                    _second_adjusted_icon_rect = QtCore.QRectF(
+                        _second_icon_rect.x() + _second_icon_x_offset,
+                        _second_icon_rect.y() + _second_icon_y_offset,
+                        _second_icon_scaled.width(),
+                        _second_icon_scaled.height(),
+                    )
+                    painter.drawPixmap(_second_adjusted_icon_rect, _second_icon_scaled)
+
+                    _second_text_rect = QtCore.QRectF(
+                        _second_icon_x + _icon_size + 5,
+                        0.0,
+                        _text_area_width / 2.0 - 5,
+                        _rect.height(),
+                    )
+                    painter.drawText(
+                        _second_text_rect,
+                        QtCore.Qt.TextFlag.TextShowMnemonic
+                        | QtCore.Qt.AlignmentFlag.AlignLeft
+                        | QtCore.Qt.AlignmentFlag.AlignVCenter,
+                        str(self.secondary_text) if self.secondary_text else str("?"),
                     )
 
             else:
@@ -248,7 +344,7 @@ class DisplayButton(QtWidgets.QPushButton):
                 font.setPointSize(12)
                 font.setFamily("Momcake-bold")
                 painter.setFont(font)
-                painter.drawText(
+                _ = painter.drawText(
                     _mtl,
                     QtCore.Qt.TextFlag.TextShowMnemonic
                     | QtCore.Qt.AlignmentFlag.AlignHCenter
@@ -256,7 +352,7 @@ class DisplayButton(QtWidgets.QPushButton):
                     str(self.text()) if self.text() else str("?"),
                 )
                 painter.setPen(QtCore.Qt.PenStyle.NoPen)
-        painter.end()
+        _ = painter.end()
         return
 
     def setProperty(self, name: str, value: typing.Any) -> bool:
