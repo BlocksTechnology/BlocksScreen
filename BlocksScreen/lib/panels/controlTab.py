@@ -40,6 +40,9 @@ class ControlTab(QtWidgets.QStackedWidget):
     disable_popups: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         bool, name="disable-popups"
     )
+    lock_ui: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        bool, name="lock-ui"
+    )
     request_numpad: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         [str, int, "PyQt_PyObject"],
         [str, int, "PyQt_PyObject", int, int],
@@ -82,6 +85,7 @@ class ControlTab(QtWidgets.QStackedWidget):
         self.probe_helper_page = ProbeHelper(self)
         self.probe_helper_page.toggle_conn_page.connect(self.toggle_conn_page)
         self.probe_helper_page.disable_popups.connect(self.disable_popups)
+        self.probe_helper_page.lock_ui.connect(self.lock_ui)
         self.addWidget(self.probe_helper_page)
         self.probe_helper_page.call_load_panel.connect(self.call_load_panel)
         self.printcores_page = SwapPrintcorePage(self)
