@@ -4,9 +4,15 @@ from functools import partial
 import logging
 from lib.printer import Printer
 from lib.filament import Filament
-from lib.ui.filamentStackedWidget_ui import Ui_filamentStackedWidget
 from lib.panels.widgets.popupDialogWidget import Popup
-from PyQt6 import QtCore, QtGui, QtWidgets
+from PyQt6 import QtCore, QtWidgets
+
+from devices.amu import AMUManager
+
+from lib.panels.widgets.amuPage import AMUpage
+
+from lib.ui.filamentStackedWidget_ui import Ui_filamentStackedWidget
+
 
 logger = logging.getLogger(__name__)
 
@@ -32,20 +38,48 @@ class FilamentTab(QtWidgets.QStackedWidget):
     call_load_panel = QtCore.pyqtSignal(bool, str, name="call-load-panel")
 
     class FilamentStates(enum.Enum):
+        UNKNOWN = -1
         LOADED = enum.auto()
         UNLOADED = enum.auto()
-        UNKNOWN = -1
 
         def __repr__(self) -> str:
             return "<%s.%s>" % (self.__class__.__name__, self._name_)
 
-    def __init__(self, parent, printer: Printer, ws, config, /) -> None:
+    def __init__(
+        self, parent, printer: Printer, ws, config, amu_manager: AMUManager
+    ) -> None:
         super().__init__(parent)
+
+        self.ws = ws
+        self.printer = printer
+        self.state = "standby"
+        self.cfg = config
+        self.amu_manager: AMUManager = amu_manager
+
+        self.setup_ui()
+
+    def setup_ui(self):
+        print(self.amu_manager.get_pre_gate_sensors())
+        if self.amu_manager.is_amu_configured():
+            self.amu_manager.mmu_state_changed.connect(self.on_mmu_state_changed)
+        else:
+            self.without_amu()
+
+    def on_mmu_state_changed(self, mmu_state):
+        self.status = mmu_state
+        if len(mmu_state.gates) > 1:
+            self.setMinimumSize(720, 420)
+            self.amupage = AMUpage(self.amu_manager, parent=self)
+            self.addWidget(self.amupage)
+            self.amupage.request_back.connect(self.request_back)
+
+        else:
+            self.without_amu()
+
+    def without_amu(self):
         self.panel = Ui_filamentStackedWidget()
         self.panel.setupUi(self)
         self.setCurrentIndex(0)
-        self.ws = ws
-        self.printer = printer
         self.toolhead_count: int = 0
         self.target_temp: int = 0
         self.current_temp: int = 0
@@ -54,9 +88,8 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self._filament_state = self.FilamentStates.UNKNOWN
         self.filament_type = FilamentTypes.UNKNOWN
 
-        cfg = config
-        if cfg.has_section("filament_presence"):
-            i = cfg.get_section("filament_presence", None)
+        if self.cfg.has_section("filament_presence"):
+            i = self.cfg.get_section("filament_presence", None)
             self.filament_sensor = i.get("name", str, None)
         else:
             self.filament_sensor = None
@@ -259,12 +292,12 @@ class FilamentTab(QtWidgets.QStackedWidget):
         """Go back a page"""
         self.request_back.emit()
 
-    def paintEvent(self, a0: QtGui.QPaintEvent | None) -> None:
-        """Widget painting"""
-        if self.panel.load_page.isVisible() and self.toolhead_count == 1:
-            self.panel.load_header_page_title.setText("Load Toolhead")
-        if a0 is not None:
-            return super().paintEvent(a0)
+    # def paintEvent(self, a0: QtGui.QPaintEvent | None) -> None:
+    #     """Widget painting"""
+    #     if self.panel.load_page.isVisible() and self.toolhead_count == 1:
+    #         self.panel.load_header_page_title.setText("Load Toolhead")
+    #     if a0 is not None:
+    #         return super().paintEvent(a0)
 
     def find_routine_objects(self):
         """Check if printer has load/unload printer objects"""

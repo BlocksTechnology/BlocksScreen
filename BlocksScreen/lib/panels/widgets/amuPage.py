@@ -10,6 +10,9 @@ from devices.amu.models import GateInfo, GateStatus
 
 from lib.panels.widgets.basePopup import BasePopup
 
+from devices.amu import AMUManager
+from lib.panels.widgets.keyboardPage import CustomQwertyKeyboard
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Spool button
@@ -21,7 +24,7 @@ class Spoll_button(QtWidgets.QAbstractButton):
         self.status = GateStatus.UNKNOWN
         self.slot_id = ""
         self.setCheckable(True)
-        self.setMinimumSize(100, 100)
+        self.setMinimumHeight(100)
         self._icon = QtGui.QPixmap("/home/levi/Downloads/loaded_spool.svg")
         self._unloaded_icon = QtGui.QPixmap("/home/levi/Downloads/spool.svg")
 
@@ -55,10 +58,17 @@ class Spoll_button(QtWidgets.QAbstractButton):
         self.update()
 
     def paintEvent(self, e: QtGui.QPaintEvent | None) -> None:
+        opt = QtWidgets.QStyleOption()
+        opt.initFrom(self)
+
         painter = QtGui.QPainter(self)
         painter.setRenderHint(painter.RenderHint.Antialiasing)
         painter.setRenderHint(painter.RenderHint.SmoothPixmapTransform)
         painter.setRenderHint(painter.RenderHint.LosslessImageRendering)
+
+        self.style().drawPrimitive(
+            QtWidgets.QStyle.PrimitiveElement.PE_Widget, opt, painter, self
+        )
 
         color = QtGui.QColor(self.color)
         white = QtGui.QColor(255, 255, 255)
@@ -146,6 +156,7 @@ class SpoolCarousel(QtWidgets.QWidget):
         self.button_group = QtWidgets.QButtonGroup(self)
         self.button_group.setExclusive(True)
         self._offset = 0  # first visible index
+        # self.setStyleSheet("border: 1px solid white")
 
         self._anim_group: QtCore.QParallelAnimationGroup | None = None
 
@@ -166,6 +177,9 @@ class SpoolCarousel(QtWidgets.QWidget):
         self.right_arrow.setFixedWidth(60)
         self.left_arrow.setFixedWidth(60)
 
+        self.left_arrow.setFixedHeight(100)
+        self.right_arrow.setFixedHeight(100)
+
         # sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Expanding)
         # self.right_arrow.setSizePolicy(sizePolicy)
         # self.left_arrow.setSizePolicy(sizePolicy)
@@ -173,11 +187,10 @@ class SpoolCarousel(QtWidgets.QWidget):
         self.left_arrow.clicked.connect(self._scroll_left)
         self.right_arrow.clicked.connect(self._scroll_right)
 
-        self._slot_area = QtWidgets.QWidget()
+        self._slot_area = QtWidgets.QWidget(self)
         self._slot_layout = QtWidgets.QHBoxLayout(self._slot_area)
-
-        self.left_arrow.setFixedHeight(100)
-        self.right_arrow.setFixedHeight(100)
+        self._slot_layout.setSpacing(0)
+        self._slot_layout.setContentsMargins(0, 0, 0, 0)
 
         root.addWidget(self.left_arrow)
         root.addWidget(self._slot_area)
@@ -201,8 +214,12 @@ class SpoolCarousel(QtWidgets.QWidget):
         btn.setGateId(slot_id)
         btn.setStatus(status)
         btn.setMaterial(material)
+        btn.setSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Expanding,
+            QtWidgets.QSizePolicy.Policy.Preferred,
+        )
         self.button_group.addButton(btn, len(self.buttons))
-        btn.clicked.connect(lambda checked, b=btn: self._on_btn_clicked(b))
+        btn.clicked.connect(lambda b=btn: self._on_btn_clicked(b))
         self.buttons.append(btn)
         self._refresh_visible()
 
@@ -220,6 +237,10 @@ class SpoolCarousel(QtWidgets.QWidget):
         end = min(self._offset + self.VISIBLE, len(self.buttons))
         for btn in self.buttons[self._offset : end]:
             self._slot_layout.addWidget(btn)
+            btn.setSizePolicy(
+                QtWidgets.QSizePolicy.Policy.Expanding,
+                QtWidgets.QSizePolicy.Policy.Preferred,
+            )
             btn.show()
 
         if len(self.button_group.buttons()) <= 4:
@@ -266,7 +287,7 @@ class SpoolCarousel(QtWidgets.QWidget):
 # ──────────────────────────────────────────────────────────────────────────────
 # Info table panel (BlocksCustomFrame + detail grid + op buttons)
 # ──────────────────────────────────────────────────────────────────────────────
-class SpoolInfoPanel(BlocksCustomFrame):
+class SpoolInfoPanel(QtWidgets.QWidget):
     loadRequested = QtCore.pyqtSignal()
     unloadRequested = QtCore.pyqtSignal()
     ejectRequested = QtCore.pyqtSignal()
@@ -370,7 +391,7 @@ class SpoolInfoPanel(BlocksCustomFrame):
 
         self._btn_load = BlocksCustomButton(self)
         self._btn_load.setText("Load")
-        self._btn_load.setFixedSize(160, 60)
+        self._btn_load.setFixedSize(140, 60)
         self._btn_load.setFont(font)
         self._btn_load.setPixmap(
             QtGui.QPixmap(":/filament_related/media/btn_icons/load_filament.svg")
@@ -381,19 +402,19 @@ class SpoolInfoPanel(BlocksCustomFrame):
         self._btn_unload.setPixmap(
             QtGui.QPixmap(":/filament_related/media/btn_icons/unload_filament.svg")
         )
-        self._btn_unload.setFixedSize(160, 60)
+        self._btn_unload.setFixedSize(140, 60)
         self._btn_purge = BlocksCustomButton(self)
         self._btn_purge.setText("Eject")
         self._btn_purge.setFont(font)
         self._btn_purge.setPixmap(
             QtGui.QPixmap(":/filament_related/media/btn_icons/eject.svg")
         )
-        self._btn_purge.setFixedSize(160, 60)
+        self._btn_purge.setFixedSize(140, 60)
         self._btn_cut = BlocksCustomButton(self)
         self._btn_cut.setPixmap(QtGui.QPixmap(":/load_icons/media/btn_icons/cut.svg"))
         self._btn_cut.setText("Check\nGates")
         self._btn_cut.setFont(font)
-        self._btn_cut.setFixedSize(160, 60)
+        self._btn_cut.setFixedSize(140, 60)
 
         self._btn_load.clicked.connect(lambda: self.loadRequested.emit())
         self._btn_unload.clicked.connect(lambda: self.unloadRequested.emit())
@@ -435,23 +456,23 @@ class SpoolInfoPanel(BlocksCustomFrame):
 
         status_map = {
             GateStatus.AVAILABLE.value: (
-                "<span style='color:#2ec4a0'>● LOADED</span>",
-                False,
+                "<span style='color:#2ec4a0'>● PRE-LOADED</span>",
                 True,
+                False,
                 True,
                 True,
             ),
             GateStatus.AVAILABLE_FROM_BUFFER.value: (  # Add this
-                "<span style='color:#2ec4a0'>● LOADED (BUFFER)</span>",  # Or whatever text you want
-                False,
+                "<span style='color:#2ec4a0'>● PRE-LOADED (BUFFER)</span>",
                 True,
+                False,
                 True,
                 True,
             ),
             GateStatus.EMPTY.value: (
                 "<span style='color:#e8445a'>○ EMPTY</span>",
-                True,
-                True,
+                False,
+                False,
                 True,
                 True,
             ),
@@ -485,13 +506,6 @@ class SpoolInfoPanel(BlocksCustomFrame):
         self._lbl_color.setText(f"#{r:02X}{g:02X}{b:02X}")
 
 
-from devices.amu import AMUManager
-from devices.amu.models import (
-    GateStatus,
-)
-from lib.panels.widgets.keyboardPage import CustomQwertyKeyboard
-
-
 # ──────────────────────────────────────────────────────────────────────────────
 # AMU widget — carousel + info panel stacked
 # ──────────────────────────────────────────────────────────────────────────────
@@ -502,10 +516,13 @@ class AMUpage(QtWidgets.QStackedWidget):
 
     def __init__(self, amu_manager, parent=None):
         super().__init__(parent)
-        self.amu_manager: AMUManager = amu_manager
-        self.amu_manager.mmu_state_changed.connect(self.on_mmu_state_changed)
-        self._build_ui()
+        self._previous_gate_states: dict[int, bool] = {}
         self.current_index = -1
+        self.amu_manager: AMUManager = amu_manager
+        self._build_ui()
+
+        self.amu_manager.mmu_state_changed.connect(self.on_mmu_state_changed)
+        self.on_mmu_state_changed(self.amu_manager.get_state())
         self.info_panel._lbl_color.editingFinished.connect(
             lambda: self.amu_manager.set_gate_color(
                 self.current_index,
@@ -526,7 +543,6 @@ class AMUpage(QtWidgets.QStackedWidget):
         self._qwerty.value_selected.connect(self._on_qwerty_value_selected)
 
         self.info_panel.request_keypad.connect(self._on_show_keyboard)
-        self._previous_gate_states: dict[int, bool] = {}
 
         self.info_panel.loadRequested.connect(self.amu_manager.load_gate)
         self.info_panel.unloadRequested.connect(self.amu_manager.unload)
@@ -535,7 +551,6 @@ class AMUpage(QtWidgets.QStackedWidget):
 
         self.amu_manager.pre_gate_changed.connect(self.on_pre_gate)
         self.carousel.selectionChanged.connect(self._select_gate)
-
 
         self._setup_popup()
 
@@ -581,7 +596,6 @@ class AMUpage(QtWidgets.QStackedWidget):
     def _select_gate(self, idx: int):
         self.carousel.selectIndex(self.current_index)
         self.amu_manager.select_tool(idx)
-
 
     def _on_selection(self, idx: int):
         # self.amu_manager.sele
@@ -748,34 +762,43 @@ class AMUpage(QtWidgets.QStackedWidget):
         amu_widget = QtWidgets.QWidget(parent=self)
         root = QtWidgets.QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Minimum
-        )
 
         # Carousel inside its own BlocksCustomFrame
         carousel_frame = BlocksCustomFrame(self)
-        carousel_frame.setSizePolicy(sizePolicy)
 
-        cf_layout = QtWidgets.QVBoxLayout(carousel_frame)
-        cf_layout.setContentsMargins(0, 0, 0, 0)
+        cf_layout = QtWidgets.QVBoxLayout(self)
 
         self.carousel = SpoolCarousel(carousel_frame)
-        self.carousel.setSizePolicy(sizePolicy)
+        QsizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Minimum
+        )
+        self.carousel.setSizePolicy(QsizePolicy)
         cf_layout.addWidget(self.carousel)
-        root.addWidget(carousel_frame)
 
         # Info / operation panel
         self.info_panel = SpoolInfoPanel(parent=self, amu_manager=self.amu_manager)
+
         sizePolicy = QtWidgets.QSizePolicy(
             QtWidgets.QSizePolicy.Policy.Expanding,
             QtWidgets.QSizePolicy.Policy.Expanding,
         )
+
         self.info_panel.setSizePolicy(sizePolicy)
 
         # self.info_panel.request_numpad[str, int, "PyQt_PyObject", int, int].connect(
         #     self.on_numpad_request
         # )
-        root.addWidget(self.info_panel)
+
+        cf_layout.addWidget(self.info_panel)
+        cf_layout.setContentsMargins(0, 0, 0, 0)
+        cf_layout.setSpacing(0)
+
+        carousel_frame.setLayout(cf_layout)
+
+        root.addWidget(carousel_frame)
+        root.setSpacing(0)
+        root.setContentsMargins(0, 0, 0, 0)
+
         amu_widget.setLayout(root)
 
         self.verticalLayout.addWidget(amu_widget)
