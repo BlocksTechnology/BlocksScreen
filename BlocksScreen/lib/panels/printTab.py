@@ -198,6 +198,7 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.printer.print_stats_update[str, float].connect(
             self.jobStatusPage_widget.on_print_stats_update
         )
+        self.printer.flowguard_update.connect(self.jobStatusPage_widget.on_flowguard_update)
         self.printer.print_stats_update[str, str].connect(self.on_print_stats_update)
         self.printer.print_stats_update[str, dict].connect(self.on_print_stats_update)
         self.printer.print_stats_update[str, float].connect(self.on_print_stats_update)

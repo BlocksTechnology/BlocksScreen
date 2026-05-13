@@ -48,6 +48,8 @@ class Printer(QtCore.QObject):
         [str, dict], [str, list], [str, int], [str, str], name="mmu_update"
     )
 
+    flowguard_update = QtCore.pyqtSignal([str, dict], name="flowguard_update")
+
     display_update = QtCore.pyqtSignal([str, str], [str, float], name="display_update")
     temperature_sensor_update = QtCore.pyqtSignal(
         str, str, float, name="temperature_sensor_update"
@@ -401,6 +403,10 @@ class Printer(QtCore.QObject):
 
         if "gate_status" in value:
             self.mmu_update[str, list].emit("gate_status", value["gate_status"])
+
+        if "flowguard" in value:
+            self.flowguard_update[str, dict].emit("flowguard", value["flowguard"])
+
         # i only putted the most relevant ones, there are some other parameters that can be added later if needed
 
     def _gcode_move_object_updated(self, value: dict, name: str = "gcode_move") -> None:
@@ -814,6 +820,3 @@ class Printer(QtCore.QObject):
     def _load_filament_object_updated(self, values: dict, name: str) -> None:
         if "state" in values.keys():
             self.load_filament_update[dict].emit(values)
-    
-
-    
