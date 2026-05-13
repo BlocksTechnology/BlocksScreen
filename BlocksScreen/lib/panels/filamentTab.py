@@ -240,7 +240,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self.run_gcode.emit(
             f"""SAVE_VARIABLE VARIABLE=filament_type VALUE='"{filament.value.name}"'"""
         )
-        self.run_gcode.emit(f"LOAD_FILAMENT TEMPERATURE={filament.value.temperature}")
+        self.run_gcode.emit("MMU_LOAD")
 
     @QtCore.pyqtSlot(str, int, name="unload_filament")
     def unload_filament(self, toolhead: int = 0, temp: int = 220) -> None:
@@ -266,7 +266,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self.run_gcode.emit(
             f"""SAVE_VARIABLE VARIABLE=filament_type VALUE='"{FilamentTypes.UNKNOWN.value.name}"'"""
         )
-        self.run_gcode.emit(f"UNLOAD_FILAMENT TEMPERATURE={temp}")
+        self.run_gcode.emit("MMU_UNLOAD")
 
     def handle_filament_state(self):
         """Handle ui changes on filament states"""
