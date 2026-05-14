@@ -219,7 +219,7 @@ class SpoolCarousel(QtWidgets.QWidget):
             QtWidgets.QSizePolicy.Policy.Preferred,
         )
         self.button_group.addButton(btn, len(self.buttons))
-        btn.clicked.connect(lambda b=btn: self._on_btn_clicked(b))
+        btn.clicked.connect(lambda checked, b=btn: self._on_btn_clicked(b))
         self.buttons.append(btn)
         self._refresh_visible()
 
@@ -573,7 +573,6 @@ class AMUpage(QtWidgets.QStackedWidget):
             self.addSpool(gate_info)
             self.update()
         self._on_selection(mmu_state.gate)
-        self.info_panel.setFilamentStatus(mmu_state)
 
     def on_pre_gate(self, gate_index: int, detected: bool):
         """Only show popup when gate transitions from False to True."""
@@ -598,11 +597,11 @@ class AMUpage(QtWidgets.QStackedWidget):
         self.amu_manager.select_tool(idx)
 
     def _on_selection(self, idx: int):
-        # self.amu_manager.sele
         btn = self.carousel.buttons[idx]
         self.current_index = idx
         self.info_panel.update_for_slot(idx, btn)
         self.carousel.selectIndex(idx)
+        self.info_panel.setFilamentStatus(self.status)
 
     @QtCore.pyqtSlot("PyQt_PyObject", name="request-keyboard")
     def _on_show_keyboard(self, field: QtWidgets.QLineEdit) -> None:

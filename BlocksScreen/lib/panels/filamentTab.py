@@ -53,8 +53,10 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self.ws = ws
         self.printer = printer
         self.state = "standby"
+        self.load_state = False
         self.cfg = config
         self.amu_manager: AMUManager = amu_manager
+        self.amu_configured = False
 
         self.setup_ui()
 
@@ -66,15 +68,28 @@ class FilamentTab(QtWidgets.QStackedWidget):
             self.without_amu()
 
     def on_mmu_state_changed(self, mmu_state):
-        self.status = mmu_state
-        if len(mmu_state.gates) > 1:
-            self.setMinimumSize(720, 420)
-            self.amupage = AMUpage(self.amu_manager, parent=self)
-            self.addWidget(self.amupage)
-            self.amupage.request_back.connect(self.request_back)
+        if not self.amu_configured:
+            if len(mmu_state.gates) > 1:
+                self.setMinimumSize(720, 420)
+                self.amupage = AMUpage(self.amu_manager, parent=self)
+                self.addWidget(self.amupage)
+                self.amupage.request_back.connect(self.request_back)
 
-        else:
-            self.without_amu()
+            else:
+                self.without_amu()
+
+            self.amu_configured = True
+
+        if self.load_state:
+            if mmu_state.action == "Idle":
+                self.load_state = False
+                self.call_load_panel.emit(False, "")
+                return
+            self.call_load_panel.emit(True, mmu_state.action)
+
+        if mmu_state.action == "Loading" or mmu_state.action == "Unloading":
+            self.load_state = True
+            self.call_load_panel.emit(True, mmu_state.action)
 
     def without_amu(self):
         self.panel = Ui_filamentStackedWidget()
@@ -240,7 +255,12 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self.run_gcode.emit(
             f"""SAVE_VARIABLE VARIABLE=filament_type VALUE='"{filament.value.name}"'"""
         )
-        self.run_gcode.emit("MMU_LOAD")
+        if self.amu_manager.is_amu_configured():
+            self.run_gcode.emit("MMU_LOAD")
+        else:
+            self.run_gcode.emit(
+                f"LOAD_FILAMENT TEMPERATURE={filament.value.temperature}"
+            )
 
     @QtCore.pyqtSlot(str, int, name="unload_filament")
     def unload_filament(self, toolhead: int = 0, temp: int = 220) -> None:
@@ -266,7 +286,10 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self.run_gcode.emit(
             f"""SAVE_VARIABLE VARIABLE=filament_type VALUE='"{FilamentTypes.UNKNOWN.value.name}"'"""
         )
-        self.run_gcode.emit("MMU_UNLOAD")
+        if self.amu_manager.is_amu_configured():
+            self.run_gcode.emit("MMU_UNLOAD")
+        else:
+            self.run_gcode.emit(f"UNLOAD_FILAMENT TEMPERATURE={temp}")
 
     def handle_filament_state(self):
         """Handle ui changes on filament states"""
@@ -291,13 +314,6 @@ class FilamentTab(QtWidgets.QStackedWidget):
     def back_button(self):
         """Go back a page"""
         self.request_back.emit()
-
-    # def paintEvent(self, a0: QtGui.QPaintEvent | None) -> None:
-    #     """Widget painting"""
-    #     if self.panel.load_page.isVisible() and self.toolhead_count == 1:
-    #         self.panel.load_header_page_title.setText("Load Toolhead")
-    #     if a0 is not None:
-    #         return super().paintEvent(a0)
 
     def find_routine_objects(self):
         """Check if printer has load/unload printer objects"""
