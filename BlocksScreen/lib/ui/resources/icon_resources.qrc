@@ -93,6 +93,8 @@
     <file>media/btn_icons/filament_sensor_turn_on.svg</file>
     <file>media/btn_icons/load_filament.svg</file>
     <file>media/btn_icons/unload_filament.svg</file>
+    <file>media/btn_icons/loaded_spool.svg</file>
+    <file>media/btn_icons/half_spoll.svg</file>
   </qresource>
   <qresource prefix="ui">
     <file>media/btn_icons/notification.svg</file>
