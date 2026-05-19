@@ -204,6 +204,15 @@ class AMUManager(QtCore.QObject):
         """
         self.run_gcode_signal.emit(f"MMU_GATE_MAP gate={gate} MATERIAL={material}")
 
+    def set_gate_temp(self, gate: int , temp : int):
+        """Set the `temperature` at the gate `gate`
+
+        Args:
+            gate (int): Gate index (0-based).
+            temp (int): Filament temperature, e.g. ``"220"``.
+        """
+        self.run_gcode_signal.emit(f"MMU_GATE_MAP gate={gate} TEMP={temp}")
+
     def set_gate_color(self, gate: int, color: str) -> None:
         """Set the `color` at the gate `gate`
 
