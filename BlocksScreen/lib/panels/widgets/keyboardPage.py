@@ -85,8 +85,12 @@ class CustomQwertyKeyboard(QtWidgets.QDialog):
     def __init__(self, parent: QtWidgets.QWidget) -> None:
         super().__init__(parent)
         self.current_value: str = ""
+        self.prefix: str = ""
+        self.suffix: str = ""
         self.symbolsrun: bool = False
         self._key_buttons: list[QtWidgets.QPushButton] = []
+        self._pattern: str = ""
+        self._max_length: int = 0
 
         self._setup_ui()
         self.setCursor(QtCore.Qt.CursorShape.BlankCursor)
@@ -129,6 +133,48 @@ class CustomQwertyKeyboard(QtWidgets.QDialog):
             "}"
         )
         self.handle_keyboard_layout()
+
+    
+    def setPrefix(self , text:str):
+        self.prefix = text
+
+    def setSuffix(self , text:str):
+        self.suffix = text
+
+    def setPatern(self, patern: str) -> None:
+        self._pattern = patern
+
+    def setMaxLength(self, length: int) -> None:
+        self._max_length = length
+
+    def _flash_limit_warning(self) -> None:
+        self.inserted_value.setStyleSheet("color: #ff4444;")
+        QtCore.QTimer.singleShot(400, lambda: self.inserted_value.setStyleSheet("color: white;"))
+
+    def _validate_pattern(self, value: str) -> bool:
+        if not self._pattern:
+            return True
+        if self._pattern == "ip":
+            parts = value.split(".")
+            if len(parts) > 4:
+                return False
+            for part in parts:
+                if part and (not part.isdigit() or int(part) > 255):
+                    return False
+            return True
+        if self._pattern == "hex":
+            return all(c in "0123456789abcdefABCDEF" for c in value)
+        if self._pattern == "int":
+            return value == "" or value.lstrip("-").isdigit()
+        if self._pattern == "float":
+            if not value:
+                return True
+            try:
+                float(value)
+                return True
+            except ValueError:
+                return value.endswith(".")
+        return True
 
     def _get_mainWindow_widget(self) -> typing.Optional[QtWidgets.QMainWindow]:
         """Get the main application window"""
@@ -193,9 +239,12 @@ class CustomQwertyKeyboard(QtWidgets.QDialog):
             value = "&"
 
         if value == "enter":
-            self.value_selected.emit(self.current_value)
+            self.value_selected.emit(self.prefix+self.current_value+self.suffix)
             self.current_value = ""
             self.inserted_value.setText("")
+            self.setPrefix("")
+            self.setSuffix("")
+            self.setPatern("")
             return
 
         if value == "clear":
@@ -204,14 +253,19 @@ class CustomQwertyKeyboard(QtWidgets.QDialog):
             else:
                 self.current_value = ""
         else:
-            self.current_value += value
+            candidate = self.current_value + value
+            if self._validate_pattern(candidate):
+                if not self._max_length or len(candidate) <= self._max_length:
+                    self.current_value = candidate
+                else:
+                    self._flash_limit_warning()
 
-        self.inserted_value.setText(self.current_value)
+        self.inserted_value.setText(len(self.suffix)*" " + self.prefix+self.current_value  + self.suffix + len(self.prefix)*" " )
 
     def set_value(self, value: str) -> None:
         """Pre-fill keyboard input with an existing value."""
         self.current_value = value
-        self.inserted_value.setText(value)
+        self.inserted_value.setText(len(self.suffix)*" " + self.prefix+self.current_value  + self.suffix + len(self.prefix)*" " )
 
     def _create_key_button(
         self,
