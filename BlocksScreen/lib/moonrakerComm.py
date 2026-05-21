@@ -824,6 +824,53 @@ class MoonAPI(QtCore.QObject):
 
     #   ---------------------------------AMU----------------------------------
 
+    def spoolman_proxy(
+        self,
+        request_method: str,
+        path: str,
+        query: str = None,
+        body: dict = None,
+        use_v2_response: bool = True,
+        callback=None,
+    ) -> bool:
+        """Proxy a request to the Spoolman API via Moonraker (server.spoolman.proxy)."""
+        params = {
+            "use_v2_response": use_v2_response,
+            "request_method": request_method,
+            "path": path,
+        }
+        if query is not None:
+            params["query"] = query
+        if body is not None:
+            params["body"] = body
+        return self._ws.send_request(
+            method="server.spoolman.proxy",
+            params=params,
+            callback=callback,
+        )
+
+    def get_filaments(self, callback) -> bool:
+        return self.spoolman_proxy(
+            request_method="GET",
+            path="/v1/filament",
+            callback=callback,
+        )
+
+    def get_spool_id(self, callback=None) -> bool:
+        """Get the currently active spool ID (server.spoolman.get_spool_id)."""
+        return self._ws.send_request(
+            method="server.spoolman.get_spool_id",
+            callback=callback,
+        )
+
+    def set_spool_id(self, spool_id: int | None, callback=None) -> bool:
+        """Set the active spool ID (server.spoolman.post_spool_id). Pass None to unset."""
+        return self._ws.send_request(
+            method="server.spoolman.post_spool_id",
+            params={"spool_id": spool_id},
+            callback=callback,
+        )
+
     def get_spool(self, spool_id: int, callback) -> bool:
         """Request spool data from Moonraker's Spoolman proxy"""
         return self._ws.send_request(
@@ -831,3 +878,20 @@ class MoonAPI(QtCore.QObject):
             params={"spool_id": spool_id},
             callback=callback,
         )
+
+    def add_spool(
+        self, filament_id: int, body: dict | None = None, callback=None
+    ) -> bool:
+        """Create a new spool (POST /v1/spool)."""
+        payload: dict = {"filament_id": filament_id}
+        if body:
+            payload.update(body)
+        return self.spoolman_proxy("POST", "/v1/spool", body=payload, callback=callback)
+
+    def delete_spool(self, spool_id: int, callback=None) -> bool:
+        """Delete a spool (DELETE /v1/spool/{id})."""
+        return self.spoolman_proxy("DELETE", f"/v1/spool/{spool_id}", callback=callback)
+
+    def add_filament(self, body: dict, callback=None) -> bool:
+        """Create a new filament (POST /v1/filament)."""
+        return self.spoolman_proxy("POST", "/v1/filament", body=body, callback=callback)
