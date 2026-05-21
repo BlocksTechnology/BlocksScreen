@@ -1,8 +1,9 @@
 from __future__ import annotations
+
+import logging
 import re
 import typing
 from functools import partial
-import logging
 
 from helper_methods import normalize
 from lib.moonrakerComm import MoonWebSocket
@@ -16,7 +17,6 @@ from lib.printer import Printer
 from lib.ui.controlStackedWidget_ui import Ui_controlStackedWidget
 from lib.utils.display_button import DisplayButton
 from PyQt6 import QtCore, QtGui, QtWidgets
-
 
 _logger = logging.getLogger(__name__)
 
@@ -71,6 +71,7 @@ class ControlTab(QtWidgets.QStackedWidget):
 
         self.ws: MoonWebSocket = ws
         self.printer: Printer = printer
+        self._beacon_state: bool | None = None
         self.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
         self.timers = []
         self.ztilt_state = False
@@ -294,6 +295,7 @@ class ControlTab(QtWidgets.QStackedWidget):
         self.printer.fan_update[str, str, int].connect(self.on_fan_object_update)
 
         self.printer.printer_config.connect(self.on_printer_config)
+        self.printer.request_object_subscription_signal.connect(self._on_object_list)
 
     def _handle_z_tilt_object_update(self, value, state):
         if state:
@@ -515,6 +517,26 @@ class ControlTab(QtWidgets.QStackedWidget):
         if state.lower() == "startup":
             self.printcores_page.setText("Almost done \n be patient")
             return
+        self._beacon_state = None
+        self.panel.cp_nozzles_calibration_btn.setVisible(True)
+        self._place_fans_btn(row=2)
+
+    @QtCore.pyqtSlot(dict, name="_on_object_list")
+    def _on_object_list(self, objects: dict) -> None:
+        has_beacon = "beacon" in objects
+        if has_beacon == self._beacon_state:
+            return
+        self._beacon_state = has_beacon
+        self.panel.cp_nozzles_calibration_btn.setVisible(not has_beacon)
+        self._place_fans_btn(row=1 if has_beacon else 2)
+
+    def _place_fans_btn(self, row: int) -> None:
+        layout = self.panel.cp_content_layout
+        layout.removeWidget(self.panel.cp_fans_btn)
+        layout.addWidget(self.panel.cp_fans_btn, row, 0, 1, 1)
+        # When fans moves to row 1, row 2 is empty — pin its height so the
+        # grid doesn't shrink and shift the "Control" header.
+        layout.setRowMinimumHeight(2, 80 if row == 1 else 0)
 
     def show_swapcore(self):
         """Show swap printcore"""

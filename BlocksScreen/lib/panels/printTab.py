@@ -407,7 +407,9 @@ class PrintTab(QtWidgets.QStackedWidget):
         if not value or name != "homing_origin" or len(value) <= 2:
             return
         self._active_z_offset = value[2]
-        self.save_config_btn.setVisible(round(value[2], 3) != 0)
+        self.save_config_btn.setVisible(
+            "beacon" not in self.printer.available_objects and round(value[2], 3) != 0
+        )
 
     def _on_delete_file_confirmed(self, filename: str, directory: str) -> None:
         """Handle confirmed file deletion after user accepted the dialog."""
@@ -481,9 +483,13 @@ class PrintTab(QtWidgets.QStackedWidget):
         if self._finish_print_handled:
             return
         if self._active_z_offset != 0 and self.babystepPage.baby_stepchange:
-            self.save_config()
+            if "beacon" not in self.printer.available_objects:
+                self.save_config()
             self._finish_print_handled = True
-        self.save_config_btn.setVisible(round(self._active_z_offset, 3) != 0)
+        self.save_config_btn.setVisible(
+            "beacon" not in self.printer.available_objects
+            and round(self._active_z_offset, 3) != 0
+        )
 
     def setupMainPrintPage(self) -> None:
         """Setup UI for print page"""
