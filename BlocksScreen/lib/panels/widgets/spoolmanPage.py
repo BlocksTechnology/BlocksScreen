@@ -173,7 +173,9 @@ class SpoolmanPage(QtWidgets.QWidget):
             return
         spool_id = self._selected_spool.get("id")
         if spool_id is not None:
+            self._active_spool_id = int(spool_id)
             self.request_set_spool_id.emit(int(spool_id))
+            self._refresh_info_box()
 
     def _on_delete_clicked(self) -> None:
         if self._selected_spool is None:
@@ -316,16 +318,20 @@ class SpoolmanPage(QtWidgets.QWidget):
             )
             self.color_swatch_layout.addWidget(swatch)
 
-    def showEvent(self, event: QtGui.QShowEvent | None) -> None:
+    def showEvent(self, event: QtGui.QShowEvent | None) -> None:  # noqa: N802
         self._on_reload_clicked()
         return super().showEvent(event)
 
-    def deleteLater(self) -> None:
+    def deleteLater(self) -> None:  # noqa: N802
         self.model.clear()
         self.entry_delegate.clear()
         return super().deleteLater()
 
-    def _setupUI(self) -> None:
+    def _setupUI(self) -> None:  # noqa: N802
+        font_id = QtGui.QFontDatabase.addApplicationFont(
+            ":/font/media/fonts for text/Momcake-Bold.ttf"
+        )
+        font_family = QtGui.QFontDatabase.applicationFontFamilies(font_id)[0]
 
         size_policy = QtWidgets.QSizePolicy(
             QtWidgets.QSizePolicy.Policy.MinimumExpanding,

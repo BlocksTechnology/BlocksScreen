@@ -1,22 +1,19 @@
-from PyQt6 import QtCore, QtGui, QtWidgets
 import typing
-from lib.utils.icon_button import IconButton
-from lib.utils.blocks_button import BlocksCustomButton
-from lib.utils.blocks_frame import BlocksCustomFrame
-from lib.utils.blocks_linedit import BlocksCustomLinEdit
-from lib.panels.widgets.loadWidget import LoadingOverlayWidget
-from lib.utils.list_model import EntryDelegate, EntryListModel, ListItem
-
-from devices.amu.models import GateInfo, GateStatus
-
-from lib.panels.widgets.basePopup import BasePopup
-from devices.amu import AMUManager
-from lib.panels.widgets.keyboardPage import CustomQwertyKeyboard
-
 from collections import deque
 from typing import Deque
 
+from devices.amu import AMUManager
+from devices.amu.models import GateInfo, GateStatus
 from lib.panels.widgets.amuWidgets import SpoolCarousel, SpoolInfoPanel
+from lib.panels.widgets.basePopup import BasePopup
+from lib.panels.widgets.keyboardPage import CustomQwertyKeyboard
+from lib.panels.widgets.loadWidget import LoadingOverlayWidget
+from lib.utils.blocks_button import BlocksCustomButton
+from lib.utils.blocks_frame import BlocksCustomFrame
+from lib.utils.blocks_linedit import BlocksCustomLinEdit
+from lib.utils.icon_button import IconButton
+from lib.utils.list_model import EntryDelegate, EntryListModel, ListItem
+from PyQt6 import QtCore, QtGui, QtWidgets
 
 
 class AMUpage(QtWidgets.QStackedWidget):
@@ -71,9 +68,13 @@ class AMUpage(QtWidgets.QStackedWidget):
         self._qwerty.value_selected.connect(self._on_qwerty_value_selected)
 
         self.info_panel.request_keypad.connect(self._on_show_keyboard)
-        self.info_panel.loadRequested.connect(self.amu_manager.load_gate)
+        self.info_panel.loadRequested.connect(
+            lambda: self.amu_manager.load_gate(self.current_index)
+        )
         self.info_panel.unloadRequested.connect(self.amu_manager.unload)
-        self.info_panel.ejectRequested.connect(self.amu_manager.eject_gate)
+        self.info_panel.ejectRequested.connect(
+            lambda: self.amu_manager.eject_gate(self.current_index)
+        )
         self.info_panel.checkRequested.connect(self.amu_manager.check_gate)
 
         self.amu_manager.pre_gate_changed.connect(self.on_pre_gate)

@@ -204,7 +204,7 @@ class AMUManager(QtCore.QObject):
         """
         self.run_gcode_signal.emit(f"MMU_GATE_MAP gate={gate} MATERIAL={material}")
 
-    def set_gate_temp(self, gate: int , temp : int):
+    def set_gate_temp(self, gate: int, temp: int):
         """Set the `temperature` at the gate `gate`
 
         Args:
@@ -233,6 +233,27 @@ class AMUManager(QtCore.QObject):
         if spool_id != -1:
             self.fetch_spool(gate, spool_id)
 
+    def update_spool_weight(self, gate: int, used_weight: float) -> None:
+        """Push updated used_weight to Spoolman for the spool at `gate`.
+
+        No-op if MMU state not received, spoolman is off or read-only, gate is
+        out of range, of the gate has no spool assigned.
+        """
+        if self._mmu_state is None:
+            return
+        if self._mmu_state.spoolman_support in (
+            SpoolmanSupport.OFF,
+            SpoolmanSupport.READONLY,
+        ):
+            return
+        if gate >= len(self._mmu_state.gates):
+            logger.warning("update_spool_weight: gate %d out of range", gate)
+            return
+        spool_id = self._mmu_state.gates[gate].spool_id
+        if spool_id == -1:
+            return
+        self._ws.api.update_spool(spool_id, {"used_weight": used_weight})
+
     def home_mmu(self) -> None:
         """Home the MMU selector by sending MMU_HOME."""
         self.run_gcode_signal.emit("MMU_HOME")
@@ -241,13 +262,13 @@ class AMUManager(QtCore.QObject):
         """Reset the MMU and clear any pause or error state by sending MMU_RESET."""
         self.run_gcode_signal.emit("MMU_RESET")
 
-    def load_gate(self) -> None:
+    def load_gate(self, gate: int = 0) -> None:
         """Load filament from the specified gate by sending MMU_LOAD
 
         Args:
             gate (int): Gate index to select (0-based)
         """
-        self.run_gcode_signal.emit("MMU_LOAD")
+        self.run_gcode_signal.emit(f"MMU_SELECT gate={gate}\nMMU_LOAD")
 
     def unload(self) -> None:
         """Unload the currently loaded filament by sending MMU_UNLOAD."""
@@ -259,15 +280,15 @@ class AMUManager(QtCore.QObject):
         Args:
             tool (int): Tool index to select (0-based)
         """
-        self.run_gcode_signal.emit(f"MMU_SELECT Gate={tool}")
+        self.run_gcode_signal.emit(f"MMU_CHANGE_TOOL TOOL={tool}")
 
-    def eject_gate(self) -> None:
+    def eject_gate(self, gate: int = 0) -> None:
         """Fully eject filament from gate, releasing from MMU gear.
 
         Args:
             gate: Gate index to eject from, on None to use currently selected gate.
         """
-        self.run_gcode_signal.emit("MMU_EJECT")
+        self.run_gcode_signal.emit(f"MMU_EJECT GATE={gate}")
 
     def check_gate(self) -> None:
         """Check the current gate for filament presence by sending MMU_CHECK_GATE."""

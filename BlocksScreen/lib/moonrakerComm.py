@@ -828,8 +828,8 @@ class MoonAPI(QtCore.QObject):
         self,
         request_method: str,
         path: str,
-        query: str = None,
-        body: dict = None,
+        query: str | None = None,
+        body: dict | None = None,
         use_v2_response: bool = True,
         callback=None,
     ) -> bool:
@@ -884,7 +884,7 @@ class MoonAPI(QtCore.QObject):
     ) -> bool:
         """Create a new spool (POST /v1/spool)."""
         payload: dict = {"filament_id": filament_id}
-        if body:
+        if body is not None:
             payload.update(body)
         return self.spoolman_proxy("POST", "/v1/spool", body=payload, callback=callback)
 
@@ -895,3 +895,9 @@ class MoonAPI(QtCore.QObject):
     def add_filament(self, body: dict, callback=None) -> bool:
         """Create a new filament (POST /v1/filament)."""
         return self.spoolman_proxy("POST", "/v1/filament", body=body, callback=callback)
+
+    def update_spool(self, spool_id: int, body: dict, callback=None) -> bool:
+        """Update spool attributes (PATCH /v1/spool/{id})."""
+        return self.spoolman_proxy(
+            "PATCH", f"/v1/spool/{spool_id}", body=body, callback=callback
+        )
