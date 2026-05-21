@@ -10,6 +10,8 @@ from PyQt6 import QtCore, QtWidgets
 from devices.amu import AMUManager
 
 from lib.panels.widgets.amuPage import AMUpage
+from lib.panels.widgets.spoolmanPage import SpoolmanPage
+from lib.panels.widgets.basePopup import BasePopup
 
 from lib.ui.filamentStackedWidget_ui import Ui_filamentStackedWidget
 
@@ -59,21 +61,74 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self.amu_configured = False
 
         self.setup_ui()
+        self.run_gcode.connect(self.ws.api.run_gcode)
 
     def setup_ui(self):
-        print(self.amu_manager.get_pre_gate_sensors())
-        if self.amu_manager.is_amu_configured():
-            self.amu_manager.mmu_state_changed.connect(self.on_mmu_state_changed)
-        else:
-            self.without_amu()
+
+        #        if self.amu_manager.is_amu_configured():
+        self.amu_manager.mmu_state_changed.connect(self.on_mmu_state_changed)
+
+    #        else:
+    #            self.without_amu()
 
     def on_mmu_state_changed(self, mmu_state):
         if not self.amu_configured:
-            if len(mmu_state.gates) > 1:
+            if len(mmu_state.gates) > 0:
                 self.setMinimumSize(720, 420)
                 self.amupage = AMUpage(self.amu_manager, parent=self)
                 self.addWidget(self.amupage)
                 self.amupage.request_back.connect(self.request_back)
+                self.amupage.request_gate_map.connect(self.run_gcode)
+                self.amupage.request_spools.connect(
+                    lambda: self.ws.api.spoolman_proxy(
+                        "GET", "/v1/spool", callback=self.amupage.on_spools_received
+                    )
+                )
+
+                self.spoolmanPage = SpoolmanPage(self)
+                self._spoolman_popup = BasePopup(self, False, False)
+                self._spoolman_popup.add_widget(self.spoolmanPage)
+                self.spoolmanPage.request_spools.connect(
+                    lambda: self.ws.api.spoolman_proxy(
+                        "GET",
+                        "/v1/spool",
+                        callback=self.spoolmanPage.on_spools_received,
+                    )
+                )
+                self.spoolmanPage.request_get_spool_id.connect(
+                    lambda: self.ws.api.get_spool_id(
+                        callback=self.spoolmanPage.on_active_spool_received
+                    )
+                )
+                self.spoolmanPage.request_set_spool_id.connect(
+                    lambda spool_id: self.ws.api.set_spool_id(spool_id)
+                )
+                self.spoolmanPage.request_delete_spool.connect(
+                    lambda spool_id: self.ws.api.delete_spool(
+                        spool_id,
+                        callback=self.spoolmanPage.on_delete_spool_result,
+                    )
+                )
+                self.spoolmanPage.request_filaments.connect(
+                    lambda: self.ws.api.get_filaments(
+                        callback=self.spoolmanPage.on_filaments_received
+                    )
+                )
+                self.spoolmanPage.request_add_spool.connect(
+                    lambda filament_id, body: self.ws.api.add_spool(
+                        filament_id,
+                        body,
+                        callback=self.spoolmanPage.on_add_spool_result,
+                    )
+                )
+                self.spoolmanPage.request_add_filament.connect(
+                    lambda body: self.ws.api.add_filament(
+                        body,
+                        callback=self.spoolmanPage.on_add_filament_result,
+                    )
+                )
+                self.spoolmanPage.request_back.connect(self._spoolman_popup.hide)
+                self.amupage.request_open_spoolman.connect(self._spoolman_popup.show)
 
             else:
                 self.without_amu()
@@ -138,7 +193,6 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self.panel.main_back_button.clicked.connect(
             lambda: self.request_change_tab.emit(0)
         )
-        self.run_gcode.connect(self.ws.api.run_gcode)
         self.printer.unload_filament_update.connect(self.on_unload_filament)
         self.printer.load_filament_update.connect(self.on_load_filament)
         self.printer.filament_switch_sensor_update.connect(
@@ -255,12 +309,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self.run_gcode.emit(
             f"""SAVE_VARIABLE VARIABLE=filament_type VALUE='"{filament.value.name}"'"""
         )
-        if self.amu_manager.is_amu_configured():
-            self.run_gcode.emit("MMU_LOAD")
-        else:
-            self.run_gcode.emit(
-                f"LOAD_FILAMENT TEMPERATURE={filament.value.temperature}"
-            )
+        self.run_gcode.emit("MMU_LOAD")
 
     @QtCore.pyqtSlot(str, int, name="unload_filament")
     def unload_filament(self, toolhead: int = 0, temp: int = 220) -> None:
@@ -286,10 +335,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self.run_gcode.emit(
             f"""SAVE_VARIABLE VARIABLE=filament_type VALUE='"{FilamentTypes.UNKNOWN.value.name}"'"""
         )
-        if self.amu_manager.is_amu_configured():
-            self.run_gcode.emit("MMU_UNLOAD")
-        else:
-            self.run_gcode.emit(f"UNLOAD_FILAMENT TEMPERATURE={temp}")
+        self.run_gcode.emit("MMU_UNLOAD")
 
     def handle_filament_state(self):
         """Handle ui changes on filament states"""

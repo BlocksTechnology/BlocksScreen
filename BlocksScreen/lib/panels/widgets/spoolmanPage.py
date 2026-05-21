@@ -3,8 +3,6 @@ import typing
 from lib.panels.widgets.addFilamentPage import AddFilamentPage
 from lib.panels.widgets.addSpoolPage import AddSpoolPage
 from lib.panels.widgets.basePopup import BasePopup
-from lib.panels.widgets.loadWidget import LoadingOverlayWidget
-from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_frame import BlocksCustomFrame
 from lib.utils.icon_button import IconButton
 from lib.utils.list_model import EntryDelegate, EntryListModel, ListItem
@@ -45,6 +43,25 @@ class SpoolmanPage(QtWidgets.QWidget):
         self._display_name_to_spool: dict[str, dict] = {}
 
         self._setupUI()
+        self._setup_add_popup()
+
+        self._add_spool_page.request_filaments.connect(self.request_filaments)
+        self._add_spool_page.request_add_spool.connect(self.request_add_spool)
+        self._add_spool_page.open_add_filament.connect(
+            lambda: self._add_stack.setCurrentIndex(1)
+        )
+        self._add_spool_page.accepted.connect(self._add_popup.hide)
+        self._add_spool_page.accepted.connect(self._on_reload_clicked)
+        self._add_spool_page.cancelled.connect(self._add_popup.hide)
+
+        self._add_filament_page.request_add_filament.connect(self.request_add_filament)
+        self._add_filament_page.accepted.connect(
+            lambda: self._add_stack.setCurrentIndex(0)
+        )
+        self._add_filament_page.accepted.connect(self._add_spool_page.reset)
+        self._add_filament_page.cancelled.connect(
+            lambda: self._add_stack.setCurrentIndex(0)
+        )
 
         self.model = EntryListModel()
         self.model.setParent(self.spool_list_widget)
@@ -55,24 +72,21 @@ class SpoolmanPage(QtWidgets.QWidget):
         self.entry_delegate.item_selected.connect(self.on_item_clicked)
         self.reload_btn.clicked.connect(self._on_reload_clicked)
         self.back_btn.clicked.connect(self.request_back)
-        self.set_active_btn.clicked.connect(self._on_set_active_clicked)
         self.delete_btn.clicked.connect(self._on_delete_clicked)
-        self.confirm_yes_btn.clicked.connect(self._on_confirm_delete)
-        self.confirm_no_btn.clicked.connect(self._on_cancel_delete)
+
+        self.confirm_popup = BasePopup(self, True, True)
+        self.confirm_popup.set_message("Do you want to delete this spool")
+        self.confirm_popup.accepted.connect(self._on_confirm_delete)
 
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_StyledBackground, True)
-        self._setup_add_popup()
-        self.show_loading(True)
 
     @QtCore.pyqtSlot(dict, name="on-spools-received")
     def on_spools_received(self, result: dict) -> None:
         """Handle v2 proxy response for GET /v1/spool."""
         if result.get("error") is not None:
-            self.show_loading(False)
             return
         spools = result.get("response")
         if not isinstance(spools, list):
-            self.show_loading(False)
             return
         self._spools = spools
         self._build_model_list()
@@ -99,6 +113,7 @@ class SpoolmanPage(QtWidgets.QWidget):
             name = f"{name} [Archived]"
         return name
 
+    @staticmethod
     def _make_add_pixmap() -> QtGui.QPixmap:
         pixmap = QtGui.QPixmap(32, 32)
         pixmap.fill(QtCore.Qt.GlobalColor.transparent)
@@ -150,7 +165,6 @@ class SpoolmanPage(QtWidgets.QWidget):
         return pixmap
 
     def _on_reload_clicked(self) -> None:
-        self.show_loading(True)
         self.request_spools.emit()
         self.request_get_spool_id.emit()
 
@@ -164,17 +178,13 @@ class SpoolmanPage(QtWidgets.QWidget):
     def _on_delete_clicked(self) -> None:
         if self._selected_spool is None:
             return
-        self.action_stack.setCurrentIndex(1)
+        self.confirm_popup.show()
 
     def _on_confirm_delete(self) -> None:
-        self.action_stack.setCurrentIndex(0)
         if self._selected_spool is not None:
             spool_id = self._selected_spool.get("id")
             if spool_id is not None:
                 self.request_delete_spool.emit(int(spool_id))
-
-    def _on_cancel_delete(self) -> None:
-        self.action_stack.setCurrentIndex(0)
 
     def _build_model_list(self) -> None:
         self.spool_list_widget.blockSignals(True)
@@ -217,6 +227,9 @@ class SpoolmanPage(QtWidgets.QWidget):
                 notificate=is_active,
             )
             self.model.add_item(item)
+        self.on_item_clicked(
+            self.model.data(self.model.index(0), QtCore.Qt.ItemDataRole.UserRole)
+        )
 
         self.model.add_item(
             ListItem(
@@ -228,11 +241,7 @@ class SpoolmanPage(QtWidgets.QWidget):
         )
 
         self.model.setData(self.model.index(0), True, EntryListModel.EnableRole)
-        self.on_item_clicked(
-            self.model.data(self.model.index(0), QtCore.Qt.ItemDataRole.UserRole)
-        )
         self.spool_list_widget.blockSignals(False)
-        self.show_loading(False)
 
     @QtCore.pyqtSlot(ListItem, name="on-item-clicked")
     def on_item_clicked(self, item: ListItem) -> None:
@@ -242,7 +251,6 @@ class SpoolmanPage(QtWidgets.QWidget):
             self._on_add_spool_clicked()
             return
         self._selected_spool = self._display_name_to_spool.get(item.text)
-        self.action_stack.setCurrentIndex(0)
         self._refresh_info_box()
 
     def _refresh_info_box(self) -> None:
@@ -272,10 +280,6 @@ class SpoolmanPage(QtWidgets.QWidget):
         self.temps_label.setText(f"{extruder_str} / {bed_str}")
 
         self._update_color_swatches(filament)
-
-        is_active = spool.get("id") == self._active_spool_id
-        self.set_active_btn.setText("Active" if is_active else "Set Active")
-        self.set_active_btn.setEnabled(not is_active)
 
     def _update_color_swatches(self, filament: dict) -> None:
         while self.color_swatch_layout.count():
@@ -312,10 +316,6 @@ class SpoolmanPage(QtWidgets.QWidget):
             )
             self.color_swatch_layout.addWidget(swatch)
 
-    def show_loading(self, loading: bool) -> None:
-        self.load_widget.setVisible(loading)
-        self.spool_list_widget.setVisible(not loading)
-
     def showEvent(self, event: QtGui.QShowEvent | None) -> None:
         self._on_reload_clicked()
         return super().showEvent(event)
@@ -326,10 +326,6 @@ class SpoolmanPage(QtWidgets.QWidget):
         return super().deleteLater()
 
     def _setupUI(self) -> None:
-        font_id = QtGui.QFontDatabase.addApplicationFont(
-            ":/font/media/fonts for text/Momcake-Bold.ttf"
-        )
-        font_family = QtGui.QFontDatabase.applicationFontFamilies(font_id)[0]
 
         size_policy = QtWidgets.QSizePolicy(
             QtWidgets.QSizePolicy.Policy.MinimumExpanding,
@@ -362,7 +358,6 @@ class SpoolmanPage(QtWidgets.QWidget):
         header_layout.addWidget(self.reload_btn)
 
         title_font = QtGui.QFont()
-        title_font.setFamily(font_family)
         title_font.setPointSize(22)
         self.header_title = QtWidgets.QLabel("Spoolman", self)
         self.header_title.setFixedHeight(60)
@@ -416,15 +411,9 @@ class SpoolmanPage(QtWidgets.QWidget):
             QtWidgets.QScroller.ScrollerGestureType.LeftMouseButtonGesture,
         )
 
-        self.load_widget = LoadingOverlayWidget(
-            list_frame, LoadingOverlayWidget.AnimationGIF.DEFAULT
-        )
-
         list_layout = QtWidgets.QVBoxLayout()
         list_layout.setContentsMargins(4, 4, 4, 4)
         list_layout.addWidget(self.spool_list_widget, 1)
-        self.spool_list_widget.hide()
-        list_layout.addWidget(self.load_widget, 1)
         list_frame.setLayout(list_layout)
         main_layout.addWidget(list_frame, 3)
 
@@ -435,11 +424,9 @@ class SpoolmanPage(QtWidgets.QWidget):
         info_frame.setLayout(info_layout)
 
         key_font = QtGui.QFont()
-        key_font.setFamily(font_family)
         key_font.setPointSize(12)
 
         val_font = QtGui.QFont()
-        val_font.setFamily(font_family)
         val_font.setPointSize(14)
 
         white_palette = QtGui.QPalette()
@@ -447,21 +434,19 @@ class SpoolmanPage(QtWidgets.QWidget):
             white_palette.ColorRole.WindowText, QtGui.QColor("#FFFFFF")
         )
 
-        ROW_H = 32
-
         def _add_row(title_text: str) -> QtWidgets.QLabel:
             row = QtWidgets.QHBoxLayout()
             row.setSpacing(4)
             title = QtWidgets.QLabel(title_text, self)
             title.setFont(key_font)
             title.setStyleSheet("color: rgb(180,180,180); background: transparent;")
-            title.setFixedHeight(ROW_H)
+            title.setFixedHeight(32)
             title.setMinimumWidth(80)
             title.setMaximumWidth(110)
             value = QtWidgets.QLabel("—", self)
             value.setFont(val_font)
             value.setStyleSheet("color: white; background: transparent;")
-            value.setFixedHeight(ROW_H)
+            value.setFixedHeight(32)
             value.setAlignment(
                 QtCore.Qt.AlignmentFlag.AlignRight
                 | QtCore.Qt.AlignmentFlag.AlignVCenter
@@ -482,7 +467,7 @@ class SpoolmanPage(QtWidgets.QWidget):
         color_title = QtWidgets.QLabel("Color:", self)
         color_title.setFont(key_font)
         color_title.setStyleSheet("color: rgb(180,180,180); background: transparent;")
-        color_title.setFixedHeight(ROW_H)
+        color_title.setFixedHeight(32)
         color_title.setMinimumWidth(80)
         color_title.setMaximumWidth(110)
         color_row.addWidget(color_title, 0)
@@ -494,17 +479,11 @@ class SpoolmanPage(QtWidgets.QWidget):
 
         info_layout.addStretch(1)
 
-        # Action area: stacked (normal | delete-confirm)
         action_font = QtGui.QFont()
-        action_font.setFamily(font_family)
-        action_font.setPointSize(16)
+        action_font.setPointSize(22)
 
-        self.action_stack = QtWidgets.QStackedWidget()
-        self.action_stack.setFixedHeight(60)
-
-        # Page 0: normal actions
-        normal_page = QtWidgets.QWidget()
-        normal_layout = QtWidgets.QHBoxLayout(normal_page)
+        button_widget = QtWidgets.QWidget()
+        normal_layout = QtWidgets.QHBoxLayout(button_widget)
         normal_layout.setContentsMargins(0, 0, 0, 0)
         normal_layout.setSpacing(8)
 
@@ -516,77 +495,27 @@ class SpoolmanPage(QtWidgets.QWidget):
         )
         normal_layout.addWidget(self.delete_btn, 0)
 
-        self.set_active_btn = BlocksCustomButton()
-        self.set_active_btn.setFixedHeight(60)
-        self.set_active_btn.setMinimumWidth(160)
-        self.set_active_btn.setMaximumWidth(260)
-        self.set_active_btn.setFont(action_font)
-        self.set_active_btn.setText("Set Active")
-        normal_layout.addWidget(
-            self.set_active_btn, 1, QtCore.Qt.AlignmentFlag.AlignCenter
-        )
-
-        self.action_stack.addWidget(normal_page)
-
-        # Page 1: confirm delete
-        confirm_page = QtWidgets.QWidget()
-        confirm_layout = QtWidgets.QHBoxLayout(confirm_page)
-        confirm_layout.setContentsMargins(0, 0, 0, 0)
-        confirm_layout.setSpacing(6)
-
-        confirm_lbl = QtWidgets.QLabel("Delete spool?", self)
-        confirm_lbl.setFont(val_font)
-        confirm_lbl.setStyleSheet("color: white; background: transparent;")
-        confirm_layout.addWidget(confirm_lbl, 1)
-
-        self.confirm_yes_btn = BlocksCustomButton()
-        self.confirm_yes_btn.setFixedSize(QtCore.QSize(90, 60))
-        self.confirm_yes_btn.setFont(action_font)
-        self.confirm_yes_btn.setText("Yes")
-        confirm_layout.addWidget(self.confirm_yes_btn)
-
-        self.confirm_no_btn = BlocksCustomButton()
-        self.confirm_no_btn.setFixedSize(QtCore.QSize(90, 60))
-        self.confirm_no_btn.setFont(action_font)
-        self.confirm_no_btn.setText("No")
-        confirm_layout.addWidget(self.confirm_no_btn)
-
-        self.action_stack.addWidget(confirm_page)
-
-        info_layout.addWidget(self.action_stack, 0, QtCore.Qt.AlignmentFlag.AlignCenter)
+        info_layout.addWidget(button_widget, 0, QtCore.Qt.AlignmentFlag.AlignCenter)
 
         main_layout.addWidget(info_frame, 1)
         page_layout.addLayout(main_layout, 1)
         self.setLayout(page_layout)
 
     def _setup_add_popup(self) -> None:
-        # Add Spool popup
         self._add_spool_page = AddSpoolPage(keyboard_parent=self, parent=self)
-        self._add_spool_popup = BasePopup(self, False, False)
-        self._add_spool_popup.add_widget(self._add_spool_page)
-
-        # Add Filament popup
         self._add_filament_page = AddFilamentPage(keyboard_parent=self, parent=self)
-        self._add_filament_popup = BasePopup(self, False, False)
-        self._add_filament_popup.add_widget(self._add_filament_page)
 
-        # --- Add Spool signals ---
-        self._add_spool_page.request_filaments.connect(self.request_filaments)
-        self._add_spool_page.request_add_spool.connect(self.request_add_spool)
-        self._add_spool_page.open_add_filament.connect(self._add_filament_popup.show)
-        self._add_spool_page.accepted.connect(self._add_spool_popup.hide)
-        self._add_spool_page.accepted.connect(self._on_reload_clicked)
-        self._add_spool_page.cancelled.connect(self._add_spool_popup.hide)
+        self._add_stack = QtWidgets.QStackedWidget()
+        self._add_stack.addWidget(self._add_spool_page)  # index 0
+        self._add_stack.addWidget(self._add_filament_page)  # index 1
 
-        # --- Add Filament signals ---
-        self._add_filament_page.request_add_filament.connect(self.request_add_filament)
-        self._add_filament_page.accepted.connect(self._add_filament_popup.hide)
-        self._add_filament_page.accepted.connect(self._add_spool_page.reset)
-        self._add_filament_page.cancelled.connect(self._add_filament_popup.hide)
+        self._add_popup = BasePopup(self, False, False)
+        self._add_popup.add_widget(self._add_stack)
 
     def _on_add_spool_clicked(self) -> None:
+        self._add_stack.setCurrentIndex(0)
         self._add_spool_page.reset()
-        self._add_spool_popup.show()
+        self._add_popup.show()
 
     @QtCore.pyqtSlot(dict, name="on-filaments-received")
     def on_filaments_received(self, result: dict) -> None:

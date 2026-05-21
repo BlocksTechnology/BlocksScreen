@@ -31,6 +31,9 @@ class AddFilamentPage(QtWidgets.QWidget):
     def on_add_filament_result(self, result: dict) -> None:
         if result.get("error") is None:
             self.accepted.emit()
+        else:
+            ...
+            # TODO: some responsiveness here
 
     def _show_keyboard(
         self,
@@ -60,7 +63,7 @@ class AddFilamentPage(QtWidgets.QWidget):
         if len(hex_text) == 6:
             color = QtGui.QColor(f"#{hex_text}")
             self._color_swatch.setStyleSheet(
-                f"border-radius: 10px;"
+                f"border-radius: 8px;"
                 f"background: rgb({color.red()},{color.green()},{color.blue()});"
                 f"border: 2px solid rgba(255,255,255,80);"
             )
@@ -72,6 +75,9 @@ class AddFilamentPage(QtWidgets.QWidget):
         color_hex = self._color_field.text().strip().strip("#")
         ext_temp = self._ext_temp_field.text().strip()
         bed_temp = self._bed_temp_field.text().strip()
+        density_text = self._density_field.text().strip()
+        diameter_text = self._diameter_field.text().strip()
+
         if name:
             body["name"] = name
         if material:
@@ -86,6 +92,15 @@ class AddFilamentPage(QtWidgets.QWidget):
             body["settings_bed_temp"] = int(bed_temp)
         except ValueError:
             pass
+        try:
+            body["density"] = float(density_text)
+        except ValueError:
+            body["density"] = 1.24
+        try:
+            body["diameter"] = float(diameter_text)
+        except ValueError:
+            body["diameter"] = 1.75
+
         self.request_add_filament.emit(body)
 
     def _build_ui(self) -> None:
@@ -112,12 +127,12 @@ class AddFilamentPage(QtWidgets.QWidget):
         def _make_field() -> BlocksCustomLinEdit:
             fld = BlocksCustomLinEdit(self)
             fld.setFont(_f(14))
-            fld.setFixedHeight(52)
+            fld.setFixedHeight(44)
             return fld
 
         root = QtWidgets.QVBoxLayout(self)
         root.setContentsMargins(8, 8, 8, 8)
-        root.setSpacing(6)
+        root.setSpacing(4)
 
         hdr = QtWidgets.QHBoxLayout()
         hdr.setContentsMargins(0, 0, 0, 0)
@@ -138,9 +153,9 @@ class AddFilamentPage(QtWidgets.QWidget):
 
         grid_w = QtWidgets.QWidget()
         grid = QtWidgets.QGridLayout(grid_w)
-        grid.setContentsMargins(8, 4, 8, 4)
+        grid.setContentsMargins(8, 2, 8, 2)
         grid.setHorizontalSpacing(12)
-        grid.setVerticalSpacing(6)
+        grid.setVerticalSpacing(4)
         grid.setColumnStretch(1, 1)
 
         self._name_field = _make_field()
@@ -148,11 +163,13 @@ class AddFilamentPage(QtWidgets.QWidget):
         self._color_field = _make_field()
         self._ext_temp_field = _make_field()
         self._bed_temp_field = _make_field()
+        self._density_field = _make_field()
+        self._diameter_field = _make_field()
 
         self._color_swatch = QtWidgets.QLabel(self)
-        self._color_swatch.setFixedSize(52, 52)
+        self._color_swatch.setFixedSize(44, 44)
         self._color_swatch.setStyleSheet(
-            "border-radius: 10px; background: #ffffff; border: 2px solid rgba(255,255,255,80);"
+            "border-radius: 8px; background: #ffffff; border: 2px solid rgba(255,255,255,80);"
         )
 
         rows = [
@@ -161,6 +178,8 @@ class AddFilamentPage(QtWidgets.QWidget):
             ("Color:", self._color_field, self._color_swatch),
             ("Ext Temp:", self._ext_temp_field, None),
             ("Bed Temp:", self._bed_temp_field, None),
+            ("Density:", self._density_field, None),
+            ("Diameter:", self._diameter_field, None),
         ]
         for i, (label, field, extra) in enumerate(rows):
             grid.addWidget(_key_lbl(label), i, 0)
@@ -175,6 +194,8 @@ class AddFilamentPage(QtWidgets.QWidget):
         self._color_field.setText("ffffff")
         self._ext_temp_field.setText("220")
         self._bed_temp_field.setText("60")
+        self._density_field.setText("1.24")
+        self._diameter_field.setText("1.75")
 
         self._name_field.clicked.connect(lambda: self._show_keyboard(self._name_field))
         self._material_field.clicked.connect(
@@ -189,9 +210,16 @@ class AddFilamentPage(QtWidgets.QWidget):
         self._bed_temp_field.clicked.connect(
             lambda: self._show_keyboard(self._bed_temp_field, pattern="int", max_char=3)
         )
+        self._density_field.clicked.connect(
+            lambda: self._show_keyboard(self._density_field, max_char=5)
+        )
+        self._diameter_field.clicked.connect(
+            lambda: self._show_keyboard(self._diameter_field, max_char=4)
+        )
 
         self._color_field.textChanged.connect(self._update_swatch)
 
+        # Submit
         submit_btn = BlocksCustomButton(self)
         submit_btn.setFixedHeight(60)
         submit_btn.setFont(_f(16))

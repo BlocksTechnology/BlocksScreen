@@ -4,24 +4,33 @@ from lib.utils.icon_button import IconButton
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_frame import BlocksCustomFrame
 from lib.utils.blocks_linedit import BlocksCustomLinEdit
+from lib.panels.widgets.loadWidget import LoadingOverlayWidget
+from lib.utils.list_model import EntryDelegate, EntryListModel, ListItem
 
 from devices.amu.models import GateInfo, GateStatus
 
-
 from lib.panels.widgets.basePopup import BasePopup
-
 from devices.amu import AMUManager
 from lib.panels.widgets.keyboardPage import CustomQwertyKeyboard
 
 from collections import deque
 from typing import Deque
 
-from lib.panels.widgets.amuWidgets import SpoolCarousel , SpoolInfoPanel
+from lib.panels.widgets.amuWidgets import SpoolCarousel, SpoolInfoPanel
 
 
 class AMUpage(QtWidgets.QStackedWidget):
     request_back: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         name="request_back"
+    )
+    request_spools: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        name="request-spools"
+    )
+    request_gate_map: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        str, name="request-gate-map"
+    )
+    request_open_spoolman: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        name="request-open-spoolman"
     )
 
     def __init__(self, amu_manager, parent=None):
@@ -31,6 +40,9 @@ class AMUpage(QtWidgets.QStackedWidget):
         self.pre_gate_idx = -1
         self.amu_manager: AMUManager = amu_manager
         self.popup_gates: Deque = deque()
+        self._selected_spool_id: int = -1
+        self._spool_id_map: dict[str, dict] = {}
+        self._current_field = None
 
         self._build_ui()
 
@@ -53,16 +65,12 @@ class AMUpage(QtWidgets.QStackedWidget):
             )
         )
 
-        # self.info_panel._lbl_weight.editingFinished.connect(lambda:self.amu_manager.set_gate_weight(self.current_index, int(self.info_panel._lbl_weight.text())))
-
         self._qwerty = CustomQwertyKeyboard(self)
         self._qwerty.hide()
-
         self._qwerty.numpad_back_btn.clicked.connect(self._on_qwerty_go_back)
         self._qwerty.value_selected.connect(self._on_qwerty_value_selected)
 
         self.info_panel.request_keypad.connect(self._on_show_keyboard)
-
         self.info_panel.loadRequested.connect(self.amu_manager.load_gate)
         self.info_panel.unloadRequested.connect(self.amu_manager.unload)
         self.info_panel.ejectRequested.connect(self.amu_manager.eject_gate)
@@ -74,9 +82,209 @@ class AMUpage(QtWidgets.QStackedWidget):
         self._setup_popup()
 
     def _setup_popup(self):
+        self._popup_stack = QtWidgets.QStackedWidget()
+        self._popup_stack.addWidget(self._build_form_page())  # index 0: manual form
+        self._popup_stack.addWidget(self._build_spool_page())  # index 1: spool picker
+
         self.popup = BasePopup(self, False, False)
-        self.popup_wiget = self._popup_widget_ui()
-        self.popup.add_widget(self.popup_wiget)
+        self.popup.add_widget(self._popup_stack)
+
+    def _build_form_page(self) -> QtWidgets.QWidget:
+        page = QtWidgets.QWidget()
+        root = QtWidgets.QVBoxLayout(page)
+        root.setContentsMargins(16, 12, 16, 12)
+        root.setSpacing(8)
+
+        self._popup_title_lbl = QtWidgets.QLabel("Filament Detected", page)
+        title_font = QtGui.QFont()
+        title_font.setPointSize(20)
+        self._popup_title_lbl.setFont(title_font)
+        self._popup_title_lbl.setStyleSheet("color: white; background: transparent;")
+        self._popup_title_lbl.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self._popup_title_lbl.setFixedHeight(50)
+        root.addWidget(self._popup_title_lbl)
+
+        grid_w = QtWidgets.QWidget(page)
+        grid = QtWidgets.QGridLayout(grid_w)
+        grid.setContentsMargins(0, 0, 0, 0)
+        grid.setHorizontalSpacing(10)
+        grid.setVerticalSpacing(6)
+        grid.setColumnStretch(1, 1)
+
+        key_font = QtGui.QFont()
+        key_font.setPointSize(13)
+        val_font = QtGui.QFont()
+        val_font.setPointSize(14)
+
+        def _lbl(text):
+            l = QtWidgets.QLabel(text, grid_w)
+            l.setFont(key_font)
+            l.setStyleSheet("color: rgb(180,180,180); background: transparent;")
+            return l
+
+        def _field():
+            f = BlocksCustomLinEdit(page)
+            f.setFont(val_font)
+            f.setFixedHeight(50)
+            return f
+
+        self._popup_name = _field()
+        self._popup_color = _field()
+        self._popup_material = _field()
+        self._popup_temp = _field()
+
+        self._popup_swatch = QtWidgets.QLabel(page)
+        self._popup_swatch.setFixedSize(50, 50)
+        self._popup_swatch.setStyleSheet(
+            "border-radius: 8px; background: #ffffff; border: 2px solid rgba(255,255,255,80);"
+        )
+
+        rows = [
+            ("Name:", self._popup_name, None),
+            ("Color:", self._popup_color, self._popup_swatch),
+            ("Material:", self._popup_material, None),
+            ("Temp:", self._popup_temp, None),
+        ]
+        for i, (lbl_text, field, extra) in enumerate(rows):
+            grid.addWidget(_lbl(lbl_text), i, 0)
+            grid.addWidget(field, i, 1)
+            if extra:
+                grid.addWidget(extra, i, 2)
+
+        root.addWidget(grid_w, 1)
+
+        self._popup_name.setPlaceholderText("e.g. PLA Generic")
+        self._popup_color.setText("ffffff")
+        self._popup_material.setText("PLA")
+        self._popup_temp.setText("220")
+
+        self._popup_name.clicked.connect(
+            lambda: self._on_show_keyboard(self._popup_name)
+        )
+        self._popup_color.clicked.connect(
+            lambda: self._on_show_keyboard(self._popup_color, prefix="#", max_char=6)
+        )
+        self._popup_material.clicked.connect(
+            lambda: self._on_show_keyboard(self._popup_material)
+        )
+        self._popup_temp.clicked.connect(
+            lambda: self._on_show_keyboard(
+                self._popup_temp, suffix="º", pattern="int", max_char=3
+            )
+        )
+
+        def _update_swatch():
+            hex_text = self._popup_color.text().strip("#").strip()
+            if len(hex_text) == 6:
+                c = QtGui.QColor(f"#{hex_text}")
+                self._popup_swatch.setStyleSheet(
+                    f"border-radius: 8px;"
+                    f"background: rgb({c.red()},{c.green()},{c.blue()});"
+                    f"border: 2px solid rgba(255,255,255,80);"
+                )
+
+        self._popup_color.textChanged.connect(_update_swatch)
+
+        btn_row = QtWidgets.QHBoxLayout()
+        btn_row.setSpacing(8)
+
+        spoolman_btn = BlocksCustomButton(page)
+        spoolman_btn.setFixedHeight(60)
+        spoolman_btn.setText("Spoolman")
+        spoolman_btn.clicked.connect(self._on_spoolman_clicked)
+        btn_row.addWidget(spoolman_btn)
+
+        accept_btn = BlocksCustomButton(page)
+        accept_btn.setFixedHeight(60)
+        accept_btn.setText("Accept")
+        accept_btn.clicked.connect(self.on_popup_accept)
+        btn_row.addWidget(accept_btn)
+
+        root.addLayout(btn_row)
+        return page
+
+    def _build_spool_page(self) -> QtWidgets.QWidget:
+        page = QtWidgets.QWidget()
+        root = QtWidgets.QVBoxLayout(page)
+        root.setContentsMargins(8, 8, 8, 8)
+        root.setSpacing(6)
+
+        # Header
+        hdr = QtWidgets.QHBoxLayout()
+        hdr.setContentsMargins(0, 0, 0, 0)
+        hdr.setSpacing(0)
+        back_btn = IconButton(page)
+        back_btn.setFixedSize(QtCore.QSize(60, 60))
+        back_btn.setFlat(True)
+        back_btn.setPixmap(QtGui.QPixmap(":/ui/media/btn_icons/back.svg"))
+        back_btn.clicked.connect(lambda: self._popup_stack.setCurrentIndex(0))
+        hdr.addWidget(back_btn)
+
+        title_font = QtGui.QFont()
+        title_font.setPointSize(18)
+        title_lbl = QtWidgets.QLabel("Select Spool", page)
+        title_lbl.setFont(title_font)
+        title_lbl.setFixedHeight(60)
+        title_lbl.setStyleSheet("color: white; background: transparent;")
+        title_lbl.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        hdr.addWidget(title_lbl, 1)
+
+        manage_btn = IconButton(page)
+        manage_btn.setFixedSize(QtCore.QSize(60, 60))
+        manage_btn.setFlat(True)
+        manage_btn.setPixmap(QtGui.QPixmap(":/ui/media/btn_icons/LCD_settings.svg"))
+        manage_btn.clicked.connect(lambda: self.request_open_spoolman.emit())
+        hdr.addWidget(manage_btn)
+
+        root.addLayout(hdr)
+
+        # List
+        frame = BlocksCustomFrame(page)
+        frame_lay = QtWidgets.QVBoxLayout(frame)
+        frame_lay.setContentsMargins(4, 4, 4, 4)
+
+        self._spool_list_view = QtWidgets.QListView(frame)
+        self._spool_list_view.setMouseTracking(True)
+        self._spool_list_view.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
+        self._spool_list_view.setStyleSheet("background-color: transparent;")
+        self._spool_list_view.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
+        self._spool_list_view.setVerticalScrollBarPolicy(
+            QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
+        self._spool_list_view.setHorizontalScrollBarPolicy(
+            QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
+        self._spool_list_view.setSelectionMode(
+            QtWidgets.QAbstractItemView.SelectionMode.NoSelection
+        )
+        self._spool_list_view.setVerticalScrollMode(
+            QtWidgets.QAbstractItemView.ScrollMode.ScrollPerPixel
+        )
+        QtWidgets.QScroller.grabGesture(
+            self._spool_list_view, QtWidgets.QScroller.ScrollerGestureType.TouchGesture
+        )
+        QtWidgets.QScroller.grabGesture(
+            self._spool_list_view,
+            QtWidgets.QScroller.ScrollerGestureType.LeftMouseButtonGesture,
+        )
+
+        self._spool_model = EntryListModel()
+        self._spool_model.setParent(self._spool_list_view)
+        self._spool_delegate = EntryDelegate()
+        self._spool_list_view.setModel(self._spool_model)
+        self._spool_list_view.setItemDelegate(self._spool_delegate)
+        self._spool_delegate.item_selected.connect(self._on_spool_selected)
+
+        self._spool_load_widget = LoadingOverlayWidget(
+            frame, LoadingOverlayWidget.AnimationGIF.DEFAULT
+        )
+
+        frame_lay.addWidget(self._spool_list_view, 1)
+        frame_lay.addWidget(self._spool_load_widget, 1)
+        self._spool_list_view.hide()
+
+        root.addWidget(frame, 1)
+        return page
 
     def on_mmu_state_changed(self, mmu_state):
         self.status = mmu_state
@@ -86,35 +294,143 @@ class AMUpage(QtWidgets.QStackedWidget):
                     GateStatus.AVAILABLE,
                     GateStatus.AVAILABLE_FROM_BUFFER,
                 ]
-
         for i in range(len(mmu_state.gates)):
-            gate_info = mmu_state.gates[i]
-            self.addSpool(gate_info)
+            self.addSpool(mmu_state.gates[i])
             self.update()
         self._on_selection(mmu_state.gate)
 
     def on_pre_gate(self, gate_index: int, detected: bool):
-        """Only show popup when gate transitions from False to True."""
         previous_state = self._previous_gate_states.get(gate_index)
         self._previous_gate_states[gate_index] = detected
         if previous_state is False and detected is True:
-            self.popup_gates.append({"gate":gate_index})
+            self.popup_gates.append({"gate": gate_index})
             self.handle_popup()
-    
+
     def handle_popup(self):
         if self.popup.isVisible():
             return
         if not self.popup_gates:
             return
         self.pre_gate_idx = self.popup_gates.popleft()
-        self.popup.ui.label.setText(f'Filament Detected on gate {self.pre_gate_idx["gate"]}')
+        gate = self.pre_gate_idx["gate"]
+        self._popup_title_lbl.setText(f"Filament Detected — Gate {gate}")
+        self._popup_stack.setCurrentIndex(0)
+        self._selected_spool_id = -1
         self.popup.show()
 
+    def on_popup_accept(self):
+        gate = self.pre_gate_idx["gate"]
+        name = self._popup_name.text().strip()
+        color = self._popup_color.text().strip("#").strip()
+        material = self._popup_material.text().strip()
+        try:
+            temp = int(self._popup_temp.text().strip("°º").strip())
+        except ValueError:
+            temp = -1
 
-    def addSpool(
-        self,
-        gate_info: GateInfo,
-    ):
+        if len(color) == 6:
+            color = color + "FF"
+
+        parts = [f"MMU_GATE_MAP GATE={gate}"]
+        if self._selected_spool_id != -1:
+            parts.append(f"SPOOLID={self._selected_spool_id}")
+        if name:
+            parts.append(f'NAME="{name}"')
+        if material:
+            parts.append(f'MATERIAL="{material}"')
+        if color:
+            parts.append(f'COLOR="{color}"')
+        parts.append(f"TEMP={temp}")
+        parts.append("QUIET=1")
+
+        self.request_gate_map.emit(" ".join(parts))
+        self.popup.hide()
+        self.handle_popup()
+
+    @QtCore.pyqtSlot(dict, name="on-spools-received")
+    def on_spools_received(self, result: dict) -> None:
+        self._spool_load_widget.hide()
+        self._spool_list_view.show()
+        if result.get("error") is not None:
+            return
+        spools = result.get("response")
+        if not isinstance(spools, list):
+            return
+        self._spool_id_map = {}
+        self._spool_model.clear()
+        self._spool_delegate.clear()
+        for spool in spools:
+            spool_id = spool.get("id", "?")
+            filament = spool.get("filament") or {}
+            name = filament.get("name") or f"Spool #{spool_id}"
+            material = filament.get("material") or ""
+            self._spool_model.add_item(
+                ListItem(
+                    text=name,
+                    right_text=material,
+                    left_icon=self._make_color_pixmap(filament),
+                    _lfontsize=14,
+                    _rfontsize=12,
+                    height=60,
+                )
+            )
+            self._spool_id_map[name] = spool
+
+    @QtCore.pyqtSlot(ListItem, name="on-spool-selected")
+    def _on_spool_selected(self, item: ListItem) -> None:
+        if not item:
+            return
+        spool = self._spool_id_map.get(item.text)
+        if not spool:
+            return
+        filament = spool.get("filament") or {}
+        self._selected_spool_id = spool.get("id", -1)
+        self._popup_name.setText(filament.get("name") or "")
+        self._popup_color.setText(filament.get("color_hex") or "ffffff")
+        self._popup_material.setText(filament.get("material") or "")
+        temp = filament.get("settings_extruder_temp")
+        self._popup_temp.setText(str(temp) if temp is not None else "")
+        self._popup_stack.setCurrentIndex(0)
+
+    def _on_spoolman_clicked(self):
+        self._spool_list_view.hide()
+        self._spool_load_widget.show()
+        self._popup_stack.setCurrentIndex(1)
+        self.request_spools.emit()
+
+    @staticmethod
+    def _make_color_pixmap(filament: dict) -> QtGui.QPixmap:
+        size = 32
+        pixmap = QtGui.QPixmap(size, size)
+        pixmap.fill(QtCore.Qt.GlobalColor.transparent)
+        painter = QtGui.QPainter(pixmap)
+        painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
+        multi_hexes = filament.get("multi_color_hexes")
+        color_hex = filament.get("color_hex")
+        if multi_hexes:
+            hexes = [h.strip() for h in multi_hexes.split(",") if h.strip()]
+            if hexes:
+                clip = QtGui.QPainterPath()
+                clip.addRoundedRect(QtCore.QRectF(0, 0, size, size), 6, 6)
+                painter.setClipPath(clip)
+                stripe_w = size / len(hexes)
+                for i, h in enumerate(hexes):
+                    painter.fillRect(
+                        QtCore.QRectF(i * stripe_w, 0, stripe_w, size),
+                        QtGui.QColor(f"#{h}"),
+                    )
+        elif color_hex:
+            painter.setBrush(QtGui.QColor(f"#{color_hex}"))
+            painter.setPen(QtCore.Qt.PenStyle.NoPen)
+            painter.drawRoundedRect(QtCore.QRectF(0, 0, size, size), 6, 6)
+        else:
+            painter.setPen(QtGui.QColor(180, 180, 180))
+            painter.setBrush(QtCore.Qt.BrushStyle.NoBrush)
+            painter.drawRoundedRect(QtCore.QRectF(1, 1, size - 2, size - 2), 6, 6)
+        painter.end()
+        return pixmap
+
+    def addSpool(self, gate_info: GateInfo):
         self.carousel.addSpool(
             QtGui.QColor("#" + str(gate_info.color)[:-2]),
             gate_info.index,
@@ -134,9 +450,15 @@ class AMUpage(QtWidgets.QStackedWidget):
         self.carousel.selectIndex(idx)
         self.info_panel.setFilamentStatus(self.status)
 
-    @QtCore.pyqtSlot("PyQt_PyObject",str , str , str , int,name="request-keyboard")
-    def _on_show_keyboard(self, field: QtWidgets.QLineEdit , prefix:str = "" ,suffix: str = ""  ,pattern:str = "",max_char:int = 0) -> None:
-        """Show the QWERTY keyboard panel, saving the originating panel and input field."""
+    @QtCore.pyqtSlot("PyQt_PyObject", str, str, str, int, name="request-keyboard")
+    def _on_show_keyboard(
+        self,
+        field: QtWidgets.QLineEdit,
+        prefix: str = "",
+        suffix: str = "",
+        pattern: str = "",
+        max_char: int = 0,
+    ) -> None:
         self._current_field = field
         self._qwerty.setPrefix(prefix)
         self._qwerty.setSuffix(suffix)
@@ -146,146 +468,13 @@ class AMUpage(QtWidgets.QStackedWidget):
         self._qwerty.show()
 
     def _on_qwerty_go_back(self) -> None:
-        """Hide the keyboard and return to the previously active panel."""
         self._qwerty.hide()
 
     def _on_qwerty_value_selected(self, value: str) -> None:
-        """Apply the keyboard-selected *value* to the previously focused input field."""
         self._qwerty.hide()
         if self._current_field:
             self._current_field.setText(value)
             self._current_field.editingFinished.emit()
-
-    def on_popup_accept(self):
-        """Validate popup fields and save data if all are filled."""
-        # Get the popup widget
-        popup_widget = self.popup.ui
-        
-        # Get values from the line edits
-        color = popup_widget._lbl_color.text().strip("#")+"ff"
-        material = popup_widget._lbl_mat.text().strip()
-        weight = popup_widget._lbl_weight.text().strip("g")
-        temp = popup_widget._lbl_temp.text().strip(" º")
-        
-
-        
-        self.amu_manager.set_gate_info(gate= self.pre_gate_idx["gate"] , material=material , color=color , spool_id=-1 , temperature=temp)
-        self.popup.hide()
-        self.handle_popup()
-    
-
-
-    def _popup_widget_ui(self):
-        widget = QtWidgets.QWidget(self)
-        layout = QtWidgets.QVBoxLayout(widget)
-
-        font = QtGui.QFont()
-        font.setPointSize(20)
-
-        widget.label = QtWidgets.QLabel("Filament Detected")
-        widget.label.setFont(font)
-        widget.label.setStyleSheet("color:white")
-        widget.label.setMinimumSize(0, 60)
-        layout.addWidget(widget.label, alignment=QtCore.Qt.AlignmentFlag.AlignCenter)
-
-        grid_widget = QtWidgets.QWidget()
-        grid = QtWidgets.QGridLayout(grid_widget)
-        grid.setContentsMargins(0, 0, 0, 0)
-        grid.setHorizontalSpacing(12)
-        grid.setVerticalSpacing(2)
-
-        font = QtGui.QFont()
-        font.setPointSize(14)
-
-        def make_key(text):
-            l = QtWidgets.QLabel(text)
-            l.setStyleSheet("color: rgb(255,255,255);")
-            l.setFont(font)
-            return l
-
-        def make_val(edit: bool = True, type: str = "keypad"):
-            """Make either an editable line edit or a static label, depending on the *edit* flag. The *type* arg determines the signal emitted on edit (numpad vs qwerty).
-
-            Args:
-                text (str, optional): _description_. Defaults to "—".
-                edit (bool, optional): _description_. Defaults to True.
-                type (str, optional): type of the input field gets ignored if edit is False. Defaults to "keypad".
-
-            Returns:
-                _type_: retuns label or line edit widget depending on the edit flag.
-            """
-
-
-            l = BlocksCustomLinEdit(self)
-            l.setFont(font)
-            l.setMinimumSize(0, 60)
-
-            return l
-
-        widget._lbl_color = make_val()
-        widget._lbl_mat = make_val()
-        widget._lbl_weight = make_val()
-        widget._lbl_temp = make_val()
-
-        rows = [
-            ("Color", widget._lbl_color, "keypad"),
-            ("Material", widget._lbl_mat, "keypad"),
-            ("Weight", widget._lbl_weight, "numpad"),
-            ("Temperature" , widget._lbl_temp, "numpad")
-        ]
-        self._swatch = QtWidgets.QLabel()
-        self._swatch.setFixedSize(52, 52)
-        self._swatch.setStyleSheet("border-radius: 2px; background: #222;")
-        grid.addWidget(self._swatch , 0 , 3)
-        for i, (key, val, _) in enumerate(rows):
-            grid.addWidget(make_key(key), i, 0 , QtCore.Qt.AlignmentFlag.AlignCenter)
-            grid.addWidget(val, i, 1)
-
-        layout.addWidget(grid_widget, 1)
-
-        def _update_swatch(self):
-            color = QtGui.QColor(str(widget._lbl_color.text())+"ff")
-            self._swatch.setStyleSheet(
-                f"border-radius: 12px;"
-                f"background: rgb({color.red()},{color.green()},{color.blue()});"
-                f"border: 2px solid white;"
-            )
-
-        widget._lbl_color.textChanged.connect(lambda: _update_swatch(self))
-
-        widget._lbl_color.setText("#ffffff")
-        widget._lbl_mat.setText("PLA")
-        widget._lbl_weight.setText("1000g")
-        widget._lbl_temp.setText("220")
-
-        widget._lbl_color.clicked.connect(lambda: self._on_show_keyboard(widget._lbl_color,prefix="#" , max_char=6))
-        widget._lbl_mat.clicked.connect(lambda: self._on_show_keyboard(widget._lbl_mat))
-        widget._lbl_weight.clicked.connect(
-            lambda: self._on_show_keyboard(widget._lbl_weight , suffix="g")
-        )
-        widget._lbl_temp.clicked.connect(lambda:self._on_show_keyboard(widget._lbl_temp,suffix="º" , pattern="int", max_char=3))
-
-        
-
-        horizntal_layout = QtWidgets.QHBoxLayout(self)
-
-        self.button_1 = BlocksCustomButton(self)
-        self.button_1.setMaximumSize(200, 80)
-        self.button_1.setMinimumSize(200, 80)
-        self.button_1.setText("Spoolman")
-
-        self.button_2 = BlocksCustomButton(self)
-        self.button_2.setMaximumSize(200, 80)
-        self.button_2.setMinimumSize(200, 80)
-        self.button_2.setText("Accept")
-        self.button_2.clicked.connect(self.on_popup_accept)
-
-        horizntal_layout.addWidget(self.button_1)
-        horizntal_layout.addWidget(self.button_2)
-        layout.addLayout(horizntal_layout)
-
-        widget.setLayout(layout)
-        return widget
 
     def _build_ui(self):
         self.setMinimumSize(720, 420)
@@ -353,9 +542,7 @@ class AMUpage(QtWidgets.QStackedWidget):
         root = QtWidgets.QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
 
-        # Carousel inside its own BlocksCustomFrame
         carousel_frame = BlocksCustomFrame(self)
-
         cf_layout = QtWidgets.QVBoxLayout(self)
 
         self.carousel = SpoolCarousel(carousel_frame)
@@ -365,24 +552,16 @@ class AMUpage(QtWidgets.QStackedWidget):
         self.carousel.setSizePolicy(QsizePolicy)
         cf_layout.addWidget(self.carousel)
 
-        # Info / operation panel
         self.info_panel = SpoolInfoPanel(parent=self, amu_manager=self.amu_manager)
-
-        sizePolicy = QtWidgets.QSizePolicy(
+        sizePolicy2 = QtWidgets.QSizePolicy(
             QtWidgets.QSizePolicy.Policy.Expanding,
             QtWidgets.QSizePolicy.Policy.Expanding,
         )
-
-        self.info_panel.setSizePolicy(sizePolicy)
-
-        # self.info_panel.request_numpad[str, int, "PyQt_PyObject", int, int].connect(
-        #     self.on_numpad_request
-        # )
+        self.info_panel.setSizePolicy(sizePolicy2)
 
         cf_layout.addWidget(self.info_panel)
         cf_layout.setContentsMargins(0, 0, 0, 0)
         cf_layout.setSpacing(0)
-
         carousel_frame.setLayout(cf_layout)
 
         root.addWidget(carousel_frame)
@@ -390,13 +569,10 @@ class AMUpage(QtWidgets.QStackedWidget):
         root.setContentsMargins(0, 0, 0, 0)
 
         amu_widget.setLayout(root)
-
         self.verticalLayout.addWidget(amu_widget)
         widget.setLayout(self.verticalLayout)
         self.addWidget(widget)
 
-        _translate = QtCore.QCoreApplication.translate
-
         self.filament_page_header_title.setText(
-            _translate("widget", "Filament Control")
+            QtCore.QCoreApplication.translate("widget", "Filament Control")
         )

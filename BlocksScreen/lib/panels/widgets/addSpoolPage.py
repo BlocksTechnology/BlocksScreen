@@ -75,7 +75,33 @@ class AddSpoolPage(QtWidgets.QWidget):
                     height=60,
                 )
             )
+
             self._filament_id_map[name] = fil
+        self._fil_model.add_item(
+            ListItem(
+                text="+ Add Filament",
+                left_icon=self._make_add_pixmap(),
+                _lfontsize=14,
+                height=60,
+            )
+        )
+
+    @staticmethod
+    def _make_add_pixmap() -> QtGui.QPixmap:
+        pixmap = QtGui.QPixmap(32, 32)
+        pixmap.fill(QtCore.Qt.GlobalColor.transparent)
+        painter = QtGui.QPainter(pixmap)
+        painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
+        pen = QtGui.QPen(QtGui.QColor(160, 160, 160))
+        pen.setWidth(2)
+        painter.setPen(pen)
+        painter.setBrush(QtCore.Qt.BrushStyle.NoBrush)
+        painter.drawRoundedRect(QtCore.QRectF(1, 1, 32 - 2, 32 - 2), 6, 6)
+        mid = 32 // 2
+        painter.drawLine(mid, 8, mid, 32 - 8)
+        painter.drawLine(8, mid, 32 - 8, mid)
+        painter.end()
+        return pixmap
 
     @QtCore.pyqtSlot(dict, name="on-add-spool-result")
     def on_add_spool_result(self, result: dict) -> None:
@@ -85,6 +111,9 @@ class AddSpoolPage(QtWidgets.QWidget):
     @QtCore.pyqtSlot(ListItem, name="on-filament-selected")
     def _on_filament_selected(self, item: ListItem) -> None:
         if not item:
+            return
+        if item.text == "+ Add Filament":
+            self.open_add_filament.emit()
             return
         filament = self._filament_id_map.get(item.text)
         if filament:
@@ -132,6 +161,7 @@ class AddSpoolPage(QtWidgets.QWidget):
                 pass
         self.request_add_spool.emit(int(self._selected_filament_id), body)
 
+    @staticmethod
     def _make_color_pixmap(filament: dict) -> QtGui.QPixmap:
         size = 32
         pixmap = QtGui.QPixmap(size, size)
@@ -164,6 +194,7 @@ class AddSpoolPage(QtWidgets.QWidget):
         return pixmap
 
     def _build_ui(self) -> None:
+        self.setMaximumHeight(470)
         font_id = QtGui.QFontDatabase.addApplicationFont(
             ":/font/media/fonts for text/Momcake-Bold.ttf"
         )
@@ -190,11 +221,17 @@ class AddSpoolPage(QtWidgets.QWidget):
         hdr = QtWidgets.QHBoxLayout()
         hdr.setContentsMargins(0, 0, 0, 0)
         hdr.setSpacing(0)
+        blank = QtWidgets.QWidget(self)
+        blank.setMaximumSize(60, 60)
+        blank.setMinimumSize(60, 60)
+        hdr.addWidget(blank)
+
         title_lbl = QtWidgets.QLabel("Add Spool", self)
         title_lbl.setFont(_f(22))
         title_lbl.setFixedHeight(60)
         title_lbl.setStyleSheet("color: white; background: transparent;")
-        hdr.addWidget(title_lbl, 1)
+        hdr.addWidget(title_lbl, alignment=QtCore.Qt.AlignmentFlag.AlignCenter)
+
         back_btn = IconButton(self)
         back_btn.setFixedSize(QtCore.QSize(60, 60))
         back_btn.setFlat(True)
@@ -252,13 +289,6 @@ class AddSpoolPage(QtWidgets.QWidget):
         left_lay.addWidget(self._fil_list_view, 1)
         left_lay.addWidget(self._fil_load_widget, 1)
         self._fil_list_view.hide()
-
-        add_fil_btn = BlocksCustomButton(left_frame)
-        add_fil_btn.setFixedHeight(60)
-        add_fil_btn.setFont(_f(14))
-        add_fil_btn.setText("+ Add Filament")
-        add_fil_btn.clicked.connect(self.open_add_filament)
-        left_lay.addWidget(add_fil_btn)
 
         body.addWidget(left_frame, 1)
 
