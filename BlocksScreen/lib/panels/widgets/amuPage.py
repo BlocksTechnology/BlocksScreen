@@ -68,13 +68,9 @@ class AMUpage(QtWidgets.QStackedWidget):
         self._qwerty.value_selected.connect(self._on_qwerty_value_selected)
 
         self.info_panel.request_keypad.connect(self._on_show_keyboard)
-        self.info_panel.loadRequested.connect(
-            self.amu_manager.load_gate
-        )
+        self.info_panel.loadRequested.connect(self.amu_manager.load_gate)
         self.info_panel.unloadRequested.connect(self.amu_manager.unload)
-        self.info_panel.ejectRequested.connect(
-             self.amu_manager.eject_gate
-        )
+        self.info_panel.ejectRequested.connect(self.amu_manager.eject_gate)
         self.info_panel.checkRequested.connect(self.amu_manager.check_gate)
 
         self.amu_manager.pre_gate_changed.connect(self.on_pre_gate)
@@ -442,7 +438,7 @@ class AMUpage(QtWidgets.QStackedWidget):
 
     def _select_gate(self, idx: int):
         self.carousel.selectIndex(self.current_index)
-        self.amu_manager.select_tool(idx)
+        self.amu_manager.select_gate(idx)
 
     def _on_selection(self, idx: int):
         btn = self.carousel.buttons[idx]

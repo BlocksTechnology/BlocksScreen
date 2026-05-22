@@ -270,13 +270,13 @@ class AMUManager(QtCore.QObject):
         """Unload the currently loaded filament by sending MMU_UNLOAD."""
         self.run_gcode_signal.emit("MMU_UNLOAD")
 
-    def select_tool(self, tool: int) -> None:
-        """Change to the specified tool by sending MMU_CHANGE_TOOL
+    def select_gate(self, gate: int) -> None:
+        """select the specified tool by sending MMU_SELECT
 
         Args:
-            tool (int): Tool index to select (0-based)
+            gate (int): gate index to select (0-based)
         """
-        self.run_gcode_signal.emit(f"MMU_CHANGE_TOOL TOOL={tool}")
+        self.run_gcode_signal.emit(f"MMU_SELECT GATE={gate}")
 
     def eject_gate(self) -> None:
         """Fully eject filament from gate, releasing from MMU gear."""
