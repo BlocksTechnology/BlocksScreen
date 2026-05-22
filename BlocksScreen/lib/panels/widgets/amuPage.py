@@ -69,11 +69,11 @@ class AMUpage(QtWidgets.QStackedWidget):
 
         self.info_panel.request_keypad.connect(self._on_show_keyboard)
         self.info_panel.loadRequested.connect(
-            lambda: self.amu_manager.load_gate(self.current_index)
+            self.amu_manager.load_gate
         )
         self.info_panel.unloadRequested.connect(self.amu_manager.unload)
         self.info_panel.ejectRequested.connect(
-            lambda: self.amu_manager.eject_gate(self.current_index)
+             self.amu_manager.eject_gate
         )
         self.info_panel.checkRequested.connect(self.amu_manager.check_gate)
 
