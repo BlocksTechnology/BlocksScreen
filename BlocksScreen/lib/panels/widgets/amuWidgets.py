@@ -354,7 +354,7 @@ class SpoolInfoPanel(QtWidgets.QWidget):
             if edit:
                 lbl = BlocksCustomLinEdit(self)
                 lbl.setText(text)
-                callable.setFont(font)
+                lbl.setFont(font)
                 # elif type == "qwerty":
                 #     l.editingFinished.connect(lambda: self.request_numpad[str, int, "PyQt_PyObject", int, int].emit(l.text(), self._slot_index, l, 0, 0))
             else:

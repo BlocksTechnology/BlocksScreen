@@ -1,18 +1,17 @@
 import enum
+import logging
 from functools import partial
 
-import logging
-from lib.printer import Printer
-from lib.filament import Filament
-from lib.panels.widgets.popupDialogWidget import Popup
 from PyQt6 import QtCore, QtWidgets
 
 from devices.amu import AMUManager
-
+from lib.filament import Filament
+from lib.panels.widgets.addFilamentPage import AddFilamentPage
+from lib.panels.widgets.addSpoolPage import AddSpoolPage
 from lib.panels.widgets.amuPage import AMUpage
-from lib.panels.widgets.spoolmanPage import SpoolmanPage
 from lib.panels.widgets.basePopup import BasePopup
-
+from lib.panels.widgets.popupDialogWidget import Popup
+from lib.printer import Printer
 from lib.ui.filamentStackedWidget_ui import Ui_filamentStackedWidget
 
 
@@ -64,12 +63,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self.run_gcode.connect(self.ws.api.run_gcode)
 
     def setup_ui(self):
-
-        #        if self.amu_manager.is_amu_configured():
         self.amu_manager.mmu_state_changed.connect(self.on_mmu_state_changed)
-
-    #        else:
-    #            self.without_amu()
 
     def on_mmu_state_changed(self, mmu_state):
         if not self.amu_configured:
@@ -85,50 +79,57 @@ class FilamentTab(QtWidgets.QStackedWidget):
                     )
                 )
 
-                self.spoolmanPage = SpoolmanPage(self)
-                self._spoolman_popup = BasePopup(self, False, False)
-                self._spoolman_popup.add_widget(self.spoolmanPage)
-                self.spoolmanPage.request_spools.connect(
-                    lambda: self.ws.api.spoolman_proxy(
-                        "GET",
-                        "/v1/spool",
-                        callback=self.spoolmanPage.on_spools_received,
-                    )
+                self._add_spool_page = AddSpoolPage(keyboard_parent=self, parent=self)
+                self._add_filament_page = AddFilamentPage(
+                    keyboard_parent=self, parent=self
                 )
-                self.spoolmanPage.request_get_spool_id.connect(
-                    lambda: self.ws.api.get_spool_id(
-                        callback=self.spoolmanPage.on_active_spool_received
-                    )
+
+                self._add_stack = QtWidgets.QStackedWidget()
+                self._add_stack.addWidget(self._add_spool_page)  # index 0
+                self._add_stack.addWidget(self._add_filament_page)  # index 1
+
+                self._add_filament_page.accepted.connect(self._add_spool_page.reset)
+
+                self.amupage.request_open_add_spoolman.connect(
+                    self._on_add_spool_request
                 )
-                self.spoolmanPage.request_set_spool_id.connect(
-                    lambda spool_id: self.ws.api.set_spool_id(spool_id)
-                )
-                self.spoolmanPage.request_delete_spool.connect(
-                    lambda spool_id: self.ws.api.delete_spool(
-                        spool_id,
-                        callback=self.spoolmanPage.on_delete_spool_result,
-                    )
-                )
-                self.spoolmanPage.request_filaments.connect(
+
+                self._add_popup = BasePopup(self, False, False)
+                self._add_popup.add_widget(self._add_stack)
+
+                self._add_spool_page.request_filaments.connect(
                     lambda: self.ws.api.get_filaments(
-                        callback=self.spoolmanPage.on_filaments_received
+                        callback=self._add_spool_page.on_filaments_received
                     )
                 )
-                self.spoolmanPage.request_add_spool.connect(
+                self._add_spool_page.cancelled.connect(self._add_popup.hide)
+
+                self._add_spool_page.request_add_spool.connect(
                     lambda filament_id, body: self.ws.api.add_spool(
                         filament_id,
                         body,
-                        callback=self.spoolmanPage.on_add_spool_result,
+                        callback=self._add_spool_page.on_add_spool_result,
                     )
                 )
-                self.spoolmanPage.request_add_filament.connect(
+                self._add_spool_page.accepted.connect(self._add_popup.hide)
+
+                self._add_spool_page.open_add_filament.connect(
+                    lambda: self._add_stack.setCurrentIndex(1)
+                )
+
+                self._add_filament_page.request_add_filament.connect(
                     lambda body: self.ws.api.add_filament(
                         body,
-                        callback=self.spoolmanPage.on_add_filament_result,
+                        callback=self._add_filament_page.on_add_filament_result,
                     )
                 )
-                self.spoolmanPage.request_back.connect(self._spoolman_popup.hide)
-                self.amupage.request_open_spoolman.connect(self._spoolman_popup.show)
+
+                self._add_filament_page.accepted.connect(
+                    lambda: self._add_stack.setCurrentIndex(0)
+                )
+                self._add_filament_page.cancelled.connect(
+                    lambda: self._add_stack.setCurrentIndex(0)
+                )
 
             else:
                 self.without_amu()
@@ -145,6 +146,10 @@ class FilamentTab(QtWidgets.QStackedWidget):
         if mmu_state.action == "Loading" or mmu_state.action == "Unloading":
             self.load_state = True
             self.call_load_panel.emit(True, mmu_state.action)
+
+    def _on_add_spool_request(self):
+        self._add_spool_page.reset()
+        self._add_popup.show()
 
     def without_amu(self):
         self.panel = Ui_filamentStackedWidget()

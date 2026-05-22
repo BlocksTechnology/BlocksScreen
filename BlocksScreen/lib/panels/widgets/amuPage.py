@@ -26,7 +26,7 @@ class AMUpage(QtWidgets.QStackedWidget):
     request_gate_map: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         str, name="request-gate-map"
     )
-    request_open_spoolman: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+    request_open_add_spoolman: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         name="request-open-spoolman"
     )
 
@@ -186,15 +186,20 @@ class AMUpage(QtWidgets.QStackedWidget):
         btn_row = QtWidgets.QHBoxLayout()
         btn_row.setSpacing(8)
 
+        font = QtGui.QFont()
+        font.setPointSize(15)
+
         spoolman_btn = BlocksCustomButton(page)
-        spoolman_btn.setFixedHeight(60)
+        spoolman_btn.setFixedSize(200,80)
         spoolman_btn.setText("Spoolman")
+        spoolman_btn.setFont(font)
         spoolman_btn.clicked.connect(self._on_spoolman_clicked)
         btn_row.addWidget(spoolman_btn)
 
         accept_btn = BlocksCustomButton(page)
-        accept_btn.setFixedHeight(60)
+        accept_btn.setFixedSize(200,80)
         accept_btn.setText("Accept")
+        accept_btn.setFont(font)
         accept_btn.clicked.connect(self.on_popup_accept)
         btn_row.addWidget(accept_btn)
 
@@ -231,7 +236,7 @@ class AMUpage(QtWidgets.QStackedWidget):
         manage_btn.setFixedSize(QtCore.QSize(60, 60))
         manage_btn.setFlat(True)
         manage_btn.setPixmap(QtGui.QPixmap(":/ui/media/btn_icons/LCD_settings.svg"))
-        manage_btn.clicked.connect(lambda: self.request_open_spoolman.emit())
+        manage_btn.clicked.connect(lambda: self.request_open_add_spoolman.emit())
         hdr.addWidget(manage_btn)
 
         root.addLayout(hdr)
@@ -356,6 +361,13 @@ class AMUpage(QtWidgets.QStackedWidget):
         self._spool_id_map = {}
         self._spool_model.clear()
         self._spool_delegate.clear()
+        self._spool_model.add_item(
+            ListItem(
+                text="+ Add Spool",
+                _lfontsize=14,
+                height=60,
+            )
+        )
         for spool in spools:
             spool_id = spool.get("id", "?")
             filament = spool.get("filament") or {}
@@ -377,6 +389,8 @@ class AMUpage(QtWidgets.QStackedWidget):
     def _on_spool_selected(self, item: ListItem) -> None:
         if not item:
             return
+        if item.text == "+ Add Spool":
+            self.request_open_add_spoolman.emit()
         spool = self._spool_id_map.get(item.text)
         if not spool:
             return

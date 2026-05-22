@@ -195,22 +195,16 @@ class AddSpoolPage(QtWidgets.QWidget):
 
     def _build_ui(self) -> None:
         self.setMaximumHeight(470)
-        font_id = QtGui.QFontDatabase.addApplicationFont(
-            ":/font/media/fonts for text/Momcake-Bold.ttf"
-        )
-        ff = (QtGui.QFontDatabase.applicationFontFamilies(font_id) or ["Arial"])[0]
-
         def _f(pt: int) -> QtGui.QFont:
             font = QtGui.QFont()
-            font.setFamily(ff)
             font.setPointSize(pt)
             return font
 
         def _key_lbl(text: str) -> QtWidgets.QLabel:
             lbl = QtWidgets.QLabel(text, self)
-            lbl.setFont(_f(12))
+            lbl.setFont(_f(15))
             lbl.setStyleSheet("color: rgb(180,180,180); background: transparent;")
-            lbl.setFixedHeight(24)
+            lbl.setFixedHeight(30)
             return lbl
 
         root = QtWidgets.QVBoxLayout(self)

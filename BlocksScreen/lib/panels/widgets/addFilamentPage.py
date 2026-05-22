@@ -104,14 +104,9 @@ class AddFilamentPage(QtWidgets.QWidget):
         self.request_add_filament.emit(body)
 
     def _build_ui(self) -> None:
-        font_id = QtGui.QFontDatabase.addApplicationFont(
-            ":/font/media/fonts for text/Momcake-Bold.ttf"
-        )
-        ff = (QtGui.QFontDatabase.applicationFontFamilies(font_id) or ["Arial"])[0]
 
         def _f(pt: int) -> QtGui.QFont:
             font = QtGui.QFont()
-            font.setFamily(ff)
             font.setPointSize(pt)
             return font
 
@@ -157,6 +152,7 @@ class AddFilamentPage(QtWidgets.QWidget):
         grid.setHorizontalSpacing(12)
         grid.setVerticalSpacing(4)
         grid.setColumnStretch(1, 1)
+        grid.setColumnStretch(4, 1)
 
         self._name_field = _make_field()
         self._material_field = _make_field()
@@ -172,20 +168,47 @@ class AddFilamentPage(QtWidgets.QWidget):
             "border-radius: 8px; background: #ffffff; border: 2px solid rgba(255,255,255,80);"
         )
 
-        rows = [
-            ("Name:", self._name_field, None),
-            ("Material:", self._material_field, None),
-            ("Color:", self._color_field, self._color_swatch),
-            ("Ext Temp:", self._ext_temp_field, None),
-            ("Bed Temp:", self._bed_temp_field, None),
-            ("Density:", self._density_field, None),
-            ("Diameter:", self._diameter_field, None),
-        ]
-        for i, (label, field, extra) in enumerate(rows):
-            grid.addWidget(_key_lbl(label), i, 0)
-            grid.addWidget(field, i, 1)
-            if extra is not None:
-                grid.addWidget(extra, i, 2)
+        # rows = [
+        #     ("Name:", self._name_field, None),
+        #     ("Material:", self._material_field, None),
+        #     ("Color:", self._color_field, self._color_swatch),
+        #     ("Ext Temp:", self._ext_temp_field, None),
+        #     ("Bed Temp:", self._bed_temp_field, None),
+        #     ("Density:", self._density_field, None),
+        #     ("Diameter:", self._diameter_field, None),
+        # ]
+        # for i, (label, field, extra) in enumerate(rows):
+        #    grid.addWidget(_key_lbl(label), i, 0)
+        #    grid.addWidget(field, i, 1)
+        #    if extra is not None:
+        #        grid.addWidget(extra, i, 2)
+
+        grid.addWidget(_key_lbl("Name:"), 0, 0)
+        grid.addWidget(self._name_field, 0, 1, 1, 2)
+        grid.addWidget(_key_lbl("Material:"), 0, 3)
+        grid.addWidget(self._material_field, 0, 4)
+        
+        grid.addWidget(_key_lbl("Color:"), 1, 0)
+        grid.addWidget(self._color_field, 1, 1)
+        self._color_field.setMaximumWidth(70)
+
+        grid.addWidget(self._color_swatch, 1, 2)
+
+        grid.addWidget(_key_lbl("Ext Temp:"), 2, 0)
+        grid.addWidget(self._ext_temp_field, 2, 1)
+        self._ext_temp_field.setMaximumWidth(60)
+        grid.addWidget(_key_lbl("Bed Temp:"), 2, 2)
+        grid.addWidget(self._bed_temp_field, 2, 3)
+        self._bed_temp_field.setMaximumWidth(60)
+
+        grid.addWidget(_key_lbl("Density:"), 3, 0)
+        grid.addWidget(self._density_field, 3, 1)
+        self._density_field.setMaximumWidth(65)
+
+        grid.addWidget(_key_lbl("Diameter:"), 3, 2)
+        grid.addWidget(self._diameter_field, 3, 3)
+        self._diameter_field.setMaximumWidth(65)
+
 
         root.addWidget(grid_w, 1)
 
@@ -221,7 +244,7 @@ class AddFilamentPage(QtWidgets.QWidget):
 
         # Submit
         submit_btn = BlocksCustomButton(self)
-        submit_btn.setFixedHeight(60)
+        submit_btn.setFixedSize(200, 80)
         submit_btn.setFont(_f(16))
         submit_btn.setText("Save Filament")
         submit_btn.clicked.connect(self._on_submit)
