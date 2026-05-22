@@ -323,10 +323,6 @@ class SpoolmanPage(QtWidgets.QWidget):
             )
             self.color_swatch_layout.addWidget(swatch)
 
-    def show_loading(self, loading: bool) -> None:
-        self.load_widget.setVisible(loading)
-        self.spool_list_widget.setVisible(not loading)
-
     def showEvent(self, event: QtGui.QShowEvent | None) -> None:  # noqa: N802
         self._on_reload_clicked()
         return super().showEvent(event)
