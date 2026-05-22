@@ -341,7 +341,7 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
 
 class MoonAPI(QtCore.QObject):
     def __init__(self, ws: MoonWebSocket):
-        super(MoonAPI, self).__init__(ws)
+        super().__init__(ws)
         self._ws: MoonWebSocket = ws
 
     @QtCore.pyqtSlot(name="api_query_server_info")

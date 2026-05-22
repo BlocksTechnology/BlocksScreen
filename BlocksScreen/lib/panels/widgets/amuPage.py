@@ -48,7 +48,7 @@ class AMUpage(QtWidgets.QStackedWidget):
         self.info_panel._lbl_color.editingFinished.connect(
             lambda: self.amu_manager.set_gate_color(
                 self.current_index,
-                self.info_panel._lbl_color.text().strip("#") + "FF",
+                self.info_panel._lbl_color.text().strip("#"),
             )
         )
         self.info_panel._lbl_mat.editingFinished.connect(
@@ -58,7 +58,8 @@ class AMUpage(QtWidgets.QStackedWidget):
         )
         self.info_panel._lbl_temp.editingFinished.connect(
             lambda: self.amu_manager.set_gate_temp(
-                self.current_index, self.info_panel._lbl_temp.text().strip("º")
+                self.current_index,
+                int(self.info_panel._lbl_temp.text().strip("º") or 0),
             )
         )
 
@@ -114,10 +115,10 @@ class AMUpage(QtWidgets.QStackedWidget):
         val_font.setPointSize(14)
 
         def _lbl(text):
-            l = QtWidgets.QLabel(text, grid_w)
-            l.setFont(key_font)
-            l.setStyleSheet("color: rgb(180,180,180); background: transparent;")
-            return l
+            lbl = QtWidgets.QLabel(text, grid_w)
+            lbl.setFont(key_font)
+            lbl.setStyleSheet("color: rgb(180,180,180); background: transparent;")
+            return lbl
 
         def _field():
             f = BlocksCustomLinEdit(page)
@@ -284,6 +285,8 @@ class AMUpage(QtWidgets.QStackedWidget):
         return page
 
     def on_mmu_state_changed(self, mmu_state):
+        if mmu_state is None:
+            return
         self.status = mmu_state
         if not self._previous_gate_states:
             for gate_info in mmu_state.gates:
@@ -293,7 +296,7 @@ class AMUpage(QtWidgets.QStackedWidget):
                 ]
         for i in range(len(mmu_state.gates)):
             self.addSpool(mmu_state.gates[i])
-            self.update()
+        self.update()
         self._on_selection(mmu_state.gate)
 
     def on_pre_gate(self, gate_index: int, detected: bool):
@@ -324,9 +327,6 @@ class AMUpage(QtWidgets.QStackedWidget):
             temp = int(self._popup_temp.text().strip("°º").strip())
         except ValueError:
             temp = -1
-
-        if len(color) == 6:
-            color = color + "FF"
 
         parts = [f"MMU_GATE_MAP GATE={gate}"]
         if self._selected_spool_id != -1:
@@ -429,18 +429,20 @@ class AMUpage(QtWidgets.QStackedWidget):
 
     def addSpool(self, gate_info: GateInfo):
         self.carousel.addSpool(
-            QtGui.QColor("#" + str(gate_info.color)[:-2]),
+            QtGui.QColor("#" + str(gate_info.color)[:6]),
             gate_info.index,
             gate_info.material,
-            gate_info.temperature,
+            int(gate_info.temperature or 0),
             gate_info.status,
         )
 
     def _select_gate(self, idx: int):
-        self.carousel.selectIndex(self.current_index)
+        self.carousel.selectIndex(idx)
         self.amu_manager.select_gate(idx)
 
     def _on_selection(self, idx: int):
+        if idx < 0 or idx >= len(self.carousel.buttons):
+            return
         btn = self.carousel.buttons[idx]
         self.current_index = idx
         self.info_panel.update_for_slot(idx, btn)
@@ -481,7 +483,7 @@ class AMUpage(QtWidgets.QStackedWidget):
         self.setObjectName("temperature_page")
         self.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
         widget.setObjectName("filament_control_page")
-        self.verticalLayout = QtWidgets.QVBoxLayout(self)
+        self.verticalLayout = QtWidgets.QVBoxLayout()
         self.verticalLayout.setObjectName("verticalLayout")
 
         self.filament_page_header_layout = QtWidgets.QHBoxLayout()
@@ -536,11 +538,11 @@ class AMUpage(QtWidgets.QStackedWidget):
         self.verticalLayout.addLayout(self.filament_page_header_layout)
 
         amu_widget = QtWidgets.QWidget(parent=self)
-        root = QtWidgets.QVBoxLayout(self)
+        root = QtWidgets.QVBoxLayout()
         root.setContentsMargins(0, 0, 0, 0)
 
         carousel_frame = BlocksCustomFrame(self)
-        cf_layout = QtWidgets.QVBoxLayout(self)
+        cf_layout = QtWidgets.QVBoxLayout()
 
         self.carousel = SpoolCarousel(carousel_frame)
         QsizePolicy = QtWidgets.QSizePolicy(

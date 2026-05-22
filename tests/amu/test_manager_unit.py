@@ -227,8 +227,8 @@ class TestGcodeSignals:
 
     def test_load_gate(self, manager, qtbot) -> None:
         with qtbot.waitSignal(manager.run_gcode_signal) as blocker:
-            manager.load_gate(3)
-        assert blocker.args == ["MMU_SELECT gate=3\nMMU_LOAD"]
+            manager.load_gate()
+        assert blocker.args == ["MMU_LOAD"]
 
     def test_unload(self, manager, qtbot) -> None:
         with qtbot.waitSignal(manager.run_gcode_signal) as blocker:
@@ -237,8 +237,8 @@ class TestGcodeSignals:
 
     def test_eject_gate(self, manager, qtbot) -> None:
         with qtbot.waitSignal(manager.run_gcode_signal) as blocker:
-            manager.eject_gate(1)
-        assert blocker.args == ["MMU_EJECT GATE=1"]
+            manager.eject_gate()
+        assert blocker.args == ["MMU_EJECT"]
 
     def test_eject_all_gates(self, manager, qtbot) -> None:
         with qtbot.waitSignal(manager.run_gcode_signal) as blocker:
@@ -247,8 +247,8 @@ class TestGcodeSignals:
 
     def test_select_tool(self, manager, qtbot) -> None:
         with qtbot.waitSignal(manager.run_gcode_signal) as blocker:
-            manager.select_tool(2)
-        assert blocker.args == ["MMU_CHANGE_TOOL TOOL=2"]
+            manager.select_gate(2)
+        assert blocker.args == ["MMU_SELECT GATE=2"]
 
     def test_klippy_disconnect(self, manager) -> None:
         manager.update_mmu_state(_FULL_STATUS)

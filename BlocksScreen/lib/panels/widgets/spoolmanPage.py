@@ -1,3 +1,4 @@
+import logging
 import typing
 
 from lib.panels.widgets.addFilamentPage import AddFilamentPage
@@ -7,6 +8,8 @@ from lib.utils.blocks_frame import BlocksCustomFrame
 from lib.utils.icon_button import IconButton
 from lib.utils.list_model import EntryDelegate, EntryListModel, ListItem
 from PyQt6 import QtCore, QtGui, QtWidgets
+
+logger: logging.Logger = logging.getLogger(__name__)
 
 
 class SpoolmanPage(QtWidgets.QWidget):
@@ -101,9 +104,11 @@ class SpoolmanPage(QtWidgets.QWidget):
 
     @QtCore.pyqtSlot(dict, name="on-delete-spool-result")
     def on_delete_spool_result(self, result: dict) -> None:
-        if result.get("error") is None:
-            self._selected_spool = None
-            self._on_reload_clicked()
+        if result.get("error") is not None:
+            logger.error("Delete spol failed: %s", result["error"])
+            return
+        self._selected_spool = None
+        self._on_reload_clicked()
 
     def _spool_display_name(self, spool: dict) -> str:
         spool_id = spool.get("id", "?")
@@ -318,6 +323,10 @@ class SpoolmanPage(QtWidgets.QWidget):
             )
             self.color_swatch_layout.addWidget(swatch)
 
+    def show_loading(self, loading: bool) -> None:
+        self.load_widget.setVisible(loading)
+        self.spool_list_widget.setVisible(not loading)
+
     def showEvent(self, event: QtGui.QShowEvent | None) -> None:  # noqa: N802
         self._on_reload_clicked()
         return super().showEvent(event)
@@ -328,10 +337,6 @@ class SpoolmanPage(QtWidgets.QWidget):
         return super().deleteLater()
 
     def _setupUI(self) -> None:  # noqa: N802
-        font_id = QtGui.QFontDatabase.addApplicationFont(
-            ":/font/media/fonts for text/Momcake-Bold.ttf"
-        )
-        font_family = QtGui.QFontDatabase.applicationFontFamilies(font_id)[0]
 
         size_policy = QtWidgets.QSizePolicy(
             QtWidgets.QSizePolicy.Policy.MinimumExpanding,

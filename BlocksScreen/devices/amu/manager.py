@@ -105,6 +105,7 @@ class AMUManager(QtCore.QObject):
         if updates:
             gates[gate] = dataclasses.replace(gates[gate], **updates)
             self._mmu_state = dataclasses.replace(self._mmu_state, gates=tuple(gates))
+            self.mmu_state_changed.emit(self._mmu_state)
 
     def _emit_speed_gcode(self, gate: int, remaining_weight: float) -> None:
         """Emit MMU_GATE_MAP SPEED=x for the gate based on the spool weight profile."""

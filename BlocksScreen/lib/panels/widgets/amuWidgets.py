@@ -1,9 +1,10 @@
-from PyQt6 import QtCore, QtGui, QtWidgets
-from lib.utils.icon_button import IconButton
-from lib.utils.blocks_button import BlocksCustomButton
-from lib.utils.blocks_linedit import BlocksCustomLinEdit
+import typing
 
 from devices.amu.models import GateStatus
+from lib.utils.blocks_button import BlocksCustomButton
+from lib.utils.blocks_linedit import BlocksCustomLinEdit
+from lib.utils.icon_button import IconButton
+from PyQt6 import QtCore, QtGui, QtWidgets
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -16,6 +17,8 @@ class Spoll_button(QtWidgets.QAbstractButton):
         self.status = GateStatus.UNKNOWN
         self.slot_id = ""
         self.temp = 0
+        self.material = ""
+        self.weight = 0
         self.setCheckable(True)
         self.setMinimumHeight(100)
         self._icon = QtGui.QPixmap(
@@ -31,7 +34,7 @@ class Spoll_button(QtWidgets.QAbstractButton):
 
     def setStatus(self, s: GateStatus):
         self.status = s
-        self.repaint()
+        self.update()
 
     def setGateId(self, i: int):
         self.slot_id = i
@@ -147,7 +150,9 @@ class Spoll_button(QtWidgets.QAbstractButton):
 # Carousel (scrollable spool row)
 # ──────────────────────────────────────────────────────────────────────────────
 class SpoolCarousel(QtWidgets.QWidget):
-    selectionChanged = QtCore.pyqtSignal(int)  # emits selected slot index (0-based)
+    selectionChanged: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        int
+    )  # emits selected slot index (0-based)
 
     VISIBLE = 4  # how many spools show at once
 
@@ -291,10 +296,10 @@ class SpoolCarousel(QtWidgets.QWidget):
 # Info table panel (BlocksCustomFrame + detail grid + op buttons)
 # ──────────────────────────────────────────────────────────────────────────────
 class SpoolInfoPanel(QtWidgets.QWidget):
-    loadRequested = QtCore.pyqtSignal()
-    unloadRequested = QtCore.pyqtSignal()
-    ejectRequested = QtCore.pyqtSignal()
-    checkRequested = QtCore.pyqtSignal()
+    loadRequested: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal()
+    unloadRequested: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal()
+    ejectRequested: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal()
+    checkRequested: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal()
 
     request_keypad = QtCore.pyqtSignal(
         "PyQt_PyObject", str, str, str, int, name="request-keyboard"
@@ -329,10 +334,10 @@ class SpoolInfoPanel(QtWidgets.QWidget):
         font.setPointSize(12)
 
         def make_key(text):
-            l = QtWidgets.QLabel(text)
-            l.setStyleSheet("color: rgba(255,255,255,100);")
-            l.setFont(font)
-            return l
+            lbl = QtWidgets.QLabel(text)
+            lbl.setStyleSheet("color: rgba(255,255,255,100);")
+            lbl.setFont(font)
+            return lbl
 
         def make_val(text="—", edit: bool = True, type: str = "keypad"):
             """Make either an editable line edit or a static label, depending on the *edit* flag. The *type* arg determines the signal emitted on edit (numpad vs qwerty).
@@ -347,16 +352,16 @@ class SpoolInfoPanel(QtWidgets.QWidget):
             """
 
             if edit:
-                l = BlocksCustomLinEdit(self)
-                l.setText(text)
-                l.setFont(font)
+                lbl = BlocksCustomLinEdit(self)
+                lbl.setText(text)
+                callable.setFont(font)
                 # elif type == "qwerty":
                 #     l.editingFinished.connect(lambda: self.request_numpad[str, int, "PyQt_PyObject", int, int].emit(l.text(), self._slot_index, l, 0, 0))
             else:
-                l = QtWidgets.QLabel(text)
-                l.setStyleSheet("color: rgb(255,255,255);")
-                l.setFont(font)
-            return l
+                lbl = QtWidgets.QLabel(text)
+                lbl.setStyleSheet("color: rgb(255,255,255);")
+                lbl.setFont(font)
+            return lbl
 
         self._lbl_status = make_val(edit=False)
         self._lbl_temp = make_val()
@@ -393,7 +398,7 @@ class SpoolInfoPanel(QtWidgets.QWidget):
             ("Weight", self._lbl_weight, "numpad"),
         ]
         for i, (key, val, _) in enumerate(rows):
-            grid.addWidget(make_key(key), i, 0 , QtCore.Qt.AlignmentFlag.AlignCenter)
+            grid.addWidget(make_key(key), i, 0, QtCore.Qt.AlignmentFlag.AlignCenter)
             grid.addWidget(val, i, 1)
 
         root.addWidget(grid_widget, 1)
@@ -464,48 +469,45 @@ class SpoolInfoPanel(QtWidgets.QWidget):
     def update_for_slot(self, index: int, btn: Spoll_button):
         self._slot_index = index
         color = btn.color
-        status = btn.status
-        material = btn.material
-        temp = btn.temp
+        r, g, b = color.red(), color.green(), color.blue()
 
-        # Swatch
         self._swatch.setStyleSheet(
-            f"border-radius: 12px;"
-            f"background: rgb({color.red()},{color.green()},{color.blue()});"
-            f"border: 2px solid white;"
+            f"border-radius: 12px;background: rgb({r},{g},{b});border: 2px solid white"
         )
 
-        status_map = {
-            GateStatus.AVAILABLE.value: (
-                "<span style='color:#2ec4a0'>● PRE-LOADED</span>",
-                True,
-                False,
-                True,
-                True,
-            ),
-            GateStatus.AVAILABLE_FROM_BUFFER.value: (  # Add this
-                "<span style='color:#2ec4a0'>● PRE-LOADED (BUFFER)</span>",
-                True,
-                False,
-                True,
-                True,
-            ),
-            GateStatus.EMPTY.value: (
-                "<span style='color:#e8445a'>○ EMPTY</span>",
-                False,
-                False,
-                True,
-                True,
-            ),
-            GateStatus.UNKNOWN.value: (
-                "<span style='color:#aaa'>? UNKNOWN</span>",
-                True,
-                True,
-                False,
-                True,
-            ),
-        }
-        text, en_load, en_unload, en_purge, en_cut = status_map[status.value]
+        match btn.status:
+            case GateStatus.AVAILABLE:
+                text, en_load, en_unload, en_purge, en_cut = (
+                    "<span style='color:#2ec4a0'>● PRE-LOADED</span>",
+                    True,
+                    False,
+                    True,
+                    True,
+                )
+            case GateStatus.AVAILABLE_FROM_BUFFER:
+                text, en_load, en_unload, en_purge, en_cut = (
+                    "<span style='color:#2ec4a0'>● PRE-LOADED (BUFFER)</span>",
+                    True,
+                    False,
+                    True,
+                    True,
+                )
+            case GateStatus.EMPTY:
+                text, en_load, en_unload, en_purge, en_cut = (
+                    "<span style='color:#e8445a'>○ EMPTY</span>",
+                    False,
+                    False,
+                    True,
+                    True,
+                )
+            case _:
+                text, en_load, en_unload, en_purge, en_cut = (
+                    "<span style='color:#aaa'>? UNKNOWN</span>",
+                    True,
+                    True,
+                    False,
+                    True,
+                )
 
         if self.FStatus == "Loaded" and self._slot_index == self.Gate:
             text = "<span style='color:#2ec4a0'>● LOADED</span>"
@@ -513,12 +515,10 @@ class SpoolInfoPanel(QtWidgets.QWidget):
             en_unload = True
 
         self._lbl_status.setText(text)
-        self._lbl_temp.setText(str(temp) + "º")
-        self._lbl_mat.setText(material if material else "—")
+        self._lbl_temp.setText(f"{btn.temp}º")
+        self._lbl_mat.setText(f"{btn.material}g" if btn.material else "—")
         self._btn_load.setEnabled(en_load)
         self._btn_unload.setEnabled(en_unload)
         self._btn_purge.setEnabled(en_purge)
         self._btn_cut.setEnabled(en_cut)
-
-        r, g, b = color.red(), color.green(), color.blue()
         self._lbl_color.setText(f"#{r:02X}{g:02X}{b:02X}")
