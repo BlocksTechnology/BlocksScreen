@@ -19,9 +19,6 @@ class SpoolmanPage(QtWidgets.QWidget):
     request_get_spool_id: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         name="request-get-spool-id"
     )
-    request_set_spool_id: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
-        int, name="request-set-spool-id"
-    )
     request_delete_spool: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         int, name="request-delete-spool"
     )
@@ -92,14 +89,6 @@ class SpoolmanPage(QtWidgets.QWidget):
         if not isinstance(spools, list):
             return
         self._spools = spools
-        self._build_model_list()
-
-    @QtCore.pyqtSlot(dict, name="on-active-spool-received")
-    def on_active_spool_received(self, result: dict) -> None:
-        """Handle response for server.spoolman.get_spool_id."""
-        self._active_spool_id = (
-            result.get("spool_id") if isinstance(result, dict) else None
-        )
         self._build_model_list()
 
     @QtCore.pyqtSlot(dict, name="on-delete-spool-result")
@@ -179,7 +168,6 @@ class SpoolmanPage(QtWidgets.QWidget):
         spool_id = self._selected_spool.get("id")
         if spool_id is not None:
             self._active_spool_id = int(spool_id)
-            self.request_set_spool_id.emit(int(spool_id))
             self._refresh_info_box()
 
     def _on_delete_clicked(self) -> None:
@@ -222,7 +210,6 @@ class SpoolmanPage(QtWidgets.QWidget):
             else:
                 right_text = material
 
-            is_active = spool_id == self._active_spool_id
             item = ListItem(
                 text=display_name,
                 right_text=right_text,
@@ -231,7 +218,6 @@ class SpoolmanPage(QtWidgets.QWidget):
                 _lfontsize=14,
                 _rfontsize=12,
                 height=60,
-                notificate=is_active,
             )
             self.model.add_item(item)
         self.on_item_clicked(
@@ -333,6 +319,7 @@ class SpoolmanPage(QtWidgets.QWidget):
         return super().deleteLater()
 
     def _setupUI(self) -> None:  # noqa: N802
+        self.setMaximumHeight(470)
 
         size_policy = QtWidgets.QSizePolicy(
             QtWidgets.QSizePolicy.Policy.MinimumExpanding,
@@ -385,8 +372,6 @@ class SpoolmanPage(QtWidgets.QWidget):
         list_frame.setMinimumWidth(380)
 
         self.spool_list_widget = QtWidgets.QListView(list_frame)
-        self.spool_list_widget.setMouseTracking(True)
-        self.spool_list_widget.setTabletTracking(True)
         self.spool_list_widget.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
         self.spool_list_widget.setStyleSheet("background-color: transparent;")
         self.spool_list_widget.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
@@ -396,17 +381,10 @@ class SpoolmanPage(QtWidgets.QWidget):
         self.spool_list_widget.setHorizontalScrollBarPolicy(
             QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff
         )
-        self.spool_list_widget.setSizeAdjustPolicy(
-            QtWidgets.QAbstractScrollArea.SizeAdjustPolicy.AdjustToContents
-        )
-        self.spool_list_widget.setAutoScroll(False)
-        self.spool_list_widget.setSelectionMode(
-            QtWidgets.QAbstractItemView.SelectionMode.NoSelection
+        self.spool_list_widget.setSelectionBehavior(
+            QtWidgets.QAbstractItemView.SelectionBehavior.SelectItems
         )
         self.spool_list_widget.setVerticalScrollMode(
-            QtWidgets.QAbstractItemView.ScrollMode.ScrollPerPixel
-        )
-        self.spool_list_widget.setHorizontalScrollMode(
             QtWidgets.QAbstractItemView.ScrollMode.ScrollPerPixel
         )
         QtWidgets.QScroller.grabGesture(
@@ -485,9 +463,6 @@ class SpoolmanPage(QtWidgets.QWidget):
         info_layout.addLayout(color_row)
 
         info_layout.addStretch(1)
-
-        action_font = QtGui.QFont()
-        action_font.setPointSize(22)
 
         button_widget = QtWidgets.QWidget()
         normal_layout = QtWidgets.QHBoxLayout(button_widget)
