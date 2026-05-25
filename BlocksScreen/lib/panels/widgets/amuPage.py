@@ -8,6 +8,7 @@ from lib.panels.widgets.amuWidgets import SpoolCarousel, SpoolInfoPanel
 from lib.panels.widgets.basePopup import BasePopup
 from lib.panels.widgets.keyboardPage import CustomQwertyKeyboard
 from lib.panels.widgets.loadWidget import LoadingOverlayWidget
+from lib.panels.widgets.numpadPage import CustomNumpad
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_frame import BlocksCustomFrame
 from lib.utils.blocks_linedit import BlocksCustomLinEdit
@@ -29,6 +30,11 @@ class AMUpage(QtWidgets.QStackedWidget):
     request_open_add_spoolman: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         name="request-open-spoolman"
     )
+    request_numpad: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        [str, int, "PyQt_PyObject"],
+        [str, int, "PyQt_PyObject", int, int],
+        name="request-numpad",
+    )
 
     def __init__(self, amu_manager, parent=None):
         super().__init__(parent)
@@ -39,9 +45,17 @@ class AMUpage(QtWidgets.QStackedWidget):
         self.popup_gates: Deque = deque()
         self._selected_spool_id: int = -1
         self._spool_id_map: dict[str, dict] = {}
-        self._current_field = None
+        self._current_field: QtWidgets.QLineEdit | None = None
 
         self._build_ui()
+
+        self.numpadPage = CustomNumpad(self)
+        self.numpadPage.request_back.connect(lambda: self.setCurrentIndex(0))
+        self.addWidget(self.numpadPage)
+
+        self.request_numpad[str, int, "PyQt_PyObject", int, int].connect(
+            self.on_numpad_request
+        )
 
         self.amu_manager.mmu_state_changed.connect(self.on_mmu_state_changed)
         self.on_mmu_state_changed(self.amu_manager.get_state())
@@ -60,6 +74,24 @@ class AMUpage(QtWidgets.QStackedWidget):
             lambda: self.amu_manager.set_gate_temp(
                 self.current_index,
                 int(self.info_panel._lbl_temp.text().strip("º") or 0),
+            )
+        )
+        self.info_panel._lbl_temp.clicked.connect(
+            lambda: self.request_numpad[str, int, "PyQt_PyObject", int, int].emit(
+                "Temperature",
+                int(self.info_panel._lbl_temp.text().strip("º")),
+                self._on_gate_temp_change,
+                0,
+                500,
+            )
+        )
+        self.info_panel._lbl_weight.clicked.connect(
+            lambda: self.request_numpad[str, int, "PyQt_PyObject", int, int].emit(
+                "Weight",
+                int(self.info_panel._lbl_weight.text().strip("g")),
+                self._on_gate_weight_change,
+                0,
+                9999,
             )
         )
 
@@ -166,8 +198,12 @@ class AMUpage(QtWidgets.QStackedWidget):
             lambda: self._on_show_keyboard(self._popup_material)
         )
         self._popup_temp.clicked.connect(
-            lambda: self._on_show_keyboard(
-                self._popup_temp, suffix="º", pattern="int", max_char=3
+            lambda: self.request_numpad[str, int, "PyQt_PyObject", int, int].emit(
+                "Temperature",
+                int(self._popup_temp.text().strip("º") or 0),
+                self._on_popup_temp_change,
+                0,
+                500,
             )
         )
 
@@ -492,6 +528,42 @@ class AMUpage(QtWidgets.QStackedWidget):
         if self._current_field:
             self._current_field.setText(value)
             self._current_field.editingFinished.emit()
+
+    @QtCore.pyqtSlot(str, int, "PyQt_PyObject", name="on-numpad-request")
+    @QtCore.pyqtSlot(str, int, "PyQt_PyObject", int, int, name="on-numpad-request")
+    def on_numpad_request(
+        self,
+        name: str,
+        current_value: int,
+        callback,
+        min_value: int = 0,
+        max_value: int = 100,
+    ) -> None:
+        try:
+            self.numpadPage.value_selected.disconnect()
+        except TypeError:
+            pass
+        self.numpadPage.value_selected.connect(callback)
+        self.numpadPage.set_name(name)
+        self.numpadPage.set_value(current_value)
+        self.numpadPage.set_min_value(min_value)
+        self.numpadPage.set_max_value(max_value)
+        self.setCurrentWidget(self.numpadPage)
+
+    @QtCore.pyqtSlot(str, int, name="on-gate-temp-change")
+    def _on_gate_temp_change(self, _name: str, value: int) -> None:
+        self.info_panel._lbl_temp.setText(str(value))
+        self.info_panel._lbl_temp.editingFinished.emit()
+
+    @QtCore.pyqtSlot(str, int, name="on-gate-weight-change")
+    def _on_gate_weight_change(self, _name: str, value: int) -> None:
+        self.info_panel._lbl_weight.setText(str(value))
+        self.info_panel._lbl_weight.editingFinished.emit()
+
+    @QtCore.pyqtSlot(str, int, name="on-popup-temp-change")
+    def _on_popup_temp_change(self, _name: str, value: int) -> None:
+        self._popup_temp.setText(str(value))
+        self._popup_temp.editingFinished.emit()
 
     def _build_ui(self):
         self.setMinimumSize(720, 420)

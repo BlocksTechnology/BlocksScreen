@@ -1,6 +1,7 @@
 import typing
 
 from lib.panels.widgets.keyboardPage import CustomQwertyKeyboard
+from lib.panels.widgets.numpadPage import CustomNumpad
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_linedit import BlocksCustomLinEdit
 from lib.utils.icon_button import IconButton
@@ -13,6 +14,11 @@ class AddFilamentPage(QtWidgets.QWidget):
     )
     accepted: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(name="accepted")
     cancelled: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(name="cancelled")
+    request_numpad: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        [str, int, "PyQt_PyObject"],
+        [str, int, "PyQt_PyObject", int, int],
+        name="request-numpad",
+    )
 
     def __init__(
         self, keyboard_parent: QtWidgets.QWidget | None = None, parent=None
@@ -26,6 +32,14 @@ class AddFilamentPage(QtWidgets.QWidget):
         self._keyboard.hide()
         self._keyboard.numpad_back_btn.clicked.connect(self._keyboard.hide)
         self._keyboard.value_selected.connect(self._on_keyboard_done)
+
+        self._numpad = CustomNumpad(keyboard_parent)
+        self._numpad.hide()
+        self._numpad.numpad_back_btn.clicked.connect(self._numpad.hide)
+
+        self.request_numpad[str, int, "PyQt_PyObject", int, int].connect(
+            self.on_numpad_request
+        )
 
     @QtCore.pyqtSlot(dict, name="on-add-filament-result")
     def on_add_filament_result(self, result: dict) -> None:
@@ -57,6 +71,37 @@ class AddFilamentPage(QtWidgets.QWidget):
         if self._keyboard_field is not None:
             self._keyboard_field.setText(value)
             self._keyboard_field = None
+
+    @QtCore.pyqtSlot(str, int, "PyQt_PyObject", name="on-numpad-request")
+    @QtCore.pyqtSlot(str, int, "PyQt_PyObject", int, int, name="on-numpad-request")
+    def on_numpad_request(
+        self,
+        name: str,
+        current_value: int,
+        callback,
+        min_value: int = 0,
+        max_value: int = 100,
+    ) -> None:
+        try:
+            self._numpad.value_selected.disconnect()
+        except TypeError:
+            pass
+        self._numpad.value_selected.connect(callback)
+        self._numpad.set_name(name)
+        self._numpad.set_value(current_value)
+        self._numpad.set_min_value(min_value)
+        self._numpad.set_max_value(max_value)
+        self._numpad.show()
+
+    @QtCore.pyqtSlot(str, int, name="on-ext-temp-change")
+    def _on_ext_temp_change(self, _name: str, value: int) -> None:
+        self._numpad.hide()
+        self._ext_temp_field.setText(str(value))
+
+    @QtCore.pyqtSlot(str, int, name="on-bed-temp-change")
+    def _on_bed_temp_change(self, _name: str, value: int) -> None:
+        self._numpad.hide()
+        self._bed_temp_field.setText(str(value))
 
     def _update_swatch(self) -> None:
         hex_text = self._color_field.text().strip("#").strip()
@@ -187,7 +232,7 @@ class AddFilamentPage(QtWidgets.QWidget):
         grid.addWidget(self._name_field, 0, 1, 1, 2)
         grid.addWidget(_key_lbl("Material:"), 0, 3)
         grid.addWidget(self._material_field, 0, 4)
-        
+
         grid.addWidget(_key_lbl("Color:"), 1, 0)
         grid.addWidget(self._color_field, 1, 1)
         self._color_field.setMaximumWidth(70)
@@ -209,7 +254,6 @@ class AddFilamentPage(QtWidgets.QWidget):
         grid.addWidget(self._diameter_field, 3, 3)
         self._diameter_field.setMaximumWidth(65)
 
-
         root.addWidget(grid_w, 1)
 
         self._name_field.setPlaceholderText("e.g. PLA Generic")
@@ -228,10 +272,22 @@ class AddFilamentPage(QtWidgets.QWidget):
             lambda: self._show_keyboard(self._color_field, prefix="#", max_char=6)
         )
         self._ext_temp_field.clicked.connect(
-            lambda: self._show_keyboard(self._ext_temp_field, pattern="int", max_char=3)
+            lambda: self.request_numpad[str, int, "PyQt_PyObject", int, int].emit(
+                "Extruder Temp",
+                int(self._ext_temp_field.text().strip() or 0),
+                self._on_ext_temp_change,
+                0,
+                500,
+            )
         )
         self._bed_temp_field.clicked.connect(
-            lambda: self._show_keyboard(self._bed_temp_field, pattern="int", max_char=3)
+            lambda: self.request_numpad[str, int, "PyQt_PyObject", int, int].emit(
+                "Bed Temp",
+                int(self._bed_temp_field.text().strip() or 0),
+                self._on_bed_temp_change,
+                0,
+                150,
+            )
         )
         self._density_field.clicked.connect(
             lambda: self._show_keyboard(self._density_field, max_char=5)

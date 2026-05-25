@@ -379,16 +379,6 @@ class SpoolInfoPanel(QtWidgets.QWidget):
                 self._lbl_mat, "", "", "", 0
             )
         )
-        self._lbl_weight.clicked.connect(
-            lambda: self.request_keypad["PyQt_PyObject", str, str, str, int].emit(
-                self._lbl_weight, "g", "", "", 0
-            )
-        )
-        self._lbl_temp.clicked.connect(
-            lambda: self.request_keypad["PyQt_PyObject", str, str, str, int].emit(
-                self._lbl_temp, "", "º", "int", 3
-            )
-        )
 
         rows = [
             ("Status", self._lbl_status, None),

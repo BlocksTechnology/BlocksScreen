@@ -1,6 +1,7 @@
 import typing
 
 from lib.panels.widgets.keyboardPage import CustomQwertyKeyboard
+from lib.panels.widgets.numpadPage import CustomNumpad
 from lib.panels.widgets.loadWidget import LoadingOverlayWidget
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_frame import BlocksCustomFrame
@@ -22,6 +23,11 @@ class AddSpoolPage(QtWidgets.QWidget):
     )
     accepted: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(name="accepted")
     cancelled: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(name="cancelled")
+    request_numpad: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        [str, int, "PyQt_PyObject"],
+        [str, int, "PyQt_PyObject", int, int],
+        name="request-numpad",
+    )
 
     def __init__(
         self, keyboard_parent: QtWidgets.QWidget | None = None, parent=None
@@ -37,6 +43,14 @@ class AddSpoolPage(QtWidgets.QWidget):
         self._keyboard.hide()
         self._keyboard.numpad_back_btn.clicked.connect(self._keyboard.hide)
         self._keyboard.value_selected.connect(self._on_keyboard_done)
+
+        self._numpad = CustomNumpad(keyboard_parent)
+        self._numpad.hide()
+        self._numpad.numpad_back_btn.clicked.connect(self._numpad.hide)
+
+        self.request_numpad[str, int, "PyQt_PyObject", int, int].connect(
+            self.on_numpad_request
+        )
 
     def reset(self) -> None:
         """Clear state and trigger a fresh filament fetch. Call before showing."""
@@ -144,6 +158,32 @@ class AddSpoolPage(QtWidgets.QWidget):
         if self._keyboard_field is not None:
             self._keyboard_field.setText(value)
             self._keyboard_field = None
+
+    @QtCore.pyqtSlot(str, int, "PyQt_PyObject", name="on-numpad-request")
+    @QtCore.pyqtSlot(str, int, "PyQt_PyObject", int, int, name="on-numpad-request")
+    def on_numpad_request(
+        self,
+        name: str,
+        current_value: int,
+        callback,
+        min_value: int = 0,
+        max_value: int = 100,
+    ) -> None:
+        try:
+            self._numpad.value_selected.disconnect()
+        except TypeError:
+            pass
+        self._numpad.value_selected.connect(callback)
+        self._numpad.set_name(name)
+        self._numpad.set_value(current_value)
+        self._numpad.set_min_value(min_value)
+        self._numpad.set_max_value(max_value)
+        self._numpad.show()
+
+    @QtCore.pyqtSlot(str, int, name="on-weight-change")
+    def _on_weight_change(self, _name: str, value: int) -> None:
+        self._numpad.hide()
+        self._weight_field.setText(str(value))
 
     def _on_submit(self) -> None:
         if self._selected_filament_id is None:
@@ -312,7 +352,13 @@ class AddSpoolPage(QtWidgets.QWidget):
         )
         self._lot_field.clicked.connect(lambda: self._show_keyboard(self._lot_field))
         self._weight_field.clicked.connect(
-            lambda: self._show_keyboard(self._weight_field, pattern="int")
+            lambda: self.request_numpad[str, int, "PyQt_PyObject", int, int].emit(
+                "Weight",
+                int(self._weight_field.text().strip() or 0),
+                self._on_weight_change,
+                0,
+                9999,
+            )
         )
 
         right_lay.addStretch(1)
