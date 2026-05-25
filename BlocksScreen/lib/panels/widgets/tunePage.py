@@ -1,12 +1,13 @@
+import logging
 import re
 import typing
-import logging
 
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.display_button import DisplayButton
 from lib.utils.icon_button import IconButton
 from PyQt6 import QtCore, QtGui, QtWidgets
 
+from BlocksScreen.lib.utils.gcode import fan_speed_gcode
 
 _logger = logging.getLogger(__name__)
 
@@ -114,13 +115,7 @@ class TuneWidget(QtWidgets.QWidget):
     @QtCore.pyqtSlot(str, int, name="on_slider_change")
     def on_slider_change(self, name: str, new_value: int) -> None:
         """Handle fan slider value change."""
-        if name.lower() == "fan":
-            self.run_gcode.emit(f"M106 S{round(new_value * 255 / 100)}")
-        else:
-            gcode_name = name.replace(" ", "_")
-            self.run_gcode.emit(
-                f"SET_FAN_SPEED FAN={gcode_name} SPEED={float(new_value / 100.00)}"
-            )
+        self.run_gcode.emit(fan_speed_gcode(name, new_value))
 
     @QtCore.pyqtSlot(str, str, float, name="on_fan_update")
     @QtCore.pyqtSlot(str, str, int, name="on_fan_update")

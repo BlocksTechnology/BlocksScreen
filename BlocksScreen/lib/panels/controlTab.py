@@ -16,6 +16,7 @@ from lib.panels.widgets.slider_selector_page import SliderPage
 from lib.printer import Printer
 from lib.ui.controlStackedWidget_ui import Ui_controlStackedWidget
 from lib.utils.display_button import DisplayButton
+from lib.utils.gcode import fan_speed_gcode
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 _logger = logging.getLogger(__name__)
@@ -390,13 +391,7 @@ class ControlTab(QtWidgets.QStackedWidget):
     @QtCore.pyqtSlot(str, int, name="on_slider_change")
     def on_slider_change(self, name: str, new_value: int) -> None:
         """Handle fan slider value change."""
-        if name.lower() == "fan":
-            self.run_gcode_signal.emit(f"M106 S{round(new_value * 255 / 100)}")
-        else:
-            gcode_name = name.replace(" ", "_")
-            self.run_gcode_signal.emit(
-                f"SET_FAN_SPEED FAN={gcode_name} SPEED={float(new_value / 100.00)}"
-            )
+        self.run_gcode_signal.emit(fan_speed_gcode(name, new_value))
 
     def create_display_button(self, name: str) -> DisplayButton:
         """Create and return a DisplayButton
