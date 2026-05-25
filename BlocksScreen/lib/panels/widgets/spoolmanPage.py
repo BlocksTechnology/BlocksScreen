@@ -44,6 +44,7 @@ class SpoolmanPage(QtWidgets.QWidget):
 
         self._setupUI()
         self._setup_add_popup()
+        self.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
 
         self._add_spool_page.request_filaments.connect(self.request_filaments)
         self._add_spool_page.request_add_spool.connect(self.request_add_spool)

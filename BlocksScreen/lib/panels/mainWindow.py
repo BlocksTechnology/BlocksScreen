@@ -21,6 +21,7 @@ from lib.panels.networkWindow import NetworkControlWindow, PixmapCache
 from lib.panels.printTab import PrintTab
 from lib.panels.utilitiesTab import UtilitiesTab
 from lib.panels.widgets.basePopup import BasePopup
+from lib.panels.widgets.spoolmanPage import SpoolmanPage
 from lib.panels.widgets.cancelPage import CancelPage
 from lib.panels.widgets.connectionPage import ConnectionPage
 from lib.panels.widgets.loadWidget import LoadingOverlayWidget
@@ -147,6 +148,12 @@ class MainWindow(QtWidgets.QMainWindow):
         )
         self.controlPanel = ControlTab(self.ui.controlTab, self.ws, self.printer)
         self.utilitiesPanel = UtilitiesTab(self.ui.utilitiesTab, self.ws, self.printer)
+
+        self.spoolmanPanel = SpoolmanPage(parent=self.ui.SpoolmanTab)
+        _spoolman_layout = QtWidgets.QVBoxLayout(self.ui.SpoolmanTab)
+        _spoolman_layout.setContentsMargins(0, 0, 0, 0)
+        _spoolman_layout.addWidget(self.spoolmanPanel)
+
         self.networkPanel = NetworkControlWindow(self)
         self.bo_ws_startup.connect(slot=self.bo_start_websocket_connection)
         self.ws.connecting_signal.connect(self.conn_window.on_websocket_connecting)
@@ -169,6 +176,36 @@ class MainWindow(QtWidgets.QMainWindow):
         self.utilitiesPanel.request_back.connect(slot=self.global_back)
         self.utilitiesPanel.request_change_page.connect(slot=self.global_change_page)
         self.utilitiesPanel.update_available.connect(self.on_update_available)
+
+        self.spoolmanPanel.request_back.connect(self.global_back)
+        self.spoolmanPanel.request_spools.connect(
+            lambda: self.ws.api.spoolman_proxy(
+                "GET", "/v1/spool", callback=self.spoolmanPanel.on_spools_received
+            )
+        )
+        self.spoolmanPanel.request_get_spool_id.connect(
+            lambda: self.ws.api.get_spool_id()
+        )
+        self.spoolmanPanel.request_delete_spool.connect(
+            lambda spool_id: self.ws.api.delete_spool(
+                spool_id, callback=self.spoolmanPanel.on_delete_spool_result
+            )
+        )
+        self.spoolmanPanel.request_filaments.connect(
+            lambda: self.ws.api.get_filaments(
+                callback=self.spoolmanPanel.on_filaments_received
+            )
+        )
+        self.spoolmanPanel.request_add_spool.connect(
+            lambda filament_id, body: self.ws.api.add_spool(
+                filament_id, body, callback=self.spoolmanPanel.on_add_spool_result
+            )
+        )
+        self.spoolmanPanel.request_add_filament.connect(
+            lambda body: self.ws.api.add_filament(
+                body, callback=self.spoolmanPanel.on_add_filament_result
+            )
+        )
         self.ui.notification_btn.clicked.connect(self.notiPage.show_notification_panel)
         self.ui.extruder_temp_display.clicked.connect(
             lambda: self.global_change_page(
@@ -386,6 +423,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui.main_content_widget.setTabEnabled(
             self.ui.main_content_widget.indexOf(self.ui.utilitiesTab), True
         )
+        self.ui.main_content_widget.setTabEnabled(
+            self.ui.main_content_widget.indexOf(self.ui.SpoolmanTab), True
+        )
         self.ui.header_main_layout.setEnabled(True)
         return all(
             [
@@ -394,6 +434,9 @@ class MainWindow(QtWidgets.QMainWindow):
                 ),
                 not self.ui.main_content_widget.isTabEnabled(
                     self.ui.main_content_widget.indexOf(self.ui.utilitiesTab)
+                ),
+                not self.ui.main_content_widget.isTabEnabled(
+                    self.ui.main_content_widget.indexOf(self.ui.SpoolmanTab)
                 ),
                 not self.ui.header_main_layout.isEnabled(),
             ]
@@ -416,6 +459,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui.main_content_widget.setTabEnabled(
             self.ui.main_content_widget.indexOf(self.ui.utilitiesTab), False
         )
+        self.ui.main_content_widget.setTabEnabled(
+            self.ui.main_content_widget.indexOf(self.ui.SpoolmanTab), False
+        )
         self.ui.header_main_layout.setEnabled(False)
         return all(
             [
@@ -424,6 +470,9 @@ class MainWindow(QtWidgets.QMainWindow):
                 ),
                 not self.ui.main_content_widget.isTabEnabled(
                     self.ui.main_content_widget.indexOf(self.ui.utilitiesTab)
+                ),
+                not self.ui.main_content_widget.isTabEnabled(
+                    self.ui.main_content_widget.indexOf(self.ui.SpoolmanTab)
                 ),
                 not self.ui.header_main_layout.isEnabled(),
             ]
@@ -441,7 +490,7 @@ class MainWindow(QtWidgets.QMainWindow):
         Disables all tabs except controlTab (where calibration lives) and
         the header, so the user cannot navigate away mid-calibration.
         """
-        for tab in (self.ui.printTab, self.ui.filamentTab, self.ui.utilitiesTab):
+        for tab in (self.ui.printTab, self.ui.filamentTab, self.ui.utilitiesTab, self.ui.SpoolmanTab):
             self.ui.main_content_widget.setTabEnabled(
                 self.ui.main_content_widget.indexOf(tab), not locked
             )
