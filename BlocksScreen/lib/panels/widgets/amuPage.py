@@ -113,8 +113,8 @@ class AMUpage(QtWidgets.QStackedWidget):
 
     def _setup_popup(self):
         self._popup_stack = QtWidgets.QStackedWidget()
-        self._popup_stack.addWidget(self._build_form_page())  # index 0: manual form
-        self._popup_stack.addWidget(self._build_spool_page())  # index 1: spool picker
+        self._popup_stack.addWidget(self._build_form_page())
+        self._popup_stack.addWidget(self._build_spool_page())
 
         self.popup = BasePopup(self, False, False)
         self.popup.add_widget(self._popup_stack)

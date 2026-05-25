@@ -53,12 +53,18 @@ class Spoll_button(QtWidgets.QAbstractButton):
         self.update()
 
     def update_entry(
-        self, color: QtGui.QColor, slot_id: int, status: GateStatus, material: str
+        self,
+        color: QtGui.QColor,
+        slot_id: int,
+        status: GateStatus,
+        material: str,
+        temp: int,
     ):
         self.setColor(color)
         self.setGateId(slot_id)
         self.setStatus(status)
         self.setMaterial(material)
+        self.setTemp(temp)
         self.update()
 
     def paintEvent(self, e: QtGui.QPaintEvent | None) -> None:
@@ -213,7 +219,9 @@ class SpoolCarousel(QtWidgets.QWidget):
         status: GateStatus = GateStatus.UNKNOWN,
     ):
         if any(btn.slot_id == slot_id for btn in self.buttons):
-            self.buttons[int(slot_id)].update_entry(color, slot_id, status, material)
+            self.buttons[int(slot_id)].update_entry(
+                color, slot_id, status, material, temp
+            )
             self.update()
             return
         btn = Spoll_button()
@@ -506,7 +514,7 @@ class SpoolInfoPanel(QtWidgets.QWidget):
 
         self._lbl_status.setText(text)
         self._lbl_temp.setText(f"{btn.temp}º")
-        self._lbl_mat.setText(f"{btn.material}g" if btn.material else "—")
+        self._lbl_mat.setText(f"{btn.material}" if btn.material else "—")
         self._btn_load.setEnabled(en_load)
         self._btn_unload.setEnabled(en_unload)
         self._btn_purge.setEnabled(en_purge)
