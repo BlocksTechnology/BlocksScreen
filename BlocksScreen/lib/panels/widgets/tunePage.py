@@ -113,11 +113,14 @@ class TuneWidget(QtWidgets.QWidget):
 
     @QtCore.pyqtSlot(str, int, name="on_slider_change")
     def on_slider_change(self, name: str, new_value: int) -> None:
-        """Handle fan_generic slider value change."""
-        gcode_name = name.replace(" ", "_")
-        self.run_gcode.emit(
-            f"SET_FAN_SPEED FAN={gcode_name} SPEED={float(new_value / 100.00)}"
-        )  # [0.0, 1.0] Range
+        """Handle fan slider value change."""
+        if name.lower() == "fan":
+            self.run_gcode.emit(f"M106 S{round(new_value * 2.55)}")
+        else:
+            gcode_name = name.replace(" ", "_")
+            self.run_gcode.emit(
+                f"SET_FAN_SPEED FAN={gcode_name} SPEED={float(new_value / 100.00)}"
+            )
 
     @QtCore.pyqtSlot(str, str, float, name="on_fan_update")
     @QtCore.pyqtSlot(str, str, int, name="on_fan_update")

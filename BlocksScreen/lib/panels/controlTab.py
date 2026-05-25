@@ -53,8 +53,6 @@ class ControlTab(QtWidgets.QStackedWidget):
     )
     call_load_panel = QtCore.pyqtSignal(bool, str, name="call-load-panel")
     toggle_conn_page = QtCore.pyqtSignal(bool, name="call-load-panel")
-    tune_display_buttons: dict = {}
-    card_options: dict = {}
 
     def __init__(
         self,
@@ -77,6 +75,8 @@ class ControlTab(QtWidgets.QStackedWidget):
         self.extruder_info: dict = {}
         self.bed_info: dict = {}
         self.toolhead_info: dict = {}
+        self.tune_display_buttons: dict = {}
+        self.card_options: dict = {}
         self.extrude_length: int = 10
         self.extrude_feedrate: int = 2
         self.extrude_page_message: str = ""
@@ -458,7 +458,9 @@ class ControlTab(QtWidgets.QStackedWidget):
                         return
                     self.call_load_panel.emit(
                         True,
-                        f"Retries: {retries_done}/{retries_total} | Range: {probed_range:.6f} | Tolerance: {tolerance:.6f}",
+                        f"Retries: {retries_done}/{retries_total}"
+                        f" | Range: {probed_range:.6f}"
+                        f" | Tolerance: {tolerance:.6f}",
                     )
 
     @QtCore.pyqtSlot(dict, name="printer_config")
@@ -473,8 +475,8 @@ class ControlTab(QtWidgets.QStackedWidget):
             self.panel.bed_temp_display.clicked.disconnect()
         except Exception:
             _logger.debug("Signals were not connected")
-        extruder = config.get("extruder", None) or {}
-        bed = config.get("heater_bed", None) or {}
+        extruder = config.get("extruder") or {}
+        bed = config.get("heater_bed") or {}
         e_min_temp = extruder.get("min_temp", 0)
         e_max_temp = extruder.get("max_temp", 300)
         b_max_temp = bed.get("max_temp", 100)
@@ -483,7 +485,7 @@ class ControlTab(QtWidgets.QStackedWidget):
         self.panel.extruder_temp_display.clicked.connect(
             lambda: self.request_numpad[str, int, "PyQt_PyObject", int, int].emit(
                 "Extruder Temperature",
-                int(round(float(self.panel.extruder_temp_display.secondary_text))),
+                round(float(self.panel.extruder_temp_display.secondary_text)),
                 self.on_numpad_change,
                 int(e_min_temp),
                 int(e_max_temp),
@@ -492,7 +494,7 @@ class ControlTab(QtWidgets.QStackedWidget):
         self.panel.bed_temp_display.clicked.connect(
             lambda: self.request_numpad[str, int, "PyQt_PyObject", int, int].emit(
                 "Bed Temperature",
-                int(round(float(self.panel.bed_temp_display.secondary_text))),
+                round(float(self.panel.bed_temp_display.secondary_text)),
                 self.on_numpad_change,
                 int(b_min_temp),
                 int(b_max_temp),
@@ -641,13 +643,15 @@ class ControlTab(QtWidgets.QStackedWidget):
             return
         if extrude:
             self.run_gcode_signal.emit(
-                f"M83\nG1 E{self.extrude_length} F{self.extrude_feedrate * 60}\nM82\nM400"
+                f"M83\nG1 E{self.extrude_length}"
+                f" F{self.extrude_feedrate * 60}\nM82\nM400"
             )
             self.extrude_page_message = "Extruding"
             self.panel.exp_info_label.setText(self.extrude_page_message)
         else:
             self.run_gcode_signal.emit(
-                f"M83\nG1 E-{self.extrude_length} F{self.extrude_feedrate * 60}\nM82\nM400"
+                f"M83\nG1 E-{self.extrude_length}"
+                f" F{self.extrude_feedrate * 60}\nM82\nM400"
             )
             self.extrude_page_message = "Retracting"
             self.panel.exp_info_label.setText(self.extrude_page_message)
@@ -682,7 +686,8 @@ class ControlTab(QtWidgets.QStackedWidget):
         if axis not in ["X", "X-", "Y", "Y-", "Z", "Z-"]:
             return
         self.run_gcode_signal.emit(
-            f"G91\nG0 {axis}{float(self.move_length)} F{float(self.move_speed * 60)}\nG90\nM400"
+            f"G91\nG0 {axis}{float(self.move_length)}"
+            f" F{float(self.move_speed * 60)}\nG90\nM400"
         )
 
     @QtCore.pyqtSlot(str, list, name="on-toolhead-update")
