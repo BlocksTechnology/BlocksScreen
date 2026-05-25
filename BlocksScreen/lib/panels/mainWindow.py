@@ -34,6 +34,12 @@ from screensaver import ScreenSaver
 
 _logger = logging.getLogger(__name__)
 
+_GCODE_POPUP_MESSAGES: tuple[tuple[str, str], ...] = (
+    ("filament runout", "Filament Runout"),
+    ("no filament", "No Filament Detected"),
+    ("sensor not in valid range", "Eddy Current Sensor:\nnot in valid range"),
+)
+
 
 def api_handler(func):
     """Decorator for methods that handle api responses"""
@@ -112,6 +118,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui.setupUi(self)
         self.screensaver = ScreenSaver(self)
         self._popup_toggle: bool = False
+        self._klippy_ready: bool = False
         self.ui.main_content_widget.setCurrentIndex(0)
 
         usb_config = self.config.get_section("usb_manager", fallback=None)
@@ -136,7 +143,9 @@ class MainWindow(QtWidgets.QMainWindow):
             self.ui.printTab, self.file_data, self.ws, self.printer
         )
         QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.CursorShape.BlankCursor)
-        self.filamentPanel = FilamentTab(self.ui.filamentTab, self.printer, self.ws)
+        self.filamentPanel = FilamentTab(
+            self.ui.filamentTab, self.printer, self.ws, self.config
+        )
         self.controlPanel = ControlTab(self.ui.controlTab, self.ws, self.printer)
         self.utilitiesPanel = UtilitiesTab(self.ui.utilitiesTab, self.ws, self.printer)
         self.networkPanel = NetworkControlWindow(self)
@@ -146,6 +155,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.conn_window.on_websocket_connection_achieved
         )
         self.ws.connection_lost.connect(self.conn_window.on_websocket_connection_lost)
+        self.ws.klippy_state_signal.connect(self._on_klippy_state)
         self.printer.webhooks_update.connect(self.conn_window.webhook_update)
         self.printPanel.request_back.connect(slot=self.global_back)
         self.printPanel.on_cancel_print.connect(slot=self.on_cancel_print)
@@ -177,7 +187,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui.filament_type_icon.clicked.connect(
             lambda: self.global_change_page(
                 self.ui.main_content_widget.indexOf(self.ui.filamentTab),
-                self.filamentPanel.indexOf(self.filamentPanel.panel.load_page),
+                self.filamentPanel.indexOf(self.filamentPanel),
             )
         )
         self.ui.filament_type_icon.setText("PLA")
@@ -216,7 +226,11 @@ class MainWindow(QtWidgets.QMainWindow):
         self.handle_error_response.connect(
             self.controlPanel.probe_helper_page.handle_error_response
         )
+        self.controlPanel.probe_helper_page.show_notifications.connect(
+            self.notiPage.new_notication
+        )
         self.controlPanel.disable_popups.connect(self.popup_toggle)
+        self.controlPanel.lock_ui.connect(self.set_ui_lock)
         self.on_update_message.connect(self.update_page.handle_update_message)
         self.update_page.request_full_update.connect(self.ws.api.full_update)
         self.update_page.request_recover_repo[str].connect(
@@ -243,11 +257,14 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui.extruder_temp_display.display_format = "upper_downer"
         self.ui.bed_temp_display.display_format = "upper_downer"
 
-        self.controlPanel.call_load_panel.connect(self.show_LoadScreen)
-        self.filamentPanel.call_load_panel.connect(self.show_LoadScreen)
-        self.printPanel.call_load_panel.connect(self.show_LoadScreen)
-        self.utilitiesPanel.call_load_panel.connect(self.show_LoadScreen)
-        self.conn_window.call_load_panel.connect(self.show_LoadScreen)
+        self.controlPanel.call_load_panel.connect(self.show_loadscreen)
+        self.filamentPanel.call_load_panel.connect(self.show_loadscreen)
+        self.printPanel.call_load_panel.connect(self.show_loadscreen)
+        self.utilitiesPanel.call_load_panel.connect(self.show_loadscreen)
+        self.conn_window.call_load_panel.connect(self.show_loadscreen)
+
+        self.filamentPanel.request_change_tab.connect(self.global_change_tab)
+        self.printPanel.request_change_tab.connect(self.global_change_tab)
 
         self.loadscreen = BasePopup(self, floating=False, dialog=False)
         self.loadwidget = LoadingOverlayWidget(
@@ -271,6 +288,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.file_data.fileinfo.connect(self.cancelpage._show_screen_thumbnail)
         self.printPanel.call_cancel_panel.connect(self.handle_cancel_print)
 
+        self.print_status = "idle"
+
         if self.config.has_section("server"):
             self.bo_ws_startup.emit()
         self.reset_tab_indexes()
@@ -289,13 +308,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.cancelpage.show()
 
     @QtCore.pyqtSlot(bool, str, name="show-load-page")
-    def show_LoadScreen(self, show: bool = True, msg: str = ""):
+    def show_loadscreen(self, show: bool = True, msg: str = ""):
         """Show or hide the loading overlay, guarded by the calling panel's visibility."""
         _sender = self.sender()
-
-        if _sender == self.filamentPanel:
-            if not self.filamentPanel.isVisible():
-                return
         if _sender == self.controlPanel:
             if not self.controlPanel.isVisible():
                 return
@@ -305,7 +320,6 @@ class MainWindow(QtWidgets.QMainWindow):
         if _sender == self.utilitiesPanel:
             if not self.utilitiesPanel.isVisible():
                 return
-
         self.loadwidget.set_status_message(msg)
         if show:
             self.loadscreen.show()
@@ -374,9 +388,6 @@ class MainWindow(QtWidgets.QMainWindow):
         """
 
         self.ui.main_content_widget.setTabEnabled(
-            self.ui.main_content_widget.indexOf(self.ui.filamentTab), True
-        )
-        self.ui.main_content_widget.setTabEnabled(
             self.ui.main_content_widget.indexOf(self.ui.controlTab), True
         )
         self.ui.main_content_widget.setTabEnabled(
@@ -385,10 +396,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui.header_main_layout.setEnabled(True)
         return all(
             [
-                self.ui.main_content_widget.isTabEnabled(
-                    self.ui.main_content_widget.indexOf(self.ui.filamentTab)
-                ),
-                self.ui.main_content_widget.isTabEnabled(
+                not self.ui.main_content_widget.isTabEnabled(
                     self.ui.main_content_widget.indexOf(self.ui.controlTab)
                 ),
                 self.ui.main_content_widget.isTabEnabled(
@@ -410,9 +418,6 @@ class MainWindow(QtWidgets.QMainWindow):
             boolean: True if the TabBar was disabled
         """
         self.ui.main_content_widget.setTabEnabled(
-            self.ui.main_content_widget.indexOf(self.ui.filamentTab), False
-        )
-        self.ui.main_content_widget.setTabEnabled(
             self.ui.main_content_widget.indexOf(self.ui.controlTab), False
         )
         self.ui.main_content_widget.setTabEnabled(
@@ -421,9 +426,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui.header_main_layout.setEnabled(False)
         return all(
             [
-                not self.ui.main_content_widget.isTabEnabled(
-                    self.ui.main_content_widget.indexOf(self.ui.filamentTab)
-                ),
                 not self.ui.main_content_widget.isTabEnabled(
                     self.ui.main_content_widget.indexOf(self.ui.controlTab)
                 ),
@@ -439,17 +441,41 @@ class MainWindow(QtWidgets.QMainWindow):
         """Toggles app popups"""
         self._popup_toggle = toggle
 
+    @QtCore.pyqtSlot(bool, name="set-ui-lock")
+    def set_ui_lock(self, locked: bool) -> None:
+        """Lock or unlock navigation during calibration.
+
+        Disables all tabs except controlTab (where calibration lives) and
+        the header, so the user cannot navigate away mid-calibration.
+        """
+        for tab in (self.ui.printTab, self.ui.filamentTab, self.ui.utilitiesTab):
+            self.ui.main_content_widget.setTabEnabled(
+                self.ui.main_content_widget.indexOf(tab), not locked
+            )
+        self.ui.header_main_layout.setEnabled(not locked)
+
+    @QtCore.pyqtSlot(str, name="on-klippy-state")
+    def _on_klippy_state(self, state: str) -> None:
+        """Track Klippy readiness to suppress spurious error popups during disconnect."""
+        self._klippy_ready = state == "ready"
+
     def reset_tab_indexes(self):
         """
         Used to grantee all tabs reset to their
         first page once the user leaves the tab
         """
-        self.update_page.hide()
-        self.printPanel.setCurrentIndex(0)
         self.filamentPanel.setCurrentIndex(0)
+
+        if self.print_status == "printing":
+            self.printPanel.setCurrentIndex(
+                self.printPanel.indexOf(self.printPanel.jobStatusPage_widget)
+            )
+            return
+        self.printPanel.setCurrentIndex(0)
         self.controlPanel.setCurrentIndex(0)
         self.utilitiesPanel.setCurrentIndex(0)
         self.networkPanel.setCurrentIndex(0)
+        self.update_page.hide()
 
     def current_panel_index(self) -> int:
         """Helper function to get the index of the current page in the current tab
@@ -510,7 +536,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 "Panel page index expected type int, %s", str(type(panel_index))
             )
 
-        self.show_LoadScreen(False)
+        self.show_loadscreen(False)
         current_page = [
             self.ui.main_content_widget.currentIndex(),
             self.current_panel_index(),
@@ -534,6 +560,22 @@ class MainWindow(QtWidgets.QMainWindow):
             self.ui.main_content_widget.setTabEnabled(tab_index, True)
         _logger.debug(
             f"Requested page change -> Tab index : {requested_page[0]} | panel index : {requested_page[1]}",
+        )
+
+    def global_change_tab(self, tab_index: int) -> None:
+        """Changes the current tab while keeping the current panel page index if possible
+
+        Args:
+            tab_index (int): The index of the tab to change to
+        """
+        if not isinstance(tab_index, int):
+            _logger.debug(
+                "Tab index argument expected type int, got %s", str(type(tab_index))
+            )
+            return
+        self.ui.main_content_widget.setCurrentIndex(tab_index)
+        _logger.debug(
+            f"Requested tab change -> Tab index : {tab_index}",
         )
 
     @QtCore.pyqtSlot(name="request-back")
@@ -738,16 +780,29 @@ class MainWindow(QtWidgets.QMainWindow):
             if len(_parts) < 2:
                 return
             _gcode_msg_type, _message = _parts
-            popupWhitelist = ["filament runout", "no filament"]
-            if _message.lower() not in popupWhitelist or _gcode_msg_type != "!!":
+            _msg_lower = _message.lower()
+            _display = next(
+                (
+                    fmt
+                    for pattern, fmt in _GCODE_POPUP_MESSAGES
+                    if pattern in _msg_lower
+                ),
+                None,
+            )
+            if _gcode_msg_type != "!!" or _display is None:
                 return
-            self.show_notifications.emit("mainwindow", _message, 3, True)
+            self.show_notifications.emit("mainwindow", _display, 3, True)
 
     @api_handler
     def _handle_error_message(self, method, data, metadata) -> None:
         """Handle error messages from Moonraker API."""
         self.handle_error_response[list].emit([data, metadata])
         if self._popup_toggle:
+            return
+
+        # Suppress error popups while Klippy is disconnected/shutting down.
+        # Those errors are side-effects of the disconnect, not actionable by the user.
+        if not self._klippy_ready:
             return
 
         text = data.get("message", str(data)) if isinstance(data, dict) else str(data)
@@ -860,6 +915,7 @@ class MainWindow(QtWidgets.QMainWindow):
             return False
         if event.type() == events.PrintStart.type():
             self._printing_active = True
+            self.print_status = "printing"
             self.disable_tab_bar()
             try:
                 self.ui.extruder_temp_display.clicked.disconnect()
@@ -887,6 +943,7 @@ class MainWindow(QtWidgets.QMainWindow):
             events.PrintComplete.type(),
             events.PrintCancelled.type(),
         ):
+            self.print_status = "idle"
             if event.type() == events.PrintCancelled.type():
                 self.handle_cancel_print()
             self._printing_active = False

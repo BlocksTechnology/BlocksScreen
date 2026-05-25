@@ -30,6 +30,8 @@ class Printer(QtCore.QObject):
         [str, float], [str, str], name="idle_timeout_update"
     )
 
+    save_variables_update = QtCore.pyqtSignal(dict, name="save_variables_update")
+
     gcode_move_update = QtCore.pyqtSignal(
         [str, list], [str, float], [str, bool], name="gcode_move_update"
     )
@@ -62,8 +64,8 @@ class Printer(QtCore.QObject):
     gcode_macro_update = QtCore.pyqtSignal(str, dict, name="gcode_macro_update")
     webhooks_update = QtCore.pyqtSignal(str, str, name="webhooks_update")
 
-    load_filament_update = QtCore.pyqtSignal(bool, name="load_filament_update")
-    unload_filament_update = QtCore.pyqtSignal(bool, name="unload_filament_update")
+    load_filament_update = QtCore.pyqtSignal(dict, name="load_filament_update")
+    unload_filament_update = QtCore.pyqtSignal(dict, name="unload_filament_update")
 
     query_printer_object = QtCore.pyqtSignal(dict, name="query_printer_object")
     save_config_pending: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
@@ -339,6 +341,11 @@ class Printer(QtCore.QObject):
                             _state_call,
                             e,
                         )
+
+    def _save_variables_object_updated(
+        self, value: dict, name: str = "saved_variables"
+    ) -> None:
+        self.save_variables_update.emit(value)
 
     def _gcode_move_object_updated(self, value: dict, name: str = "gcode_move") -> None:
         if "speed_factor" in value:
@@ -752,9 +759,7 @@ class Printer(QtCore.QObject):
 
     # TODO: testing needed here idk if does work
     def _unload_filament_object_updated(self, values: dict, name: str) -> None:
-        if "state" in values:
-            self.unload_filament_update[bool].emit(values["state"])
+        self.unload_filament_update[dict].emit(values)
 
     def _load_filament_object_updated(self, values: dict, name: str) -> None:
-        if "state" in values:
-            self.load_filament_update[bool].emit(values["state"])
+        self.load_filament_update[dict].emit(values)
