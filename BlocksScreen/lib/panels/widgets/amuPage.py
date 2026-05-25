@@ -190,14 +190,14 @@ class AMUpage(QtWidgets.QStackedWidget):
         font.setPointSize(15)
 
         spoolman_btn = BlocksCustomButton(page)
-        spoolman_btn.setFixedSize(200,80)
+        spoolman_btn.setFixedSize(200, 80)
         spoolman_btn.setText("Spoolman")
         spoolman_btn.setFont(font)
         spoolman_btn.clicked.connect(self._on_spoolman_clicked)
         btn_row.addWidget(spoolman_btn)
 
         accept_btn = BlocksCustomButton(page)
-        accept_btn.setFixedSize(200,80)
+        accept_btn.setFixedSize(200, 80)
         accept_btn.setText("Accept")
         accept_btn.setFont(font)
         accept_btn.clicked.connect(self.on_popup_accept)
@@ -336,16 +336,19 @@ class AMUpage(QtWidgets.QStackedWidget):
         parts = [f"MMU_GATE_MAP GATE={gate}"]
         if self._selected_spool_id != -1:
             parts.append(f"SPOOLID={self._selected_spool_id}")
+            parts.append("AVAILABLE=1")
         if name:
             parts.append(f'NAME="{name}"')
         if material:
             parts.append(f'MATERIAL="{material}"')
         if color:
             parts.append(f'COLOR="{color}"')
-        parts.append(f"TEMP={temp}")
+        if temp > 0:
+            parts.append(f"TEMP={temp}")
         parts.append("QUIET=1")
 
         self.request_gate_map.emit(" ".join(parts))
+        self.request_gate_map.emit("MMU_GATE_MAP REFRESH=1")
         self.popup.hide()
         self.handle_popup()
 
@@ -391,6 +394,7 @@ class AMUpage(QtWidgets.QStackedWidget):
             return
         if item.text == "+ Add Spool":
             self.request_open_add_spoolman.emit()
+            return
         spool = self._spool_id_map.get(item.text)
         if not spool:
             return

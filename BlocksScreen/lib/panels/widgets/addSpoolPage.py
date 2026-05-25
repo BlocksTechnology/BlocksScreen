@@ -47,6 +47,8 @@ class AddSpoolPage(QtWidgets.QWidget):
         self._weight_field.clear()
         self._fil_list_view.hide()
         self._fil_load_widget.show()
+        self._fil_model.clear()
+        self._fil_delegate.clear()
         self.request_filaments.emit()
 
     @QtCore.pyqtSlot(dict, name="on-filaments-received")
@@ -195,6 +197,7 @@ class AddSpoolPage(QtWidgets.QWidget):
 
     def _build_ui(self) -> None:
         self.setMaximumHeight(470)
+
         def _f(pt: int) -> QtGui.QFont:
             font = QtGui.QFont()
             font.setPointSize(pt)
