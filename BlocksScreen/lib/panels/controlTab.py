@@ -391,7 +391,7 @@ class ControlTab(QtWidgets.QStackedWidget):
     def on_slider_change(self, name: str, new_value: int) -> None:
         """Handle fan slider value change."""
         if name.lower() == "fan":
-            self.run_gcode_signal.emit(f"M106 S{round(new_value * 2.55)}")
+            self.run_gcode_signal.emit(f"M106 S{round(new_value * 255 / 100)}")
         else:
             gcode_name = name.replace(" ", "_")
             self.run_gcode_signal.emit(

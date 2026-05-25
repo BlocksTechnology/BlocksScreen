@@ -39,10 +39,10 @@ class TuneWidget(QtWidgets.QWidget):
     speed_factor_override: float = 1.0
     extruder_target: int = 0
     bed_target: int = 0
-    tune_display_buttons: dict = {}
 
     def __init__(self, parent) -> None:
         super().__init__(parent)
+        self.tune_display_buttons: dict = {}
         self.setObjectName("tune_page")
         self._setupUI()
         self.sensors_menu_btn.clicked.connect(self.request_sensorsPage.emit)
@@ -115,7 +115,7 @@ class TuneWidget(QtWidgets.QWidget):
     def on_slider_change(self, name: str, new_value: int) -> None:
         """Handle fan slider value change."""
         if name.lower() == "fan":
-            self.run_gcode.emit(f"M106 S{round(new_value * 2.55)}")
+            self.run_gcode.emit(f"M106 S{round(new_value * 255 / 100)}")
         else:
             gcode_name = name.replace(" ", "_")
             self.run_gcode.emit(
