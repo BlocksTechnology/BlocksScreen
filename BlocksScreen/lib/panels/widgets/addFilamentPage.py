@@ -3,10 +3,12 @@ import typing
 from lib.panels.widgets.keyboardPage import CustomQwertyKeyboard
 from lib.panels.widgets.numpadPage import CustomNumpad
 from lib.utils.blocks_button import BlocksCustomButton
+from lib.utils.blocks_frame import BlocksCustomFrame
 from lib.utils.blocks_linedit import BlocksCustomLinEdit
 from lib.utils.icon_button import IconButton
 from PyQt6 import QtCore, QtGui, QtWidgets
 from lib.panels.widgets.basePopup import BasePopup
+from lib.panels.widgets.colorWheelPage import ColorWheelPage
 
 
 class AddFilamentPage(QtWidgets.QWidget):
@@ -38,6 +40,18 @@ class AddFilamentPage(QtWidgets.QWidget):
         self._numpad_popup = BasePopup(self, False, False)
         self._numpad_popup.add_widget(self._numpad)
         self._numpad.numpad_back_btn.clicked.connect(self._numpad_popup.hide)
+
+
+        self.color_whell = ColorWheelPage(self)
+        self.color_whell.hide()
+
+        self._color_whell_popup = BasePopup(self, True, False)
+        self._color_whell_popup.x_offset = 0.95
+        self._color_whell_popup.y_offset = 0.95
+        self._color_whell_popup.add_widget(self.color_whell)
+        self.color_whell.request_back.connect(self._color_whell_popup.hide)
+        self.color_whell.color_selected.connect(self._on_color_selected)
+
 
         self.request_numpad[str, int, "PyQt_PyObject", int, int].connect(
             self.on_numpad_request
@@ -105,6 +119,14 @@ class AddFilamentPage(QtWidgets.QWidget):
         self._numpad_popup.hide()
         self._bed_temp_field.setText(str(value))
 
+    def _open_color_wheel(self) -> None:
+        self.color_whell.set_color_hex(self._color_field.text().strip().lstrip("#") or "ffffff")
+        self._color_whell_popup.show()
+
+    @QtCore.pyqtSlot(str, name="on-color-selected")
+    def _on_color_selected(self, hex_str: str) -> None:
+        self._color_field.setText(hex_str)
+
     def _update_swatch(self) -> None:
         hex_text = self._color_field.text().strip("#").strip()
         if len(hex_text) == 6:
@@ -151,112 +173,126 @@ class AddFilamentPage(QtWidgets.QWidget):
         self.request_add_filament.emit(body)
 
     def _build_ui(self) -> None:
-
         def _f(pt: int) -> QtGui.QFont:
             font = QtGui.QFont()
             font.setPointSize(pt)
             return font
 
-        def _key_lbl(text: str) -> QtWidgets.QLabel:
-            lbl = QtWidgets.QLabel(text, self)
+        def _key_lbl(text: str, parent: QtWidgets.QWidget) -> QtWidgets.QLabel:
+            lbl = QtWidgets.QLabel(text, parent)
             lbl.setFont(_f(12))
+            lbl.setFixedHeight(20)
             lbl.setStyleSheet("color: rgb(180,180,180); background: transparent;")
-            lbl.setAlignment(
-                QtCore.Qt.AlignmentFlag.AlignVCenter | QtCore.Qt.AlignmentFlag.AlignLeft
-            )
             return lbl
 
-        def _make_field() -> BlocksCustomLinEdit:
-            fld = BlocksCustomLinEdit(self)
+        def _make_field(parent: QtWidgets.QWidget) -> BlocksCustomLinEdit:
+            fld = BlocksCustomLinEdit(parent)
             fld.setFont(_f(14))
-            fld.setFixedHeight(44)
+            fld.setFixedHeight(46)
             return fld
 
         root = QtWidgets.QVBoxLayout(self)
         root.setContentsMargins(8, 8, 8, 8)
-        root.setSpacing(4)
+        root.setSpacing(6)
 
+        # Header
         hdr = QtWidgets.QHBoxLayout()
         hdr.setContentsMargins(0, 0, 0, 0)
         hdr.setSpacing(0)
+
+        blank = QtWidgets.QWidget(self)
+        blank.setFixedSize(60, 60)
+        hdr.addWidget(blank)
+
+        title_lbl = QtWidgets.QLabel("Add Filament", self)
+        title_lbl.setFont(_f(22))
+        title_lbl.setFixedHeight(60)
+        title_lbl.setStyleSheet("color: white; background: transparent;")
+        title_lbl.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        hdr.addWidget(title_lbl)
+
         back_btn = IconButton(self)
         back_btn.setFixedSize(QtCore.QSize(60, 60))
         back_btn.setFlat(True)
         back_btn.setPixmap(QtGui.QPixmap(":/ui/media/btn_icons/back.svg"))
         back_btn.clicked.connect(self.cancelled)
         hdr.addWidget(back_btn)
-        title_lbl = QtWidgets.QLabel("Add Filament", self)
-        title_lbl.setFont(_f(22))
-        title_lbl.setFixedHeight(60)
-        title_lbl.setStyleSheet("color: white; background: transparent;")
-        title_lbl.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
-        hdr.addWidget(title_lbl, 1)
         root.addLayout(hdr)
 
-        grid_w = QtWidgets.QWidget()
-        grid = QtWidgets.QGridLayout(grid_w)
-        grid.setContentsMargins(8, 2, 8, 2)
-        grid.setHorizontalSpacing(12)
-        grid.setVerticalSpacing(4)
-        grid.setColumnStretch(1, 1)
-        grid.setColumnStretch(4, 1)
+        body = QtWidgets.QHBoxLayout()
+        body.setSpacing(8)
 
-        self._name_field = _make_field()
-        self._material_field = _make_field()
-        self._color_field = _make_field()
-        self._ext_temp_field = _make_field()
-        self._bed_temp_field = _make_field()
-        self._density_field = _make_field()
-        self._diameter_field = _make_field()
+        left_frame = BlocksCustomFrame(self)
+        left_lay = QtWidgets.QVBoxLayout(left_frame)
+        left_lay.setContentsMargins(12, 10, 12, 10)
+        left_lay.setSpacing(6)
 
-        self._color_swatch = QtWidgets.QLabel(self)
-        self._color_swatch.setFixedSize(44, 44)
+        self._name_field = _make_field(left_frame)
+        self._material_field = _make_field(left_frame)
+        self._color_field = _make_field(left_frame)
+
+        self._color_swatch = QtWidgets.QLabel(left_frame)
+        self._color_swatch.setFixedSize(70, 70)
         self._color_swatch.setStyleSheet(
             "border-radius: 8px; background: #ffffff; border: 2px solid rgba(255,255,255,80);"
         )
 
-        # rows = [
-        #     ("Name:", self._name_field, None),
-        #     ("Material:", self._material_field, None),
-        #     ("Color:", self._color_field, self._color_swatch),
-        #     ("Ext Temp:", self._ext_temp_field, None),
-        #     ("Bed Temp:", self._bed_temp_field, None),
-        #     ("Density:", self._density_field, None),
-        #     ("Diameter:", self._diameter_field, None),
-        # ]
-        # for i, (label, field, extra) in enumerate(rows):
-        #    grid.addWidget(_key_lbl(label), i, 0)
-        #    grid.addWidget(field, i, 1)
-        #    if extra is not None:
-        #        grid.addWidget(extra, i, 2)
+        left_lay.addWidget(_key_lbl("Name:", left_frame))
+        left_lay.addWidget(self._name_field)
 
-        grid.addWidget(_key_lbl("Name:"), 0, 0)
-        grid.addWidget(self._name_field, 0, 1, 1, 2)
-        grid.addWidget(_key_lbl("Material:"), 0, 3)
-        grid.addWidget(self._material_field, 0, 4)
+        left_lay.addWidget(_key_lbl("Material:", left_frame))
+        left_lay.addWidget(self._material_field)
 
-        grid.addWidget(_key_lbl("Color:"), 1, 0)
-        grid.addWidget(self._color_field, 1, 1)
-        self._color_field.setMaximumWidth(70)
+        left_lay.addWidget(_key_lbl("Color (hex):", left_frame))
+        color_row = QtWidgets.QHBoxLayout()
+        color_row.setSpacing(30)
+        color_row.setContentsMargins(0, 0, 0, 0)
+        self._color_field.setMaximumWidth(100)
+        color_row.addWidget(self._color_field)
+        color_row.addWidget(self._color_swatch)
+        color_row.addStretch(1)
+        left_lay.addLayout(color_row)
 
-        grid.addWidget(self._color_swatch, 1, 2)
+        left_lay.addStretch(1)
+        body.addWidget(left_frame, 1)
 
-        grid.addWidget(_key_lbl("Ext Temp:"), 2, 0)
-        grid.addWidget(self._ext_temp_field, 2, 1)
-        self._ext_temp_field.setMaximumWidth(60)
-        grid.addWidget(_key_lbl("Bed Temp:"), 2, 2)
-        grid.addWidget(self._bed_temp_field, 2, 3)
-        self._bed_temp_field.setMaximumWidth(60)
+        right_frame = BlocksCustomFrame(self)
+        right_lay = QtWidgets.QVBoxLayout(right_frame)
+        right_lay.setContentsMargins(12, 10, 12, 10)
+        right_lay.setSpacing(6)
 
-        grid.addWidget(_key_lbl("Density:"), 3, 0)
-        grid.addWidget(self._density_field, 3, 1)
-        self._density_field.setMaximumWidth(65)
+        self._ext_temp_field = _make_field(right_frame)
+        self._bed_temp_field = _make_field(right_frame)
+        self._density_field = _make_field(right_frame)
+        self._diameter_field = _make_field(right_frame)
 
-        grid.addWidget(_key_lbl("Diameter:"), 3, 2)
-        grid.addWidget(self._diameter_field, 3, 3)
-        self._diameter_field.setMaximumWidth(65)
+        right_lay.addWidget(_key_lbl("Extruder Temp (°C):", right_frame))
+        right_lay.addWidget(self._ext_temp_field)
 
-        root.addWidget(grid_w, 1)
+        right_lay.addWidget(_key_lbl("Bed Temp (°C):", right_frame))
+        right_lay.addWidget(self._bed_temp_field)
+
+        dd_row = QtWidgets.QHBoxLayout()
+        dd_row.setSpacing(8)
+        dd_row.setContentsMargins(0, 0, 0, 0)
+
+        dens_col = QtWidgets.QVBoxLayout()
+        dens_col.setSpacing(4)
+        dens_col.addWidget(_key_lbl("Density (g/cm³):", right_frame))
+        dens_col.addWidget(self._density_field)
+        dd_row.addLayout(dens_col)
+
+        diam_col = QtWidgets.QVBoxLayout()
+        diam_col.setSpacing(4)
+        diam_col.addWidget(_key_lbl("Diameter (mm):", right_frame))
+        diam_col.addWidget(self._diameter_field)
+        dd_row.addLayout(diam_col)
+
+        right_lay.addLayout(dd_row)
+        right_lay.addStretch(1)
+        body.addWidget(right_frame, 1)
+
+        root.addLayout(body, 1)
 
         self._name_field.setPlaceholderText("e.g. PLA Generic")
         self._material_field.setText("PLA")
@@ -270,16 +306,14 @@ class AddFilamentPage(QtWidgets.QWidget):
         self._material_field.clicked.connect(
             lambda: self._show_keyboard(self._material_field)
         )
-        self._color_field.clicked.connect(
-            lambda: self._show_keyboard(self._color_field, prefix="#", max_char=6)
-        )
+        self._color_field.clicked.connect(self._open_color_wheel)
         self._ext_temp_field.clicked.connect(
             lambda: self.request_numpad[str, int, "PyQt_PyObject", int, int].emit(
                 "Extruder Temp",
                 int(self._ext_temp_field.text().strip() or 0),
                 self._on_ext_temp_change,
                 0,
-                500,
+                330,
             )
         )
         self._bed_temp_field.clicked.connect(
@@ -288,7 +322,7 @@ class AddFilamentPage(QtWidgets.QWidget):
                 int(self._bed_temp_field.text().strip() or 0),
                 self._on_bed_temp_change,
                 0,
-                150,
+                110,
             )
         )
         self._density_field.clicked.connect(
@@ -302,8 +336,8 @@ class AddFilamentPage(QtWidgets.QWidget):
 
         # Submit
         submit_btn = BlocksCustomButton(self)
-        submit_btn.setFixedSize(200, 80)
+        submit_btn.setFixedSize(220, 80)
         submit_btn.setFont(_f(16))
-        submit_btn.setText("Save Filament")
+        submit_btn.setText("Save\nFilament")
         submit_btn.clicked.connect(self._on_submit)
-        root.addWidget(submit_btn)
+        root.addWidget(submit_btn, alignment=QtCore.Qt.AlignmentFlag.AlignCenter)
