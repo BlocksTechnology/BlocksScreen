@@ -8,7 +8,7 @@ from lib.utils.blocks_linedit import BlocksCustomLinEdit
 from lib.utils.icon_button import IconButton
 from PyQt6 import QtCore, QtGui, QtWidgets
 from lib.panels.widgets.basePopup import BasePopup
-from lib.panels.widgets.colorWheelPage import ColorWheelPage
+from lib.panels.widgets.colorWheelWidget import ColorWheelWidget
 
 
 class AddFilamentPage(QtWidgets.QWidget):
@@ -41,8 +41,7 @@ class AddFilamentPage(QtWidgets.QWidget):
         self._numpad_popup.add_widget(self._numpad)
         self._numpad.numpad_back_btn.clicked.connect(self._numpad_popup.hide)
 
-
-        self.color_whell = ColorWheelPage(self)
+        self.color_whell = ColorWheelWidget(self)
         self.color_whell.hide()
 
         self._color_whell_popup = BasePopup(self, True, False)
@@ -51,7 +50,6 @@ class AddFilamentPage(QtWidgets.QWidget):
         self._color_whell_popup.add_widget(self.color_whell)
         self.color_whell.request_back.connect(self._color_whell_popup.hide)
         self.color_whell.color_selected.connect(self._on_color_selected)
-
 
         self.request_numpad[str, int, "PyQt_PyObject", int, int].connect(
             self.on_numpad_request
@@ -120,7 +118,9 @@ class AddFilamentPage(QtWidgets.QWidget):
         self._bed_temp_field.setText(str(value))
 
     def _open_color_wheel(self) -> None:
-        self.color_whell.set_color_hex(self._color_field.text().strip().lstrip("#") or "ffffff")
+        self.color_whell.set_color_hex(
+            self._color_field.text().strip().lstrip("#") or "ffffff"
+        )
         self._color_whell_popup.show()
 
     @QtCore.pyqtSlot(str, name="on-color-selected")

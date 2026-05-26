@@ -17,7 +17,9 @@ class _ColorWheel(QtWidgets.QWidget):
 
     _PADDING = 4
 
-    def __init__(self, parent: QtWidgets.QWidget | None = None, diameter: int = 256) -> None:
+    def __init__(
+        self, parent: QtWidgets.QWidget | None = None, diameter: int = 256
+    ) -> None:
         super().__init__(parent)
         self._diameter = diameter
         self._hue = 0.0
@@ -30,7 +32,7 @@ class _ColorWheel(QtWidgets.QWidget):
 
     def _build_image(self) -> None:
         s = self._diameter
-        img = QtGui.QImage(s, s , QtGui.QImage.Format.Format_ARGB32_Premultiplied)
+        img = QtGui.QImage(s, s, QtGui.QImage.Format.Format_ARGB32_Premultiplied)
 
         painter = QtGui.QPainter(img)
         painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
@@ -43,13 +45,21 @@ class _ColorWheel(QtWidgets.QWidget):
             hue_grad.setColorAt(i / 360.0, QtGui.QColor.fromHsvF(i / 360.0, 1.0, 1.0))
         painter.setBrush(QtGui.QBrush(hue_grad))
         painter.setPen(QtCore.Qt.PenStyle.NoPen)
-        painter.drawEllipse(QtCore.QRectF(center_x - radious, center_y - radious, radious * 2, radious * 2))
+        painter.drawEllipse(
+            QtCore.QRectF(
+                center_x - radious, center_y - radious, radious * 2, radious * 2
+            )
+        )
 
         sat_grad = QtGui.QRadialGradient(center_x, center_y, radious)
         sat_grad.setColorAt(0.0, QtGui.QColor(255, 255, 255, 255))
         sat_grad.setColorAt(1.0, QtGui.QColor(255, 255, 255, 0))
         painter.setBrush(QtGui.QBrush(sat_grad))
-        painter.drawEllipse(QtCore.QRectF(center_x - radious, center_y - radious, radious * 2, radious * 2))
+        painter.drawEllipse(
+            QtCore.QRectF(
+                center_x - radious, center_y - radious, radious * 2, radious * 2
+            )
+        )
         painter.end()
 
         self._wheel_img = img
@@ -103,7 +113,7 @@ class _ColorWheel(QtWidgets.QWidget):
             self._pick(event.position())
 
 
-class ColorWheelPage(QtWidgets.QWidget):
+class ColorWheelWidget(QtWidgets.QWidget):
     color_selected: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         str, name="color_selected"
     )
@@ -167,7 +177,6 @@ class ColorWheelPage(QtWidgets.QWidget):
         self.color_selected.emit(self._current_color().name().lstrip("#"))
         self.request_back.emit()
 
-
     def _build_ui(self) -> None:
         def _pal(color: str | QtGui.QColor) -> QtGui.QPalette:
             p = QtGui.QPalette()
@@ -175,7 +184,13 @@ class ColorWheelPage(QtWidgets.QWidget):
             p.setColor(QtGui.QPalette.ColorRole.WindowText, QtGui.QColor(color))
             return p
 
-        def _lbl(text: str, pt: int, color: str | QtGui.QColor, parent: QtWidgets.QWidget, height: int = 24) -> BlocksLabel:
+        def _lbl(
+            text: str,
+            pt: int,
+            color: str | QtGui.QColor,
+            parent: QtWidgets.QWidget,
+            height: int = 24,
+        ) -> BlocksLabel:
             lbl = BlocksLabel(parent)
             lbl.setText(text)
             f = QtGui.QFont()
@@ -242,7 +257,9 @@ class ColorWheelPage(QtWidgets.QWidget):
         card_lay.addWidget(self._swatch)
 
         # Brightness row
-        card_lay.addWidget(_lbl("Brightness", 22, QtGui.QColor(160, 160, 160), card , 30))
+        card_lay.addWidget(
+            _lbl("Brightness", 22, QtGui.QColor(160, 160, 160), card, 30)
+        )
 
         self._brightness_slider = BlocksSlider(card)
         self._brightness_slider.setMinimum(0)
