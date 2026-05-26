@@ -233,14 +233,14 @@ class AMUpage(QtWidgets.QStackedWidget):
         font.setPointSize(15)
 
         spoolman_btn = BlocksCustomButton(page)
-        spoolman_btn.setFixedSize(200, 80)
+        spoolman_btn.setFixedSize(230, 80)
         spoolman_btn.setText("Spoolman")
         spoolman_btn.setFont(font)
         spoolman_btn.clicked.connect(self._on_spoolman_clicked)
         btn_row.addWidget(spoolman_btn)
 
         accept_btn = BlocksCustomButton(page)
-        accept_btn.setFixedSize(200, 80)
+        accept_btn.setFixedSize(230, 80)
         accept_btn.setText("Accept")
         accept_btn.setFont(font)
         accept_btn.clicked.connect(self.on_popup_accept)
@@ -263,6 +263,7 @@ class AMUpage(QtWidgets.QStackedWidget):
         self._color_target_field = field
         self._color_wheel.set_color_hex(field.text().strip("#") or "ffffff")
         self._color_wheel_popup.show()
+        self._color_wheel_popup.raise_()
 
     @QtCore.pyqtSlot(str, name="on-color-selected")
     def _on_color_selected(self, hex_str: str) -> None:
@@ -297,12 +298,11 @@ class AMUpage(QtWidgets.QStackedWidget):
         title_lbl.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         hdr.addWidget(title_lbl, 1)
 
-        manage_btn = IconButton(page)
-        manage_btn.setFixedSize(QtCore.QSize(60, 60))
-        manage_btn.setFlat(True)
-        manage_btn.setPixmap(QtGui.QPixmap(":/ui/media/btn_icons/LCD_settings.svg"))
-        manage_btn.clicked.connect(lambda: self.request_open_add_spoolman.emit())
-        hdr.addWidget(manage_btn)
+
+        blank = QtWidgets.QWidget(self)
+        blank.setFixedSize(60,60)
+
+        hdr.addWidget(blank)
 
         root.addLayout(hdr)
 
@@ -385,7 +385,7 @@ class AMUpage(QtWidgets.QStackedWidget):
         gate = self.pre_gate_idx["gate"]
         self._popup_title_lbl.setText(f"Filament Detected — Gate {gate}")
         self._popup_stack.setCurrentIndex(0)
-        self._selected_spool_id = -1
+        self._selected_spool_id = -2
         self.popup.show()
 
     def on_popup_accept(self):
@@ -399,9 +399,8 @@ class AMUpage(QtWidgets.QStackedWidget):
             temp = -1
 
         parts = [f"MMU_GATE_MAP GATE={gate}"]
-        if self._selected_spool_id != -1:
+        if self._selected_spool_id != -2:
             parts.append(f"SPOOLID={self._selected_spool_id}")
-            parts.append("AVAILABLE=1")
         if name:
             parts.append(f'NAME="{name}"')
         if material:
@@ -464,7 +463,7 @@ class AMUpage(QtWidgets.QStackedWidget):
         if not spool:
             return
         filament = spool.get("filament") or {}
-        self._selected_spool_id = spool.get("id", -1)
+        self._selected_spool_id = spool.get("id", -2)
         self._popup_name.setText(filament.get("name") or "")
         self._popup_color.setText(filament.get("color_hex") or "ffffff")
         self._popup_material.setText(filament.get("material") or "")
@@ -555,6 +554,7 @@ class AMUpage(QtWidgets.QStackedWidget):
     def _on_qwerty_value_selected(self, value: str) -> None:
         self._qwerty.hide()
         if self._current_field:
+            self._selected_spool_id = -1
             self._current_field.setText(value)
             self._current_field.editingFinished.emit()
 
@@ -593,15 +593,16 @@ class AMUpage(QtWidgets.QStackedWidget):
 
     @QtCore.pyqtSlot(str, int, name="on-popup-temp-change")
     def _on_popup_temp_change(self, _name: str, value: int) -> None:
+        self._selected_spool_id = -1
         self._numpad_popup.hide()
         self._popup_temp.setText(str(value))
         self._popup_temp.editingFinished.emit()
 
     def _build_ui(self):
-        self.setMinimumSize(720, 420)
+        self.setMinimumSize(700, 420)
         self.setObjectName("fans_page")
         widget = QtWidgets.QWidget(parent=self)
-        widget.setMinimumSize(720, 420)
+        widget.setMinimumSize(700, 420)
         self.setObjectName("temperature_page")
         self.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
         widget.setObjectName("filament_control_page")
