@@ -138,7 +138,7 @@ class BlocksScreenConfig:
         option: str,
         parser: type = str,
         default: typing.Union[Sentinel, str, T] = Sentinel.MISSING,
-    ) -> typing.Union[Sentinel, str]:
+    ) -> typing.Any:
         """Get option value
 
         Args:
@@ -150,6 +150,22 @@ class BlocksScreenConfig:
             typing.Union[Sentinel, str]: Requested option. Defaults to the specified default value
         """
         return parser(
+            self.config.get(section=self.section, option=option, fallback=default)
+        )
+
+    def getlists(
+        self,
+        option: str,
+        parser: type = str,
+        sep=(",",),
+        default: Sentinel | list[typing.Any] = Sentinel.MISSING,
+    ) -> list:
+        def parse_list(value: str, sep=(",")):
+            if not value:
+                return Sentinel.MISSING
+            return [item.strip() for item in value.split(sep)]
+
+        return parse_list(
             self.config.get(section=self.section, option=option, fallback=default)
         )
 
