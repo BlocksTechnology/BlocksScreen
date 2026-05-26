@@ -31,9 +31,6 @@ class SpoolmanPage(QtWidgets.QWidget):
     request_add_filament: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         dict, name="request-add-filament"
     )
-    request_back: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
-        name="request-back"
-    )
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -72,7 +69,6 @@ class SpoolmanPage(QtWidgets.QWidget):
 
         self.entry_delegate.item_selected.connect(self.on_item_clicked)
         self.reload_btn.clicked.connect(self._on_reload_clicked)
-        self.back_btn.clicked.connect(self.request_back)
         self.delete_btn.clicked.connect(self._on_delete_clicked)
 
         self.confirm_popup = BasePopup(self, True, True)
@@ -188,8 +184,16 @@ class SpoolmanPage(QtWidgets.QWidget):
         self.entry_delegate.clear()
         self._display_name_to_spool = {}
 
+        self.model.add_item(
+            ListItem(
+                text="+ Add Spool",
+                left_icon=self._make_add_pixmap(),
+                _lfontsize=14,
+                height=60,
+            )
+        )
+
         for spool in self._spools:
-            spool_id = spool.get("id", "?")
             filament = spool.get("filament") or {}
             base_name = self._spool_display_name(spool)
 
@@ -221,20 +225,12 @@ class SpoolmanPage(QtWidgets.QWidget):
                 height=60,
             )
             self.model.add_item(item)
+
+        self.model.setData(self.model.index(1), True, EntryListModel.EnableRole)
         self.on_item_clicked(
-            self.model.data(self.model.index(0), QtCore.Qt.ItemDataRole.UserRole)
+            self.model.data(self.model.index(1), QtCore.Qt.ItemDataRole.UserRole)
         )
 
-        self.model.add_item(
-            ListItem(
-                text="+ Add Spool",
-                left_icon=self._make_add_pixmap(),
-                _lfontsize=14,
-                height=60,
-            )
-        )
-
-        self.model.setData(self.model.index(0), True, EntryListModel.EnableRole)
         self.spool_list_widget.blockSignals(False)
 
     @QtCore.pyqtSlot(ListItem, name="on-item-clicked")
@@ -356,13 +352,14 @@ class SpoolmanPage(QtWidgets.QWidget):
         title_font.setPointSize(22)
         self.header_title = QtWidgets.QLabel("Spoolman", self)
         self.header_title.setFixedHeight(60)
-        self.header_title.setStyleSheet("color: white; background: transparent;")
+        self.header_title.setStyleSheet("color: white;")
         self.header_title.setFont(title_font)
         self.header_title.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         header_layout.addWidget(self.header_title, 1)
 
-        self.back_btn = _icon_btn(":/ui/media/btn_icons/back.svg")
-        header_layout.addWidget(self.back_btn)
+        blank = QtWidgets.QWidget(self)
+        blank.setFixedSize(60, 60)
+        header_layout.addWidget(blank)
 
         page_layout.addLayout(header_layout)
 
@@ -485,8 +482,8 @@ class SpoolmanPage(QtWidgets.QWidget):
         self.setLayout(page_layout)
 
     def _setup_add_popup(self) -> None:
-        self._add_spool_page = AddSpoolPage(keyboard_parent=self, parent=self)
-        self._add_filament_page = AddFilamentPage(keyboard_parent=self, parent=self)
+        self._add_spool_page = AddSpoolPage(parent=self)
+        self._add_filament_page = AddFilamentPage(parent=self)
 
         self._add_stack = QtWidgets.QStackedWidget()
         self._add_stack.addWidget(self._add_spool_page)  # index 0

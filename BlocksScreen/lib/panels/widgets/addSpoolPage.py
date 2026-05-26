@@ -9,6 +9,7 @@ from lib.utils.blocks_linedit import BlocksCustomLinEdit
 from lib.utils.icon_button import IconButton
 from lib.utils.list_model import EntryDelegate, EntryListModel, ListItem
 from PyQt6 import QtCore, QtGui, QtWidgets
+from lib.panels.widgets.basePopup import BasePopup
 
 
 class AddSpoolPage(QtWidgets.QWidget):
@@ -29,9 +30,7 @@ class AddSpoolPage(QtWidgets.QWidget):
         name="request-numpad",
     )
 
-    def __init__(
-        self, keyboard_parent: QtWidgets.QWidget | None = None, parent=None
-    ) -> None:
+    def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self._selected_filament_id: int | None = None
         self._filament_id_map: dict[str, dict] = {}
@@ -39,14 +38,17 @@ class AddSpoolPage(QtWidgets.QWidget):
 
         self._build_ui()
 
-        self._keyboard = CustomQwertyKeyboard(keyboard_parent)
+        self._keyboard = CustomQwertyKeyboard(self)
         self._keyboard.hide()
         self._keyboard.numpad_back_btn.clicked.connect(self._keyboard.hide)
         self._keyboard.value_selected.connect(self._on_keyboard_done)
 
-        self._numpad = CustomNumpad(keyboard_parent)
+        self._numpad = CustomNumpad(self)
         self._numpad.hide()
-        self._numpad.numpad_back_btn.clicked.connect(self._numpad.hide)
+
+        self._numpad_popup = BasePopup(self, False, False)
+        self._numpad_popup.add_widget(self._numpad)
+        self._numpad.numpad_back_btn.clicked.connect(self._numpad_popup.hide)
 
         self.request_numpad[str, int, "PyQt_PyObject", int, int].connect(
             self.on_numpad_request
@@ -77,6 +79,15 @@ class AddSpoolPage(QtWidgets.QWidget):
         self._filament_id_map = {}
         self._fil_model.clear()
         self._fil_delegate.clear()
+        self._fil_model.add_item(
+            ListItem(
+                text="+ Add Filament",
+                left_icon=self._make_add_pixmap(),
+                _lfontsize=14,
+                height=60,
+            )
+        )
+
         for fil in filaments:
             fil_id = fil.get("id", "?")
             name = fil.get("name") or f"Filament #{fil_id}"
@@ -93,14 +104,6 @@ class AddSpoolPage(QtWidgets.QWidget):
             )
 
             self._filament_id_map[name] = fil
-        self._fil_model.add_item(
-            ListItem(
-                text="+ Add Filament",
-                left_icon=self._make_add_pixmap(),
-                _lfontsize=14,
-                height=60,
-            )
-        )
 
     @staticmethod
     def _make_add_pixmap() -> QtGui.QPixmap:
@@ -178,11 +181,11 @@ class AddSpoolPage(QtWidgets.QWidget):
         self._numpad.set_value(current_value)
         self._numpad.set_min_value(min_value)
         self._numpad.set_max_value(max_value)
-        self._numpad.show()
+        self._numpad_popup.show()
 
     @QtCore.pyqtSlot(str, int, name="on-weight-change")
     def _on_weight_change(self, _name: str, value: int) -> None:
-        self._numpad.hide()
+        self._numpad_popup.hide()
         self._weight_field.setText(str(value))
 
     def _on_submit(self) -> None:

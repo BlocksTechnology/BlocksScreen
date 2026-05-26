@@ -6,6 +6,7 @@ from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_linedit import BlocksCustomLinEdit
 from lib.utils.icon_button import IconButton
 from PyQt6 import QtCore, QtGui, QtWidgets
+from lib.panels.widgets.basePopup import BasePopup
 
 
 class AddFilamentPage(QtWidgets.QWidget):
@@ -20,22 +21,23 @@ class AddFilamentPage(QtWidgets.QWidget):
         name="request-numpad",
     )
 
-    def __init__(
-        self, keyboard_parent: QtWidgets.QWidget | None = None, parent=None
-    ) -> None:
+    def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self._keyboard_field: QtWidgets.QLineEdit | None = None
 
         self._build_ui()
 
-        self._keyboard = CustomQwertyKeyboard(keyboard_parent)
+        self._keyboard = CustomQwertyKeyboard(self)
         self._keyboard.hide()
         self._keyboard.numpad_back_btn.clicked.connect(self._keyboard.hide)
         self._keyboard.value_selected.connect(self._on_keyboard_done)
 
-        self._numpad = CustomNumpad(keyboard_parent)
+        self._numpad = CustomNumpad(self)
         self._numpad.hide()
-        self._numpad.numpad_back_btn.clicked.connect(self._numpad.hide)
+
+        self._numpad_popup = BasePopup(self, False, False)
+        self._numpad_popup.add_widget(self._numpad)
+        self._numpad.numpad_back_btn.clicked.connect(self._numpad_popup.hide)
 
         self.request_numpad[str, int, "PyQt_PyObject", int, int].connect(
             self.on_numpad_request
@@ -91,16 +93,16 @@ class AddFilamentPage(QtWidgets.QWidget):
         self._numpad.set_value(current_value)
         self._numpad.set_min_value(min_value)
         self._numpad.set_max_value(max_value)
-        self._numpad.show()
+        self._numpad_popup.show()
 
     @QtCore.pyqtSlot(str, int, name="on-ext-temp-change")
     def _on_ext_temp_change(self, _name: str, value: int) -> None:
-        self._numpad.hide()
+        self._numpad_popup.hide()
         self._ext_temp_field.setText(str(value))
 
     @QtCore.pyqtSlot(str, int, name="on-bed-temp-change")
     def _on_bed_temp_change(self, _name: str, value: int) -> None:
-        self._numpad.hide()
+        self._numpad_popup.hide()
         self._bed_temp_field.setText(str(value))
 
     def _update_swatch(self) -> None:

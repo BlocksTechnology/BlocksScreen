@@ -68,7 +68,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
     def on_mmu_state_changed(self, mmu_state):
         if not self.amu_configured:
             if len(mmu_state.gates) > 0:
-                self.setMinimumSize(720, 420)
+                self.setMinimumSize(710, 420)
                 self.amupage = AMUpage(self.amu_manager, parent=self)
                 self.addWidget(self.amupage)
                 self.amupage.request_back.connect(self.request_back)
@@ -79,10 +79,8 @@ class FilamentTab(QtWidgets.QStackedWidget):
                     )
                 )
 
-                self._add_spool_page = AddSpoolPage(keyboard_parent=self, parent=self)
-                self._add_filament_page = AddFilamentPage(
-                    keyboard_parent=self, parent=self
-                )
+                self._add_spool_page = AddSpoolPage(self)
+                self._add_filament_page = AddFilamentPage(self)
 
                 self._add_stack = QtWidgets.QStackedWidget()
                 self._add_stack.addWidget(self._add_spool_page)  # index 0

@@ -144,7 +144,7 @@ class MainWindow(QtWidgets.QMainWindow):
         )
         QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.CursorShape.BlankCursor)
         self.filamentPanel = FilamentTab(
-            self.ui.filamentTab, self.printer, self.ws, self.config , self.amu_manager
+            self.ui.filamentTab, self.printer, self.ws, self.config, self.amu_manager
         )
         self.controlPanel = ControlTab(self.ui.controlTab, self.ws, self.printer)
         self.utilitiesPanel = UtilitiesTab(self.ui.utilitiesTab, self.ws, self.printer)
@@ -177,7 +177,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.utilitiesPanel.request_change_page.connect(slot=self.global_change_page)
         self.utilitiesPanel.update_available.connect(self.on_update_available)
 
-        self.spoolmanPanel.request_back.connect(self.global_back)
         self.spoolmanPanel.request_spools.connect(
             lambda: self.ws.api.spoolman_proxy(
                 "GET", "/v1/spool", callback=self.spoolmanPanel.on_spools_received
@@ -490,7 +489,12 @@ class MainWindow(QtWidgets.QMainWindow):
         Disables all tabs except controlTab (where calibration lives) and
         the header, so the user cannot navigate away mid-calibration.
         """
-        for tab in (self.ui.printTab, self.ui.filamentTab, self.ui.utilitiesTab, self.ui.SpoolmanTab):
+        for tab in (
+            self.ui.printTab,
+            self.ui.filamentTab,
+            self.ui.utilitiesTab,
+            self.ui.SpoolmanTab,
+        ):
             self.ui.main_content_widget.setTabEnabled(
                 self.ui.main_content_widget.indexOf(tab), not locked
             )
