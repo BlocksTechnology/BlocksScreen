@@ -6,6 +6,7 @@ from devices.amu import AMUManager
 from devices.amu.models import GateInfo, GateStatus
 from lib.panels.widgets.amuWidgets import SpoolCarousel, SpoolInfoPanel
 from lib.panels.widgets.basePopup import BasePopup
+from lib.panels.widgets.colorWheelWidget import ColorWheelWidget
 from lib.panels.widgets.keyboardPage import CustomQwertyKeyboard
 from lib.panels.widgets.loadWidget import LoadingOverlayWidget
 from lib.panels.widgets.numpadPage import CustomNumpad
@@ -46,12 +47,14 @@ class AMUpage(QtWidgets.QStackedWidget):
         self._selected_spool_id: int = -1
         self._spool_id_map: dict[str, dict] = {}
         self._current_field: QtWidgets.QLineEdit | None = None
-
         self._build_ui()
 
-        self.numpadPage = CustomNumpad(self)
-        self.numpadPage.request_back.connect(lambda: self.setCurrentIndex(0))
-        self.addWidget(self.numpadPage)
+        self._numpad = CustomNumpad(self)
+        self._numpad.hide()
+
+        self._numpad_popup = BasePopup(self, False, False)
+        self._numpad_popup.add_widget(self._numpad)
+        self._numpad.numpad_back_btn.clicked.connect(self._numpad_popup.hide)
 
         self.request_numpad[str, int, "PyQt_PyObject", int, int].connect(
             self.on_numpad_request
@@ -64,6 +67,9 @@ class AMUpage(QtWidgets.QStackedWidget):
                 self.current_index,
                 self.info_panel._lbl_color.text().strip("#"),
             )
+        )
+        self.info_panel._lbl_color.clicked.connect(
+            lambda: self._open_color_wheel(self.info_panel._lbl_color)
         )
         self.info_panel._lbl_mat.editingFinished.connect(
             lambda: self.amu_manager.set_gate_material(
@@ -110,6 +116,7 @@ class AMUpage(QtWidgets.QStackedWidget):
         self.carousel.selectionChanged.connect(self._select_gate)
 
         self._setup_popup()
+        self._setup_color_wheel()
 
     def _setup_popup(self):
         self._popup_stack = QtWidgets.QStackedWidget()
@@ -192,7 +199,7 @@ class AMUpage(QtWidgets.QStackedWidget):
             lambda: self._on_show_keyboard(self._popup_name)
         )
         self._popup_color.clicked.connect(
-            lambda: self._on_show_keyboard(self._popup_color, prefix="#", max_char=6)
+            lambda: self._open_color_wheel(self._popup_color)
         )
         self._popup_material.clicked.connect(
             lambda: self._on_show_keyboard(self._popup_material)
@@ -241,6 +248,28 @@ class AMUpage(QtWidgets.QStackedWidget):
 
         root.addLayout(btn_row)
         return page
+
+    def _setup_color_wheel(self) -> None:
+        self._color_wheel = ColorWheelWidget(self)
+        self._color_wheel.hide()
+        self._color_wheel_popup = BasePopup(self, True, False)
+        self._color_wheel_popup.x_offset = 0.95
+        self._color_wheel_popup.y_offset = 0.95
+        self._color_wheel_popup.add_widget(self._color_wheel)
+        self._color_wheel.request_back.connect(self._color_wheel_popup.hide)
+        self._color_wheel.color_selected.connect(self._on_color_selected)
+
+    def _open_color_wheel(self, field: "BlocksCustomLinEdit") -> None:
+        self._color_target_field = field
+        self._color_wheel.set_color_hex(field.text().strip("#") or "ffffff")
+        self._color_wheel_popup.show()
+
+    @QtCore.pyqtSlot(str, name="on-color-selected")
+    def _on_color_selected(self, hex_str: str) -> None:
+        if self._color_target_field is not None:
+            self._color_target_field.setText(hex_str)
+            self._color_target_field.editingFinished.emit()
+            self._color_target_field = None
 
     def _build_spool_page(self) -> QtWidgets.QWidget:
         page = QtWidgets.QWidget()
@@ -540,28 +569,31 @@ class AMUpage(QtWidgets.QStackedWidget):
         max_value: int = 100,
     ) -> None:
         try:
-            self.numpadPage.value_selected.disconnect()
+            self._numpad.value_selected.disconnect()
         except TypeError:
             pass
-        self.numpadPage.value_selected.connect(callback)
-        self.numpadPage.set_name(name)
-        self.numpadPage.set_value(current_value)
-        self.numpadPage.set_min_value(min_value)
-        self.numpadPage.set_max_value(max_value)
-        self.setCurrentWidget(self.numpadPage)
+        self._numpad.value_selected.connect(callback)
+        self._numpad.set_name(name)
+        self._numpad.set_value(current_value)
+        self._numpad.set_min_value(min_value)
+        self._numpad.set_max_value(max_value)
+        self._numpad_popup.show()
 
     @QtCore.pyqtSlot(str, int, name="on-gate-temp-change")
     def _on_gate_temp_change(self, _name: str, value: int) -> None:
+        self._numpad_popup.hide()
         self.info_panel._lbl_temp.setText(str(value))
         self.info_panel._lbl_temp.editingFinished.emit()
 
     @QtCore.pyqtSlot(str, int, name="on-gate-weight-change")
     def _on_gate_weight_change(self, _name: str, value: int) -> None:
+        self._numpad_popup.hide()
         self.info_panel._lbl_weight.setText(str(value))
         self.info_panel._lbl_weight.editingFinished.emit()
 
     @QtCore.pyqtSlot(str, int, name="on-popup-temp-change")
     def _on_popup_temp_change(self, _name: str, value: int) -> None:
+        self._numpad_popup.hide()
         self._popup_temp.setText(str(value))
         self._popup_temp.editingFinished.emit()
 
