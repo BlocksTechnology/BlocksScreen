@@ -1,31 +1,29 @@
-import enum
 import logging
-from functools import partial
+from collections import deque
+from typing import Deque
 
-from PyQt6 import QtCore, QtWidgets
+from PyQt6 import QtCore, QtGui, QtWidgets
 
 from devices.amu import AMUManager
-from lib.filament import Filament
+from devices.amu.models import GateStatus
 from lib.panels.widgets.addFilamentPage import AddFilamentPage
 from lib.panels.widgets.addSpoolPage import AddSpoolPage
 from lib.panels.widgets.amuPage import AMUpage
+from lib.panels.widgets.basicFilamentPanel import BasicFilamentPanel
 from lib.panels.widgets.basePopup import BasePopup
-from lib.panels.widgets.popupDialogWidget import Popup
+from lib.panels.widgets.colorWheelWidget import ColorWheelWidget
+from lib.panels.widgets.keyboardPage import CustomQwertyKeyboard
+from lib.panels.widgets.loadWidget import LoadingOverlayWidget
+from lib.panels.widgets.numpadPage import CustomNumpad
 from lib.printer import Printer
-from lib.ui.filamentStackedWidget_ui import Ui_filamentStackedWidget
+from lib.utils.blocks_button import BlocksCustomButton
+from lib.utils.blocks_frame import BlocksCustomFrame
+from lib.utils.blocks_linedit import BlocksCustomLinEdit
+from lib.utils.icon_button import IconButton
+from lib.utils.list_model import EntryDelegate, EntryListModel, ListItem
 
 
 logger = logging.getLogger(__name__)
-
-
-class FilamentTypes(enum.Enum):
-    PLA = Filament(name="PLA", temperature=220)
-    PETG = Filament(name="PETG", temperature=240)
-    ABS = Filament(name="ABS", temperature=250)
-    HIPS = Filament(name="HIPS", temperature=250)
-    NYLON = Filament(name="NYLON", temperature=270)
-    TPU = Filament(name="TPU", temperature=230)
-    UNKNOWN = Filament(name="UNKNOWN", temperature=250)
 
 
 class FilamentTab(QtWidgets.QStackedWidget):
@@ -38,14 +36,6 @@ class FilamentTab(QtWidgets.QStackedWidget):
     run_gcode = QtCore.pyqtSignal(str, name="run_gcode")
     call_load_panel = QtCore.pyqtSignal(bool, str, name="call-load-panel")
 
-    class FilamentStates(enum.Enum):
-        UNKNOWN = -1
-        LOADED = enum.auto()
-        UNLOADED = enum.auto()
-
-        def __repr__(self) -> str:
-            return "<%s.%s>" % (self.__class__.__name__, self._name_)
-
     def __init__(
         self, parent, printer: Printer, ws, config, amu_manager: AMUManager
     ) -> None:
@@ -53,7 +43,6 @@ class FilamentTab(QtWidgets.QStackedWidget):
 
         self.ws = ws
         self.printer = printer
-        self.state = "standby"
         self.load_state = False
         self.cfg = config
         self.amu_manager: AMUManager = amu_manager
@@ -63,21 +52,481 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self.run_gcode.connect(self.ws.api.run_gcode)
 
     def setup_ui(self):
+        self._previous_gate_states: dict[int, bool] = {}
+        self.pre_gate_idx = -1
+        self.popup_gates: Deque = deque()
+        self._selected_spool_id: int = -1
+        self._spool_id_map: dict[str, dict] = {}
+        self._current_field: QtWidgets.QLineEdit | None = None
+        self._color_target_field = None
+
+        self.fallback = QtCore.QTimer(self)
+        self.fallback.singleShot(5000,self.without_amu)
+
         self.amu_manager.mmu_state_changed.connect(self.on_mmu_state_changed)
+        self.amu_manager.pre_gate_changed.connect(self.on_pre_gate)
+        self._setup_pre_gate_popup()
+
+    def _setup_pre_gate_popup(self) -> None:
+        self._numpad = CustomNumpad(self)
+        self._numpad.hide()
+        self._numpad_popup = BasePopup(self, False, False)
+        self._numpad_popup.add_widget(self._numpad)
+        self._numpad.numpad_back_btn.clicked.connect(self._numpad_popup.hide)
+
+        self._qwerty = CustomQwertyKeyboard(self)
+        self._qwerty.hide()
+        self._qwerty.numpad_back_btn.clicked.connect(self._on_qwerty_go_back)
+        self._qwerty.value_selected.connect(self._on_qwerty_value_selected)
+
+        self._color_wheel = ColorWheelWidget(self)
+        self._color_wheel.hide()
+        self._color_wheel_popup = BasePopup(self, True, False)
+        self._color_wheel_popup.x_offset = 0.95
+        self._color_wheel_popup.y_offset = 0.95
+        self._color_wheel_popup.add_widget(self._color_wheel)
+        self._color_wheel.request_back.connect(self._color_wheel_popup.hide)
+        self._color_wheel.color_selected.connect(self._on_color_selected)
+
+        self._popup_stack = QtWidgets.QStackedWidget()
+        self._popup_stack.addWidget(self._build_form_page())
+        self._popup_stack.addWidget(self._build_spool_page())
+
+        self.popup = BasePopup(self, False, False)
+        self.popup.add_widget(self._popup_stack)
+
+    def _build_form_page(self) -> QtWidgets.QWidget:
+        page = QtWidgets.QWidget()
+        root = QtWidgets.QVBoxLayout(page)
+        root.setContentsMargins(16, 12, 16, 12)
+        root.setSpacing(8)
+
+        self._popup_title_lbl = QtWidgets.QLabel("Filament Detected", page)
+        title_font = QtGui.QFont()
+        title_font.setPointSize(20)
+        self._popup_title_lbl.setFont(title_font)
+        self._popup_title_lbl.setStyleSheet("color: white; background: transparent;")
+        self._popup_title_lbl.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self._popup_title_lbl.setFixedHeight(50)
+        root.addWidget(self._popup_title_lbl)
+
+        grid_w = QtWidgets.QWidget(page)
+        grid = QtWidgets.QGridLayout(grid_w)
+        grid.setContentsMargins(0, 0, 0, 0)
+        grid.setHorizontalSpacing(10)
+        grid.setVerticalSpacing(6)
+        grid.setColumnStretch(1, 1)
+
+        key_font = QtGui.QFont()
+        key_font.setPointSize(13)
+        val_font = QtGui.QFont()
+        val_font.setPointSize(14)
+
+        def _lbl(text):
+            lbl = QtWidgets.QLabel(text, grid_w)
+            lbl.setFont(key_font)
+            lbl.setStyleSheet("color: rgb(180,180,180); background: transparent;")
+            return lbl
+
+        def _field():
+            f = BlocksCustomLinEdit(page)
+            f.setFont(val_font)
+            f.setFixedHeight(50)
+            return f
+
+        self._popup_name = _field()
+        self._popup_color = _field()
+        self._popup_material = _field()
+        self._popup_temp = _field()
+
+        self._popup_swatch = QtWidgets.QLabel(page)
+        self._popup_swatch.setFixedSize(50, 50)
+        self._popup_swatch.setStyleSheet(
+            "border-radius: 8px; background: #ffffff; border: 2px solid rgba(255,255,255,80);"
+        )
+
+        rows = [
+            ("Name:", self._popup_name, None),
+            ("Color:", self._popup_color, self._popup_swatch),
+            ("Material:", self._popup_material, None),
+            ("Temp:", self._popup_temp, None),
+        ]
+        for i, (lbl_text, field, extra) in enumerate(rows):
+            grid.addWidget(_lbl(lbl_text), i, 0)
+            grid.addWidget(field, i, 1)
+            if extra:
+                grid.addWidget(extra, i, 2)
+
+        root.addWidget(grid_w, 1)
+
+        self._popup_name.setPlaceholderText("e.g. PLA Generic")
+        self._popup_color.setText("ffffff")
+        self._popup_material.setText("PLA")
+        self._popup_temp.setText("220")
+
+        self._popup_name.clicked.connect(
+            lambda: self._on_show_keyboard(self._popup_name)
+        )
+        self._popup_color.clicked.connect(
+            lambda: self._open_color_wheel(self._popup_color)
+        )
+        self._popup_material.clicked.connect(
+            lambda: self._on_show_keyboard(self._popup_material)
+        )
+        self._popup_temp.clicked.connect(
+            lambda: self._open_numpad(
+                "Temperature",
+                int(self._popup_temp.text().strip("º") or 0),
+                self._on_popup_temp_change,
+                0,
+                500,
+            )
+        )
+
+        def _update_swatch():
+            hex_text = self._popup_color.text().strip("#").strip()
+            if len(hex_text) == 6:
+                c = QtGui.QColor(f"#{hex_text}")
+                self._popup_swatch.setStyleSheet(
+                    f"border-radius: 8px;"
+                    f"background: rgb({c.red()},{c.green()},{c.blue()});"
+                    f"border: 2px solid rgba(255,255,255,80);"
+                )
+
+        self._popup_color.textChanged.connect(_update_swatch)
+
+        btn_row = QtWidgets.QHBoxLayout()
+        btn_row.setSpacing(8)
+
+        font = QtGui.QFont()
+        font.setPointSize(15)
+
+        spoolman_btn = BlocksCustomButton(page)
+        spoolman_btn.setFixedSize(230, 80)
+        spoolman_btn.setText("Spoolman")
+        spoolman_btn.setFont(font)
+        spoolman_btn.clicked.connect(self._on_spoolman_clicked)
+        btn_row.addWidget(spoolman_btn)
+
+        accept_btn = BlocksCustomButton(page)
+        accept_btn.setFixedSize(230, 80)
+        accept_btn.setText("Accept")
+        accept_btn.setFont(font)
+        accept_btn.clicked.connect(self.on_popup_accept)
+        btn_row.addWidget(accept_btn)
+
+        root.addLayout(btn_row)
+        return page
+
+    def _build_spool_page(self) -> QtWidgets.QWidget:
+        page = QtWidgets.QWidget()
+        root = QtWidgets.QVBoxLayout(page)
+        root.setContentsMargins(8, 8, 8, 8)
+        root.setSpacing(6)
+
+        hdr = QtWidgets.QHBoxLayout()
+        hdr.setContentsMargins(0, 0, 0, 0)
+        hdr.setSpacing(0)
+        back_btn = IconButton(page)
+        back_btn.setFixedSize(QtCore.QSize(60, 60))
+        back_btn.setFlat(True)
+        back_btn.setPixmap(QtGui.QPixmap(":/ui/media/btn_icons/back.svg"))
+        back_btn.clicked.connect(lambda: self._popup_stack.setCurrentIndex(0))
+        hdr.addWidget(back_btn)
+
+        title_font = QtGui.QFont()
+        title_font.setPointSize(18)
+        title_lbl = QtWidgets.QLabel("Select Spool", page)
+        title_lbl.setFont(title_font)
+        title_lbl.setFixedHeight(60)
+        title_lbl.setStyleSheet("color: white; background: transparent;")
+        title_lbl.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        hdr.addWidget(title_lbl, 1)
+
+        blank = QtWidgets.QWidget(self)
+        blank.setFixedSize(60, 60)
+        hdr.addWidget(blank)
+
+        root.addLayout(hdr)
+
+        frame = BlocksCustomFrame(page)
+        frame_lay = QtWidgets.QVBoxLayout(frame)
+        frame_lay.setContentsMargins(4, 4, 4, 4)
+
+        self._spool_list_view = QtWidgets.QListView(frame)
+        self._spool_list_view.setMouseTracking(True)
+        self._spool_list_view.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
+        self._spool_list_view.setStyleSheet("background-color: transparent;")
+        self._spool_list_view.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
+        self._spool_list_view.setVerticalScrollBarPolicy(
+            QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
+        self._spool_list_view.setHorizontalScrollBarPolicy(
+            QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
+        self._spool_list_view.setSelectionMode(
+            QtWidgets.QAbstractItemView.SelectionMode.NoSelection
+        )
+        self._spool_list_view.setVerticalScrollMode(
+            QtWidgets.QAbstractItemView.ScrollMode.ScrollPerPixel
+        )
+        QtWidgets.QScroller.grabGesture(
+            self._spool_list_view, QtWidgets.QScroller.ScrollerGestureType.TouchGesture
+        )
+        QtWidgets.QScroller.grabGesture(
+            self._spool_list_view,
+            QtWidgets.QScroller.ScrollerGestureType.LeftMouseButtonGesture,
+        )
+
+        self._spool_model = EntryListModel()
+        self._spool_model.setParent(self._spool_list_view)
+        self._spool_delegate = EntryDelegate()
+        self._spool_list_view.setModel(self._spool_model)
+        self._spool_list_view.setItemDelegate(self._spool_delegate)
+        self._spool_delegate.item_selected.connect(self._on_spool_selected)
+
+        self._spool_load_widget = LoadingOverlayWidget(
+            frame, LoadingOverlayWidget.AnimationGIF.DEFAULT
+        )
+
+        frame_lay.addWidget(self._spool_list_view, 1)
+        frame_lay.addWidget(self._spool_load_widget, 1)
+        self._spool_list_view.hide()
+
+        root.addWidget(frame, 1)
+        return page
+
+    def on_pre_gate(self, gate_index: int, detected: bool):
+        previous_state = self._previous_gate_states.get(gate_index)
+        self._previous_gate_states[gate_index] = detected
+        if previous_state is False and detected is True:
+            self.popup_gates.append({"gate": gate_index})
+            self.handle_popup()
+
+    def handle_popup(self):
+        if self.popup.isVisible():
+            return
+        if not self.popup_gates:
+            return
+        self.pre_gate_idx = self.popup_gates.popleft()
+        gate = self.pre_gate_idx["gate"]
+        self._popup_title_lbl.setText(f"Filament Detected — Gate {gate}")
+        self._popup_stack.setCurrentIndex(0)
+        self._selected_spool_id = -2
+        self.popup.show()
+
+    def on_popup_accept(self):
+        gate = self.pre_gate_idx["gate"]
+        name = self._popup_name.text().strip()
+        color = self._popup_color.text().strip("#").strip()
+        material = self._popup_material.text().strip()
+        try:
+            temp = int(self._popup_temp.text().strip("°º").strip())
+        except ValueError:
+            temp = -1
+
+        parts = [f"MMU_GATE_MAP GATE={gate}"]
+        if self._selected_spool_id not in (-2, -1):
+            parts.append(f"SPOOLID={self._selected_spool_id}")
+        if name:
+            parts.append(f'NAME="{name}"')
+        if material:
+            parts.append(f'MATERIAL="{material}"')
+        if color:
+            parts.append(f'COLOR="{color}"')
+        if temp > 0:
+            parts.append(f"TEMP={temp}")
+        parts.append("QUIET=1")
+
+        self.run_gcode.emit(" ".join(parts))
+        self.run_gcode.emit("MMU_GATE_MAP REFRESH=1")
+        self.popup.hide()
+        self.handle_popup()
+
+    @QtCore.pyqtSlot(dict, name="on-spools-received")
+    def on_spools_received(self, result: dict) -> None:
+        self._spool_load_widget.hide()
+        self._spool_list_view.show()
+        if result.get("error") is not None:
+            return
+        spools = result.get("response")
+        if not isinstance(spools, list):
+            return
+        self._spool_id_map = {}
+        self._spool_model.clear()
+        self._spool_delegate.clear()
+        self._spool_model.add_item(
+            ListItem(
+                text="+ Add Spool",
+                _lfontsize=14,
+                height=60,
+            )
+        )
+        for spool in spools:
+            spool_id = spool.get("id", "?")
+            filament = spool.get("filament") or {}
+            name = filament.get("name") or f"Spool #{spool_id}"
+            material = filament.get("material") or ""
+            self._spool_model.add_item(
+                ListItem(
+                    text=name,
+                    right_text=material,
+                    left_icon=self._make_color_pixmap(filament),
+                    _lfontsize=14,
+                    _rfontsize=12,
+                    height=60,
+                )
+            )
+            self._spool_id_map[name] = spool
+
+    @QtCore.pyqtSlot(ListItem, name="on-spool-selected")
+    def _on_spool_selected(self, item: ListItem) -> None:
+        if not item:
+            return
+        if item.text == "+ Add Spool":
+            self._on_add_spool_request()
+            return
+        spool = self._spool_id_map.get(item.text)
+        if not spool:
+            return
+        filament = spool.get("filament") or {}
+        self._selected_spool_id = spool.get("id", -2)
+        self._popup_name.setText(filament.get("name") or "")
+        self._popup_color.setText(filament.get("color_hex") or "ffffff")
+        self._popup_material.setText(filament.get("material") or "")
+        temp = filament.get("settings_extruder_temp")
+        self._popup_temp.setText(str(temp) if temp is not None else "")
+        self._popup_stack.setCurrentIndex(0)
+
+    def _on_spoolman_clicked(self):
+        self._spool_list_view.hide()
+        self._spool_load_widget.show()
+        self._popup_stack.setCurrentIndex(1)
+        self.ws.api.spoolman_proxy("GET", "/v1/spool", callback=self.on_spools_received)
+
+    @staticmethod
+    def _make_color_pixmap(filament: dict) -> QtGui.QPixmap:
+        size = 32
+        pixmap = QtGui.QPixmap(size, size)
+        pixmap.fill(QtCore.Qt.GlobalColor.transparent)
+        painter = QtGui.QPainter(pixmap)
+        painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
+        multi_hexes = filament.get("multi_color_hexes")
+        color_hex = filament.get("color_hex")
+        if multi_hexes:
+            hexes = [h.strip() for h in multi_hexes.split(",") if h.strip()]
+            if hexes:
+                clip = QtGui.QPainterPath()
+                clip.addRoundedRect(QtCore.QRectF(0, 0, size, size), 6, 6)
+                painter.setClipPath(clip)
+                stripe_w = size / len(hexes)
+                for i, h in enumerate(hexes):
+                    painter.fillRect(
+                        QtCore.QRectF(i * stripe_w, 0, stripe_w, size),
+                        QtGui.QColor(f"#{h}"),
+                    )
+        elif color_hex:
+            painter.setBrush(QtGui.QColor(f"#{color_hex}"))
+            painter.setPen(QtCore.Qt.PenStyle.NoPen)
+            painter.drawRoundedRect(QtCore.QRectF(0, 0, size, size), 6, 6)
+        else:
+            painter.setPen(QtGui.QColor(180, 180, 180))
+            painter.setBrush(QtCore.Qt.BrushStyle.NoBrush)
+            painter.drawRoundedRect(QtCore.QRectF(1, 1, size - 2, size - 2), 6, 6)
+        painter.end()
+        return pixmap
+
+    def _open_numpad(
+        self,
+        name: str,
+        current_value: int,
+        callback,
+        min_value: int = 0,
+        max_value: int = 100,
+    ) -> None:
+        try:
+            self._numpad.value_selected.disconnect()
+        except TypeError:
+            pass
+
+        def _on_value(n, v):
+            self._numpad_popup.hide()
+            callback(n, v)
+
+        self._numpad.value_selected.connect(_on_value)
+        self._numpad.set_name(name)
+        self._numpad.set_value(current_value)
+        self._numpad.set_min_value(min_value)
+        self._numpad.set_max_value(max_value)
+        self._numpad_popup.show()
+
+    @QtCore.pyqtSlot(str, int, name="on-popup-temp-change")
+    def _on_popup_temp_change(self, _name: str, value: int) -> None:
+        self._selected_spool_id = -1
+        self._popup_temp.setText(str(value))
+
+    def _on_show_keyboard(
+        self,
+        field: QtWidgets.QLineEdit,
+        prefix: str = "",
+        suffix: str = "",
+        pattern: str = "",
+        max_char: int = 0,
+    ) -> None:
+        self._current_field = field
+        self._qwerty.setPrefix(prefix)
+        self._qwerty.setSuffix(suffix)
+        self._qwerty.setPatern(pattern)
+        self._qwerty.set_value(field.text().strip("#ºg"))
+        self._qwerty.setMaxLength(max_char)
+        self._qwerty.show()
+
+    def _on_qwerty_go_back(self) -> None:
+        self._qwerty.hide()
+
+    def _on_qwerty_value_selected(self, value: str) -> None:
+        self._qwerty.hide()
+        if self._current_field:
+            if self._current_field in (self._popup_name, self._popup_material):
+                self._selected_spool_id = -1
+            self._current_field.setText(value)
+            self._current_field.editingFinished.emit()
+
+    def _open_color_wheel(self, field) -> None:
+        self._color_target_field = field
+        self._color_wheel.set_color_hex(field.text().strip("#") or "ffffff")
+        self._color_wheel_popup.show()
+        self._color_wheel_popup.raise_()
+
+    @QtCore.pyqtSlot(str, name="on-color-selected")
+    def _on_color_selected(self, hex_str: str) -> None:
+        if self._color_target_field is not None:
+            self._color_target_field.setText(hex_str)
+            self._color_target_field.editingFinished.emit()
+            self._color_target_field = None
+
 
     def on_mmu_state_changed(self, mmu_state):
+        if not self._previous_gate_states and mmu_state.gates:
+            for gate_info in mmu_state.gates:
+                self._previous_gate_states[gate_info.index] = gate_info.status in [
+                    GateStatus.AVAILABLE,
+                    GateStatus.AVAILABLE_FROM_BUFFER,
+                ]
+
         if not self.amu_configured:
             if len(mmu_state.gates) > 0:
+                self.fallback.stop()
                 self.setMinimumSize(710, 420)
                 self.amupage = AMUpage(self.amu_manager, parent=self)
                 self.addWidget(self.amupage)
                 self.amupage.request_back.connect(self.request_back)
                 self.amupage.request_gate_map.connect(self.run_gcode)
-                self.amupage.request_spools.connect(
-                    lambda: self.ws.api.spoolman_proxy(
-                        "GET", "/v1/spool", callback=self.amupage.on_spools_received
-                    )
-                )
+                self.amupage.request_numpad[
+                    str, int, "PyQt_PyObject", int, int
+                ].connect(self._open_numpad)
+                self.amupage.request_keyboard.connect(self._on_show_keyboard)
+                self.amupage.request_color_wheel.connect(self._open_color_wheel)
 
                 self._add_spool_page = AddSpoolPage(self)
                 self._add_filament_page = AddFilamentPage(self)
@@ -87,10 +536,6 @@ class FilamentTab(QtWidgets.QStackedWidget):
                 self._add_stack.addWidget(self._add_filament_page)  # index 1
 
                 self._add_filament_page.accepted.connect(self._add_spool_page.reset)
-
-                self.amupage.request_open_add_spoolman.connect(
-                    self._on_add_spool_request
-                )
 
                 self._add_popup = BasePopup(self, False, False)
                 self._add_popup.add_widget(self._add_stack)
@@ -129,9 +574,6 @@ class FilamentTab(QtWidgets.QStackedWidget):
                     lambda: self._add_stack.setCurrentIndex(0)
                 )
 
-            else:
-                self.without_amu()
-
             self.amu_configured = True
 
         if self.load_state:
@@ -145,241 +587,15 @@ class FilamentTab(QtWidgets.QStackedWidget):
             self.load_state = True
             self.call_load_panel.emit(True, mmu_state.action)
 
+    def without_amu(self) -> None:
+        self.resize(710, 410)
+        self._basic_panel = BasicFilamentPanel(self.printer, self.cfg, parent=self)
+        self._basic_panel.run_gcode.connect(self.run_gcode)
+        self._basic_panel.call_load_panel.connect(self.call_load_panel)
+        self._basic_panel.request_back.connect(self.request_back)
+        self._basic_panel.request_change_tab.connect(self.request_change_tab)
+        self.addWidget(self._basic_panel)
+
     def _on_add_spool_request(self):
         self._add_spool_page.reset()
         self._add_popup.show()
-
-    def without_amu(self):
-        self.panel = Ui_filamentStackedWidget()
-        self.panel.setupUi(self)
-        self.setCurrentIndex(0)
-        self.toolhead_count: int = 0
-        self.target_temp: int = 0
-        self.current_temp: int = 0
-        self.popup = Popup(self)
-        self.has_load_unload_objects = None
-        self._filament_state = self.FilamentStates.UNKNOWN
-        self.filament_type = FilamentTypes.UNKNOWN
-
-        if self.cfg.has_section("filament_presence"):
-            i = self.cfg.get_section("filament_presence", None)
-            self.filament_sensor = i.get("name", str, None)
-        else:
-            self.filament_sensor = None
-        self.panel.filament_page_load_btn.clicked.connect(
-            partial(self.change_page, self.indexOf(self.panel.load_page))
-        )
-        self.panel.custom_filament_header_back_btn.clicked.connect(self.back_button)
-        self.panel.load_custom_btn.hide()
-        self.panel.load_header_back_button.clicked.connect(self.back_button)
-        self.panel.load_pla_btn.clicked.connect(
-            partial(self.load_filament, toolhead=0, filament=FilamentTypes.PLA)
-        )
-        self.panel.load_petg_btn.clicked.connect(
-            partial(self.load_filament, toolhead=0, filament=FilamentTypes.PETG)
-        )
-        self.panel.load_abs_btn.clicked.connect(
-            partial(self.load_filament, toolhead=0, filament=FilamentTypes.ABS)
-        )
-        self.panel.load_hips_btn.clicked.connect(
-            partial(self.load_filament, toolhead=0, filament=FilamentTypes.HIPS)
-        )
-        self.panel.load_nylon_btn.clicked.connect(
-            partial(self.load_filament, toolhead=0, filament=FilamentTypes.NYLON)
-        )
-        self.panel.load_tpu_btn.clicked.connect(
-            partial(self.load_filament, toolhead=0, filament=FilamentTypes.TPU)
-        )
-        self.panel.filament_page_unload_btn.clicked.connect(
-            lambda: self.unload_filament(toolhead=0, temp=250)
-        )
-        self.panel.main_back_button.clicked.connect(
-            lambda: self.request_change_tab.emit(0)
-        )
-        self.printer.unload_filament_update.connect(self.on_unload_filament)
-        self.printer.load_filament_update.connect(self.on_load_filament)
-        self.printer.filament_switch_sensor_update.connect(
-            self.on_filament_sensor_update
-        )
-
-        self.printer.print_stats_update[str, str].connect(self.on_print_stats_update)
-        self.printer.print_stats_update[str, dict].connect(self.on_print_stats_update)
-        self.printer.print_stats_update[str, float].connect(self.on_print_stats_update)
-
-        self.printer.save_variables_update.connect(self.on_save_variables_update)
-        self.state = "standby"
-
-    def on_save_variables_update(self, save_variables: dict):
-        """Handle query response"""
-        for i in FilamentTypes:
-            if i.value.name in save_variables["variables"]["filament_type"]:
-                self.filament_type = i
-                break
-            else:
-                self.filament_type = FilamentTypes.UNKNOWN
-        self.panel.label_2.setText(self.filament_type.value.name)
-
-    @QtCore.pyqtSlot(str, dict, name="on_print_stats_update")
-    @QtCore.pyqtSlot(str, float, name="on_print_stats_update")
-    @QtCore.pyqtSlot(str, str, name="on_print_stats_update")
-    def on_print_stats_update(self, field: str, value: dict | float | str) -> None:
-        """Handle print stats object update"""
-        if isinstance(value, str):
-            if "state" in field:
-                self.state = value
-                if value in ("printing", "pausing", "paused", "resuming"):
-                    self.panel.main_back_button.show()
-                    self.panel.spacerItem1.changeSize(
-                        60,
-                        0,
-                        QtWidgets.QSizePolicy.Policy.Minimum,
-                        QtWidgets.QSizePolicy.Policy.Minimum,
-                    )
-                if value in ("standby"):
-                    self.panel.main_back_button.hide()
-                    self.panel.spacerItem1.changeSize(
-                        0,
-                        0,
-                        QtWidgets.QSizePolicy.Policy.Minimum,
-                        QtWidgets.QSizePolicy.Policy.Minimum,
-                    )
-
-    @QtCore.pyqtSlot(str, str, bool, name="on_filament_sensor_update")
-    def on_filament_sensor_update(self, sensor_name: str, parameter: str, value: bool):
-        """Handle filament sensor object update"""
-        if parameter == "filament_detected":
-            if not isinstance(value, bool):
-                self._filament_state = self.FilamentStates.UNKNOWN
-                self.handle_filament_state()
-                return
-            if sensor_name == self.filament_sensor:
-                if value:
-                    self._filament_state = self.FilamentStates.LOADED
-                else:
-                    self._filament_state = self.FilamentStates.UNLOADED
-                return
-        self.handle_filament_state()
-
-    @QtCore.pyqtSlot(dict, name="on_load_filament")
-    def on_load_filament(self, status: dict):
-        """Handle load filament object updated"""
-        if "state" in status.keys():
-            if not status["state"]:
-                self.target_temp = 0
-                self.call_load_panel.emit(False, "")
-                if self.state == "paused":
-                    self.request_change_tab.emit(0)
-                return
-        self.call_load_panel.emit(
-            True, f"Loading Filament\n{status['step'].capitalize()}"
-        )
-        self.handle_filament_state()
-
-    @QtCore.pyqtSlot(dict, name="on_unload_filament")
-    def on_unload_filament(self, status: dict):
-        """Handle unload filament object updated"""
-        if "state" in status.keys():
-            if not status["state"]:
-                self.target_temp = 0
-                self.call_load_panel.emit(False, "")
-                return
-        self.call_load_panel.emit(
-            True, f"Unloading Filament\n{status['step'].capitalize()}"
-        )
-        self.handle_filament_state()
-
-    @QtCore.pyqtSlot(int, int, name="load_filament")
-    def load_filament(
-        self, toolhead: int = 0, filament: FilamentTypes = FilamentTypes.UNKNOWN
-    ) -> None:
-        """Handle load filament buttons clicked"""
-        if not self.isVisible:
-            return
-
-        if self._filament_state == self.FilamentStates.UNKNOWN:
-            self.popup.new_message(
-                message_type=Popup.MessageType.ERROR,
-                message="Unable to detect whether the filament is loaded or unloaded.",
-            )
-
-        if self._filament_state == self.FilamentStates.LOADED:
-            self.popup.new_message(
-                message_type=Popup.MessageType.ERROR,
-                message="Filament is already loaded.",
-            )
-            return
-        self.call_load_panel.emit(True, "Loading Filament")
-        self.run_gcode.emit(
-            f"""SAVE_VARIABLE VARIABLE=filament_type VALUE='"{filament.value.name}"'"""
-        )
-        self.run_gcode.emit("MMU_LOAD")
-
-    @QtCore.pyqtSlot(str, int, name="unload_filament")
-    def unload_filament(self, toolhead: int = 0, temp: int = 220) -> None:
-        """Handle unload filament button clicked"""
-        if not self.isVisible:
-            return
-
-        if self._filament_state == self.FilamentStates.UNKNOWN:
-            self.popup.new_message(
-                message_type=Popup.MessageType.ERROR,
-                message="Unable to detect whether the filament is loaded or unloaded.",
-            )
-
-        if self._filament_state == self.FilamentStates.UNLOADED:
-            self.popup.new_message(
-                message_type=Popup.MessageType.ERROR,
-                message="Filament is already unloaded.",
-            )
-            return
-
-        self.find_routine_objects()
-        self.call_load_panel.emit(True, "Unloading Filament")
-        self.run_gcode.emit(
-            f"""SAVE_VARIABLE VARIABLE=filament_type VALUE='"{FilamentTypes.UNKNOWN.value.name}"'"""
-        )
-        self.run_gcode.emit("MMU_UNLOAD")
-
-    def handle_filament_state(self):
-        """Handle ui changes on filament states"""
-        if self._filament_state == self.FilamentStates.LOADED:
-            self.panel.filament_page_unload_btn.setEnabled(True)
-            self.panel.filament_page_load_btn.setEnabled(False)
-        elif self._filament_state == self.FilamentStates.UNLOADED:
-            self.panel.filament_page_unload_btn.setEnabled(False)
-            self.panel.filament_page_load_btn.setEnabled(True)
-        else:
-            self.panel.filament_page_load_btn.setEnabled(True)
-            self.panel.filament_page_unload_btn.setEnabled(True)
-
-    @property
-    def filament_state(self):
-        return self._filament_state
-
-    def change_page(self, index):
-        """Issue a page change"""
-        self.request_change_page.emit(1, index)
-
-    def back_button(self):
-        """Go back a page"""
-        self.request_back.emit()
-
-    def find_routine_objects(self):
-        """Check if printer has load/unload printer objects"""
-        if not self.printer:
-            return
-
-        _available_objects = self.printer.available_objects.copy()
-
-        if "load_filament" in _available_objects.keys():
-            self.has_load_unload_objects = True
-            return True
-        if "unload_filament" in _available_objects.keys():
-            self.has_load_unload_objects = True
-            return True
-        if "gcode_macro LOAD_FILAMENT" in _available_objects.keys():
-            return True
-        if "gcode_macro UNLOAD_FILAMENT" in _available_objects.keys():
-            return True
-
-        return False
