@@ -746,38 +746,38 @@ class MainWindow(QtWidgets.QMainWindow):
         *,
         source_id: str = "mainwindow",
         fallback: bool,
-        persistent: bool,
+        show_popup: bool,
     ) -> bool:
         rule = match_message(source, text)
         if rule is not None:
             self.show_notifications.emit(
-                source_id, rule.full_display, rule.severity.value, persistent
+                source_id, rule.full_display, rule.severity.value, show_popup
             )
             return True
         elif fallback:
             self.show_notifications.emit(
-                source_id, text, Severity.ERROR.value, persistent
+                source_id, text, Severity.ERROR.value, show_popup
             )
             return True
         return False
 
     @QtCore.pyqtSlot(str, str, int, bool)
     def _on_probe_notification(
-        self, _source: str, text: str, _severity: int, persistent: bool
+        self, _source: str, text: str, _severity: int, show_popup: bool
     ) -> None:
         if not self._emit_filtered_notification(
             MessageSource.GCODE_ERROR,
             text,
             source_id="probe_helper",
             fallback=False,
-            persistent=persistent,
+            show_popup=show_popup,
         ):
             self._emit_filtered_notification(
                 MessageSource.MOONRAKER_ERROR,
                 text,
                 source_id="probe_helper",
                 fallback=True,
-                persistent=persistent,
+                show_popup=show_popup,
             )
 
     @api_handler
@@ -799,7 +799,7 @@ class MainWindow(QtWidgets.QMainWindow):
             else:
                 return
             self._emit_filtered_notification(
-                source, _message, fallback=False, persistent=False
+                source, _message, fallback=False, show_popup=True
             )
 
     @api_handler
@@ -832,7 +832,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # Show popup for all other errors (including directory errors)
         self._emit_filtered_notification(
-            MessageSource.MOONRAKER_ERROR, text, fallback=True, persistent=False
+            MessageSource.MOONRAKER_ERROR, text, fallback=True, show_popup=True
         )
         _logger.error(text)
 
@@ -851,13 +851,13 @@ class MainWindow(QtWidgets.QMainWindow):
             _bits = data.get("bits", None)
             if not _bits:
                 self.show_notifications.emit(
-                    "mainwindow", "Cpu throttled unknown reason", 2, False
+                    "mainwindow", "Cpu throttled unknown reason", 2, True
                 )
                 return
             _active_flags = [name for name, mask in flags.items() if _bits & mask]
             for flag in _active_flags:
                 self._emit_filtered_notification(
-                    MessageSource.CPU_THROTTLE, flag, fallback=True, persistent=False
+                    MessageSource.CPU_THROTTLE, flag, fallback=True, show_popup=True
                 )
         except Exception:
             logging.debug("Error emitting notification for cpu throttled notification.")
