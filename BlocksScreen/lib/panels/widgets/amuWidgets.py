@@ -484,7 +484,7 @@ class SpoolInfoPanel(QtWidgets.QWidget):
                 )
             case GateStatus.AVAILABLE_FROM_BUFFER:
                 text, en_load, en_unload, en_purge, en_cut = (
-                    "<span style='color:#2ec4a0'>● PRE-LOADED (BUFFER)</span>",
+                    "<span style='color:#2ec4a0'>● PRE-LOADED</span>",
                     True,
                     False,
                     True,
