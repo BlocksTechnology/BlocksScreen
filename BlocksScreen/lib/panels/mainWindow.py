@@ -790,9 +790,16 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # Show popup for all other errors (including directory errors)
         rule = match_message(MessageSource.MOONRAKER_ERROR, text)
-        display = rule.full_display if rule else str(text)
-        severity = rule.severity.value if rule else Severity.ERROR.value
-        self.show_notifications.emit("mainwindow", display, severity, True)
+        if rule is not None:
+            self.show_notifications.emit(
+                "mainwindow", rule.full_display, rule.severity.value, True
+            )
+        elif match_message(MessageSource.GCODE_ERROR, text) is not None:
+            pass  # already shown by _handle_notify_gcode_response_message
+        else:
+            self.show_notifications.emit(
+                "mainwindow", str(text), Severity.ERROR.value, True
+            )
         _logger.error(text)
 
     @api_handler
