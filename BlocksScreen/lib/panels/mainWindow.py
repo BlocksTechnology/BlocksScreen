@@ -6,7 +6,11 @@ import events
 from configfile import BlocksScreenConfig, get_configparser
 from devices.storage import USBManager
 from lib.files import Files
-from lib.klipper_message_filter import MessageSource, Severity, match_message  # noqa: F405
+from lib.klipper_message_filter import (  # noqa: F405
+    MessageSource,
+    Severity,
+    match_message,
+)
 from lib.machine import MachineControl
 from lib.moonrakerComm import MoonWebSocket
 from lib.network import WifiIconKey
@@ -220,7 +224,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.controlPanel.probe_helper_page.handle_error_response
         )
         self.controlPanel.probe_helper_page.show_notifications.connect(
-            self.notiPage.new_notication
+            self._on_probe_notification
         )
         self.controlPanel.disable_popups.connect(self.popup_toggle)
         self.controlPanel.lock_ui.connect(self.set_ui_lock)
@@ -735,6 +739,47 @@ class MainWindow(QtWidgets.QMainWindow):
                 False,
             )
 
+    def _emit_filtered_notification(
+        self,
+        source: MessageSource,
+        text: str,
+        *,
+        source_id: str = "mainwindow",
+        fallback: bool,
+        persistent: bool,
+    ) -> bool:
+        rule = match_message(source, text)
+        if rule is not None:
+            self.show_notifications.emit(
+                source_id, rule.full_display, rule.severity.value, persistent
+            )
+            return True
+        elif fallback:
+            self.show_notifications.emit(
+                source_id, text, Severity.ERROR.value, persistent
+            )
+            return True
+        return False
+
+    @QtCore.pyqtSlot(str, str, int, bool)
+    def _on_probe_notification(
+        self, _source: str, text: str, _severity: int, persistent: bool
+    ) -> None:
+        if not self._emit_filtered_notification(
+            MessageSource.GCODE_ERROR,
+            text,
+            source_id="probe_helper",
+            fallback=False,
+            persistent=persistent,
+        ):
+            self._emit_filtered_notification(
+                MessageSource.MOONRAKER_ERROR,
+                text,
+                source_id="probe_helper",
+                fallback=True,
+                persistent=persistent,
+            )
+
     @api_handler
     def _handle_notify_gcode_response_message(self, method, data, metadata) -> None:
         """Handle websocket gcode responses messages"""
@@ -753,11 +798,8 @@ class MainWindow(QtWidgets.QMainWindow):
                 source = MessageSource.GCODE_ECHO
             else:
                 return
-            rule = match_message(source, _message)
-            if rule is None:
-                return
-            self.show_notifications.emit(
-                "mainwindow", rule.full_display, rule.severity.value, True
+            self._emit_filtered_notification(
+                source, _message, fallback=False, persistent=False
             )
 
     @api_handler
@@ -789,16 +831,9 @@ class MainWindow(QtWidgets.QMainWindow):
             self.printPanel.filesPage_widget.on_directory_error()
 
         # Show popup for all other errors (including directory errors)
-        rule = match_message(MessageSource.MOONRAKER_ERROR, text)
-        if rule is not None:
-            self.show_notifications.emit(
-                "mainwindow", rule.full_display, rule.severity.value, True
-            )
-        elif match_message(MessageSource.GCODE_ERROR, text) is not None:
-            pass  # already shown by _handle_notify_gcode_response_message
-        else:
-            self.show_notifications.emit(
-                "mainwindow", str(text), Severity.ERROR.value, True
+        if match_message(MessageSource.GCODE_ERROR, text) is None:
+            self._emit_filtered_notification(
+                MessageSource.MOONRAKER_ERROR, text, fallback=True, persistent=False
             )
         _logger.error(text)
 
@@ -817,15 +852,14 @@ class MainWindow(QtWidgets.QMainWindow):
             _bits = data.get("bits", None)
             if not _bits:
                 self.show_notifications.emit(
-                    "mainWindow", "Cpu throttled unknown reason", 2, False
+                    "mainwindow", "Cpu throttled unknown reason", 2, False
                 )
                 return
             _active_flags = [name for name, mask in flags.items() if _bits & mask]
             for flag in _active_flags:
-                rule = match_message(MessageSource.CPU_THROTTLE, flag)
-                display = rule.full_display if rule else flag
-                severity = rule.severity.value if rule else Severity.WARNING.value
-                self.show_notifications.emit("mainwindow", display, severity, False)
+                self._emit_filtered_notification(
+                    MessageSource.CPU_THROTTLE, flag, fallback=True, persistent=False
+                )
         except Exception:
             logging.debug("Error emitting notification for cpu throttled notification.")
             return
