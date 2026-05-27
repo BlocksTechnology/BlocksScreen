@@ -203,6 +203,13 @@ RULES: tuple[MessageRule, ...] = (
         hint="Check axis movement",
         severity=Severity.ERROR,
     ),
+    MessageRule(
+        source=MessageSource.GCODE_ERROR,
+        matcher=_sub("must home axis first"),
+        display="Axis Not Homed",
+        hint="Home all axes first",
+        severity=Severity.ERROR,
+    ),
     # ── Gcode errors — general ─────────────────────────────────────────────────
     MessageRule(
         source=MessageSource.GCODE_ERROR,
@@ -255,6 +262,13 @@ RULES: tuple[MessageRule, ...] = (
         severity=Severity.INFO,
     ),
     # ── Moonraker errors ───────────────────────────────────────────────────────
+    MessageRule(
+        source=MessageSource.MOONRAKER_ERROR,
+        matcher=_sub("must home axis first"),
+        display="Axis Not Homed",
+        hint="Home all axes first",
+        severity=Severity.ERROR,
+    ),
     MessageRule(
         source=MessageSource.MOONRAKER_ERROR,
         matcher=_sub("beacon"),

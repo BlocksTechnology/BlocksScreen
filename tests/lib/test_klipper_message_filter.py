@@ -138,6 +138,18 @@ def test_re_no_match() -> None:
             "Homing Timeout",
             Severity.ERROR,
         ),
+        (
+            MessageSource.GCODE_ERROR,
+            "Must home axis first: 1.000 500.000 5.000 [0.000]",
+            "Axis Not Homed",
+            Severity.ERROR,
+        ),
+        (
+            MessageSource.MOONRAKER_ERROR,
+            "Must home axis first: 1.000 500.000 5.000 [0.000]",
+            "Axis Not Homed",
+            Severity.ERROR,
+        ),
         # GCODEs Errors - General
         (
             MessageSource.GCODE_ERROR,
