@@ -11,6 +11,7 @@ class MessageSource(enum.Enum):
     GCODE_ECHO = "gcode_echo"
     MOONRAKER_ERROR = "moonraker_error"
     CPU_THROTTLE = "cpu_throttle"
+    KLIPPY_STATE = "klippy_state"
 
 
 class Severity(enum.IntEnum):
@@ -122,6 +123,43 @@ RULES: tuple[MessageRule, ...] = (
         hint="Check probe",
         severity=Severity.ERROR,
     ),
+    MessageRule(
+        source=MessageSource.GCODE_ERROR,
+        matcher=_sub("scan height"),
+        display="Beacon Scan Height Invalid",
+        hint="Adjust scan height in probe config",
+        severity=Severity.ERROR,
+    ),
+    # ── Gcode errors — BLTouch probe ──────────────────────────────────────────
+    MessageRule(
+        source=MessageSource.GCODE_ERROR,
+        matcher=_sub("failed to verify sensor state"),
+        display="BLTouch Verify Failed",
+        hint="Set pin_up_touch_mode_reports_triggered = False in config",
+        severity=Severity.ERROR,
+    ),
+    # ── Gcode errors — probe calibration ─────────────────────────────────────
+    MessageRule(
+        source=MessageSource.GCODE_ERROR,
+        matcher=_sub("manual probe failed"),
+        display="Manual Probe Incomplete",
+        hint="Use TESTZ to position nozzle, then ACCEPT",
+        severity=Severity.WARNING,
+    ),
+    MessageRule(
+        source=MessageSource.GCODE_ERROR,
+        matcher=_sub("25 microns"),
+        display="Probe Accuracy Poor",
+        hint="Check probe mount and re-run PROBE_ACCURACY",
+        severity=Severity.WARNING,
+    ),
+    MessageRule(
+        source=MessageSource.GCODE_ERROR,
+        matcher=_sub("location bias"),
+        display="Probe Location Bias",
+        hint="Check probe mount for play or inconsistency",
+        severity=Severity.WARNING,
+    ),
     # ── Gcode errors — Happy Hare MMU ──────────────────────────────────────────
     MessageRule(
         source=MessageSource.GCODE_ERROR,
@@ -180,6 +218,20 @@ RULES: tuple[MessageRule, ...] = (
         hint="Heat up before extruding",
         severity=Severity.WARNING,
     ),
+    MessageRule(
+        source=MessageSource.GCODE_ERROR,
+        matcher=_sub("temperature overshoot"),
+        display="Heater Overshoot",
+        hint="Check PID tuning or heater wiring",
+        severity=Severity.ERROR,
+    ),
+    MessageRule(
+        source=MessageSource.GCODE_ERROR,
+        matcher=_sub("will exceed max_duration"),
+        display="Heater PWM Fault",
+        hint="Check heater wiring and configuration",
+        severity=Severity.ERROR,
+    ),
     # ── Gcode errors — MCU / timing ────────────────────────────────────────────
     MessageRule(
         source=MessageSource.GCODE_ERROR,
@@ -195,6 +247,13 @@ RULES: tuple[MessageRule, ...] = (
         hint="Reduce CPU load",
         severity=Severity.ERROR,
     ),
+    MessageRule(
+        source=MessageSource.GCODE_ERROR,
+        matcher=_sub("step pulse duration"),
+        display="Stepper Timing Error",
+        hint="Check step_pulse_duration in stepper config",
+        severity=Severity.ERROR,
+    ),
     # ── Gcode errors — homing ──────────────────────────────────────────────────
     MessageRule(
         source=MessageSource.GCODE_ERROR,
@@ -208,6 +267,35 @@ RULES: tuple[MessageRule, ...] = (
         matcher=_sub("must home axis first"),
         display="Axis Not Homed",
         hint="Home all axes first",
+        severity=Severity.ERROR,
+    ),
+    MessageRule(
+        source=MessageSource.GCODE_ERROR,
+        matcher=_re(r"endstop .* still triggered"),
+        display="Endstop Stuck",
+        hint="Clear obstruction or check wiring",
+        severity=Severity.ERROR,
+    ),
+    MessageRule(
+        source=MessageSource.GCODE_ERROR,
+        matcher=_re(r"homing (interrupted|aborted)"),
+        display="Homing Interrupted",
+        hint="Check for obstructions and retry",
+        severity=Severity.ERROR,
+    ),
+    # ── Gcode errors — bed leveling ───────────────────────────────────────────
+    MessageRule(
+        source=MessageSource.GCODE_ERROR,
+        matcher=_sub("unable to probe bed point"),
+        display="Bed Mesh Point Failed",
+        hint="Check probe reach and bed position",
+        severity=Severity.ERROR,
+    ),
+    MessageRule(
+        source=MessageSource.GCODE_ERROR,
+        matcher=_re(r"unable to converge|max_adjust"),
+        display="Leveling Failed",
+        hint="Check gantry alignment and adjust max_adjust limit",
         severity=Severity.ERROR,
     ),
     # ── Gcode errors — general ─────────────────────────────────────────────────
@@ -246,6 +334,13 @@ RULES: tuple[MessageRule, ...] = (
         hint="Check endstop wiring",
         severity=Severity.ERROR,
     ),
+    MessageRule(
+        source=MessageSource.GCODE_ERROR,
+        matcher=_sub("kinematically unreachable"),
+        display="Position Unreachable",
+        hint="Move is outside the printer's kinematic workspace",
+        severity=Severity.ERROR,
+    ),
     # ── Gcode echo ─────────────────────────────────────────────────────────────
     MessageRule(
         source=MessageSource.GCODE_ECHO,
@@ -256,12 +351,26 @@ RULES: tuple[MessageRule, ...] = (
     ),
     MessageRule(
         source=MessageSource.GCODE_ECHO,
+        matcher=_re(r"recommended shaper_freq(?:uency)?"),
+        display="Shaper Frequency Ready",
+        hint="Run SAVE_CONFIG to apply recommended frequency",
+        severity=Severity.INFO,
+    ),
+    MessageRule(
+        source=MessageSource.GCODE_ECHO,
         matcher=_sub("save_config command will update"),
         display="Config Needs Saving",
         hint="Restart after SAVE_CONFIG",
         severity=Severity.INFO,
     ),
     # ── Moonraker errors ───────────────────────────────────────────────────────
+    MessageRule(
+        source=MessageSource.MOONRAKER_ERROR,
+        matcher=_re(r"mcu\b.*shutdown"),
+        display="MCU Shutdown",
+        hint="Check Klipper logs for shutdown reason",
+        severity=Severity.ERROR,
+    ),
     MessageRule(
         source=MessageSource.MOONRAKER_ERROR,
         matcher=_sub("must home axis first"),
@@ -275,6 +384,42 @@ RULES: tuple[MessageRule, ...] = (
         display="Probe Error",
         hint="Check probe connection",
         severity=Severity.ERROR,
+    ),
+    MessageRule(
+        source=MessageSource.MOONRAKER_ERROR,
+        matcher=_re(r"tmc.*(overtemp|ot=1)"),
+        display="Stepper Overheating",
+        hint="Check stepper cooling and current settings",
+        severity=Severity.ERROR,
+    ),
+    MessageRule(
+        source=MessageSource.MOONRAKER_ERROR,
+        matcher=_re(r"unable to read tmc uart"),
+        display="Stepper Driver Offline",
+        hint="Check wiring to stepper driver",
+        severity=Severity.ERROR,
+    ),
+    # ── Klippy state ───────────────────────────────────────────────────────────
+    MessageRule(
+        source=MessageSource.KLIPPY_STATE,
+        matcher=_sub("shutdown"),
+        display="Klipper Shutdown",
+        hint="Check Klipper logs for the shutdown reason",
+        severity=Severity.ERROR,
+    ),
+    MessageRule(
+        source=MessageSource.KLIPPY_STATE,
+        matcher=_sub("error"),
+        display="Klipper Error",
+        hint="Check Klipper logs for details",
+        severity=Severity.ERROR,
+    ),
+    MessageRule(
+        source=MessageSource.KLIPPY_STATE,
+        matcher=_sub("disconnected"),
+        display="Klipper Disconnected",
+        hint="Check MCU connection",
+        severity=Severity.WARNING,
     ),
 )
 

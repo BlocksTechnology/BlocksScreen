@@ -713,6 +713,18 @@ class MainWindow(QtWidgets.QMainWindow):
                             str(_state_call),
                             str(e),
                         )
+            if not self._popup_toggle and status_type in (
+                "shutdown",
+                "error",
+                "disconnected",
+            ):
+                self._emit_filtered_notification(
+                    MessageSource.KLIPPY_STATE,
+                    status_type,
+                    source_id="klippy_state",
+                    fallback=False,
+                    show_popup=True,
+                )
 
     @api_handler
     def _handle_notify_filelist_changed_message(self, method, data, metadata) -> None:
