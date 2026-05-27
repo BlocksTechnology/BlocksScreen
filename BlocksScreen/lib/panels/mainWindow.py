@@ -831,10 +831,9 @@ class MainWindow(QtWidgets.QMainWindow):
             self.printPanel.filesPage_widget.on_directory_error()
 
         # Show popup for all other errors (including directory errors)
-        if match_message(MessageSource.GCODE_ERROR, text) is None:
-            self._emit_filtered_notification(
-                MessageSource.MOONRAKER_ERROR, text, fallback=True, persistent=False
-            )
+        self._emit_filtered_notification(
+            MessageSource.MOONRAKER_ERROR, text, fallback=True, persistent=False
+        )
         _logger.error(text)
 
     @api_handler
