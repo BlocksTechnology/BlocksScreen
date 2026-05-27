@@ -6,6 +6,7 @@ import events
 from configfile import BlocksScreenConfig, get_configparser
 from devices.storage import USBManager
 from lib.files import Files
+from lib.klipper_message_filter import MessageSource, Severity, match_message  # noqa: F405
 from lib.machine import MachineControl
 from lib.moonrakerComm import MoonWebSocket
 from lib.network import WifiIconKey
@@ -33,12 +34,6 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 from screensaver import ScreenSaver
 
 _logger = logging.getLogger(__name__)
-
-_GCODE_POPUP_MESSAGES: tuple[tuple[str, str], ...] = (
-    ("filament runout", "Filament Runout"),
-    ("no filament", "No Filament Detected"),
-    ("sensor not in valid range", "Eddy Current Sensor:\nnot in valid range"),
-)
 
 
 def api_handler(func):
@@ -748,19 +743,22 @@ class MainWindow(QtWidgets.QMainWindow):
         if _gcode_response:
             if self._popup_toggle:
                 return
-            _gcode_msg_type, _message = str(_gcode_response[0]).split(" ", maxsplit=1)
-            _msg_lower = _message.lower()
-            _display = next(
-                (
-                    fmt
-                    for pattern, fmt in _GCODE_POPUP_MESSAGES
-                    if pattern in _msg_lower
-                ),
-                None,
-            )
-            if _gcode_msg_type != "!!" or _display is None:
+            parts = str(_gcode_response[0]).split(" ", maxsplit=1)
+            if len(parts) != 2:
                 return
-            self.show_notifications.emit("mainwindow", _display, 3, True)
+            _gcode_msg_type, _message = parts
+            if _gcode_msg_type == "!!":
+                source = MessageSource.GCODE_ERROR
+            elif _gcode_msg_type == "echo:":
+                source = MessageSource.GCODE_ECHO
+            else:
+                return
+            rule = match_message(source, _message)
+            if rule is None:
+                return
+            self.show_notifications.emit(
+                "mainwindow", rule.full_display, rule.severity.value, True
+            )
 
     @api_handler
     def _handle_error_message(self, method, data, metadata) -> None:
@@ -791,7 +789,10 @@ class MainWindow(QtWidgets.QMainWindow):
             self.printPanel.filesPage_widget.on_directory_error()
 
         # Show popup for all other errors (including directory errors)
-        self.show_notifications.emit("mainwindow", str(text), 3, True)
+        rule = match_message(MessageSource.MOONRAKER_ERROR, text)
+        display = rule.full_display if rule else str(text)
+        severity = rule.severity.value if rule else Severity.ERROR.value
+        self.show_notifications.emit("mainwindow", display, severity, True)
         _logger.error(text)
 
     @api_handler
@@ -813,7 +814,11 @@ class MainWindow(QtWidgets.QMainWindow):
                 )
                 return
             _active_flags = [name for name, mask in flags.items() if _bits & mask]
-            self.show_notifications.emit("mainwindow", str(_active_flags), 2, False)
+            for flag in _active_flags:
+                rule = match_message(MessageSource.CPU_THROTTLE, flag)
+                display = rule.full_display if rule else flag
+                severity = rule.severity.value if rule else Severity.WARNING.value
+                self.show_notifications.emit("mainwindow", display, severity, False)
         except Exception:
             logging.debug("Error emitting notification for cpu throttled notification.")
             return
