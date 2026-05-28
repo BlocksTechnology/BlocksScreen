@@ -821,31 +821,28 @@ class MainWindow(QtWidgets.QMainWindow):
         if self._popup_toggle:
             return
 
-        # Suppress error popups while Klippy is disconnected/shutting down.
-        # Those errors are side-effects of the disconnect, not actionable by the user.
         if not self._klippy_ready:
             return
 
         text = data.get("message", str(data)) if isinstance(data, dict) else str(data)
         lower_text = text.lower()
 
-        # Metadata errors - silent, handled by files_manager
         if "metadata" in lower_text:
             self.file_data.handle_metadata_error(text)
             return
 
-        # File not found - silent
         if "file" in lower_text and "does not exist" in lower_text:
             return
 
-        # Directory not found - navigate back + show popup
         if "does not exist" in lower_text:
             self.printPanel.filesPage_widget.on_directory_error()
 
-        # Show popup for all other errors (including directory errors)
-        self._emit_filtered_notification(
-            MessageSource.MOONRAKER_ERROR, text, fallback=True, show_popup=True
-        )
+        if not self._emit_filtered_notification(
+            MessageSource.MOONRAKER_ERROR, text, fallback=False, show_popup=True
+        ):
+            self._emit_filtered_notification(
+                MessageSource.GCODE_ERROR, text, fallback=True, show_popup=True
+            )
         _logger.error(text)
 
     @api_handler
