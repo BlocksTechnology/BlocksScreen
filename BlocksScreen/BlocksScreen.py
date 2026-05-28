@@ -9,6 +9,9 @@ install_crash_handler()
 from lib.panels.mainWindow import MainWindow  # noqa: E402
 from PyQt6 import QtCore, QtGui, QtWidgets  # noqa: E402
 
+from tools.configuration_manager import ConfigManager
+from configfile import get_configparser
+
 
 class BlocksScreenApp(QtWidgets.QApplication):
     """QApplication subclass that routes unhandled slot exceptions to CrashHandler."""
@@ -53,6 +56,11 @@ def on_quit() -> None:
     LogManager.shutdown()
 
 
+def initialize_conf_manager() -> None:
+    global conf_man
+    conf_man = ConfigManager(get_configparser())
+
+
 if __name__ == "__main__":
     setup_logging(
         filename="logs/BlocksScreen.log",
@@ -64,6 +72,7 @@ if __name__ == "__main__":
     )
     _logger = logging.getLogger(__name__)
     _logger.info("============ BlocksScreen Initializing ============")
+    initialize_conf_manager()
     BlocksScreen = BlocksScreenApp([])
     BlocksScreen.setApplicationName("BlocksScreen")
     BlocksScreen.setApplicationDisplayName("BlocksScreen")
