@@ -1184,8 +1184,8 @@ background-image: url(:/background/media/1st_background.png);
 QTabBar::tab{
 	min-width: 80px;
 	max-width: 80px;
-	min-height: 80px;
-	max-height: 80px;
+	min-height: 100px;
+	max-height: 100px;
     background: transparent;
 }
 
@@ -1198,7 +1198,7 @@ QTabBar::tab{
        <enum>QTabWidget::TabShape::Rounded</enum>
       </property>
       <property name="currentIndex">
-       <number>1</number>
+       <number>3</number>
       </property>
       <property name="iconSize">
        <size>
@@ -1368,15 +1368,6 @@ QTabBar::tab{
          <normaloff>:/icons/media/main_menu/ICON_utilities.png</normaloff>
          <normalon>:/icons/media/main_menu/ICON_utilities_pressed.png</normalon>
          <disabledon>:/icons/media/main_menu/ICON_utilities_blocked.png</disabledon>:/icons/media/main_menu/ICON_utilities.png</iconset>
-       </attribute>
-       <attribute name="title">
-        <string/>
-       </attribute>
-      </widget>
-      <widget class="QWidget" name="SpoolmanTab">
-       <attribute name="icon">
-        <iconset resource="resources/icon_resources.qrc">
-         <normaloff>:/filament_related/media/btn_icons/spoll.svg</normaloff>:/filament_related/media/btn_icons/spoll.svg</iconset>
        </attribute>
        <attribute name="title">
         <string/>

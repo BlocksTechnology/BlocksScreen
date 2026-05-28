@@ -437,8 +437,8 @@ class Ui_MainWindow(object):
 "QTabBar::tab{\n"
 "    min-width: 80px;\n"
 "    max-width: 80px;\n"
-"    min-height: 80px;\n"
-"    max-height: 80px;\n"
+"    min-height: 100px;\n"
+"    max-height: 100px;\n"
 "    background: transparent;\n"
 "}\n"
 "\n"
@@ -516,16 +516,11 @@ class Ui_MainWindow(object):
         icon3.addPixmap(QtGui.QPixmap(":/icons/media/main_menu/ICON_utilities_pressed.png"), QtGui.QIcon.Mode.Normal, QtGui.QIcon.State.On)
         icon3.addPixmap(QtGui.QPixmap(":/icons/media/main_menu/ICON_utilities_blocked.png"), QtGui.QIcon.Mode.Disabled, QtGui.QIcon.State.On)
         self.main_content_widget.addTab(self.utilitiesTab, icon3, "")
-        self.SpoolmanTab = QtWidgets.QWidget()
-        self.SpoolmanTab.setObjectName("SpoolmanTab")
-        icon4 = QtGui.QIcon()
-        icon4.addPixmap(QtGui.QPixmap(":/filament_related/media/btn_icons/spoll.svg"), QtGui.QIcon.Mode.Normal, QtGui.QIcon.State.Off)
-        self.main_content_widget.addTab(self.SpoolmanTab, icon4, "")
         self.verticalLayout.addWidget(self.main_content_widget)
         MainWindow.setCentralWidget(self.main_widget)
 
         self.retranslateUi(MainWindow)
-        self.main_content_widget.setCurrentIndex(1)
+        self.main_content_widget.setCurrentIndex(3)
         QtCore.QMetaObject.connectSlotsByName(MainWindow)
 
     def retranslateUi(self, MainWindow):
