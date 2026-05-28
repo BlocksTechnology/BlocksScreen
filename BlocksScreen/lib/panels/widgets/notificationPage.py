@@ -19,12 +19,11 @@ class NotificationPage(QtWidgets.QWidget):
         dict, name="on-update-message"
     )
 
-    _ICON_INFO = QtGui.QPixmap(":/ui/media/btn_icons/info.svg")
-    _ICON_WARN = QtGui.QPixmap(":/ui/media/btn_icons/troubleshoot.svg")
-    _ICON_ERROR = QtGui.QPixmap(":/ui/media/btn_icons/error.svg")
-
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
+        self._ICON_INFO = QtGui.QPixmap(":/ui/media/btn_icons/info.svg")
+        self._ICON_WARN = QtGui.QPixmap(":/ui/media/btn_icons/troubleshoot.svg")
+        self._ICON_ERROR = QtGui.QPixmap(":/ui/media/btn_icons/error.svg")
         self._setupUI()
         self.cli_tracking: deque = deque()
         self.selected_item: ListItem | None = None
