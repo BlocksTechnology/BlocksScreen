@@ -373,19 +373,10 @@ class ConfigManager:
                         tgt_mcu = {n: b for n, b in tgt_blocks if n and n.startswith("mcu")}
 
                         merged_lines = []
-                        mcu_seen = set()
                         for name, block in src_blocks:
                             if name and name.startswith("mcu") and name in tgt_mcu:
                                 merged_lines.extend(tgt_mcu[name])
-                                mcu_seen.add(name)
                             else:
-                                merged_lines.extend(block)
-                                if name:
-                                    mcu_seen.add(name)
-
-                        for name, block in tgt_blocks:
-                            if name and name.startswith("mcu") and name not in mcu_seen:
-                                merged_lines.append("\n")
                                 merged_lines.extend(block)
 
                         merged = "".join(merged_lines) + tgt_save
@@ -400,6 +391,8 @@ class ConfigManager:
 
                     appendix = []
                     for section in src_cfg.sections():
+                        if section.startswith("mcu"):
+                            continue
                         if not target_cfg.has_section(section):
                             appendix.append((section, True, list(src_cfg.items(section))))
                         else:
@@ -492,6 +485,7 @@ class ConfigManager:
             self.cleanup_broken_symlinks(self.config_dir)
             _missing = self._get_missing_symlinks(self.config_dir, self.repo)
             self._symlink_config(_missing)
+
 
             self._cpy_cfg_files()
         except NotADirectoryError as e:
