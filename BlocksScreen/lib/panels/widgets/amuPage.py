@@ -33,6 +33,8 @@ class AMUpage(QtWidgets.QStackedWidget):
         self.amu_manager: AMUManager = amu_manager
         self._build_ui()
 
+        self.main_back_button.clicked.connect(self.request_back)
+
         self.amu_manager.mmu_state_changed.connect(self.on_mmu_state_changed)
         self.on_mmu_state_changed(self.amu_manager.get_state())
         self.info_panel._lbl_color.editingFinished.connect(

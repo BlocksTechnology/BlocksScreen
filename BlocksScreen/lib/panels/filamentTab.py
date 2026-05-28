@@ -21,6 +21,7 @@ from lib.utils.blocks_frame import BlocksCustomFrame
 from lib.utils.blocks_linedit import BlocksCustomLinEdit
 from lib.utils.icon_button import IconButton
 from lib.utils.list_model import EntryDelegate, EntryListModel, ListItem
+from lib.panels.widgets.spoolmanPage import SpoolmanPage
 
 
 logger = logging.getLogger(__name__)
@@ -48,10 +49,9 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self.amu_manager: AMUManager = amu_manager
         self.amu_configured = False
 
-        self.setup_ui()
-        self.run_gcode.connect(self.ws.api.run_gcode)
+        self.ui = self.setupUi()
+        self.change_page(self.indexOf(self.ui))
 
-    def setup_ui(self):
         self._previous_gate_states: dict[int, bool] = {}
         self.pre_gate_idx = -1
         self.popup_gates: Deque = deque()
@@ -61,11 +61,59 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self._color_target_field = None
 
         self.fallback = QtCore.QTimer(self)
-        self.fallback.singleShot(5000,self.without_amu)
+        self.fallback.setInterval(5000)
+        self.fallback.timeout.connect(self.without_amu)
+        self.fallback.start()
 
         self.amu_manager.mmu_state_changed.connect(self.on_mmu_state_changed)
         self.amu_manager.pre_gate_changed.connect(self.on_pre_gate)
         self._setup_pre_gate_popup()
+
+        self.spoolmanPanel = SpoolmanPage(self)
+        self.addWidget(self.spoolmanPanel)
+        self.fp_button_2.clicked.connect(
+            lambda: self.change_page(self.indexOf(self.spoolmanPanel))
+        )
+        self.spoolmanPanel.request_back.connect(self.request_back)
+
+        self.spoolmanPanel.request_spools.connect(
+            lambda: self.ws.api.spoolman_proxy(
+                "GET", "/v1/spool", callback=self.spoolmanPanel.on_spools_received
+            )
+        )
+        self.spoolmanPanel.request_get_spool_id.connect(
+            lambda: self.ws.api.get_spool_id()
+        )
+        self.spoolmanPanel.request_delete_spool.connect(
+            lambda spool_id: self.ws.api.delete_spool(
+                spool_id, callback=self.spoolmanPanel.on_delete_spool_result
+            )
+        )
+        self.spoolmanPanel.request_filaments.connect(
+            lambda: self.ws.api.get_filaments(
+                callback=self.spoolmanPanel.on_filaments_received
+            )
+        )
+        self.spoolmanPanel.request_add_spool.connect(
+            lambda filament_id, body: self.ws.api.add_spool(
+                filament_id, body, callback=self.spoolmanPanel.on_add_spool_result
+            )
+        )
+        self.spoolmanPanel.request_add_filament.connect(
+            lambda body: self.ws.api.add_filament(
+                body, callback=self.spoolmanPanel.on_add_filament_result
+            )
+        )
+
+        self.run_gcode.connect(self.ws.api.run_gcode)
+
+    def change_page(self, index: int) -> None:
+        """Requests a page change page to the global manager
+
+        Args:
+            index (int): page index
+        """
+        self.request_change_page.emit(1, index)
 
     def _setup_pre_gate_popup(self) -> None:
         self._numpad = CustomNumpad(self)
@@ -231,7 +279,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
         back_btn.setFixedSize(QtCore.QSize(60, 60))
         back_btn.setFlat(True)
         back_btn.setPixmap(QtGui.QPixmap(":/ui/media/btn_icons/back.svg"))
-        back_btn.clicked.connect(lambda: self._popup_stack.setCurrentIndex(0))
+        back_btn.clicked.connect(lambda: self._popup_stack.change_page(0))
         hdr.addWidget(back_btn)
 
         title_font = QtGui.QFont()
@@ -293,6 +341,50 @@ class FilamentTab(QtWidgets.QStackedWidget):
         frame_lay.addWidget(self._spool_load_widget, 1)
         self._spool_list_view.hide()
 
+        self._add_spool_page = AddSpoolPage(self)
+        self._add_filament_page = AddFilamentPage(self)
+
+        self._add_stack = QtWidgets.QStackedWidget()
+        self._add_stack.addWidget(self._add_spool_page)  # index 0
+        self._add_stack.addWidget(self._add_filament_page)  # index 1
+
+        self._add_filament_page.accepted.connect(self._add_spool_page.reset)
+
+        self._add_popup = BasePopup(self, False, False)
+        self._add_popup.add_widget(self._add_stack)
+
+        self._add_spool_page.request_filaments.connect(
+            lambda: self.ws.api.get_filaments(
+                callback=self._add_spool_page.on_filaments_received
+            )
+        )
+        self._add_spool_page.cancelled.connect(self._add_popup.hide)
+
+        self._add_spool_page.request_add_spool.connect(
+            lambda filament_id, body: self.ws.api.add_spool(
+                filament_id,
+                body,
+                callback=self._add_spool_page.on_add_spool_result,
+            )
+        )
+        self._add_spool_page.accepted.connect(self._add_popup.hide)
+
+        self._add_spool_page.open_add_filament.connect(
+            lambda: self._add_stack.change_page(1)
+        )
+
+        self._add_filament_page.request_add_filament.connect(
+            lambda body: self.ws.api.add_filament(
+                body,
+                callback=self._add_filament_page.on_add_filament_result,
+            )
+        )
+
+        self._add_filament_page.accepted.connect(lambda: self._add_stack.change_page(0))
+        self._add_filament_page.cancelled.connect(
+            lambda: self._add_stack.change_page(0)
+        )
+
         root.addWidget(frame, 1)
         return page
 
@@ -311,7 +403,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self.pre_gate_idx = self.popup_gates.popleft()
         gate = self.pre_gate_idx["gate"]
         self._popup_title_lbl.setText(f"Filament Detected — Gate {gate}")
-        self._popup_stack.setCurrentIndex(0)
+        self._popup_stack.change_page(0)
         self._selected_spool_id = -2
         self.popup.show()
 
@@ -396,12 +488,12 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self._popup_material.setText(filament.get("material") or "")
         temp = filament.get("settings_extruder_temp")
         self._popup_temp.setText(str(temp) if temp is not None else "")
-        self._popup_stack.setCurrentIndex(0)
+        self._popup_stack.change_page(0)
 
     def _on_spoolman_clicked(self):
         self._spool_list_view.hide()
         self._spool_load_widget.show()
-        self._popup_stack.setCurrentIndex(1)
+        self._popup_stack.change_page(1)
         self.ws.api.spoolman_proxy("GET", "/v1/spool", callback=self.on_spools_received)
 
     @staticmethod
@@ -505,7 +597,6 @@ class FilamentTab(QtWidgets.QStackedWidget):
             self._color_target_field.editingFinished.emit()
             self._color_target_field = None
 
-
     def on_mmu_state_changed(self, mmu_state):
         if not self._previous_gate_states and mmu_state.gates:
             for gate_info in mmu_state.gates:
@@ -520,6 +611,9 @@ class FilamentTab(QtWidgets.QStackedWidget):
                 self.setMinimumSize(710, 420)
                 self.amupage = AMUpage(self.amu_manager, parent=self)
                 self.addWidget(self.amupage)
+                self.fp_button_1.clicked.connect(
+                    lambda: self.change_page(self.indexOf(self.amupage))
+                )
                 self.amupage.request_back.connect(self.request_back)
                 self.amupage.request_gate_map.connect(self.run_gcode)
                 self.amupage.request_numpad[
@@ -527,52 +621,6 @@ class FilamentTab(QtWidgets.QStackedWidget):
                 ].connect(self._open_numpad)
                 self.amupage.request_keyboard.connect(self._on_show_keyboard)
                 self.amupage.request_color_wheel.connect(self._open_color_wheel)
-
-                self._add_spool_page = AddSpoolPage(self)
-                self._add_filament_page = AddFilamentPage(self)
-
-                self._add_stack = QtWidgets.QStackedWidget()
-                self._add_stack.addWidget(self._add_spool_page)  # index 0
-                self._add_stack.addWidget(self._add_filament_page)  # index 1
-
-                self._add_filament_page.accepted.connect(self._add_spool_page.reset)
-
-                self._add_popup = BasePopup(self, False, False)
-                self._add_popup.add_widget(self._add_stack)
-
-                self._add_spool_page.request_filaments.connect(
-                    lambda: self.ws.api.get_filaments(
-                        callback=self._add_spool_page.on_filaments_received
-                    )
-                )
-                self._add_spool_page.cancelled.connect(self._add_popup.hide)
-
-                self._add_spool_page.request_add_spool.connect(
-                    lambda filament_id, body: self.ws.api.add_spool(
-                        filament_id,
-                        body,
-                        callback=self._add_spool_page.on_add_spool_result,
-                    )
-                )
-                self._add_spool_page.accepted.connect(self._add_popup.hide)
-
-                self._add_spool_page.open_add_filament.connect(
-                    lambda: self._add_stack.setCurrentIndex(1)
-                )
-
-                self._add_filament_page.request_add_filament.connect(
-                    lambda body: self.ws.api.add_filament(
-                        body,
-                        callback=self._add_filament_page.on_add_filament_result,
-                    )
-                )
-
-                self._add_filament_page.accepted.connect(
-                    lambda: self._add_stack.setCurrentIndex(0)
-                )
-                self._add_filament_page.cancelled.connect(
-                    lambda: self._add_stack.setCurrentIndex(0)
-                )
 
             self.amu_configured = True
 
@@ -599,3 +647,115 @@ class FilamentTab(QtWidgets.QStackedWidget):
     def _on_add_spool_request(self):
         self._add_spool_page.reset()
         self._add_popup.show()
+
+    def setupUi(self):
+        self.resize(710, 410)
+        self.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
+        Hblank = QtWidgets.QWidget(self)
+        Hblank.setMinimumSize(QtCore.QSize(60, 60))
+        Hblank.setMaximumSize(QtCore.QSize(60, 60))
+
+        widget = QtWidgets.QWidget()
+        widget.setMinimumSize(QtCore.QSize(710, 410))
+        widget.setMaximumSize(QtCore.QSize(710, 410))
+        self.setObjectName("filament_page")
+        self.verticalLayout = QtWidgets.QVBoxLayout()
+        self.verticalLayout.setObjectName("verticalLayout")
+        self.fp_header_layout = QtWidgets.QHBoxLayout()
+        self.fp_header_layout.setObjectName("fp_header_layout")
+
+        self.fp_header_layout.addWidget(Hblank)
+        self.fp_header_title = QtWidgets.QLabel(parent=self)
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
+            QtWidgets.QSizePolicy.Policy.Fixed,
+        )
+        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setVerticalStretch(0)
+        sizePolicy.setHeightForWidth(
+            self.fp_header_title.sizePolicy().hasHeightForWidth()
+        )
+        self.fp_header_title.setSizePolicy(sizePolicy)
+        self.fp_header_title.setMinimumSize(QtCore.QSize(300, 60))
+        self.fp_header_title.setMaximumSize(QtCore.QSize(16777215, 60))
+        font = QtGui.QFont()
+        font.setFamily("Momcake")
+        font.setPointSize(24)
+        font.setBold(True)
+        font.setWeight(75)
+        self.fp_header_title.setFont(font)
+        self.fp_header_title.setStyleSheet("background: transparent; color: white;")
+        self.fp_header_title.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.fp_header_title.setObjectName("fp_header_title")
+        self.fp_header_layout.addWidget(self.fp_header_title)
+
+        self.fp_header_layout.addWidget(Hblank)
+
+        self.verticalLayout.addLayout(self.fp_header_layout)
+        self.fp_content_layout = QtWidgets.QGridLayout()
+        self.fp_content_layout.setObjectName("fp_content_layout")
+
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Fixed
+        )
+        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setVerticalStretch(0)
+        font = QtGui.QFont()
+        font.setFamily("Momcake")
+        font.setPointSize(19)
+        font.setItalic(False)
+        font.setStyleStrategy(QtGui.QFont.StyleStrategy.PreferAntialias)
+
+        self.fp_button_1 = BlocksCustomButton(parent=self)
+        self.fp_button_1.setSizePolicy(sizePolicy)
+        self.fp_button_1.setMinimumSize(QtCore.QSize(250, 80))
+        self.fp_button_1.setMaximumSize(QtCore.QSize(250, 80))
+        self.fp_button_1.setFont(font)
+        self.fp_button_1.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.NoContextMenu)
+        self.fp_button_1.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
+        self.fp_button_1.setProperty(
+            "icon_pixmap",
+            QtGui.QPixmap(":/filament_related/media/btn_icons/load_filament.svg"),
+        )
+        self.fp_button_1.setObjectName("fp_button_1")
+
+        self.fp_content_layout.addWidget(self.fp_button_1, 1, 0, 1, 1)
+
+        self.fp_button_2 = BlocksCustomButton(parent=self)
+        self.fp_button_2.setSizePolicy(sizePolicy)
+        self.fp_button_2.setMinimumSize(QtCore.QSize(10, 80))
+        self.fp_button_2.setMaximumSize(QtCore.QSize(250, 80))
+        self.fp_button_2.setFont(font)
+        self.fp_button_2.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.NoContextMenu)
+        self.fp_button_2.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
+        self.fp_button_2.setProperty(
+            "icon_pixmap",
+            QtGui.QPixmap("/home/raspi/Untitled.svg"),
+        )
+        self.fp_button_2.setObjectName("fp_button_2")
+
+        self.fp_content_layout.addWidget(self.fp_button_2, 1, 1, 1, 1)
+
+        self.verticalLayout.addLayout(self.fp_content_layout)
+        widget.setLayout(self.verticalLayout)
+
+        self.fp_content_layout.setRowMinimumHeight(
+            0, int(87.5)
+        )  # 87.5 to compensate for not having margin on the rest of the buttons
+        self.fp_content_layout.setRowMinimumHeight(
+            2, int(87.5)
+        )  # dont ask how i got this value , it was try and repeat
+
+        self.addWidget(widget)
+
+        self.retranslateUi()
+
+    def retranslateUi(self):
+        _translate = QtCore.QCoreApplication.translate
+        self.setWindowTitle(_translate("filaemtnStackedWidget", "StackedWidget"))
+        self.fp_header_title.setText(_translate("filaemtnStackedWidget", "Filament"))
+
+        self.fp_button_1.setText(
+            _translate("filaemtnStackedWidget", "Filament\nControl")
+        )
+        self.fp_button_2.setText(_translate("filaemtnStackedWidget", "Spoolman"))

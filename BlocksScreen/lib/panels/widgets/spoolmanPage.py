@@ -31,6 +31,9 @@ class SpoolmanPage(QtWidgets.QWidget):
     request_add_filament: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         dict, name="request-add-filament"
     )
+    request_back: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        name="request_back"
+    )
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -42,6 +45,8 @@ class SpoolmanPage(QtWidgets.QWidget):
         self._setupUI()
         self._setup_add_popup()
         self.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
+
+        self.main_back_button.clicked.connect(self.request_back)
 
         self._add_spool_page.request_filaments.connect(self.request_filaments)
         self._add_spool_page.request_add_spool.connect(self.request_add_spool)
@@ -355,11 +360,16 @@ class SpoolmanPage(QtWidgets.QWidget):
         self.header_title.setStyleSheet("color: white;")
         self.header_title.setFont(title_font)
         self.header_title.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
-        header_layout.addWidget(self.header_title, 1)
+        header_layout.addWidget(self.header_title)
 
-        blank = QtWidgets.QWidget(self)
-        blank.setFixedSize(60, 60)
-        header_layout.addWidget(blank)
+        self.main_back_button = IconButton(parent=self)
+        self.main_back_button.setMinimumSize(QtCore.QSize(60, 60))
+        self.main_back_button.setMaximumSize(QtCore.QSize(60, 60))
+        self.main_back_button.setProperty(
+            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/back.svg")
+        )
+        self.main_back_button.setObjectName("main_back_button")
+        header_layout.addWidget(self.main_back_button)
 
         page_layout.addLayout(header_layout)
 
