@@ -494,7 +494,6 @@ class ConfigManager:
             self._symlink_config(_missing)
 
             self._cpy_cfg_files()
-            exit(1)
         except NotADirectoryError as e:
             _logger.error("%s" % e)
         except FileNotFoundError as e:
