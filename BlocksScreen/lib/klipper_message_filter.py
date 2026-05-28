@@ -195,6 +195,13 @@ RULES: tuple[MessageRule, ...] = (
     ),
     MessageRule(
         source=MessageSource.GCODE_ERROR,
+        matcher=_sub("runout detected on"),
+        display="Filament Runout",
+        hint="Replace the empty spool and resume",
+        severity=Severity.ERROR,
+    ),
+    MessageRule(
+        source=MessageSource.GCODE_ERROR,
         matcher=_sub("flowguard"),
         display="Filament Tangle Detected",
         hint="Clear tangle in filament path and resume",
