@@ -160,6 +160,9 @@ def copy_file_simple(orig: pathlib.Path | str, dest: pathlib.Path | str):
 class ConfigManager:
     def __init__(self, config) -> None:
         self.config = config.get_section("configuration_manager", fallback=None)
+        if not self.config:
+            _logger.error("Failed Configuration Manager Start, skipping")
+            return
         self.repo = pathlib.Path(
             self.config.get("config_repo", default="")
         ).expanduser()
@@ -485,8 +488,6 @@ class ConfigManager:
             self.cleanup_broken_symlinks(self.config_dir)
             _missing = self._get_missing_symlinks(self.config_dir, self.repo)
             self._symlink_config(_missing)
-
-
             self._cpy_cfg_files()
         except NotADirectoryError as e:
             _logger.error("%s" % e)
