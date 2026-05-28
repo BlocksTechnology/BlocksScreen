@@ -276,6 +276,149 @@ def test_re_no_match() -> None:
             "Probe Error",
             Severity.ERROR,
         ),
+        # GCODEs Errors - Eddy probe
+        (
+            MessageSource.GCODE_ERROR,
+            "Must calibrate probe_eddy_current first",
+            "Eddy Not Calibrated",
+            Severity.ERROR,
+        ),
+        (
+            MessageSource.GCODE_ERROR,
+            "probe_eddy_current sensor outage on mcu",
+            "Eddy Sensor Offline",
+            Severity.ERROR,
+        ),
+        (
+            MessageSource.GCODE_ERROR,
+            "Unable to obtain probe_eddy_current sensor readings",
+            "Eddy No Readings",
+            Severity.ERROR,
+        ),
+        (
+            MessageSource.GCODE_ERROR,
+            "tap detected too close to start of move",
+            "Eddy Early Trigger",
+            Severity.WARNING,
+        ),
+        (
+            MessageSource.GCODE_ERROR,
+            "unable to detect tap: no trigger",
+            "Eddy Tap Failed",
+            Severity.ERROR,
+        ),
+        (
+            MessageSource.GCODE_ERROR,
+            "frequency stops decreasing at step 1.250",
+            "Eddy Calibration Failed",
+            Severity.ERROR,
+        ),
+        (
+            MessageSource.GCODE_ERROR,
+            "frequency too noisy at step 2.000 -> 3.500",
+            "Eddy Frequency Noise",
+            Severity.WARNING,
+        ),
+        (
+            MessageSource.GCODE_ERROR,
+            "eddy: gaps in the data: 0.123 > 0.050",
+            "Eddy Data Gap",
+            Severity.ERROR,
+        ),
+        (
+            MessageSource.GCODE_ERROR,
+            "eddy: clkin frequency too low: 1000 < 2000",
+            "Eddy Clock Error",
+            Severity.ERROR,
+        ),
+        (
+            MessageSource.GCODE_ERROR,
+            "insufficient lift (0.000050 vs 0.000100)",
+            "Eddy Low Lift",
+            Severity.ERROR,
+        ),
+        (
+            MessageSource.GCODE_ERROR,
+            "invalid free air slope (s=0.001 s2=0.002)",
+            "Eddy Bad Baseline",
+            Severity.ERROR,
+        ),
+        # GCODEs Errors - Bed leveling
+        (
+            MessageSource.GCODE_ERROR,
+            "Must run Z_TILT_ADJUST before bed_mesh",
+            "Z Tilt Required",
+            Severity.WARNING,
+        ),
+        # GCODEs Errors - Resonance tester
+        (
+            MessageSource.GCODE_ERROR,
+            "no accelerometers specified to measure",
+            "No Accelerometer",
+            Severity.ERROR,
+        ),
+        (
+            MessageSource.GCODE_ERROR,
+            "measured no data on the accelerometer",
+            "Accelerometer No Data",
+            Severity.ERROR,
+        ),
+        (
+            MessageSource.GCODE_ERROR,
+            "Insufficient maximum z velocity for the test",
+            "Z Speed Too Low",
+            Severity.WARNING,
+        ),
+        (
+            MessageSource.GCODE_ERROR,
+            "Insufficient maximum z acceleration for the test",
+            "Z Accel Too Low",
+            Severity.WARNING,
+        ),
+        (
+            MessageSource.GCODE_ERROR,
+            "Invalid adxl345 id (got 0x00 vs 0xe5)",
+            "ADXL Chip Not Found",
+            Severity.ERROR,
+        ),
+        (
+            MessageSource.GCODE_ERROR,
+            "Failed to set adxl345 register",
+            "ADXL Connection Error",
+            Severity.ERROR,
+        ),
+        (
+            MessageSource.GCODE_ERROR,
+            "no accelerometer measurements found",
+            "No Measurements",
+            Severity.ERROR,
+        ),
+        # GCODEs Errors - General (macro / LED)
+        (
+            MessageSource.GCODE_ERROR,
+            "Error loading template 'gcode_macro START_PRINT'",
+            "Macro Syntax Error",
+            Severity.ERROR,
+        ),
+        (
+            MessageSource.GCODE_ERROR,
+            "Macro called recursively",
+            "Macro Loop Detected",
+            Severity.ERROR,
+        ),
+        (
+            MessageSource.GCODE_ERROR,
+            "neopixel chain too long for mcu bitbang",
+            "Too Many LEDs",
+            Severity.ERROR,
+        ),
+        # GCODEs Errors - Kalico / Danger Klipper
+        (
+            MessageSource.GCODE_ERROR,
+            "error on unused option 'extruder' 'pressure_advance_smooth_time'",
+            "Unused Config Option",
+            Severity.WARNING,
+        ),
         # No Match
         (MessageSource.GCODE_ERROR, "unknown gcode error xyz", None, None),
         (MessageSource.GCODE_ECHO, "some echo message", None, None),
