@@ -1,8 +1,6 @@
 #!/usr/bin/python3
-import asyncio
-import hashlib
 import configparser
-import io
+import hashlib
 import logging
 import os
 import pathlib
@@ -11,7 +9,6 @@ import shutil
 import subprocess
 import threading
 from datetime import datetime
-from io import StringIO, TextIOWrapper
 from typing import Literal
 
 HOME = pathlib.Path.home()
@@ -358,7 +355,7 @@ class ConfigManager:
                             name = None
                             block = []
                             for line in lines:
-                                m = re.match(r'^\[\s*(.+?)\s*\]\s*$', line)
+                                m = re.match(r"^\[\s*(.+?)\s*\]\s*$", line)
                                 if m:
                                     if block:
                                         blocks.append((name, block))
@@ -373,7 +370,9 @@ class ConfigManager:
                         src_blocks = _section_blocks(_sfl.splitlines(keepends=True))
                         tgt_blocks = _section_blocks(tgt_header)
 
-                        tgt_mcu = {n: b for n, b in tgt_blocks if n and n.startswith("mcu")}
+                        tgt_mcu = {
+                            n: b for n, b in tgt_blocks if n and n.startswith("mcu")
+                        }
 
                         merged_lines = []
                         for name, block in src_blocks:
@@ -397,10 +396,13 @@ class ConfigManager:
                         if section.startswith("mcu"):
                             continue
                         if not target_cfg.has_section(section):
-                            appendix.append((section, True, list(src_cfg.items(section))))
+                            appendix.append(
+                                (section, True, list(src_cfg.items(section)))
+                            )
                         else:
                             sec_missing = [
-                                (o, v) for o, v in src_cfg.items(section)
+                                (o, v)
+                                for o, v in src_cfg.items(section)
                                 if not target_cfg.has_option(section, o)
                             ]
                             if sec_missing:
@@ -408,7 +410,11 @@ class ConfigManager:
 
                     for opt, val in src_cfg.defaults().items():
                         if not target_cfg.defaults().get(opt):
-                            items = appendix[-1][2] if appendix and appendix[-1][0] == "DEFAULT" else None
+                            items = (
+                                appendix[-1][2]
+                                if appendix and appendix[-1][0] == "DEFAULT"
+                                else None
+                            )
                             if items is not None:
                                 items.append((opt, val))
                             else:
