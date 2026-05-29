@@ -60,11 +60,6 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self._current_field: QtWidgets.QLineEdit | None = None
         self._color_target_field = None
 
-        self.fallback = QtCore.QTimer(self)
-        self.fallback.setInterval(5000)
-        self.fallback.timeout.connect(self.without_amu)
-        self.fallback.start()
-
         self.amu_manager.mmu_state_changed.connect(self.on_mmu_state_changed)
         self.amu_manager.pre_gate_changed.connect(self.on_pre_gate)
         self._setup_pre_gate_popup()
@@ -103,6 +98,16 @@ class FilamentTab(QtWidgets.QStackedWidget):
             lambda body: self.ws.api.add_filament(
                 body, callback=self.spoolmanPanel.on_add_filament_result
             )
+        )
+
+        self._basic_panel = BasicFilamentPanel(self.printer, self.cfg, parent=self)
+        self._basic_panel.run_gcode.connect(self.run_gcode)
+        self._basic_panel.call_load_panel.connect(self.call_load_panel)
+        self._basic_panel.request_back.connect(self.request_back)
+        self._basic_panel.request_change_tab.connect(self.request_change_tab)
+        self.addWidget(self._basic_panel)
+        self.fp_button_1.clicked.connect(
+            lambda: self.change_page(self.indexOf(self._basic_panel))
         )
 
         self.run_gcode.connect(self.ws.api.run_gcode)
@@ -607,18 +612,33 @@ class FilamentTab(QtWidgets.QStackedWidget):
 
         if not self.amu_configured:
             if len(mmu_state.gates) > 0:
-                self.fallback.stop()
-                self.setMinimumSize(710, 420)
                 self.amupage = AMUpage(self.amu_manager, parent=self)
                 self.addWidget(self.amupage)
+                try:
+                    self.removeWidget(self._basic_panel)
+                    self._basic_panel.deleteLater()
+                    self.fp_button_1.disconnect()
+                except TypeError:
+                    pass
                 self.fp_button_1.clicked.connect(
                     lambda: self.change_page(self.indexOf(self.amupage))
                 )
                 self.amupage.request_back.connect(self.request_back)
+                self.amupage.request_change_tab.connect(self.request_change_tab)
                 self.amupage.request_gate_map.connect(self.run_gcode)
                 self.amupage.request_numpad[
                     str, int, "PyQt_PyObject", int, int
                 ].connect(self._open_numpad)
+                self.printer.print_stats_update[str, str].connect(
+                    self.amupage.on_print_stats_update
+                )
+                self.printer.print_stats_update[str, dict].connect(
+                    self.amupage.on_print_stats_update
+                )
+                self.printer.print_stats_update[str, float].connect(
+                    self.amupage.on_print_stats_update
+                )
+
                 self.amupage.request_keyboard.connect(self._on_show_keyboard)
                 self.amupage.request_color_wheel.connect(self._open_color_wheel)
 
@@ -634,15 +654,6 @@ class FilamentTab(QtWidgets.QStackedWidget):
         if mmu_state.action == "Loading" or mmu_state.action == "Unloading":
             self.load_state = True
             self.call_load_panel.emit(True, mmu_state.action)
-
-    def without_amu(self) -> None:
-        self.resize(710, 410)
-        self._basic_panel = BasicFilamentPanel(self.printer, self.cfg, parent=self)
-        self._basic_panel.run_gcode.connect(self.run_gcode)
-        self._basic_panel.call_load_panel.connect(self.call_load_panel)
-        self._basic_panel.request_back.connect(self.request_back)
-        self._basic_panel.request_change_tab.connect(self.request_change_tab)
-        self.addWidget(self._basic_panel)
 
     def _on_add_spool_request(self):
         self._add_spool_page.reset()

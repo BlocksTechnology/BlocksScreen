@@ -90,9 +90,6 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         self.panel.filament_page_unload_btn.clicked.connect(
             lambda: self.unload_filament(toolhead=0, temp=250)
         )
-        self.panel.main_back_button.clicked.connect(
-            lambda: self.request_change_tab.emit(0)
-        )
 
         self.printer.unload_filament_update.connect(self.on_unload_filament)
         self.printer.load_filament_update.connect(self.on_load_filament)
@@ -117,25 +114,26 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
     @QtCore.pyqtSlot(str, float, name="on_print_stats_update")
     @QtCore.pyqtSlot(str, str, name="on_print_stats_update")
     def on_print_stats_update(self, field: str, value: dict | float | str) -> None:
-        if isinstance(value, str):
-            if "state" in field:
-                self.state = value
-                if value in ("printing", "pausing", "paused", "resuming"):
-                    self.panel.main_back_button.show()
-                    self.panel.spacerItem1.changeSize(
-                        60,
-                        0,
-                        QtWidgets.QSizePolicy.Policy.Minimum,
-                        QtWidgets.QSizePolicy.Policy.Minimum,
-                    )
-                if value in ("standby"):
-                    self.panel.main_back_button.hide()
-                    self.panel.spacerItem1.changeSize(
-                        0,
-                        0,
-                        QtWidgets.QSizePolicy.Policy.Minimum,
-                        QtWidgets.QSizePolicy.Policy.Minimum,
-                    )
+        if "state" in field:
+            self.state = value
+            if value in ("printing", "paused"):
+                try:
+                    self.panel.main_back_button.disconnect()
+                except TypeError:
+                    pass
+
+                self.panel.main_back_button.clicked.connect(
+                    lambda: self.request_change_tab.emit(0)
+                )
+
+            else:
+                try:
+                    self.panel.main_back_button.disconnect()
+                except TypeError:
+                    pass
+                self.panel.main_back_button.clicked.connect(
+                    lambda: self.request_back.emit()
+                )
 
     @QtCore.pyqtSlot(str, str, bool, name="on_filament_sensor_update")
     def on_filament_sensor_update(self, sensor_name: str, parameter: str, value: bool):

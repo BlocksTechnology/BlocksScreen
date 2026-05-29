@@ -26,6 +26,9 @@ class AMUpage(QtWidgets.QStackedWidget):
     request_color_wheel: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         "PyQt_PyObject", name="request-color-wheel"
     )
+    request_change_tab: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        int, name="request_change_tab"
+    )
 
     def __init__(self, amu_manager, parent=None):
         super().__init__(parent)
@@ -83,6 +86,32 @@ class AMUpage(QtWidgets.QStackedWidget):
         self.info_panel.checkRequested.connect(self.amu_manager.check_gate)
 
         self.carousel.selectionChanged.connect(self._select_gate)
+
+    @QtCore.pyqtSlot(str, dict, name="on_print_stats_update")
+    @QtCore.pyqtSlot(str, float, name="on_print_stats_update")
+    @QtCore.pyqtSlot(str, str, name="on_print_stats_update")
+    def on_print_stats_update(self, field: str, value: dict | float | str) -> None:
+        if isinstance(value, str):
+            if "state" in field:
+                self.state = value
+                if value in ("printing", "pausing", "paused", "resuming"):
+                    try:
+                        self.main_back_button.clicked.disconnect()
+                    except TypeError:
+                        pass
+
+                    self.main_back_button.clicked.connect(
+                        lambda: self.request_change_tab.emit(0)
+                    )
+
+                else:
+                    try:
+                        self.main_back_button.clicked.disconnect()
+                    except TypeError:
+                        pass
+                    self.main_back_button.clicked.connect(
+                        lambda: self.request_back.emit()
+                    )
 
     def on_mmu_state_changed(self, mmu_state):
         if mmu_state is None:
