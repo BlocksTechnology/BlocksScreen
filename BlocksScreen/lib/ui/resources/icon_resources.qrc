@@ -75,6 +75,14 @@
     <file>media/btn_icons/speed.svg</file>
   </qresource>
   <qresource prefix="filament_related">
+    <file>media/btn_icons/add spool.svg</file>
+    <file>media/btn_icons/add filament.svg</file>
+    <file>media/btn_icons/spoolman.svg</file>
+    <file>media/btn_icons/base dados spool 2.svg</file>
+    <file>media/btn_icons/base dados spool 1.svg</file>
+    <file>media/btn_icons/check gate 3.svg</file>
+    <file>media/btn_icons/check gate 2.svg</file>
+    <file>media/btn_icons/check gate 1.svg</file>
     <file>media/btn_icons/edit.svg</file>
     <file>media/btn_icons/eject.svg</file>
     <file>media/btn_icons/humity_and_temp.svg</file>

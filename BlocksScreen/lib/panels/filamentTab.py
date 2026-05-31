@@ -258,6 +258,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
         spoolman_btn.setFixedSize(230, 80)
         spoolman_btn.setText("Spoolman")
         spoolman_btn.setFont(font)
+        spoolman_btn.setPixmap(QtGui.QPixmap(":/filament_related/media/btn_icons/spoolman.svg"))
         spoolman_btn.clicked.connect(self._on_spoolman_clicked)
         btn_row.addWidget(spoolman_btn)
 
@@ -265,6 +266,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
         accept_btn.setFixedSize(230, 80)
         accept_btn.setText("Accept")
         accept_btn.setFont(font)
+        accept_btn.setPixmap(QtGui.QPixmap(":/dialog/media/btn_icons/yes.svg"))
         accept_btn.clicked.connect(self.on_popup_accept)
         btn_row.addWidget(accept_btn)
 
@@ -408,7 +410,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self.pre_gate_idx = self.popup_gates.popleft()
         gate = self.pre_gate_idx["gate"]
         self._popup_title_lbl.setText(f"Filament Detected — Gate {gate}")
-        self._popup_stack.change_page(0)
+        self._popup_stack.setCurrentIndex(0)
         self._selected_spool_id = -2
         self.popup.show()
 
@@ -741,7 +743,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self.fp_button_2.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
         self.fp_button_2.setProperty(
             "icon_pixmap",
-            QtGui.QPixmap("/home/raspi/Untitled.svg"),
+            QtGui.QPixmap(":/filament_related/media/btn_icons/base dados spool 1.svg"),
         )
         self.fp_button_2.setObjectName("fp_button_2")
 

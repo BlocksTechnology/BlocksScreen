@@ -436,7 +436,7 @@ class SpoolInfoPanel(QtWidgets.QWidget):
         )
         self._btn_purge.setFixedSize(140, 60)
         self._btn_cut = BlocksCustomButton(self)
-        self._btn_cut.setPixmap(QtGui.QPixmap(":/load_icons/media/btn_icons/cut.svg"))
+        self._btn_cut.setPixmap(QtGui.QPixmap(":/filament_related/media/btn_icons/check gate 1.svg"))
         self._btn_cut.setText("Check\nGates")
         self._btn_cut.setFont(font)
         self._btn_cut.setFixedSize(140, 60)
