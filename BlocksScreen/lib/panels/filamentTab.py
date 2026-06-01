@@ -53,7 +53,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self.change_page(self.indexOf(self.ui))
 
         self._previous_gate_states: dict[int, bool] = {}
-        self.pre_gate_idx = -1
+        self.pre_gate_idx = {}
         self.popup_gates: Deque = deque()
         self._selected_spool_id: int = -1
         self._spool_id_map: dict[str, dict] = {}
@@ -286,7 +286,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
         back_btn.setFixedSize(QtCore.QSize(60, 60))
         back_btn.setFlat(True)
         back_btn.setPixmap(QtGui.QPixmap(":/ui/media/btn_icons/back.svg"))
-        back_btn.clicked.connect(lambda: self._popup_stack.change_page(0))
+        back_btn.clicked.connect(lambda: self._popup_stack.setCurrentIndex(0))
         hdr.addWidget(back_btn)
 
         title_font = QtGui.QFont()
@@ -377,7 +377,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self._add_spool_page.accepted.connect(self._add_popup.hide)
 
         self._add_spool_page.open_add_filament.connect(
-            lambda: self._add_stack.change_page(1)
+            lambda: self._add_stack.setCurrentIndex(1)
         )
 
         self._add_filament_page.request_add_filament.connect(
@@ -387,9 +387,9 @@ class FilamentTab(QtWidgets.QStackedWidget):
             )
         )
 
-        self._add_filament_page.accepted.connect(lambda: self._add_stack.change_page(0))
+        self._add_filament_page.accepted.connect(lambda: self._add_stack.setCurrentIndex(0))
         self._add_filament_page.cancelled.connect(
-            lambda: self._add_stack.change_page(0)
+            lambda: self._add_stack.setCurrentIndex(0)
         )
 
         root.addWidget(frame, 1)
@@ -495,12 +495,12 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self._popup_material.setText(filament.get("material") or "")
         temp = filament.get("settings_extruder_temp")
         self._popup_temp.setText(str(temp) if temp is not None else "")
-        self._popup_stack.change_page(0)
+        self._popup_stack.setCurrentIndex(0)
 
     def _on_spoolman_clicked(self):
         self._spool_list_view.hide()
         self._spool_load_widget.show()
-        self._popup_stack.change_page(1)
+        self._popup_stack.setCurrentIndex(1)
         self.ws.api.spoolman_proxy("GET", "/v1/spool", callback=self.on_spools_received)
 
     @staticmethod
