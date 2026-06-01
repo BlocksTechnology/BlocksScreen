@@ -231,10 +231,6 @@ class SpoolmanPage(QtWidgets.QWidget):
             )
             self.model.add_item(item)
 
-        self.model.setData(self.model.index(1), True, EntryListModel.EnableRole)
-        self.on_item_clicked(
-            self.model.data(self.model.index(1), QtCore.Qt.ItemDataRole.UserRole)
-        )
 
         self.spool_list_widget.blockSignals(False)
 
