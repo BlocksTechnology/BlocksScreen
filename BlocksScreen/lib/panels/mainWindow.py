@@ -6,6 +6,11 @@ import events
 from configfile import BlocksScreenConfig, get_configparser
 from devices.storage import USBManager
 from lib.files import Files
+from lib.klipper_message_filter import (  # noqa: F405
+    MessageSource,
+    Severity,
+    match_message,
+)
 from lib.machine import MachineControl
 from lib.moonrakerComm import MoonWebSocket
 from lib.network import WifiIconKey
@@ -33,12 +38,6 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 from screensaver import ScreenSaver
 
 _logger = logging.getLogger(__name__)
-
-_GCODE_POPUP_MESSAGES: tuple[tuple[str, str], ...] = (
-    ("filament runout", "Filament Runout"),
-    ("no filament", "No Filament Detected"),
-    ("sensor not in valid range", "Eddy Current Sensor:\nnot in valid range"),
-)
 
 
 def api_handler(func):
@@ -225,7 +224,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.controlPanel.probe_helper_page.handle_error_response
         )
         self.controlPanel.probe_helper_page.show_notifications.connect(
-            self.notiPage.new_notication
+            self._on_probe_notification
         )
         self.controlPanel.disable_popups.connect(self.popup_toggle)
         self.controlPanel.lock_ui.connect(self.set_ui_lock)
@@ -714,6 +713,18 @@ class MainWindow(QtWidgets.QMainWindow):
                             str(_state_call),
                             str(e),
                         )
+            if not self._popup_toggle and status_type in (
+                "shutdown",
+                "error",
+                "disconnected",
+            ):
+                self._emit_filtered_notification(
+                    MessageSource.KLIPPY_STATE,
+                    status_type,
+                    source_id="klippy_state",
+                    fallback=False,
+                    show_popup=True,
+                )
 
     @api_handler
     def _handle_notify_filelist_changed_message(self, method, data, metadata) -> None:
@@ -740,6 +751,47 @@ class MainWindow(QtWidgets.QMainWindow):
                 False,
             )
 
+    def _emit_filtered_notification(
+        self,
+        source: MessageSource,
+        text: str,
+        *,
+        source_id: str = "mainwindow",
+        fallback: bool,
+        show_popup: bool,
+    ) -> bool:
+        rule = match_message(source, text)
+        if rule is not None:
+            self.show_notifications.emit(
+                source_id, rule.full_display, rule.severity.value, show_popup
+            )
+            return True
+        elif fallback:
+            self.show_notifications.emit(
+                source_id, text, Severity.ERROR.value, show_popup
+            )
+            return True
+        return False
+
+    @QtCore.pyqtSlot(str, str, int, bool)
+    def _on_probe_notification(
+        self, _source: str, text: str, _severity: int, show_popup: bool
+    ) -> None:
+        if not self._emit_filtered_notification(
+            MessageSource.GCODE_ERROR,
+            text,
+            source_id="probe_helper",
+            fallback=False,
+            show_popup=show_popup,
+        ):
+            self._emit_filtered_notification(
+                MessageSource.MOONRAKER_ERROR,
+                text,
+                source_id="probe_helper",
+                fallback=True,
+                show_popup=show_popup,
+            )
+
     @api_handler
     def _handle_notify_gcode_response_message(self, method, data, metadata) -> None:
         """Handle websocket gcode responses messages"""
@@ -748,19 +800,19 @@ class MainWindow(QtWidgets.QMainWindow):
         if _gcode_response:
             if self._popup_toggle:
                 return
-            _gcode_msg_type, _message = str(_gcode_response[0]).split(" ", maxsplit=1)
-            _msg_lower = _message.lower()
-            _display = next(
-                (
-                    fmt
-                    for pattern, fmt in _GCODE_POPUP_MESSAGES
-                    if pattern in _msg_lower
-                ),
-                None,
-            )
-            if _gcode_msg_type != "!!" or _display is None:
+            parts = str(_gcode_response[0]).split(" ", maxsplit=1)
+            if len(parts) != 2:
                 return
-            self.show_notifications.emit("mainwindow", _display, 3, True)
+            _gcode_msg_type, _message = parts
+            if _gcode_msg_type == "!!":
+                source = MessageSource.GCODE_ERROR
+            elif _gcode_msg_type == "echo:":
+                source = MessageSource.GCODE_ECHO
+            else:
+                return
+            self._emit_filtered_notification(
+                source, _message, fallback=False, show_popup=True
+            )
 
     @api_handler
     def _handle_error_message(self, method, data, metadata) -> None:
@@ -769,29 +821,28 @@ class MainWindow(QtWidgets.QMainWindow):
         if self._popup_toggle:
             return
 
-        # Suppress error popups while Klippy is disconnected/shutting down.
-        # Those errors are side-effects of the disconnect, not actionable by the user.
         if not self._klippy_ready:
             return
 
         text = data.get("message", str(data)) if isinstance(data, dict) else str(data)
         lower_text = text.lower()
 
-        # Metadata errors - silent, handled by files_manager
         if "metadata" in lower_text:
             self.file_data.handle_metadata_error(text)
             return
 
-        # File not found - silent
         if "file" in lower_text and "does not exist" in lower_text:
             return
 
-        # Directory not found - navigate back + show popup
         if "does not exist" in lower_text:
             self.printPanel.filesPage_widget.on_directory_error()
 
-        # Show popup for all other errors (including directory errors)
-        self.show_notifications.emit("mainwindow", str(text), 3, True)
+        if not self._emit_filtered_notification(
+            MessageSource.MOONRAKER_ERROR, text, fallback=False, show_popup=True
+        ):
+            self._emit_filtered_notification(
+                MessageSource.GCODE_ERROR, text, fallback=True, show_popup=True
+            )
         _logger.error(text)
 
     @api_handler
@@ -809,11 +860,14 @@ class MainWindow(QtWidgets.QMainWindow):
             _bits = data.get("bits", None)
             if not _bits:
                 self.show_notifications.emit(
-                    "mainWindow", "Cpu throttled unknown reason", 2, False
+                    "mainwindow", "Cpu throttled unknown reason", 2, True
                 )
                 return
             _active_flags = [name for name, mask in flags.items() if _bits & mask]
-            self.show_notifications.emit("mainwindow", str(_active_flags), 2, False)
+            for flag in _active_flags:
+                self._emit_filtered_notification(
+                    MessageSource.CPU_THROTTLE, flag, fallback=True, show_popup=True
+                )
         except Exception:
             logging.debug("Error emitting notification for cpu throttled notification.")
             return
