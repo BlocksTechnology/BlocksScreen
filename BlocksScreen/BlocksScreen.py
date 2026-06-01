@@ -2,16 +2,13 @@ import logging
 import sys
 import typing
 
+from configfile import get_configparser
+from lib.panels.mainWindow import MainWindow  # noqa: E402
 from logger import CrashHandler, LogManager, install_crash_handler, setup_logging
+from PyQt6 import QtCore, QtGui, QtWidgets  # noqa: E402
+from tools.configuration_manager import ConfigManager
 
 install_crash_handler()
-
-from lib.panels.mainWindow import MainWindow  # noqa: E402
-from PyQt6 import QtCore, QtGui, QtWidgets  # noqa: E402
-
-from tools.configuration_manager import ConfigManager
-from configfile import get_configparser
-
 
 class BlocksScreenApp(QtWidgets.QApplication):
     """QApplication subclass that routes unhandled slot exceptions to CrashHandler."""

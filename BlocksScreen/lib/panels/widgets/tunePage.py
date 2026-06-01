@@ -7,7 +7,7 @@ from lib.utils.display_button import DisplayButton
 from lib.utils.icon_button import IconButton
 from PyQt6 import QtCore, QtGui, QtWidgets
 
-from BlocksScreen.lib.utils.gcode import fan_speed_gcode
+from lib.utils.gcode import fan_speed_gcode
 
 _logger = logging.getLogger(__name__)
 
