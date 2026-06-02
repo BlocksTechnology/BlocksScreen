@@ -134,22 +134,31 @@ class CustomQwertyKeyboard(QtWidgets.QDialog):
         )
         self.handle_keyboard_layout()
 
-    
-    def setPrefix(self , text:str):
+    def setPrefix(self, text: str):
+        """Set a static prefix that appears before the user input."""
         self.prefix = text
 
-    def setSuffix(self , text:str):
+    def setSuffix(self, text: str):
+        """Set a static suffix that appears after the user input."""
         self.suffix = text
 
-    def setPatern(self, patern: str) -> None:
-        self._pattern = patern
+    def setPattern(self, pattern: str) -> None:
+        """Set input validation pattern: 'ip', 'hex', 'int', 'float', or '' for no pattern."""
+        self._pattern = pattern
 
     def setMaxLength(self, length: int) -> None:
+        """Set maximum allowed length for user input (excluding prefix/suffix)."""
+        if length < 0:
+            length = 0
+        if length == 0:
+            length = 999
         self._max_length = length
 
     def _flash_limit_warning(self) -> None:
         self.inserted_value.setStyleSheet("color: #ff4444;")
-        QtCore.QTimer.singleShot(400, lambda: self.inserted_value.setStyleSheet("color: white;"))
+        QtCore.QTimer.singleShot(
+            400, lambda: self.inserted_value.setStyleSheet("color: white;")
+        )
 
     def _validate_pattern(self, value: str) -> bool:
         if not self._pattern:
@@ -239,12 +248,13 @@ class CustomQwertyKeyboard(QtWidgets.QDialog):
             value = "&"
 
         if value == "enter":
-            self.value_selected.emit(self.prefix+self.current_value+self.suffix)
+            self.value_selected.emit(self.prefix + self.current_value + self.suffix)
             self.current_value = ""
             self.inserted_value.setText("")
             self.setPrefix("")
             self.setSuffix("")
-            self.setPatern("")
+            self.setPattern("")
+            self.setMaxLength(0)
             return
 
         if value == "clear":
@@ -260,12 +270,24 @@ class CustomQwertyKeyboard(QtWidgets.QDialog):
                 else:
                     self._flash_limit_warning()
 
-        self.inserted_value.setText(len(self.suffix)*" " + self.prefix+self.current_value  + self.suffix + len(self.prefix)*" " )
+        self.inserted_value.setText(
+            len(self.suffix) * " "
+            + self.prefix
+            + self.current_value
+            + self.suffix
+            + len(self.prefix) * " "
+        )
 
     def set_value(self, value: str) -> None:
         """Pre-fill keyboard input with an existing value."""
         self.current_value = value
-        self.inserted_value.setText(len(self.suffix)*" " + self.prefix+self.current_value  + self.suffix + len(self.prefix)*" " )
+        self.inserted_value.setText(
+            len(self.suffix) * " "
+            + self.prefix
+            + self.current_value
+            + self.suffix
+            + len(self.prefix) * " "
+        )
 
     def _create_key_button(
         self,
