@@ -216,7 +216,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.call_notification_panel.connect(self.notiPage.show_notification_panel)
         self.networkPanel.update_wifi_icon.connect(self.change_wifi_icon)
         self.conn_window.wifi_button_clicked.connect(self.call_network_panel.emit)
-        self.conn_window.notification_btn_clicked.connect(
+        self.conn_window.notification_button_clicked.connect(
             self.call_notification_panel.emit
         )
         self.ui.wifi_button.clicked.connect(self.call_network_panel.emit)
