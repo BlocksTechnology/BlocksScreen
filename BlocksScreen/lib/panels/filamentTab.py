@@ -396,6 +396,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
         return page
 
     def on_pre_gate(self, gate_index: int, detected: bool):
+        """Handles the pre-gate signal from the AMU manager to show the popup when filament is detected in a gate."""
         previous_state = self._previous_gate_states.get(gate_index)
         self._previous_gate_states[gate_index] = detected
         if previous_state is False and detected is True:
@@ -403,6 +404,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
             self.handle_popup()
 
     def handle_popup(self):
+        """Handles showing the popup for pre-gate filament detection. If multiple gates trigger, they will be queued and shown one at a time."""
         if self.popup.isVisible():
             return
         if not self.popup_gates:
@@ -415,6 +417,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self.popup.show()
 
     def on_popup_accept(self):
+        """Handles the accept action from the pre-gate popup to send the appropriate G-code to map the gate to the spool."""
         gate = self.pre_gate_idx["gate"]
         name = self._popup_name.text().strip()
         color = self._popup_color.text().strip("#").strip()
@@ -444,6 +447,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
 
     @QtCore.pyqtSlot(dict, name="on-spools-received")
     def on_spools_received(self, result: dict) -> None:
+        """Handles the result from the API call to get spools for the spoolman page."""
         self._spool_load_widget.hide()
         self._spool_list_view.show()
         if result.get("error") is not None:
@@ -605,6 +609,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
             self._color_target_field = None
 
     def on_mmu_state_changed(self, mmu_state):
+        """Handles changes in the MMU state from the AMU manager to update the UI and show the load panel when loading/unloading."""342f
         if not self._previous_gate_states and mmu_state.gates:
             for gate_info in mmu_state.gates:
                 self._previous_gate_states[gate_info.index] = gate_info.status in [
@@ -760,15 +765,11 @@ class FilamentTab(QtWidgets.QStackedWidget):
         )  # dont ask how i got this value , it was try and repeat
 
         self.addWidget(widget)
-
-        self.retranslateUi()
-
-    def retranslateUi(self):
-        _translate = QtCore.QCoreApplication.translate
-        self.setWindowTitle(_translate("filaemtnStackedWidget", "StackedWidget"))
-        self.fp_header_title.setText(_translate("filaemtnStackedWidget", "Filament"))
-
+        self.fp_header_title.setText("Filament")
         self.fp_button_1.setText(
-            _translate("filaemtnStackedWidget", "Filament\nControl")
+            "Filament\nControl"
         )
-        self.fp_button_2.setText(_translate("filaemtnStackedWidget", "Spoolman"))
+        self.fp_button_2.setText("Spoolman")
+
+
+

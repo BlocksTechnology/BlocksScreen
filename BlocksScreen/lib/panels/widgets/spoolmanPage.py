@@ -95,8 +95,9 @@ class SpoolmanPage(QtWidgets.QWidget):
 
     @QtCore.pyqtSlot(dict, name="on-delete-spool-result")
     def on_delete_spool_result(self, result: dict) -> None:
+        """Handle v2 proxy response for DELETE /v1/spool/{id}."""
         if result.get("error") is not None:
-            logger.error("Delete spol failed: %s", result["error"])
+            logger.error("Delete spool failed: %s", result["error"])
             return
         self._selected_spool = None
         self._on_reload_clicked()
@@ -231,11 +232,11 @@ class SpoolmanPage(QtWidgets.QWidget):
             )
             self.model.add_item(item)
 
-
         self.spool_list_widget.blockSignals(False)
 
     @QtCore.pyqtSlot(ListItem, name="on-item-clicked")
     def on_item_clicked(self, item: ListItem) -> None:
+        """Handle when a spool item is clicked in the list."""
         if not item:
             return
         if item.text == "+ Add Spool":
@@ -273,6 +274,7 @@ class SpoolmanPage(QtWidgets.QWidget):
         self._update_color_swatches(filament)
 
     def _update_color_swatches(self, filament: dict) -> None:
+        """ "Update the color swatches in the info box based on the filament's color information."""
         while self.color_swatch_layout.count():
             child = self.color_swatch_layout.takeAt(0)
             if child.widget():
@@ -308,13 +310,9 @@ class SpoolmanPage(QtWidgets.QWidget):
             self.color_swatch_layout.addWidget(swatch)
 
     def showEvent(self, event: QtGui.QShowEvent | None) -> None:  # noqa: N802
+        """reloads spool on show"""
         self._on_reload_clicked()
         return super().showEvent(event)
-
-    def deleteLater(self) -> None:  # noqa: N802
-        self.model.clear()
-        self.entry_delegate.clear()
-        return super().deleteLater()
 
     def _setupUI(self) -> None:  # noqa: N802
         self.setMaximumHeight(470)
@@ -505,12 +503,15 @@ class SpoolmanPage(QtWidgets.QWidget):
 
     @QtCore.pyqtSlot(dict, name="on-filaments-received")
     def on_filaments_received(self, result: dict) -> None:
+        """Handle v2 proxy response for GET /v1/filament."""
         self._add_spool_page.on_filaments_received(result)
 
     @QtCore.pyqtSlot(dict, name="on-add-spool-result")
     def on_add_spool_result(self, result: dict) -> None:
+        """Handle results for adding a spool."""
         self._add_spool_page.on_add_spool_result(result)
 
     @QtCore.pyqtSlot(dict, name="on-add-filament-result")
     def on_add_filament_result(self, result: dict) -> None:
+        """Handle results for adding a filament."""
         self._add_filament_page.on_add_filament_result(result)

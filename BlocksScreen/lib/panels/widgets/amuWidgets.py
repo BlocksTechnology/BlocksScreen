@@ -29,26 +29,57 @@ class Spoll_button(QtWidgets.QAbstractButton):
         )
 
     def setColor(self, qc: QtGui.QColor):
+        """sets button color
+
+        Args:
+            qc (QtGui.QColor): a Qcolor representing filament color
+        """
         self.color = qc
         self.update()
 
     def setStatus(self, s: GateStatus):
+        """sets button status
+
+        Args:
+            s (GateStatus): a GateStatus representing the gate status
+        """
         self.status = s
         self.update()
 
     def setGateId(self, i: int):
+        """sets button gate id
+
+        Args:
+            i (int): a integer representing the gate id
+        """
         self.slot_id = i
         self.update()
 
     def setMaterial(self, mat: str):
+        """sets button material
+
+        Args:
+            mat (str): a string representing the material
+        """
+
         self.material = mat
         self.update()
 
     def setWeight(self, w: int):
+        """sets gate weight
+
+        Args:
+            w (int): a integer representing the weight of the filament in grams
+        """
         self.weight = w
         self.update()
 
     def setTemp(self, t: int):
+        """sets gate temp
+
+        Args:
+            t (int): a integer representing the temperature of the filament
+        """
         self.temp = t
         self.update()
 
@@ -60,6 +91,15 @@ class Spoll_button(QtWidgets.QAbstractButton):
         material: str,
         temp: int,
     ):
+        """updates button and repaints it
+
+        Args:
+            color (QtGui.QColor): a Qcolor representing filament color
+            slot_id (int): a integer representing the gate id
+            status (GateStatus): a GateStatus representing the gate status
+            material (str): a string representing the material
+            temp (int): a integer representing the temperature of the filament
+        """
         self.setColor(color)
         self.setGateId(slot_id)
         self.setStatus(status)
@@ -67,7 +107,7 @@ class Spoll_button(QtWidgets.QAbstractButton):
         self.setTemp(temp)
         self.update()
 
-    def paintEvent(self, e: QtGui.QPaintEvent | None) -> None:
+    def paintEvent(self, a0: QtGui.QPaintEvent) -> None:
         opt = QtWidgets.QStyleOption()
         opt.initFrom(self)
 
@@ -120,7 +160,6 @@ class Spoll_button(QtWidgets.QAbstractButton):
         rect.setY(int(rect.height() - rect.height() * 0.15))
         painter.drawRect(rect)
 
-        # Draw icon centered
         icon_size = 65
         icon = (
             self._icon
@@ -152,9 +191,6 @@ class Spoll_button(QtWidgets.QAbstractButton):
         painter.end()
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Carousel (scrollable spool row)
-# ──────────────────────────────────────────────────────────────────────────────
 class SpoolCarousel(QtWidgets.QWidget):
     selectionChanged: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         int
@@ -168,7 +204,6 @@ class SpoolCarousel(QtWidgets.QWidget):
         self.button_group = QtWidgets.QButtonGroup(self)
         self.button_group.setExclusive(True)
         self._offset = 0  # first visible index
-        # self.setStyleSheet("border: 1px solid white")
 
         self._anim_group: QtCore.QParallelAnimationGroup | None = None
 
@@ -192,16 +227,11 @@ class SpoolCarousel(QtWidgets.QWidget):
         self.left_arrow.setFixedHeight(100)
         self.right_arrow.setFixedHeight(100)
 
-        # sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Expanding)
-        # self.right_arrow.setSizePolicy(sizePolicy)
-        # self.left_arrow.setSizePolicy(sizePolicy)
-
         self.left_arrow.clicked.connect(self._scroll_left)
         self.right_arrow.clicked.connect(self._scroll_right)
 
         self._slot_area = QtWidgets.QWidget(self)
         self._slot_layout = QtWidgets.QHBoxLayout(self._slot_area)
-        # on self._slot_layout.setSpacing(0)
         self._slot_layout.setContentsMargins(0, 0, 0, 0)
 
         root.addWidget(self.left_arrow)
@@ -218,6 +248,7 @@ class SpoolCarousel(QtWidgets.QWidget):
         temp: int = 999,
         status: GateStatus = GateStatus.UNKNOWN,
     ):
+        """Adds or updates a spool button in the carousel"""
         if any(btn.slot_id == slot_id for btn in self.buttons):
             self.buttons[int(slot_id)].update_entry(
                 color, slot_id, status, material, temp
@@ -244,7 +275,6 @@ class SpoolCarousel(QtWidgets.QWidget):
         self.selectionChanged.emit(idx)
 
     def _refresh_visible(self):
-        # Clear layout
         while self._slot_layout.count():
             item = self._slot_layout.takeAt(0)
             if item.widget():
@@ -283,15 +313,20 @@ class SpoolCarousel(QtWidgets.QWidget):
         self.right_arrow.setEnabled(self._offset + self.VISIBLE < len(self.buttons))
 
     def selectedIndex(self) -> int:
+        """returns the index of the currently selected button, or -1 if none is selected"""
         btn = self.button_group.checkedButton()
         if btn:
             return self.buttons.index(btn)
         return -1
 
     def selectIndex(self, idx: int):
+        """seletect a button by index
+
+        Args:
+            idx (int): the indext of the button to select
+        """
         if 0 <= idx < len(self.buttons):
             self.buttons[idx].setChecked(True)
-            # scroll so it's visible
             if idx < self._offset:
                 self._offset = idx
                 self._refresh_visible()
@@ -300,9 +335,6 @@ class SpoolCarousel(QtWidgets.QWidget):
                 self._refresh_visible()
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Info table panel (BlocksCustomFrame + detail grid + op buttons)
-# ──────────────────────────────────────────────────────────────────────────────
 class SpoolInfoPanel(QtWidgets.QWidget):
     loadRequested: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal()
     unloadRequested: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal()
@@ -325,13 +357,11 @@ class SpoolInfoPanel(QtWidgets.QWidget):
         root.setContentsMargins(14, 12, 14, 12)
         root.setSpacing(20)
 
-        # ── Color swatch ──
         self._swatch = QtWidgets.QLabel()
         self._swatch.setFixedSize(52, 52)
         self._swatch.setStyleSheet("border-radius: 2px; background: #222;")
         root.addWidget(self._swatch, 0, QtCore.Qt.AlignmentFlag.AlignVCenter)
 
-        # ── Info grid ──
         grid_widget = QtWidgets.QWidget()
         grid = QtWidgets.QGridLayout(grid_widget)
         grid.setContentsMargins(0, 0, 0, 0)
@@ -342,6 +372,7 @@ class SpoolInfoPanel(QtWidgets.QWidget):
         font.setPointSize(12)
 
         def make_key(text):
+            """Helper to create a label for the left column of the info grid."""
             lbl = QtWidgets.QLabel(text)
             lbl.setStyleSheet("color: rgba(255,255,255,100);")
             lbl.setFont(font)
@@ -436,7 +467,9 @@ class SpoolInfoPanel(QtWidgets.QWidget):
         )
         self._btn_purge.setFixedSize(140, 60)
         self._btn_cut = BlocksCustomButton(self)
-        self._btn_cut.setPixmap(QtGui.QPixmap(":/filament_related/media/btn_icons/check gate 1.svg"))
+        self._btn_cut.setPixmap(
+            QtGui.QPixmap(":/filament_related/media/btn_icons/check gate 1.svg")
+        )
         self._btn_cut.setText("Check\nGates")
         self._btn_cut.setFont(font)
         self._btn_cut.setFixedSize(140, 60)
@@ -461,10 +494,17 @@ class SpoolInfoPanel(QtWidgets.QWidget):
         root.addLayout(btn_col)
 
     def setFilamentStatus(self, mmu_state):
+        """updates the filament status and gate index from the mmu state"""
         self.FStatus = mmu_state.filament
         self.Gate = mmu_state.gate
 
     def update_for_slot(self, index: int, btn: Spoll_button):
+        """updates table based of the selected button
+
+        Args:
+            index (int): the index of the selected button
+            btn (Spoll_button): the selected button
+        """
         self._slot_index = index
         color = btn.color
         r, g, b = color.red(), color.green(), color.blue()
