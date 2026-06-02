@@ -153,7 +153,9 @@ class MainWindow(QtWidgets.QMainWindow):
             self.conn_window.on_websocket_connection_achieved
         )
         self.ws.connection_lost.connect(self.conn_window.on_websocket_connection_lost)
+        self.ws.klippy_connected_signal.connect(self.conn_window.on_klippy_connection)
         self.ws.klippy_state_signal.connect(self._on_klippy_state)
+        self.ws.klippy_state_signal.connect(self.conn_window.on_klippy_state)
         self.printer.webhooks_update.connect(self.conn_window.webhook_update)
         self.printPanel.request_back.connect(slot=self.global_back)
         self.printPanel.on_cancel_print.connect(slot=self.on_cancel_print)
