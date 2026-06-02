@@ -128,18 +128,24 @@ class ConnectionPage(QtWidgets.QFrame):
         dots = "." * self.dot_count
         self.status_label.setText(f"{self.base_text}{dots}")
 
+    _FIRMWARE_RESTART_STATES: typing.ClassVar[frozenset[ConnectionState]] = frozenset(
+        {
+            ConnectionState.KLIPPER_ERROR,
+            ConnectionState.KLIPPER_SHUTDOWN,
+            ConnectionState.MOONRAKER_CONNECTED,
+            ConnectionState.KLIPPER_STARTUP,
+        }
+    )
+
     def _update_restart_label(self, state: ConnectionState) -> None:
         """Set restart_klipper_button label based on current state."""
-        if state in {ConnectionState.KLIPPER_ERROR, ConnectionState.KLIPPER_SHUTDOWN}:
+        if state in self._FIRMWARE_RESTART_STATES:
             self.restart_klipper_button.setText("Firmware Restart")
         else:
             self.restart_klipper_button.setText("Restart Klipper")
 
     def _on_restart_clicked(self) -> None:
-        if self._state in {
-            ConnectionState.KLIPPER_ERROR,
-            ConnectionState.KLIPPER_SHUTDOWN,
-        }:
+        if self._state in self._FIRMWARE_RESTART_STATES:
             self.firmware_restart_clicked.emit()
         else:
             self.restart_klipper_clicked.emit()
@@ -252,31 +258,6 @@ class ConnectionPage(QtWidgets.QFrame):
             QtWidgets.QSizePolicy.Policy.Fixed,
         )
 
-        self.restart_klipper_button = IconButton(parent=self.button_frame)
-        self.restart_klipper_button.setSizePolicy(_btn_policy)
-        self.restart_klipper_button.setMinimumSize(QtCore.QSize(100, 80))
-        self.restart_klipper_button.setMaximumSize(QtCore.QSize(100, 80))
-        self.restart_klipper_button.setCursor(
-            QtGui.QCursor(QtCore.Qt.CursorShape.BlankCursor)
-        )
-        self.restart_klipper_button.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
-        self.restart_klipper_button.setContextMenuPolicy(
-            QtCore.Qt.ContextMenuPolicy.NoContextMenu
-        )
-        self.restart_klipper_button.setFlat(True)
-        self.restart_klipper_button.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/system/media/btn_icons/restart_klipper.svg")
-        )
-        self.restart_klipper_button.setProperty("has_text", True)
-        self.restart_klipper_button.setProperty("text_formatting", "bottom")
-        self.restart_klipper_button.setText("Restart Klipper")
-        self.restart_klipper_button.setObjectName("restart_klipper_button")
-        self.button_layout.addWidget(
-            self.restart_klipper_button,
-            0,
-            QtCore.Qt.AlignmentFlag.AlignHCenter | QtCore.Qt.AlignmentFlag.AlignTop,
-        )
-
         self.reboot_system_button = IconButton(parent=self.button_frame)
         self.reboot_system_button.setSizePolicy(_btn_policy)
         self.reboot_system_button.setMinimumSize(QtCore.QSize(100, 80))
@@ -298,6 +279,31 @@ class ConnectionPage(QtWidgets.QFrame):
         self.reboot_system_button.setObjectName("reboot_system_button")
         self.button_layout.addWidget(
             self.reboot_system_button,
+            0,
+            QtCore.Qt.AlignmentFlag.AlignHCenter | QtCore.Qt.AlignmentFlag.AlignTop,
+        )
+
+        self.restart_klipper_button = IconButton(parent=self.button_frame)
+        self.restart_klipper_button.setSizePolicy(_btn_policy)
+        self.restart_klipper_button.setMinimumSize(QtCore.QSize(100, 80))
+        self.restart_klipper_button.setMaximumSize(QtCore.QSize(100, 80))
+        self.restart_klipper_button.setCursor(
+            QtGui.QCursor(QtCore.Qt.CursorShape.BlankCursor)
+        )
+        self.restart_klipper_button.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
+        self.restart_klipper_button.setContextMenuPolicy(
+            QtCore.Qt.ContextMenuPolicy.NoContextMenu
+        )
+        self.restart_klipper_button.setFlat(True)
+        self.restart_klipper_button.setProperty(
+            "icon_pixmap", QtGui.QPixmap(":/system/media/btn_icons/restart_klipper.svg")
+        )
+        self.restart_klipper_button.setProperty("has_text", True)
+        self.restart_klipper_button.setProperty("text_formatting", "bottom")
+        self.restart_klipper_button.setText("Restart Klipper")
+        self.restart_klipper_button.setObjectName("restart_klipper_button")
+        self.button_layout.addWidget(
+            self.restart_klipper_button,
             0,
             QtCore.Qt.AlignmentFlag.AlignHCenter | QtCore.Qt.AlignmentFlag.AlignTop,
         )
@@ -392,7 +398,7 @@ class ConnectionPage(QtWidgets.QFrame):
         _font = QtGui.QFont()
         _font.setFamily("Momcake")
         _font.setPointSize(17)
-        _font.setBold(True)
+
         self.status_label.setFont(_font)
         self.status_label.setStyleSheet("color:white")
         self.status_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
