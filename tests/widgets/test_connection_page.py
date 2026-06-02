@@ -33,7 +33,7 @@ class TestSetState:
     def test_disconnected(self, page):
         page._set_state(ConnectionState.DISCONNECTED)
         assert page._state == ConnectionState.DISCONNECTED
-        assert "Not connected" in page.status_label.text()
+        assert "unreachable" in page.status_label.text()
 
     def test_connecting(self, page):
         page._set_state(ConnectionState.CONNECTING, context="3")
@@ -48,7 +48,7 @@ class TestSetState:
     def test_moonraker_connected(self, page):
         page._set_state(ConnectionState.MOONRAKER_CONNECTED)
         assert page._state == ConnectionState.MOONRAKER_CONNECTED
-        assert "Moonraker connected" in page.status_label.text()
+        assert "Connected to Moonraker" in page.status_label.text()
 
     def test_klipper_startup(self, page):
         page._set_state(ConnectionState.KLIPPER_STARTUP)
@@ -63,7 +63,7 @@ class TestSetState:
     def test_klipper_disconnected(self, page):
         page._set_state(ConnectionState.KLIPPER_DISCONNECTED)
         assert page._state == ConnectionState.KLIPPER_DISCONNECTED
-        assert "disconnected" in page.status_label.text()
+        assert "not connected" in page.status_label.text()
 
     def test_klipper_error(self, page):
         page._set_state(ConnectionState.KLIPPER_ERROR)

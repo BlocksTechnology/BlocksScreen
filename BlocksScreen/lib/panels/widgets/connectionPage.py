@@ -25,15 +25,15 @@ class ConnectionState(enum.Enum):
 
 class ConnectionPage(QtWidgets.QFrame):
     _MESSAGES: typing.ClassVar[dict[ConnectionState, str]] = {
-        ConnectionState.DISCONNECTED: "Not connected to Moonraker.\nReconnecting automatically...",
-        ConnectionState.CONNECTING: "Reconnecting to Moonraker...\nAttempt {n}",
-        ConnectionState.WEBSOCKET_LOST: "Connection to Moonraker was lost.\nReconnecting automatically...",
-        ConnectionState.MOONRAKER_CONNECTED: "Moonraker connected.\nWaiting for Klipper to respond...",
-        ConnectionState.KLIPPER_STARTUP: "Klipper is starting up.\nThis usually takes a few seconds...",
+        ConnectionState.DISCONNECTED: "Moonraker is unreachable.\nReconnecting automatically…",
+        ConnectionState.CONNECTING: "Connecting to Moonraker…\nAttempt {n}",
+        ConnectionState.WEBSOCKET_LOST: "Connection to Moonraker was lost.\nAttempting to reconnect…",
+        ConnectionState.MOONRAKER_CONNECTED: "Connected to Moonraker.\nWaiting for Klipper to respond…",
+        ConnectionState.KLIPPER_STARTUP: "Klipper is starting up.\nPlease wait…",
         ConnectionState.KLIPPER_READY: "Klipper is ready.",
-        ConnectionState.KLIPPER_DISCONNECTED: "Klipper has disconnected.\nRestart Klipper to reconnect.",
-        ConnectionState.KLIPPER_ERROR: "Klipper reported an error.\nRestart Klipper or check the logs.",
-        ConnectionState.KLIPPER_SHUTDOWN: "Klipper was shut down.\n{message}",
+        ConnectionState.KLIPPER_DISCONNECTED: "Klipper is not connected.\nPress Restart Klipper to reconnect.",
+        ConnectionState.KLIPPER_ERROR: "Klipper has reported an error.\nPress Restart Klipper to recover.",
+        ConnectionState.KLIPPER_SHUTDOWN: "Klipper has shut down.\n{message}",
     }
 
     _AUTO_SHOW_STATES: typing.ClassVar[frozenset[ConnectionState]] = frozenset(
@@ -132,8 +132,6 @@ class ConnectionPage(QtWidgets.QFrame):
         {
             ConnectionState.KLIPPER_ERROR,
             ConnectionState.KLIPPER_SHUTDOWN,
-            ConnectionState.MOONRAKER_CONNECTED,
-            ConnectionState.KLIPPER_STARTUP,
         }
     )
 
@@ -226,9 +224,15 @@ class ConnectionPage(QtWidgets.QFrame):
         elif a1.type() == KlippyReady.type():
             self._set_state(ConnectionState.KLIPPER_READY)
         elif a1.type() == KlippyShutdown.type():
+            _raw = str(getattr(a1, "data", ""))
+            _context = (
+                _raw
+                if _raw and _raw.lower() not in {"shutdown", "none", ""}
+                else "No shutdown reason was provided. Press Firmware Restart to recover."
+            )
             self._set_state(
                 ConnectionState.KLIPPER_SHUTDOWN,
-                context=str(getattr(a1, "data", "")),
+                context=_context,
             )
         return super().eventFilter(a0, a1)
 
@@ -240,9 +244,9 @@ class ConnectionPage(QtWidgets.QFrame):
             "#ConnectionPage{background-image: url(:/background/media/1st_background.png);}"
         )
         self.button_frame = BlocksCustomFrame(parent=self)
-        self.button_frame.setGeometry(QtCore.QRect(10, 380, 780, 124))
-        self.button_frame.setMinimumSize(QtCore.QSize(780, 124))
-        self.button_frame.setMaximumSize(QtCore.QSize(780, 150))
+        self.button_frame.setGeometry(QtCore.QRect(10, 365, 780, 140))
+        self.button_frame.setMinimumSize(QtCore.QSize(780, 140))
+        self.button_frame.setMaximumSize(QtCore.QSize(780, 160))
         self.button_frame.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
         self.button_frame.setFrameShadow(QtWidgets.QFrame.Shadow.Plain)
         self.button_frame.setLineWidth(0)
@@ -260,8 +264,8 @@ class ConnectionPage(QtWidgets.QFrame):
 
         self.reboot_system_button = IconButton(parent=self.button_frame)
         self.reboot_system_button.setSizePolicy(_btn_policy)
-        self.reboot_system_button.setMinimumSize(QtCore.QSize(100, 80))
-        self.reboot_system_button.setMaximumSize(QtCore.QSize(100, 80))
+        self.reboot_system_button.setMinimumSize(QtCore.QSize(115, 92))
+        self.reboot_system_button.setMaximumSize(QtCore.QSize(115, 92))
         self.reboot_system_button.setCursor(
             QtGui.QCursor(QtCore.Qt.CursorShape.BlankCursor)
         )
@@ -285,8 +289,8 @@ class ConnectionPage(QtWidgets.QFrame):
 
         self.restart_klipper_button = IconButton(parent=self.button_frame)
         self.restart_klipper_button.setSizePolicy(_btn_policy)
-        self.restart_klipper_button.setMinimumSize(QtCore.QSize(100, 80))
-        self.restart_klipper_button.setMaximumSize(QtCore.QSize(100, 80))
+        self.restart_klipper_button.setMinimumSize(QtCore.QSize(115, 92))
+        self.restart_klipper_button.setMaximumSize(QtCore.QSize(115, 92))
         self.restart_klipper_button.setCursor(
             QtGui.QCursor(QtCore.Qt.CursorShape.BlankCursor)
         )
@@ -310,8 +314,8 @@ class ConnectionPage(QtWidgets.QFrame):
 
         self.notification_button = IconButton(parent=self.button_frame)
         self.notification_button.setSizePolicy(_btn_policy)
-        self.notification_button.setMinimumSize(QtCore.QSize(100, 80))
-        self.notification_button.setMaximumSize(QtCore.QSize(100, 80))
+        self.notification_button.setMinimumSize(QtCore.QSize(115, 92))
+        self.notification_button.setMaximumSize(QtCore.QSize(115, 92))
         self.notification_button.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
         self.notification_button.setFlat(True)
         self.notification_button.setProperty(
@@ -329,8 +333,8 @@ class ConnectionPage(QtWidgets.QFrame):
 
         self.update_page_button = IconButton(parent=self.button_frame)
         self.update_page_button.setSizePolicy(_btn_policy)
-        self.update_page_button.setMinimumSize(QtCore.QSize(100, 80))
-        self.update_page_button.setMaximumSize(QtCore.QSize(100, 80))
+        self.update_page_button.setMinimumSize(QtCore.QSize(115, 92))
+        self.update_page_button.setMaximumSize(QtCore.QSize(115, 92))
         self.update_page_button.setCursor(
             QtGui.QCursor(QtCore.Qt.CursorShape.BlankCursor)
         )
@@ -355,8 +359,8 @@ class ConnectionPage(QtWidgets.QFrame):
 
         self.wifi_button = IconButton(parent=self.button_frame)
         self.wifi_button.setSizePolicy(_btn_policy)
-        self.wifi_button.setMinimumSize(QtCore.QSize(100, 80))
-        self.wifi_button.setMaximumSize(QtCore.QSize(100, 80))
+        self.wifi_button.setMinimumSize(QtCore.QSize(115, 92))
+        self.wifi_button.setMaximumSize(QtCore.QSize(115, 92))
         self.wifi_button.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
         self.wifi_button.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.NoContextMenu)
         self.wifi_button.setFlat(True)
@@ -375,9 +379,9 @@ class ConnectionPage(QtWidgets.QFrame):
         )
 
         self.content_frame = QtWidgets.QFrame(parent=self)
-        self.content_frame.setGeometry(QtCore.QRect(0, 0, 800, 380))
-        self.content_frame.setMinimumSize(QtCore.QSize(800, 380))
-        self.content_frame.setMaximumSize(QtCore.QSize(800, 380))
+        self.content_frame.setGeometry(QtCore.QRect(0, 0, 800, 365))
+        self.content_frame.setMinimumSize(QtCore.QSize(800, 365))
+        self.content_frame.setMaximumSize(QtCore.QSize(800, 365))
         self.content_frame.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
         self.content_frame.setFrameShadow(QtWidgets.QFrame.Shadow.Raised)
         self.content_frame.setObjectName("content_frame")
