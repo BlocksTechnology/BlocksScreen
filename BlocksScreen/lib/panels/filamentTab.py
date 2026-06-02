@@ -258,7 +258,9 @@ class FilamentTab(QtWidgets.QStackedWidget):
         spoolman_btn.setFixedSize(230, 80)
         spoolman_btn.setText("Spoolman")
         spoolman_btn.setFont(font)
-        spoolman_btn.setPixmap(QtGui.QPixmap(":/filament_related/media/btn_icons/spoolman.svg"))
+        spoolman_btn.setPixmap(
+            QtGui.QPixmap(":/filament_related/media/btn_icons/spoolman.svg")
+        )
         spoolman_btn.clicked.connect(self._on_spoolman_clicked)
         btn_row.addWidget(spoolman_btn)
 
@@ -387,7 +389,9 @@ class FilamentTab(QtWidgets.QStackedWidget):
             )
         )
 
-        self._add_filament_page.accepted.connect(lambda: self._add_stack.setCurrentIndex(0))
+        self._add_filament_page.accepted.connect(
+            lambda: self._add_stack.setCurrentIndex(0)
+        )
         self._add_filament_page.cancelled.connect(
             lambda: self._add_stack.setCurrentIndex(0)
         )
@@ -609,7 +613,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
             self._color_target_field = None
 
     def on_mmu_state_changed(self, mmu_state):
-        """Handles changes in the MMU state from the AMU manager to update the UI and show the load panel when loading/unloading."""342f
+        """Handles changes in the MMU state from the AMU manager to update the UI and show the load panel when loading/unloading."""
         if not self._previous_gate_states and mmu_state.gates:
             for gate_info in mmu_state.gates:
                 self._previous_gate_states[gate_info.index] = gate_info.status in [
@@ -766,10 +770,5 @@ class FilamentTab(QtWidgets.QStackedWidget):
 
         self.addWidget(widget)
         self.fp_header_title.setText("Filament")
-        self.fp_button_1.setText(
-            "Filament\nControl"
-        )
+        self.fp_button_1.setText("Filament\nControl")
         self.fp_button_2.setText("Spoolman")
-
-
-
