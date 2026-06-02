@@ -16,7 +16,8 @@
         "libxi-dev",
         "libxkbcommon-dev",
         "libxkbcommon-x11-dev",
-        "libxcb-cursor0"
-
+        "libxcb-cursor0",
+        "curl",
+        "jq"
     ]
 }
