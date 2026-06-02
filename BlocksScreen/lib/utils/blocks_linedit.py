@@ -89,8 +89,6 @@ class BlocksCustomLinEdit(QtWidgets.QLineEdit):
         """Handle mouse release"""
         super().mouseReleaseEvent(event)
 
-
-
     def paintEvent(self, event: typing.Optional[QtGui.QPaintEvent]) -> None:
         """Custom paint with embedded toggle button."""
         painter = QtGui.QPainter(self)

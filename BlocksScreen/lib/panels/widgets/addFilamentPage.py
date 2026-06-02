@@ -339,6 +339,8 @@ class AddFilamentPage(QtWidgets.QWidget):
         submit_btn.setFixedSize(220, 80)
         submit_btn.setFont(_f(16))
         submit_btn.setText("Add\nFilament")
-        submit_btn.setPixmap(QtGui.QPixmap(":/filament_related/media/btn_icons/add filament.svg"))
+        submit_btn.setPixmap(
+            QtGui.QPixmap(":/filament_related/media/btn_icons/add filament.svg")
+        )
         submit_btn.clicked.connect(self._on_submit)
         root.addWidget(submit_btn, alignment=QtCore.Qt.AlignmentFlag.AlignCenter)

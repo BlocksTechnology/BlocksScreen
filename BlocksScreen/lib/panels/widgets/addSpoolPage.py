@@ -372,7 +372,9 @@ class AddSpoolPage(QtWidgets.QWidget):
         self._submit_btn.setText("Add Spool")
         self._submit_btn.setEnabled(False)
         self._submit_btn.clicked.connect(self._on_submit)
-        self._submit_btn.setPixmap(QtGui.QPixmap(":/filament_related/media/btn_icons/add spool.svg"))
+        self._submit_btn.setPixmap(
+            QtGui.QPixmap(":/filament_related/media/btn_icons/add spool.svg")
+        )
         right_lay.addWidget(self._submit_btn)
 
         body.addWidget(right_frame, 1)
