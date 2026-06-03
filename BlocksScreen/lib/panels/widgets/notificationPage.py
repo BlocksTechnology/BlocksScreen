@@ -1,15 +1,12 @@
-from lib.utils.blocks_frame import BlocksCustomFrame
+from collections import deque
+from typing import ClassVar
+
+from lib.panels.widgets.popupDialogWidget import Popup
 from lib.utils.blocks_button import BlocksCustomButton
+from lib.utils.blocks_frame import BlocksCustomFrame
 from lib.utils.icon_button import IconButton
 from lib.utils.list_model import EntryDelegate, EntryListModel, ListItem
 from PyQt6 import QtCore, QtGui, QtWidgets
-import typing
-
-from collections import deque
-from typing import Deque
-
-
-from lib.panels.widgets.popupDialogWidget import Popup
 
 
 class NotificationPage(QtWidgets.QWidget):
@@ -18,19 +15,18 @@ class NotificationPage(QtWidgets.QWidget):
     for updating or recovering them
     """
 
-    on_update_message: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+    on_update_message: ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         dict, name="on-update-message"
     )
 
     def __init__(self, parent=None) -> None:
-        if parent:
-            super().__init__(parent)
-        else:
-            super().__init__()
+        super().__init__(parent)
+        self._ICON_INFO = QtGui.QPixmap(":/ui/media/btn_icons/info.svg")
+        self._ICON_WARN = QtGui.QPixmap(":/ui/media/btn_icons/troubleshoot.svg")
+        self._ICON_ERROR = QtGui.QPixmap(":/ui/media/btn_icons/error.svg")
         self._setupUI()
-        self.cli_tracking: Deque = deque()
+        self.cli_tracking: deque = deque()
         self.selected_item: ListItem | None = None
-        self.ongoing_update: bool = False
         self.popup = Popup(self)
 
         self.model = EntryListModel()
@@ -79,29 +75,20 @@ class NotificationPage(QtWidgets.QWidget):
     def build_model_list(self) -> None:
         """Builds the model list (`self.model`) containing updatable clients"""
         self.update_buttons_list_widget.blockSignals(True)
-        message, origin, priority = self.cli_tracking.popleft()
-        match priority:
-            case 1:
-                self._add_notif_entry(
-                    message, "#1A8FBF", QtGui.QPixmap(":/ui/media/btn_icons/info.svg")
-                )
-            case 2:
-                self._add_notif_entry(
-                    message,
-                    "#E7E147",
-                    QtGui.QPixmap(":/ui/media/btn_icons/troubleshoot.svg"),
-                )
-            case 3:
-                self._add_notif_entry(
-                    message, "#CA4949", QtGui.QPixmap(":/ui/media/btn_icons/error.svg")
-                )
-            case _:
-                self._add_notif_entry(
-                    message, "#a4a4a4", QtGui.QPixmap(":/ui/media/btn_icons/info.svg")
-                )
-
-        self.model.setData(self.model.index(0), True, EntryListModel.EnableRole)
-        self.update_buttons_list_widget.blockSignals(False)
+        try:
+            message, _, priority = self.cli_tracking.popleft()
+            match priority:
+                case 1:
+                    self._add_notif_entry(message, "#1A8FBF", self._ICON_INFO)
+                case 2:
+                    self._add_notif_entry(message, "#E7E147", self._ICON_WARN)
+                case 3:
+                    self._add_notif_entry(message, "#CA4949", self._ICON_ERROR)
+                case _:
+                    self._add_notif_entry(message, "#a4a4a4", self._ICON_INFO)
+            self.model.setData(self.model.index(0), True, EntryListModel.EnableRole)
+        finally:
+            self.update_buttons_list_widget.blockSignals(False)
 
     @QtCore.pyqtSlot(ListItem, name="on-item-clicked")
     def on_item_clicked(self, item: ListItem) -> None:
@@ -143,19 +130,17 @@ class NotificationPage(QtWidgets.QWidget):
         self.model.delete_duplicates()
 
         if popup:
-            ui = False
             match priority:
                 case 3:
-                    type = Popup.MessageType.ERROR
-                    ui = True
+                    msg_type = Popup.MessageType.ERROR
                 case 2:
-                    type = Popup.MessageType.WARNING
+                    msg_type = Popup.MessageType.WARNING
                 case 1:
-                    type = Popup.MessageType.INFO
+                    msg_type = Popup.MessageType.INFO
                 case _:
-                    type = Popup.MessageType.UNKNOWN
+                    msg_type = Popup.MessageType.UNKNOWN
 
-            self.popup.new_message(message_type=type, message=message, userInput=ui)
+            self.popup.new_message(message_type=msg_type, message=message, timeout=3000)
 
         self.build_model_list()
 
@@ -309,17 +294,19 @@ class NotificationPage(QtWidgets.QWidget):
         self.info_frame = BlocksCustomFrame()
         self.info_frame.setMinimumSize(QtCore.QSize(200, 150))
 
-        self.spacer_item = QtWidgets.QSpacerItem(
-            20,
-            20,
-            QtWidgets.QSizePolicy.Policy.Minimum,
-            QtWidgets.QSizePolicy.Policy.Minimum,
-        )
-
         self.info_box_layout = QtWidgets.QGridLayout(self.info_frame)
         self.info_box_layout.setContentsMargins(0, 0, 0, 0)
 
-        self.info_box_layout.addItem(self.spacer_item, 0, 0)
+        self.info_box_layout.addItem(
+            QtWidgets.QSpacerItem(
+                20,
+                20,
+                QtWidgets.QSizePolicy.Policy.Minimum,
+                QtWidgets.QSizePolicy.Policy.Minimum,
+            ),
+            0,
+            0,
+        )
 
         self.type_title = QtWidgets.QLabel(self.info_frame)
         self.type_title.setText("Type:")
@@ -347,10 +334,10 @@ class NotificationPage(QtWidgets.QWidget):
         self.time_title.setFont(font)
         self.time_title.setStyleSheet("color:#FFFFFF")
 
-        self.time_title.setFont(font)
+        self.type_label.setFont(font)
         self.type_label.setStyleSheet("color:#FFFFFF")
 
-        self.time_title.setFont(font)
+        self.time_label.setFont(font)
         self.time_label.setStyleSheet("color:#FFFFFF")
 
         self.info_frame.setLayout(self.info_box_layout)
@@ -365,9 +352,15 @@ class NotificationPage(QtWidgets.QWidget):
 
         self.button_box = QtWidgets.QVBoxLayout()
         self.button_box.setContentsMargins(0, 0, 0, 0)
-        self.button_box.addSpacing(-1)
 
-        self.button_box.addItem(self.spacer_item)
+        self.button_box.addItem(
+            QtWidgets.QSpacerItem(
+                20,
+                20,
+                QtWidgets.QSizePolicy.Policy.Minimum,
+                QtWidgets.QSizePolicy.Policy.Minimum,
+            )
+        )
 
         self.delete_btn = BlocksCustomButton()
         self.delete_btn.setMinimumSize(QtCore.QSize(200, 60))
