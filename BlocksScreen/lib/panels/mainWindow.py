@@ -187,7 +187,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui.filament_type_icon.clicked.connect(
             lambda: self.global_change_page(
                 self.ui.main_content_widget.indexOf(self.ui.filamentTab),
-                self.filamentPanel.indexOf(self.filamentPanel),
+                2,
             )
         )
         self.ui.filament_type_icon.setText("PLA")

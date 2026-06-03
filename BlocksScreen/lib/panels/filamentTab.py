@@ -622,7 +622,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
                 ]
 
         if not self.amu_configured:
-            if len(mmu_state.gates) > 0:
+            if len(mmu_state.gates) > 1:
                 self.amupage = AMUpage(self.amu_manager, parent=self)
                 self.addWidget(self.amupage)
                 try:
