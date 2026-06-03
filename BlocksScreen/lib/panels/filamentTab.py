@@ -583,7 +583,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self._current_field = field
         self._qwerty.setPrefix(prefix)
         self._qwerty.setSuffix(suffix)
-        self._qwerty.setPatern(pattern)
+        self._qwerty.setPattern(pattern)
         self._qwerty.set_value(field.text().strip("#ºg"))
         self._qwerty.setMaxLength(max_char)
         self._qwerty.show()

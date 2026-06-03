@@ -74,7 +74,7 @@ class AddFilamentPage(QtWidgets.QWidget):
         self._keyboard_field = field
         self._keyboard.setPrefix(prefix)
         self._keyboard.setSuffix(suffix)
-        self._keyboard.setPatern(pattern)
+        self._keyboard.setPattern(pattern)
         self._keyboard.set_value(field.text().strip("#"))
         self._keyboard.setMaxLength(max_char)
         self._keyboard.show()
