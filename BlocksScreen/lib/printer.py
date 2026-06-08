@@ -327,7 +327,7 @@ class Printer(QtCore.QObject):
                             raise TypeError("QApplication.instance is None type.")
                     except Exception as e:
                         logger.debug(
-                            "Unable to send internal Klippy %s notification : %e",
+                            "Unable to send internal Klippy %s notification : %s",
                             _state_call,
                             e,
                         )

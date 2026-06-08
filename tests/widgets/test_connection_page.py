@@ -75,6 +75,21 @@ class TestSetState:
         assert page._state == ConnectionState.KLIPPER_SHUTDOWN
         assert "heater fault" in page.status_label.text()
 
+    def test_real_shutdown_blocks_subsequent_fallback(self, page):
+        page.webhook_update("shutdown", "heater fault")
+        page.on_klippy_state("shutdown")  # no-context path — should be rejected
+        assert "heater fault" in page.status_label.text()
+
+    def test_shutdown_confirmed_resets_on_state_change(self, page):
+        page.webhook_update("shutdown", "heater fault")
+        assert page._shutdown_confirmed is True
+        page._set_state(ConnectionState.KLIPPER_READY)
+        assert page._shutdown_confirmed is False
+
+    def test_real_shutdown_reason_can_be_overwritten_by_another_real_reason(self, page):
+        page.webhook_update("shutdown", "heater fault")
+        page.webhook_update("shutdown", "thermistor short")
+        assert "thermistor short" in page.status_label.text()
 
 class TestDotTimer:
     def test_connecting_starts_timer(self, page):
