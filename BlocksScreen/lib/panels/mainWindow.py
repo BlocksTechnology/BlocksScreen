@@ -209,6 +209,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.query_object_list.connect(self.utilitiesPanel.on_object_list)
         self.printer.extruder_update.connect(self.on_extruder_update)
         self.printer.heater_bed_update.connect(self.on_heater_bed_update)
+        self.printer.sensor_update.connect(self.on_temp_sensor_update)
         self.run_gcode_signal.connect(self.ws.api.run_gcode)
 
         self.ui.main_content_widget.currentChanged.connect(slot=self.reset_tab_indexes)
@@ -898,6 +899,17 @@ class MainWindow(QtWidgets.QMainWindow):
             self.ui.bed_temp_display.setText(f"{new_value:.1f}")
         elif field == "target":
             self.ui.bed_temp_display.secondary_text = f"{round(int(new_value)):.0f}"
+
+    @QtCore.pyqtSlot(str, str, float, name="sensor_update")
+    def on_temp_sensor_update(self, name: str, field: str, value: float) -> None:
+        """Handles Chamber temperature if a sensor with that name exists"""
+        if name == "Chamber":
+            if self.ui.chamber_temp_display.isHidden(): 
+                self.ui.chamber_temp_display.show()
+            if field == "temperature":
+                self.ui.chamber_temp_display.setText(str(value))
+            elif field == "humidity":
+                self.ui.chamber_temp_display.setSecondaryText(f"{str(value)}%" )
 
     @QtCore.pyqtSlot(str, name="set-header-filament-type")
     def set_header_filament_type(self, type: str):
