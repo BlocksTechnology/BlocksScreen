@@ -49,6 +49,13 @@ class ConnectionPage(QtWidgets.QFrame):
         }
     )
 
+    _FIRMWARE_RESTART_STATES: typing.ClassVar[frozenset[ConnectionState]] = frozenset(
+        {
+            ConnectionState.KLIPPER_ERROR,
+            ConnectionState.KLIPPER_SHUTDOWN,
+        }
+    )
+
     retry_connection_clicked: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         name="retry_connection_clicked"
     )
@@ -144,19 +151,17 @@ class ConnectionPage(QtWidgets.QFrame):
         dots = "." * self.dot_count
         self.status_label.setText(f"{self.base_text}{dots}")
 
-    _FIRMWARE_RESTART_STATES: typing.ClassVar[frozenset[ConnectionState]] = frozenset(
-        {
-            ConnectionState.KLIPPER_ERROR,
-            ConnectionState.KLIPPER_SHUTDOWN,
-        }
-    )
-
     def _update_restart_label(self, state: ConnectionState) -> None:
         """Set restart_klipper_button label based on current state."""
         if state in self._FIRMWARE_RESTART_STATES:
             self.restart_klipper_button.setText("Firmware Restart")
         else:
             self.restart_klipper_button.setText("Restart Printer")
+
+    @staticmethod
+    def _clean_shutdown_context(raw: str) -> str:
+        line = raw.split("\n")[0].strip()
+        return line.removeprefix("Shutdown due to ")
 
     def _on_restart_clicked(self) -> None:
         if self._state in self._FIRMWARE_RESTART_STATES:
@@ -214,7 +219,13 @@ class ConnectionPage(QtWidgets.QFrame):
     def webhook_update(self, state: str, message: str) -> None:
         """Handle Moonraker websocket state updates."""
         if state == "shutdown":
-            self._set_state(ConnectionState.KLIPPER_SHUTDOWN, context=message)
+            _cleaned = (
+                self._clean_shutdown_context(message) or _SHUTDOWN_FALLBACK_CONTEXT
+            )
+            self._set_state(
+                ConnectionState.KLIPPER_SHUTDOWN,
+                context=_cleaned,
+            )
 
     def showEvent(self, a0: QtGui.QShowEvent | None) -> None:  # noqa: N802
         if self.conn_toggle:
@@ -232,7 +243,7 @@ class ConnectionPage(QtWidgets.QFrame):
         elif a1.type() == KlippyReady.type():
             self._set_state(ConnectionState.KLIPPER_READY)
         elif a1.type() == KlippyShutdown.type():
-            _raw = str(getattr(a1, "data", ""))
+            _raw = self._clean_shutdown_context(str(getattr(a1, "data", "")))
             _context = (
                 _raw
                 if _raw and _raw.lower() not in {"shutdown", "none", ""}
