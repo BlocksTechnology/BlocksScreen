@@ -91,18 +91,16 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
         self._retry_timer = RepeatedTimer(self.timeout, self.reconnect)
         return self.connect()
 
-    def reconnect(self):
+    def reconnect(self) -> bool:
         """Reconnect to websocket"""
         if self.connected:
             return True
-
         if self._reconnect_count >= self.max_retries:
-            self._retry_timer.stopTimer()
+            self._reconnect_count = 0
             unable_to_connect_event = WebSocketError(
                 data="Unable to establish connection to Websocket"
             )
             self.connecting_signal[int].emit(0)
-            self.connecting = False
             try:
                 instance = QtWidgets.QApplication.instance()
                 if instance is not None:
@@ -113,10 +111,9 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
                 logger.error(
                     f"Error on sending Event {unable_to_connect_event.__class__.__name__} | Error message: {e}"
                 )
-            logger.info(
+            logger.warning(
                 "Maximum number of connection retries reached, Unable to establish connection with Moonraker"
             )
-            return False
         return self.connect()
 
     def connect(self) -> bool:
@@ -230,6 +227,7 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
         _ws = args[0] if len(args) == 1 else None
         self.connecting = False
         self.connected = True
+        self._reconnect_count = 0
         self.evaluate_klippy_status()
         open_event = WebSocketOpen(data="Connected")
         try:

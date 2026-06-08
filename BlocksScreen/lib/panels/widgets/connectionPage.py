@@ -1,5 +1,6 @@
 import enum
 import logging
+import re
 import typing
 
 from events import KlippyDisconnected, KlippyReady, KlippyShutdown
@@ -23,10 +24,9 @@ class ConnectionState(enum.Enum):
     KLIPPER_SHUTDOWN = "klipper_shutdown"
 
 
-_SHUTDOWN_FALLBACK_CONTEXT = "Press Firmware Restart to recover."
-
-
 class ConnectionPage(QtWidgets.QFrame):
+    _SHUTDOWN_FALLBACK_CONTEXT: typing.Final[str] = "Press Firmware Restart to recover."
+
     _MESSAGES: typing.ClassVar[dict[ConnectionState, str]] = {
         ConnectionState.DISCONNECTED: "The printer is offline.\nReconnecting automatically…",
         ConnectionState.CONNECTING: "Connecting to the printer…\nAttempt {n}",
@@ -55,6 +55,16 @@ class ConnectionPage(QtWidgets.QFrame):
             ConnectionState.KLIPPER_SHUTDOWN,
         }
     )
+
+    _SHUTDOWN_NOISE: typing.ClassVar[frozenset[str]] = frozenset(
+        {"forced shutdown command", "forced shutdown", "shutdown", "none", ""}
+    )
+
+    _RESTART_LABELS: typing.ClassVar[dict[ConnectionState, str]] = {
+        ConnectionState.KLIPPER_ERROR: "Firmware Restart",
+        ConnectionState.KLIPPER_SHUTDOWN: "Firmware Restart",
+        ConnectionState.WEBSOCKET_LOST: "Retry Connection",
+    }
 
     retry_connection_clicked: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         name="retry_connection_clicked"
@@ -117,7 +127,9 @@ class ConnectionPage(QtWidgets.QFrame):
         ):
             self._shutdown_confirmed = False
         if state == ConnectionState.KLIPPER_SHUTDOWN:
-            _is_real = bool(context) and context != _SHUTDOWN_FALLBACK_CONTEXT
+            _is_real = (
+                bool(context) and context != ConnectionPage._SHUTDOWN_FALLBACK_CONTEXT
+            )
             if _is_real:
                 self._shutdown_confirmed = True
             elif self._shutdown_confirmed or (
@@ -153,19 +165,26 @@ class ConnectionPage(QtWidgets.QFrame):
 
     def _update_restart_label(self, state: ConnectionState) -> None:
         """Set restart_klipper_button label based on current state."""
-        if state in self._FIRMWARE_RESTART_STATES:
-            self.restart_klipper_button.setText("Firmware Restart")
-        else:
-            self.restart_klipper_button.setText("Restart Printer")
+        self.restart_klipper_button.setText(
+            self._RESTART_LABELS.get(state, "Restart Printer")
+        )
 
     @staticmethod
     def _clean_shutdown_context(raw: str) -> str:
-        line = raw.split("\n")[0].strip()
-        return line.removeprefix("Shutdown due to ")
+        line = re.sub(
+            r"^(?:Shutdown due to |MCU '[^']*' shutdown[:.]\s*)",
+            "",
+            raw.split("\n")[0].strip(),
+        )
+        if line.lower() in ConnectionPage._SHUTDOWN_NOISE:
+            return ""
+        return line
 
     def _on_restart_clicked(self) -> None:
         if self._state in self._FIRMWARE_RESTART_STATES:
             self.firmware_restart_clicked.emit()
+        elif self._state == ConnectionState.WEBSOCKET_LOST:
+            self.retry_connection_clicked.emit()
         else:
             self.restart_klipper_clicked.emit()
 
@@ -219,12 +238,15 @@ class ConnectionPage(QtWidgets.QFrame):
     def webhook_update(self, state: str, message: str) -> None:
         """Handle Moonraker websocket state updates."""
         if state == "shutdown":
-            _cleaned = (
-                self._clean_shutdown_context(message) or _SHUTDOWN_FALLBACK_CONTEXT
+            _reason = self._clean_shutdown_context(message)
+            _context = (
+                f"{_reason}\nPress Firmware Restart to recover."
+                if _reason
+                else self._SHUTDOWN_FALLBACK_CONTEXT
             )
             self._set_state(
                 ConnectionState.KLIPPER_SHUTDOWN,
-                context=_cleaned,
+                context=_context,
             )
 
     def showEvent(self, a0: QtGui.QShowEvent | None) -> None:  # noqa: N802
@@ -243,11 +265,11 @@ class ConnectionPage(QtWidgets.QFrame):
         elif a1.type() == KlippyReady.type():
             self._set_state(ConnectionState.KLIPPER_READY)
         elif a1.type() == KlippyShutdown.type():
-            _raw = self._clean_shutdown_context(str(getattr(a1, "data", "")))
+            _reason = self._clean_shutdown_context(str(getattr(a1, "data", "")))
             _context = (
-                _raw
-                if _raw and _raw.lower() not in {"shutdown", "none", ""}
-                else _SHUTDOWN_FALLBACK_CONTEXT
+                f"{_reason}\nPress Firmware Restart to recover."
+                if _reason
+                else self._SHUTDOWN_FALLBACK_CONTEXT
             )
             self._set_state(
                 ConnectionState.KLIPPER_SHUTDOWN,
