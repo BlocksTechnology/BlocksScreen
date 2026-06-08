@@ -49,6 +49,7 @@
     <file>media/btn_icons/blower.svg</file>
   </qresource>
   <qresource prefix="temperature_related">
+    <file>media/btn_icons/humidity_raindrop_icon_bw.svg</file>
     <file>media/btn_icons/standart_temperature.svg</file>
     <file>media/btn_icons/temperature.svg</file>
     <file>media/btn_icons/temperature_error.svg</file>
