@@ -24,7 +24,6 @@ class Printer(QtCore.QObject):
     fan_update = QtCore.pyqtSignal(
         [str, str, float], [str, str, int], name="fan_update"
     )
-    chamber_update = QtCore.pyqtSignal(name="chamber_update")
 
     idle_timeout_update = QtCore.pyqtSignal(
         [str, float], [str, str], name="idle_timeout_update"
@@ -114,8 +113,6 @@ class Printer(QtCore.QObject):
         self.ws = ws
         self.active_extruder_name: str = ""
         self.available_filament_sensors: dict = {}
-        self.has_chamber: bool = False
-
         _heater_attributes: dict = {
             "current_temperature": 0.0,
             "target_temperature": 0.0,
@@ -443,8 +440,6 @@ class Printer(QtCore.QObject):
         if "power" in value.keys():
             self.heater_bed_update.emit(heater_name, "power", value["power"])
 
-    def _chamber_object_updated(self, value: dict, heater_name: str = "chamber"):
-        self.has_chamber = True
 
     def _fan_object_updated(self, value: dict, fan_name: str = "fan") -> None:
         if "speed" in value.keys():
@@ -605,7 +600,7 @@ class Printer(QtCore.QObject):
                 values["measured_max_temp"],
             )
         if "humidity" in values.keys(): 
-            self.temperature_sensor_update.emit(
+            self.sensor_update.emit(
                     temperature_sensor_name, 
                     "humidity", 
                     values["humidity"]
@@ -613,7 +608,7 @@ class Printer(QtCore.QObject):
 
     def _aht10_object_updated(
         self,
-        values: dict,
+        values: dict[str, float],
         sensor_name: str,
     ) -> None:
         if "temperature" in values.keys():
