@@ -233,7 +233,7 @@ class DisplayButton(QtWidgets.QPushButton):
                     )
                     _downer_rect = QtCore.QRectF(
                         _mtl.left() + margin,
-                        (_upper_rect.bottom() + margin + 5),
+                        (_upper_rect.bottom() + margin + 2),
                         _mtl.width() - margin * 2,
                         (_mtl.height() * 0.5) // 2,
                     )
@@ -307,7 +307,7 @@ class DisplayButton(QtWidgets.QPushButton):
                     painter.drawText(
                         _first_text_rect,
                         QtCore.Qt.TextFlag.TextShowMnemonic
-                        | QtCore.Qt.AlignmentFlag.AlignHCenter
+                        | QtCore.Qt.AlignmentFlag.AlignRight
                         | QtCore.Qt.AlignmentFlag.AlignVCenter,
                         str(self.text()) if self.text() else "?",
                     )
@@ -339,7 +339,7 @@ class DisplayButton(QtWidgets.QPushButton):
                     painter.drawText(
                         _second_text_rect,
                         QtCore.Qt.TextFlag.TextShowMnemonic
-                        | QtCore.Qt.AlignmentFlag.AlignHCenter
+                        | QtCore.Qt.AlignmentFlag.AlignRight
                         | QtCore.Qt.AlignmentFlag.AlignVCenter,
                         str(self.secondary_text) if self.secondary_text else "?",
                     )
