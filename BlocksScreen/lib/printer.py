@@ -311,6 +311,8 @@ class Printer(QtCore.QObject):
             self.webhooks_update.emit(value["state"], value["state_message"])
             logger.debug("Webhooks message received")
             _state: str = value["state"]
+            if _state == "shutdown":
+                return
             _state_upper = _state[0].upper()
             _state_call = f"{_state_upper}{_state[1:]}"
             if hasattr(events, f"Klippy{_state_call}"):

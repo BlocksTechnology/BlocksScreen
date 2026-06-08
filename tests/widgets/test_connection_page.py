@@ -33,7 +33,7 @@ class TestSetState:
     def test_disconnected(self, page):
         page._set_state(ConnectionState.DISCONNECTED)
         assert page._state == ConnectionState.DISCONNECTED
-        assert "unreachable" in page.status_label.text()
+        assert "offline" in page.status_label.text()
 
     def test_connecting(self, page):
         page._set_state(ConnectionState.CONNECTING, context="3")
@@ -43,12 +43,12 @@ class TestSetState:
     def test_websocket_lost(self, page):
         page._set_state(ConnectionState.WEBSOCKET_LOST)
         assert page._state == ConnectionState.WEBSOCKET_LOST
-        assert "lost" in page.status_label.text()
+        assert "interrupted" in page.status_label.text()
 
     def test_moonraker_connected(self, page):
         page._set_state(ConnectionState.MOONRAKER_CONNECTED)
         assert page._state == ConnectionState.MOONRAKER_CONNECTED
-        assert "Connected to Moonraker" in page.status_label.text()
+        assert "Connection established" in page.status_label.text()
 
     def test_klipper_startup(self, page):
         page._set_state(ConnectionState.KLIPPER_STARTUP)
@@ -63,7 +63,7 @@ class TestSetState:
     def test_klipper_disconnected(self, page):
         page._set_state(ConnectionState.KLIPPER_DISCONNECTED)
         assert page._state == ConnectionState.KLIPPER_DISCONNECTED
-        assert "not connected" in page.status_label.text()
+        assert "not responding" in page.status_label.text()
 
     def test_klipper_error(self, page):
         page._set_state(ConnectionState.KLIPPER_ERROR)
@@ -155,7 +155,7 @@ class TestRestartButton:
 
     def test_normal_label_says_restart_klipper(self, page, qtbot):
         page._set_state(ConnectionState.KLIPPER_DISCONNECTED)
-        assert page.restart_klipper_button.text() == "Restart Klipper"
+        assert page.restart_klipper_button.text() == "Restart Printer"
 
 
 class TestSignalWiring:

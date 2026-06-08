@@ -23,17 +23,20 @@ class ConnectionState(enum.Enum):
     KLIPPER_SHUTDOWN = "klipper_shutdown"
 
 
+_SHUTDOWN_FALLBACK_CONTEXT = "Press Firmware Restart to recover."
+
+
 class ConnectionPage(QtWidgets.QFrame):
     _MESSAGES: typing.ClassVar[dict[ConnectionState, str]] = {
-        ConnectionState.DISCONNECTED: "Moonraker is unreachable.\nReconnecting automatically…",
-        ConnectionState.CONNECTING: "Connecting to Moonraker…\nAttempt {n}",
-        ConnectionState.WEBSOCKET_LOST: "Connection to Moonraker was lost.\nAttempting to reconnect…",
-        ConnectionState.MOONRAKER_CONNECTED: "Connected to Moonraker.\nWaiting for Klipper to respond…",
-        ConnectionState.KLIPPER_STARTUP: "Klipper is starting up.\nPlease wait…",
-        ConnectionState.KLIPPER_READY: "Klipper is ready.",
-        ConnectionState.KLIPPER_DISCONNECTED: "Klipper is not connected.\nPress Restart Klipper to reconnect.",
-        ConnectionState.KLIPPER_ERROR: "Klipper has reported an error.\nPress Restart Klipper to recover.",
-        ConnectionState.KLIPPER_SHUTDOWN: "Klipper has shut down.\n{message}",
+        ConnectionState.DISCONNECTED: "The printer is offline.\nReconnecting automatically…",
+        ConnectionState.CONNECTING: "Connecting to the printer…\nAttempt {n}",
+        ConnectionState.WEBSOCKET_LOST: "Connection to the printer was interrupted.\nAttempting to reconnect…",
+        ConnectionState.MOONRAKER_CONNECTED: "Connection established.\nWaiting for the printer to initialise…",
+        ConnectionState.KLIPPER_STARTUP: "The printer is starting up.\nPlease wait…",
+        ConnectionState.KLIPPER_READY: "The printer is ready.",
+        ConnectionState.KLIPPER_DISCONNECTED: "The printer is not responding.\nPress Restart Printer to reconnect.",
+        ConnectionState.KLIPPER_ERROR: "A printer error has occurred.\nPress Firmware Restart to recover.",
+        ConnectionState.KLIPPER_SHUTDOWN: "The printer has shut down.\n{message}",
     }
 
     _AUTO_SHOW_STATES: typing.ClassVar[frozenset[ConnectionState]] = frozenset(
@@ -46,9 +49,6 @@ class ConnectionPage(QtWidgets.QFrame):
         }
     )
 
-    text_updated: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
-        int, name="connection_text_updated"
-    )
     retry_connection_clicked: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         name="retry_connection_clicked"
     )
@@ -86,6 +86,9 @@ class ConnectionPage(QtWidgets.QFrame):
         self.base_text: str = ""
         self.dot_count: int = 0
         self.conn_toggle: bool = True
+        self._shutdown_confirmed: bool = (
+            False  # prevents fallback from overwriting shutdown reason
+        )
 
         self.dot_timer = QtCore.QTimer(self)
         self.dot_timer.setInterval(1000)
@@ -101,6 +104,20 @@ class ConnectionPage(QtWidgets.QFrame):
 
     def _set_state(self, state: ConnectionState, context: str = "") -> None:
         """Update connection state and refresh the UI accordingly."""
+        if (
+            self._state == ConnectionState.KLIPPER_SHUTDOWN
+            and state != ConnectionState.KLIPPER_SHUTDOWN
+        ):
+            self._shutdown_confirmed = False
+        if state == ConnectionState.KLIPPER_SHUTDOWN:
+            _is_real = bool(context) and context != _SHUTDOWN_FALLBACK_CONTEXT
+            if _is_real:
+                self._shutdown_confirmed = True
+            elif self._shutdown_confirmed or (
+                self._state == ConnectionState.KLIPPER_SHUTDOWN and not context
+            ):
+                return
+
         self.dot_timer.stop()
         self._state = state
         message = self._MESSAGES[state].format(n=context, message=context)
@@ -110,7 +127,6 @@ class ConnectionPage(QtWidgets.QFrame):
             self.dot_count = 0
             self.dot_timer.start()
         if state == ConnectionState.KLIPPER_READY:
-            self._update_restart_label(state)
             self.hide()
             return
         if (
@@ -140,7 +156,7 @@ class ConnectionPage(QtWidgets.QFrame):
         if state in self._FIRMWARE_RESTART_STATES:
             self.restart_klipper_button.setText("Firmware Restart")
         else:
-            self.restart_klipper_button.setText("Restart Klipper")
+            self.restart_klipper_button.setText("Restart Printer")
 
     def _on_restart_clicked(self) -> None:
         if self._state in self._FIRMWARE_RESTART_STATES:
@@ -163,14 +179,6 @@ class ConnectionPage(QtWidgets.QFrame):
             self.status_label.setText(reason)
             return True
         return False
-
-    @QtCore.pyqtSlot(bool, name="on_klippy_connection")
-    def on_klippy_connection(self, connected: bool) -> None:
-        """Handle Klipper connection state changes."""
-        if connected:
-            self._set_state(ConnectionState.KLIPPER_STARTUP)
-        else:
-            self._set_state(ConnectionState.KLIPPER_DISCONNECTED)
 
     @QtCore.pyqtSlot(str, name="on_klippy_state")
     def on_klippy_state(self, state: str) -> None:
@@ -228,7 +236,7 @@ class ConnectionPage(QtWidgets.QFrame):
             _context = (
                 _raw
                 if _raw and _raw.lower() not in {"shutdown", "none", ""}
-                else "No shutdown reason was provided. Press Firmware Restart to recover."
+                else _SHUTDOWN_FALLBACK_CONTEXT
             )
             self._set_state(
                 ConnectionState.KLIPPER_SHUTDOWN,
@@ -304,7 +312,7 @@ class ConnectionPage(QtWidgets.QFrame):
         )
         self.restart_klipper_button.setProperty("has_text", True)
         self.restart_klipper_button.setProperty("text_formatting", "bottom")
-        self.restart_klipper_button.setText("Restart Klipper")
+        self.restart_klipper_button.setText("Restart Printer")
         self.restart_klipper_button.setObjectName("restart_klipper_button")
         self.button_layout.addWidget(
             self.restart_klipper_button,
@@ -349,7 +357,7 @@ class ConnectionPage(QtWidgets.QFrame):
         )
         self.update_page_button.setProperty("has_text", True)
         self.update_page_button.setProperty("text_formatting", "bottom")
-        self.update_page_button.setText("Update page")
+        self.update_page_button.setText("Updates")
         self.update_page_button.setObjectName("update_page_button")
         self.button_layout.addWidget(
             self.update_page_button,
@@ -370,7 +378,7 @@ class ConnectionPage(QtWidgets.QFrame):
         self.wifi_button.setProperty("has_text", True)
         self.wifi_button.setProperty("text_formatting", "bottom")
         self.wifi_button.setProperty("class", "system_control_btn")
-        self.wifi_button.setText("Wifi Settings")
+        self.wifi_button.setText("Wi-Fi Settings")
         self.wifi_button.setObjectName("wifi_button")
         self.button_layout.addWidget(
             self.wifi_button,

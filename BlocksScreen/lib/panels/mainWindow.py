@@ -153,7 +153,6 @@ class MainWindow(QtWidgets.QMainWindow):
             self.conn_window.on_websocket_connection_achieved
         )
         self.ws.connection_lost.connect(self.conn_window.on_websocket_connection_lost)
-        self.ws.klippy_connected_signal.connect(self.conn_window.on_klippy_connection)
         self.ws.klippy_state_signal.connect(self._on_klippy_state)
         self.ws.klippy_state_signal.connect(self.conn_window.on_klippy_state)
         self.printer.webhooks_update.connect(self.conn_window.webhook_update)
@@ -698,9 +697,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 )
                 if callable(_klippy_event_callback):
                     try:
-                        _event = _klippy_event_callback(
-                            data=f"Moonraker reported klippy is {_state_call}"
-                        )
+                        _event = _klippy_event_callback(data="")
                         instance = QtWidgets.QApplication.instance()
                         if not isinstance(_event, QtCore.QEvent):
                             return

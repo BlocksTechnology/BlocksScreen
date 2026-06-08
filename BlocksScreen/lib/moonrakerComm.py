@@ -2,6 +2,7 @@
 import json
 import logging
 import threading
+import typing
 
 import websocket
 from events import (
@@ -43,6 +44,13 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
     klippy_connected_signal = QtCore.pyqtSignal(bool, name="klippy_connection_status")
     klippy_state_signal = QtCore.pyqtSignal(str, name="klippy_state")
     query_server_info_signal = QtCore.pyqtSignal(name="query_server_information")
+
+    _KLIPPY_NOTIFY_METHODS: typing.ClassVar[frozenset[str]] = frozenset(
+        {
+            "notify_klippy_disconnected",
+            "notify_klippy_shutdown",
+        }
+    )
 
     def __init__(self, parent: QtCore.QObject) -> None:
         super().__init__(parent)
@@ -248,23 +256,22 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
         )  # First argument is ws second is message
 
         response: dict = json.loads(_message)
+        message_event = None
         if "id" in response and response["id"] in self.request_table:
             _entry = self.request_table.pop(response["id"])
             if "server.info" in _entry[0]:
-                if response["result"]["klippy_state"] == "ready":
+                _klippy_state = response["result"]["klippy_state"]
+                if _klippy_state == "ready":
                     self.query_klippy_status_timer.stopTimer()
                     self.api.update_status()  # Request update status immediately after klippy ready DEVDEBT
-                elif response["result"]["klippy_state"] == "startup":
+                elif _klippy_state == "startup":
                     # request server.info in 2 seconds
                     if not self.query_klippy_status_timer.running:
                         self.query_klippy_status_timer.startTimer()
-                elif response["result"]["klippy_state"] == "disconnected":
+                elif _klippy_state == "disconnected":
                     if not self.query_klippy_status_timer.running:
                         self.query_klippy_status_timer.startTimer()
-                self.klippy_connected_signal.emit(
-                    response["result"]["klippy_connected"]
-                )
-                self.klippy_state_signal.emit(response["result"]["klippy_state"])
+                self.klippy_state_signal.emit(_klippy_state)
                 return
             else:
                 if "error" in response:
@@ -280,20 +287,18 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
                         metadata=_entry,
                     )
         elif "method" in response:
-            if str(response["method"]).lower() in (
-                "notify_klippy_disconnected",
-                "notify_klippy_shutdown",
-            ):
+            if response["method"] in self._KLIPPY_NOTIFY_METHODS:
                 self.evaluate_klippy_status()
-
             message_event = (
                 WebSocketMessageReceived(  # mainly used to pass websocket notifications
-                    method=str(response["method"]),
+                    method=response["method"],
                     data=response,
                     metadata=None,
                 )
             )
 
+        if message_event is None:
+            return
         try:
             instance = QtWidgets.QApplication.instance()
             if instance:
@@ -301,7 +306,9 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
             else:
                 raise TypeError("QApplication.instance expected non None value")
         except Exception as e:
-            logger.info(f"Unexpected error while creating websocket message event: {e}")
+            logger.error(
+                "Unexpected error while creating websocket message event: %s", e
+            )
 
     def send_request(self, method: str, params: dict = {}) -> bool:
         """Send a request over the websocket
