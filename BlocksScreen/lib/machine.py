@@ -34,6 +34,11 @@ class MachineControl(QtCore.QObject):
             ["sudo", "systemctl", "restart", "klipper.service", "--no-block"]
         )
 
+    @QtCore.pyqtSlot(name="restart_klipper_mcu_service")
+    def restart_klipper_mcu_service(self):
+        """Start klipper-mcu service if not already running"""
+        return self._run_command(["sudo", "systemctl", "start", "klipper-mcu.service"])
+
     @QtCore.pyqtSlot(name="restart_moonraker_service")
     def restart_moonraker_service(self):
         """Restart moonraker service"""

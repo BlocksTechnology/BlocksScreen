@@ -178,7 +178,7 @@ class ConnectionPage(QtWidgets.QFrame):
         )
         if line.lower() in ConnectionPage._SHUTDOWN_NOISE:
             return ""
-        return line
+        return line.capitalize()
 
     def _on_restart_clicked(self) -> None:
         if self._state in self._FIRMWARE_RESTART_STATES:

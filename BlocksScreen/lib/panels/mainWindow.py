@@ -192,8 +192,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui.filament_type_icon.update()
         self.ui.nozzle_size_icon.setText("0.4mm")
         self.ui.nozzle_size_icon.update()
-
         self.conn_window.retry_connection_clicked.connect(slot=self.ws.retry_wb_conn)
+        self.conn_window.firmware_restart_clicked.connect(
+            slot=self.mc.restart_klipper_mcu_service
+        )
         self.conn_window.firmware_restart_clicked.connect(
             slot=self.ws.api.firmware_restart
         )

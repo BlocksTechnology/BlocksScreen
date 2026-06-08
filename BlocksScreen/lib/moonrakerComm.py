@@ -68,6 +68,7 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
         self.api: MoonAPI = MoonAPI(self)
         self._retry_timer: RepeatedTimer
         websocket.setdefaulttimeout(self.timeout)
+        self._intentional_disconnect: bool = False
 
         self.query_server_info_signal.connect(self.api.api_query_server_info)
         self.query_klippy_status_timer = RepeatedTimer(
@@ -85,8 +86,11 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
         self._reconnect_count = 0
         self.try_connection()
 
+    @QtCore.pyqtSlot(name="try_connection")
     def try_connection(self):
         """Try connecting to websocket"""
+        if self.connecting:
+            return
         self.connecting = True
         self._retry_timer = RepeatedTimer(self.timeout, self.reconnect)
         return self.connect()
@@ -145,8 +149,6 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
             on_error=self.on_error,
             on_message=self.on_message,
         )
-        _kwargs = {"reconnect": self.timeout}  # FIXME: This goes nowhere
-
         self._wst = threading.Thread(
             name="websocket.run_forever",
             target=self.ws.run_forever,
@@ -164,6 +166,7 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
     def wb_disconnect(self) -> None:
         """Websocket disconnect"""
         if self._wst is not None and self.ws is not None:
+            self._intentional_disconnect = True
             self.ws.close()
             if self._wst.is_alive():
                 self._wst.join()
@@ -211,6 +214,11 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
         logger.info(
             f"Websocket closed, code: {_close_status_code}, message: {_close_message}"
         )
+        if not self.connecting and not self._intentional_disconnect:
+            QtCore.QMetaObject.invokeMethod(
+                self, "try_connection", QtCore.Qt.ConnectionType.QueuedConnection
+            )
+        self._intentional_disconnect = False
 
     @QtCore.pyqtSlot(name="evaluate_klippy_status")
     def evaluate_klippy_status(self) -> None:
