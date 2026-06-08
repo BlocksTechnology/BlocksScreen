@@ -25,7 +25,7 @@ class ConnectionState(enum.Enum):
 
 
 class ConnectionPage(QtWidgets.QFrame):
-    _SHUTDOWN_FALLBACK_CONTEXT: typing.Final[str] = "Press Firmware Restart to recover."
+    _SHUTDOWN_FALLBACK_CONTEXT: typing.Final[str] = "Press firmware restart to recover."
 
     _MESSAGES: typing.ClassVar[dict[ConnectionState, str]] = {
         ConnectionState.DISCONNECTED: "The printer is offline.\nReconnecting automatically…",
@@ -34,8 +34,8 @@ class ConnectionPage(QtWidgets.QFrame):
         ConnectionState.MOONRAKER_CONNECTED: "Connection established.\nWaiting for the printer to initialise…",
         ConnectionState.KLIPPER_STARTUP: "The printer is starting up.\nPlease wait…",
         ConnectionState.KLIPPER_READY: "The printer is ready.",
-        ConnectionState.KLIPPER_DISCONNECTED: "The printer is not responding.\nPress Restart Printer to reconnect.",
-        ConnectionState.KLIPPER_ERROR: "A printer error has occurred.\nPress Firmware Restart to recover.",
+        ConnectionState.KLIPPER_DISCONNECTED: "The printer is not responding.\nPress restart printer to reconnect.",
+        ConnectionState.KLIPPER_ERROR: "A printer error has occurred.\nPress firmware restart to recover.",
         ConnectionState.KLIPPER_SHUTDOWN: "The printer has shut down.\n{message}",
     }
 
@@ -106,6 +106,7 @@ class ConnectionPage(QtWidgets.QFrame):
         self._shutdown_confirmed: bool = (
             False  # prevents fallback from overwriting shutdown reason
         )
+        self._firmware_restarting_pending: bool = False
 
         self.dot_timer = QtCore.QTimer(self)
         self.dot_timer.setInterval(1000)
@@ -136,7 +137,11 @@ class ConnectionPage(QtWidgets.QFrame):
                 self._state == ConnectionState.KLIPPER_SHUTDOWN and not context
             ):
                 return
-
+        if (
+            state == ConnectionState.KLIPPER_DISCONNECTED
+            and self._firmware_restarting_pending
+        ):
+            return
         self.dot_timer.stop()
         self._state = state
         message = self._MESSAGES[state].format(n=context, message=context)
@@ -146,6 +151,7 @@ class ConnectionPage(QtWidgets.QFrame):
             self.dot_count = 0
             self.dot_timer.start()
         if state == ConnectionState.KLIPPER_READY:
+            self._firmware_restarting_pending = False
             self.hide()
             return
         if (
@@ -181,7 +187,9 @@ class ConnectionPage(QtWidgets.QFrame):
         return line.capitalize()
 
     def _on_restart_clicked(self) -> None:
+        self.restart_klipper_button.setEnabled(True)
         if self._state in self._FIRMWARE_RESTART_STATES:
+            self._firmware_restarting_pending = True
             self.firmware_restart_clicked.emit()
         elif self._state == ConnectionState.WEBSOCKET_LOST:
             self.retry_connection_clicked.emit()
@@ -240,7 +248,7 @@ class ConnectionPage(QtWidgets.QFrame):
         if state == "shutdown":
             _reason = self._clean_shutdown_context(message)
             _context = (
-                f"{_reason}\nPress Firmware Restart to recover."
+                f"{_reason}\nPress firmware restart to recover."
                 if _reason
                 else self._SHUTDOWN_FALLBACK_CONTEXT
             )
@@ -261,13 +269,14 @@ class ConnectionPage(QtWidgets.QFrame):
         if a1 is None:
             return super().eventFilter(a0, a1)
         if a1.type() == KlippyDisconnected.type():
-            self._set_state(ConnectionState.KLIPPER_DISCONNECTED)
+            if not self._firmware_restarting_pending:
+                self._set_state(ConnectionState.KLIPPER_DISCONNECTED)
         elif a1.type() == KlippyReady.type():
             self._set_state(ConnectionState.KLIPPER_READY)
         elif a1.type() == KlippyShutdown.type():
             _reason = self._clean_shutdown_context(str(getattr(a1, "data", "")))
             _context = (
-                f"{_reason}\nPress Firmware Restart to recover."
+                f"{_reason}\nPress firmware restart to recover."
                 if _reason
                 else self._SHUTDOWN_FALLBACK_CONTEXT
             )
