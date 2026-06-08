@@ -45,9 +45,11 @@ class Printer(QtCore.QObject):
         [str, dict], [str, float], [str, str], name="print_stats_update"
     )
     display_update = QtCore.pyqtSignal([str, str], [str, float], name="display_update")
-    temperature_sensor_update = QtCore.pyqtSignal(
-        str, str, float, name="temperature_sensor_update"
-    )
+    sensor_update = QtCore.pyqtSignal(str, str, float, name="sensor_update")
+    # temperature_sensor_update = QtCore.pyqtSignal(
+    #     str, str, float, name="temperature_sensor_update"
+    # )
+    # aht10_sensor_update = QtCore.pyqtSignal(str, str, float, name="aht10_sensor_update")
     temperature_fan_update = QtCore.pyqtSignal(
         str, str, float, name="temperature_fan_update"
     )
@@ -162,6 +164,7 @@ class Printer(QtCore.QObject):
     def on_object_list(self, object_list: list):
         """Handle receiving Printer object list"""
         self.available_objects = dict.fromkeys(object_list, None)
+        print(self.available_objects)
         self.request_object_subscription_signal[dict].emit(self.available_objects)
 
     def has_config_keyword(self, section: str) -> bool:
@@ -586,17 +589,17 @@ class Printer(QtCore.QObject):
         self, values: dict, temperature_sensor_name: str
     ) -> None:
         if "temperature" in values.keys():
-            self.temperature_sensor_update.emit(
+            self.sensor_update.emit(
                 temperature_sensor_name, "temperature", values["temperature"]
             )
         if "measured_min_temp" in values.keys():
-            self.temperature_sensor_update.emit(
+            self.sensor_update.emit(
                 temperature_sensor_name,
                 "measured_min_temp",
                 values["measured_min_temp"],
             )
         if "measured_max_temp" in values.keys():
-            self.temperature_sensor_update.emit(
+            self.sensor_update.emit(
                 temperature_sensor_name,
                 "measured_max_temp",
                 values["measured_max_temp"],
@@ -607,6 +610,16 @@ class Printer(QtCore.QObject):
                     "humidity", 
                     values["humidity"]
             )
+
+    def _aht10_object_updated(
+        self,
+        values: dict,
+        sensor_name: str,
+    ) -> None:
+        if "temperature" in values.keys():
+            self.sensor_update.emit(sensor_name, "temperature", values["temperature"])
+        if "humidity" in values.keys():
+            self.sensor_update.emit(sensor_name, "humidity", values["humidity"])
 
     def _temperature_fan_object_updated(
         self, values: dict, temperature_fan_name: str = ""
