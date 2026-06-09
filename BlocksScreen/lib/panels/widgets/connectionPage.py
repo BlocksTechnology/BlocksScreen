@@ -43,7 +43,7 @@ class ConnectionPage(QtWidgets.QFrame):
 
     _SHUTDOWN_REASON_MAP: typing.ClassVar[dict[str, str]] = {
         "m112 command": "Emergency stop activated.\nRelease the emergency button, then press 'Firmware Restart' to recover.",
-        "printer's emergency button pressed": "Emergency stop activated.\nRelease the emergency button, then press 'Firmware Restart' to recover.",
+        "printers emergency button pressed": "Emergency stop activated.\nRelease the emergency button, then press 'Firmware Restart' to recover.",
         "printer emergency button pressed": "Emergency stop activated.\nRelease the emergency button, then press 'Firmware Restart' to recover.",
         "webhooks request": "Emergency stop activated.",
         "lost communication with mcu": "Lost communication with the MCU.",
@@ -229,7 +229,7 @@ class ConnectionPage(QtWidgets.QFrame):
             "",
             raw.split("\n")[0].strip(),
         )
-        lower = line.lower()
+        lower = line.lower().replace("'", "").replace("’", "")
         if lower in ConnectionPage._SHUTDOWN_NOISE:
             return ""
         for key, display in ConnectionPage._SHUTDOWN_REASON_MAP.items():
