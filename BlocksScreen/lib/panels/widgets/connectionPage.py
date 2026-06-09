@@ -131,6 +131,16 @@ class ConnectionPage(QtWidgets.QFrame):
         self.dot_timer.setInterval(1000)
         self.dot_timer.timeout.connect(self._add_dot)
 
+        self._restart_10s_timer = QtCore.QTimer(self)
+        self._restart_10s_timer.setSingleShot(True)
+        self._restart_10s_timer.setInterval(10_000)
+        self._restart_10s_timer.timeout.connect(self._on_restart_10s_elapsed)
+
+        self._restart_30s_timer = QtCore.QTimer(self)
+        self._restart_30s_timer.setSingleShot(True)
+        self._restart_30s_timer.setInterval(30_000)
+        self._restart_30s_timer.timeout.connect(self._on_restart_30s_elapsed)
+
         self.restart_klipper_button.clicked.connect(self._on_restart_clicked)
         self.reboot_system_button.clicked.connect(self.reboot_clicked.emit)
         self.notification_button.clicked.connect(self.notification_button_clicked.emit)
@@ -171,6 +181,9 @@ class ConnectionPage(QtWidgets.QFrame):
             self.dot_timer.start()
         if state == ConnectionState.KLIPPER_READY:
             self._firmware_restarting_pending = False
+            self._restart_10s_timer.stop()
+            self._restart_30s_timer.stop()
+            self.call_load_panel.emit(False, "")
             self.hide()
             return
         if (
@@ -213,11 +226,22 @@ class ConnectionPage(QtWidgets.QFrame):
         self.restart_klipper_button.setEnabled(True)
         if self._state in self._FIRMWARE_RESTART_STATES:
             self._firmware_restarting_pending = True
+            self.call_load_panel.emit(True, "Restarting firmware…")
+            self._restart_10s_timer.start()
+            self._restart_30s_timer.start()
             self.firmware_restart_clicked.emit()
         elif self._state == ConnectionState.WEBSOCKET_LOST:
             self.retry_connection_clicked.emit()
         else:
             self.restart_klipper_clicked.emit()
+
+    def _on_restart_10s_elapsed(self) -> None:
+        self.call_load_panel.emit(True, "Still restarting, please wait…")
+
+    def _on_restart_30s_elapsed(self) -> None:
+        self._firmware_restarting_pending = False
+        self._restart_10s_timer.stop()
+        self.call_load_panel.emit(False, "")
 
     def _on_update_page_clicked(self) -> None:
         self.update_button_clicked.emit(True)
