@@ -1,0 +1,26 @@
+name: PR size check
+
+on: [pull_request]
+
+jobs: 
+
+  size-check: 
+    runs-on: ubuntu-latest
+    steps: 
+      - uses: actions/checkout@v4
+        with: 
+          fetch-depth: 0 
+      
+      - name: Check PR size
+        run: | 
+          LINES=$(git diff --stat origin/${{ github.base_ref }}...HEAD \
+            -- '*.py' | tail -1 | grep -oP '\d+ insertion' | grep -oP '\d+')
+          echo "Lines changed: ${LINES:-0}"
+          if [ "${LINES:-0}" -gt 400 ]; then
+            echo "❌ PR too large: ${LINES} lines changed."
+            echo "Maximum is 400 lines per PR."
+            echo "Split this into smaller, focused PRs."
+            echo "Each PR should do ONE thing: one feature, one fix, one refactor."
+            exit 1
+          fi
+          echo "✅ PR size acceptable: ${LINES} lines"
