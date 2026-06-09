@@ -47,14 +47,14 @@ class ConnectionPage(QtWidgets.QFrame):
         "printer emergency button pressed": "Emergency stop activated.\nRelease the emergency button, then\npress 'Firmware Restart' to recover.",
         "webhooks request": "Emergency stop activated.",
         "lost communication with mcu": "Lost communication with the MCU.",
-        "timer too close": "MCU overload -\ncommunication timing failure.\nPress 'Firmware Restart' to recover.",
+        "timer too close": "MCU overload\nCommunication timing failure.\nPress 'Firmware Restart' to recover.",
         "adc out of range": "Temperature sensor fault.",
         "no next step": "Communication failure with the MCU.",
-        "rescheduled timer in the past": "Motion rate exceeded -\nreduce speed or acceleration.\nPress 'Firmware Restart' to recover.",
-        "stepper too far in past": "Stepper timing failure -\nreduce speed or acceleration.\nPress 'Firmware Restart' to recover.",
+        "rescheduled timer in the past": "Motion rate exceeded\nReduce speed or acceleration.\nPress 'Firmware Restart' to recover.",
+        "stepper too far in past": "Stepper timing failure\nReduce speed or acceleration.\nPress 'Firmware Restart' to recover.",
         "communication timeout during homing": "Communication timeout during homing.",
         "protocol error": "MCU communication protocol error.",
-        "config error": "Configuration error -\ncheck printer.cfg.\nPress 'Firmware Restart' to recover.",
+        "config error": "Configuration error\nCheck printer.cfg.\nPress 'Firmware Restart' to recover.",
         "mcu error during connect": "Failed to connect to the MCU.",
     }
 
@@ -179,6 +179,8 @@ class ConnectionPage(QtWidgets.QFrame):
 
     def _set_state(self, state: ConnectionState, context: str = "") -> None:
         """Update connection state and refresh the UI accordingly."""
+        if state == ConnectionState.KLIPPER_SHUTDOWN and not context:
+            context = ConnectionPage._SHUTDOWN_FALLBACK_CONTEXT
         if not self._apply_shutdown_guard(state, context):
             return
         if self._handle_pending_restart(state):
