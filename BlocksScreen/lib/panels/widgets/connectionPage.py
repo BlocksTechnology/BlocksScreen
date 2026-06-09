@@ -223,29 +223,31 @@ class ConnectionPage(QtWidgets.QFrame):
         return line.capitalize()
 
     def _on_restart_clicked(self) -> None:
-        self.restart_klipper_button.setEnabled(True)
-        if self._state in self._FIRMWARE_RESTART_STATES:
-            self._firmware_restarting_pending = True
-            self.call_load_panel.emit(True, "Restarting firmware…")
-            self._restart_10s_timer.start()
-            self._restart_30s_timer.start()
-            self.firmware_restart_clicked.emit()
-        elif self._state == ConnectionState.WEBSOCKET_LOST:
+        if self._state == ConnectionState.WEBSOCKET_LOST:
             self.retry_connection_clicked.emit()
+            return
+        msg = (
+            "Restarting firmware…"
+            if self._state in self._FIRMWARE_RESTART_STATES
+            else "Restarting printer…"
+        )
+        self._firmware_restarting_pending = True
+        self.call_load_panel.emit(True, msg)
+        self._restart_10s_timer.start()
+        self._restart_30s_timer.start()
+        if self._state in self._FIRMWARE_RESTART_STATES:
+            self.firmware_restart_clicked.emit()
         else:
-            self._firmware_restarting_pending = True
-            self.call_load_panel.emit(True, "Restarting printer…")
-            self._restart_10s_timer.start()
-            self._restart_30s_timer.start()
             self.restart_klipper_clicked.emit()
 
     def _on_restart_10s_elapsed(self) -> None:
         self.call_load_panel.emit(True, "Still restarting, please wait…")
 
     def _on_restart_30s_elapsed(self) -> None:
-        self._firmware_restarting_pending = False
         self._restart_10s_timer.stop()
+        self._restart_30s_timer.stop()
         self.call_load_panel.emit(False, "")
+        self._firmware_restarting_pending = False
 
     def _on_update_page_clicked(self) -> None:
         self.update_button_clicked.emit(True)
@@ -254,14 +256,6 @@ class ConnectionPage(QtWidgets.QFrame):
     def set_toggle(self, toggle: bool) -> None:
         """Enable or disable auto-show behaviour."""
         self.conn_toggle = toggle
-
-    def show_panel(self, reason: str | None = None) -> bool:
-        """Show the connection page, optionally setting a custom reason string."""
-        self.show()
-        if reason is not None:
-            self.status_label.setText(reason)
-            return True
-        return False
 
     @QtCore.pyqtSlot(str, name="on_klippy_state")
     def on_klippy_state(self, state: str) -> None:
