@@ -42,19 +42,19 @@ class ConnectionPage(QtWidgets.QFrame):
     }
 
     _SHUTDOWN_REASON_MAP: typing.ClassVar[dict[str, str]] = {
-        "m112 command": "Emergency stop activated.\nRelease the emergency button, then press 'Firmware Restart' to recover.",
-        "printers emergency button pressed": "Emergency stop activated.\nRelease the emergency button, then press 'Firmware Restart' to recover.",
-        "printer emergency button pressed": "Emergency stop activated.\nRelease the emergency button, then press 'Firmware Restart' to recover.",
+        "m112 command": "Emergency stop activated.\nRelease the emergency button, then\npress 'Firmware Restart' to recover.",
+        "printers emergency button pressed": "Emergency stop activated.\nRelease the emergency button, then\npress 'Firmware Restart' to recover.",
+        "printer emergency button pressed": "Emergency stop activated.\nRelease the emergency button, then\npress 'Firmware Restart' to recover.",
         "webhooks request": "Emergency stop activated.",
         "lost communication with mcu": "Lost communication with the MCU.",
-        "timer too close": "MCU overload - communication timing failure.",
+        "timer too close": "MCU overload -\ncommunication timing failure.\nPress 'Firmware Restart' to recover.",
         "adc out of range": "Temperature sensor fault.",
         "no next step": "Communication failure with the MCU.",
-        "rescheduled timer in the past": "Motion rate exceeded - reduce speed or acceleration.",
-        "stepper too far in past": "Stepper timing failure - reduce speed or acceleration.",
+        "rescheduled timer in the past": "Motion rate exceeded -\nreduce speed or acceleration.\nPress 'Firmware Restart' to recover.",
+        "stepper too far in past": "Stepper timing failure -\nreduce speed or acceleration.\nPress 'Firmware Restart' to recover.",
         "communication timeout during homing": "Communication timeout during homing.",
         "protocol error": "MCU communication protocol error.",
-        "config error": "Configuration error - check printer.cfg.",
+        "config error": "Configuration error -\ncheck printer.cfg.\nPress 'Firmware Restart' to recover.",
         "mcu error during connect": "Failed to connect to the MCU.",
     }
 
