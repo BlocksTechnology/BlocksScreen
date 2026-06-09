@@ -233,6 +233,10 @@ class ConnectionPage(QtWidgets.QFrame):
         elif self._state == ConnectionState.WEBSOCKET_LOST:
             self.retry_connection_clicked.emit()
         else:
+            self._firmware_restarting_pending = True
+            self.call_load_panel.emit(True, "Restarting printer…")
+            self._restart_10s_timer.start()
+            self._restart_30s_timer.start()
             self.restart_klipper_clicked.emit()
 
     def _on_restart_10s_elapsed(self) -> None:
