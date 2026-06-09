@@ -91,6 +91,7 @@ class TestSetState:
         page.webhook_update("shutdown", "thermistor short")
         assert "Thermistor short" in page.status_label.text()
 
+
 class TestDotTimer:
     def test_connecting_starts_timer(self, page):
         page._set_state(ConnectionState.CONNECTING, context="1")
