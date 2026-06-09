@@ -125,6 +125,7 @@ class ConnectionPage(QtWidgets.QFrame):
         self._shutdown_confirmed: bool = (
             False  # prevents fallback from overwriting shutdown reason
         )
+        self._last_shutdown_context: str = ""
         self._firmware_restarting_pending: bool = False
 
         self.dot_timer = QtCore.QTimer(self)
@@ -159,6 +160,7 @@ class ConnectionPage(QtWidgets.QFrame):
             _is_real = context and context != ConnectionPage._SHUTDOWN_FALLBACK_CONTEXT
             if _is_real:
                 self._shutdown_confirmed = True
+                self._last_shutdown_context = context
             elif self._shutdown_confirmed or (
                 self._state == ConnectionState.KLIPPER_SHUTDOWN and not context
             ):
@@ -180,7 +182,9 @@ class ConnectionPage(QtWidgets.QFrame):
     def _set_state(self, state: ConnectionState, context: str = "") -> None:
         """Update connection state and refresh the UI accordingly."""
         if state == ConnectionState.KLIPPER_SHUTDOWN and not context:
-            context = ConnectionPage._SHUTDOWN_FALLBACK_CONTEXT
+            context = (
+                self._last_shutdown_context or ConnectionPage._SHUTDOWN_FALLBACK_CONTEXT
+            )
         if not self._apply_shutdown_guard(state, context):
             return
         if self._handle_pending_restart(state):
@@ -195,6 +199,7 @@ class ConnectionPage(QtWidgets.QFrame):
             self.dot_timer.start()
         elif state == ConnectionState.KLIPPER_READY:
             self._stop_restart_overlay()
+            self._last_shutdown_context = ""
             self.hide()
             return
         if (
