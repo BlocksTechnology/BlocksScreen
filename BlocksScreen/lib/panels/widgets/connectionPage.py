@@ -25,18 +25,37 @@ class ConnectionState(enum.Enum):
 
 
 class ConnectionPage(QtWidgets.QFrame):
-    _SHUTDOWN_FALLBACK_CONTEXT: typing.Final[str] = "Press firmware restart to recover."
+    _SHUTDOWN_FALLBACK_CONTEXT: typing.Final[str] = (
+        "Press 'Firmware Restart' to recover."
+    )
 
     _MESSAGES: typing.ClassVar[dict[ConnectionState, str]] = {
         ConnectionState.DISCONNECTED: "The printer is offline.\nReconnecting automatically…",
         ConnectionState.CONNECTING: "Connecting to the printer…\nAttempt {n}",
-        ConnectionState.WEBSOCKET_LOST: "Connection to the printer was interrupted.\nAttempting to reconnect…",
+        ConnectionState.WEBSOCKET_LOST: "Connection interrupted.\nAttempting to reconnect…",
         ConnectionState.MOONRAKER_CONNECTED: "Connection established.\nWaiting for the printer to initialise…",
         ConnectionState.KLIPPER_STARTUP: "The printer is starting up.\nPlease wait…",
         ConnectionState.KLIPPER_READY: "The printer is ready.",
-        ConnectionState.KLIPPER_DISCONNECTED: "The printer is not responding.\nPress restart printer to reconnect.",
-        ConnectionState.KLIPPER_ERROR: "A printer error has occurred.\nPress firmware restart to recover.",
+        ConnectionState.KLIPPER_DISCONNECTED: "The printer is not responding.\nPress 'Restart Printer' to reconnect.",
+        ConnectionState.KLIPPER_ERROR: "A printer error has occurred.\nPress 'Firmware Restart' to recover.",
         ConnectionState.KLIPPER_SHUTDOWN: "The printer has shut down.\n{message}",
+    }
+
+    _SHUTDOWN_REASON_MAP: typing.ClassVar[dict[str, str]] = {
+        "m112 command": "Emergency stop activated",
+        "printer's emergency button pressed": "Emergency stop activated.",
+        "printer emergency button pressed": "Emergency stop activated.",
+        "webhooks request": "Emergency stop activated.",
+        "lost communication with mcu": "Lost communication with the MCU.",
+        "timer too close": "MCU overload, communication timing failure.",
+        "adc out of range": "Temperature sensor fault.",
+        "no next step": "Communication failure with the MCU.",
+        "rescheduled timer in the past": "Motion rate exceeded — reduce speed or acceleration.",
+        "stepper too far in past": "Stepper timing failure — reduce speed or acceleration.",
+        "communication timeout during homing": "Communication timeout during homing.",
+        "protocol error": "MCU communication protocol error.",
+        "config error": "Configuration error — check printer.cfg.",
+        "mcu error during connect": "Failed to connect to the MCU.",
     }
 
     _AUTO_SHOW_STATES: typing.ClassVar[frozenset[ConnectionState]] = frozenset(
@@ -182,8 +201,12 @@ class ConnectionPage(QtWidgets.QFrame):
             "",
             raw.split("\n")[0].strip(),
         )
-        if line.lower() in ConnectionPage._SHUTDOWN_NOISE:
+        lower = line.lower()
+        if lower in ConnectionPage._SHUTDOWN_NOISE:
             return ""
+        for key, display in ConnectionPage._SHUTDOWN_REASON_MAP.items():
+            if lower.startswith(key):
+                return display
         return line.capitalize()
 
     def _on_restart_clicked(self) -> None:
@@ -248,7 +271,7 @@ class ConnectionPage(QtWidgets.QFrame):
         if state == "shutdown":
             _reason = self._clean_shutdown_context(message)
             _context = (
-                f"{_reason}\nPress firmware restart to recover."
+                f"{_reason}\nPress 'Firmware Restart' to recover."
                 if _reason
                 else self._SHUTDOWN_FALLBACK_CONTEXT
             )
@@ -276,7 +299,7 @@ class ConnectionPage(QtWidgets.QFrame):
         elif a1.type() == KlippyShutdown.type():
             _reason = self._clean_shutdown_context(str(getattr(a1, "data", "")))
             _context = (
-                f"{_reason}\nPress firmware restart to recover."
+                f"{_reason}\nPress 'Firmware Restart' to recover."
                 if _reason
                 else self._SHUTDOWN_FALLBACK_CONTEXT
             )
