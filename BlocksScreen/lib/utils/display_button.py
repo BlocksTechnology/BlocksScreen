@@ -228,12 +228,12 @@ class DisplayButton(QtWidgets.QPushButton):
                     _upper_rect = QtCore.QRectF(
                         _mtl.left() + margin,
                         _mtl.top() + margin,
-                        _mtl.width() - margin * 2,
+                        _mtl.width() - margin * 2.,
                         (_mtl.height() * 0.7) // 2,
                     )
                     _downer_rect = QtCore.QRectF(
                         _mtl.left() + margin,
-                        (_upper_rect.bottom() + margin + 2),
+                        (_upper_rect.bottom() + margin + 5),
                         _mtl.width() - margin * 2,
                         (_mtl.height() * 0.5) // 2,
                     )
@@ -246,12 +246,11 @@ class DisplayButton(QtWidgets.QPushButton):
                     )
                     _ = painter.drawText(
                         _upper_rect,
-                        # QtCore.Qt.AlignmentFlag.AlignCenter,
                         QtCore.Qt.AlignmentFlag.AlignRight
                         | QtCore.Qt.AlignmentFlag.AlignVCenter,
                         self.text(),
                     )
-                    font.setPointSize(15)
+                    font.setPointSize(14)
                     painter.setPen(QtGui.QColor("#b6b0b0"))
                     painter.setFont(font)
 
@@ -301,7 +300,7 @@ class DisplayButton(QtWidgets.QPushButton):
                         _row_height,
                     )
                     font = QtGui.QFont()
-                    font.setPointSize(18)
+                    font.setPointSize(20)
                     font.setFamily("Momcake-bold")
                     painter.setFont(font)
                     painter.drawText(
@@ -336,6 +335,9 @@ class DisplayButton(QtWidgets.QPushButton):
                         _rect.width() - _icon_size - _margin * 3,
                         _row_height,
                     )
+                    font.setPointSize(15)
+                    painter.setPen(QtGui.QColor("#b6b0b0"))
+                    painter.setFont(font)
                     painter.drawText(
                         _second_text_rect,
                         QtCore.Qt.TextFlag.TextShowMnemonic
