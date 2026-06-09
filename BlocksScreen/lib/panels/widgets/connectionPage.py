@@ -42,19 +42,19 @@ class ConnectionPage(QtWidgets.QFrame):
     }
 
     _SHUTDOWN_REASON_MAP: typing.ClassVar[dict[str, str]] = {
-        "m112 command": "Emergency stop activated",
-        "printer's emergency button pressed": "Emergency stop activated.",
-        "printer emergency button pressed": "Emergency stop activated.",
+        "m112 command": "Emergency stop activated.\nRelease the emergency button, then press 'Firmware Restart' to recover.",
+        "printer's emergency button pressed": "Emergency stop activated.\nRelease the emergency button, then press 'Firmware Restart' to recover.",
+        "printer emergency button pressed": "Emergency stop activated.\nRelease the emergency button, then press 'Firmware Restart' to recover.",
         "webhooks request": "Emergency stop activated.",
         "lost communication with mcu": "Lost communication with the MCU.",
-        "timer too close": "MCU overload, communication timing failure.",
+        "timer too close": "MCU overload - communication timing failure.",
         "adc out of range": "Temperature sensor fault.",
         "no next step": "Communication failure with the MCU.",
-        "rescheduled timer in the past": "Motion rate exceeded — reduce speed or acceleration.",
-        "stepper too far in past": "Stepper timing failure — reduce speed or acceleration.",
+        "rescheduled timer in the past": "Motion rate exceeded - reduce speed or acceleration.",
+        "stepper too far in past": "Stepper timing failure - reduce speed or acceleration.",
         "communication timeout during homing": "Communication timeout during homing.",
         "protocol error": "MCU communication protocol error.",
-        "config error": "Configuration error — check printer.cfg.",
+        "config error": "Configuration error - check printer.cfg.",
         "mcu error during connect": "Failed to connect to the MCU.",
     }
 
@@ -149,27 +149,39 @@ class ConnectionPage(QtWidgets.QFrame):
 
         self.installEventFilter(self.parent())
 
-    def _set_state(self, state: ConnectionState, context: str = "") -> None:
-        """Update connection state and refresh the UI accordingly."""
+    def _apply_shutdown_guard(self, state: ConnectionState, context: str) -> bool:
         if (
             self._state == ConnectionState.KLIPPER_SHUTDOWN
             and state != ConnectionState.KLIPPER_SHUTDOWN
         ):
             self._shutdown_confirmed = False
-        if state == ConnectionState.KLIPPER_SHUTDOWN:
-            _is_real = (
-                bool(context) and context != ConnectionPage._SHUTDOWN_FALLBACK_CONTEXT
-            )
+        elif state == ConnectionState.KLIPPER_SHUTDOWN:
+            _is_real = context and context != ConnectionPage._SHUTDOWN_FALLBACK_CONTEXT
             if _is_real:
                 self._shutdown_confirmed = True
             elif self._shutdown_confirmed or (
                 self._state == ConnectionState.KLIPPER_SHUTDOWN and not context
             ):
-                return
-        if (
-            state == ConnectionState.KLIPPER_DISCONNECTED
-            and self._firmware_restarting_pending
+                return False
+        return True
+
+    def _handle_pending_restart(self, state: ConnectionState) -> bool:
+        if self._firmware_restarting_pending and state in (
+            ConnectionState.KLIPPER_SHUTDOWN,
+            ConnectionState.KLIPPER_ERROR,
+            ConnectionState.WEBSOCKET_LOST,
         ):
+            self._stop_restart_overlay()
+        return state == ConnectionState.KLIPPER_DISCONNECTED and (
+            self._firmware_restarting_pending
+            or self._state == ConnectionState.KLIPPER_SHUTDOWN
+        )
+
+    def _set_state(self, state: ConnectionState, context: str = "") -> None:
+        """Update connection state and refresh the UI accordingly."""
+        if not self._apply_shutdown_guard(state, context):
+            return
+        if self._handle_pending_restart(state):
             return
         self.dot_timer.stop()
         self._state = state
@@ -179,11 +191,8 @@ class ConnectionPage(QtWidgets.QFrame):
             self.base_text = message
             self.dot_count = 0
             self.dot_timer.start()
-        if state == ConnectionState.KLIPPER_READY:
-            self._firmware_restarting_pending = False
-            self._restart_10s_timer.stop()
-            self._restart_30s_timer.stop()
-            self.call_load_panel.emit(False, "")
+        elif state == ConnectionState.KLIPPER_READY:
+            self._stop_restart_overlay()
             self.hide()
             return
         if (
@@ -193,6 +202,12 @@ class ConnectionPage(QtWidgets.QFrame):
         ):
             self.show()
         self._update_restart_label(state)
+
+    def _stop_restart_overlay(self) -> None:
+        self._firmware_restarting_pending = False
+        self._restart_10s_timer.stop()
+        self._restart_30s_timer.stop()
+        self.call_load_panel.emit(False, "")
 
     def _add_dot(self) -> None:
         self.dot_count += 1
@@ -222,20 +237,27 @@ class ConnectionPage(QtWidgets.QFrame):
                 return display
         return line.capitalize()
 
+    @staticmethod
+    def _build_shutdown_context(raw: str) -> str:
+        reason = ConnectionPage._clean_shutdown_context(raw)
+        if not reason:
+            return ConnectionPage._SHUTDOWN_FALLBACK_CONTEXT
+        if "\n" in reason:
+            return reason
+        return f"{reason}\nPress 'Firmware Restart' to recover."
+
     def _on_restart_clicked(self) -> None:
         if self._state == ConnectionState.WEBSOCKET_LOST:
             self.retry_connection_clicked.emit()
             return
-        msg = (
-            "Restarting firmware…"
-            if self._state in self._FIRMWARE_RESTART_STATES
-            else "Restarting printer…"
-        )
+        is_firmware = self._state in self._FIRMWARE_RESTART_STATES
         self._firmware_restarting_pending = True
-        self.call_load_panel.emit(True, msg)
+        self.call_load_panel.emit(
+            True, "Restarting firmware…" if is_firmware else "Restarting printer…"
+        )
         self._restart_10s_timer.start()
         self._restart_30s_timer.start()
-        if self._state in self._FIRMWARE_RESTART_STATES:
+        if is_firmware:
             self.firmware_restart_clicked.emit()
         else:
             self.restart_klipper_clicked.emit()
@@ -244,10 +266,7 @@ class ConnectionPage(QtWidgets.QFrame):
         self.call_load_panel.emit(True, "Still restarting, please wait…")
 
     def _on_restart_30s_elapsed(self) -> None:
-        self._restart_10s_timer.stop()
-        self._restart_30s_timer.stop()
-        self.call_load_panel.emit(False, "")
-        self._firmware_restarting_pending = False
+        self._stop_restart_overlay()
 
     def _on_update_page_clicked(self) -> None:
         self.update_button_clicked.emit(True)
@@ -291,15 +310,9 @@ class ConnectionPage(QtWidgets.QFrame):
     def webhook_update(self, state: str, message: str) -> None:
         """Handle Moonraker websocket state updates."""
         if state == "shutdown":
-            _reason = self._clean_shutdown_context(message)
-            _context = (
-                f"{_reason}\nPress 'Firmware Restart' to recover."
-                if _reason
-                else self._SHUTDOWN_FALLBACK_CONTEXT
-            )
             self._set_state(
                 ConnectionState.KLIPPER_SHUTDOWN,
-                context=_context,
+                context=self._build_shutdown_context(message),
             )
 
     def showEvent(self, a0: QtGui.QShowEvent | None) -> None:  # noqa: N802
@@ -319,15 +332,9 @@ class ConnectionPage(QtWidgets.QFrame):
         elif a1.type() == KlippyReady.type():
             self._set_state(ConnectionState.KLIPPER_READY)
         elif a1.type() == KlippyShutdown.type():
-            _reason = self._clean_shutdown_context(str(getattr(a1, "data", "")))
-            _context = (
-                f"{_reason}\nPress 'Firmware Restart' to recover."
-                if _reason
-                else self._SHUTDOWN_FALLBACK_CONTEXT
-            )
             self._set_state(
                 ConnectionState.KLIPPER_SHUTDOWN,
-                context=_context,
+                context=self._build_shutdown_context(str(getattr(a1, "data", ""))),
             )
         return super().eventFilter(a0, a1)
 
