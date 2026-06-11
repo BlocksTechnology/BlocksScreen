@@ -10,6 +10,7 @@ from tools.configuration_manager import ConfigManager
 
 install_crash_handler()
 
+
 class BlocksScreenApp(QtWidgets.QApplication):
     """QApplication subclass that routes unhandled slot exceptions to CrashHandler."""
 
