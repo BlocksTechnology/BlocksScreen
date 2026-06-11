@@ -72,7 +72,7 @@ def _make_key_font(size: int = 29) -> QtGui.QFont:
     return font
 
 
-class CustomQwertyKeyboard(QtWidgets.QWidget):
+class CustomQwertyKeyboard(QtWidgets.QDialog):
     """Custom on-screen QWERTY keyboard for touch input."""
 
     value_selected: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
@@ -85,11 +85,18 @@ class CustomQwertyKeyboard(QtWidgets.QWidget):
     def __init__(self, parent: QtWidgets.QWidget) -> None:
         super().__init__(parent)
         self.current_value: str = ""
+        self.prefix: str = ""
+        self.suffix: str = ""
         self.symbolsrun: bool = False
         self._key_buttons: list[QtWidgets.QPushButton] = []
+        self._pattern: str = ""
+        self._max_length: int = 0
 
         self._setup_ui()
         self.setCursor(QtCore.Qt.CursorShape.BlankCursor)
+        self.setWindowFlags(
+            QtCore.Qt.WindowType.Popup | QtCore.Qt.WindowType.FramelessWindowHint
+        )
 
         for btn in self._key_buttons:
             btn.clicked.connect(lambda _, b=btn: self.value_inserted(b.text()))
@@ -104,7 +111,12 @@ class CustomQwertyKeyboard(QtWidgets.QWidget):
 
         self.inserted_value.setText("")
 
+        self.setObjectName("MyParent")
+
         self.setStyleSheet(
+            "#MyParent {"
+            "  background-image: url(:/background/media/1st_background.png);"
+            "}"
             "QPushButton {"
             "  background-color: #dfdfdf;"
             "  border-radius: 10px;"
@@ -121,6 +133,87 @@ class CustomQwertyKeyboard(QtWidgets.QWidget):
             "}"
         )
         self.handle_keyboard_layout()
+
+    def setPrefix(self, text: str):
+        """Set a static prefix that appears before the user input."""
+        self.prefix = text
+
+    def setSuffix(self, text: str):
+        """Set a static suffix that appears after the user input."""
+        self.suffix = text
+
+    def setPattern(self, pattern: str) -> None:
+        """Set input validation pattern: 'ip', 'hex', 'int', 'float', or '' for no pattern."""
+        self._pattern = pattern
+
+    def setMaxLength(self, length: int) -> None:
+        """Set maximum allowed length for user input (excluding prefix/suffix)."""
+        if length < 0:
+            length = 0
+        if length == 0:
+            length = 999
+        self._max_length = length
+
+    def _flash_limit_warning(self) -> None:
+        self.inserted_value.setStyleSheet("color: #ff4444;")
+        QtCore.QTimer.singleShot(
+            400, lambda: self.inserted_value.setStyleSheet("color: white;")
+        )
+
+    def _validate_pattern(self, value: str) -> bool:
+        if not self._pattern:
+            return True
+        if self._pattern == "ip":
+            parts = value.split(".")
+            if len(parts) > 4:
+                return False
+            for part in parts:
+                if part and (not part.isdigit() or int(part) > 255):
+                    return False
+            return True
+        if self._pattern == "hex":
+            return all(c in "0123456789abcdefABCDEF" for c in value)
+        if self._pattern == "int":
+            return value == "" or value.lstrip("-").isdigit()
+        if self._pattern == "float":
+            if not value:
+                return True
+            try:
+                float(value)
+                return True
+            except ValueError:
+                return value.endswith(".")
+        return True
+
+    def _get_mainWindow_widget(self) -> typing.Optional[QtWidgets.QMainWindow]:
+        """Get the main application window"""
+        app_instance = QtWidgets.QApplication.instance()
+        if not app_instance:
+            return None
+        main_window = app_instance.activeWindow()
+        if main_window is None:
+            for widget in app_instance.allWidgets():
+                if isinstance(widget, QtWidgets.QMainWindow):
+                    main_window = widget
+                    break
+        return main_window if isinstance(main_window, QtWidgets.QMainWindow) else None
+
+    def _geometry_calc(self) -> None:
+        """Calculate dialog widget position relative to the window"""
+        main_window = self._get_mainWindow_widget()
+        if main_window is None:
+            return
+
+        x = main_window.geometry().x()
+        y = main_window.geometry().y()
+        width = main_window.width()
+        height = main_window.height()
+
+        self.setGeometry(x, y, width, height)
+
+    def show(self) -> None:
+        self._geometry_calc()
+        return super().show()
 
     def handle_keyboard_layout(self) -> None:
         """Update key labels based on current shift/keychange state."""
@@ -155,9 +248,13 @@ class CustomQwertyKeyboard(QtWidgets.QWidget):
             value = "&"
 
         if value == "enter":
-            self.value_selected.emit(self.current_value)
+            self.value_selected.emit(self.prefix + self.current_value + self.suffix)
             self.current_value = ""
             self.inserted_value.setText("")
+            self.setPrefix("")
+            self.setSuffix("")
+            self.setPattern("")
+            self.setMaxLength(0)
             return
 
         if value == "clear":
@@ -166,14 +263,31 @@ class CustomQwertyKeyboard(QtWidgets.QWidget):
             else:
                 self.current_value = ""
         else:
-            self.current_value += value
+            candidate = self.current_value + value
+            if self._validate_pattern(candidate):
+                if not self._max_length or len(candidate) <= self._max_length:
+                    self.current_value = candidate
+                else:
+                    self._flash_limit_warning()
 
-        self.inserted_value.setText(self.current_value)
+        self.inserted_value.setText(
+            len(self.suffix) * " "
+            + self.prefix
+            + self.current_value
+            + self.suffix
+            + len(self.prefix) * " "
+        )
 
     def set_value(self, value: str) -> None:
         """Pre-fill keyboard input with an existing value."""
         self.current_value = value
-        self.inserted_value.setText(value)
+        self.inserted_value.setText(
+            len(self.suffix) * " "
+            + self.prefix
+            + self.current_value
+            + self.suffix
+            + len(self.prefix) * " "
+        )
 
     def _create_key_button(
         self,
