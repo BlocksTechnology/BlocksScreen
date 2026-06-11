@@ -346,7 +346,9 @@ class ConfigManager:
                 if marker:
                     if marker in _tfl:
                         tfl_lines = _tfl.splitlines(keepends=True)
-                        idx = next(i for i, line in enumerate(tfl_lines) if marker in line)
+                        idx = next(
+                            i for i, line in enumerate(tfl_lines) if marker in line
+                        )
                         tgt_header = tfl_lines[:idx]
                         tgt_save = "".join(tfl_lines[idx:])
 
