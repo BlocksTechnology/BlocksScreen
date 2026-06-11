@@ -71,6 +71,9 @@ def is_git_dirty(path: pathlib.Path | str):
 
 
 def ensure_dir(path: pathlib.Path | str) -> pathlib.Path:
+    """Ensures a specified directory exists, creating the 
+    directory if no match was found
+    """
     try:
         if not isinstance(path, pathlib.Path):
             path = pathlib.Path(path)
@@ -126,6 +129,11 @@ def resolve_symlink(file: pathlib.Path, target: pathlib.Path) -> bool:
 
 
 def get_file_checksum(file: pathlib.Path | str) -> str:
+    """Get file checksum 
+
+    Returns: 
+        str: digested file checksum 
+    """
     if not isinstance(file, pathlib.Path):
         file = pathlib.Path(file)
     try:
@@ -339,6 +347,7 @@ class ConfigManager:
         target_file: pathlib.Path,
         marker="",
     ) -> bool:
+        """Merges two configuration files together"""
         try:
             _sfl = src_file.read_text(encoding="utf-8")
             _tfl = target_file.read_text(encoding="utf-8")
