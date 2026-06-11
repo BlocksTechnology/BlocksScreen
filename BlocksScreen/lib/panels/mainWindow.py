@@ -156,6 +156,7 @@ class MainWindow(QtWidgets.QMainWindow):
         )
         self.ws.connection_lost.connect(self.conn_window.on_websocket_connection_lost)
         self.ws.klippy_state_signal.connect(self._on_klippy_state)
+        self.ws.klippy_state_signal.connect(self.conn_window.on_klippy_state)
         self.printer.webhooks_update.connect(self.conn_window.webhook_update)
         self.printPanel.request_back.connect(slot=self.global_back)
         self.printPanel.on_cancel_print.connect(slot=self.on_cancel_print)
@@ -194,8 +195,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui.filament_type_icon.update()
         self.ui.nozzle_size_icon.setText("0.4mm")
         self.ui.nozzle_size_icon.update()
-
         self.conn_window.retry_connection_clicked.connect(slot=self.ws.retry_wb_conn)
+        self.conn_window.firmware_restart_clicked.connect(
+            slot=self.mc.restart_klipper_mcu_service
+        )
         self.conn_window.firmware_restart_clicked.connect(
             slot=self.ws.api.firmware_restart
         )
@@ -221,7 +224,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.call_notification_panel.connect(self.notiPage.show_notification_panel)
         self.networkPanel.update_wifi_icon.connect(self.change_wifi_icon)
         self.conn_window.wifi_button_clicked.connect(self.call_network_panel.emit)
-        self.conn_window.notification_btn_clicked.connect(
+        self.conn_window.notification_button_clicked.connect(
             self.call_notification_panel.emit
         )
         self.ui.wifi_button.clicked.connect(self.call_network_panel.emit)
@@ -705,9 +708,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 )
                 if callable(_klippy_event_callback):
                     try:
-                        _event = _klippy_event_callback(
-                            data=f"Moonraker reported klippy is {_state_call}"
-                        )
+                        _event = _klippy_event_callback(data="")
                         instance = QtWidgets.QApplication.instance()
                         if not isinstance(_event, QtCore.QEvent):
                             return

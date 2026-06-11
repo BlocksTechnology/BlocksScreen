@@ -362,6 +362,8 @@ class Printer(QtCore.QObject):
             self.webhooks_update.emit(value["state"], value["state_message"])
             logger.debug("Webhooks message received")
             _state: str = value["state"]
+            if _state == "shutdown":
+                return
             _state_upper = _state[0].upper()
             _state_call = f"{_state_upper}{_state[1:]}"
             if hasattr(events, f"Klippy{_state_call}"):
@@ -376,7 +378,7 @@ class Printer(QtCore.QObject):
                             raise TypeError("QApplication.instance is None type.")
                     except Exception as e:
                         logger.debug(
-                            "Unable to send internal Klippy %s notification : %e",
+                            "Unable to send internal Klippy %s notification : %s",
                             _state_call,
                             e,
                         )
