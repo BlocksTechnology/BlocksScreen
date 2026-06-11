@@ -2,8 +2,7 @@ import enum
 import logging
 from functools import partial
 
-from PyQt6 import QtCore, QtWidgets
-from PyQt6.QtGui import QShowEvent
+from PyQt6 import QtCore, QtWidgets, QtGui
 
 from lib.filament import Filament
 from lib.panels.widgets.popupDialogWidget import Popup
@@ -51,7 +50,7 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         self.filament_type = FilamentTypes.UNKNOWN
         self._setup_ui()
 
-    def showEvent(self, a0: QShowEvent | None) -> None:
+    def showEvent(self, a0: QtGui.QShowEvent | None) -> None:
         """reset to main page every time the panel is shown"""
         self.change_page(0)
         return super().showEvent(a0)
