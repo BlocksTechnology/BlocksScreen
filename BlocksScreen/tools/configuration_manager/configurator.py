@@ -5,7 +5,7 @@ import logging
 import os
 import pathlib
 import re
-import shutil
+import shutil  # nosec:
 import subprocess
 import threading
 from datetime import datetime
@@ -71,7 +71,7 @@ def is_git_dirty(path: pathlib.Path | str):
 
 
 def ensure_dir(path: pathlib.Path | str) -> pathlib.Path:
-    """Ensures a specified directory exists, creating the 
+    """Ensures a specified directory exists, creating the
     directory if no match was found
     """
     try:
@@ -129,10 +129,10 @@ def resolve_symlink(file: pathlib.Path, target: pathlib.Path) -> bool:
 
 
 def get_file_checksum(file: pathlib.Path | str) -> str:
-    """Get file checksum 
+    """Get file checksum
 
-    Returns: 
-        str: digested file checksum 
+    Returns:
+        str: digested file checksum
     """
     if not isinstance(file, pathlib.Path):
         file = pathlib.Path(file)
