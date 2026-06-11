@@ -5,8 +5,8 @@ import logging
 import os
 import pathlib
 import re
-import shutil  # nosec:
-import subprocess
+import shutil  # nosec
+import subprocess  # nosec B404
 import threading
 from datetime import datetime
 from typing import Literal
@@ -32,23 +32,24 @@ def _timestamp() -> str:
 
 
 def is_git_repo(path: pathlib.Path) -> bool:
-    """https://stackoverflow.com/questions/19687394/python-script-to-determine-if-a-directory-is-a-git-repository"""
+    """Check if path is a git repository by looking for the .git directory"""
     try:
-        if not (path.exists() or path.is_dir()):
+        if not path.exists() or not path.is_dir():
             return False
-        _existance = (
-            bool(
-                subprocess.call(
-                    ["git", "-C", path, "status"],
-                    stderr=subprocess.STDOUT,
-                    stdout=open(os.devnull, "w"),
-                )
-            )
-            == 0
-        )
-        return _existance
+        return (path / ".git").exists()
     except Exception:
         return False
+
+
+def _run_git(path: pathlib.Path, args: list[str]) -> subprocess.CompletedProcess:
+    """Run a git command with validated path (no shell)."""
+    if not path.is_dir():
+        raise NotADirectoryError(f"Not a directory: {path}")
+    return subprocess.run(
+        ["git", "-C", str(path)] + args,
+        capture_output=True,
+        text=True,
+    )  # nosec B603 — path validated above, no shell=True
 
 
 def is_git_dirty(path: pathlib.Path | str):
@@ -56,15 +57,7 @@ def is_git_dirty(path: pathlib.Path | str):
     try:
         if not isinstance(path, pathlib.Path):
             path = pathlib.Path(path)
-        if not path.is_dir() or not path.exists():
-            raise NotADirectoryError(
-                "Provides repo dir %s was not found or is not a directory" % path
-            )
-        result = subprocess.run(
-            ["git", "-C", str(path), "status", "--porcelain"],
-            capture_output=True,
-            text=True,
-        )
+        result = _run_git(path, ["status", "--porcelain"])
         return bool(result.stdout.strip())
     except Exception:
         return True
