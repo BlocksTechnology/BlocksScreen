@@ -206,18 +206,20 @@ class SensorWidget(QtWidgets.QWidget):
             if self.filament_state == self.FilamentState.PRESENT
             else self.icon_pixmap_fnp
         )
-        self._text_label_name_ = QtWidgets.QLabel(parent=self)
-        size_policy.setHeightForWidth(
-            self._text_label_name_.sizePolicy().hasHeightForWidth()
-        )
+        font = QtGui.QFont()
+        font.setPointSize(15)
+        self._text_label_name_ = BlocksLabel(parent=self)
         self._text_label_name_.setMinimumSize(self.rect().width(), 40)
         self._text_label_name_.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self._text_label_name_.setFont(font)
+        self._text_label_name_.setStyleSheet("background: transparent; color: white;")
+        self._text_label_name_.setText(str(self._text))
+
         palette = self._text_label_name_.palette()
         palette.setColor(
             palette.ColorRole.WindowText, QtGui.QColorConstants.Transparent
         )
-        self._text_label_name_.setPalette(palette)
-        self._text_label_name_.setText(str(self._text))
+
         self._icon_label.setSizePolicy(size_policy)
 
         self._text_label_detected = QtWidgets.QLabel(parent=self)

@@ -3765,16 +3765,19 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self._previous_panel = panel
         self._current_field = field
         self._qwerty.set_value(field.text())
-        self.setCurrentIndex(self.indexOf(self._qwerty))
+        self._qwerty.show()
+        field.clearFocus()
 
     def _on_qwerty_go_back(self) -> None:
         """Hide the keyboard and return to the previously active panel."""
         if self._previous_panel:
+            self._qwerty.hide()
             self.setCurrentIndex(self.indexOf(self._previous_panel))
 
     def _on_qwerty_value_selected(self, value: str) -> None:
         """Apply the keyboard-selected *value* to the previously focused input field."""
         if self._previous_panel:
+            self._qwerty.hide()
             self.setCurrentIndex(self.indexOf(self._previous_panel))
         if self._current_field:
             self._current_field.setText(value)
