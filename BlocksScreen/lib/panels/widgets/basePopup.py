@@ -144,12 +144,13 @@ class BasePopup(QtWidgets.QDialog):
     def add_widget(self, widget: QtWidgets.QWidget) -> None:
         """Replace the label with a custom widget in the layout"""
 
+        self.ui = widget
         layout = self.vlayout
         index = layout.indexOf(self.label)
         self.label.setParent(None)
         self.label.hide()
-        layout.insertWidget(index, widget)
-        widget.show()
+        layout.insertWidget(index, self.ui)
+        self.ui.show()
 
     def _get_mainWindow_widget(self) -> typing.Optional[QtWidgets.QMainWindow]:
         """Get the main application window"""
