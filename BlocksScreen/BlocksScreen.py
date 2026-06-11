@@ -8,6 +8,7 @@ from PyQt6 import QtCore, QtGui, QtWidgets  # noqa: E402
 
 install_crash_handler()
 
+
 class BlocksScreenApp(QtWidgets.QApplication):
     """QApplication subclass that routes unhandled slot exceptions to CrashHandler."""
 
