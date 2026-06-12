@@ -821,7 +821,7 @@ class MainWindow(QtWidgets.QMainWindow):
             else:
                 return
             self._emit_filtered_notification(
-                source, _message, fallback=False, show_popup=True
+                source, _message, fallback=True, show_popup=True
             )
 
     @api_handler
