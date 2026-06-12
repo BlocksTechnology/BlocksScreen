@@ -296,6 +296,7 @@ class PrintTab(QtWidgets.QStackedWidget):
         unblocks tabs if on standby
         """
         if isinstance(value, str) and "state" in field and value == "standby":
+            self.call_load_panel.emit(False, "")
             self.on_cancel_print.emit()
             if not self._finish_print_handled and self._cancel_z_snapshot != 0:
                 self._active_z_offset = self._cancel_z_snapshot
