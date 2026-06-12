@@ -112,6 +112,11 @@ class FilamentTab(QtWidgets.QStackedWidget):
 
         self.run_gcode.connect(self.ws.api.run_gcode)
 
+
+    def handle_moonraker_components(self):
+        components = self.ws.get_moonraker_components()
+        self.call_load_panel.emit(False, str(components))
+
     def change_page(self, index: int) -> None:
         """Requests a page change page to the global manager
 
