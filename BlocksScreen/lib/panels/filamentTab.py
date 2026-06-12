@@ -114,7 +114,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
 
 
     def handle_moonraker_components(self):
-        components = self.ws.get_moonraker_components()
+        components = self.ws.api.get_moonraker_components()
         self.call_load_panel.emit(False, str(components))
 
     def change_page(self, index: int) -> None:

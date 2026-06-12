@@ -177,6 +177,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.utilitiesPanel.request_change_page.connect(slot=self.global_change_page)
         self.utilitiesPanel.update_available.connect(self.on_update_available)
 
+        self.ws.connected_signal.connect(self.filamentPanel.handle_moonraker_components)
+
         self.ui.notification_btn.clicked.connect(self.notiPage.show_notification_panel)
         self.ui.extruder_temp_display.clicked.connect(
             lambda: self.global_change_page(
