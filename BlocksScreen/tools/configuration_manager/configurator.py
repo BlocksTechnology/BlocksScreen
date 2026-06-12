@@ -107,18 +107,22 @@ def check_broken_symlinks(dir: pathlib.Path) -> list[pathlib.Path]:
         return []
 
 
-def resolve_symlink(file: pathlib.Path, target: pathlib.Path) -> bool:
+def resolve_symlink(
+    file: pathlib.Path, resolved: set[str]
+) -> bool:  # }target: pathlib.Path) -> bool:
     """Check if `file` has a valid symlink on `target` dir
 
     Returns:
         bool: whether or not the provided directory has a working symlink pointing to the src file
     """
-    if not target.is_dir():
-        return False
-    for f in target.rglob(pattern="*"):
-        if file.resolve().as_posix() == f.resolve().as_posix():
-            return True
-    return False
+    return file.resolve().as_posix() in resolved
+    # if not target.is_dir():
+    #     return False
+    # for f in target.rglob(pattern="*"):
+    #     if file.resolve().as_posix() == f.resolve().as_posix():
+    #         return True
+    # return False
+    #
 
 
 def get_file_checksum(file: pathlib.Path | str) -> str:
@@ -302,6 +306,9 @@ class ConfigManager:
         if not _repo.is_dir() or not _repo.exists():
             raise NotADirectoryError("Provided repo dir missing or does not exist")
 
+        _resolved: set[str] = {
+            f.resolve().as_posix() for f in _root.rglob("*") if f.is_symlink()
+        }
         _missing = []
         for d in _repo.rglob("*.cfg"):
             # ignore copy files
@@ -310,8 +317,7 @@ class ConfigManager:
             # ignore .git dir files
             if ".git" in d.parts:
                 continue
-            valid = resolve_symlink(d, _root)
-            if not valid:
+            if d.resolve().as_posix() not in _resolved:
                 _missing.append(d)
         return _missing
 
