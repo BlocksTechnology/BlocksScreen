@@ -162,7 +162,7 @@ class ConfigManager:
             _logger.error("Failed Configuration Manager Start, skipping")
             return
         self.repo = pathlib.Path(
-            self.config.get("config_repo", default="")
+            self.config.get("config_repo", default=CONFIG_REPO)
         ).expanduser()
         self.mergeLock = threading.Lock()
         if not self.repo:
