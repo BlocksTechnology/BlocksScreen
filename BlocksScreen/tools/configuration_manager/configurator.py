@@ -158,12 +158,21 @@ def copy_file_simple(orig: pathlib.Path | str, dest: pathlib.Path | str):
 class ConfigManager:
     def __init__(self, config) -> None:
         self.config = config.get_section("configuration_manager", fallback=None)
+
         if not self.config:
-            _logger.error("Failed Configuration Manager Start, skipping")
-            return
+            _logger.error(
+                "Failed fetching Configuration Manager section, falling back to default"
+            )
+
         self.repo = pathlib.Path(
-            self.config.get("config_repo", default=CONFIG_REPO)
+            (
+                self.config.get("config_repo", default=CONFIG_REPO)
+                if self.config
+                else None
+            )
+            or CONFIG_REPO
         ).expanduser()
+
         self.mergeLock = threading.Lock()
         if not self.repo:
             _logger.error(
@@ -178,7 +187,12 @@ class ConfigManager:
             _logger.error("Provided repository directory is not a git repo")
 
         self.config_dir = pathlib.Path(
-            self.config.get("config_dir", default=KLIPPER_CONFIG_DIR)
+            (
+                self.config.get("config_dir", default=KLIPPER_CONFIG_DIR)
+                if self.config
+                else None
+            )
+            or KLIPPER_CONFIG_DIR
         ).expanduser()
         if not self.config_dir.exists() or not self.config_dir.is_dir():
             _logger.error(
@@ -187,17 +201,24 @@ class ConfigManager:
             raise NotADirectoryError("Machine configuration directory does not exist")
 
         self.backup_dir = pathlib.Path(
-            self.config.get("backup_dir", default=BACKUP_DIR)
+            (self.config.get("backup_dir", default=BACKUP_DIR) if self.config else None)
+            or BACKUP_DIR
         ).expanduser()
         if not self.backup_dir.exists():
             ensure_dir(self.backup_dir)
         if not self.backup_dir.is_dir():
             raise NotADirectoryError("Provided backup dir is not a directory")
 
-        self.config_variant = self.config.get("variant", default=0)
-        self.cpy_files = self.config.getlists(
-            "copy_files", ["printer.cfg", "variables.cfg", "BlocksScreen.cfg"]
-        )
+        self.config_variant = (
+            self.config.get("variant", default=0) if self.config else None
+        ) or 0
+        self.cpy_files = (
+            self.config.getlists(
+                "copy_files", ["printer.cfg", "variables.cfg", "BlocksScreen.cfg"]
+            )
+            if self.config
+            else None
+        ) or ["printer.cfg", "variables.cfg", "BlocksScreen.cfg"]
 
         _logger.info(self.cpy_files)
         _logger.info("--- Configuration Manager Initialized --- ")
@@ -220,6 +241,7 @@ class ConfigManager:
         self.config_fi_name, self.config_fi_relpath = self._build_file_index(
             self.config_dir
         )
+
         self.sync()
 
     def ensure_base_files(self, repo_dir) -> bool:
