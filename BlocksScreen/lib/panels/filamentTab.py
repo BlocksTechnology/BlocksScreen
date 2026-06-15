@@ -110,6 +110,8 @@ class FilamentTab(QtWidgets.QStackedWidget):
             lambda: self.change_page(self.indexOf(self._basic_panel))
         )
 
+        self.ws.connected_signal.connect(self.handle_moonraker_components)
+
         self.run_gcode.connect(self.ws.api.run_gcode)
 
     def handle_moonraker_components(self):
