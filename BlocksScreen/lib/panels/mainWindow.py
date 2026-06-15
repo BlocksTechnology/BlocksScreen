@@ -1,9 +1,11 @@
 import logging
+import re
 import typing
 from collections import deque
 
 import events
 from configfile import BlocksScreenConfig, get_configparser
+from devices.amu import AMUManager
 from devices.storage import USBManager
 from lib.files import Files
 from lib.klipper_message_filter import (  # noqa: F405
@@ -38,6 +40,10 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 from screensaver import ScreenSaver
 
 _logger = logging.getLogger(__name__)
+
+_MACRO_ERROR_RE = re.compile(
+    r"Error evaluating 'gcode_macro ([^:]+):gcode'.*CommandError", re.IGNORECASE
+)
 
 
 def api_handler(func):
@@ -124,9 +130,9 @@ class MainWindow(QtWidgets.QMainWindow):
         gdir = None
         if usb_config:
             gdir = usb_config.get("gcodes_dir", default=None)
-
         self.usb_manager: USBManager = USBManager(parent=self, gcodes_dir=gdir)
         self.ws = MoonWebSocket(self)
+        self.amu_manager: AMUManager = AMUManager(ws=self.ws, parent=self)
         self.notiPage = NotificationPage(self)
         self.mc = MachineControl(self)
         self.file_data = Files(self, self.ws)
@@ -142,10 +148,11 @@ class MainWindow(QtWidgets.QMainWindow):
         )
         QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.CursorShape.BlankCursor)
         self.filamentPanel = FilamentTab(
-            self.ui.filamentTab, self.printer, self.ws, self.config
+            self.ui.filamentTab, self.printer, self.ws, self.config, self.amu_manager
         )
         self.controlPanel = ControlTab(self.ui.controlTab, self.ws, self.printer)
         self.utilitiesPanel = UtilitiesTab(self.ui.utilitiesTab, self.ws, self.printer)
+
         self.networkPanel = NetworkControlWindow(self)
         self.bo_ws_startup.connect(slot=self.bo_start_websocket_connection)
         self.ws.connecting_signal.connect(self.conn_window.on_websocket_connecting)
@@ -154,6 +161,7 @@ class MainWindow(QtWidgets.QMainWindow):
         )
         self.ws.connection_lost.connect(self.conn_window.on_websocket_connection_lost)
         self.ws.klippy_state_signal.connect(self._on_klippy_state)
+        self.ws.klippy_state_signal.connect(self.conn_window.on_klippy_state)
         self.printer.webhooks_update.connect(self.conn_window.webhook_update)
         self.printPanel.request_back.connect(slot=self.global_back)
         self.printPanel.on_cancel_print.connect(slot=self.on_cancel_print)
@@ -168,6 +176,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.utilitiesPanel.request_back.connect(slot=self.global_back)
         self.utilitiesPanel.request_change_page.connect(slot=self.global_change_page)
         self.utilitiesPanel.update_available.connect(self.on_update_available)
+
         self.ui.notification_btn.clicked.connect(self.notiPage.show_notification_panel)
         self.ui.extruder_temp_display.clicked.connect(
             lambda: self.global_change_page(
@@ -184,15 +193,17 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui.filament_type_icon.clicked.connect(
             lambda: self.global_change_page(
                 self.ui.main_content_widget.indexOf(self.ui.filamentTab),
-                self.filamentPanel.indexOf(self.filamentPanel),
+                2,
             )
         )
         self.ui.filament_type_icon.setText("PLA")
         self.ui.filament_type_icon.update()
         self.ui.nozzle_size_icon.setText("0.4mm")
         self.ui.nozzle_size_icon.update()
-
         self.conn_window.retry_connection_clicked.connect(slot=self.ws.retry_wb_conn)
+        self.conn_window.firmware_restart_clicked.connect(
+            slot=self.mc.restart_klipper_mcu_service
+        )
         self.conn_window.firmware_restart_clicked.connect(
             slot=self.ws.api.firmware_restart
         )
@@ -210,6 +221,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.printer.extruder_update.connect(self.on_extruder_update)
         self.printer.heater_bed_update.connect(self.on_heater_bed_update)
         self.printer.sensor_update.connect(self.on_temp_sensor_update)
+        self.printer.object_updated.connect(self.amu_manager.on_object_updated)
+        self.amu_manager.run_gcode_signal.connect(self.ws.api.run_gcode)
         self.run_gcode_signal.connect(self.ws.api.run_gcode)
 
         self.ui.main_content_widget.currentChanged.connect(slot=self.reset_tab_indexes)
@@ -217,7 +230,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.call_notification_panel.connect(self.notiPage.show_notification_panel)
         self.networkPanel.update_wifi_icon.connect(self.change_wifi_icon)
         self.conn_window.wifi_button_clicked.connect(self.call_network_panel.emit)
-        self.conn_window.notification_btn_clicked.connect(
+        self.conn_window.notification_button_clicked.connect(
             self.call_notification_panel.emit
         )
         self.ui.wifi_button.clicked.connect(self.call_network_panel.emit)
@@ -284,12 +297,19 @@ class MainWindow(QtWidgets.QMainWindow):
         )
         self.file_data.fileinfo.connect(self.cancelpage._show_screen_thumbnail)
         self.printPanel.call_cancel_panel.connect(self.handle_cancel_print)
+        self.printer.display_update.connect(self._handle_display_status)
 
         self.print_status = "idle"
 
         if self.config.has_section("server"):
             self.bo_ws_startup.emit()
         self.reset_tab_indexes()
+
+    @QtCore.pyqtSlot(str, str, name="handleDisplayUpdate")
+    @QtCore.pyqtSlot(str, float, name="handleDisplayUpdate")
+    def _handle_display_status(self, name, value: str | float) -> None:
+        if isinstance(value, str):
+            self.show_notifications.emit("M117", str(value), Severity.INFO.value, True)
 
     @QtCore.pyqtSlot(bool, name="show-cancel-page")
     def handle_cancel_print(self, show: bool = True):
@@ -439,7 +459,11 @@ class MainWindow(QtWidgets.QMainWindow):
         Disables all tabs except controlTab (where calibration lives) and
         the header, so the user cannot navigate away mid-calibration.
         """
-        for tab in (self.ui.printTab, self.ui.filamentTab, self.ui.utilitiesTab):
+        for tab in (
+            self.ui.printTab,
+            self.ui.filamentTab,
+            self.ui.utilitiesTab,
+        ):
             self.ui.main_content_widget.setTabEnabled(
                 self.ui.main_content_widget.indexOf(tab), not locked
             )
@@ -697,9 +721,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 )
                 if callable(_klippy_event_callback):
                     try:
-                        _event = _klippy_event_callback(
-                            data=f"Moonraker reported klippy is {_state_call}"
-                        )
+                        _event = _klippy_event_callback(data="")
                         instance = QtWidgets.QApplication.instance()
                         if not isinstance(_event, QtCore.QEvent):
                             return
@@ -807,12 +829,25 @@ class MainWindow(QtWidgets.QMainWindow):
             _gcode_msg_type, _message = parts
             if _gcode_msg_type == "!!":
                 source = MessageSource.GCODE_ERROR
+                m = _MACRO_ERROR_RE.search(_message)
+                if m:
+                    _message = f"macro failed: {m.group(1)}"
             elif _gcode_msg_type == "echo:":
                 source = MessageSource.GCODE_ECHO
+
+            elif _gcode_msg_type == "SCREEN":
+                self.show_notifications.emit(
+                    _gcode_msg_type, _message, Severity.INFO.value, True
+                )
+                return
             else:
                 return
+
             self._emit_filtered_notification(
-                source, _message, fallback=False, show_popup=True
+                source,
+                _message,
+                fallback=True,
+                show_popup=True,
             )
 
     @api_handler
@@ -904,12 +939,14 @@ class MainWindow(QtWidgets.QMainWindow):
     def on_temp_sensor_update(self, name: str, field: str, value: float) -> None:
         """Handles Chamber temperature if a sensor with that name exists"""
         if name == "Chamber":
-            if self.ui.chamber_temp_display.isHidden(): 
+            if self.ui.chamber_temp_display.isHidden():
                 self.ui.chamber_temp_display.show()
             if field == "temperature":
                 self.ui.chamber_temp_display.setText(f"{round(int(value)):.0f}°C")
             elif field == "humidity":
-                self.ui.chamber_temp_display.setSecondaryText(f"{round(int(value)):.0f}%" )
+                self.ui.chamber_temp_display.setSecondaryText(
+                    f"{round(int(value)):.0f}%"
+                )
 
     @QtCore.pyqtSlot(str, name="set-header-filament-type")
     def set_header_filament_type(self, type: str):
