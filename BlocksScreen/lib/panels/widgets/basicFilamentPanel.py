@@ -140,21 +140,6 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
                     lambda: self.request_back.emit()
                 )
 
-    @QtCore.pyqtSlot(str, str, bool, name="on_filament_sensor_update")
-    def on_filament_sensor_update(self, sensor_name: str, parameter: str, value: bool):
-        if parameter == "filament_detected":
-            if not isinstance(value, bool):
-                self._filament_state = self.FilamentStates.UNKNOWN
-                self.handle_filament_state()
-                return
-            if sensor_name == self.filament_sensor:
-                if value:
-                    self._filament_state = self.FilamentStates.LOADED
-                else:
-                    self._filament_state = self.FilamentStates.UNLOADED
-                return
-        self.handle_filament_state()
-
     @QtCore.pyqtSlot(dict, name="on_load_filament")
     def on_load_filament(self, status: dict):
         if "state" in status.keys():
@@ -167,7 +152,6 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         self.call_load_panel.emit(
             True, f"Loading Filament\n{status['step'].capitalize()}"
         )
-        self.handle_filament_state()
 
     @QtCore.pyqtSlot(dict, name="on_unload_filament")
     def on_unload_filament(self, status: dict):
@@ -179,7 +163,6 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         self.call_load_panel.emit(
             True, f"Unloading Filament\n{status['step'].capitalize()}"
         )
-        self.handle_filament_state()
 
     @QtCore.pyqtSlot(int, int, name="load_filament")
     def load_filament(
@@ -226,16 +209,27 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         )
         self.run_gcode.emit("MMU_UNLOAD")
 
-    def handle_filament_state(self):
-        if self._filament_state == self.FilamentStates.LOADED:
+    def on_mmu_state_changed(self, mmu_state):
+        if mmu_state is None:
+            return
+        self.status = mmu_state.get("filament", None)
+        self.set_filament_state(True if self.status == "loaded" else False)
+
+
+    def set_filament_state(self , update: bool) -> None:
+        if update:
             self.panel.filament_page_unload_btn.setEnabled(True)
             self.panel.filament_page_load_btn.setEnabled(False)
-        elif self._filament_state == self.FilamentStates.UNLOADED:
+            self._filament_state = self.FilamentStates.LOADED
+        elif update:
             self.panel.filament_page_unload_btn.setEnabled(False)
             self.panel.filament_page_load_btn.setEnabled(True)
+            self._filament_state = self.FilamentStates.UNLOADED
+
         else:
             self.panel.filament_page_load_btn.setEnabled(True)
             self.panel.filament_page_unload_btn.setEnabled(True)
+            self._filament_state = self.FilamentStates.UNKNOWN
 
     @property
     def filament_state(self):
