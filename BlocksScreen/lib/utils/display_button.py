@@ -228,7 +228,7 @@ class DisplayButton(QtWidgets.QPushButton):
                     _upper_rect = QtCore.QRectF(
                         _mtl.left() + margin,
                         _mtl.top() + margin,
-                        _mtl.width() - margin * 2.,
+                        _mtl.width() - margin * 2.0,
                         (_mtl.height() * 0.7) // 2,
                     )
                     _downer_rect = QtCore.QRectF(
@@ -275,10 +275,10 @@ class DisplayButton(QtWidgets.QPushButton):
 
                     _first_icon_rect = QtCore.QRectF(
                         _margin,
-                        (_row_height - _icon_size) / 2.0,   # vertically centred in row 1
+                        (_row_height - _icon_size) / 2.0,  # vertically centred in row 1
                         _icon_size,
                         _icon_size,
-                                                     )
+                    )
                     _first_icon_scaled = self.icon_pixmap.scaled(
                         int(_icon_size),
                         int(_icon_size),
@@ -286,16 +286,22 @@ class DisplayButton(QtWidgets.QPushButton):
                         QtCore.Qt.TransformationMode.SmoothTransformation,
                     )
                     _first_adjusted_icon_rect = QtCore.QRectF(
-                        _first_icon_rect.x() + (_icon_size - _first_icon_scaled.width())  / 2.0,
-                        _first_icon_rect.y() + (_icon_size - _first_icon_scaled.height()) / 2.0,
+                        _first_icon_rect.x()
+                        + (_icon_size - _first_icon_scaled.width()) / 2.0,
+                        _first_icon_rect.y()
+                        + (_icon_size - _first_icon_scaled.height()) / 2.0,
                         _first_icon_scaled.width(),
                         _first_icon_scaled.height(),
                     )
-                    painter.drawPixmap(_first_adjusted_icon_rect, _first_icon_scaled, _first_icon_scaled.rect().toRectF())
+                    painter.drawPixmap(
+                        _first_adjusted_icon_rect,
+                        _first_icon_scaled,
+                        _first_icon_scaled.rect().toRectF(),
+                    )
 
                     _first_text_rect = QtCore.QRectF(
-                        _margin + _icon_size + _margin,      # starts right after the icon
-                        0.0,                                  # top of row 1
+                        _margin + _icon_size + _margin,  # starts right after the icon
+                        0.0,  # top of row 1
                         _rect.width() - _icon_size - _margin * 3,
                         _row_height,
                     )
@@ -312,7 +318,9 @@ class DisplayButton(QtWidgets.QPushButton):
                     )
                     _second_icon_rect = QtCore.QRectF(
                         _margin,
-                        _row_height + (_row_height - _icon_size) / 2.0,   # vertically centred in row 2
+                        _row_height
+                        + (_row_height - _icon_size)
+                        / 2.0,  # vertically centred in row 2
                         _icon_size,
                         _icon_size,
                     )
@@ -323,15 +331,21 @@ class DisplayButton(QtWidgets.QPushButton):
                         QtCore.Qt.TransformationMode.SmoothTransformation,
                     )
                     _second_adjusted_icon_rect = QtCore.QRectF(
-                        _second_icon_rect.x() + (_icon_size - _second_icon_scaled.width())  / 2.0,
-                        _second_icon_rect.y() + (_icon_size - _second_icon_scaled.height()) / 2.0,
+                        _second_icon_rect.x()
+                        + (_icon_size - _second_icon_scaled.width()) / 2.0,
+                        _second_icon_rect.y()
+                        + (_icon_size - _second_icon_scaled.height()) / 2.0,
                         _second_icon_scaled.width(),
                         _second_icon_scaled.height(),
                     )
-                    painter.drawPixmap(_second_adjusted_icon_rect, _second_icon_scaled, _second_icon_scaled.rect().toRectF())
+                    painter.drawPixmap(
+                        _second_adjusted_icon_rect,
+                        _second_icon_scaled,
+                        _second_icon_scaled.rect().toRectF(),
+                    )
                     _second_text_rect = QtCore.QRectF(
                         _margin + _icon_size + _margin,
-                        _row_height,                           # top of row 2
+                        _row_height,  # top of row 2
                         _rect.width() - _icon_size - _margin * 3,
                         _row_height,
                     )

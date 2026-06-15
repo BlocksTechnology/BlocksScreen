@@ -516,7 +516,6 @@ class Printer(QtCore.QObject):
         if "power" in value.keys():
             self.heater_bed_update.emit(heater_name, "power", value["power"])
 
-
     def _fan_object_updated(self, value: dict, fan_name: str = "fan") -> None:
         if "speed" in value.keys():
             self.fan_update[str, str, float].emit("fan", "speed", value["speed"])
@@ -675,11 +674,9 @@ class Printer(QtCore.QObject):
                 "measured_max_temp",
                 values["measured_max_temp"],
             )
-        if "humidity" in values.keys(): 
+        if "humidity" in values.keys():
             self.sensor_update.emit(
-                    temperature_sensor_name, 
-                    "humidity", 
-                    values["humidity"]
+                temperature_sensor_name, "humidity", values["humidity"]
             )
 
     def _aht10_object_updated(
