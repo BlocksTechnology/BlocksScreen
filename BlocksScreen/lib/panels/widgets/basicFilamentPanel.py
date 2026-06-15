@@ -98,9 +98,6 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
 
         self.printer.unload_filament_update.connect(self.on_unload_filament)
         self.printer.load_filament_update.connect(self.on_load_filament)
-        self.printer.filament_switch_sensor_update.connect(
-            self.on_filament_sensor_update
-        )
         self.printer.print_stats_update[str, str].connect(self.on_print_stats_update)
         self.printer.print_stats_update[str, dict].connect(self.on_print_stats_update)
         self.printer.print_stats_update[str, float].connect(self.on_print_stats_update)
@@ -212,11 +209,10 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
     def on_mmu_state_changed(self, mmu_state):
         if mmu_state is None:
             return
-        self.status = mmu_state.get("filament", None)
-        self.set_filament_state(True if self.status == "loaded" else False)
+        self.status = mmu_state.filament
+        self.set_filament_state(True if self.status == "Loaded" else False)
 
-
-    def set_filament_state(self , update: bool) -> None:
+    def set_filament_state(self, update: bool) -> None:
         if update:
             self.panel.filament_page_unload_btn.setEnabled(True)
             self.panel.filament_page_load_btn.setEnabled(False)
