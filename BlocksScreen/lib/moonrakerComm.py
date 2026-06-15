@@ -589,11 +589,11 @@ class MoonAPI(QtCore.QObject):
             return False
 
         return self._ws._moonRest.get_request(f"/server/files/{root}/{filename}")
-    
+
     def get_moonraker_components(self):
         """Request moonraker components information"""
-        components = self._ws._moonRest.get_request("/server/info")
-        return components.get("components", {}) if components else False
+        response = self._ws._moonRest.get_request("/server/info")
+        return response.get("result", {}).get("components", [])
 
     @QtCore.pyqtSlot(name="api-get-dir-info")
     @QtCore.pyqtSlot(str, name="api-get-dir-info")

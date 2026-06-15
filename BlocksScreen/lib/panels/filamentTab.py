@@ -112,10 +112,15 @@ class FilamentTab(QtWidgets.QStackedWidget):
 
         self.run_gcode.connect(self.ws.api.run_gcode)
 
-
     def handle_moonraker_components(self):
         components = self.ws.api.get_moonraker_components()
-        self.call_load_panel.emit(False, str(components))
+
+        if "spoolman" not in components:
+            self.fp_button_2.hide()
+            self.spoolman_btn.hide()
+        else:
+            self.fp_button_2.show()
+            self.spoolman_btn.show()
 
     def change_page(self, index: int) -> None:
         """Requests a page change page to the global manager
@@ -259,15 +264,15 @@ class FilamentTab(QtWidgets.QStackedWidget):
         font = QtGui.QFont()
         font.setPointSize(15)
 
-        spoolman_btn = BlocksCustomButton(page)
-        spoolman_btn.setFixedSize(230, 80)
-        spoolman_btn.setText("Spoolman")
-        spoolman_btn.setFont(font)
-        spoolman_btn.setPixmap(
+        self.spoolman_btn = BlocksCustomButton(page)
+        self.spoolman_btn.setFixedSize(230, 80)
+        self.spoolman_btn.setText("Spoolman")
+        self.spoolman_btn.setFont(font)
+        self.spoolman_btn.setPixmap(
             QtGui.QPixmap(":/filament_related/media/btn_icons/spoolman.svg")
         )
-        spoolman_btn.clicked.connect(self._on_spoolman_clicked)
-        btn_row.addWidget(spoolman_btn)
+        self.spoolman_btn.clicked.connect(self._on_spoolman_clicked)
+        btn_row.addWidget(self.spoolman_btn)
 
         accept_btn = BlocksCustomButton(page)
         accept_btn.setFixedSize(230, 80)
