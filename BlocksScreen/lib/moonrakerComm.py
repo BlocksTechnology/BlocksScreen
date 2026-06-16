@@ -788,7 +788,9 @@ class MoonAPI(QtCore.QObject):
         """Issue client update"""
         if not isinstance(client_name, str) or not client_name:
             return False
-        return self._ws.send_request(method="machine.update.client")
+        return self._ws.send_request(
+            method="machine.update.client", params={"name": client_name}
+        )
 
     @QtCore.pyqtSlot(name="update-system")
     def update_system(self):
