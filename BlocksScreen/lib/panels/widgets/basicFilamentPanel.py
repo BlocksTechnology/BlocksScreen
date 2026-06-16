@@ -47,8 +47,8 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         self.current_temp: int = 0
         self.has_load_unload_objects = None
         self._filament_state = self.FilamentStates.UNKNOWN
-        self.filament_type = FilamentTypes.UNKNOWN
         self._setup_ui()
+        self.set_filament_state()
 
     def showEvent(self, a0: QtGui.QShowEvent | None) -> None:
         """reset to main page every time the panel is shown"""
@@ -112,13 +112,12 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         Args:
             save_variables (dict): dictionary containing the save variables from the printer
         """
+        filament_type = FilamentTypes.UNKNOWN
         for i in FilamentTypes:
             if i.value.name in save_variables["variables"]["filament_type"]:
-                self.filament_type = i
+                filament_type = i
                 break
-            else:
-                self.filament_type = FilamentTypes.UNKNOWN
-        self.panel.label_2.setText(self.filament_type.value.name)
+        self.panel.label_2.setText(filament_type.value.name)
 
     @QtCore.pyqtSlot(str, dict, name="on_print_stats_update")
     @QtCore.pyqtSlot(str, float, name="on_print_stats_update")
@@ -242,7 +241,7 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         self.status = mmu_state.filament
         self.set_filament_state(True if self.status == "Loaded" else False)
 
-    def set_filament_state(self, update: bool | None) -> None:
+    def set_filament_state(self, update: bool | None = None) -> None:
         """sets filament states and updates load/unload button accordingly if None then both buttons are enabled
 
         Args:
