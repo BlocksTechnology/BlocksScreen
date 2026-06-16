@@ -174,7 +174,9 @@ class BlocksScreenConfig:
             list: Parsed list of values, or *default* when option is missing.
         """
         raw = self.config.get(section=self.section, option=option, fallback=None)
-        if not raw or raw == Sentinel.MISSING:
+        if raw is Sentinel.MISSING:
+            return default if default is not Sentinel. else []
+        if not raw:
             if default is not Sentinel.MISSING:
                 return default
             return []
