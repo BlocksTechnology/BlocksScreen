@@ -1,13 +1,13 @@
+import logging
 import re
 import typing
-import logging
 
-from helper_methods import normalize
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.display_button import DisplayButton
 from lib.utils.icon_button import IconButton
 from PyQt6 import QtCore, QtGui, QtWidgets
 
+from lib.utils.gcode import fan_speed_gcode
 
 _logger = logging.getLogger(__name__)
 
@@ -40,10 +40,10 @@ class TuneWidget(QtWidgets.QWidget):
     speed_factor_override: float = 1.0
     extruder_target: int = 0
     bed_target: int = 0
-    tune_display_buttons: dict = {}
 
     def __init__(self, parent) -> None:
         super().__init__(parent)
+        self.tune_display_buttons: dict = {}
         self.setObjectName("tune_page")
         self._setupUI()
         self.sensors_menu_btn.clicked.connect(self.request_sensorsPage.emit)
@@ -53,7 +53,7 @@ class TuneWidget(QtWidgets.QWidget):
             lambda: self.request_sliderPage[str, int, "PyQt_PyObject", int, int].emit(
                 "Speed",
                 int(self.speed_factor_override * 100),
-                self.on_slider_change,
+                self._on_speed_slider_change,
                 10,
                 300,
             )
@@ -99,30 +99,23 @@ class TuneWidget(QtWidgets.QWidget):
 
     @QtCore.pyqtSlot(str, int, name="on_numpad_change")
     def on_numpad_change(self, name: str, new_value: int) -> None:
-        """Handle numpad value inserted"""
+        """Handle numpad value inserted."""
         if "bed" in name.lower():
             name = "heater_bed"
         elif "extruder" in name.lower():
             name = "extruder"
         self.run_gcode.emit(f"SET_HEATER_TEMPERATURE HEATER={name} TARGET={new_value}")
 
+    @QtCore.pyqtSlot(str, int)
+    def _on_speed_slider_change(self, _name: str, new_value: int) -> None:
+        """Handle print speed slider change."""
+        self.speed_factor_override = new_value / 100
+        self.run_gcode.emit(f"M220 S{new_value}")
+
     @QtCore.pyqtSlot(str, int, name="on_slider_change")
     def on_slider_change(self, name: str, new_value: int) -> None:
-        """Handle slider page value inserted"""
-        if "speed" in name.lower():
-            self.speed_factor_override = new_value / 100
-            self.run_gcode.emit(f"M220 S{new_value}")
-
-        if "fan" in name.lower():
-            if name.lower() == "fan":
-                self.run_gcode.emit(
-                    f"M106 S{int(round((normalize(float(new_value / 100), 0.0, 1.0, 0, 255))))}"
-                )  # [0, 255] Range
-            else:
-                name = name.replace(" ", "_")
-                self.run_gcode.emit(
-                    f"SET_FAN_SPEED FAN={name} SPEED={float(new_value / 100.00)}"
-                )  # [0.0, 1.0] Range
+        """Handle fan slider value change."""
+        self.run_gcode.emit(fan_speed_gcode(name, new_value))
 
     @QtCore.pyqtSlot(str, str, float, name="on_fan_update")
     @QtCore.pyqtSlot(str, str, int, name="on_fan_update")
@@ -137,6 +130,8 @@ class TuneWidget(QtWidgets.QWidget):
             new_value (int | float): New value for field name
         """
         fields = name.split()
+        if not fields:
+            return
         first_field = fields[0]
         second_field = fields[1] if len(fields) > 1 else None
         name = second_field.replace("_", " ") if second_field else name

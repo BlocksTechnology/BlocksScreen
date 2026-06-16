@@ -2,6 +2,7 @@
 import json
 import logging
 import threading
+import typing
 
 import websocket
 from events import (
@@ -40,6 +41,13 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
     klippy_state_signal = QtCore.pyqtSignal(str, name="klippy_state")
     query_server_info_signal = QtCore.pyqtSignal(name="query_server_information")
 
+    _KLIPPY_NOTIFY_METHODS: typing.ClassVar[frozenset[str]] = frozenset(
+        {
+            "notify_klippy_disconnected",
+            "notify_klippy_shutdown",
+        }
+    )
+
     def __init__(self, parent: QtCore.QObject) -> None:
         """Initialize the websocket thread, timers, and Moonraker API helper."""
         super().__init__(parent)
@@ -67,6 +75,7 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
         self.api: MoonAPI = MoonAPI(self)
         self._retry_timer: RepeatedTimer | None = None
         websocket.setdefaulttimeout(self.timeout)
+        self._intentional_disconnect: bool = False
 
         self.query_server_info_signal.connect(self.api.api_query_server_info)
         self.query_klippy_status_timer = RepeatedTimer(
@@ -90,6 +99,7 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
             self._reconnect_count = 0
         self.try_connection()
 
+    @QtCore.pyqtSlot(name="try_connection")
     def try_connection(self):
         """Try connecting to websocket"""
         with self._state_lock:
@@ -99,7 +109,7 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
         self._retry_timer = RepeatedTimer(self.timeout, self.reconnect)
         return self.connect()
 
-    def reconnect(self):
+    def reconnect(self) -> bool:
         """Reconnect to websocket"""
         with self._state_lock:
             if self.connected:
@@ -127,10 +137,9 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
                     unable_to_connect_event.__class__.__name__,
                     e,
                 )
-            logger.info(
+            logger.warning(
                 "Maximum number of connection retries reached, Unable to establish connection with Moonraker"
             )
-            return False
         return self.connect()
 
     def connect(self) -> bool:
@@ -164,8 +173,6 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
             on_error=self.on_error,
             on_message=self.on_message,
         )
-        _kwargs = {"reconnect": self.timeout}  # FIXME: This goes nowhere
-
         self._wst = threading.Thread(
             name="websocket.run_forever",
             target=self.ws.run_forever,
@@ -183,6 +190,7 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
     def wb_disconnect(self) -> None:
         """Websocket disconnect"""
         if self._wst is not None and self.ws is not None:
+            self._intentional_disconnect = True
             self.ws.close()
             if self._wst.is_alive():
                 self._wst.join(timeout=self.timeout + 1)
@@ -231,6 +239,11 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
         logger.info(
             f"Websocket closed, code: {_close_status_code}, message: {_close_message}"
         )
+        if not self.connecting and not self._intentional_disconnect:
+            QtCore.QMetaObject.invokeMethod(
+                self, "try_connection", QtCore.Qt.ConnectionType.QueuedConnection
+            )
+        self._intentional_disconnect = False
 
     @QtCore.pyqtSlot(name="evaluate_klippy_status")
     def evaluate_klippy_status(self) -> None:
@@ -249,6 +262,7 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
             self.connecting = False
             self.connected = True
             self._klippy_retry_count = 0
+            self._reconnect_count = 0
         self.evaluate_klippy_status()
         open_event = WebSocketOpen(data="Connected")
         try:
@@ -280,6 +294,7 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
         except json.JSONDecodeError as e:
             logger.error("Failed to decode websocket message: %s", e)
             return
+        message_event = None
         if "id" in response:
             with self._request_lock:
                 _entry = self.request_table.pop(response["id"], None)
@@ -315,6 +330,15 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
                 self.klippy_state_signal.emit(_klippy_state)
                 return
             else:
+                _callback = _entry[2] if len(_entry) > 2 else None
+                if _callback is not None:
+                    if "error" not in response:
+                        _callback(response.get("result"))
+                    else:
+                        logger.error(
+                            "WS request %s error: %s", _entry[0], response.get("error")
+                        )
+                    return
                 if "error" in response:
                     message_event = WebSocketMessageReceived(
                         method="error",
@@ -335,10 +359,9 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
                 self.klippy_state_signal.emit("disconnected")
                 self._klippy_retry_count = 0
                 self.evaluate_klippy_status()
-
             message_event = (
                 WebSocketMessageReceived(  # mainly used to pass websocket notifications
-                    method=str(response["method"]),
+                    method=response["method"],
                     data=response,
                     metadata=None,
                 )
@@ -346,6 +369,8 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
         else:
             return
 
+        if message_event is None:
+            return
         try:
             instance = QtWidgets.QApplication.instance()
             if instance:
@@ -353,17 +378,21 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
             else:
                 raise TypeError("QApplication.instance expected non None value")
         except Exception as e:
-            logger.info(
+            logger.error(
                 "Unexpected error while creating websocket message event: %s", e
             )
 
-    def send_request(self, method: str, params: dict | None = None) -> bool:
+    def send_request(
+        self, method: str, params: dict | None = None, callback=None
+    ) -> bool:
         """Send a request over the websocket
 
         Args:
             method (str): Websocket method name
             params (dict, optional): parameters for the websocket method. Defaults to None.
-
+            callback (callable, optional): Called with ``response["result"]`` when the
+            response arrives. If None, the response is routed as a
+            ``WebSocketMessageReceived`` event to the parent widget. Defaults to None.
         Returns:
             bool: Whether the method finished and a request was sent
         """
@@ -378,7 +407,7 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
         with self._request_lock:
             self._request_id += 1
             _rid = self._request_id
-            self.request_table[_rid] = [method, params]
+            self.request_table[_rid] = [method, params, callback]
 
         packet = {
             "jsonrpc": "2.0",
@@ -874,3 +903,83 @@ class MoonAPI(QtCore.QObject):
     def history_delete_job(self, uid: str):
         """Request delete job history"""
         raise NotImplementedError
+
+    #   ---------------------------------AMU----------------------------------
+
+    def spoolman_proxy(
+        self,
+        request_method: str,
+        path: str,
+        query: str | None = None,
+        body: dict | None = None,
+        use_v2_response: bool = True,
+        callback=None,
+    ) -> bool:
+        """Proxy a request to the Spoolman API via Moonraker (server.spoolman.proxy)."""
+        params = {
+            "use_v2_response": use_v2_response,
+            "request_method": request_method,
+            "path": path,
+        }
+        if query is not None:
+            params["query"] = query
+        if body is not None:
+            params["body"] = body
+        return self._ws.send_request(
+            method="server.spoolman.proxy",
+            params=params,
+            callback=callback,
+        )
+
+    def get_filaments(self, callback) -> bool:
+        return self.spoolman_proxy(
+            request_method="GET",
+            path="/v1/filament",
+            callback=callback,
+        )
+
+    def get_spool_id(self, callback=None) -> bool:
+        """Get the currently active spool ID (server.spoolman.get_spool_id)."""
+        return self._ws.send_request(
+            method="server.spoolman.get_spool_id",
+            callback=callback,
+        )
+
+    def set_spool_id(self, spool_id: int | None, callback=None) -> bool:
+        """Set the active spool ID (server.spoolman.post_spool_id). Pass None to unset."""
+        return self._ws.send_request(
+            method="server.spoolman.post_spool_id",
+            params={"spool_id": spool_id},
+            callback=callback,
+        )
+
+    def get_spool(self, spool_id: int, callback) -> bool:
+        """Request spool data from Moonraker's Spoolman proxy"""
+        return self._ws.send_request(
+            method="server.spoolman.get_spool",
+            params={"spool_id": spool_id},
+            callback=callback,
+        )
+
+    def add_spool(
+        self, filament_id: int, body: dict | None = None, callback=None
+    ) -> bool:
+        """Create a new spool (POST /v1/spool)."""
+        payload: dict = {"filament_id": filament_id}
+        if body is not None:
+            payload.update(body)
+        return self.spoolman_proxy("POST", "/v1/spool", body=payload, callback=callback)
+
+    def delete_spool(self, spool_id: int, callback=None) -> bool:
+        """Delete a spool (DELETE /v1/spool/{id})."""
+        return self.spoolman_proxy("DELETE", f"/v1/spool/{spool_id}", callback=callback)
+
+    def add_filament(self, body: dict, callback=None) -> bool:
+        """Create a new filament (POST /v1/filament)."""
+        return self.spoolman_proxy("POST", "/v1/filament", body=body, callback=callback)
+
+    def update_spool(self, spool_id: int, body: dict, callback=None) -> bool:
+        """Update spool attributes (PATCH /v1/spool/{id})."""
+        return self.spoolman_proxy(
+            "PATCH", f"/v1/spool/{spool_id}", body=body, callback=callback
+        )

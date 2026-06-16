@@ -611,6 +611,9 @@ class ProbeHelper(QtWidgets.QWidget):
                 error_msg,
             )
             return
+        # Not calibrating — mainWindow already handles the notification.
+        if not self.helper_start and self._calib_phase == _CalibPhase.IDLE:
+            return
         logger.error("Error Response: %s", error_msg)
         self._cancel_calibration()
         self.show_notifications.emit("probe_helper", error_msg, 3, True)

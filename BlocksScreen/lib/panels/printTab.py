@@ -99,6 +99,7 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.addWidget(self.sliderPage)
         self.sliderPage.request_back.connect(self.back_button)
         self.numpadPage = CustomNumpad(self)
+        self.numpadPage.setMaximumHeight(400)
         self.numpadPage.request_back.connect(self.back_button)
         self.addWidget(self.numpadPage)
 
@@ -198,6 +199,9 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.printer.print_stats_update[str, float].connect(
             self.jobStatusPage_widget.on_print_stats_update
         )
+        self.printer.flowguard_update.connect(
+            self.jobStatusPage_widget.on_flowguard_update
+        )
         self.printer.print_stats_update[str, str].connect(self.on_print_stats_update)
         self.printer.print_stats_update[str, dict].connect(self.on_print_stats_update)
         self.printer.print_stats_update[str, float].connect(self.on_print_stats_update)
@@ -211,7 +215,7 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.tune_page = TuneWidget(self)
         self.addWidget(self.tune_page)
         self.tune_page.tune_change_filament_btn.clicked.connect(
-            lambda: self.request_change_tab.emit(1)
+            lambda: self.request_change_page.emit(1, 2)
         )
         self.jobStatusPage_widget.tune_clicked.connect(
             lambda: self.change_page(self.indexOf(self.tune_page))

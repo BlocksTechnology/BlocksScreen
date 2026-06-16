@@ -1,4 +1,5 @@
 # CI pipeline (mirrors .github/workflows/dev-ci.yml)
+requests
 ruff
 pylint
 pytest
