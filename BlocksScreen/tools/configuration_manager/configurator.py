@@ -169,7 +169,6 @@ class ConfigManager:
             )
             or CONFIG_REPO
         ).expanduser()
-
         self.mergeLock = threading.Lock()
         if not self.repo:
             _logger.error(
@@ -287,7 +286,7 @@ class ConfigManager:
         self, root: pathlib.Path | str, repo: pathlib.Path | str
     ) -> list[pathlib.Path]:
         """Scan the `root` directory for missing symbolic links compared
-        againts files on `repo` directory.
+        against files on `repo` directory.
 
         Returns:
             list: paths for Missing symlinks
