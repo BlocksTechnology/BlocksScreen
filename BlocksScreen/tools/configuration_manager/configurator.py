@@ -176,7 +176,7 @@ class ConfigManager:
 
         if not self.repo.exists() or not self.repo.is_dir():
             _logger.error("Repo directory does not exist")
-            raise NotADirectoryError("Repository directory does not exits")
+            raise NotADirectoryError("Repository directory does not exists")
 
         if not is_git_repo(self.repo):
             _logger.error("Provided repository directory is not a git repo")
@@ -218,7 +218,7 @@ class ConfigManager:
         _logger.info(self.cpy_files)
         _logger.info("--- Configuration Manager Initialized --- ")
         _logger.info(
-            "Configuration manager will synchronyze configurations from %s to %s "
+            "Configuration manager will synchronize configurations from %s to %s "
             % (
                 self.repo,
                 self.config_dir,
@@ -262,7 +262,7 @@ class ConfigManager:
                     i.unlink()
             return True
         except FileNotFoundError:
-            _logger.error("Unable to find broken symbolic link for deletetion")
+            _logger.error("Unable to find broken symbolic link for deletion")
         except ValueError:
             _logger.error("Caught fatal exception while cleaning up symbolic links")
         except (PermissionError, OSError):
@@ -293,7 +293,7 @@ class ConfigManager:
         _root = pathlib.Path(root)
         _repo = pathlib.Path(repo)
         if not _root.is_dir() or not _root.exists():
-            raise NotADirectoryError("Provided root dir missig or does not exist")
+            raise NotADirectoryError("Provided root dir missing or does not exist")
         if not _repo.is_dir() or not _repo.exists():
             raise NotADirectoryError("Provided repo dir missing or does not exist")
 
@@ -465,7 +465,7 @@ class ConfigManager:
 
     def _cpy_cfg_files(self) -> None:
         """Compares copy files with their version on the machines configuration
-        if they differ, copy the udpdated file perserving klipper configurations"""
+        if they differ, copy the updated file preserving klipper configurations"""
 
         try:
             if not self.cpy_files:
