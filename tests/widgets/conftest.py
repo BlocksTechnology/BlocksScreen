@@ -3,6 +3,7 @@ import sys
 from pathlib import Path
 from unittest.mock import MagicMock
 
+import pytest
 from PyQt6 import QtWidgets
 
 # Load real events module from its app-side location.
@@ -26,3 +27,12 @@ sys.modules.setdefault("lib.utils.blocks_frame", _frame_stub)
 _icon_btn_stub = MagicMock()
 _icon_btn_stub.IconButton = QtWidgets.QPushButton
 sys.modules.setdefault("lib.utils.icon_button", _icon_btn_stub)
+
+
+@pytest.fixture(scope="module", autouse=True)
+def mock_heavy_deps():
+    with pytest.MonkeyPatch.context() as mp:
+        for key in ("configfile", "BlocksScreen.lib.panels.widgets.loadWidget"):
+            mp.delitem(sys.modules, key, raising=False)
+        mp.setitem(sys.modules, "configfile", MagicMock())
+        yield

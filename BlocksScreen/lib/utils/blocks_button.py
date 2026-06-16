@@ -249,7 +249,7 @@ class BlocksCustomButton(QtWidgets.QAbstractButton):
         painter.setPen(QtCore.Qt.PenStyle.NoPen)
 
     def _paint_notification(self, painter: QtGui.QPainter) -> None:
-        dot_diameter = self.height() * 0.4
+        dot_diameter = min(14, self.height() * 0.35)
         dot_x = self.width() - dot_diameter
         notification_color = QtGui.QColor(*ButtonColors.NOTIFICATION_DOT.value)
         painter.setBrush(notification_color)
