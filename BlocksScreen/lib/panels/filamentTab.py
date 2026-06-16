@@ -116,7 +116,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
     def handle_moonraker_components(self):
         components = self.ws._moonRest.get_server_info()
 
-        if "spoolman" not in components["result"].get("components", []):
+        if "spoolman" not in components.get("result", {}).get("components", []):
             self.fp_button_2.hide()
             self.spoolman_btn.hide()
         else:

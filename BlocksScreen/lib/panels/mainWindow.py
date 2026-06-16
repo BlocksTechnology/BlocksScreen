@@ -817,7 +817,7 @@ class MainWindow(QtWidgets.QMainWindow):
     @api_handler
     def _handle_notify_gcode_response_message(self, method, data, metadata) -> None:
         """Handle websocket gcode responses messages"""
-        _gcode_response = data.get("params")
+        _gcode_response = data.get("params", [])
         self.gcode_response[list].emit(_gcode_response)
         if _gcode_response:
             if self._popup_toggle:
@@ -826,6 +826,7 @@ class MainWindow(QtWidgets.QMainWindow):
             if len(parts) != 2:
                 return
             _gcode_msg_type, _message = parts
+            source: MessageSource
             if _gcode_msg_type == "!!":
                 source = MessageSource.GCODE_ERROR
                 m = _MACRO_ERROR_RE.search(_message)
