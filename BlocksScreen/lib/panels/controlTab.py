@@ -70,7 +70,7 @@ class ControlTab(QtWidgets.QStackedWidget):
 
         self.ws: MoonWebSocket = ws
         self.printer: Printer = printer
-        self._beacon_state: bool | None = None
+        self._true_zero_state: bool | None = None
         self.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
         self.timers = []
         self.ztilt_state = False
@@ -515,18 +515,18 @@ class ControlTab(QtWidgets.QStackedWidget):
         if state.lower() == "startup":
             self.printcores_page.setText("Almost done \n be patient")
             return
-        self._beacon_state = None
+        self._true_zero_state = None
         self.panel.cp_nozzles_calibration_btn.setVisible(True)
         self._place_fans_btn(row=2)
 
     @QtCore.pyqtSlot(dict, name="_on_object_list")
     def _on_object_list(self, objects: dict) -> None:
-        has_beacon = "beacon" in objects
-        if has_beacon == self._beacon_state:
+        has_true_zero = self.printer.uses_true_zero_offset
+        if has_true_zero == self._true_zero_state:
             return
-        self._beacon_state = has_beacon
-        self.panel.cp_nozzles_calibration_btn.setVisible(not has_beacon)
-        self._place_fans_btn(row=1 if has_beacon else 2)
+        self._true_zero_state = has_true_zero
+        self.panel.cp_nozzles_calibration_btn.setVisible(not has_true_zero)
+        self._place_fans_btn(row=1 if has_true_zero else 2)
 
     def _place_fans_btn(self, row: int) -> None:
         layout = self.panel.cp_content_layout

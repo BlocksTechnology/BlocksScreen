@@ -413,7 +413,7 @@ class PrintTab(QtWidgets.QStackedWidget):
             return
         self._active_z_offset = value[2]
         self.save_config_btn.setVisible(
-            "beacon" not in self.printer.available_objects and round(value[2], 3) != 0
+            not self.printer.uses_true_zero_offset and round(value[2], 3) != 0
         )
 
     def _on_delete_file_confirmed(self, filename: str, directory: str) -> None:
@@ -488,11 +488,11 @@ class PrintTab(QtWidgets.QStackedWidget):
         if self._finish_print_handled:
             return
         if self._active_z_offset != 0 and self.babystepPage.baby_stepchange:
-            if "beacon" not in self.printer.available_objects:
+            if not self.printer.uses_true_zero_offset:
                 self.save_config()
             self._finish_print_handled = True
         self.save_config_btn.setVisible(
-            "beacon" not in self.printer.available_objects
+            not self.printer.uses_true_zero_offset
             and round(self._active_z_offset, 3) != 0
         )
 
