@@ -107,9 +107,7 @@ def check_broken_symlinks(dir: pathlib.Path) -> list[pathlib.Path]:
         return []
 
 
-def resolve_symlink(
-    file: pathlib.Path, resolved: set[str]
-) -> bool:  # }target: pathlib.Path) -> bool:
+def resolve_symlink(file: pathlib.Path, resolved: set[str]) -> bool:
     """Check if `file` has a valid symlink on `target` dir
 
     Returns:
