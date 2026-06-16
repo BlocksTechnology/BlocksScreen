@@ -257,6 +257,7 @@ class ControlTab(QtWidgets.QStackedWidget):
         self.run_gcode_signal.connect(self.ws.api.run_gcode)
         # @ object temperature change clicked
         self.numpadPage = CustomNumpad(self)
+        self.numpadPage.setMaximumHeight(400)
         self.numpadPage.request_back.connect(self.request_back_button)
         self.addWidget(self.numpadPage)
 
