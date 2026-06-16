@@ -1,11 +1,18 @@
 import logging
+import re
 import typing
 from collections import deque
 
 import events
 from configfile import BlocksScreenConfig, get_configparser
+from devices.amu import AMUManager
 from devices.storage import USBManager
 from lib.files import Files
+from lib.klipper_message_filter import (  # noqa: F405
+    MessageSource,
+    Severity,
+    match_message,
+)
 from lib.machine import MachineControl
 from lib.moonrakerComm import MoonWebSocket
 from lib.network import WifiIconKey
@@ -34,10 +41,8 @@ from screensaver import ScreenSaver
 
 _logger = logging.getLogger(__name__)
 
-_GCODE_POPUP_MESSAGES: tuple[tuple[str, str], ...] = (
-    ("filament runout", "Filament Runout"),
-    ("no filament", "No Filament Detected"),
-    ("sensor not in valid range", "Eddy Current Sensor:\nnot in valid range"),
+_MACRO_ERROR_RE = re.compile(
+    r"Error evaluating 'gcode_macro ([^:]+):gcode'.*CommandError", re.IGNORECASE
 )
 
 
@@ -112,7 +117,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def __init__(self):
         """Set up UI, instantiate subsystems, and wire all inter-component signals."""
-        super().__init__()
+        super(MainWindow, self).__init__()
         self.config: BlocksScreenConfig = get_configparser()
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
@@ -125,14 +130,13 @@ class MainWindow(QtWidgets.QMainWindow):
         gdir = None
         if usb_config:
             gdir = usb_config.get("gcodes_dir", default=None)
-
         self.usb_manager: USBManager = USBManager(parent=self, gcodes_dir=gdir)
         self.ws = MoonWebSocket(self)
+        self.amu_manager: AMUManager = AMUManager(ws=self.ws, parent=self)
         self.notiPage = NotificationPage(self)
         self.mc = MachineControl(self)
         self.file_data = Files(self, self.ws)
         self.index_stack = deque(maxlen=4)
-        self._printing_active = False
         self.printer = Printer(self, self.ws)
         self.conn_window = ConnectionPage(self, self.ws)
         self.update_page = UpdatePage(self)
@@ -144,10 +148,11 @@ class MainWindow(QtWidgets.QMainWindow):
         )
         QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.CursorShape.BlankCursor)
         self.filamentPanel = FilamentTab(
-            self.ui.filamentTab, self.printer, self.ws, self.config
+            self.ui.filamentTab, self.printer, self.ws, self.config, self.amu_manager
         )
         self.controlPanel = ControlTab(self.ui.controlTab, self.ws, self.printer)
         self.utilitiesPanel = UtilitiesTab(self.ui.utilitiesTab, self.ws, self.printer)
+
         self.networkPanel = NetworkControlWindow(self)
         self.bo_ws_startup.connect(slot=self.bo_start_websocket_connection)
         self.ws.connecting_signal.connect(self.conn_window.on_websocket_connecting)
@@ -156,6 +161,7 @@ class MainWindow(QtWidgets.QMainWindow):
         )
         self.ws.connection_lost.connect(self.conn_window.on_websocket_connection_lost)
         self.ws.klippy_state_signal.connect(self._on_klippy_state)
+        self.ws.klippy_state_signal.connect(self.conn_window.on_klippy_state)
         self.printer.webhooks_update.connect(self.conn_window.webhook_update)
         self.printPanel.request_back.connect(slot=self.global_back)
         self.printPanel.on_cancel_print.connect(slot=self.on_cancel_print)
@@ -165,12 +171,12 @@ class MainWindow(QtWidgets.QMainWindow):
         self.printPanel.request_change_page.connect(slot=self.global_change_page)
         self.filamentPanel.request_back.connect(slot=self.global_back)
         self.filamentPanel.request_change_page.connect(slot=self.global_change_page)
-        self.filamentPanel.filament_type_changed.connect(self.set_header_filament_type)
         self.controlPanel.request_back_button.connect(slot=self.global_back)
         self.controlPanel.request_change_page.connect(slot=self.global_change_page)
         self.utilitiesPanel.request_back.connect(slot=self.global_back)
         self.utilitiesPanel.request_change_page.connect(slot=self.global_change_page)
         self.utilitiesPanel.update_available.connect(self.on_update_available)
+
         self.ui.notification_btn.clicked.connect(self.notiPage.show_notification_panel)
         self.ui.extruder_temp_display.clicked.connect(
             lambda: self.global_change_page(
@@ -187,15 +193,17 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui.filament_type_icon.clicked.connect(
             lambda: self.global_change_page(
                 self.ui.main_content_widget.indexOf(self.ui.filamentTab),
-                self.filamentPanel.indexOf(self.filamentPanel),
+                2,
             )
         )
         self.ui.filament_type_icon.setText("PLA")
         self.ui.filament_type_icon.update()
         self.ui.nozzle_size_icon.setText("0.4mm")
         self.ui.nozzle_size_icon.update()
-
         self.conn_window.retry_connection_clicked.connect(slot=self.ws.retry_wb_conn)
+        self.conn_window.firmware_restart_clicked.connect(
+            slot=self.mc.restart_klipper_mcu_service
+        )
         self.conn_window.firmware_restart_clicked.connect(
             slot=self.ws.api.firmware_restart
         )
@@ -212,6 +220,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.query_object_list.connect(self.utilitiesPanel.on_object_list)
         self.printer.extruder_update.connect(self.on_extruder_update)
         self.printer.heater_bed_update.connect(self.on_heater_bed_update)
+        self.printer.object_updated.connect(self.amu_manager.on_object_updated)
+        self.amu_manager.run_gcode_signal.connect(self.ws.api.run_gcode)
         self.run_gcode_signal.connect(self.ws.api.run_gcode)
 
         self.ui.main_content_widget.currentChanged.connect(slot=self.reset_tab_indexes)
@@ -219,7 +229,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.call_notification_panel.connect(self.notiPage.show_notification_panel)
         self.networkPanel.update_wifi_icon.connect(self.change_wifi_icon)
         self.conn_window.wifi_button_clicked.connect(self.call_network_panel.emit)
-        self.conn_window.notification_btn_clicked.connect(
+        self.conn_window.notification_button_clicked.connect(
             self.call_notification_panel.emit
         )
         self.ui.wifi_button.clicked.connect(self.call_network_panel.emit)
@@ -227,7 +237,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.controlPanel.probe_helper_page.handle_error_response
         )
         self.controlPanel.probe_helper_page.show_notifications.connect(
-            self.notiPage.new_notication
+            self._on_probe_notification
         )
         self.controlPanel.disable_popups.connect(self.popup_toggle)
         self.controlPanel.lock_ui.connect(self.set_ui_lock)
@@ -272,9 +282,8 @@ class MainWindow(QtWidgets.QMainWindow):
         )
         self.loadscreen.add_widget(self.loadwidget)
         self.controlPanel.toggle_conn_page.connect(self.conn_window.set_toggle)
-        self.cancelpage = CancelPage(self)
+        self.cancelpage = CancelPage(self, ws=self.ws)
         self.cancelpage.request_file_info.connect(self.file_data.on_request_fileinfo)
-        self.cancelpage.reprint_start.connect(self.ws.api.start_print)
         self.cancelpage.run_gcode.connect(self.ws.api.run_gcode)
         self.printer.print_stats_update[str, str].connect(
             self.cancelpage.on_print_stats_update
@@ -287,12 +296,19 @@ class MainWindow(QtWidgets.QMainWindow):
         )
         self.file_data.fileinfo.connect(self.cancelpage._show_screen_thumbnail)
         self.printPanel.call_cancel_panel.connect(self.handle_cancel_print)
+        self.printer.display_update.connect(self._handle_display_status)
 
         self.print_status = "idle"
 
         if self.config.has_section("server"):
             self.bo_ws_startup.emit()
         self.reset_tab_indexes()
+
+    @QtCore.pyqtSlot(str, str, name="handleDisplayUpdate")
+    @QtCore.pyqtSlot(str, float, name="handleDisplayUpdate")
+    def _handle_display_status(self, name, value: str | float) -> None:
+        if isinstance(value, str):
+            self.show_notifications.emit("M117", str(value), Severity.INFO.value, True)
 
     @QtCore.pyqtSlot(bool, name="show-cancel-page")
     def handle_cancel_print(self, show: bool = True):
@@ -350,15 +366,9 @@ class MainWindow(QtWidgets.QMainWindow):
     @QtCore.pyqtSlot(name="on-cancel-print")
     def on_cancel_print(self):
         """Slot for cancel print signal"""
-        self._printing_active = False
         self.enable_tab_bar()
-        try:
-            self.ui.extruder_temp_display.clicked.disconnect()
-            self.ui.bed_temp_display.clicked.disconnect()
-        except TypeError:
-            pass
-        self.ui.filament_type_icon.setDisabled(False)
-        self.ui.nozzle_size_icon.setDisabled(False)
+        self.ui.extruder_temp_display.clicked.disconnect()
+        self.ui.bed_temp_display.clicked.disconnect()
         self.ui.extruder_temp_display.clicked.connect(
             lambda: self.global_change_page(
                 self.ui.main_content_widget.indexOf(self.ui.controlTab),
@@ -399,10 +409,10 @@ class MainWindow(QtWidgets.QMainWindow):
                 not self.ui.main_content_widget.isTabEnabled(
                     self.ui.main_content_widget.indexOf(self.ui.controlTab)
                 ),
-                self.ui.main_content_widget.isTabEnabled(
+                not self.ui.main_content_widget.isTabEnabled(
                     self.ui.main_content_widget.indexOf(self.ui.utilitiesTab)
                 ),
-                self.ui.header_main_layout.isEnabled(),
+                not self.ui.header_main_layout.isEnabled(),
             ]
         )
 
@@ -448,7 +458,11 @@ class MainWindow(QtWidgets.QMainWindow):
         Disables all tabs except controlTab (where calibration lives) and
         the header, so the user cannot navigate away mid-calibration.
         """
-        for tab in (self.ui.printTab, self.ui.filamentTab, self.ui.utilitiesTab):
+        for tab in (
+            self.ui.printTab,
+            self.ui.filamentTab,
+            self.ui.utilitiesTab,
+        ):
             self.ui.main_content_widget.setTabEnabled(
                 self.ui.main_content_widget.indexOf(tab), not locked
             )
@@ -546,18 +560,8 @@ class MainWindow(QtWidgets.QMainWindow):
             _logger.debug("User is already on the requested page")
             return
         self.index_stack.append(current_page)
-        # Temporarily enable the target tab so setCurrentIndex works,
-        # then re-disable the tab bar if a print is active.
-        was_enabled = self.ui.main_content_widget.isTabEnabled(tab_index)
-        if not was_enabled:
-            self.ui.main_content_widget.setTabEnabled(tab_index, True)
         self.ui.main_content_widget.setCurrentIndex(tab_index)
         self.set_current_panel_index(panel_index)
-        if self._printing_active:
-            self.disable_tab_bar()
-            # Keep the target tab enabled — Qt auto-switches away from
-            # a disabled current tab, which undoes the navigation.
-            self.ui.main_content_widget.setTabEnabled(tab_index, True)
         _logger.debug(
             f"Requested page change -> Tab index : {requested_page[0]} | panel index : {requested_page[1]}",
         )
@@ -584,16 +588,9 @@ class MainWindow(QtWidgets.QMainWindow):
         if not bool(self.index_stack):
             _logger.debug("Index stack is empty, cannot go back any further")
             return
-        tab_index, panel_index = self.index_stack[-1]
-        was_enabled = self.ui.main_content_widget.isTabEnabled(tab_index)
-        if not was_enabled:
-            self.ui.main_content_widget.setTabEnabled(tab_index, True)
-        self.ui.main_content_widget.setCurrentIndex(tab_index)
-        self.set_current_panel_index(panel_index)
-        if self._printing_active:
-            self.disable_tab_bar()
-            self.ui.main_content_widget.setTabEnabled(tab_index, True)
-        self.index_stack.pop()
+        self.ui.main_content_widget.setCurrentIndex(self.index_stack[-1][0])
+        self.set_current_panel_index(self.index_stack[-1][1])
+        self.index_stack.pop()  # Remove the last position.
         _logger.debug("Successfully went back a page.")
 
     @QtCore.pyqtSlot(name="bo-start-websocket-connection")
@@ -626,7 +623,7 @@ class MainWindow(QtWidgets.QMainWindow):
             return
         api_reference = _method.split(".")
         if "klippy" in _method:
-            api_reference = ["notify_klippy"]
+            api_reference = "notify_klippy"
         method_handle = f"_handle_{api_reference[0]}_message"
         if hasattr(self, method_handle):
             obj = getattr(self, method_handle)
@@ -642,8 +639,10 @@ class MainWindow(QtWidgets.QMainWindow):
                 QtWidgets.QApplication.postEvent(self.file_data, file_data_event)
             except Exception as e:
                 _logger.error(
-                    "Error posting event for file related information "
-                    "received from websocket | error message received: %s",
+                    (
+                        "Error posting event for file related information",
+                        "received from websocket | error message received: %s",
+                    ),
                     str(e),
                 )
 
@@ -653,18 +652,20 @@ class MainWindow(QtWidgets.QMainWindow):
         if "ok" in data:
             return
         if "update" in method:
-            if "status" in method or "refresh" in method:
+            if ("status" or "refresh") in method:
                 self.on_update_message.emit(dict(data))
 
     @api_handler
     def _handle_notify_update_response_message(self, method, data, metadata) -> None:
         """Handle update response messages"""
-        self.on_update_message.emit(dict(dict(data.get("params", [{}])[0])))
+        self.on_update_message.emit(
+            dict(dict(data.get("params", {})[0]))
+        )  # Also necessary, notify klippy can also signal update complete
 
     @api_handler
     def _handle_notify_update_refreshed_message(self, method, data, metadata) -> None:
         """Handle update refreshed messages"""
-        self.on_update_message.emit(dict(data.get("params", [{}])[0]))
+        self.on_update_message.emit(dict(data.get("params", {})[0]))
 
     @api_handler
     def _handle_printer_message(self, method, data, metadata) -> None:
@@ -683,19 +684,15 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.printer_state_signal.emit("canceled")
         if "objects" in method:
             if "list" in method:
-                _object_list: list = data.get("objects", [])
+                _object_list: list = data["objects"]
                 self.query_object_list[list].emit(_object_list)
             if "subscribe" in method:
-                _objects_response_list = [
-                    data.get("status", {}),
-                    data.get("eventtime", 0),
-                ]
+                _objects_response_list = [data["status"], data["eventtime"]]
                 self.printer_object_report_signal[list].emit(_objects_response_list)
             if "query" in method:
-                _query_status = data.get("status")
-                if isinstance(_query_status, dict):
-                    _object_report = [_query_status]
-                    _object_report_keys = _query_status.items()
+                if isinstance(data["status"], dict):
+                    _object_report = [data["status"]]
+                    _object_report_keys = data["status"].items()
                     _object_report_list_dict: list = []
                     for _, key in enumerate(_object_report_keys):
                         _helper_dict: dict = {key[0]: key[1]}
@@ -723,9 +720,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 )
                 if callable(_klippy_event_callback):
                     try:
-                        _event = _klippy_event_callback(
-                            data=f"Moonraker reported klippy is {_state_call}"
-                        )
+                        _event = _klippy_event_callback(data="")
                         instance = QtWidgets.QApplication.instance()
                         if not isinstance(_event, QtCore.QEvent):
                             return
@@ -740,6 +735,18 @@ class MainWindow(QtWidgets.QMainWindow):
                             str(_state_call),
                             str(e),
                         )
+            if not self._popup_toggle and status_type in (
+                "shutdown",
+                "error",
+                "disconnected",
+            ):
+                self._emit_filtered_notification(
+                    MessageSource.KLIPPY_STATE,
+                    status_type,
+                    source_id="klippy_state",
+                    fallback=False,
+                    show_popup=True,
+                )
 
     @api_handler
     def _handle_notify_filelist_changed_message(self, method, data, metadata) -> None:
@@ -756,9 +763,7 @@ class MainWindow(QtWidgets.QMainWindow):
             if self._popup_toggle:
                 return
             service_entry: dict = entry[0]
-            if not service_entry:
-                return
-            service_name, service_info = next(iter(service_entry.items()))
+            service_name, service_info = service_entry.popitem()
             self.show_notifications.emit(
                 "mainwindow",
                 str(
@@ -768,30 +773,81 @@ class MainWindow(QtWidgets.QMainWindow):
                 False,
             )
 
+    def _emit_filtered_notification(
+        self,
+        source: MessageSource,
+        text: str,
+        *,
+        source_id: str = "mainwindow",
+        fallback: bool,
+        show_popup: bool,
+    ) -> bool:
+        rule = match_message(source, text)
+        if rule is not None:
+            self.show_notifications.emit(
+                source_id, rule.full_display, rule.severity.value, show_popup
+            )
+            return True
+        elif fallback:
+            self.show_notifications.emit(
+                source_id, text, Severity.ERROR.value, show_popup
+            )
+            return True
+        return False
+
+    @QtCore.pyqtSlot(str, str, int, bool)
+    def _on_probe_notification(
+        self, _source: str, text: str, _severity: int, show_popup: bool
+    ) -> None:
+        if not self._emit_filtered_notification(
+            MessageSource.GCODE_ERROR,
+            text,
+            source_id="probe_helper",
+            fallback=False,
+            show_popup=show_popup,
+        ):
+            self._emit_filtered_notification(
+                MessageSource.MOONRAKER_ERROR,
+                text,
+                source_id="probe_helper",
+                fallback=True,
+                show_popup=show_popup,
+            )
+
     @api_handler
     def _handle_notify_gcode_response_message(self, method, data, metadata) -> None:
         """Handle websocket gcode responses messages"""
-        _gcode_response = data.get("params", [])
+        _gcode_response = data.get("params")
         self.gcode_response[list].emit(_gcode_response)
         if _gcode_response:
             if self._popup_toggle:
                 return
-            _parts = str(_gcode_response[0]).split(" ", maxsplit=1)
-            if len(_parts) < 2:
+            parts = str(_gcode_response[0]).split(" ", maxsplit=1)
+            if len(parts) != 2:
                 return
-            _gcode_msg_type, _message = _parts
-            _msg_lower = _message.lower()
-            _display = next(
-                (
-                    fmt
-                    for pattern, fmt in _GCODE_POPUP_MESSAGES
-                    if pattern in _msg_lower
-                ),
-                None,
+            _gcode_msg_type, _message = parts
+            if _gcode_msg_type == "!!":
+                source = MessageSource.GCODE_ERROR
+                m = _MACRO_ERROR_RE.search(_message)
+                if m:
+                    _message = f"macro failed: {m.group(1)}"
+            elif _gcode_msg_type == "echo:":
+                source = MessageSource.GCODE_ECHO
+
+            elif _gcode_msg_type == "SCREEN":
+                self.show_notifications.emit(
+                    _gcode_msg_type, _message, Severity.INFO.value, True
+                )
+                return
+            else:
+                return
+
+            self._emit_filtered_notification(
+                source,
+                _message,
+                fallback=True,
+                show_popup=True,
             )
-            if _gcode_msg_type != "!!" or _display is None:
-                return
-            self.show_notifications.emit("mainwindow", _display, 3, True)
 
     @api_handler
     def _handle_error_message(self, method, data, metadata) -> None:
@@ -800,29 +856,28 @@ class MainWindow(QtWidgets.QMainWindow):
         if self._popup_toggle:
             return
 
-        # Suppress error popups while Klippy is disconnected/shutting down.
-        # Those errors are side-effects of the disconnect, not actionable by the user.
         if not self._klippy_ready:
             return
 
         text = data.get("message", str(data)) if isinstance(data, dict) else str(data)
         lower_text = text.lower()
 
-        # Metadata errors - silent, handled by files_manager
         if "metadata" in lower_text:
             self.file_data.handle_metadata_error(text)
             return
 
-        # File not found - silent
         if "file" in lower_text and "does not exist" in lower_text:
             return
 
-        # Directory not found - navigate back + show popup
         if "does not exist" in lower_text:
             self.printPanel.filesPage_widget.on_directory_error()
 
-        # Show popup for all other errors (including directory errors)
-        self.show_notifications.emit("mainwindow", str(text), 3, True)
+        if not self._emit_filtered_notification(
+            MessageSource.MOONRAKER_ERROR, text, fallback=False, show_popup=True
+        ):
+            self._emit_filtered_notification(
+                MessageSource.GCODE_ERROR, text, fallback=True, show_popup=True
+            )
         _logger.error(text)
 
     @api_handler
@@ -837,27 +892,25 @@ class MainWindow(QtWidgets.QMainWindow):
                 "Currently Throttled": 1 << 2,
                 "Temperature Limit Active": 1 << 3,
             }
-            _params = data.get("params", [{}])
-            _bits = _params[0].get("bits") if _params else None
-            if _bits is None:
+            _bits = data.get("bits", None)
+            if not _bits:
                 self.show_notifications.emit(
-                    "mainWindow", "Cpu throttled unknown reason", 2, False
+                    "mainwindow", "Cpu throttled unknown reason", 2, True
                 )
                 return
-            if _bits == 0:
-                return
             _active_flags = [name for name, mask in flags.items() if _bits & mask]
-            self.show_notifications.emit("mainwindow", str(_active_flags), 2, False)
+            for flag in _active_flags:
+                self._emit_filtered_notification(
+                    MessageSource.CPU_THROTTLE, flag, fallback=True, show_popup=True
+                )
         except Exception:
-            _logger.debug("Error emitting notification for cpu throttled notification.")
+            logging.debug("Error emitting notification for cpu throttled notification.")
             return
 
     @api_handler
     def _handle_notify_status_update_message(self, method, data, metadata) -> None:
         """Handle websocket printer objects status update messages"""
-        _object_report = data.get("params")
-        if not _object_report:
-            return
+        _object_report = data["params"]
         self.printer_object_report_signal[list].emit(_object_report)
 
     @QtCore.pyqtSlot(str, str, float, name="on-extruder-update")
@@ -914,16 +967,10 @@ class MainWindow(QtWidgets.QMainWindow):
                 return True
             return False
         if event.type() == events.PrintStart.type():
-            self._printing_active = True
             self.print_status = "printing"
             self.disable_tab_bar()
-            try:
-                self.ui.extruder_temp_display.clicked.disconnect()
-                self.ui.bed_temp_display.clicked.disconnect()
-            except TypeError:
-                pass
-            self.ui.filament_type_icon.setDisabled(True)
-            self.ui.nozzle_size_icon.setDisabled(True)
+            self.ui.extruder_temp_display.clicked.disconnect()
+            self.ui.bed_temp_display.clicked.disconnect()
             self.ui.extruder_temp_display.clicked.connect(
                 lambda: self.global_change_page(
                     self.ui.main_content_widget.indexOf(self.ui.printTab),
@@ -946,15 +993,9 @@ class MainWindow(QtWidgets.QMainWindow):
             self.print_status = "idle"
             if event.type() == events.PrintCancelled.type():
                 self.handle_cancel_print()
-            self._printing_active = False
             self.enable_tab_bar()
-            try:
-                self.ui.extruder_temp_display.clicked.disconnect()
-                self.ui.bed_temp_display.clicked.disconnect()
-            except TypeError:
-                pass
-            self.ui.filament_type_icon.setDisabled(False)
-            self.ui.nozzle_size_icon.setDisabled(False)
+            self.ui.extruder_temp_display.clicked.disconnect()
+            self.ui.bed_temp_display.clicked.disconnect()
             self.ui.extruder_temp_display.clicked.connect(
                 lambda: self.global_change_page(
                     self.ui.main_content_widget.indexOf(self.ui.controlTab),

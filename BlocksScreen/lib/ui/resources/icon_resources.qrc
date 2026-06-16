@@ -75,6 +75,19 @@
     <file>media/btn_icons/speed.svg</file>
   </qresource>
   <qresource prefix="filament_related">
+    <file>media/btn_icons/add spool.svg</file>
+    <file>media/btn_icons/add filament.svg</file>
+    <file>media/btn_icons/spoolman.svg</file>
+    <file>media/btn_icons/base dados spool 2.svg</file>
+    <file>media/btn_icons/base dados spool 1.svg</file>
+    <file>media/btn_icons/check gate 3.svg</file>
+    <file>media/btn_icons/check gate 2.svg</file>
+    <file>media/btn_icons/check gate 1.svg</file>
+    <file>media/btn_icons/edit.svg</file>
+    <file>media/btn_icons/eject.svg</file>
+    <file>media/btn_icons/humity_and_temp.svg</file>
+    <file>media/btn_icons/humity.svg</file>
+    <file>media/btn_icons/spoll.svg</file>
     <file>media/topbar/abs_filament_topbar.svg</file>
     <file>media/topbar/custom_filament_topbar.svg</file>
     <file>media/topbar/hips_filament_topbar.svg</file>
@@ -88,6 +101,8 @@
     <file>media/btn_icons/filament_sensor_turn_on.svg</file>
     <file>media/btn_icons/load_filament.svg</file>
     <file>media/btn_icons/unload_filament.svg</file>
+    <file>media/btn_icons/loaded_spool.svg</file>
+    <file>media/btn_icons/half_spoll.svg</file>
   </qresource>
   <qresource prefix="ui">
     <file>media/btn_icons/notification.svg</file>
@@ -177,6 +192,8 @@
     <file>media/btn_icons/input_shaper_manual_Y.svg</file>
   </qresource>
   <qresource prefix="arrow_icons">
+    <file>media/btn_icons/arrow_left.svg</file>
+    <file>media/btn_icons/arrow_up.svg</file>
     <file>media/btn_icons/arrow_down.svg</file>
     <file>media/btn_icons/arrow_right.svg</file>
     <file>media/btn_icons/left_arrow.svg</file>
