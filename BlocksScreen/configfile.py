@@ -26,6 +26,7 @@
 from __future__ import annotations
 
 import configparser
+from dataclasses import MISSING
 import enum
 import io
 import logging
@@ -174,7 +175,7 @@ class BlocksScreenConfig:
             list: Parsed list of values, or *default* when option is missing.
         """
         raw = self.config.get(section=self.section, option=option, fallback=None)
-        if raw is None:
+        if not raw or raw == Sentinel.MISSING:
             if default is not Sentinel.MISSING:
                 return default
             return []
