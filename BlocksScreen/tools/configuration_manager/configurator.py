@@ -170,11 +170,6 @@ class ConfigManager:
             or CONFIG_REPO
         ).expanduser()
         self.mergeLock = threading.Lock()
-        if not self.repo:
-            _logger.error(
-                "No valid configuration repository for configuration manager. Ignoring module."
-            )
-
         if not self.repo.exists() or not self.repo.is_dir():
             _logger.error("Repo directory does not exist")
             raise NotADirectoryError("Repository directory does not exists")
@@ -190,6 +185,7 @@ class ConfigManager:
             )
             or KLIPPER_CONFIG_DIR
         ).expanduser()
+
         if not self.config_dir.exists() or not self.config_dir.is_dir():
             _logger.error(
                 "Unable to find machine configuration directory %s" % self.config_dir
