@@ -7,29 +7,10 @@ _BSENV_USER="${SUDO_USER:-$USER}"
 _BSENV_HOME=$(getent passwd "$_BSENV_USER" | cut -d: -f6)
 BSENV="${BLOCKSSCREEN_VENV:-${_BSENV_HOME}/.BlocksScreen-env}"
 
-# ── Moonraker config migration (idempotent) ──────────────────────────────────
-# Disable Moonraker's PackageKit system upgrade (was causing full apt upgrade
-# on every Update click). Fix BlocksScreen managed_services (was restarting
-# klipper/moonraker instead of BlocksScreen).
-_MOONRAKER_CONF="$_BSENV_HOME/printer_data/config/moonraker.conf"
-if [ -f "$_MOONRAKER_CONF" ]; then
-    cp "$_MOONRAKER_CONF" "${_MOONRAKER_CONF}.bak" 2>/dev/null || true
-    _mr_patched=false
-    if ! grep -q "enable_system_updates" "$_MOONRAKER_CONF"; then
-        sed -i '/^\[update_manager\]$/a enable_system_updates: False' "$_MOONRAKER_CONF"
-        _mr_patched=true
-        echo "[post-merge] moonraker.conf: disabled system apt upgrades"
-    fi
-    if grep -q "managed_services: klipper moonraker" "$_MOONRAKER_CONF"; then
-        sed -i '/^\[update_manager BlocksScreen\]/,/^\[/ s/managed_services: klipper moonraker/managed_services: BlocksScreen/' "$_MOONRAKER_CONF"
-        _mr_patched=true
-        echo "[post-merge] moonraker.conf: fixed BlocksScreen managed_services"
-    fi
-    if $_mr_patched; then
-        sudo systemctl restart moonraker.service 2>/dev/null || true
-    fi
-fi
-# ─────────────────────────────────────────────────────────────────────────────
+# shellcheck source=/dev/null
+if [ -f "$SCRIPT_PATH/bs-common.sh" ]; then . "$SCRIPT_PATH/bs-common.sh"; fi
+
+bs_migrate_moonraker_conf "$_BSENV_HOME/printer_data/config/moonraker.conf" post-merge
 
 changed=$(git -C "$BS_PATH" diff ORIG_HEAD HEAD --name-only 2>/dev/null || true)
 
@@ -52,31 +33,7 @@ if [ ! -f "$SENTINEL" ] || [ "$(cat "$SENTINEL")" != "$REQS_HASH" ]; then
 fi
 
 # 2. Sync all service files so start.sh finds them already in place.
-_need_reload=false
-_svc_sync() {
-    local src="$1" dst="$2"
-    [ -f "$src" ] || return 0
-    if ! diff -q "$dst" "$src" >/dev/null 2>&1; then
-        sudo cp "$src" "$dst" && echo "[post-merge] updated $(basename "$dst")" || true
-        _need_reload=true
-    fi
-}
-[[ ! -L /etc/systemd/system/BlocksScreen.service ]] &&
-    _svc_sync "$SCRIPT_PATH/BlocksScreen.service" /etc/systemd/system/BlocksScreen.service
-_svc_sync "$SCRIPT_PATH/BlocksScreen-xorg.service" /etc/systemd/system/BlocksScreen-xorg.service
-_svc_sync "$SCRIPT_PATH/BlocksScreen-splash-holder.service" /etc/systemd/system/BlocksScreen-splash-holder.service
-if $_need_reload; then
-    dbus-send --system --print-reply \
-        --dest=org.freedesktop.systemd1 \
-        /org/freedesktop/systemd1 \
-        org.freedesktop.systemd1.Manager.Reload 2>/dev/null ||
-        sudo systemctl daemon-reload || true
-    if [ -f /etc/systemd/system/BlocksScreen-xorg.service ]; then
-        sudo systemctl enable BlocksScreen-xorg.service 2>/dev/null || true
-        systemctl is-active --quiet BlocksScreen-xorg.service ||
-            sudo systemctl start --no-block BlocksScreen-xorg.service 2>/dev/null || true
-    fi
-fi
+bs_sync_service_files "$SCRIPT_PATH" post-merge
 
 # 3. Install updater service on first deploy or if missing.
 if [ ! -f /etc/systemd/system/BlocksScreen-updater.service ]; then

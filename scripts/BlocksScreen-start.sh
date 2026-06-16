@@ -33,24 +33,15 @@ BS_PATH=$(dirname "$SCRIPT_PATH")
 _BSENV_HOME=$(getent passwd "$(id -un)" | cut -d: -f6)
 BSENV="${BLOCKSSCREEN_VENV:-${_BSENV_HOME}/.BlocksScreen-env}"
 
+# shellcheck source=/dev/null
+[ -f "$SCRIPT_PATH/bs-common.sh" ] && . "$SCRIPT_PATH/bs-common.sh"
+
 # Switch to tty8 immediately so tty1 is hidden during startup (even before splash-holder is installed)
 sudo chvt 8 2>/dev/null || true
 printf '\033[2J\033[H\033[?25l  BlocksScreen loading...\n' > /dev/tty8 2>/dev/null || true
 
-if ! "$BSENV/bin/python3.11" -c "import yaml" 2>/dev/null; then
-    "$BSENV/bin/pip" install --quiet "PyYAML==6.0.1" >>/tmp/bs-pip.log 2>&1 || true
-fi
-# libsystemd-dev must be present before any pip sdbus source build, regardless of
-# whether sdbus is already importable — the requirements install forces --no-binary sdbus.
-if ! dpkg -s libsystemd-dev >/dev/null 2>&1; then
-    sudo apt-get install -y --quiet libsystemd-dev python3-dev 2>/dev/null || true
-fi
-if ! command -v feh >/dev/null 2>&1; then
-    sudo apt-get install -y --quiet feh 2>/dev/null || true
-fi
-if ! command -v xsetroot >/dev/null 2>&1; then
-    sudo apt-get install -y --quiet x11-xserver-utils 2>/dev/null || true
-fi
+# Heavy / network-dependent bootstrap is deferred to a background job (below)
+# so the UI starts immediately with whatever is already on disk.
 # On Pi 5 vc4 modesetting, hardware cursor planes ignore -nocursor.
 # SWcursor routes cursor through X11 software path so -nocursor and
 # xsetroot can actually suppress it.
@@ -82,44 +73,9 @@ if [ -n "$_FB_W" ] && [ -n "$_FB_H" ] && [ "$_FB_W" -gt 0 ] 2>/dev/null; then
         printf '%s' "$_XORG_RES_WANT" | sudo tee "$_XORG_RES" >/dev/null 2>/dev/null || true
     fi
 fi
-if ! "$BSENV/bin/python3.11" -c "import sdbus" 2>/dev/null; then
-    "$BSENV/bin/pip" install --quiet --force-reinstall --no-binary sdbus,sdbus-networkmanager \
-        "sdbus==0.12.0" "sdbus-networkmanager==2.0.0" >>/tmp/bs-pip.log 2>&1 || true
-fi
-REQS_HASH=$(md5sum "$BS_PATH/scripts/requirements.txt" | cut -d' ' -f1)
-SENTINEL="$BSENV/.blockscreen-reqs-hash"
-if [ ! -f "$SENTINEL" ] || [ "$(cat "$SENTINEL")" != "$REQS_HASH" ]; then
-    if "$BSENV/bin/pip" install --quiet \
-        --only-binary :all: \
-        --no-binary sdbus,sdbus-networkmanager \
-        --upgrade-strategy=only-if-needed \
-        -r "$BS_PATH/scripts/requirements.txt"; then
-        echo "$REQS_HASH" >"$SENTINEL"
-    fi
-fi
-
 git -C "$BS_PATH" config core.hooksPath scripts 2>/dev/null || true
 
-# ── Moonraker config migration (idempotent) ──────────────────────────────────
-_MOONRAKER_CONF="$_BSENV_HOME/printer_data/config/moonraker.conf"
-if [ -f "$_MOONRAKER_CONF" ]; then
-    cp "$_MOONRAKER_CONF" "${_MOONRAKER_CONF}.bak" 2>/dev/null || true
-    _mr_patched=false
-    if ! grep -q "enable_system_updates" "$_MOONRAKER_CONF"; then
-        sed -i '/^\[update_manager\]$/a enable_system_updates: False' "$_MOONRAKER_CONF"
-        _mr_patched=true
-        echo "[BlocksScreen-start] moonraker.conf: disabled system apt upgrades"
-    fi
-    if grep -q "managed_services: klipper moonraker" "$_MOONRAKER_CONF"; then
-        sed -i '/^\[update_manager BlocksScreen\]/,/^\[/ s/managed_services: klipper moonraker/managed_services: BlocksScreen/' "$_MOONRAKER_CONF"
-        _mr_patched=true
-        echo "[BlocksScreen-start] moonraker.conf: fixed BlocksScreen managed_services"
-    fi
-    if $_mr_patched; then
-        sudo systemctl restart moonraker.service 2>/dev/null || true
-    fi
-fi
-# ─────────────────────────────────────────────────────────────────────────────
+bs_migrate_moonraker_conf "$_BSENV_HOME/printer_data/config/moonraker.conf" BlocksScreen-start
 
 # Remove stale git index lock left by an interrupted update (e.g. power loss during git reset)
 rm -f "$BS_PATH/.git/index.lock"
@@ -172,46 +128,20 @@ if ! "$BSENV/bin/python3.11" -m compileall -q \
     git -C "$BS_PATH" reset --hard HEAD 2>/dev/null || true
 fi
 
-if [ ! -f /etc/systemd/system/BlocksScreen-updater.service ]; then
-    sudo bash "$SCRIPT_PATH/install-updater.sh"
+# ── Deferred bootstrap (background) ──────────────────────────────────────────
+# Heavy / network-dependent setup (apt packages, pip requirements, updater
+# install, splash-holder unit, splash precompute) runs detached in a transient
+# unit so it survives BlocksScreen restarts and never delays the UI. It is
+# idempotent and flock-guarded; whatever cannot finish now (offline) is retried
+# next boot or completed by the next update.
+if ! systemctl is-active --quiet bs-bootstrap.service 2>/dev/null; then
+    sudo systemd-run --unit=bs-bootstrap --collect \
+        /bin/bash "$SCRIPT_PATH/bs-bootstrap.sh" >/dev/null 2>&1 \
+        || { nohup sudo /bin/bash "$SCRIPT_PATH/bs-bootstrap.sh" \
+             >>/tmp/bs-bootstrap.log 2>&1 & }
 fi
 
-# Bootstrap splash-holder service on first install only.
-# Post-merge handles updates when scripts/BlocksScreen-splash-holder.service changes.
-_HOLDER_SRC="$SCRIPT_PATH/BlocksScreen-splash-holder.service"
-_HOLDER_DST="/etc/systemd/system/BlocksScreen-splash-holder.service"
-if [ ! -f "$_HOLDER_DST" ]; then
-    sudo cp "$_HOLDER_SRC" "$_HOLDER_DST" || true
-    sudo systemctl daemon-reload || true
-    sudo systemctl enable BlocksScreen-splash-holder.service 2>/dev/null || true
-fi
-if ! systemctl is-active --quiet BlocksScreen-splash-holder.service; then
-    sudo systemctl start --no-block BlocksScreen-splash-holder.service || true
-fi
-
-# Keep service files in sync with repo copies so Wants/After stay current after git updates.
-_BS_SVC_SRC="$SCRIPT_PATH/BlocksScreen.service"
-_BS_SVC_DST="/etc/systemd/system/BlocksScreen.service"
-_XORG_SVC_SRC="$SCRIPT_PATH/BlocksScreen-xorg.service"
-_XORG_SVC_DST="/etc/systemd/system/BlocksScreen-xorg.service"
-_HOLDER_SVC_SRC="$SCRIPT_PATH/BlocksScreen-splash-holder.service"
-_HOLDER_SVC_DST="/etc/systemd/system/BlocksScreen-splash-holder.service"
-_need_reload=false
-if ! diff -q "$_BS_SVC_DST" "$_BS_SVC_SRC" >/dev/null 2>&1; then
-    sudo cp "$_BS_SVC_SRC" "$_BS_SVC_DST" || true
-    _need_reload=true
-fi
-if [ -f "$_XORG_SVC_SRC" ] && ! diff -q "$_XORG_SVC_DST" "$_XORG_SVC_SRC" >/dev/null 2>&1; then
-    sudo cp "$_XORG_SVC_SRC" "$_XORG_SVC_DST" || true
-    _need_reload=true
-fi
-if [ -f "$_HOLDER_SVC_SRC" ] && ! diff -q "$_HOLDER_SVC_DST" "$_HOLDER_SVC_SRC" >/dev/null 2>&1; then
-    sudo cp "$_HOLDER_SVC_SRC" "$_HOLDER_SVC_DST" || true
-    # reenable to update WantedBy symlink (e.g. multi-user.target → sysinit.target)
-    sudo systemctl reenable BlocksScreen-splash-holder.service 2>/dev/null || true
-    _need_reload=true
-fi
-$_need_reload && { sudo systemctl daemon-reload || true; }
+bs_sync_service_files "$SCRIPT_PATH" BlocksScreen-start
 
 if [ -f $SCRIPT_PATH/launch_BlocksScreen.sh ]; then
     echo "Running $SCRIPT_PATH/launch_BlocksScreen.sh"
@@ -220,17 +150,6 @@ if [ -f $SCRIPT_PATH/launch_BlocksScreen.sh ]; then
 fi
 
 _XCLIENT="${BSENV}/bin/python3.11 ${BS_PATH}/BlocksScreen/BlocksScreen.py"
-
-# Bootstrap BlocksScreen-xorg.service (X.Org permanent session).
-# The sync block above may have already copied the file; enable independently.
-if [ -f "$_XORG_SVC_DST" ]; then
-    if ! systemctl is-enabled --quiet BlocksScreen-xorg.service 2>/dev/null; then
-        sudo systemctl enable BlocksScreen-xorg.service 2>/dev/null || true
-    fi
-    if ! systemctl is-active --quiet BlocksScreen-xorg.service; then
-        sudo systemctl start --no-block BlocksScreen-xorg.service || true
-    fi
-fi
 
 if [[ "${BS_BACKEND:-X}" =~ ^[wW]$ ]]; then
     echo "Running BlocksScreen on Cage"

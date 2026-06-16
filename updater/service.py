@@ -82,6 +82,7 @@ class UpdateService:
         self._components, self.poll_interval = load_components()
         self._git_lock = Lock()
         self._state_lock = Lock()
+        self._apt_lock = Lock()
         self._callback = callback
         self._last_status_time: float = 0.0
         self._fetch_times: dict[str, float] = {}
@@ -108,7 +109,10 @@ class UpdateService:
 
         async def _check_one(c: ComponentConfig) -> None:
             if c.kind == "apt":
-                status = await check_apt_status(exclude=c.apt_exclude)
+                # force bypasses the apt cache, mirroring the git fetch TTL bypass.
+                status = await check_apt_status(
+                    cache_ttl_seconds=0 if force else 86_400, exclude=c.apt_exclude
+                )
             elif c.path is None or not c.path.exists():
                 return
             else:
@@ -116,11 +120,15 @@ class UpdateService:
                 async with self._git_lock:
                     last = self._fetch_times.get(c.name, 0.0)
                     skip_fetch = not force and (now - last) < self._FETCH_TTL
-                    if not skip_fetch:
-                        self._fetch_times[c.name] = now
                 status = await check_git_status(
                     c.name, c.path, c.branch, c.version, skip_fetch
                 )
+                # Record fetch time only after a successful check so a failed
+                # (offline) fetch is retried on the next poll instead of being
+                # suppressed for the full TTL.
+                if not skip_fetch and status.error is None:
+                    async with self._git_lock:
+                        self._fetch_times[c.name] = now
             results[c.name] = status
 
         gathered = await asyncio.gather(
@@ -258,6 +266,23 @@ class UpdateService:
         return await _run(
             [pip_path, "install", "-r", str(req), "--quiet"], timeout=120.0
         )
+
+    async def _shielded(self, coro, label: str) -> None:
+        """Run cleanup to completion, surviving repeated cancels of the caller."""
+        task = asyncio.ensure_future(coro)
+        while True:
+            try:
+                await asyncio.shield(task)
+                return
+            except asyncio.CancelledError:
+                if task.done():
+                    return
+                self._log.warning(
+                    "%s: cleanup still running, ignoring repeat cancel", label
+                )
+            except Exception:  # noqa: BLE001
+                self._log.error("%s failed", label, exc_info=True)
+                return
 
     def _cb_error_done(self, name: str, reason: str) -> bool:
         self._cb("on_error", name, reason)
@@ -412,12 +437,10 @@ class UpdateService:
                 component.name,
                 prev_hash[:8],
             )
-            try:
-                await self._rollback(component, prev_hash, "cancelled")
-            except Exception:  # noqa: BLE001
-                self._log.error(
-                    "%s: rollback during cancel failed", component.name, exc_info=True
-                )
+            await self._shielded(
+                self._rollback(component, prev_hash, "cancelled"),
+                f"{component.name} cancel-rollback",
+            )
             raise
         except Exception as exc:  # noqa: BLE001
             self._log.error(
@@ -438,6 +461,12 @@ class UpdateService:
 
     async def _run_apt_update(self, component: ComponentConfig) -> bool:
         _apt_cache = Path.home() / ".cache" / "blockscreen" / "apt_status_cache.json"
+        async with self._apt_lock:
+            return await self._run_apt_update_locked(component, _apt_cache)
+
+    async def _run_apt_update_locked(
+        self, component: ComponentConfig, _apt_cache: Path
+    ) -> bool:
         try:
             ok, err = await apt_update()
             if not ok:
@@ -487,6 +516,11 @@ class UpdateService:
             return True
         except asyncio.CancelledError:
             self._log.warning("%s: apt update cancelled", component.name)
+            # The cancelled subprocess may have been a SIGKILLed dpkg; repair
+            # the package database before reporting back.
+            await self._shielded(
+                _apt_get_fix_broken(), f"{component.name} apt cancel-repair"
+            )
             self._cb("on_error", component.name, "cancelled")
             self._cb("on_component_done", component.name, False)
             raise
@@ -522,6 +556,10 @@ class UpdateService:
         Uses apt-get upgrade (never dist-upgrade) so the Debian release never changes.
         Never reports to the UI — failures are logged only.
         """
+        async with self._apt_lock:
+            await self._background_apt_upgrade_locked()
+
+    async def _background_apt_upgrade_locked(self) -> None:
         self._log.info("background apt upgrade: starting")
         ok, err = await apt_update()
         if not ok:

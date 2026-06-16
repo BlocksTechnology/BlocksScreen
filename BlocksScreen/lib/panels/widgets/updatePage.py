@@ -125,29 +125,30 @@ class UpdatePage(QtWidgets.QWidget):
         if self._loadwidget.isVisible():
             load_widget_height = self._loadwidget.height()
             load_widget_width = self._loadwidget.width()
-            # Position elapsed time label below the spinner (around 65% down)
             elapsed_y = int(load_widget_height * 0.65)
             elapsed_x = (load_widget_width - 200) // 2
             self._elapsed_time_label.setGeometry(elapsed_x, elapsed_y, 200, 40)
-            # Position progress label below elapsed time (prominent step counter)
             progress_y = int(load_widget_height * 0.72)
             progress_x = (load_widget_width - 200) // 2
             self._progress_label.setGeometry(progress_x, progress_y, 200, 30)
-            # Position cancel button below the progress label (60px tall for touchscreen)
             cancel_y = int(load_widget_height * 0.81)
             cancel_x = (load_widget_width - 280) // 2
             self._cancel_btn.setGeometry(cancel_x, cancel_y, 280, 60)
         return super().resizeEvent(a0)
 
     def _needs_update(self, status: ComponentStatus) -> bool:
+        # Mirrors the daemon's dirty-set in _run_update_all: errored components
+        # are not updatable (updating cannot fix a status error), they are
+        # rendered separately instead.
         return bool(
             status.commits_behind
             or status.packages_upgradable
-            or status.error
             or status.has_local_changes
         )
 
     def _version_string(self, status: ComponentStatus) -> str:
+        if status.error:
+            return "status error"
         if status.kind in ("system", "apt"):
             return "updates available"
         current = status.current_version or status.current_hash[:8]
@@ -184,12 +185,26 @@ class UpdatePage(QtWidgets.QWidget):
                     widget.deleteLater()
 
         updatable = {n: s for n, s in self._statuses.items() if self._needs_update(s)}
+        errored = {
+            n: s
+            for n, s in self._statuses.items()
+            if s.error and not self._needs_update(s)
+        }
         self._update_avail = bool(updatable)
         self.update_all_btn.setVisible(self._update_avail)
 
         if not updatable:
+            if not self._statuses:
+                text = "No update information available\nTap refresh to retry"
+            elif errored:
+                text = (
+                    f"Status check failed for {len(errored)} "
+                    f"component{'s' if len(errored) != 1 else ''}\nTap refresh to retry"
+                )
+            else:
+                text = "All systems up to date"
             label = self._make_white_label(
-                "All systems up to date",
+                text,
                 22,
                 QtCore.Qt.AlignmentFlag.AlignCenter,
             )
@@ -202,7 +217,7 @@ class UpdatePage(QtWidgets.QWidget):
             return
 
         self._cards_layout.addWidget(self._make_summary_row(updatable))
-        self._details_widget = self._make_details_widget(updatable)
+        self._details_widget = self._make_details_widget({**updatable, **errored})
         self._details_widget.setVisible(False)
         self._cards_layout.addWidget(self._details_widget)
         self._cards_layout.addStretch(1)
@@ -390,6 +405,9 @@ class UpdatePage(QtWidgets.QWidget):
         else:
             label = self._STEP_LABELS.get(step, "working")
         _log.info("step_complete: %s %d/%d (%s)", name, step, total, label)
+        # Progress = daemon liveness; push the force-dismiss deadline out.
+        if self._busy_timeout_timer.isActive():
+            self._busy_timeout_timer.start()
         self._overlay_shown = True
         overlay_msg = f"{name}: {label}"
         self._progress_label.setText(f"Step {step}/{total}")
@@ -432,7 +450,6 @@ class UpdatePage(QtWidgets.QWidget):
         self._elapsed_time_label.hide()
         self._progress_label.hide()
         self._cancel_btn.hide()
-        self.update_all_btn.setEnabled(True)
         self.show_loading(False)
         self._show_toast(
             "Updater unavailable. Check system logs or restart BlocksScreen.",
@@ -477,7 +494,6 @@ class UpdatePage(QtWidgets.QWidget):
         content = QtWidgets.QVBoxLayout(self)
         content.setContentsMargins(15, 15, 15, 15)
 
-        # Header
         header = QtWidgets.QHBoxLayout()
         header.setAlignment(QtCore.Qt.AlignmentFlag.AlignTop)
 
@@ -514,7 +530,6 @@ class UpdatePage(QtWidgets.QWidget):
         header.addWidget(self.update_back_btn)
         content.addLayout(header, 0)
 
-        # Scroll area
         self._scroll_area = QtWidgets.QScrollArea(self)
         self._scroll_area.setWidgetResizable(True)
         self._scroll_area.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
@@ -537,13 +552,11 @@ class UpdatePage(QtWidgets.QWidget):
         self._scroll_area.setWidget(self._scroll_content)
         content.addWidget(self._scroll_area, 1)
 
-        # Loading overlay with elapsed time and cancel button
         self._loadwidget = LoadingOverlayWidget(
             self, LoadingOverlayWidget.AnimationGIF.DEFAULT
         )
         content.addWidget(self._loadwidget, 1)
 
-        # Elapsed time label (positioned in the load widget area via custom overlay)
         self._elapsed_time_label = QtWidgets.QLabel("00:00", self._loadwidget)
         self._elapsed_time_label.setStyleSheet(
             "color: rgba(255, 255, 255, 200); background: transparent;"
@@ -553,7 +566,6 @@ class UpdatePage(QtWidgets.QWidget):
         self._elapsed_time_label.setFixedWidth(100)
         self._elapsed_time_label.hide()
 
-        # Progress label: shows current step/total steps visibly during update
         self._progress_label = QtWidgets.QLabel("", self._loadwidget)
         self._progress_label.setStyleSheet(
             "color: rgba(255, 255, 255, 180); background: transparent;"
@@ -563,7 +575,6 @@ class UpdatePage(QtWidgets.QWidget):
         self._progress_label.setWordWrap(True)
         self._progress_label.hide()
 
-        # Cancel button (positioned in the load widget area)
         # Touch target size: minimum 44×44 px per WCAG; set to 60px tall for comfort
         self._cancel_btn = BlocksCustomButton(self._loadwidget)
         self._cancel_btn.setMinimumSize(QtCore.QSize(240, 60))
@@ -573,7 +584,6 @@ class UpdatePage(QtWidgets.QWidget):
         self._cancel_btn.clicked.connect(self._on_cancel_clicked)
         self._cancel_btn.hide()
 
-        # Update All button
         self.update_all_btn = BlocksCustomButton(self)
         self.update_all_btn.setMinimumSize(QtCore.QSize(240, 70))
         self.update_all_btn.setMaximumSize(QtCore.QSize(360, 70))
@@ -594,7 +604,6 @@ class UpdatePage(QtWidgets.QWidget):
         content.addWidget(self._toast, 0)
         self._toast_timer = QtCore.QTimer(self)
         self._toast_timer.setSingleShot(True)
-        # 12s for touchscreen readability (vs 8s default);
         self._toast_timer.setInterval(12000)
         self._toast_timer.timeout.connect(self._toast.hide)
 

@@ -4,7 +4,7 @@
 X.Org stays alive (BlocksScreen-xorg.service is independent), so no VT switch
 is needed.  Writing the splash to fb0 is a best-effort hint; in KMS mode the
 vc4 driver may or may not honour fb0 writes while X holds DRM master.
-ExecStopPost (bs-stop.py) repeats the write after the process is fully gone.
+ExecStopPost (feh --bg-fill) repaints the splash after the process is fully gone.
 """
 
 import os

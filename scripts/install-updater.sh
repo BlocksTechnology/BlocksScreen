@@ -157,7 +157,7 @@ sudo systemctl daemon-reload
 echo_ok "BlocksScreen-bootstrap service installed (symlink)"
 
 echo_info "Installing post-merge hook ..."
-chmod +x "$SCRIPT_PATH/post-merge" "$SCRIPT_PATH/bs-stop.sh" "$SCRIPT_PATH/bs-splash.py"
+chmod +x "$SCRIPT_PATH/post-merge"
 git -C "$BS_PATH" update-index --chmod=+x scripts/post-merge 2>/dev/null || true
 git -C "$BS_PATH" config core.hooksPath scripts
 echo_ok "post-merge hook installed"
@@ -166,8 +166,8 @@ echo_info "Installing Python requirements ..."
 apt-get install -y --quiet libsystemd-dev python3-dev 2>/dev/null || true
 # xsetroot is used as belt-and-suspenders cursor hiding alongside the Xorg -nocursor server flag.
 sudo apt-get install -y --quiet x11-xserver-utils 2>/dev/null || true
-# sdbus is pinned to 0.12.0 (working aarch64 wheel); --no-binary forces a clean source build
-# only on a fresh venv. --upgrade-strategy=only-if-needed skips already-satisfied packages.
+# sdbus is pinned in requirements.txt (0.14.1); --no-binary forces a clean source build
+# (needs libsystemd-dev). --upgrade-strategy=only-if-needed skips satisfied packages.
 "$BSENV/bin/pip" install --quiet --only-binary :all: --no-binary sdbus,sdbus-networkmanager \
     --upgrade-strategy=only-if-needed \
     -r "$BS_PATH/scripts/requirements.txt" || true

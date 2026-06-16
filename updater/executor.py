@@ -6,7 +6,6 @@ import json
 import logging
 import os
 import re
-import shutil
 import signal
 import tempfile
 import time
@@ -19,9 +18,6 @@ logger = logging.getLogger(__name__)
 
 GIT = "/usr/bin/git"
 PIP = "/usr/bin/pip3"
-PIP_SYNC = "/usr/local/bin/pip-sync"
-if not Path(PIP_SYNC).exists():
-    PIP_SYNC = shutil.which("pip-sync") or PIP_SYNC
 APT = "/usr/bin/apt"
 APT_GET = "/usr/bin/apt-get"
 APT_MARK = "/usr/bin/apt-mark"
@@ -36,7 +32,6 @@ _GIT_TAG_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._/-]*$")
 _PACKAGE_NAME_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9+\-.]*$")
 
 _HOOKS_DIR = Path(__file__).parent / "hooks"
-_MIGRATION_DIR = Path.home() / ".cache" / "blockscreen" / "migrations"
 
 
 def _kill_proc_group(proc, sig):
@@ -194,11 +189,8 @@ def _compile_exclude_patterns(exclude: tuple[str, ...]) -> list[re.Pattern]:
 def _apply_exclude_patterns(pkgs: list[str], exclude: tuple[str, ...]) -> list[str]:
     if not exclude:
         return pkgs
-    return [
-        p
-        for p in pkgs
-        if not any(r.search(p) for r in _compile_exclude_patterns(exclude))
-    ]
+    compiled = _compile_exclude_patterns(exclude)
+    return [p for p in pkgs if not any(r.search(p) for r in compiled)]
 
 
 async def _count_apt_upgradable(exclude: tuple[str, ...] = ()) -> int:
@@ -275,20 +267,6 @@ async def check_git_status(
     )
 
 
-async def git_reset_origin(
-    path: Path | None, prev_hash: str = "origin/HEAD"
-) -> tuple[bool, str]:
-    """Fetch then hard-reset to a validated ref (SHA or origin/ symref)."""
-    if not path:
-        return (False, "Path not found")
-    if not _validate_git_ref(prev_hash):
-        return (False, "Hash Invalid")
-    ok, _ = await git_fetch(path)
-    if not ok:
-        return (False, "Error Fetching")
-    return await git_reset_to_hash(path, prev_hash)
-
-
 async def git_is_dirty(path: Path) -> bool:
     ok, output = await _run(
         [GIT, "status", "--porcelain", "--untracked-files=no"],
@@ -333,13 +311,6 @@ async def git_pull(path: Path | None) -> tuple[bool, str]:
     if path is None:
         return (False, "path does not exist")
     return await _run([GIT, "pull", "--ff-only"], cwd=path, timeout=60.0)
-
-
-async def git_reset(path: Path, mode: str = "hard") -> tuple[bool, str]:
-    """Reset repo at path to ORIG_HEAD using hard or soft mode (rollback)."""
-    if mode not in ("soft", "mixed", "hard", "merged", "keep"):
-        return (False, f"mode {mode} not possible to reset")
-    return await _run([GIT, "reset", f"--{mode}", "ORIG_HEAD"], cwd=path, timeout=10.0)
 
 
 async def git_reset_to_hash(path: Path | None, prev_hash: str = "") -> tuple[bool, str]:
@@ -418,41 +389,11 @@ async def git_checkout(path: Path | None, branch: str) -> tuple[bool, str]:
 
     if not _GIT_BRANCH_RE.match(branch):
         return (False, f"branch {branch} has an invalid name")
-    # SEC: reject git-unsafe characters even if regex passes
-    if any(c in branch for c in ("$", "`", ";", "|", "&", "(", ")", "<", ">")):
-        return (False, "branch name contains unsafe characters")
     current_branch = await git_get_current_branch(path)
     if current_branch == branch:
         return (True, "already on branch")
 
     return await _run([GIT, "checkout", branch], cwd=path, timeout=10.0)
-
-
-async def pip_upgrade(path: Path | None) -> tuple[bool, str]:
-    """Upgrade pip inside the given virtualenv."""
-    pip_path = _resolve_component_pip(path)
-    return await _run(
-        [pip_path, "install", "--upgrade", "pip", "--quiet"], timeout=120.0
-    )
-
-
-async def pip_sync(path: Path | None) -> tuple[bool, str]:
-    """Sync venv dependencies using pip-sync.
-
-    SEC: Validate pip-sync path like _resolve_component_pip to prevent venv hijacking.
-    """
-    pip_sync_path = PIP_SYNC
-    if path is not None:
-        try:
-            resolved_path = path.resolve()
-            possible = path.parent / f"{path.name}-env" / "bin" / "pip-sync"
-            if possible.exists():
-                resolved_pip_sync = possible.resolve()
-                resolved_pip_sync.relative_to(resolved_path.parent)
-                pip_sync_path = str(possible)
-        except (OSError, ValueError):
-            logger.warning("Rejected pip-sync path (path escape or unresolvable)")
-    return await _run([pip_sync_path], timeout=120.0)
 
 
 async def check_apt_status(
@@ -614,17 +555,6 @@ async def apt_update() -> tuple[bool, str]:
     return await _run([SUDO, APT_GET, "update"], timeout=120.0, env=_apt_env())
 
 
-async def apt_ensure_packages(packages: tuple[str, ...]) -> tuple[bool, str]:
-    """Install packages if missing; never upgrades already-installed packages."""
-    if not packages:
-        return True, "no packages"
-    return await _run(
-        [SUDO, APT_GET, "install", "-y", "--no-upgrade", *packages],
-        timeout=120.0,
-        env=_apt_env(),
-    )
-
-
 async def apt_upgrade(exclude: tuple[str, ...] = ()) -> tuple[bool, str]:
     """Run apt-get upgrade via explicit package list to limit blast radius.
 
@@ -681,24 +611,32 @@ async def run_hook(
 
 
 async def wait_for_service_active(name: str, timeout: float = 90.0) -> bool:
-    """Wait for service to become active using systemctl --wait (event-driven, not polling)."""
+    """Poll systemctl is-active until the service is active or timeout expires.
+
+    `systemctl is-active --wait` does not exist (--wait applies only to
+    start/restart/is-system-running/kill and is silently ignored here), so an
+    explicit poll loop is required to ride out 'activating' after a restart.
+    """
     if not _SERVICE_RE.match(name):
         logger.warning("wait_for_service_active: invalid service name %r", name)
         return False
-    ok, output = await _run(
-        [SYSTEMCTL, "is-active", "--wait", name],
-        timeout=timeout + 5.0,  # Add buffer for systemctl overhead
+    deadline = asyncio.get_running_loop().time() + timeout
+    output = ""
+    while True:
+        ok, output = await _run([SYSTEMCTL, "is-active", name], timeout=10.0)
+        if ok:
+            logger.info("service %r is active", name)
+            return True
+        if asyncio.get_running_loop().time() >= deadline:
+            break
+        await asyncio.sleep(2.0)
+    logger.warning(
+        "service %r did not become active within %.0fs: %s",
+        name,
+        timeout,
+        output.strip(),
     )
-    if ok:
-        logger.info("service %r is active", name)
-    else:
-        logger.warning(
-            "service %r did not become active within %.0fs: %s",
-            name,
-            timeout,
-            output.strip(),
-        )
-    return ok
+    return False
 
 
 async def restart_service(name: str | None) -> tuple[bool, str]:

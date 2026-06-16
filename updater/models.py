@@ -15,7 +15,6 @@ class ComponentConfig:
     branch: str | None = None
     version: str | None = None
     apt_exclude: tuple[str, ...] = ()
-    pip_args: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)

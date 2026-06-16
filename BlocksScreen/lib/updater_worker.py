@@ -22,6 +22,12 @@ _log = logging.getLogger(__name__)
 
 _RECONNECT_DELAYS = (5.0, 15.0, 30.0, 60.0)
 
+# Max seconds of *silence* from a busy daemon before declaring it gone.
+# Progress signals refresh the deadline, so long multi-component updates
+# (big apt upgrades, several klipper restarts) never trip it as long as
+# the daemon keeps reporting steps.
+_BUSY_IDLE_LIMIT = 360.0
+
 
 class UpdaterWorker(QtCore.QObject):
     """Async D-Bus client for the blockscreen updater daemon.
@@ -53,6 +59,7 @@ class UpdaterWorker(QtCore.QObject):
         self._reconnect_attempt: int = 0
         self._reconnecting: bool = False
         self._shutting_down: bool = False
+        self._last_activity: float = 0.0
         self._thread = threading.Thread(
             target=self._run_loop, daemon=True, name="UpdaterAsyncLoop"
         )
@@ -85,6 +92,9 @@ class UpdaterWorker(QtCore.QObject):
 
         def _do_restart() -> None:
             time.sleep(delay)
+            if self._shutting_down:
+                _log.info("skipping asyncio thread restart — shutting down")
+                return
             _log.info("restarting asyncio daemon thread")
             self._loop = asyncio.new_event_loop()
             self._thread = threading.Thread(
@@ -137,25 +147,28 @@ class UpdaterWorker(QtCore.QObject):
             self._listener_tasks.append(task)
             task.add_done_callback(self._on_listener_done)
 
-        # Give each listener task a scheduling slot to enter its async-for loop
-        # (and register its D-Bus signal subscription) before we poll current state.
-        # One sleep(0) per task is sufficient: asyncio runs all ready callbacks
-        # before yielding back to us.
+        # Let each listener enter its async-for and register its D-Bus signal
+        # subscription before we poll current state (one sleep(0) per task).
         for _ in listeners:
             await asyncio.sleep(0)
 
         try:
             busy = await self._proxy.get_busy()
-            if busy:
-                self._busy_false_event.clear()
-            else:
-                self._busy_false_event.set()
-            _log.info("get_busy() on reconnect → %s", busy)
-            self.busy_changed.emit(busy)
-            if not busy:
-                self.request_reconnect.emit()
         except sdbus.SdBusBaseError as exc:
-            _log.warning("get_busy failed on reconnect: %s", exc)
+            # Proxy creation is lazy; this first real call is what proves the
+            # daemon is actually reachable. Treat failure as daemon-down.
+            _log.warning("get_busy failed on (re)connect: %s — scheduling retry", exc)
+            self.daemon_unavailable.emit()
+            self._schedule_reconnect()
+            return
+        if busy:
+            self._busy_false_event.clear()
+        else:
+            self._busy_false_event.set()
+        _log.info("get_busy() on reconnect → %s", busy)
+        self.busy_changed.emit(busy)
+        if not busy:
+            self.request_reconnect.emit()
 
         self.proxy_connected.emit()
 
@@ -270,9 +283,15 @@ class UpdaterWorker(QtCore.QObject):
     # --- Internal coroutines ---------------------------------------
 
     def _handle_proxy_error(self, exc: Exception, method: str) -> None:
-        """Log a D-Bus call failure, emit daemon_unavailable, and schedule a reconnect."""
+        """Log a D-Bus call failure, emit daemon_unavailable, and schedule a reconnect.
+
+        While a reconnect is already pending the emit is suppressed: the UI's
+        daemon-unavailable handler triggers a status refresh, which would fail
+        and re-emit here — an endless toast/request storm without this guard.
+        """
         _log.error("%s D-Bus call failed: %s", method, exc)
-        self.daemon_unavailable.emit()
+        if not self._reconnecting:
+            self.daemon_unavailable.emit()
         self._schedule_reconnect()
 
     async def _call_update_all(self) -> None:
@@ -324,19 +343,26 @@ class UpdaterWorker(QtCore.QObject):
             _log.debug("status_ready received (%d bytes)", len(json_str))
             self.status_ready.emit(json_str)
 
+    def _touch_activity(self) -> None:
+        """Record daemon liveness; refreshes the busy-watchdog deadline."""
+        self._last_activity = self._loop.time()
+
     async def _listen_step_complete(self) -> None:
         """Forward step_complete D-Bus signals to the Qt step_complete signal."""
         async for name, step, total in self._proxy.step_complete:
+            self._touch_activity()
             self.step_complete.emit(name, step, total)
 
     async def _listen_component_done(self) -> None:
         """Forward component_done D-Bus signals to the Qt component_done signal."""
         async for name, success in self._proxy.component_done:
+            self._touch_activity()
             self.component_done.emit(name, success)
 
     async def _listen_error(self) -> None:
         """Forward error D-Bus signals to the Qt error_occurred signal."""
         async for name, reason in self._proxy.error:
+            self._touch_activity()
             self.error_occurred.emit(name, reason)
 
     async def _listen_rollback(self) -> None:
@@ -356,6 +382,7 @@ class UpdaterWorker(QtCore.QObject):
             raise RuntimeError(_msg)
         async for busy in self._proxy.busy_changed:
             _log.info("busy_changed received: %s", busy)
+            self._touch_activity()
             if busy:
                 self._busy_false_event.clear()
                 task = asyncio.create_task(self._busy_watchdog(), name="busy_watchdog")
@@ -366,17 +393,31 @@ class UpdaterWorker(QtCore.QObject):
             self.busy_changed.emit(busy)
 
     async def _busy_watchdog(self) -> None:
-        """Emit daemon_unavailable if BusyChanged(False) does not arrive within 360 seconds.
+        """Emit daemon_unavailable after _BUSY_IDLE_LIMIT seconds of daemon silence.
 
-        360s = 300s apt-get upgrade hard deadline + 30s systemctl + 30s buffer.
+        Any progress signal (step_complete, component_done, error, busy_changed)
+        refreshes the deadline via _touch_activity, so the watchdog only fires
+        when a busy daemon stops reporting entirely — not on long updates.
         """
         if self._busy_false_event is None:
             _msg = "_busy_false_event not initialized"
             raise RuntimeError(_msg)
-        try:
-            async with asyncio.timeout(360.0):
-                await self._busy_false_event.wait()
-        except TimeoutError:
-            _log.error("busy watchdog timed out, daemon is unavailable")
-            self.daemon_unavailable.emit()
-            self._schedule_reconnect()
+        while True:
+            if self._busy_false_event.is_set():
+                return
+            idle = self._loop.time() - self._last_activity
+            remaining = _BUSY_IDLE_LIMIT - idle
+            if remaining <= 0:
+                _log.error(
+                    "busy watchdog: no daemon activity for %.0fs — daemon unavailable",
+                    idle,
+                )
+                self.daemon_unavailable.emit()
+                self._schedule_reconnect()
+                return
+            try:
+                async with asyncio.timeout(remaining):
+                    await self._busy_false_event.wait()
+                return
+            except TimeoutError:
+                continue

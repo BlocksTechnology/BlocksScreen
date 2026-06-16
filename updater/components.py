@@ -86,7 +86,7 @@ def _validate_component(data: dict) -> ComponentConfig | None:
         order = 50
         try:
             order = int(data.get("order", 50))
-        except ValueError:
+        except (TypeError, ValueError):
             logger.warning("Component %r has invalid order value", name)
 
         return ComponentConfig(
@@ -102,14 +102,8 @@ def _validate_component(data: dict) -> ComponentConfig | None:
     apt_order = 50
     try:
         apt_order = int(data.get("order", 50))
-    except ValueError:
+    except (TypeError, ValueError):
         logger.warning("Component %r has invalid order value", name)
-    raw_pip = data.get("pip_args", [])
-    pip_args = (
-        tuple(str(a) for a in raw_pip if isinstance(a, str))
-        if isinstance(raw_pip, list)
-        else ()
-    )
     raw_exclude = data.get("apt_exclude", [])
     apt_exclude: tuple[str, ...] = ()
     if isinstance(raw_exclude, list):
@@ -119,7 +113,6 @@ def _validate_component(data: dict) -> ComponentConfig | None:
         kind="apt",
         order=apt_order,
         apt_exclude=apt_exclude,
-        pip_args=pip_args,
     )
 
 
@@ -219,6 +212,10 @@ def load_components() -> tuple[list[ComponentConfig], float]:
                 ),
             ),
         )
-    poll_seconds = float(bundled_data.get("poll_interval_minutes", 1440)) * 60.0
+    try:
+        poll_seconds = float(bundled_data.get("poll_interval_minutes", 1440)) * 60.0
+    except (TypeError, ValueError):
+        logger.warning("Invalid poll_interval_minutes — using 1440")
+        poll_seconds = 1440 * 60.0
     configs.sort(key=lambda c: c.order)
     return configs, poll_seconds

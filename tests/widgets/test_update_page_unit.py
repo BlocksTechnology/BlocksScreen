@@ -98,7 +98,7 @@ class TestNeedsUpdate:
         assert page._needs_update(_make_status(packages_upgradable=5)) is True
 
     def test_error(self, page):
-        assert page._needs_update(_make_status(error="boom")) is True
+        assert page._needs_update(_make_status(error="boom")) is False
 
     def test_has_local_changes(self, page):
         assert page._needs_update(_make_status(has_local_changes=True)) is True
@@ -128,8 +128,18 @@ class TestVersionString:
 
 
 class TestBuildCards:
-    def test_no_statuses_shows_up_to_date_label(self, page):
+    def test_no_statuses_shows_no_information_label(self, page):
         page._statuses = {}
+        page.build_cards()
+        page._cards_layout.addWidget.assert_called_once()
+        args = page._cards_layout.addWidget.call_args[0]
+        from PyQt6.QtWidgets import QLabel
+
+        assert isinstance(args[0], QLabel)
+        assert "no update information" in args[0].text().lower()
+
+    def test_all_clean_shows_up_to_date_label(self, page):
+        page._statuses = {"klipper": _make_status(), "moonraker": _make_status()}
         page.build_cards()
         page._cards_layout.addWidget.assert_called_once()
         args = page._cards_layout.addWidget.call_args[0]

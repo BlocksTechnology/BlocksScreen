@@ -20,6 +20,7 @@ def _make_worker():
     w._reconnect_attempt = 0
     w._reconnecting = False
     w._busy_false_event = asyncio.Event()
+    w._last_activity = 0.0
     w._proxy = MagicMock()
     return w
 
@@ -175,12 +176,13 @@ class TestWatchdog:
         await worker._busy_watchdog()  # must not raise or emit
 
     @pytest.mark.asyncio
-    async def test_watchdog_emits_on_timeout(self, worker, qtbot):
+    async def test_watchdog_emits_after_idle_limit(self, worker, qtbot):
         received = []
         worker.daemon_unavailable.connect(lambda: received.append(True))
         worker._busy_false_event.clear()
-        with patch("asyncio.timeout", side_effect=asyncio.TimeoutError):
-            await worker._busy_watchdog()
+        # Last activity far in the past → idle exceeds the limit → emit at once.
+        worker._last_activity = worker._loop.time() - 100_000
+        await worker._busy_watchdog()
         assert received == [True]
 
 

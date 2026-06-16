@@ -5,7 +5,8 @@ Two modes:
   default       — write to /dev/fb0 and save cache (no VT switch; X11 activates tty7 itself)
   --precompute  — render and save cache only (no fb0 write)
 
-The raw cache is consumed by bs-stop.py on service stop.
+The raw cache is consumed by bs-pre-stop.py (ExecStop) and bs-splash-holder.py
+(tty8 boot splash); the PNG by feh in ExecStopPost.
 """
 
 import argparse
@@ -189,7 +190,7 @@ def main() -> None:
     if fb_data is None:
         return
 
-    # Save raw cache so bs-stop.py can write to fb0 directly
+    # Save raw cache so bs-pre-stop.py / bs-splash-holder.py can write fb0 directly
     try:
         _CACHE_PATH.write_bytes(fb_data)
     except OSError as e:

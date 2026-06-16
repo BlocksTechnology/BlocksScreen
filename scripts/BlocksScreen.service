@@ -12,6 +12,10 @@ After=BlocksScreen-updater.service
 
 [Service]
 Type=notify
+# NotifyAccess=all: on the transitional fallback paths in BlocksScreen-start.sh
+# (inline xinit, launch_BlocksScreen.sh) the Qt process is not the main PID, and
+# its READY/WATCHDOG notifications would otherwise be rejected -> start timeout.
+NotifyAccess=all
 WatchdogSec=30s
 Restart=always
 RestartSec=1

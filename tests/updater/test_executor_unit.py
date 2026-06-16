@@ -23,11 +23,8 @@ from updater.executor import (
     git_is_dirty,
     git_pull,
     git_remote_url,
-    git_reset,
     git_reset_to_hash,
     git_prune_extra_remotes,
-    pip_sync,
-    pip_upgrade,
     restart_service,
 )
 
@@ -277,32 +274,6 @@ class TestGitDescribe:
             await git_describe(tmp_path, ref="origin/main")
         cmd = exec_mock.call_args.args
         assert "origin/main" in cmd
-
-
-class TestGitReset:
-    @pytest.mark.asyncio
-    async def test_success(self, tmp_path):
-        proc = _make_proc(0, b"HEAD is now at abc\n", b"")
-        with patch(
-            "asyncio.create_subprocess_exec", new_callable=AsyncMock, return_value=proc
-        ):
-            ok, out = await git_reset(tmp_path, "hard")
-        assert ok is True
-
-    @pytest.mark.asyncio
-    async def test_invalid_mode_rejected(self, tmp_path):
-        ok, msg = await git_reset(tmp_path, "invalid")
-        assert ok is False
-        assert "not possible to reset" in msg
-
-    @pytest.mark.asyncio
-    async def test_failure(self, tmp_path):
-        proc = _make_proc(1, b"", b"error\n")
-        with patch(
-            "asyncio.create_subprocess_exec", new_callable=AsyncMock, return_value=proc
-        ):
-            ok, _ = await git_reset(tmp_path, "hard")
-        assert ok is False
 
 
 class TestGitResetToHash:
@@ -569,47 +540,6 @@ class TestAptUpgrade:
             ok, out = await apt_upgrade()
         assert ok is True
         assert "no packages" in out
-
-
-class TestPipUpgrade:
-    @pytest.mark.asyncio
-    async def test_success(self, tmp_path):
-        proc = _make_proc(0, b"Successfully installed\n", b"")
-        with patch(
-            "asyncio.create_subprocess_exec", new_callable=AsyncMock, return_value=proc
-        ):
-            ok, _ = await pip_upgrade(tmp_path)
-        assert ok is True
-
-    @pytest.mark.asyncio
-    async def test_failure(self, tmp_path):
-        proc = _make_proc(1, b"", b"Could not find package\n")
-        with patch(
-            "asyncio.create_subprocess_exec", new_callable=AsyncMock, return_value=proc
-        ):
-            ok, out = await pip_upgrade(tmp_path)
-        assert ok is False
-        assert "Could not find package" in out
-
-
-class TestPipSync:
-    @pytest.mark.asyncio
-    async def test_success(self, tmp_path):
-        proc = _make_proc(0, b"Everything already installed\n", b"")
-        with patch(
-            "asyncio.create_subprocess_exec", new_callable=AsyncMock, return_value=proc
-        ):
-            ok, _ = await pip_sync(tmp_path)
-        assert ok is True
-
-    @pytest.mark.asyncio
-    async def test_failure(self, tmp_path):
-        proc = _make_proc(1, b"", b"Could not find a version\n")
-        with patch(
-            "asyncio.create_subprocess_exec", new_callable=AsyncMock, return_value=proc
-        ):
-            ok, out = await pip_sync(tmp_path)
-        assert ok is False
 
 
 class TestRestartService:

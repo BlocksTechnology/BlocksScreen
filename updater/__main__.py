@@ -1,12 +1,28 @@
 import argparse
 import asyncio
 import logging
+import os
 import signal
+import socket
 
 import sdbus
 
 from updater.dbus_service import UpdaterDbusService
 from updater.service import LoggingCallback, UpdateService
+
+
+def _sd_notify(msg: str) -> None:
+    """Send a notification to systemd via NOTIFY_SOCKET (python-sdbus has no sd_notify)."""
+    sock_path = os.environ.get("NOTIFY_SOCKET", "")
+    if not sock_path:
+        return
+    if sock_path.startswith("@"):
+        sock_path = "\0" + sock_path[1:]
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM) as s:
+            s.sendto(msg.encode(), sock_path)
+    except OSError as exc:
+        logging.getLogger("updater").warning("sd_notify(%s) failed: %s", msg, exc)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -42,13 +58,13 @@ async def _run_daemon() -> None:
         _log.error("failed to claim D-Bus name: %s — another instance running?", exc)
         return
     _log.info("updater daemon running on com.blockscreen.Updater")
-    sdbus.sd_notify(0, "READY=1")
+    _sd_notify("READY=1")
     loop = asyncio.get_running_loop()
     stop_event = asyncio.Event()
     loop.add_signal_handler(signal.SIGTERM, stop_event.set)
     loop.add_signal_handler(signal.SIGINT, stop_event.set)
     while not stop_event.is_set():
-        sdbus.sd_notify(0, "WATCHDOG=1")
+        _sd_notify("WATCHDOG=1")
         try:
             await asyncio.wait_for(stop_event.wait(), timeout=15.0)
         except asyncio.TimeoutError:
@@ -87,7 +103,7 @@ async def main() -> None:
         case "recover":
             await svc.recover(args.name, hard=args.hard)
         case None:
-            await svc.update_all()
+            build_parser().print_help()
 
 
 if __name__ == "__main__":

@@ -452,7 +452,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self._post_update_reconnect = False
         self._update_in_progress = False
         self._reconnect_timer.stop()
-        self.update_page.handle_busy_changed(False)
+        # update_page.handle_daemon_unavailable (connected to the same signal)
+        # resets the page; routing through handle_busy_changed here would issue
+        # a status request that fails and re-emits daemon_unavailable — a storm.
         self.show_loadscreen(False, "")
 
     @QtCore.pyqtSlot(name="on-post-update-reconnect")

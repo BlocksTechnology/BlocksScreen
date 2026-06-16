@@ -60,7 +60,6 @@ class UpdaterInterface(
     emit machinery on the server side and an async-iterable on the client.
     """
 
-    # ── Signals ──────────────────────────────────────────────────────────
 
     @sdbus.dbus_signal_async("sii")
     def step_complete(self) -> tuple[str, int, int]:
@@ -97,7 +96,6 @@ class UpdaterInterface(
         """Emitted on True↔False transition only (state-machine guard)."""
         raise NotImplementedError
 
-    # ── Lifecycle ────────────────────────────────────────────────────────
 
     def __init__(self) -> None:
         super().__init__()
@@ -109,7 +107,6 @@ class UpdaterInterface(
         self._invalid_requests: int = 0
         self._spawn(self._periodic_status_check(), name="periodic_status_check")
 
-    # ── Private helpers ───────────────────────────────────────────────────
 
     def _spawn(self, coro, *, name: str | None = None) -> asyncio.Task:
         """Create a task and hold a strong reference so GC cannot cancel it."""
@@ -191,7 +188,6 @@ class UpdaterInterface(
                 _log.error("periodic_check failed: %s", exc)
             await asyncio.sleep(self._svc.poll_interval)
 
-    # ── D-Bus methods ────────────────────────────────────────────────────
 
     @sdbus.dbus_method_async(result_signature="b")
     async def update_all(self) -> bool:
@@ -282,12 +278,14 @@ class UpdaterInterface(
                 cancelled_tasks.append(task)
                 _log.info("cancelled task %r", name)
         if cancelled_tasks:
-            try:
-                async with asyncio.timeout(10.0):
-                    await asyncio.gather(*cancelled_tasks, return_exceptions=True)
-            except TimeoutError:
+            # asyncio.wait (unlike a cancelled gather) never re-cancels the
+            # tasks, so an in-flight rollback is not interrupted a second time.
+            # Budget covers git reset + service restart + active-wait.
+            _done, pending = await asyncio.wait(cancelled_tasks, timeout=150.0)
+            if pending:
                 _log.error(
-                    "cancel() cleanup timed out after 10s; tasks may still be running"
+                    "cancel() cleanup timed out after 150s; %d task(s) still running",
+                    len(pending),
                 )
         self._set_busy(busy=False)
         if not cancelled_tasks:

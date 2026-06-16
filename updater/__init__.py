@@ -13,11 +13,7 @@ from .executor import (
     git_prune_extra_remotes,
     git_pull,
     git_remote_url,
-    git_reset,
-    git_reset_origin,
     git_reset_to_hash,
-    pip_sync,
-    pip_upgrade,
     restart_service,
 )
 from .models import ComponentConfig, ComponentStatus
@@ -45,11 +41,7 @@ __all__ = [
     "git_prune_extra_remotes",
     "git_pull",
     "git_remote_url",
-    "git_reset",
-    "git_reset_origin",
     "git_reset_to_hash",
-    "pip_sync",
-    "pip_upgrade",
     "restart_service",
     # Service
     "LoggingCallback",
