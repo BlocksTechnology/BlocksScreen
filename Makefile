@@ -99,14 +99,17 @@ test: ## Unit + UI tests (excludes real D-Bus integration)
 test-fast: ## Stop on first failure, quiet output
 	$(PYTHON) -m pytest -x -q $(PYTEST_IGNORE) $(TESTS)
 
+test-fast-%: ## Stop on first failure, quiet output, scoped to tests/<folder>/
+	$(PYTHON) -m pytest -x -q $(TESTS)/$*
+
 test-unit: ## Unit tests only (*_unit.py)
 	$(PYTHON) -m pytest $(PYTEST_FLAGS) $(TESTS)/*/*_unit.py
 
 test-ui: ## UI tests only (*_ui.py)
 	$(PYTHON) -m pytest $(PYTEST_FLAGS) $(TESTS)/*/*_ui.py
 
-test-network: ## Network subsystem tests (unit + UI, no D-Bus)
-	$(PYTHON) -m pytest $(PYTEST_FLAGS) $(PYTEST_IGNORE) $(TESTS)/network/
+test-%: ## Tests all files inside the /<folder>/
+	$(PYTHON) -m pytest $(PYTEST_FLAGS) $(PYTEST_IGNORE) $(TESTS)/$*/
 
 test-integration: ## D-Bus integration tests (requires live NetworkManager)
 	$(NM_INTEGRATION) $(PYTHON) -m pytest $(PYTEST_FLAGS) $(TESTS)/*/*_integration.py
