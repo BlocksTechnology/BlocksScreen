@@ -1,0 +1,14 @@
+[Unit]
+Description=BlocksScreen Splash Holder (tty8)
+DefaultDependencies=no
+After=local-fs.target
+Before=getty@tty1.service
+
+[Service]
+Type=simple
+Restart=on-failure
+RestartSec=2
+ExecStart=+/home/blocks/.BlocksScreen-env/bin/python3.11 -S /home/blocks/BlocksScreen/scripts/bs-splash-holder.py
+
+[Install]
+WantedBy=sysinit.target
