@@ -1,0 +1,14 @@
+[Unit]
+Description=BlocksScreen Updater Bootstrap
+After=network.target
+ConditionPathExists=|!/etc/systemd/system/BlocksScreen-updater.service
+ConditionPathExists=|!/etc/systemd/system/BlocksScreen-deploy.path
+ConditionPathExists=|!/usr/share/dbus-1/system-services/com.blockscreen.Updater.service
+ConditionPathExists=|!/etc/dbus-1/system.d/com.blockscreen.Updater.conf
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash -c 'exec /bin/bash "$(dirname "$(readlink -f /etc/systemd/system/BlocksScreen-bootstrap.service)")/install-updater.sh"'
+RemainAfterExit=yes
+StandardOutput=journal
+StandardError=journal

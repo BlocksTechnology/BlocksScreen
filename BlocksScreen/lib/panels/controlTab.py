@@ -694,8 +694,6 @@ class ControlTab(QtWidgets.QStackedWidget):
             self.panel.mva_y_value_label.setText(f"{values[1]:.2f}")
             self.panel.mva_z_value_label.setText(f"{values[2]:.3f}")
 
-            if values[0] == "252,50" and values[1] == "250" and values[2] == "50":
-                self.call_load_panel.emit(False, "")
         self.toolhead_info.update({f"{field}": values})
 
     @QtCore.pyqtSlot(str, str, float, name="on-extruder-update")
