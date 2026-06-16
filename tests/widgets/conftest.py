@@ -1,39 +1,32 @@
-"""Widget test configuration.
-
-Ensures ``BlocksScreen/`` is on sys.path so ``from lib.xxx`` imports
-resolve correctly, and clears any empty ``lib.*`` stub packages that
-the network conftest may have registered before this directory is loaded.
-"""
-
 import importlib.util
 import sys
+import types
 from pathlib import Path
 from unittest.mock import MagicMock
 
 from PyQt6 import QtWidgets
 
-_bs_dir = Path(__file__).resolve().parent.parent.parent / "BlocksScreen"
-if str(_bs_dir) not in sys.path:
-    sys.path.insert(0, str(_bs_dir))
+_project_root = Path(__file__).resolve().parent.parent.parent
+# Add project root (not BlocksScreen/) — adding BlocksScreen/ would cause
+# BlocksScreen.py to shadow the BlocksScreen namespace package.
+if str(_project_root) not in sys.path:
+    sys.path.insert(0, str(_project_root))
 
-# The network conftest registers empty namespace stubs for lib, lib.panels,
-# lib.panels.widgets, and lib.utils. Clear them so the real packages
-# from _bs_dir are importable.
 for _pkg in ("lib", "lib.panels", "lib.panels.widgets", "lib.utils"):
-    mod = sys.modules.get(_pkg)
-    if mod is not None and not getattr(mod, "__file__", None):
-        del sys.modules[_pkg]
+    sys.modules.pop(_pkg, None)
 
-# Load real events module from its app-side location.
-_events_path = Path(__file__).parents[2] / "BlocksScreen" / "events.py"
-_spec = importlib.util.spec_from_file_location("events", _events_path)
-_events_mod = importlib.util.module_from_spec(_spec)  # type: ignore[arg-type]
-_spec.loader.exec_module(_events_mod)  # type: ignore[union-attr]
-sys.modules["events"] = _events_mod
+_lib_mod = types.ModuleType("lib")
+_lib_mod.__path__ = [str(_project_root / "BlocksScreen" / "lib")]
+_lib_mod.__package__ = "lib"
+sys.modules["lib"] = _lib_mod
 
-# Stub bare lib.* imports — connectionPage uses these without the BlocksScreen
-# prefix (app is run from inside BlocksScreen/).  Tests use BlocksScreen.* paths
-# so these bare names are never on sys.path.
+for _mod_name in ("events", "helper_methods"):
+    _mod_path = _project_root / "BlocksScreen" / f"{_mod_name}.py"
+    _spec = importlib.util.spec_from_file_location(_mod_name, _mod_path)
+    _mod = importlib.util.module_from_spec(_spec)  # type: ignore[arg-type]
+    _spec.loader.exec_module(_mod)  # type: ignore[union-attr]
+    sys.modules[_mod_name] = _mod
+
 _moonraker_stub = MagicMock()
 _moonraker_stub.MoonWebSocket = MagicMock
 sys.modules.setdefault("lib.moonrakerComm", _moonraker_stub)
