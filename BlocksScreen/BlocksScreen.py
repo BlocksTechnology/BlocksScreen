@@ -163,7 +163,12 @@ def on_quit() -> None:
 
 def initialize_conf_manager() -> None:
     global conf_man
-    conf_man = ConfigManager(get_configparser())
+    try:
+        conf_man = ConfigManager(get_configparser())
+    except Exception as e:
+        _logger.error(
+            "Caught Exception on configuration_manager tool: %s" % e, exc_info=True
+        )
 
 
 def _sd_notify(msg: str) -> None:
