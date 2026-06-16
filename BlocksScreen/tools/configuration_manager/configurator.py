@@ -124,16 +124,16 @@ def get_file_checksum(file: pathlib.Path | str) -> str:
     """
     if not isinstance(file, pathlib.Path):
         file = pathlib.Path(file)
+    if not file.exists():
+        raise FileNotFoundError(f"File not found: {file}")
+    if not file.is_file():
+        raise ValueError(f"Path is not a regular file: {file}")
+
     try:
-        if not file.is_file() or not file.exists():
-            raise FileNotFoundError(
-                "Unable to find file %s while creating checksum" % file
-            )
-        with open(file, "rb") as f:
-            digest = hashlib.file_digest(f, "sha256")
-            return digest.hexdigest()
-    except Exception as e:
-        _logger.error("Caught fatal exception while hashing file %s" % e, exc_info=True)
+        with file.open("rb") as f:
+            return hashlib.file_digest(f, "sha256").hexdigest()
+    except OSError as e:
+        _logger.error("Failed to read file for checksum %s" % e, exc_info=True)
         return ""
 
 
