@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 import typing
 from collections import deque
 
@@ -41,6 +42,10 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 from screensaver import ScreenSaver
 
 _logger = logging.getLogger(__name__)
+
+_MACRO_ERROR_RE = re.compile(
+    r"Error evaluating 'gcode_macro ([^:]+):gcode'.*CommandError", re.IGNORECASE
+)
 
 
 def api_handler(func):
@@ -316,12 +321,19 @@ class MainWindow(QtWidgets.QMainWindow):
         )
         self.file_data.fileinfo.connect(self.cancelpage._show_screen_thumbnail)
         self.printPanel.call_cancel_panel.connect(self.handle_cancel_print)
+        self.printer.display_update.connect(self._handle_display_status)
 
         self.print_status = "idle"
 
         if self.config.has_section("server"):
             self.bo_ws_startup.emit()
         self.reset_tab_indexes()
+
+    @QtCore.pyqtSlot(str, str, name="handleDisplayUpdate")
+    @QtCore.pyqtSlot(str, float, name="handleDisplayUpdate")
+    def _handle_display_status(self, name, value: str | float) -> None:
+        if isinstance(value, str):
+            self.show_notifications.emit("M117", str(value), Severity.INFO.value, True)
 
     @QtCore.pyqtSlot(bool, name="show-cancel-page")
     def handle_cancel_print(self, show: bool = True):
@@ -960,12 +972,25 @@ class MainWindow(QtWidgets.QMainWindow):
             _gcode_msg_type, _message = parts
             if _gcode_msg_type == "!!":
                 source = MessageSource.GCODE_ERROR
+                m = _MACRO_ERROR_RE.search(_message)
+                if m:
+                    _message = f"macro failed: {m.group(1)}"
             elif _gcode_msg_type == "echo:":
                 source = MessageSource.GCODE_ECHO
+
+            elif _gcode_msg_type == "SCREEN":
+                self.show_notifications.emit(
+                    _gcode_msg_type, _message, Severity.INFO.value, True
+                )
+                return
             else:
                 return
+
             self._emit_filtered_notification(
-                source, _message, fallback=False, show_popup=True
+                source,
+                _message,
+                fallback=True,
+                show_popup=True,
             )
 
     @api_handler
