@@ -126,6 +126,7 @@ class TestVisibility:
             shown_page._state = ConnectionState.DISCONNECTED
             shown_page._firmware_restarting_pending = False
             shown_page.hide()
+            shown_page._state = ConnectionState.DISCONNECTED  # isolate iterations
             shown_page._set_state(state)
             assert shown_page.isVisible(), f"{state} should auto-shown"
 
