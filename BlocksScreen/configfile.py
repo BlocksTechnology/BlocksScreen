@@ -26,7 +26,6 @@
 from __future__ import annotations
 
 import configparser
-from dataclasses import MISSING
 import enum
 import io
 import logging
