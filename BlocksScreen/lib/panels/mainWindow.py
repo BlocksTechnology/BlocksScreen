@@ -338,6 +338,8 @@ class MainWindow(QtWidgets.QMainWindow):
     @QtCore.pyqtSlot(str, float, name="handleDisplayUpdate")
     def _handle_display_status(self, name, value: str | float) -> None:
         if isinstance(value, str):
+            if value == "" or value.isspace():
+                return
             self.show_notifications.emit("M117", str(value), Severity.INFO.value, True)
 
     @QtCore.pyqtSlot(bool, name="show-cancel-page")
