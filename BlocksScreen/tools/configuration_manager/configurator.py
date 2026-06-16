@@ -46,9 +46,7 @@ def _run_git(path: pathlib.Path, args: list[str]) -> subprocess.CompletedProcess
     if not path.is_dir():
         raise NotADirectoryError(f"Not a directory: {path}")
     return subprocess.run(
-        ["git", "-C", str(path)] + args,
-        capture_output=True,
-        text=True,
+        ["git", "-C", str(path)] + args, capture_output=True, text=True, timeout=2
     )  # nosec B603 — path validated above, no shell=True
 
 
