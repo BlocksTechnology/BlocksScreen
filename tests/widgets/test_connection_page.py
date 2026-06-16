@@ -123,6 +123,8 @@ class TestDotTimer:
 class TestVisibility:
     def test_auto_show_states_call_show(self, shown_page):
         for state in ConnectionPage._AUTO_SHOW_STATES:
+            shown_page._state = ConnectionState.DISCONNECTED
+            shown_page._firmware_restarting_pending = False
             shown_page.hide()
             shown_page._set_state(state)
             assert shown_page.isVisible(), f"{state} should auto-shown"
