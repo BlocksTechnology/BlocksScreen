@@ -142,7 +142,7 @@ class UpdatePage(QtWidgets.QWidget):
         # rendered separately instead.
         return bool(
             status.commits_behind
-            or status.packages_upgradable
+            or status.packages_upgradable > 0
             or status.has_local_changes
         )
 

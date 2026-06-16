@@ -356,7 +356,7 @@ async def git_remote_url(path: Path) -> str:
 
 
 async def _assert_https_remote(path: Path) -> tuple[bool, str]:
-    """Reject non-htpps origin remotes to guard agains supply-chain attacks."""
+    """Reject non-https origin remotes to guard against supply-chain attacks."""
     url = await git_remote_url(path)
     if not url:
         return False, "could not read origin remote URL"
@@ -456,6 +456,13 @@ async def check_apt_status(
                 tmp_path.unlink(missing_ok=True)
             logger.error("writing cache apt data: %s", e)
 
+    if packages_upgradable < 0:
+        return ComponentStatus(
+            name="system",
+            kind="apt",
+            packages_upgradable=-1,
+            error="apt status check failed",
+        )
     return ComponentStatus(
         name="system", kind="apt", packages_upgradable=packages_upgradable
     )
@@ -541,6 +548,12 @@ async def _apt_restore_packages(snapshot_path: Path) -> tuple[bool, str]:
         _kill_proc_group(proc, signal.SIGKILL)
         await proc.wait()
         return False, "dpkg --set-selections timed out"
+    except asyncio.CancelledError:
+        if proc.returncode is None:
+            _kill_proc_group(proc, signal.SIGKILL)
+            with contextlib.suppress(asyncio.TimeoutError):
+                await asyncio.wait_for(proc.wait(), timeout=2.0)
+        raise
     if proc.returncode != 0:
         msg = stderr.decode(errors="replace")
         logger.error("dpkg --set-selections failed: %s", msg)

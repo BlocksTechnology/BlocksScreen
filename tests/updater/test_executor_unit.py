@@ -631,3 +631,18 @@ class TestCheckAptStatus:
             result = await check_apt_status()
         assert result.name == "system"
         assert result.kind == "apt"
+
+    @pytest.mark.asyncio
+    async def test_failed_count_sets_error(self, tmp_path, monkeypatch):
+        # A failed upgradable-package count (-1) must surface as an error so the
+        # UI renders "status check failed" instead of a phantom update.
+        monkeypatch.setenv("HOME", str(tmp_path))
+        with patch(
+            "updater.executor._count_apt_upgradable",
+            new_callable=AsyncMock,
+            return_value=-1,
+        ):
+            result = await check_apt_status()
+        assert result.kind == "apt"
+        assert result.packages_upgradable == -1
+        assert result.error == "apt status check failed"

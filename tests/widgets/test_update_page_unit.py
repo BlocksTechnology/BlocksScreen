@@ -106,6 +106,12 @@ class TestNeedsUpdate:
     def test_up_to_date(self, page):
         assert page._needs_update(_make_status()) is False
 
+    def test_apt_check_failed_not_updatable(self, page):
+        # packages_upgradable == -1 means the apt status check failed; it must
+        # not show as an available update (mirrors the daemon dirty-set's > 0).
+        s = _make_status(kind="apt", packages_upgradable=-1)
+        assert page._needs_update(s) is False
+
 
 class TestVersionString:
     def test_git_current_and_remote(self, page):
