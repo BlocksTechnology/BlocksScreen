@@ -116,13 +116,6 @@ def resolve_symlink(
         bool: whether or not the provided directory has a working symlink pointing to the src file
     """
     return file.resolve().as_posix() in resolved
-    # if not target.is_dir():
-    #     return False
-    # for f in target.rglob(pattern="*"):
-    #     if file.resolve().as_posix() == f.resolve().as_posix():
-    #         return True
-    # return False
-    #
 
 
 def get_file_checksum(file: pathlib.Path | str) -> str:
