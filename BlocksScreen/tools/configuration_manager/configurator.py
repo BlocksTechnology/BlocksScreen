@@ -210,7 +210,6 @@ class ConfigManager:
             else None
         ) or ["printer.cfg", "variables.cfg", "BlocksScreen.cfg"]
 
-        _logger.info(self.cpy_files)
         _logger.info("--- Configuration Manager Initialized --- ")
         _logger.info(
             "Configuration manager will synchronize configurations from %s to %s "
@@ -226,7 +225,6 @@ class ConfigManager:
         _logger.info("-> Backup Directory: %s" % self.backup_dir)
         _logger.info("-> Config Variant: %s" % str(self.config_variant))
         _logger.info("-> Mandatory copy files: %s " % str(self.cpy_files))
-
         self.repo_fi_name, self.repo_fi_relpath = self._build_file_index(self.repo)
         self.config_fi_name, self.config_fi_relpath = self._build_file_index(
             self.config_dir
