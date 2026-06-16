@@ -151,7 +151,6 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         if parameter == "filament_detected":
             if not isinstance(value, bool):
                 self.set_filament_state()
-                self.handle_filament_state()
                 return
             if sensor_name == self.filament_sensor:
                 if value:
