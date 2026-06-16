@@ -99,6 +99,7 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.addWidget(self.sliderPage)
         self.sliderPage.request_back.connect(self.back_button)
         self.numpadPage = CustomNumpad(self)
+        self.numpadPage.setMaximumHeight(400)
         self.numpadPage.request_back.connect(self.back_button)
         self.addWidget(self.numpadPage)
 
