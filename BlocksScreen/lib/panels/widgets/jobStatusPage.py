@@ -13,6 +13,7 @@ from lib.utils.blocks_label import BlocksLabel
 from lib.utils.blocks_progressbar import CustomProgressBar
 from lib.utils.display_button import DisplayButton
 from PyQt6 import QtCore, QtGui, QtWidgets
+from lib.utils.flowguard import FlowguardWidget
 
 logger = logging.getLogger(__name__)
 
@@ -102,11 +103,13 @@ class JobStatusWidget(QtWidgets.QWidget):
             self.printing_progress_bar.hide()
             self.btnWidget.hide()
             self.headerWidget.hide()
+            self.flowrateWidget.hide()
             return
         self.thumbnail_view.hide()
         self.progressWidget.show()
         self.contentWidget.show()
         self.printing_progress_bar.show()
+        self.flowrateWidget.show()
         self.btnWidget.show()
         self.headerWidget.show()
 
@@ -254,6 +257,13 @@ class JobStatusWidget(QtWidgets.QWidget):
                 getattr(events, event_class_name)(_event_file, _event_meta)
             )
 
+    @QtCore.pyqtSlot(str, dict, name="flowguard_update")
+    def on_flowguard_update(self, str, dict):
+        """Handle flowguard update"""
+        self.flowrate.setValue(dict["level"])
+        self.flowrate.set_max_clog(dict["max_clog"])
+        self.flowrate.set_max_tangle(dict["max_tangle"])
+
     @QtCore.pyqtSlot(str, dict, name="on_print_stats_update")
     @QtCore.pyqtSlot(str, float, name="on_print_stats_update")
     @QtCore.pyqtSlot(str, str, name="on_print_stats_update")
@@ -379,10 +389,13 @@ class JobStatusWidget(QtWidgets.QWidget):
         self.btnWidget.setGeometry(QtCore.QRect(10, 80, 691, 90))
         self.btnWidget.setObjectName("btnWidget")
         self.progressWidget = QtWidgets.QWidget(self)
-        self.progressWidget.setGeometry(QtCore.QRect(10, 170, 471, 241))
+        self.progressWidget.setGeometry(QtCore.QRect(10, 170, 341, 231))
         self.progressWidget.setObjectName("progressWidget")
+        self.flowrateWidget = QtWidgets.QWidget(self)
+        self.flowrateWidget.setGeometry(QtCore.QRect(357, 170, 115, 231))
+        self.flowrateWidget.setObjectName("flowrateWidget")
         self.contentWidget = QtWidgets.QWidget(self)
-        self.contentWidget.setGeometry(QtCore.QRect(480, 170, 221, 241))
+        self.contentWidget.setGeometry(QtCore.QRect(480, 170, 221, 231))
         self.contentWidget.setObjectName("contentWidget")
         self.job_status_header_layout = QtWidgets.QHBoxLayout(self.headerWidget)
         self.job_status_header_layout.setSpacing(20)
@@ -468,6 +481,12 @@ class JobStatusWidget(QtWidgets.QWidget):
         self.printing_progress_bar.setObjectName("printing_progress_bar")
         self.printing_progress_bar.setSizePolicy(sizePolicy)
         self.job_status_progress_layout.addWidget(self.printing_progress_bar)
+        self.flowrate_layout = QtWidgets.QVBoxLayout(self.flowrateWidget)
+        self.flowrate_layout.setSizeConstraint(
+            QtWidgets.QLayout.SizeConstraint.SetMaximumSize
+        )
+        self.flowrate = FlowguardWidget(self)
+        self.flowrate_layout.addWidget(self.flowrate)
         self.layer_display_button = DisplayButton(self)
         self.layer_display_button.button_type = "display_secondary"
         self.layer_display_button.setEnabled(False)
