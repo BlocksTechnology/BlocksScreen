@@ -1,29 +1,35 @@
 [Unit]
 Description=BlocksScreen GUI
 StartLimitIntervalSec=0
-After=systemd-user-sessions.service plymouth-quit-wait.service
+After=systemd-user-sessions.service
 ConditionPathExists=/dev/tty0
 Wants=dbus.socket systemd-logind.service
 After=dbus.socket systemd-logind.service
-
+Wants=BlocksScreen-xorg.service
+After=BlocksScreen-xorg.service
+Wants=BlocksScreen-updater.service
+After=BlocksScreen-updater.service
 
 [Service]
-Type=simple
+Type=notify
+# NotifyAccess=all: on the transitional fallback paths in BlocksScreen-start.sh
+# (inline xinit, launch_BlocksScreen.sh) the Qt process is not the main PID, and
+# its READY/WATCHDOG notifications would otherwise be rejected -> start timeout.
+NotifyAccess=all
+WatchdogSec=30s
 Restart=always
-RestartSec=2
+RestartSec=1
 User=blocks
 Group=blocksscreen
 SupplementaryGroups=blocksscreen
-WorkingDirectory=BS_DIR
-Environment= "BS_XCLIENT=BSENV/bin/python3.11 BS_DIR/BlocksScreen/BlocksScreen.py" BACKEND=BS_BACKEND
-ExecStart="BS_DIR/scripts/BlocksScreen-start.sh"
-UtmpIdentifier=tty7
-UtmpMode=user
-PAMName=%u
-TTYPath=/dev/tty7
-TTYReset=yes
-TTYVHangup=yes
-TTYVTDisallocate=yes
+WorkingDirectory=/home/blocks/BlocksScreen
+EnvironmentFile=-/home/blocks/.config/blockscreen/env
+Environment=DISPLAY=:0
+Environment=XAUTHORITY=/home/blocks/.Xauthority
+ExecStartPre=-+/bin/bash /home/blocks/BlocksScreen/scripts/bs-deploy-check.sh
+ExecStart=/home/blocks/BlocksScreen/scripts/BlocksScreen-start.sh
+ExecStop=-+/home/blocks/BlocksScreen/scripts/bs-pre-stop.py
+ExecStopPost=-/usr/bin/feh --no-fehbg --bg-fill /home/blocks/.cache/blockscreen/splash.png
 
 [Install]
 WantedBy=multi-user.target
