@@ -2,7 +2,6 @@
 # Machine manager
 #
 import logging
-import shlex
 import subprocess  # nosec: B404
 import typing
 
@@ -21,24 +20,33 @@ class MachineControl(QtCore.QObject):
     @QtCore.pyqtSlot(name="machine_restart")
     def machine_restart(self):
         """Reboot machine"""
-        return self._run_command("sudo reboot now")
+        return self._run_command(["sudo", "reboot", "now"])
 
     @QtCore.pyqtSlot(name="machine_shutdown")
     def machine_shutdown(self):
         """Shutdown machine"""
-        return self._run_command("sudo shutdown now")
+        return self._run_command(["sudo", "shutdown", "now"])
 
     @QtCore.pyqtSlot(name="restart_klipper_service")
     def restart_klipper_service(self):
         """Restart klipper service"""
-        return self._run_command("sudo systemctl stop klipper.service")
+        return self._run_command(
+            ["sudo", "systemctl", "restart", "klipper.service", "--no-block"]
+        )
+
+    @QtCore.pyqtSlot(name="restart_klipper_mcu_service")
+    def restart_klipper_mcu_service(self):
+        """Start klipper-mcu service if not already running"""
+        return self._run_command(["sudo", "systemctl", "start", "klipper-mcu.service"])
 
     @QtCore.pyqtSlot(name="restart_moonraker_service")
     def restart_moonraker_service(self):
         """Restart moonraker service"""
-        return self._run_command("sudo systemctl restart moonraker.service")
+        return self._run_command(
+            ["sudo", "systemctl", "restart", "moonraker.service", "--no-block"]
+        )
 
-    def check_service_state(self, service_name: str):
+    def check_service_state(self, service_name: str | None):
         """Check service status
 
         Args:
@@ -49,28 +57,23 @@ class MachineControl(QtCore.QObject):
         """
         if service_name is None:
             return None
-        return self._run_command(f"systemctl is-active {service_name}")
+        return self._run_command(["systemctl", "is-active", service_name])
 
-    def _run_command(self, command: str):
+    def _run_command(self, command: list[str]):
         """Runs a shell command.
 
         Args:
-            command (type: string): The command to be executed .
+            command (type: list[string]): The command to be executed .
 
         Returns:
             type: The complete output that resulted from the command.
 
         """
         try:
-            # Split command into a list of strings
-            cmd = shlex.split(command)
             p = subprocess.run(  # nosec: B603
-                cmd, check=True, capture_output=True, text=True, timeout=5
+                command, check=True, capture_output=True, text=True, timeout=5
             )
             return p.stdout.strip() + "\n" + p.stderr.strip()
-        except ValueError as e:
-            logger.error("Failed to parse command string '%s': '%s'", command, e)
-            raise RuntimeError(f"Invalid command format: {e}") from e
         except subprocess.CalledProcessError as e:
             logger.error(
                 "Caught exception (exit code %d) failed to run command: %s \nStderr: %s",

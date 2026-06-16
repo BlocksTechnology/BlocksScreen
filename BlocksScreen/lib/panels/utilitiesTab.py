@@ -121,6 +121,11 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         self.cg = None
         self.aut: bool = False
 
+        self._is_timeout_timer: QtCore.QTimer = QtCore.QTimer(self)
+        self._is_timeout_timer.setSingleShot(True)
+        self._is_timeout_timer.setInterval(300_000)  # 5 min: longest plausible IS run
+        self._is_timeout_timer.timeout.connect(self._on_is_timeout)
+
         # --- UI Setup ---
         self.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
         self.panel.update_btn.clicked.connect(
@@ -305,6 +310,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
                 self.is_aut_types[axis] = recommended_type
                 if len(self.is_aut_types) == 2:
                     self.run_gcode_signal.emit("SAVE_CONFIG")
+                    self._is_timeout_timer.stop()
                     self.call_load_panel.emit(False, "")
                     self.aut = False
                     return
@@ -324,6 +330,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
                     self.is_page.add_type_entry(key)
 
             self.is_page.build_model_list()
+            self._is_timeout_timer.stop()
             self.call_load_panel.emit(False, "")
             return
 
@@ -349,7 +356,11 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
             self.run_gcode_signal.emit(gcode)
             self.change_page(self.indexOf(self.is_page))
 
+        self._is_timeout_timer.start()
         self.call_load_panel.emit(True, "Running Input Shaper...")
+
+    def _on_is_timeout(self) -> None:
+        self.call_load_panel.emit(False, "")
 
     @QtCore.pyqtSlot(list, name="on_object_list")
     def on_object_list(self, object_list: list) -> None:

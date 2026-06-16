@@ -1,10 +1,11 @@
 from __future__ import annotations
+
+import contextlib
+import logging
 import re
 import typing
 from functools import partial
-import logging
 
-from helper_methods import normalize
 from lib.moonrakerComm import MoonWebSocket
 from lib.panels.widgets.numpadPage import CustomNumpad
 from lib.panels.widgets.optionCardWidget import OptionCard
@@ -15,8 +16,8 @@ from lib.panels.widgets.slider_selector_page import SliderPage
 from lib.printer import Printer
 from lib.ui.controlStackedWidget_ui import Ui_controlStackedWidget
 from lib.utils.display_button import DisplayButton
+from lib.utils.gcode import fan_speed_gcode
 from PyQt6 import QtCore, QtGui, QtWidgets
-
 
 _logger = logging.getLogger(__name__)
 
@@ -40,6 +41,9 @@ class ControlTab(QtWidgets.QStackedWidget):
     disable_popups: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         bool, name="disable-popups"
     )
+    lock_ui: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        bool, name="lock-ui"
+    )
     request_numpad: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         [str, int, "PyQt_PyObject"],
         [str, int, "PyQt_PyObject", int, int],
@@ -50,8 +54,6 @@ class ControlTab(QtWidgets.QStackedWidget):
     )
     call_load_panel = QtCore.pyqtSignal(bool, str, name="call-load-panel")
     toggle_conn_page = QtCore.pyqtSignal(bool, name="call-load-panel")
-    tune_display_buttons: dict = {}
-    card_options: dict = {}
 
     def __init__(
         self,
@@ -74,6 +76,8 @@ class ControlTab(QtWidgets.QStackedWidget):
         self.extruder_info: dict = {}
         self.bed_info: dict = {}
         self.toolhead_info: dict = {}
+        self.tune_display_buttons: dict = {}
+        self.card_options: dict = {}
         self.extrude_length: int = 10
         self.extrude_feedrate: int = 2
         self.extrude_page_message: str = ""
@@ -82,6 +86,7 @@ class ControlTab(QtWidgets.QStackedWidget):
         self.probe_helper_page = ProbeHelper(self)
         self.probe_helper_page.toggle_conn_page.connect(self.toggle_conn_page)
         self.probe_helper_page.disable_popups.connect(self.disable_popups)
+        self.probe_helper_page.lock_ui.connect(self.lock_ui)
         self.addWidget(self.probe_helper_page)
         self.probe_helper_page.call_load_panel.connect(self.call_load_panel)
         self.printcores_page = SwapPrintcorePage(self)
@@ -252,6 +257,7 @@ class ControlTab(QtWidgets.QStackedWidget):
         self.run_gcode_signal.connect(self.ws.api.run_gcode)
         # @ object temperature change clicked
         self.numpadPage = CustomNumpad(self)
+        self.numpadPage.setMaximumHeight(400)
         self.numpadPage.request_back.connect(self.request_back_button)
         self.addWidget(self.numpadPage)
 
@@ -373,6 +379,9 @@ class ControlTab(QtWidgets.QStackedWidget):
         min_value: int = 0,
         max_value: int = 100,
     ) -> None:
+
+        with contextlib.suppress(RuntimeError, TypeError):
+            self.sliderPage.value_selected.disconnect()
         self.sliderPage.value_selected.connect(callback)
         self.sliderPage.set_name(name)
         self.sliderPage.set_slider_position(int(current_value))
@@ -382,18 +391,8 @@ class ControlTab(QtWidgets.QStackedWidget):
 
     @QtCore.pyqtSlot(str, int, name="on_slider_change")
     def on_slider_change(self, name: str, new_value: int) -> None:
-        if "speed" in name.lower():
-            self.speed_factor_override = new_value / 100
-            self.run_gcode_signal.emit(f"M220 S{new_value}")
-        if name.lower() == "fan":
-            self.run_gcode_signal.emit(
-                f"M106 S{int(round((normalize(float(new_value / 100), 0.0, 1.0, 0, 255))))}"
-            )  # [0, 255] Range
-        else:
-            name = name.replace(" ", "_")
-            self.run_gcode_signal.emit(
-                f'SET_FAN_SPEED FAN="{name}" SPEED={float(new_value / 100.00)}'
-            )  # [0.0, 1.0] Range
+        """Handle fan slider value change."""
+        self.run_gcode_signal.emit(fan_speed_gcode(name, new_value))
 
     def create_display_button(self, name: str) -> DisplayButton:
         """Create and return a DisplayButton
@@ -414,19 +413,20 @@ class ControlTab(QtWidgets.QStackedWidget):
         return display_button
 
     def handle_printcoreupdate(self, value: dict):
-        if value["swapping"] == "idle":
+        _swapping = value.get("swapping")
+        if _swapping is None or _swapping == "idle":
             return
 
-        if value["swapping"] == "in_pos":
+        if _swapping == "in_pos":
             self.call_load_panel.emit(False, "")
             self.printcores_page.show()
             self.disable_popups.emit(True)
             self.printcores_page.setText(
                 "Please Insert Print Core \n \n Afterwards click continue"
             )
-        if value["swapping"] == "unloading":
+        if _swapping == "unloading":
             self.call_load_panel.emit(True, "Unloading print core")
-        if value["swapping"] == "cleaning":
+        if _swapping == "cleaning":
             self.call_load_panel.emit(True, "Cleaning print core")
 
     def _handle_gcode_response(self, messages: list):
@@ -454,7 +454,9 @@ class ControlTab(QtWidgets.QStackedWidget):
                         return
                     self.call_load_panel.emit(
                         True,
-                        f"Retries: {retries_done}/{retries_total} | Range: {probed_range:.6f} | Tolerance: {tolerance:.6f}",
+                        f"Retries: {retries_done}/{retries_total}"
+                        f" | Range: {probed_range:.6f}"
+                        f" | Tolerance: {tolerance:.6f}",
                     )
 
     @QtCore.pyqtSlot(dict, name="printer_config")
@@ -469,8 +471,8 @@ class ControlTab(QtWidgets.QStackedWidget):
             self.panel.bed_temp_display.clicked.disconnect()
         except Exception:
             _logger.debug("Signals were not connected")
-        extruder = config.get("extruder", None) or {}
-        bed = config.get("heater_bed", None) or {}
+        extruder = config.get("extruder") or {}
+        bed = config.get("heater_bed") or {}
         e_min_temp = extruder.get("min_temp", 0)
         e_max_temp = extruder.get("max_temp", 300)
         b_max_temp = bed.get("max_temp", 100)
@@ -479,7 +481,7 @@ class ControlTab(QtWidgets.QStackedWidget):
         self.panel.extruder_temp_display.clicked.connect(
             lambda: self.request_numpad[str, int, "PyQt_PyObject", int, int].emit(
                 "Extruder Temperature",
-                int(round(float(self.panel.extruder_temp_display.secondary_text))),
+                round(float(self.panel.extruder_temp_display.secondary_text)),
                 self.on_numpad_change,
                 int(e_min_temp),
                 int(e_max_temp),
@@ -488,7 +490,7 @@ class ControlTab(QtWidgets.QStackedWidget):
         self.panel.bed_temp_display.clicked.connect(
             lambda: self.request_numpad[str, int, "PyQt_PyObject", int, int].emit(
                 "Bed Temperature",
-                int(round(float(self.panel.bed_temp_display.secondary_text))),
+                round(float(self.panel.bed_temp_display.secondary_text)),
                 self.on_numpad_change,
                 int(b_min_temp),
                 int(b_max_temp),
@@ -533,6 +535,9 @@ class ControlTab(QtWidgets.QStackedWidget):
         max_value: int = 100,
     ) -> None:
         """Handles numpad widget request"""
+
+        with contextlib.suppress(RuntimeError, TypeError):
+            self.numpadPage.value_selected.disconnect()
         self.numpadPage.value_selected.connect(callback)
         self.numpadPage.set_name(name)
         self.numpadPage.set_value(current_value)
@@ -634,13 +639,15 @@ class ControlTab(QtWidgets.QStackedWidget):
             return
         if extrude:
             self.run_gcode_signal.emit(
-                f"M83\nG1 E{self.extrude_length} F{self.extrude_feedrate * 60}\nM82\nM400"
+                f"M83\nG1 E{self.extrude_length}"
+                f" F{self.extrude_feedrate * 60}\nM82\nM400"
             )
             self.extrude_page_message = "Extruding"
             self.panel.exp_info_label.setText(self.extrude_page_message)
         else:
             self.run_gcode_signal.emit(
-                f"M83\nG1 E-{self.extrude_length} F{self.extrude_feedrate * 60}\nM82\nM400"
+                f"M83\nG1 E-{self.extrude_length}"
+                f" F{self.extrude_feedrate * 60}\nM82\nM400"
             )
             self.extrude_page_message = "Retracting"
             self.panel.exp_info_label.setText(self.extrude_page_message)
@@ -675,7 +682,8 @@ class ControlTab(QtWidgets.QStackedWidget):
         if axis not in ["X", "X-", "Y", "Y-", "Z", "Z-"]:
             return
         self.run_gcode_signal.emit(
-            f"G91\nG0 {axis}{float(self.move_length)} F{float(self.move_speed * 60)}\nG90\nM400"
+            f"G91\nG0 {axis}{float(self.move_length)}"
+            f" F{float(self.move_speed * 60)}\nG90\nM400"
         )
 
     @QtCore.pyqtSlot(str, list, name="on-toolhead-update")
@@ -686,8 +694,6 @@ class ControlTab(QtWidgets.QStackedWidget):
             self.panel.mva_y_value_label.setText(f"{values[1]:.2f}")
             self.panel.mva_z_value_label.setText(f"{values[2]:.3f}")
 
-            if values[0] == "252,50" and values[1] == "250" and values[2] == "50":
-                self.call_load_panel.emit(False, "")
         self.toolhead_info.update({f"{field}": values})
 
     @QtCore.pyqtSlot(str, str, float, name="on-extruder-update")

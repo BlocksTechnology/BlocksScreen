@@ -1,0 +1,59 @@
+#!/bin/bash
+set -euo pipefail
+
+SCRIPT_PATH=$(dirname -- "$(readlink -f -- "$0")")
+BS_PATH=$(dirname "$SCRIPT_PATH")
+_BSENV_USER="${SUDO_USER:-$USER}"
+_BSENV_HOME=$(getent passwd "$_BSENV_USER" | cut -d: -f6)
+BSENV="${BLOCKSSCREEN_VENV:-${_BSENV_HOME}/.BlocksScreen-env}"
+
+# shellcheck source=/dev/null
+if [ -f "$SCRIPT_PATH/bs-common.sh" ]; then . "$SCRIPT_PATH/bs-common.sh"; fi
+
+bs_migrate_moonraker_conf "$_BSENV_HOME/printer_data/config/moonraker.conf" post-merge
+
+changed=$(git -C "$BS_PATH" diff ORIG_HEAD HEAD --name-only 2>/dev/null || true)
+
+# ── Pre-flight: run all heavy prep before any restart ────────────────────────
+# Everything here is idempotent — safe to re-run on every merge.
+
+# 1. Pre-install pip requirements so the next service start is instant.
+REQS_HASH=$(md5sum "$BS_PATH/scripts/requirements.txt" | cut -d' ' -f1)
+SENTINEL="$BSENV/.blockscreen-reqs-hash"
+if [ ! -f "$SENTINEL" ] || [ "$(cat "$SENTINEL")" != "$REQS_HASH" ]; then
+    echo "[post-merge] requirements changed — pre-installing deps (this may take a few minutes) ..."
+    if "$BSENV/bin/pip" install --quiet \
+        --only-binary :all: \
+        --no-binary sdbus,sdbus-networkmanager \
+        --upgrade-strategy=only-if-needed \
+        -r "$BS_PATH/scripts/requirements.txt"; then
+        echo "$REQS_HASH" >"$SENTINEL"
+        echo "[post-merge] deps installed"
+    fi
+fi
+
+# 2. Sync all service files so start.sh finds them already in place.
+bs_sync_service_files "$SCRIPT_PATH" post-merge
+
+# 3. Install updater service on first deploy or if missing.
+if [ ! -f /etc/systemd/system/BlocksScreen-updater.service ]; then
+    echo "[post-merge] installing updater ..."
+    sudo bash "$SCRIPT_PATH/install-updater.sh"
+fi
+
+# 4. Precompute splash cache so the first Qt restart shows the right logo.
+"$BSENV/bin/python3.11" "$SCRIPT_PATH/bs-splash.py" --precompute 2>/dev/null || true
+
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── Service restart based on what changed ────────────────────────────────────
+if echo "$changed" | grep -qE '^scripts/BlocksScreen-updater\.service$|^scripts/BlocksScreen-bootstrap\.service$|^scripts/com\.blockscreen\.Updater\.conf$|^scripts/install-updater\.sh$'; then
+    echo "[post-merge] Updater install files changed - reinstalling updater ..."
+    sudo bash "$SCRIPT_PATH/install-updater.sh"
+elif echo "$changed" | grep -qE '^scripts/bs-splash-holder\.py$'; then
+    echo "[post-merge] Splash-holder script changed - restarting ..."
+    sudo systemctl restart --no-block BlocksScreen-splash-holder.service || true
+elif echo "$changed" | grep -qE '^updater/'; then
+    echo "[post-merge] Updater code changed - restarting daemon ..."
+    sudo systemctl restart BlocksScreen-updater.service
+fi

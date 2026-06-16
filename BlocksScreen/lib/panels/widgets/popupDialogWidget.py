@@ -107,8 +107,6 @@ class Popup(QtWidgets.QDialog):
 
     def mousePressEvent(self, a0: QtGui.QMouseEvent) -> None:
         """Re-implemented method, handle mouse press events"""
-        if self.userInput:
-            return
         self.timeout_timer.stop()
         self.slide_out_animation.setStartValue(self.slide_in_animation.currentValue())
         self.slide_in_animation.stop()
