@@ -1,0 +1,20 @@
+[Unit]
+Description=BlocksScreen Updater D-Bus Daemon
+After=dbus.service network.target
+Requires=dbus.service
+StartLimitIntervalSec=0
+
+[Service]
+Type=notify
+NotifyAccess=main
+User=blocks
+Group=blocksscreen
+WorkingDirectory=BS_DIR
+Environment=HOME=BS_PRIMARY_HOME
+ExecStart=BSENV/bin/python3.11 -m updater daemon
+Restart=always
+RestartSec=5
+WatchdogSec=30s
+
+[Install]
+WantedBy=multi-user.target
