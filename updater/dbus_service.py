@@ -60,7 +60,6 @@ class UpdaterInterface(
     emit machinery on the server side and an async-iterable on the client.
     """
 
-
     @sdbus.dbus_signal_async("sii")
     def step_complete(self) -> tuple[str, int, int]:
         """Emitted after each numbered update step: (name, step, total)."""
@@ -96,7 +95,6 @@ class UpdaterInterface(
         """Emitted on True↔False transition only (state-machine guard)."""
         raise NotImplementedError
 
-
     def __init__(self) -> None:
         super().__init__()
         self._svc = UpdateService(callback=DbusProgressCallback(self))
@@ -106,7 +104,6 @@ class UpdaterInterface(
         self._status_pending: bool = False
         self._invalid_requests: int = 0
         self._spawn(self._periodic_status_check(), name="periodic_status_check")
-
 
     def _spawn(self, coro, *, name: str | None = None) -> asyncio.Task:
         """Create a task and hold a strong reference so GC cannot cancel it."""
@@ -187,7 +184,6 @@ class UpdaterInterface(
             except Exception as exc:  # noqa: BLE001
                 _log.error("periodic_check failed: %s", exc)
             await asyncio.sleep(self._svc.poll_interval)
-
 
     @sdbus.dbus_method_async(result_signature="b")
     async def update_all(self) -> bool:
