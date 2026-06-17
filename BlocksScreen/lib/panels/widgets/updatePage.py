@@ -137,13 +137,14 @@ class UpdatePage(QtWidgets.QWidget):
         return super().resizeEvent(a0)
 
     def _needs_update(self, status: ComponentStatus) -> bool:
-        # Mirrors the daemon's dirty-set in _run_update_all: errored components
-        # are not updatable (updating cannot fix a status error), they are
-        # rendered separately instead.
+        # Mirrors the daemon's dirty-set in _run_update_all: an errored git repo
+        # (e.g. a corrupt repo) is included so the one "Update" button shows and
+        # the update flow self-heals it. apt errors are not repairable this way.
         return bool(
             status.commits_behind
             or status.packages_upgradable > 0
             or status.has_local_changes
+            or (status.error is not None and status.kind != "apt")
         )
 
     def _version_string(self, status: ComponentStatus) -> str:
