@@ -10,9 +10,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from configfile import get_configparser
 from lib.panels.mainWindow import MainWindow  # noqa: E402
 from logger import CrashHandler, LogManager, install_crash_handler, setup_logging
 from PyQt6 import QtCore, QtGui, QtWidgets  # noqa: E402
+from tools.configuration_manager import ConfigManager
 
 install_crash_handler()
 
@@ -159,6 +161,16 @@ def on_quit() -> None:
     LogManager.shutdown()
 
 
+def initialize_conf_manager() -> None:
+    global conf_man
+    try:
+        conf_man = ConfigManager(get_configparser())
+    except Exception as e:
+        _logger.error(
+            "Caught Exception on configuration_manager tool: %s" % e, exc_info=True
+        )
+
+
 def _sd_notify(msg: str) -> None:
     sock_path = os.environ.get("NOTIFY_SOCKET", "")
     if not sock_path:
@@ -244,6 +256,7 @@ if __name__ == "__main__":
     )
     _logger = logging.getLogger(__name__)
     _logger.info("============ BlocksScreen Initializing ============")
+    initialize_conf_manager()
     BlocksScreen = BlocksScreenApp([])
     BlocksScreen.setApplicationName("BlocksScreen")
     BlocksScreen.setApplicationDisplayName("BlocksScreen")
