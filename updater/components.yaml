@@ -1,0 +1,69 @@
+poll_interval_minutes: 1440
+
+components:
+  - name: klipper
+    type: git
+    path: ~/klipper
+    service: klipper.service
+    reset_mode: hard
+    order: 2
+
+  - name: moonraker
+    type: git
+    path: ~/moonraker
+    service: moonraker.service
+    reset_mode: hard
+    order: 3
+
+  - name: RF50-Klipper
+    type: git
+    path: ~/RF50-Klipper
+    branch: main
+    service: klipper.service
+    reset_mode: hard
+    order: 10
+
+  - name: happy-hare
+    type: git
+    path: ~/Happy-Hare
+    branch: main
+    service: klipper.service
+    reset_mode: hard
+    order: 11
+
+  - name: Klippain-ShakeTune
+    type: git
+    path: ~/klippain_shaketune
+    branch: main
+    service: klipper.service
+    reset_mode: hard
+    order: 12
+
+  - name: mainsail-config
+    type: git
+    path: ~/mainsail-config
+    branch: master
+    service: klipper.service
+    reset_mode: hard
+    order: 13
+
+  - name: crowsnest
+    type: git
+    path: ~/crowsnest
+    service: crowsnest.service
+    reset_mode: hard
+    order: 20
+
+  - name: KlipperScreen
+    type: git
+    path: ~/KlipperScreen
+    service: KlipperScreen.service
+    reset_mode: hard
+    order: 20
+
+  - name: BlocksScreen
+    type: git
+    path: ~/BlocksScreen
+    service: BlocksScreen.service
+    reset_mode: hard
+    order: 99

@@ -61,7 +61,6 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self._color_target_field = None
 
         self.amu_manager.mmu_state_changed.connect(self.on_mmu_state_changed)
-        self.amu_manager.pre_gate_changed.connect(self.on_pre_gate)
         self._setup_pre_gate_popup()
 
         self.spoolmanPanel = SpoolmanPage(self)
@@ -110,7 +109,19 @@ class FilamentTab(QtWidgets.QStackedWidget):
             lambda: self.change_page(self.indexOf(self._basic_panel))
         )
 
+        self.ws.connected_signal.connect(self.handle_moonraker_components)
+
         self.run_gcode.connect(self.ws.api.run_gcode)
+
+    def handle_moonraker_components(self):
+        components = self.ws._moonRest.get_server_info()
+
+        if "spoolman" not in components["result"].get("components", []):
+            self.fp_button_2.hide()
+            self.spoolman_btn.hide()
+        else:
+            self.fp_button_2.show()
+            self.spoolman_btn.show()
 
     def change_page(self, index: int) -> None:
         """Requests a page change page to the global manager
@@ -254,15 +265,15 @@ class FilamentTab(QtWidgets.QStackedWidget):
         font = QtGui.QFont()
         font.setPointSize(15)
 
-        spoolman_btn = BlocksCustomButton(page)
-        spoolman_btn.setFixedSize(230, 80)
-        spoolman_btn.setText("Spoolman")
-        spoolman_btn.setFont(font)
-        spoolman_btn.setPixmap(
+        self.spoolman_btn = BlocksCustomButton(page)
+        self.spoolman_btn.setFixedSize(230, 80)
+        self.spoolman_btn.setText("Spoolman")
+        self.spoolman_btn.setFont(font)
+        self.spoolman_btn.setPixmap(
             QtGui.QPixmap(":/filament_related/media/btn_icons/spoolman.svg")
         )
-        spoolman_btn.clicked.connect(self._on_spoolman_clicked)
-        btn_row.addWidget(spoolman_btn)
+        self.spoolman_btn.clicked.connect(self._on_spoolman_clicked)
+        btn_row.addWidget(self.spoolman_btn)
 
         accept_btn = BlocksCustomButton(page)
         accept_btn.setFixedSize(230, 80)
@@ -398,14 +409,6 @@ class FilamentTab(QtWidgets.QStackedWidget):
 
         root.addWidget(frame, 1)
         return page
-
-    def on_pre_gate(self, gate_index: int, detected: bool):
-        """Handles the pre-gate signal from the AMU manager to show the popup when filament is detected in a gate."""
-        previous_state = self._previous_gate_states.get(gate_index)
-        self._previous_gate_states[gate_index] = detected
-        if previous_state is False and detected is True:
-            self.popup_gates.append({"gate": gate_index})
-            self.handle_popup()
 
     def handle_popup(self):
         """Handles showing the popup for pre-gate filament detection. If multiple gates trigger, they will be queued and shown one at a time."""
@@ -614,12 +617,18 @@ class FilamentTab(QtWidgets.QStackedWidget):
 
     def on_mmu_state_changed(self, mmu_state):
         """Handles changes in the MMU state from the AMU manager to update the UI and show the load panel when loading/unloading."""
-        if not self._previous_gate_states and mmu_state.gates:
-            for gate_info in mmu_state.gates:
-                self._previous_gate_states[gate_info.index] = gate_info.status in [
-                    GateStatus.AVAILABLE,
-                    GateStatus.AVAILABLE_FROM_BUFFER,
-                ]
+        for gate_info in mmu_state.gates:
+            previous_state = self._previous_gate_states.get(gate_info.index)
+            self._previous_gate_states[gate_info.index] = gate_info.status in [
+                GateStatus.AVAILABLE,
+                GateStatus.AVAILABLE_FROM_BUFFER,
+            ]
+            if (
+                previous_state is False
+                and self._previous_gate_states[gate_info.index] is True
+            ):
+                self.popup_gates.append({"gate": gate_info.index})
+                self.handle_popup()
 
         if not self.amu_configured:
             if len(mmu_state.gates) > 1:

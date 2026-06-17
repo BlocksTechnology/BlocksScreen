@@ -1,4 +1,5 @@
 import logging
+import os
 import re
 import typing
 from collections import deque
@@ -36,6 +37,7 @@ from lib.ui.resources.icon_resources_rc import *
 from lib.ui.resources.main_menu_resources_rc import *
 from lib.ui.resources.system_resources_rc import *
 from lib.ui.resources.top_bar_resources_rc import *
+from lib.updater_worker import UpdaterWorker
 from PyQt6 import QtCore, QtGui, QtWidgets
 from screensaver import ScreenSaver
 
@@ -123,7 +125,19 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui.setupUi(self)
         self.screensaver = ScreenSaver(self)
         self._popup_toggle: bool = False
+        self._update_in_progress: bool = False
+        self._post_update_reconnect: bool = False
+        self._reconnect_retries: int = 0
+        self._reconnect_timer = QtCore.QTimer(self)
+        self._reconnect_timer.setSingleShot(False)
+        self._reconnect_timer.setInterval(15_000)
+        self._reconnect_timer.timeout.connect(self._on_reconnect_timer)
         self._klippy_ready: bool = False
+        self._klipper_auto_restart_pending: bool = False
+        self._klipper_restart_timeout = QtCore.QTimer(self)
+        self._klipper_restart_timeout.setSingleShot(True)
+        self._klipper_restart_timeout.setInterval(30_000)
+        self._klipper_restart_timeout.timeout.connect(self._on_klipper_restart_timeout)
         self.ui.main_content_widget.setCurrentIndex(0)
 
         usb_config = self.config.get_section("usb_manager", fallback=None)
@@ -139,14 +153,21 @@ class MainWindow(QtWidgets.QMainWindow):
         self.index_stack = deque(maxlen=4)
         self.printer = Printer(self, self.ws)
         self.conn_window = ConnectionPage(self, self.ws)
-        self.update_page = UpdatePage(self)
+        self.update_page = UpdatePage()
+        self.printer.print_stats_update[str, str].connect(
+            self.update_page.set_printing_state
+        )
+        self.printer.extruder_update.connect(self.update_page.set_heater_target)
+        self.printer.heater_bed_update.connect(self.update_page.set_heater_target)
+        self.updater_worker = UpdaterWorker()
         self.update_page.hide()
         self.conn_window.call_cancel_panel.connect(self.handle_cancel_print)
         self.installEventFilter(self.conn_window)
         self.printPanel = PrintTab(
             self.ui.printTab, self.file_data, self.ws, self.printer
         )
-        QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.CursorShape.BlankCursor)
+        if not os.environ.get("BLOCKSCREEN_DEV"):
+            QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.CursorShape.BlankCursor)
         self.filamentPanel = FilamentTab(
             self.ui.filamentTab, self.printer, self.ws, self.config, self.amu_manager
         )
@@ -241,28 +262,32 @@ class MainWindow(QtWidgets.QMainWindow):
             self._on_probe_notification
         )
         self.controlPanel.disable_popups.connect(self.popup_toggle)
+        self.updater_worker.status_ready.connect(self.update_page.handle_status_ready)
+        self.updater_worker.busy_changed.connect(self.update_page.handle_busy_changed)
+        self.updater_worker.daemon_unavailable.connect(self.on_updater_unavailable)
+        self.updater_worker.daemon_unavailable.connect(
+            self.update_page.handle_daemon_unavailable
+        )
         self.controlPanel.lock_ui.connect(self.set_ui_lock)
-        self.on_update_message.connect(self.update_page.handle_update_message)
-        self.update_page.request_full_update.connect(self.ws.api.full_update)
-        self.update_page.request_recover_repo[str].connect(
-            self.ws.api.recover_corrupt_repo
+        self.updater_worker.request_reconnect.connect(self._on_post_update_reconnect)
+        self.updater_worker.proxy_connected.connect(
+            self.update_page._request_status_debounced
         )
-        self.update_page.request_recover_repo[str, bool].connect(
-            self.ws.api.recover_corrupt_repo
-        )
-        self.update_page.request_refresh_update.connect(
-            self.ws.api.refresh_update_status
-        )
-        self.update_page.request_refresh_update[str].connect(
-            self.ws.api.refresh_update_status
-        )
-        self.update_page.request_rollback_update.connect(self.ws.api.rollback_update)
-        self.update_page.request_update_client.connect(self.ws.api.update_client)
-        self.update_page.request_update_klipper.connect(self.ws.api.update_klipper)
-        self.update_page.request_update_moonraker.connect(self.ws.api.update_moonraker)
-        self.update_page.request_update_status.connect(self.ws.api.update_status)
-        self.update_page.request_update_system.connect(self.ws.api.update_system)
+        self.ws.connected_signal.connect(self._on_moonraker_connected_post_update)
+        self.update_page.request_update.connect(self.updater_worker.trigger_update)
+        self.update_page.request_status.connect(self.updater_worker.trigger_status)
+        self.update_page.request_cancel.connect(self.updater_worker.trigger_cancel)
+        self.update_page.update_available.connect(self.on_update_available)
+        self.update_page.call_load_panel.connect(self.show_loadscreen)
+        self.update_page.disable_popups.connect(self.popup_toggle)
         self.update_page.update_back_btn.clicked.connect(self.update_page.hide)
+        self.updater_worker.step_complete.connect(self.update_page.handle_step_complete)
+        self.updater_worker.error_occurred.connect(
+            self.update_page.handle_error_occurred
+        )
+        self.updater_worker.rollback_done.connect(self.update_page.handle_rollback_done)
+        self.updater_worker.recover_done.connect(self.update_page.handle_recover_done)
+        self.ws.klippy_state_signal.connect(self._on_klippy_state)
         self.utilitiesPanel.show_update_page.connect(self.show_update_page)
         self.conn_window.update_button_clicked.connect(self.show_update_page)
         self.ui.extruder_temp_display.display_format = "upper_downer"
@@ -328,6 +353,19 @@ class MainWindow(QtWidgets.QMainWindow):
     def show_loadscreen(self, show: bool = True, msg: str = ""):
         """Show or hide the loading overlay, guarded by the calling panel's visibility."""
         _sender = self.sender()
+
+        if _sender is self.update_page:
+            self._update_in_progress = show
+        if not show and self._post_update_reconnect:
+            return
+        elif not show and self._update_in_progress:
+            return
+        elif not show and self._klipper_auto_restart_pending:
+            return
+
+        if _sender == self.filamentPanel:
+            if not self.filamentPanel.isVisible():
+                return
         if _sender == self.controlPanel:
             if not self.controlPanel.isVisible():
                 return
@@ -364,6 +402,39 @@ class MainWindow(QtWidgets.QMainWindow):
         self.update_page.repaint()
         self.update_page.show()
 
+    @QtCore.pyqtSlot(str, name="on-klippy-state")
+    def _on_klippy_state(self, state: str) -> None:
+        self._klippy_ready = state == "ready"
+        if state == "shutdown":
+            if self._update_in_progress:
+                _logger.warning("Klipper E-stop detected — cancelling active update")
+                self.updater_worker.trigger_cancel()
+        elif (
+            state == "disconnected"
+            and not self._klipper_auto_restart_pending
+            and not self._update_in_progress
+        ):
+            _logger.info("Klipper disconnected — auto-restarting service")
+            self._klipper_auto_restart_pending = True
+            self.loadwidget.set_status_message("Restarting Klipper...")
+            self.loadscreen.show()
+            self._klipper_restart_timeout.start()
+            self.ws.api.restart_service("klipper")
+        elif state == "ready" and self._klipper_auto_restart_pending:
+            _logger.info("Klipper back online after auto-restart")
+            self._klipper_auto_restart_pending = False
+            self._klipper_restart_timeout.stop()
+            if not self._post_update_reconnect:
+                self.loadscreen.hide()
+
+    @QtCore.pyqtSlot(name="on-klipper-restart-timeout")
+    def _on_klipper_restart_timeout(self) -> None:
+        _logger.warning(
+            "Klipper auto-restart timed out after 30 s — showing connection page"
+        )
+        self._klipper_auto_restart_pending = False
+        self.loadscreen.hide()
+
     @QtCore.pyqtSlot(name="on-cancel-print")
     def on_cancel_print(self):
         """Slot for cancel print signal"""
@@ -383,10 +454,88 @@ class MainWindow(QtWidgets.QMainWindow):
             )
         )
 
+    @QtCore.pyqtSlot(name="on-updater-unavailable")
+    def on_updater_unavailable(self) -> None:
+        """Handle updater daemon going offline: dismiss loading overlay and hide update page."""
+        _logger.warning(
+            "updater daemon unavailable: clearing flags (update_in_progress=%s, post_update_reconnect=%s)",
+            self._update_in_progress,
+            self._post_update_reconnect,
+        )
+        self._post_update_reconnect = False
+        self._update_in_progress = False
+        self._reconnect_timer.stop()
+        # update_page.handle_daemon_unavailable (connected to the same signal)
+        # resets the page; routing through handle_busy_changed here would issue
+        # a status request that fails and re-emits daemon_unavailable — a storm.
+        self.show_loadscreen(False, "")
+
+    @QtCore.pyqtSlot(name="on-post-update-reconnect")
+    def _on_post_update_reconnect(self) -> None:
+        """Called when an update finishes: hold the loading screen and retry Moonraker until it's up."""
+        _logger.debug(
+            "_on_post_update_reconnect: ws.connected=%s update_in_progress=%s",
+            self.ws.connected,
+            self._update_in_progress,
+        )
+        if self.ws.connected:
+            # Moonraker never restarted — overlay will be dismissed by handle_status_ready
+            # once the post-update status refresh completes (via _post_update_status_pending).
+            return
+        self._post_update_reconnect = True
+        self._reconnect_retries = 0
+        self.loadwidget.set_status_message("Reconnecting...")
+        self.ws.retry_wb_conn()
+        self._reconnect_timer.start()
+
+    _MAX_RECONNECT_RETRIES: int = 10  # 10 × 15 s = 2.5 min before giving up
+
+    @QtCore.pyqtSlot(name="on-reconnect-timer")
+    def _on_reconnect_timer(self) -> None:
+        if not self._post_update_reconnect:
+            self._reconnect_timer.stop()
+            return
+        if self.ws.connected:
+            _logger.debug("post-update: Moonraker reconnected, hiding loadscreen")
+            self._post_update_reconnect = False
+            self._update_in_progress = False
+            self._reconnect_retries = 0
+            self._reconnect_timer.stop()
+            self.loadscreen.hide()
+            return
+        self._reconnect_retries += 1
+        if self._reconnect_retries >= self._MAX_RECONNECT_RETRIES:
+            _logger.warning(
+                "post-update reconnect gave up after %d retries",
+                self._reconnect_retries,
+            )
+            self._post_update_reconnect = False
+            self._update_in_progress = False
+            self._reconnect_timer.stop()
+            self.loadscreen.hide()
+            return
+        _logger.info(
+            "post-update reconnect retry %d/%d",
+            self._reconnect_retries,
+            self._MAX_RECONNECT_RETRIES,
+        )
+        self.ws.retry_wb_conn()
+
+    @QtCore.pyqtSlot(name="on-moonraker-connected-post-update")
+    def _on_moonraker_connected_post_update(self) -> None:
+        if self._post_update_reconnect:
+            _logger.info("Moonraker reconnected after update, hiding loading screen")
+            self._post_update_reconnect = False
+            self._update_in_progress = False
+            self._reconnect_retries = 0
+            self._reconnect_timer.stop()
+            self.loadscreen.hide()
+
     @QtCore.pyqtSlot(bool, name="update-available")
     def on_update_available(self, state: bool = False):
-        """Signal render for red dot on utilities tab icon"""
+        """Signal render for red dot on utilities tab icon and Update button"""
         self.ui.main_content_widget.setNotification(3, state)
+        self.utilitiesPanel.panel.update_btn.setShowNotification(state)
         self.repaint()
 
     def enable_tab_bar(self) -> bool:
@@ -468,11 +617,6 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.ui.main_content_widget.indexOf(tab), not locked
             )
         self.ui.header_main_layout.setEnabled(not locked)
-
-    @QtCore.pyqtSlot(str, name="on-klippy-state")
-    def _on_klippy_state(self, state: str) -> None:
-        """Track Klippy readiness to suppress spurious error popups during disconnect."""
-        self._klippy_ready = state == "ready"
 
     def reset_tab_indexes(self):
         """
@@ -965,6 +1109,7 @@ class MainWindow(QtWidgets.QMainWindow):
         try:
             self.networkPanel.close()
             self.usb_manager.close()
+            self.updater_worker.shutdown()
         except Exception as e:
             _logger.warning("Error shutting down: %s", e)
         self.ws.wb_disconnect()

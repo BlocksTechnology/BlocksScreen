@@ -99,6 +99,7 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.addWidget(self.sliderPage)
         self.sliderPage.request_back.connect(self.back_button)
         self.numpadPage = CustomNumpad(self)
+        self.numpadPage.setMaximumHeight(400)
         self.numpadPage.request_back.connect(self.back_button)
         self.addWidget(self.numpadPage)
 
@@ -296,6 +297,7 @@ class PrintTab(QtWidgets.QStackedWidget):
         unblocks tabs if on standby
         """
         if isinstance(value, str) and "state" in field and value == "standby":
+            self.call_load_panel.emit(False, "")
             self.on_cancel_print.emit()
             if not self._finish_print_handled and self._cancel_z_snapshot != 0:
                 self._active_z_offset = self._cancel_z_snapshot
