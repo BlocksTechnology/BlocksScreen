@@ -109,6 +109,12 @@ echo_info "Adding blocks to video group (required for framebuffer splash) ..."
 sudo usermod -aG video blocks 2>/dev/null || true
 echo_ok "blocks added to video group"
 
+echo_info "Enabling persistent journald (retain logs across reboots for field debugging) ..."
+sudo mkdir -p /var/log/journal
+sudo systemd-tmpfiles --create --prefix /var/log/journal 2>/dev/null || true
+sudo systemctl restart systemd-journald 2>/dev/null || true
+echo_ok "Persistent journald enabled"
+
 echo_info "Allowing blocks to operate on repos owned by primary user ..."
 sudo git config --system --add safe.directory '*'
 echo_ok "Git safe.directory configured"
