@@ -152,6 +152,11 @@ class MainWindow(QtWidgets.QMainWindow):
         self.file_data = Files(self, self.ws)
         self.index_stack = deque(maxlen=4)
         self.printer = Printer(self, self.ws)
+        bs_config = self.config.get_section("blockscreen", fallback=None)
+        if bs_config:
+            self.printer.force_true_zero_offset = bs_config.getboolean(
+                "true_zero_probe", default=False
+            )
         self.conn_window = ConnectionPage(self, self.ws)
         self.update_page = UpdatePage()
         self.printer.print_stats_update[str, str].connect(
@@ -333,6 +338,8 @@ class MainWindow(QtWidgets.QMainWindow):
     @QtCore.pyqtSlot(str, float, name="handleDisplayUpdate")
     def _handle_display_status(self, name, value: str | float) -> None:
         if isinstance(value, str):
+            if value == "" or value.isspace():
+                return
             self.show_notifications.emit("M117", str(value), Severity.INFO.value, True)
 
     @QtCore.pyqtSlot(bool, name="show-cancel-page")
@@ -970,19 +977,19 @@ class MainWindow(QtWidgets.QMainWindow):
             if len(parts) != 2:
                 return
             _gcode_msg_type, _message = parts
-            if _gcode_msg_type == "!!":
-                source = MessageSource.GCODE_ERROR
-                m = _MACRO_ERROR_RE.search(_message)
-                if m:
-                    _message = f"macro failed: {m.group(1)}"
-            elif _gcode_msg_type == "echo:":
-                source = MessageSource.GCODE_ECHO
 
-            elif _gcode_msg_type == "SCREEN":
+            if _gcode_msg_type in ["SCREEN", "echo:"]:
                 self.show_notifications.emit(
                     _gcode_msg_type, _message, Severity.INFO.value, True
                 )
                 return
+
+            elif _gcode_msg_type == "!!":
+                source = MessageSource.GCODE_ERROR
+                m = _MACRO_ERROR_RE.search(_message)
+                if m:
+                    _message = f"macro failed: {m.group(1)}"
+
             else:
                 return
 
