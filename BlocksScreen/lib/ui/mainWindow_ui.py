@@ -259,7 +259,7 @@ class Ui_MainWindow(object):
         self.chamber_temp_display.setMaximumSize(QtCore.QSize(160, 60))
         self.chamber_temp_display.setFlat(True)
         self.chamber_temp_display.setProperty("icon_pixmap", QtGui.QPixmap(":/top_bar_icons/media/topbar/chamber_temp_topbar.svg"))
-        self.chamber_temp_display.setProperty("secondary_pixmap", QtGui.QPixmap(":/temperature_related/media/btn_icons/humidity_raindrop_icon_bw.svg"))
+        self.chamber_temp_display.setProperty("secondary_pixmap", QtGui.QPixmap(":/temperature_related/media/btn_icons/humidity.svg"))
         self.chamber_temp_display.setObjectName("chamber_temp_display")
         self.header_main_layout.addWidget(self.chamber_temp_display, 0, QtCore.Qt.AlignmentFlag.AlignHCenter)
         self.filament_type_icon = IconButton(parent=self.main_header_layout)

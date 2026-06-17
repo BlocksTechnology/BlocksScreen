@@ -660,7 +660,7 @@ QPushButton:pressed{
         <string>display_secondary</string>
        </property>
        <property name="secondary_pixmap" stdset="0">
-        <pixmap resource="resources/icon_resources.qrc">:/temperature_related/media/btn_icons/humidity_raindrop_icon_bw.svg</pixmap>
+        <pixmap resource="resources/icon_resources.qrc">:/temperature_related/media/btn_icons/humidity.svg</pixmap>
        </property>
       </widget>
      </item>
