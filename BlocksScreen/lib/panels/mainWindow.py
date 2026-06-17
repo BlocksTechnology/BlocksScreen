@@ -977,19 +977,19 @@ class MainWindow(QtWidgets.QMainWindow):
             if len(parts) != 2:
                 return
             _gcode_msg_type, _message = parts
-            if _gcode_msg_type == "!!":
-                source = MessageSource.GCODE_ERROR
-                m = _MACRO_ERROR_RE.search(_message)
-                if m:
-                    _message = f"macro failed: {m.group(1)}"
-            elif _gcode_msg_type == "echo:":
-                source = MessageSource.GCODE_ECHO
 
-            elif _gcode_msg_type == "SCREEN":
+            if _gcode_msg_type == "SCREEN" or _gcode_msg_type == "echo:":
                 self.show_notifications.emit(
                     _gcode_msg_type, _message, Severity.INFO.value, True
                 )
                 return
+
+            elif _gcode_msg_type == "!!":
+                source = MessageSource.GCODE_ERROR
+                m = _MACRO_ERROR_RE.search(_message)
+                if m:
+                    _message = f"macro failed: {m.group(1)}"
+
             else:
                 return
 
