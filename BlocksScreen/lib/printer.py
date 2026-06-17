@@ -51,10 +51,6 @@ class Printer(QtCore.QObject):
 
     display_update = QtCore.pyqtSignal([str, str], [str, float], name="display_update")
     sensor_update = QtCore.pyqtSignal(str, str, float, name="sensor_update")
-    # temperature_sensor_update = QtCore.pyqtSignal(
-    #     str, str, float, name="temperature_sensor_update"
-    # )
-    # aht10_sensor_update = QtCore.pyqtSignal(str, str, float, name="aht10_sensor_update")
     temperature_fan_update = QtCore.pyqtSignal(
         str, str, float, name="temperature_fan_update"
     )
