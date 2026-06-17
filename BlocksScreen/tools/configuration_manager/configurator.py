@@ -56,7 +56,7 @@ def is_git_dirty(path: pathlib.Path | str):
         if not isinstance(path, pathlib.Path):
             path = pathlib.Path(path)
         result = _run_git(path, ["status", "--porcelain"])
-        if not result:
+        if result.returncode != 0 or not result:
             return True
         return bool(result.stdout.strip())
     except Exception:
