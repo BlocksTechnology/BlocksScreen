@@ -330,6 +330,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.printer.display_update.connect(self._handle_display_status)
 
         self.print_status = "idle"
+        self.ui.chamber_temp_display.hide()
 
         if self.config.has_section("server"):
             self.bo_ws_startup.emit()
