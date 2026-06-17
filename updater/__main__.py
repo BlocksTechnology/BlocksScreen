@@ -81,14 +81,17 @@ async def _run_daemon() -> None:
 
 
 def _cli_lock_path() -> Path:
-    """Return a writable path for the CLI lock, preferring the runtime dir."""
-    for d in (Path("/run/blockscreen"), Path.home() / ".cache" / "blockscreen"):
+    """Return a user-owned path for the CLI lock, preferring the runtime dir."""
+    cache = Path.home() / ".cache" / "blockscreen"
+    for d in (Path("/run/blockscreen"), cache):
         try:
             d.mkdir(parents=True, exist_ok=True)
             return d / "updater_cli.lock"
         except OSError:
             continue
-    return Path("/tmp/blockscreen_updater_cli.lock")  # noqa: S108
+    # Both unavailable (broken home): return the cache path anyway so the caller's
+    # open() surfaces the error, rather than fall back to a world-writable /tmp.
+    return cache / "updater_cli.lock"
 
 
 @contextlib.contextmanager
