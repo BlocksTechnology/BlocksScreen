@@ -175,7 +175,7 @@ class BlocksScreenConfig:
         """
         raw = self.config.get(section=self.section, option=option, fallback=None)
         if raw is Sentinel.MISSING:
-            return default if default is not Sentinel. else []
+            return default if default is not Sentinel else []
         if not raw:
             if default is not Sentinel.MISSING:
                 return default
