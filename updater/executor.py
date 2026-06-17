@@ -24,6 +24,17 @@ APT_MARK = "/usr/bin/apt-mark"
 SUDO = "/usr/bin/sudo"
 SYSTEMCTL = "/usr/bin/systemctl"
 
+# Wait up to 60s for the dpkg lock instead of failing immediately when apt-daily
+# or unattended-upgrades is mid-run (the daemon now owns apt on this image).
+_APT_LOCK_OPTS = ["-o", "DPkg::Lock::Timeout=60"]
+# Keep existing conffiles without prompting (an upgrade must never block on input).
+_APT_CONF_OPTS = [
+    "-o",
+    "Dpkg::Options::=--force-confdef",
+    "-o",
+    "Dpkg::Options::=--force-confold",
+]
+
 _SERVICE_RE = re.compile(r"^[a-zA-Z0-9@:._-]+\.service$")
 _GIT_SHA_RE = re.compile(r"^[a-f0-9]{7,40}$")
 _GIT_SYMREF_RE = re.compile(r"^origin/[a-zA-Z0-9._-]+$")
@@ -324,6 +335,66 @@ async def git_reset_to_hash(path: Path | None, prev_hash: str = "") -> tuple[boo
     return await _run([GIT, "reset", "--hard", prev_hash], cwd=path, timeout=10.0)
 
 
+# Object-corruption signatures. Kept narrow so generic failures like
+# "fatal: not a git repository" are NOT treated as corruption.
+_GIT_CORRUPT_SIGNATURES = (
+    "corrupt",
+    "is empty",
+    "cannot read",
+    "invalid index-pack",
+    "missing blob",
+    "missing tree",
+    "missing commit",
+)
+
+
+async def git_has_corruption(path: Path, hint: str = "") -> bool:
+    """True if `hint` or git fsck shows object corruption.
+
+    `hint` (e.g. a failed fetch's stderr) is checked first: `git fsck
+    --connectivity-only` validates reachability, not object content, so it can
+    miss a corrupt blob that already broke the fetch. The fetch error is the
+    reliable signal in that case.
+    """
+    if any(k in hint for k in _GIT_CORRUPT_SIGNATURES):
+        return True
+    ok, out = await _run(
+        [GIT, "fsck", "--connectivity-only", "--no-progress"], cwd=path, timeout=60.0
+    )
+    if ok:
+        return False
+    return any(k in out for k in _GIT_CORRUPT_SIGNATURES)
+
+
+async def git_repair(path: Path) -> tuple[bool, str]:
+    """Prune 0-byte loose objects, re-fetch, and re-verify. Mirrors start.sh recovery.
+
+    Working tree is untouched (delete + fetch only), so tracked-but-modified files
+    survive. Returns (ok, message).
+    """
+    objects = path / ".git" / "objects"
+    if not objects.is_dir():
+        return (False, "no .git/objects directory")
+    removed = 0
+    for sub in objects.iterdir():
+        if len(sub.name) != 2 or not sub.is_dir():
+            continue  # loose objects live in 2-hex-char subdirs only
+        for obj in sub.iterdir():
+            try:
+                if obj.is_file() and obj.stat().st_size == 0:
+                    obj.unlink()
+                    removed += 1
+            except OSError:
+                continue
+    logger.warning("git_repair: removed %d empty object(s) from %s", removed, path)
+    ok, out = await git_fetch(path, prune_remotes=False)
+    if not ok:
+        return (False, f"fetch after cleanup failed: {out}")
+    if await git_has_corruption(path):
+        return (False, "still corrupt after fetch")
+    return (True, f"repaired ({removed} empty objects removed)")
+
+
 async def git_get_hash(path: Path | None) -> str:
     """Return the current HEAD commit hash, or empty string on failure."""
     if path is None:
@@ -471,7 +542,18 @@ async def check_apt_status(
 def _apt_env() -> dict[str, str]:
     env = _make_clean_env()
     env["DEBIAN_FRONTEND"] = "noninteractive"
+    # needrestart can otherwise open an interactive prompt mid-upgrade and hang.
+    env["NEEDRESTART_MODE"] = "a"
     return env
+
+
+def _apt_get(args: list[str], *, keep_conffiles: bool = False) -> list[str]:
+    """Build a sudo apt-get argv with the dpkg-lock wait always applied.
+
+    keep_conffiles adds --force-confdef/--force-confold for unpacking operations.
+    """
+    opts = [*_APT_LOCK_OPTS, *(_APT_CONF_OPTS if keep_conffiles else [])]
+    return [SUDO, APT_GET, *opts, *args]
 
 
 async def _apt_snapshot_packages() -> tuple[bool, Path | None]:
@@ -517,7 +599,7 @@ async def _apt_get_fix_broken() -> tuple[bool, str]:
     but aims to unbreak the system. Called only on apt_upgrade failure.
     """
     return await _run(
-        [SUDO, APT_GET, "-f", "install", "-y"],
+        _apt_get(["-f", "install", "-y"], keep_conffiles=True),
         timeout=120.0,
         env=_apt_env(),
     )
@@ -559,13 +641,15 @@ async def _apt_restore_packages(snapshot_path: Path) -> tuple[bool, str]:
         logger.error("dpkg --set-selections failed: %s", msg)
         return False, msg
     return await _run(
-        [SUDO, APT_GET, "dselect-upgrade", "-y"], timeout=120.0, env=_apt_env()
+        _apt_get(["dselect-upgrade", "-y"], keep_conffiles=True),
+        timeout=120.0,
+        env=_apt_env(),
     )
 
 
 async def apt_update() -> tuple[bool, str]:
     """Run apt-get update to refresh package lists."""
-    return await _run([SUDO, APT_GET, "update"], timeout=120.0, env=_apt_env())
+    return await _run(_apt_get(["update"]), timeout=120.0, env=_apt_env())
 
 
 async def apt_upgrade(exclude: tuple[str, ...] = ()) -> tuple[bool, str]:
@@ -584,7 +668,7 @@ async def apt_upgrade(exclude: tuple[str, ...] = ()) -> tuple[bool, str]:
         return True, "no packages to upgrade"
 
     return await _run(
-        [SUDO, APT_GET, "install", "--only-upgrade", "-y", *pkgs],
+        _apt_get(["install", "--only-upgrade", "-y", *pkgs], keep_conffiles=True),
         timeout=300.0,
         env=_apt_env(),
     )
@@ -592,9 +676,7 @@ async def apt_upgrade(exclude: tuple[str, ...] = ()) -> tuple[bool, str]:
 
 async def apt_autoremove() -> tuple[bool, str]:
     """Run apt-get autoremove -y to remove orphaned packages after an upgrade."""
-    return await _run(
-        [SUDO, APT_GET, "autoremove", "-y"], timeout=120.0, env=_apt_env()
-    )
+    return await _run(_apt_get(["autoremove", "-y"]), timeout=120.0, env=_apt_env())
 
 
 async def run_hook(

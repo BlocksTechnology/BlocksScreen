@@ -96,11 +96,11 @@ signal.signal(signal.SIGTERM, _on_sigterm)
 # Switch to tty8 immediately — VT switch does not require fb0.
 _activate_tty8()
 
-# Write text immediately so tty8 is not blank while waiting for fb0/splash.
+# Clear tty8 and hide the cursor (no bare text): the screen stays black until the
+# splash image is written to fb0 below, so the user only ever sees the logo splash.
 try:
     with open("/dev/tty8", "wb") as _tty:
-        # clear screen, home cursor, hide cursor
-        _tty.write(b"\x1b[2J\x1b[H\x1b[?25l  BlocksScreen loading...")
+        _tty.write(b"\x1b[2J\x1b[H\x1b[?25l")
 except OSError:
     pass
 

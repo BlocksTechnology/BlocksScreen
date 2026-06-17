@@ -1,14 +1,18 @@
 import argparse
 import asyncio
+import contextlib
+import fcntl
 import logging
 import os
 import signal
 import socket
+from collections.abc import Iterator
+from pathlib import Path
 
-import sdbus
-
-from updater.dbus_service import UpdaterDbusService
 from updater.service import LoggingCallback, UpdateService
+
+# NOTE: sdbus and updater.dbus_service are imported lazily inside _run_daemon so
+# the status/update/recover CLI works on an interpreter without sdbus installed.
 
 
 def _sd_notify(msg: str) -> None:
@@ -48,6 +52,10 @@ def build_parser() -> argparse.ArgumentParser:
 
 async def _run_daemon() -> None:
     """Start the updater D-Bus service on the system bus."""
+    import sdbus
+
+    from updater.dbus_service import UpdaterDbusService
+
     _log = logging.getLogger("updater")
     bus = sdbus.sd_bus_open_system()
     service = UpdaterDbusService()
@@ -72,6 +80,31 @@ async def _run_daemon() -> None:
     _log.info("updater daemon shutting down")
 
 
+def _cli_lock_path() -> Path:
+    """Return a writable path for the CLI lock, preferring the runtime dir."""
+    for d in (Path("/run/blockscreen"), Path.home() / ".cache" / "blockscreen"):
+        try:
+            d.mkdir(parents=True, exist_ok=True)
+            return d / "updater_cli.lock"
+        except OSError:
+            continue
+    return Path("/tmp/blockscreen_updater_cli.lock")  # noqa: S108
+
+
+@contextlib.contextmanager
+def _cli_lock() -> Iterator[None]:
+    """Serialize mutating CLI commands against the daemon and other CLI runs."""
+    with open(_cli_lock_path(), "w") as f:
+        try:
+            fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            logging.getLogger("updater").error(
+                "updater busy: the daemon or another CLI run holds the lock"
+            )
+            raise SystemExit(1) from None
+        yield
+
+
 async def main() -> None:
     """Parse CLI args and dispatch to the appropriate UpdateService method."""
     args = build_parser().parse_args()
@@ -85,15 +118,16 @@ async def main() -> None:
     svc = UpdateService(callback=LoggingCallback())
     match args.command:
         case "update":
-            if args.name is None:
-                await svc.update_all()
-            else:
-                await svc.update_component(args.name)
+            with _cli_lock():
+                if args.name is None:
+                    await svc.update_all()
+                else:
+                    await svc.update_component(args.name)
         case "status":
             result = await svc.check_status()
             for s in sorted(result.values(), key=lambda c: c.name):
                 if s.error:
-                    print(f"{s.name}: ERROR — {s.error}")
+                    print(f"{s.name}: ERROR: {s.error}")
                 elif s.packages_upgradable > 0:
                     print(f"{s.name}: {s.packages_upgradable} packages upgradable")
                 elif s.commits_behind > 0:
@@ -101,7 +135,8 @@ async def main() -> None:
                 else:
                     print(f"{s.name}: up to date")
         case "recover":
-            await svc.recover(args.name, hard=args.hard)
+            with _cli_lock():
+                await svc.recover(args.name, hard=args.hard)
         case None:
             build_parser().print_help()
 
