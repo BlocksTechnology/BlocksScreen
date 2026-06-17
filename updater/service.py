@@ -271,6 +271,17 @@ class UpdateService:
             # SEC: world-writable only; group-writable is permitted (blocksscreen group is trusted)
             return (False, "world-writable permissions")
 
+        # Best-effort pip self-upgrade so the in-app update also refreshes pip
+        # itself. A failure here must not block the dependency install — the
+        # existing pip is still usable.
+        ok_pip, pip_msg = await _run(
+            [pip_path, "install", "--upgrade", "pip", "--quiet"], timeout=120.0
+        )
+        if not ok_pip:
+            self._log.warning(
+                "%s: pip self-upgrade failed: %s", component.name, pip_msg
+            )
+
         return await _run(
             [pip_path, "install", "-r", str(req), "--quiet"], timeout=120.0
         )

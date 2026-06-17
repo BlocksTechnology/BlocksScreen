@@ -182,6 +182,13 @@ class UDisksDBusAsync(QtCore.QThread):
             logging.error("Caught exception on udisks2 monitor, %s", err)
             self.close()
             return
+        except RuntimeError as err:
+            # close() stops the loop mid run_until_complete; expected on shutdown.
+            if self.stop_event.is_set():
+                logging.debug("udisks2 monitor stopped during shutdown: %s", err)
+            else:
+                logging.error("udisks2 monitor unexpected RuntimeError: %s", err)
+            return
 
     def close(self) -> None:
         """Close usb devices monitoring thread and run loop"""
