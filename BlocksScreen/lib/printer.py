@@ -221,7 +221,6 @@ class Printer(QtCore.QObject):
     def on_object_list(self, object_list: list):
         """Handle receiving Printer object list"""
         self.available_objects = dict.fromkeys(object_list, None)
-        print(self.available_objects)
         self.request_object_subscription_signal[dict].emit(self.available_objects)
 
     def has_config_keyword(self, section: str) -> bool:
