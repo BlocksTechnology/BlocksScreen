@@ -5,7 +5,7 @@ idna==3.15
 numpy==2.3.4
 pefile==2024.8.26
 requests>=2.32.5
-sdbus==0.12.0
+sdbus==0.14.1
 sdbus-networkmanager==2.0.0
 typing==3.7.4.3
 websocket-client==1.9.0

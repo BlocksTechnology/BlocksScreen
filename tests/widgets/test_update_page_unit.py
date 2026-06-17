@@ -97,8 +97,14 @@ class TestNeedsUpdate:
     def test_packages_upgradable(self, page):
         assert page._needs_update(_make_status(packages_upgradable=5)) is True
 
-    def test_error(self, page):
-        assert page._needs_update(_make_status(error="boom")) is False
+    def test_errored_git_is_updatable(self, page):
+        # An errored git repo (e.g. a corrupt repo) is now updatable: pressing
+        # the one Update button heals it via the update flow.
+        assert page._needs_update(_make_status(error="boom")) is True
+
+    def test_errored_apt_not_updatable(self, page):
+        s = _make_status(kind="apt", error="boom")
+        assert page._needs_update(s) is False
 
     def test_has_local_changes(self, page):
         assert page._needs_update(_make_status(has_local_changes=True)) is True
