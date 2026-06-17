@@ -937,6 +937,8 @@ class MainWindow(QtWidgets.QMainWindow):
     ) -> bool:
         rule = match_message(source, text)
         if rule is not None:
+            if rule.severity == Severity.IGNORE:
+                return True
             self.show_notifications.emit(
                 source_id, rule.full_display, rule.severity.value, show_popup
             )
