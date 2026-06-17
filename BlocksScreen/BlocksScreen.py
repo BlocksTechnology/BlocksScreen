@@ -245,6 +245,25 @@ def _record_boot_success() -> None:
         log.warning("record_boot_success: write failed %s", exc)
 
 
+def _force_screen_refresh() -> None:
+    """Repaint the screen so a restarted GUI is presented over the splash.
+
+    X.Org persists across Qt restarts, so the newly mapped MainWindow never gets
+    an Expose and its first frame is not flushed to the KMS scanout, leaving the
+    feh restart splash frozen on the panel. xrefresh forces the repaint; a no-op
+    on a cold boot.
+    """
+    if not os.environ.get("DISPLAY"):
+        return
+    xrefresh = shutil.which("xrefresh")
+    if not xrefresh:
+        return
+    try:
+        subprocess.run([xrefresh], timeout=5, check=False)  # nosec B603
+    except (subprocess.SubprocessError, OSError) as exc:
+        logging.getLogger(__name__).warning("xrefresh failed: %s", exc)
+
+
 if __name__ == "__main__":
     setup_logging(
         filename="logs/BlocksScreen.log",
@@ -270,5 +289,8 @@ if __name__ == "__main__":
     _splash.finish(main_window)
     _sd_notify("READY=1")
     _setup_watchdog()
+    # Two nudges cover a slow first paint after a restart.
+    QtCore.QTimer.singleShot(300, _force_screen_refresh)
+    QtCore.QTimer.singleShot(1500, _force_screen_refresh)
     QtCore.QTimer.singleShot(5000, _record_boot_success)
     sys.exit(BlocksScreen.exec())

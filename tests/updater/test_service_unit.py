@@ -690,7 +690,7 @@ class TestInstallDependencies:
 
     @pytest.mark.asyncio
     async def test_runs_pip_when_component_venv_found(self, tmp_path):
-        """When a component venv pip is found, run pip install -r requirements.txt."""
+        """Component venv pip: upgrade pip first, then install -r requirements.txt."""
         comp_path = tmp_path / "mycomp"
         comp_path.mkdir()
         (comp_path / "requirements.txt").write_text("requests\n")
@@ -706,10 +706,36 @@ class TestInstallDependencies:
         ):
             ok, _ = await svc._install_dependencies(component)
         assert ok is True
-        mock_run.assert_called_once()
-        cmd = mock_run.call_args[0][0]
-        assert cmd[0] == venv_pip
-        assert "-r" in cmd
+        assert mock_run.call_count == 2
+        upgrade_cmd = mock_run.call_args_list[0][0][0]
+        assert upgrade_cmd == [venv_pip, "install", "--upgrade", "pip", "--quiet"]
+        install_cmd = mock_run.call_args_list[1][0][0]
+        assert install_cmd[0] == venv_pip
+        assert "-r" in install_cmd
+
+    @pytest.mark.asyncio
+    async def test_pip_upgrade_failure_does_not_block_install(self, tmp_path):
+        """Best-effort pip upgrade: a failure still runs the requirements install."""
+        comp_path = tmp_path / "mycomp"
+        comp_path.mkdir()
+        (comp_path / "requirements.txt").write_text("requests\n")
+        component = ComponentConfig(name="mycomp", kind="git", path=comp_path)
+        venv_pip = str(tmp_path / "mycomp-env" / "bin" / "pip")
+        svc = UpdateService()
+        with (
+            patch(
+                "updater.service._resolve_component_pip",
+                return_value=venv_pip,
+            ),
+            patch(
+                "updater.service._run",
+                side_effect=[(False, "pip upgrade boom"), (True, "")],
+            ) as mock_run,
+        ):
+            ok, _ = await svc._install_dependencies(component)
+        assert ok is True
+        assert mock_run.call_count == 2
+        assert "-r" in mock_run.call_args_list[1][0][0]
 
 
 class TestCorruptionDuringUpdate:
