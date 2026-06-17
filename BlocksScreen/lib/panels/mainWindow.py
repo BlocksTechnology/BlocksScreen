@@ -246,6 +246,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.query_object_list.connect(self.utilitiesPanel.on_object_list)
         self.printer.extruder_update.connect(self.on_extruder_update)
         self.printer.heater_bed_update.connect(self.on_heater_bed_update)
+        self.printer.sensor_update.connect(self.on_temp_sensor_update)
         self.printer.object_updated.connect(self.amu_manager.on_object_updated)
         self.amu_manager.run_gcode_signal.connect(self.ws.api.run_gcode)
         self.run_gcode_signal.connect(self.ws.api.run_gcode)
@@ -329,6 +330,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.printer.display_update.connect(self._handle_display_status)
 
         self.print_status = "idle"
+        self.ui.chamber_temp_display.hide()
 
         if self.config.has_section("server"):
             self.bo_ws_startup.emit()
@@ -1073,19 +1075,32 @@ class MainWindow(QtWidgets.QMainWindow):
         """Handles extruder printer object updates"""
         if extruder_name == "extruder":
             if field == "temperature":
-                self.ui.extruder_temp_display.setText(f"{new_value:.1f}")
+                self.ui.extruder_temp_display.setText(f"{new_value:.0f}")
             elif field == "target":
                 self.ui.extruder_temp_display.secondary_text = (
-                    f"{round(int(new_value)):.0f}"
+                    f"{round(int(new_value)):.0f}°C"
                 )
 
     @QtCore.pyqtSlot(str, str, float, name="on-heater-bed-update")
     def on_heater_bed_update(self, name: str, field: str, new_value: float) -> None:
         """Handles heater_bed printer object updates"""
         if field == "temperature":
-            self.ui.bed_temp_display.setText(f"{new_value:.1f}")
+            self.ui.bed_temp_display.setText(f"{new_value:.0f}")
         elif field == "target":
-            self.ui.bed_temp_display.secondary_text = f"{round(int(new_value)):.0f}"
+            self.ui.bed_temp_display.secondary_text = f"{round(int(new_value)):.0f}°C"
+
+    @QtCore.pyqtSlot(str, str, float, name="sensor_update")
+    def on_temp_sensor_update(self, name: str, field: str, value: float) -> None:
+        """Handles Chamber temperature if a sensor with that name exists"""
+        if name == "Chamber":
+            if self.ui.chamber_temp_display.isHidden():
+                self.ui.chamber_temp_display.show()
+            if field == "temperature":
+                self.ui.chamber_temp_display.setText(f"{round(int(value)):.0f}°C")
+            elif field == "humidity":
+                self.ui.chamber_temp_display.setSecondaryText(
+                    f"{round(int(value)):.0f}%"
+                )
 
     @QtCore.pyqtSlot(str, name="set-header-filament-type")
     def set_header_filament_type(self, type: str):
