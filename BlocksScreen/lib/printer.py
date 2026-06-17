@@ -112,6 +112,9 @@ class Printer(QtCore.QObject):
     extruder_number: int = 0
     available_gcode_commands: dict = {}
     available_objects: dict = {}
+    _TRUE_ZERO_PROBES: typing.ClassVar[frozenset[str]] = frozenset(
+        {"beacon", "cartographer", "btt_eddy_usb"}
+    )
     configfile: dict = {}
     printing: bool = False
     printing_state: str = ""
@@ -126,6 +129,8 @@ class Printer(QtCore.QObject):
         self.ws = ws
         self.active_extruder_name: str = ""
         self.available_filament_sensors: dict = {}
+        self.force_true_zero_offset: bool = False
+
         _heater_attributes: dict = {
             "current_temperature": 0.0,
             "target_temperature": 0.0,
@@ -142,6 +147,13 @@ class Printer(QtCore.QObject):
         self.query_printer_object.connect(self.ws.api.object_query)
         self._klippy_callback: typing.Callable[[str], None] | None = None
         self._callbacks: dict[str, typing.Callable[[dict, str], None]] = {}
+
+    @property
+    def uses_true_zero_offset(self) -> bool:
+        """Return True if the active probe uses true-zero offset (no persistent z-offset needed)."""
+        return self.force_true_zero_offset or bool(
+            self._TRUE_ZERO_PROBES & set(self.available_objects)
+        )
 
     def clear_printer_objs(self) -> None:
         """Clear all tracking of printer object"""

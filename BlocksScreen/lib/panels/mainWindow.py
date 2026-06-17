@@ -152,6 +152,11 @@ class MainWindow(QtWidgets.QMainWindow):
         self.file_data = Files(self, self.ws)
         self.index_stack = deque(maxlen=4)
         self.printer = Printer(self, self.ws)
+        bs_config = self.config.get_section("blockscreen", fallback=None)
+        if bs_config:
+            self.printer.force_true_zero_offset = bs_config.getboolean(
+                "true_zero_probe", default=False
+            )
         self.conn_window = ConnectionPage(self, self.ws)
         self.update_page = UpdatePage()
         self.printer.print_stats_update[str, str].connect(
