@@ -978,7 +978,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 return
             _gcode_msg_type, _message = parts
 
-            if _gcode_msg_type in ["SCREEN","echo:"]:
+            if _gcode_msg_type in ["SCREEN", "echo:"]:
                 self.show_notifications.emit(
                     _gcode_msg_type, _message, Severity.INFO.value, True
                 )
