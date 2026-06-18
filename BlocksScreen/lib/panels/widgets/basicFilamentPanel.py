@@ -46,9 +46,9 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         self.target_temp: int = 0
         self.current_temp: int = 0
         self.has_load_unload_objects = None
-        self._filament_state = self.FilamentStates.UNKNOWN
-        self.filament_type = FilamentTypes.UNKNOWN
         self._setup_ui()
+
+        self.filament_state = self.FilamentStates.UNKNOWN
 
     def showEvent(self, a0: QtGui.QShowEvent | None) -> None:
         """reset to main page every time the panel is shown"""
@@ -107,18 +107,23 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         self.printer.save_variables_update.connect(self.on_save_variables_update)
 
     def on_save_variables_update(self, save_variables: dict):
+        """receives save variables from the printer and updates the filament type accordingly
+
+        Args:
+            save_variables (dict): dictionary containing the save variables from the printer
+        """
+        filament_type = FilamentTypes.UNKNOWN
         for i in FilamentTypes:
             if i.value.name in save_variables["variables"]["filament_type"]:
-                self.filament_type = i
+                filament_type = i
                 break
-            else:
-                self.filament_type = FilamentTypes.UNKNOWN
-        self.panel.label_2.setText(self.filament_type.value.name)
+        self.panel.label_2.setText(filament_type.value.name)
 
     @QtCore.pyqtSlot(str, dict, name="on_print_stats_update")
     @QtCore.pyqtSlot(str, float, name="on_print_stats_update")
     @QtCore.pyqtSlot(str, str, name="on_print_stats_update")
     def on_print_stats_update(self, field: str, value: dict | float | str) -> None:
+        """slot to handle print stats updates changing back button behavior"""
         if "state" in field:
             self.state = value
             if value in ("printing", "paused"):
@@ -142,21 +147,22 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
 
     @QtCore.pyqtSlot(str, str, bool, name="on_filament_sensor_update")
     def on_filament_sensor_update(self, sensor_name: str, parameter: str, value: bool):
+        """slot to handle filament sensor updates"""
         if parameter == "filament_detected":
             if not isinstance(value, bool):
-                self._filament_state = self.FilamentStates.UNKNOWN
-                self.handle_filament_state()
+                self.filament_state = self.FilamentStates.UNKNOWN
                 return
             if sensor_name == self.filament_sensor:
-                if value:
-                    self._filament_state = self.FilamentStates.LOADED
-                else:
-                    self._filament_state = self.FilamentStates.UNLOADED
+                self.filament_state = (
+                    self.FilamentStates.LOADED
+                    if value
+                    else self.FilamentStates.UNLOADED
+                )
                 return
-        self.handle_filament_state()
 
     @QtCore.pyqtSlot(dict, name="on_load_filament")
     def on_load_filament(self, status: dict):
+        """slot to handle load macro status updates"""
         if "state" in status.keys():
             if not status["state"]:
                 self.target_temp = 0
@@ -167,10 +173,10 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         self.call_load_panel.emit(
             True, f"Loading Filament\n{status['step'].capitalize()}"
         )
-        self.handle_filament_state()
 
     @QtCore.pyqtSlot(dict, name="on_unload_filament")
     def on_unload_filament(self, status: dict):
+        """slot to handle unload macro status updates"""
         if "state" in status.keys():
             if not status["state"]:
                 self.target_temp = 0
@@ -179,20 +185,21 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         self.call_load_panel.emit(
             True, f"Unloading Filament\n{status['step'].capitalize()}"
         )
-        self.handle_filament_state()
 
     @QtCore.pyqtSlot(int, int, name="load_filament")
     def load_filament(
         self, toolhead: int = 0, filament: FilamentTypes = FilamentTypes.UNKNOWN
     ) -> None:
-        if not self.isVisible:
+        """slot to handle load filament button click"""
+
+        if not self.isVisible():
             return
-        if self._filament_state == self.FilamentStates.UNKNOWN:
+        if self.filament_state == self.FilamentStates.UNKNOWN:
             self.popup.new_message(
                 message_type=Popup.MessageType.ERROR,
                 message="Unable to detect whether the filament is loaded or unloaded.",
             )
-        if self._filament_state == self.FilamentStates.LOADED:
+        if self.filament_state == self.FilamentStates.LOADED:
             self.popup.new_message(
                 message_type=Popup.MessageType.ERROR,
                 message="Filament is already loaded.",
@@ -206,14 +213,15 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
 
     @QtCore.pyqtSlot(str, int, name="unload_filament")
     def unload_filament(self, toolhead: int = 0, temp: int = 220) -> None:
-        if not self.isVisible:
+        """slot to handle unload filament button click"""
+        if not self.isVisible():
             return
-        if self._filament_state == self.FilamentStates.UNKNOWN:
+        if self.filament_state == self.FilamentStates.UNKNOWN:
             self.popup.new_message(
                 message_type=Popup.MessageType.ERROR,
                 message="Unable to detect whether the filament is loaded or unloaded.",
             )
-        if self._filament_state == self.FilamentStates.UNLOADED:
+        if self.filament_state == self.FilamentStates.UNLOADED:
             self.popup.new_message(
                 message_type=Popup.MessageType.ERROR,
                 message="Filament is already unloaded.",
@@ -226,20 +234,30 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         )
         self.run_gcode.emit("MMU_UNLOAD")
 
-    def handle_filament_state(self):
-        if self._filament_state == self.FilamentStates.LOADED:
+    def on_mmu_state_changed(self, mmu_state):
+        if mmu_state is None:
+            return
+        if mmu_state.filament == "Loaded":
+            self.filament_state = self.FilamentStates.LOADED
+        else:
+            self.filament_state = self.FilamentStates.UNLOADED
+
+    @property
+    def filament_state(self):
+        return self._filament_state
+
+    @filament_state.setter
+    def filament_state(self, update: FilamentStates) -> None:
+        self._filament_state = update
+        if update is self.FilamentStates.LOADED:
             self.panel.filament_page_unload_btn.setEnabled(True)
             self.panel.filament_page_load_btn.setEnabled(False)
-        elif self._filament_state == self.FilamentStates.UNLOADED:
+        elif update is self.FilamentStates.UNLOADED:
             self.panel.filament_page_unload_btn.setEnabled(False)
             self.panel.filament_page_load_btn.setEnabled(True)
         else:
             self.panel.filament_page_load_btn.setEnabled(True)
             self.panel.filament_page_unload_btn.setEnabled(True)
-
-    @property
-    def filament_state(self):
-        return self._filament_state
 
     def change_page(self, index: int) -> None:
         self.setCurrentIndex(index)
