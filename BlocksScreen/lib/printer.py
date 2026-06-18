@@ -24,7 +24,6 @@ class Printer(QtCore.QObject):
     fan_update = QtCore.pyqtSignal(
         [str, str, float], [str, str, int], name="fan_update"
     )
-    chamber_update = QtCore.pyqtSignal(name="chamber_update")
 
     idle_timeout_update = QtCore.pyqtSignal(
         [str, float], [str, str], name="idle_timeout_update"
@@ -51,9 +50,7 @@ class Printer(QtCore.QObject):
     flowguard_update = QtCore.pyqtSignal([str, dict], name="flowguard_update")
 
     display_update = QtCore.pyqtSignal([str, str], [str, float], name="display_update")
-    temperature_sensor_update = QtCore.pyqtSignal(
-        str, str, float, name="temperature_sensor_update"
-    )
+    sensor_update = QtCore.pyqtSignal(str, str, float, name="sensor_update")
     temperature_fan_update = QtCore.pyqtSignal(
         str, str, float, name="temperature_fan_update"
     )
@@ -128,7 +125,6 @@ class Printer(QtCore.QObject):
         self.ws = ws
         self.active_extruder_name: str = ""
         self.available_filament_sensors: dict = {}
-        self.has_chamber: bool = False
         self.force_true_zero_offset: bool = False
 
         _heater_attributes: dict = {
@@ -527,9 +523,6 @@ class Printer(QtCore.QObject):
         if "power" in value.keys():
             self.heater_bed_update.emit(heater_name, "power", value["power"])
 
-    def _chamber_object_updated(self, value: dict, heater_name: str = "chamber"):
-        self.has_chamber = True
-
     def _fan_object_updated(self, value: dict, fan_name: str = "fan") -> None:
         if "speed" in value.keys():
             self.fan_update[str, str, float].emit("fan", "speed", value["speed"])
@@ -673,21 +666,35 @@ class Printer(QtCore.QObject):
         self, values: dict, temperature_sensor_name: str
     ) -> None:
         if "temperature" in values.keys():
-            self.temperature_sensor_update.emit(
+            self.sensor_update.emit(
                 temperature_sensor_name, "temperature", values["temperature"]
             )
         if "measured_min_temp" in values.keys():
-            self.temperature_sensor_update.emit(
+            self.sensor_update.emit(
                 temperature_sensor_name,
                 "measured_min_temp",
                 values["measured_min_temp"],
             )
         if "measured_max_temp" in values.keys():
-            self.temperature_sensor_update.emit(
+            self.sensor_update.emit(
                 temperature_sensor_name,
                 "measured_max_temp",
                 values["measured_max_temp"],
             )
+        if "humidity" in values.keys():
+            self.sensor_update.emit(
+                temperature_sensor_name, "humidity", values["humidity"]
+            )
+
+    def _aht10_object_updated(
+        self,
+        values: dict[str, float],
+        sensor_name: str,
+    ) -> None:
+        if "temperature" in values.keys():
+            self.sensor_update.emit(sensor_name, "temperature", values["temperature"])
+        if "humidity" in values.keys():
+            self.sensor_update.emit(sensor_name, "humidity", values["humidity"])
 
     def _temperature_fan_object_updated(
         self, values: dict, temperature_fan_name: str = ""

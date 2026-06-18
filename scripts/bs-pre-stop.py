@@ -1,4 +1,4 @@
-#!/usr/bin/env python3 -S
+#!/usr/bin/env python3
 """ExecStop — write splash to fb0 before the Qt process is fully dead.
 
 X.Org stays alive (BlocksScreen-xorg.service is independent), so no VT switch

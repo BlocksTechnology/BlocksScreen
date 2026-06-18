@@ -18,6 +18,7 @@ class Severity(enum.IntEnum):
     INFO = 1
     WARNING = 2
     ERROR = 3
+    IGNORE = 4
 
 
 @dataclass(frozen=True, kw_only=True, slots=True)
@@ -626,11 +627,25 @@ RULES: tuple[MessageRule, ...] = (
     ),
 )
 
+IGNORED_RULE = MessageRule(
+    source=MessageSource.GCODE_ECHO,  # placeholder, wont mater
+    matcher=lambda _: False,
+    display="",
+    severity=Severity.IGNORE,
+)
+
+_IGNORED: tuple[re.Pattern, ...] = (
+    re.compile(r"REMOVED log_path=", re.I),
+    # add more patterns as needed,
+)
+
 _INDEX: dict[MessageSource, tuple[MessageRule, ...]] = {
     src: tuple(r for r in RULES if r.source is src) for src in MessageSource
 }
 
 
 def match_message(source: MessageSource, text: str) -> MessageRule | None:
+    if any(p.search(text) for p in _IGNORED):
+        return IGNORED_RULE
     lo = text.lower()
     return next((r for r in _INDEX[source] if r.matcher(lo)), None)
