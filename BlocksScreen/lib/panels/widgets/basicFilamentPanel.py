@@ -47,10 +47,9 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         self.current_temp: int = 0
         self.has_load_unload_objects = None
         self._setup_ui()
-        
+
         self.filament_state = self.FilamentStates.UNKNOWN
 
-    
     def showEvent(self, a0: QtGui.QShowEvent | None) -> None:
         """reset to main page every time the panel is shown"""
         self.change_page(0)
@@ -154,7 +153,11 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
                 self.filament_state = self.FilamentStates.UNKNOWN
                 return
             if sensor_name == self.filament_sensor:
-                self.filament_state = self.FilamentStates.LOADED if value else self.FilamentStates.UNLOADED
+                self.filament_state = (
+                    self.FilamentStates.LOADED
+                    if value
+                    else self.FilamentStates.UNLOADED
+                )
                 return
 
     @QtCore.pyqtSlot(dict, name="on_load_filament")
@@ -235,14 +238,14 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         if mmu_state is None:
             return
         if mmu_state.filament == "Loaded":
-            self.filament_state = self.FilamentStates.LOADED 
+            self.filament_state = self.FilamentStates.LOADED
         else:
             self.filament_state = self.FilamentStates.UNLOADED
 
     @property
     def filament_state(self):
         return self._filament_state
-    
+
     @filament_state.setter
     def filament_state(self, update: FilamentStates) -> None:
         self._filament_state = update
@@ -255,7 +258,6 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         else:
             self.panel.filament_page_load_btn.setEnabled(True)
             self.panel.filament_page_unload_btn.setEnabled(True)
-
 
     def change_page(self, index: int) -> None:
         self.setCurrentIndex(index)
