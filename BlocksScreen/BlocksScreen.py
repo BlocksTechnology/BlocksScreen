@@ -264,6 +264,28 @@ def _force_screen_refresh() -> None:
         logging.getLogger(__name__).warning("xrefresh failed: %s", exc)
 
 
+class _FirstPaintRefresh(QtCore.QObject):
+    """Trigger :func:`_force_screen_refresh` on the window's first paint.
+
+    Event-driven companion to the fixed 300/1500 ms nudges: it fires the repaint
+    the instant the restarted GUI first paints (often well before 300 ms),
+    removing the dependency on a magic delay, then detaches itself. The xrefresh
+    call is deferred via ``singleShot(0)`` so it never blocks inside the paint
+    handler. The fixed nudges remain as a slow-paint safety net.
+    """
+
+    def __init__(self, target: QtCore.QObject) -> None:
+        super().__init__(target)
+        target.installEventFilter(self)
+
+    def eventFilter(self, a0: QtCore.QObject | None, a1: QtCore.QEvent | None) -> bool:
+        if a1 is not None and a1.type() == QtCore.QEvent.Type.Paint:
+            if a0 is not None:
+                a0.removeEventFilter(self)
+            QtCore.QTimer.singleShot(0, _force_screen_refresh)
+        return False
+
+
 if __name__ == "__main__":
     setup_logging(
         filename="logs/BlocksScreen.log",
@@ -285,11 +307,14 @@ if __name__ == "__main__":
     BlocksScreen.processEvents()
     BlocksScreen.aboutToQuit.connect(on_quit)
     _setup_sigterm(BlocksScreen)
+    # Event-driven repaint: fire the moment the window first paints (parented to
+    # main_window so it lives as long as the window).
+    _FirstPaintRefresh(main_window)
     main_window.show()
     _splash.finish(main_window)
     _sd_notify("READY=1")
     _setup_watchdog()
-    # Two nudges cover a slow first paint after a restart.
+    # Belt-and-suspenders: fixed nudges still cover a pathologically slow paint.
     QtCore.QTimer.singleShot(300, _force_screen_refresh)
     QtCore.QTimer.singleShot(1500, _force_screen_refresh)
     QtCore.QTimer.singleShot(5000, _record_boot_success)

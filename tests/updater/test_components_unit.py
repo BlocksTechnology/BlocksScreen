@@ -342,3 +342,46 @@ class TestOverridePermissions:
         ):
             components, poll = load_components()
         assert any("Cannot stat override path" in r.message for r in caplog.records)
+
+
+class TestProvisionConfig:
+    """install_if_missing + url validation in _validate_component."""
+
+    def _base(self, **extra):
+        data = {"name": "newcomp", "type": "git", "path": "~/newcomp"}
+        data.update(extra)
+        return data
+
+    def test_valid_url_and_flag_parsed(self):
+        from updater.components import _validate_component
+
+        cfg = _validate_component(
+            self._base(url="https://github.com/x/y", install_if_missing=True)
+        )
+        assert cfg is not None
+        assert cfg.url == "https://github.com/x/y"
+        assert cfg.install_if_missing is True
+
+    def test_non_https_url_dropped(self, caplog):
+        from updater.components import _validate_component
+
+        with caplog.at_level(logging.WARNING, logger="updater.components"):
+            cfg = _validate_component(self._base(url="git@github.com:x/y"))
+        assert cfg is not None
+        assert cfg.url is None
+
+    def test_flag_without_url_disabled(self, caplog):
+        from updater.components import _validate_component
+
+        with caplog.at_level(logging.WARNING, logger="updater.components"):
+            cfg = _validate_component(self._base(install_if_missing=True))
+        assert cfg is not None
+        assert cfg.install_if_missing is False
+
+    def test_defaults_when_absent(self):
+        from updater.components import _validate_component
+
+        cfg = _validate_component(self._base())
+        assert cfg is not None
+        assert cfg.url is None
+        assert cfg.install_if_missing is False

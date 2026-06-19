@@ -10,6 +10,7 @@ from pathlib import Path
 
 import sdbus
 
+from updater.locking import process_lock
 from updater.models import ComponentStatus
 from updater.service import UpdateService
 
@@ -103,6 +104,7 @@ class UpdaterInterface(
         self._status_check_in_progress: bool = False
         self._status_pending: bool = False
         self._invalid_requests: int = 0
+        self._spawn(self._svc.reconcile(), name="boot_reconcile")
         self._spawn(self._periodic_status_check(), name="periodic_status_check")
 
     def _spawn(self, coro, *, name: str | None = None) -> asyncio.Task:
@@ -219,31 +221,50 @@ class UpdaterInterface(
         return True
 
     async def _run_update_all(self) -> None:
+        ran = False
         try:
-            statuses = await self._svc.check_status()
-            dirty = {
-                name
-                for name, s in statuses.items()
-                if s.commits_behind
-                or s.packages_upgradable > 0
-                or s.has_local_changes
-                # Errored git repos (e.g. a corrupt repo) are included so the one
-                # "Update" button reaches them; the update flow self-heals them.
-                or (s.error is not None and s.kind != "apt")
-            }
-            if dirty:
-                await self._svc.update_all(dirty)
-            else:
-                _log.info("update_all: no dirty components found")
+            with process_lock() as acquired:
+                if not acquired:
+                    _log.warning("update_all: a CLI run holds the lock; skipping")
+                    return
+                ran = True
+                await self._update_all_locked()
         except Exception as exc:  # noqa: BLE001
             _log.error("_run_update_all failed: %s", exc, exc_info=True)
         finally:
             self._set_busy(busy=False)
-        self._spawn(self._svc.background_apt_upgrade(), name="background_apt_upgrade")
+        # Only run the silent apt pass if we actually held the lock — otherwise a
+        # CLI run owns the update and is responsible for apt.
+        if ran:
+            self._spawn(
+                self._svc.background_apt_upgrade(), name="background_apt_upgrade"
+            )
+
+    async def _update_all_locked(self) -> None:
+        statuses = await self._svc.check_status()
+        dirty = {
+            name
+            for name, s in statuses.items()
+            if s.commits_behind
+            or s.packages_upgradable > 0
+            or s.has_local_changes
+            or s.needs_install
+            # Errored git repos (e.g. a corrupt repo) are included so the one
+            # "Update" button reaches them; the update flow self-heals them.
+            or (s.error is not None and s.kind != "apt")
+        }
+        if dirty:
+            await self._svc.update_all(dirty)
+        else:
+            _log.info("update_all: no dirty components found")
 
     async def _run_update_component(self, name: str) -> None:
         try:
-            await self._svc.update_component(name)
+            with process_lock() as acquired:
+                if not acquired:
+                    _log.warning("update_component: a CLI run holds the lock; skipping")
+                    return
+                await self._svc.update_component(name)
         except Exception as exc:  # noqa: BLE001
             _log.error("_run_update_component failed: %s", exc, exc_info=True)
         finally:
@@ -251,7 +272,11 @@ class UpdaterInterface(
 
     async def _run_recover(self, name: str, hard: bool) -> None:  # noqa: FBT001
         try:
-            await self._svc.recover(name, hard)
+            with process_lock() as acquired:
+                if not acquired:
+                    _log.warning("recover: a CLI run holds the lock; skipping")
+                    return
+                await self._svc.recover(name, hard)
         except Exception as exc:  # noqa: BLE001
             _log.error("_run_recover failed: %s", exc, exc_info=True)
         finally:

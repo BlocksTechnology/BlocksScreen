@@ -76,3 +76,14 @@ if ! git -C "$COMPONENT_PATH" diff --quiet "$PREV_HASH" "$NEW_HASH" \
     echo "[hook:BlocksScreen] install-updater.sh changed — setting deploy flag"
     _set_deploy_flag
 fi
+
+# --- updater/ code changed: the running daemon still holds the OLD code in
+# memory (restarting BlocksScreen.service does not touch BlocksScreen-updater).
+# Don't restart it here — that would kill this very update. Set the deploy flag
+# so BlocksScreen-deploy.path runs install-updater.sh out-of-band, which
+# restarts the daemon onto the new code after the update finishes.
+if ! git -C "$COMPONENT_PATH" diff --quiet "$PREV_HASH" "$NEW_HASH" \
+        -- updater/ 2>/dev/null; then
+    echo "[hook:BlocksScreen] updater/ changed — setting deploy flag to restart daemon"
+    _set_deploy_flag
+fi
