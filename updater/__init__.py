@@ -1,5 +1,8 @@
 from .components import load_components
-from .dbus_service import DbusProgressCallback, UpdaterDbusService, UpdaterInterface
+
+# NOTE: dbus_service (which imports sdbus) is intentionally NOT imported here so
+# that the CLI (status/update/recover) runs on an interpreter without sdbus. The
+# daemon imports updater.dbus_service explicitly.
 from .executor import (
     apt_update,
     apt_upgrade,
@@ -24,10 +27,6 @@ __all__ = [
     "ComponentConfig",
     "ComponentStatus",
     "load_components",
-    # D-Bus
-    "DbusProgressCallback",
-    "UpdaterDbusService",
-    "UpdaterInterface",
     # Executor
     "apt_update",
     "apt_upgrade",

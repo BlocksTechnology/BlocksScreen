@@ -31,7 +31,7 @@ fi
 
 # 2. Python deps. PyYAML is required by the updater daemon's component loader.
 _as_blocks "$BSENV/bin/python3.11" -c "import yaml" 2>/dev/null \
-    || _as_blocks "$BSENV/bin/pip" install --quiet "PyYAML==6.0.1" || true
+    || _as_blocks "$BSENV/bin/pip" install --quiet "PyYAML==6.0.3" || true
 # Emergency repair only — requirements.txt below carries the canonical pin.
 _as_blocks "$BSENV/bin/python3.11" -c "import sdbus" 2>/dev/null \
     || _as_blocks "$BSENV/bin/pip" install --quiet \
