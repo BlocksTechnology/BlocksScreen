@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -20,9 +21,11 @@ from updater.executor import (
     git_fetch,
     git_get_current_branch,
     git_get_hash,
+    git_has_corruption,
     git_is_dirty,
     git_pull,
     git_remote_url,
+    git_repair,
     git_reset_to_hash,
     git_prune_extra_remotes,
     restart_service,
@@ -524,6 +527,25 @@ class TestAptUpgrade:
         assert "dpkg error" in out
 
     @pytest.mark.asyncio
+    async def test_unattended_hardening_options_present(self):
+        proc = _make_proc(0, b"", b"")
+        exec_mock = AsyncMock(return_value=proc)
+        with (
+            patch(
+                "updater.executor._list_upgradable_packages",
+                return_value=(True, ["pkg1"]),
+            ),
+            patch("asyncio.create_subprocess_exec", exec_mock),
+        ):
+            await apt_upgrade()
+        argv = [str(a) for a in exec_mock.call_args[0]]
+        assert "DPkg::Lock::Timeout=60" in argv  # wait for the lock, never fail fast
+        assert "Dpkg::Options::=--force-confold" in argv  # no conffile prompt
+        env = exec_mock.call_args[1]["env"]
+        assert env["DEBIAN_FRONTEND"] == "noninteractive"
+        assert env["NEEDRESTART_MODE"] == "a"
+
+    @pytest.mark.asyncio
     async def test_list_failure(self):
         with patch(
             "updater.executor._list_upgradable_packages", return_value=(False, [])
@@ -646,3 +668,75 @@ class TestCheckAptStatus:
         assert result.kind == "apt"
         assert result.packages_upgradable == -1
         assert result.error == "apt status check failed"
+
+
+class TestCorruption:
+    @pytest.mark.asyncio
+    async def test_has_corruption_true_on_fsck_failure(self):
+        proc = _make_proc(1, b"", b"error: object file ... is empty\n")
+        with patch(
+            "asyncio.create_subprocess_exec", new_callable=AsyncMock, return_value=proc
+        ):
+            assert await git_has_corruption(Path("/x")) is True
+
+    @pytest.mark.asyncio
+    async def test_has_corruption_false_when_clean(self):
+        proc = _make_proc(0, b"", b"")
+        with patch(
+            "asyncio.create_subprocess_exec", new_callable=AsyncMock, return_value=proc
+        ):
+            assert await git_has_corruption(Path("/x")) is False
+
+    @pytest.mark.asyncio
+    async def test_has_corruption_from_hint_skips_fsck(self):
+        # The fetch error alone proves corruption even if fsck would miss it;
+        # no subprocess should be spawned when the hint already matches.
+        exec_mock = AsyncMock()
+        with patch("asyncio.create_subprocess_exec", exec_mock):
+            result = await git_has_corruption(
+                Path("/x"), hint="error: object file ... is empty"
+            )
+        assert result is True
+        exec_mock.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_repair_deletes_empty_objects_then_fetches(self, tmp_path):
+        objdir = tmp_path / ".git" / "objects" / "5d"
+        objdir.mkdir(parents=True)
+        (objdir / "deadbeef").write_bytes(b"")  # 0-byte = corrupt
+        (objdir / "good").write_bytes(b"x")  # non-empty kept
+        with (
+            patch(
+                "updater.executor.git_fetch",
+                new_callable=AsyncMock,
+                return_value=(True, ""),
+            ),
+            patch(
+                "updater.executor.git_has_corruption",
+                new_callable=AsyncMock,
+                return_value=False,
+            ),
+        ):
+            ok, _msg = await git_repair(tmp_path)
+        assert ok is True
+        assert not (objdir / "deadbeef").exists()
+        assert (objdir / "good").exists()
+
+    @pytest.mark.asyncio
+    async def test_repair_fails_when_still_corrupt(self, tmp_path):
+        (tmp_path / ".git" / "objects").mkdir(parents=True)
+        with (
+            patch(
+                "updater.executor.git_fetch",
+                new_callable=AsyncMock,
+                return_value=(True, ""),
+            ),
+            patch(
+                "updater.executor.git_has_corruption",
+                new_callable=AsyncMock,
+                return_value=True,
+            ),
+        ):
+            ok, msg = await git_repair(tmp_path)
+        assert ok is False
+        assert "still corrupt" in msg

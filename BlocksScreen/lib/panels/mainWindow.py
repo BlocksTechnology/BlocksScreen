@@ -152,6 +152,11 @@ class MainWindow(QtWidgets.QMainWindow):
         self.file_data = Files(self, self.ws)
         self.index_stack = deque(maxlen=4)
         self.printer = Printer(self, self.ws)
+        bs_config = self.config.get_section("blockscreen", fallback=None)
+        if bs_config:
+            self.printer.force_true_zero_offset = bs_config.getboolean(
+                "true_zero_probe", default=False
+            )
         self.conn_window = ConnectionPage(self, self.ws)
         self.update_page = UpdatePage()
         self.printer.print_stats_update[str, str].connect(
@@ -241,6 +246,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.query_object_list.connect(self.utilitiesPanel.on_object_list)
         self.printer.extruder_update.connect(self.on_extruder_update)
         self.printer.heater_bed_update.connect(self.on_heater_bed_update)
+        self.printer.sensor_update.connect(self.on_temp_sensor_update)
         self.printer.object_updated.connect(self.amu_manager.on_object_updated)
         self.amu_manager.run_gcode_signal.connect(self.ws.api.run_gcode)
         self.run_gcode_signal.connect(self.ws.api.run_gcode)
@@ -324,6 +330,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.printer.display_update.connect(self._handle_display_status)
 
         self.print_status = "idle"
+        self.ui.chamber_temp_display.hide()
 
         if self.config.has_section("server"):
             self.bo_ws_startup.emit()
@@ -333,6 +340,8 @@ class MainWindow(QtWidgets.QMainWindow):
     @QtCore.pyqtSlot(str, float, name="handleDisplayUpdate")
     def _handle_display_status(self, name, value: str | float) -> None:
         if isinstance(value, str):
+            if value == "" or value.isspace():
+                return
             self.show_notifications.emit("M117", str(value), Severity.INFO.value, True)
 
     @QtCore.pyqtSlot(bool, name="show-cancel-page")
@@ -928,6 +937,8 @@ class MainWindow(QtWidgets.QMainWindow):
     ) -> bool:
         rule = match_message(source, text)
         if rule is not None:
+            if rule.severity == Severity.IGNORE:
+                return True
             self.show_notifications.emit(
                 source_id, rule.full_display, rule.severity.value, show_popup
             )
@@ -970,19 +981,19 @@ class MainWindow(QtWidgets.QMainWindow):
             if len(parts) != 2:
                 return
             _gcode_msg_type, _message = parts
-            if _gcode_msg_type == "!!":
-                source = MessageSource.GCODE_ERROR
-                m = _MACRO_ERROR_RE.search(_message)
-                if m:
-                    _message = f"macro failed: {m.group(1)}"
-            elif _gcode_msg_type == "echo:":
-                source = MessageSource.GCODE_ECHO
 
-            elif _gcode_msg_type == "SCREEN":
+            if _gcode_msg_type in ["SCREEN", "echo:"]:
                 self.show_notifications.emit(
                     _gcode_msg_type, _message, Severity.INFO.value, True
                 )
                 return
+
+            elif _gcode_msg_type == "!!":
+                source = MessageSource.GCODE_ERROR
+                m = _MACRO_ERROR_RE.search(_message)
+                if m:
+                    _message = f"macro failed: {m.group(1)}"
+
             else:
                 return
 
@@ -1064,19 +1075,32 @@ class MainWindow(QtWidgets.QMainWindow):
         """Handles extruder printer object updates"""
         if extruder_name == "extruder":
             if field == "temperature":
-                self.ui.extruder_temp_display.setText(f"{new_value:.1f}")
+                self.ui.extruder_temp_display.setText(f"{new_value:.0f}")
             elif field == "target":
                 self.ui.extruder_temp_display.secondary_text = (
-                    f"{round(int(new_value)):.0f}"
+                    f"{round(int(new_value)):.0f}°C"
                 )
 
     @QtCore.pyqtSlot(str, str, float, name="on-heater-bed-update")
     def on_heater_bed_update(self, name: str, field: str, new_value: float) -> None:
         """Handles heater_bed printer object updates"""
         if field == "temperature":
-            self.ui.bed_temp_display.setText(f"{new_value:.1f}")
+            self.ui.bed_temp_display.setText(f"{new_value:.0f}")
         elif field == "target":
-            self.ui.bed_temp_display.secondary_text = f"{round(int(new_value)):.0f}"
+            self.ui.bed_temp_display.secondary_text = f"{round(int(new_value)):.0f}°C"
+
+    @QtCore.pyqtSlot(str, str, float, name="sensor_update")
+    def on_temp_sensor_update(self, name: str, field: str, value: float) -> None:
+        """Handles Chamber temperature if a sensor with that name exists"""
+        if name == "Chamber":
+            if self.ui.chamber_temp_display.isHidden():
+                self.ui.chamber_temp_display.show()
+            if field == "temperature":
+                self.ui.chamber_temp_display.setText(f"{round(int(value)):.0f}°C")
+            elif field == "humidity":
+                self.ui.chamber_temp_display.setSecondaryText(
+                    f"{round(int(value)):.0f}%"
+                )
 
     @QtCore.pyqtSlot(str, name="set-header-filament-type")
     def set_header_filament_type(self, type: str):
