@@ -187,8 +187,6 @@ class UDisksDBusAsync(QtCore.QThread):
         except asyncio.CancelledError as err:
             logging.info("UDisks2 monitor cancelled: %s", err)
         except RuntimeError as err:
-            # Defensive: a legacy abrupt loop.stop() would surface here. Expected
-            # only during shutdown; anything else is a real fault worth surfacing.
             if self.stop_event.is_set():
                 logging.debug("UDisks2 monitor stopped during shutdown: %s", err)
             else:
