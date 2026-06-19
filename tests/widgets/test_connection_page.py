@@ -121,29 +121,21 @@ class TestDotTimer:
 
 
 class TestVisibility:
-    def test_auto_show_states_call_show(self, shown_page):
-        for state in ConnectionPage._AUTO_SHOW_STATES:
-            shown_page._state = ConnectionState.DISCONNECTED
+    def test_all_non_ready_states_auto_show(self, shown_page):
+        for state in ConnectionState:
+            if state == ConnectionState.KLIPPER_READY:
+                continue
+            shown_page._shutdown_confirmed = False
             shown_page._firmware_restarting_pending = False
+            shown_page._state = ConnectionState.DISCONNECTED
             shown_page.hide()
-            shown_page._state = ConnectionState.DISCONNECTED  # isolate iterations
             shown_page._set_state(state)
-            assert shown_page.isVisible(), f"{state} should auto-shown"
+            assert shown_page.isVisible(), f"{state} should auto-show"
 
     def test_klipper_ready_hides(self, shown_page):
         shown_page.show()
         shown_page._set_state(ConnectionState.KLIPPER_READY)
         assert not shown_page.isVisible()
-
-    def test_non_auto_show_does_not_show(self, shown_page):
-        shown_page.hide()
-        for state in (
-            ConnectionState.CONNECTING,
-            ConnectionState.MOONRAKER_CONNECTED,
-            ConnectionState.KLIPPER_STARTUP,
-        ):
-            shown_page._set_state(state)
-            assert not shown_page.isVisible(), f"{state} should not auto-shown"
 
     def test_conn_toggle_false_suppresses_show(self, shown_page):
         shown_page.conn_toggle = False

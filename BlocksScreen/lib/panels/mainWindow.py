@@ -335,6 +335,7 @@ class MainWindow(QtWidgets.QMainWindow):
         if self.config.has_section("server"):
             self.bo_ws_startup.emit()
         self.reset_tab_indexes()
+        self.conn_window.show()
 
     @QtCore.pyqtSlot(str, str, name="handleDisplayUpdate")
     @QtCore.pyqtSlot(str, float, name="handleDisplayUpdate")
