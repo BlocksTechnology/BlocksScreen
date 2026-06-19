@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import asyncio
-import itertools
 import json
 import logging
+import os
 import shutil
 import tempfile
 import time
@@ -27,6 +27,7 @@ from updater.executor import (
     check_apt_status,
     check_git_status,
     git_checkout,
+    git_clone,
     git_fetch,
     git_get_current_branch,
     git_get_hash,
@@ -42,6 +43,11 @@ from updater.models import ComponentConfig, ComponentStatus
 
 _STATE_PATH = Path.home() / ".cache" / "blockscreen" / "updater_state.json"
 _HISTORY_PATH = Path.home() / ".cache" / "blockscreen" / "update_history.jsonl"
+
+# git's empty-tree object: used as the prev_hash when provisioning so a
+# diff-based hook (`git diff <prev> <new>`) sees every file as newly added and
+# performs a full install, instead of no-op'ing on an empty prev_hash.
+_GIT_EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
 
 
 class ProgressCallback(Protocol):
@@ -116,6 +122,10 @@ class UpdateService:
                     cache_ttl_seconds=0 if force else 86_400, exclude=c.apt_exclude
                 )
             elif c.path is None or not c.path.exists():
+                # A missing opted-in component surfaces as needs_install so the
+                # one Update button reaches it; everything else stays skipped.
+                if c.install_if_missing and c.url:
+                    results[c.name] = ComponentStatus(name=c.name, needs_install=True)
                 return
             else:
                 now = time.monotonic()
@@ -156,7 +166,11 @@ class UpdateService:
         return await self._run_git_update(component)
 
     async def update_all(self, names: set[str] | None = None) -> None:
-        """Update components in order-group batches."""
+        """Update components: apt independently, existing git as one atomic batch.
+
+        apt packages and missing-component provisioning are independent of the git
+        code set, so they run outside the all-or-nothing batch.
+        """
         components = (
             self._components
             if names is None
@@ -170,20 +184,190 @@ class UpdateService:
                 self._cb("on_error", c.name, msg)
             return
         sorted_components = sorted(components, key=lambda c: c.order)
-        for _, group_iter in itertools.groupby(
-            sorted_components, key=lambda c: c.order
-        ):
-            group = list(group_iter)
-            gathered = await asyncio.gather(
-                *[self.update_component(c.name) for c in group], return_exceptions=True
+        if not await self._preflight_fetch(sorted_components, components):
+            return
+
+        apt = [c for c in sorted_components if c.kind == "apt"]
+        batch = [
+            c
+            for c in sorted_components
+            if c.kind == "git" and c.path is not None and c.path.exists()
+        ]
+        provision = [
+            c
+            for c in sorted_components
+            if c.kind == "git"
+            and (c.path is None or not c.path.exists())
+            and c.install_if_missing
+            and c.url
+        ]
+        for c in apt:
+            await self._run_apt_update(c)
+        if batch:
+            await self._run_git_batch(batch)
+        for c in provision:
+            await self._provision_component(c)
+
+    async def _preflight_fetch(
+        self, sorted_components: list[ComponentConfig], all_components: list
+    ) -> bool:
+        """Fetch every existing git component up-front (network phase).
+
+        Decoupling the download from the apply means a mid-sequence connection
+        drop aborts before anything is checked out, instead of leaving an
+        applied/unapplied skew across components. A pre-fetched component skips
+        its own fetch in the apply phase (recorded fetch time). Repos that need
+        cloning or are corrupt are left to self-heal in their own flow.
+        """
+        targets = [
+            c
+            for c in sorted_components
+            if c.kind == "git" and c.path is not None and c.path.exists()
+        ]
+        offline: list[str] = []
+        async with self._git_lock:
+            for c in targets:
+                now = time.monotonic()
+                # Skip a component the status check just fetched (<30s ago); its
+                # recorded time still lets the apply phase skip its own fetch.
+                if now - self._fetch_times.get(c.name, 0.0) < 30:
+                    continue
+                ok, err = await git_fetch(c.path)
+                if ok:
+                    self._fetch_times[c.name] = now
+                elif not await git_has_corruption(c.path, hint=err):
+                    offline.append(c.name)
+        if offline:
+            msg = "network error during pre-flight fetch — no components changed"
+            self._log.error("update_all: %s (failed: %s)", msg, offline)
+            for c in all_components:
+                self._cb("on_error", c.name, msg)
+            return False
+        return True
+
+    async def _run_git_batch(self, batch: list[ComponentConfig]) -> None:
+        """Apply existing git components all-or-nothing.
+
+        Stage every repo, then deps, then hooks, then restart each unique service
+        once. While staging/deps/hooks run nothing has been restarted, so the live
+        services still execute the old code — an abort then just reverts git and
+        restarts nothing. A restart-phase failure reverts git AND re-restarts the
+        services already bounced so they come back on the old code.
+        """
+        prev: dict[str, str] = {}
+        for c in batch:
+            ph = await git_get_hash(c.path)
+            if ph == "":
+                self._log.error("%s: prev_hash empty — aborting batch", c.name)
+                for b in batch:
+                    self._cb_error_done(b.name, "prev_hash empty")
+                return
+            prev[c.name] = ph
+        async with self._state_lock:
+            state = await asyncio.to_thread(self._read_state)
+            for name, ph in prev.items():
+                state[name] = {"prev_hash": ph}
+            if not await asyncio.to_thread(self._write_state, state):
+                for b in batch:
+                    self._cb_error_done(b.name, "failed to persist rollback point")
+                return
+        for c in batch:
+            ok, reason = await _assert_https_remote(c.path)
+            if not ok:
+                self._log.error("%s: SEC-4 remote check failed: %s", c.name, reason)
+                for b in batch:
+                    self._cb_error_done(b.name, "insecure remote")
+                return
+            self._history("update_start", c.name, prev_hash=prev[c.name][:12])
+
+        touched: list[ComponentConfig] = []
+        restarted: list[str] = []
+        try:
+            for c in batch:
+                self._cb("on_step", c.name, 1, 4)
+                touched.append(c)  # mark before staging so a partial stage is reverted
+                ok, reason = await self._stage_component(c)
+                if not ok:
+                    await self._abort_batch(batch, prev, touched, restarted, reason)
+                    return
+            for c in batch:
+                self._cb("on_step", c.name, 2, 4)
+                deps_ok, deps_err = await self._install_dependencies(c)
+                if not deps_ok:
+                    self._log.warning("%s: deps failed: %s", c.name, deps_err)
+                    await self._abort_batch(batch, prev, touched, restarted, "deps")
+                    return
+            new_hashes: dict[str, str] = {}
+            for c in batch:
+                self._cb("on_step", c.name, 3, 4)
+                new_hashes[c.name] = await git_get_hash(c.path)
+                hook_ok, hook_err = await run_hook(
+                    c.name, c.path, new_hashes[c.name], prev[c.name]
+                )
+                if not hook_ok:
+                    self._log.error("%s: hook failed: %s", c.name, hook_err)
+                    await self._abort_batch(batch, prev, touched, restarted, "hook")
+                    return
+            # Restart each unique service once, pinging progress before each
+            # (up to 90s) restart so the UI busy-watchdog stays fed across services.
+            seen: set[str] = set()
+            for c in batch:
+                if not c.service or c.service in seen:
+                    continue
+                seen.add(c.service)
+                self._cb("on_step", c.name, 4, 4)
+                # Mark bounced before the restart so an abort re-restarts even the
+                # service that failed its health check, onto the reverted code.
+                restarted.append(c.service)
+                if not await self._restart_one(c.service):
+                    await self._abort_batch(batch, prev, touched, restarted, "restart")
+                    return
+            for c in batch:
+                self._history(
+                    "update_success", c.name, new_hash=new_hashes[c.name][:12]
+                )
+                self._cb("on_component_done", c.name, True)
+        except asyncio.CancelledError:
+            self._log.warning("git batch cancelled — aborting")
+            await self._shielded(
+                self._abort_batch(batch, prev, touched, restarted, "cancelled"),
+                "git batch cancel-abort",
             )
-            for res in gathered:
-                if isinstance(res, BaseException) and not isinstance(
-                    res, asyncio.CancelledError
-                ):
-                    self._log.error(
-                        "update_all component raised: %s", res, exc_info=res
-                    )
+            raise
+        except Exception:  # noqa: BLE001
+            self._log.error("git batch unexpected error", exc_info=True)
+            await self._abort_batch(batch, prev, touched, restarted, "unexpected_error")
+
+    async def _abort_batch(
+        self,
+        batch: list[ComponentConfig],
+        prev: dict[str, str],
+        touched: list[ComponentConfig],
+        restarted: list[str],
+        reason: str,
+    ) -> None:
+        """Revert touched repos, re-restart bounced services, report all failed."""
+        self._log.warning(
+            "aborting batch (reason=%s): reverting %d repo(s)", reason, len(touched)
+        )
+        for c in touched:
+            await git_reset_to_hash(c.path, prev[c.name])
+        restart_ok = True
+        for service in restarted:
+            if not await self._restart_one(service):
+                restart_ok = False
+                self._log.error("abort: %s did not recover after revert", service)
+        for c in batch:
+            self._history(
+                "rollback",
+                c.name,
+                reason=reason,
+                reverted_to=prev[c.name][:12],
+                ok=restart_ok,
+            )
+            self._cb("on_error", c.name, reason)
+            self._cb("on_rollback", c.name, restart_ok)
+            self._cb("on_component_done", c.name, False)
 
     async def recover(self, name: str, hard: bool = False) -> bool:
         """Reset a component to its last known-good hash."""
@@ -223,6 +407,42 @@ class UpdateService:
         self._cb("on_recover", name, ok)
         return ok
 
+    async def reconcile(self) -> None:
+        """Heal repos left damaged by a power loss mid-update, for every component.
+
+        start.sh only repairs the BlocksScreen repo; this covers klipper/moonraker/
+        config repos too. The gate is the cheap `rev-parse HEAD` (mirrors start.sh's
+        `cat-file -e HEAD`) so a healthy boot pays almost nothing; deeper corruption
+        is caught on demand by the normal update flow. Offline-safe: git_repair
+        fetches when it can, else we reset to the last recorded good hash.
+        """
+        for c in self._components:
+            if c.kind != "git" or c.path is None or not c.path.exists():
+                continue
+            async with self._git_lock:
+                if await git_get_hash(c.path) != "":
+                    continue
+                self._log.warning("reconcile: %s HEAD unreadable — repairing", c.name)
+                ok, msg = await git_repair(c.path)
+                if ok:
+                    self._history("boot_repair", c.name, detail=msg[:80])
+                    continue
+                prev = (
+                    (await asyncio.to_thread(self._read_state))
+                    .get(c.name, {})
+                    .get("prev_hash")
+                )
+                if prev and _GIT_SHA_RE.match(prev):
+                    rok, _ = await git_reset_to_hash(c.path, prev)
+                    self._history("boot_reset", c.name, ok=rok, reverted_to=prev[:12])
+                    self._log.warning(
+                        "reconcile: %s reset to %s (ok=%s)", c.name, prev[:8], rok
+                    )
+                else:
+                    self._log.error(
+                        "reconcile: %s unrepairable, no recorded prev_hash", c.name
+                    )
+
     async def _rollback(
         self, component: ComponentConfig, prev_hash: str, reason: str
     ) -> None:
@@ -230,11 +450,8 @@ class UpdateService:
             "%s: rolling back to %s (reason=%s)", component.name, prev_hash[:8], reason
         )
         ok, _ = await git_reset_to_hash(component.path, prev_hash)
-        if component.service:
-            rs_ok, _ = await restart_service(component.service)
-            if not rs_ok:
-                self._log.warning("rollback restart failed: %s", component.service)
-                ok = False
+        if component.service and not await self._restart_one(component.service):
+            ok = False
         self._history(
             "rollback", component.name, reason=reason, reverted_to=prev_hash[:12], ok=ok
         )
@@ -271,17 +488,9 @@ class UpdateService:
             # SEC: world-writable only; group-writable is permitted (blocksscreen group is trusted)
             return (False, "world-writable permissions")
 
-        # Best-effort pip self-upgrade so the in-app update also refreshes pip
-        # itself. A failure here must not block the dependency install — the
-        # existing pip is still usable.
-        ok_pip, pip_msg = await _run(
-            [pip_path, "install", "--upgrade", "pip", "--quiet"], timeout=120.0
-        )
-        if not ok_pip:
-            self._log.warning(
-                "%s: pip self-upgrade failed: %s", component.name, pip_msg
-            )
-
+        # pip itself is pinned/owned by bs-bootstrap, not refreshed here: a pip
+        # self-upgrade would mutate the venv on a network round-trip before the
+        # reqs install, adding a failure surface for no in-flow benefit.
         return await _run(
             [pip_path, "install", "-r", str(req), "--quiet"], timeout=120.0
         )
@@ -327,9 +536,180 @@ class UpdateService:
         except OSError as exc:
             self._log.warning("update history write failed: %s", exc)
 
+    async def _remove_clone(self, component: ComponentConfig) -> None:
+        """Delete a freshly-cloned tree (the path did not exist before provisioning)."""
+        if component.path is not None:
+            await asyncio.to_thread(shutil.rmtree, component.path, ignore_errors=True)
+
+    async def _fail_provision(self, component: ComponentConfig, reason: str) -> bool:
+        """Remove the partial clone, log it to history, and report the failure."""
+        await self._remove_clone(component)
+        self._history("install_failed", component.name, reason=reason)
+        self._log.warning(
+            "%s: provision failed (%s), partial clone removed", component.name, reason
+        )
+        return self._cb_error_done(component.name, reason)
+
+    async def _provision_component(self, component: ComponentConfig) -> bool:
+        """Clone and set up a missing opted-in component.
+
+        A fresh component has no prev_hash to roll back to, so any failure deletes
+        the partial clone (clean slate to retry next Update) rather than rolling
+        back. Service install is delegated to the component's hook, mirroring the
+        existing update flow.
+        """
+        if not component.url:
+            return self._cb_error_done(component.name, "no clone url")
+        self._log.info("%s: provisioning via clone %s", component.name, component.url)
+        self._history("install_start", component.name, url=component.url)
+        try:
+            self._cb("on_step", component.name, 1, 4)
+            ok, err = await git_clone(component.url, component.path, component.branch)
+            if not ok:
+                self._log.error("%s: clone failed: %s", component.name, err)
+                return await self._fail_provision(component, "clone")
+
+            if component.version:
+                ok, err = await git_reset_to_hash(component.path, component.version)
+                if not ok:
+                    self._log.error("%s: pin failed: %s", component.name, err)
+                    return await self._fail_provision(component, "version")
+
+            self._cb("on_step", component.name, 2, 4)
+            new_hash = await git_get_hash(component.path)
+            deps_ok, deps_err = await self._install_dependencies(component)
+            if not deps_ok:
+                self._log.warning("%s: provision deps: %s", component.name, deps_err)
+                return await self._fail_provision(component, "deps")
+
+            self._cb("on_step", component.name, 3, 4)
+            hook_ok, hook_err = await run_hook(
+                component.name, component.path, new_hash, _GIT_EMPTY_TREE
+            )
+            if not hook_ok:
+                self._log.error("%s: provision hook: %s", component.name, hook_err)
+                return await self._fail_provision(component, "hook")
+
+            self._cb("on_step", component.name, 4, 4)
+            if component.service:
+                svc_ok, svc_err = await restart_service(component.service)
+                if not svc_ok:
+                    self._log.error(
+                        "%s: provision restart: %s", component.name, svc_err
+                    )
+                    return await self._fail_provision(component, "restart")
+                if not await wait_for_service_active(component.service, timeout=90.0):
+                    self._log.error(
+                        "%s: provisioned service not active", component.name
+                    )
+                    return await self._fail_provision(component, "restart_timeout")
+
+            self._history("install_success", component.name, new_hash=new_hash[:12])
+            self._cb("on_component_done", component.name, True)
+            return True
+        except asyncio.CancelledError:
+            self._log.warning(
+                "%s: provision cancelled, removing partial clone", component.name
+            )
+            await self._shielded(
+                self._remove_clone(component), f"{component.name} provision-cleanup"
+            )
+            raise
+        except Exception:  # noqa: BLE001
+            self._log.error(
+                "%s: unexpected error during provision", component.name, exc_info=True
+            )
+            return await self._fail_provision(component, "unexpected_error")
+
+    async def _stage_component(self, component: ComponentConfig) -> tuple[bool, str]:
+        """Bring the working tree to its target ref: fetch-gate + reset/checkout/pull.
+
+        No deps/hook/restart and no rollback — the caller decides what to do on
+        failure. Returns (ok, reason) where reason is one of
+        network/corrupt/reset/version/branch/conflict.
+        """
+        if component.path is None:
+            return (False, "path not found")
+        async with self._git_lock:
+            # Gate the update-fetch on this component's last *successful* fetch, not
+            # the last status check: an errored/corrupt repo has no recorded fetch
+            # time, so it always re-fetches here (and then self-heals).
+            last_fetch = self._fetch_times.pop(component.name, 0.0)
+        elapsed = time.monotonic() - last_fetch if last_fetch else float("inf")
+
+        if elapsed >= 30:
+            ok, error = await git_fetch(component.path)
+            if not ok:
+                self._log.error(error)
+                # fsck --connectivity-only can miss the object corruption that
+                # broke the fetch, so pass the fetch error as a hint.
+                if not await git_has_corruption(component.path, hint=error):
+                    return (False, "network")
+                self._log.warning("%s: corrupt repo, repairing", component.name)
+                rok, rmsg = await git_repair(component.path)
+                if not rok:
+                    return (False, "corrupt")
+                self._history("repair", component.name, detail=rmsg[:80])
+
+        if component.reset_mode == "hard":
+            # Reset to the remote tracking ref, not HEAD, so local commits that
+            # diverge from origin are discarded before the pull.
+            if component.branch:
+                hard_ref = f"origin/{component.branch}"
+            else:
+                _cur = await git_get_current_branch(component.path)
+                hard_ref = f"origin/{_cur}" if _cur else "origin/HEAD"
+            ok, err = await git_reset_to_hash(component.path, hard_ref)
+            if not ok:
+                self._log.error(
+                    "%s: pre-update hard reset failed: %s", component.name, err
+                )
+                return (False, "reset")
+
+        if component.version:
+            ok, err = await git_reset_to_hash(component.path, component.version)
+            if not ok:
+                self._log.error("%s: version pin failed: %s", component.name, err)
+                return (False, "version")
+        elif component.branch:
+            ok, err = await git_checkout(component.path, component.branch)
+            if not ok:
+                self._log.error("%s: git_checkout failed: %s", component.name, err)
+                return (False, "branch")
+            ok, err = await git_pull(component.path)
+            if not ok:
+                self._log.error("%s: git_pull failed: %s", component.name, err)
+                return (False, "conflict")
+        else:
+            ok, err = await git_pull(component.path)
+            if not ok:
+                self._log.error("%s: git_pull failed: %s", component.name, err)
+                return (False, "conflict")
+        return (True, "")
+
+    async def _restart_one(self, service: str) -> bool:
+        """Restart a service and verify it came active (kill-fallback aware)."""
+        ok, err = await restart_service(service)
+        if not ok:
+            self._log.error("restart %s failed: %s", service, err)
+            return False
+        if not await wait_for_service_active(service, timeout=90.0):
+            self._log.error("%s did not become active after restart", service)
+            return False
+        return True
+
     async def _run_git_update(self, component: ComponentConfig) -> bool:
-        """Run the 4-step git update flow: fetch/pull/deps/restart, rolling back on failure."""
-        if component.path is None or not component.path.exists():
+        """Update a single existing git component, rolling back on any failure.
+
+        Shares its git mechanics (_stage_component) with the multi-component batch;
+        keeps its own per-component rollback since a single update has no peers to
+        coordinate.
+        """
+        if component.path is None:
+            return self._cb_error_done(component.name, "path not found")
+        if not component.path.exists():
+            if component.install_if_missing and component.url:
+                return await self._provision_component(component)
             return self._cb_error_done(component.name, "path not found")
 
         prev_hash = await git_get_hash(component.path)
@@ -348,90 +728,26 @@ class UpdateService:
             self._log.error("SEC-4 remote check failed: %s", reason)
             return self._cb_error_done(component.name, "insecure remote")
         self._history("update_start", component.name, prev_hash=prev_hash[:12])
-        async with self._git_lock:
-            # Gate the update-fetch on this component's last *successful* fetch, not
-            # the last status check: an errored/corrupt repo has no recorded fetch
-            # time, so it always re-fetches here (and then self-heals).
-            last_fetch = self._fetch_times.pop(component.name, 0.0)
-        elapsed = time.monotonic() - last_fetch if last_fetch else float("inf")
 
         try:
             self._cb("on_step", component.name, 1, 4)
-            if elapsed >= 30:
-                self._log.info(
-                    "%s: git_fetch (%.0fs since last status)", component.name, elapsed
-                )
-                ok, error = await git_fetch(component.path)
-                if not ok:
-                    self._log.error(error)
-                    # Pass the fetch error as a hint: fsck --connectivity-only
-                    # can miss the object corruption that broke the fetch.
-                    if not await git_has_corruption(component.path, hint=error):
-                        await self._rollback(component, prev_hash, "network")
-                        return False
-                    self._log.warning("%s: corrupt repo, repairing", component.name)
-                    rok, rmsg = await git_repair(component.path)
-                    if not rok:
-                        await self._rollback(component, prev_hash, "corrupt")
-                        return False
-                    self._history("repair", component.name, detail=rmsg[:80])
-            else:
-                self._log.info(
-                    "%s: skipping git_fetch (%.0fs since last status)",
-                    component.name,
-                    elapsed,
-                )
+            stage_ok, stage_reason = await self._stage_component(component)
+            if not stage_ok:
+                # A failed pre-update reset changed nothing, so there is nothing
+                # to roll back; every other stage failure leaves a dirty tree.
+                if stage_reason == "reset":
+                    return self._cb_error_done(component.name, "reset")
+                await self._rollback(component, prev_hash, stage_reason)
+                return False
 
             self._cb("on_step", component.name, 2, 4)
-            if component.reset_mode == "hard":
-                # Reset to the remote tracking ref, not HEAD, so local commits
-                # that diverge from origin are discarded before the pull.
-                if component.branch:
-                    hard_ref = f"origin/{component.branch}"
-                else:
-                    _cur = await git_get_current_branch(component.path)
-                    hard_ref = f"origin/{_cur}" if _cur else "origin/HEAD"
-                ok, err = await git_reset_to_hash(component.path, hard_ref)
-                if not ok:
-                    self._log.error(
-                        "%s: pre-update hard reset failed: %s", component.name, err
-                    )
-                    return self._cb_error_done(component.name, "reset")
-
-            if component.version:
-                ok, err = await git_reset_to_hash(component.path, component.version)
-                if not ok:
-                    self._log.error(
-                        "%s: git_reset_to_hash failed: %s", component.name, err
-                    )
-                    await self._rollback(component, prev_hash, "version")
-                    return False
-            elif component.branch:
-                ok, err = await git_checkout(component.path, component.branch)
-                if not ok:
-                    self._log.error("%s: git_checkout failed: %s", component.name, err)
-                    await self._rollback(component, prev_hash, "branch")
-                    return False
-                ok, err = await git_pull(component.path)
-                if not ok:
-                    self._log.error("%s: git_pull failed: %s", component.name, err)
-                    await self._rollback(component, prev_hash, "conflict")
-                    return False
-            else:
-                ok, err = await git_pull(component.path)
-                if not ok:
-                    self._log.error("%s: git_pull failed: %s", component.name, err)
-                    await self._rollback(component, prev_hash, "conflict")
-                    return False
-
-            self._cb("on_step", component.name, 3, 4)
             deps_ok, deps_err = await self._install_dependencies(component)
             if not deps_ok:
                 self._log.warning("dependencies error: %s", deps_err)
                 await self._rollback(component, prev_hash, "deps")
                 return False
 
-            self._cb("on_step", component.name, 4, 4)
+            self._cb("on_step", component.name, 3, 4)
             new_hash = await git_get_hash(component.path)
             hook_ok, hook_err = await run_hook(
                 component.name, component.path, new_hash, prev_hash
@@ -441,23 +757,10 @@ class UpdateService:
                 await self._rollback(component, prev_hash, "hook")
                 return False
 
-            if component.service:
-                svc_ok, svc_err = await restart_service(component.service)
-                if not svc_ok:
-                    self._log.error(
-                        "%s: service restart failed: %s", component.name, svc_err
-                    )
-                    await self._rollback(component, prev_hash, "restart")
-                    return False
-                active = await wait_for_service_active(component.service, timeout=90.0)
-                if not active:
-                    self._log.error(
-                        "%s: service %r did not become active after restart — rolling back",  # noqa: E501
-                        component.name,
-                        component.service,
-                    )
-                    await self._rollback(component, prev_hash, "restart_timeout")
-                    return False
+            self._cb("on_step", component.name, 4, 4)
+            if component.service and not await self._restart_one(component.service):
+                await self._rollback(component, prev_hash, "restart")
+                return False
 
             self._history("update_success", component.name, new_hash=new_hash[:12])
             self._cb("on_component_done", component.name, True)
@@ -573,13 +876,29 @@ class UpdateService:
                 prefix=".updater_state_",
             ) as f:
                 f.write(json.dumps(data, indent=2))
+                # fsync the file + parent dir so the rollback point survives a
+                # power cut: rename-without-fsync can otherwise zero the file.
+                f.flush()
+                os.fsync(f.fileno())
                 temp_path = Path(f.name)
             temp_path.chmod(0o600)
             temp_path.replace(self._state_path)
+            self._fsync_dir(self._state_path.parent)
             return True
         except OSError:
             self._log.error("Failed to write state file")
             return False
+
+    @staticmethod
+    def _fsync_dir(path: Path) -> None:
+        try:
+            fd = os.open(path, os.O_RDONLY)
+            try:
+                os.fsync(fd)
+            finally:
+                os.close(fd)
+        except OSError:
+            pass
 
     async def background_apt_upgrade(self) -> None:
         """Run apt update + upgrade + autoremove silently after every Update click.
