@@ -175,12 +175,8 @@ class UDisksDBusAsync(QtCore.QThread):
         """Start UDisks2 USB monitoring.
 
         Shutdown is driven by cancelling the listener tasks (see :meth:`close`),
-        not by stopping the loop out from under ``run_until_complete``. The old
-        ``loop.stop()`` teardown left the ``monitor_dbus`` future pending and
-        raised ``RuntimeError: Event loop stopped before Future completed``, so
-        ``run`` exited the thread with code 1 and dirtied the X session on
-        restart. Cancelling makes ``monitor_dbus``'s ``gather`` finish, so
-        ``run_until_complete`` returns normally.
+        not by stopping the loop out from under ``run_until_complete``. Cancelling makes
+        ``monitor_dbus``'s ``gather`` finish, so ``run_until_complete`` returns normally.
         """
         self.stop_event.clear()
         self.loop = asyncio.new_event_loop()
