@@ -104,6 +104,9 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self._basic_panel.call_load_panel.connect(self.call_load_panel)
         self._basic_panel.request_back.connect(self.request_back)
         self._basic_panel.request_change_tab.connect(self.request_change_tab)
+        self.amu_manager.mmu_state_changed.connect(
+            self._basic_panel.on_mmu_state_changed
+        )
         self.addWidget(self._basic_panel)
         self.fp_button_1.clicked.connect(
             lambda: self.change_page(self.indexOf(self._basic_panel))

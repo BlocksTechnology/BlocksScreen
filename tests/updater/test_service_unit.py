@@ -1,10 +1,14 @@
 import asyncio
+import json
 import time
-import pytest
-from unittest.mock import patch, MagicMock, call
+from contextlib import ExitStack
 from pathlib import Path
-from updater.service import UpdateService, LoggingCallback
-from updater.models import ComponentStatus, ComponentConfig
+from unittest.mock import AsyncMock, MagicMock, call, patch
+
+import pytest
+
+from updater.models import ComponentConfig, ComponentStatus
+from updater.service import LoggingCallback, UpdateService
 
 
 class TestLoggingCallback:
@@ -20,7 +24,6 @@ class TestLoggingCallback:
 class TestHistoryLog:
     def test_history_appends_jsonl_entry(self, tmp_path: Path):
         """OBS-1: _history appends one JSON line per event with the given fields."""
-        import json
 
         svc = UpdateService()
         svc._history_path = tmp_path / "update_history.jsonl"
@@ -279,7 +282,7 @@ class TestGitUpdate:
             patch("updater.service.wait_for_service_active", return_value=True),
         ):
             svc = UpdateService(callback=cb)
-            svc._last_status_time = time.monotonic()
+            svc._fetch_times["klipper"] = time.monotonic()
             result = await svc.update_component("klipper")
         assert result is True
         mock_fetch.assert_not_called()
@@ -460,7 +463,6 @@ class TestGitUpdate:
     @pytest.mark.asyncio
     async def test_state_lock_prevents_corruption_on_concurrent_writes(self, tmp_path):
         """Verify _state_lock prevents concurrent corruption of state file."""
-        import json
 
         state_path = tmp_path / "updater_state.json"
         svc = UpdateService.__new__(UpdateService)
@@ -588,6 +590,7 @@ class TestRecover:
             patch(
                 "updater.service.restart_service", return_value=(True, "")
             ) as mock_restart,
+            patch("updater.service.wait_for_service_active", return_value=True),
             patch.object(UpdateService, "_read_state", return_value=state),
         ):
             svc = UpdateService(callback=cb)
@@ -596,6 +599,23 @@ class TestRecover:
         mock_reset.assert_called_once()
         mock_restart.assert_called_once()
         cb.on_recover.assert_called_once_with("klipper", True)
+
+    @pytest.mark.asyncio
+    async def test_hard_recover_fails_if_service_not_active(self):
+        # restart_service can report success via its kill-fallback without the
+        # unit coming back; recover must confirm it is active and fail otherwise.
+        cb = MagicMock()
+        state = {"klipper": {"prev_hash": "abc1234"}}
+        with (
+            patch("updater.service.git_reset_to_hash", return_value=(True, "")),
+            patch("updater.service.restart_service", return_value=(True, "")),
+            patch("updater.service.wait_for_service_active", return_value=False),
+            patch.object(UpdateService, "_read_state", return_value=state),
+        ):
+            svc = UpdateService(callback=cb)
+            result = await svc.recover("klipper", hard=True)
+        assert result is False
+        cb.on_recover.assert_called_once_with("klipper", False)
 
     @pytest.mark.asyncio
     async def test_emits_on_recover(self):
@@ -670,7 +690,7 @@ class TestInstallDependencies:
 
     @pytest.mark.asyncio
     async def test_runs_pip_when_component_venv_found(self, tmp_path):
-        """When a component venv pip is found, run pip install -r requirements.txt."""
+        """Component venv pip: upgrade pip first, then install -r requirements.txt."""
         comp_path = tmp_path / "mycomp"
         comp_path.mkdir()
         (comp_path / "requirements.txt").write_text("requests\n")
@@ -686,7 +706,112 @@ class TestInstallDependencies:
         ):
             ok, _ = await svc._install_dependencies(component)
         assert ok is True
-        mock_run.assert_called_once()
-        cmd = mock_run.call_args[0][0]
-        assert cmd[0] == venv_pip
-        assert "-r" in cmd
+        assert mock_run.call_count == 2
+        upgrade_cmd = mock_run.call_args_list[0][0][0]
+        assert upgrade_cmd == [venv_pip, "install", "--upgrade", "pip", "--quiet"]
+        install_cmd = mock_run.call_args_list[1][0][0]
+        assert install_cmd[0] == venv_pip
+        assert "-r" in install_cmd
+
+    @pytest.mark.asyncio
+    async def test_pip_upgrade_failure_does_not_block_install(self, tmp_path):
+        """Best-effort pip upgrade: a failure still runs the requirements install."""
+        comp_path = tmp_path / "mycomp"
+        comp_path.mkdir()
+        (comp_path / "requirements.txt").write_text("requests\n")
+        component = ComponentConfig(name="mycomp", kind="git", path=comp_path)
+        venv_pip = str(tmp_path / "mycomp-env" / "bin" / "pip")
+        svc = UpdateService()
+        with (
+            patch(
+                "updater.service._resolve_component_pip",
+                return_value=venv_pip,
+            ),
+            patch(
+                "updater.service._run",
+                side_effect=[(False, "pip upgrade boom"), (True, "")],
+            ) as mock_run,
+        ):
+            ok, _ = await svc._install_dependencies(component)
+        assert ok is True
+        assert mock_run.call_count == 2
+        assert "-r" in mock_run.call_args_list[1][0][0]
+
+
+class TestCorruptionDuringUpdate:
+    """The single Update button heals a corrupt repo via the fetch-failure path."""
+
+    @staticmethod
+    def _patches(corrupt: bool, repair_result, *, extra=None):
+
+        ctx = [
+            patch("pathlib.Path.exists", return_value=True),
+            patch(
+                "updater.service.git_get_hash",
+                new_callable=AsyncMock,
+                return_value="abc1234",
+            ),
+            patch(
+                "updater.service._assert_https_remote",
+                new_callable=AsyncMock,
+                return_value=(True, "https://x"),
+            ),
+            patch(
+                "updater.service.git_fetch",
+                new_callable=AsyncMock,
+                return_value=(False, "fatal: loose object is corrupt"),
+            ),
+            patch(
+                "updater.service.git_has_corruption",
+                new_callable=AsyncMock,
+                return_value=corrupt,
+            ),
+            patch(
+                "updater.service.git_repair",
+                new_callable=AsyncMock,
+                return_value=repair_result,
+            ),
+            # Halt/short-circuit the post-fetch steps so the tests stay focused on
+            # the corruption branch; also used by _rollback's reset.
+            patch(
+                "updater.service.git_reset_to_hash",
+                new_callable=AsyncMock,
+                return_value=(False, "reset"),
+            ),
+            patch(
+                "updater.service.git_get_current_branch",
+                new_callable=AsyncMock,
+                return_value="main",
+            ),
+        ]
+        ctx.extend(extra or [])
+        return ctx
+
+    @pytest.mark.asyncio
+    async def test_repairs_corrupt_repo_then_continues(self):
+
+        cb = MagicMock()
+        comp = ComponentConfig(name="RF50-Klipper", kind="git", path=Path("/x"))
+        with ExitStack() as stack:
+            mocks = [
+                stack.enter_context(p) for p in self._patches(True, (True, "repaired"))
+            ]
+            svc = UpdateService(callback=cb)
+            svc._components = [comp]
+            await svc._run_git_update(comp)
+        repair_mock = mocks[5]
+        repair_mock.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_rollback_when_repair_fails(self):
+
+        cb = MagicMock()
+        comp = ComponentConfig(name="RF50-Klipper", kind="git", path=Path("/x"))
+        with ExitStack() as stack:
+            for p in self._patches(True, (False, "still corrupt after fetch")):
+                stack.enter_context(p)
+            svc = UpdateService(callback=cb)
+            svc._components = [comp]
+            ok = await svc._run_git_update(comp)
+        assert ok is False
+        assert cb.on_error.call_args[0][1] == "corrupt"

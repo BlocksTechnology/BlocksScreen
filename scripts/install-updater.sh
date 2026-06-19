@@ -50,6 +50,7 @@ printf 'blocks ALL=(ALL) NOPASSWD: /usr/bin/apt-get install -y --quiet *\n' >>"$
 printf 'blocks ALL=(ALL) NOPASSWD: /usr/bin/apt-get autoremove -y\n' >>"$SUDOERS_TMP"
 printf 'blocks ALL=(ALL) NOPASSWD: /usr/bin/systemctl reboot\n' >>"$SUDOERS_TMP"
 printf 'blocks ALL=(ALL) NOPASSWD: /usr/bin/chvt 7\n' >>"$SUDOERS_TMP"
+printf 'blocks ALL=(ALL) NOPASSWD: /usr/bin/chvt 8\n' >>"$SUDOERS_TMP"
 printf 'blocks ALL=(ALL) NOPASSWD: /usr/bin/bash %s/scripts/install-updater.sh\n' "$BS_PATH" >>"$SUDOERS_TMP"
 # Derive allowed restart targets from components.yaml instead of wildcard
 _COMP_YAML="$BS_PATH/updater/components.yaml"
@@ -107,6 +108,12 @@ echo_ok "Apt cache directory ready"
 echo_info "Adding blocks to video group (required for framebuffer splash) ..."
 sudo usermod -aG video blocks 2>/dev/null || true
 echo_ok "blocks added to video group"
+
+echo_info "Enabling persistent journald (retain logs across reboots for field debugging) ..."
+sudo mkdir -p /var/log/journal
+sudo systemd-tmpfiles --create --prefix /var/log/journal 2>/dev/null || true
+sudo systemctl restart systemd-journald 2>/dev/null || true
+echo_ok "Persistent journald enabled"
 
 echo_info "Allowing blocks to operate on repos owned by primary user ..."
 sudo git config --system --add safe.directory '*'
@@ -166,7 +173,7 @@ echo_info "Installing Python requirements ..."
 apt-get install -y --quiet libsystemd-dev python3-dev 2>/dev/null || true
 # xsetroot is used as belt-and-suspenders cursor hiding alongside the Xorg -nocursor server flag.
 sudo apt-get install -y --quiet x11-xserver-utils 2>/dev/null || true
-# sdbus is pinned in requirements.txt (0.14.1); --no-binary forces a clean source build
+# sdbus is pinned in requirements.txt (0.12.0); --no-binary forces a clean source build
 # (needs libsystemd-dev). --upgrade-strategy=only-if-needed skips satisfied packages.
 "$BSENV/bin/pip" install --quiet --only-binary :all: --no-binary sdbus,sdbus-networkmanager \
     --upgrade-strategy=only-if-needed \

@@ -224,7 +224,12 @@ class UpdaterInterface(
             dirty = {
                 name
                 for name, s in statuses.items()
-                if s.commits_behind or s.packages_upgradable > 0 or s.has_local_changes
+                if s.commits_behind
+                or s.packages_upgradable > 0
+                or s.has_local_changes
+                # Errored git repos (e.g. a corrupt repo) are included so the one
+                # "Update" button reaches them; the update flow self-heals them.
+                or (s.error is not None and s.kind != "apt")
             }
             if dirty:
                 await self._svc.update_all(dirty)
