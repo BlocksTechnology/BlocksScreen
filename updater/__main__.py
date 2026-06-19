@@ -1,14 +1,13 @@
 import argparse
 import asyncio
 import contextlib
-import fcntl
 import logging
 import os
 import signal
 import socket
 from collections.abc import Iterator
-from pathlib import Path
 
+from updater.locking import process_lock
 from updater.service import LoggingCallback, UpdateService
 
 # NOTE: sdbus and updater.dbus_service are imported lazily inside _run_daemon so
@@ -80,27 +79,11 @@ async def _run_daemon() -> None:
     _log.info("updater daemon shutting down")
 
 
-def _cli_lock_path() -> Path:
-    """Return a user-owned path for the CLI lock, preferring the runtime dir."""
-    cache = Path.home() / ".cache" / "blockscreen"
-    for d in (Path("/run/blockscreen"), cache):
-        try:
-            d.mkdir(parents=True, exist_ok=True)
-            return d / "updater_cli.lock"
-        except OSError:
-            continue
-    # Both unavailable (broken home): return the cache path anyway so the caller's
-    # open() surfaces the error, rather than fall back to a world-writable /tmp.
-    return cache / "updater_cli.lock"
-
-
 @contextlib.contextmanager
 def _cli_lock() -> Iterator[None]:
     """Serialize mutating CLI commands against the daemon and other CLI runs."""
-    with open(_cli_lock_path(), "w") as f:
-        try:
-            fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
+    with process_lock() as acquired:
+        if not acquired:
             logging.getLogger("updater").error(
                 "updater busy: the daemon or another CLI run holds the lock"
             )
