@@ -138,7 +138,7 @@ class BlocksScreenConfig:
         option: str,
         parser: type = str,
         default: typing.Union[Sentinel, str, T] = Sentinel.MISSING,
-    ) -> typing.Union[Sentinel, str]:
+    ) -> typing.Any:
         """Get option value
 
         Args:
@@ -149,9 +149,45 @@ class BlocksScreenConfig:
         Returns:
             typing.Union[Sentinel, str]: Requested option. Defaults to the specified default value
         """
-        return parser(
-            self.config.get(section=self.section, option=option, fallback=default)
-        )
+        value = self.config.get(section=self.section, option=option, fallback=default)
+        if value is Sentinel.MISSING:
+            return Sentinel.MISSING
+        return parser(value)
+
+    def getlists(
+        self,
+        option: str,
+        default: Sentinel | list[T] = Sentinel.MISSING,
+        sep: str | tuple[str, ...] = ",",
+        parser: type = str,
+    ) -> list[str | float | int]:
+        """Get option value parsed as a list
+
+        Args:
+            option (str): option name
+            default (Sentinel | list[T], optional): Default value when option missing.
+            sep (str | tuple[str, ...], optional): Single separator string or tuple
+                of separators. Defaults to ",".
+            parser (type, optional): Type to cast each list item. Defaults to str.
+
+        Returns:
+            list: Parsed list of values, or *default* when option is missing.
+        """
+        raw = self.config.get(section=self.section, option=option, fallback=None)
+        if raw is Sentinel.MISSING:
+            return default if default is not Sentinel else []
+        if not raw:
+            if default is not Sentinel.MISSING:
+                return default
+            return []
+
+        if isinstance(sep, str):
+            items = [item.strip() for item in raw.split(sep)]
+        else:
+            pattern = "|".join(re.escape(s) for s in sep)
+            items = [item.strip() for item in re.split(pattern, raw)]
+
+        return [parser(item) for item in items if item]
 
     def getint(
         self,

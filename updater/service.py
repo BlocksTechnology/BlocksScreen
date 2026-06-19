@@ -30,7 +30,9 @@ from updater.executor import (
     git_fetch,
     git_get_current_branch,
     git_get_hash,
+    git_has_corruption,
     git_pull,
+    git_repair,
     git_reset_to_hash,
     restart_service,
     run_hook,
@@ -209,6 +211,12 @@ class UpdateService:
             self._fetch_times.pop(name, None)
         if hard and component.service:
             restart_ok, restart_err = await restart_service(component.service)
+            if restart_ok:
+                # restart_service can fall back to `systemctl kill` and report
+                # success without the unit coming back, so confirm it is active.
+                restart_ok = await wait_for_service_active(
+                    component.service, timeout=90.0
+                )
             if not restart_ok:
                 self._log.error("hard recover restart failed: %s", restart_err)
             ok = restart_ok
@@ -262,6 +270,17 @@ class UpdateService:
         if mode & 0o002:
             # SEC: world-writable only; group-writable is permitted (blocksscreen group is trusted)
             return (False, "world-writable permissions")
+
+        # Best-effort pip self-upgrade so the in-app update also refreshes pip
+        # itself. A failure here must not block the dependency install — the
+        # existing pip is still usable.
+        ok_pip, pip_msg = await _run(
+            [pip_path, "install", "--upgrade", "pip", "--quiet"], timeout=120.0
+        )
+        if not ok_pip:
+            self._log.warning(
+                "%s: pip self-upgrade failed: %s", component.name, pip_msg
+            )
 
         return await _run(
             [pip_path, "install", "-r", str(req), "--quiet"], timeout=120.0
@@ -330,8 +349,11 @@ class UpdateService:
             return self._cb_error_done(component.name, "insecure remote")
         self._history("update_start", component.name, prev_hash=prev_hash[:12])
         async with self._git_lock:
-            self._fetch_times.pop(component.name, None)
-            elapsed = time.monotonic() - self._last_status_time
+            # Gate the update-fetch on this component's last *successful* fetch, not
+            # the last status check: an errored/corrupt repo has no recorded fetch
+            # time, so it always re-fetches here (and then self-heals).
+            last_fetch = self._fetch_times.pop(component.name, 0.0)
+        elapsed = time.monotonic() - last_fetch if last_fetch else float("inf")
 
         try:
             self._cb("on_step", component.name, 1, 4)
@@ -342,8 +364,17 @@ class UpdateService:
                 ok, error = await git_fetch(component.path)
                 if not ok:
                     self._log.error(error)
-                    await self._rollback(component, prev_hash, "network")
-                    return False
+                    # Pass the fetch error as a hint: fsck --connectivity-only
+                    # can miss the object corruption that broke the fetch.
+                    if not await git_has_corruption(component.path, hint=error):
+                        await self._rollback(component, prev_hash, "network")
+                        return False
+                    self._log.warning("%s: corrupt repo, repairing", component.name)
+                    rok, rmsg = await git_repair(component.path)
+                    if not rok:
+                        await self._rollback(component, prev_hash, "corrupt")
+                        return False
+                    self._history("repair", component.name, detail=rmsg[:80])
             else:
                 self._log.info(
                     "%s: skipping git_fetch (%.0fs since last status)",

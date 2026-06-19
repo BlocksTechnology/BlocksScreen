@@ -17,8 +17,36 @@ bs_migrate_moonraker_conf() {
         patched=true
         echo "[$tag] moonraker.conf: fixed BlocksScreen managed_services"
     fi
+    if ! grep -q "blocksscreen-single-owner" "$conf"; then
+        bs_disable_overlapping_update_managers "$conf" "$tag" && patched=true
+    fi
     $patched && sudo systemctl restart moonraker.service 2>/dev/null || true
     return 0
+}
+
+# Disable Moonraker management of repos the BlocksScreen daemon now owns, so a
+# Mainsail "Update All" can't trip on them. Grep-gated marker so it runs once.
+bs_disable_overlapping_update_managers() {
+    local conf="$1" tag="${2:-bs-common}"
+    [ -f "$conf" ] || return 1
+    grep -q "blocksscreen-single-owner" "$conf" && return 1
+    local owned="RF50-Klipper happy-hare Klippain-ShakeTune mainsail-config crowsnest"
+    local tmp
+    tmp="$(mktemp)" || return 1
+    awk -v owned="$owned" '
+        BEGIN { n = split(owned, a, " "); for (i = 1; i <= n; i++) own[a[i]] = 1 }
+        /^\[/ {
+            insec = 0
+            if ($0 ~ /^\[update_manager [^]]+\]/) {
+                name = $0; sub(/^\[update_manager /, "", name); sub(/\].*/, "", name)
+                if (name in own) insec = 1
+            }
+        }
+        { if (insec) print "#" $0; else print }
+    ' "$conf" > "$tmp" && cat "$tmp" > "$conf"
+    rm -f "$tmp"
+    printf '\n# blocksscreen-single-owner applied by %s\n' "$tag" >> "$conf"
+    echo "[$tag] moonraker.conf: disabled Moonraker management of daemon-owned repos"
 }
 
 # Sync repo unit files → /etc/systemd/system, reload on change, ensure X.Org is

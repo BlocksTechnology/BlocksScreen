@@ -36,9 +36,21 @@ BSENV="${BLOCKSSCREEN_VENV:-${_BSENV_HOME}/.BlocksScreen-env}"
 # shellcheck source=/dev/null
 [ -f "$SCRIPT_PATH/bs-common.sh" ] && . "$SCRIPT_PATH/bs-common.sh"
 
-# Switch to tty8 immediately so tty1 is hidden during startup (even before splash-holder is installed)
-sudo chvt 8 2>/dev/null || true
-printf '\033[2J\033[H\033[?25l  BlocksScreen loading...\n' > /dev/tty8 2>/dev/null || true
+# Smooth splash with no VT flash: on a service RESTART X.Org already holds tty7
+# with the splash (ExecStop/feh), so stay on tty7. Only on a cold boot use tty8,
+# writing the splash image to fb0 (never bare text).
+_BS_XORG_UP=0
+if systemctl is-active --quiet BlocksScreen-xorg.service 2>/dev/null \
+   && [ -S /tmp/.X11-unix/X0 ]; then
+    _BS_XORG_UP=1
+fi
+if [ "$_BS_XORG_UP" -eq 0 ]; then
+    sudo chvt 8 2>/dev/null || true
+    _SPLASH_RAW="$_BSENV_HOME/.cache/blockscreen/splash.raw"
+    if [ -e /dev/fb0 ] && [ -r "$_SPLASH_RAW" ]; then
+        cat "$_SPLASH_RAW" > /dev/fb0 2>/dev/null || true
+    fi
+fi
 
 # Heavy / network-dependent bootstrap is deferred to a background job (below)
 # so the UI starts immediately with whatever is already on disk.
@@ -81,6 +93,8 @@ bs_migrate_moonraker_conf "$_BSENV_HOME/printer_data/config/moonraker.conf" Bloc
 rm -f "$BS_PATH/.git/index.lock"
 
 # Recover from corrupt loose objects (empty files written by an interrupted git fetch/reset).
+# This is the boot-time counterpart of updater.executor.git_repair (which heals the
+# other components from the daemon); keep the two prune+fetch flows in sync.
 # git cat-file -e HEAD fails when the commit object is missing/empty; symbolic-ref still works
 # because .git/HEAD is a plain-text ref file, not a commit object.
 _bs_branch=$(git -C "$BS_PATH" symbolic-ref --short HEAD 2>/dev/null || echo "")
@@ -172,6 +186,8 @@ else
         exec /usr/bin/xinit "$_XCLIENT" -- :0 vt7 -keeptty -novtswitch -nocursor \
             -auth /home/blocks/.Xauthority
     fi
-    sudo chvt 7 2>/dev/null || true
+    # Only switch back to tty7 if we left it for the cold-boot tty8 splash; on a
+    # restart we never left tty7, so skip the switch to avoid a visible flash.
+    [ "$_BS_XORG_UP" -eq 0 ] && sudo chvt 7 2>/dev/null || true
     exec $_XCLIENT
 fi
