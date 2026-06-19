@@ -15,6 +15,8 @@ class ComponentConfig:
     branch: str | None = None
     version: str | None = None
     apt_exclude: tuple[str, ...] = ()
+    url: str | None = None
+    install_if_missing: bool = False
 
 
 @dataclass(frozen=True)
@@ -29,3 +31,4 @@ class ComponentStatus:
     packages_upgradable: int = 0
     error: str | None = None
     has_local_changes: bool = False
+    needs_install: bool = False

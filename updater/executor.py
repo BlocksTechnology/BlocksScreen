@@ -314,7 +314,11 @@ async def git_fetch(
         return (False, "path does not exist")
     if prune_remotes:
         await git_prune_extra_remotes(path)
-    return await _run([GIT, "fetch", "--all"], cwd=path, timeout=60.0)
+    # --atomic: all-or-nothing ref update (no partial refs on a dropped connection);
+    # --prune: drop refs deleted upstream so stale tracking refs don't accumulate.
+    return await _run(
+        [GIT, "fetch", "--all", "--atomic", "--prune"], cwd=path, timeout=60.0
+    )
 
 
 async def git_pull(path: Path | None) -> tuple[bool, str]:
@@ -322,6 +326,30 @@ async def git_pull(path: Path | None) -> tuple[bool, str]:
     if path is None:
         return (False, "path does not exist")
     return await _run([GIT, "pull", "--ff-only"], cwd=path, timeout=60.0)
+
+
+_GIT_URL_RE = re.compile(r"^https://[a-zA-Z0-9._~:/?#\[\]@!$&'()*+,;=%-]+$")
+
+
+async def git_clone(
+    url: str, path: Path | None, branch: str | None = None
+) -> tuple[bool, str]:
+    """Clone url into path (https-only), optionally at branch. Returns (ok, message).
+
+    Large repos (klipper, moonraker) can take a while, so the timeout is generous.
+    git creates the leaf directory; the parent (home) must already exist.
+    """
+    if not path:
+        return (False, "path error")
+    if not _GIT_URL_RE.match(url):
+        return (False, f"invalid or non-https clone url: {url!r}")
+    if branch is not None and not _GIT_BRANCH_RE.match(branch):
+        return (False, f"invalid branch name: {branch!r}")
+    cmd = [GIT, "clone"]
+    if branch:
+        cmd += ["--branch", branch]
+    cmd += [url, str(path)]
+    return await _run(cmd, timeout=300.0)
 
 
 async def git_reset_to_hash(path: Path | None, prev_hash: str = "") -> tuple[bool, str]:
@@ -348,7 +376,7 @@ _GIT_CORRUPT_SIGNATURES = (
 )
 
 
-async def git_has_corruption(path: Path, hint: str = "") -> bool:
+async def git_has_corruption(path: Path | None, hint: str = "") -> bool:
     """True if `hint` or git fsck shows object corruption.
 
     `hint` (e.g. a failed fetch's stderr) is checked first: `git fsck
@@ -356,6 +384,8 @@ async def git_has_corruption(path: Path, hint: str = "") -> bool:
     miss a corrupt blob that already broke the fetch. The fetch error is the
     reliable signal in that case.
     """
+    if path is None:
+        return False
     if any(k in hint for k in _GIT_CORRUPT_SIGNATURES):
         return True
     ok, out = await _run(
@@ -426,8 +456,10 @@ async def git_remote_url(path: Path) -> str:
     return output.strip() if ok else ""
 
 
-async def _assert_https_remote(path: Path) -> tuple[bool, str]:
+async def _assert_https_remote(path: Path | None) -> tuple[bool, str]:
     """Reject non-https origin remotes to guard against supply-chain attacks."""
+    if path is None:
+        return False, "path does not exist"
     url = await git_remote_url(path)
     if not url:
         return False, "could not read origin remote URL"
@@ -606,7 +638,13 @@ async def _apt_get_fix_broken() -> tuple[bool, str]:
 
 
 async def _apt_restore_packages(snapshot_path: Path) -> tuple[bool, str]:
-    """Restore dpkg package selections from pre-upgrade snapshot; then apt dselect-upgrade."""
+    """Restore dpkg package *selections* from the pre-upgrade snapshot, then dselect-upgrade.
+
+    This re-asserts which packages should be installed; it does NOT reliably
+    downgrade versions, since the prior .debs may no longer be in the apt cache.
+    Treat it as an unbreak step (keep the set consistent), not a true rollback.
+    Kernel/firmware are excluded from upgrades, bounding the blast radius.
+    """
     try:
         stdin_data = snapshot_path.read_bytes()
     except OSError as e:

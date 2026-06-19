@@ -46,10 +46,11 @@ def test_cli_lock_rejects_concurrent_run(monkeypatch, tmp_path):
     """A second mutating CLI run exits when the lock is already held."""
     # Local import: this module's other tests mask sdbus before importing updater.
     from updater import __main__ as cli
+    from updater import locking
 
-    lock_path = tmp_path / "updater_cli.lock"
-    monkeypatch.setattr(cli, "_cli_lock_path", lambda: lock_path)
-    holder = open(lock_path, "w")
+    lock_file = tmp_path / "updater.lock"
+    monkeypatch.setattr(locking, "lock_path", lambda: lock_file)
+    holder = open(lock_file, "w")
     fcntl.flock(holder, fcntl.LOCK_EX | fcntl.LOCK_NB)
     try:
         with pytest.raises(SystemExit):
