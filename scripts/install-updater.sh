@@ -52,15 +52,24 @@ printf 'blocks ALL=(ALL) NOPASSWD: /usr/bin/systemctl reboot\n' >>"$SUDOERS_TMP"
 printf 'blocks ALL=(ALL) NOPASSWD: /usr/bin/chvt 7\n' >>"$SUDOERS_TMP"
 printf 'blocks ALL=(ALL) NOPASSWD: /usr/bin/chvt 8\n' >>"$SUDOERS_TMP"
 printf 'blocks ALL=(ALL) NOPASSWD: /usr/bin/bash %s/scripts/install-updater.sh\n' "$BS_PATH" >>"$SUDOERS_TMP"
-# Derive allowed restart targets from components.yaml instead of wildcard
+# Derive allowed restart targets from components.yaml instead of wildcard.
+# Per service we allow: restart (normal), reset-failed (start-limit recovery,
+# replaces the old systemctl-kill fallback), and --no-block restart (used for the
+# self UI service so a slow restart never blocks/aborts the update batch).
+_emit_svc_rules() {
+    local _s="$1"
+    printf 'blocks ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart %s\n' "$_s" >>"$SUDOERS_TMP"
+    printf 'blocks ALL=(ALL) NOPASSWD: /usr/bin/systemctl reset-failed %s\n' "$_s" >>"$SUDOERS_TMP"
+    printf 'blocks ALL=(ALL) NOPASSWD: /usr/bin/systemctl --no-block restart %s\n' "$_s" >>"$SUDOERS_TMP"
+}
 _COMP_YAML="$BS_PATH/updater/components.yaml"
 if [[ -f "$_COMP_YAML" ]]; then
     while IFS= read -r _svc; do
-        printf 'blocks ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart %s\n' "$_svc" >>"$SUDOERS_TMP"
+        _emit_svc_rules "$_svc"
     done < <(grep '^\s*service:' "$_COMP_YAML" | awk '{print $2}' | sort -u)
 else
     for _svc in klipper.service moonraker.service crowsnest.service KlipperScreen.service BlocksScreen.service; do
-        printf 'blocks ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart %s\n' "$_svc" >>"$SUDOERS_TMP"
+        _emit_svc_rules "$_svc"
     done
 fi
 if sudo visudo -cf "$SUDOERS_TMP" >/dev/null 2>&1; then
@@ -104,6 +113,15 @@ sudo chmod 750 "$_BSENV_HOME/.cache"
 sudo chown -R blocks:blocksscreen "$_BSENV_HOME/.cache/blockscreen"
 sudo chmod 775 "$_BSENV_HOME/.cache/blockscreen"
 echo_ok "Apt cache directory ready"
+
+# Re-arm the crash-loop boot counter on a deliberate deploy. A stale count left
+# over from a prior unstable period would otherwise let BlocksScreen-start.sh
+# roll this fresh install straight back to last_good on the first boot. Reset
+# boot_attempts only; last_good_commit stays as the rollback target so crash-loop
+# protection of the new code still works.
+echo_info "Re-arming crash-loop boot counter ..."
+printf '0\n' | sudo -u "$_BSENV_USER" tee "$_BSENV_HOME/.cache/blockscreen/boot_attempts" >/dev/null 2>&1 || true
+echo_ok "Boot counter re-armed (boot_attempts=0)"
 
 echo_info "Adding blocks to video group (required for framebuffer splash) ..."
 sudo usermod -aG video blocks 2>/dev/null || true

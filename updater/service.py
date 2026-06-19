@@ -36,6 +36,7 @@ from updater.executor import (
     git_repair,
     git_reset_to_hash,
     restart_service,
+    restart_service_noblock,
     run_hook,
     wait_for_service_active,
 )
@@ -48,6 +49,12 @@ _HISTORY_PATH = Path.home() / ".cache" / "blockscreen" / "update_history.jsonl"
 # diff-based hook (`git diff <prev> <new>`) sees every file as newly added and
 # performs a full install, instead of no-op'ing on an empty prev_hash.
 _GIT_EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+
+# Services that host the updater's own D-Bus client (the UI). They are restarted
+# non-blocking and never waited on, so a self-update cannot tear down or abort
+# the in-flight batch; new UI code loads on the queued restart, daemon code on
+# the next reboot.
+_FIRE_AND_FORGET_SERVICES = frozenset({"BlocksScreen.service"})
 
 
 class ProgressCallback(Protocol):
@@ -308,25 +315,34 @@ class UpdateService:
                     self._log.error("%s: hook failed: %s", c.name, hook_err)
                     await self._abort_batch(batch, prev, touched, restarted, "hook")
                     return
-            # Restart each unique service once, pinging progress before each
-            # (up to 90s) restart so the UI busy-watchdog stays fed across services.
+            # Restart each unique non-self service once and verify it. Mark bounced
+            # before the restart so an abort re-restarts even a service that failed
+            # its health check, onto the reverted code. Self/UI services are deferred.
             seen: set[str] = set()
+            ui_components: list[ComponentConfig] = []
             for c in batch:
                 if not c.service or c.service in seen:
                     continue
                 seen.add(c.service)
+                if c.service in _FIRE_AND_FORGET_SERVICES:
+                    ui_components.append(c)
+                    continue
                 self._cb("on_step", c.name, 4, 4)
-                # Mark bounced before the restart so an abort re-restarts even the
-                # service that failed its health check, onto the reverted code.
                 restarted.append(c.service)
                 if not await self._restart_one(c.service):
                     await self._abort_batch(batch, prev, touched, restarted, "restart")
                     return
+            # All verified services are up: the batch has succeeded. Record success
+            # and persist BEFORE the fire-and-forget UI restart, which tears down the
+            # D-Bus client, so a completed update can never be reverted by it.
             for c in batch:
                 self._history(
                     "update_success", c.name, new_hash=new_hashes[c.name][:12]
                 )
                 self._cb("on_component_done", c.name, True)
+            for c in ui_components:
+                self._cb("on_step", c.name, 4, 4)
+                await restart_service_noblock(c.service)
         except asyncio.CancelledError:
             self._log.warning("git batch cancelled — aborting")
             await self._shielded(
@@ -758,12 +774,20 @@ class UpdateService:
                 return False
 
             self._cb("on_step", component.name, 4, 4)
-            if component.service and not await self._restart_one(component.service):
+            fire_and_forget = component.service in _FIRE_AND_FORGET_SERVICES
+            if (
+                component.service
+                and not fire_and_forget
+                and not await self._restart_one(component.service)
+            ):
                 await self._rollback(component, prev_hash, "restart")
                 return False
 
             self._history("update_success", component.name, new_hash=new_hash[:12])
             self._cb("on_component_done", component.name, True)
+            # Self/UI service: queue the restart only after success is recorded.
+            if fire_and_forget and component.service:
+                await restart_service_noblock(component.service)
             return True
         except asyncio.CancelledError:
             self._log.warning(
