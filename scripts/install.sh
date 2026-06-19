@@ -279,9 +279,14 @@ function install_systemd_service() {
     echo "blocks ALL=(root) NOPASSWD: /usr/bin/chvt 7" |
         sudo tee /etc/sudoers.d/blockscreen-chvt >/dev/null
     sudo chmod 440 /etc/sudoers.d/blockscreen-chvt
+    # blocksscreen group must exist before the chown (create_policy creates it
+    # later); groupadd -f is idempotent. Without this the chown failed and logs/
+    # stayed root-owned, crashing the blocks GUI on first start.
+    sudo groupadd -f blocksscreen
     sudo mkdir -p "$BS_PATH/logs"
     sudo chown blocks:blocksscreen "$BS_PATH/logs"
-    sudo chmod 775 "$BS_PATH/logs"
+    # setgid so files created by root or blocks inherit the blocksscreen group.
+    sudo chmod 2775 "$BS_PATH/logs"
 
     if systemctl is-enabled "BlocksScreen.service" &>/dev/null; then
         echo_ok "BlocksScreen service installed and enabled"

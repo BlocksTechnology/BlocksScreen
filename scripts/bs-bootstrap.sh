@@ -41,6 +41,7 @@ _as_blocks "$BSENV/bin/python3.11" -c "import sdbus" 2>/dev/null \
 # 3. Full pinned requirements when the set changed (also done by post-merge).
 REQS_HASH=$(md5sum "$BS_PATH/scripts/requirements.txt" | cut -d' ' -f1)
 SENTINEL="$BSENV/.blockscreen-reqs-hash"
+ATTEMPT="$BSENV/.blockscreen-reqs-attempt"
 if [ ! -f "$SENTINEL" ] || [ "$(cat "$SENTINEL")" != "$REQS_HASH" ]; then
     if _as_blocks "$BSENV/bin/pip" install --quiet \
         --only-binary :all: \
@@ -49,6 +50,25 @@ if [ ! -f "$SENTINEL" ] || [ "$(cat "$SENTINEL")" != "$REQS_HASH" ]; then
         -r "$BS_PATH/scripts/requirements.txt"; then
         echo "$REQS_HASH" >"$SENTINEL"
         chown "$_BSENV_USER" "$SENTINEL" 2>/dev/null || true
+        rm -f "$ATTEMPT" 2>/dev/null || true
+    else
+        # pip resolves -r atomically: a single dep without an aarch64 wheel
+        # rejects the whole set, the sentinel never advances, and bootstrap
+        # re-thrashes this install on every boot. Bound the retries — keep
+        # trying for a few boots (covers transient/offline failures), then
+        # accept the partial venv so a deterministically-failing set stops
+        # thrashing the boot path.
+        _prev=$(cut -d' ' -f1 "$ATTEMPT" 2>/dev/null || true)
+        _cnt=$(cut -d' ' -f2 "$ATTEMPT" 2>/dev/null || true)
+        case "$_cnt" in '' | *[!0-9]*) _cnt=0 ;; esac
+        if [ "$_prev" = "$REQS_HASH" ]; then _cnt=$((_cnt + 1)); else _cnt=1; fi
+        echo "$REQS_HASH $_cnt" >"$ATTEMPT"
+        chown "$_BSENV_USER" "$ATTEMPT" 2>/dev/null || true
+        if [ "$_cnt" -ge 3 ]; then
+            echo "[bs-bootstrap] requirements failed ${_cnt}x; giving up to stop boot thrash (venv left as-is)"
+            echo "$REQS_HASH" >"$SENTINEL"
+            chown "$_BSENV_USER" "$SENTINEL" 2>/dev/null || true
+        fi
     fi
 fi
 
