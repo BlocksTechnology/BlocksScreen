@@ -16,6 +16,7 @@ from updater.executor import (
     check_apt_status,
     check_git_status,
     git_checkout,
+    git_clone,
     git_commits_behind,
     git_describe,
     git_fetch,
@@ -145,6 +146,40 @@ class TestRun:
                 await _run(["/bin/sleep", "999"], timeout=5.0, cwd=tmp_path)
         # Should call killpg once with SIGKILL on cancel
         assert killpg_mock.call_count == 1
+
+
+class TestGitClone:
+    @pytest.mark.asyncio
+    async def test_rejects_non_https_url(self, tmp_path):
+        ok, msg = await git_clone("git@github.com:x/y", tmp_path / "y")
+        assert ok is False
+        assert "https" in msg
+
+    @pytest.mark.asyncio
+    async def test_rejects_none_path(self):
+        ok, msg = await git_clone("https://github.com/x/y", None)
+        assert ok is False
+
+    @pytest.mark.asyncio
+    async def test_rejects_bad_branch(self, tmp_path):
+        ok, msg = await git_clone(
+            "https://github.com/x/y", tmp_path / "y", branch="../evil"
+        )
+        assert ok is False
+        assert "branch" in msg
+
+    @pytest.mark.asyncio
+    async def test_builds_clone_argv_with_branch(self, tmp_path):
+        dest = tmp_path / "y"
+        with patch(
+            "updater.executor._run", new_callable=AsyncMock, return_value=(True, "")
+        ) as mock_run:
+            ok, _ = await git_clone("https://github.com/x/y", dest, branch="main")
+        assert ok is True
+        argv = mock_run.call_args[0][0]
+        assert argv[:2] == ["/usr/bin/git", "clone"]
+        assert "--branch" in argv and "main" in argv
+        assert argv[-2:] == ["https://github.com/x/y", str(dest)]
 
 
 class TestGitGetHash:

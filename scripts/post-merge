@@ -20,6 +20,7 @@ changed=$(git -C "$BS_PATH" diff ORIG_HEAD HEAD --name-only 2>/dev/null || true)
 # 1. Pre-install pip requirements so the next service start is instant.
 REQS_HASH=$(md5sum "$BS_PATH/scripts/requirements.txt" | cut -d' ' -f1)
 SENTINEL="$BSENV/.blockscreen-reqs-hash"
+ATTEMPT="$BSENV/.blockscreen-reqs-attempt"
 if [ ! -f "$SENTINEL" ] || [ "$(cat "$SENTINEL")" != "$REQS_HASH" ]; then
     echo "[post-merge] requirements changed — pre-installing deps (this may take a few minutes) ..."
     if "$BSENV/bin/pip" install --quiet \
@@ -28,7 +29,22 @@ if [ ! -f "$SENTINEL" ] || [ "$(cat "$SENTINEL")" != "$REQS_HASH" ]; then
         --upgrade-strategy=only-if-needed \
         -r "$BS_PATH/scripts/requirements.txt"; then
         echo "$REQS_HASH" >"$SENTINEL"
+        rm -f "$ATTEMPT" 2>/dev/null || true
         echo "[post-merge] deps installed"
+    else
+        # An atomic -r failure (e.g. a dep without an aarch64 wheel) must not
+        # re-thrash on every pull. Retry a few times — covering transient or
+        # offline failures — then accept the partial venv so the sentinel
+        # advances and the boot path stops retrying a known-failing set.
+        _prev=$(cut -d' ' -f1 "$ATTEMPT" 2>/dev/null || true)
+        _cnt=$(cut -d' ' -f2 "$ATTEMPT" 2>/dev/null || true)
+        case "$_cnt" in '' | *[!0-9]*) _cnt=0 ;; esac
+        if [ "$_prev" = "$REQS_HASH" ]; then _cnt=$((_cnt + 1)); else _cnt=1; fi
+        echo "$REQS_HASH $_cnt" >"$ATTEMPT"
+        if [ "$_cnt" -ge 3 ]; then
+            echo "[post-merge] deps failed ${_cnt}x; giving up to stop thrash (venv left as-is)"
+            echo "$REQS_HASH" >"$SENTINEL"
+        fi
     fi
 fi
 
