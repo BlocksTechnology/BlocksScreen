@@ -14,6 +14,7 @@ _SERVICE_RE = re.compile(r"^[a-zA-Z0-9@:._-]+\.service$")
 _GIT_BRANCH_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._/-]*$")
 _GIT_VERSION_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._/+-]*$")
 _COMPONENT_NAME_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_-]*$")
+_GIT_URL_RE = re.compile(r"^https://[a-zA-Z0-9._~:/?#\[\]@!$&'()*+,;=%-]+$")
 _SERVICE_BANNED = set("/\\;&|$`") | {" ", "\t"}
 OVERRIDE_PATH = Path("~/printer_data/config/blockscreen_updater.yaml").expanduser()
 
@@ -89,6 +90,22 @@ def _validate_component(data: dict) -> ComponentConfig | None:
         except (TypeError, ValueError):
             logger.warning("Component %r has invalid order value", name)
 
+        url = data.get("url")
+        if url is not None and not _GIT_URL_RE.match(str(url)):
+            logger.warning(
+                "Component %r has invalid (non-https) url %r — dropping url", name, url
+            )
+            url = None
+
+        install_if_missing = bool(data.get("install_if_missing", False))
+        if install_if_missing and not url:
+            logger.warning(
+                "Component %r sets install_if_missing but has no valid url — "
+                "cannot provision, disabling",
+                name,
+            )
+            install_if_missing = False
+
         return ComponentConfig(
             name=name,
             kind=comp_type,
@@ -98,6 +115,8 @@ def _validate_component(data: dict) -> ComponentConfig | None:
             order=order,
             branch=str(branch) if branch else None,
             version=str(version) if version else None,
+            url=str(url) if url else None,
+            install_if_missing=install_if_missing,
         )
     apt_order = 50
     try:

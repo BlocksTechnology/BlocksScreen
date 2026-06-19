@@ -155,9 +155,7 @@ class ConfigManager:
         self.config = config.get_section("configuration_manager", fallback=None)
 
         if not self.config:
-            _logger.error(
-                "Failed fetching Configuration Manager section, falling back to default"
-            )
+            _logger.debug("No Configuration Manager section; falling back to defaults")
 
         self.repo = pathlib.Path(
             (
@@ -169,7 +167,7 @@ class ConfigManager:
         ).expanduser()
         self.mergeLock = threading.Lock()
         if not self.repo.exists() or not self.repo.is_dir():
-            _logger.error("Repo directory does not exist")
+            _logger.debug("Config repo directory %s does not exist", self.repo)
             raise NotADirectoryError("Repository directory does not exists")
 
         if not is_git_repo(self.repo):
