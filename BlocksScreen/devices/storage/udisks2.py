@@ -150,6 +150,9 @@ class UDisksDBusAsync(QtCore.QThread):
         self.gcodes_path: pathlib.Path = pathlib.Path(gcodes_dir)
         self.system_bus: sdbus.SdBus = sdbus.sd_bus_open_system()
         self._active: bool = False
+        # Set before the bus check: close() reads both on the failure path.
+        self.loop: asyncio.AbstractEventLoop | None = None
+        self.controlled_devs: dict[str, Device] = {}
         if not self.system_bus:
             self.close()
             return
@@ -159,10 +162,8 @@ class UDisksDBusAsync(QtCore.QThread):
             object_path="/org/freedesktop/UDisks2",
             bus=self.system_bus,
         )
-        self.loop: asyncio.AbstractEventLoop | None = None
         self.stop_event: asyncio.Event = asyncio.Event()
         self.listener_running: bool = False
-        self.controlled_devs: dict[str, Device] = {}
         self._cleanup_broken_symlinks()
         self._cleanup_legacy_dir()
 
@@ -171,41 +172,81 @@ class UDisksDBusAsync(QtCore.QThread):
         return self._active
 
     def run(self) -> None:
-        """Start UDisks2 USB monitoring"""
+        """Start UDisks2 USB monitoring.
+
+        Shutdown is driven by cancelling the listener tasks (see :meth:`close`),
+        not by stopping the loop out from under ``run_until_complete``. The old
+        ``loop.stop()`` teardown left the ``monitor_dbus`` future pending and
+        raised ``RuntimeError: Event loop stopped before Future completed``, so
+        ``run`` exited the thread with code 1 and dirtied the X session on
+        restart. Cancelling makes ``monitor_dbus``'s ``gather`` finish, so
+        ``run_until_complete`` returns normally.
+        """
         self.stop_event.clear()
+        self.loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(self.loop)
+        self._active = True
         try:
-            self.loop = asyncio.new_event_loop()
-            self._active = True
-            asyncio.set_event_loop(self.loop)
             self.loop.run_until_complete(self.monitor_dbus())
         except asyncio.CancelledError as err:
-            logging.error("Caught exception on udisks2 monitor, %s", err)
-            self.close()
-            return
+            logging.info("UDisks2 monitor cancelled: %s", err)
         except RuntimeError as err:
-            # close() stops the loop mid run_until_complete; expected on shutdown.
+            # Defensive: a legacy abrupt loop.stop() would surface here. Expected
+            # only during shutdown; anything else is a real fault worth surfacing.
             if self.stop_event.is_set():
-                logging.debug("udisks2 monitor stopped during shutdown: %s", err)
+                logging.debug("UDisks2 monitor stopped during shutdown: %s", err)
             else:
-                logging.error("udisks2 monitor unexpected RuntimeError: %s", err)
+                logging.warning("UDisks2 monitor unexpected RuntimeError: %s", err)
+        finally:
+            self._drain_loop()
+            self._active = False
+
+    def _cancel_tasks(self) -> None:
+        """Cancel every tracked task. Scheduled onto the loop thread."""
+        for task in list(self.task_stack):
+            _ = task.cancel()
+
+    def _drain_loop(self) -> None:
+        """Cancel any stragglers and close the loop so nothing stays pending."""
+        if self.loop is None:
             return
+        try:
+            pending = asyncio.all_tasks(self.loop)
+            for task in pending:
+                _ = task.cancel()
+            if pending:
+                self.loop.run_until_complete(
+                    asyncio.gather(*pending, return_exceptions=True)
+                )
+            self.loop.run_until_complete(self.loop.shutdown_asyncgens())
+        except Exception as e:
+            logging.debug("UDisks2 loop drain encountered: %s", e)
+        finally:
+            self.loop.close()
 
     def close(self) -> None:
-        """Close usb devices monitoring thread and run loop"""
+        """Stop the monitor thread and tear the event loop down cleanly.
+
+        Requests cancellation of the tracked tasks from inside the loop thread
+        and lets :meth:`run` unwind on its own, instead of stopping the loop
+        mid-future (which raised ``RuntimeError``). ``terminate`` is kept only
+        as a last-resort fallback if the thread fails to stop in time.
+        """
         try:
-            if not self.loop:
-                return
-            if self.loop.is_running():
+            loop = self.loop
+            if loop is not None and loop.is_running():
                 self.stop_event.set()
-                self.loop.call_soon_threadsafe(self.loop.stop)
-            _ = self.wait()
+                loop.call_soon_threadsafe(self._cancel_tasks)
+            if self.isRunning() and not self.wait(5000):
+                logging.warning("UDisks2 monitor did not stop in time; terminating")
+                self.terminate()
+                _ = self.wait()
             self._active = False
-            for path in self.controlled_devs.keys():
+            for path in list(self.controlled_devs.keys()):
                 dev: Device = self.controlled_devs.pop(path)
                 dev.delete()
-            self.terminate()
             self.deleteLater()
-        except asyncio.CancelledError as e:
+        except Exception as e:
             logging.error(
                 "Caught exception while trying to close Udisks2 monitor: %s", e
             )
@@ -229,7 +270,7 @@ class UDisksDBusAsync(QtCore.QThread):
         for name, coro in tasks.items():
             t = asyncio.create_task(coro, name=name)
             self.task_stack.add(t)
-            t.add_done_callback(lambda _: self.task_stack.discard(t))
+            t.add_done_callback(self.task_stack.discard)
             managed_tasks.append(t)
         try:
             await asyncio.gather(*managed_tasks)
