@@ -1,8 +1,10 @@
 import asyncio
-from unittest.mock import MagicMock, AsyncMock
+import json
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-import json
+
+from updater.models import ComponentStatus
 
 
 class TestUpdaterInterfaceImport:
@@ -346,3 +348,21 @@ class TestMethodReturnValues:
         await asyncio.sleep(0)  # yield to spawned task
         # Task should have been spawned
         assert len(svc._background_tasks) > 0
+
+    @pytest.mark.asyncio
+    async def test_update_all_includes_errored_git_repo(self, svc):
+        """The one Update button must reach an errored (e.g. corrupt) git repo."""
+        svc._svc.check_status = AsyncMock(
+            return_value={
+                "RF50-Klipper": ComponentStatus(
+                    name="RF50-Klipper", kind="git", error="repo is corrupt"
+                ),
+                "klipper": ComponentStatus(name="klipper", kind="git"),
+            }
+        )
+        svc._svc.update_all = AsyncMock()
+        svc._svc.background_apt_upgrade = AsyncMock()
+        await svc._run_update_all()
+        called_with = svc._svc.update_all.call_args[0][0]
+        assert "RF50-Klipper" in called_with
+        assert "klipper" not in called_with  # clean repo not updated

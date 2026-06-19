@@ -171,6 +171,43 @@ class BlocksScreenConfig:
                 raise
             return default
 
+    def getlists(
+        self,
+        option: str,
+        default: Sentinel | list[Any] = Sentinel.MISSING,
+        sep: str | tuple[str, ...] = ",",
+        parser: type = str,
+    ) -> list[Any]:
+        """Get option value parsed as a list
+
+        Args:
+            option (str): option name
+            default (Sentinel | list, optional): Default value when option missing.
+            sep (str | tuple[str, ...], optional): Single separator string or tuple
+                of separators. Defaults to ",".
+            parser (type, optional): Type to cast each list item. Defaults to str.
+
+        Returns:
+            list: Parsed list of values, or *default* when option is missing.
+        """
+        raw = self.config.get(section=self.section, option=option, fallback=None)
+        if raw is None:
+            if default is not Sentinel.MISSING:
+                return default
+            return []
+        if not raw:
+            if default is not Sentinel.MISSING:
+                return default
+            return []
+
+        if isinstance(sep, str):
+            items = [item.strip() for item in raw.split(sep)]
+        else:
+            pattern = "|".join(re.escape(s) for s in sep)
+            items = [item.strip() for item in re.split(pattern, raw)]
+
+        return [parser(item) for item in items if item]
+
     def getint(
         self,
         option: str,
