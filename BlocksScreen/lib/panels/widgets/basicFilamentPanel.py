@@ -10,7 +10,6 @@ from lib.printer import Printer
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_frame import BlocksCustomFrame
 from lib.utils.icon_button import IconButton
-from lib.utils.blocks_linedit import BlocksCustomLinEdit
 
 logger = logging.getLogger(__name__)
 
@@ -261,7 +260,7 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         return False
     
 
-    def setupInfoBox_bare(self):
+    def setupInfoBox(self):
         root = BlocksCustomFrame(parent=self.filament_control_page)
         root.setMinimumSize(QtCore.QSize(600, 80))
         root.setMaximumSize(QtCore.QSize(600, 80))
@@ -309,74 +308,6 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         
 
         return root
-    
-    def setupInfoBox(self):
-        root = QtWidgets.QWidget(parent=self.filament_control_page)
-        root.setFixedSize(600, 130)
-        root.setObjectName("root")
-
-        hozlay = QtWidgets.QHBoxLayout(root)
-        hozlay.setContentsMargins(16, 12, 16, 12)
-        hozlay.setSpacing(16)
-
-        # Color swatch
-        self._swatch = QtWidgets.QLabel()
-        self._swatch.setFixedSize(48, 48)
-        self._swatch.setStyleSheet("border-radius: 4px; background: #333;")
-        hozlay.addWidget(self._swatch, 0, QtCore.Qt.AlignmentFlag.AlignVCenter)
-
-        # Divider
-        divider = QtWidgets.QFrame()
-        divider.setFrameShape(QtWidgets.QFrame.Shape.VLine)
-        divider.setStyleSheet("color: rgba(255,255,255,40);")
-        hozlay.addWidget(divider)
-
-        # Info grid
-        grid_widget = QtWidgets.QWidget()
-        grid = QtWidgets.QGridLayout(grid_widget)
-        grid.setContentsMargins(0, 0, 0, 0)
-        grid.setHorizontalSpacing(14)
-        grid.setVerticalSpacing(6)
-
-        key_font = QtGui.QFont()
-        key_font.setPointSize(11)
-
-        val_font = QtGui.QFont()
-        val_font.setPointSize(12)
-
-        def make_key(text: str) -> QtWidgets.QLabel:
-            lbl = QtWidgets.QLabel(text)
-            lbl.setFont(key_font)
-            lbl.setStyleSheet("color: rgba(255,255,255,120);")
-            return lbl
-
-        def make_val(text: str = "—", editable: bool = True) -> QtWidgets.QWidget:
-            if editable:
-                w = BlocksCustomLinEdit(self)
-                w.setText(text)
-            else:
-                w = QtWidgets.QLabel(text)
-                w.setStyleSheet("color: white;")
-            w.setFont(val_font)
-            return w
-
-        self._lbl_temp  = make_val("—")
-        self._lbl_color = make_val("—")
-        self._lbl_mat   = make_val("—")
-
-        rows = [
-            ("Temperature", self._lbl_temp ),
-            ("Color",       self._lbl_color),
-            ("Material",    self._lbl_mat),
-        ]
-        for i, (key, val) in enumerate(rows):
-            grid.addWidget(make_key(key), i, 0, QtCore.Qt.AlignmentFlag.AlignVCenter)
-            grid.addWidget(val,           i, 1, QtCore.Qt.AlignmentFlag.AlignVCenter)
-
-        hozlay.addWidget(grid_widget, 1)
-
-        return root
-
 
     def setupUi(self):
         self.setObjectName("self")
@@ -742,34 +673,9 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
 
     def retranslateUi(self):
         _translate = QtCore.QCoreApplication.translate
-        self.setWindowTitle(_translate("self", "StackedWidget"))
         self.filament_page_header_title.setText(_translate("self", "Filament Control"))
-        self.filament_page_header_title.setProperty(
-            "class", _translate("self", "title_text")
-        )
         self.main_back_button.setText(_translate("self", "Back"))
-        self.main_back_button.setProperty("class", _translate("self", "menu_btn"))
-        self.main_back_button.setProperty("button_type", _translate("self", "icon"))
         self.filament_page_load_btn.setText(_translate("self", "Load"))
-        self.filament_page_load_btn.setProperty("class", _translate("self", "menu_btn"))
-        self.filament_page_load_btn.setProperty(
-            "button_type", _translate("self", "normal")
-        )
         self.filament_page_unload_btn.setText(_translate("self", "Unload"))
-        self.filament_page_unload_btn.setProperty(
-            "class", _translate("self", "menu_btn")
-        )
-        self.filament_page_unload_btn.setProperty(
-            "button_type", _translate("self", "normal")
-        )
         self.load_header_page_title.setText(_translate("self", "Load Filament"))
-        self.load_header_page_title.setProperty(
-            "class", _translate("self", "title_text")
-        )
         self.load_header_back_button.setText(_translate("self", "Back"))
-        self.load_header_back_button.setProperty(
-            "class", _translate("self", "menu_btn")
-        )
-        self.load_header_back_button.setProperty(
-            "button_type", _translate("self", "icon")
-        )
