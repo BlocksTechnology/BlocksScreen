@@ -93,7 +93,9 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         """
         filament_type = FilamentTypes.UNKNOWN
         for i in FilamentTypes:
-            if i.value.name in save_variables["variables"]["filament_type"]:
+            variables = save_variables.get("variables", {})
+            filament_type = variables.get("filament_type", "")
+            if filament_type and i.value.name in filament_type:
                 filament_type = i
                 break
         self._lbl_mat.setText(filament_type.value.name)
@@ -245,7 +247,7 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
     def find_routine_objects(self):
         if not self.printer:
             return
-        _available_objects = self.printer.available_objects.copy()
+        _available_objects = self.printer.available_objects
         if "load_filament" in _available_objects.keys():
             self.has_load_unload_objects = True
             return True
@@ -436,13 +438,24 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
             QtWidgets.QSizePolicy.Policy.Maximum,
             QtWidgets.QSizePolicy.Policy.Minimum,
         )
-
+        spacerItem6 = QtWidgets.QSpacerItem(
+            20,
+            40,
+            QtWidgets.QSizePolicy.Policy.Minimum,
+            QtWidgets.QSizePolicy.Policy.Expanding,
+        )
+        spacerItem7 = QtWidgets.QSpacerItem(
+            20,
+            40,
+            QtWidgets.QSizePolicy.Policy.Minimum,
+            QtWidgets.QSizePolicy.Policy.Expanding,
+        )
         self.verticalLayout.addLayout(self.filament_page_header_layout)
         self.verticalLayout.addItem(spacerItem2)
 
         self.verticalLayout_3 = QtWidgets.QVBoxLayout()
         self.verticalLayout_3.setObjectName("verticalLayout_3")
-        self.verticalLayout_3.addItem(spacerItem2)
+        self.verticalLayout_3.addItem(spacerItem6)
 
         self.verticalLayout_3.addWidget(
             self.setupInfoBox(), 0, QtCore.Qt.AlignmentFlag.AlignHCenter
@@ -498,7 +511,7 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         self.verticalLayout.addLayout(self.verticalLayout_3)
 
         self.verticalLayout.addItem(spacerItem4)
-        self.verticalLayout.addItem(spacerItem2)
+        self.verticalLayout.addItem(spacerItem7)
         self.addWidget(self.filament_control_page)
         sizePolicy = QtWidgets.QSizePolicy(
             QtWidgets.QSizePolicy.Policy.MinimumExpanding,
@@ -631,13 +644,13 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         font.setPointSize(19)
         font.setStyleStrategy(QtGui.QFont.StyleStrategy.PreferAntialias)
 
-        for obj_name, text, pixmap_path, row, col, type in filament_buttons:
+        for obj_name, text, pixmap_path, row, col, _filament_type in filament_buttons:
             btn = BlocksCustomButton(parent=self.load_page)
             btn.setMinimumSize(QtCore.QSize(200, 80))
             btn.setMaximumSize(QtCore.QSize(200, 80))
             btn.setFont(font)
             btn.setText(text)
-            btn.clicked.connect(lambda: self.load_filament(0, type))
+            btn.clicked.connect(partial(self.load_filament, 0, _filament_type))
             btn.setProperty("icon_pixmap", QtGui.QPixmap(pixmap_path))
             btn.setObjectName(obj_name)
             self.load_page_content_layout.addWidget(btn, row, col, 1, 1)
