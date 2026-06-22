@@ -12,7 +12,7 @@ from datetime import datetime
 from typing import Literal
 
 HOME = pathlib.Path.home()
-CONFIG_REPO = pathlib.Path.joinpath(HOME, "github", "RF50-Klipper")
+CONFIG_REPO = pathlib.Path.joinpath(HOME, "RF50-Klipper")
 CONFIG_DIR = pathlib.Path.joinpath(HOME, "configs")
 KLIPPER_CONFIG_DIR = pathlib.Path.joinpath(HOME, "printer_data", "config")
 BACKUP_DIR = pathlib.Path(HOME, ".rf50_backups")
