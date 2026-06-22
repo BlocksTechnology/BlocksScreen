@@ -13,7 +13,6 @@ from typing import Literal
 
 HOME = pathlib.Path.home()
 CONFIG_REPO = pathlib.Path.joinpath(HOME, "RF50-Klipper")
-CONFIG_DIR = pathlib.Path.joinpath(HOME, "configs")
 KLIPPER_CONFIG_DIR = pathlib.Path.joinpath(HOME, "printer_data", "config")
 BACKUP_DIR = pathlib.Path(HOME, ".rf50_backups")
 DETECTION_CACHE = pathlib.Path.joinpath(HOME, ".rf50_config.json")
@@ -262,6 +261,18 @@ class ConfigManager:
             )
         return False
 
+    def _cleanup_nested(self) -> None:
+        """Remove any config/.../ directories that were incorrectly nested by prior bug"""
+        for entry in list(self.config_dir.rglob("*")):
+            if entry.is_dir():
+                shutil.rmtree(entry, ignore_errors=True)
+                _logger.warning("Removed nested dir: %s" % (entry))
+            # if entry.is_dir() and entry.name == "config":
+            #     p = entry.parent
+            #     if p.name == "config":
+            #         shutil.rmtree(entry, ignore_errors=True)
+            #         _logger.warning("Removed nested config dir: %s", entry)
+
     def get_file_stat(self, root, file):
         """Get file stat"""
         _root = pathlib.Path(root)
@@ -273,7 +284,10 @@ class ConfigManager:
         return file_dir.stat(follow_symlinks=False)
 
     def _get_missing_symlinks(
-        self, root: pathlib.Path | str, repo: pathlib.Path | str
+        self,
+        root: pathlib.Path | str,
+        repo: pathlib.Path | str,
+        mode: Literal[0, 1] = 0,
     ) -> list[pathlib.Path]:
         """Scan the `root` directory for missing symbolic links compared
         against files on `repo` directory.
@@ -291,6 +305,15 @@ class ConfigManager:
         _resolved: set[str] = {
             f.resolve().as_posix() for f in _root.rglob("*") if f.is_symlink()
         }
+
+        if mode:
+            for f in list(_root.rglob("*")):
+                if f.is_symlink() and f.is_dir():
+                    resolved_dir = f.resolve()
+                    if resolved_dir.exists():
+                        for sub in resolved_dir.rglob("*"):
+                            _resolved.add(sub.as_posix())
+
         _missing = []
         for d in _repo.rglob("*.cfg"):
             # ignore copy files
@@ -333,10 +356,27 @@ class ConfigManager:
                     target = self.config_dir / pathlib.Path(*src_rel.parts[1:])
                     if target.exists() and target.is_symlink():
                         continue
+                    _logger.info(pathlib.Path(*target.parts[:-1]))
                     ensure_dir(pathlib.Path(*target.parts[:-1]))
                     target.symlink_to(src)
                 return
-            # TODO: Second Mode -> symlinks directories entire contents of the repo
+            elif mode:
+                for entry in sorted(
+                    self.repo.iterdir(), key=lambda p: (not p.is_dir(), p.name)
+                ):
+                    name = entry.name
+                    if name.startswith("."):
+                        continue
+                    target = self.config_dir / name
+                    if target.exists():
+                        continue
+                    ensure_dir(target.parent)
+                    if entry.is_dir():
+                        target.symlink_to(entry.resolve(), target_is_directory=True)
+                        _logger.info("Directory symlink: %s -> %s", target, entry)
+                    elif entry.is_file() and name not in self.cpy_files:
+                        target.symlink_to(entry.resolve())
+                        _logger.info("File symlink %s -> %s", target, entry)
 
         except Exception as e:
             _logger.error(
@@ -505,6 +545,7 @@ class ConfigManager:
         """Synchronizes configuration repo with the
         machines configuration"""
         try:
+            self._cleanup_nested()
             self.cleanup_broken_symlinks(self.config_dir)
             _missing = self._get_missing_symlinks(self.config_dir, self.repo)
             self._symlink_config(_missing)
