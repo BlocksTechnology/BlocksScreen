@@ -2,14 +2,13 @@ import enum
 import logging
 from functools import partial
 
-from PyQt6 import QtCore, QtWidgets, QtGui
-
 from lib.filament import Filament
 from lib.panels.widgets.popupDialogWidget import Popup
 from lib.printer import Printer
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_frame import BlocksCustomFrame
 from lib.utils.icon_button import IconButton
+from PyQt6 import QtCore, QtGui, QtWidgets
 
 logger = logging.getLogger(__name__)
 
@@ -258,7 +257,6 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         if "gcode_macro UNLOAD_FILAMENT" in _available_objects.keys():
             return True
         return False
-    
 
     def setupInfoBox(self):
         root = BlocksCustomFrame(parent=self.filament_control_page)
@@ -300,12 +298,9 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         self.filament_page_info_title_6.setText("Filament Type: ")
         self._lbl_mat.setText("...")
 
-
         hozlay.addWidget(self.filament_page_info_title_6)
         hozlay.addWidget(self.line_2)
         hozlay.addWidget(self._lbl_mat)
-
-        
 
         return root
 
@@ -448,7 +443,7 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         self.verticalLayout_3 = QtWidgets.QVBoxLayout()
         self.verticalLayout_3.setObjectName("verticalLayout_3")
         self.verticalLayout_3.addItem(spacerItem2)
-        
+
         self.verticalLayout_3.addWidget(
             self.setupInfoBox(), 0, QtCore.Qt.AlignmentFlag.AlignHCenter
         )
@@ -505,16 +500,6 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         self.verticalLayout.addItem(spacerItem4)
         self.verticalLayout.addItem(spacerItem2)
         self.addWidget(self.filament_control_page)
-        
-        #-----------------------------------------------------------------------------------------------------
-        #-----------------------------------------------------------------------------------------------------
-        #-----------------------------------------------------------------------------------------------------
-        #-------------------------------------------Load - Page-----------------------------------------------
-        #-----------------------------------------------------------------------------------------------------
-        #-----------------------------------------------------------------------------------------------------
-        #-----------------------------------------------------------------------------------------------------
-
-
         sizePolicy = QtWidgets.QSizePolicy(
             QtWidgets.QSizePolicy.Policy.MinimumExpanding,
             QtWidgets.QSizePolicy.Policy.MinimumExpanding,
