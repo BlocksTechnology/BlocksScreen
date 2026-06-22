@@ -287,9 +287,15 @@ class UpdateService:
                 return
             self._history("update_start", c.name, prev_hash=prev[c.name][:12])
 
+        self._log.info(
+            "git batch start: %d component(s): %s",
+            len(batch),
+            ", ".join(f"{c.name}->{c.service or '-'}" for c in batch),
+        )
         touched: list[ComponentConfig] = []
         restarted: list[str] = []
         try:
+            self._log.info("git batch: stage phase (%d repo(s))", len(batch))
             for c in batch:
                 self._cb("on_step", c.name, 1, 4)
                 touched.append(c)  # mark before staging so a partial stage is reverted
@@ -297,6 +303,7 @@ class UpdateService:
                 if not ok:
                     await self._abort_batch(batch, prev, touched, restarted, reason)
                     return
+            self._log.info("git batch: deps phase")
             for c in batch:
                 self._cb("on_step", c.name, 2, 4)
                 deps_ok, deps_err = await self._install_dependencies(c)
@@ -304,10 +311,17 @@ class UpdateService:
                     self._log.warning("%s: deps failed: %s", c.name, deps_err)
                     await self._abort_batch(batch, prev, touched, restarted, "deps")
                     return
+            self._log.info("git batch: hook phase")
             new_hashes: dict[str, str] = {}
             for c in batch:
                 self._cb("on_step", c.name, 3, 4)
                 new_hashes[c.name] = await git_get_hash(c.path)
+                self._log.info(
+                    "git batch hook: %s %s -> %s",
+                    c.name,
+                    prev[c.name][:8],
+                    new_hashes[c.name][:8],
+                )
                 hook_ok, hook_err = await run_hook(
                     c.name, c.path, new_hashes[c.name], prev[c.name]
                 )
@@ -318,6 +332,7 @@ class UpdateService:
             # Restart each unique non-self service once and verify it. Mark bounced
             # before the restart so an abort re-restarts even a service that failed
             # its health check, onto the reverted code. Self/UI services are deferred.
+            self._log.info("git batch: restart phase")
             seen: set[str] = set()
             ui_components: list[ComponentConfig] = []
             for c in batch:
@@ -325,10 +340,15 @@ class UpdateService:
                     continue
                 seen.add(c.service)
                 if c.service in _FIRE_AND_FORGET_SERVICES:
+                    self._log.info(
+                        "git batch: deferring self/UI service %s to fire-and-forget",
+                        c.service,
+                    )
                     ui_components.append(c)
                     continue
                 self._cb("on_step", c.name, 4, 4)
                 restarted.append(c.service)
+                self._log.info("git batch: restarting %s (verified)", c.service)
                 if not await self._restart_one(c.service):
                     await self._abort_batch(batch, prev, touched, restarted, "restart")
                     return
@@ -340,8 +360,15 @@ class UpdateService:
                     "update_success", c.name, new_hash=new_hashes[c.name][:12]
                 )
                 self._cb("on_component_done", c.name, True)
+            self._log.info(
+                "git batch complete: %d component(s) updated; queueing UI restart(s)",
+                len(batch),
+            )
             for c in ui_components:
                 self._cb("on_step", c.name, 4, 4)
+                self._log.info(
+                    "git batch: fire-and-forget restart of %s (no wait)", c.service
+                )
                 await restart_service_noblock(c.service)
         except asyncio.CancelledError:
             self._log.warning("git batch cancelled — aborting")
@@ -432,6 +459,7 @@ class UpdateService:
         is caught on demand by the normal update flow. Offline-safe: git_repair
         fetches when it can, else we reset to the last recorded good hash.
         """
+        self._log.info("reconcile: boot-checking git components for damage")
         for c in self._components:
             if c.kind != "git" or c.path is None or not c.path.exists():
                 continue
@@ -705,6 +733,7 @@ class UpdateService:
 
     async def _restart_one(self, service: str) -> bool:
         """Restart a service and verify it came active (kill-fallback aware)."""
+        self._log.info("restarting %s and waiting for active", service)
         ok, err = await restart_service(service)
         if not ok:
             self._log.error("restart %s failed: %s", service, err)
@@ -712,6 +741,7 @@ class UpdateService:
         if not await wait_for_service_active(service, timeout=90.0):
             self._log.error("%s did not become active after restart", service)
             return False
+        self._log.info("%s active after restart", service)
         return True
 
     async def _run_git_update(self, component: ComponentConfig) -> bool:
@@ -787,6 +817,11 @@ class UpdateService:
             self._cb("on_component_done", component.name, True)
             # Self/UI service: queue the restart only after success is recorded.
             if fire_and_forget and component.service:
+                self._log.info(
+                    "%s updated; fire-and-forget restart of %s (no wait)",
+                    component.name,
+                    component.service,
+                )
                 await restart_service_noblock(component.service)
             return True
         except asyncio.CancelledError:
