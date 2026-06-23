@@ -267,11 +267,6 @@ class ConfigManager:
             if entry.is_dir():
                 shutil.rmtree(entry, ignore_errors=True)
                 _logger.warning("Removed nested dir: %s" % (entry))
-            # if entry.is_dir() and entry.name == "config":
-            #     p = entry.parent
-            #     if p.name == "config":
-            #         shutil.rmtree(entry, ignore_errors=True)
-            #         _logger.warning("Removed nested config dir: %s", entry)
 
     def get_file_stat(self, root, file):
         """Get file stat"""
@@ -356,7 +351,6 @@ class ConfigManager:
                     target = self.config_dir / pathlib.Path(*src_rel.parts[1:])
                     if target.exists() and target.is_symlink():
                         continue
-                    _logger.info(pathlib.Path(*target.parts[:-1]))
                     ensure_dir(pathlib.Path(*target.parts[:-1]))
                     target.symlink_to(src)
                 return
