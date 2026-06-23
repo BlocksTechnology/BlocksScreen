@@ -48,7 +48,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self.cfg = config
         self.amu_manager: AMUManager = amu_manager
         self.amu_configured = False
-
+        self._popup_callback = None 
         self.ui = self.setupUi()
         self.change_page(self.indexOf(self.ui))
 
@@ -104,6 +104,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self._basic_panel.call_load_panel.connect(self.call_load_panel)
         self._basic_panel.request_back.connect(self.request_back)
         self._basic_panel.request_change_tab.connect(self.request_change_tab)
+        self._basic_panel.filament_selected.connect(self.open_pregate_popup)
         self.amu_manager.mmu_state_changed.connect(
             self._basic_panel.on_mmu_state_changed
         )
@@ -168,6 +169,12 @@ class FilamentTab(QtWidgets.QStackedWidget):
         root.setContentsMargins(16, 12, 16, 12)
         root.setSpacing(8)
 
+        header_layout = QtWidgets.QHBoxLayout(page)
+
+        spacer = QtWidgets.QWidget(self)
+        header_layout.addWidget(spacer)
+
+
         self._popup_title_lbl = QtWidgets.QLabel("Filament Detected", page)
         title_font = QtGui.QFont()
         title_font.setPointSize(20)
@@ -175,7 +182,17 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self._popup_title_lbl.setStyleSheet("color: white; background: transparent;")
         self._popup_title_lbl.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self._popup_title_lbl.setFixedHeight(50)
-        root.addWidget(self._popup_title_lbl)
+        header_layout.addWidget(self._popup_title_lbl)
+
+
+        skip_button = BlocksCustomButton(page)
+        skip_button.setFixedSize(100,80)
+        skip_button.clicked.connect(self.on_popup_accept)
+        header_layout.addWidget(skip_button)
+
+
+
+        root.addLayout(header_layout)
 
         grid_w = QtWidgets.QWidget(page)
         grid = QtWidgets.QGridLayout(grid_w)
@@ -413,22 +430,41 @@ class FilamentTab(QtWidgets.QStackedWidget):
         root.addWidget(frame, 1)
         return page
 
-    def handle_popup(self):
-        """Handles showing the popup for pre-gate filament detection. If multiple gates trigger, they will be queued and shown one at a time."""
+    def handle_popup(self, force=False):
+        """Handles showing the popup for pre-gate filament detection. 
+        If multiple gates trigger, they will be queued and shown one at a time.
+        
+        Args:
+            force (bool): If True, forces the popup to open even if no gates are queued.
+        """
         if self.popup.isVisible():
             return
+            
         if not self.popup_gates:
-            return
-        self.pre_gate_idx = self.popup_gates.popleft()
-        gate = self.pre_gate_idx["gate"]
+            if force:
+                self.pre_gate_idx = {"gate": 0} 
+            else:
+                return
+        else:
+            self.pre_gate_idx = self.popup_gates.popleft()
+            
+        gate = self.pre_gate_idx.get("gate", -1)
         self._popup_title_lbl.setText(f"Filament Detected — Gate {gate}")
         self._popup_stack.setCurrentIndex(0)
         self._selected_spool_id = -2
         self.popup.show()
 
+    QtCore.pyqtSlot(int,str,str,name="open-pregate-popup")
+    def open_pregate_popup(self, temp , material , name , callback= None):
+        self._popup_name.setText(name)
+        self._popup_material.setText(material)
+        self._popup_temp.setText(str(temp))
+        self._popup_callback = callback
+        self.handle_popup(True)
+
     def on_popup_accept(self):
         """Handles the accept action from the pre-gate popup to send the appropriate G-code to map the gate to the spool."""
-        gate = self.pre_gate_idx["gate"]
+        gate = self.pre_gate_idx.get("gate", 0)
         name = self._popup_name.text().strip()
         color = self._popup_color.text().strip("#").strip()
         material = self._popup_material.text().strip()
@@ -452,6 +488,15 @@ class FilamentTab(QtWidgets.QStackedWidget):
 
         self.run_gcode.emit(" ".join(parts))
         self.run_gcode.emit("MMU_GATE_MAP REFRESH=1")
+        
+        if self._popup_callback is not None:
+            try:
+                self._popup_callback()
+            except Exception as e:
+                logger.error(f"Error executing pre-gate accept callback: {e}")
+            finally:
+                self._popup_callback = None 
+
         self.popup.hide()
         self.handle_popup()
 
