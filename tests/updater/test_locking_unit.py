@@ -3,13 +3,21 @@
 from __future__ import annotations
 
 import updater.locking as locking
-from updater.locking import lock_path, process_lock
+from updater.locking import lock_path, process_lock, restart_sentinel_path
 
 
 def test_lock_path_is_under_home_or_run(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
     p = lock_path()
     assert p.name == "updater.lock"
+
+
+def test_restart_sentinel_path_name(monkeypatch, tmp_path):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    p = restart_sentinel_path()
+    assert p.name == "updater-restart-needed"
+    # Shares the runtime dir with the lock so both clear/live together.
+    assert p.parent == lock_path().parent
 
 
 def test_acquire_then_second_attempt_fails(monkeypatch, tmp_path):

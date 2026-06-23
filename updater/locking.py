@@ -14,18 +14,34 @@ from collections.abc import Iterator
 from pathlib import Path
 
 
-def lock_path() -> Path:
-    """Return a user-owned lock path, preferring the runtime dir over the cache."""
+def _runtime_dir() -> Path:
+    """Return a writable user-owned runtime dir, preferring tmpfs over the cache."""
     cache = Path.home() / ".cache" / "blockscreen"
     for d in (Path("/run/blockscreen"), cache):
         try:
             d.mkdir(parents=True, exist_ok=True)
-            return d / "updater.lock"
+            return d
         except OSError:
             continue
     # Both unavailable (broken home): return the cache path so the caller's open()
     # surfaces the error rather than silently falling back to world-writable /tmp.
-    return cache / "updater.lock"
+    return cache
+
+
+def lock_path() -> Path:
+    """Return a user-owned lock path, preferring the runtime dir over the cache."""
+    return _runtime_dir() / "updater.lock"
+
+
+def restart_sentinel_path() -> Path:
+    """Return the sentinel a self-update hook writes instead of restarting.
+
+    Hooks running under the updater append `install`/`code` here rather than
+    restarting the daemon mid-batch; the daemon reads it once the batch is done.
+    Preferring /run (tmpfs) means it clears on reboot, so a crash can never
+    trigger a spurious restart later — the safe floor is 'adopt on next reboot'.
+    """
+    return _runtime_dir() / "updater-restart-needed"
 
 
 @contextlib.contextmanager

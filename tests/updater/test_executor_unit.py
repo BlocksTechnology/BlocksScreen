@@ -827,3 +827,27 @@ class TestCorruption:
             ok, msg = await git_repair(tmp_path)
         assert ok is False
         assert "still corrupt" in msg
+
+
+class TestSelfUpdateEnvStamp:
+    def test_clean_env_marks_self_update(self):
+        from updater.executor import _make_clean_env
+
+        env = _make_clean_env()
+        assert env["BS_UPDATER_SELF_UPDATE"] == "1"
+        assert env["BS_UPDATER_RESTART_SENTINEL"].endswith("updater-restart-needed")
+
+
+class TestVerifyUpdaterImportable:
+    @pytest.mark.asyncio
+    async def test_returns_false_for_missing_path(self):
+        from updater.executor import verify_updater_importable
+
+        assert await verify_updater_importable(Path("/no/such/path")) is False
+
+    @pytest.mark.asyncio
+    async def test_imports_real_package(self):
+        from updater.executor import verify_updater_importable
+
+        # The repo root (cwd) has the importable `updater` package.
+        assert await verify_updater_importable(Path.cwd()) is True

@@ -645,6 +645,63 @@ class TestAtomicBatch:
         assert all(c.args[1] is True for c in cb.on_component_done.call_args_list)
 
     @pytest.mark.asyncio
+    async def test_restart_ui_component_also_restarts_ui(self, tmp_path):
+        """A klipper/RF50-style restart_ui component refreshes BlocksScreen too."""
+        cb = MagicMock()
+        comp = self._git(tmp_path, "klipper", 2, "klipper.service")
+        comp.restart_ui = True
+        svc = UpdateService(callback=cb)
+        svc._components = [comp]
+        svc._state_path = tmp_path / "state.json"
+        with (
+            patch(
+                "updater.service.UpdateService._stage_component",
+                return_value=(True, ""),
+            ),
+            patch(
+                "updater.service.UpdateService._install_dependencies",
+                return_value=(True, ""),
+            ),
+            patch("updater.service.run_hook", return_value=(True, "")),
+            patch("updater.service.restart_service", return_value=(True, "")),
+            patch("updater.service.wait_for_service_active", return_value=True),
+            patch(
+                "updater.service.restart_service_noblock", new=AsyncMock()
+            ) as mock_nb,
+            patch.object(UpdateService, "_apply_deferred_restart", new=AsyncMock()),
+        ):
+            await svc._run_git_batch([comp])
+        mock_nb.assert_awaited_once_with("BlocksScreen.service")
+
+    @pytest.mark.asyncio
+    async def test_cancel_after_commit_does_not_revert(self, tmp_path):
+        """A self-restart SIGTERM (CancelledError) post-success must not revert."""
+        cb = MagicMock()
+        svc, comps = self._svc(tmp_path, cb, n=1)
+        with (
+            patch(
+                "updater.service.UpdateService._stage_component",
+                return_value=(True, ""),
+            ),
+            patch(
+                "updater.service.UpdateService._install_dependencies",
+                return_value=(True, ""),
+            ),
+            patch("updater.service.run_hook", return_value=(True, "")),
+            patch("updater.service.restart_service", return_value=(True, "")),
+            patch("updater.service.wait_for_service_active", return_value=True),
+            patch(
+                "updater.service.UpdateService._apply_deferred_restart",
+                new=AsyncMock(side_effect=asyncio.CancelledError),
+            ),
+            patch("updater.service.git_reset_to_hash", return_value=(True, "")) as mr,
+        ):
+            with pytest.raises(asyncio.CancelledError):
+                await svc._run_git_batch(comps)
+        mr.assert_not_called()  # committed: no revert
+        assert all(c.args[1] is True for c in cb.on_component_done.call_args_list)
+
+    @pytest.mark.asyncio
     async def test_stage_failure_reverts_touched_and_does_not_restart(self, tmp_path):
         cb = MagicMock()
         svc, comps = self._svc(tmp_path, cb, n=2)
@@ -1314,3 +1371,93 @@ class TestPreflightFetch:
             svc._components = comps
             await svc.update_all({"klipper"})
         mock_update.assert_not_called()
+
+
+class TestDeferredRestart:
+    """_apply_deferred_restart: hooks record to the sentinel, daemon acts once."""
+
+    def _svc_with_ui(self):
+        svc = UpdateService()
+        svc._components = [
+            ComponentConfig(
+                name="BlocksScreen",
+                kind="git",
+                path=Path("/home/blocks/BlocksScreen"),
+                service="BlocksScreen.service",
+            )
+        ]
+        return svc
+
+    @pytest.mark.asyncio
+    async def test_no_sentinel_is_noop(self, tmp_path: Path):
+        sentinel = tmp_path / "updater-restart-needed"
+        with (
+            patch("updater.service.restart_sentinel_path", return_value=sentinel),
+            patch("updater.service.restart_service_noblock") as mock_restart,
+            patch.object(UpdateService, "_touch_deploy_flag") as mock_flag,
+        ):
+            svc = self._svc_with_ui()
+            await svc._apply_deferred_restart()
+        mock_restart.assert_not_called()
+        mock_flag.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_install_touches_deploy_flag_not_restart(self, tmp_path: Path):
+        sentinel = tmp_path / "updater-restart-needed"
+        sentinel.write_text("install\n")
+        with (
+            patch("updater.service.restart_sentinel_path", return_value=sentinel),
+            patch("updater.service.restart_service_noblock") as mock_restart,
+            patch(
+                "updater.service.verify_updater_importable", new=AsyncMock()
+            ) as mock_verify,
+            patch.object(UpdateService, "_touch_deploy_flag") as mock_flag,
+        ):
+            svc = self._svc_with_ui()
+            await svc._apply_deferred_restart()
+        mock_flag.assert_called_once()
+        mock_restart.assert_not_called()
+        mock_verify.assert_not_called()
+        assert not sentinel.exists()  # consumed
+
+    @pytest.mark.asyncio
+    async def test_code_restarts_only_when_importable(self, tmp_path: Path):
+        sentinel = tmp_path / "updater-restart-needed"
+        sentinel.write_text("code\n")
+        with (
+            patch("updater.service.restart_sentinel_path", return_value=sentinel),
+            patch(
+                "updater.service.verify_updater_importable",
+                new=AsyncMock(return_value=True),
+            ),
+            patch("updater.service.restart_service_noblock") as mock_restart,
+        ):
+            svc = self._svc_with_ui()
+            await svc._apply_deferred_restart()
+        mock_restart.assert_called_once_with("BlocksScreen-updater.service")
+
+    @pytest.mark.asyncio
+    async def test_code_skips_restart_when_not_importable(self, tmp_path: Path):
+        """Brick-guard: a broken new updater must not restart the daemon."""
+        sentinel = tmp_path / "updater-restart-needed"
+        sentinel.write_text("code\n")
+        with (
+            patch("updater.service.restart_sentinel_path", return_value=sentinel),
+            patch(
+                "updater.service.verify_updater_importable",
+                new=AsyncMock(return_value=False),
+            ),
+            patch("updater.service.restart_service_noblock") as mock_restart,
+        ):
+            svc = self._svc_with_ui()
+            await svc._apply_deferred_restart()
+        mock_restart.assert_not_called()
+
+    def test_read_clear_sentinel_install_outranks_code(self, tmp_path: Path):
+        sentinel = tmp_path / "updater-restart-needed"
+        sentinel.write_text("code\ninstall\ncode\n")
+        assert UpdateService._read_clear_sentinel(sentinel) == "install"
+        assert not sentinel.exists()
+
+    def test_read_clear_sentinel_missing_returns_empty(self, tmp_path: Path):
+        assert UpdateService._read_clear_sentinel(tmp_path / "nope") == ""

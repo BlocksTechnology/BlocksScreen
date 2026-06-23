@@ -9,6 +9,15 @@ if [ -z "${COMPONENT_PATH:-}" ] || [ -z "${PREV_HASH:-}" ] || [ -z "${NEW_HASH:-
 fi
 
 _set_deploy_flag() {
+    # Under the updater (mid-batch), do NOT trigger install-updater now: record
+    # to the sentinel so the daemon touches the deploy flag once the batch is
+    # done. Setting the flag here could fire BlocksScreen-deploy.path mid-batch.
+    if [ -n "${BS_UPDATER_SELF_UPDATE:-}" ] && [ -n "${BS_UPDATER_RESTART_SENTINEL:-}" ]; then
+        mkdir -p "$(dirname "$BS_UPDATER_RESTART_SENTINEL")" 2>/dev/null || true
+        echo "install" >>"$BS_UPDATER_RESTART_SENTINEL"
+        echo "[hook:BlocksScreen] under updater — deferring install-updater to post-batch"
+        return
+    fi
     local _flag="${HOME}/.config/blockscreen/.run-install-updater"
     mkdir -p "$(dirname "$_flag")"
     touch "$_flag"

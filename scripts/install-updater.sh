@@ -72,6 +72,9 @@ else
         _emit_svc_rules "$_svc"
     done
 fi
+# The daemon restarts itself (--no-block) to adopt new updater code after a
+# successful self-update; this service is never in components.yaml.
+_emit_svc_rules BlocksScreen-updater.service
 if sudo visudo -cf "$SUDOERS_TMP" >/dev/null 2>&1; then
     sudo install -m 0440 "$SUDOERS_TMP" "$SUDOERS_FILE"
     echo_ok "Sudoers rules installed"
