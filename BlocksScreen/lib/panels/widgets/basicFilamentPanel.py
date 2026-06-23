@@ -92,9 +92,9 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
             save_variables (dict): dictionary containing the save variables from the printer
         """
         filament_type = FilamentTypes.UNKNOWN
+        variables = save_variables.get("variables", {})
+        filament_type = variables.get("filament_type", "")
         for i in FilamentTypes:
-            variables = save_variables.get("variables", {})
-            filament_type = variables.get("filament_type", "")
             if filament_type and i.value.name in filament_type:
                 filament_type = i
                 break
@@ -652,7 +652,7 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
             btn.setText(text)
             btn.clicked.connect(partial(self.load_filament, 0, _filament_type))
             btn.setProperty("icon_pixmap", QtGui.QPixmap(pixmap_path))
-            btn.setObjectName(obj_name)
+            btn.setObjectName(obj_name):
             self.load_page_content_layout.addWidget(btn, row, col, 1, 1)
 
         self.verticalLayout_2.addLayout(self.load_page_content_layout)
