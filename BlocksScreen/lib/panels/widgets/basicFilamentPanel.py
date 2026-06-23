@@ -46,17 +46,9 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         self.target_temp: int = 0
         self.current_temp: int = 0
         self.has_load_unload_objects = None
-        self._setup_ui()
-
+        self._setupUi()
         self.filament_state = self.FilamentStates.UNKNOWN
 
-    def showEvent(self, a0: QtGui.QShowEvent | None) -> None:
-        """reset to main page every time the panel is shown"""
-        self.change_page(0)
-        return super().showEvent(a0)
-
-    def _setup_ui(self) -> None:
-        self.setupUi()
         self.setCurrentIndex(0)
 
         self.popup = Popup(self)
@@ -84,6 +76,11 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         self.printer.print_stats_update[str, dict].connect(self.on_print_stats_update)
         self.printer.print_stats_update[str, float].connect(self.on_print_stats_update)
         self.printer.save_variables_update.connect(self.on_save_variables_update)
+
+    def showEvent(self, a0: QtGui.QShowEvent | None) -> None:
+        """reset to main page every time the panel is shown"""
+        self.change_page(0)
+        return super().showEvent(a0)
 
     def on_save_variables_update(self, save_variables: dict):
         """receives save variables from the printer and updates the filament type accordingly
@@ -260,7 +257,10 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
             return True
         return False
 
-    def setupInfoBox(self):
+    def _setupInfoBox(self):
+        """
+            returns the info box widget 
+        """
         root = BlocksCustomFrame(parent=self.filament_control_page)
         root.setMinimumSize(QtCore.QSize(600, 80))
         root.setMaximumSize(QtCore.QSize(600, 80))
@@ -306,7 +306,7 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
 
         return root
 
-    def setupUi(self):
+    def _setupUi(self):
         self.setObjectName("self")
         self.resize(710, 411)
 
@@ -458,7 +458,7 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         self.verticalLayout_3.addItem(spacerItem6)
 
         self.verticalLayout_3.addWidget(
-            self.setupInfoBox(), 0, QtCore.Qt.AlignmentFlag.AlignHCenter
+            self._setupInfoBox(), 0, QtCore.Qt.AlignmentFlag.AlignHCenter
         )
 
         self.verticalLayout_3.addItem(spacerItem3)
@@ -652,7 +652,7 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
             btn.setText(text)
             btn.clicked.connect(partial(self.load_filament, 0, _filament_type))
             btn.setProperty("icon_pixmap", QtGui.QPixmap(pixmap_path))
-            btn.setObjectName(obj_name):
+            btn.setObjectName(obj_name)
             self.load_page_content_layout.addWidget(btn, row, col, 1, 1)
 
         self.verticalLayout_2.addLayout(self.load_page_content_layout)
