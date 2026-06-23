@@ -758,6 +758,38 @@ class TestAtomicBatch:
         mock_reset.assert_not_called()
         assert cb.on_error.call_args[0][1] == "prev_hash empty"
 
+    @pytest.mark.asyncio
+    async def test_ui_service_restarted_fire_and_forget(self, tmp_path):
+        # BlocksScreen.service (the UI hosting the updater) must be restarted
+        # non-blocking and NOT verified, so a self-update cannot abort the batch.
+        cb = MagicMock()
+        comp = self._git(tmp_path, "BlocksScreen", 99, "BlocksScreen.service")
+        svc = UpdateService(callback=cb)
+        svc._components = [comp]
+        svc._state_path = tmp_path / "state.json"
+        with (
+            patch(
+                "updater.service.UpdateService._stage_component",
+                return_value=(True, ""),
+            ),
+            patch(
+                "updater.service.UpdateService._install_dependencies",
+                return_value=(True, ""),
+            ),
+            patch("updater.service.run_hook", return_value=(True, "")),
+            patch("updater.service.restart_service") as mock_restart,
+            patch("updater.service.wait_for_service_active") as mock_wait,
+            patch(
+                "updater.service.restart_service_noblock", return_value=(True, "")
+            ) as mock_noblock,
+        ):
+            await svc._run_git_batch([comp])
+        mock_restart.assert_not_called()  # no verified restart of the UI
+        mock_wait.assert_not_called()  # never waits on the UI
+        mock_noblock.assert_called_once_with("BlocksScreen.service")
+        # Success recorded before the fire-and-forget restart.
+        cb.on_component_done.assert_called_once_with("BlocksScreen", True)
+
 
 class TestRecover:
     @pytest.mark.asyncio
