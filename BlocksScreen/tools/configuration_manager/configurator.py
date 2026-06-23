@@ -266,7 +266,7 @@ class ConfigManager:
         for entry in list(self.config_dir.rglob("*")):
             if entry.is_dir():
                 shutil.rmtree(entry, ignore_errors=True)
-                _logger.warning("Removed nested dir: %s" % (entry))
+                _logger.warning("Removed nested dir: %s", entry)
 
     def get_file_stat(self, root, file):
         """Get file stat"""
