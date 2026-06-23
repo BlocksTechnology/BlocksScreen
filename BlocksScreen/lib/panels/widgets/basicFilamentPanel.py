@@ -666,14 +666,10 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         self.verticalLayout_2.addItem(spacerItem20)
         self.addWidget(self.load_page)
 
-        self.retranslateUi()
         self.setCurrentIndex(0)
 
-    def retranslateUi(self):
-        _translate = QtCore.QCoreApplication.translate
-        self.filament_page_header_title.setText(_translate("self", "Filament Control"))
-        self.main_back_button.setText(_translate("self", "Back"))
-        self.filament_page_load_btn.setText(_translate("self", "Load"))
-        self.filament_page_unload_btn.setText(_translate("self", "Unload"))
-        self.load_header_page_title.setText(_translate("self", "Load Filament"))
-        self.load_header_back_button.setText(_translate("self", "Back"))
+        self.filament_page_header_title.setText("Filament Control")
+        self.filament_page_load_btn.setText("Load")
+        self.filament_page_unload_btn.setText("Unload")
+        self.load_header_page_title.setText("Load Filament")
+        self.load_header_back_button.setText("Back")
