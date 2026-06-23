@@ -258,9 +258,6 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         return False
 
     def _setupInfoBox(self):
-        """
-            returns the info box widget 
-        """
         root = BlocksCustomFrame(parent=self.filament_control_page)
         root.setMinimumSize(QtCore.QSize(600, 80))
         root.setMaximumSize(QtCore.QSize(600, 80))
