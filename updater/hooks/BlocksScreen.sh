@@ -15,7 +15,7 @@ _set_deploy_flag() {
     if [ -n "${BS_UPDATER_SELF_UPDATE:-}" ] && [ -n "${BS_UPDATER_RESTART_SENTINEL:-}" ]; then
         mkdir -p "$(dirname "$BS_UPDATER_RESTART_SENTINEL")" 2>/dev/null || true
         echo "install" >>"$BS_UPDATER_RESTART_SENTINEL"
-        echo "[hook:BlocksScreen] under updater — deferring install-updater to post-batch"
+        echo "[hook:BlocksScreen] under updater: deferring install-updater to post-batch"
         return
     fi
     local _flag="${HOME}/.config/blockscreen/.run-install-updater"

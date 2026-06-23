@@ -799,7 +799,7 @@ async def verify_updater_importable(component_path: Path | None) -> bool:
     """Self-test the new on-disk updater code before restarting into it.
 
     Imports the updater package in a fresh interpreter from component_path. A
-    new updater that fails to import must never restart the daemon onto itself —
+    new updater that fails to import must never restart the daemon onto itself:
     that would take down the only field update path. On failure the caller keeps
     the running (old) daemon and lets the next reboot adopt the new code.
     """

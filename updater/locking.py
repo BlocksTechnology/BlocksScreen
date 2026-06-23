@@ -20,6 +20,9 @@ def _runtime_dir() -> Path:
     for d in (Path("/run/blockscreen"), cache):
         try:
             d.mkdir(parents=True, exist_ok=True)
+            # Owner-only: nothing else may plant a sentinel to force a restart.
+            with contextlib.suppress(OSError):
+                d.chmod(0o700)
             return d
         except OSError:
             continue
@@ -39,7 +42,7 @@ def restart_sentinel_path() -> Path:
     Hooks running under the updater append `install`/`code` here rather than
     restarting the daemon mid-batch; the daemon reads it once the batch is done.
     Preferring /run (tmpfs) means it clears on reboot, so a crash can never
-    trigger a spurious restart later — the safe floor is 'adopt on next reboot'.
+    trigger a spurious restart later; the safe floor is 'adopt on next reboot'.
     """
     return _runtime_dir() / "updater-restart-needed"
 

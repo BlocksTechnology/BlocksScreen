@@ -373,7 +373,7 @@ class UpdateService:
                 self._cb("on_component_done", c.name, True)
             # Past this point the update is durable. The post-success restarts
             # below include a self-restart of the daemon, whose SIGTERM surfaces
-            # as CancelledError here — it must never trigger a revert.
+            # as CancelledError here; it must never trigger a revert.
             committed = True
             self._log.info(
                 "git batch complete: %d component(s) updated; queueing UI restart(s)",
@@ -450,7 +450,7 @@ class UpdateService:
             install-updater out-of-band (its own cgroup, post-batch).
           - `code`: self-test the new on-disk updater; only if it imports
             cleanly, `--no-block` restart the daemon onto it. Otherwise keep the
-            running daemon and let the next reboot adopt it. Never raises — a
+            running daemon and let the next reboot adopt it. Never raises: a
             completed update must stand regardless of what happens here.
         """
         try:
@@ -460,7 +460,7 @@ class UpdateService:
                 return
             if reason == "install":
                 self._log.info(
-                    "deferred: install files changed — touching deploy flag "
+                    "deferred: install files changed, touching deploy flag "
                     "(install-updater runs out-of-band)"
                 )
                 await asyncio.to_thread(self._touch_deploy_flag)
@@ -472,12 +472,12 @@ class UpdateService:
             path = comp.path if comp else None
             if not await verify_updater_importable(path):
                 self._log.error(
-                    "deferred: new updater code failed import self-test — keeping "
+                    "deferred: new updater code failed import self-test, keeping "
                     "current daemon; new code adopts on next reboot"
                 )
                 return
             self._log.info(
-                "deferred: updater code changed — clean self-restart of %s",
+                "deferred: updater code changed, clean self-restart of %s",
                 UPDATER_SERVICE,
             )
             await restart_service_noblock(UPDATER_SERVICE)
@@ -503,6 +503,8 @@ class UpdateService:
     def _touch_deploy_flag(self) -> None:
         """Create the deploy flag watched by BlocksScreen-deploy.path."""
         _DEPLOY_FLAG.parent.mkdir(parents=True, exist_ok=True)
+        if _DEPLOY_FLAG.is_symlink():
+            _DEPLOY_FLAG.unlink()
         _DEPLOY_FLAG.touch()
 
     async def recover(self, name: str, hard: bool = False) -> bool:
