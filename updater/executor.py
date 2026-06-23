@@ -772,8 +772,28 @@ async def wait_for_service_active(name: str, timeout: float = 90.0) -> bool:
     return False
 
 
+async def restart_service_noblock(name: str | None) -> tuple[bool, str]:
+    """Queue a service restart without waiting (systemctl --no-block).
+
+    For the UI service that hosts the updater's D-Bus client: a blocking restart
+    tears down that client, and a slow restart could time out and abort the
+    in-flight update. Fire-and-forget and let it reload on its own.
+    """
+    if name is None:
+        return (False, "service name is None")
+    if not _SERVICE_RE.match(name):
+        return (False, f"service name {name!r} is invalid")
+    return await _run([SUDO, SYSTEMCTL, "--no-block", "restart", name], timeout=15.0)
+
+
 async def restart_service(name: str | None) -> tuple[bool, str]:
-    """Restart a systemd service; falls back to SIGTERM if systemctl fails."""
+    """Restart a systemd service, recovering from a start-limit hit.
+
+    If `restart` fails (commonly "start request repeated too quickly"), clear the
+    rate-limit/failed state with `reset-failed` and retry once. `systemctl kill`
+    is NOT used as a fallback: it does not clear a start-limit and is not covered
+    by the scoped NOPASSWD sudoers rules, so it would prompt for a password.
+    """
     if name is None:
         return (False, "service name is None")
     if not _SERVICE_RE.match(name):
@@ -781,14 +801,9 @@ async def restart_service(name: str | None) -> tuple[bool, str]:
     ok, err = await _run([SUDO, SYSTEMCTL, "restart", name], timeout=30.0)
     if ok:
         return (True, "")
-    # Fallback: send SIGTERM to the main process and its children
-    logger.warning("systemctl restart failed (%s), falling back to systemctl kill", err)
-    kill_ok, kill_err = await _run(
-        [SUDO, SYSTEMCTL, "kill", "-s", "SIGTERM", name], timeout=10.0
-    )
-    if kill_ok:
-        return (
-            True,
-            f"sent SIGTERM via systemctl kill (systemctl restart failed: {err})",
-        )
-    return (False, kill_err)
+    logger.warning("systemctl restart %s failed (%s); reset-failed + retry", name, err)
+    await _run([SUDO, SYSTEMCTL, "reset-failed", name], timeout=10.0)
+    ok, err2 = await _run([SUDO, SYSTEMCTL, "restart", name], timeout=30.0)
+    if ok:
+        return (True, f"recovered via reset-failed (first error: {err})")
+    return (False, err2)
