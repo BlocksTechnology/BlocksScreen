@@ -846,8 +846,21 @@ class TestVerifyUpdaterImportable:
         assert await verify_updater_importable(Path("/no/such/path")) is False
 
     @pytest.mark.asyncio
-    async def test_imports_real_package(self):
+    async def test_true_when_import_subprocess_succeeds(self, tmp_path):
         from updater.executor import verify_updater_importable
 
-        # The repo root (cwd) has the importable `updater` package.
-        assert await verify_updater_importable(Path.cwd()) is True
+        with patch(
+            "updater.executor._run", new=AsyncMock(return_value=(True, ""))
+        ) as mock_run:
+            assert await verify_updater_importable(tmp_path) is True
+        assert mock_run.await_args.kwargs["cwd"] == tmp_path
+
+    @pytest.mark.asyncio
+    async def test_false_when_import_subprocess_fails(self, tmp_path):
+        from updater.executor import verify_updater_importable
+
+        with patch(
+            "updater.executor._run",
+            new=AsyncMock(return_value=(False, "ModuleNotFoundError: sdbus")),
+        ):
+            assert await verify_updater_importable(tmp_path) is False
