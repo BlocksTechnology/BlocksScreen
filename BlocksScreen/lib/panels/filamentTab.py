@@ -247,10 +247,6 @@ class FilamentTab(QtWidgets.QStackedWidget):
                 500,
             )
         )
-        self._popup_name.clicked.connect(lambda: self._popup_edited())
-        self._popup_color.clicked.connect(lambda: self._popup_edited())
-        self._popup_material.clicked.connect(lambda: self._popup_edited())
-        self._popup_temp.clicked.connect(lambda: self._popup_edited())
 
         def _update_swatch():
             hex_text = self._popup_color.text().strip("#").strip()
@@ -280,15 +276,23 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self.spoolman_btn.clicked.connect(self._on_spoolman_clicked)
         btn_row.addWidget(self.spoolman_btn)
 
-        self.accept_btn = BlocksCustomButton(page)
-        self.accept_btn.setFixedSize(230, 80)
-        self.accept_btn.setText("Skip")
-        self.accept_btn.setFont(font)
-        self.accept_btn.clicked.connect(self.on_popup_accept)
-        self.accept_btn.setPixmap(
+        skip_btn = BlocksCustomButton(page)
+        skip_btn.setFixedSize(230, 80)
+        skip_btn.setText("Skip")
+        skip_btn.setFont(font)
+        skip_btn.clicked.connect(self.handle_skip_button)
+        skip_btn.setPixmap(
             QtGui.QPixmap(":/arrow_icons/media/btn_icons/right_arrow.svg")
         )
-        btn_row.addWidget(self.accept_btn)
+        btn_row.addWidget(skip_btn)
+
+        accept_btn = BlocksCustomButton(page)
+        accept_btn.setFixedSize(230, 80)
+        accept_btn.setText("Accept")
+        accept_btn.setFont(font)
+        accept_btn.clicked.connect(self.on_popup_accept)
+        accept_btn.setPixmap(QtGui.QPixmap(":/dialog/media/btn_icons/yes.svg"))
+        btn_row.addWidget(accept_btn)
 
         root.addLayout(btn_row)
         return page
@@ -417,6 +421,21 @@ class FilamentTab(QtWidgets.QStackedWidget):
         root.addWidget(frame, 1)
         return page
 
+    def handle_skip_button(self):
+        gate = self.pre_gate_idx.get("gate", 0)
+        self.popup.hide()
+        self._reset_popup()
+        self.run_gcode.emit(
+            f"MMU_GATE_MAP GATE={gate} MATERIAL=N/A NAME=N/A COLOR=FFFFFF SPOOLID=-1 TEMP=250 QUIET=1"
+        )
+        if self._popup_callback is not None:
+            try:
+                self._popup_callback()
+            except Exception as e:
+                logger.error(f"Error executing pre-gate accept callback: {e}")
+            finally:
+                self._popup_callback = None
+
     def handle_popup(self, force=False):
         """Handles showing the popup for pre-gate filament detection.
         If multiple gates trigger, they will be queued and shown one at a time.
@@ -440,10 +459,6 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self._popup_stack.setCurrentIndex(0)
         self._selected_spool_id = -2
         self.popup.show()
-
-    def _popup_edited(self):
-        self.accept_btn.setText("Accept")
-        self.accept_btn.setPixmap(QtGui.QPixmap(":/dialog/media/btn_icons/yes.svg"))
 
     @QtCore.pyqtSlot(int, str, str, "PyQt_PyObject", name="open-pregate-popup")
     def open_pregate_popup(self, temp, material, name, callback=None):
@@ -495,12 +510,8 @@ class FilamentTab(QtWidgets.QStackedWidget):
     def _reset_popup(self):
         self._popup_name.setText("")
         self._popup_color.setText("ffffff")
-        self._popup_material.setText("N/A")
+        self._popup_material.setText("")
         self._popup_temp.setText("250")
-        self.accept_btn.setText("Skip")
-        self.accept_btn.setPixmap(
-            QtGui.QPixmap(":/arrow_icons/media/btn_icons/right_arrow.svg")
-        )
 
     @QtCore.pyqtSlot(dict, name="on-spools-received")
     def on_spools_received(self, result: dict) -> None:
