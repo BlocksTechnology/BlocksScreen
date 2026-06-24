@@ -344,6 +344,48 @@ class ConfigManager:
                 % e
             )
 
+    def _section_blocks(self, lines):
+        blocks = []
+        name = None
+        block = []
+        for line in lines:
+            m = re.match("^\[\s*(.+?)\s*\]\s*$", line)
+            if m:
+                if block:
+                    blocks.append((name, block))
+                name = m.group(1)
+                block = [line]
+            else:
+                block.append(line)
+        if block:
+            blocks.append((name, block))
+        return blocks
+
+    def _parse_save_config(self, lines):
+        sections = []
+        name = None
+        block = []
+        for line in lines:
+            m = re.match(r"^#\*#\s*\[\s*(.+?)\s*\]\s*$", line)
+            if m:
+                if block:
+                    sections.append((name, block))
+                name = m.group(1)
+                block = [line]
+            else:
+                block.append(line)
+        if block:
+            sections.append((name, block))
+        return sections
+
+    def _parse_save_config_keys(self, block_lines):
+        keys = {}
+        for line in block_lines:
+            m = re.match(r"^#\*#\s+(\S+)\s*=\s*(.+)$", line)
+            if m:
+                keys[m.group(1)] = m.group(2).strip()
+        return keys
+
     def merge_cfg(
         self,
         src_file: pathlib.Path,
@@ -354,6 +396,7 @@ class ConfigManager:
         try:
             _sfl = src_file.read_text(encoding="utf-8")
             _tfl = target_file.read_text(encoding="utf-8")
+
             with self.mergeLock:
                 if marker:
                     if marker in _tfl:
@@ -362,42 +405,93 @@ class ConfigManager:
                             i for i, line in enumerate(tfl_lines) if marker in line
                         )
                         tgt_header = tfl_lines[:idx]
-                        tgt_save = "".join(tfl_lines[idx:])
+                        tgt_save = tfl_lines[idx:]  # keep as lines for merging
 
-                        def _section_blocks(lines):
-                            blocks = []
-                            name = None
-                            block = []
-                            for line in lines:
-                                m = re.match(r"^\[\s*(.+?)\s*\]\s*$", line)
-                                if m:
-                                    if block:
-                                        blocks.append((name, block))
-                                    name = m.group(1)
-                                    block = [line]
-                                else:
-                                    block.append(line)
-                            if block:
-                                blocks.append((name, block))
-                            return blocks
+                        # Split source at marker too (it may or may not have one)
+                        if marker in _sfl:
+                            sfl_lines = _sfl.splitlines(keepends=True)
+                            src_idx = next(
+                                i for i, line in enumerate(sfl_lines) if marker in line
+                            )
+                            src_header_lines = sfl_lines[:src_idx]
+                            src_save = sfl_lines[src_idx:]  # source's SAVE_CONFIG block
+                        else:
+                            src_header_lines = _sfl.splitlines(keepends=True)
+                            src_save = []
 
-                        src_blocks = _section_blocks(_sfl.splitlines(keepends=True))
-                        tgt_blocks = _section_blocks(tgt_header)
+                        # --- Merge the header (before marker) ---
+                        src_blocks = self._section_blocks(src_header_lines)
+                        tgt_blocks = self._section_blocks(tgt_header)
 
                         tgt_mcu = {
-                            n: b for n, b in tgt_blocks if n and n.startswith("mcu")
+                            n: b
+                            for n, b in tgt_blocks
+                            if n and (n.startswith("mcu") or n.startswith("beacon"))
                         }
 
-                        merged_lines = []
+                        merged_header_lines = []
                         for name, block in src_blocks:
-                            if name and name.startswith("mcu") and name in tgt_mcu:
-                                merged_lines.extend(tgt_mcu[name])
+                            if (
+                                name
+                                and (
+                                    name.startswith("mcu") or name.startswith("beacon")
+                                )
+                                and name in tgt_mcu
+                            ):
+                                merged_header_lines.extend(tgt_mcu[name])
                             else:
-                                merged_lines.extend(block)
+                                merged_header_lines.extend(block)
 
-                        merged = "".join(merged_lines) + tgt_save
+                        # --- Merge the SAVE_CONFIG block (after marker) ---
+                        # Strategy: target wins for existing keys/sections,
+                        # source contributes only new sections or new keys.
+                        tgt_sc_sections = self._parse_save_config(tgt_save)
+                        src_sc_sections = (
+                            self._parse_save_config(src_save) if src_save else []
+                        )
+
+                        # Build a lookup of target sections by name
+                        tgt_sc_map = {
+                            n: block for n, block in tgt_sc_sections if n is not None
+                        }
+                        src_sc_map = {
+                            n: block for n, block in src_sc_sections if n is not None
+                        }
+
+                        merged_save_lines = []
+
+                        # First: emit all target sections (they take priority)
+                        for name, block in tgt_sc_sections:
+                            if name is None:
+                                # This is the preamble (marker line + comments)
+                                merged_save_lines.extend(block)
+                            else:
+                                merged_save_lines.extend(block)
+                                # Check if source has extra keys not in target for this section
+                                if name in src_sc_map:
+                                    tgt_keys = self._parse_save_config_keys(block)
+                                    src_keys = self._parse_save_config_keys(
+                                        src_sc_map[name]
+                                    )
+                                    for k, v in src_keys.items():
+                                        if k not in tgt_keys:
+                                            merged_save_lines.append(
+                                                f"#*# \t{k} = {v}\n"
+                                            )
+
+                        # Then: append any sections that exist only in source
+                        for name, block in src_sc_sections:
+                            if name is not None and name not in tgt_sc_map:
+                                merged_save_lines.extend(block)
+
+                        merged = "".join(merged_header_lines) + "".join(
+                            merged_save_lines
+                        )
+
                     else:
+                        # Target has no SAVE_CONFIG block yet — use source as-is
                         merged = _sfl
+
                 else:
                     src_cfg = configparser.ConfigParser(strict=False)
                     src_cfg.read_string(_sfl)
@@ -407,22 +501,22 @@ class ConfigManager:
 
                     appendix = []
                     for section in src_cfg.sections():
-                        if section.startswith("mcu"):
+                        if section.startswith("mcu") or section.startswith("beacon"):
                             continue
                         if not target_cfg.has_section(section):
                             appendix.append(
-                                (section, True, list(src_cfg.items(section)))
+                                (section, True, list(src_cfg.items(section, raw=True)))
                             )
                         else:
                             sec_missing = [
                                 (o, v)
-                                for o, v in src_cfg.items(section)
+                                for o, v in src_cfg.items(section, raw=True)
                                 if not target_cfg.has_option(section, o)
                             ]
                             if sec_missing:
                                 appendix.append((section, False, sec_missing))
 
-                    for opt, val in src_cfg.defaults().items():
+                    for opt, val in src_cfg.defaults().items(raw=True):
                         if not target_cfg.defaults().get(opt):
                             items = (
                                 appendix[-1][2]
@@ -447,6 +541,7 @@ class ConfigManager:
                         merged = _tfl + text + "\n"
                     else:
                         merged = _tfl
+
             if _tfl != merged:
                 target_file.write_text(merged, encoding="utf-8")
             return True
@@ -501,12 +596,46 @@ class ConfigManager:
         except Exception as e:
             _logger.info("Caught exception while cpy files: %s" % e)
 
+    def cmp_file(self, src, target) -> bool:
+        src = pathlib.Path(src)
+        target = pathlib.Path(target)
+        if not (src.exists() and src.is_file()):
+            return False
+        if not (target.exists() and target.is_file()):
+            return False
+        return get_file_checksum(src) == get_file_checksum(target)
+
+    def cmp_cpy_files(self) -> list[bool]:
+        _cmp: list[bool] = []
+        for f in self.cpy_files:
+            src_cpy_files = self.repo_fi_name.get(f, [])
+            if not src_cpy_files:
+                _cmp.append(False)
+                continue
+            src_file = min(src_cpy_files, key=lambda p: len(p.parents))
+            target_files = self.config_fi_name.get(f, [])
+            if not target_files:
+                _cmp.append(False)
+                continue
+
+            target = min(target_files, key=lambda p: len(p.parents))
+            if not target.exists():
+                _cmp.append(False)
+                continue
+            chk_src = get_file_checksum(src_file)
+            chk_target = get_file_checksum(target)
+            _cmp.append(chk_src == chk_target)
+        return _cmp
+
     def sync(self) -> None:
         """Synchronizes configuration repo with the
         machines configuration"""
         try:
-            self.cleanup_broken_symlinks(self.config_dir)
+            # self.cleanup_broken_symlinks(self.config_dir)
             _missing = self._get_missing_symlinks(self.config_dir, self.repo)
+            if _missing and any(self.cmp_cpy_files()):
+                self.cleanup_broken_symlinks(self.config_dir)
+
             self._symlink_config(_missing)
             self._cpy_cfg_files()
         except NotADirectoryError as e:
