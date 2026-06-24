@@ -49,6 +49,19 @@ class TestHistoryLog:
         svc._history_path = blocker / "sub" / "history.jsonl"
         svc._history("update_start", "klipper")  # must not raise
 
+    def test_history_is_bounded(self, tmp_path: Path):
+        """Oversized history is trimmed to the last KEEP lines (SD-fill guard)."""
+        from updater.service import _HISTORY_KEEP_LINES, _HISTORY_MAX_BYTES
+
+        hist = tmp_path / "history.jsonl"
+        hist.write_text(('{"x":"' + "y" * 80 + '"}\n') * 15000)
+        assert hist.stat().st_size > _HISTORY_MAX_BYTES
+        svc = UpdateService()
+        svc._history_path = hist
+        svc._trim_history()
+        assert sum(1 for _ in hist.open()) == _HISTORY_KEEP_LINES
+        assert hist.stat().st_size < _HISTORY_MAX_BYTES
+
 
 class TestCheckStatus:
     @pytest.mark.asyncio
@@ -1461,3 +1474,13 @@ class TestDeferredRestart:
 
     def test_read_clear_sentinel_missing_returns_empty(self, tmp_path: Path):
         assert UpdateService._read_clear_sentinel(tmp_path / "nope") == ""
+
+    def test_touch_deploy_flag_rejects_planted_symlink(self, tmp_path: Path):
+        target = tmp_path / "target"
+        target.write_text("keep")
+        flag = tmp_path / ".run-install-updater"
+        flag.symlink_to(target)
+        with patch("updater.service._DEPLOY_FLAG", flag):
+            UpdateService()._touch_deploy_flag()
+        assert flag.exists() and not flag.is_symlink()
+        assert target.read_text() == "keep"  # symlink not followed

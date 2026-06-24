@@ -30,3 +30,15 @@ def test_acquire_then_second_attempt_fails(monkeypatch, tmp_path):
     # Released after the outer context — re-acquire succeeds.
     with process_lock() as third:
         assert third is True
+
+
+def test_process_lock_yields_false_when_open_fails(monkeypatch, tmp_path):
+    """Disk-full / read-only: open() failure degrades to 'not acquired', not a crash."""
+    monkeypatch.setattr(locking, "lock_path", lambda: tmp_path / "updater.lock")
+
+    def _boom(*_a, **_k):
+        raise OSError("ENOSPC")
+
+    monkeypatch.setattr("builtins.open", _boom)
+    with process_lock() as acquired:
+        assert acquired is False

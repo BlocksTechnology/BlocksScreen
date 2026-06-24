@@ -48,6 +48,9 @@ from updater.models import ComponentConfig, ComponentStatus
 
 _STATE_PATH = Path.home() / ".cache" / "blockscreen" / "updater_state.json"
 _HISTORY_PATH = Path.home() / ".cache" / "blockscreen" / "update_history.jsonl"
+# Cap the history so a device running for years cannot fill the SD card.
+_HISTORY_MAX_BYTES = 1_000_000
+_HISTORY_KEEP_LINES = 2000
 
 # git's empty-tree object: used as the prev_hash when provisioning so a
 # diff-based hook (`git diff <prev> <new>`) sees every file as newly added and
@@ -506,6 +509,8 @@ class UpdateService:
         if _DEPLOY_FLAG.is_symlink():
             _DEPLOY_FLAG.unlink()
         _DEPLOY_FLAG.touch()
+        # Persist the dirent so a power cut right after this can't drop the flag.
+        self._fsync_dir(_DEPLOY_FLAG.parent)
 
     async def recover(self, name: str, hard: bool = False) -> bool:
         """Reset a component to its last known-good hash."""
@@ -672,8 +677,18 @@ class UpdateService:
             self._history_path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
             with self._history_path.open("a", encoding="utf-8") as f:
                 f.write(json.dumps(entry) + "\n")
+            self._trim_history()
         except OSError as exc:
             self._log.warning("update history write failed: %s", exc)
+
+    def _trim_history(self) -> None:
+        """Cap the on-SD history so a years-running device cannot fill the card."""
+        if self._history_path.stat().st_size <= _HISTORY_MAX_BYTES:
+            return
+        lines = self._history_path.read_text(encoding="utf-8").splitlines()
+        tmp = self._history_path.with_name(self._history_path.name + ".tmp")
+        tmp.write_text("\n".join(lines[-_HISTORY_KEEP_LINES:]) + "\n", encoding="utf-8")
+        tmp.replace(self._history_path)
 
     async def _remove_clone(self, component: ComponentConfig) -> None:
         """Delete a freshly-cloned tree (the path did not exist before provisioning)."""

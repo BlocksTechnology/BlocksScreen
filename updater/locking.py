@@ -55,7 +55,13 @@ def process_lock() -> Iterator[bool]:
     holds it. The fd stays open for the whole `with` block — closing it on exit
     is what releases the lock.
     """
-    f = open(lock_path(), "w")  # noqa: SIM115, PTH123
+    try:
+        f = open(lock_path(), "w")  # noqa: SIM115, PTH123
+    except OSError:
+        # Disk full / read-only SD: behave as "could not acquire" so the caller
+        # degrades gracefully instead of crashing the update operation.
+        yield False
+        return
     try:
         try:
             fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
