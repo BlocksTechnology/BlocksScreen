@@ -28,7 +28,9 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
     call_load_panel = QtCore.pyqtSignal(bool, str, name="call-load-panel")
     request_back = QtCore.pyqtSignal(name="request_back")
     request_change_tab = QtCore.pyqtSignal(int, name="request_change_tab")
-    filament_selected = QtCore.pyqtSignal(int,str,str,"PyQt_PyObject", name="filament_selected")
+    filament_selected = QtCore.pyqtSignal(
+        int, str, str, "PyQt_PyObject", name="filament_selected"
+    )
 
     class FilamentStates(enum.Enum):
         UNKNOWN = -1
@@ -215,25 +217,25 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
 
     def open_pre_gate_popup(self, filament_type: FilamentTypes):
         callback_action = partial(self.load_filament, 0, filament_type)
-        
+
         self.filament_selected.emit(
             filament_type.value.temperature,
             filament_type.value.name,
             filament_type.value.name,
-            callback_action
+            callback_action,
         )
 
     def on_mmu_state_changed(self, mmu_state):
         if mmu_state is None:
             return
-            
+
         if not self.mmu_configured:
             for btn, _filament_type in self.filament_buttons_list:
                 try:
                     btn.clicked.disconnect()
                 except TypeError:
                     pass
-                
+
                 btn.clicked.connect(partial(self.open_pre_gate_popup, _filament_type))
             self.mmu_configured = True
 

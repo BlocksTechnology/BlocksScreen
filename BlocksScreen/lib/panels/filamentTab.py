@@ -2,27 +2,25 @@ import logging
 from collections import deque
 from typing import Deque
 
-from PyQt6 import QtCore, QtGui, QtWidgets
-
 from devices.amu import AMUManager
 from devices.amu.models import GateStatus
 from lib.panels.widgets.addFilamentPage import AddFilamentPage
 from lib.panels.widgets.addSpoolPage import AddSpoolPage
 from lib.panels.widgets.amuPage import AMUpage
-from lib.panels.widgets.basicFilamentPanel import BasicFilamentPanel
 from lib.panels.widgets.basePopup import BasePopup
+from lib.panels.widgets.basicFilamentPanel import BasicFilamentPanel
 from lib.panels.widgets.colorWheelWidget import ColorWheelWidget
 from lib.panels.widgets.keyboardPage import CustomQwertyKeyboard
 from lib.panels.widgets.loadWidget import LoadingOverlayWidget
 from lib.panels.widgets.numpadPage import CustomNumpad
+from lib.panels.widgets.spoolmanPage import SpoolmanPage
 from lib.printer import Printer
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_frame import BlocksCustomFrame
 from lib.utils.blocks_linedit import BlocksCustomLinEdit
 from lib.utils.icon_button import IconButton
 from lib.utils.list_model import EntryDelegate, EntryListModel, ListItem
-from lib.panels.widgets.spoolmanPage import SpoolmanPage
-
+from PyQt6 import QtCore, QtGui, QtWidgets
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +46,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self.cfg = config
         self.amu_manager: AMUManager = amu_manager
         self.amu_configured = False
-        self._popup_callback = None 
+        self._popup_callback = None
         self.ui = self.setupUi()
         self.change_page(self.indexOf(self.ui))
 
@@ -169,12 +167,6 @@ class FilamentTab(QtWidgets.QStackedWidget):
         root.setContentsMargins(16, 12, 16, 12)
         root.setSpacing(8)
 
-        header_layout = QtWidgets.QHBoxLayout(page)
-
-        spacer = QtWidgets.QWidget(self)
-        header_layout.addWidget(spacer)
-
-
         self._popup_title_lbl = QtWidgets.QLabel("Filament Detected", page)
         title_font = QtGui.QFont()
         title_font.setPointSize(20)
@@ -182,17 +174,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self._popup_title_lbl.setStyleSheet("color: white; background: transparent;")
         self._popup_title_lbl.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self._popup_title_lbl.setFixedHeight(50)
-        header_layout.addWidget(self._popup_title_lbl)
-
-
-        skip_button = BlocksCustomButton(page)
-        skip_button.setFixedSize(100,80)
-        skip_button.clicked.connect(self.on_popup_accept)
-        header_layout.addWidget(skip_button)
-
-
-
-        root.addLayout(header_layout)
+        root.addWidget(self._popup_title_lbl)
 
         grid_w = QtWidgets.QWidget(page)
         grid = QtWidgets.QGridLayout(grid_w)
@@ -245,8 +227,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
 
         self._popup_name.setPlaceholderText("e.g. PLA Generic")
         self._popup_color.setText("ffffff")
-        self._popup_material.setText("PLA")
-        self._popup_temp.setText("220")
+        self._popup_temp.setText("250")
 
         self._popup_name.clicked.connect(
             lambda: self._on_show_keyboard(self._popup_name)
@@ -266,6 +247,10 @@ class FilamentTab(QtWidgets.QStackedWidget):
                 500,
             )
         )
+        self._popup_name.clicked.connect(lambda: self._popup_edited())
+        self._popup_color.clicked.connect(lambda: self._popup_edited())
+        self._popup_material.clicked.connect(lambda: self._popup_edited())
+        self._popup_temp.clicked.connect(lambda: self._popup_edited())
 
         def _update_swatch():
             hex_text = self._popup_color.text().strip("#").strip()
@@ -295,13 +280,15 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self.spoolman_btn.clicked.connect(self._on_spoolman_clicked)
         btn_row.addWidget(self.spoolman_btn)
 
-        accept_btn = BlocksCustomButton(page)
-        accept_btn.setFixedSize(230, 80)
-        accept_btn.setText("Accept")
-        accept_btn.setFont(font)
-        accept_btn.setPixmap(QtGui.QPixmap(":/dialog/media/btn_icons/yes.svg"))
-        accept_btn.clicked.connect(self.on_popup_accept)
-        btn_row.addWidget(accept_btn)
+        self.accept_btn = BlocksCustomButton(page)
+        self.accept_btn.setFixedSize(230, 80)
+        self.accept_btn.setText("Skip")
+        self.accept_btn.setFont(font)
+        self.accept_btn.clicked.connect(self.on_popup_accept)
+        self.accept_btn.setPixmap(
+            QtGui.QPixmap(":/arrow_icons/media/btn_icons/right_arrow.svg")
+        )
+        btn_row.addWidget(self.accept_btn)
 
         root.addLayout(btn_row)
         return page
@@ -431,31 +418,35 @@ class FilamentTab(QtWidgets.QStackedWidget):
         return page
 
     def handle_popup(self, force=False):
-        """Handles showing the popup for pre-gate filament detection. 
+        """Handles showing the popup for pre-gate filament detection.
         If multiple gates trigger, they will be queued and shown one at a time.
-        
+
         Args:
             force (bool): If True, forces the popup to open even if no gates are queued.
         """
         if self.popup.isVisible():
             return
-            
         if not self.popup_gates:
             if force:
-                self.pre_gate_idx = {"gate": 0} 
+                self.pre_gate_idx = {"gate": 0}
+                self._popup_title_lbl.setText("Load filament information")
             else:
                 return
         else:
             self.pre_gate_idx = self.popup_gates.popleft()
-            
-        gate = self.pre_gate_idx.get("gate", -1)
-        self._popup_title_lbl.setText(f"Filament Detected — Gate {gate}")
+            gate = self.pre_gate_idx.get("gate", -1)
+            self._popup_title_lbl.setText(f"Filament Detected — Gate {gate}")
+
         self._popup_stack.setCurrentIndex(0)
         self._selected_spool_id = -2
         self.popup.show()
 
-    QtCore.pyqtSlot(int,str,str,name="open-pregate-popup")
-    def open_pregate_popup(self, temp , material , name , callback= None):
+    def _popup_edited(self):
+        self.accept_btn.setText("Accept")
+        self.accept_btn.setPixmap(QtGui.QPixmap(":/dialog/media/btn_icons/yes.svg"))
+
+    @QtCore.pyqtSlot(int, str, str, "PyQt_PyObject", name="open-pregate-popup")
+    def open_pregate_popup(self, temp, material, name, callback=None):
         self._popup_name.setText(name)
         self._popup_material.setText(material)
         self._popup_temp.setText(str(temp))
@@ -465,7 +456,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
     def on_popup_accept(self):
         """Handles the accept action from the pre-gate popup to send the appropriate G-code to map the gate to the spool."""
         gate = self.pre_gate_idx.get("gate", 0)
-        name = self._popup_name.text().strip()
+        name = self._popup_name.text().strip() or "N/A"
         color = self._popup_color.text().strip("#").strip()
         material = self._popup_material.text().strip()
         try:
@@ -488,17 +479,28 @@ class FilamentTab(QtWidgets.QStackedWidget):
 
         self.run_gcode.emit(" ".join(parts))
         self.run_gcode.emit("MMU_GATE_MAP REFRESH=1")
-        
+
         if self._popup_callback is not None:
             try:
                 self._popup_callback()
             except Exception as e:
                 logger.error(f"Error executing pre-gate accept callback: {e}")
             finally:
-                self._popup_callback = None 
+                self._popup_callback = None
 
+        self._reset_popup()
         self.popup.hide()
         self.handle_popup()
+
+    def _reset_popup(self):
+        self._popup_name.setText("")
+        self._popup_color.setText("ffffff")
+        self._popup_material.setText("N/A")
+        self._popup_temp.setText("250")
+        self.accept_btn.setText("Skip")
+        self.accept_btn.setPixmap(
+            QtGui.QPixmap(":/arrow_icons/media/btn_icons/right_arrow.svg")
+        )
 
     @QtCore.pyqtSlot(dict, name="on-spools-received")
     def on_spools_received(self, result: dict) -> None:
