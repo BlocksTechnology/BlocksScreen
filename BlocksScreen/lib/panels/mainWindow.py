@@ -117,6 +117,18 @@ class MainWindow(QtWidgets.QMainWindow):
 
     call_load_panel = QtCore.pyqtSignal(bool, str, name="call-load-panel")
 
+    _EVT_WS_MSG: typing.ClassVar[QtCore.QEvent.Type] = (
+        events.WebSocketMessageReceived.type()
+    )
+    _EVT_PRINT_START: typing.ClassVar[QtCore.QEvent.Type] = events.PrintStart.type()
+    _EVT_PRINT_ERROR: typing.ClassVar[QtCore.QEvent.Type] = events.PrintError.type()
+    _EVT_PRINT_COMPLETE: typing.ClassVar[QtCore.QEvent.Type] = (
+        events.PrintComplete.type()
+    )
+    _EVT_PRINT_CANCELLED: typing.ClassVar[QtCore.QEvent.Type] = (
+        events.PrintCancelled.type()
+    )
+
     def __init__(self):
         """Set up UI, instantiate subsystems, and wire all inter-component signals."""
         super(MainWindow, self).__init__()
@@ -1131,12 +1143,13 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def event(self, event: QtCore.QEvent) -> bool:
         """Receives PyQt Events, reimplemented method from the QEvent class"""
-        if event.type() == events.WebSocketMessageReceived.type():
+        etype = event.type()
+        if etype == self._EVT_WS_MSG:
             if isinstance(event, events.WebSocketMessageReceived):
                 self.messageReceivedEvent(event)
                 return True
             return False
-        if event.type() == events.PrintStart.type():
+        if etype == self._EVT_PRINT_START:
             self.print_status = "printing"
             self.disable_tab_bar()
             self.ui.extruder_temp_display.clicked.disconnect()
@@ -1155,13 +1168,13 @@ class MainWindow(QtWidgets.QMainWindow):
             )
             return False
 
-        if event.type() in (
-            events.PrintError.type(),
-            events.PrintComplete.type(),
-            events.PrintCancelled.type(),
+        if etype in (
+            self._EVT_PRINT_ERROR,
+            self._EVT_PRINT_COMPLETE,
+            self._EVT_PRINT_CANCELLED,
         ):
             self.print_status = "idle"
-            if event.type() == events.PrintCancelled.type():
+            if etype == self._EVT_PRINT_CANCELLED:
                 self.handle_cancel_print()
             self.enable_tab_bar()
             self.ui.extruder_temp_display.clicked.disconnect()

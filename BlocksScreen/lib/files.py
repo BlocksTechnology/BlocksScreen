@@ -165,6 +165,12 @@ class Files(QtCore.QObject):
         - full_refresh_needed: Root changed
     """
 
+    _EVT_WS_OPEN: typing.ClassVar[QtCore.QEvent.Type] = events.WebSocketOpen.type()
+    _EVT_KLIPPER_DISC: typing.ClassVar[QtCore.QEvent.Type] = (
+        events.KlippyDisconnected.type()
+    )
+    _EVT_FILE_DATA: typing.ClassVar[QtCore.QEvent.Type] = ReceivedFileData.type()
+
     # Signals for API requests
     request_file_list = QtCore.pyqtSignal([], [str], name="api_get_files_list")
     request_dir_info = QtCore.pyqtSignal(
@@ -657,19 +663,18 @@ class Files(QtCore.QObject):
 
     def eventFilter(self, obj: QtCore.QObject, event: QtCore.QEvent) -> bool:
         """Handle application-level events."""
-        if event.type() == events.WebSocketOpen.type():
+        etype = event.type()
+        if etype == self._EVT_WS_OPEN:
             self.initial_load()
             return False
-
-        if event.type() == events.KlippyDisconnected.type():
+        if etype == self._EVT_KLIPPER_DISC:
             self._clear_all_data()
             return False
-
         return super().eventFilter(obj, event)
 
     def event(self, event: QtCore.QEvent) -> bool:
         """Handle object-level events."""
-        if event.type() == ReceivedFileData.type():
+        if event.type() == self._EVT_FILE_DATA:
             if isinstance(event, ReceivedFileData):
                 self.handle_message_received(event.method, event.data, event.params)
                 return True

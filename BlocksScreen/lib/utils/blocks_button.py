@@ -33,6 +33,9 @@ class BlocksCustomButton(QtWidgets.QAbstractButton):
         self.text_color: QtGui.QColor = QtGui.QColor(*ButtonColors.TEXT_COLOR.value)
         self._show_notification: bool = False
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_AcceptTouchEvents, True)
+        self._icon_cache: QtGui.QPixmap = QtGui.QPixmap()
+        self._icon_cache_size: QtCore.QSize = QtCore.QSize()
+        self._cached_path_size: QtCore.QSize = QtCore.QSize()
 
     def setShowNotification(self, show: bool) -> None:
         """Set notification on button"""
@@ -62,6 +65,8 @@ class BlocksCustomButton(QtWidgets.QAbstractButton):
     def setPixmap(self, pixmap: QtGui.QPixmap) -> None:
         """Set button pixmap"""
         self.icon_pixmap = pixmap
+        self._icon_cache = QtGui.QPixmap()
+        self._icon_cache_size = QtCore.QSize()
         self.update()
 
     def mousePressEvent(self, e: QtGui.QMouseEvent) -> None:
@@ -118,19 +123,14 @@ class BlocksCustomButton(QtWidgets.QAbstractButton):
             return
         # Flat button control
         opt = QtWidgets.QStyleOptionButton()
-        draw_frame = (
+        if (
             not self._is_flat
             or self.underMouse()
             or opt.state & QtWidgets.QStyle.StateFlag.State_Sunken
-        )
-        if draw_frame:
+        ):
             _style.drawControl(
                 QtWidgets.QStyle.ControlElement.CE_PushButtonLabel, opt, painter, self
             )
-        _style.drawControl(
-            QtWidgets.QStyle.ControlElement.CE_PushButtonLabel, opt, painter, self
-        )
-        self.setStyle(_style)
         # Determine background and text colors based on state
         if not self.isEnabled():
             bg_color_tuple = ButtonColors.DISABLED_BG.value
@@ -144,30 +144,21 @@ class BlocksCustomButton(QtWidgets.QAbstractButton):
 
         bg_color = QtGui.QColor(*bg_color_tuple)
 
-        path = QtGui.QPainterPath()
-        xRadius = self.rect().toRectF().normalized().height() / 2.0
-        yRadius = self.rect().toRectF().normalized().height() / 2.0
         painter.setBackgroundMode(QtCore.Qt.BGMode.TransparentMode)
-        path.addRoundedRect(
-            0,
-            0,
-            self.rect().toRectF().normalized().width(),
-            self.rect().toRectF().normalized().height(),
-            xRadius,
-            yRadius,
-            QtCore.Qt.SizeMode.AbsoluteSize,
-        )
-        icon_path = QtGui.QPainterPath()
-        self.button_ellipse = QtCore.QRectF(
-            self.rect().toRectF().normalized().left()
-            + self.rect().toRectF().normalized().height() * 0.05,
-            self.rect().toRectF().normalized().top()
-            + self.rect().toRectF().normalized().height() * 0.05,
-            (self.rect().toRectF().normalized().height() * 0.90),
-            (self.rect().toRectF().normalized().height() * 0.90),
-        )
-        icon_path.addEllipse(self.button_ellipse)
-        self.button_background = path.subtracted(icon_path)
+        current_size = _rect.size()
+        if current_size != self._cached_path_size:
+            h = float(_rect.height())
+            w = float(_rect.width())
+            radius = h / 2.0
+            path = QtGui.QPainterPath()
+            path.addRoundedRect(
+                0, 0, w, h, radius, radius, QtCore.Qt.SizeMode.AbsoluteSize
+            )
+            self.button_ellipse = QtCore.QRectF(h * 0.05, h * 0.05, h * 0.90, h * 0.90)
+            icon_path = QtGui.QPainterPath()
+            icon_path.addEllipse(self.button_ellipse)
+            self.button_background = path.subtracted(icon_path)
+            self._cached_path_size = current_size
         painter.setPen(QtCore.Qt.PenStyle.NoPen)
         painter.setBrush(bg_color)
         painter.fillPath(self.button_background, bg_color)
@@ -179,11 +170,15 @@ class BlocksCustomButton(QtWidgets.QAbstractButton):
             _parent_rect.height() * 0.80,
         )
         if not self.icon_pixmap.isNull():
-            _icon_scaled = self.icon_pixmap.scaled(
-                _icon_rect.size().toSize(),
-                QtCore.Qt.AspectRatioMode.KeepAspectRatio,
-                QtCore.Qt.TransformationMode.SmoothTransformation,
-            )
+            target_size = _icon_rect.size().toSize()
+            if target_size != self._icon_cache_size:
+                self._icon_cache = self.icon_pixmap.scaled(
+                    target_size,
+                    QtCore.Qt.AspectRatioMode.KeepAspectRatio,
+                    QtCore.Qt.TransformationMode.SmoothTransformation,
+                )
+                self._icon_cache_size = target_size
+            _icon_scaled = self._icon_cache
             scaled_width = _icon_scaled.width()
             scaled_height = _icon_scaled.height()
             adjusted_x = (_icon_rect.width() - scaled_width) / 2.0
@@ -194,8 +189,6 @@ class BlocksCustomButton(QtWidgets.QAbstractButton):
                 scaled_width,
                 scaled_height,
             )
-            tinted_icon_pixmap = QtGui.QPixmap(_icon_scaled.size())
-            tinted_icon_pixmap.fill(QtCore.Qt.GlobalColor.transparent)
             if not self.isEnabled():
                 tinted_icon_pixmap = QtGui.QPixmap(_icon_scaled.size())
                 tinted_icon_pixmap.fill(QtCore.Qt.GlobalColor.transparent)

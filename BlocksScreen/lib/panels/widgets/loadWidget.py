@@ -168,10 +168,16 @@ class LoadingOverlayWidget(QtWidgets.QLabel):
 
         self.gifshow.setGeometry(gifshow_x, gifshow_y, size, size)
 
-    def show(self) -> None:
-        """Re-implemented method, show widget"""
-        self.repaint()
-        return super().show()
+    def setVisible(self, visible: bool) -> None:
+        """Re-implemented method, pause animation timer when hidden"""
+        if self.anim_type == LoadingOverlayWidget.AnimationGIF.DEFAULT:
+            if visible:
+                self.timer.start(16)
+            else:
+                self.timer.stop()
+        if visible:
+            self.repaint()
+        super().setVisible(visible)
 
     def _setupUI(self) -> None:
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_TranslucentBackground, True)
