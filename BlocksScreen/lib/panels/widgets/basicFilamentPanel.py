@@ -526,7 +526,14 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
 
         self.verticalLayout_2 = QtWidgets.QVBoxLayout(self.load_page)
         self.verticalLayout_2.setObjectName("verticalLayout_2")
-        self.verticalLayout_2.addItem(spacerItem)
+        self.verticalLayout_2.addItem(
+            QtWidgets.QSpacerItem(
+                20,
+                24,
+                QtWidgets.QSizePolicy.Policy.Minimum,
+                QtWidgets.QSizePolicy.Policy.Minimum,
+            )
+        )
 
         self.load_page_header_layout = QtWidgets.QHBoxLayout()
         self.load_page_header_layout.setObjectName("load_page_header_layout")
