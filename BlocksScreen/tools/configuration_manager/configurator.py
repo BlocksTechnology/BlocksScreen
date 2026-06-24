@@ -686,13 +686,16 @@ class ConfigManager:
         machines configuration"""
         try:
             _missing = self._get_missing_symlinks(self.config_dir, self.repo)
-            if _missing and any(self.cmp_cpy_files()):
+            _logger.info(_missing)
+            if _missing or any(self.cmp_cpy_files()):
                 if self.check_nested():
                     self._cleanup_nested()
 
                 self.cleanup_broken_symlinks(self.config_dir)
                 self._symlink_config(_missing)
                 self._cpy_cfg_files()
+            else:
+                _logger.info("Configuration correct, proceding")
         except NotADirectoryError as e:
             _logger.error("%s" % e)
         except FileNotFoundError as e:
