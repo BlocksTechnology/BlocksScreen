@@ -631,7 +631,6 @@ class ConfigManager:
         """Synchronizes configuration repo with the
         machines configuration"""
         try:
-            # self.cleanup_broken_symlinks(self.config_dir)
             _missing = self._get_missing_symlinks(self.config_dir, self.repo)
             if _missing and any(self.cmp_cpy_files()):
                 self.cleanup_broken_symlinks(self.config_dir)
