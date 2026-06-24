@@ -634,9 +634,8 @@ class ConfigManager:
             _missing = self._get_missing_symlinks(self.config_dir, self.repo)
             if _missing and any(self.cmp_cpy_files()):
                 self.cleanup_broken_symlinks(self.config_dir)
-
-            self._symlink_config(_missing)
-            self._cpy_cfg_files()
+                self._symlink_config(_missing)
+                self._cpy_cfg_files()
         except NotADirectoryError as e:
             _logger.error("%s" % e)
         except FileNotFoundError as e:
