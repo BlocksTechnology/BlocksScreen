@@ -262,11 +262,18 @@ class ConfigManager:
         return False
 
     def _cleanup_nested(self) -> None:
-        """Remove any config/.../ directories that were incorrectly nested by prior bug"""
-        for entry in list(self.config_dir.rglob("*")):
-            if entry.is_dir():
-                shutil.rmtree(entry, ignore_errors=True)
-                _logger.warning("Removed nested dir: %s", entry)
+        """Remove accidentally nested config/ directories (2+ levels deep)."""
+        current = self.config_dir
+        for _ in range(10):
+            first = current / "config"
+            if not first.is_dir():
+                break
+            second = first / "config"
+            if not second.is_dir():
+                break
+            shutil.rmtree(second, ignore_errors=True)
+            _logger.warning("Removed nested dir: %s", second)
+            current = first
 
     def get_file_stat(self, root, file):
         """Get file stat"""
@@ -347,8 +354,9 @@ class ConfigManager:
             # symlinks each file, ensure correct directories
             if not mode:
                 for src in symlink_list:
-                    src_rel = src.relative_to(src.home())
-                    target = self.config_dir / pathlib.Path(*src_rel.parts[1:])
+                    src_rel = src.relative_to(self.repo)
+                    target = self.config_dir / src_rel
+
                     if target.exists() and target.is_symlink():
                         continue
                     ensure_dir(pathlib.Path(*target.parts[:-1]))
@@ -550,7 +558,7 @@ class ConfigManager:
                             if sec_missing:
                                 appendix.append((section, False, sec_missing))
 
-                    for opt, val in src_cfg.defaults().items(raw=True):
+                    for opt, val in src_cfg.defaults().items():
                         if not target_cfg.defaults().get(opt):
                             items = (
                                 appendix[-1][2]
@@ -568,7 +576,7 @@ class ConfigManager:
                             if is_new:
                                 lines.append(f"[{section}]")
                             for opt, val in opts:
-                                lines.append(f"{opt}: {val}")
+                                lines.append(f"{opt}= {val}")
                         text = "\n".join(lines)
                         if _tfl and not _tfl.endswith("\n"):
                             _tfl += "\n"
@@ -601,9 +609,9 @@ class ConfigManager:
                 src_file = min(src_cpy_files, key=lambda p: len(p.parents))
                 target_files = self.config_fi_name.get(f, [])
                 if not target_files:
-                    _src_file = src_file.relative_to(src_file.home())
-                    _src_ = pathlib.Path(*_src_file.parts[1:])
-                    target = self.config_dir / _src_
+                    _src_file = src_file.relative_to(self.repo)
+                    target = self.config_dir / _src_file
+
                     shutil.copy2(src_file, target)
                     _logger.info("File created")
                     continue
@@ -661,13 +669,27 @@ class ConfigManager:
             _cmp.append(chk_src == chk_target)
         return _cmp
 
+    def check_nested(self) -> bool:
+        """Checks if machines printer directory has nested config dirs"""
+        depth = 0
+        current = self.config_dir
+        for _ in range(10):
+            candidate = current / "config"
+            if not candidate.is_dir():
+                break
+            depth += 1
+            current = candidate
+        return depth > 1
+
     def sync(self) -> None:
         """Synchronizes configuration repo with the
         machines configuration"""
         try:
             _missing = self._get_missing_symlinks(self.config_dir, self.repo)
             if _missing and any(self.cmp_cpy_files()):
-                self._cleanup_nested()
+                if self.check_nested():
+                    self._cleanup_nested()
+
                 self.cleanup_broken_symlinks(self.config_dir)
                 self._symlink_config(_missing)
                 self._cpy_cfg_files()
