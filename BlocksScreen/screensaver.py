@@ -38,24 +38,25 @@ class ScreenSaver(QtCore.QObject):
             QtCore.QEvent.Type.MouseButtonPress,
             QtCore.QEvent.Type.MouseButtonDblClick,
         ):
-            dpms_info = helper_methods.get_dpms_info()
-            if (
-                dpms_info.get("state")
-                in (
-                    helper_methods.DPMSState.OFF,
-                    helper_methods.DPMSState.STANDBY,
-                    helper_methods.DPMSState.SUSPEND,
-                )
-                or self.touch_blocked
-            ):
-                if not self.timer.isActive():
-                    self.touch_blocked = False
-                    helper_methods.set_dpms_mode(helper_methods.DPMSState.ON)
-                    self.timer.start()
-                    return True  # filter out the event, block touch events on the application
-            else:
-                self.timer.stop()
-                self.timer.start()
+            if self.touch_blocked:
+                # Screen may be off — query DPMS only in this rare state
+                dpms_info = helper_methods.get_dpms_info()
+                if (
+                    dpms_info.get("state")
+                    in (
+                        helper_methods.DPMSState.OFF,
+                        helper_methods.DPMSState.STANDBY,
+                        helper_methods.DPMSState.SUSPEND,
+                    )
+                    or self.touch_blocked
+                ):
+                    if not self.timer.isActive():
+                        self.touch_blocked = False
+                        helper_methods.set_dpms_mode(helper_methods.DPMSState.ON)
+                        self.timer.start()
+                        return True  # filter out the event, block touch events on the application
+            self.timer.stop()
+            self.timer.start()
         return False
 
     def check_dpms(self) -> None:

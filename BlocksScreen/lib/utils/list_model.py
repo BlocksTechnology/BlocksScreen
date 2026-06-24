@@ -442,15 +442,10 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
         )
 
         if item.right_icon:
-            icon_scaled = item.right_icon.scaled(
-                ellipse_rect.size().toSize(),
-                QtCore.Qt.AspectRatioMode.KeepAspectRatio,
-                QtCore.Qt.TransformationMode.SmoothTransformation,
+            icon_scaled = self._get_scaled(
+                item.right_icon, ellipse_rect.size().toSize()
             )
-            painter.drawPixmap(
-                ellipse_rect.toRect(),
-                icon_scaled,
-            )
+            painter.drawPixmap(ellipse_rect.toRect(), icon_scaled)
 
         left_margin = 10
         left_icon_rect = QtCore.QRectF(
@@ -461,11 +456,9 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
         )
 
         if item.left_icon:
-            l_icon_scaled = item.left_icon.scaled(
-                int(left_icon_rect.width()),
-                int(left_icon_rect.height()),
-                QtCore.Qt.AspectRatioMode.KeepAspectRatio,
-                QtCore.Qt.TransformationMode.SmoothTransformation,
+            l_icon_scaled = self._get_scaled(
+                item.left_icon,
+                QtCore.QSize(int(left_icon_rect.width()), int(left_icon_rect.height())),
             )
 
             if item.color_left_icon:

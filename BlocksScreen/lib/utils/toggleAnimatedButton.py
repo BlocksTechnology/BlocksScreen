@@ -235,7 +235,8 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
             + (self._handleONcolor.alpha() - self._handleOFFcolor.alpha()) * progress
         )
 
-        self.handleColor = QtGui.QColor(int(r), int(g), int(b), int(a))
+        computed_handle_color = QtGui.QColor(int(r), int(g), int(b), int(a))
+        self._handleColor = computed_handle_color
 
         painter.fillPath(
             self.trailPath,
@@ -243,7 +244,7 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
         )
         painter.fillPath(
             self.handlePath,
-            self.handleColor if self.isEnabled() else self.disable_handle_color,
+            computed_handle_color if self.isEnabled() else self.disable_handle_color,
         )
 
         if not self.icon_pixmap.isNull():

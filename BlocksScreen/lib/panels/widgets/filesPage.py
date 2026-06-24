@@ -45,6 +45,7 @@ class FilesPage(QtWidgets.QWidget):
 
         self._file_list: list[dict] = []
         self._files_data: dict[str, dict] = {}  # filename -> metadata dict
+        self._display_name_to_key: dict[str, str] = {}  # display_name -> filename key
         self._directories: list[dict] = []
         self._curr_dir: str = ""
         self._pending_action: bool = False
@@ -86,6 +87,7 @@ class FilesPage(QtWidgets.QWidget):
     def clear_files_data(self) -> None:
         """Clear all cached file data."""
         self._files_data.clear()
+        self._display_name_to_key.clear()
         self._pending_metadata_requests.clear()
         self._metadata_retry_count.clear()
 
@@ -155,6 +157,7 @@ class FilesPage(QtWidgets.QWidget):
 
         # Cache the file data
         self._files_data[filename] = filedata
+        self._display_name_to_key[self._get_display_name(filename)] = filename
 
         # Remove from pending requests and reset retry count (success)
         self._pending_metadata_requests.discard(filename)
@@ -265,10 +268,7 @@ class FilesPage(QtWidgets.QWidget):
 
     def _find_file_key_by_display_name(self, display_name: str) -> typing.Optional[str]:
         """Find the file key in _files_data by its display name."""
-        for key in self._files_data:
-            if self._get_display_name(key) == display_name:
-                return key
-        return None
+        return self._display_name_to_key.get(display_name)
 
     @QtCore.pyqtSlot(dict, name="on_file_added")
     def on_file_added(self, file_data: dict) -> None:
@@ -344,6 +344,7 @@ class FilesPage(QtWidgets.QWidget):
         current = self._curr_dir.removeprefix("/")
 
         # Always clean up cache
+        self._display_name_to_key.pop(self._get_display_name(filepath), None)
         self._files_data.pop(filepath, None)
         self._pending_metadata_requests.discard(filepath)
         self._metadata_retry_count.pop(filepath, None)
