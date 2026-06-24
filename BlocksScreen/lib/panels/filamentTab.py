@@ -678,7 +678,8 @@ class FilamentTab(QtWidgets.QStackedWidget):
                 and self._previous_gate_states[gate_info.index] is True
             ):
                 self.popup_gates.append({"gate": gate_info.index})
-                self.handle_popup()
+                if len(mmu_state.gates) > 1:
+                    self.handle_popup()
 
         if not self.amu_configured:
             if len(mmu_state.gates) > 1:
