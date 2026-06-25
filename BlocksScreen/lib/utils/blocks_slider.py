@@ -55,7 +55,7 @@ class BlocksSlider(QtWidgets.QSlider):
         """
         _handle_path = QtGui.QPainterPath()
         self._handle_rect.setSize(QtCore.QSize(60, 55))
-        self._handle_rect.adjusted(-20,0,0,0)
+        self._handle_rect.adjusted(-20, 0, 0, 0)
         _handle_path.addRoundedRect(self._handle_rect.toRectF(), 5, 5)
         return _handle_path.contains(pos)
 
