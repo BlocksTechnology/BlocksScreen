@@ -121,7 +121,6 @@ class SerialScanner:
 
         return devs
 
-
     def scan_klipper(self) -> list[Device]:
         return [d for d in self.scan() if d.is_klipper]
 
@@ -130,11 +129,3 @@ class SerialScanner:
 
     def scan_unflashed(self) -> list[Device]:
         return [d for d in self.scan() if d.is_unflashed]
-
-
-if __name__ == "__main__":
-    sc = SerialScanner()
-
-    print(sc.scan())
-
-
