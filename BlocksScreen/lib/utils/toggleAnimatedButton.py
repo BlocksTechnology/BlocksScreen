@@ -34,6 +34,8 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
         )
 
         self.icon_pixmap: QtGui.QPixmap = QtGui.QPixmap()
+        self._icon_cache: QtGui.QPixmap = QtGui.QPixmap()
+        self._icon_cache_size: QtCore.QSize = QtCore.QSize()
         self._backgroundColor: QtGui.QColor = QtGui.QColor(223, 223, 223)
         self._handleColor: QtGui.QColor = QtGui.QColor(255, 100, 10)
 
@@ -163,7 +165,8 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
     def setPixmap(self, pixmap: QtGui.QPixmap) -> None:
         """Set widget pixmap"""
         self.icon_pixmap = pixmap
-        # self.repaint()
+        self._icon_cache = QtGui.QPixmap()
+        self._icon_cache_size = QtCore.QSize()
         self.update()
 
     @QtCore.pyqtSlot(name="clicked")
@@ -197,19 +200,18 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
 
         _rect = self.contentsRect()
         bg_color = self.backgroundColor
-        self.handlePath: QtGui.QPainterPath = QtGui.QPainterPath()
         self.handle_ellipseRect = QtCore.QRectF(
             self._handle_position,
             ((_rect.toRectF().normalized().height() * 0.20) // 2),
             (_rect.toRectF().normalized().height() * 0.80),
             (_rect.toRectF().normalized().height() * 0.80),
         )
+        self.handlePath.clear()
         self.handlePath.addEllipse(self.handle_ellipseRect)
         painter = QtGui.QPainter(self)
         painter.setRenderHint(painter.RenderHint.Antialiasing)
         painter.setRenderHint(painter.RenderHint.SmoothPixmapTransform)
         painter.setBackgroundMode(QtCore.Qt.BGMode.TransparentMode)
-        painter.setRenderHint(painter.RenderHint.LosslessImageRendering)
 
         rect_norm = _rect.toRectF().normalized()
         min_x = rect_norm.x()
@@ -217,7 +219,6 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
         progress = (self._handle_position - min_x) / (max_x - min_x)
         progress = max(0.0, min(1.0, progress))
 
-        # Inline color interpolation (no separate functions)
         r = (
             self._handleOFFcolor.red()
             + (self._handleONcolor.red() - self._handleOFFcolor.red()) * progress
@@ -255,12 +256,15 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
                 self.handle_ellipseRect.width() * 0.90,
                 self.handle_ellipseRect.height() * 0.90,
             )
-            _icon_scaled = self.icon_pixmap.scaled(
-                _icon_rect.size().toSize(),
-                QtCore.Qt.AspectRatioMode.KeepAspectRatio,
-                QtCore.Qt.TransformationMode.SmoothTransformation,
-            )
-            # Calculate the actual QRect for the scaled pixmap (centering it if needed)
+            target_size = _icon_rect.size().toSize()
+            if target_size != self._icon_cache_size:
+                self._icon_cache = self.icon_pixmap.scaled(
+                    target_size,
+                    QtCore.Qt.AspectRatioMode.KeepAspectRatio,
+                    QtCore.Qt.TransformationMode.SmoothTransformation,
+                )
+                self._icon_cache_size = target_size
+            _icon_scaled = self._icon_cache
             scaled_width = _icon_scaled.width()
             scaled_height = _icon_scaled.height()
             adjusted_x = (_icon_rect.width() - scaled_width) // 2.0
@@ -272,8 +276,8 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
                 scaled_height,
             )
             painter.drawPixmap(
-                adjusted_icon_rect,  # Target area (center adjusted)
-                _icon_scaled,  # Scaled pixmap
-                _icon_scaled.rect().toRectF(),  # Entire source (scaled) pixmap
+                adjusted_icon_rect,
+                _icon_scaled,
+                _icon_scaled.rect().toRectF(),
             )
         painter.end()

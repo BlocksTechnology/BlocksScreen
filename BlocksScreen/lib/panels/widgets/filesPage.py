@@ -240,10 +240,7 @@ class FilesPage(QtWidgets.QWidget):
         """
         insert_pos = 0
 
-        for i in range(self._model.rowCount()):
-            index = self._model.index(i)
-            item = self._model.data(index, QtCore.Qt.ItemDataRole.UserRole)
-
+        for i, item in enumerate(self._model.entries):
             if not item:
                 continue
 

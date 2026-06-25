@@ -231,10 +231,14 @@ class Files(QtCore.QObject):
         self.request_file_metadata.connect(self.ws.api.get_gcode_metadata)
 
     def _install_event_filter(self) -> None:
-        """Install event filter on application instance."""
-        app = QtWidgets.QApplication.instance()
-        if app:
-            app.installEventFilter(self)
+        """Install event filter on parent to limit scope to mainWindow events only."""
+        parent = self.parent()
+        if parent is not None:
+            parent.installEventFilter(self)
+        else:
+            app = QtWidgets.QApplication.instance()
+            if app:
+                app.installEventFilter(self)
 
     @property
     def file_list(self) -> list[dict]:
