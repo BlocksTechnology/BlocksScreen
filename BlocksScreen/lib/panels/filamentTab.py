@@ -685,10 +685,6 @@ class FilamentTab(QtWidgets.QStackedWidget):
     def setupUi(self):
         self.resize(710, 410)
         self.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
-        Hblank = QtWidgets.QWidget(self)
-        Hblank.setMinimumSize(QtCore.QSize(60, 60))
-        Hblank.setMaximumSize(QtCore.QSize(60, 60))
-
         widget = QtWidgets.QWidget()
         widget.setMinimumSize(QtCore.QSize(710, 410))
         widget.setMaximumSize(QtCore.QSize(710, 410))
@@ -698,7 +694,14 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self.fp_header_layout = QtWidgets.QHBoxLayout()
         self.fp_header_layout.setObjectName("fp_header_layout")
 
-        self.fp_header_layout.addWidget(Hblank)
+        self.fp_header_layout.addItem(
+            QtWidgets.QSpacerItem(
+                60,
+                60,
+                QtWidgets.QSizePolicy.Policy.Fixed,
+                QtWidgets.QSizePolicy.Policy.Minimum,
+            )
+        )
         self.fp_header_title = QtWidgets.QLabel(parent=self)
         sizePolicy = QtWidgets.QSizePolicy(
             QtWidgets.QSizePolicy.Policy.MinimumExpanding,
@@ -723,7 +726,14 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self.fp_header_title.setObjectName("fp_header_title")
         self.fp_header_layout.addWidget(self.fp_header_title)
 
-        self.fp_header_layout.addWidget(Hblank)
+        self.fp_header_layout.addItem(
+            QtWidgets.QSpacerItem(
+                60,
+                60,
+                QtWidgets.QSizePolicy.Policy.Fixed,
+                QtWidgets.QSizePolicy.Policy.Minimum,
+            )
+        )
 
         self.verticalLayout.addLayout(self.fp_header_layout)
         self.fp_content_layout = QtWidgets.QGridLayout()
