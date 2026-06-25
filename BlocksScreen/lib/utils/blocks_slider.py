@@ -54,7 +54,9 @@ class BlocksSlider(QtWidgets.QSlider):
             bool: If the handle contains the specified position
         """
         _handle_path = QtGui.QPainterPath()
-        _handle_path.addRoundedRect(self._handle_rect.toRectF(), 6, 6)
+        self._handle_rect.setSize(QtCore.QSize(60, 55))
+        self._handle_rect.adjusted(-20,0,0,0)
+        _handle_path.addRoundedRect(self._handle_rect.toRectF(), 5, 5)
         return _handle_path.contains(pos)
 
     def _set_slider_pos(self, pos: QtCore.QPointF):
