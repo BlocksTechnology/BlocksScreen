@@ -21,6 +21,21 @@ class DisplayButton(QtWidgets.QPushButton):
         self._name: str = ""
         self.text_color: QtGui.QColor = QtGui.QColor(0, 0, 0)
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_AcceptTouchEvents, True)
+        self._path_cache: dict[tuple[int, int], QtGui.QPainterPath] = {}
+        self._icon_cache: QtGui.QPixmap = QtGui.QPixmap()
+        self._icon_cache_size: QtCore.QSize = QtCore.QSize()
+        self._icon_secondary_cache: QtGui.QPixmap = QtGui.QPixmap()
+        self._icon_secondary_cache_size: QtCore.QSize = QtCore.QSize()
+        self._font_cache: dict[int, QtGui.QFont] = {}
+        self._color_bg = QtGui.QColor(177, 196, 203, 75)
+        self._color_secondary_text = QtGui.QColor("#b6b0b0")
+        _hc = QtGui.QColor(self.highlight_color)
+        self._highlight_c1 = QtGui.QColor(_hc)
+        self._highlight_c1.setAlpha(40)
+        self._highlight_c2 = QtGui.QColor(_hc)
+        self._highlight_c2.setAlpha(35)
+        self._highlight_c3 = QtGui.QColor(_hc)
+        self._highlight_c3.setAlpha(1)
 
     @property
     def name(self):
@@ -30,12 +45,25 @@ class DisplayButton(QtWidgets.QPushButton):
     def setPixmap(self, pixmap: QtGui.QPixmap) -> None:
         """Set widget pixmap"""
         self.icon_pixmap = pixmap
+        self._icon_cache = QtGui.QPixmap()
+        self._icon_cache_size = QtCore.QSize()
         self.repaint()
 
     def setSecondaryPixmap(self, pixmap: QtGui.QPixmap) -> None:
         """Set secondary widget pixmap"""
         self.icon_pixmap_secondary = pixmap
+        self._icon_secondary_cache = QtGui.QPixmap()
+        self._icon_secondary_cache_size = QtCore.QSize()
         self.repaint()
+
+    def _get_font(self, point_size: int) -> QtGui.QFont:
+        cached = self._font_cache.get(point_size)
+        if cached is None:
+            f = QtGui.QFont()
+            f.setPointSize(point_size)
+            f.setFamily("Momcake-bold")
+            self._font_cache[point_size] = cached = f
+        return cached
 
     @property
     def button_type(self) -> str:
@@ -81,7 +109,6 @@ class DisplayButton(QtWidgets.QPushButton):
         painter = QtWidgets.QStylePainter(self)
         painter.setRenderHint(painter.RenderHint.Antialiasing, True)
         painter.setRenderHint(painter.RenderHint.SmoothPixmapTransform, True)
-        painter.setRenderHint(painter.RenderHint.LosslessImageRendering, True)
 
         _rect = self.rect()
         _style = self.style()
@@ -89,16 +116,16 @@ class DisplayButton(QtWidgets.QPushButton):
         if not _style or _rect is None:
             return
         margin = _style.pixelMetric(_style.PixelMetric.PM_ButtonMargin, opt, self)
-        # Rounded background edges
-        path = QtGui.QPainterPath()
-        path.addRoundedRect(
-            self.rect().toRectF(),
-            10.0,
-            10.0,
-            QtCore.Qt.SizeMode.AbsoluteSize,
-        )
+        path_key = (_rect.width(), _rect.height())
+        path = self._path_cache.get(path_key)
+        if path is None:
+            path = QtGui.QPainterPath()
+            path.addRoundedRect(
+                _rect.toRectF(), 10.0, 10.0, QtCore.Qt.SizeMode.AbsoluteSize
+            )
+            self._path_cache[path_key] = path
 
-        painter.fillPath(path, QtGui.QColor(177, 196, 203, 75))
+        painter.fillPath(path, self._color_bg)
         painter.setPen(QtCore.Qt.PenStyle.SolidLine)
         painter.setPen(QtCore.Qt.GlobalColor.white)
 
@@ -107,24 +134,16 @@ class DisplayButton(QtWidgets.QPushButton):
             _pen.setStyle(QtCore.Qt.PenStyle.SolidLine)
             _pen.setJoinStyle(QtCore.Qt.PenJoinStyle.RoundJoin)
             _pen.setCapStyle(QtCore.Qt.PenCapStyle.RoundCap)
-            _color = QtGui.QColor(self.highlight_color)
-            _color2 = QtGui.QColor(self.highlight_color)
-            _color3 = QtGui.QColor(self.highlight_color)
-            _color.setAlpha(40)
-            _color2.setAlpha(35)
-            _color3.setAlpha(1)
-            _pen.setColor(_color)
+            _pen.setColor(self._highlight_c1)
+            _rect_f = _rect.toRectF()
             _gradient = QtGui.QRadialGradient(
-                QtCore.QPointF(
-                    self.rect().toRectF().left() + 2,
-                    self.rect().toRectF().top(),
-                ),
+                QtCore.QPointF(_rect_f.left() + 2, _rect_f.top()),
                 150.0,
-                self.rect().toRectF().center(),
+                _rect_f.center(),
             )
-            _gradient.setColorAt(0, _color)
-            _gradient.setColorAt(0.5, _color2)
-            _gradient.setColorAt(1, _color3)
+            _gradient.setColorAt(0, self._highlight_c1)
+            _gradient.setColorAt(0.5, self._highlight_c2)
+            _gradient.setColorAt(1, self._highlight_c3)
             _pen.setBrush(_gradient)
             painter.fillPath(path, _pen.brush())
 
@@ -140,12 +159,17 @@ class DisplayButton(QtWidgets.QPushButton):
                 _rect.height() - 5,
             )
 
-            _icon_scaled = self.icon_pixmap.scaled(
-                int(_icon_rect.width()),
-                int(_icon_rect.height()),
-                QtCore.Qt.AspectRatioMode.KeepAspectRatio,
-                QtCore.Qt.TransformationMode.SmoothTransformation,
+            target_size = QtCore.QSize(
+                int(_icon_rect.width()), int(_icon_rect.height())
             )
+            if target_size != self._icon_cache_size:
+                self._icon_cache = self.icon_pixmap.scaled(
+                    target_size,
+                    QtCore.Qt.AspectRatioMode.KeepAspectRatio,
+                    QtCore.Qt.TransformationMode.SmoothTransformation,
+                )
+                self._icon_cache_size = target_size
+            _icon_scaled = self._icon_cache
 
             scaled_width = _icon_scaled.width()
             scaled_height = _icon_scaled.height()
@@ -193,10 +217,7 @@ class DisplayButton(QtWidgets.QPushButton):
                         int(_mtl.width() / 2.0),
                         _rect.height(),
                     )
-                    font = QtGui.QFont()
-                    font.setPointSize(12)
-                    font.setFamily("Momcake-bold")
-                    painter.setFont(font)
+                    painter.setFont(self._get_font(12))
                     painter.drawText(
                         _ptl_rect,
                         QtCore.Qt.TextFlag.TextShowMnemonic
@@ -237,10 +258,7 @@ class DisplayButton(QtWidgets.QPushButton):
                         _mtl.width() - margin * 2,
                         (_mtl.height() * 0.5) // 2,
                     )
-                    font = QtGui.QFont()
-                    font.setPointSize(20)
-                    font.setFamily("Momcake-bold")
-                    painter.setFont(font)
+                    painter.setFont(self._get_font(20))
                     painter.setCompositionMode(
                         painter.CompositionMode.CompositionMode_SourceAtop
                     )
@@ -250,9 +268,8 @@ class DisplayButton(QtWidgets.QPushButton):
                         | QtCore.Qt.AlignmentFlag.AlignVCenter,
                         self.text(),
                     )
-                    font.setPointSize(14)
-                    painter.setPen(QtGui.QColor("#b6b0b0"))
-                    painter.setFont(font)
+                    painter.setPen(self._color_secondary_text)
+                    painter.setFont(self._get_font(14))
 
                     _ = painter.drawText(
                         _downer_rect,
@@ -279,12 +296,15 @@ class DisplayButton(QtWidgets.QPushButton):
                         _icon_size,
                         _icon_size,
                     )
-                    _first_icon_scaled = self.icon_pixmap.scaled(
-                        int(_icon_size),
-                        int(_icon_size),
-                        QtCore.Qt.AspectRatioMode.KeepAspectRatio,
-                        QtCore.Qt.TransformationMode.SmoothTransformation,
-                    )
+                    _dual_icon_size = QtCore.QSize(int(_icon_size), int(_icon_size))
+                    if _dual_icon_size != self._icon_cache_size:
+                        self._icon_cache = self.icon_pixmap.scaled(
+                            _dual_icon_size,
+                            QtCore.Qt.AspectRatioMode.KeepAspectRatio,
+                            QtCore.Qt.TransformationMode.SmoothTransformation,
+                        )
+                        self._icon_cache_size = _dual_icon_size
+                    _first_icon_scaled = self._icon_cache
                     _first_adjusted_icon_rect = QtCore.QRectF(
                         _first_icon_rect.x()
                         + (_icon_size - _first_icon_scaled.width()) / 2.0,
@@ -305,10 +325,7 @@ class DisplayButton(QtWidgets.QPushButton):
                         _rect.width() - _icon_size - _margin * 3,
                         _row_height,
                     )
-                    font = QtGui.QFont()
-                    font.setPointSize(20)
-                    font.setFamily("Momcake-bold")
-                    painter.setFont(font)
+                    painter.setFont(self._get_font(20))
                     painter.drawText(
                         _first_text_rect,
                         QtCore.Qt.TextFlag.TextShowMnemonic
@@ -324,12 +341,14 @@ class DisplayButton(QtWidgets.QPushButton):
                         _icon_size,
                         _icon_size,
                     )
-                    _second_icon_scaled = self.icon_pixmap_secondary.scaled(
-                        int(_icon_size),
-                        int(_icon_size),
-                        QtCore.Qt.AspectRatioMode.KeepAspectRatio,
-                        QtCore.Qt.TransformationMode.SmoothTransformation,
-                    )
+                    if _dual_icon_size != self._icon_secondary_cache_size:
+                        self._icon_secondary_cache = self.icon_pixmap_secondary.scaled(
+                            _dual_icon_size,
+                            QtCore.Qt.AspectRatioMode.KeepAspectRatio,
+                            QtCore.Qt.TransformationMode.SmoothTransformation,
+                        )
+                        self._icon_secondary_cache_size = _dual_icon_size
+                    _second_icon_scaled = self._icon_secondary_cache
                     _second_adjusted_icon_rect = QtCore.QRectF(
                         _second_icon_rect.x()
                         + (_icon_size - _second_icon_scaled.width()) / 2.0,
@@ -349,9 +368,8 @@ class DisplayButton(QtWidgets.QPushButton):
                         _rect.width() - _icon_size - _margin * 3,
                         _row_height,
                     )
-                    font.setPointSize(15)
-                    painter.setPen(QtGui.QColor("#b6b0b0"))
-                    painter.setFont(font)
+                    painter.setPen(self._color_secondary_text)
+                    painter.setFont(self._get_font(15))
                     painter.drawText(
                         _second_text_rect,
                         QtCore.Qt.TextFlag.TextShowMnemonic
@@ -360,10 +378,7 @@ class DisplayButton(QtWidgets.QPushButton):
                         str(self.secondary_text) if self.secondary_text else "?",
                     )
             else:
-                font = QtGui.QFont()
-                font.setPointSize(12)
-                font.setFamily("Momcake-bold")
-                painter.setFont(font)
+                painter.setFont(self._get_font(12))
                 _ = painter.drawText(
                     _mtl,
                     QtCore.Qt.TextFlag.TextShowMnemonic

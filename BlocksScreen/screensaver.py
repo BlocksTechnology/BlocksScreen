@@ -8,8 +8,9 @@ class ScreenSaver(QtCore.QObject):
     dpms_suspend_timeout = helper_methods.get_dpms_timeouts().get("suspend_timeout")
     dpms_standby_timeout = helper_methods.get_dpms_timeouts().get("standby_timeout")
     touch_blocked: bool = False
-    _TOUCH_TYPES: frozenset = frozenset(
-        (
+    _TOUCH_INTS: frozenset = frozenset(
+        e.value
+        for e in (
             QtCore.QEvent.Type.TouchBegin,
             QtCore.QEvent.Type.TouchUpdate,
             QtCore.QEvent.Type.TouchEnd,
@@ -40,7 +41,7 @@ class ScreenSaver(QtCore.QObject):
     def eventFilter(self, object, event) -> bool:
         """Filter touch events considering DPMS Screen state"""
 
-        if event.type() in self._TOUCH_TYPES:
+        if event.type().value in self._TOUCH_INTS:
             if self.touch_blocked:
                 # Screen may be off — query DPMS only in this rare state
                 dpms_info = helper_methods.get_dpms_info()
