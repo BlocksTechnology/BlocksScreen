@@ -11,6 +11,8 @@ import threading
 from datetime import datetime
 from typing import Literal
 
+from tools.serial_scanner import SerialScanner
+
 HOME = pathlib.Path.home()
 CONFIG_REPO = pathlib.Path.joinpath(HOME, "RF50-Klipper")
 KLIPPER_CONFIG_DIR = pathlib.Path.joinpath(HOME, "printer_data", "config")
@@ -584,6 +586,8 @@ class ConfigManager:
                     else:
                         merged = _tfl
 
+            merged = self._fix_beacon_serial(merged)
+
             if _tfl != merged:
                 target_file.write_text(merged, encoding="utf-8")
             return True
@@ -680,6 +684,50 @@ class ConfigManager:
             depth += 1
             current = candidate
         return depth > 1
+
+    def _fix_beacon_serial(self, config_text: str) -> str:
+        """Update [beacon] serial option with scanned device path if missing/empty."""
+        if not config_text.strip():
+            return config_text
+
+        lines = config_text.splitlines(keepends=True)
+        beacon_header_idx = None
+        serial_missing = True
+        serial_is_empty = False
+
+        for i, line in enumerate(lines):
+            stripped = line.strip()
+            if re.match(r"^\[\s*beacon\s*\]\s*$", stripped, re.IGNORECASE):
+                beacon_header_idx = i
+            elif beacon_header_idx is not None:
+                if re.match(r"^\[.*\]\s*$", stripped):
+                    break
+                m = re.match(r"^\s*serial\s*[:=]\s*(.*)$", stripped)
+                if m:
+                    serial_missing = False
+                    if not m.group(1).strip():
+                        serial_is_empty = True
+                    else:
+                        return config_text
+
+        if beacon_header_idx is None or (not serial_missing and not serial_is_empty):
+            return config_text
+
+        scanner = SerialScanner()
+        for dev in scanner.scan():
+            if "beacon" in dev.symlink_name.lower() or "beacon" in dev.name.lower():
+                serial_line = f"serial: {dev.symlink}\n"
+                if serial_is_empty:
+                    for j in range(beacon_header_idx + 1, len(lines)):
+                        if re.match(r"^\s*serial\s*[:=]\s*$", lines[j].strip()):
+                            lines[j] = serial_line
+                            return "".join(lines)
+                lines.insert(beacon_header_idx + 1, serial_line)
+                _logger.info("Beacon serial set to %s", dev.symlink)
+                return "".join(lines)
+
+        _logger.warning("No beacon device found via serial scan")
+        return config_text
 
     def sync(self) -> None:
         """Synchronizes configuration repo with the
