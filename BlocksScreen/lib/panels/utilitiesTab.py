@@ -1,21 +1,19 @@
+import re
 import typing
 from dataclasses import dataclass
 from enum import Enum, auto
 from functools import partial
 
 from lib.moonrakerComm import MoonWebSocket
+from lib.panels.widgets.basePopup import BasePopup
+from lib.panels.widgets.inputshaperPage import InputShaperPage
+from lib.panels.widgets.optionCardWidget import OptionCard
 from lib.panels.widgets.troubleshootPage import TroubleshootPage
 from lib.printer import Printer
 from lib.ui.utilitiesStackedWidget_ui import Ui_utilitiesStackedWidget
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.toggleAnimatedButton import ToggleAnimatedButton
 from PyQt6 import QtCore, QtGui, QtWidgets
-
-from lib.panels.widgets.optionCardWidget import OptionCard
-from lib.panels.widgets.inputshaperPage import InputShaperPage
-from lib.panels.widgets.basePopup import BasePopup
-
-import re
 
 
 @dataclass
@@ -586,7 +584,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
 
         try:
             self.panel.utilities_leds_btn.clicked.disconnect()
-        except RuntimeError:
+        except (RuntimeError, TypeError):
             pass
         if len(buttons) == 1:
             self.panel.utilities_leds_btn.clicked.connect(
