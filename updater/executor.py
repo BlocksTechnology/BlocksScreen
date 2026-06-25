@@ -7,14 +7,18 @@ import logging
 import os
 import re
 import signal
+import sys
 import tempfile
 import time
 from collections.abc import Sequence
 from pathlib import Path
 
+from updater.locking import restart_sentinel_path
 from updater.models import ComponentStatus
 
 logger = logging.getLogger(__name__)
+
+UPDATER_SERVICE = "BlocksScreen-updater.service"
 
 GIT = "/usr/bin/git"
 PIP = "/usr/bin/pip3"
@@ -73,6 +77,11 @@ def _make_clean_env() -> dict[str, str]:
     for key, val in os.environ.items():
         if key in safe_sudo:
             env[key] = val
+    # Lets hooks (git post-merge, the updater's own) tell they run mid-batch and
+    # defer any daemon restart to the sentinel instead of aborting the update.
+    env["BS_UPDATER_SELF_UPDATE"] = "1"
+    with contextlib.suppress(OSError):
+        env["BS_UPDATER_RESTART_SENTINEL"] = str(restart_sentinel_path())
     return env
 
 
@@ -784,6 +793,26 @@ async def restart_service_noblock(name: str | None) -> tuple[bool, str]:
     if not _SERVICE_RE.match(name):
         return (False, f"service name {name!r} is invalid")
     return await _run([SUDO, SYSTEMCTL, "--no-block", "restart", name], timeout=15.0)
+
+
+async def verify_updater_importable(component_path: Path | None) -> bool:
+    """Self-test the new on-disk updater code before restarting into it.
+
+    Imports the updater package in a fresh interpreter from component_path. A
+    new updater that fails to import must never restart the daemon onto itself:
+    that would take down the only field update path. On failure the caller keeps
+    the running (old) daemon and lets the next reboot adopt the new code.
+    """
+    if component_path is None or not component_path.exists():
+        return False
+    ok, out = await _run(
+        [sys.executable, "-c", "import updater.dbus_service"],
+        cwd=component_path,
+        timeout=30.0,
+    )
+    if not ok:
+        logger.error("updater import self-test failed: %s", out.strip())
+    return ok
 
 
 async def restart_service(name: str | None) -> tuple[bool, str]:
