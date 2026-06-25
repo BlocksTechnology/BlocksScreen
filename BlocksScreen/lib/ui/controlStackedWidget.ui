@@ -32,7 +32,7 @@
    <string>StackedWidget</string>
   </property>
   <property name="currentIndex">
-   <number>7</number>
+   <number>2</number>
   </property>
   <widget class="QWidget" name="control_page">
    <property name="sizePolicy">
@@ -80,7 +80,6 @@
          <font>
           <family>Momcake</family>
           <pointsize>24</pointsize>
-          <weight>75</weight>
           <bold>true</bold>
          </font>
         </property>
@@ -137,10 +136,10 @@
          <bool>true</bool>
         </property>
         <property name="contextMenuPolicy">
-         <enum>Qt::NoContextMenu</enum>
+         <enum>Qt::ContextMenuPolicy::NoContextMenu</enum>
         </property>
         <property name="layoutDirection">
-         <enum>Qt::LeftToRight</enum>
+         <enum>Qt::LayoutDirection::LeftToRight</enum>
         </property>
         <property name="styleSheet">
          <string notr="true"/>
@@ -197,10 +196,10 @@
          <bool>true</bool>
         </property>
         <property name="contextMenuPolicy">
-         <enum>Qt::NoContextMenu</enum>
+         <enum>Qt::ContextMenuPolicy::NoContextMenu</enum>
         </property>
         <property name="layoutDirection">
-         <enum>Qt::LeftToRight</enum>
+         <enum>Qt::LayoutDirection::LeftToRight</enum>
         </property>
         <property name="styleSheet">
          <string notr="true"/>
@@ -258,10 +257,10 @@ Control</string>
          <bool>true</bool>
         </property>
         <property name="contextMenuPolicy">
-         <enum>Qt::NoContextMenu</enum>
+         <enum>Qt::ContextMenuPolicy::NoContextMenu</enum>
         </property>
         <property name="layoutDirection">
-         <enum>Qt::LeftToRight</enum>
+         <enum>Qt::LayoutDirection::LeftToRight</enum>
         </property>
         <property name="styleSheet">
          <string notr="true"/>
@@ -319,10 +318,10 @@ Calibration</string>
          <bool>true</bool>
         </property>
         <property name="contextMenuPolicy">
-         <enum>Qt::NoContextMenu</enum>
+         <enum>Qt::ContextMenuPolicy::NoContextMenu</enum>
         </property>
         <property name="layoutDirection">
-         <enum>Qt::LeftToRight</enum>
+         <enum>Qt::LayoutDirection::LeftToRight</enum>
         </property>
         <property name="styleSheet">
          <string notr="true"/>
@@ -380,10 +379,10 @@ Control</string>
          <bool>true</bool>
         </property>
         <property name="contextMenuPolicy">
-         <enum>Qt::NoContextMenu</enum>
+         <enum>Qt::ContextMenuPolicy::NoContextMenu</enum>
         </property>
         <property name="layoutDirection">
-         <enum>Qt::LeftToRight</enum>
+         <enum>Qt::LayoutDirection::LeftToRight</enum>
         </property>
         <property name="styleSheet">
          <string notr="true"/>
@@ -440,10 +439,10 @@ Control</string>
          <bool>true</bool>
         </property>
         <property name="contextMenuPolicy">
-         <enum>Qt::NoContextMenu</enum>
+         <enum>Qt::ContextMenuPolicy::NoContextMenu</enum>
         </property>
         <property name="layoutDirection">
-         <enum>Qt::LeftToRight</enum>
+         <enum>Qt::LayoutDirection::LeftToRight</enum>
         </property>
         <property name="styleSheet">
          <string notr="true"/>
@@ -586,10 +585,10 @@ Print Core</string>
          <bool>true</bool>
         </property>
         <property name="contextMenuPolicy">
-         <enum>Qt::NoContextMenu</enum>
+         <enum>Qt::ContextMenuPolicy::NoContextMenu</enum>
         </property>
         <property name="layoutDirection">
-         <enum>Qt::LeftToRight</enum>
+         <enum>Qt::LayoutDirection::LeftToRight</enum>
         </property>
         <property name="styleSheet">
          <string notr="true"/>
@@ -653,10 +652,10 @@ Print Core</string>
          <bool>true</bool>
         </property>
         <property name="contextMenuPolicy">
-         <enum>Qt::NoContextMenu</enum>
+         <enum>Qt::ContextMenuPolicy::NoContextMenu</enum>
         </property>
         <property name="layoutDirection">
-         <enum>Qt::LeftToRight</enum>
+         <enum>Qt::LayoutDirection::LeftToRight</enum>
         </property>
         <property name="styleSheet">
          <string notr="true"/>
@@ -713,10 +712,10 @@ Print Core</string>
          <bool>true</bool>
         </property>
         <property name="contextMenuPolicy">
-         <enum>Qt::NoContextMenu</enum>
+         <enum>Qt::ContextMenuPolicy::NoContextMenu</enum>
         </property>
         <property name="layoutDirection">
-         <enum>Qt::LeftToRight</enum>
+         <enum>Qt::LayoutDirection::LeftToRight</enum>
         </property>
         <property name="styleSheet">
          <string notr="true"/>
@@ -774,10 +773,10 @@ Steppers</string>
          <bool>true</bool>
         </property>
         <property name="contextMenuPolicy">
-         <enum>Qt::NoContextMenu</enum>
+         <enum>Qt::ContextMenuPolicy::NoContextMenu</enum>
         </property>
         <property name="layoutDirection">
-         <enum>Qt::LeftToRight</enum>
+         <enum>Qt::LayoutDirection::LeftToRight</enum>
         </property>
         <property name="styleSheet">
          <string notr="true"/>
@@ -834,10 +833,10 @@ Steppers</string>
          <bool>true</bool>
         </property>
         <property name="contextMenuPolicy">
-         <enum>Qt::NoContextMenu</enum>
+         <enum>Qt::ContextMenuPolicy::NoContextMenu</enum>
         </property>
         <property name="layoutDirection">
-         <enum>Qt::LeftToRight</enum>
+         <enum>Qt::LayoutDirection::LeftToRight</enum>
         </property>
         <property name="styleSheet">
          <string notr="true"/>
@@ -903,10 +902,10 @@ Home</string>
     <item>
      <spacer name="verticalSpacer_5">
       <property name="orientation">
-       <enum>Qt::Vertical</enum>
+       <enum>Qt::Orientation::Vertical</enum>
       </property>
       <property name="sizeType">
-       <enum>QSizePolicy::Minimum</enum>
+       <enum>QSizePolicy::Policy::Minimum</enum>
       </property>
       <property name="sizeHint" stdset="0">
        <size>
@@ -921,10 +920,10 @@ Home</string>
       <item>
        <spacer name="horizontalSpacer_2">
         <property name="orientation">
-         <enum>Qt::Horizontal</enum>
+         <enum>Qt::Orientation::Horizontal</enum>
         </property>
         <property name="sizeType">
-         <enum>QSizePolicy::Minimum</enum>
+         <enum>QSizePolicy::Policy::Minimum</enum>
         </property>
         <property name="sizeHint" stdset="0">
          <size>
@@ -1009,10 +1008,10 @@ Home</string>
          <bool>true</bool>
         </property>
         <property name="contextMenuPolicy">
-         <enum>Qt::NoContextMenu</enum>
+         <enum>Qt::ContextMenuPolicy::NoContextMenu</enum>
         </property>
         <property name="layoutDirection">
-         <enum>Qt::LeftToRight</enum>
+         <enum>Qt::LayoutDirection::LeftToRight</enum>
         </property>
         <property name="styleSheet">
          <string notr="true"/>
@@ -1299,7 +1298,6 @@ Home</string>
             <property name="font">
              <font>
               <pointsize>16</pointsize>
-              <weight>50</weight>
               <bold>false</bold>
              </font>
             </property>
@@ -1485,7 +1483,6 @@ Home</string>
             <property name="font">
              <font>
               <pointsize>16</pointsize>
-              <weight>50</weight>
               <bold>false</bold>
              </font>
             </property>
@@ -1668,7 +1665,6 @@ Home</string>
             <property name="font">
              <font>
               <pointsize>16</pointsize>
-              <weight>50</weight>
               <bold>false</bold>
              </font>
             </property>
@@ -1936,7 +1932,6 @@ Home</string>
             <property name="font">
              <font>
               <pointsize>16</pointsize>
-              <weight>50</weight>
               <bold>false</bold>
              </font>
             </property>
@@ -1967,7 +1962,7 @@ Home</string>
            </widget>
           </item>
           <item>
-           <widget class="GroupButton" name="extrude_select_feedrate_5_btn">
+           <widget class="GroupButton" name="extrude_select_feedrate_4_btn">
             <property name="sizePolicy">
              <sizepolicy hsizetype="Minimum" vsizetype="Expanding">
               <horstretch>0</horstretch>
@@ -2122,12 +2117,11 @@ Home</string>
             <property name="font">
              <font>
               <pointsize>16</pointsize>
-              <weight>50</weight>
               <bold>false</bold>
              </font>
             </property>
             <property name="text">
-             <string>5</string>
+             <string>4</string>
             </property>
             <property name="checkable">
              <bool>true</bool>
@@ -2150,7 +2144,7 @@ Home</string>
            </widget>
           </item>
           <item>
-           <widget class="GroupButton" name="extrude_select_feedrate_10_btn">
+           <widget class="GroupButton" name="extrude_select_feedrate_8_btn">
             <property name="sizePolicy">
              <sizepolicy hsizetype="Minimum" vsizetype="Expanding">
               <horstretch>0</horstretch>
@@ -2305,12 +2299,11 @@ Home</string>
             <property name="font">
              <font>
               <pointsize>16</pointsize>
-              <weight>50</weight>
               <bold>false</bold>
              </font>
             </property>
             <property name="text">
-             <string>10</string>
+             <string>8</string>
             </property>
             <property name="checkable">
              <bool>true</bool>
@@ -2393,10 +2386,10 @@ Home</string>
              <bool>true</bool>
             </property>
             <property name="contextMenuPolicy">
-             <enum>Qt::NoContextMenu</enum>
+             <enum>Qt::ContextMenuPolicy::NoContextMenu</enum>
             </property>
             <property name="layoutDirection">
-             <enum>Qt::LeftToRight</enum>
+             <enum>Qt::LayoutDirection::LeftToRight</enum>
             </property>
             <property name="styleSheet">
              <string notr="true"/>
@@ -2487,10 +2480,10 @@ Home</string>
              <bool>true</bool>
             </property>
             <property name="contextMenuPolicy">
-             <enum>Qt::NoContextMenu</enum>
+             <enum>Qt::ContextMenuPolicy::NoContextMenu</enum>
             </property>
             <property name="layoutDirection">
-             <enum>Qt::LeftToRight</enum>
+             <enum>Qt::LayoutDirection::LeftToRight</enum>
             </property>
             <property name="styleSheet">
              <string notr="true"/>
@@ -2746,10 +2739,10 @@ Home</string>
      <item>
       <spacer name="horizontalSpacer_3">
        <property name="orientation">
-        <enum>Qt::Horizontal</enum>
+        <enum>Qt::Orientation::Horizontal</enum>
        </property>
        <property name="sizeType">
-        <enum>QSizePolicy::Minimum</enum>
+        <enum>QSizePolicy::Policy::Minimum</enum>
        </property>
        <property name="sizeHint" stdset="0">
         <size>
@@ -2834,10 +2827,10 @@ Home</string>
         <bool>true</bool>
        </property>
        <property name="contextMenuPolicy">
-        <enum>Qt::NoContextMenu</enum>
+        <enum>Qt::ContextMenuPolicy::NoContextMenu</enum>
        </property>
        <property name="layoutDirection">
-        <enum>Qt::LeftToRight</enum>
+        <enum>Qt::LayoutDirection::LeftToRight</enum>
        </property>
        <property name="styleSheet">
         <string notr="true"/>
@@ -4324,10 +4317,10 @@ Home</string>
     <item>
      <spacer name="verticalSpacer_3">
       <property name="orientation">
-       <enum>Qt::Vertical</enum>
+       <enum>Qt::Orientation::Vertical</enum>
       </property>
       <property name="sizeType">
-       <enum>QSizePolicy::Minimum</enum>
+       <enum>QSizePolicy::Policy::Minimum</enum>
       </property>
       <property name="sizeHint" stdset="0">
        <size>
@@ -4342,10 +4335,10 @@ Home</string>
       <item>
        <spacer name="horizontalSpacer_4">
         <property name="orientation">
-         <enum>Qt::Horizontal</enum>
+         <enum>Qt::Orientation::Horizontal</enum>
         </property>
         <property name="sizeType">
-         <enum>QSizePolicy::Minimum</enum>
+         <enum>QSizePolicy::Policy::Minimum</enum>
         </property>
         <property name="sizeHint" stdset="0">
          <size>
@@ -4379,12 +4372,11 @@ Home</string>
          <font>
           <family>Momcake</family>
           <pointsize>24</pointsize>
-          <weight>75</weight>
           <bold>true</bold>
          </font>
         </property>
         <property name="layoutDirection">
-         <enum>Qt::RightToLeft</enum>
+         <enum>Qt::LayoutDirection::RightToLeft</enum>
         </property>
         <property name="styleSheet">
          <string notr="true">background: transparent; color: white;</string>
@@ -4435,10 +4427,10 @@ Home</string>
          <bool>true</bool>
         </property>
         <property name="contextMenuPolicy">
-         <enum>Qt::NoContextMenu</enum>
+         <enum>Qt::ContextMenuPolicy::NoContextMenu</enum>
         </property>
         <property name="layoutDirection">
-         <enum>Qt::LeftToRight</enum>
+         <enum>Qt::LayoutDirection::LeftToRight</enum>
         </property>
         <property name="styleSheet">
          <string notr="true"/>
@@ -4465,10 +4457,10 @@ Home</string>
     <item>
      <spacer name="verticalSpacer_2">
       <property name="orientation">
-       <enum>Qt::Vertical</enum>
+       <enum>Qt::Orientation::Vertical</enum>
       </property>
       <property name="sizeType">
-       <enum>QSizePolicy::Minimum</enum>
+       <enum>QSizePolicy::Policy::Minimum</enum>
       </property>
       <property name="sizeHint" stdset="0">
        <size>
@@ -4501,7 +4493,7 @@ Home</string>
          <number>5</number>
         </property>
         <property name="sizeConstraint">
-         <enum>QLayout::SetMinimumSize</enum>
+         <enum>QLayout::SizeConstraint::SetMinimumSize</enum>
         </property>
         <property name="leftMargin">
          <number>5</number>
@@ -4871,10 +4863,10 @@ Home</string>
          <bool>true</bool>
         </property>
         <property name="contextMenuPolicy">
-         <enum>Qt::NoContextMenu</enum>
+         <enum>Qt::ContextMenuPolicy::NoContextMenu</enum>
         </property>
         <property name="layoutDirection">
-         <enum>Qt::LeftToRight</enum>
+         <enum>Qt::LayoutDirection::LeftToRight</enum>
         </property>
         <property name="styleSheet">
          <string notr="true"/>
@@ -4899,10 +4891,10 @@ Home</string>
       <item row="1" column="0" colspan="2">
        <spacer name="verticalSpacer">
         <property name="orientation">
-         <enum>Qt::Vertical</enum>
+         <enum>Qt::Orientation::Vertical</enum>
         </property>
         <property name="sizeType">
-         <enum>QSizePolicy::Minimum</enum>
+         <enum>QSizePolicy::Policy::Minimum</enum>
         </property>
         <property name="sizeHint" stdset="0">
          <size>
@@ -4947,10 +4939,10 @@ Home</string>
          <bool>true</bool>
         </property>
         <property name="contextMenuPolicy">
-         <enum>Qt::NoContextMenu</enum>
+         <enum>Qt::ContextMenuPolicy::NoContextMenu</enum>
         </property>
         <property name="layoutDirection">
-         <enum>Qt::LeftToRight</enum>
+         <enum>Qt::LayoutDirection::LeftToRight</enum>
         </property>
         <property name="styleSheet">
          <string notr="true"/>
@@ -4977,10 +4969,10 @@ Home</string>
     <item>
      <spacer name="verticalSpacer_4">
       <property name="orientation">
-       <enum>Qt::Vertical</enum>
+       <enum>Qt::Orientation::Vertical</enum>
       </property>
       <property name="sizeType">
-       <enum>QSizePolicy::Minimum</enum>
+       <enum>QSizePolicy::Policy::Minimum</enum>
       </property>
       <property name="sizeHint" stdset="0">
        <size>
@@ -5068,10 +5060,10 @@ Home</string>
      <item>
       <spacer name="horizontalSpacer_5">
        <property name="orientation">
-        <enum>Qt::Horizontal</enum>
+        <enum>Qt::Orientation::Horizontal</enum>
        </property>
        <property name="sizeType">
-        <enum>QSizePolicy::Minimum</enum>
+        <enum>QSizePolicy::Policy::Minimum</enum>
        </property>
        <property name="sizeHint" stdset="0">
         <size>
@@ -5190,10 +5182,10 @@ Home</string>
         <bool>true</bool>
        </property>
        <property name="contextMenuPolicy">
-        <enum>Qt::NoContextMenu</enum>
+        <enum>Qt::ContextMenuPolicy::NoContextMenu</enum>
        </property>
        <property name="layoutDirection">
-        <enum>Qt::LeftToRight</enum>
+        <enum>Qt::LayoutDirection::LeftToRight</enum>
        </property>
        <property name="styleSheet">
         <string notr="true"/>
@@ -5247,10 +5239,10 @@ Home</string>
         <bool>true</bool>
        </property>
        <property name="contextMenuPolicy">
-        <enum>Qt::NoContextMenu</enum>
+        <enum>Qt::ContextMenuPolicy::NoContextMenu</enum>
        </property>
        <property name="layoutDirection">
-        <enum>Qt::LeftToRight</enum>
+        <enum>Qt::LayoutDirection::LeftToRight</enum>
        </property>
        <property name="styleSheet">
         <string notr="true"/>
@@ -5307,10 +5299,10 @@ Home</string>
      <bool>true</bool>
     </property>
     <property name="contextMenuPolicy">
-     <enum>Qt::NoContextMenu</enum>
+     <enum>Qt::ContextMenuPolicy::NoContextMenu</enum>
     </property>
     <property name="layoutDirection">
-     <enum>Qt::LeftToRight</enum>
+     <enum>Qt::LayoutDirection::LeftToRight</enum>
     </property>
     <property name="styleSheet">
      <string notr="true"/>
@@ -5379,10 +5371,10 @@ Home</string>
         <bool>true</bool>
        </property>
        <property name="contextMenuPolicy">
-        <enum>Qt::NoContextMenu</enum>
+        <enum>Qt::ContextMenuPolicy::NoContextMenu</enum>
        </property>
        <property name="layoutDirection">
-        <enum>Qt::LeftToRight</enum>
+        <enum>Qt::LayoutDirection::LeftToRight</enum>
        </property>
        <property name="styleSheet">
         <string notr="true"/>
@@ -5433,10 +5425,10 @@ Home</string>
         <bool>true</bool>
        </property>
        <property name="contextMenuPolicy">
-        <enum>Qt::NoContextMenu</enum>
+        <enum>Qt::ContextMenuPolicy::NoContextMenu</enum>
        </property>
        <property name="layoutDirection">
-        <enum>Qt::LeftToRight</enum>
+        <enum>Qt::LayoutDirection::LeftToRight</enum>
        </property>
        <property name="styleSheet">
         <string notr="true"/>
@@ -5541,10 +5533,10 @@ Home</string>
         <bool>true</bool>
        </property>
        <property name="contextMenuPolicy">
-        <enum>Qt::NoContextMenu</enum>
+        <enum>Qt::ContextMenuPolicy::NoContextMenu</enum>
        </property>
        <property name="layoutDirection">
-        <enum>Qt::LeftToRight</enum>
+        <enum>Qt::LayoutDirection::LeftToRight</enum>
        </property>
        <property name="styleSheet">
         <string notr="true"/>
@@ -5588,10 +5580,10 @@ Home</string>
     <item>
      <spacer name="verticalSpacer_10">
       <property name="orientation">
-       <enum>Qt::Vertical</enum>
+       <enum>Qt::Orientation::Vertical</enum>
       </property>
       <property name="sizeType">
-       <enum>QSizePolicy::Minimum</enum>
+       <enum>QSizePolicy::Policy::Minimum</enum>
       </property>
       <property name="sizeHint" stdset="0">
        <size>
@@ -5606,10 +5598,10 @@ Home</string>
       <item>
        <spacer name="horizontalSpacer">
         <property name="orientation">
-         <enum>Qt::Horizontal</enum>
+         <enum>Qt::Orientation::Horizontal</enum>
         </property>
         <property name="sizeType">
-         <enum>QSizePolicy::Minimum</enum>
+         <enum>QSizePolicy::Policy::Minimum</enum>
         </property>
         <property name="sizeHint" stdset="0">
          <size>
@@ -5682,10 +5674,10 @@ Home</string>
          <bool>true</bool>
         </property>
         <property name="contextMenuPolicy">
-         <enum>Qt::NoContextMenu</enum>
+         <enum>Qt::ContextMenuPolicy::NoContextMenu</enum>
         </property>
         <property name="layoutDirection">
-         <enum>Qt::LeftToRight</enum>
+         <enum>Qt::LayoutDirection::LeftToRight</enum>
         </property>
         <property name="styleSheet">
          <string notr="true"/>
@@ -5715,7 +5707,7 @@ Home</string>
     <item>
      <spacer name="verticalSpacer_8">
       <property name="orientation">
-       <enum>Qt::Vertical</enum>
+       <enum>Qt::Orientation::Vertical</enum>
       </property>
       <property name="sizeHint" stdset="0">
        <size>
@@ -5731,7 +5723,7 @@ Home</string>
     <item>
      <spacer name="verticalSpacer_9">
       <property name="orientation">
-       <enum>Qt::Vertical</enum>
+       <enum>Qt::Orientation::Vertical</enum>
       </property>
       <property name="sizeHint" stdset="0">
        <size>
@@ -5781,9 +5773,9 @@ Home</string>
  </resources>
  <connections/>
  <buttongroups>
-  <buttongroup name="extrude_select_feedrate_group"/>
-  <buttongroup name="axis_select_length_group"/>
   <buttongroup name="extrude_select_length_group"/>
+  <buttongroup name="axis_select_length_group"/>
+  <buttongroup name="extrude_select_feedrate_group"/>
   <buttongroup name="axis_select_speed_group"/>
  </buttongroups>
 </ui>
