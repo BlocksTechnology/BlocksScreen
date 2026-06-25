@@ -559,15 +559,14 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         if not self.cg:
             return
 
-        # Collect LED names
+        # Collect LED names - match Klipper LED hardware types only
+        _LED_TYPES = {"led", "neopixel", "dotstar"}
         for obj in self.cg:
-            if "led" in obj:
-                try:
-                    name = obj.split()[1]
-                    led_names.append(name)
-                    self.objects["leds"][name] = LedState(led_type="white")
-                except IndexError:
-                    pass
+            parts = obj.split()
+            if len(parts) >= 2 and parts[0] in _LED_TYPES:
+                name = parts[1]
+                led_names.append(name)
+                self.objects["leds"][name] = LedState(led_type="white")
 
         max_columns = 3
         buttons = []  # store references to created buttons
@@ -585,11 +584,15 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
                 button.clicked.connect(partial(self.handle_led_button, name))
                 buttons.append(button)
 
+        try:
+            self.panel.utilities_leds_btn.clicked.disconnect()
+        except RuntimeError:
+            pass
         if len(buttons) == 1:
             self.panel.utilities_leds_btn.clicked.connect(
                 partial(self.handle_led_button, led_names[0])
             )
-        else:
+        elif len(buttons) > 1:
             self._connect_page_change(
                 self.panel.utilities_leds_btn, self.panel.leds_page
             )
