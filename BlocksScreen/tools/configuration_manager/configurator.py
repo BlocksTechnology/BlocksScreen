@@ -587,7 +587,6 @@ class ConfigManager:
                         merged = _tfl
 
             merged = self._fix_beacon_serial(merged)
-
             if _tfl != merged:
                 target_file.write_text(merged, encoding="utf-8")
             return True
