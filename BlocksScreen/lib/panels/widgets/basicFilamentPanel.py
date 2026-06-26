@@ -211,7 +211,7 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         self.run_gcode.emit(
             f"""SAVE_VARIABLE VARIABLE=filament_type VALUE='"{FilamentTypes.UNKNOWN.value.name}"'"""
         )
-        self.run_gcode.emit("MMU_LOAD")
+        self.run_gcode.emit("MMU_UNLOAD")
 
     def open_pre_gate_popup(self, filament_type: FilamentTypes):
         callback_action = partial(self.load_filament, 0, filament_type)
