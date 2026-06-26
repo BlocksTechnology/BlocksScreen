@@ -65,7 +65,7 @@ class SerialScanner:
         return FirmwareState.Unknown
 
     def extract_mcu(self, product: str) -> str:
-
+        """Extract mcu information"""
         return product.split("_")[0] if product else ""
 
     def _parse_symlink(self, symlink_name: str, resolved: str) -> Device:
@@ -122,10 +122,13 @@ class SerialScanner:
         return devs
 
     def scan_klipper(self) -> list[Device]:
+        """Scans for Klipper serial devices"""
         return [d for d in self.scan() if d.is_klipper]
 
     def scan_katapult(self) -> list[Device]:
+        """Scans for katapult serial devices"""
         return [d for d in self.scan() if d.is_katapult]
 
     def scan_unflashed(self) -> list[Device]:
+        """Scans for unflashed serial devices"""
         return [d for d in self.scan() if d.is_unflashed]
