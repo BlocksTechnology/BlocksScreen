@@ -1,7 +1,7 @@
 import os
 import logging
 import glob
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 
 _logger = logging.getLogger(__name__)
