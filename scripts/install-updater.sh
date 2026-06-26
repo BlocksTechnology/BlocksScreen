@@ -72,6 +72,9 @@ else
         _emit_svc_rules "$_svc"
     done
 fi
+# The daemon restarts itself (--no-block) to adopt new updater code after a
+# successful self-update; this service is never in components.yaml.
+_emit_svc_rules BlocksScreen-updater.service
 if sudo visudo -cf "$SUDOERS_TMP" >/dev/null 2>&1; then
     sudo install -m 0440 "$SUDOERS_TMP" "$SUDOERS_FILE"
     echo_ok "Sudoers rules installed"
@@ -96,11 +99,16 @@ echo_ok "Polkit rule installed"
 echo_info "Converting BlocksScreen.service copy to symlink (enables sudo-free hook) ..."
 _BS_SVC_SRC="$BS_PATH/scripts/BlocksScreen.service"
 _BS_SVC_DEST="/etc/systemd/system/BlocksScreen.service"
-if [[ -f "$_BS_SVC_DEST" && ! -L "$_BS_SVC_DEST" ]]; then
-    sudo rm "$_BS_SVC_DEST"
-fi
-if [[ ! -L "$_BS_SVC_DEST" ]]; then
-    sudo systemctl link "$_BS_SVC_SRC"
+if [[ ! -f "$_BS_SVC_SRC" ]]; then
+    # Never remove the running unit when there is no source to replace it with:
+    # a missing BlocksScreen.service on a no-SSH box is unrecoverable.
+    echo_info "WARN: $_BS_SVC_SRC missing, leaving existing BlocksScreen.service intact"
+elif [[ "$(readlink -f "$_BS_SVC_DEST" 2>/dev/null)" != "$(readlink -f "$_BS_SVC_SRC")" ]]; then
+    # Atomic replace: create the symlink under a temp name and rename it over the
+    # destination, so the unit is never absent. The old rm-then-link left a window
+    # where a link failure (e.g. missing source) deleted the service outright.
+    sudo ln -sfn "$_BS_SVC_SRC" "${_BS_SVC_DEST}.new"
+    sudo mv -Tf "${_BS_SVC_DEST}.new" "$_BS_SVC_DEST"
     sudo systemctl unmask BlocksScreen.service 2>/dev/null || true
 fi
 sudo systemctl daemon-reload
