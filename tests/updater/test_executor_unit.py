@@ -827,3 +827,40 @@ class TestCorruption:
             ok, msg = await git_repair(tmp_path)
         assert ok is False
         assert "still corrupt" in msg
+
+
+class TestSelfUpdateEnvStamp:
+    def test_clean_env_marks_self_update(self):
+        from updater.executor import _make_clean_env
+
+        env = _make_clean_env()
+        assert env["BS_UPDATER_SELF_UPDATE"] == "1"
+        assert env["BS_UPDATER_RESTART_SENTINEL"].endswith("updater-restart-needed")
+
+
+class TestVerifyUpdaterImportable:
+    @pytest.mark.asyncio
+    async def test_returns_false_for_missing_path(self):
+        from updater.executor import verify_updater_importable
+
+        assert await verify_updater_importable(Path("/no/such/path")) is False
+
+    @pytest.mark.asyncio
+    async def test_true_when_import_subprocess_succeeds(self, tmp_path):
+        from updater.executor import verify_updater_importable
+
+        with patch(
+            "updater.executor._run", new=AsyncMock(return_value=(True, ""))
+        ) as mock_run:
+            assert await verify_updater_importable(tmp_path) is True
+        assert mock_run.await_args.kwargs["cwd"] == tmp_path
+
+    @pytest.mark.asyncio
+    async def test_false_when_import_subprocess_fails(self, tmp_path):
+        from updater.executor import verify_updater_importable
+
+        with patch(
+            "updater.executor._run",
+            new=AsyncMock(return_value=(False, "ModuleNotFoundError: sdbus")),
+        ):
+            assert await verify_updater_importable(tmp_path) is False

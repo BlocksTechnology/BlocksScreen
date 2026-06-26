@@ -498,12 +498,11 @@ class UpdatePage(QtWidgets.QWidget):
         header = QtWidgets.QHBoxLayout()
         header.setAlignment(QtCore.Qt.AlignmentFlag.AlignTop)
 
-        self.reload_btn = IconButton(self)
-        # Touch target: 66×66 px (minimum 44×44 per WCAG, 60+ for kiosk)
-        self.reload_btn.setFixedSize(QtCore.QSize(66, 66))
-        self.reload_btn.setFlat(True)
-        self.reload_btn.setPixmap(QtGui.QPixmap(":/ui/media/btn_icons/refresh.svg"))
-        header.addWidget(self.reload_btn)
+        self.update_back_btn = IconButton(self)
+        self.update_back_btn.setFixedSize(QtCore.QSize(66, 66))
+        self.update_back_btn.setFlat(True)
+        self.update_back_btn.setPixmap(QtGui.QPixmap(":/ui/media/btn_icons/back.svg"))
+        header.addWidget(self.update_back_btn)
 
         title = QtWidgets.QLabel("Update Manager", self)
         _title_font = QtGui.QFont(_title_family, 24)
@@ -523,12 +522,12 @@ class UpdatePage(QtWidgets.QWidget):
         title.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         header.addWidget(title)
 
-        self.update_back_btn = IconButton(self)
-        # Touch target: 66×66 px for consistency with reload button
-        self.update_back_btn.setFixedSize(QtCore.QSize(66, 66))
-        self.update_back_btn.setFlat(True)
-        self.update_back_btn.setPixmap(QtGui.QPixmap(":/ui/media/btn_icons/back.svg"))
-        header.addWidget(self.update_back_btn)
+        self.reload_btn = IconButton(self)
+        self.reload_btn.setFixedSize(QtCore.QSize(66, 66))
+        self.reload_btn.setFlat(True)
+        self.reload_btn.setPixmap(QtGui.QPixmap(":/ui/media/btn_icons/refresh.svg"))
+        header.addWidget(self.reload_btn)
+
         content.addLayout(header, 0)
 
         self._scroll_area = QtWidgets.QScrollArea(self)
