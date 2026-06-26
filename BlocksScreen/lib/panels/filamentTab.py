@@ -2,27 +2,25 @@ import logging
 from collections import deque
 from typing import Deque
 
-from PyQt6 import QtCore, QtGui, QtWidgets
-
 from devices.amu import AMUManager
 from devices.amu.models import GateStatus
 from lib.panels.widgets.addFilamentPage import AddFilamentPage
 from lib.panels.widgets.addSpoolPage import AddSpoolPage
 from lib.panels.widgets.amuPage import AMUpage
-from lib.panels.widgets.basicFilamentPanel import BasicFilamentPanel
 from lib.panels.widgets.basePopup import BasePopup
+from lib.panels.widgets.basicFilamentPanel import BasicFilamentPanel
 from lib.panels.widgets.colorWheelWidget import ColorWheelWidget
 from lib.panels.widgets.keyboardPage import CustomQwertyKeyboard
 from lib.panels.widgets.loadWidget import LoadingOverlayWidget
 from lib.panels.widgets.numpadPage import CustomNumpad
+from lib.panels.widgets.spoolmanPage import SpoolmanPage
 from lib.printer import Printer
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_frame import BlocksCustomFrame
 from lib.utils.blocks_linedit import BlocksCustomLinEdit
 from lib.utils.icon_button import IconButton
 from lib.utils.list_model import EntryDelegate, EntryListModel, ListItem
-from lib.panels.widgets.spoolmanPage import SpoolmanPage
-
+from PyQt6 import QtCore, QtGui, QtWidgets
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +46,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self.cfg = config
         self.amu_manager: AMUManager = amu_manager
         self.amu_configured = False
-
+        self._popup_callback = None
         self.ui = self.setupUi()
         self.change_page(self.indexOf(self.ui))
 
@@ -104,6 +102,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self._basic_panel.call_load_panel.connect(self.call_load_panel)
         self._basic_panel.request_back.connect(self.request_back)
         self._basic_panel.request_change_tab.connect(self.request_change_tab)
+        self._basic_panel.filament_selected.connect(self.open_pregate_popup)
         self.amu_manager.mmu_state_changed.connect(
             self._basic_panel.on_mmu_state_changed
         )
@@ -228,8 +227,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
 
         self._popup_name.setPlaceholderText("e.g. PLA Generic")
         self._popup_color.setText("ffffff")
-        self._popup_material.setText("PLA")
-        self._popup_temp.setText("220")
+        self._popup_temp.setText("250")
 
         self._popup_name.clicked.connect(
             lambda: self._on_show_keyboard(self._popup_name)
@@ -278,12 +276,22 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self.spoolman_btn.clicked.connect(self._on_spoolman_clicked)
         btn_row.addWidget(self.spoolman_btn)
 
+        skip_btn = BlocksCustomButton(page)
+        skip_btn.setFixedSize(230, 80)
+        skip_btn.setText("Skip")
+        skip_btn.setFont(font)
+        skip_btn.clicked.connect(self.handle_skip_button)
+        skip_btn.setPixmap(
+            QtGui.QPixmap(":/arrow_icons/media/btn_icons/right_arrow.svg")
+        )
+        btn_row.addWidget(skip_btn)
+
         accept_btn = BlocksCustomButton(page)
         accept_btn.setFixedSize(230, 80)
         accept_btn.setText("Accept")
         accept_btn.setFont(font)
-        accept_btn.setPixmap(QtGui.QPixmap(":/dialog/media/btn_icons/yes.svg"))
         accept_btn.clicked.connect(self.on_popup_accept)
+        accept_btn.setPixmap(QtGui.QPixmap(":/dialog/media/btn_icons/yes.svg"))
         btn_row.addWidget(accept_btn)
 
         root.addLayout(btn_row)
@@ -413,23 +421,57 @@ class FilamentTab(QtWidgets.QStackedWidget):
         root.addWidget(frame, 1)
         return page
 
-    def handle_popup(self):
-        """Handles showing the popup for pre-gate filament detection. If multiple gates trigger, they will be queued and shown one at a time."""
+    def handle_skip_button(self):
+        gate = self.pre_gate_idx.get("gate", 0)
+        self.popup.hide()
+        self._reset_popup()
+        self.run_gcode.emit(
+            f"MMU_GATE_MAP GATE={gate} MATERIAL=N/A NAME=N/A COLOR=FFFFFF SPOOLID=-1 TEMP=250 QUIET=1"
+        )
+        if self._popup_callback is not None:
+            try:
+                self._popup_callback()
+            except Exception as e:
+                logger.error(f"Error executing pre-gate accept callback: {e}")
+            finally:
+                self._popup_callback = None
+
+    def handle_popup(self, force=False):
+        """Handles showing the popup for pre-gate filament detection.
+        If multiple gates trigger, they will be queued and shown one at a time.
+
+        Args:
+            force (bool): If True, forces the popup to open even if no gates are queued.
+        """
         if self.popup.isVisible():
             return
         if not self.popup_gates:
-            return
-        self.pre_gate_idx = self.popup_gates.popleft()
-        gate = self.pre_gate_idx["gate"]
-        self._popup_title_lbl.setText(f"Filament Detected — Gate {gate}")
+            if force:
+                self.pre_gate_idx = {"gate": 0}
+                self._popup_title_lbl.setText("Load filament information")
+            else:
+                return
+        else:
+            self.pre_gate_idx = self.popup_gates.popleft()
+            gate = self.pre_gate_idx.get("gate", -1)
+            self._popup_title_lbl.setText(f"Filament Detected — Gate {gate}")
+
         self._popup_stack.setCurrentIndex(0)
         self._selected_spool_id = -2
         self.popup.show()
 
+    @QtCore.pyqtSlot(int, str, str, "PyQt_PyObject", name="open-pregate-popup")
+    def open_pregate_popup(self, temp, material, name, callback=None):
+        self._popup_name.setText(name)
+        self._popup_material.setText(material)
+        self._popup_temp.setText(str(temp))
+        self._popup_callback = callback
+        self.handle_popup(True)
+
     def on_popup_accept(self):
         """Handles the accept action from the pre-gate popup to send the appropriate G-code to map the gate to the spool."""
-        gate = self.pre_gate_idx["gate"]
-        name = self._popup_name.text().strip()
+        gate = self.pre_gate_idx.get("gate", 0)
+        name = self._popup_name.text().strip() or "N/A"
         color = self._popup_color.text().strip("#").strip()
         material = self._popup_material.text().strip()
         try:
@@ -452,8 +494,24 @@ class FilamentTab(QtWidgets.QStackedWidget):
 
         self.run_gcode.emit(" ".join(parts))
         self.run_gcode.emit("MMU_GATE_MAP REFRESH=1")
+
+        if self._popup_callback is not None:
+            try:
+                self._popup_callback()
+            except Exception as e:
+                logger.error(f"Error executing pre-gate accept callback: {e}")
+            finally:
+                self._popup_callback = None
+
+        self._reset_popup()
         self.popup.hide()
         self.handle_popup()
+
+    def _reset_popup(self):
+        self._popup_name.setText("")
+        self._popup_color.setText("ffffff")
+        self._popup_material.setText("")
+        self._popup_temp.setText("250")
 
     @QtCore.pyqtSlot(dict, name="on-spools-received")
     def on_spools_received(self, result: dict) -> None:
@@ -631,7 +689,8 @@ class FilamentTab(QtWidgets.QStackedWidget):
                 and self._previous_gate_states[gate_info.index] is True
             ):
                 self.popup_gates.append({"gate": gate_info.index})
-                self.handle_popup()
+                if len(mmu_state.gates) > 1:
+                    self.handle_popup()
 
         if not self.amu_configured:
             if len(mmu_state.gates) > 1:
