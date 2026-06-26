@@ -1,5 +1,6 @@
-import typing
 import enum
+import typing
+
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 
@@ -118,19 +119,14 @@ class BlocksCustomButton(QtWidgets.QAbstractButton):
             return
         # Flat button control
         opt = QtWidgets.QStyleOptionButton()
-        draw_frame = (
+        if (
             not self._is_flat
             or self.underMouse()
             or opt.state & QtWidgets.QStyle.StateFlag.State_Sunken
-        )
-        if draw_frame:
+        ):
             _style.drawControl(
                 QtWidgets.QStyle.ControlElement.CE_PushButtonLabel, opt, painter, self
             )
-        _style.drawControl(
-            QtWidgets.QStyle.ControlElement.CE_PushButtonLabel, opt, painter, self
-        )
-        self.setStyle(_style)
         # Determine background and text colors based on state
         if not self.isEnabled():
             bg_color_tuple = ButtonColors.DISABLED_BG.value
