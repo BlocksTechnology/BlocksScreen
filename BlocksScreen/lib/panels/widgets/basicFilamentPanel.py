@@ -28,6 +28,9 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
     call_load_panel = QtCore.pyqtSignal(bool, str, name="call-load-panel")
     request_back = QtCore.pyqtSignal(name="request_back")
     request_change_tab = QtCore.pyqtSignal(int, name="request_change_tab")
+    filament_selected = QtCore.pyqtSignal(
+        int, str, str, "PyQt_PyObject", name="filament_selected"
+    )
 
     class FilamentStates(enum.Enum):
         UNKNOWN = -1
@@ -46,6 +49,8 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         self.target_temp: int = 0
         self.current_temp: int = 0
         self.has_load_unload_objects = None
+        self.filament_buttons_list = []
+        self.mmu_configured = False
         self._setupUi()
         self.filament_state = self.FilamentStates.UNKNOWN
 
@@ -181,7 +186,6 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
                 message="Filament is already loaded.",
             )
             return
-        self.call_load_panel.emit(True, "Loading Filament")
         self.run_gcode.emit(
             f"""SAVE_VARIABLE VARIABLE=filament_type VALUE='"{filament.value.name}"'"""
         )
@@ -204,15 +208,35 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
             )
             return
         self.find_routine_objects()
-        self.call_load_panel.emit(True, "Unloading Filament")
         self.run_gcode.emit(
             f"""SAVE_VARIABLE VARIABLE=filament_type VALUE='"{FilamentTypes.UNKNOWN.value.name}"'"""
         )
         self.run_gcode.emit("MMU_UNLOAD")
 
+    def open_pre_gate_popup(self, filament_type: FilamentTypes):
+        callback_action = partial(self.load_filament, 0, filament_type)
+
+        self.filament_selected.emit(
+            filament_type.value.temperature,
+            filament_type.value.name,
+            filament_type.value.name,
+            callback_action,
+        )
+
     def on_mmu_state_changed(self, mmu_state):
         if mmu_state is None:
             return
+
+        if not self.mmu_configured:
+            for btn, _filament_type in self.filament_buttons_list:
+                try:
+                    btn.clicked.disconnect()
+                except TypeError:
+                    pass
+
+                btn.clicked.connect(partial(self.open_pre_gate_popup, _filament_type))
+            self.mmu_configured = True
+
         if mmu_state.filament == "Loaded":
             self.filament_state = self.FilamentStates.LOADED
         else:
@@ -658,6 +682,7 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
             btn.setProperty("icon_pixmap", QtGui.QPixmap(pixmap_path))
             btn.setObjectName(obj_name)
             self.load_page_content_layout.addWidget(btn, row, col, 1, 1)
+            self.filament_buttons_list.append((btn, _filament_type))
 
         self.verticalLayout_2.addLayout(self.load_page_content_layout)
 
