@@ -3,8 +3,6 @@
 # BlocksScreen - A GUI for Blocks 3D Printers
 
 
-## :exclamation: This Software is currently a work in progress, some parts may not work as intended. It's in active development. 
-
 A PyQt6 GUI for [Blocks](https://blockstec.com) 3D Printers, based on [KlipperScreen GUI](https://github.com/KlipperScreen/KlipperScreen). But may be compatible with other printers. 
 
 Following the same philosophy as KlipperScreen, BlocksScreen interfaces with [Klipper Firmware](https://github.com/Klipper3d/klipper) via [Moonraker API](https://github.com/arksine/moonraker). Hence, the name for this GUI pays tribute to the KlipperScreen project.
