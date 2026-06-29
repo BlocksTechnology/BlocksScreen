@@ -20,6 +20,8 @@ from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.display_button import DisplayButton
 from PyQt6 import QtCore, QtGui, QtWidgets
 
+from devices.amu import AMUManager
+
 logger = logging.getLogger(__name__)
 
 
@@ -73,12 +75,17 @@ class PrintTab(QtWidgets.QStackedWidget):
         bool, name="call-load-panel"
     )
 
+    notify: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        str, str, int, bool, name="notify"
+    )
+
     def __init__(
         self,
         parent: QtWidgets.QWidget,
         file_data: Files,
         ws: MoonWebSocket,
         printer: Printer,
+        amu_manager: AMUManager | None = None,
     ) -> None:
         super().__init__(parent)
         self._active_z_offset: float = 0.0
@@ -90,6 +97,8 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.setupMainPrintPage()
         self.ws: MoonWebSocket = ws
         self.printer: Printer = printer
+        self._amu_manager = amu_manager
+
         self.config: BlocksScreenConfig = get_configparser()
         # TODO: Get the gcode path from the configfile by asking the websocket first
         self.gcode_path = os.path.expanduser("~/printer_data/gcodes")
@@ -158,9 +167,7 @@ class PrintTab(QtWidgets.QStackedWidget):
         )
         self.jobStatusPage_widget = JobStatusWidget(self)
         self.addWidget(self.jobStatusPage_widget)
-        self.confirmPage_widget.on_accept.connect(
-            self.jobStatusPage_widget.on_print_start
-        )
+        self.confirmPage_widget.on_accept.connect(self._guard_start_print)
         self.jobStatusPage_widget.show_request.connect(
             lambda: self.change_page(self.indexOf(self.jobStatusPage_widget))
         )
@@ -173,7 +180,7 @@ class PrintTab(QtWidgets.QStackedWidget):
         )
         self.file_data.fileinfo.connect(self.jobStatusPage_widget.on_fileinfo)
         self.jobStatusPage_widget.print_start.connect(self.ws.api.start_print)
-        self.jobStatusPage_widget.print_resume.connect(self.ws.api.resume_print)
+        self.jobStatusPage_widget.print_resume.connect(self._guard_resume)
         self.jobStatusPage_widget.print_cancel.connect(self.handle_cancel_print)
         self.jobStatusPage_widget.print_pause.connect(self.ws.api.pause_print)
         self.jobStatusPage_widget.print_finish.connect(self.finish_print_signal)
@@ -350,6 +357,40 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.sliderPage.set_slider_minimum(min_value)
         self.sliderPage.set_slider_maximum(max_value)
         self.change_page(self.indexOf(self.sliderPage))
+
+    def _filament_loaded(self) -> bool:
+        """Returns True if filament is confirmed loaded, False if absent.
+
+        Uses Happy_hare state when AMU is active, falls back to filament
+        switch sensors, and returns True when no sensor is configured"""
+        if self._amu_manager is not None and self._amu_manager.is_amu_active():
+            state = self._amu_manager.get_state()
+            if state is not None:
+                return state.filament == "Loaded"
+        sensors = self.printer.available_filament_sensors
+        if not sensors:
+            return True
+        return any(
+            isinstance(v, dict)
+            and v.get("enabled", True)
+            and v.get("filament_detected", False)
+            for v in sensors.values()
+        )
+
+    def _notify_no_filament(self) -> None:
+        self.notify.emit("PrintTab", "No filament loaded", 2, True)
+
+    def _guard_start_print(self, file: str) -> None:
+        if not self._filament_loaded():
+            self._notify_no_filament()
+            return
+        self.jobStatusPage_widget.on_print_start(file)
+
+    def _guard_resume(self) -> None:
+        if not self._filament_loaded():
+            self._notify_no_filament()
+            return
+        self.ws.api.resume_print()
 
     @QtCore.pyqtSlot(str, str, name="delete_file")
     @QtCore.pyqtSlot(str, name="delete_file")

@@ -169,8 +169,13 @@ class MainWindow(QtWidgets.QMainWindow):
         self.conn_window.call_cancel_panel.connect(self.handle_cancel_print)
         self.installEventFilter(self.conn_window)
         self.printPanel = PrintTab(
-            self.ui.printTab, self.file_data, self.ws, self.printer
+            self.ui.printTab,
+            self.file_data,
+            self.ws,
+            self.printer,
+            amu_manager=self.amu_manager,
         )
+        self.printPanel.notify.connect(self.notiPage.new_notication)
         if not os.environ.get("BLOCKSCREEN_DEV"):
             QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.CursorShape.BlankCursor)
         self.filamentPanel = FilamentTab(
