@@ -112,19 +112,27 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
             if value in ("printing", "paused"):
                 try:
                     self.main_back_button.disconnect()
+                    self.filament_page_load_btn.disconnect()
                 except TypeError:
                     pass
 
                 self.main_back_button.clicked.connect(
                     lambda: self.request_change_tab.emit(0)
                 )
+                self.filament_page_load_btn.clicked.connect(
+                    lambda: self.load_filament(0, FilamentTypes.UNKNOWN)
+                )
 
             else:
                 try:
                     self.main_back_button.disconnect()
+                    self.filament_page_load_btn.disconnect()
                 except TypeError:
                     pass
                 self.main_back_button.clicked.connect(lambda: self.request_back.emit())
+                self.filament_page_load_btn.clicked.connect(
+                    partial(self.change_page, self.indexOf(self.load_page))
+                )
 
     @QtCore.pyqtSlot(str, str, bool, name="on_filament_sensor_update")
     def on_filament_sensor_update(self, sensor_name: str, parameter: str, value: bool):
