@@ -1,5 +1,6 @@
-import typing
 import enum
+import typing
+
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 
