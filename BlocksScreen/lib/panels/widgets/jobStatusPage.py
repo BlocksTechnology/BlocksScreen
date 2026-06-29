@@ -200,6 +200,7 @@ class JobStatusWidget(QtWidgets.QWidget):
     def pause_resume_print(self) -> None:
         """Handle pause/resume print job button clicked"""
         self.pause_printing_btn.setEnabled(False)
+        QtCore.QTimer.singleShot(10000, lambda: self.pause_printing_btn.setEnabled(True))
         if self._internal_print_status == "printing":
             self.print_pause.emit()
         if self._internal_print_status == "paused":
@@ -229,7 +230,6 @@ class JobStatusWidget(QtWidgets.QWidget):
             self._internal_print_status = lstate
 
         if lstate in valid_states:
-            self.pause_printing_btn.setEnabled(True)
             self.request_query_print_stats.emit({"print_stats": ["filename"]})
             self.call_cancel_panel.emit(False)
             self.show_request.emit()
