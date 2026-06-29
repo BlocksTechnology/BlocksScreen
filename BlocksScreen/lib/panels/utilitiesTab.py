@@ -50,6 +50,8 @@ class Process(Enum):
 
 
 class UtilitiesTab(QtWidgets.QStackedWidget):
+    _LED_TYPES: frozenset[str] = frozenset({"led", "neopixel", "dotstar"})
+
     request_back: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         name="request-back"
     )
@@ -124,6 +126,8 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         self._is_timeout_timer.setInterval(300_000)  # 5 min: longest plausible IS run
         self._is_timeout_timer.timeout.connect(self._on_is_timeout)
 
+        # --- PixMap ---
+        self._led_pixmap = QtGui.QPixmap(":/ui/media/btn_icons/LEDs.svg")
         # --- UI Setup ---
         self.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
         self.panel.update_btn.clicked.connect(
@@ -562,15 +566,13 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         if not self.cg:
             return
 
-        # Collect LED names
+        # Collect LED names - match Klipper LED hardware types only
         for obj in self.cg:
-            if "led" in obj:
-                try:
-                    name = obj.split()[1]
-                    led_names.append(name)
-                    self.objects["leds"][name] = LedState(led_type="white")
-                except IndexError:
-                    pass
+            parts = obj.split()
+            if len(parts) >= 2 and parts[0] in self._LED_TYPES:
+                name = parts[1]
+                led_names.append(name)
+                self.objects["leds"][name] = LedState(led_type="white")
 
         max_columns = 3
         buttons = []  # store references to created buttons
@@ -582,17 +584,21 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
                 button.setFixedSize(200, 70)
                 button.setText(name)
                 button.setProperty("class", "menu_btn")
-                button.setPixmap(QtGui.QPixmap(":/ui/media/btn_icons/LEDs.svg"))
+                button.setPixmap(self._led_pixmap)
                 row, col = divmod(i, max_columns)
                 layout.addWidget(button, row, col)
                 button.clicked.connect(partial(self.handle_led_button, name))
                 buttons.append(button)
 
+        try:
+            self.panel.utilities_leds_btn.clicked.disconnect()
+        except (RuntimeError, TypeError):
+            pass
         if len(buttons) == 1:
             self.panel.utilities_leds_btn.clicked.connect(
                 partial(self.handle_led_button, led_names[0])
             )
-        else:
+        elif len(buttons) > 1:
             self._connect_page_change(
                 self.panel.utilities_leds_btn, self.panel.leds_page
             )
