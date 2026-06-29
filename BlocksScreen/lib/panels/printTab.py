@@ -487,6 +487,7 @@ class PrintTab(QtWidgets.QStackedWidget):
         """Behaviour when the print ends — but only once."""
         if self._finish_print_handled:
             return
+        self.on_cancel_print.emit()
         if self._active_z_offset != 0 and self.babystepPage.baby_stepchange:
             if not self.printer.uses_true_zero_offset:
                 self.save_config()

@@ -373,7 +373,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
 
             # Only accept 'fan_generic' or 'fan'
             if base_name == "fan_generic" or base_name == "fan":
-                self.objects["fans"][obj] = "indef"
+                self.objects["fans"][obj.removeprefix(base_name + " ")] = "indef"
         self._update_leds_from_config()
 
     @QtCore.pyqtSlot(dict, name="on_object_config")
@@ -431,14 +431,19 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         obj_key, message = routine_configs[process]
         obj_list = list(self.objects.get(obj_key, {}).keys())
         if not self._advance_routine_object(obj_list):
+            if process == Process.FAN:
+                self.run_gcode_signal.emit("M107")
+                for i in self.objects["fans"]:
+                    self.run_gcode_signal.emit(
+                        f"SET_FAN_SPEED FAN={i.removeprefix('fan_generic ')} SPEED=0\nM400"
+                    )
+
             if self.tb:
                 self.troubleshoot_request()
                 self.tb = False
             else:
                 self.change_page(self.indexOf(self.panel.utilities_page))
 
-            if process == Process.FAN:
-                self.run_gcode_signal.emit("M107")
             return
 
         message = f"Please check if the {self.current_object} is functioning correctly."
@@ -515,7 +520,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
                     self.run_gcode_signal.emit("M106 S255\nM400")
                 else:
                     self.run_gcode_signal.emit(
-                        f"SET_FAN_SPEED FAN={fan_name} SPEED=0.8\nM400"
+                        f"SET_FAN_SPEED FAN={fan_name.removeprefix('fan_generic ')} SPEED=0.8\nM400"
                     )
 
             return
@@ -523,9 +528,9 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         gcode_map = {
             Process.BED_HEATER: "SET_HEATER_TEMPERATURE HEATER=heater_bed TARGET=60",
             Process.EXTRUDER: "SET_HEATER_TEMPERATURE HEATER=extruder TARGET=60",
-            (Process.AXIS, "x"): "G91\nG1 X50 F700\nG1 X-50 F700",
-            (Process.AXIS, "y"): "G91\nG1 Y50 F700\nG1 Y-50 F700",
-            (Process.AXIS, "z"): "G91\nG1 Z50 F600\nG1 Z-50 F600",
+            (Process.AXIS, "x"): "G91\nG1 X250 F1000\nG1 X-250 F1000",
+            (Process.AXIS, "y"): "G91\nG1 Y250 F1000\nG1 Y-250 F1000",
+            (Process.AXIS, "z"): "G91\nG1 Z250 F1000\nG1 Z-250 F1000",
         }
 
         key = (
@@ -634,6 +639,8 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         self.current_process = Process.AXIS_MAINTENANCE
         self.current_object = axis
         self.run_gcode_signal.emit(f"G28 {axis.upper()}\nM400")
+        if axis == "x":
+            self.run_gcode_signal.emit("G1 X10 Y250 F18000")
         self.set_routine_check_page(
             "Axis Maintenance",
             f"Insert oil on the {axis.upper()} axis before confirming.",
@@ -650,7 +657,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
             max_pos = self.stepper_limits[stepper_key].get("max", 20)
             distance = int(max_pos) - 20
             self.run_gcode_signal.emit(
-                f"G1 {axis.upper()}{distance} F3000\nM400\nG28 {axis.upper()}\nM400"
+                f"G1 {axis.upper()}{distance} F3000\nM400\nG28\nM400"
             )
             self.show_waiting_page(
                 self.indexOf(self.panel.axes_page),
