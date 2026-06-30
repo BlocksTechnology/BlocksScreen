@@ -14,6 +14,11 @@
     <file>media/topbar/nylon_filament_topbar.svg</file>
     <file>media/topbar/petg_filament_topbar.svg</file>
     <file>media/topbar/pla_filament_topbar.svg</file>
+    <file>media/topbar/signal_good_signal.svg</file>
+    <file>media/topbar/signal_no_signal.svg</file>
+    <file>media/topbar/signal_very_good_signal.svg</file>
+    <file>media/topbar/signal_veryweak_signal.svg</file>
+    <file>media/topbar/signal_weak_signal.svg</file>
     <file>media/topbar/standard_temp_printcore.svg</file>
     <file>media/topbar/tpu_filament_topbar.svg</file>
   </qresource>

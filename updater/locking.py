@@ -14,18 +14,37 @@ from collections.abc import Iterator
 from pathlib import Path
 
 
-def lock_path() -> Path:
-    """Return a user-owned lock path, preferring the runtime dir over the cache."""
+def _runtime_dir() -> Path:
+    """Return a writable user-owned runtime dir, preferring tmpfs over the cache."""
     cache = Path.home() / ".cache" / "blockscreen"
     for d in (Path("/run/blockscreen"), cache):
         try:
             d.mkdir(parents=True, exist_ok=True)
-            return d / "updater.lock"
+            # Owner-only: nothing else may plant a sentinel to force a restart.
+            with contextlib.suppress(OSError):
+                d.chmod(0o700)
+            return d
         except OSError:
             continue
     # Both unavailable (broken home): return the cache path so the caller's open()
     # surfaces the error rather than silently falling back to world-writable /tmp.
-    return cache / "updater.lock"
+    return cache
+
+
+def lock_path() -> Path:
+    """Return a user-owned lock path, preferring the runtime dir over the cache."""
+    return _runtime_dir() / "updater.lock"
+
+
+def restart_sentinel_path() -> Path:
+    """Return the sentinel a self-update hook writes instead of restarting.
+
+    Hooks running under the updater append `install`/`code` here rather than
+    restarting the daemon mid-batch; the daemon reads it once the batch is done.
+    Preferring /run (tmpfs) means it clears on reboot, so a crash can never
+    trigger a spurious restart later; the safe floor is 'adopt on next reboot'.
+    """
+    return _runtime_dir() / "updater-restart-needed"
 
 
 @contextlib.contextmanager
@@ -36,7 +55,13 @@ def process_lock() -> Iterator[bool]:
     holds it. The fd stays open for the whole `with` block — closing it on exit
     is what releases the lock.
     """
-    f = open(lock_path(), "w")  # noqa: SIM115, PTH123
+    try:
+        f = open(lock_path(), "w")  # noqa: SIM115, PTH123
+    except OSError:
+        # Disk full / read-only SD: behave as "could not acquire" so the caller
+        # degrades gracefully instead of crashing the update operation.
+        yield False
+        return
     try:
         try:
             fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)

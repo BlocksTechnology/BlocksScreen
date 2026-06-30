@@ -118,10 +118,14 @@ class BlocksCustomButton(QtWidgets.QAbstractButton):
         if not _style or not _rect:
             return
         opt = QtWidgets.QStyleOptionButton()
-        _style.drawControl(
-            QtWidgets.QStyle.ControlElement.CE_PushButtonLabel, opt, painter, self
-        )
-        self.setStyle(_style)
+        if (
+            not self._is_flat
+            or self.underMouse()
+            or opt.state & QtWidgets.QStyle.StateFlag.State_Sunken
+        ):
+            _style.drawControl(
+                QtWidgets.QStyle.ControlElement.CE_PushButtonLabel, opt, painter, self
+            )
         # Determine background and text colors based on state
         if not self.isEnabled():
             bg_color_tuple = ButtonColors.DISABLED_BG.value

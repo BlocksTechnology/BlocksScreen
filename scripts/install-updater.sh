@@ -52,17 +52,29 @@ printf 'blocks ALL=(ALL) NOPASSWD: /usr/bin/systemctl reboot\n' >>"$SUDOERS_TMP"
 printf 'blocks ALL=(ALL) NOPASSWD: /usr/bin/chvt 7\n' >>"$SUDOERS_TMP"
 printf 'blocks ALL=(ALL) NOPASSWD: /usr/bin/chvt 8\n' >>"$SUDOERS_TMP"
 printf 'blocks ALL=(ALL) NOPASSWD: /usr/bin/bash %s/scripts/install-updater.sh\n' "$BS_PATH" >>"$SUDOERS_TMP"
-# Derive allowed restart targets from components.yaml instead of wildcard
+# Derive allowed restart targets from components.yaml instead of wildcard.
+# Per service we allow: restart (normal), reset-failed (start-limit recovery,
+# replaces the old systemctl-kill fallback), and --no-block restart (used for the
+# self UI service so a slow restart never blocks/aborts the update batch).
+_emit_svc_rules() {
+    local _s="$1"
+    printf 'blocks ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart %s\n' "$_s" >>"$SUDOERS_TMP"
+    printf 'blocks ALL=(ALL) NOPASSWD: /usr/bin/systemctl reset-failed %s\n' "$_s" >>"$SUDOERS_TMP"
+    printf 'blocks ALL=(ALL) NOPASSWD: /usr/bin/systemctl --no-block restart %s\n' "$_s" >>"$SUDOERS_TMP"
+}
 _COMP_YAML="$BS_PATH/updater/components.yaml"
 if [[ -f "$_COMP_YAML" ]]; then
     while IFS= read -r _svc; do
-        printf 'blocks ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart %s\n' "$_svc" >>"$SUDOERS_TMP"
+        _emit_svc_rules "$_svc"
     done < <(grep '^\s*service:' "$_COMP_YAML" | awk '{print $2}' | sort -u)
 else
     for _svc in klipper.service moonraker.service crowsnest.service KlipperScreen.service BlocksScreen.service; do
-        printf 'blocks ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart %s\n' "$_svc" >>"$SUDOERS_TMP"
+        _emit_svc_rules "$_svc"
     done
 fi
+# The daemon restarts itself (--no-block) to adopt new updater code after a
+# successful self-update; this service is never in components.yaml.
+_emit_svc_rules BlocksScreen-updater.service
 if sudo visudo -cf "$SUDOERS_TMP" >/dev/null 2>&1; then
     sudo install -m 0440 "$SUDOERS_TMP" "$SUDOERS_FILE"
     echo_ok "Sudoers rules installed"
@@ -87,11 +99,16 @@ echo_ok "Polkit rule installed"
 echo_info "Converting BlocksScreen.service copy to symlink (enables sudo-free hook) ..."
 _BS_SVC_SRC="$BS_PATH/scripts/BlocksScreen.service"
 _BS_SVC_DEST="/etc/systemd/system/BlocksScreen.service"
-if [[ -f "$_BS_SVC_DEST" && ! -L "$_BS_SVC_DEST" ]]; then
-    sudo rm "$_BS_SVC_DEST"
-fi
-if [[ ! -L "$_BS_SVC_DEST" ]]; then
-    sudo systemctl link "$_BS_SVC_SRC"
+if [[ ! -f "$_BS_SVC_SRC" ]]; then
+    # Never remove the running unit when there is no source to replace it with:
+    # a missing BlocksScreen.service on a no-SSH box is unrecoverable.
+    echo_info "WARN: $_BS_SVC_SRC missing, leaving existing BlocksScreen.service intact"
+elif [[ "$(readlink -f "$_BS_SVC_DEST" 2>/dev/null)" != "$(readlink -f "$_BS_SVC_SRC")" ]]; then
+    # Atomic replace: create the symlink under a temp name and rename it over the
+    # destination, so the unit is never absent. The old rm-then-link left a window
+    # where a link failure (e.g. missing source) deleted the service outright.
+    sudo ln -sfn "$_BS_SVC_SRC" "${_BS_SVC_DEST}.new"
+    sudo mv -Tf "${_BS_SVC_DEST}.new" "$_BS_SVC_DEST"
     sudo systemctl unmask BlocksScreen.service 2>/dev/null || true
 fi
 sudo systemctl daemon-reload
@@ -104,6 +121,15 @@ sudo chmod 750 "$_BSENV_HOME/.cache"
 sudo chown -R blocks:blocksscreen "$_BSENV_HOME/.cache/blockscreen"
 sudo chmod 775 "$_BSENV_HOME/.cache/blockscreen"
 echo_ok "Apt cache directory ready"
+
+# Re-arm the crash-loop boot counter on a deliberate deploy. A stale count left
+# over from a prior unstable period would otherwise let BlocksScreen-start.sh
+# roll this fresh install straight back to last_good on the first boot. Reset
+# boot_attempts only; last_good_commit stays as the rollback target so crash-loop
+# protection of the new code still works.
+echo_info "Re-arming crash-loop boot counter ..."
+printf '0\n' | sudo -u "$_BSENV_USER" tee "$_BSENV_HOME/.cache/blockscreen/boot_attempts" >/dev/null 2>&1 || true
+echo_ok "Boot counter re-armed (boot_attempts=0)"
 
 echo_info "Adding blocks to video group (required for framebuffer splash) ..."
 sudo usermod -aG video blocks 2>/dev/null || true

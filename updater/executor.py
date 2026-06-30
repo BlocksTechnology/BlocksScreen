@@ -7,14 +7,18 @@ import logging
 import os
 import re
 import signal
+import sys
 import tempfile
 import time
 from collections.abc import Sequence
 from pathlib import Path
 
+from updater.locking import restart_sentinel_path
 from updater.models import ComponentStatus
 
 logger = logging.getLogger(__name__)
+
+UPDATER_SERVICE = "BlocksScreen-updater.service"
 
 GIT = "/usr/bin/git"
 PIP = "/usr/bin/pip3"
@@ -73,6 +77,11 @@ def _make_clean_env() -> dict[str, str]:
     for key, val in os.environ.items():
         if key in safe_sudo:
             env[key] = val
+    # Lets hooks (git post-merge, the updater's own) tell they run mid-batch and
+    # defer any daemon restart to the sentinel instead of aborting the update.
+    env["BS_UPDATER_SELF_UPDATE"] = "1"
+    with contextlib.suppress(OSError):
+        env["BS_UPDATER_RESTART_SENTINEL"] = str(restart_sentinel_path())
     return env
 
 
@@ -772,8 +781,48 @@ async def wait_for_service_active(name: str, timeout: float = 90.0) -> bool:
     return False
 
 
+async def restart_service_noblock(name: str | None) -> tuple[bool, str]:
+    """Queue a service restart without waiting (systemctl --no-block).
+
+    For the UI service that hosts the updater's D-Bus client: a blocking restart
+    tears down that client, and a slow restart could time out and abort the
+    in-flight update. Fire-and-forget and let it reload on its own.
+    """
+    if name is None:
+        return (False, "service name is None")
+    if not _SERVICE_RE.match(name):
+        return (False, f"service name {name!r} is invalid")
+    return await _run([SUDO, SYSTEMCTL, "--no-block", "restart", name], timeout=15.0)
+
+
+async def verify_updater_importable(component_path: Path | None) -> bool:
+    """Self-test the new on-disk updater code before restarting into it.
+
+    Imports the updater package in a fresh interpreter from component_path. A
+    new updater that fails to import must never restart the daemon onto itself:
+    that would take down the only field update path. On failure the caller keeps
+    the running (old) daemon and lets the next reboot adopt the new code.
+    """
+    if component_path is None or not component_path.exists():
+        return False
+    ok, out = await _run(
+        [sys.executable, "-c", "import updater.dbus_service"],
+        cwd=component_path,
+        timeout=30.0,
+    )
+    if not ok:
+        logger.error("updater import self-test failed: %s", out.strip())
+    return ok
+
+
 async def restart_service(name: str | None) -> tuple[bool, str]:
-    """Restart a systemd service; falls back to SIGTERM if systemctl fails."""
+    """Restart a systemd service, recovering from a start-limit hit.
+
+    If `restart` fails (commonly "start request repeated too quickly"), clear the
+    rate-limit/failed state with `reset-failed` and retry once. `systemctl kill`
+    is NOT used as a fallback: it does not clear a start-limit and is not covered
+    by the scoped NOPASSWD sudoers rules, so it would prompt for a password.
+    """
     if name is None:
         return (False, "service name is None")
     if not _SERVICE_RE.match(name):
@@ -781,14 +830,9 @@ async def restart_service(name: str | None) -> tuple[bool, str]:
     ok, err = await _run([SUDO, SYSTEMCTL, "restart", name], timeout=30.0)
     if ok:
         return (True, "")
-    # Fallback: send SIGTERM to the main process and its children
-    logger.warning("systemctl restart failed (%s), falling back to systemctl kill", err)
-    kill_ok, kill_err = await _run(
-        [SUDO, SYSTEMCTL, "kill", "-s", "SIGTERM", name], timeout=10.0
-    )
-    if kill_ok:
-        return (
-            True,
-            f"sent SIGTERM via systemctl kill (systemctl restart failed: {err})",
-        )
-    return (False, kill_err)
+    logger.warning("systemctl restart %s failed (%s); reset-failed + retry", name, err)
+    await _run([SUDO, SYSTEMCTL, "reset-failed", name], timeout=10.0)
+    ok, err2 = await _run([SUDO, SYSTEMCTL, "restart", name], timeout=30.0)
+    if ok:
+        return (True, f"recovered via reset-failed (first error: {err})")
+    return (False, err2)
