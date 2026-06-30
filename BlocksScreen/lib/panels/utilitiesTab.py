@@ -636,7 +636,9 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
     def axis_maintenance(self) -> None:
         """Routine, checks axis movement for printer debugging"""
         self.current_process = Process.AXIS_MAINTENANCE
-        self.current_object = self.panel.axis_maintenance_gb.checkedButton().text().lower() 
+        self.current_object = (
+            self.panel.axis_maintenance_gb.checkedButton().text().lower()
+        )
         self.run_gcode_signal.emit(f"AXIS_MAINTENANCE_{self.current_object}\nM400")
         self.set_routine_check_page(
             "Axis Maintenance",

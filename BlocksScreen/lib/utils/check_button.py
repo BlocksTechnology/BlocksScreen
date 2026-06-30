@@ -1,4 +1,5 @@
 import typing
+
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 
@@ -31,8 +32,8 @@ class BlocksCustomCheckButton(QtWidgets.QAbstractButton):
     def text(self) -> str:
         """returns Widget text"""
         return self._text
-    
-    def setFont(self,font:QtGui.QFont):
+
+    def setFont(self, font: QtGui.QFont):
         self.font = font
         self.update()
 
