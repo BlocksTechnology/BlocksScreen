@@ -31,7 +31,7 @@ class ConnectionPage(QtWidgets.QFrame):
 
     _MESSAGES: typing.ClassVar[dict[ConnectionState, str]] = {
         ConnectionState.DISCONNECTED: "The printer is offline.\nReconnecting automatically…",
-        ConnectionState.CONNECTING: "Connecting to the printer…\nAttempt {n}",
+        ConnectionState.CONNECTING: "Connecting to the printer\nAttempt {n}",
         ConnectionState.WEBSOCKET_LOST: "Connection interrupted.\nAttempting to reconnect…",
         ConnectionState.MOONRAKER_CONNECTED: "Connection established.\nWaiting for the printer to initialise…",
         ConnectionState.KLIPPER_STARTUP: "The printer is starting up.\nPlease wait…",
@@ -57,16 +57,6 @@ class ConnectionPage(QtWidgets.QFrame):
         "config error": "Configuration error\nCheck printer.cfg.\nPress 'Firmware Restart' to recover.",
         "mcu error during connect": "Failed to connect to the MCU.",
     }
-
-    _AUTO_SHOW_STATES: typing.ClassVar[frozenset[ConnectionState]] = frozenset(
-        {
-            ConnectionState.WEBSOCKET_LOST,
-            ConnectionState.DISCONNECTED,
-            ConnectionState.KLIPPER_DISCONNECTED,
-            ConnectionState.KLIPPER_ERROR,
-            ConnectionState.KLIPPER_SHUTDOWN,
-        }
-    )
 
     _FIRMWARE_RESTART_STATES: typing.ClassVar[frozenset[ConnectionState]] = frozenset(
         {
@@ -200,11 +190,7 @@ class ConnectionPage(QtWidgets.QFrame):
             self._last_shutdown_context = ""
             self.hide()
             return
-        if (
-            state in self._AUTO_SHOW_STATES
-            and not self.isVisible()
-            and self.conn_toggle
-        ):
+        if not self.isVisible() and self.conn_toggle:
             self.show()
         self._update_restart_label(state)
 

@@ -13,6 +13,7 @@ components:
     service: klipper.service
     reset_mode: hard
     order: 2
+    restart_ui: true
 
   - name: moonraker
     type: git
@@ -28,6 +29,7 @@ components:
     service: klipper.service
     reset_mode: hard
     order: 10
+    restart_ui: true
 
   - name: happy-hare
     type: git

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
 import os
@@ -15,6 +16,7 @@ from updater.components import load_components
 from updater.executor import (
     _GIT_SHA_RE,
     PIP,
+    UPDATER_SERVICE,
     _apt_get_fix_broken,
     _apt_restore_packages,
     _apt_snapshot_packages,
@@ -36,18 +38,36 @@ from updater.executor import (
     git_repair,
     git_reset_to_hash,
     restart_service,
+    restart_service_noblock,
     run_hook,
+    verify_updater_importable,
     wait_for_service_active,
 )
+from updater.locking import restart_sentinel_path
 from updater.models import ComponentConfig, ComponentStatus
 
 _STATE_PATH = Path.home() / ".cache" / "blockscreen" / "updater_state.json"
 _HISTORY_PATH = Path.home() / ".cache" / "blockscreen" / "update_history.jsonl"
+# Cap the history so a device running for years cannot fill the SD card.
+_HISTORY_MAX_BYTES = 1_000_000
+_HISTORY_KEEP_LINES = 2000
 
 # git's empty-tree object: used as the prev_hash when provisioning so a
 # diff-based hook (`git diff <prev> <new>`) sees every file as newly added and
 # performs a full install, instead of no-op'ing on an empty prev_hash.
 _GIT_EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+
+# Services that host the updater's own D-Bus client (the UI). They are restarted
+# non-blocking and never waited on, so a self-update cannot tear down or abort
+# the in-flight batch; new UI code loads on the queued restart, daemon code on
+# the next reboot.
+_UI_SERVICE = "BlocksScreen.service"
+_FIRE_AND_FORGET_SERVICES = frozenset({_UI_SERVICE})
+
+# Deploy flag watched by BlocksScreen-deploy.path; touching it runs
+# install-updater.sh out-of-band (its own cgroup), the cgroup-safe way to apply
+# unit/sudoers/install changes after a batch completes.
+_DEPLOY_FLAG = Path.home() / ".config" / "blockscreen" / ".run-install-updater"
 
 
 class ProgressCallback(Protocol):
@@ -280,9 +300,16 @@ class UpdateService:
                 return
             self._history("update_start", c.name, prev_hash=prev[c.name][:12])
 
+        self._log.info(
+            "git batch start: %d component(s): %s",
+            len(batch),
+            ", ".join(f"{c.name}->{c.service or '-'}" for c in batch),
+        )
         touched: list[ComponentConfig] = []
         restarted: list[str] = []
+        committed = False
         try:
+            self._log.info("git batch: stage phase (%d repo(s))", len(batch))
             for c in batch:
                 self._cb("on_step", c.name, 1, 4)
                 touched.append(c)  # mark before staging so a partial stage is reverted
@@ -290,6 +317,7 @@ class UpdateService:
                 if not ok:
                     await self._abort_batch(batch, prev, touched, restarted, reason)
                     return
+            self._log.info("git batch: deps phase")
             for c in batch:
                 self._cb("on_step", c.name, 2, 4)
                 deps_ok, deps_err = await self._install_dependencies(c)
@@ -297,10 +325,17 @@ class UpdateService:
                     self._log.warning("%s: deps failed: %s", c.name, deps_err)
                     await self._abort_batch(batch, prev, touched, restarted, "deps")
                     return
+            self._log.info("git batch: hook phase")
             new_hashes: dict[str, str] = {}
             for c in batch:
                 self._cb("on_step", c.name, 3, 4)
                 new_hashes[c.name] = await git_get_hash(c.path)
+                self._log.info(
+                    "git batch hook: %s %s -> %s",
+                    c.name,
+                    prev[c.name][:8],
+                    new_hashes[c.name][:8],
+                )
                 hook_ok, hook_err = await run_hook(
                     c.name, c.path, new_hashes[c.name], prev[c.name]
                 )
@@ -308,26 +343,62 @@ class UpdateService:
                     self._log.error("%s: hook failed: %s", c.name, hook_err)
                     await self._abort_batch(batch, prev, touched, restarted, "hook")
                     return
-            # Restart each unique service once, pinging progress before each
-            # (up to 90s) restart so the UI busy-watchdog stays fed across services.
+            # Restart each unique non-self service once and verify it. Mark bounced
+            # before the restart so an abort re-restarts even a service that failed
+            # its health check, onto the reverted code. Self/UI services are deferred.
+            self._log.info("git batch: restart phase")
             seen: set[str] = set()
+            ui_components: list[ComponentConfig] = []
             for c in batch:
                 if not c.service or c.service in seen:
                     continue
                 seen.add(c.service)
+                if c.service in _FIRE_AND_FORGET_SERVICES:
+                    self._log.info(
+                        "git batch: deferring self/UI service %s to fire-and-forget",
+                        c.service,
+                    )
+                    ui_components.append(c)
+                    continue
                 self._cb("on_step", c.name, 4, 4)
-                # Mark bounced before the restart so an abort re-restarts even the
-                # service that failed its health check, onto the reverted code.
                 restarted.append(c.service)
+                self._log.info("git batch: restarting %s (verified)", c.service)
                 if not await self._restart_one(c.service):
                     await self._abort_batch(batch, prev, touched, restarted, "restart")
                     return
+            # All verified services are up: the batch has succeeded. Record success
+            # and persist BEFORE the fire-and-forget UI restart, which tears down the
+            # D-Bus client, so a completed update can never be reverted by it.
             for c in batch:
                 self._history(
                     "update_success", c.name, new_hash=new_hashes[c.name][:12]
                 )
                 self._cb("on_component_done", c.name, True)
+            # Past this point the update is durable. The post-success restarts
+            # below include a self-restart of the daemon, whose SIGTERM surfaces
+            # as CancelledError here; it must never trigger a revert.
+            committed = True
+            self._log.info(
+                "git batch complete: %d component(s) updated; queueing UI restart(s)",
+                len(batch),
+            )
+            ui_services: set[str] = set()
+            for c in ui_components:
+                self._cb("on_step", c.name, 4, 4)
+                if c.service:
+                    ui_services.add(c.service)
+            # klipper/RF50 hold config the UI reads at startup: refresh it too.
+            if any(c.restart_ui for c in batch):
+                ui_services.add(_UI_SERVICE)
+            for svc in ui_services:
+                self._log.info(
+                    "git batch: fire-and-forget restart of %s (no wait)", svc
+                )
+                await restart_service_noblock(svc)
+            await self._apply_deferred_restart()
         except asyncio.CancelledError:
+            if committed:
+                raise
             self._log.warning("git batch cancelled — aborting")
             await self._shielded(
                 self._abort_batch(batch, prev, touched, restarted, "cancelled"),
@@ -335,6 +406,9 @@ class UpdateService:
             )
             raise
         except Exception:  # noqa: BLE001
+            if committed:
+                self._log.error("post-commit error (update stands)", exc_info=True)
+                return
             self._log.error("git batch unexpected error", exc_info=True)
             await self._abort_batch(batch, prev, touched, restarted, "unexpected_error")
 
@@ -368,6 +442,75 @@ class UpdateService:
             self._cb("on_error", c.name, reason)
             self._cb("on_rollback", c.name, restart_ok)
             self._cb("on_component_done", c.name, False)
+
+    async def _apply_deferred_restart(self) -> None:
+        """Apply a daemon restart/reinstall a hook deferred during this batch.
+
+        Hooks running under the updater record `install`/`code` to the tmpfs
+        sentinel instead of restarting the daemon mid-batch. Called once, after
+        success is recorded and the UI restart is queued:
+          - `install`: touch the deploy flag so BlocksScreen-deploy.path runs
+            install-updater out-of-band (its own cgroup, post-batch).
+          - `code`: self-test the new on-disk updater; only if it imports
+            cleanly, `--no-block` restart the daemon onto it. Otherwise keep the
+            running daemon and let the next reboot adopt it. Never raises: a
+            completed update must stand regardless of what happens here.
+        """
+        try:
+            sentinel = restart_sentinel_path()
+            reason = await asyncio.to_thread(self._read_clear_sentinel, sentinel)
+            if not reason:
+                return
+            if reason == "install":
+                self._log.info(
+                    "deferred: install files changed, touching deploy flag "
+                    "(install-updater runs out-of-band)"
+                )
+                await asyncio.to_thread(self._touch_deploy_flag)
+                return
+            comp = next(
+                (c for c in self._components if c.service in _FIRE_AND_FORGET_SERVICES),
+                None,
+            )
+            path = comp.path if comp else None
+            if not await verify_updater_importable(path):
+                self._log.error(
+                    "deferred: new updater code failed import self-test, keeping "
+                    "current daemon; new code adopts on next reboot"
+                )
+                return
+            self._log.info(
+                "deferred: updater code changed, clean self-restart of %s",
+                UPDATER_SERVICE,
+            )
+            await restart_service_noblock(UPDATER_SERVICE)
+        except Exception:  # noqa: BLE001
+            self._log.error("deferred restart handling failed", exc_info=True)
+
+    @staticmethod
+    def _read_clear_sentinel(sentinel: Path) -> str:
+        """Read+remove the restart sentinel, returning the highest-severity reason."""
+        try:
+            content = sentinel.read_text()
+        except OSError:
+            return ""
+        with contextlib.suppress(OSError):
+            sentinel.unlink()
+        words = set(content.split())
+        if "install" in words:
+            return "install"
+        if "code" in words:
+            return "code"
+        return ""
+
+    def _touch_deploy_flag(self) -> None:
+        """Create the deploy flag watched by BlocksScreen-deploy.path."""
+        _DEPLOY_FLAG.parent.mkdir(parents=True, exist_ok=True)
+        if _DEPLOY_FLAG.is_symlink():
+            _DEPLOY_FLAG.unlink()
+        _DEPLOY_FLAG.touch()
+        # Persist the dirent so a power cut right after this can't drop the flag.
+        self._fsync_dir(_DEPLOY_FLAG.parent)
 
     async def recover(self, name: str, hard: bool = False) -> bool:
         """Reset a component to its last known-good hash."""
@@ -416,6 +559,7 @@ class UpdateService:
         is caught on demand by the normal update flow. Offline-safe: git_repair
         fetches when it can, else we reset to the last recorded good hash.
         """
+        self._log.info("reconcile: boot-checking git components for damage")
         for c in self._components:
             if c.kind != "git" or c.path is None or not c.path.exists():
                 continue
@@ -533,8 +677,18 @@ class UpdateService:
             self._history_path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
             with self._history_path.open("a", encoding="utf-8") as f:
                 f.write(json.dumps(entry) + "\n")
+            self._trim_history()
         except OSError as exc:
             self._log.warning("update history write failed: %s", exc)
+
+    def _trim_history(self) -> None:
+        """Cap the on-SD history so a years-running device cannot fill the card."""
+        if self._history_path.stat().st_size <= _HISTORY_MAX_BYTES:
+            return
+        lines = self._history_path.read_text(encoding="utf-8").splitlines()
+        tmp = self._history_path.with_name(self._history_path.name + ".tmp")
+        tmp.write_text("\n".join(lines[-_HISTORY_KEEP_LINES:]) + "\n", encoding="utf-8")
+        tmp.replace(self._history_path)
 
     async def _remove_clone(self, component: ComponentConfig) -> None:
         """Delete a freshly-cloned tree (the path did not exist before provisioning)."""
@@ -689,6 +843,7 @@ class UpdateService:
 
     async def _restart_one(self, service: str) -> bool:
         """Restart a service and verify it came active (kill-fallback aware)."""
+        self._log.info("restarting %s and waiting for active", service)
         ok, err = await restart_service(service)
         if not ok:
             self._log.error("restart %s failed: %s", service, err)
@@ -696,6 +851,7 @@ class UpdateService:
         if not await wait_for_service_active(service, timeout=90.0):
             self._log.error("%s did not become active after restart", service)
             return False
+        self._log.info("%s active after restart", service)
         return True
 
     async def _run_git_update(self, component: ComponentConfig) -> bool:
@@ -729,6 +885,7 @@ class UpdateService:
             return self._cb_error_done(component.name, "insecure remote")
         self._history("update_start", component.name, prev_hash=prev_hash[:12])
 
+        committed = False
         try:
             self._cb("on_step", component.name, 1, 4)
             stage_ok, stage_reason = await self._stage_component(component)
@@ -758,14 +915,39 @@ class UpdateService:
                 return False
 
             self._cb("on_step", component.name, 4, 4)
-            if component.service and not await self._restart_one(component.service):
+            fire_and_forget = component.service in _FIRE_AND_FORGET_SERVICES
+            if (
+                component.service
+                and not fire_and_forget
+                and not await self._restart_one(component.service)
+            ):
                 await self._rollback(component, prev_hash, "restart")
                 return False
 
             self._history("update_success", component.name, new_hash=new_hash[:12])
             self._cb("on_component_done", component.name, True)
+            committed = True
+            # Self/UI service: queue the restart only after success is recorded.
+            if fire_and_forget and component.service:
+                self._log.info(
+                    "%s updated; fire-and-forget restart of %s (no wait)",
+                    component.name,
+                    component.service,
+                )
+                await restart_service_noblock(component.service)
+            # klipper/RF50 hold config the UI reads at startup: refresh it too.
+            elif component.restart_ui:
+                self._log.info(
+                    "%s updated (restart_ui); fire-and-forget restart of %s",
+                    component.name,
+                    _UI_SERVICE,
+                )
+                await restart_service_noblock(_UI_SERVICE)
+            await self._apply_deferred_restart()
             return True
         except asyncio.CancelledError:
+            if committed:
+                raise
             self._log.warning(
                 "%s: update cancelled mid-flight, rolling back to %s",
                 component.name,
@@ -777,6 +959,13 @@ class UpdateService:
             )
             raise
         except Exception as exc:  # noqa: BLE001
+            if committed:
+                self._log.error(
+                    "%s: post-commit error (update stands)",
+                    component.name,
+                    exc_info=True,
+                )
+                return True
             self._log.error(
                 "%s: unexpected error during update: %s",
                 component.name,
