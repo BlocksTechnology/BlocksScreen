@@ -1,14 +1,22 @@
 import asyncio
 import json
 import time
-from contextlib import ExitStack
+from contextlib import ExitStack, nullcontext
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, call, patch
 
 import pytest
 
+import updater.service as updater_service
 from updater.models import ComponentConfig, ComponentStatus
 from updater.service import LoggingCallback, UpdateService
+
+
+@pytest.fixture(autouse=True)
+def _isolate_inflight(tmp_path_factory, monkeypatch):
+    """Keep the in-flight marker out of the real cache for every test in this file."""
+    marker = tmp_path_factory.mktemp("inflight") / "updater_inflight.json"
+    monkeypatch.setattr(updater_service, "_INFLIGHT_PATH", marker)
 
 
 class TestLoggingCallback:
@@ -658,6 +666,49 @@ class TestAtomicBatch:
         assert all(c.args[1] is True for c in cb.on_component_done.call_args_list)
 
     @pytest.mark.asyncio
+    async def test_inflight_marker_written_then_cleared_on_success(self, tmp_path):
+        cb = MagicMock()
+        svc, comps = self._svc(tmp_path, cb, n=1)
+        svc._inflight_path = tmp_path / "inflight.json"
+        with (
+            patch(
+                "updater.service.UpdateService._stage_component",
+                return_value=(True, ""),
+            ),
+            patch(
+                "updater.service.UpdateService._install_dependencies",
+                return_value=(True, ""),
+            ),
+            patch("updater.service.run_hook", return_value=(True, "")),
+            patch("updater.service.restart_service", return_value=(True, "")),
+            patch("updater.service.wait_for_service_active", return_value=True),
+            patch.object(UpdateService, "_apply_deferred_restart", new=AsyncMock()),
+            patch.object(svc, "_write_inflight", wraps=svc._write_inflight) as spy,
+        ):
+            await svc._run_git_batch(comps)
+        spy.assert_called_once()  # marker written before staging
+        assert not svc._inflight_path.exists()  # cleared on commit
+
+    @pytest.mark.asyncio
+    async def test_inflight_marker_cleared_on_abort(self, tmp_path):
+        cb = MagicMock()
+        svc, comps = self._svc(tmp_path, cb, n=2)
+        svc._inflight_path = tmp_path / "inflight.json"
+        with (
+            patch(
+                "updater.service.UpdateService._stage_component",
+                side_effect=[(True, ""), (False, "conflict")],
+            ),
+            patch(
+                "updater.service.UpdateService._install_dependencies",
+                return_value=(True, ""),
+            ),
+            patch("updater.service.git_reset_to_hash", return_value=(True, "")),
+        ):
+            await svc._run_git_batch(comps)
+        assert not svc._inflight_path.exists()  # cleared by _abort_batch
+
+    @pytest.mark.asyncio
     async def test_restart_ui_component_also_restarts_ui(self, tmp_path):
         """A klipper/RF50-style restart_ui component refreshes BlocksScreen too."""
         cb = MagicMock()
@@ -1230,6 +1281,7 @@ class TestReconcile:
     async def test_healthy_repo_is_skipped(self, tmp_path):
         comp = self._git_comp(tmp_path)
         with (
+            patch("updater.service.process_lock", lambda: nullcontext(True)),
             patch("updater.service.git_get_hash", return_value="abc123"),
             patch("updater.service.git_repair") as mock_repair,
         ):
@@ -1242,6 +1294,7 @@ class TestReconcile:
     async def test_unreadable_head_triggers_repair(self, tmp_path):
         comp = self._git_comp(tmp_path)
         with (
+            patch("updater.service.process_lock", lambda: nullcontext(True)),
             patch("updater.service.git_get_hash", return_value=""),
             patch(
                 "updater.service.git_repair", return_value=(True, "repaired")
@@ -1256,6 +1309,7 @@ class TestReconcile:
     async def test_repair_failure_falls_back_to_prev_hash_reset(self, tmp_path):
         comp = self._git_comp(tmp_path)
         with (
+            patch("updater.service.process_lock", lambda: nullcontext(True)),
             patch("updater.service.git_get_hash", return_value=""),
             patch("updater.service.git_repair", return_value=(False, "no fetch")),
             patch(
@@ -1275,11 +1329,29 @@ class TestReconcile:
     @pytest.mark.asyncio
     async def test_apt_component_skipped(self, tmp_path):
         comp = ComponentConfig(name="system", kind="apt")
-        with patch("updater.service.git_get_hash") as mock_hash:
+        with (
+            patch("updater.service.process_lock", lambda: nullcontext(True)),
+            patch("updater.service.git_get_hash") as mock_hash,
+        ):
             svc = UpdateService()
             svc._components = [comp]
             await svc.reconcile()
         mock_hash.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_skips_when_process_lock_held(self, tmp_path):
+        # A concurrent update/CLI run owns the lock: reconcile must not touch git.
+        comp = self._git_comp(tmp_path)
+        with (
+            patch("updater.service.process_lock", lambda: nullcontext(False)),
+            patch("updater.service.git_get_hash") as mock_hash,
+            patch("updater.service.git_repair") as mock_repair,
+        ):
+            svc = UpdateService()
+            svc._components = [comp]
+            await svc.reconcile()
+        mock_hash.assert_not_called()
+        mock_repair.assert_not_called()
 
 
 class TestWriteStateDurability:
@@ -1484,3 +1556,84 @@ class TestDeferredRestart:
             UpdateService()._touch_deploy_flag()
         assert flag.exists() and not flag.is_symlink()
         assert target.read_text() == "keep"  # symlink not followed
+
+
+class TestInflightRollback:
+    """Cross-reboot revert: an update cut off before commit is undone on boot."""
+
+    def _git(self, tmp_path: Path, name: str = "klipper") -> ComponentConfig:
+        path = tmp_path / name
+        path.mkdir()
+        return ComponentConfig(
+            name=name, kind="git", path=path, service="klipper.service"
+        )
+
+    def test_write_read_clear_roundtrip(self, tmp_path):
+        svc = UpdateService()
+        svc._inflight_path = tmp_path / "inflight.json"
+        assert svc._read_inflight() == {}
+        assert svc._write_inflight({"klipper": "a" * 40}) is True
+        assert svc._read_inflight() == {"klipper": "a" * 40}
+        svc._clear_inflight()
+        assert svc._read_inflight() == {}
+
+    @pytest.mark.asyncio
+    async def test_revert_resets_interrupted_repo(self, tmp_path):
+        comp = self._git(tmp_path)
+        svc = UpdateService()
+        svc._components = [comp]
+        svc._inflight_path = tmp_path / "inflight.json"
+        svc._write_inflight({"klipper": "a" * 40})
+        with (
+            patch("updater.service.git_get_hash", return_value="b" * 40),
+            patch(
+                "updater.service.git_reset_to_hash", return_value=(True, "")
+            ) as mock_reset,
+        ):
+            await svc._revert_inflight()
+        mock_reset.assert_awaited_once_with(comp.path, "a" * 40)
+        assert svc._read_inflight() == {}
+
+    @pytest.mark.asyncio
+    async def test_revert_skips_repo_already_at_prev(self, tmp_path):
+        comp = self._git(tmp_path)
+        svc = UpdateService()
+        svc._components = [comp]
+        svc._inflight_path = tmp_path / "inflight.json"
+        svc._write_inflight({"klipper": "a" * 40})
+        with (
+            patch("updater.service.git_get_hash", return_value="a" * 40),
+            patch(
+                "updater.service.git_reset_to_hash", return_value=(True, "")
+            ) as mock_reset,
+        ):
+            await svc._revert_inflight()
+        mock_reset.assert_not_called()
+        assert svc._read_inflight() == {}
+
+    @pytest.mark.asyncio
+    async def test_revert_noop_without_marker(self, tmp_path):
+        svc = UpdateService()
+        svc._inflight_path = tmp_path / "inflight.json"
+        with patch(
+            "updater.service.git_reset_to_hash", return_value=(True, "")
+        ) as mock_reset:
+            await svc._revert_inflight()
+        mock_reset.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_revert_rejects_invalid_prev_hash(self, tmp_path):
+        comp = self._git(tmp_path)
+        svc = UpdateService()
+        svc._components = [comp]
+        svc._inflight_path = tmp_path / "inflight.json"
+        svc._write_inflight({"klipper": "not-a-sha"})
+        with (
+            patch("updater.service.git_get_hash", return_value="b" * 40),
+            patch(
+                "updater.service.git_reset_to_hash", return_value=(True, "")
+            ) as mock_reset,
+        ):
+            await svc._revert_inflight()
+        mock_reset.assert_not_called()
+        assert svc._read_inflight() == {}  # marker still cleared

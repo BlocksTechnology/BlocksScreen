@@ -64,7 +64,7 @@ def _make_clean_env() -> dict[str, str]:
         "HOME",
         "USER",
         "LANG",
-        # SEC: DBUS_SESSION_BUS_ADDRESS and XDG_RUNTIME_DIR intentionally excluded —
+        # SEC: DBUS_SESSION_BUS_ADDRESS and XDG_RUNTIME_DIR intentionally excluded -
         # hook scripts must not make D-Bus calls or access the session runtime dir.
         "TMPDIR",
     ):
@@ -202,7 +202,7 @@ def _compile_exclude_patterns(exclude: tuple[str, ...]) -> list[re.Pattern]:
         try:
             compiled.append(re.compile(pat))
         except re.error:
-            logger.warning("invalid apt_exclude regex %r — skipping", pat)
+            logger.warning("invalid apt_exclude regex %r - skipping", pat)
     return compiled
 
 
@@ -384,6 +384,14 @@ _GIT_CORRUPT_SIGNATURES = (
     "missing commit",
 )
 
+# Quarantine directory for loose objects fsck reports as corrupt (kept inside
+# .git/objects so it never shows up as an untracked working-tree file).
+_QUARANTINE_DIRNAME = "objects-corrupt"
+# fsck error lines reference a corrupt object either by its on-disk path
+# (.git/objects/ab/<38 hex>) or by its 40-hex SHA; match both.
+_GIT_OBJ_PATH_RE = re.compile(r"objects/([0-9a-f]{2})/([0-9a-f]{38})")
+_GIT_OBJ_SHA_RE = re.compile(r"\b([0-9a-f]{40})\b")
+
 
 async def git_has_corruption(path: Path | None, hint: str = "") -> bool:
     """True if `hint` or git fsck shows object corruption.
@@ -405,15 +413,8 @@ async def git_has_corruption(path: Path | None, hint: str = "") -> bool:
     return any(k in out for k in _GIT_CORRUPT_SIGNATURES)
 
 
-async def git_repair(path: Path) -> tuple[bool, str]:
-    """Prune 0-byte loose objects, re-fetch, and re-verify. Mirrors start.sh recovery.
-
-    Working tree is untouched (delete + fetch only), so tracked-but-modified files
-    survive. Returns (ok, message).
-    """
-    objects = path / ".git" / "objects"
-    if not objects.is_dir():
-        return (False, "no .git/objects directory")
+def _prune_empty_loose_objects(objects: Path) -> int:
+    """Delete 0-byte loose objects (the classic power-loss signature). Returns count."""
     removed = 0
     for sub in objects.iterdir():
         if len(sub.name) != 2 or not sub.is_dir():
@@ -425,13 +426,86 @@ async def git_repair(path: Path) -> tuple[bool, str]:
                     removed += 1
             except OSError:
                 continue
+    return removed
+
+
+async def _quarantine_corrupt_objects(path: Path) -> int:
+    """Move loose objects that `git fsck --full` flags as corrupt out of the way.
+
+    `git_has_corruption` uses `fsck --connectivity-only`, which never reads blob
+    content and so cannot see a non-empty object with a bad zlib header - exactly
+    what a power cut mid-write produces. A plain re-fetch will NOT replace such an
+    object because git still finds a file at that name. `fsck --full` reads object
+    content and names the bad ones; we move (not delete) them so a re-fetch
+    re-downloads them, and a misdiagnosis stays recoverable. Returns count moved.
+    """
+    ok, out = await _run(
+        [GIT, "fsck", "--full", "--no-dangling", "--no-progress"],
+        cwd=path,
+        timeout=120.0,
+    )
+    if ok:
+        return 0  # fsck --full clean: corruption is elsewhere (e.g. a packfile)
+    objects = path / ".git" / "objects"
+    quarantine = objects / _QUARANTINE_DIRNAME
+    candidates: set[Path] = set()
+    for line in out.splitlines():
+        m = _GIT_OBJ_PATH_RE.search(line)
+        if m:
+            candidates.add(objects / m.group(1) / m.group(2))
+            continue
+        if any(k in line for k in ("corrupt", "unable to unpack", "missing", "empty")):
+            sha = _GIT_OBJ_SHA_RE.search(line)
+            if sha:
+                s = sha.group(1)
+                candidates.add(objects / s[:2] / s[2:])
+    moved = 0
+    for obj in candidates:
+        if not obj.is_file():
+            continue  # e.g. a "missing blob" object that does not exist on disk
+        try:
+            dest = quarantine / obj.parent.name
+            dest.mkdir(parents=True, exist_ok=True)
+            obj.replace(dest / obj.name)
+            moved += 1
+        except OSError as exc:
+            logger.warning("git_repair: could not quarantine %s: %s", obj, exc)
+    logger.warning("git_repair: quarantined %d corrupt object(s) from %s", moved, path)
+    return moved
+
+
+async def git_repair(path: Path) -> tuple[bool, str]:
+    """Prune 0-byte loose objects, re-fetch, and re-verify. Mirrors start.sh recovery.
+
+    If empty-object pruning plus a fetch does not clear the corruption, escalate to
+    quarantining non-empty corrupt loose objects (`fsck --full`) and re-fetch once
+    more. Working tree is untouched (delete/move + fetch only), so tracked-but-
+    modified files survive. Returns (ok, message).
+    """
+    objects = path / ".git" / "objects"
+    if not objects.is_dir():
+        return (False, "no .git/objects directory")
+    removed = _prune_empty_loose_objects(objects)
     logger.warning("git_repair: removed %d empty object(s) from %s", removed, path)
     ok, out = await git_fetch(path, prune_remotes=False)
     if not ok:
         return (False, f"fetch after cleanup failed: {out}")
+    if not await git_has_corruption(path):
+        return (True, f"repaired ({removed} empty objects removed)")
+    # Empty-object pruning + fetch did not clear it: a non-empty loose object is
+    # corrupt. Quarantine the bad objects and re-fetch to re-download them.
+    quarantined = await _quarantine_corrupt_objects(path)
+    if quarantined == 0:
+        return (False, "still corrupt after fetch (no quarantinable objects found)")
+    ok, out = await git_fetch(path, prune_remotes=False)
+    if not ok:
+        return (False, f"fetch after quarantine failed: {out}")
     if await git_has_corruption(path):
-        return (False, "still corrupt after fetch")
-    return (True, f"repaired ({removed} empty objects removed)")
+        return (False, "still corrupt after quarantine + fetch")
+    return (
+        True,
+        f"repaired ({removed} empty + {quarantined} corrupt object(s) removed)",
+    )
 
 
 async def git_get_hash(path: Path | None) -> str:

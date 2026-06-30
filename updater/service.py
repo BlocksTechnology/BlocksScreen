@@ -43,10 +43,15 @@ from updater.executor import (
     verify_updater_importable,
     wait_for_service_active,
 )
-from updater.locking import restart_sentinel_path
+from updater.locking import process_lock, restart_sentinel_path
 from updater.models import ComponentConfig, ComponentStatus
 
 _STATE_PATH = Path.home() / ".cache" / "blockscreen" / "updater_state.json"
+# Persistent (SD-backed, not tmpfs) record of the components a batch is actively
+# mutating, mapped to the hash to return to. Written before staging and removed
+# at any terminal outcome, so a reboot finding it knows an update was cut off
+# mid-flight and reverts each repo to its pre-update commit.
+_INFLIGHT_PATH = Path.home() / ".cache" / "blockscreen" / "updater_inflight.json"
 _HISTORY_PATH = Path.home() / ".cache" / "blockscreen" / "update_history.jsonl"
 # Cap the history so a device running for years cannot fill the SD card.
 _HISTORY_MAX_BYTES = 1_000_000
@@ -116,6 +121,7 @@ class UpdateService:
         self._fetch_times: dict[str, float] = {}
         self._component_pip_cache: dict[str, str] = {}
         self._state_path = _STATE_PATH
+        self._inflight_path = _INFLIGHT_PATH
         self._history_path = _HISTORY_PATH
         self._log = logging.getLogger("updater")
 
@@ -258,7 +264,7 @@ class UpdateService:
                 elif not await git_has_corruption(c.path, hint=err):
                     offline.append(c.name)
         if offline:
-            msg = "network error during pre-flight fetch — no components changed"
+            msg = "network error during pre-flight fetch - no components changed"
             self._log.error("update_all: %s (failed: %s)", msg, offline)
             for c in all_components:
                 self._cb("on_error", c.name, msg)
@@ -270,7 +276,7 @@ class UpdateService:
 
         Stage every repo, then deps, then hooks, then restart each unique service
         once. While staging/deps/hooks run nothing has been restarted, so the live
-        services still execute the old code — an abort then just reverts git and
+        services still execute the old code - an abort then just reverts git and
         restarts nothing. A restart-phase failure reverts git AND re-restarts the
         services already bounced so they come back on the old code.
         """
@@ -278,7 +284,7 @@ class UpdateService:
         for c in batch:
             ph = await git_get_hash(c.path)
             if ph == "":
-                self._log.error("%s: prev_hash empty — aborting batch", c.name)
+                self._log.error("%s: prev_hash empty - aborting batch", c.name)
                 for b in batch:
                     self._cb_error_done(b.name, "prev_hash empty")
                 return
@@ -291,6 +297,9 @@ class UpdateService:
                 for b in batch:
                     self._cb_error_done(b.name, "failed to persist rollback point")
                 return
+            # Mark the batch in-flight so a power cut before commit is reverted
+            # to these hashes on the next boot (reconcile).
+            await asyncio.to_thread(self._write_inflight, dict(prev))
         for c in batch:
             ok, reason = await _assert_https_remote(c.path)
             if not ok:
@@ -378,6 +387,9 @@ class UpdateService:
             # below include a self-restart of the daemon, whose SIGTERM surfaces
             # as CancelledError here; it must never trigger a revert.
             committed = True
+            # Durably clear the in-flight marker before any restart: past this
+            # point the update stands and must never be reverted on reboot.
+            await asyncio.to_thread(self._clear_inflight)
             self._log.info(
                 "git batch complete: %d component(s) updated; queueing UI restart(s)",
                 len(batch),
@@ -399,7 +411,7 @@ class UpdateService:
         except asyncio.CancelledError:
             if committed:
                 raise
-            self._log.warning("git batch cancelled — aborting")
+            self._log.warning("git batch cancelled - aborting")
             await self._shielded(
                 self._abort_batch(batch, prev, touched, restarted, "cancelled"),
                 "git batch cancel-abort",
@@ -426,6 +438,8 @@ class UpdateService:
         )
         for c in touched:
             await git_reset_to_hash(c.path, prev[c.name])
+        # Repos are back at prev_hash: the batch is resolved, drop the marker.
+        await asyncio.to_thread(self._clear_inflight)
         restart_ok = True
         for service in restarted:
             if not await self._restart_one(service):
@@ -558,7 +572,58 @@ class UpdateService:
         `cat-file -e HEAD`) so a healthy boot pays almost nothing; deeper corruption
         is caught on demand by the normal update flow. Offline-safe: git_repair
         fetches when it can, else we reset to the last recorded good hash.
+
+        Held under the shared process lock so the boot-time heal cannot interleave
+        its git resets/repairs with a near-simultaneous user update or CLI run on
+        the same repo. If another updater holds the lock, skip: that run is already
+        mutating the repos, and any real damage is re-detected on demand.
         """
+        with process_lock() as acquired:
+            if not acquired:
+                self._log.info(
+                    "reconcile: another updater holds the lock - skipping boot heal"
+                )
+                return
+            await self._reconcile_locked()
+
+    async def _revert_inflight(self) -> None:
+        """Revert any update cut off mid-flight by a power loss before it committed.
+
+        The in-flight marker maps each batch component to the commit it was on
+        before staging. Its mere presence at boot means a batch did not reach a
+        terminal outcome, so every listed repo is hard-reset back to that commit
+        and the marker is cleared. A repo already on its prev_hash is left alone.
+        """
+        inflight = await asyncio.to_thread(self._read_inflight)
+        if not inflight:
+            return
+        self._log.warning(
+            "reconcile: in-flight marker present - reverting %d interrupted repo(s)",
+            len(inflight),
+        )
+        by_name = {c.name: c for c in self._components}
+        for name, prev_hash in inflight.items():
+            comp = by_name.get(name)
+            if comp is None or comp.path is None or not comp.path.exists():
+                continue
+            if not _GIT_SHA_RE.match(prev_hash):
+                self._log.error("reconcile: %s in-flight prev_hash invalid", name)
+                continue
+            async with self._git_lock:
+                if await git_get_hash(comp.path) == prev_hash:
+                    continue  # already at the pre-update commit
+                rok, _ = await git_reset_to_hash(comp.path, prev_hash)
+                self._history("boot_rollback", name, ok=rok, reverted_to=prev_hash[:12])
+                self._log.warning(
+                    "reconcile: %s reverted in-flight update to %s (ok=%s)",
+                    name,
+                    prev_hash[:8],
+                    rok,
+                )
+        await asyncio.to_thread(self._clear_inflight)
+
+    async def _reconcile_locked(self) -> None:
+        await self._revert_inflight()
         self._log.info("reconcile: boot-checking git components for damage")
         for c in self._components:
             if c.kind != "git" or c.path is None or not c.path.exists():
@@ -566,7 +631,7 @@ class UpdateService:
             async with self._git_lock:
                 if await git_get_hash(c.path) != "":
                     continue
-                self._log.warning("reconcile: %s HEAD unreadable — repairing", c.name)
+                self._log.warning("reconcile: %s HEAD unreadable - repairing", c.name)
                 ok, msg = await git_repair(c.path)
                 if ok:
                     self._history("boot_repair", c.name, detail=msg[:80])
@@ -594,6 +659,7 @@ class UpdateService:
             "%s: rolling back to %s (reason=%s)", component.name, prev_hash[:8], reason
         )
         ok, _ = await git_reset_to_hash(component.path, prev_hash)
+        await asyncio.to_thread(self._clear_inflight)
         if component.service and not await self._restart_one(component.service):
             ok = False
         self._history(
@@ -621,9 +687,9 @@ class UpdateService:
             # (PEP 668 externally-managed-environment). Deps are managed by the
             # component's own installer (e.g. klipper's klippy-env).
             self._log.info(
-                "%s: no component venv — skipping dep install", component.name
+                "%s: no component venv - skipping dep install", component.name
             )
-            return (True, "no venv — deps managed externally")
+            return (True, "no venv - deps managed externally")
         req = component.path / "requirements.txt"
         if not req.exists():
             return (True, "no requirements.txt")
@@ -778,7 +844,7 @@ class UpdateService:
     async def _stage_component(self, component: ComponentConfig) -> tuple[bool, str]:
         """Bring the working tree to its target ref: fetch-gate + reset/checkout/pull.
 
-        No deps/hook/restart and no rollback — the caller decides what to do on
+        No deps/hook/restart and no rollback - the caller decides what to do on
         failure. Returns (ok, reason) where reason is one of
         network/corrupt/reset/version/branch/conflict.
         """
@@ -879,6 +945,7 @@ class UpdateService:
                 return self._cb_error_done(
                     component.name, "failed to persist rollback point"
                 )
+            await asyncio.to_thread(self._write_inflight, {component.name: prev_hash})
         ok, reason = await _assert_https_remote(component.path)
         if not ok:
             self._log.error("SEC-4 remote check failed: %s", reason)
@@ -927,6 +994,7 @@ class UpdateService:
             self._history("update_success", component.name, new_hash=new_hash[:12])
             self._cb("on_component_done", component.name, True)
             committed = True
+            await asyncio.to_thread(self._clear_inflight)
             # Self/UI service: queue the restart only after success is recorded.
             if fire_and_forget and component.service:
                 self._log.info(
@@ -1054,6 +1122,43 @@ class UpdateService:
         except (FileNotFoundError, json.JSONDecodeError):
             return {}
 
+    def _read_inflight(self) -> dict[str, str]:
+        try:
+            data = json.loads(self._inflight_path.read_text())
+        except (FileNotFoundError, json.JSONDecodeError):
+            return {}
+        return data if isinstance(data, dict) else {}
+
+    def _write_inflight(self, mapping: dict[str, str]) -> bool:
+        """Atomically record the in-flight batch's name->prev_hash map (fsync'd)."""
+        try:
+            self._inflight_path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+            with tempfile.NamedTemporaryFile(
+                mode="w",
+                dir=self._inflight_path.parent,
+                delete=False,
+                prefix=".updater_inflight_",
+            ) as f:
+                f.write(json.dumps(mapping))
+                f.flush()
+                os.fsync(f.fileno())
+                temp_path = Path(f.name)
+            temp_path.chmod(0o600)
+            temp_path.replace(self._inflight_path)
+            self._fsync_dir(self._inflight_path.parent)
+            return True
+        except OSError:
+            self._log.error("Failed to write in-flight marker")
+            return False
+
+    def _clear_inflight(self) -> None:
+        """Remove the in-flight marker; the batch reached a terminal outcome."""
+        try:
+            self._inflight_path.unlink(missing_ok=True)
+            self._fsync_dir(self._inflight_path.parent)
+        except OSError:
+            self._log.warning("Failed to clear in-flight marker")
+
     def _write_state(self, data: dict) -> bool:
         try:
             self._state_path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -1093,7 +1198,7 @@ class UpdateService:
         """Run apt update + upgrade + autoremove silently after every Update click.
 
         Uses apt-get upgrade (never dist-upgrade) so the Debian release never changes.
-        Never reports to the UI — failures are logged only.
+        Never reports to the UI - failures are logged only.
         """
         async with self._apt_lock:
             await self._background_apt_upgrade_locked()

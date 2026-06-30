@@ -15,14 +15,14 @@ bs_migrate_moonraker_conf "$_BSENV_HOME/printer_data/config/moonraker.conf" post
 changed=$(git -C "$BS_PATH" diff ORIG_HEAD HEAD --name-only 2>/dev/null || true)
 
 # ── Pre-flight: run all heavy prep before any restart ────────────────────────
-# Everything here is idempotent — safe to re-run on every merge.
+# Everything here is idempotent - safe to re-run on every merge.
 
 # 1. Pre-install pip requirements so the next service start is instant.
 REQS_HASH=$(md5sum "$BS_PATH/scripts/requirements.txt" | cut -d' ' -f1)
 SENTINEL="$BSENV/.blockscreen-reqs-hash"
 ATTEMPT="$BSENV/.blockscreen-reqs-attempt"
 if [ ! -f "$SENTINEL" ] || [ "$(cat "$SENTINEL")" != "$REQS_HASH" ]; then
-    echo "[post-merge] requirements changed — pre-installing deps (this may take a few minutes) ..."
+    echo "[post-merge] requirements changed - pre-installing deps (this may take a few minutes) ..."
     if "$BSENV/bin/pip" install --quiet \
         --only-binary :all: \
         --no-binary sdbus,sdbus-networkmanager \
@@ -33,8 +33,8 @@ if [ ! -f "$SENTINEL" ] || [ "$(cat "$SENTINEL")" != "$REQS_HASH" ]; then
         echo "[post-merge] deps installed"
     else
         # An atomic -r failure (e.g. a dep without an aarch64 wheel) must not
-        # re-thrash on every pull. Retry a few times — covering transient or
-        # offline failures — then accept the partial venv so the sentinel
+        # re-thrash on every pull. Retry a few times - covering transient or
+        # offline failures - then accept the partial venv so the sentinel
         # advances and the boot path stops retrying a known-failing set.
         _prev=$(cut -d' ' -f1 "$ATTEMPT" 2>/dev/null || true)
         _cnt=$(cut -d' ' -f2 "$ATTEMPT" 2>/dev/null || true)

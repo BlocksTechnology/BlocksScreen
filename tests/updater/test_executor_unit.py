@@ -811,6 +811,8 @@ class TestCorruption:
 
     @pytest.mark.asyncio
     async def test_repair_fails_when_still_corrupt(self, tmp_path):
+        # Empty-object prune + fetch left it corrupt and fsck found nothing to
+        # quarantine: repair gives up rather than looping.
         (tmp_path / ".git" / "objects").mkdir(parents=True)
         with (
             patch(
@@ -823,10 +825,74 @@ class TestCorruption:
                 new_callable=AsyncMock,
                 return_value=True,
             ),
+            patch(
+                "updater.executor._quarantine_corrupt_objects",
+                new_callable=AsyncMock,
+                return_value=0,
+            ),
         ):
             ok, msg = await git_repair(tmp_path)
         assert ok is False
         assert "still corrupt" in msg
+
+    @pytest.mark.asyncio
+    async def test_repair_quarantines_non_empty_corrupt_then_succeeds(self, tmp_path):
+        # Non-empty corrupt loose object: first verify fails, quarantine moves it,
+        # the re-fetch re-downloads it, and the second verify is clean.
+        (tmp_path / ".git" / "objects").mkdir(parents=True)
+        with (
+            patch(
+                "updater.executor.git_fetch",
+                new_callable=AsyncMock,
+                return_value=(True, ""),
+            ),
+            patch(
+                "updater.executor.git_has_corruption",
+                new_callable=AsyncMock,
+                side_effect=[True, False],
+            ),
+            patch(
+                "updater.executor._quarantine_corrupt_objects",
+                new_callable=AsyncMock,
+                return_value=1,
+            ) as mock_quarantine,
+        ):
+            ok, msg = await git_repair(tmp_path)
+        assert ok is True
+        assert "1 corrupt" in msg
+        mock_quarantine.assert_awaited_once_with(tmp_path)
+
+    @pytest.mark.asyncio
+    async def test_quarantine_moves_fsck_flagged_object(self, tmp_path):
+        objdir = tmp_path / ".git" / "objects" / "ab"
+        objdir.mkdir(parents=True)
+        name = "a" * 38
+        (objdir / name).write_bytes(b"garbage")  # non-empty but corrupt
+        from updater.executor import _quarantine_corrupt_objects
+
+        proc = _make_proc(
+            1, b"", f"error: object file .git/objects/ab/{name} is corrupt\n".encode()
+        )
+        with patch(
+            "asyncio.create_subprocess_exec", new_callable=AsyncMock, return_value=proc
+        ):
+            moved = await _quarantine_corrupt_objects(tmp_path)
+        assert moved == 1
+        assert not (objdir / name).exists()
+        assert (
+            tmp_path / ".git" / "objects" / "objects-corrupt" / "ab" / name
+        ).exists()
+
+    @pytest.mark.asyncio
+    async def test_quarantine_noop_when_fsck_clean(self, tmp_path):
+        (tmp_path / ".git" / "objects").mkdir(parents=True)
+        from updater.executor import _quarantine_corrupt_objects
+
+        proc = _make_proc(0, b"", b"")
+        with patch(
+            "asyncio.create_subprocess_exec", new_callable=AsyncMock, return_value=proc
+        ):
+            assert await _quarantine_corrupt_objects(tmp_path) == 0
 
 
 class TestSelfUpdateEnvStamp:

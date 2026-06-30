@@ -79,7 +79,7 @@ if sudo visudo -cf "$SUDOERS_TMP" >/dev/null 2>&1; then
     sudo install -m 0440 "$SUDOERS_TMP" "$SUDOERS_FILE"
     echo_ok "Sudoers rules installed"
 else
-    echo_error "Sudoers syntax check failed — skipping sudoers install"
+    echo_error "Sudoers syntax check failed - skipping sudoers install"
 fi
 rm -f "$SUDOERS_TMP"
 
@@ -112,7 +112,7 @@ elif [[ "$(readlink -f "$_BS_SVC_DEST" 2>/dev/null)" != "$(readlink -f "$_BS_SVC
     sudo systemctl unmask BlocksScreen.service 2>/dev/null || true
 fi
 sudo systemctl daemon-reload
-echo_ok "BlocksScreen.service is a symlink — hook no longer needs sudo cp"
+echo_ok "BlocksScreen.service is a symlink - hook no longer needs sudo cp"
 
 echo_info "Setting up apt cache directory for blocks user ..."
 sudo mkdir -p "$_BSENV_HOME/.cache/blockscreen"
