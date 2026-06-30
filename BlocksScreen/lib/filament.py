@@ -1,6 +1,7 @@
 # Class that represents a filament spool
 
-from typing import Optional
+from __future__ import annotations
+
 import enum
 
 
@@ -29,17 +30,18 @@ class Filament:
         self,
         name: str,
         temperature: int,
-        brand: Optional[str] = None,
-        spool_type: Optional[SpoolMaterial] = None,
-        spool_weight: Optional[float] = None,
+        brand: str | None = None,
+        spool_type: SpoolMaterial | None = None,
+        spool_weight: float | None = None,
     ):
         if not isinstance(name, str) or not isinstance(temperature, int):
             raise TypeError("__init__() invalid argument type")
 
         self._name: str = name
         self._temperature: int = temperature
-        self._weight: Optional[float] = None
-        self._brand: Optional[str] = brand
+        self._weight: float | None = None
+        self._brand: str | None = brand
+        self._spool_type: Filament.SpoolMaterial | None = None
 
         if spool_type is not None and spool_type in self.SpoolMaterial:
             self._spool_type = spool_type
@@ -55,7 +57,7 @@ class Filament:
         return self._temperature
 
     @property
-    def weight(self) -> Optional[float]:
+    def weight(self) -> float | None:
         if self._weight is None:
             return
         return self._weight
@@ -65,22 +67,19 @@ class Filament:
         self._weight = new_value
 
     @property
-    def brand(self) -> Optional[str]:
+    def brand(self) -> str | None:
         return self._brand
 
     @brand.setter
-    def brand(self, new_value: str) -> Optional[str]:
+    def brand(self, new_value: str) -> None:
         self._brand = new_value
 
     @property
-    def spool_type(self) -> Optional[SpoolMaterial]:
+    def spool_type(self) -> SpoolMaterial | None:
         return self._spool_type
 
     @spool_type.setter
-    def spool_type(self, new):
-        if new not in self.SpoolMaterial:
-            if isinstance(new, self.SpoolMaterial):
-                raise ValueError(
-                    "Spool Material type is invalid"
-                )  # Correct type but invalid option
+    def spool_type(self, new) -> None:
+        if new is not None and not isinstance(new, self.SpoolMaterial):
+            raise ValueError(f"Spool Material type is invalid: {new!r}")
         self._spool_type = new
