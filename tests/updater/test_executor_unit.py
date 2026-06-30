@@ -29,8 +29,10 @@ from updater.executor import (
     git_repair,
     git_reset_to_hash,
     git_prune_extra_remotes,
+    enable_service,
     restart_service,
     restart_service_noblock,
+    run_hook,
 )
 
 
@@ -930,3 +932,62 @@ class TestVerifyUpdaterImportable:
             new=AsyncMock(return_value=(False, "ModuleNotFoundError: sdbus")),
         ):
             assert await verify_updater_importable(tmp_path) is False
+
+
+class TestRunHook:
+    """run_hook: resolve under hooks dir, pass timeout, reject traversal."""
+
+    @pytest.mark.asyncio
+    async def test_run_hook_passes_timeout(self, tmp_path, monkeypatch):
+        import updater.executor as ex
+
+        monkeypatch.setattr(ex, "_HOOKS_DIR", tmp_path)
+        (tmp_path / "comp.sh").write_text("#!/bin/bash\nexit 0\n")
+        with patch.object(ex, "_run", new=AsyncMock(return_value=(True, ""))) as run:
+            await run_hook("comp", tmp_path, "newh", "prevh", timeout=600.0)
+        assert run.await_args.kwargs["timeout"] == 600.0
+        assert run.await_args.kwargs["env"]["NEW_HASH"] == "newh"
+
+    @pytest.mark.asyncio
+    async def test_run_hook_default_timeout(self, tmp_path, monkeypatch):
+        import updater.executor as ex
+
+        monkeypatch.setattr(ex, "_HOOKS_DIR", tmp_path)
+        (tmp_path / "comp.sh").write_text("#!/bin/bash\nexit 0\n")
+        with patch.object(ex, "_run", new=AsyncMock(return_value=(True, ""))) as run:
+            await run_hook("comp", tmp_path, "n", "p")
+        assert run.await_args.kwargs["timeout"] == 60.0
+
+    @pytest.mark.asyncio
+    async def test_hook_path_traversal_rejected(self, tmp_path, monkeypatch):
+        import updater.executor as ex
+
+        monkeypatch.setattr(ex, "_HOOKS_DIR", tmp_path)
+        ok, msg = await run_hook("../../etc/passwd", tmp_path, "n", "p")
+        assert ok is False
+        assert "escapes" in msg
+
+
+class TestEnableService:
+    """enable_service: validate name, build the sudo systemctl enable argv."""
+
+    @pytest.mark.asyncio
+    async def test_enables_valid_service(self):
+        with patch(
+            "updater.executor._run", new=AsyncMock(return_value=(True, ""))
+        ) as run:
+            ok, _ = await enable_service("Spoolman.service")
+        assert ok is True
+        argv = run.await_args.args[0]
+        assert argv[-2:] == ["enable", "Spoolman.service"]
+
+    @pytest.mark.asyncio
+    async def test_rejects_invalid_name(self):
+        ok, msg = await enable_service("evil; rm -rf /")
+        assert ok is False
+        assert "invalid" in msg
+
+    @pytest.mark.asyncio
+    async def test_none_name(self):
+        ok, _ = await enable_service(None)
+        assert ok is False

@@ -41,6 +41,13 @@ sudo systemctl enable BlocksScreen-updater.service
 sudo systemctl restart BlocksScreen-updater.service || true
 echo_ok "BlocksScreen-updater service installed and started"
 
+echo_info "Installing Spoolman service unit (inactive until the updater provisions it) ..."
+SPOOLMAN_SVC=$(cat "$SCRIPT_PATH/Spoolman.service")
+SPOOLMAN_SVC=${SPOOLMAN_SVC//BS_PRIMARY_HOME/$_BSENV_HOME}
+echo "$SPOOLMAN_SVC" | sudo tee /etc/systemd/system/Spoolman.service >/dev/null
+sudo systemctl daemon-reload
+echo_ok "Spoolman service unit installed"
+
 echo_info "Installing sudoers rules for updater ..."
 SUDOERS_FILE="/etc/sudoers.d/blockscreen-updater"
 SUDOERS_TMP=$(mktemp)
@@ -75,6 +82,10 @@ fi
 # The daemon restarts itself (--no-block) to adopt new updater code after a
 # successful self-update; this service is never in components.yaml.
 _emit_svc_rules BlocksScreen-updater.service
+# Spoolman is provisioned on demand (install_if_missing): the daemon enables its
+# unit after a successful first start so it persists across reboots. Restart
+# rules are already auto-derived above from components.yaml.
+printf 'blocks ALL=(ALL) NOPASSWD: /usr/bin/systemctl enable Spoolman.service\n' >>"$SUDOERS_TMP"
 if sudo visudo -cf "$SUDOERS_TMP" >/dev/null 2>&1; then
     sudo install -m 0440 "$SUDOERS_TMP" "$SUDOERS_FILE"
     echo_ok "Sudoers rules installed"
@@ -196,6 +207,9 @@ git -C "$BS_PATH" config core.hooksPath scripts
 echo_ok "post-merge hook installed"
 
 echo_info "Installing Python requirements ..."
+# Keep pip itself current on each update (best-effort: a failed self-upgrade must
+# not block the requirements install below).
+"$BSENV/bin/pip" install --quiet --upgrade pip 2>/dev/null || true
 apt-get install -y --quiet libsystemd-dev python3-dev 2>/dev/null || true
 # xsetroot is used as belt-and-suspenders cursor hiding alongside the Xorg -nocursor server flag.
 sudo apt-get install -y --quiet x11-xserver-utils 2>/dev/null || true
@@ -205,6 +219,12 @@ sudo apt-get install -y --quiet x11-xserver-utils 2>/dev/null || true
     --upgrade-strategy=only-if-needed \
     -r "$BS_PATH/scripts/requirements.txt" || true
 echo_ok "Python requirements installed"
+
+# uv is the dependency installer Spoolman uses (run from source, not pip-packaged).
+# Provide it in the venv so hooks/Spoolman.sh can provision a missing Spoolman.
+echo_info "Ensuring uv is available for Spoolman provisioning ..."
+"$BSENV/bin/pip" install --quiet --upgrade uv 2>/dev/null || true
+echo_ok "uv ready"
 
 echo_info "Pre-generating framebuffer splash cache ..."
 "$BSENV/bin/python3.11" "$SCRIPT_PATH/bs-splash.py" --precompute 2>/dev/null || true

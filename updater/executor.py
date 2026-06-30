@@ -805,8 +805,14 @@ async def run_hook(
     path: Path | None,
     new_hash: str,
     prev_hash: str,
+    timeout: float = 60.0,
 ) -> tuple[bool, str]:
-    """Run the per-component update hook if it exists."""
+    """Run the per-component update hook if it exists.
+
+    timeout defaults to 60s for update hooks (lightweight: relink units, set
+    flags). Provisioning a missing component passes a much larger budget because
+    a first install may sync a full dependency set.
+    """
     hook = (_HOOKS_DIR / f"{name}.sh").resolve()  # SEC: resolve symlinks
     try:
         hook.relative_to(_HOOKS_DIR.resolve())  # SEC: prevent path traversal
@@ -823,7 +829,16 @@ async def run_hook(
             "PREV_HASH": prev_hash,
         }
     )
-    return await _run([str(hook)], env=env, timeout=60.0)
+    return await _run([str(hook)], env=env, timeout=timeout)
+
+
+async def enable_service(name: str | None) -> tuple[bool, str]:
+    """Enable a systemd unit so a newly provisioned service survives reboot."""
+    if name is None:
+        return (False, "service name is None")
+    if not _SERVICE_RE.match(name):
+        return (False, f"service name {name!r} is invalid")
+    return await _run([SUDO, SYSTEMCTL, "enable", name], timeout=15.0)
 
 
 async def wait_for_service_active(name: str, timeout: float = 90.0) -> bool:

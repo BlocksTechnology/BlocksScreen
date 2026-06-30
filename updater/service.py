@@ -37,6 +37,7 @@ from updater.executor import (
     git_pull,
     git_repair,
     git_reset_to_hash,
+    enable_service,
     restart_service,
     restart_service_noblock,
     run_hook,
@@ -698,9 +699,9 @@ class UpdateService:
             # SEC: world-writable only; group-writable is permitted (blocksscreen group is trusted)
             return (False, "world-writable permissions")
 
-        # pip itself is pinned/owned by bs-bootstrap, not refreshed here: a pip
-        # self-upgrade would mutate the venv on a network round-trip before the
-        # reqs install, adding a failure surface for no in-flow benefit.
+        # Keep pip current on each update. Best-effort: a failed self-upgrade
+        # (e.g. transient network) must not block the requirements install.
+        await _run([pip_path, "install", "--upgrade", "pip", "--quiet"], timeout=120.0)
         return await _run(
             [pip_path, "install", "-r", str(req), "--quiet"], timeout=120.0
         )
@@ -762,7 +763,13 @@ class UpdateService:
             await asyncio.to_thread(shutil.rmtree, component.path, ignore_errors=True)
 
     async def _fail_provision(self, component: ComponentConfig, reason: str) -> bool:
-        """Remove the partial clone, log it to history, and report the failure."""
+        """Remove the partial clone, log it to history, and report the failure.
+
+        A fresh component has no prev_hash and is self-contained, so the clean
+        slate is simply deleting the clone. The service unit (if any) is only
+        enabled after a successful start, so a failed provision never leaves an
+        enabled unit behind.
+        """
         await self._remove_clone(component)
         self._history("install_failed", component.name, reason=reason)
         self._log.warning(
@@ -804,7 +811,7 @@ class UpdateService:
 
             self._cb("on_step", component.name, 3, 4)
             hook_ok, hook_err = await run_hook(
-                component.name, component.path, new_hash, _GIT_EMPTY_TREE
+                component.name, component.path, new_hash, _GIT_EMPTY_TREE, timeout=600.0
             )
             if not hook_ok:
                 self._log.error("%s: provision hook: %s", component.name, hook_err)
@@ -823,6 +830,16 @@ class UpdateService:
                         "%s: provisioned service not active", component.name
                     )
                     return await self._fail_provision(component, "restart_timeout")
+                # Persist across reboots only now that it started cleanly, so a
+                # failed provision never leaves an enabled (and thus boot-looping)
+                # unit. Best-effort: it is already running this session.
+                en_ok, en_err = await enable_service(component.service)
+                if not en_ok:
+                    self._log.warning(
+                        "%s: enable failed (runs now, may not persist): %s",
+                        component.name,
+                        en_err,
+                    )
 
             self._history("install_success", component.name, new_hash=new_hash[:12])
             self._cb("on_component_done", component.name, True)

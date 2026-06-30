@@ -1042,7 +1042,7 @@ class TestInstallDependencies:
 
     @pytest.mark.asyncio
     async def test_runs_pip_when_component_venv_found(self, tmp_path):
-        """Component venv pip: a single `install -r requirements.txt` (no pip self-upgrade)."""
+        """Component venv pip: best-effort pip self-upgrade, then reqs install."""
         comp_path = tmp_path / "mycomp"
         comp_path.mkdir()
         (comp_path / "requirements.txt").write_text("requests\n")
@@ -1058,12 +1058,12 @@ class TestInstallDependencies:
         ):
             ok, _ = await svc._install_dependencies(component)
         assert ok is True
-        assert mock_run.call_count == 1
-        install_cmd = mock_run.call_args_list[0][0][0]
+        assert mock_run.call_count == 2
+        upgrade_cmd = mock_run.call_args_list[0][0][0]
+        assert upgrade_cmd == [venv_pip, "install", "--upgrade", "pip", "--quiet"]
+        install_cmd = mock_run.call_args_list[1][0][0]
         assert install_cmd[0] == venv_pip
         assert "-r" in install_cmd
-        # The pip self-upgrade was removed; only the reqs install runs.
-        assert "--upgrade" not in install_cmd
 
 
 class TestCorruptionDuringUpdate:
@@ -1267,6 +1267,68 @@ class TestProvisionMissingComponent:
         svc._components = [comp]
         result = await svc.check_status()
         assert result["newcomp"].needs_install is True
+
+    @pytest.mark.asyncio
+    async def test_provision_hook_uses_long_timeout(self, tmp_path):
+        comp = self._comp(tmp_path)
+        with (
+            patch("updater.service.git_clone", return_value=(True, "")),
+            patch("updater.service.git_get_hash", return_value="newhash"),
+            patch(
+                "updater.service.UpdateService._install_dependencies",
+                return_value=(True, ""),
+            ),
+            patch("updater.service.run_hook", return_value=(True, "")) as mock_hook,
+        ):
+            svc = UpdateService(callback=MagicMock())
+            svc._components = [comp]
+            await svc.update_component("newcomp")
+        assert mock_hook.call_args.kwargs["timeout"] == 600.0
+
+    @pytest.mark.asyncio
+    async def test_provision_enables_service_after_successful_start(self, tmp_path):
+        comp = self._comp(tmp_path, service="newcomp.service")
+        with (
+            patch("updater.service.git_clone", return_value=(True, "")),
+            patch("updater.service.git_get_hash", return_value="newhash"),
+            patch(
+                "updater.service.UpdateService._install_dependencies",
+                return_value=(True, ""),
+            ),
+            patch("updater.service.run_hook", return_value=(True, "")),
+            patch("updater.service.restart_service", return_value=(True, "")),
+            patch("updater.service.wait_for_service_active", return_value=True),
+            patch(
+                "updater.service.enable_service", return_value=(True, "")
+            ) as mock_enable,
+        ):
+            svc = UpdateService(callback=MagicMock())
+            svc._components = [comp]
+            ok = await svc.update_component("newcomp")
+        assert ok is True
+        mock_enable.assert_called_once_with("newcomp.service")
+
+    @pytest.mark.asyncio
+    async def test_provision_enable_failure_is_best_effort(self, tmp_path):
+        comp = self._comp(tmp_path, service="newcomp.service")
+        cb = MagicMock()
+        with (
+            patch("updater.service.git_clone", return_value=(True, "")),
+            patch("updater.service.git_get_hash", return_value="newhash"),
+            patch(
+                "updater.service.UpdateService._install_dependencies",
+                return_value=(True, ""),
+            ),
+            patch("updater.service.run_hook", return_value=(True, "")),
+            patch("updater.service.restart_service", return_value=(True, "")),
+            patch("updater.service.wait_for_service_active", return_value=True),
+            patch("updater.service.enable_service", return_value=(False, "denied")),
+        ):
+            svc = UpdateService(callback=cb)
+            svc._components = [comp]
+            ok = await svc.update_component("newcomp")
+        assert ok is True
+        cb.on_component_done.assert_called_once_with("newcomp", True)
 
 
 class TestReconcile:
