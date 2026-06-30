@@ -12,8 +12,8 @@ from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_label import BlocksLabel
 from lib.utils.blocks_progressbar import CustomProgressBar
 from lib.utils.display_button import DisplayButton
-from PyQt6 import QtCore, QtGui, QtWidgets
 from lib.utils.flowguard import FlowguardWidget
+from PyQt6 import QtCore, QtGui, QtWidgets
 
 logger = logging.getLogger(__name__)
 
@@ -201,15 +201,15 @@ class JobStatusWidget(QtWidgets.QWidget):
         self.file_metadata = metadata
         self._load_thumbnails(*metadata.get("thumbnail_images", ()))
 
-    @QtCore.pyqtSlot(name="pause_resume_print")
     def pause_resume_print(self) -> None:
         """Handle pause/resume print job button clicked"""
         self.pause_printing_btn.setEnabled(False)
+        QtCore.QTimer.singleShot(
+            10000, lambda: self.pause_printing_btn.setEnabled(True)
+        )
         if self._internal_print_status == "printing":
-            self._internal_print_status = "paused"
             self.print_pause.emit()
-        elif self._internal_print_status == "paused":
-            self._internal_print_status = "printing"
+        if self._internal_print_status == "paused":
             self.print_resume.emit()
 
     def _handle_print_state(self, state: str) -> None:
@@ -222,18 +222,21 @@ class JobStatusWidget(QtWidgets.QWidget):
         if lstate in self._VALID_STATES:
             self._internal_print_status = lstate
             if lstate == "paused":
-                self.pause_printing_btn.setText(" Resume")
+                self.pause_printing_btn.setEnabled(True)
+                self.pause_printing_btn.setText("Resume")
                 self.pause_printing_btn.setPixmap(
                     QtGui.QPixmap(":/ui/media/btn_icons/play.svg")
                 )
                 event_state = "pause"
             elif lstate == "printing":
+                self.pause_printing_btn.setEnabled(True)
                 self.pause_printing_btn.setText("Pause")
                 self.pause_printing_btn.setPixmap(
                     QtGui.QPixmap(":/ui/media/btn_icons/pause.svg")
                 )
                 event_state = "start"
-            self.pause_printing_btn.setEnabled(True)
+
+        if lstate in self._VALID_STATES:
             self.request_query_print_stats.emit({"print_stats": ["filename"]})
             self.call_cancel_panel.emit(False)
             self.show_request.emit()
