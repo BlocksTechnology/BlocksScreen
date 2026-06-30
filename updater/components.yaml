@@ -1,15 +1,9 @@
 poll_interval_minutes: 1440
 
-# Optional per-component keys for auto-provisioning a missing component:
-#   url: https://...        # https-only clone URL (required to provision)
-#   install_if_missing: true  # clone + deps + hook when the path is absent
-# Both can be set here or per-unit in ~/printer_data/config/blockscreen_updater.yaml
-# (merged by name). Without a valid url, install_if_missing is ignored.
-#
-# install_if_missing only fully provisions a component whose install the core
-# flow + a hooks/<name>.sh can complete unattended. It suits self-contained apps
-# (Spoolman: venv + pip + own service) and config-only repos. It does NOT suit
-# components needing interactive/hardware-specific setup or a frontend build.
+# Optional keys (also settable per-unit in
+# ~/printer_data/config/blockscreen_updater.yaml, merged by name):
+#   url: https://...          https-only clone URL (install_if_missing needs it)
+#   install_if_missing: true  clone + deps + hook when the path is absent
 
 components:
   - name: klipper
@@ -29,8 +23,6 @@ components:
     reset_mode: hard
     order: 3
 
-  # Private BlocksTechnology fork: https auto-clone needs credentials, so
-  # install_if_missing is intentionally omitted (the field already has it).
   - name: RF50-Klipper
     type: git
     path: ~/RF50-Klipper
@@ -58,9 +50,8 @@ components:
     reset_mode: hard
     order: 20
 
-  # Self-contained: provisioned by hooks/Spoolman.sh (uv sync from source +
-  # SQLite .env + enable Spoolman.service). BlocksScreen uses Spoolman's REST API
-  # via moonraker, so the backend-only install is sufficient (no web-client build).
+  # Provisioned by hooks/Spoolman.sh (uv sync from source + stub client/dist);
+  # backend-only, used via the moonraker API.
   - name: Spoolman
     type: git
     path: ~/Spoolman
@@ -71,8 +62,6 @@ components:
     order: 21
     install_if_missing: true
 
-  # Private BlocksTechnology repo: https auto-clone needs credentials, so
-  # install_if_missing is intentionally omitted.
   - name: BlocksScreen
     type: git
     path: ~/BlocksScreen

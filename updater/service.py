@@ -699,8 +699,7 @@ class UpdateService:
             # SEC: world-writable only; group-writable is permitted (blocksscreen group is trusted)
             return (False, "world-writable permissions")
 
-        # Keep pip current on each update. Best-effort: a failed self-upgrade
-        # (e.g. transient network) must not block the requirements install.
+        # Keep pip current (best-effort: a failed upgrade must not block reqs).
         await _run([pip_path, "install", "--upgrade", "pip", "--quiet"], timeout=120.0)
         return await _run(
             [pip_path, "install", "-r", str(req), "--quiet"], timeout=120.0
@@ -763,12 +762,10 @@ class UpdateService:
             await asyncio.to_thread(shutil.rmtree, component.path, ignore_errors=True)
 
     async def _fail_provision(self, component: ComponentConfig, reason: str) -> bool:
-        """Remove the partial clone, log it to history, and report the failure.
+        """Remove the partial clone, log, and report failure.
 
-        A fresh component has no prev_hash and is self-contained, so the clean
-        slate is simply deleting the clone. The service unit (if any) is only
-        enabled after a successful start, so a failed provision never leaves an
-        enabled unit behind.
+        No prev_hash to roll back to, so the clean slate is deleting the clone.
+        The unit is enabled only after a clean start, so nothing is left enabled.
         """
         await self._remove_clone(component)
         self._history("install_failed", component.name, reason=reason)
@@ -830,9 +827,8 @@ class UpdateService:
                         "%s: provisioned service not active", component.name
                     )
                     return await self._fail_provision(component, "restart_timeout")
-                # Persist across reboots only now that it started cleanly, so a
-                # failed provision never leaves an enabled (and thus boot-looping)
-                # unit. Best-effort: it is already running this session.
+                # Enable only now it started cleanly (a failed provision must not
+                # leave a boot-looping unit). Best-effort: it already runs now.
                 en_ok, en_err = await enable_service(component.service)
                 if not en_ok:
                     self._log.warning(

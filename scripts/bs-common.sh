@@ -28,10 +28,8 @@ bs_migrate_moonraker_conf() {
 }
 
 # Point Moonraker at a locally-provisioned Spoolman so the UI's spoolman_proxy
-# (server.spoolman.proxy) works. Only acts when Spoolman is actually installed
-# (its venv exists) and the section is absent, so it is safe on boxes that ship
-# their own [spoolman] or have no Spoolman. Returns 0 only when it changed the
-# file, so the caller restarts moonraker.
+# works. Idempotent; only acts when Spoolman is installed and [spoolman] is
+# absent. Returns 0 only on change, so the caller restarts moonraker.
 bs_ensure_spoolman_moonraker() {
     local conf="$1" tag="${2:-bs-common}"
     [ -f "$conf" ] || return 1

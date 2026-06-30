@@ -809,9 +809,8 @@ async def run_hook(
 ) -> tuple[bool, str]:
     """Run the per-component update hook if it exists.
 
-    timeout defaults to 60s for update hooks (lightweight: relink units, set
-    flags). Provisioning a missing component passes a much larger budget because
-    a first install may sync a full dependency set.
+    timeout is 60s for update hooks; provisioning passes a larger budget since a
+    first install may sync a full dependency set.
     """
     hook = (_HOOKS_DIR / f"{name}.sh").resolve()  # SEC: resolve symlinks
     try:
