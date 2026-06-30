@@ -11,9 +11,10 @@ import threading
 from datetime import datetime
 from typing import Literal
 
+from tools.serial_scanner import SerialScanner
+
 HOME = pathlib.Path.home()
-CONFIG_REPO = pathlib.Path.joinpath(HOME, "github", "RF50-Klipper")
-CONFIG_DIR = pathlib.Path.joinpath(HOME, "configs")
+CONFIG_REPO = pathlib.Path.joinpath(HOME, "RF50-Klipper")
 KLIPPER_CONFIG_DIR = pathlib.Path.joinpath(HOME, "printer_data", "config")
 BACKUP_DIR = pathlib.Path(HOME, ".rf50_backups")
 DETECTION_CACHE = pathlib.Path.joinpath(HOME, ".rf50_config.json")
@@ -262,6 +263,20 @@ class ConfigManager:
             )
         return False
 
+    def _cleanup_nested(self) -> None:
+        """Remove accidentally nested config/ directories (2+ levels deep)."""
+        current = self.config_dir
+        for _ in range(10):
+            first = current / "config"
+            if not first.is_dir():
+                break
+            second = first / "config"
+            if not second.is_dir():
+                break
+            shutil.rmtree(second, ignore_errors=True)
+            _logger.warning("Removed nested dir: %s", second)
+            current = first
+
     def get_file_stat(self, root, file):
         """Get file stat"""
         _root = pathlib.Path(root)
@@ -273,7 +288,10 @@ class ConfigManager:
         return file_dir.stat(follow_symlinks=False)
 
     def _get_missing_symlinks(
-        self, root: pathlib.Path | str, repo: pathlib.Path | str
+        self,
+        root: pathlib.Path | str,
+        repo: pathlib.Path | str,
+        mode: Literal[0, 1] = 0,
     ) -> list[pathlib.Path]:
         """Scan the `root` directory for missing symbolic links compared
         against files on `repo` directory.
@@ -291,6 +309,15 @@ class ConfigManager:
         _resolved: set[str] = {
             f.resolve().as_posix() for f in _root.rglob("*") if f.is_symlink()
         }
+
+        if mode:
+            for f in list(_root.rglob("*")):
+                if f.is_symlink() and f.is_dir():
+                    resolved_dir = f.resolve()
+                    if resolved_dir.exists():
+                        for sub in resolved_dir.rglob("*"):
+                            _resolved.add(sub.as_posix())
+
         _missing = []
         for d in _repo.rglob("*.cfg"):
             # ignore copy files
@@ -329,20 +356,79 @@ class ConfigManager:
             # symlinks each file, ensure correct directories
             if not mode:
                 for src in symlink_list:
-                    src_rel = src.relative_to(src.home())
-                    target = self.config_dir / pathlib.Path(*src_rel.parts[1:])
+                    src_rel = src.relative_to(self.repo)
+                    target = self.config_dir / src_rel
+
                     if target.exists() and target.is_symlink():
                         continue
                     ensure_dir(pathlib.Path(*target.parts[:-1]))
                     target.symlink_to(src)
                 return
-            # TODO: Second Mode -> symlinks directories entire contents of the repo
+            elif mode:
+                for entry in sorted(
+                    self.repo.iterdir(), key=lambda p: (not p.is_dir(), p.name)
+                ):
+                    name = entry.name
+                    if name.startswith("."):
+                        continue
+                    target = self.config_dir / name
+                    if target.exists():
+                        continue
+                    ensure_dir(target.parent)
+                    if entry.is_dir():
+                        target.symlink_to(entry.resolve(), target_is_directory=True)
+                        _logger.info("Directory symlink: %s -> %s", target, entry)
+                    elif entry.is_file() and name not in self.cpy_files:
+                        target.symlink_to(entry.resolve())
+                        _logger.info("File symlink %s -> %s", target, entry)
 
         except Exception as e:
             _logger.error(
                 "Caught exception while creating symbolic links for configuration files: %s"
                 % e
             )
+
+    def _section_blocks(self, lines):
+        blocks = []
+        name = None
+        block = []
+        for line in lines:
+            m = re.match("^\[\s*(.+?)\s*\]\s*$", line)
+            if m:
+                if block:
+                    blocks.append((name, block))
+                name = m.group(1)
+                block = [line]
+            else:
+                block.append(line)
+        if block:
+            blocks.append((name, block))
+        return blocks
+
+    def _parse_save_config(self, lines):
+        sections = []
+        name = None
+        block = []
+        for line in lines:
+            m = re.match(r"^#\*#\s*\[\s*(.+?)\s*\]\s*$", line)
+            if m:
+                if block:
+                    sections.append((name, block))
+                name = m.group(1)
+                block = [line]
+            else:
+                block.append(line)
+        if block:
+            sections.append((name, block))
+        return sections
+
+    def _parse_save_config_keys(self, block_lines):
+        keys = {}
+        for line in block_lines:
+            m = re.match(r"^#\*#\s+(\S+)\s*=\s*(.+)$", line)
+            if m:
+                keys[m.group(1)] = m.group(2).strip()
+        return keys
 
     def merge_cfg(
         self,
@@ -354,6 +440,7 @@ class ConfigManager:
         try:
             _sfl = src_file.read_text(encoding="utf-8")
             _tfl = target_file.read_text(encoding="utf-8")
+
             with self.mergeLock:
                 if marker:
                     if marker in _tfl:
@@ -362,42 +449,93 @@ class ConfigManager:
                             i for i, line in enumerate(tfl_lines) if marker in line
                         )
                         tgt_header = tfl_lines[:idx]
-                        tgt_save = "".join(tfl_lines[idx:])
+                        tgt_save = tfl_lines[idx:]  # keep as lines for merging
 
-                        def _section_blocks(lines):
-                            blocks = []
-                            name = None
-                            block = []
-                            for line in lines:
-                                m = re.match(r"^\[\s*(.+?)\s*\]\s*$", line)
-                                if m:
-                                    if block:
-                                        blocks.append((name, block))
-                                    name = m.group(1)
-                                    block = [line]
-                                else:
-                                    block.append(line)
-                            if block:
-                                blocks.append((name, block))
-                            return blocks
+                        # Split source at marker too (it may or may not have one)
+                        if marker in _sfl:
+                            sfl_lines = _sfl.splitlines(keepends=True)
+                            src_idx = next(
+                                i for i, line in enumerate(sfl_lines) if marker in line
+                            )
+                            src_header_lines = sfl_lines[:src_idx]
+                            src_save = sfl_lines[src_idx:]  # source's SAVE_CONFIG block
+                        else:
+                            src_header_lines = _sfl.splitlines(keepends=True)
+                            src_save = []
 
-                        src_blocks = _section_blocks(_sfl.splitlines(keepends=True))
-                        tgt_blocks = _section_blocks(tgt_header)
+                        # --- Merge the header (before marker) ---
+                        src_blocks = self._section_blocks(src_header_lines)
+                        tgt_blocks = self._section_blocks(tgt_header)
 
                         tgt_mcu = {
-                            n: b for n, b in tgt_blocks if n and n.startswith("mcu")
+                            n: b
+                            for n, b in tgt_blocks
+                            if n and (n.startswith("mcu") or n.startswith("beacon"))
                         }
 
-                        merged_lines = []
+                        merged_header_lines = []
                         for name, block in src_blocks:
-                            if name and name.startswith("mcu") and name in tgt_mcu:
-                                merged_lines.extend(tgt_mcu[name])
+                            if (
+                                name
+                                and (
+                                    name.startswith("mcu") or name.startswith("beacon")
+                                )
+                                and name in tgt_mcu
+                            ):
+                                merged_header_lines.extend(tgt_mcu[name])
                             else:
-                                merged_lines.extend(block)
+                                merged_header_lines.extend(block)
 
-                        merged = "".join(merged_lines) + tgt_save
+                        # --- Merge the SAVE_CONFIG block (after marker) ---
+                        # Strategy: target wins for existing keys/sections,
+                        # source contributes only new sections or new keys.
+                        tgt_sc_sections = self._parse_save_config(tgt_save)
+                        src_sc_sections = (
+                            self._parse_save_config(src_save) if src_save else []
+                        )
+
+                        # Build a lookup of target sections by name
+                        tgt_sc_map = {
+                            n: block for n, block in tgt_sc_sections if n is not None
+                        }
+                        src_sc_map = {
+                            n: block for n, block in src_sc_sections if n is not None
+                        }
+
+                        merged_save_lines = []
+
+                        # First: emit all target sections (they take priority)
+                        for name, block in tgt_sc_sections:
+                            if name is None:
+                                # This is the preamble (marker line + comments)
+                                merged_save_lines.extend(block)
+                            else:
+                                merged_save_lines.extend(block)
+                                # Check if source has extra keys not in target for this section
+                                if name in src_sc_map:
+                                    tgt_keys = self._parse_save_config_keys(block)
+                                    src_keys = self._parse_save_config_keys(
+                                        src_sc_map[name]
+                                    )
+                                    for k, v in src_keys.items():
+                                        if k not in tgt_keys:
+                                            merged_save_lines.append(
+                                                f"#*# \t{k} = {v}\n"
+                                            )
+
+                        # Then: append any sections that exist only in source
+                        for name, block in src_sc_sections:
+                            if name is not None and name not in tgt_sc_map:
+                                merged_save_lines.extend(block)
+
+                        merged = "".join(merged_header_lines) + "".join(
+                            merged_save_lines
+                        )
+
                     else:
+                        # Target has no SAVE_CONFIG block yet — use source as-is
                         merged = _sfl
+
                 else:
                     src_cfg = configparser.ConfigParser(strict=False)
                     src_cfg.read_string(_sfl)
@@ -407,16 +545,16 @@ class ConfigManager:
 
                     appendix = []
                     for section in src_cfg.sections():
-                        if section.startswith("mcu"):
+                        if section.startswith("mcu") or section.startswith("beacon"):
                             continue
                         if not target_cfg.has_section(section):
                             appendix.append(
-                                (section, True, list(src_cfg.items(section)))
+                                (section, True, list(src_cfg.items(section, raw=True)))
                             )
                         else:
                             sec_missing = [
                                 (o, v)
-                                for o, v in src_cfg.items(section)
+                                for o, v in src_cfg.items(section, raw=True)
                                 if not target_cfg.has_option(section, o)
                             ]
                             if sec_missing:
@@ -440,13 +578,15 @@ class ConfigManager:
                             if is_new:
                                 lines.append(f"[{section}]")
                             for opt, val in opts:
-                                lines.append(f"{opt}: {val}")
+                                lines.append(f"{opt}= {val}")
                         text = "\n".join(lines)
                         if _tfl and not _tfl.endswith("\n"):
                             _tfl += "\n"
                         merged = _tfl + text + "\n"
                     else:
                         merged = _tfl
+
+            merged = self._fix_beacon_serial(merged)
             if _tfl != merged:
                 target_file.write_text(merged, encoding="utf-8")
             return True
@@ -472,9 +612,9 @@ class ConfigManager:
                 src_file = min(src_cpy_files, key=lambda p: len(p.parents))
                 target_files = self.config_fi_name.get(f, [])
                 if not target_files:
-                    _src_file = src_file.relative_to(src_file.home())
-                    _src_ = pathlib.Path(*_src_file.parts[1:])
-                    target = self.config_dir / _src_
+                    _src_file = src_file.relative_to(self.repo)
+                    target = self.config_dir / _src_file
+
                     shutil.copy2(src_file, target)
                     _logger.info("File created")
                     continue
@@ -501,14 +641,108 @@ class ConfigManager:
         except Exception as e:
             _logger.info("Caught exception while cpy files: %s" % e)
 
+    def cmp_file(self, src, target) -> bool:
+        src = pathlib.Path(src)
+        target = pathlib.Path(target)
+        if not (src.exists() and src.is_file()):
+            return False
+        if not (target.exists() and target.is_file()):
+            return False
+        return get_file_checksum(src) == get_file_checksum(target)
+
+    def cmp_cpy_files(self) -> list[bool]:
+        _cmp: list[bool] = []
+        for f in self.cpy_files:
+            src_cpy_files = self.repo_fi_name.get(f, [])
+            if not src_cpy_files:
+                _cmp.append(False)
+                continue
+            src_file = min(src_cpy_files, key=lambda p: len(p.parents))
+            target_files = self.config_fi_name.get(f, [])
+            if not target_files:
+                _cmp.append(False)
+                continue
+
+            target = min(target_files, key=lambda p: len(p.parents))
+            if not target.exists():
+                _cmp.append(False)
+                continue
+            chk_src = get_file_checksum(src_file)
+            chk_target = get_file_checksum(target)
+            _cmp.append(chk_src == chk_target)
+        return _cmp
+
+    def check_nested(self) -> bool:
+        """Checks if machines printer directory has nested config dirs"""
+        depth = 0
+        current = self.config_dir
+        for _ in range(10):
+            candidate = current / "config"
+            if not candidate.is_dir():
+                break
+            depth += 1
+            current = candidate
+        return depth > 1
+
+    def _fix_beacon_serial(self, config_text: str) -> str:
+        """Update [beacon] serial option with scanned device path if missing/empty."""
+        if not config_text.strip():
+            return config_text
+
+        lines = config_text.splitlines(keepends=True)
+        beacon_header_idx = None
+        serial_missing = True
+        serial_is_empty = False
+
+        for i, line in enumerate(lines):
+            stripped = line.strip()
+            if re.match(r"^\[\s*beacon\s*\]\s*$", stripped, re.IGNORECASE):
+                beacon_header_idx = i
+            elif beacon_header_idx is not None:
+                if re.match(r"^\[.*\]\s*$", stripped):
+                    break
+                m = re.match(r"^\s*serial\s*[:=]\s*(.*)$", stripped)
+                if m:
+                    serial_missing = False
+                    if not m.group(1).strip():
+                        serial_is_empty = True
+                    else:
+                        return config_text
+
+        if beacon_header_idx is None or (not serial_missing and not serial_is_empty):
+            return config_text
+
+        scanner = SerialScanner()
+        for dev in scanner.scan():
+            if "beacon" in dev.symlink_name.lower() or "beacon" in dev.name.lower():
+                serial_line = f"serial: {dev.symlink}\n"
+                if serial_is_empty:
+                    for j in range(beacon_header_idx + 1, len(lines)):
+                        if re.match(r"^\s*serial\s*[:=]\s*$", lines[j].strip()):
+                            lines[j] = serial_line
+                            return "".join(lines)
+                lines.insert(beacon_header_idx + 1, serial_line)
+                _logger.info("Beacon serial set to %s", dev.symlink)
+                return "".join(lines)
+
+        _logger.warning("No beacon device found via serial scan")
+        return config_text
+
     def sync(self) -> None:
         """Synchronizes configuration repo with the
         machines configuration"""
         try:
-            self.cleanup_broken_symlinks(self.config_dir)
             _missing = self._get_missing_symlinks(self.config_dir, self.repo)
-            self._symlink_config(_missing)
-            self._cpy_cfg_files()
+            _logger.info(_missing)
+            if _missing or any(self.cmp_cpy_files()):
+                if self.check_nested():
+                    self._cleanup_nested()
+
+                self.cleanup_broken_symlinks(self.config_dir)
+                self._symlink_config(_missing)
+                self._cpy_cfg_files()
+            else:
+                _logger.info("Configuration correct, proceding")
         except NotADirectoryError as e:
             _logger.error("%s" % e)
         except FileNotFoundError as e:
