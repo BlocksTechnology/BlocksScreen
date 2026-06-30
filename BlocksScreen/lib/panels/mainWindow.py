@@ -460,8 +460,11 @@ class MainWindow(QtWidgets.QMainWindow):
     def on_cancel_print(self):
         """Slot for cancel print signal"""
         self.enable_tab_bar()
-        self.ui.extruder_temp_display.clicked.disconnect()
-        self.ui.bed_temp_display.clicked.disconnect()
+        try:
+            self.ui.extruder_temp_display.clicked.disconnect()
+            self.ui.bed_temp_display.clicked.disconnect()
+        except TypeError:
+            pass
         self.ui.extruder_temp_display.clicked.connect(
             lambda: self.global_change_page(
                 self.ui.main_content_widget.indexOf(self.ui.controlTab),
@@ -1152,8 +1155,11 @@ class MainWindow(QtWidgets.QMainWindow):
         if etype == self._EVT_PRINT_START:
             self.print_status = "printing"
             self.disable_tab_bar()
-            self.ui.extruder_temp_display.clicked.disconnect()
-            self.ui.bed_temp_display.clicked.disconnect()
+            try:
+                self.ui.extruder_temp_display.clicked.disconnect()
+                self.ui.bed_temp_display.clicked.disconnect()
+            except TypeError:
+                pass
             self.ui.extruder_temp_display.clicked.connect(
                 lambda: self.global_change_page(
                     self.ui.main_content_widget.indexOf(self.ui.printTab),
@@ -1177,8 +1183,11 @@ class MainWindow(QtWidgets.QMainWindow):
             if etype == self._EVT_PRINT_CANCELLED:
                 self.handle_cancel_print()
             self.enable_tab_bar()
-            self.ui.extruder_temp_display.clicked.disconnect()
-            self.ui.bed_temp_display.clicked.disconnect()
+            try:
+                self.ui.extruder_temp_display.clicked.disconnect()
+                self.ui.bed_temp_display.clicked.disconnect()
+            except TypeError:
+                pass
             self.ui.extruder_temp_display.clicked.connect(
                 lambda: self.global_change_page(
                     self.ui.main_content_widget.indexOf(self.ui.controlTab),
