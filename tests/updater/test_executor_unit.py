@@ -30,6 +30,7 @@ from updater.executor import (
     git_reset_to_hash,
     git_prune_extra_remotes,
     restart_service,
+    restart_service_noblock,
 )
 
 
@@ -621,19 +622,70 @@ class TestRestartService:
         assert ok is False
 
     @pytest.mark.asyncio
-    async def test_systemctl_fail_falls_back_to_sigterm(self):
-        # systemctl restart fails, then show MainPID succeeds, pgrep succeeds
-        fail_proc = _make_proc(1, b"", b"permission denied\n")
-        pid_proc = _make_proc(0, b"1234\n", b"")
-        pgrep_proc = _make_proc(0, b"1235\n", b"")
-        exec_mock = AsyncMock(side_effect=[fail_proc, pid_proc, pgrep_proc])
-        with (
-            patch("asyncio.create_subprocess_exec", exec_mock),
-            patch("os.kill"),
-        ):
+    async def test_restart_fail_then_reset_failed_and_retry_succeeds(self):
+        # restart fails (e.g. start-limit), reset-failed runs, retry restart succeeds.
+        fail = _make_proc(1, b"", b"start request repeated too quickly\n")
+        reset = _make_proc(0, b"", b"")
+        retry = _make_proc(0, b"", b"")
+        exec_mock = AsyncMock(side_effect=[fail, reset, retry])
+        with patch("asyncio.create_subprocess_exec", exec_mock):
             ok, msg = await restart_service("klipper.service")
         assert ok is True
-        assert "SIGTERM" in msg
+        assert "reset-failed" in msg
+        assert exec_mock.call_count == 3  # restart, reset-failed, restart
+
+    @pytest.mark.asyncio
+    async def test_restart_fail_then_retry_also_fails(self):
+        fail = _make_proc(1, b"", b"boom\n")
+        reset = _make_proc(0, b"", b"")
+        retry_fail = _make_proc(1, b"", b"still failing\n")
+        exec_mock = AsyncMock(side_effect=[fail, reset, retry_fail])
+        with patch("asyncio.create_subprocess_exec", exec_mock):
+            ok, _ = await restart_service("klipper.service")
+        assert ok is False
+
+    @pytest.mark.asyncio
+    async def test_no_systemctl_kill_used(self):
+        # Regression: the systemctl-kill fallback must be gone (it needed a
+        # password and did not clear a start-limit). reset-failed is used instead.
+        procs = [
+            _make_proc(1, b"", b"boom\n"),  # restart fails
+            _make_proc(0, b"", b""),  # reset-failed
+            _make_proc(0, b"", b""),  # retry restart
+        ]
+        calls: list[list[str]] = []
+
+        async def _spawn(*args, **kwargs):
+            calls.append([str(a) for a in args])
+            return procs[len(calls) - 1]
+
+        with patch("asyncio.create_subprocess_exec", side_effect=_spawn):
+            await restart_service("klipper.service")
+        flat = [tok for c in calls for tok in c]
+        assert "kill" not in flat
+        assert "reset-failed" in flat
+
+
+class TestRestartServiceNoblock:
+    @pytest.mark.asyncio
+    async def test_uses_no_block_flag(self):
+        calls: list[list[str]] = []
+
+        async def _spawn(*args, **kwargs):
+            calls.append([str(a) for a in args])
+            return _make_proc(0, b"", b"")
+
+        with patch("asyncio.create_subprocess_exec", side_effect=_spawn):
+            ok, _ = await restart_service_noblock("BlocksScreen.service")
+        assert ok is True
+        flat = [tok for c in calls for tok in c]
+        assert "--no-block" in flat and "restart" in flat
+        assert "BlocksScreen.service" in flat
+
+    @pytest.mark.asyncio
+    async def test_invalid_name_rejected(self):
+        ok, _ = await restart_service_noblock("bad name")
+        assert ok is False
 
 
 class TestCheckGitStatus:
@@ -775,3 +827,40 @@ class TestCorruption:
             ok, msg = await git_repair(tmp_path)
         assert ok is False
         assert "still corrupt" in msg
+
+
+class TestSelfUpdateEnvStamp:
+    def test_clean_env_marks_self_update(self):
+        from updater.executor import _make_clean_env
+
+        env = _make_clean_env()
+        assert env["BS_UPDATER_SELF_UPDATE"] == "1"
+        assert env["BS_UPDATER_RESTART_SENTINEL"].endswith("updater-restart-needed")
+
+
+class TestVerifyUpdaterImportable:
+    @pytest.mark.asyncio
+    async def test_returns_false_for_missing_path(self):
+        from updater.executor import verify_updater_importable
+
+        assert await verify_updater_importable(Path("/no/such/path")) is False
+
+    @pytest.mark.asyncio
+    async def test_true_when_import_subprocess_succeeds(self, tmp_path):
+        from updater.executor import verify_updater_importable
+
+        with patch(
+            "updater.executor._run", new=AsyncMock(return_value=(True, ""))
+        ) as mock_run:
+            assert await verify_updater_importable(tmp_path) is True
+        assert mock_run.await_args.kwargs["cwd"] == tmp_path
+
+    @pytest.mark.asyncio
+    async def test_false_when_import_subprocess_fails(self, tmp_path):
+        from updater.executor import verify_updater_importable
+
+        with patch(
+            "updater.executor._run",
+            new=AsyncMock(return_value=(False, "ModuleNotFoundError: sdbus")),
+        ):
+            assert await verify_updater_importable(tmp_path) is False
