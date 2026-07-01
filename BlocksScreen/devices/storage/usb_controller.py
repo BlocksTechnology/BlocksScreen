@@ -40,14 +40,12 @@ class USBManager(QtCore.QObject):
     def __init__(self, parent: QtCore.QObject, gcodes_dir: str | None) -> None:
         super().__init__(parent)
 
-        self.gcodes_dir = (
+        self.gcodes_dir: pathlib.Path = (
             pathlib.Path(gcodes_dir)
             if gcodes_dir
             else pathlib.Path.home() / "printer_data" / "gcodes"
         )
 
-        # os.path.expanduser("~/printer_data/gcodes/")
-        # if not (os.path.isdir(self.gcodes_dir) and os.path.exists(self.gcodes_dir)):
         if not (self.gcodes_dir.is_dir() and self.gcodes_dir.exists()):
             logging.info("Provided gcodes directory does not exist.")
 
