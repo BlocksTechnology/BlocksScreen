@@ -189,21 +189,21 @@ class ControlTab(QtWidgets.QStackedWidget):
         self.panel.extrude_select_feedrate_low_btn.toggled.connect(
             partial(
                 self.handle_toggle_extrude_feedrate,
-                caller=self.panel.extrude_select_feedrate_2_btn,
+                caller=self.panel.extrude_select_feedrate_low_btn,
                 value=self.extrude_list[0],
             )
         )
         self.panel.extrude_select_feedrate_middle_btn.toggled.connect(
             partial(
                 self.handle_toggle_extrude_feedrate,
-                caller=self.panel.extrude_select_feedrate_extrude_select_feedrate_8_btn4_btn,
+                caller=self.panel.extrude_select_feedrate_middle_btn,
                 value=self.extrude_list[1],
             )
         )
         self.panel.extrude_select_feedrate_high_btn.toggled.connect(
             partial(
                 self.handle_toggle_extrude_feedrate,
-                caller=self.panel.extrude_select_feedrate_8_btn,
+                caller=self.panel.extrude_select_feedrate_high_btn,
                 value=self.extrude_list[2],
             )
         )
