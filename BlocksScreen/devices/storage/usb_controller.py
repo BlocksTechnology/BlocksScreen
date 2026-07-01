@@ -1,5 +1,4 @@
 import logging
-import os
 import typing
 import pathlib
 from PyQt6 import QtCore
