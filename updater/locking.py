@@ -52,7 +52,7 @@ def process_lock() -> Iterator[bool]:
     """Acquire the shared updater lock non-blocking.
 
     Yields True if acquired, False if another updater process (daemon or CLI)
-    holds it. The fd stays open for the whole `with` block — closing it on exit
+    holds it. The fd stays open for the whole `with` block - closing it on exit
     is what releases the lock.
     """
     try:

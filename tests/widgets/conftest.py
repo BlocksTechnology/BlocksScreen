@@ -1,21 +1,33 @@
 import importlib.util
 import sys
+import types
 from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
 from PyQt6 import QtWidgets
 
-# Load real events module from its app-side location.
-_events_path = Path(__file__).parents[2] / "BlocksScreen" / "events.py"
-_spec = importlib.util.spec_from_file_location("events", _events_path)
-_events_mod = importlib.util.module_from_spec(_spec)  # type: ignore[arg-type]
-_spec.loader.exec_module(_events_mod)  # type: ignore[union-attr]
-sys.modules["events"] = _events_mod
+_project_root = Path(__file__).resolve().parent.parent.parent
+# Add project root (not BlocksScreen/) — adding BlocksScreen/ would cause
+# BlocksScreen.py to shadow the BlocksScreen namespace package.
+if str(_project_root) not in sys.path:
+    sys.path.insert(0, str(_project_root))
 
-# Stub bare lib.* imports — connectionPage uses these without the BlocksScreen
-# prefix (app is run from inside BlocksScreen/).  Tests use BlocksScreen.* paths
-# so these bare names are never on sys.path.
+for _pkg in ("lib", "lib.panels", "lib.panels.widgets", "lib.utils"):
+    sys.modules.pop(_pkg, None)
+
+_lib_mod = types.ModuleType("lib")
+_lib_mod.__path__ = [str(_project_root / "BlocksScreen" / "lib")]
+_lib_mod.__package__ = "lib"
+sys.modules["lib"] = _lib_mod
+
+for _mod_name in ("events", "helper_methods"):
+    _mod_path = _project_root / "BlocksScreen" / f"{_mod_name}.py"
+    _spec = importlib.util.spec_from_file_location(_mod_name, _mod_path)
+    _mod = importlib.util.module_from_spec(_spec)  # type: ignore[arg-type]
+    _spec.loader.exec_module(_mod)  # type: ignore[union-attr]
+    sys.modules[_mod_name] = _mod
+
 _moonraker_stub = MagicMock()
 _moonraker_stub.MoonWebSocket = MagicMock
 sys.modules.setdefault("lib.moonrakerComm", _moonraker_stub)
