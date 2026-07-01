@@ -85,6 +85,9 @@ class JobStatusWidget(QtWidgets.QWidget):
         super().__init__(parent)
         self.thumbnail_graphics = []
         self.layer_fallback = False
+        self.total_layer_reported = False
+        self._displayed_layer = 0
+        self._pending_layer = 0
         self._setupUI()
         self.cancel_print_dialog = BasePopup(self, floating=True)
         self.tune_menu_btn.clicked.connect(self.tune_clicked.emit)
@@ -96,25 +99,21 @@ class JobStatusWidget(QtWidgets.QWidget):
         """Toggle thumbnail expansion"""
         if not self.thumbnail_view.scene():
             return
-        if not self.thumbnail_view.isVisible():
-            self.thumbnail_view.show()
-            self.progressWidget.hide()
-            self.contentWidget.hide()
-            self.printing_progress_bar.hide()
-            self.btnWidget.hide()
-            self.headerWidget.hide()
-            self.flowrateWidget.hide()
-            return
-        self.thumbnail_view.hide()
-        self.progressWidget.show()
-        self.contentWidget.show()
-        self.printing_progress_bar.show()
-        self.flowrateWidget.show()
-        self.btnWidget.show()
-        self.headerWidget.show()
+        expand = not self.thumbnail_view.isVisible()
+        self.thumbnail_view.setVisible(expand)
+        for widget in (
+            self.progressWidget,
+            self.contentWidget,
+            self.printing_progress_bar,
+            self.flowrateWidget,
+            self.btnWidget,
+            self.headerWidget,
+        ):
+            widget.setVisible(not expand)
 
     def showEvent(self, a0) -> None:
         """Reimplemented method, handle `show` Event"""
+        super().showEvent(a0)
         if self._current_file_name:
             self.request_file_info.emit(self._current_file_name)
 
@@ -167,10 +166,12 @@ class JobStatusWidget(QtWidgets.QWidget):
             "Are you sure you \n want to cancel \n the current print job?"
         )
         try:
-            self.cancel_print_dialog.accepted.disconnect(self.print_cancel)
+            self.cancel_print_dialog.accepted.connect(
+                self.print_cancel,
+                QtCore.Qt.ConnectionType.UniqueConnection,  # type: ignore
+            )
         except TypeError:
             pass
-        self.cancel_print_dialog.accepted.connect(self.print_cancel)
         self.cancel_print_dialog.open()
 
     @QtCore.pyqtSlot(str, name="on_print_start")
@@ -179,6 +180,9 @@ class JobStatusWidget(QtWidgets.QWidget):
         self._current_file_name = file
         self.js_file_name_label.setText(self._current_file_name)
         self.layer_display_button.setText("0")
+        self.total_layer_reported = False
+        self._displayed_layer = 0
+        self._pending_layer = 0
         self.print_time_display_button.setText("?")
         self.printing_progress_bar.reset()
         self._print_duration = 0.0
@@ -196,6 +200,7 @@ class JobStatusWidget(QtWidgets.QWidget):
         """
         layer_count = metadata.get("layer_count", -1)
         self.total_layers = str(layer_count) if layer_count >= 0 else "---"
+        self.total_layer_reported = layer_count >= 0
         self.layer_display_button.setText("0")
         self.layer_display_button.secondary_text = self.total_layers
         self.file_metadata = metadata
@@ -218,8 +223,9 @@ class JobStatusWidget(QtWidgets.QWidget):
         """
         lstate = state.lower()
         event_state = lstate
+        is_valid = lstate in self._VALID_STATES
         is_invalid = lstate in self._INVALID_STATES
-        if lstate in self._VALID_STATES:
+        if is_valid:
             self._internal_print_status = lstate
             if lstate == "paused":
                 self.pause_printing_btn.setEnabled(True)
@@ -235,8 +241,6 @@ class JobStatusWidget(QtWidgets.QWidget):
                     QtGui.QPixmap(":/ui/media/btn_icons/pause.svg")
                 )
                 event_state = "start"
-
-        if lstate in self._VALID_STATES:
             self.request_query_print_stats.emit({"print_stats": ["filename"]})
             self.call_cancel_panel.emit(False)
             self.show_request.emit()
@@ -251,6 +255,9 @@ class JobStatusWidget(QtWidgets.QWidget):
             self._internal_print_status = ""
             self._current_file_name = ""
             self.total_layers = "?"
+            self.total_layer_reported = False
+            self._displayed_layer = 0
+            self._pending_layer = 0
             self._print_duration = 0.0
             self.file_metadata = None
         # Send Event on Print state
@@ -261,11 +268,14 @@ class JobStatusWidget(QtWidgets.QWidget):
             )
 
     @QtCore.pyqtSlot(str, dict, name="flowguard_update")
-    def on_flowguard_update(self, str, dict):
+    def on_flowguard_update(self, field: str, value: dict) -> None:
         """Handle flowguard update"""
-        self.flowrate.setValue(dict["level"])
-        self.flowrate.set_max_clog(dict["max_clog"])
-        self.flowrate.set_max_tangle(dict["max_tangle"])
+        if "level" in value:
+            self.flowrate.setValue(value["level"])
+        if "max_clog" in value:
+            self.flowrate.set_max_clog(value["max_clog"])
+        if "max_tangle" in value:
+            self.flowrate.set_max_tangle(value["max_tangle"])
 
     @QtCore.pyqtSlot(str, dict, name="on_print_stats_update")
     @QtCore.pyqtSlot(str, float, name="on_print_stats_update")
@@ -293,12 +303,17 @@ class JobStatusWidget(QtWidgets.QWidget):
                 if value["total_layer"] is not None:
                     self.total_layers = value["total_layer"]
                     self.layer_display_button.secondary_text = str(self.total_layers)
+                    self.total_layer_reported = True
                 else:
                     self.total_layers = "---"
+                    self.total_layer_reported = False
 
             if "current_layer" in value:
                 if value["current_layer"] is not None:
-                    self.layer_display_button.setText(f"{int(value['current_layer'])}")
+                    _reported_layer = int(value["current_layer"])
+                    self.layer_display_button.setText(str(_reported_layer))
+                    self._displayed_layer = _reported_layer
+                    self._pending_layer = _reported_layer
                     self.layer_fallback = False
                 else:
                     self.layer_display_button.setText("---")
@@ -307,7 +322,7 @@ class JobStatusWidget(QtWidgets.QWidget):
             # print_duration tracked regardless of visibility (gates Z fallback)
             if "print_duration" in field:
                 self._print_duration = value
-            if self.isVisible() and "total_duration" in field:
+            elif self.isVisible() and "total_duration" in field:
                 _time = estimate_print_time(int(value))
                 _print_time_string = (
                     f"{_time[0]}Day {_time[1]}H {_time[2]}min {_time[3]} s"
@@ -344,11 +359,10 @@ class JobStatusWidget(QtWidgets.QWidget):
         first_layer_height = float(meta.get("first_layer_height", 0))
         if layer_height <= 0:
             return
-        # Mainsail getPrintMaxLayers fallback
         _max_layers = calculate_max_layers(
             object_height, layer_height, first_layer_height
         )
-        if _max_layers > 0:
+        if not self.total_layer_reported and _max_layers > 0:
             self.layer_display_button.secondary_text = str(_max_layers)
         _current_layer = calculate_current_layer(
             z_position=value[2],
@@ -356,7 +370,14 @@ class JobStatusWidget(QtWidgets.QWidget):
             first_layer_height=first_layer_height,
             max_layers=_max_layers,
         )
-        self.layer_display_button.setText(str(_current_layer))
+        advance = (
+            _current_layer > self._displayed_layer
+            and _current_layer <= self._pending_layer
+        )
+        if advance:
+            self._displayed_layer = _current_layer
+            self.layer_display_button.setText(str(_current_layer))
+        self._pending_layer = _current_layer
 
     @QtCore.pyqtSlot(str, float, name="virtual_sdcard_update")
     @QtCore.pyqtSlot(str, bool, name="virtual_sdcard_update")

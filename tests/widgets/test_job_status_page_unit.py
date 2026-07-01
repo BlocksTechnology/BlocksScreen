@@ -195,9 +195,42 @@ class TestOnGcodeMoveUpdate:
 
     def test_calculates_layer_from_z(self, widget):
         self._ready_widget(widget)
-        # z=0.4, layer_height=0.2, first=0.2 -> ceil ((0.4-0.2)/ 0.2 + 1) = 2
+        # z=0.4 -> layer 2; needs two samples for Z to settle before it commits.
+        widget.on_gcode_move_update("gcode_position", [0, 0, 0.4, 0])
         widget.on_gcode_move_update("gcode_position", [0, 0, 0.4, 0])
         assert widget.layer_display_button.text() == "2"
+
+    def test_transient_z_hop_does_not_bump_layer(self, widget):
+        """A one-off Z rise (travel/Z-hop) must not advance the layer."""
+        self._ready_widget(widget)
+        # Settle at layer 2 (z=0.4).
+        widget.on_gcode_move_update("gcode_position", [0, 0, 0.4, 0])
+        widget.on_gcode_move_update("gcode_position", [0, 0, 0.4, 0])
+        assert widget.layer_display_button.text() == "2"
+        # Single hop up to z=1.0 (would compute layer 5) then back to 0.4.
+        widget.on_gcode_move_update("gcode_position", [0, 0, 1.0, 0])
+        widget.on_gcode_move_update("gcode_position", [0, 0, 0.4, 0])
+        assert widget.layer_display_button.text() == "2"
+
+    def test_layer_never_regresses(self, widget):
+        """The displayed layer must not decrease within a print."""
+        self._ready_widget(widget)
+        widget.on_gcode_move_update("gcode_position", [0, 0, 0.8, 0])  # layer 4
+        widget.on_gcode_move_update("gcode_position", [0, 0, 0.8, 0])
+        assert widget.layer_display_button.text() == "4"
+        # Z drops (e.g. first move of an adaptive/second object) -> keep 4.
+        widget.on_gcode_move_update("gcode_position", [0, 0, 0.4, 0])
+        widget.on_gcode_move_update("gcode_position", [0, 0, 0.4, 0])
+        assert widget.layer_display_button.text() == "4"
+
+    def test_reported_total_layer_not_overridden_by_estimate(self, widget):
+        """Klipper-reported total_layer wins over the geometry estimate."""
+        self._ready_widget(widget)
+        widget.on_print_stats_update("info", {"total_layer": 999})
+        assert widget.total_layer_reported is True
+        widget.on_gcode_move_update("gcode_position", [0, 0, 0.4, 0])
+        widget.on_gcode_move_update("gcode_position", [0, 0, 0.4, 0])
+        assert widget.layer_display_button.secondary_text == "999"
 
 
 class TestVirtualSdcardUpdate:
@@ -226,6 +259,33 @@ class TestVirtualSdcardUpdate:
         with patch.object(widget.printing_progress_bar, "setValue") as mock_test:
             widget.virtual_sdcard_update("is_active", True)
         mock_test.assert_not_called()
+
+
+class TestOnFlowguardUpdate:
+    """on_flowguard_update applies only the keys present in the payload."""
+
+    def _mock_flowrate(self, widget):
+        from unittest.mock import MagicMock
+
+        widget.flowrate.setValue = MagicMock()
+        widget.flowrate.set_max_clog = MagicMock()
+        widget.flowrate.set_max_tangle = MagicMock()
+
+    def test_partial_payload_does_not_raise(self, widget):
+        self._mock_flowrate(widget)
+        widget.on_flowguard_update("flowguard", {"level": 42})
+        widget.flowrate.setValue.assert_called_once_with(42)
+        widget.flowrate.set_max_clog.assert_not_called()
+        widget.flowrate.set_max_tangle.assert_not_called()
+
+    def test_full_payload_sets_all_fields(self, widget):
+        self._mock_flowrate(widget)
+        widget.on_flowguard_update(
+            "flowguard", {"level": 10, "max_clog": 20, "max_tangle": 30}
+        )
+        widget.flowrate.setValue.assert_called_once_with(10)
+        widget.flowrate.set_max_clog.assert_called_once_with(20)
+        widget.flowrate.set_max_tangle.assert_called_once_with(30)
 
 
 class TestPauseResumePrint:
