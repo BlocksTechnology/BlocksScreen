@@ -1777,7 +1777,7 @@ Home</string>
            <number>5</number>
           </property>
           <item>
-           <widget class="GroupButton" name="extrude_select_feedrate_2_btn">
+           <widget class="GroupButton" name="extrude_select_feedrate_low_btn">
             <property name="sizePolicy">
              <sizepolicy hsizetype="Minimum" vsizetype="Expanding">
               <horstretch>0</horstretch>
@@ -1962,7 +1962,7 @@ Home</string>
            </widget>
           </item>
           <item>
-           <widget class="GroupButton" name="extrude_select_feedrate_4_btn">
+           <widget class="GroupButton" name="extrude_select_feedrate_middle_btn">
             <property name="sizePolicy">
              <sizepolicy hsizetype="Minimum" vsizetype="Expanding">
               <horstretch>0</horstretch>
@@ -2144,7 +2144,7 @@ Home</string>
            </widget>
           </item>
           <item>
-           <widget class="GroupButton" name="extrude_select_feedrate_8_btn">
+           <widget class="GroupButton" name="extrude_select_feedrate_high_btn">
             <property name="sizePolicy">
              <sizepolicy hsizetype="Minimum" vsizetype="Expanding">
               <horstretch>0</horstretch>
@@ -5774,8 +5774,8 @@ Home</string>
  <connections/>
  <buttongroups>
   <buttongroup name="extrude_select_length_group"/>
-  <buttongroup name="axis_select_length_group"/>
-  <buttongroup name="extrude_select_feedrate_group"/>
   <buttongroup name="axis_select_speed_group"/>
+  <buttongroup name="extrude_select_feedrate_group"/>
+  <buttongroup name="axis_select_length_group"/>
  </buttongroups>
 </ui>
