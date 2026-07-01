@@ -30,8 +30,6 @@ def _sd_notify(msg: str) -> None:
 
 def build_parser() -> argparse.ArgumentParser:
     """Build the CLI argument parser with update, status, and recover subcommands."""
-    # Subcommands
-    # update [name] , status, recover <name> [--hard]
     parser = argparse.ArgumentParser(prog="python -m updater")
     parser.add_argument("--verbose", action="store_true")
     sub = parser.add_subparsers(dest="command")
@@ -62,7 +60,7 @@ async def _run_daemon() -> None:
     try:
         await bus.request_name_async("com.blockscreen.Updater", 0)
     except sdbus.SdBusBaseError as exc:
-        _log.error("failed to claim D-Bus name: %s — another instance running?", exc)
+        _log.error("failed to claim D-Bus name: %s - another instance running?", exc)
         return
     _log.info("updater daemon running on com.blockscreen.Updater")
     _sd_notify("READY=1")
@@ -70,13 +68,27 @@ async def _run_daemon() -> None:
     stop_event = asyncio.Event()
     loop.add_signal_handler(signal.SIGTERM, stop_event.set)
     loop.add_signal_handler(signal.SIGINT, stop_event.set)
+    ping_interval = _watchdog_ping_interval()
     while not stop_event.is_set():
         _sd_notify("WATCHDOG=1")
         try:
-            await asyncio.wait_for(stop_event.wait(), timeout=15.0)
+            await asyncio.wait_for(stop_event.wait(), timeout=ping_interval)
         except asyncio.TimeoutError:
             pass
     _log.info("updater daemon shutting down")
+
+
+def _watchdog_ping_interval() -> float:
+    """Half of systemd's WatchdogSec (per sd_notify(3)), or 15s if unset/invalid.
+
+    Reading WATCHDOG_USEC from the environment keeps the heartbeat correct if the
+    unit's WatchdogSec is ever retuned, instead of hardcoding half of 30s.
+    """
+    try:
+        watchdog_usec = int(os.environ.get("WATCHDOG_USEC", "0"))
+    except ValueError:
+        watchdog_usec = 0
+    return watchdog_usec / 2_000_000 if watchdog_usec > 0 else 15.0
 
 
 @contextlib.contextmanager
