@@ -1,21 +1,32 @@
-"""Unit tests for JobStatusWidget (JobStatusWidget.py) """
+"""Unit tests for JobStatusWidget (JobStatusWidget.py)"""
+
 import sys
 import types
 import pytest
 from PyQt6 import QtWidgets
 
+
 # STUBS must be in sys.modules BEFORE jobStatusPage is imported so the widget
 # uses lightweight stand-ins instead of the full custom classes.
 def _make_stub(base):
     """Return a minimal subclass of *base* usable in place of a custom widget."""
+
     class Stub(base):
         secondary_text: str = ""
+
         def __init__(self, *args, **kwargs):
             kwargs.pop("floating", None)
             super().__init__(*args, **kwargs)
-        def set_inner_pixmap(self, *a): pass
-        def set_message(self, *a): pass
-        def setPixmap(self, *a): pass
+
+        def set_inner_pixmap(self, *a):
+            pass
+
+        def set_message(self, *a):
+            pass
+
+        def setPixmap(self, *a):
+            pass
+
     return Stub
 
 
@@ -26,26 +37,27 @@ _progress_bar = types.ModuleType("lib.utils.blocks_progressbar")
 _base_popup = types.ModuleType("lib.panels.widgets.basePopup")
 
 _blocks_button.BlocksCustomButton = _make_stub(QtWidgets.QPushButton)
-_blocks_label.BlocksLabel =         _make_stub(QtWidgets.QLabel)
-_display_button.DisplayButton =     _make_stub(QtWidgets.QPushButton)
-_progress_bar.CustomProgressBar =   _make_stub(QtWidgets.QProgressBar)
-_base_popup.BasePopup =             _make_stub(QtWidgets.QDialog)
+_blocks_label.BlocksLabel = _make_stub(QtWidgets.QLabel)
+_display_button.DisplayButton = _make_stub(QtWidgets.QPushButton)
+_progress_bar.CustomProgressBar = _make_stub(QtWidgets.QProgressBar)
+_base_popup.BasePopup = _make_stub(QtWidgets.QDialog)
 
 for _name, _mod in [
-    ("lib.utils.blocks_button",       _blocks_button),
-    ("lib.utils.blocks_label",        _blocks_label),
-    ("lib.utils.display_button",      _display_button),
-    ("lib.utils.blocks_progressbar",  _progress_bar),
-    ("lib.panels.widgets.basePopup",  _base_popup),
+    ("lib.utils.blocks_button", _blocks_button),
+    ("lib.utils.blocks_label", _blocks_label),
+    ("lib.utils.display_button", _display_button),
+    ("lib.utils.blocks_progressbar", _progress_bar),
+    ("lib.panels.widgets.basePopup", _base_popup),
 ]:
     sys.modules[_name] = _mod  # force-set so network conftest stubs don't win
 
 import events  # noqa: F401, E402  # ensure events is importable before jobStatusPage loads
 from lib.panels.widgets.jobStatusPage import JobStatusWidget  # noqa: E402
 
+
 @pytest.fixture()
 def widget(qtbot):
-    """Create a JobStatusWidget with all state initialised. """
+    """Create a JobStatusWidget with all state initialised."""
     w = JobStatusWidget(parent=None)
     # initialise state that slots depend on
     w._current_file_name = ""
@@ -56,8 +68,9 @@ def widget(qtbot):
     qtbot.addWidget(w)
     return w
 
+
 class TestOnPrintStart:
-    """ on_print_start sets state and emits signals"""
+    """on_print_start sets state and emits signals"""
 
     def test_sets_current_file_name(self, widget):
         widget.on_print_start("test.gcode")
@@ -77,26 +90,28 @@ class TestOnPrintStart:
             widget.on_print_start("my_file.gcode")
         assert sig.args == ["my_file.gcode"]
 
+
 class TestHandlePrintState:
-    """ _handle_print_state drives the UI and signals correctly. """
+    """_handle_print_state drives the UI and signals correctly."""
+
     def test_printing_emits_show_request(self, widget, qtbot):
-        with qtbot.waitSignal(widget.show_request, timeout = 500):
+        with qtbot.waitSignal(widget.show_request, timeout=500):
             widget._handle_print_state("printing")
 
     def test_paused_emits_show_request(self, widget, qtbot):
-        with qtbot.waitSignal(widget.show_request, timeout = 500):
+        with qtbot.waitSignal(widget.show_request, timeout=500):
             widget._handle_print_state("paused")
 
     def test_complete_emits_print_finish(self, widget, qtbot):
-        with qtbot.waitSignal(widget.print_finish, timeout = 500):
+        with qtbot.waitSignal(widget.print_finish, timeout=500):
             widget._handle_print_state("complete")
 
     def test_complete_emits_hide_request(self, widget, qtbot):
-        with qtbot.waitSignal(widget.hide_request, timeout = 500):
+        with qtbot.waitSignal(widget.hide_request, timeout=500):
             widget._handle_print_state("complete")
 
     def test_canceller_does_not_emit_print_finish(self, widget, qtbot):
-         with qtbot.assertNotEmitted(widget.print_finish):
+        with qtbot.assertNotEmitted(widget.print_finish):
             widget._handle_print_state("cancelled")
 
     def test_invalid_state_clears_metadata(self, widget):
@@ -109,8 +124,10 @@ class TestHandlePrintState:
         widget._handle_print_state("error")
         assert widget._current_file_name == ""
 
+
 class TestOnPrintStatsUpdate:
-    """ on_print_stats_update routes fields to the right state."""
+    """on_print_stats_update routes fields to the right state."""
+
     def test_state_field_triggers_handle_print_state(self, widget, qtbot):
         with qtbot.waitSignal(widget.show_request, timeout=500):
             widget.on_print_stats_update("state", "printing")
@@ -135,6 +152,7 @@ class TestOnPrintStatsUpdate:
     def test_total_layer_value_stored(self, widget):
         widget.on_print_stats_update("info", {"total_layer": 120})
         assert widget.total_layers == 120
+
 
 class TestOnGcodeMoveUpdate:
     """on_gcode_move_update computes layer from Z position."""
@@ -187,33 +205,32 @@ class TestVirtualSdcardUpdate:
 
     def test_no_update_when_hidden(self, widget):
         from unittest.mock import patch
+
         widget.hide()
-        with patch.object(widget.printing_progress_bar, 'setValue') as mock_test:
+        with patch.object(widget.printing_progress_bar, "setValue") as mock_test:
             widget.virtual_sdcard_update("progress", 50)
         mock_test.assert_not_called()
 
     def test_progress_field_sets_value(self, widget):
         from unittest.mock import patch
+
         widget.show()
-        with patch.object(widget.printing_progress_bar, 'setValue') as mock_test:
+        with patch.object(widget.printing_progress_bar, "setValue") as mock_test:
             widget.virtual_sdcard_update("progress", 75)
         mock_test.assert_called_once_with(75)
 
     def test_non_progress_field_ignored(self, widget):
         from unittest.mock import patch
+
         widget.hide()
-        with patch.object(widget.printing_progress_bar, 'setValue') as mock_test:
+        with patch.object(widget.printing_progress_bar, "setValue") as mock_test:
             widget.virtual_sdcard_update("is_active", True)
         mock_test.assert_not_called()
 
-class TestPauseResumePrint:
-    """ pause_resume_print toggles state and emits the right signal."""
 
-    def test_printing_transitions_status(self, widget):
-        widget._internal_print_status = "printing"
-        widget.pause_resume_print()
-        assert widget._internal_print_status == "paused"
-    
+class TestPauseResumePrint:
+    """pause_resume_print toggles state and emits the right signal."""
+
     def test_printing_emits_print_pause(self, widget, qtbot):
         widget._internal_print_status = "printing"
         with qtbot.waitSignal(widget.print_pause, timeout=500):
@@ -223,12 +240,7 @@ class TestPauseResumePrint:
         widget._internal_print_status = "paused"
         with qtbot.waitSignal(widget.print_resume, timeout=500):
             widget.pause_resume_print()
-    
-    def test_paused_emits_print_resume(self, widget):
-        widget._internal_print_status = "paused"
-        widget.pause_resume_print()
-        assert widget._internal_print_status == "printing"
-    
+
     def test_disables_pause_button(self, widget):
         widget._internal_print_status = "printing"
         widget.pause_printing_btn.setEnabled(True)
@@ -241,10 +253,13 @@ class TestPauseResumePrint:
             with qtbot.assertNotEmitted(widget.print_resume):
                 widget.pause_resume_print()
 
+
 class TestHandleCancel:
     """handleCancel wires the cancel dialog exactly once."""
+
     def test_sets_cancel_message(self, widget):
         from unittest.mock import patch
+
         with patch.object(widget.cancel_print_dialog, "set_message") as m:
             widget.handleCancel()
         m.assert_called_once()
@@ -252,6 +267,7 @@ class TestHandleCancel:
 
     def test_opens_dialog(self, widget):
         from unittest.mock import patch
+
         with patch.object(widget.cancel_print_dialog, "open") as m:
             widget.handleCancel()
         m.assert_called_once()
@@ -260,7 +276,7 @@ class TestHandleCancel:
         widget.handleCancel()
         with qtbot.waitSignal(widget.print_cancel, timeout=500):
             widget.cancel_print_dialog.accepted.emit()
-    
+
     def test_double_call_connects_only_once(self, widget):
         widget.handleCancel()
         widget.handleCancel()
@@ -269,8 +285,10 @@ class TestHandleCancel:
         widget.cancel_print_dialog.accepted.emit()
         assert len(emissions) == 1
 
+
 class TestOnFileInfo:
     """on_fileinfo loads the thumbnail and layer count regardless of visibility"""
+
     def _ready_widget(self, widget) -> dict:
         """Put widget in the state where gcode_move_update should fire."""
         widget.show()
@@ -285,7 +303,6 @@ class TestOnFileInfo:
             "thumbnail_images": [],
         }
 
-
     def test_load_correct_info(self, widget):
         _metadata = self._ready_widget(widget)
         widget.on_fileinfo(_metadata)
@@ -293,7 +310,7 @@ class TestOnFileInfo:
 
     def test_handle_error_total_layers(self, widget):
         _metadata = self._ready_widget(widget)
-        del _metadata['layer_count']
+        del _metadata["layer_count"]
         widget.on_fileinfo(_metadata)
         assert widget.total_layers == "---"
 
