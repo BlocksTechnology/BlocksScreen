@@ -51,7 +51,6 @@ class USBManager(QtCore.QObject):
         self.udisks: UDisksDBusAsync = UDisksDBusAsync(
             parent=self, gcodes_dir=self.gcodes_dir
         )
-        # self.banner = BannerPopup(self)
         self.banner = BannerPopup()
         self._restart_type: ResType = "always"
         self.udisks.start(self.udisks.Priority.InheritPriority)
