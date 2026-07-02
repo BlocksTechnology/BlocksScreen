@@ -23,6 +23,7 @@ UtmpMode=user
 WorkingDirectory=/home/blocks/BlocksScreen
 ExecStartPre=+/usr/bin/chvt 7
 ExecStartPre=-/usr/bin/rm -f /tmp/.X0-lock /tmp/.X11-unix/X0
+ExecStartPre=-/bin/bash /home/blocks/BlocksScreen/scripts/bs-ensure-xauth.sh /home/blocks/.Xauthority
 ExecStartPre=-+/usr/bin/timeout 3 /usr/bin/plymouth quit
 ExecStartPre=-+/usr/bin/pkill -x plymouthd
 ExecStartPre=-+/home/blocks/.BlocksScreen-env/bin/python3.11 /home/blocks/BlocksScreen/scripts/bs-splash.py
