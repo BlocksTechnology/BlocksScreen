@@ -71,7 +71,7 @@ class UpdaterWorker(QtCore.QObject):
         try:
             self._system_bus = sdbus.sd_bus_open_system()
         except Exception as exc:  # noqa: BLE001
-            _log.error("sd_bus_open_system failed: %s — restarting thread in 10s", exc)
+            _log.error("sd_bus_open_system failed: %s - restarting thread in 10s", exc)
             self._loop.close()
             if not self._shutting_down:
                 self._restart_loop_thread(delay=10.0)
@@ -93,7 +93,7 @@ class UpdaterWorker(QtCore.QObject):
         def _do_restart() -> None:
             time.sleep(delay)
             if self._shutting_down:
-                _log.info("skipping asyncio thread restart — shutting down")
+                _log.info("skipping asyncio thread restart - shutting down")
                 return
             _log.info("restarting asyncio daemon thread")
             self._loop = asyncio.new_event_loop()
@@ -157,7 +157,7 @@ class UpdaterWorker(QtCore.QObject):
         except sdbus.SdBusBaseError as exc:
             # Proxy creation is lazy; this first real call is what proves the
             # daemon is actually reachable. Treat failure as daemon-down.
-            _log.warning("get_busy failed on (re)connect: %s — scheduling retry", exc)
+            _log.warning("get_busy failed on (re)connect: %s - scheduling retry", exc)
             self.daemon_unavailable.emit()
             self._schedule_reconnect()
             return
@@ -210,7 +210,7 @@ class UpdaterWorker(QtCore.QObject):
             )
         except RuntimeError:
             self._reconnecting = False
-            _log.warning("_schedule_reconnect called outside running loop — skipped")
+            _log.warning("_schedule_reconnect called outside running loop - skipped")
 
     async def _delayed_reconnect(self, delay: float) -> None:
         """Sleep for ``delay`` seconds then re-run ``_async_initialize``."""
@@ -287,7 +287,7 @@ class UpdaterWorker(QtCore.QObject):
 
         While a reconnect is already pending the emit is suppressed: the UI's
         daemon-unavailable handler triggers a status refresh, which would fail
-        and re-emit here — an endless toast/request storm without this guard.
+        and re-emit here - an endless toast/request storm without this guard.
         """
         _log.error("%s D-Bus call failed: %s", method, exc)
         if not self._reconnecting:
@@ -368,11 +368,13 @@ class UpdaterWorker(QtCore.QObject):
     async def _listen_rollback(self) -> None:
         """Forward rollback D-Bus signals to the Qt rollback_done signal."""
         async for name, success in self._proxy.rollback:
+            self._touch_activity()
             self.rollback_done.emit(name, success)
 
     async def _listen_recover_done(self) -> None:
         """Forward recover_done D-Bus signals to the Qt recover_done signal."""
         async for name, success in self._proxy.recover_done:
+            self._touch_activity()
             self.recover_done.emit(name, success)
 
     async def _listen_busy_changed(self) -> None:
@@ -397,7 +399,7 @@ class UpdaterWorker(QtCore.QObject):
 
         Any progress signal (step_complete, component_done, error, busy_changed)
         refreshes the deadline via _touch_activity, so the watchdog only fires
-        when a busy daemon stops reporting entirely — not on long updates.
+        when a busy daemon stops reporting entirely - not on long updates.
         """
         if self._busy_false_event is None:
             _msg = "_busy_false_event not initialized"
@@ -409,7 +411,7 @@ class UpdaterWorker(QtCore.QObject):
             remaining = _BUSY_IDLE_LIMIT - idle
             if remaining <= 0:
                 _log.error(
-                    "busy watchdog: no daemon activity for %.0fs — daemon unavailable",
+                    "busy watchdog: no daemon activity for %.0fs - daemon unavailable",
                     idle,
                 )
                 self.daemon_unavailable.emit()

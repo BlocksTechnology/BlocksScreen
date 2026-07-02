@@ -22,7 +22,7 @@ class DbusProgressCallback:
     """Adapter that forwards ProgressCallback events to D-Bus signals.
 
     Holds a reference to the server interface so each on_* call invokes
-    the corresponding signal's .emit() — decoupling UpdateService from D-Bus.
+    the corresponding signal's .emit() - decoupling UpdateService from D-Bus.
     """
 
     def __init__(self, iface: UpdaterInterface) -> None:
@@ -233,7 +233,7 @@ class UpdaterInterface(
             _log.error("_run_update_all failed: %s", exc, exc_info=True)
         finally:
             self._set_busy(busy=False)
-        # Only run the silent apt pass if we actually held the lock — otherwise a
+        # Only run the silent apt pass if we actually held the lock - otherwise a
         # CLI run owns the update and is responsible for apt.
         if ran:
             self._spawn(
