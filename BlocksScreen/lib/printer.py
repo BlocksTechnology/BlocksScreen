@@ -143,6 +143,8 @@ class Printer(QtCore.QObject):
         self.query_printer_object.connect(self.ws.api.object_query)
         self._klippy_callback: typing.Callable[[str], None] | None = None
         self._callbacks: dict[str, typing.Callable[[dict, str], None]] = {}
+        self._webhooks_state: str = ""
+        self._webhooks_state_message: str = ""
 
     @property
     def uses_true_zero_offset(self) -> bool:
@@ -365,10 +367,16 @@ class Printer(QtCore.QObject):
             value (dict): _description_
             name (str, optional): _description_. Defaults to "".
         """
-        if "state" in value.keys() and "state_message" in value.keys():
-            self.webhooks_update.emit(value["state"], value["state_message"])
+        if "state" in value.keys() or "state_message" in value.keys():
+            self._webhooks_state = value.get("state", self._webhooks_state)
+            self._webhooks_state_message = value.get(
+                "state_message", self._webhooks_state_message
+            )
+            self.webhooks_update.emit(
+                self._webhooks_state, self._webhooks_state_message
+            )
             logger.debug("Webhooks message received")
-            _state: str = value["state"]
+            _state: str = self._webhooks_state
             if _state == "shutdown":
                 return
             _state_upper = _state[0].upper()
@@ -377,7 +385,7 @@ class Printer(QtCore.QObject):
                 _event_callback = getattr(events, f"Klippy{_state_call}")
                 if callable(_event_callback):
                     try:
-                        event = _event_callback(value["state"], value["state_message"])
+                        event = _event_callback(_state, self._webhooks_state_message)
                         instance = QtWidgets.QApplication.instance()
                         if instance is not None and isinstance(event, QtCore.QEvent):
                             instance.sendEvent(self.parent(), event)
