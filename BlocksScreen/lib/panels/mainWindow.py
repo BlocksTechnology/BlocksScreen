@@ -849,15 +849,8 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.printer_object_report_signal[list].emit(_objects_response_list)
             if "query" in method:
                 if isinstance(data["status"], dict):
-                    _object_report = [data["status"]]
-                    _object_report_keys = data["status"].items()
-                    _object_report_list_dict: list = []
-                    for _, key in enumerate(_object_report_keys):
-                        _helper_dict: dict = {key[0]: key[1]}
-                        _object_report_list_dict.append(_helper_dict)
-                    self.printer_object_report_signal[list].emit(
-                        _object_report_list_dict
-                    )
+                    _object_report_list = [data["status"], data["eventtime"]]
+                    self.printer_object_report_signal[list].emit(_object_report_list)
 
     @api_handler
     def _handle_notify_klippy_message(self, method, data, metadata) -> None:
