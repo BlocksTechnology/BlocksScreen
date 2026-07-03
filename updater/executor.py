@@ -63,7 +63,6 @@ def _make_clean_env() -> dict[str, str]:
         "PATH",
         "HOME",
         "USER",
-        "LANG",
         # SEC: DBUS_SESSION_BUS_ADDRESS and XDG_RUNTIME_DIR intentionally excluded -
         # hook scripts must not make D-Bus calls or access the session runtime dir.
         "TMPDIR",
@@ -72,6 +71,8 @@ def _make_clean_env() -> dict[str, str]:
         if val is not None:
             env[key] = val
     env["GIT_TERMINAL_PROMPT"] = "0"
+    # git_fetch's broken-ref self-heal and the apt parser match English messages
+    env["LC_ALL"] = "C"
     # SEC: only copy safe SUDO_ vars; reject SUDO_ASKPASS and others
     safe_sudo = {"SUDO_USER", "SUDO_UID", "SUDO_GID"}
     for key, val in os.environ.items():
@@ -311,6 +312,31 @@ async def git_prune_extra_remotes(path: Path) -> None:
             logger.warning("failed to remove remote %r from %s: %s", remote, path, err)
 
 
+_BROKEN_REF_RE = re.compile(r"cannot lock ref '([^']+)'")
+
+
+def _remove_broken_loose_ref(path: Path, ref: str) -> None:
+    """Delete a corrupt loose ref and its reflog when `update-ref -d` cannot."""
+    git_dir = path / ".git"
+    for p in (git_dir / ref, git_dir / "logs" / ref):
+        with contextlib.suppress(OSError):
+            p.unlink()
+
+
+async def _prune_broken_refs(path: Path, output: str) -> bool:
+    """Delete corrupt refs named in a failed fetch. Returns True if any were."""
+    pruned = False
+    for ref in dict.fromkeys(_BROKEN_REF_RE.findall(output)):
+        if not ref.startswith("refs/") or any(c.isspace() for c in ref):
+            continue
+        ok, _ = await _run([GIT, "update-ref", "-d", ref], cwd=path, timeout=10.0)
+        if not ok:
+            await asyncio.to_thread(_remove_broken_loose_ref, path, ref)
+        logger.warning("git_fetch: pruned broken ref %r in %s", ref, path)
+        pruned = True
+    return pruned
+
+
 async def git_fetch(
     path: Path | None, *, prune_remotes: bool = True
 ) -> tuple[bool, str]:
@@ -318,16 +344,22 @@ async def git_fetch(
 
     prune_remotes=False skips the extra-remote cleanup; pass False during status
     checks where pruning is unnecessary and adds ~2 subprocess spawns per repo.
+
+    A corrupt local ref (null SHA from an interrupted write) makes --prune abort
+    the whole fetch and silently disables every update; on that failure the
+    named ref is deleted and the fetch retried once.
     """
     if path is None:
         return (False, "path does not exist")
     if prune_remotes:
         await git_prune_extra_remotes(path)
-    # --atomic: all-or-nothing ref update (no partial refs on a dropped connection);
-    # --prune: drop refs deleted upstream so stale tracking refs don't accumulate.
-    return await _run(
-        [GIT, "fetch", "--all", "--atomic", "--prune"], cwd=path, timeout=60.0
-    )
+    cmd = [GIT, "fetch", "--all", "--atomic", "--prune"]
+    ok, out = await _run(cmd, cwd=path, timeout=60.0)
+    if ok or "reference broken" not in out:
+        return (ok, out)
+    if not await _prune_broken_refs(path, out):
+        return (ok, out)
+    return await _run(cmd, cwd=path, timeout=60.0)
 
 
 async def git_pull(path: Path | None) -> tuple[bool, str]:
