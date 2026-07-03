@@ -22,7 +22,7 @@ class OneShotTokenError(Exception):
     """Raised when unable to get oneshot token to connect to a websocket"""
 
     def __init__(self, message="Unable to get oneshot token", errors=None) -> None:
-        super(OneShotTokenError).__init__(message, errors)
+        super().__init__(message)
         self.errors = errors
         self.message = message
 

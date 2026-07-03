@@ -17,8 +17,7 @@ class ComponentConfig:
     apt_exclude: tuple[str, ...] = ()
     url: str | None = None
     install_if_missing: bool = False
-    # Fire-and-forget restart BlocksScreen on update even when the component's
-    # own service differs (e.g. klipper config the UI reads at startup).
+    # Restart BlocksScreen on update even when the component's service differs.
     restart_ui: bool = False
 
 

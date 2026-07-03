@@ -10,8 +10,7 @@ from collections.abc import Iterator
 from updater.locking import process_lock
 from updater.service import LoggingCallback, UpdateService
 
-# NOTE: sdbus and updater.dbus_service are imported lazily inside _run_daemon so
-# the status/update/recover CLI works on an interpreter without sdbus installed.
+# NOTE: sdbus imports are lazy (in _run_daemon) so the CLI works without sdbus.
 
 
 def _sd_notify(msg: str) -> None:
