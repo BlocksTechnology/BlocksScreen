@@ -48,13 +48,18 @@ echo "$SPOOLMAN_SVC" | sudo tee /etc/systemd/system/Spoolman.service >/dev/null
 sudo systemctl daemon-reload
 echo_ok "Spoolman service unit installed"
 
+echo_info "Installing bs-apt-helper (root-owned apt wrapper) ..."
+# Atomic install: the helper is never absent or half-written.
+sudo install -o root -g root -m 0755 "$SCRIPT_PATH/bs-apt-helper.sh" /usr/local/sbin/.bs-apt-helper.new
+sudo mv -Tf /usr/local/sbin/.bs-apt-helper.new /usr/local/sbin/bs-apt-helper
+echo_ok "bs-apt-helper installed"
+
 echo_info "Installing sudoers rules for updater ..."
 SUDOERS_FILE="/etc/sudoers.d/blockscreen-updater"
 SUDOERS_TMP=$(mktemp)
-printf 'blocks ALL=(ALL) NOPASSWD: /usr/bin/apt-get update\n' >>"$SUDOERS_TMP"
-printf 'blocks ALL=(ALL) NOPASSWD: /usr/bin/apt-get install --only-upgrade -y *\n' >>"$SUDOERS_TMP"
-printf 'blocks ALL=(ALL) NOPASSWD: /usr/bin/apt-get install -y --quiet *\n' >>"$SUDOERS_TMP"
-printf 'blocks ALL=(ALL) NOPASSWD: /usr/bin/apt-get autoremove -y\n' >>"$SUDOERS_TMP"
+# All apt/dpkg ops go through the root-owned wrapper: fixed argvs, no option
+# injection. Kept in sync by tests/scripts/test_sudoers_rules.py.
+printf 'blocks ALL=(ALL) NOPASSWD: /usr/local/sbin/bs-apt-helper *\n' >>"$SUDOERS_TMP"
 printf 'blocks ALL=(ALL) NOPASSWD: /usr/bin/systemctl reboot\n' >>"$SUDOERS_TMP"
 printf 'blocks ALL=(ALL) NOPASSWD: /usr/bin/chvt 7\n' >>"$SUDOERS_TMP"
 printf 'blocks ALL=(ALL) NOPASSWD: /usr/bin/chvt 8\n' >>"$SUDOERS_TMP"
@@ -151,9 +156,19 @@ sudo systemd-tmpfiles --create --prefix /var/log/journal 2>/dev/null || true
 sudo systemctl restart systemd-journald 2>/dev/null || true
 echo_ok "Persistent journald enabled"
 
-echo_info "Allowing blocks to operate on repos owned by primary user ..."
-sudo git config --system --add safe.directory '*'
-echo_ok "Git safe.directory configured"
+echo_info "Scoping git safe.directory to component repos ..."
+# Root tooling (this script, deploy service) runs git in blocks-owned repos;
+# scope the trust to those paths instead of '*'.
+sudo git config --system --unset-all safe.directory 2>/dev/null || true
+_SAFE_YAML="$BS_PATH/updater/components.yaml"
+if [[ -f "$_SAFE_YAML" ]]; then
+    grep '^\s*path:' "$_SAFE_YAML" | awk '{print $2}' | sort -u | while read -r _p; do
+        sudo git config --system --add safe.directory "${_p/#\~/$_BSENV_HOME}"
+    done
+fi
+git config --system --get-all safe.directory 2>/dev/null | grep -qxF "$BS_PATH" || \
+    sudo git config --system --add safe.directory "$BS_PATH"
+echo_ok "Git safe.directory scoped"
 
 echo_info "Setting git repo permissions for updater ..."
 COMPONENTS_YAML="$BS_PATH/updater/components.yaml"

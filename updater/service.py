@@ -38,6 +38,7 @@ from updater.executor import (
     git_pull,
     git_repair,
     git_reset_to_hash,
+    is_git_repo,
     enable_service,
     restart_service,
     restart_service_noblock,
@@ -208,6 +209,12 @@ class UpdateService:
             for c in sorted_components
             if c.kind == "git" and c.path is not None and c.path.exists()
         ]
+        # A dir without .git (e.g. a pre-updater tarball install) can never
+        # fetch; error it individually instead of poisoning the whole batch.
+        for c in [c for c in batch if not is_git_repo(c.path)]:
+            batch.remove(c)
+            self._log.error("%s: %s is not a git repository - skipping", c.name, c.path)
+            self._cb_error_done(c.name, "not a git repository - reinstall required")
         provision = [
             c
             for c in sorted_components
@@ -234,10 +241,12 @@ class UpdateService:
         its own fetch in the apply phase (recorded fetch time). Repos that need
         cloning or are corrupt are left to self-heal in their own flow.
         """
+        # Non-repo dirs are excluded: their fetch failure is not "offline" and
+        # must not abort the batch (they are errored individually by update_all).
         targets = [
             c
             for c in sorted_components
-            if c.kind == "git" and c.path is not None and c.path.exists()
+            if c.kind == "git" and c.path is not None and is_git_repo(c.path)
         ]
         offline: list[str] = []
         async with self._git_lock:
@@ -959,6 +968,14 @@ class UpdateService:
             if component.install_if_missing and component.url:
                 return await self._provision_component(component)
             return self._cb_error_done(component.name, "path not found")
+        # Non-repo dir (e.g. pre-updater tarball install): nothing to update or revert.
+        if not is_git_repo(component.path):
+            self._log.error(
+                "%s: %s is not a git repository", component.name, component.path
+            )
+            return self._cb_error_done(
+                component.name, "not a git repository - reinstall required"
+            )
 
         prev_hash = await git_get_hash(component.path)
         if prev_hash == "":

@@ -79,10 +79,10 @@ if ! git -C "$COMPONENT_PATH" diff --quiet "$PREV_HASH" "$NEW_HASH" \
     echo "[hook:BlocksScreen] daemon-reload done (xorg service)"
 fi
 
-# --- install-updater.sh changed (checked independently) ---
+# --- install files changed (checked independently) ---
 if ! git -C "$COMPONENT_PATH" diff --quiet "$PREV_HASH" "$NEW_HASH" \
-        -- scripts/install-updater.sh 2>/dev/null; then
-    echo "[hook:BlocksScreen] install-updater.sh changed - setting deploy flag"
+        -- scripts/install-updater.sh scripts/bs-apt-helper.sh 2>/dev/null; then
+    echo "[hook:BlocksScreen] install files changed - setting deploy flag"
     _set_deploy_flag
 fi
 

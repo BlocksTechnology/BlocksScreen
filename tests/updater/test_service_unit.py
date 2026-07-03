@@ -548,7 +548,7 @@ class TestUpdateAll:
 
     def _git(self, tmp_path: Path, name: str, order: int) -> ComponentConfig:
         path = tmp_path / name
-        path.mkdir()
+        (path / ".git").mkdir(parents=True)
         return ComponentConfig(name=name, kind="git", path=path, order=order)
 
     @pytest.mark.asyncio
@@ -1456,7 +1456,7 @@ class TestPreflightFetch:
 
     def _git(self, tmp_path: Path, name: str) -> ComponentConfig:
         path = tmp_path / name
-        path.mkdir()
+        (path / ".git").mkdir(parents=True)
         return ComponentConfig(name=name, kind="git", path=path)
 
     @pytest.mark.asyncio
@@ -1863,3 +1863,61 @@ class TestInflightClearedOnEarlyReturn:
             await svc._run_git_batch([comp])
         assert not (tmp_path / "inflight.json").exists()
         cb.on_error.assert_called_once_with("klipper", "insecure remote")
+
+
+class TestNonRepoComponent:
+    """A dir without .git (pre-updater tarball install) must not poison updates."""
+
+    def _comps(self, tmp_path):
+        repo = tmp_path / "klipper"
+        (repo / ".git").mkdir(parents=True)
+        nonrepo = tmp_path / "Spoolman"
+        nonrepo.mkdir()
+        return (
+            ComponentConfig(name="klipper", kind="git", path=repo),
+            ComponentConfig(name="Spoolman", kind="git", path=nonrepo),
+        )
+
+    @pytest.mark.asyncio
+    async def test_update_all_excludes_nonrepo_and_continues(self, tmp_path):
+        cb = MagicMock()
+        good, bad = self._comps(tmp_path)
+        with (
+            patch("updater.service.git_fetch", return_value=(True, "")),
+            patch(
+                "updater.service.UpdateService._run_git_batch", new_callable=AsyncMock
+            ) as mock_batch,
+        ):
+            svc = UpdateService(callback=cb)
+            svc._components = [good, bad]
+            await svc.update_all()
+        mock_batch.assert_awaited_once_with([good])
+        cb.on_error.assert_called_once_with(
+            "Spoolman", "not a git repository - reinstall required"
+        )
+        cb.on_component_done.assert_called_once_with("Spoolman", False)
+
+    @pytest.mark.asyncio
+    async def test_preflight_skips_nonrepo_fetch(self, tmp_path):
+        good, bad = self._comps(tmp_path)
+        fetched: list[str] = []
+
+        async def fake_fetch(path, **kw):
+            fetched.append(path.name)
+            return (True, "")
+
+        with patch("updater.service.git_fetch", side_effect=fake_fetch):
+            svc = UpdateService(callback=MagicMock())
+            assert await svc._preflight_fetch([good, bad], [good, bad]) is True
+        assert fetched == ["klipper"]
+
+    @pytest.mark.asyncio
+    async def test_single_update_nonrepo_errors_cleanly(self, tmp_path):
+        cb = MagicMock()
+        _, bad = self._comps(tmp_path)
+        svc = UpdateService(callback=cb)
+        svc._components = [bad]
+        assert await svc.update_component("Spoolman") is False
+        cb.on_error.assert_called_once_with(
+            "Spoolman", "not a git repository - reinstall required"
+        )
