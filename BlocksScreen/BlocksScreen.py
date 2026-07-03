@@ -84,7 +84,7 @@ def show_splash() -> QtWidgets.QSplashScreen:
     """Show a fullscreen splash immediately after QApplication is created.
 
     Centres the logo on a dark background matching the current screen geometry,
-    with a 'Restarting ...' message below the logo.
+    with a 'Starting ...' message below the logo.
     Returns the QSplashScreen so the caller can call splash.finish(main_window).
     """
     screen = QtWidgets.QApplication.primaryScreen()
@@ -131,7 +131,7 @@ def show_splash() -> QtWidgets.QSplashScreen:
                 bg.width(),
                 32,
                 QtCore.Qt.AlignmentFlag.AlignHCenter,
-                "Restarting ...",
+                "Starting ...",
             )
             painter.end()
             splash = QtWidgets.QSplashScreen(

@@ -92,6 +92,9 @@ bs_migrate_moonraker_conf "$_BSENV_HOME/printer_data/config/moonraker.conf" Bloc
 # Remove stale git index lock left by an interrupted update (e.g. power loss during git reset)
 rm -f "$BS_PATH/.git/index.lock"
 
+# Delete zero-byte loose refs (interrupted write): one broken ref aborts every fetch --prune
+find "$BS_PATH/.git/refs" -type f -empty -delete 2>/dev/null || true
+
 # Recover from corrupt loose objects (empty files written by an interrupted git fetch/reset).
 # This is the boot-time counterpart of updater.executor.git_repair (which heals the
 # other components from the daemon); keep the two prune+fetch flows in sync.
@@ -183,6 +186,7 @@ else
     if [ ! -S /tmp/.X11-unix/X0 ] && \
        ! systemctl is-active --quiet BlocksScreen-xorg.service 2>/dev/null; then
         echo "X.Org service not active — starting X inline (transitional)" >&2
+        /bin/bash "$SCRIPT_PATH/bs-ensure-xauth.sh" /home/blocks/.Xauthority
         exec /usr/bin/xinit "$_XCLIENT" -- :0 vt7 -keeptty -novtswitch -nocursor \
             -auth /home/blocks/.Xauthority
     fi
