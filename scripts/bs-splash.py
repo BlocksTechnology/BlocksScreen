@@ -104,7 +104,7 @@ def _render(w: int, h: int, Image, ImageDraw, ImageFont) -> Any:
             pass
     if font is None:
         font = ImageFont.load_default()
-    text = "Restarting ..."
+    text = "Starting ..."
     try:
         bbox = draw.textbbox((0, 0), text, font=font)
         text_w = bbox[2] - bbox[0]

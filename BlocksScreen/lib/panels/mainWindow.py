@@ -422,6 +422,7 @@ class MainWindow(QtWidgets.QMainWindow):
             state == "disconnected"
             and not self._klipper_auto_restart_pending
             and not self._update_in_progress
+            and not self.conn_window.manual_restart_pending
         ):
             _logger.info("Klipper disconnected — auto-restarting service")
             self._klipper_auto_restart_pending = True

@@ -10,6 +10,7 @@ import pytest
 
 from updater.executor import (
     _make_clean_env,
+    _remove_broken_loose_ref,
     _run,
     apt_update,
     apt_upgrade,
@@ -58,6 +59,12 @@ class TestMakeCleanEnv:
         result = _make_clean_env()
         assert "LD_PRELOAD" not in result
         assert "PYTHONPATH" not in result
+
+    def test_forces_untranslated_output(self):
+        result = _make_clean_env()
+        assert result["LC_ALL"] == "C"
+        assert "LANG" not in result
+        assert "LANGUAGE" not in result
 
 
 class TestRun:
@@ -443,6 +450,64 @@ class TestGitFetch:
             ok, out = await git_fetch(tmp_path)
         assert ok is False
         assert "network error" in out
+
+    @pytest.mark.asyncio
+    async def test_repairs_broken_ref_then_retries(self, tmp_path):
+        broken = (
+            b"error: cannot lock ref 'refs/remotes/origin/fix/x': unable to "
+            b"resolve reference 'refs/remotes/origin/fix/x': reference broken\n"
+        )
+        prune_proc = _make_proc(0, b"origin\n", b"")
+        fail_proc = _make_proc(1, b"", broken)
+        del_proc = _make_proc(0, b"", b"")
+        retry_proc = _make_proc(0, b"From https://github.com\n", b"")
+        exec_mock = AsyncMock(side_effect=[prune_proc, fail_proc, del_proc, retry_proc])
+        with patch("asyncio.create_subprocess_exec", exec_mock):
+            ok, _ = await git_fetch(tmp_path)
+        assert ok is True
+        argvs = [call.args for call in exec_mock.call_args_list]
+        assert any(
+            "update-ref" in a and "refs/remotes/origin/fix/x" in a for a in argvs
+        )
+
+    @pytest.mark.asyncio
+    async def test_broken_ref_unparseable_does_not_retry(self, tmp_path):
+        prune_proc = _make_proc(0, b"origin\n", b"")
+        fail_proc = _make_proc(1, b"", b"fatal: reference broken somewhere\n")
+        exec_mock = AsyncMock(side_effect=[prune_proc, fail_proc])
+        with patch("asyncio.create_subprocess_exec", exec_mock):
+            ok, _ = await git_fetch(tmp_path)
+        assert ok is False
+        assert exec_mock.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_update_ref_failure_falls_back_to_unlink(self, tmp_path):
+        ref = "refs/remotes/origin/fix/x"
+        (tmp_path / ".git" / ref).parent.mkdir(parents=True)
+        (tmp_path / ".git" / ref).write_text("")
+        broken = (
+            f"error: cannot lock ref '{ref}': unable to "
+            f"resolve reference '{ref}': reference broken\n"
+        ).encode()
+        prune_proc = _make_proc(0, b"origin\n", b"")
+        fail_proc = _make_proc(1, b"", broken)
+        del_proc = _make_proc(1, b"", b"error: unable to resolve reference\n")
+        retry_proc = _make_proc(0, b"From https://github.com\n", b"")
+        exec_mock = AsyncMock(side_effect=[prune_proc, fail_proc, del_proc, retry_proc])
+        with patch("asyncio.create_subprocess_exec", exec_mock):
+            ok, _ = await git_fetch(tmp_path)
+        assert ok is True
+        assert not (tmp_path / ".git" / ref).exists()
+
+    def test_remove_broken_loose_ref_deletes_file_and_reflog(self, tmp_path):
+        ref = "refs/remotes/origin/fix/x"
+        (tmp_path / ".git" / ref).parent.mkdir(parents=True)
+        (tmp_path / ".git" / ref).write_text("")
+        (tmp_path / ".git" / "logs" / ref).parent.mkdir(parents=True)
+        (tmp_path / ".git" / "logs" / ref).write_text("")
+        _remove_broken_loose_ref(tmp_path, ref)
+        assert not (tmp_path / ".git" / ref).exists()
+        assert not (tmp_path / ".git" / "logs" / ref).exists()
 
 
 class TestGitPull:
