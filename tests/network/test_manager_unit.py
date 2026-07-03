@@ -12,17 +12,15 @@ Architecture (current):
 """
 
 import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 import BlocksScreen.lib.network.manager as manager_mod
 from BlocksScreen.lib.network.models import (ConnectionPriority,
-                                             ConnectionResult,
                                              ConnectivityState, HotspotConfig,
                                              NetworkInfo, NetworkState,
-                                             NetworkStatus, SavedNetwork,
-                                             SecurityType)
+                                             SavedNetwork)
 
 
 def _make_mock_timer():

@@ -65,7 +65,7 @@ class TestSecurityType:
         }
 
     def test_is_connectable_security(self):
-        assert is_connectable_security(SecurityType.WEP.value) == False
+        assert not is_connectable_security(SecurityType.WEP.value)
 
     def test_not_connectable_security(self):
         assert is_connectable_security("No security")

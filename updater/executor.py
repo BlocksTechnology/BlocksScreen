@@ -20,6 +20,9 @@ logger = logging.getLogger(__name__)
 
 UPDATER_SERVICE = "BlocksScreen-updater.service"
 
+# Hook budget: a deps-heavy hook (Spoolman uv sync) runs minutes; timeout = abort.
+HOOK_TIMEOUT = 600.0
+
 GIT = "/usr/bin/git"
 PIP = "/usr/bin/pip3"
 APT = "/usr/bin/apt"
@@ -28,8 +31,7 @@ APT_MARK = "/usr/bin/apt-mark"
 SUDO = "/usr/bin/sudo"
 SYSTEMCTL = "/usr/bin/systemctl"
 
-# Wait up to 60s for the dpkg lock instead of failing immediately when apt-daily
-# or unattended-upgrades is mid-run (the daemon now owns apt on this image).
+# Wait up to 60s for the dpkg lock (apt-daily/unattended-upgrades may be mid-run).
 _APT_LOCK_OPTS = ["-o", "DPkg::Lock::Timeout=60"]
 # Keep existing conffiles without prompting (an upgrade must never block on input).
 _APT_CONF_OPTS = [
@@ -63,8 +65,7 @@ def _make_clean_env() -> dict[str, str]:
         "PATH",
         "HOME",
         "USER",
-        # SEC: DBUS_SESSION_BUS_ADDRESS and XDG_RUNTIME_DIR intentionally excluded -
-        # hook scripts must not make D-Bus calls or access the session runtime dir.
+        # SEC: session bus + XDG runtime vars excluded; hooks must not use them.
         "TMPDIR",
     ):
         val = os.environ.get(key)
@@ -78,8 +79,7 @@ def _make_clean_env() -> dict[str, str]:
     for key, val in os.environ.items():
         if key in safe_sudo:
             env[key] = val
-    # Lets hooks (git post-merge, the updater's own) tell they run mid-batch and
-    # defer any daemon restart to the sentinel instead of aborting the update.
+    # Tells hooks they run mid-batch: defer daemon restarts to the sentinel.
     env["BS_UPDATER_SELF_UPDATE"] = "1"
     with contextlib.suppress(OSError):
         env["BS_UPDATER_RESTART_SENTINEL"] = str(restart_sentinel_path())
@@ -394,18 +394,22 @@ async def git_clone(
 
 
 async def git_reset_to_hash(path: Path | None, prev_hash: str = "") -> tuple[bool, str]:
-    """Hard-reset repo at path directly to prev_hash without fetching."""
+    """Hard-reset repo at path directly to prev_hash without fetching.
+
+    This is the rollback/heal primitive (abort, boot revert, recover), so the
+    timeout is generous: a reset across a large delta on a slow SD card must
+    not be SIGTERM'd mid-checkout in exactly the path meant to fix things.
+    """
     if not path:
         return (False, "path error")
     if prev_hash == "":
         return (False, "prev_hash does not exist")
     if not _validate_git_ref(prev_hash):
         return (False, f"invalid git ref: {prev_hash!r}")
-    return await _run([GIT, "reset", "--hard", prev_hash], cwd=path, timeout=10.0)
+    return await _run([GIT, "reset", "--hard", prev_hash], cwd=path, timeout=60.0)
 
 
-# Object-corruption signatures. Kept narrow so generic failures like
-# "fatal: not a git repository" are NOT treated as corruption.
+# Narrow corruption signatures: "not a git repository" etc. must not match.
 _GIT_CORRUPT_SIGNATURES = (
     "corrupt",
     "is empty",
@@ -416,11 +420,9 @@ _GIT_CORRUPT_SIGNATURES = (
     "missing commit",
 )
 
-# Quarantine directory for loose objects fsck reports as corrupt (kept inside
-# .git/objects so it never shows up as an untracked working-tree file).
+# Quarantine dir inside .git/objects so it never appears as untracked.
 _QUARANTINE_DIRNAME = "objects-corrupt"
-# fsck error lines reference a corrupt object either by its on-disk path
-# (.git/objects/ab/<38 hex>) or by its 40-hex SHA; match both.
+# fsck names corrupt objects by path (.git/objects/ab/<38hex>) or 40-hex SHA.
 _GIT_OBJ_PATH_RE = re.compile(r"objects/([0-9a-f]{2})/([0-9a-f]{38})")
 _GIT_OBJ_SHA_RE = re.compile(r"\b([0-9a-f]{40})\b")
 
@@ -524,8 +526,7 @@ async def git_repair(path: Path) -> tuple[bool, str]:
         return (False, f"fetch after cleanup failed: {out}")
     if not await git_has_corruption(path):
         return (True, f"repaired ({removed} empty objects removed)")
-    # Empty-object pruning + fetch did not clear it: a non-empty loose object is
-    # corrupt. Quarantine the bad objects and re-fetch to re-download them.
+    # A non-empty loose object is corrupt: quarantine and re-fetch it.
     quarantined = await _quarantine_corrupt_objects(path)
     if quarantined == 0:
         return (False, "still corrupt after fetch (no quarantinable objects found)")
@@ -611,7 +612,8 @@ async def git_checkout(path: Path | None, branch: str) -> tuple[bool, str]:
     if current_branch == branch:
         return (True, "already on branch")
 
-    return await _run([GIT, "checkout", branch], cwd=path, timeout=10.0)
+    # Generous: a big checkout on slow SD can pass 10s; SIGTERM = half-written tree.
+    return await _run([GIT, "checkout", branch], cwd=path, timeout=60.0)
 
 
 async def check_apt_status(
@@ -841,8 +843,9 @@ async def run_hook(
 ) -> tuple[bool, str]:
     """Run the per-component update hook if it exists.
 
-    timeout is 60s for update hooks; provisioning passes a larger budget since a
-    first install may sync a full dependency set.
+    The 60s default suits tests and trivial hooks; the update and provisioning
+    flows pass HOOK_TIMEOUT since a hook may sync a full dependency set (e.g.
+    Spoolman's `uv sync` after its deps changed).
     """
     hook = (_HOOKS_DIR / f"{name}.sh").resolve()  # SEC: resolve symlinks
     try:

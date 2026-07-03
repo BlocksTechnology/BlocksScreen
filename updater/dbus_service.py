@@ -226,6 +226,8 @@ class UpdaterInterface(
             with process_lock() as acquired:
                 if not acquired:
                     _log.warning("update_all: a CLI run holds the lock; skipping")
+                    # Surface the rejection so the UI toasts instead of going silent.
+                    self.error.emit(("updater", "another update is running"))
                     return
                 ran = True
                 await self._update_all_locked()
@@ -233,8 +235,7 @@ class UpdaterInterface(
             _log.error("_run_update_all failed: %s", exc, exc_info=True)
         finally:
             self._set_busy(busy=False)
-        # Only run the silent apt pass if we actually held the lock - otherwise a
-        # CLI run owns the update and is responsible for apt.
+        # Silent apt pass only if we held the lock; else the CLI run owns apt.
         if ran:
             self._spawn(
                 self._svc.background_apt_upgrade(), name="background_apt_upgrade"
@@ -249,8 +250,7 @@ class UpdaterInterface(
             or s.packages_upgradable > 0
             or s.has_local_changes
             or s.needs_install
-            # Errored git repos (e.g. a corrupt repo) are included so the one
-            # "Update" button reaches them; the update flow self-heals them.
+            # Errored git repos included: the update flow self-heals them.
             or (s.error is not None and s.kind != "apt")
         }
         if dirty:
@@ -263,6 +263,7 @@ class UpdaterInterface(
             with process_lock() as acquired:
                 if not acquired:
                     _log.warning("update_component: a CLI run holds the lock; skipping")
+                    self.error.emit((name, "another update is running"))
                     return
                 await self._svc.update_component(name)
         except Exception as exc:  # noqa: BLE001
@@ -275,6 +276,7 @@ class UpdaterInterface(
             with process_lock() as acquired:
                 if not acquired:
                     _log.warning("recover: a CLI run holds the lock; skipping")
+                    self.error.emit((name, "another update is running"))
                     return
                 await self._svc.recover(name, hard)
         except Exception as exc:  # noqa: BLE001
@@ -304,9 +306,7 @@ class UpdaterInterface(
                 cancelled_tasks.append(task)
                 _log.info("cancelled task %r", name)
         if cancelled_tasks:
-            # asyncio.wait (unlike a cancelled gather) never re-cancels the
-            # tasks, so an in-flight rollback is not interrupted a second time.
-            # Budget covers git reset + service restart + active-wait.
+            # asyncio.wait never re-cancels: rollback isn't interrupted again.
             _done, pending = await asyncio.wait(cancelled_tasks, timeout=150.0)
             if pending:
                 _log.error(

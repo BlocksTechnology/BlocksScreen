@@ -26,8 +26,7 @@ def _runtime_dir() -> Path:
             return d
         except OSError:
             continue
-    # Both unavailable (broken home): return the cache path so the caller's open()
-    # surfaces the error rather than silently falling back to world-writable /tmp.
+    # Broken home: return the cache path so open() surfaces the error (no /tmp).
     return cache
 
 
@@ -58,8 +57,7 @@ def process_lock() -> Iterator[bool]:
     try:
         f = open(lock_path(), "w")  # noqa: SIM115, PTH123
     except OSError:
-        # Disk full / read-only SD: behave as "could not acquire" so the caller
-        # degrades gracefully instead of crashing the update operation.
+        # Disk-full/RO SD: treat as "not acquired" so the caller degrades gracefully.
         yield False
         return
     try:

@@ -26,7 +26,7 @@ Coverage targets
 from unittest.mock import MagicMock, patch
 
 import pytest
-from PyQt6 import QtCore, QtGui, QtWidgets
+from PyQt6 import QtGui, QtWidgets
 
 from BlocksScreen.lib.network.models import (ConnectionPriority,
                                              ConnectionResult,

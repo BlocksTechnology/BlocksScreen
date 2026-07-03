@@ -137,9 +137,7 @@ class UpdatePage(QtWidgets.QWidget):
         return super().resizeEvent(a0)
 
     def _needs_update(self, status: ComponentStatus) -> bool:
-        # Mirrors the daemon's dirty-set in _run_update_all: an errored git repo
-        # (e.g. a corrupt repo) is included so the one "Update" button shows and
-        # the update flow self-heals it. apt errors are not repairable this way.
+        # Mirrors daemon dirty-set: errored git repos self-heal; apt errors don't.
         return bool(
             status.commits_behind
             or status.packages_upgradable > 0
@@ -315,9 +313,10 @@ class UpdatePage(QtWidgets.QWidget):
         except (json.JSONDecodeError, TypeError) as exc:
             _log.error("handle_status_ready: bad payload '%s'", exc)
             _log.debug(json_str)
+            # Keep the last good list but tell the user it may be stale.
+            self._show_toast("Status update failed - tap refresh to retry")
             return
-        # Build per-component so one malformed entry (e.g. a newer daemon adding
-        # a field this UI build doesn't know) can't blank the whole list.
+        # Build per-component so one malformed entry can't blank the whole list.
         self._statuses = {}
         for name, fields in data.items():
             try:
@@ -381,6 +380,9 @@ class UpdatePage(QtWidgets.QWidget):
         self._show_update_confirm()
 
     def _show_update_confirm(self) -> None:
+        # Dialogs parented to the page outlive close(); drop the previous one.
+        if self._update_confirm_popup is not None:
+            self._update_confirm_popup.deleteLater()
         popup = BasePopup(self, floating=True)
         popup.set_message(
             "The printer will restart.\n"
