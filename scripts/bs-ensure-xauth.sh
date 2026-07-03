@@ -12,6 +12,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 set -u
+umask 077
 
 _XAUTH="${1:-${XAUTHORITY:-$HOME/.Xauthority}}"
 
@@ -21,7 +22,6 @@ _cookie="$(mcookie 2>/dev/null)"
 [ -z "$_cookie" ] && exit 0
 
 : > "$_XAUTH" 2>/dev/null || exit 0
-chmod 600 "$_XAUTH" 2>/dev/null || true
 xauth -f "$_XAUTH" add :0 . "$_cookie" 2>/dev/null || true
 xauth -f "$_XAUTH" add "$(hostname)/unix:0" . "$_cookie" 2>/dev/null || true
 exit 0

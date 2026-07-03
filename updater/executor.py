@@ -63,7 +63,6 @@ def _make_clean_env() -> dict[str, str]:
         "PATH",
         "HOME",
         "USER",
-        "LANG",
         # SEC: DBUS_SESSION_BUS_ADDRESS and XDG_RUNTIME_DIR intentionally excluded -
         # hook scripts must not make D-Bus calls or access the session runtime dir.
         "TMPDIR",
@@ -72,6 +71,8 @@ def _make_clean_env() -> dict[str, str]:
         if val is not None:
             env[key] = val
     env["GIT_TERMINAL_PROMPT"] = "0"
+    # git_fetch's broken-ref self-heal and the apt parser match English messages
+    env["LC_ALL"] = "C"
     # SEC: only copy safe SUDO_ vars; reject SUDO_ASKPASS and others
     safe_sudo = {"SUDO_USER", "SUDO_UID", "SUDO_GID"}
     for key, val in os.environ.items():
