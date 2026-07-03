@@ -156,6 +156,11 @@ class ConnectionPage(QtWidgets.QFrame):
         self.update_page_button.clicked.connect(self._on_update_page_clicked)
         self.wifi_button.clicked.connect(self.wifi_button_clicked.emit)
 
+    @property
+    def manual_restart_pending(self) -> bool:
+        """True while a user-initiated restart (firmware or printer) is in flight."""
+        return self._firmware_restarting_pending
+
     def _apply_shutdown_guard(self, state: ConnectionState, context: str) -> bool:
         if (
             self._state == ConnectionState.KLIPPER_SHUTDOWN
