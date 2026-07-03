@@ -1,4 +1,4 @@
-"""Update page widget — displays component status from the D-Bus updater daemon."""
+"""Update page widget - displays component status from the D-Bus updater daemon."""
 
 import json
 import logging
@@ -312,13 +312,21 @@ class UpdatePage(QtWidgets.QWidget):
         _log.debug("handle_status_ready: busy=%s", self._busy)
         try:
             data: dict[str, dict] = json.loads(json_str)
-            self._statuses = {
-                name: ComponentStatus(**fields) for name, fields in data.items()
-            }
         except (json.JSONDecodeError, TypeError) as exc:
             _log.error("handle_status_ready: bad payload '%s'", exc)
             _log.debug(json_str)
             return
+        # Build per-component so one malformed entry (e.g. a newer daemon adding
+        # a field this UI build doesn't know) can't blank the whole list.
+        self._statuses = {}
+        for name, fields in data.items():
+            try:
+                self._statuses[name] = ComponentStatus(**fields)
+            except (TypeError, ValueError) as exc:
+                _log.error("handle_status_ready: skipping %r - %s", name, exc)
+                self._statuses[name] = ComponentStatus(
+                    name=name, kind="unknown", error="malformed status"
+                )
         _update_avail = any(self._needs_update(s) for s in self._statuses.values())
         self._update_avail = _update_avail
         if not self._busy:

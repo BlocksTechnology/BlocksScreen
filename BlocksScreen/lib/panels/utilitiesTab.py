@@ -179,10 +179,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         self.panel.rc_yes.clicked.connect(self.on_routine_answer)
 
         # --- Axis Maintenance ---
-        self.panel.axis_x_btn.clicked.connect(partial(self.axis_maintenance, "x"))
-        self.panel.axis_y_btn.clicked.connect(partial(self.axis_maintenance, "y"))
-        self.panel.axis_z_btn.clicked.connect(partial(self.axis_maintenance, "z"))
-
+        self.panel.am_execute.clicked.connect(self.axis_maintenance)
         self.panel.toggle_led_button.state = ToggleAnimatedButton.State.ON
 
         # --- LEDs ---
@@ -393,13 +390,19 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
                     pos_min = value.get("position_min")
                     pos_max = value.get("position_max")
                     if pos_min is not None or pos_max is not None:
+                        min_val = (
+                            float(pos_min) if pos_min is not None else -float("inf")
+                        )
+                        max_val = (
+                            float(pos_max) if pos_max is not None else float("inf")
+                        )
+                        endstop_raw = value.get("position_endstop")
+                        endstop = float(endstop_raw) if endstop_raw is not None else 0.0
+                        homes_at_min = abs(endstop - min_val) <= abs(endstop - max_val)
                         self.stepper_limits[key] = {
-                            "min": float(pos_min)
-                            if pos_min is not None
-                            else -float("inf"),
-                            "max": float(pos_max)
-                            if pos_max is not None
-                            else float("inf"),
+                            "min": min_val,
+                            "max": max_val,
+                            "homes_at_min": homes_at_min,
                         }
 
     def on_printer_config_received(self, config: dict) -> None:
@@ -431,13 +434,6 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         obj_key, message = routine_configs[process]
         obj_list = list(self.objects.get(obj_key, {}).keys())
         if not self._advance_routine_object(obj_list):
-            if process == Process.FAN:
-                self.run_gcode_signal.emit("M107")
-                for i in self.objects["fans"]:
-                    self.run_gcode_signal.emit(
-                        f"SET_FAN_SPEED FAN={i.removeprefix('fan_generic ')} SPEED=0\nM400"
-                    )
-
             if self.tb:
                 self.troubleshoot_request()
                 self.tb = False
@@ -445,20 +441,27 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
                 self.change_page(self.indexOf(self.panel.utilities_page))
 
             return
-
-        message = f"Please check if the {self.current_object} is functioning correctly."
+        if self.tb:
+            self.troubleshoot_request()
+            self.tb = False
+            self.current_object = None
+            self.current_process = None
+            return
+        message = (
+            f"Please check if the {self.current_object}\nis functioning correctly."
+        )
         if process == Process.AXIS:
             message = f"Please ensure the {self.current_object} axis moves correctly."
         elif process in [Process.BED_HEATER, Process.EXTRUDER]:
-            message = "Please check if the temperature reaches 60°C. \n you may need to wait a few moments."
+            message = "Please check if the temperature reaches 60°C. \n it may take a few moments."
 
         self.set_routine_check_page(
             f"Running routine for: {self.current_object}", message
         )
         self.show_waiting_page(
             self.indexOf(self.panel.rc_page),
-            f"Please check if the {message}",
-            10000 if process == Process.AXIS else 0,
+            message,
+            20000 if process == Process.AXIS else 0,
         )
         self._send_routine_gcode()
 
@@ -504,10 +507,18 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
             self.objects[obj_key][item_key] = answer
             if self.current_process in [Process.BED_HEATER, Process.EXTRUDER]:
                 self.run_gcode_signal.emit("TURN_OFF_HEATERS")
+
+            if self.current_process == Process.FAN:
+                self.run_gcode_signal.emit("M107")
+                for i in self.objects["fans"]:
+                    self.run_gcode_signal.emit(
+                        f"SET_FAN_SPEED FAN={i.removeprefix('fan_generic ')} SPEED=0\nM400"
+                    )
+
             self.run_routine(self.current_process)
         elif self.current_process == Process.AXIS_MAINTENANCE:
             if answer == "yes":
-                self._run_axis_maintenance_gcode(self.current_object)
+                self._run_AXIS_MAINTENANCE_gcode(self.current_object)
             else:
                 self.change_page(self.indexOf(self.panel.axes_page))
 
@@ -525,22 +536,46 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
 
             return
 
+        if self.current_process == Process.AXIS:
+            if gcode := self._routine_check_axis_gcode(self.current_object):
+                self.run_gcode_signal.emit(f"{gcode}\nM400")
+            return
+
         gcode_map = {
             Process.BED_HEATER: "SET_HEATER_TEMPERATURE HEATER=heater_bed TARGET=60",
             Process.EXTRUDER: "SET_HEATER_TEMPERATURE HEATER=extruder TARGET=60",
-            (Process.AXIS, "x"): "G91\nG1 X250 F1000\nG1 X-250 F1000",
-            (Process.AXIS, "y"): "G91\nG1 Y250 F1000\nG1 Y-250 F1000",
-            (Process.AXIS, "z"): "G91\nG1 Z250 F1000\nG1 Z-250 F1000",
         }
 
-        key = (
-            (self.current_process, self.current_object)
-            if self.current_process == Process.AXIS
-            else self.current_process
-        )
-
-        if gcode := gcode_map.get(key):
+        if gcode := gcode_map.get(self.current_process):
             self.run_gcode_signal.emit(f"{gcode}\nM400")
+
+    def _routine_check_axis_gcode(self, axis: str, margin: float = 70.0) -> str:
+        limits = self.stepper_limits.get(f"stepper_{axis}")
+        if not limits:
+            return ""
+
+        span = limits["max"] - limits["min"]
+        if span <= 0:
+            return ""
+
+        effective_margin = margin
+        if span - (2 * margin) <= 0:
+            effective_margin = span * 0.1
+
+        distance = span - (2 * effective_margin)
+        if distance <= 0:
+            return ""
+
+        sign = 1 if limits.get("homes_at_min", True) else -1
+        axis_upper = axis.upper()
+
+        out = f"G1 {axis_upper}{sign * distance:.2f} F6000"
+        back = f"G1 {axis_upper}{-sign * (distance - 10):.2f} F6000"
+        moves = f"{out}\n{back}"
+        if axis == "x":
+            moves += "\nG90\nG1 X250 F6000"
+
+        return f"G91\n{moves}"
 
     def set_routine_check_page(self, title: str, label: str):
         """Set text on routine page"""
@@ -634,31 +669,27 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
                 led_state: LedState = self.objects["leds"][self.current_object]
                 self.run_gcode_signal.emit(led_state.get_gcode(self.current_object))
 
-    def axis_maintenance(self, axis: str) -> None:
+    def axis_maintenance(self) -> None:
         """Routine, checks axis movement for printer debugging"""
         self.current_process = Process.AXIS_MAINTENANCE
-        self.current_object = axis
-        self.run_gcode_signal.emit(f"G28 {axis.upper()}\nM400")
-        if axis == "x":
-            self.run_gcode_signal.emit("G1 X10 Y250 F18000")
+        self.current_object = (
+            self.panel.axis_maintenance_gb.checkedButton().text().lower()
+        )
+        self.run_gcode_signal.emit(f"AXIS_MAINTENANCE_{self.current_object}\nM400")
         self.set_routine_check_page(
             "Axis Maintenance",
-            f"Insert oil on the {axis.upper()} axis before confirming.",
+            f"Insert oil on the {self.current_object.upper()} axis before confirming.",
         )
         self.show_waiting_page(
             self.indexOf(self.panel.rc_page),
-            f"Homing {axis.upper()} axis...",
-            5000,
+            f"Homing {self.current_object.upper()} axis...",
+            20000,
         )
 
-    def _run_axis_maintenance_gcode(self, axis: str):
+    def _run_AXIS_MAINTENANCE_gcode(self, axis: str):
         stepper_key = f"stepper_{axis}"
         if stepper_key in self.stepper_limits:
-            max_pos = self.stepper_limits[stepper_key].get("max", 20)
-            distance = int(max_pos) - 20
-            self.run_gcode_signal.emit(
-                f"G1 {axis.upper()}{distance} F3000\nM400\nG28\nM400"
-            )
+            self.run_gcode_signal.emit(f"AXIS_MAINTENANCE_FINISH_{axis}\nM400")
             self.show_waiting_page(
                 self.indexOf(self.panel.axes_page),
                 f"Running maintenance cycle on {axis.upper()} axis...",
