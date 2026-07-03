@@ -50,7 +50,7 @@ from updater.locking import process_lock, restart_sentinel_path
 from updater.models import ComponentConfig, ComponentStatus
 
 _STATE_PATH = Path.home() / ".cache" / "blockscreen" / "updater_state.json"
-# SD-backed batch map name->pre-update hash; present at boot = revert those repos.
+# SD-backed map of component name to pre-update hash; if present at boot, revert.
 _INFLIGHT_PATH = Path.home() / ".cache" / "blockscreen" / "updater_inflight.json"
 _HISTORY_PATH = Path.home() / ".cache" / "blockscreen" / "update_history.jsonl"
 # Cap the history so a device running for years cannot fill the SD card.
@@ -141,7 +141,7 @@ class UpdateService:
                     cache_ttl_seconds=0 if force else 86_400, exclude=c.apt_exclude
                 )
             elif c.path is None or not c.path.exists():
-                # Missing opted-in comps surface as needs_install; rest stay skipped.
+                # Missing opted-in components surface as needs_install; others skip.
                 if c.install_if_missing and c.url:
                     results[c.name] = ComponentStatus(name=c.name, needs_install=True)
                 return
@@ -209,8 +209,7 @@ class UpdateService:
             for c in sorted_components
             if c.kind == "git" and c.path is not None and c.path.exists()
         ]
-        # A dir without .git (e.g. a pre-updater tarball install) can never
-        # fetch; error it individually instead of poisoning the whole batch.
+        # A dir without .git (tarball install) errors individually, not the batch.
         for c in [c for c in batch if not is_git_repo(c.path)]:
             batch.remove(c)
             if c.install_if_missing and c.url and await self._quarantine_nonrepo(c):
@@ -243,8 +242,7 @@ class UpdateService:
         its own fetch in the apply phase (recorded fetch time). Repos that need
         cloning or are corrupt are left to self-heal in their own flow.
         """
-        # Non-repo dirs are excluded: their fetch failure is not "offline" and
-        # must not abort the batch (they are errored individually by update_all).
+        # Non-repo dirs excluded: their fetch failure is not "offline" (see update_all).
         targets = [
             c
             for c in sorted_components
@@ -361,7 +359,7 @@ class UpdateService:
                     self._log.error("%s: hook failed: %s", c.name, hook_err)
                     await self._abort_batch(batch, prev, touched, restarted, "hook")
                     return
-            # Restart each unique svc once; bounced marked BEFORE so abort re-restarts.
+            # Restart each unique service once; record it BEFORE so abort re-restarts it.
             self._log.info("git batch: restart phase")
             seen: set[str] = set()
             ui_components: list[ComponentConfig] = []

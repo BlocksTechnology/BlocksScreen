@@ -15,8 +15,7 @@ flock -x -w 30 200 || { echo_error "Another install-updater.sh is already runnin
 
 SCRIPT_PATH=$(dirname -- "$(readlink -f -- "$0")")
 BS_PATH=$(dirname "$SCRIPT_PATH")
-# Service always runs as 'blocks'; derive home from that, not the caller's identity.
-# Callers vary (sudo, post-merge hook, root shell) so SUDO_USER/$USER are unreliable.
+# Always derive home from 'blocks': callers vary, SUDO_USER/$USER unreliable.
 _BSENV_USER="blocks"
 _BSENV_HOME=$(getent passwd "$_BSENV_USER" | cut -d: -f6)
 BSENV="${BLOCKSSCREEN_VENV:-${_BSENV_HOME}/.BlocksScreen-env}"
@@ -29,6 +28,12 @@ echo_ok "D-Bus policy installed"
 echo_info "Installing D-Bus activation file ..."
 sudo cp "$SCRIPT_PATH/com.blockscreen.Updater.service" /usr/share/dbus-1/system-services/
 echo_ok "D-Bus activation file installed"
+
+echo_info "Installing bs-apt-helper (root-owned apt wrapper) ..."
+# Atomic + before the daemon (re)start: new updater code has no apt fallback.
+sudo install -o root -g root -m 0755 "$SCRIPT_PATH/bs-apt-helper.sh" /usr/local/sbin/.bs-apt-helper.new
+sudo mv -Tf /usr/local/sbin/.bs-apt-helper.new /usr/local/sbin/bs-apt-helper
+echo_ok "bs-apt-helper installed"
 
 echo_info "Installing BlocksScreen-updater service ..."
 SERVICE=$(cat "$SCRIPT_PATH/BlocksScreen-updater.service")
@@ -48,26 +53,16 @@ echo "$SPOOLMAN_SVC" | sudo tee /etc/systemd/system/Spoolman.service >/dev/null
 sudo systemctl daemon-reload
 echo_ok "Spoolman service unit installed"
 
-echo_info "Installing bs-apt-helper (root-owned apt wrapper) ..."
-# Atomic install: the helper is never absent or half-written.
-sudo install -o root -g root -m 0755 "$SCRIPT_PATH/bs-apt-helper.sh" /usr/local/sbin/.bs-apt-helper.new
-sudo mv -Tf /usr/local/sbin/.bs-apt-helper.new /usr/local/sbin/bs-apt-helper
-echo_ok "bs-apt-helper installed"
-
 echo_info "Installing sudoers rules for updater ..."
 SUDOERS_FILE="/etc/sudoers.d/blockscreen-updater"
 SUDOERS_TMP=$(mktemp)
-# All apt/dpkg ops go through the root-owned wrapper: fixed argvs, no option
-# injection. Kept in sync by tests/scripts/test_sudoers_rules.py.
+# The wrapper is the only apt/dpkg grant; kept in sync by tests/scripts/test_sudoers_rules.py.
 printf 'blocks ALL=(ALL) NOPASSWD: /usr/local/sbin/bs-apt-helper *\n' >>"$SUDOERS_TMP"
 printf 'blocks ALL=(ALL) NOPASSWD: /usr/bin/systemctl reboot\n' >>"$SUDOERS_TMP"
 printf 'blocks ALL=(ALL) NOPASSWD: /usr/bin/chvt 7\n' >>"$SUDOERS_TMP"
 printf 'blocks ALL=(ALL) NOPASSWD: /usr/bin/chvt 8\n' >>"$SUDOERS_TMP"
 printf 'blocks ALL=(ALL) NOPASSWD: /usr/bin/bash %s/scripts/install-updater.sh\n' "$BS_PATH" >>"$SUDOERS_TMP"
-# Derive allowed restart targets from components.yaml instead of wildcard.
-# Per service we allow: restart (normal), reset-failed (start-limit recovery,
-# replaces the old systemctl-kill fallback), and --no-block restart (used for the
-# self UI service so a slow restart never blocks/aborts the update batch).
+# Per components.yaml service: restart, reset-failed (start-limit), --no-block restart.
 _emit_svc_rules() {
     local _s="$1"
     printf 'blocks ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart %s\n' "$_s" >>"$SUDOERS_TMP"
@@ -84,11 +79,9 @@ else
         _emit_svc_rules "$_svc"
     done
 fi
-# The daemon restarts itself (--no-block) to adopt new updater code after a
-# successful self-update; this service is never in components.yaml.
+# Daemon self-restart target; never in components.yaml.
 _emit_svc_rules BlocksScreen-updater.service
-# Spoolman is provisioned on demand: the daemon enables its unit after a clean
-# first start (restart rules are auto-derived above from components.yaml).
+# Spoolman is provisioned on demand; enable rule needed for its first clean start.
 printf 'blocks ALL=(ALL) NOPASSWD: /usr/bin/systemctl enable Spoolman.service\n' >>"$SUDOERS_TMP"
 if sudo visudo -cf "$SUDOERS_TMP" >/dev/null 2>&1; then
     sudo install -m 0440 "$SUDOERS_TMP" "$SUDOERS_FILE"
@@ -115,13 +108,10 @@ echo_info "Converting BlocksScreen.service copy to symlink (enables sudo-free ho
 _BS_SVC_SRC="$BS_PATH/scripts/BlocksScreen.service"
 _BS_SVC_DEST="/etc/systemd/system/BlocksScreen.service"
 if [[ ! -f "$_BS_SVC_SRC" ]]; then
-    # Never remove the running unit when there is no source to replace it with:
-    # a missing BlocksScreen.service on a no-SSH box is unrecoverable.
+    # Never remove the running unit without a replacement; the device has no SSH recovery.
     echo_info "WARN: $_BS_SVC_SRC missing, leaving existing BlocksScreen.service intact"
 elif [[ "$(readlink -f "$_BS_SVC_DEST" 2>/dev/null)" != "$(readlink -f "$_BS_SVC_SRC")" ]]; then
-    # Atomic replace: create the symlink under a temp name and rename it over the
-    # destination, so the unit is never absent. The old rm-then-link left a window
-    # where a link failure (e.g. missing source) deleted the service outright.
+    # Atomic replace via temp symlink + rename: the unit is never absent.
     sudo ln -sfn "$_BS_SVC_SRC" "${_BS_SVC_DEST}.new"
     sudo mv -Tf "${_BS_SVC_DEST}.new" "$_BS_SVC_DEST"
     sudo systemctl unmask BlocksScreen.service 2>/dev/null || true
@@ -137,11 +127,7 @@ sudo chown -R blocks:blocksscreen "$_BSENV_HOME/.cache/blockscreen"
 sudo chmod 775 "$_BSENV_HOME/.cache/blockscreen"
 echo_ok "Apt cache directory ready"
 
-# Re-arm the crash-loop boot counter on a deliberate deploy. A stale count left
-# over from a prior unstable period would otherwise let BlocksScreen-start.sh
-# roll this fresh install straight back to last_good on the first boot. Reset
-# boot_attempts only; last_good_commit stays as the rollback target so crash-loop
-# protection of the new code still works.
+# Deploy re-arms boot_attempts only; last_good stays as the rollback target.
 echo_info "Re-arming crash-loop boot counter ..."
 printf '0\n' | sudo -u "$_BSENV_USER" tee "$_BSENV_HOME/.cache/blockscreen/boot_attempts" >/dev/null 2>&1 || true
 echo_ok "Boot counter re-armed (boot_attempts=0)"
@@ -157,8 +143,7 @@ sudo systemctl restart systemd-journald 2>/dev/null || true
 echo_ok "Persistent journald enabled"
 
 echo_info "Scoping git safe.directory to component repos ..."
-# Root tooling (this script, deploy service) runs git in blocks-owned repos;
-# scope the trust to those paths instead of '*'.
+# Scope root git trust to component paths instead of '*'.
 sudo git config --system --unset-all safe.directory 2>/dev/null || true
 _SAFE_YAML="$BS_PATH/updater/components.yaml"
 if [[ -f "$_SAFE_YAML" ]]; then
@@ -221,14 +206,12 @@ git -C "$BS_PATH" config core.hooksPath scripts
 echo_ok "post-merge hook installed"
 
 echo_info "Installing Python requirements ..."
-# Keep pip itself current on each update (best-effort: a failed self-upgrade must
-# not block the requirements install below).
+# Best-effort pip self-update; must not block the requirements install below.
 "$BSENV/bin/pip" install --quiet --upgrade pip 2>/dev/null || true
 apt-get install -y --quiet libsystemd-dev python3-dev 2>/dev/null || true
 # xsetroot is used as belt-and-suspenders cursor hiding alongside the Xorg -nocursor server flag.
 sudo apt-get install -y --quiet x11-xserver-utils 2>/dev/null || true
-# sdbus is pinned in requirements.txt (0.12.0); --no-binary forces a clean source build
-# (needs libsystemd-dev). --upgrade-strategy=only-if-needed skips satisfied packages.
+# sdbus pinned; --no-binary needs libsystemd-dev; only-if-needed skips satisfied.
 "$BSENV/bin/pip" install --quiet --only-binary :all: --no-binary sdbus,sdbus-networkmanager \
     --upgrade-strategy=only-if-needed \
     -r "$BS_PATH/scripts/requirements.txt" || true

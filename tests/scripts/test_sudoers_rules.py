@@ -61,20 +61,10 @@ class TestSudoersRules:
                 f"direct apt/dpkg rule bypasses the wrapper: {rule!r}"
             )
 
-    def test_wrapper_argvs_match_rule(self, tmp_path, monkeypatch):
-        helper = tmp_path / "bs-apt-helper"
-        helper.touch()
-        monkeypatch.setattr(executor, "APT_HELPER", helper)
+    def test_wrapper_argvs_match_rule(self):
         for argv in _daemon_apt_argvs():
-            cmd = " ".join([_WRAPPER_RULE.split()[0], *argv[2:]])
-            assert argv[1] == str(helper)
+            cmd = " ".join(argv[1:])
             assert fnmatch.fnmatch(cmd, _WRAPPER_RULE), f"unmatched argv: {cmd!r}"
-
-    def test_fallback_builds_direct_apt_get(self, tmp_path, monkeypatch):
-        monkeypatch.setattr(executor, "APT_HELPER", tmp_path / "missing")
-        argv = _apt_cmd("upgrade", ["vim"])
-        assert argv[:2] == [executor.SUDO, executor.APT_GET]
-        assert argv[-4:] == ["install", "--only-upgrade", "-y", "vim"]
 
 
 class TestWrapperValidation:

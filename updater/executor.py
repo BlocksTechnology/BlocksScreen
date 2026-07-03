@@ -20,29 +20,18 @@ logger = logging.getLogger(__name__)
 
 UPDATER_SERVICE = "BlocksScreen-updater.service"
 
-# Hook budget: a deps-heavy hook (Spoolman uv sync) runs minutes; timeout = abort.
+# Hook budget: a dependency-heavy hook can run minutes; a timeout aborts the batch.
 HOOK_TIMEOUT = 600.0
 
 GIT = "/usr/bin/git"
 PIP = "/usr/bin/pip3"
 APT = "/usr/bin/apt"
-APT_GET = "/usr/bin/apt-get"
 APT_MARK = "/usr/bin/apt-mark"
 SUDO = "/usr/bin/sudo"
 SYSTEMCTL = "/usr/bin/systemctl"
 DPKG = "/usr/bin/dpkg"
-# Root-owned fixed-argv apt wrapper, installed by install-updater.sh.
+# Root-owned fixed-argv apt wrapper (owns the -o opts); installed pre-restart.
 APT_HELPER = Path("/usr/local/sbin/bs-apt-helper")
-
-# Wait up to 60s for the dpkg lock (apt-daily/unattended-upgrades may be mid-run).
-_APT_LOCK_OPTS = ["-o", "DPkg::Lock::Timeout=60"]
-# Keep existing conffiles without prompting (an upgrade must never block on input).
-_APT_CONF_OPTS = [
-    "-o",
-    "Dpkg::Options::=--force-confdef",
-    "-o",
-    "Dpkg::Options::=--force-confold",
-]
 
 _SERVICE_RE = re.compile(r"^[a-zA-Z0-9@:._-]+\.service$")
 _GIT_SHA_RE = re.compile(r"^[a-f0-9]{7,40}$")
@@ -704,36 +693,14 @@ def _apt_env() -> dict[str, str]:
     return env
 
 
-def _apt_get(args: list[str], *, keep_conffiles: bool = False) -> list[str]:
-    """Build a sudo apt-get argv with the dpkg-lock wait always applied.
-
-    keep_conffiles adds --force-confdef/--force-confold for unpacking operations.
-    """
-    opts = [*_APT_LOCK_OPTS, *(_APT_CONF_OPTS if keep_conffiles else [])]
-    return [SUDO, APT_GET, *opts, *args]
-
-
-# Wrapper verb -> pre-wrapper direct apt-get form (fallback path).
-_APT_LEGACY: dict[str, tuple[list[str], bool]] = {
-    "update": (["update"], False),
-    "upgrade": (["install", "--only-upgrade", "-y"], True),
-    "autoremove": (["autoremove", "-y"], False),
-    "fix-broken": (["-f", "install", "-y"], True),
-    "dselect-upgrade": (["dselect-upgrade", "-y"], True),
-}
-
-
 def _apt_cmd(verb: str, pkgs: Sequence[str] = ()) -> list[str]:
-    """Build the sudo apt argv: root-owned wrapper when deployed, else direct apt-get.
+    """Build the sudo apt argv via the root-owned wrapper.
 
-    The wrapper is the only apt command scoped sudoers grants (no option
-    injection); boxes without it yet still run NOPASSWD ALL, so the direct
-    fallback works there until install-updater deploys the wrapper.
+    The wrapper is the only apt command sudoers grants; install-updater.sh
+    deploys it before the daemon restarts onto this code, so it is always
+    present. It owns the lock/conffile -o options and validates its args.
     """
-    if APT_HELPER.exists():
-        return [SUDO, str(APT_HELPER), verb, *pkgs]
-    args, keep = _APT_LEGACY[verb]
-    return _apt_get([*args, *pkgs], keep_conffiles=keep)
+    return [SUDO, str(APT_HELPER), verb, *pkgs]
 
 
 async def _apt_snapshot_packages() -> tuple[bool, Path | None]:
@@ -748,10 +715,7 @@ async def _apt_snapshot_packages() -> tuple[bool, Path | None]:
     )
     try:
         snapshot_path.parent.mkdir(parents=True, mode=0o0700, exist_ok=True)
-        ok, output = await _run(
-            ["/usr/bin/dpkg", "--get-selections"],
-            timeout=15.0,
-        )
+        ok, output = await _run([DPKG, "--get-selections"], timeout=15.0)
         if not ok:
             logger.warning("dpkg --get-selections failed: %s", output)
             return False, None
@@ -794,13 +758,10 @@ async def _apt_restore_packages(snapshot_path: Path) -> tuple[bool, str]:
     except OSError as e:
         logger.error("apt restore: cannot read snapshot %s: %s", snapshot_path, e)
         return False, str(e)
-    set_sel = (
-        [SUDO, str(APT_HELPER), "set-selections"]
-        if APT_HELPER.exists()
-        else [SUDO, DPKG, "--set-selections"]
-    )
     proc = await asyncio.create_subprocess_exec(
-        *set_sel,
+        SUDO,
+        str(APT_HELPER),
+        "set-selections",
         stdin=asyncio.subprocess.PIPE,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,

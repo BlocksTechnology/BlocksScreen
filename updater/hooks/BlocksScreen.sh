@@ -1,7 +1,5 @@
 #!/bin/bash
-# Runs after a successful BlocksScreen git update (via updater daemon).
-# Uses only sudo-free mechanisms: symlink + dbus-send (polkit) for service
-# file changes, flag file + BlocksScreen-deploy.path for install-updater.sh.
+# Post-update hook: sudo-free unit sync + deploy-flag mechanics only.
 set -euo pipefail
 
 if [ -z "${COMPONENT_PATH:-}" ] || [ -z "${PREV_HASH:-}" ] || [ -z "${NEW_HASH:-}" ]; then
@@ -9,9 +7,7 @@ if [ -z "${COMPONENT_PATH:-}" ] || [ -z "${PREV_HASH:-}" ] || [ -z "${NEW_HASH:-
 fi
 
 _set_deploy_flag() {
-    # Under the updater (mid-batch), do NOT trigger install-updater now: record
-    # to the sentinel so the daemon touches the deploy flag once the batch is
-    # done. Setting the flag here could fire BlocksScreen-deploy.path mid-batch.
+    # Mid-batch: record to the sentinel; setting the flag now would fire deploy mid-batch.
     if [ -n "${BS_UPDATER_SELF_UPDATE:-}" ] && [ -n "${BS_UPDATER_RESTART_SENTINEL:-}" ]; then
         mkdir -p "$(dirname "$BS_UPDATER_RESTART_SENTINEL")" 2>/dev/null || true
         echo "install" >>"$BS_UPDATER_RESTART_SENTINEL"
@@ -86,9 +82,4 @@ if ! git -C "$COMPONENT_PATH" diff --quiet "$PREV_HASH" "$NEW_HASH" \
     _set_deploy_flag
 fi
 
-# NOTE: do NOT trigger a daemon restart here when updater/ changes. The deploy
-# flag fires BlocksScreen-deploy.path immediately, which runs install-updater.sh
-# and restarts BlocksScreen-updater.service while it is still running this very
-# update batch, which cancels the batch and reverts the update. The daemon picks
-# up new updater/ code on the next reboot; a clean post-batch self-restart is the
-# proper fix (see docs/superpowers/specs/2026-06-19-updater-self-update-ordering-design.md).
+# NOTE: no daemon restart here on updater/ changes: mid-batch restart cancels+reverts (see 2026-06-19 self-update-ordering spec).

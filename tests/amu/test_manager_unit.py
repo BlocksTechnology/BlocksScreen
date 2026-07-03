@@ -157,7 +157,7 @@ class TestUpdateMMUState:
         assert manager.get_state().gate_speed_override == ()
 
     def test_from_status_parses_endless_spool_groups(self, manager) -> None:
-        data = {**_FULL_STATUS, "endless_spool_groups": [0, 1, 3,0]}
+        data = {**_FULL_STATUS, "endless_spool_groups": [0, 1, 3, 0]}
         manager.update_mmu_state(data)
         assert manager.get_state().endless_spool_groups == (0, 1, 3, 0)
 

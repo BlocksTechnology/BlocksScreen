@@ -2,20 +2,28 @@
 
 import pytest
 
-from BlocksScreen.lib.network.models import (SIGNAL_EXCELLENT_THRESHOLD,
-                                             SIGNAL_FAIR_THRESHOLD,
-                                             SIGNAL_GOOD_THRESHOLD,
-                                             SIGNAL_MINIMUM_THRESHOLD,
-                                             ConnectionPriority,
-                                             ConnectionResult,
-                                             ConnectivityState, HotspotConfig,
-                                             HotspotSecurity, NetworkInfo,
-                                             NetworkState, NetworkStatus,
-                                             PendingOperation, SavedNetwork,
-                                             SecurityType, VlanInfo,
-                                             WifiIconKey,
-                                             is_connectable_security,
-                                             is_hidden_ssid, signal_to_bars)
+from BlocksScreen.lib.network.models import (
+    SIGNAL_EXCELLENT_THRESHOLD,
+    SIGNAL_FAIR_THRESHOLD,
+    SIGNAL_GOOD_THRESHOLD,
+    SIGNAL_MINIMUM_THRESHOLD,
+    ConnectionPriority,
+    ConnectionResult,
+    ConnectivityState,
+    HotspotConfig,
+    HotspotSecurity,
+    NetworkInfo,
+    NetworkState,
+    NetworkStatus,
+    PendingOperation,
+    SavedNetwork,
+    SecurityType,
+    VlanInfo,
+    WifiIconKey,
+    is_connectable_security,
+    is_hidden_ssid,
+    signal_to_bars,
+)
 
 
 class TestSecurityType:
@@ -71,7 +79,6 @@ class TestSecurityType:
         assert is_connectable_security("No security")
 
 
-
 class TestConnectivityState:
     def test_all_states_exist(self):
         assert len(ConnectivityState) == 5
@@ -93,7 +100,6 @@ class TestConnectivityState:
         assert ConnectivityState.UNKNOWN + 1 == 1
 
 
-
 class TestConnectionPriority:
     def test_ordering(self):
         assert (
@@ -111,7 +117,6 @@ class TestConnectionPriority:
         """ConnectionPriority.MEDIUM is the default for SavedNetwork.priority."""
         sn = SavedNetwork()
         assert sn.priority == ConnectionPriority.MEDIUM.value
-
 
 
 class TestPendingOperation:
@@ -180,7 +185,6 @@ class TestPendingOperation:
         assert op not in (PendingOperation.WIFI_ON, PendingOperation.WIFI_OFF)
 
 
-
 class TestSignalToBars:
     def test_zero_signal(self):
         assert signal_to_bars(0) == 0
@@ -224,7 +228,6 @@ class TestSignalToBars:
             < SIGNAL_GOOD_THRESHOLD
             < SIGNAL_EXCELLENT_THRESHOLD
         )
-
 
 
 class TestWifiIconKey:
@@ -312,7 +315,6 @@ class TestWifiIconKey:
         """WifiIconKey values are plain ints — cheap cross-thread signalling."""
         for member in WifiIconKey:
             assert isinstance(member.value, int)
-
 
 
 class TestNetworkInfo:
@@ -409,7 +411,6 @@ class TestNetworkInfo:
         assert info in s
 
 
-
 class TestSavedNetwork:
     def test_defaults(self):
         sn = SavedNetwork()
@@ -432,7 +433,6 @@ class TestSavedNetwork:
         a = make_saved_network(ssid="Net", uuid="u1")
         b = make_saved_network(ssid="Net", uuid="u1")
         assert a == b
-
 
 
 class TestConnectionResult:
@@ -465,7 +465,6 @@ class TestConnectionResult:
         assert r.message == "Permission denied"
         assert r.error_code == "permission_denied"
         assert r.data["ssid"] == "Net"
-
 
 
 class TestNetworkState:
@@ -528,7 +527,6 @@ class TestNetworkState:
         assert s.signal_strength == 85
 
 
-
 class TestHotspotConfig:
     def test_defaults(self):
         c = HotspotConfig()
@@ -551,11 +549,9 @@ class TestHotspotConfig:
         assert c.band == "a"
 
 
-
 class TestHotspotSecurity:
     def test_is_valid_returns_false_for_invalid_value(self):
         assert not HotspotSecurity.is_valid("invalid_value")
-
 
 
 class TestIsHiddenSSID:
@@ -618,7 +614,6 @@ class TestIsHiddenSSID:
         assert is_hidden_ssid("CorporateWPA2") is False
 
 
-
 class TestVlanInfo:
     def test_defaults(self):
         v = VlanInfo()
@@ -646,7 +641,6 @@ class TestVlanInfo:
         v = VlanInfo()
         with pytest.raises(AttributeError):
             v.vlan_id = 99
-
 
 
 class TestIsConnectableSecurity:
@@ -678,7 +672,6 @@ class TestIsConnectableSecurity:
         assert is_connectable_security("some-future-type") is True
 
 
-
 class TestSignalToBarsThresholds:
     @pytest.mark.parametrize(
         "signal,expected_bars",
@@ -697,7 +690,6 @@ class TestSignalToBarsThresholds:
     )
     def test_threshold_boundaries(self, signal, expected_bars):
         assert signal_to_bars(signal) == expected_bars
-
 
 
 class TestWifiIconKeyEdgeCases:

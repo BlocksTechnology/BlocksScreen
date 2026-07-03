@@ -302,8 +302,15 @@ sys.modules["configfile"] = _mock_configfile_mod
 
 # Now safe to import the actual network package
 from BlocksScreen.lib.network.models import (  # noqa: E402
-    ConnectionPriority, ConnectivityState, NetworkInfo, NetworkState, NetworkStatus,
-    PendingOperation, SavedNetwork, SecurityType)
+    ConnectionPriority,
+    ConnectivityState,
+    NetworkInfo,
+    NetworkState,
+    NetworkStatus,
+    PendingOperation,
+    SavedNetwork,
+    SecurityType,
+)
 
 # Alias so ``from lib.network import ...`` works.
 sys.modules["lib.network"] = sys.modules["BlocksScreen.lib.network"]
