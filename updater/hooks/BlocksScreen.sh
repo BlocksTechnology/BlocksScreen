@@ -21,14 +21,14 @@ _set_deploy_flag() {
     local _flag="${HOME}/.config/blockscreen/.run-install-updater"
     mkdir -p "$(dirname "$_flag")"
     touch "$_flag"
-    echo "[hook:BlocksScreen] deploy flag set — BlocksScreen-deploy.path will run install-updater.sh"
+    echo "[hook:BlocksScreen] deploy flag set - BlocksScreen-deploy.path will run install-updater.sh"
 }
 
 # --- BlocksScreen.service changed ---
 if ! git -C "$COMPONENT_PATH" diff --quiet "$PREV_HASH" "$NEW_HASH" \
         -- scripts/BlocksScreen.service 2>/dev/null; then
 
-    echo "[hook:BlocksScreen] unit file changed — reinstalling"
+    echo "[hook:BlocksScreen] unit file changed - reinstalling"
 
     _env_dir="${HOME}/.config/blockscreen"
     _env_file="${_env_dir}/env"
@@ -46,7 +46,7 @@ if ! git -C "$COMPONENT_PATH" diff --quiet "$PREV_HASH" "$NEW_HASH" \
     if [[ ! -L /etc/systemd/system/BlocksScreen.service ]]; then
         sudo cp "$COMPONENT_PATH/scripts/BlocksScreen.service" \
             /etc/systemd/system/BlocksScreen.service 2>/dev/null || {
-            echo "[hook:BlocksScreen] sudo cp blocked — triggering deploy to bootstrap symlink"
+            echo "[hook:BlocksScreen] sudo cp blocked - triggering deploy to bootstrap symlink"
             _set_deploy_flag
         }
     fi
@@ -63,7 +63,7 @@ fi
 if ! git -C "$COMPONENT_PATH" diff --quiet "$PREV_HASH" "$NEW_HASH" \
         -- scripts/BlocksScreen-xorg.service 2>/dev/null; then
 
-    echo "[hook:BlocksScreen] xorg unit file changed — reinstalling"
+    echo "[hook:BlocksScreen] xorg unit file changed - reinstalling"
 
     if [[ -f "$COMPONENT_PATH/scripts/BlocksScreen-xorg.service" ]] && \
        [[ ! -L /etc/systemd/system/BlocksScreen-xorg.service ]]; then
@@ -82,7 +82,7 @@ fi
 # --- install-updater.sh changed (checked independently) ---
 if ! git -C "$COMPONENT_PATH" diff --quiet "$PREV_HASH" "$NEW_HASH" \
         -- scripts/install-updater.sh 2>/dev/null; then
-    echo "[hook:BlocksScreen] install-updater.sh changed — setting deploy flag"
+    echo "[hook:BlocksScreen] install-updater.sh changed - setting deploy flag"
     _set_deploy_flag
 fi
 

@@ -20,7 +20,24 @@ bs_migrate_moonraker_conf() {
     if ! grep -q "blocksscreen-single-owner" "$conf"; then
         bs_disable_overlapping_update_managers "$conf" "$tag" && patched=true
     fi
+    if bs_ensure_spoolman_moonraker "$conf" "$tag"; then
+        patched=true
+    fi
     $patched && sudo systemctl restart moonraker.service 2>/dev/null || true
+    return 0
+}
+
+# Point Moonraker at a locally-provisioned Spoolman so the UI's spoolman_proxy
+# works. Idempotent; only acts when Spoolman is installed and [spoolman] is
+# absent. Returns 0 only on change, so the caller restarts moonraker.
+bs_ensure_spoolman_moonraker() {
+    local conf="$1" tag="${2:-bs-common}"
+    [ -f "$conf" ] || return 1
+    local spoolman_dir="${conf%/printer_data/config/moonraker.conf}/Spoolman"
+    [ -d "$spoolman_dir/.venv" ] || return 1
+    grep -q '^\[spoolman\]' "$conf" && return 1
+    printf '\n[spoolman]\nserver: localhost:7912\n' >>"$conf"
+    echo "[$tag] moonraker.conf: added [spoolman] (server: localhost:7912)"
     return 0
 }
 
