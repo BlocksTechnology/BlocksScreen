@@ -343,8 +343,7 @@ class JobStatusWidget(QtWidgets.QWidget):
         nozzle cleaning).
         """
         if (
-            not self.isVisible()
-            or "gcode_position" not in field
+            "gcode_position" not in field
             or self._internal_print_status != "printing"
             or not self.layer_fallback
             or self._print_duration <= 0  # Mainsail: skip during pre-print procedures

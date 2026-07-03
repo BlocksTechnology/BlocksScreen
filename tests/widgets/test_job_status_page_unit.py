@@ -170,11 +170,15 @@ class TestOnGcodeMoveUpdate:
             "first_layer_height": 0.2,
         }
 
-    def test_no_update_when_hidden(self, widget):
+    def test_updates_when_hidden(self, widget):
+        """Layer must keep syncing while the page is hidden (e.g. behind Tune),
+        mirroring Mainsail so the value is correct the moment it's shown again."""
         self._ready_widget(widget)
         widget.hide()
-        widget.on_gcode_move_update("gcode_position", [0, 0, 1.0, 0])
-        assert widget.layer_display_button.text() == "sentinel"
+        # z=0.4 -> layer 2; needs two samples for Z to settle before it commits.
+        widget.on_gcode_move_update("gcode_position", [0, 0, 0.4, 0])
+        widget.on_gcode_move_update("gcode_position", [0, 0, 0.4, 0])
+        assert widget.layer_display_button.text() == "2"
 
     def test_no_update_wrong_field(self, widget):
         self._ready_widget(widget)
