@@ -1921,3 +1921,66 @@ class TestNonRepoComponent:
         cb.on_error.assert_called_once_with(
             "Spoolman", "not a git repository - reinstall required"
         )
+
+    def _installable(self, tmp_path) -> ComponentConfig:
+        nonrepo = tmp_path / "Spoolman"
+        nonrepo.mkdir()
+        (nonrepo / ".env").write_text("keep me")
+        return ComponentConfig(
+            name="Spoolman",
+            kind="git",
+            path=nonrepo,
+            url="https://github.com/Donkie/Spoolman",
+            install_if_missing=True,
+        )
+
+    @pytest.mark.asyncio
+    async def test_update_all_quarantines_installable_and_provisions(self, tmp_path):
+        cb = MagicMock()
+        comp = self._installable(tmp_path)
+        with (
+            patch("updater.service.git_fetch", return_value=(True, "")),
+            patch(
+                "updater.service.UpdateService._provision_component",
+                new_callable=AsyncMock,
+            ) as mock_prov,
+        ):
+            svc = UpdateService(callback=cb)
+            svc._history_path = tmp_path / "history.jsonl"
+            svc._components = [comp]
+            await svc.update_all()
+        mock_prov.assert_awaited_once_with(comp)
+        cb.on_error.assert_not_called()
+        assert not comp.path.exists()  # moved aside
+        moved = list(tmp_path.glob("Spoolman.pre-updater-*"))
+        assert len(moved) == 1
+        assert (moved[0] / ".env").read_text() == "keep me"  # old dir intact
+
+    @pytest.mark.asyncio
+    async def test_single_update_quarantines_installable_and_provisions(self, tmp_path):
+        cb = MagicMock()
+        comp = self._installable(tmp_path)
+        with patch(
+            "updater.service.UpdateService._provision_component",
+            new_callable=AsyncMock,
+            return_value=True,
+        ) as mock_prov:
+            svc = UpdateService(callback=cb)
+            svc._history_path = tmp_path / "history.jsonl"
+            svc._components = [comp]
+            assert await svc.update_component("Spoolman") is True
+        mock_prov.assert_awaited_once_with(comp)
+        assert list(tmp_path.glob("Spoolman.pre-updater-*"))
+
+    @pytest.mark.asyncio
+    async def test_quarantine_failure_falls_back_to_error(self, tmp_path):
+        cb = MagicMock()
+        comp = self._installable(tmp_path)
+        with patch("updater.service.os.rename", side_effect=OSError("busy")):
+            svc = UpdateService(callback=cb)
+            svc._components = [comp]
+            assert await svc.update_component("Spoolman") is False
+        cb.on_error.assert_called_once_with(
+            "Spoolman", "not a git repository - reinstall required"
+        )
+        assert comp.path.exists()  # nothing moved

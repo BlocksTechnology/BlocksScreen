@@ -213,6 +213,8 @@ class UpdateService:
         # fetch; error it individually instead of poisoning the whole batch.
         for c in [c for c in batch if not is_git_repo(c.path)]:
             batch.remove(c)
+            if c.install_if_missing and c.url and await self._quarantine_nonrepo(c):
+                continue  # path is now absent: the provision pass below clones fresh
             self._log.error("%s: %s is not a git repository - skipping", c.name, c.path)
             self._cb_error_done(c.name, "not a git repository - reinstall required")
         provision = [
@@ -774,6 +776,33 @@ class UpdateService:
         tmp.write_text("\n".join(lines[-_HISTORY_KEEP_LINES:]) + "\n", encoding="utf-8")
         tmp.replace(self._history_path)
 
+    def _quarantine_sync(self, path: Path) -> Path | None:
+        """Rename a non-repo dir aside (same fs, instant, reversible); None on failure."""
+        dest = path.with_name(
+            f"{path.name}.pre-updater-{time.strftime('%Y%m%d-%H%M%S')}"
+        )
+        try:
+            os.rename(path, dest)
+        except OSError as exc:
+            self._log.error("quarantine of %s failed: %s", path, exc)
+            return None
+        return dest
+
+    async def _quarantine_nonrepo(self, component: ComponentConfig) -> bool:
+        """Move an install_if_missing component's non-repo dir aside for a fresh clone."""
+        if component.path is None:
+            return False
+        dest = await asyncio.to_thread(self._quarantine_sync, component.path)
+        if dest is None:
+            return False
+        self._history("quarantine_nonrepo", component.name, moved_to=dest.name)
+        self._log.warning(
+            "%s: non-repo dir quarantined to %s; provisioning fresh clone",
+            component.name,
+            dest,
+        )
+        return True
+
     async def _remove_clone(self, component: ComponentConfig) -> None:
         """Delete a freshly-cloned tree (the path did not exist before provisioning)."""
         if component.path is not None:
@@ -970,6 +999,12 @@ class UpdateService:
             return self._cb_error_done(component.name, "path not found")
         # Non-repo dir (e.g. pre-updater tarball install): nothing to update or revert.
         if not is_git_repo(component.path):
+            if (
+                component.install_if_missing
+                and component.url
+                and await self._quarantine_nonrepo(component)
+            ):
+                return await self._provision_component(component)
             self._log.error(
                 "%s: %s is not a git repository", component.name, component.path
             )
