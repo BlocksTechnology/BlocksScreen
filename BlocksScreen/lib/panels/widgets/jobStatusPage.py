@@ -193,15 +193,11 @@ class JobStatusWidget(QtWidgets.QWidget):
 
     @QtCore.pyqtSlot(dict, name="on_fileinfo")
     def on_fileinfo(self, metadata: dict) -> None:
-        """Handle received file information/metadata.
-
-        Loads thumbnail and layer count regardless of visibility so they
-        are ready when the widget is shown.
-        """
+        """Handle received file info/metadata (loads regardless of visibility)."""
+        # Metadata has no current_layer (that's live print_stats); don't reset it here.
         layer_count = metadata.get("layer_count", -1)
         self.total_layers = str(layer_count) if layer_count >= 0 else "---"
         self.total_layer_reported = layer_count >= 0
-        self.layer_display_button.setText("0")
         self.layer_display_button.secondary_text = self.total_layers
         self.file_metadata = metadata
         self._load_thumbnails(*metadata.get("thumbnail_images", ()))

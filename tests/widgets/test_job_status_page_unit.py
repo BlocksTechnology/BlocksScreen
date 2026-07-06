@@ -383,11 +383,12 @@ class TestOnFileInfo:
         widget.on_fileinfo(_metadata)
         assert widget.file_metadata is _metadata
 
-    def test_layer_display_reset_to_zero(self, widget):
+    def test_layer_display_not_reset_when_already_reporting(self, widget):
+        """Re-showing after Tune redelivers cached metadata; must not reset the live layer."""
         widget.layer_display_button.setText("99")
         _metadata = self._ready_widget(widget)
         widget.on_fileinfo(_metadata)
-        assert widget.layer_display_button.text() == "0"
+        assert widget.layer_display_button.text() == "99"
 
     def test_secondary_text_set_to_total_layers(self, widget):
         _metadata = self._ready_widget(widget)
