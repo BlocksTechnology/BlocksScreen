@@ -19,13 +19,19 @@ import pytest
 from PyQt6.QtCore import QObject
 
 from BlocksScreen.lib.network import worker as _worker_mod
-from BlocksScreen.lib.network.models import (ConnectionPriority,
-                                             ConnectionResult,
-                                             ConnectivityState, HotspotConfig,
-                                             NetworkInfo, NetworkState,
-                                             NetworkStatus, SavedNetwork,
-                                             SecurityType)
+from BlocksScreen.lib.network.models import (
+    ConnectionPriority,
+    ConnectionResult,
+    ConnectivityState,
+    HotspotConfig,
+    NetworkInfo,
+    NetworkState,
+    NetworkStatus,
+    SavedNetwork,
+    SecurityType,
+)
 from BlocksScreen.lib.network.worker import NetworkManagerWorker
+
 # Import conftest helpers
 from tests.network.conftest import AsyncProxyMock, _ProxyFactory, _run
 
@@ -60,7 +66,6 @@ def _make_worker(qapp, *, running=True, with_wifi=True, with_wired=False):
     w._is_hotspot_active = False
     w._consecutive_dbus_errors = 0
     w._background_tasks = set()
-
 
     # Signal-reactive architecture: persistent signal proxies
     w._signal_nm = None
@@ -155,7 +160,6 @@ def _wire(w, *, nm=None, wifi_proxy=None, wired_proxy=None, settings=None):
     return w
 
 
-
 class TestWorkerCreation:
     def test_initial_state(self, qapp):
         w = _bare_worker(qapp)
@@ -205,7 +209,6 @@ class TestWorkerCreation:
             assert callable(getattr(w, name, None)), f"Missing factory: {name}"
 
 
-
 class TestHotspotProperties:
     def test_hotspot_ssid(self, qapp):
         w = _bare_worker(qapp)
@@ -214,7 +217,6 @@ class TestHotspotProperties:
     def test_hotspot_password(self, qapp):
         w = _bare_worker(qapp)
         assert w.hotspot_password == "123456789"
-
 
 
 class TestAsyncInitialize:
@@ -253,7 +255,6 @@ class TestAsyncInitialize:
         assert len(hotspot_info) == 1
         assert hotspot_info[0] == ("PrinterHotspot", "123456789", "wpa-psk")
         assert len(initialized) == 1
-
 
 
 class TestDetectInterfaces:
@@ -308,7 +309,6 @@ class TestDetectInterfaces:
         assert w._primary_wired_iface == "eth0"
 
 
-
 class TestDecodeSSID:
     def test_bytes_input(self):
         assert NetworkManagerWorker._decode_ssid(b"TestNetwork") == "TestNetwork"
@@ -336,7 +336,6 @@ class TestDecodeSSID:
         assert NetworkManagerWorker._decode_ssid(12345) == "12345"
 
 
-
 class TestGetAllApProperties:
     @pytest.mark.asyncio
     async def test_success(self, qapp):
@@ -360,7 +359,6 @@ class TestGetAllApProperties:
         w._ap = lambda path: ap_proxy
         result = await w._get_all_ap_properties("/ap/bad")
         assert result == {}
-
 
 
 class TestIsEthernetConnected:
@@ -390,7 +388,6 @@ class TestIsEthernetConnected:
         assert await w._is_ethernet_connected() is False
 
 
-
 class TestHasEthernetCarrier:
     @pytest.mark.asyncio
     async def test_no_wired_path_returns_false(self, qapp):
@@ -412,7 +409,6 @@ class TestHasEthernetCarrier:
         assert await w._has_ethernet_carrier() is False
 
 
-
 class TestConnectivityMapping:
     @pytest.mark.parametrize(
         "value,expected",
@@ -428,7 +424,6 @@ class TestConnectivityMapping:
     )
     def test_map_connectivity(self, value, expected):
         assert NetworkManagerWorker._map_connectivity(value) == expected
-
 
 
 class TestSecurityTypeDetection:
@@ -489,7 +484,6 @@ class TestSecurityTypeDetection:
         assert result == SecurityType.WPA3_SAE
 
 
-
 class TestSignalEmission:
     def test_state_changed_signal(self, qapp):
         w = _bare_worker(qapp)
@@ -548,7 +542,6 @@ class TestSignalEmission:
         assert received == [True]
 
 
-
 class TestCheckConnectivity:
     @pytest.mark.asyncio
     async def test_emits_unknown_when_no_bus(self, qapp):
@@ -582,7 +575,6 @@ class TestCheckConnectivity:
         assert received == [ConnectivityState.UNKNOWN]
 
 
-
 class TestGetCurrentSSID:
     @pytest.mark.asyncio
     async def test_primary_connection_returns_ssid(self, qapp):
@@ -609,7 +601,6 @@ class TestGetCurrentSSID:
         # Override primary_connection to raise on await
         w._nm = lambda: nm_proxy
         assert await w._get_current_ssid() == ""
-
 
 
 class TestSSIDFromActiveConnection:
@@ -654,7 +645,6 @@ class TestSSIDFromActiveConnection:
         assert result == ""
 
 
-
 class TestGetSSIDFromAnyActive:
     @pytest.mark.asyncio
     async def test_finds_wifi_in_active_connections(self, qapp):
@@ -676,7 +666,6 @@ class TestGetSSIDFromAnyActive:
         nm_proxy = AsyncProxyMock(active_connections=[])
         w._nm = _ProxyFactory(nm_proxy)
         assert await w._get_ssid_from_any_active() == ""
-
 
 
 class TestGetCurrentIp:
@@ -706,7 +695,6 @@ class TestGetCurrentIp:
         )
         w._nm = lambda: nm_proxy
         assert await w._get_current_ip() == ""
-
 
 
 class TestGetIpByInterface:
@@ -739,11 +727,9 @@ class TestGetIpByInterface:
         assert await w._get_ip_by_interface("wlan0") == ""
 
 
-
 class TestGetIpOsFallback:
     def test_empty_interface(self):
         assert NetworkManagerWorker._get_ip_os_fallback("") == ""
-
 
 
 class TestGetCurrentState:
@@ -765,7 +751,6 @@ class TestGetCurrentState:
         w.error_occurred.connect(lambda op, msg: errors.append((op, msg)))
         await w._async_get_current_state()
         assert len(errors) == 1
-
 
 
 class TestBuildCurrentState:
@@ -899,7 +884,6 @@ class TestBuildCurrentState:
         assert state.connectivity == ConnectivityState.UNKNOWN
 
 
-
 class TestScanNetworks:
     @pytest.mark.asyncio
     async def test_scan_no_wifi_path_emits_empty(self, qapp):
@@ -1008,7 +992,6 @@ class TestScanNetworks:
         assert received == [[]]
 
 
-
 class TestParseAp:
     @pytest.mark.asyncio
     async def test_empty_props_returns_none(self, qapp):
@@ -1092,7 +1075,6 @@ class TestParseAp:
         assert result is None
 
 
-
 class TestBuildSignalMap:
     @pytest.mark.asyncio
     async def test_no_wifi_returns_empty(self, qapp):
@@ -1114,7 +1096,6 @@ class TestBuildSignalMap:
         w._get_all_ap_properties = mock_props
         result = await w._build_signal_map()
         assert result["samenet"] == 80
-
 
 
 class TestSavedNetworkCache:
@@ -1211,7 +1192,6 @@ class TestSavedNetworkCache:
         assert await w._get_connection_path("nope") is None
 
 
-
 class TestLoadSavedNetworks:
     @pytest.mark.asyncio
     async def test_happy_path_emits_list(self, qapp):
@@ -1247,14 +1227,12 @@ class TestLoadSavedNetworks:
         assert received == [[]]
 
 
-
 class TestGetSavedNetworksImpl:
     @pytest.mark.asyncio
     async def test_no_bus_returns_empty(self, qapp):
         w = _bare_worker(qapp)
         w._system_bus = None
         assert await w._get_saved_networks_impl() == []
-
 
 
 class TestBuildConnectionProperties:
@@ -1302,7 +1280,6 @@ class TestBuildConnectionProperties:
         assert result["802-11-wireless"]["mode"] == ("s", "infrastructure")
 
 
-
 class TestConnectNetwork:
     @pytest.mark.asyncio
     async def test_connect_success_emits_result_and_state(self, qapp):
@@ -1333,7 +1310,6 @@ class TestConnectNetwork:
         assert results[0].error_code == "connect_failed"
 
 
-
 class TestConnectNetworkImpl:
     @pytest.mark.asyncio
     async def test_no_bus_returns_error(self, qapp):
@@ -1355,7 +1331,6 @@ class TestConnectNetworkImpl:
         w._find_connection_path_direct = AsyncMock(return_value=None)
         result = await w._connect_network_impl("Ghost")
         assert result.error_code == "not_found"
-
 
 
 class TestFindConnectionPathDirect:
@@ -1413,7 +1388,6 @@ class TestFindConnectionPathDirect:
         assert await w._find_connection_path_direct("net") is None
 
 
-
 class TestDisconnect:
     @pytest.mark.asyncio
     async def test_disconnect_emits_success(self, qapp):
@@ -1447,7 +1421,6 @@ class TestDisconnect:
         assert "Not active" in received[0].message
 
 
-
 class TestDeleteNetwork:
     @pytest.mark.asyncio
     async def test_delete_success_emits_result_and_state(self, qapp):
@@ -1473,7 +1446,6 @@ class TestDeleteNetwork:
         w.connection_result.connect(lambda r: results.append(r))
         await w._async_delete_network("Net")
         assert results[0].error_code == "delete_failed"
-
 
 
 class TestDeleteNetworkImpl:
@@ -1509,7 +1481,6 @@ class TestDeleteNetworkImpl:
         wifi_proxy.disconnect.assert_called_once()
 
 
-
 class TestUpdateNetwork:
     @pytest.mark.asyncio
     async def test_update_emits_result(self, qapp):
@@ -1531,7 +1502,6 @@ class TestUpdateNetwork:
         w.connection_result.connect(lambda r: results.append(r))
         await w._async_update_network("Net", "", 0)
         assert results[0].error_code == "update_failed"
-
 
 
 class TestUpdateNetworkImpl:
@@ -1629,7 +1599,6 @@ class TestUpdateNetworkImpl:
         assert result.error_code == "update_failed"
 
 
-
 class TestEnsureDbusConnection:
     @pytest.mark.asyncio
     async def test_not_running_returns_false(self, qapp):
@@ -1654,7 +1623,6 @@ class TestEnsureDbusConnection:
         assert w._consecutive_dbus_errors == 1
 
 
-
 class TestShutdown:
     @pytest.mark.asyncio
     async def test_shutdown_sets_not_running(self, qapp):
@@ -1663,7 +1631,6 @@ class TestShutdown:
         assert w._running is False
         assert w._primary_wifi_path == ""
         assert w._primary_wired_path == ""
-
 
 
 class TestDisconnectEthernet:
@@ -1692,7 +1659,6 @@ class TestDisconnectEthernet:
         await w._async_disconnect_ethernet()  # should not raise
 
 
-
 class TestAddNetwork:
     @pytest.mark.asyncio
     async def test_add_emits_result_and_invalidates(self, qapp):
@@ -1714,7 +1680,6 @@ class TestAddNetwork:
         await w._async_add_network("Net", "pass", 0)
         assert received[0].success is False
         assert received[0].error_code == "add_failed"
-
 
 
 class TestAddNetworkImpl:
@@ -1763,7 +1728,6 @@ class TestAddNetworkImpl:
         )
         result = await w._add_network_impl("EAPNet", "pass", 0)
         assert result.error_code == "unsupported_security"
-
 
 
 class TestDeleteConnectionsById:
@@ -1827,7 +1791,6 @@ class TestDeleteConnectionsById:
         assert count == 1
 
 
-
 class TestEnterpriseNetworkHandling:
     def test_eap_detected_via_rsn_flags(self):
         result = NetworkManagerWorker._determine_security_type(
@@ -1878,7 +1841,6 @@ class TestEnterpriseNetworkHandling:
         assert result is None
 
 
-
 class TestIpToNmUint32:
     def test_loopback(self):
         assert NetworkManagerWorker._ip_to_nm_uint32("127.0.0.1") > 0
@@ -1903,7 +1865,6 @@ class TestMaskToPrefix:
     def test_invalid_raises(self):
         with pytest.raises(ValueError):
             NetworkManagerWorker._mask_to_prefix("33")
-
 
 
 class TestAsyncShutdown:
@@ -1952,7 +1913,6 @@ class TestAsyncShutdown:
         assert w._saved_cache == []
 
 
-
 class TestEnsureSignalProxies:
     def test_creates_nm_proxy_when_none(self, qapp):
         w = _make(qapp)
@@ -1985,7 +1945,6 @@ class TestEnsureSignalProxies:
         assert w._signal_wifi is sentinel_wifi
         assert w._signal_wired is sentinel_wired
         assert w._signal_settings is sentinel_settings
-
 
 
 class TestDebounceState:
@@ -2051,7 +2010,6 @@ class TestDebounceScan:
         loop.create_task.assert_called_once()
 
 
-
 class TestFallbackPoll:
     def test_not_running_returns_immediately(self, qapp):
         w = _make(qapp, running=False)
@@ -2068,7 +2026,6 @@ class TestFallbackPoll:
         w._async_get_current_state.assert_awaited_once()
         w._async_check_connectivity.assert_awaited_once()
         w._async_load_saved_networks.assert_awaited_once()
-
 
 
 class TestEnforceBootMutualExclusion:
@@ -2111,7 +2068,6 @@ class TestEnforceBootMutualExclusion:
         _run(w._enforce_boot_mutual_exclusion())  # must not raise
 
 
-
 class TestWaitForWifiRadio:
     def test_returns_true_when_already_matching(self, qapp):
         w = _make(qapp)
@@ -2126,7 +2082,6 @@ class TestWaitForWifiRadio:
         _wire(w, nm=nm)
         result = _run(w._wait_for_wifi_radio(True, timeout=0.5))
         assert result is False
-
 
 
 class TestSetWifiEnabled:
@@ -2193,7 +2148,6 @@ class TestSetWifiEnabled:
         assert errors[0][0] == "set_wifi_enabled"
 
 
-
 class TestDisconnectEthernetAsync:
     def test_no_wired_path_noop(self, qapp):
         w = _make(qapp, wired=False)
@@ -2252,7 +2206,6 @@ class TestConnectEthernetAsync:
         w.error_occurred.connect(lambda op, msg: errors.append(op))
         _run(w._async_connect_ethernet())
         assert "connect_ethernet" in errors
-
 
 
 class TestToggleHotspotOff:
@@ -2316,7 +2269,6 @@ class TestToggleHotspotOn:
         )
 
 
-
 class TestCreateAndActivateHotspot:
     def test_happy_path(self, qapp):
         w = _make(qapp)
@@ -2368,7 +2320,6 @@ class TestCreateAndActivateHotspot:
         _run(w._async_create_and_activate_hotspot("TestAP", "pass"))
         assert results[0].success is False
         assert w._is_hotspot_active is False
-
 
 
 class TestHotspotActivation:
@@ -2423,7 +2374,6 @@ class TestHotspotActivation:
         conn_props = settings.add_connection.call_args[0][0]
         iface_name = conn_props["connection"]["interface-name"][1]
         assert iface_name == "wlan1"
-
 
 
 class TestUpdateHotspotConfig:
@@ -2485,7 +2435,6 @@ class TestUpdateHotspotConfig:
         w.connection_result.connect(results.append)
         _run(w._async_update_hotspot_config("A", "B", "C", "wpa-psk"))
         assert results[0].success is False
-
 
 
 class TestUpdateWifiStaticIp:
@@ -2568,7 +2517,6 @@ class TestResetWifiToDhcp:
         assert results[0].success is True
 
 
-
 class TestCreateVlan:
     def test_no_wired_device_emits_error(self, qapp):
         w = _make(qapp, wired=False)
@@ -2620,7 +2568,6 @@ class TestDeleteVlan:
         assert "delete_vlan" in errors
 
 
-
 class TestStartSignalListeners:
     def test_creates_seven_listener_tasks(self, qapp):
         w = _make(qapp)
@@ -2647,7 +2594,6 @@ class TestStartSignalListeners:
         # 7 listeners -> 7 tasks
         assert len(w._listener_tasks) == 7
         loop.close()
-
 
 
 class TestAsyncInitializeFull:
@@ -2694,7 +2640,6 @@ class TestAsyncInitializeFull:
         _run(w._async_initialize())
         assert errors == ["initialize"]
         assert len(inits) == 1
-
 
 
 class TestExceptionHandlerBranches:
@@ -2775,7 +2720,6 @@ class TestExceptionHandlerBranches:
         assert scanned == []
 
 
-
 class TestConnectNetworkImplException:
     """_connect_network_impl returns a failure result when activate_connection raises."""
 
@@ -2789,7 +2733,6 @@ class TestConnectNetworkImplException:
         result = _run(w._connect_network_impl("HomeNet"))
         assert result.success is False
         assert result.error_code == "connect_failed"
-
 
 
 class TestWaitForConnection:
@@ -2814,7 +2757,6 @@ class TestWaitForConnection:
         w._get_current_ip = AsyncMock(return_value="")
         result = _run(w._wait_for_connection("HomeNet", timeout=10.0))
         assert result is False
-
 
 
 class TestGetSavedNetworksHandlesMalformedEntry:

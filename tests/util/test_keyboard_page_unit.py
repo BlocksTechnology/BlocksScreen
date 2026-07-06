@@ -31,8 +31,13 @@ for _key in [
     sys.modules.pop(_key, None)
 
 from BlocksScreen.lib.panels.widgets.keyboardPage import (  # noqa: E402
-    _LOWERCASE, _NUM_KEYS, _NUMBERS, _SYMBOLS, _UPPERCASE,
-    CustomQwertyKeyboard)
+    _LOWERCASE,
+    _NUM_KEYS,
+    _NUMBERS,
+    _SYMBOLS,
+    _UPPERCASE,
+    CustomQwertyKeyboard,
+)
 
 
 @pytest.fixture()
@@ -218,6 +223,4 @@ class TestButtonClicks:
 
     def test_back_button_emits_signal(self, keyboard, qtbot):
         with qtbot.waitSignal(keyboard.request_back, timeout=1000):
-            qtbot.mouseClick(
-                keyboard.numpad_back_btn, QtCore.Qt.MouseButton.LeftButton
-            )
+            qtbot.mouseClick(keyboard.numpad_back_btn, QtCore.Qt.MouseButton.LeftButton)

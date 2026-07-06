@@ -548,7 +548,7 @@ class TestUpdateAll:
 
     def _git(self, tmp_path: Path, name: str, order: int) -> ComponentConfig:
         path = tmp_path / name
-        path.mkdir()
+        (path / ".git").mkdir(parents=True)
         return ComponentConfig(name=name, kind="git", path=path, order=order)
 
     @pytest.mark.asyncio
@@ -1456,7 +1456,7 @@ class TestPreflightFetch:
 
     def _git(self, tmp_path: Path, name: str) -> ComponentConfig:
         path = tmp_path / name
-        path.mkdir()
+        (path / ".git").mkdir(parents=True)
         return ComponentConfig(name=name, kind="git", path=path)
 
     @pytest.mark.asyncio
@@ -1699,6 +1699,7 @@ class TestInflightRollback:
             await svc._revert_inflight()
         mock_reset.assert_not_called()
         assert svc._read_inflight() == {}  # marker still cleared
+<<<<<<< HEAD
 
 
 class TestPingWhile:
@@ -1863,3 +1864,291 @@ class TestInflightClearedOnEarlyReturn:
             await svc._run_git_batch([comp])
         assert not (tmp_path / "inflight.json").exists()
         cb.on_error.assert_called_once_with("klipper", "insecure remote")
+||||||| 7175bc1
+=======
+
+
+class TestPingWhile:
+    @pytest.mark.asyncio
+    async def test_returns_result(self):
+        svc = UpdateService(callback=MagicMock())
+
+        async def fast():
+            return (True, "ok")
+
+        assert await svc._ping_while(fast(), "x", 3, 4) == (True, "ok")
+
+    @pytest.mark.asyncio
+    async def test_emits_on_step_while_waiting(self):
+        cb = MagicMock()
+        svc = UpdateService(callback=cb)
+
+        async def slow():
+            await asyncio.sleep(0.05)
+            return "done"
+
+        assert await svc._ping_while(slow(), "klipper", 3, 4, interval=0.01) == "done"
+        cb.on_step.assert_called_with("klipper", 3, 4)
+
+    @pytest.mark.asyncio
+    async def test_cancellation_reaches_inner_task(self):
+        svc = UpdateService(callback=MagicMock())
+        started = asyncio.Event()
+        cancelled = asyncio.Event()
+
+        async def hang():
+            started.set()
+            try:
+                await asyncio.sleep(30)
+            except asyncio.CancelledError:
+                cancelled.set()
+                raise
+
+        task = asyncio.create_task(svc._ping_while(hang(), "x", 3, 4, interval=0.01))
+        await started.wait()
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        assert cancelled.is_set()
+
+
+class TestHookTimeoutBudget:
+    @pytest.mark.asyncio
+    async def test_single_update_passes_hook_timeout(self, tmp_path):
+        cb = MagicMock()
+        with (
+            patch("pathlib.Path.exists", return_value=True),
+            patch("updater.service.git_get_hash", return_value="a" * 40),
+            patch("updater.service.git_fetch", return_value=(True, "")),
+            patch("updater.service.git_pull", return_value=(True, "")),
+            patch("updater.service.git_reset_to_hash", return_value=(True, "")),
+            patch("updater.service.git_get_current_branch", return_value="master"),
+            patch(
+                "updater.service.UpdateService._install_dependencies",
+                return_value=(True, ""),
+            ),
+            patch("updater.service.run_hook", return_value=(True, "")) as mock_hook,
+            patch("updater.service.restart_service", return_value=(True, "")),
+            patch("updater.service.restart_service_noblock", return_value=(True, "")),
+            patch("updater.service.wait_for_service_active", return_value=True),
+            patch(
+                "updater.service._assert_https_remote",
+                return_value=(True, "https://github.com/test/repo"),
+            ),
+        ):
+            svc = UpdateService(callback=cb)
+            svc._state_path = tmp_path / "state.json"
+            svc._inflight_path = tmp_path / "inflight.json"
+            svc._history_path = tmp_path / "history.jsonl"
+            assert await svc.update_component("klipper") is True
+        assert mock_hook.await_args.kwargs["timeout"] == updater_service.HOOK_TIMEOUT
+
+    @pytest.mark.asyncio
+    async def test_batch_passes_hook_timeout(self, tmp_path):
+        cb = MagicMock()
+        comp = ComponentConfig(name="klipper", kind="git", path=tmp_path)
+        with (
+            patch("updater.service.git_get_hash", return_value="a" * 40),
+            patch(
+                "updater.service.UpdateService._stage_component",
+                return_value=(True, ""),
+            ),
+            patch(
+                "updater.service.UpdateService._install_dependencies",
+                return_value=(True, ""),
+            ),
+            patch("updater.service.run_hook", return_value=(True, "")) as mock_hook,
+            patch(
+                "updater.service._assert_https_remote",
+                return_value=(True, "https://github.com/test/repo"),
+            ),
+        ):
+            svc = UpdateService(callback=cb)
+            svc._state_path = tmp_path / "state.json"
+            svc._inflight_path = tmp_path / "inflight.json"
+            svc._history_path = tmp_path / "history.jsonl"
+            await svc._run_git_batch([comp])
+        assert mock_hook.await_args.kwargs["timeout"] == updater_service.HOOK_TIMEOUT
+        cb.on_component_done.assert_called_once_with("klipper", True)
+
+
+class TestInflightClearedOnEarlyReturn:
+    def _svc(self, tmp_path, cb):
+        svc = UpdateService(callback=cb)
+        svc._state_path = tmp_path / "state.json"
+        svc._inflight_path = tmp_path / "inflight.json"
+        svc._history_path = tmp_path / "history.jsonl"
+        return svc
+
+    @pytest.mark.asyncio
+    async def test_single_insecure_remote_clears_marker(self, tmp_path):
+        cb = MagicMock()
+        with (
+            patch("pathlib.Path.exists", return_value=True),
+            patch("updater.service.git_get_hash", return_value="a" * 40),
+            patch(
+                "updater.service._assert_https_remote",
+                return_value=(False, "origin remote uses non-https URL"),
+            ),
+        ):
+            svc = self._svc(tmp_path, cb)
+            assert await svc.update_component("klipper") is False
+        assert not (tmp_path / "inflight.json").exists()
+        cb.on_error.assert_called_once_with("klipper", "insecure remote")
+
+    @pytest.mark.asyncio
+    async def test_single_reset_failure_clears_marker(self, tmp_path):
+        cb = MagicMock()
+        with (
+            patch("pathlib.Path.exists", return_value=True),
+            patch("updater.service.git_get_hash", return_value="a" * 40),
+            patch("updater.service.git_fetch", return_value=(True, "")),
+            patch("updater.service.git_get_current_branch", return_value="master"),
+            patch("updater.service.git_reset_to_hash", return_value=(False, "boom")),
+            patch(
+                "updater.service._assert_https_remote",
+                return_value=(True, "https://github.com/test/repo"),
+            ),
+        ):
+            svc = self._svc(tmp_path, cb)
+            assert await svc.update_component("klipper") is False
+        assert not (tmp_path / "inflight.json").exists()
+        cb.on_error.assert_called_once_with("klipper", "reset")
+
+    @pytest.mark.asyncio
+    async def test_batch_insecure_remote_clears_marker(self, tmp_path):
+        cb = MagicMock()
+        comp = ComponentConfig(name="klipper", kind="git", path=tmp_path)
+        with (
+            patch("updater.service.git_get_hash", return_value="a" * 40),
+            patch(
+                "updater.service._assert_https_remote",
+                return_value=(False, "origin remote uses non-https URL"),
+            ),
+        ):
+            svc = self._svc(tmp_path, cb)
+            await svc._run_git_batch([comp])
+        assert not (tmp_path / "inflight.json").exists()
+        cb.on_error.assert_called_once_with("klipper", "insecure remote")
+
+
+class TestNonRepoComponent:
+    """A dir without .git (pre-updater tarball install) must not poison updates."""
+
+    def _comps(self, tmp_path):
+        repo = tmp_path / "klipper"
+        (repo / ".git").mkdir(parents=True)
+        nonrepo = tmp_path / "Spoolman"
+        nonrepo.mkdir()
+        return (
+            ComponentConfig(name="klipper", kind="git", path=repo),
+            ComponentConfig(name="Spoolman", kind="git", path=nonrepo),
+        )
+
+    @pytest.mark.asyncio
+    async def test_update_all_excludes_nonrepo_and_continues(self, tmp_path):
+        cb = MagicMock()
+        good, bad = self._comps(tmp_path)
+        with (
+            patch("updater.service.git_fetch", return_value=(True, "")),
+            patch(
+                "updater.service.UpdateService._run_git_batch", new_callable=AsyncMock
+            ) as mock_batch,
+        ):
+            svc = UpdateService(callback=cb)
+            svc._components = [good, bad]
+            await svc.update_all()
+        mock_batch.assert_awaited_once_with([good])
+        cb.on_error.assert_called_once_with(
+            "Spoolman", "not a git repository - reinstall required"
+        )
+        cb.on_component_done.assert_called_once_with("Spoolman", False)
+
+    @pytest.mark.asyncio
+    async def test_preflight_skips_nonrepo_fetch(self, tmp_path):
+        good, bad = self._comps(tmp_path)
+        fetched: list[str] = []
+
+        async def fake_fetch(path, **kw):
+            fetched.append(path.name)
+            return (True, "")
+
+        with patch("updater.service.git_fetch", side_effect=fake_fetch):
+            svc = UpdateService(callback=MagicMock())
+            assert await svc._preflight_fetch([good, bad], [good, bad]) is True
+        assert fetched == ["klipper"]
+
+    @pytest.mark.asyncio
+    async def test_single_update_nonrepo_errors_cleanly(self, tmp_path):
+        cb = MagicMock()
+        _, bad = self._comps(tmp_path)
+        svc = UpdateService(callback=cb)
+        svc._components = [bad]
+        assert await svc.update_component("Spoolman") is False
+        cb.on_error.assert_called_once_with(
+            "Spoolman", "not a git repository - reinstall required"
+        )
+
+    def _installable(self, tmp_path) -> ComponentConfig:
+        nonrepo = tmp_path / "Spoolman"
+        nonrepo.mkdir()
+        (nonrepo / ".env").write_text("keep me")
+        return ComponentConfig(
+            name="Spoolman",
+            kind="git",
+            path=nonrepo,
+            url="https://github.com/Donkie/Spoolman",
+            install_if_missing=True,
+        )
+
+    @pytest.mark.asyncio
+    async def test_update_all_quarantines_installable_and_provisions(self, tmp_path):
+        cb = MagicMock()
+        comp = self._installable(tmp_path)
+        with (
+            patch("updater.service.git_fetch", return_value=(True, "")),
+            patch(
+                "updater.service.UpdateService._provision_component",
+                new_callable=AsyncMock,
+            ) as mock_prov,
+        ):
+            svc = UpdateService(callback=cb)
+            svc._history_path = tmp_path / "history.jsonl"
+            svc._components = [comp]
+            await svc.update_all()
+        mock_prov.assert_awaited_once_with(comp)
+        cb.on_error.assert_not_called()
+        assert not comp.path.exists()  # moved aside
+        moved = list(tmp_path.glob("Spoolman.pre-updater-*"))
+        assert len(moved) == 1
+        assert (moved[0] / ".env").read_text() == "keep me"  # old dir intact
+
+    @pytest.mark.asyncio
+    async def test_single_update_quarantines_installable_and_provisions(self, tmp_path):
+        cb = MagicMock()
+        comp = self._installable(tmp_path)
+        with patch(
+            "updater.service.UpdateService._provision_component",
+            new_callable=AsyncMock,
+            return_value=True,
+        ) as mock_prov:
+            svc = UpdateService(callback=cb)
+            svc._history_path = tmp_path / "history.jsonl"
+            svc._components = [comp]
+            assert await svc.update_component("Spoolman") is True
+        mock_prov.assert_awaited_once_with(comp)
+        assert list(tmp_path.glob("Spoolman.pre-updater-*"))
+
+    @pytest.mark.asyncio
+    async def test_quarantine_failure_falls_back_to_error(self, tmp_path):
+        cb = MagicMock()
+        comp = self._installable(tmp_path)
+        with patch("updater.service.os.rename", side_effect=OSError("busy")):
+            svc = UpdateService(callback=cb)
+            svc._components = [comp]
+            assert await svc.update_component("Spoolman") is False
+        cb.on_error.assert_called_once_with(
+            "Spoolman", "not a git repository - reinstall required"
+        )
+        assert comp.path.exists()  # nothing moved
+>>>>>>> origin/dev
