@@ -17,19 +17,6 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 import BlocksScreen.lib.network.manager as manager_mod
-<<<<<<< HEAD
-from BlocksScreen.lib.network.models import (ConnectionPriority,
-                                             ConnectivityState, HotspotConfig,
-                                             NetworkInfo, NetworkState,
-                                             SavedNetwork)
-||||||| 7175bc1
-from BlocksScreen.lib.network.models import (ConnectionPriority,
-                                             ConnectionResult,
-                                             ConnectivityState, HotspotConfig,
-                                             NetworkInfo, NetworkState,
-                                             NetworkStatus, SavedNetwork,
-                                             SecurityType)
-=======
 from BlocksScreen.lib.network.models import (
     ConnectionPriority,
     ConnectivityState,
@@ -38,7 +25,6 @@ from BlocksScreen.lib.network.models import (
     NetworkState,
     SavedNetwork,
 )
->>>>>>> origin/dev
 
 
 def _make_mock_timer():

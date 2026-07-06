@@ -26,20 +26,12 @@ HOOK_TIMEOUT = 600.0
 GIT = "/usr/bin/git"
 PIP = "/usr/bin/pip3"
 APT = "/usr/bin/apt"
-APT_GET = "/usr/bin/apt-get"
 APT_MARK = "/usr/bin/apt-mark"
 SUDO = "/usr/bin/sudo"
 SYSTEMCTL = "/usr/bin/systemctl"
-
-# Wait up to 60s for the dpkg lock (apt-daily/unattended-upgrades may be mid-run).
-_APT_LOCK_OPTS = ["-o", "DPkg::Lock::Timeout=60"]
-# Keep existing conffiles without prompting (an upgrade must never block on input).
-_APT_CONF_OPTS = [
-    "-o",
-    "Dpkg::Options::=--force-confdef",
-    "-o",
-    "Dpkg::Options::=--force-confold",
-]
+DPKG = "/usr/bin/dpkg"
+# Root-owned fixed-argv apt wrapper (owns the -o opts); installed pre-restart.
+APT_HELPER = Path("/usr/local/sbin/bs-apt-helper")
 
 _SERVICE_RE = re.compile(r"^[a-zA-Z0-9@:._-]+\.service$")
 _GIT_SHA_RE = re.compile(r"^[a-f0-9]{7,40}$")
@@ -286,6 +278,11 @@ async def check_git_status(
         current_version=current_version,
         remote_version=remote_version,
     )
+
+
+def is_git_repo(path: Path | None) -> bool:
+    """True if path exists and has a .git entry (a non-repo dir can never fetch)."""
+    return path is not None and (path / ".git").exists()
 
 
 async def git_is_dirty(path: Path) -> bool:
@@ -696,13 +693,14 @@ def _apt_env() -> dict[str, str]:
     return env
 
 
-def _apt_get(args: list[str], *, keep_conffiles: bool = False) -> list[str]:
-    """Build a sudo apt-get argv with the dpkg-lock wait always applied.
+def _apt_cmd(verb: str, pkgs: Sequence[str] = ()) -> list[str]:
+    """Build the sudo apt argv via the root-owned wrapper.
 
-    keep_conffiles adds --force-confdef/--force-confold for unpacking operations.
+    The wrapper is the only apt command sudoers grants; install-updater.sh
+    deploys it before the daemon restarts onto this code, so it is always
+    present. It owns the lock/conffile -o options and validates its args.
     """
-    opts = [*_APT_LOCK_OPTS, *(_APT_CONF_OPTS if keep_conffiles else [])]
-    return [SUDO, APT_GET, *opts, *args]
+    return [SUDO, str(APT_HELPER), verb, *pkgs]
 
 
 async def _apt_snapshot_packages() -> tuple[bool, Path | None]:
@@ -717,10 +715,7 @@ async def _apt_snapshot_packages() -> tuple[bool, Path | None]:
     )
     try:
         snapshot_path.parent.mkdir(parents=True, mode=0o0700, exist_ok=True)
-        ok, output = await _run(
-            ["/usr/bin/dpkg", "--get-selections"],
-            timeout=15.0,
-        )
+        ok, output = await _run([DPKG, "--get-selections"], timeout=15.0)
         if not ok:
             logger.warning("dpkg --get-selections failed: %s", output)
             return False, None
@@ -747,11 +742,7 @@ async def _apt_get_fix_broken() -> tuple[bool, str]:
     Best-effort rollback after failed upgrade. May not fully restore state,
     but aims to unbreak the system. Called only on apt_upgrade failure.
     """
-    return await _run(
-        _apt_get(["-f", "install", "-y"], keep_conffiles=True),
-        timeout=120.0,
-        env=_apt_env(),
-    )
+    return await _run(_apt_cmd("fix-broken"), timeout=120.0, env=_apt_env())
 
 
 async def _apt_restore_packages(snapshot_path: Path) -> tuple[bool, str]:
@@ -769,8 +760,8 @@ async def _apt_restore_packages(snapshot_path: Path) -> tuple[bool, str]:
         return False, str(e)
     proc = await asyncio.create_subprocess_exec(
         SUDO,
-        "/usr/bin/dpkg",
-        "--set-selections",
+        str(APT_HELPER),
+        "set-selections",
         stdin=asyncio.subprocess.PIPE,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
@@ -795,16 +786,12 @@ async def _apt_restore_packages(snapshot_path: Path) -> tuple[bool, str]:
         msg = stderr.decode(errors="replace")
         logger.error("dpkg --set-selections failed: %s", msg)
         return False, msg
-    return await _run(
-        _apt_get(["dselect-upgrade", "-y"], keep_conffiles=True),
-        timeout=120.0,
-        env=_apt_env(),
-    )
+    return await _run(_apt_cmd("dselect-upgrade"), timeout=120.0, env=_apt_env())
 
 
 async def apt_update() -> tuple[bool, str]:
     """Run apt-get update to refresh package lists."""
-    return await _run(_apt_get(["update"]), timeout=120.0, env=_apt_env())
+    return await _run(_apt_cmd("update"), timeout=120.0, env=_apt_env())
 
 
 async def apt_upgrade(exclude: tuple[str, ...] = ()) -> tuple[bool, str]:
@@ -822,16 +809,12 @@ async def apt_upgrade(exclude: tuple[str, ...] = ()) -> tuple[bool, str]:
     if not pkgs:
         return True, "no packages to upgrade"
 
-    return await _run(
-        _apt_get(["install", "--only-upgrade", "-y", *pkgs], keep_conffiles=True),
-        timeout=300.0,
-        env=_apt_env(),
-    )
+    return await _run(_apt_cmd("upgrade", pkgs), timeout=300.0, env=_apt_env())
 
 
 async def apt_autoremove() -> tuple[bool, str]:
     """Run apt-get autoremove -y to remove orphaned packages after an upgrade."""
-    return await _run(_apt_get(["autoremove", "-y"]), timeout=120.0, env=_apt_env())
+    return await _run(_apt_cmd("autoremove"), timeout=120.0, env=_apt_env())
 
 
 async def run_hook(
