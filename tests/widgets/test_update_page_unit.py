@@ -485,3 +485,24 @@ class TestErrorMessageActionability:
         page.handle_error_occurred("firmware", "checksum mismatch")
         msg = page._show_toast.call_args[0][0]
         assert "failed" in msg.lower()
+
+
+class TestBadStatusPayload:
+    def test_bad_payload_keeps_statuses_and_toasts(self, page):
+        page._statuses = {"klipper": ComponentStatus(name="klipper")}
+        page._show_toast = MagicMock()
+        page.handle_status_ready("{not json")
+        assert "klipper" in page._statuses
+        page._show_toast.assert_called_once()
+
+
+class TestConfirmPopupCleanup:
+    def test_second_confirm_deletes_previous_popup(self, page):
+        with patch("BlocksScreen.lib.panels.widgets.updatePage.BasePopup") as popup_cls:
+            first = MagicMock()
+            second = MagicMock()
+            popup_cls.side_effect = [first, second]
+            page._show_update_confirm()
+            page._show_update_confirm()
+        first.deleteLater.assert_called_once()
+        second.deleteLater.assert_not_called()

@@ -22,10 +22,7 @@ _log = logging.getLogger(__name__)
 
 _RECONNECT_DELAYS = (5.0, 15.0, 30.0, 60.0)
 
-# Max seconds of *silence* from a busy daemon before declaring it gone.
-# Progress signals refresh the deadline, so long multi-component updates
-# (big apt upgrades, several klipper restarts) never trip it as long as
-# the daemon keeps reporting steps.
+# Max silence from a busy daemon; progress signals refresh the deadline.
 _BUSY_IDLE_LIMIT = 360.0
 
 
@@ -147,16 +144,14 @@ class UpdaterWorker(QtCore.QObject):
             self._listener_tasks.append(task)
             task.add_done_callback(self._on_listener_done)
 
-        # Let each listener enter its async-for and register its D-Bus signal
-        # subscription before we poll current state (one sleep(0) per task).
+        # One sleep(0) per task lets each listener register its subscription.
         for _ in listeners:
             await asyncio.sleep(0)
 
         try:
             busy = await self._proxy.get_busy()
         except sdbus.SdBusBaseError as exc:
-            # Proxy creation is lazy; this first real call is what proves the
-            # daemon is actually reachable. Treat failure as daemon-down.
+            # Proxy is lazy; this first call proves the daemon is reachable.
             _log.warning("get_busy failed on (re)connect: %s - scheduling retry", exc)
             self.daemon_unavailable.emit()
             self._schedule_reconnect()

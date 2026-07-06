@@ -36,7 +36,7 @@ def worker():
 class TestTriggerMethods:
     def test_trigger_status_sibmits_to_loop(self, worker):
         with patch(
-            "asyncio.run_coroutine_threadsafe", side_effect=lambda c, l: c.close()
+            "asyncio.run_coroutine_threadsafe", side_effect=lambda c, loop: c.close()
         ) as mock_rctf:
             worker.trigger_status()
         mock_rctf.assert_called_once()
@@ -44,21 +44,21 @@ class TestTriggerMethods:
 
     def test_trigger_update_empty_name_calls_update_all(self, worker):
         with patch(
-            "asyncio.run_coroutine_threadsafe", side_effect=lambda c, l: c.close()
+            "asyncio.run_coroutine_threadsafe", side_effect=lambda c, loop: c.close()
         ) as mock_rctf:
             worker.trigger_update("")
         mock_rctf.assert_called_once()
 
     def test_trigger_update_name_calls_update_component(self, worker):
         with patch(
-            "asyncio.run_coroutine_threadsafe", side_effect=lambda c, l: c.close()
+            "asyncio.run_coroutine_threadsafe", side_effect=lambda c, loop: c.close()
         ) as mock_rctf:
             worker.trigger_update("klipper")
         mock_rctf.assert_called_once()
 
     def test_trigger_recover_submits_coroutine(self, worker):
         with patch(
-            "asyncio.run_coroutine_threadsafe", side_effect=lambda c, l: c.close()
+            "asyncio.run_coroutine_threadsafe", side_effect=lambda c, loop: c.close()
         ) as mock_rctf:
             worker.trigger_recover("klipper", True)
         mock_rctf.assert_called_once()

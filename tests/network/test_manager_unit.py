@@ -12,17 +12,19 @@ Architecture (current):
 """
 
 import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 import BlocksScreen.lib.network.manager as manager_mod
-from BlocksScreen.lib.network.models import (ConnectionPriority,
-                                             ConnectionResult,
-                                             ConnectivityState, HotspotConfig,
-                                             NetworkInfo, NetworkState,
-                                             NetworkStatus, SavedNetwork,
-                                             SecurityType)
+from BlocksScreen.lib.network.models import (
+    ConnectionPriority,
+    ConnectivityState,
+    HotspotConfig,
+    NetworkInfo,
+    NetworkState,
+    SavedNetwork,
+)
 
 
 def _make_mock_timer():
@@ -110,7 +112,6 @@ def nm(qapp):
             yield nm_inst
 
 
-
 def test_manager_hotspot_cache_seeded_from_worker_config(qapp):
     """Manager must read saved config from worker synchronously, not use defaults."""
     with (
@@ -143,7 +144,6 @@ def test_manager_hotspot_cache_seeded_from_worker_config(qapp):
         nm_inst = NetworkManager()
         assert nm_inst.hotspot_ssid == "SavedSSID"
         assert nm_inst.hotspot_password == "SavedPass"
-
 
 
 class TestFacadeCreation:
@@ -200,7 +200,6 @@ class TestFacadeCreation:
         # coroutine should be closed
         with pytest.raises(RuntimeError):
             test.send(None)
-
 
 
 class TestCacheSlots:
@@ -305,7 +304,6 @@ class TestCacheSlots:
         assert nm._network_info_map["Same"].signal_strength == 90
 
 
-
 class TestConvenienceProperties:
     def test_current_ssid(self, nm):
         nm._cached_state = NetworkState(current_ssid="MySSID")
@@ -361,7 +359,6 @@ class TestConvenienceProperties:
     def test_get_saved_network_not_found(self, nm):
         nm._saved_network_map = {}
         assert nm.get_saved_network("Ghost") is None
-
 
 
 class TestPublicAPI:
@@ -475,7 +472,6 @@ class TestPublicAPI:
         assert self._count(nm) == b
 
 
-
 class TestKeepalive:
     def test_keepalive_tick_dispatches(self, nm):
         b = nm._mock_asyncio.run_coroutine_threadsafe.call_count
@@ -497,7 +493,6 @@ class TestKeepalive:
         nm._on_keepalive_tick()
         # Should dispatch 3 coroutines: state + connectivity + saved
         assert nm._mock_asyncio.run_coroutine_threadsafe.call_count == b + 3
-
 
 
 class TestWorkerInitialized:
@@ -541,7 +536,6 @@ class TestWorkerInitialized:
         assert fired_with_ms == [123]
 
 
-
 class TestFacadeShutdown:
     def test_shutdown_sets_flag(self, nm):
         nm.shutdown()
@@ -568,7 +562,9 @@ class TestFacadeShutdown:
         nm._mock_asyncio.run_coroutine_threadsafe.return_value.result.side_effect = (
             RuntimeError("async shutdown failed")
         )
-        with caplog.at_level(logging.WARNING, logger="BlocksScreen.lib.network.manager"):
+        with caplog.at_level(
+            logging.WARNING, logger="BlocksScreen.lib.network.manager"
+        ):
             nm.shutdown()
         assert nm._shutting_down is True
         assert "async shutdown failed" in caplog.text
@@ -578,7 +574,6 @@ class TestFacadeShutdown:
         nm.shutdown()
         nm._mock_asyncio.run_coroutine_threadsafe.assert_not_called()
         assert nm._shutting_down is True
-
 
 
 class TestSignalForwarding:

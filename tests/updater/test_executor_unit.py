@@ -631,6 +631,8 @@ class TestAptUpgrade:
 
     @pytest.mark.asyncio
     async def test_unattended_hardening_options_present(self):
+        # The hardening options moved into the root-owned wrapper: assert the
+        # argv routes through it and the wrapper still carries the options.
         proc = _make_proc(0, b"", b"")
         exec_mock = AsyncMock(return_value=proc)
         with (
@@ -642,11 +644,15 @@ class TestAptUpgrade:
         ):
             await apt_upgrade()
         argv = [str(a) for a in exec_mock.call_args[0]]
-        assert "DPkg::Lock::Timeout=60" in argv  # wait for the lock, never fail fast
-        assert "Dpkg::Options::=--force-confold" in argv  # no conffile prompt
-        env = exec_mock.call_args[1]["env"]
-        assert env["DEBIAN_FRONTEND"] == "noninteractive"
-        assert env["NEEDRESTART_MODE"] == "a"
+        assert argv[1] == "/usr/local/sbin/bs-apt-helper"
+        assert argv[2:] == ["upgrade", "pkg1"]
+        wrapper = (
+            Path(__file__).resolve().parents[2] / "scripts" / "bs-apt-helper.sh"
+        ).read_text()
+        assert "DPkg::Lock::Timeout=60" in wrapper  # wait for the lock
+        assert "--force-confold" in wrapper  # no conffile prompt
+        assert "DEBIAN_FRONTEND=noninteractive" in wrapper
+        assert "NEEDRESTART_MODE=a" in wrapper
 
     @pytest.mark.asyncio
     async def test_list_failure(self):

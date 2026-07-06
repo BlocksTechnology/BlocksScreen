@@ -20,24 +20,18 @@ logger = logging.getLogger(__name__)
 
 UPDATER_SERVICE = "BlocksScreen-updater.service"
 
+# Hook budget: a dependency-heavy hook can run minutes; a timeout aborts the batch.
+HOOK_TIMEOUT = 600.0
+
 GIT = "/usr/bin/git"
 PIP = "/usr/bin/pip3"
 APT = "/usr/bin/apt"
-APT_GET = "/usr/bin/apt-get"
 APT_MARK = "/usr/bin/apt-mark"
 SUDO = "/usr/bin/sudo"
 SYSTEMCTL = "/usr/bin/systemctl"
-
-# Wait up to 60s for the dpkg lock instead of failing immediately when apt-daily
-# or unattended-upgrades is mid-run (the daemon now owns apt on this image).
-_APT_LOCK_OPTS = ["-o", "DPkg::Lock::Timeout=60"]
-# Keep existing conffiles without prompting (an upgrade must never block on input).
-_APT_CONF_OPTS = [
-    "-o",
-    "Dpkg::Options::=--force-confdef",
-    "-o",
-    "Dpkg::Options::=--force-confold",
-]
+DPKG = "/usr/bin/dpkg"
+# Root-owned fixed-argv apt wrapper (owns the -o opts); installed pre-restart.
+APT_HELPER = Path("/usr/local/sbin/bs-apt-helper")
 
 _SERVICE_RE = re.compile(r"^[a-zA-Z0-9@:._-]+\.service$")
 _GIT_SHA_RE = re.compile(r"^[a-f0-9]{7,40}$")
@@ -63,8 +57,7 @@ def _make_clean_env() -> dict[str, str]:
         "PATH",
         "HOME",
         "USER",
-        # SEC: DBUS_SESSION_BUS_ADDRESS and XDG_RUNTIME_DIR intentionally excluded -
-        # hook scripts must not make D-Bus calls or access the session runtime dir.
+        # SEC: session bus + XDG runtime vars excluded; hooks must not use them.
         "TMPDIR",
     ):
         val = os.environ.get(key)
@@ -78,8 +71,7 @@ def _make_clean_env() -> dict[str, str]:
     for key, val in os.environ.items():
         if key in safe_sudo:
             env[key] = val
-    # Lets hooks (git post-merge, the updater's own) tell they run mid-batch and
-    # defer any daemon restart to the sentinel instead of aborting the update.
+    # Tells hooks they run mid-batch: defer daemon restarts to the sentinel.
     env["BS_UPDATER_SELF_UPDATE"] = "1"
     with contextlib.suppress(OSError):
         env["BS_UPDATER_RESTART_SENTINEL"] = str(restart_sentinel_path())
@@ -288,6 +280,11 @@ async def check_git_status(
     )
 
 
+def is_git_repo(path: Path | None) -> bool:
+    """True if path exists and has a .git entry (a non-repo dir can never fetch)."""
+    return path is not None and (path / ".git").exists()
+
+
 async def git_is_dirty(path: Path) -> bool:
     ok, output = await _run(
         [GIT, "status", "--porcelain", "--untracked-files=no"],
@@ -394,18 +391,22 @@ async def git_clone(
 
 
 async def git_reset_to_hash(path: Path | None, prev_hash: str = "") -> tuple[bool, str]:
-    """Hard-reset repo at path directly to prev_hash without fetching."""
+    """Hard-reset repo at path directly to prev_hash without fetching.
+
+    This is the rollback/heal primitive (abort, boot revert, recover), so the
+    timeout is generous: a reset across a large delta on a slow SD card must
+    not be SIGTERM'd mid-checkout in exactly the path meant to fix things.
+    """
     if not path:
         return (False, "path error")
     if prev_hash == "":
         return (False, "prev_hash does not exist")
     if not _validate_git_ref(prev_hash):
         return (False, f"invalid git ref: {prev_hash!r}")
-    return await _run([GIT, "reset", "--hard", prev_hash], cwd=path, timeout=10.0)
+    return await _run([GIT, "reset", "--hard", prev_hash], cwd=path, timeout=60.0)
 
 
-# Object-corruption signatures. Kept narrow so generic failures like
-# "fatal: not a git repository" are NOT treated as corruption.
+# Narrow corruption signatures: "not a git repository" etc. must not match.
 _GIT_CORRUPT_SIGNATURES = (
     "corrupt",
     "is empty",
@@ -416,11 +417,9 @@ _GIT_CORRUPT_SIGNATURES = (
     "missing commit",
 )
 
-# Quarantine directory for loose objects fsck reports as corrupt (kept inside
-# .git/objects so it never shows up as an untracked working-tree file).
+# Quarantine dir inside .git/objects so it never appears as untracked.
 _QUARANTINE_DIRNAME = "objects-corrupt"
-# fsck error lines reference a corrupt object either by its on-disk path
-# (.git/objects/ab/<38 hex>) or by its 40-hex SHA; match both.
+# fsck names corrupt objects by path (.git/objects/ab/<38hex>) or 40-hex SHA.
 _GIT_OBJ_PATH_RE = re.compile(r"objects/([0-9a-f]{2})/([0-9a-f]{38})")
 _GIT_OBJ_SHA_RE = re.compile(r"\b([0-9a-f]{40})\b")
 
@@ -524,8 +523,7 @@ async def git_repair(path: Path) -> tuple[bool, str]:
         return (False, f"fetch after cleanup failed: {out}")
     if not await git_has_corruption(path):
         return (True, f"repaired ({removed} empty objects removed)")
-    # Empty-object pruning + fetch did not clear it: a non-empty loose object is
-    # corrupt. Quarantine the bad objects and re-fetch to re-download them.
+    # A non-empty loose object is corrupt: quarantine and re-fetch it.
     quarantined = await _quarantine_corrupt_objects(path)
     if quarantined == 0:
         return (False, "still corrupt after fetch (no quarantinable objects found)")
@@ -611,7 +609,8 @@ async def git_checkout(path: Path | None, branch: str) -> tuple[bool, str]:
     if current_branch == branch:
         return (True, "already on branch")
 
-    return await _run([GIT, "checkout", branch], cwd=path, timeout=10.0)
+    # Generous: a big checkout on slow SD can pass 10s; SIGTERM = half-written tree.
+    return await _run([GIT, "checkout", branch], cwd=path, timeout=60.0)
 
 
 async def check_apt_status(
@@ -694,13 +693,14 @@ def _apt_env() -> dict[str, str]:
     return env
 
 
-def _apt_get(args: list[str], *, keep_conffiles: bool = False) -> list[str]:
-    """Build a sudo apt-get argv with the dpkg-lock wait always applied.
+def _apt_cmd(verb: str, pkgs: Sequence[str] = ()) -> list[str]:
+    """Build the sudo apt argv via the root-owned wrapper.
 
-    keep_conffiles adds --force-confdef/--force-confold for unpacking operations.
+    The wrapper is the only apt command sudoers grants; install-updater.sh
+    deploys it before the daemon restarts onto this code, so it is always
+    present. It owns the lock/conffile -o options and validates its args.
     """
-    opts = [*_APT_LOCK_OPTS, *(_APT_CONF_OPTS if keep_conffiles else [])]
-    return [SUDO, APT_GET, *opts, *args]
+    return [SUDO, str(APT_HELPER), verb, *pkgs]
 
 
 async def _apt_snapshot_packages() -> tuple[bool, Path | None]:
@@ -715,10 +715,7 @@ async def _apt_snapshot_packages() -> tuple[bool, Path | None]:
     )
     try:
         snapshot_path.parent.mkdir(parents=True, mode=0o0700, exist_ok=True)
-        ok, output = await _run(
-            ["/usr/bin/dpkg", "--get-selections"],
-            timeout=15.0,
-        )
+        ok, output = await _run([DPKG, "--get-selections"], timeout=15.0)
         if not ok:
             logger.warning("dpkg --get-selections failed: %s", output)
             return False, None
@@ -745,11 +742,7 @@ async def _apt_get_fix_broken() -> tuple[bool, str]:
     Best-effort rollback after failed upgrade. May not fully restore state,
     but aims to unbreak the system. Called only on apt_upgrade failure.
     """
-    return await _run(
-        _apt_get(["-f", "install", "-y"], keep_conffiles=True),
-        timeout=120.0,
-        env=_apt_env(),
-    )
+    return await _run(_apt_cmd("fix-broken"), timeout=120.0, env=_apt_env())
 
 
 async def _apt_restore_packages(snapshot_path: Path) -> tuple[bool, str]:
@@ -767,8 +760,8 @@ async def _apt_restore_packages(snapshot_path: Path) -> tuple[bool, str]:
         return False, str(e)
     proc = await asyncio.create_subprocess_exec(
         SUDO,
-        "/usr/bin/dpkg",
-        "--set-selections",
+        str(APT_HELPER),
+        "set-selections",
         stdin=asyncio.subprocess.PIPE,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
@@ -793,16 +786,12 @@ async def _apt_restore_packages(snapshot_path: Path) -> tuple[bool, str]:
         msg = stderr.decode(errors="replace")
         logger.error("dpkg --set-selections failed: %s", msg)
         return False, msg
-    return await _run(
-        _apt_get(["dselect-upgrade", "-y"], keep_conffiles=True),
-        timeout=120.0,
-        env=_apt_env(),
-    )
+    return await _run(_apt_cmd("dselect-upgrade"), timeout=120.0, env=_apt_env())
 
 
 async def apt_update() -> tuple[bool, str]:
     """Run apt-get update to refresh package lists."""
-    return await _run(_apt_get(["update"]), timeout=120.0, env=_apt_env())
+    return await _run(_apt_cmd("update"), timeout=120.0, env=_apt_env())
 
 
 async def apt_upgrade(exclude: tuple[str, ...] = ()) -> tuple[bool, str]:
@@ -820,16 +809,12 @@ async def apt_upgrade(exclude: tuple[str, ...] = ()) -> tuple[bool, str]:
     if not pkgs:
         return True, "no packages to upgrade"
 
-    return await _run(
-        _apt_get(["install", "--only-upgrade", "-y", *pkgs], keep_conffiles=True),
-        timeout=300.0,
-        env=_apt_env(),
-    )
+    return await _run(_apt_cmd("upgrade", pkgs), timeout=300.0, env=_apt_env())
 
 
 async def apt_autoremove() -> tuple[bool, str]:
     """Run apt-get autoremove -y to remove orphaned packages after an upgrade."""
-    return await _run(_apt_get(["autoremove", "-y"]), timeout=120.0, env=_apt_env())
+    return await _run(_apt_cmd("autoremove"), timeout=120.0, env=_apt_env())
 
 
 async def run_hook(
@@ -841,8 +826,9 @@ async def run_hook(
 ) -> tuple[bool, str]:
     """Run the per-component update hook if it exists.
 
-    timeout is 60s for update hooks; provisioning passes a larger budget since a
-    first install may sync a full dependency set.
+    The 60s default suits tests and trivial hooks; the update and provisioning
+    flows pass HOOK_TIMEOUT since a hook may sync a full dependency set (e.g.
+    Spoolman's `uv sync` after its deps changed).
     """
     hook = (_HOOKS_DIR / f"{name}.sh").resolve()  # SEC: resolve symlinks
     try:

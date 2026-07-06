@@ -140,7 +140,7 @@ class TestMMUState:
     def test_from_status_builds_correctly(self) -> None:
         state: MMUState = MMUState.from_status(self._full_status())
         assert state.num_gates == 2
-        assert state.enabled == True
+        assert state.enabled
         assert len(state.gates) == 2
         assert state.gates[0].material == "PLA"
         assert state.gates[1].status == GateStatus.EMPTY
