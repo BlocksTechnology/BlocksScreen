@@ -87,7 +87,7 @@ class JobStatusWidget(QtWidgets.QWidget):
         self.layer_fallback = False
         self.total_layer_reported = False
         self._displayed_layer = 0
-        self._pending_layer = 0
+        self._extrusion_high_water = 0.0
         self._setupUI()
         self.cancel_print_dialog = BasePopup(self, floating=True)
         self.tune_menu_btn.clicked.connect(self.tune_clicked.emit)
@@ -182,7 +182,7 @@ class JobStatusWidget(QtWidgets.QWidget):
         self.layer_display_button.setText("0")
         self.total_layer_reported = False
         self._displayed_layer = 0
-        self._pending_layer = 0
+        self._extrusion_high_water = 0.0
         self.print_time_display_button.setText("?")
         self.printing_progress_bar.reset()
         self._print_duration = 0.0
@@ -193,15 +193,11 @@ class JobStatusWidget(QtWidgets.QWidget):
 
     @QtCore.pyqtSlot(dict, name="on_fileinfo")
     def on_fileinfo(self, metadata: dict) -> None:
-        """Handle received file information/metadata.
-
-        Loads thumbnail and layer count regardless of visibility so they
-        are ready when the widget is shown.
-        """
+        """Handle received file info/metadata (loads regardless of visibility)."""
+        # Metadata has no current_layer (that's live print_stats); don't reset it here.
         layer_count = metadata.get("layer_count", -1)
         self.total_layers = str(layer_count) if layer_count >= 0 else "---"
         self.total_layer_reported = layer_count >= 0
-        self.layer_display_button.setText("0")
         self.layer_display_button.secondary_text = self.total_layers
         self.file_metadata = metadata
         self._load_thumbnails(*metadata.get("thumbnail_images", ()))
@@ -257,7 +253,7 @@ class JobStatusWidget(QtWidgets.QWidget):
             self.total_layers = "?"
             self.total_layer_reported = False
             self._displayed_layer = 0
-            self._pending_layer = 0
+            self._extrusion_high_water = 0.0
             self._print_duration = 0.0
             self.file_metadata = None
         # Send Event on Print state
@@ -313,7 +309,6 @@ class JobStatusWidget(QtWidgets.QWidget):
                     _reported_layer = int(value["current_layer"])
                     self.layer_display_button.setText(str(_reported_layer))
                     self._displayed_layer = _reported_layer
-                    self._pending_layer = _reported_layer
                     self.layer_fallback = False
                 else:
                     self.layer_display_button.setText("---")
@@ -333,24 +328,19 @@ class JobStatusWidget(QtWidgets.QWidget):
 
     @QtCore.pyqtSlot(str, list, name="on_gcode_move_update")
     def on_gcode_move_update(self, field: str, value: list) -> None:
-        """Z-position fallback for layer count display.
-
-        Only runs when Klipper does not provide
-        ``print_stats.info.current_layer`` (``layer_fallback`` is True)
-        AND ``print_duration > 0``.  The ``print_duration`` gate
-        matches Mainsail's ``getPrintCurrentLayer`` getter which
-        prevents layer updates during pre-print procedures (heating,
-        nozzle cleaning).
-        """
+        """Z-position layer fallback, gated on E advancing past its high-water mark to reject travel/Z-hop."""
         if (
-            not self.isVisible()
-            or "gcode_position" not in field
+            "gcode_position" not in field
             or self._internal_print_status != "printing"
             or not self.layer_fallback
             or self._print_duration <= 0  # Mainsail: skip during pre-print procedures
-            or len(value) <= 2
+            or len(value) <= 3
         ):
             return
+        extrude_position = float(value[3])
+        if extrude_position <= self._extrusion_high_water:
+            return  # travel / Z-hop: no extrusion, not a real layer sample
+        self._extrusion_high_water = extrude_position
         meta = self.file_metadata
         if not meta:
             return
@@ -370,14 +360,9 @@ class JobStatusWidget(QtWidgets.QWidget):
             first_layer_height=first_layer_height,
             max_layers=_max_layers,
         )
-        advance = (
-            _current_layer > self._displayed_layer
-            and _current_layer <= self._pending_layer
-        )
-        if advance:
+        if _current_layer > self._displayed_layer:
             self._displayed_layer = _current_layer
             self.layer_display_button.setText(str(_current_layer))
-        self._pending_layer = _current_layer
 
     @QtCore.pyqtSlot(str, float, name="virtual_sdcard_update")
     @QtCore.pyqtSlot(str, bool, name="virtual_sdcard_update")

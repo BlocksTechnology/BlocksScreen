@@ -170,11 +170,15 @@ class TestOnGcodeMoveUpdate:
             "first_layer_height": 0.2,
         }
 
-    def test_no_update_when_hidden(self, widget):
+    def test_updates_when_hidden(self, widget):
+        """Layer must keep syncing while the page is hidden (e.g. behind Tune),
+        mirroring Mainsail so the value is correct the moment it's shown again."""
         self._ready_widget(widget)
         widget.hide()
-        widget.on_gcode_move_update("gcode_position", [0, 0, 1.0, 0])
-        assert widget.layer_display_button.text() == "sentinel"
+        # z=0.4 -> layer 2; E must advance past the high-water mark to count.
+        widget.on_gcode_move_update("gcode_position", [0, 0, 0.4, 1])
+        widget.on_gcode_move_update("gcode_position", [0, 0, 0.4, 2])
+        assert widget.layer_display_button.text() == "2"
 
     def test_no_update_wrong_field(self, widget):
         self._ready_widget(widget)
@@ -195,32 +199,50 @@ class TestOnGcodeMoveUpdate:
 
     def test_calculates_layer_from_z(self, widget):
         self._ready_widget(widget)
-        # z=0.4 -> layer 2; needs two samples for Z to settle before it commits.
-        widget.on_gcode_move_update("gcode_position", [0, 0, 0.4, 0])
-        widget.on_gcode_move_update("gcode_position", [0, 0, 0.4, 0])
+        # z=0.4 -> layer 2; E must advance past the high-water mark to count.
+        widget.on_gcode_move_update("gcode_position", [0, 0, 0.4, 1])
+        widget.on_gcode_move_update("gcode_position", [0, 0, 0.4, 2])
         assert widget.layer_display_button.text() == "2"
 
     def test_transient_z_hop_does_not_bump_layer(self, widget):
         """A one-off Z rise (travel/Z-hop) must not advance the layer."""
         self._ready_widget(widget)
-        # Settle at layer 2 (z=0.4).
-        widget.on_gcode_move_update("gcode_position", [0, 0, 0.4, 0])
-        widget.on_gcode_move_update("gcode_position", [0, 0, 0.4, 0])
+        # Settle at layer 2 (z=0.4), genuine extrusion.
+        widget.on_gcode_move_update("gcode_position", [0, 0, 0.4, 1])
+        widget.on_gcode_move_update("gcode_position", [0, 0, 0.4, 2])
         assert widget.layer_display_button.text() == "2"
-        # Single hop up to z=1.0 (would compute layer 5) then back to 0.4.
-        widget.on_gcode_move_update("gcode_position", [0, 0, 1.0, 0])
-        widget.on_gcode_move_update("gcode_position", [0, 0, 0.4, 0])
+        # Hop up to z=1.0 (would compute layer 5) with no extrusion (flat E),
+        # then back to 0.4 still with no new extrusion.
+        widget.on_gcode_move_update("gcode_position", [0, 0, 1.0, 2])
+        widget.on_gcode_move_update("gcode_position", [0, 0, 0.4, 2])
         assert widget.layer_display_button.text() == "2"
+
+    def test_prolonged_z_hop_does_not_stick_above_real_layer(self, widget):
+        """A Z-hop that dwells across 2+ samples (e.g. a wipe at the hop
+        plateau) must not falsely settle and lock in an inflated layer."""
+        self._ready_widget(widget)
+        # Settle at layer 2 (z=0.4), genuine extrusion.
+        widget.on_gcode_move_update("gcode_position", [0, 0, 0.4, 1])
+        widget.on_gcode_move_update("gcode_position", [0, 0, 0.4, 2])
+        assert widget.layer_display_button.text() == "2"
+        # Z-hop dwells at z=1.0 (layer 5) across two travel samples, no extrusion.
+        widget.on_gcode_move_update("gcode_position", [0, 0, 1.0, 2])
+        widget.on_gcode_move_update("gcode_position", [0, 0, 1.0, 2])
+        # Toolhead descends and resumes printing the real next layer (3).
+        widget.on_gcode_move_update("gcode_position", [0, 0, 0.6, 3])
+        widget.on_gcode_move_update("gcode_position", [0, 0, 0.6, 4])
+        assert widget.layer_display_button.text() == "3"
 
     def test_layer_never_regresses(self, widget):
         """The displayed layer must not decrease within a print."""
         self._ready_widget(widget)
-        widget.on_gcode_move_update("gcode_position", [0, 0, 0.8, 0])  # layer 4
-        widget.on_gcode_move_update("gcode_position", [0, 0, 0.8, 0])
+        widget.on_gcode_move_update("gcode_position", [0, 0, 0.8, 1])  # layer 4
+        widget.on_gcode_move_update("gcode_position", [0, 0, 0.8, 2])
         assert widget.layer_display_button.text() == "4"
-        # Z drops (e.g. first move of an adaptive/second object) -> keep 4.
-        widget.on_gcode_move_update("gcode_position", [0, 0, 0.4, 0])
-        widget.on_gcode_move_update("gcode_position", [0, 0, 0.4, 0])
+        # Z drops (e.g. first move of an adaptive/second object) but
+        # extrusion continues -> keep 4.
+        widget.on_gcode_move_update("gcode_position", [0, 0, 0.4, 3])
+        widget.on_gcode_move_update("gcode_position", [0, 0, 0.4, 4])
         assert widget.layer_display_button.text() == "4"
 
     def test_reported_total_layer_not_overridden_by_estimate(self, widget):
@@ -228,8 +250,8 @@ class TestOnGcodeMoveUpdate:
         self._ready_widget(widget)
         widget.on_print_stats_update("info", {"total_layer": 999})
         assert widget.total_layer_reported is True
-        widget.on_gcode_move_update("gcode_position", [0, 0, 0.4, 0])
-        widget.on_gcode_move_update("gcode_position", [0, 0, 0.4, 0])
+        widget.on_gcode_move_update("gcode_position", [0, 0, 0.4, 1])
+        widget.on_gcode_move_update("gcode_position", [0, 0, 0.4, 2])
         assert widget.layer_display_button.secondary_text == "999"
 
 
@@ -379,11 +401,12 @@ class TestOnFileInfo:
         widget.on_fileinfo(_metadata)
         assert widget.file_metadata is _metadata
 
-    def test_layer_display_reset_to_zero(self, widget):
+    def test_layer_display_not_reset_when_already_reporting(self, widget):
+        """Re-showing after Tune redelivers cached metadata; must not reset the live layer."""
         widget.layer_display_button.setText("99")
         _metadata = self._ready_widget(widget)
         widget.on_fileinfo(_metadata)
-        assert widget.layer_display_button.text() == "0"
+        assert widget.layer_display_button.text() == "99"
 
     def test_secondary_text_set_to_total_layers(self, widget):
         _metadata = self._ready_widget(widget)
