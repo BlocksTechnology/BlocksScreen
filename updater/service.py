@@ -50,7 +50,7 @@ from updater.locking import process_lock, restart_sentinel_path
 from updater.models import ComponentConfig, ComponentStatus
 
 _STATE_PATH = Path.home() / ".cache" / "blockscreen" / "updater_state.json"
-# SD-backed map of component name to pre-update hash; if present at boot, revert.
+# SD-backed batch map name->pre-update hash; present at boot = revert those repos.
 _INFLIGHT_PATH = Path.home() / ".cache" / "blockscreen" / "updater_inflight.json"
 _HISTORY_PATH = Path.home() / ".cache" / "blockscreen" / "update_history.jsonl"
 # Cap the history so a device running for years cannot fill the SD card.
@@ -141,7 +141,7 @@ class UpdateService:
                     cache_ttl_seconds=0 if force else 86_400, exclude=c.apt_exclude
                 )
             elif c.path is None or not c.path.exists():
-                # Missing opted-in components surface as needs_install; others skip.
+                # Missing opted-in comps surface as needs_install; rest stay skipped.
                 if c.install_if_missing and c.url:
                     results[c.name] = ComponentStatus(name=c.name, needs_install=True)
                 return
@@ -359,7 +359,7 @@ class UpdateService:
                     self._log.error("%s: hook failed: %s", c.name, hook_err)
                     await self._abort_batch(batch, prev, touched, restarted, "hook")
                     return
-            # Restart each unique service once; record it BEFORE so abort re-restarts it.
+            # Restart each unique svc once; bounced marked BEFORE so abort re-restarts.
             self._log.info("git batch: restart phase")
             seen: set[str] = set()
             ui_components: list[ComponentConfig] = []
@@ -1294,7 +1294,11 @@ class UpdateService:
         if not ok:
             self._log.warning("background apt-get update failed: %s", err)
             return
-        ok, err = await apt_upgrade()
+        # Honor the apt excludes: a silent background kernel/firmware bump is the brick risk they prevent.
+        exclude = tuple(
+            pat for c in self._components if c.kind == "apt" for pat in c.apt_exclude
+        )
+        ok, err = await apt_upgrade(exclude=exclude)
         if not ok:
             self._log.warning("background apt upgrade failed: %s", err)
             return

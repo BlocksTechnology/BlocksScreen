@@ -3,7 +3,8 @@ set -euo pipefail
 
 SCRIPT_PATH=$(dirname -- "$(readlink -f -- "$0")")
 BS_PATH=$(dirname "$SCRIPT_PATH")
-_BSENV_USER="${SUDO_USER:-$USER}"
+# Hardcode 'blocks' like the other scripts: $USER=root under a root pull would derive /root and skip every patch.
+_BSENV_USER="blocks"
 _BSENV_HOME=$(getent passwd "$_BSENV_USER" | cut -d: -f6)
 BSENV="${BLOCKSSCREEN_VENV:-${_BSENV_HOME}/.BlocksScreen-env}"
 

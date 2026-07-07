@@ -112,6 +112,9 @@ class UpdatePage(QtWidgets.QWidget):
             self._overlay_shown = False
             self.show_loading(False)
             self.call_load_panel.emit(False, "")
+            self._show_toast(
+                "Update is taking longer than expected - tap refresh to check status"
+            )
 
     def showEvent(self, a0: QtGui.QShowEvent | None) -> None:
         """Rebuild cards and request a fresh status poll each time the page becomes visible."""
@@ -438,6 +441,14 @@ class UpdatePage(QtWidgets.QWidget):
         """Show a toast with the error reason and prompt the user to refresh."""
         error_msg = f"{name} update failed: {reason}. Tap refresh to retry."
         self._show_toast(error_msg)
+
+    def handle_update_rejected(self) -> None:
+        """Daemon refused the request (already busy): drop the optimistic overlay and toast."""
+        self._busy = False
+        self._overlay_shown = False
+        self.show_loading(False)
+        self.call_load_panel.emit(False, "")
+        self._show_toast("Another update is already in progress")
 
     def handle_rollback_done(self, name: str, success: bool) -> None:
         """Show a success or failure toast after an automatic rollback completes."""
