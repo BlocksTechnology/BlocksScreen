@@ -1,15 +1,15 @@
 import typing
 
+from lib.panels.widgets.basePopup import BasePopup
 from lib.panels.widgets.keyboardPage import CustomQwertyKeyboard
-from lib.panels.widgets.numpadPage import CustomNumpad
 from lib.panels.widgets.loadWidget import LoadingOverlayWidget
+from lib.panels.widgets.numpadPage import CustomNumpad
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_frame import BlocksCustomFrame
 from lib.utils.blocks_linedit import BlocksCustomLinEdit
 from lib.utils.icon_button import IconButton
 from lib.utils.list_model import EntryDelegate, EntryListModel, ListItem
 from PyQt6 import QtCore, QtGui, QtWidgets
-from lib.panels.widgets.basePopup import BasePopup
 
 
 class AddSpoolPage(QtWidgets.QWidget):
@@ -35,7 +35,7 @@ class AddSpoolPage(QtWidgets.QWidget):
         self._selected_filament_id: int | None = None
         self._filament_id_map: dict[str, dict] = {}
         self._keyboard_field: QtWidgets.QLineEdit | None = None
-        self._material_filter:str | None = None
+        self._material_filter: str | None = None
 
         self._build_ui()
 
@@ -98,8 +98,11 @@ class AddSpoolPage(QtWidgets.QWidget):
             fil_id = fil.get("id", "?")
             name = fil.get("name") or f"Filament #{fil_id}"
             material = fil.get("material") or ""
-            if self._material_filter and self._material_filter.lower() not in material.lower():
-                continue           
+            if (
+                self._material_filter
+                and self._material_filter.lower() not in material.lower()
+            ):
+                continue
             self._fil_model.add_item(
                 ListItem(
                     text=name,

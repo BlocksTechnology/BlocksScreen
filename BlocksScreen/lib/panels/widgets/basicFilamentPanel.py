@@ -687,7 +687,9 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
             btn.setFont(font)
             btn.setText(text)
             btn.clicked.connect(partial(self.load_filament, 0, _filament_type))
-            btn.clicked.connect(partial(self.change_page, self.indexOf(self.filament_control_page)))
+            btn.clicked.connect(
+                partial(self.change_page, self.indexOf(self.filament_control_page))
+            )
             btn.setProperty("icon_pixmap", QtGui.QPixmap(pixmap_path))
             btn.setObjectName(obj_name)
             self.load_page_content_layout.addWidget(btn, row, col, 1, 1)

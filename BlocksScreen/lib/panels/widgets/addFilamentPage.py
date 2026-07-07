@@ -1,5 +1,7 @@
 import typing
 
+from lib.panels.widgets.basePopup import BasePopup
+from lib.panels.widgets.colorWheelWidget import ColorWheelWidget
 from lib.panels.widgets.keyboardPage import CustomQwertyKeyboard
 from lib.panels.widgets.numpadPage import CustomNumpad
 from lib.utils.blocks_button import BlocksCustomButton
@@ -7,8 +9,6 @@ from lib.utils.blocks_frame import BlocksCustomFrame
 from lib.utils.blocks_linedit import BlocksCustomLinEdit
 from lib.utils.icon_button import IconButton
 from PyQt6 import QtCore, QtGui, QtWidgets
-from lib.panels.widgets.basePopup import BasePopup
-from lib.panels.widgets.colorWheelWidget import ColorWheelWidget
 
 
 class AddFilamentPage(QtWidgets.QWidget):
@@ -58,8 +58,7 @@ class AddFilamentPage(QtWidgets.QWidget):
             self.on_numpad_request
         )
 
-
-    def setData(self , material:str , extruder_temp:int):
+    def setData(self, material: str, extruder_temp: int):
         self._material_field.setText(material)
         self._ext_temp_field.setText(str(extruder_temp))
         self.update()
@@ -183,7 +182,7 @@ class AddFilamentPage(QtWidgets.QWidget):
             body["density"] = float(density_text)
         except ValueError:
             body["density"] = 1.24
-        
+
         body["diameter"] = 1.75  # Default diameter, can be modified later if needed
         if not vendor_text == "---":
             self.request_add_manufactor.emit({"name": vendor_text})
