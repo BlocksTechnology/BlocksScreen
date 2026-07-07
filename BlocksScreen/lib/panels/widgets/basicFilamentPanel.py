@@ -17,9 +17,9 @@ class FilamentTypes(enum.Enum):
     PLA = Filament(name="PLA", temperature=220)
     PETG = Filament(name="PETG", temperature=240)
     ABS = Filament(name="ABS", temperature=250)
-    HIPS = Filament(name="HIPS", temperature=250)
+    PP = Filament(name="PP", temperature=250)
     NYLON = Filament(name="NYLON", temperature=270)
-    TPU = Filament(name="TPU", temperature=230)
+    PC = Filament(name="PC", temperature=230)
     UNKNOWN = Filament(name="UNKNOWN", temperature=250)
 
 
@@ -650,28 +650,28 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
                 FilamentTypes.ABS,
             ),
             (
-                "load_hips_btn",
-                "HIPS",
-                ":/filament_related/media/topbar/hips_filament_topbar.svg",
+                "load_PP_btn",
+                "PP",
+                ":/top_bar_icons/media/topbar/pp_filament_topbar.svg",
                 1,
                 1,
-                FilamentTypes.HIPS,
+                FilamentTypes.PP,
             ),
             (
                 "load_nylon_btn",
                 "NYLON",
-                ":/filament_related/media/topbar/nylon_filament_topbar.svg",
+                ":/top_bar_icons/media/topbar/nylon_filament_topbar.svg",
                 2,
                 0,
                 FilamentTypes.NYLON,
             ),
             (
-                "load_tpu_btn",
-                "TPU",
-                ":/filament_related/media/topbar/tpu_filament_topbar.svg",
+                "load_PC_btn",
+                "PC",
+                ":/top_bar_icons/media/topbar/pc_filament_topbar.svg",
                 2,
                 1,
-                FilamentTypes.TPU,
+                FilamentTypes.PC,
             ),
         ]
 
@@ -687,6 +687,7 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
             btn.setFont(font)
             btn.setText(text)
             btn.clicked.connect(partial(self.load_filament, 0, _filament_type))
+            btn.clicked.connect(partial(self.change_page, self.indexOf(self.filament_control_page)))
             btn.setProperty("icon_pixmap", QtGui.QPixmap(pixmap_path))
             btn.setObjectName(obj_name)
             self.load_page_content_layout.addWidget(btn, row, col, 1, 1)
