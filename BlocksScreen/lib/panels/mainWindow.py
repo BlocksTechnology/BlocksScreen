@@ -332,6 +332,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self.printPanel.call_cancel_panel.connect(self.handle_cancel_print)
         self.printer.display_update.connect(self._handle_display_status)
 
+        # Source of truth for job activity; keeps print tab off the main page mid-job.
+        self._print_state = "standby"
+        self.printer.print_stats_update[str, str].connect(self._track_print_state)
+
         self.print_status = "idle"
         self.ui.chamber_temp_display.hide()
 
@@ -634,6 +638,38 @@ class MainWindow(QtWidgets.QMainWindow):
             )
         self.ui.header_main_layout.setEnabled(not locked)
 
+    @QtCore.pyqtSlot(str, str, name="track_print_state")
+    def _track_print_state(self, field: str, value: str) -> None:
+        """Track ``print_stats.state`` as the source of truth for job activity."""
+        if field == "state":
+            self._print_state = value
+
+    def _is_job_active(self) -> bool:
+        """True while a job occupies the printer; paused included so runout pauses hold the page."""
+        return self._print_state in ("printing", "paused")
+
+    def _print_tab_index(self) -> int:
+        """Tab index of the print tab in the main content widget."""
+        return self.ui.main_content_widget.indexOf(self.ui.printTab)
+
+    def _job_status_index(self) -> int:
+        """Panel index of the job-status page inside the print tab."""
+        return self.printPanel.indexOf(self.printPanel.jobStatusPage_widget)
+
+    def _main_print_index(self) -> int:
+        """Panel index of the main print page inside the print tab."""
+        return self.printPanel.indexOf(self.printPanel.print_page)
+
+    def _guard_print_panel(self, tab_index: int, panel_index: int) -> int:
+        """Redirect the main print page to job status while a job is active."""
+        if (
+            tab_index == self._print_tab_index()
+            and panel_index == self._main_print_index()
+            and self._is_job_active()
+        ):
+            return self._job_status_index()
+        return panel_index
+
     def reset_tab_indexes(self):
         """
         Used to grantee all tabs reset to their
@@ -641,10 +677,8 @@ class MainWindow(QtWidgets.QMainWindow):
         """
         self.filamentPanel.setCurrentIndex(0)
 
-        if self.print_status == "printing":
-            self.printPanel.setCurrentIndex(
-                self.printPanel.indexOf(self.printPanel.jobStatusPage_widget)
-            )
+        if self._is_job_active():
+            self.printPanel.setCurrentIndex(self._job_status_index())
             return
         self.printPanel.setCurrentIndex(0)
         self.controlPanel.setCurrentIndex(0)
@@ -712,6 +746,7 @@ class MainWindow(QtWidgets.QMainWindow):
             )
 
         self.show_loadscreen(False)
+        panel_index = self._guard_print_panel(tab_index, panel_index)
         current_page = [
             self.ui.main_content_widget.currentIndex(),
             self.current_panel_index(),
@@ -749,8 +784,10 @@ class MainWindow(QtWidgets.QMainWindow):
         if not bool(self.index_stack):
             _logger.debug("Index stack is empty, cannot go back any further")
             return
-        self.ui.main_content_widget.setCurrentIndex(self.index_stack[-1][0])
-        self.set_current_panel_index(self.index_stack[-1][1])
+        _tab, _panel = self.index_stack[-1]
+        _panel = self._guard_print_panel(_tab, _panel)
+        self.ui.main_content_widget.setCurrentIndex(_tab)
+        self.set_current_panel_index(_panel)
         self.index_stack.pop()  # Remove the last position.
         _logger.debug("Successfully went back a page.")
 

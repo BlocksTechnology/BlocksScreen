@@ -87,7 +87,7 @@ class JobStatusWidget(QtWidgets.QWidget):
         self.layer_fallback = False
         self.total_layer_reported = False
         self._displayed_layer = 0
-        self._extrusion_high_water = 0.0
+        self._last_z = 0.0
         self._setupUI()
         self.cancel_print_dialog = BasePopup(self, floating=True)
         self.tune_menu_btn.clicked.connect(self.tune_clicked.emit)
@@ -182,7 +182,7 @@ class JobStatusWidget(QtWidgets.QWidget):
         self.layer_display_button.setText("0")
         self.total_layer_reported = False
         self._displayed_layer = 0
-        self._extrusion_high_water = 0.0
+        self._last_z = 0.0
         self.print_time_display_button.setText("?")
         self.printing_progress_bar.reset()
         self._print_duration = 0.0
@@ -253,7 +253,7 @@ class JobStatusWidget(QtWidgets.QWidget):
             self.total_layers = "?"
             self.total_layer_reported = False
             self._displayed_layer = 0
-            self._extrusion_high_water = 0.0
+            self._last_z = 0.0
             self._print_duration = 0.0
             self.file_metadata = None
         # Send Event on Print state
@@ -290,7 +290,8 @@ class JobStatusWidget(QtWidgets.QWidget):
                 self._current_file_name = value
                 if self.js_file_name_label.text().lower() != value.lower():
                     self.js_file_name_label.setText(self._current_file_name)
-                if self.isVisible():
+                # Fetch metadata even when hidden so layers recover on reconnect.
+                if value:
                     self.request_file_info.emit(value)
         # Layer info must be processed regardless of visibility so
         # Klipper's runtime values always override metadata defaults.
@@ -311,12 +312,14 @@ class JobStatusWidget(QtWidgets.QWidget):
                     self._displayed_layer = _reported_layer
                     self.layer_fallback = False
                 else:
-                    self.layer_display_button.setText("---")
+                    # No info.current_layer from Klipper: compute from Z instead.
                     self.layer_fallback = True
         elif isinstance(value, float):
-            # print_duration tracked regardless of visibility (gates Z fallback)
+            # print_duration + filament_used tracked regardless of visibility (gate Z fallback)
             if "print_duration" in field:
                 self._print_duration = value
+            elif "filament_used" in field:
+                self._update_layer_from_z()
             elif self.isVisible() and "total_duration" in field:
                 _time = estimate_print_time(int(value))
                 _print_time_string = (
@@ -328,39 +331,37 @@ class JobStatusWidget(QtWidgets.QWidget):
 
     @QtCore.pyqtSlot(str, list, name="on_gcode_move_update")
     def on_gcode_move_update(self, field: str, value: list) -> None:
-        """Z-position layer fallback, gated on E advancing past its high-water mark to reject travel/Z-hop."""
+        """Remember live Z; the layer is recomputed from it when filament advances."""
+        if "gcode_position" in field and len(value) > 2:
+            self._last_z = float(value[2])
+
+    def _update_layer_from_z(self) -> None:
+        """Recompute fallback layer from last Z on filament advance, so park/travel Z is ignored (Mainsail getPrintCurrentLayer)."""
         if (
-            "gcode_position" not in field
-            or self._internal_print_status != "printing"
+            self._internal_print_status != "printing"
             or not self.layer_fallback
-            or self._print_duration <= 0  # Mainsail: skip during pre-print procedures
-            or len(value) <= 3
+            or self._print_duration <= 0  # skip pre-print homing/purge moves
         ):
             return
-        extrude_position = float(value[3])
-        if extrude_position <= self._extrusion_high_water:
-            return  # travel / Z-hop: no extrusion, not a real layer sample
-        self._extrusion_high_water = extrude_position
         meta = self.file_metadata
         if not meta:
             return
-        object_height = float(meta.get("object_height", 0))
         layer_height = float(meta.get("layer_height", 0))
-        first_layer_height = float(meta.get("first_layer_height", 0))
         if layer_height <= 0:
             return
+        first_layer_height = float(meta.get("first_layer_height", 0))
         _max_layers = calculate_max_layers(
-            object_height, layer_height, first_layer_height
+            float(meta.get("object_height", 0)), layer_height, first_layer_height
         )
         if not self.total_layer_reported and _max_layers > 0:
             self.layer_display_button.secondary_text = str(_max_layers)
         _current_layer = calculate_current_layer(
-            z_position=value[2],
+            z_position=self._last_z,
             layer_height=layer_height,
             first_layer_height=first_layer_height,
             max_layers=_max_layers,
         )
-        if _current_layer > self._displayed_layer:
+        if _current_layer != self._displayed_layer:
             self._displayed_layer = _current_layer
             self.layer_display_button.setText(str(_current_layer))
 

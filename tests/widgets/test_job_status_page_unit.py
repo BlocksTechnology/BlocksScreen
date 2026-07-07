@@ -155,7 +155,7 @@ class TestOnPrintStatsUpdate:
 
 
 class TestOnGcodeMoveUpdate:
-    """on_gcode_move_update computes layer from Z position."""
+    """on_gcode_move_update computes layer from Z, gated on filament advancing."""
 
     def _ready_widget(self, widget):
         """Put widget in the state where gcode_move_update should fire."""
@@ -170,88 +170,64 @@ class TestOnGcodeMoveUpdate:
             "first_layer_height": 0.2,
         }
 
+    def _feed(self, widget, z, filament_used):
+        """Report a Z move then filament progress, as the printer would."""
+        widget.on_gcode_move_update("gcode_position", [0, 0, z, 0])
+        widget.on_print_stats_update("filament_used", float(filament_used))
+
+    def test_calculates_layer_from_z(self, widget):
+        self._ready_widget(widget)
+        self._feed(widget, 0.4, 1)  # z=0.4 -> layer 2
+        assert widget.layer_display_button.text() == "2"
+
     def test_updates_when_hidden(self, widget):
-        """Layer must keep syncing while the page is hidden (e.g. behind Tune),
-        mirroring Mainsail so the value is correct the moment it's shown again."""
         self._ready_widget(widget)
         widget.hide()
-        # z=0.4 -> layer 2; E must advance past the high-water mark to count.
-        widget.on_gcode_move_update("gcode_position", [0, 0, 0.4, 1])
-        widget.on_gcode_move_update("gcode_position", [0, 0, 0.4, 2])
+        self._feed(widget, 0.4, 1)
         assert widget.layer_display_button.text() == "2"
 
     def test_no_update_wrong_field(self, widget):
         self._ready_widget(widget)
+        widget._filament_used = 1
         widget.on_gcode_move_update("position", [0, 0, 1.0, 0])
         assert widget.layer_display_button.text() == "sentinel"
 
     def test_no_update_when_not_printing(self, widget):
         self._ready_widget(widget)
         widget._internal_print_status = "paused"
-        widget.on_gcode_move_update("gcode_position", [0, 0, 1.0, 0])
+        self._feed(widget, 1.0, 1)
         assert widget.layer_display_button.text() == "sentinel"
 
     def test_no_update_when_duration_zero(self, widget):
         self._ready_widget(widget)
         widget._print_duration = 0.0
-        widget.on_gcode_move_update("gcode_position", [0, 0, 1.0, 0])
+        self._feed(widget, 1.0, 1)
         assert widget.layer_display_button.text() == "sentinel"
 
-    def test_calculates_layer_from_z(self, widget):
+    def test_park_zlift_ignored(self, widget):
+        """Z-lift with no filament advance (Happy Hare pause park) must not bump the layer."""
         self._ready_widget(widget)
-        # z=0.4 -> layer 2; E must advance past the high-water mark to count.
-        widget.on_gcode_move_update("gcode_position", [0, 0, 0.4, 1])
-        widget.on_gcode_move_update("gcode_position", [0, 0, 0.4, 2])
-        assert widget.layer_display_button.text() == "2"
-
-    def test_transient_z_hop_does_not_bump_layer(self, widget):
-        """A one-off Z rise (travel/Z-hop) must not advance the layer."""
-        self._ready_widget(widget)
-        # Settle at layer 2 (z=0.4), genuine extrusion.
-        widget.on_gcode_move_update("gcode_position", [0, 0, 0.4, 1])
-        widget.on_gcode_move_update("gcode_position", [0, 0, 0.4, 2])
-        assert widget.layer_display_button.text() == "2"
-        # Hop up to z=1.0 (would compute layer 5) with no extrusion (flat E),
-        # then back to 0.4 still with no new extrusion.
-        widget.on_gcode_move_update("gcode_position", [0, 0, 1.0, 2])
-        widget.on_gcode_move_update("gcode_position", [0, 0, 0.4, 2])
-        assert widget.layer_display_button.text() == "2"
-
-    def test_prolonged_z_hop_does_not_stick_above_real_layer(self, widget):
-        """A Z-hop that dwells across 2+ samples (e.g. a wipe at the hop
-        plateau) must not falsely settle and lock in an inflated layer."""
-        self._ready_widget(widget)
-        # Settle at layer 2 (z=0.4), genuine extrusion.
-        widget.on_gcode_move_update("gcode_position", [0, 0, 0.4, 1])
-        widget.on_gcode_move_update("gcode_position", [0, 0, 0.4, 2])
-        assert widget.layer_display_button.text() == "2"
-        # Z-hop dwells at z=1.0 (layer 5) across two travel samples, no extrusion.
-        widget.on_gcode_move_update("gcode_position", [0, 0, 1.0, 2])
-        widget.on_gcode_move_update("gcode_position", [0, 0, 1.0, 2])
-        # Toolhead descends and resumes printing the real next layer (3).
-        widget.on_gcode_move_update("gcode_position", [0, 0, 0.6, 3])
-        widget.on_gcode_move_update("gcode_position", [0, 0, 0.6, 4])
-        assert widget.layer_display_button.text() == "3"
-
-    def test_layer_never_regresses(self, widget):
-        """The displayed layer must not decrease within a print."""
-        self._ready_widget(widget)
-        widget.on_gcode_move_update("gcode_position", [0, 0, 0.8, 1])  # layer 4
-        widget.on_gcode_move_update("gcode_position", [0, 0, 0.8, 2])
+        self._feed(widget, 0.8, 1)  # layer 4
         assert widget.layer_display_button.text() == "4"
-        # Z drops (e.g. first move of an adaptive/second object) but
-        # extrusion continues -> keep 4.
-        widget.on_gcode_move_update("gcode_position", [0, 0, 0.4, 3])
-        widget.on_gcode_move_update("gcode_position", [0, 0, 0.4, 4])
+        widget.on_gcode_move_update(
+            "gcode_position", [0, 0, 15.0, 0]
+        )  # park, no extrusion
         assert widget.layer_display_button.text() == "4"
+
+    def test_layer_tracks_extruding_z(self, widget):
+        """Layer follows Z on extruding moves; may regress on a Z drop (Mainsail)."""
+        self._ready_widget(widget)
+        self._feed(widget, 0.8, 1)  # layer 4
+        assert widget.layer_display_button.text() == "4"
+        self._feed(widget, 0.4, 2)  # layer 2
+        assert widget.layer_display_button.text() == "2"
 
     def test_reported_total_layer_not_overridden_by_estimate(self, widget):
         """Klipper-reported total_layer wins over the geometry estimate."""
         self._ready_widget(widget)
         widget.on_print_stats_update("info", {"total_layer": 999})
         assert widget.total_layer_reported is True
-        widget.on_gcode_move_update("gcode_position", [0, 0, 0.4, 1])
-        widget.on_gcode_move_update("gcode_position", [0, 0, 0.4, 2])
+        self._feed(widget, 0.4, 1)
         assert widget.layer_display_button.secondary_text == "999"
 
 
