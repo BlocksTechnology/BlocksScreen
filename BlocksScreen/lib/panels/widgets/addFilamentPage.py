@@ -15,8 +15,8 @@ class AddFilamentPage(QtWidgets.QWidget):
     request_add_filament: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         dict, name="request-add-filament"
     )
-    request_add_manufactor: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
-        dict, name="request-add-manufactor"
+    request_add_manufacturer: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        dict, name="request-add-manufacturer"
     )
     accepted: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(name="accepted")
     cancelled: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(name="cancelled")
@@ -185,13 +185,13 @@ class AddFilamentPage(QtWidgets.QWidget):
 
         body["diameter"] = 1.75  # Default diameter, can be modified later if needed
         if not vendor_text == "---":
-            self.request_add_manufactor.emit({"name": vendor_text})
+            self.request_add_manufacturer.emit({"name": vendor_text})
             self.request_filament_body = body
             return
 
         self.request_add_filament.emit(body)
 
-    def on_add_manufactor_result(self, result: dict) -> None:
+    def on_add_manufacturer_result(self, result: dict) -> None:
         if result.get("error") is None:
             vendor_id = result.get("response", {}).get("id")
             if vendor_id is not None:
