@@ -199,51 +199,27 @@ class TestOnGcodeMoveUpdate:
 
     def test_calculates_layer_from_z(self, widget):
         self._ready_widget(widget)
-        # z=0.4 -> layer 2; E must advance past the high-water mark to count.
-        widget.on_gcode_move_update("gcode_position", [0, 0, 0.4, 1])
-        widget.on_gcode_move_update("gcode_position", [0, 0, 0.4, 2])
+        widget.on_gcode_move_update(
+            "gcode_position", [0, 0, 0.4, 0]
+        )  # z=0.4 -> layer 2
         assert widget.layer_display_button.text() == "2"
 
-    def test_transient_z_hop_does_not_bump_layer(self, widget):
-        """A one-off Z rise (travel/Z-hop) must not advance the layer."""
+    def test_z_hop_self_corrects(self, widget):
+        """Stateless Z recompute (Mainsail): a transient hop settles back on return."""
         self._ready_widget(widget)
-        # Settle at layer 2 (z=0.4), genuine extrusion.
-        widget.on_gcode_move_update("gcode_position", [0, 0, 0.4, 1])
-        widget.on_gcode_move_update("gcode_position", [0, 0, 0.4, 2])
+        widget.on_gcode_move_update("gcode_position", [0, 0, 0.4, 0])
         assert widget.layer_display_button.text() == "2"
-        # Hop up to z=1.0 (would compute layer 5) with no extrusion (flat E),
-        # then back to 0.4 still with no new extrusion.
-        widget.on_gcode_move_update("gcode_position", [0, 0, 1.0, 2])
-        widget.on_gcode_move_update("gcode_position", [0, 0, 0.4, 2])
+        widget.on_gcode_move_update("gcode_position", [0, 0, 1.0, 0])  # hop -> layer 5
+        widget.on_gcode_move_update("gcode_position", [0, 0, 0.4, 0])  # back -> layer 2
         assert widget.layer_display_button.text() == "2"
 
-    def test_prolonged_z_hop_does_not_stick_above_real_layer(self, widget):
-        """A Z-hop that dwells across 2+ samples (e.g. a wipe at the hop
-        plateau) must not falsely settle and lock in an inflated layer."""
+    def test_layer_tracks_z(self, widget):
+        """Layer follows current Z and may regress on a Z drop (Mainsail)."""
         self._ready_widget(widget)
-        # Settle at layer 2 (z=0.4), genuine extrusion.
-        widget.on_gcode_move_update("gcode_position", [0, 0, 0.4, 1])
-        widget.on_gcode_move_update("gcode_position", [0, 0, 0.4, 2])
-        assert widget.layer_display_button.text() == "2"
-        # Z-hop dwells at z=1.0 (layer 5) across two travel samples, no extrusion.
-        widget.on_gcode_move_update("gcode_position", [0, 0, 1.0, 2])
-        widget.on_gcode_move_update("gcode_position", [0, 0, 1.0, 2])
-        # Toolhead descends and resumes printing the real next layer (3).
-        widget.on_gcode_move_update("gcode_position", [0, 0, 0.6, 3])
-        widget.on_gcode_move_update("gcode_position", [0, 0, 0.6, 4])
-        assert widget.layer_display_button.text() == "3"
-
-    def test_layer_never_regresses(self, widget):
-        """The displayed layer must not decrease within a print."""
-        self._ready_widget(widget)
-        widget.on_gcode_move_update("gcode_position", [0, 0, 0.8, 1])  # layer 4
-        widget.on_gcode_move_update("gcode_position", [0, 0, 0.8, 2])
+        widget.on_gcode_move_update("gcode_position", [0, 0, 0.8, 0])  # layer 4
         assert widget.layer_display_button.text() == "4"
-        # Z drops (e.g. first move of an adaptive/second object) but
-        # extrusion continues -> keep 4.
-        widget.on_gcode_move_update("gcode_position", [0, 0, 0.4, 3])
-        widget.on_gcode_move_update("gcode_position", [0, 0, 0.4, 4])
-        assert widget.layer_display_button.text() == "4"
+        widget.on_gcode_move_update("gcode_position", [0, 0, 0.4, 0])  # layer 2
+        assert widget.layer_display_button.text() == "2"
 
     def test_reported_total_layer_not_overridden_by_estimate(self, widget):
         """Klipper-reported total_layer wins over the geometry estimate."""
