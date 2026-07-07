@@ -1984,3 +1984,25 @@ class TestNonRepoComponent:
             "Spoolman", "not a git repository - reinstall required"
         )
         assert comp.path.exists()  # nothing moved
+
+
+class TestBackgroundAptUpgrade:
+    @pytest.mark.asyncio
+    async def test_honors_configured_apt_excludes(self):
+        # Background path must honor the same kernel/firmware excludes as the foreground.
+        svc = UpdateService()
+        svc._components = [
+            ComponentConfig(
+                name="system",
+                kind="apt",
+                order=1,
+                apt_exclude=("^linux-image", "^firmware-"),
+            )
+        ]
+        with (
+            patch("updater.service.apt_update", return_value=(True, "")),
+            patch("updater.service.apt_upgrade", return_value=(True, "")) as mock_up,
+            patch("updater.service.apt_autoremove", return_value=(True, "")),
+        ):
+            await svc.background_apt_upgrade()
+        mock_up.assert_awaited_once_with(exclude=("^linux-image", "^firmware-"))

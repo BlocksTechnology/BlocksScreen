@@ -148,16 +148,19 @@ def show_splash() -> QtWidgets.QSplashScreen:
 
 
 def _setup_sigterm(app: BlocksScreenApp) -> None:
-    def _handler(__signum: int, __frame: typing.Any) -> None:
+    def _do_shutdown() -> None:
         logging.getLogger(__name__).info("SIGTERM: showing restart splash before exit")
         # Cover the live UI before the multi-second teardown freezes its last frame.
         try:
-            show_splash().raise_()
-            QtWidgets.QApplication.processEvents()
+            show_splash()
         except Exception as exc:  # noqa: BLE001
             logging.getLogger(__name__).warning("restart splash failed: %s", exc)
         _write_splash_to_fb0()
         app.quit()
+
+    def _handler(__signum: int, __frame: typing.Any) -> None:
+        # Defer off the signal trampoline: inline paint reenters Qt mid-paint and SEGVs.
+        QtCore.QTimer.singleShot(0, _do_shutdown)
 
     signal.signal(signal.SIGTERM, _handler)
 

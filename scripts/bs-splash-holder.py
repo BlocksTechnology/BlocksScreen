@@ -93,7 +93,7 @@ def _on_sigterm(_sig: int, _frame: object) -> None:
 
 signal.signal(signal.SIGTERM, _on_sigterm)
 
-# Switch to tty8 immediately — VT switch does not require fb0.
+# Switch to tty8 immediately - VT switch does not require fb0.
 _activate_tty8()
 
 # Clear tty8 and hide the cursor (no bare text): the screen stays black until the

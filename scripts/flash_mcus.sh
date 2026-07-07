@@ -1,5 +1,5 @@
 #!/bin/bash
-# flash_mcus.sh — Blocks Klipper MCU Flasher
+# flash_mcus.sh - Blocks Klipper MCU Flasher
 # Copyright (C) 2026 Guilherme Costa <gmmcosta15@blockstec.com>
 # Modes:
 #   ./flash_mcus.sh                       interactive TUI (requires TTY)
@@ -8,7 +8,7 @@
 #   ./flash_mcus.sh --flash-all           flash all outdated MCUs (no interaction)
 #   --force                               bypass version check (any mode)
 #
-# Config files in mcu_config/<name>.config — leading comment lines declare interface:
+# Config files in mcu_config/<name>.config - leading comment lines declare interface:
 #   # mcu_type: rp2040              -> CAN flash (matched by chip type)
 #   # klipper_section: mcu MyBoard  -> printer.cfg section (UUID auto-discovery + version query)
 #   # serial: usb-Katapult_*        -> USB Katapult flash (glob, no /dev/serial/by-id/ prefix)
@@ -62,7 +62,7 @@ header() {
     echo -e "  ${BOLD}${CYAN}┌─ ${text} $(_box_hline "$pad")┐${RESET}" >&2
 }
 
-# Repeat a single Unicode char n times — pure bash, no subprocesses.
+# Repeat a single Unicode char n times - pure bash, no subprocesses.
 _str_repeat() {
     local s='' i
     for ((i = 0; i < $2; i++)); do s+="$1"; done
@@ -120,12 +120,12 @@ ensure_katapult() {
         ok "Katapult found"
         return 0
     fi
-    warn "Katapult not found — cloning from $KATAPULT_REPO..."
+    warn "Katapult not found - cloning from $KATAPULT_REPO..."
     if git clone "$KATAPULT_REPO" "$KATAPULT_DIR" 2>&1 | _indent4; then
         ok "Katapult cloned"
         KATAPULT_OK=true
     else
-        warn "Clone failed — CAN unavailable; USB falls back to klipper make flash"
+        warn "Clone failed - CAN unavailable; USB falls back to klipper make flash"
         KATAPULT_OK=false
     fi
 }
@@ -197,12 +197,12 @@ ensure_klipper_running() {
     local need_start=false
 
     if ! systemctl is-active --quiet klipper 2>/dev/null; then
-        info "Klipper is not running — starting..."
+        info "Klipper is not running - starting..."
         sudo systemctl start klipper 2>/dev/null || true
         need_start=true
     fi
     if ! systemctl is-active --quiet moonraker 2>/dev/null; then
-        info "Moonraker is not running — starting..."
+        info "Moonraker is not running - starting..."
         sudo systemctl start moonraker 2>/dev/null || true
         need_start=true
     fi
@@ -218,13 +218,13 @@ ensure_klipper_running() {
             ((waited++))
         done
         if [ "$waited" -ge 15 ]; then
-            warn "Moonraker did not respond within 15s — version query may fail"
+            warn "Moonraker did not respond within 15s - version query may fail"
             return 1
         fi
     fi
 
-    # Wait for klippy_state to reach "ready" — CAN MCUs need time to reconnect.
-    # If can0 is down (bridge MCU in DFU), Klipper will never reach "ready" —
+    # Wait for klippy_state to reach "ready" - CAN MCUs need time to reconnect.
+    # If can0 is down (bridge MCU in DFU), Klipper will never reach "ready" -
     # cap the wait to 5s so discover() doesn't stall for 30s on every rescan.
     local max_wait=30
     ip link show can0 up >/dev/null 2>&1 || max_wait=5
@@ -238,20 +238,20 @@ ensure_klipper_running() {
             return 0
             ;;
         error)
-            warn "Klipper entered error state — MCU versions may be incomplete"
+            warn "Klipper entered error state - MCU versions may be incomplete"
             return 1
             ;;
         shutdown)
-            warn "Klipper is in shutdown state — MCU versions may be incomplete"
+            warn "Klipper is in shutdown state - MCU versions may be incomplete"
             return 1
             ;;
         esac
-        # "startup" or empty — keep waiting
+        # "startup" or empty - keep waiting
         [ "$waited" -eq 0 ] && info "Waiting for Klipper to connect to all MCUs..."
         sleep 1
         ((waited++))
     done
-    warn "Klipper did not reach ready state within ${max_wait}s — MCU versions may be incomplete"
+    warn "Klipper did not reach ready state within ${max_wait}s - MCU versions may be incomplete"
     return 1
 }
 
@@ -348,7 +348,7 @@ ensure_can_up() {
         sleep 2 # allow the interface to appear
     fi
     # Try with explicit type+bitrate (new interface), then plain up (interface
-    # already typed as CAN — re-specifying 'type can' on an existing CAN
+    # already typed as CAN - re-specifying 'type can' on an existing CAN
     # interface returns EBUSY/EINVAL on some kernels).
     if sudo ip link set "$CAN_INTERFACE" up type can bitrate "$CAN_SPEED" 2>/dev/null ||
         sudo ip link set "$CAN_INTERFACE" up 2>/dev/null; then
@@ -380,7 +380,7 @@ klipper_can_query() {
 }
 
 # Probe MCU type and firmware version from a CAN bootloader UUID.
-# Sends a 1-byte dummy file — Katapult aborts safely without writing anything.
+# Sends a 1-byte dummy file - Katapult aborts safely without writing anything.
 # Output: "mcu_type|fw_version"
 probe_can_mcu() {
     local uuid="$1"
@@ -450,7 +450,7 @@ probe_usb_version() {
     awk 'BEGIN{IGNORECASE=1} /Detected Klipper binary version/{fw=$NF; gsub(/,/,"",fw); print fw; exit}' <<<"$output"
 }
 
-# Cached lsusb output — refreshed at the start of each scan_dfu_devices() call.
+# Cached lsusb output - refreshed at the start of each scan_dfu_devices() call.
 # Avoids spawning lsusb for every bootsel_present() check per discover() cycle.
 _LSUSB_CACHE=""
 _lsusb() {
@@ -460,7 +460,7 @@ _lsusb() {
 bootsel_present() { _lsusb | grep -qi "ID $1 "; }
 
 # Install a udev rule granting non-root access to STM32 DFU devices (0483:df11).
-# One-time setup — subsequent runs skip if the rule file already exists.
+# One-time setup - subsequent runs skip if the rule file already exists.
 _install_dfu_udev_rule() {
     local rule_file="/etc/udev/rules.d/99-blocks-dfu.rules"
     [ -f "$rule_file" ] && return 0
@@ -470,10 +470,10 @@ _install_dfu_udev_rule() {
     if sudo -n sh -c "printf '%s\n' '$rule' > '$rule_file' \
             && udevadm control --reload-rules \
             && udevadm trigger --subsystem-match=usb --action=add" 2>/dev/null; then
-        ok "udev rule installed — DFU access no longer requires sudo"
+        ok "udev rule installed - DFU access no longer requires sudo"
         sleep 1 # allow udev to apply ACL to any currently-connected device
     else
-        warn "Could not install udev rule (sudo -n failed) — DFU scan will use sudo"
+        warn "Could not install udev rule (sudo -n failed) - DFU scan will use sudo"
     fi
 }
 
@@ -481,7 +481,7 @@ flash_bootsel() {
     local name="$1" vid_pid="$2"
     info "Flashing [$name] via BOOTSEL (FLASH_DEVICE=$vid_pid)..."
     cd "$KLIPPER_DIR" || return 1
-    # Use a temp file — rp2040_flash may emit null bytes that corrupt bash
+    # Use a temp file - rp2040_flash may emit null bytes that corrupt bash
     # variables ($() truncates at \0), making grep on the variable unreliable.
     local _tmp
     _tmp=$(mktemp)
@@ -489,7 +489,7 @@ flash_bootsel() {
     local make_rc=$?
     cat "$_tmp" | _indent
     # rp2040_flash exits 0 even when no device is found; detect via output.
-    # "Loaded UF2 image with 0 pages" appears on both success and failure — ignore it.
+    # "Loaded UF2 image with 0 pages" appears on both success and failure - ignore it.
     if [ "$make_rc" -ne 0 ] ||
         grep -qi "No rp2040 in BOOTSEL mode was found" "$_tmp"; then
         rm -f "$_tmp"
@@ -509,10 +509,10 @@ scan_dfu_devices() {
     DFU_SCAN_RESULT=""
     _LSUSB_CACHE="" # refresh USB device list at the start of each scan
     command -v dfu-util >/dev/null 2>&1 || {
-        warn "dfu-util not found — DFU scanning disabled"
+        warn "dfu-util not found - DFU scanning disabled"
         return 0
     }
-    # Temp file: sudo must run as a direct command, not inside $() — nested subshells
+    # Temp file: sudo must run as a direct command, not inside $() - nested subshells
     # break sudo credential/USB access on some systems. Stdout+stderr both captured
     # (2>&1) because some dfu-util/libusb builds emit "Found DFU:" to stderr.
     local list _dfu_tmp
@@ -528,7 +528,7 @@ scan_dfu_devices() {
     }
 
     _dfu_scan_once || {
-        # Device in lsusb but not accessible — likely missing udev rule.
+        # Device in lsusb but not accessible - likely missing udev rule.
         if _lsusb | grep -qi "0483:df11"; then
             local _attempt
             for _attempt in 1 2 3; do
@@ -597,19 +597,19 @@ flash_dfu() {
     output=$(sudo dfu-util -d "$vidpid" -S "$serial" -a "$alt" \
         -s "${addr}:leave" -D "$KLIPPER_DIR/out/klipper.bin" 2>&1) || rc=$?
     echo "$output" | _indent >&2
-    # "Error during download get_status" after :leave is benign — MCU already rebooted
+    # "Error during download get_status" after :leave is benign - MCU already rebooted
     if echo "$output" | grep -q "Download done"; then
         ok "[$name] flashed via DFU"
         return 0
     fi
     # Device not present when flashing started
     if echo "$output" | grep -qiE "No DFU capable USB device|Cannot open DFU device|unable to open"; then
-        err "[$name] DFU device not found (serial: $serial) — board not in DFU mode or disconnected"
+        err "[$name] DFU device not found (serial: $serial) - board not in DFU mode or disconnected"
         return 1
     fi
     # Device disconnected mid-transfer
     if echo "$output" | grep -qiE "Error during (special command|download)|libusb_open\(\) failed|Lost device|No error condition.*download"; then
-        err "[$name] MCU disconnected during flash — reconnect and retry"
+        err "[$name] MCU disconnected during flash - reconnect and retry"
         warn "  The board may be in an unknown state. Power-cycle it and re-enter DFU mode before retrying."
         return 1
     fi
@@ -700,12 +700,12 @@ bootstrap_katapult() {
 
     local katapult_cfg="$MCU_CONFIG_DIR/${name}.katapult.config"
     if [ ! -f "$katapult_cfg" ]; then
-        warn "[$name] no Katapult config ($katapult_cfg) — cannot bootstrap"
+        warn "[$name] no Katapult config ($katapult_cfg) - cannot bootstrap"
         warn "  Build Katapult manually and flash via BOOTSEL/DFU, then re-run."
         return 1
     fi
     if [ -z "$katapult_bootsel" ] && [ -z "$katapult_dfu" ]; then
-        warn "[$name] no katapult_bootsel/katapult_dfu declared in config — cannot bootstrap"
+        warn "[$name] no katapult_bootsel/katapult_dfu declared in config - cannot bootstrap"
         return 1
     fi
 
@@ -729,7 +729,7 @@ bootstrap_katapult() {
         make flash FLASH_DEVICE="$katapult_bootsel" >"$_kat_tmp" 2>&1
         _kat_rc=$?
         cat "$_kat_tmp" | _indent
-        # rp2040_flash exits 0 even when no device is found — check output too.
+        # rp2040_flash exits 0 even when no device is found - check output too.
         if [ "$_kat_rc" -ne 0 ] ||
             grep -qi "No rp2040 in BOOTSEL mode was found" "$_kat_tmp"; then
             rm -f "$_kat_tmp"
@@ -802,7 +802,7 @@ flash_usb() {
             ok "[$name] flashed via USB"
             return 0
         fi
-        warn "Katapult USB failed — falling back to klipper make flash"
+        warn "Katapult USB failed - falling back to klipper make flash"
     fi
     info "Flashing [$name] via klipper make flash ($serial)..."
     cd "$KLIPPER_DIR" || return 1
@@ -818,7 +818,7 @@ flash_usb() {
 # Scans CAN bus (Pi context only), DFU devices, USB/BOOTSEL, then matches each
 # mcu_config/*.config to a detected device.
 #
-# Populates global DISCOVERED[] — one entry per config file.
+# Populates global DISCOVERED[] - one entry per config file.
 # Entry format: "name|iface|id|cfg|fw_ver|detected"
 #   iface:    can | usb | bootsel | none  (declared interface type)
 #   id:       UUID (CAN), serial path (USB), VID:PID (BOOTSEL), or empty
@@ -854,7 +854,7 @@ discover() {
         if ensure_can_up; then
             CAN_AVAILABLE=true
 
-            # Build set of bridge mcu_types — triggering them drops can0, so skip.
+            # Build set of bridge mcu_types - triggering them drops can0, so skip.
             local -A bridge_types=()
             for cfg_b in "$MCU_CONFIG_DIR"/*.config; do
                 [[ "$(basename "$cfg_b")" == .* ]] && continue
@@ -885,7 +885,7 @@ discover() {
                 done
             fi
 
-            # 2) Klipper CAN query — discovers ALL CAN nodes (running + bootloader).
+            # 2) Klipper CAN query - discovers ALL CAN nodes (running + bootloader).
             #    For UUIDs already known from step 1, skip.  For new UUIDs, resolve
             #    mcu_type from the UUID cache (populated from printer.cfg or prior runs).
             local klipper_line klipper_uuid klipper_app
@@ -905,9 +905,9 @@ discover() {
                 if [ -n "$resolved_type" ]; then
                     uuid_to_mcu["$klipper_uuid"]="$resolved_type"
                     uuid_to_version["$klipper_uuid"]=""
-                    info "[$resolved_type] UUID $klipper_uuid — ${klipper_app:-running}"
+                    info "[$resolved_type] UUID $klipper_uuid - ${klipper_app:-running}"
                 else
-                    # Unknown UUID — try Katapult probe if in bootloader, else log it.
+                    # Unknown UUID - try Katapult probe if in bootloader, else log it.
                     if [[ "${klipper_app:-}" == *Katapult* ]] && $KATAPULT_OK; then
                         local probe_r probe_t probe_v
                         probe_r=$(probe_can_mcu "$klipper_uuid")
@@ -921,7 +921,7 @@ discover() {
                             continue
                         fi
                     fi
-                    warn "UUID $klipper_uuid — ${klipper_app:-unknown app}, mcu_type unknown (not in cache)"
+                    warn "UUID $klipper_uuid - ${klipper_app:-unknown app}, mcu_type unknown (not in cache)"
                 fi
             done < <(klipper_can_query)
 
@@ -933,7 +933,7 @@ discover() {
                 [ -n "${uuid_to_mcu[$cached_uuid]+_}" ] && continue # already registered
                 uuid_to_mcu["$cached_uuid"]="$mcu_type"
                 uuid_to_version["$cached_uuid"]=""
-                info "[$mcu_type] UUID $cached_uuid — running (from cache)"
+                info "[$mcu_type] UUID $cached_uuid - running (from cache)"
             done
         fi # ensure_can_up
     fi
@@ -979,7 +979,7 @@ discover() {
 
         local added=false
 
-        # Physical DFU — loop through ALL matching devices so that multiple boards are listed
+        # Physical DFU - loop through ALL matching devices so that multiple boards are listed
         if [ -n "$dfu_vidpid" ]; then
             local dfu_result
             dfu_result=$(find_dfu_device "$dfu_vidpid" "$dfu_mem")
@@ -994,7 +994,7 @@ discover() {
             done
         fi
 
-        # Physical BOOTSEL — each physical device is checked independently so that
+        # Physical BOOTSEL - each physical device is checked independently so that
         # multiple boards of the same type (e.g. two eddy_duo, one via CAN and one
         # in BOOTSEL mode) both appear as separate rows.
         if [ -n "$bootsel_id" ] && bootsel_present "$bootsel_id"; then
@@ -1026,7 +1026,7 @@ discover() {
             fi
         fi
 
-        # DFU triggerable — no physical DFU device present yet, but UUID is cached
+        # DFU triggerable - no physical DFU device present yet, but UUID is cached
         # so we can trigger it via CAN at flash time (or the user can use BOOT0+RESET).
         if [ -n "$dfu_vidpid" ] && ! $added &&
             [ -n "$can_mcu_type" ] && [ -n "${UUID_CACHE_MAP[$can_mcu_type]:-}" ] &&
@@ -1035,12 +1035,12 @@ discover() {
             if $CAN_AVAILABLE; then
                 info "[$name] DFU-triggerable via CAN (UUID: ${UUID_CACHE_MAP[$can_mcu_type]})"
             else
-                info "[$name] DFU-triggerable (UUID cached; CAN not up — will try at flash time or hold BOOT0+RESET)"
+                info "[$name] DFU-triggerable (UUID cached; CAN not up - will try at flash time or hold BOOT0+RESET)"
             fi
             added=true
         fi
 
-        # Katapult DFU fallback — deferred to second pass so that primary
+        # Katapult DFU fallback - deferred to second pass so that primary
         # dfu+dfu_mem matches (more specific) claim devices first.
         local _deferred=false
         if [ -n "$katapult_dfu" ] && ! $added; then
@@ -1049,7 +1049,7 @@ discover() {
             _deferred=true
         fi
 
-        # Not detected — add entry so TUI shows it grayed out.
+        # Not detected - add entry so TUI shows it grayed out.
         # Report the highest-priority declared interface (CAN > DFU > USB > BOOTSEL).
         if ! $added && ! $_deferred; then
             local iface="none"
@@ -1157,7 +1157,7 @@ _summary_box() {
     local _item
     for _item in "${flashed[@]}"; do _box_line "  ${GREEN}[OK]${RESET} $_item"; done
     for _item in "${skipped_utd[@]}"; do _box_line "  ${CYAN}[->]${RESET} $_item"; done
-    for _item in "${skipped_missing[@]}"; do _box_line "  ${YELLOW}[!!]${RESET} $_item — not found"; done
+    for _item in "${skipped_missing[@]}"; do _box_line "  ${YELLOW}[!!]${RESET} $_item - not found"; done
     for _item in "${failed[@]}"; do _box_line "  ${RED}[XX]${RESET} $_item"; done
     _box_bottom
 }
@@ -1166,9 +1166,9 @@ _summary_box() {
 is_canbus_bridge() { grep -q "^CONFIG_USBCANBUS=y" "$1"; }
 
 # Flashes MCUs from DISCOVERED[].
-# FLASH_NAMES[] — if non-empty, only flash named MCUs; otherwise all outdated.
-# FORCE=true     — bypass version check.
-# Bridge MCUs (CONFIG_USBCANBUS=y) are always flashed last — they provide can0;
+# FLASH_NAMES[] - if non-empty, only flash named MCUs; otherwise all outdated.
+# FORCE=true     - bypass version check.
+# Bridge MCUs (CONFIG_USBCANBUS=y) are always flashed last - they provide can0;
 # flashing them first would drop the CAN bus mid-session.
 declare -a FLASH_NAMES=()
 FORCE=false
@@ -1206,16 +1206,16 @@ cmd_flash() {
         IFS='|' read -r name iface id cfg fw_ver detected <<<"$entry"
 
         if [ "$detected" = "false" ]; then
-            warn "[$name] not detected — skipping"
+            warn "[$name] not detected - skipping"
             skipped_missing+=("$name")
             continue
         fi
 
-        # Version check (skip BOOTSEL — no readable version; always flash)
+        # Version check (skip BOOTSEL - no readable version; always flash)
         # When user explicitly selected MCUs (FLASH_NAMES non-empty), honour the
-        # selection and flash even if already up to date — same as --force.
+        # selection and flash even if already up to date - same as --force.
         if ! $FORCE && [ ${#FLASH_NAMES[@]} -eq 0 ] && [ "$iface" != "bootsel" ] && versions_match "$fw_ver" "$SRC_VERSION"; then
-            skip "[$name ($iface)] already up to date — skipping"
+            skip "[$name ($iface)] already up to date - skipping"
             skipped_utd+=("$name ($iface)")
             continue
         fi
@@ -1229,7 +1229,7 @@ cmd_flash() {
         return 0
     fi
 
-    # Re-order: bridge MCUs (USB-CAN) last — unless user explicitly set the order.
+    # Re-order: bridge MCUs (USB-CAN) last - unless user explicitly set the order.
     if ! $FLASH_ORDER_LOCKED; then
         local -a normal_mcus=() bridge_mcus=()
         for entry in "${to_flash[@]}"; do
@@ -1252,14 +1252,14 @@ cmd_flash() {
 
     # Block Ctrl-C and Ctrl-Z during flashing
     local _flash_aborted=false
-    trap 'warn "Signal caught — finishing current flash step before stopping..."; _flash_aborted=true' INT TERM
+    trap 'warn "Signal caught - finishing current flash step before stopping..."; _flash_aborted=true' INT TERM
     trap '' TSTP # block Ctrl-Z completely
 
     local _flash_idx=0 _flash_total=${#to_flash[@]}
     for entry in "${to_flash[@]}"; do
         IFS='|' read -r name iface id cfg fw_ver detected <<<"$entry"
         ((_flash_idx++))
-        header "[$name] ($iface) — ${_flash_idx}/${_flash_total}"
+        header "[$name] ($iface) - ${_flash_idx}/${_flash_total}"
         local ok_flag=0
         if build_firmware "$cfg" "$name" "$iface"; then
             case "$iface" in
@@ -1270,16 +1270,16 @@ cmd_flash() {
                     ok_flag=1
                 elif [ "$_can_rc" -eq 2 ]; then
                     # CONNECT error: Katapult not in bootloader mode.
-                    # Try firmware restart first — works when Katapult is installed
+                    # Try firmware restart first - works when Katapult is installed
                     # but Klipper is running (e.g. EBB-36 connected via CAN).
                     # On success, Katapult comes up on CAN and no USB is needed.
-                    info "[$name] Katapult not responding — triggering firmware restart..."
+                    info "[$name] Katapult not responding - triggering firmware restart..."
                     trigger_can_bootloader "$id" >&2 || true
                     if wait_for_katapult_node "$id" 10 && flash_can "$name" "$id"; then
                         ok_flag=1
                     else
-                        # Katapult not installed — attempt USB bootstrap.
-                        info "[$name] restart failed — attempting Katapult bootstrap via USB..."
+                        # Katapult not installed - attempt USB bootstrap.
+                        info "[$name] restart failed - attempting Katapult bootstrap via USB..."
                         if bootstrap_katapult "$name" "$cfg" &&
                             wait_for_katapult_node "$id" &&
                             flash_can "$name" "$id"; then
@@ -1308,7 +1308,7 @@ cmd_flash() {
                 if [ -z "$dfu_vidpid" ] && [ -n "$katapult_dfu_vid" ]; then
                     dfu_vidpid="$katapult_dfu_vid"
                     dfu_mem="${katapult_dfu_mem_f:-$dfu_mem}"
-                    # Katapult occupies the start of flash — read APPLICATION_ADDRESS from config
+                    # Katapult occupies the start of flash - read APPLICATION_ADDRESS from config
                     local app_addr
                     app_addr=$(grep -oP 'CONFIG_FLASH_APPLICATION_ADDRESS=\K0x[0-9a-fA-F]+' "$cfg" 2>/dev/null || true)
                     [ -n "$app_addr" ] && dfu_addr="$app_addr"
@@ -1337,7 +1337,7 @@ cmd_flash() {
                     flash_dfu "$name" "$dfu_vidpid" "$dfu_serial" "${dfu_alt:-0}" "${dfu_addr:-0x08000000}" &&
                         ok_flag=1
                 else
-                    err "[$name] DFU trigger failed — $CAN_INTERFACE unavailable"
+                    err "[$name] DFU trigger failed - $CAN_INTERFACE unavailable"
                     err "  The board must be powered (24V PSU on) and $CAN_INTERFACE must be up."
                     err "  Option 1: power on the printer, then re-run this script."
                     err "  Option 2: hold BOOT0 on the board, press RESET, release BOOT0, then re-run with --force."
@@ -1355,7 +1355,7 @@ cmd_flash() {
 
     header "Starting Klipper..."
     sudo systemctl start klipper 2>/dev/null || true
-    $_flash_aborted && warn "Flash was interrupted — Klipper has been restarted"
+    $_flash_aborted && warn "Flash was interrupted - Klipper has been restarted"
 
     _summary_box "Flash Summary"
 
@@ -1364,8 +1364,8 @@ cmd_flash() {
 
 # Build checklist args from DISCOVERED[].
 build_checklist_args() {
-    local -n _args=$1  # nameref — caller passes array name
-    local -n _count=$2 # nameref — number of items added
+    local -n _args=$1  # nameref - caller passes array name
+    local -n _count=$2 # nameref - number of items added
     local src_hash
     src_hash=$(extract_git_hash "$SRC_VERSION")
     _count=0
@@ -1407,7 +1407,7 @@ build_checklist_args() {
     done
 }
 
-# Custom interactive selector — shows [N] flash-order numbers instead of [*].
+# Custom interactive selector - shows [N] flash-order numbers instead of [*].
 tui_select() {
     local -n _cl_args=$1
     local total=$((${#_cl_args[@]} / 3))
@@ -1560,8 +1560,8 @@ cmd_tui() {
 
         tui_select checklist_args
         local tui_rc=$?
-        [ "$tui_rc" -eq 1 ] && return 0 # ESC — exit TUI
-        [ "$tui_rc" -eq 2 ] && continue # DFU change or R key — re-discover
+        [ "$tui_rc" -eq 1 ] && return 0 # ESC - exit TUI
+        [ "$tui_rc" -eq 2 ] && continue # DFU change or R key - re-discover
 
         [ ${#FLASH_NAMES[@]} -eq 0 ] && {
             info "Nothing selected."
@@ -1652,10 +1652,10 @@ USAGE:
   flash_mcus.sh --help                 Show this help
 
 OPTIONS:
-  --force   Bypass version check — flash even if MCU firmware is up to date
+  --force   Bypass version check - flash even if MCU firmware is up to date
 
 CONFIG FILES:
-  mcu_config/<name>.config — Klipper build config with interface headers:
+  mcu_config/<name>.config - Klipper build config with interface headers:
     # mcu_type: rp2040         -> CAN flash (matched by chip type)
     # klipper_section: mcu     -> Moonraker version query key
     # serial: usb-Katapult_*   -> USB Katapult flash

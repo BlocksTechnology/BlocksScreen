@@ -59,8 +59,9 @@ async def _run_daemon() -> None:
     try:
         await bus.request_name_async("com.blockscreen.Updater", 0)
     except sdbus.SdBusBaseError as exc:
+        # Exit nonzero (not READY) so systemd Restart=always retries until the name frees.
         _log.error("failed to claim D-Bus name: %s - another instance running?", exc)
-        return
+        raise SystemExit(1) from exc
     _log.info("updater daemon running on com.blockscreen.Updater")
     _sd_notify("READY=1")
     loop = asyncio.get_running_loop()

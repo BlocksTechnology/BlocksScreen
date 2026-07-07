@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 UPDATER_SERVICE = "BlocksScreen-updater.service"
 
-# Hook budget: a dependency-heavy hook can run minutes; a timeout aborts the batch.
+# Hook budget: a deps-heavy hook (Spoolman uv sync) runs minutes; timeout = abort.
 HOOK_TIMEOUT = 600.0
 
 GIT = "/usr/bin/git"
