@@ -60,13 +60,15 @@ fi
 _XORG_KIOSK="/etc/X11/xorg.conf.d/99-bs-kiosk.conf"
 if [ ! -f "$_XORG_KIOSK" ]; then
     sudo mkdir -p "/etc/X11/xorg.conf.d" 2>/dev/null || true
+    # Atomic write: a truncated Xorg snippet breaks config parse and the [ ! -f ] guard never rewrites it.
     printf '%s\n' \
         'Section "Device"' \
         '    Identifier "modesetting"' \
         '    Driver "modesetting"' \
         '    Option "SWcursor" "true"' \
         'EndSection' \
-        | sudo tee "$_XORG_KIOSK" >/dev/null 2>/dev/null || true
+        | sudo tee "${_XORG_KIOSK}.new" >/dev/null 2>/dev/null || true
+    sudo mv -Tf "${_XORG_KIOSK}.new" "$_XORG_KIOSK" 2>/dev/null || true
 fi
 # Force X.Org to use the native fb0 resolution.
 # On Pi 5, EDID can fail so xrandr --auto finds no preferred mode and
@@ -82,7 +84,8 @@ if [ -n "$_FB_W" ] && [ -n "$_FB_H" ] && [ "$_FB_W" -gt 0 ] 2>/dev/null; then
     _XORG_RES_HAVE=$(cat "$_XORG_RES" 2>/dev/null || true)
     if [ "$_XORG_RES_HAVE" != "$_XORG_RES_WANT" ]; then
         sudo mkdir -p "/etc/X11/xorg.conf.d" 2>/dev/null || true
-        printf '%s' "$_XORG_RES_WANT" | sudo tee "$_XORG_RES" >/dev/null 2>/dev/null || true
+        printf '%s' "$_XORG_RES_WANT" | sudo tee "${_XORG_RES}.new" >/dev/null 2>/dev/null || true
+        sudo mv -Tf "${_XORG_RES}.new" "$_XORG_RES" 2>/dev/null || true
     fi
 fi
 git -C "$BS_PATH" config core.hooksPath scripts 2>/dev/null || true
@@ -102,7 +105,7 @@ find "$BS_PATH/.git/refs" -type f -empty -delete 2>/dev/null || true
 # because .git/HEAD is a plain-text ref file, not a commit object.
 _bs_branch=$(git -C "$BS_PATH" symbolic-ref --short HEAD 2>/dev/null || echo "")
 if ! git -C "$BS_PATH" cat-file -e HEAD 2>/dev/null; then
-    echo "BlocksScreen: corrupt git objects detected — pruning empty objects and re-fetching"
+    echo "BlocksScreen: corrupt git objects detected - pruning empty objects and re-fetching"
     find "$BS_PATH/.git/objects" -type f -empty -delete 2>/dev/null || true
     if [ -n "$_bs_branch" ]; then
         git -C "$BS_PATH" fetch origin "$_bs_branch" 2>/dev/null || true
@@ -110,7 +113,7 @@ if ! git -C "$BS_PATH" cat-file -e HEAD 2>/dev/null; then
     fi
 fi
 
-# ── Crash-loop auto-rollback (last_good_commit only — see migration note) ──
+# -- Crash-loop auto-rollback (last_good_commit only - see migration note) --
 # A bad update can pass compileall yet crash at runtime. The app records
 # last_good_commit + zeroes boot_attempts ~5s after a stable start. Here we
 # count each boot; after N failures with HEAD != last_good, revert to it.
@@ -129,23 +132,23 @@ _last_good=$(tr -d '[:space:]' < "$_BOOT_DIR/last_good_commit" 2>/dev/null || ec
 _cur_head=$(git -C "$BS_PATH" rev-parse HEAD 2>/dev/null || echo "")
 if [ "$_attempts" -ge "$_MAX_BOOT_ATTEMPTS" ] && [ -n "$_last_good" ] \
    && [ -n "$_cur_head" ] && [ "$_last_good" != "$_cur_head" ]; then
-    echo "BlocksScreen: crash loop ($_attempts boots) — rolling back to ${_last_good:0:8}"
+    echo "BlocksScreen: crash loop ($_attempts boots) - rolling back to ${_last_good:0:8}"
     if git -C "$BS_PATH" reset --hard "$_last_good" 2>/dev/null; then
         rm -f "$BSENV/.blockscreen-reqs-hash"
         printf '0\n' > "$_BOOT_DIR/boot_attempts" 2>/dev/null || true
     fi
 fi
-# ─────────────────────────────────────────────────────────────────────────
+# -------------------------------------------------------------------------
 
 # If any source file fails to compile the working tree is corrupt (partial file write).
 # Hard-reset to HEAD to restore all tracked files to the last known-good commit.
 if ! "$BSENV/bin/python3.11" -m compileall -q \
       "$BS_PATH/BlocksScreen" "$BS_PATH/updater" 2>/dev/null; then
-    echo "BlocksScreen: source check failed — running git reset --hard HEAD to recover"
+    echo "BlocksScreen: source check failed - running git reset --hard HEAD to recover"
     git -C "$BS_PATH" reset --hard HEAD 2>/dev/null || true
 fi
 
-# ── Deferred bootstrap (background) ──────────────────────────────────────────
+# -- Deferred bootstrap (background) ------------------------------------------
 # Heavy / network-dependent setup (apt packages, pip requirements, updater
 # install, splash-holder unit, splash precompute) runs detached in a transient
 # unit so it survives BlocksScreen restarts and never delays the UI. It is
@@ -175,7 +178,7 @@ if [[ "${BS_BACKEND:-X}" =~ ^[wW]$ ]]; then
     exec /usr/bin/cage -ds $_XCLIENT
 else
     echo "Running BlocksScreen on X (DISPLAY=:0)"
-    # Wait for X.Org socket — up to 15 s on first boot, instant on Qt restart
+    # Wait for X.Org socket - up to 15 s on first boot, instant on Qt restart
     for _i in $(seq 1 30); do
         [ -S /tmp/.X11-unix/X0 ] && break
         sleep 0.5
@@ -185,9 +188,9 @@ else
     # permanent service and eliminates this path.
     if [ ! -S /tmp/.X11-unix/X0 ] && \
        ! systemctl is-active --quiet BlocksScreen-xorg.service 2>/dev/null; then
-        echo "X.Org service not active — starting X inline (transitional)" >&2
+        echo "X.Org service not active - starting X inline (transitional)" >&2
         /bin/bash "$SCRIPT_PATH/bs-ensure-xauth.sh" /home/blocks/.Xauthority
-        exec /usr/bin/xinit "$_XCLIENT" -- :0 vt7 -keeptty -novtswitch -nocursor \
+        exec /usr/bin/xinit $_XCLIENT -- :0 vt7 -keeptty -novtswitch -nocursor \
             -auth /home/blocks/.Xauthority
     fi
     # Only switch back to tty7 if we left it for the cold-boot tty8 splash; on a

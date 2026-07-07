@@ -290,6 +290,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.updater_worker.error_occurred.connect(
             self.update_page.handle_error_occurred
         )
+        self.updater_worker.update_rejected.connect(
+            self.update_page.handle_update_rejected
+        )
         self.updater_worker.rollback_done.connect(self.update_page.handle_rollback_done)
         self.updater_worker.recover_done.connect(self.update_page.handle_recover_done)
         self.ws.klippy_state_signal.connect(self._on_klippy_state)
