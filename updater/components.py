@@ -18,6 +18,14 @@ _GIT_URL_RE = re.compile(r"^https://[a-zA-Z0-9._~:/?#\[\]@!$&'()*+,;=%-]+$")
 _SERVICE_BANNED = set("/\\;&|$`") | {" ", "\t"}
 OVERRIDE_PATH = Path("~/printer_data/config/blockscreen_updater.yaml").expanduser()
 
+# Unioned into EVERY apt component: a kernel/firmware bump is unrecoverable on a 1-partition no-SSH Pi.
+_KERNEL_FIRMWARE_EXCLUDES: tuple[str, ...] = (
+    "^linux-image",
+    "^linux-headers",
+    "^raspberrypi-",
+    "^firmware-",
+)
+
 
 def _validate_service(name: str) -> bool:
     """Return True if name is a safe, well-formed systemd .service unit name."""
@@ -128,6 +136,10 @@ def _validate_component(data: dict) -> ComponentConfig | None:
     apt_exclude: tuple[str, ...] = ()
     if isinstance(raw_exclude, list):
         apt_exclude = tuple(str(p) for p in raw_exclude if isinstance(p, str))
+    # Kernel/firmware guard is non-negotiable: prepend it, drop any duplicates.
+    apt_exclude = _KERNEL_FIRMWARE_EXCLUDES + tuple(
+        p for p in apt_exclude if p not in _KERNEL_FIRMWARE_EXCLUDES
+    )
     return ComponentConfig(
         name=name,
         kind="apt",
@@ -224,12 +236,7 @@ def load_components() -> tuple[list[ComponentConfig], float]:
                 name="system",
                 kind="apt",
                 order=1,
-                apt_exclude=(
-                    "^linux-image",
-                    "^linux-headers",
-                    "^raspberrypi-",
-                    "^firmware-",
-                ),
+                apt_exclude=_KERNEL_FIRMWARE_EXCLUDES,
             ),
         )
     try:

@@ -89,6 +89,41 @@ class TestLoadComponents:
         assert len(components) >= 2
         assert any("Cannot access override path" in r.message for r in caplog.records)
 
+    def test_autoinjected_system_apt_has_kernel_guard(self):
+        # No apt component in YAML -> auto-injected 'system' keeps the guard.
+        with (
+            patch("builtins.open", _mock_load(BUNDLE_YAML)),
+            patch("pathlib.Path.exists", return_value=False),
+            patch("pathlib.Path.is_dir", return_value=True),
+        ):
+            components, _ = load_components()
+        apt = next(c for c in components if c.kind == "apt")
+        assert apt.apt_exclude == (
+            "^linux-image",
+            "^linux-headers",
+            "^raspberrypi-",
+            "^firmware-",
+        )
+
+    def test_configured_apt_without_exclude_still_guards_kernel(self):
+        # Brick guard: an override apt component omitting apt_exclude must not lift the kernel exclusion.
+        override = "components:\n  - name: system\n    type: apt\n    order: 1\n"
+        with (
+            patch("builtins.open", _mock_load(BUNDLE_YAML, override)),
+            patch("pathlib.Path.exists", return_value=True),
+            patch("pathlib.Path.stat", return_value=self._safe_stat_mock()),
+            patch("pathlib.Path.is_dir", return_value=True),
+        ):
+            components, _ = load_components()
+        apt = next(c for c in components if c.kind == "apt")
+        for pat in ("^linux-image", "^linux-headers", "^raspberrypi-", "^firmware-"):
+            assert pat in apt.apt_exclude
+
+    def _safe_stat_mock(self):
+        mock_stat = MagicMock()
+        mock_stat.st_mode = 0o100600
+        return mock_stat
+
 
 class TestYamlMerge:
     def _safe_stat_mock(self):
