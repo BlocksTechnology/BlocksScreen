@@ -696,9 +696,9 @@ def _apt_env() -> dict[str, str]:
 def _apt_cmd(verb: str, pkgs: Sequence[str] = ()) -> list[str]:
     """Build the sudo apt argv via the root-owned wrapper.
 
-    The wrapper is the only apt command sudoers grants; install-updater.sh
-    deploys it before the daemon restarts onto this code, so it is always
-    present. It owns the lock/conffile -o options and validates its args.
+    The wrapper is the only apt command sudoers grants. bs-bootstrap reinstalls it
+    when missing (an old-installer box can have the service but not the wrapper); until
+    that self-heal runs a missing wrapper surfaces as a plain 'command not found'.
     """
     return [SUDO, str(APT_HELPER), verb, *pkgs]
 

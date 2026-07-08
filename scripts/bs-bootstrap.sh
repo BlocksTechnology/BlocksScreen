@@ -73,7 +73,9 @@ if [ ! -f "$SENTINEL" ] || [ "$(cat "$SENTINEL")" != "$REQS_HASH" ]; then
 fi
 
 # 4. Updater stack (local files only - works offline).
-if [ ! -f /etc/systemd/system/BlocksScreen-updater.service ]; then
+# Verify each critical artifact: an old-installer box can have the service but no apt helper.
+if [ ! -f /etc/systemd/system/BlocksScreen-updater.service ] \
+    || [ ! -x /usr/local/sbin/bs-apt-helper ]; then
     bash "$SCRIPT_PATH/install-updater.sh" || true
 fi
 
