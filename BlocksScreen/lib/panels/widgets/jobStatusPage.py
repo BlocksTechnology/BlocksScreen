@@ -222,6 +222,7 @@ class JobStatusWidget(QtWidgets.QWidget):
         printer_status object updated
         """
         lstate = state.lower()
+        _was_active = self._internal_print_status in ("printing", "paused")
         event_state = lstate
         is_valid = lstate in self._VALID_STATES
         is_invalid = lstate in self._INVALID_STATES
@@ -250,6 +251,9 @@ class JobStatusWidget(QtWidgets.QWidget):
         elif is_invalid:
             if lstate == "complete":
                 self.print_finish.emit()
+            # An error that aborted an active print opens the cancel/reprint page.
+            if lstate == "error" and _was_active:
+                self.call_cancel_panel.emit(True)
             self.hide_request.emit()
         # Capture state before clearing so the event carries the real data.
         _event_file = self._current_file_name

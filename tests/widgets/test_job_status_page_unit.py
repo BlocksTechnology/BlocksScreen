@@ -94,7 +94,7 @@ class TestHandlePrintState:
         with qtbot.waitSignal(widget.show_request, timeout=500):
             widget._handle_print_state("printing")
 
-    #def test_paused_emits_show_request(self, widget, qtbot):
+    # def test_paused_emits_show_request(self, widget, qtbot):
     #    with qtbot.waitSignal(widget.show_request, timeout=500):
     #        widget._handle_print_state("paused")
 
@@ -119,6 +119,17 @@ class TestHandlePrintState:
         widget._current_file_name = "print.gcode"
         widget._handle_print_state("error")
         assert widget._current_file_name == ""
+
+    def test_error_while_printing_opens_cancel_page(self, widget, qtbot):
+        widget._internal_print_status = "printing"
+        with qtbot.waitSignal(widget.call_cancel_panel, timeout=500) as sig:
+            widget._handle_print_state("error")
+        assert sig.args == [True]
+
+    def test_stale_error_when_idle_does_not_open_cancel_page(self, widget, qtbot):
+        widget._internal_print_status = ""
+        with qtbot.assertNotEmitted(widget.call_cancel_panel):
+            widget._handle_print_state("error")
 
 
 class TestOnPrintStatsUpdate:
