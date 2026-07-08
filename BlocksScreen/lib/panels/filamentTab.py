@@ -662,14 +662,18 @@ class FilamentTab(QtWidgets.QStackedWidget):
 
     def _on_spool_selected(self) -> None:
         item = self._spool_model.get_selected_item()
+        if item is None:
+            return
         spool = self._spool_id_map.get(item.text)
 
         if self.sender() != self.accept_btn:
             if item.text == "+ Add Spool":
                 self._add_popup.show()
                 return
+            if spool is None:
+                return
             self.accept_btn.setEnabled(True)
-            filament = spool.get("filament", None)
+            filament = spool.get("filament") or {}
             self.filament_name_label.setText(item.text)
             self.material_label.setText(filament.get("material", "N/A"))
             self.weight_label.setText(
@@ -684,11 +688,9 @@ class FilamentTab(QtWidgets.QStackedWidget):
             )
 
             return
-        if not item:
-            return
         if not spool:
             return
-        filament = spool.get("filament", None)
+        filament = spool.get("filament") or {}
         f_id = spool.get("id", -1)
         f_name = filament.get("name", "N/A")
         f_color = filament.get("color_hex", "ffffff")

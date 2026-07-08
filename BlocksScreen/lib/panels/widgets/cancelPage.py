@@ -29,8 +29,6 @@ class CancelPage(QtWidgets.QWidget):
         self._setupUI()
         self.filename = ""
 
-        self.reprint_start.connect(self.ws.api.start_print)
-
         self.confirm_button.clicked.connect(lambda: self._handle_accept())
 
         self.refuse_button.clicked.connect(lambda: self._handle_refuse())
