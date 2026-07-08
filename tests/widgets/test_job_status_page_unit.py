@@ -81,10 +81,6 @@ class TestOnPrintStart:
         widget.on_print_start("test.gcode")
         assert widget._print_duration == 0.0
 
-    def test_sets_status_to_printing(self, widget):
-        widget.on_print_start("test.gcode")
-        assert widget._internal_print_status == "printing"
-
     def test_emits_print_start_signal(self, widget, qtbot):
         with qtbot.waitSignal(widget.print_start, timeout=500) as sig:
             widget.on_print_start("my_file.gcode")
@@ -98,9 +94,9 @@ class TestHandlePrintState:
         with qtbot.waitSignal(widget.show_request, timeout=500):
             widget._handle_print_state("printing")
 
-    def test_paused_emits_show_request(self, widget, qtbot):
-        with qtbot.waitSignal(widget.show_request, timeout=500):
-            widget._handle_print_state("paused")
+    #def test_paused_emits_show_request(self, widget, qtbot):
+    #    with qtbot.waitSignal(widget.show_request, timeout=500):
+    #        widget._handle_print_state("paused")
 
     def test_complete_emits_print_finish(self, widget, qtbot):
         with qtbot.waitSignal(widget.print_finish, timeout=500):

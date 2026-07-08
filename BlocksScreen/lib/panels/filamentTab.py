@@ -427,10 +427,10 @@ class FilamentTab(QtWidgets.QStackedWidget):
                 callback=self._add_filament_page.on_add_filament_result,
             )
         )
-        self._add_filament_page.request_add_manufactor.connect(
-            lambda body: self.ws.api.add_manufactor(
+        self._add_filament_page.request_add_manufacturer.connect(
+            lambda body: self.ws.api.add_manufacturer(
                 body,
-                callback=self._add_filament_page.on_add_manufactor_result,
+                callback=self._add_filament_page.on_add_manufacturer_result,
             )
         )
 
