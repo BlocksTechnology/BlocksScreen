@@ -74,8 +74,8 @@ if echo "$changed" | grep -qE '^scripts/BlocksScreen-updater\.service$|^scripts/
     echo "[post-merge] Updater install files changed - reinstalling updater ..."
     _record_or install sudo bash "$SCRIPT_PATH/install-updater.sh"
 elif echo "$changed" | grep -qE '^scripts/bs-splash-holder\.py$'; then
-    echo "[post-merge] Splash-holder script changed - restarting ..."
-    sudo systemctl restart --no-block BlocksScreen-splash-holder.service || true
+    # Do NOT restart the holder live: it would re-grab tty8 and steal the display from the running GUI (soft-brick). The new script applies at next boot.
+    echo "[post-merge] Splash-holder script changed - applies on next boot (not restarting)."
 elif echo "$changed" | grep -qE '^updater/'; then
     echo "[post-merge] Updater code changed - restarting daemon ..."
     _record_or code sudo systemctl restart BlocksScreen-updater.service

@@ -362,7 +362,13 @@ class MainWindow(QtWidgets.QMainWindow):
         if not show:
             self.cancelpage.hide()
             return
+        # Defer so a concurrent klippy-shutdown signal (E-stop) is processed first before we decide.
+        QtCore.QTimer.singleShot(0, self._show_cancel_page_if_operational)
 
+    def _show_cancel_page_if_operational(self) -> None:
+        # E-stop/shutdown aborts the print with an error too; the connection page handles that, not the cancel page.
+        if not self._klippy_ready:
+            return
         self.cancelpage.setGeometry(0, 0, self.width(), self.height())
         self.cancelpage.raise_()
         self.cancelpage.updateGeometry()
