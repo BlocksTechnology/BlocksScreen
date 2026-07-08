@@ -329,6 +329,10 @@ class MainWindow(QtWidgets.QMainWindow):
             self.cancelpage.on_print_stats_update
         )
         self.file_data.fileinfo.connect(self.cancelpage._show_screen_thumbnail)
+        # Reprint routes through on_print_start for the same full reset as a fresh print.
+        self.cancelpage.reprint_start.connect(
+            self.printPanel.jobStatusPage_widget.on_print_start
+        )
         self.printPanel.call_cancel_panel.connect(self.handle_cancel_print)
         self.printer.display_update.connect(self._handle_display_status)
 

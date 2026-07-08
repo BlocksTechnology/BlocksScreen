@@ -88,6 +88,7 @@ class JobStatusWidget(QtWidgets.QWidget):
         self.total_layer_reported = False
         self._displayed_layer = 0
         self._last_z = 0.0
+        self._filament_used = 0.0
         self._setupUI()
         self.cancel_print_dialog = BasePopup(self, floating=True)
         self.tune_menu_btn.clicked.connect(self.tune_clicked.emit)
@@ -183,6 +184,7 @@ class JobStatusWidget(QtWidgets.QWidget):
         self.total_layer_reported = False
         self._displayed_layer = 0
         self._last_z = 0.0
+        self._filament_used = 0.0
         self.print_time_display_button.setText("?")
         self.printing_progress_bar.reset()
         self._print_duration = 0.0
@@ -201,6 +203,9 @@ class JobStatusWidget(QtWidgets.QWidget):
         self.layer_display_button.secondary_text = self.total_layers
         self.file_metadata = metadata
         self._load_thumbnails(*metadata.get("thumbnail_images", ()))
+        # Reconnect mid-print: metadata just arrived, recompute the current layer now.
+        if self._filament_used > 0:
+            self._update_layer_from_z()
 
     def pause_resume_print(self) -> None:
         """Handle pause/resume print job button clicked"""
@@ -254,6 +259,7 @@ class JobStatusWidget(QtWidgets.QWidget):
             self.total_layer_reported = False
             self._displayed_layer = 0
             self._last_z = 0.0
+            self._filament_used = 0.0
             self._print_duration = 0.0
             self.file_metadata = None
         # Send Event on Print state
@@ -319,7 +325,9 @@ class JobStatusWidget(QtWidgets.QWidget):
             if "print_duration" in field:
                 self._print_duration = value
             elif "filament_used" in field:
-                self._update_layer_from_z()
+                self._filament_used = value
+                if value > 0:
+                    self._update_layer_from_z()
             elif self.isVisible() and "total_duration" in field:
                 _time = estimate_print_time(int(value))
                 _print_time_string = (

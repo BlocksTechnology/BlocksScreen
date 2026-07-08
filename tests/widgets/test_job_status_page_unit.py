@@ -204,6 +204,13 @@ class TestOnGcodeMoveUpdate:
         self._feed(widget, 1.0, 1)
         assert widget.layer_display_button.text() == "sentinel"
 
+    def test_bedmesh_ignored(self, widget):
+        """Bed mesh probing lifts Z but extrudes nothing (filament_used=0): stay at 0."""
+        self._ready_widget(widget)
+        widget.on_gcode_move_update("gcode_position", [0, 0, 15.0, 0])  # probe height
+        widget.on_print_stats_update("filament_used", 0.0)
+        assert widget.layer_display_button.text() == "sentinel"
+
     def test_park_zlift_ignored(self, widget):
         """Z-lift with no filament advance (Happy Hare pause park) must not bump the layer."""
         self._ready_widget(widget)
@@ -229,6 +236,22 @@ class TestOnGcodeMoveUpdate:
         assert widget.total_layer_reported is True
         self._feed(widget, 0.4, 1)
         assert widget.layer_display_button.secondary_text == "999"
+
+    def test_reconnect_midprint_shows_current_and_total(self, widget):
+        """Restart mid-print: filament already used + late metadata must fill both fields."""
+        widget.show()
+        widget._internal_print_status = "printing"
+        widget.layer_fallback = True
+        widget._print_duration = 500.0
+        widget.on_print_stats_update("filament_used", 1234.0)  # already printing
+        widget.on_gcode_move_update(
+            "gcode_position", [0, 0, 0.8, 0]
+        )  # z=0.8 -> layer 4
+        widget.on_fileinfo(
+            {"object_height": 10.0, "layer_height": 0.2, "first_layer_height": 0.2}
+        )
+        assert widget.layer_display_button.text() == "4"
+        assert widget.layer_display_button.secondary_text != ""
 
 
 class TestVirtualSdcardUpdate:
