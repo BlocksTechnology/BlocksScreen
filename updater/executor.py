@@ -789,6 +789,19 @@ async def _apt_restore_packages(snapshot_path: Path) -> tuple[bool, str]:
     return await _run(_apt_cmd("dselect-upgrade"), timeout=120.0, env=_apt_env())
 
 
+def classify_apt_error(err: str) -> str:
+    """Classify an apt failure: 'permanent' won't clear by retrying, 'transient' might."""
+    lowered = err.lower()
+    permanent = (
+        "command not found",
+        "no such file or directory",
+        "a password is required",
+        "permission denied",
+        "not allowed to execute",
+    )
+    return "permanent" if any(p in lowered for p in permanent) else "transient"
+
+
 async def apt_update() -> tuple[bool, str]:
     """Run apt-get update to refresh package lists."""
     return await _run(_apt_cmd("update"), timeout=120.0, env=_apt_env())
