@@ -65,7 +65,7 @@ class JobStatusWidget(QtWidgets.QWidget):
     file_metadata: dict | None = None
     total_layers = "?"
     _print_duration: float = 0.0
-    _VALID_STATES: typing.ClassVar[frozenset[str]] = frozenset({"printing", "paused"})
+    _VALID_STATES: typing.ClassVar[frozenset[str]] = frozenset({"printing"})
     _INVALID_STATES: typing.ClassVar[frozenset[str]] = frozenset(
         {"cancelled", "complete", "error", "standby"}
     )
@@ -186,7 +186,6 @@ class JobStatusWidget(QtWidgets.QWidget):
         self.print_time_display_button.setText("?")
         self.printing_progress_bar.reset()
         self._print_duration = 0.0
-        self._internal_print_status = "printing"
         self.request_file_info.emit(file)
         self.print_start.emit(file)
         self._post_event(events.PrintStart(self._current_file_name, self.file_metadata))
@@ -221,22 +220,25 @@ class JobStatusWidget(QtWidgets.QWidget):
         event_state = lstate
         is_valid = lstate in self._VALID_STATES
         is_invalid = lstate in self._INVALID_STATES
+
+        if lstate == "paused":
+            self.pause_printing_btn.setEnabled(True)
+            self.pause_printing_btn.setText("Resume")
+            self.pause_printing_btn.setPixmap(
+                QtGui.QPixmap(":/ui/media/btn_icons/play.svg")
+            )
+            event_state = "pause"
+        elif lstate == "printing":
+            self.pause_printing_btn.setEnabled(True)
+            self.pause_printing_btn.setText("Pause")
+            self.pause_printing_btn.setPixmap(
+                QtGui.QPixmap(":/ui/media/btn_icons/pause.svg")
+            )
+            event_state = "start"
+
+        self._internal_print_status = lstate
+
         if is_valid:
-            self._internal_print_status = lstate
-            if lstate == "paused":
-                self.pause_printing_btn.setEnabled(True)
-                self.pause_printing_btn.setText("Resume")
-                self.pause_printing_btn.setPixmap(
-                    QtGui.QPixmap(":/ui/media/btn_icons/play.svg")
-                )
-                event_state = "pause"
-            elif lstate == "printing":
-                self.pause_printing_btn.setEnabled(True)
-                self.pause_printing_btn.setText("Pause")
-                self.pause_printing_btn.setPixmap(
-                    QtGui.QPixmap(":/ui/media/btn_icons/pause.svg")
-                )
-                event_state = "start"
             self.request_query_print_stats.emit({"print_stats": ["filename"]})
             self.call_cancel_panel.emit(False)
             self.show_request.emit()
