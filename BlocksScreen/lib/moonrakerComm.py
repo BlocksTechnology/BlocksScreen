@@ -911,8 +911,8 @@ class MoonAPI(QtCore.QObject):
         """Create a new filament (POST /v1/filament)."""
         return self.spoolman_proxy("POST", "/v1/filament", body=body, callback=callback)
 
-    def add_manufactor(self, body: dict, callback=None) -> bool:
-        """Create a new manufactor (POST /v1/vendor)."""
+    def add_manufacturer(self, body: dict, callback=None) -> bool:
+        """Create a new manufacturer (POST /v1/vendor)."""
         return self.spoolman_proxy("POST", "/v1/vendor", body=body, callback=callback)
 
     def update_spool(self, spool_id: int, body: dict, callback=None) -> bool:
