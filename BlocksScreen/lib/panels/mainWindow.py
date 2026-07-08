@@ -362,7 +362,7 @@ class MainWindow(QtWidgets.QMainWindow):
         if not show:
             self.cancelpage.hide()
             return
-        # Defer so a concurrent klippy-shutdown signal (E-stop) is processed first before we decide.
+        # Defer so a concurrent E-stop (klippy shutdown) is seen before we decide.
         QtCore.QTimer.singleShot(0, self._show_cancel_page_if_operational)
 
     def _show_cancel_page_if_operational(self) -> None:
