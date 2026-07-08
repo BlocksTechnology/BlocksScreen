@@ -251,8 +251,8 @@ class JobStatusWidget(QtWidgets.QWidget):
         elif is_invalid:
             if lstate == "complete":
                 self.print_finish.emit()
-            # An error that aborted an active print opens the cancel/reprint page.
-            if lstate == "error" and _was_active:
+            # Completed/errored print reuses the cancel page as the reprint prompt.
+            if lstate in ("complete", "error") and _was_active:
                 self.call_cancel_panel.emit(True)
             self.hide_request.emit()
         # Capture state before clearing so the event carries the real data.

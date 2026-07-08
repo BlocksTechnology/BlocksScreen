@@ -44,6 +44,12 @@ class CancelPage(QtWidgets.QWidget):
         self.close()
         self.run_gcode.emit("SDCARD_RESET_FILE")
 
+    _REASON_HEADERS: typing.ClassVar[dict[str, str]] = {
+        "complete": "Print Completed",
+        "error": "Print Error",
+        "cancelled": "Print job was\ncancelled",
+    }
+
     @QtCore.pyqtSlot(str, dict, name="on_print_stats_update")
     @QtCore.pyqtSlot(str, float, name="on_print_stats_update")
     @QtCore.pyqtSlot(str, str, name="on_print_stats_update")
@@ -53,6 +59,8 @@ class CancelPage(QtWidgets.QWidget):
                 self.filename = value
                 if self.isVisible:
                     self.set_file_name(value)
+            elif "state" in field and value in self._REASON_HEADERS:
+                self.cf_info_tf.setText(self._REASON_HEADERS[value])
 
     def show(self):
         self.request_file_info.emit(self.filename)

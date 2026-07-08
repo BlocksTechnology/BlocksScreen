@@ -120,16 +120,18 @@ class TestHandlePrintState:
         widget._handle_print_state("error")
         assert widget._current_file_name == ""
 
-    def test_error_while_printing_opens_cancel_page(self, widget, qtbot):
+    @pytest.mark.parametrize("state", ["error", "complete"])
+    def test_finished_print_opens_cancel_page(self, widget, qtbot, state):
         widget._internal_print_status = "printing"
         with qtbot.waitSignal(widget.call_cancel_panel, timeout=500) as sig:
-            widget._handle_print_state("error")
+            widget._handle_print_state(state)
         assert sig.args == [True]
 
-    def test_stale_error_when_idle_does_not_open_cancel_page(self, widget, qtbot):
+    @pytest.mark.parametrize("state", ["error", "complete"])
+    def test_stale_end_when_idle_does_not_open_cancel_page(self, widget, qtbot, state):
         widget._internal_print_status = ""
         with qtbot.assertNotEmitted(widget.call_cancel_panel):
-            widget._handle_print_state("error")
+            widget._handle_print_state(state)
 
 
 class TestOnPrintStatsUpdate:
