@@ -5,7 +5,7 @@ import contextlib
 import json
 import logging
 import os
-import random
+import secrets
 import shutil
 import tempfile
 import time
@@ -31,6 +31,7 @@ from updater.executor import (
     check_apt_status,
     check_git_status,
     classify_apt_error,
+    enable_service,
     git_checkout,
     git_clone,
     git_fetch,
@@ -41,7 +42,6 @@ from updater.executor import (
     git_repair,
     git_reset_to_hash,
     is_git_repo,
-    enable_service,
     restart_service,
     restart_service_noblock,
     run_hook,
@@ -89,7 +89,8 @@ class _Backoff:
         else:
             self._delay = min(max(self._delay * 2, self._base), self._cap)
             delay = self._delay
-        self._until = time.monotonic() + delay + random.uniform(0, delay * 0.1)
+        jitter = secrets.SystemRandom().uniform(0, delay * 0.1)
+        self._until = time.monotonic() + delay + jitter
 
     def reset(self) -> None:
         """Close the breaker after a success."""
