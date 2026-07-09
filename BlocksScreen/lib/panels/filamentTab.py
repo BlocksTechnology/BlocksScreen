@@ -53,10 +53,10 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self._previous_gate_states: dict[int, bool] = {}
         self.pre_gate_idx = {}
         self.popup_gates: Deque = deque()
-        self._selected_spool_id: int = -1
         self._spool_id_map: dict[str, dict] = {}
         self._current_field: QtWidgets.QLineEdit | None = None
         self._color_target_field = None
+        self.moonraker_run = True
 
         self.amu_manager.mmu_state_changed.connect(self.on_mmu_state_changed)
         self._setup_pre_gate_popup()
@@ -116,14 +116,18 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self.run_gcode.connect(self.ws.api.run_gcode)
 
     def handle_moonraker_components(self):
-        components = self.ws._moonRest.get_server_info()
-
-        if "spoolman" not in components["result"].get("components", []):
-            self.fp_button_2.hide()
-            self.spoolman_btn.hide()
-        else:
-            self.fp_button_2.show()
-            self.spoolman_btn.show()
+        if self.moonraker_run:
+            components = self.ws._moonRest.get_server_info()
+            if "spoolman" not in components["result"].get("components", []):
+                self.fp_button_2.hide()
+                self._popup_stack.addWidget(self._build_form_page())
+                self._popup_stack.addWidget(self._build_spool_page())
+            else:
+                self.fp_button_2.show()
+                self._popup_stack.addWidget(self._build_spool_page())
+                self._popup_stack.addWidget(self._build_form_page())
+                self.request_filament_change_page.emit()
+            self.moonraker_run = False
 
     def change_page(self, index: int) -> None:
         """Requests a page change page to the global manager
@@ -155,8 +159,6 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self._color_wheel.color_selected.connect(self._on_color_selected)
 
         self._popup_stack = QtWidgets.QStackedWidget()
-        self._popup_stack.addWidget(self._build_form_page())
-        self._popup_stack.addWidget(self._build_spool_page())
 
         self.popup = BasePopup(self, False, False)
         self.popup.add_widget(self._popup_stack)
@@ -167,6 +169,16 @@ class FilamentTab(QtWidgets.QStackedWidget):
         root.setContentsMargins(16, 12, 16, 12)
         root.setSpacing(8)
 
+        hdr = QtWidgets.QHBoxLayout()
+        hdr.setContentsMargins(0, 0, 0, 0)
+        hdr.setSpacing(0)
+        back_btn = IconButton(page)
+        back_btn.setFixedSize(QtCore.QSize(60, 60))
+        back_btn.setFlat(True)
+        back_btn.setPixmap(QtGui.QPixmap(":/ui/media/btn_icons/back.svg"))
+        back_btn.clicked.connect(lambda: self.popup.hide())
+        hdr.addWidget(back_btn)
+
         self._popup_title_lbl = QtWidgets.QLabel("Filament Detected", page)
         title_font = QtGui.QFont()
         title_font.setPointSize(20)
@@ -174,7 +186,14 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self._popup_title_lbl.setStyleSheet("color: white; background: transparent;")
         self._popup_title_lbl.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self._popup_title_lbl.setFixedHeight(50)
-        root.addWidget(self._popup_title_lbl)
+        hdr.addWidget(self._popup_title_lbl, 1)
+
+        blank = QtWidgets.QWidget(self)
+
+        blank.setFixedSize(60, 60)
+        hdr.addWidget(blank)
+
+        root.addLayout(hdr)
 
         grid_w = QtWidgets.QWidget(page)
         grid = QtWidgets.QGridLayout(grid_w)
@@ -266,16 +285,6 @@ class FilamentTab(QtWidgets.QStackedWidget):
         font = QtGui.QFont()
         font.setPointSize(15)
 
-        self.spoolman_btn = BlocksCustomButton(page)
-        self.spoolman_btn.setFixedSize(230, 80)
-        self.spoolman_btn.setText("Spoolman")
-        self.spoolman_btn.setFont(font)
-        self.spoolman_btn.setPixmap(
-            QtGui.QPixmap(":/filament_related/media/btn_icons/spoolman.svg")
-        )
-        self.spoolman_btn.clicked.connect(self._on_spoolman_clicked)
-        btn_row.addWidget(self.spoolman_btn)
-
         skip_btn = BlocksCustomButton(page)
         skip_btn.setFixedSize(230, 80)
         skip_btn.setText("Skip")
@@ -306,27 +315,29 @@ class FilamentTab(QtWidgets.QStackedWidget):
         hdr = QtWidgets.QHBoxLayout()
         hdr.setContentsMargins(0, 0, 0, 0)
         hdr.setSpacing(0)
-        back_btn = IconButton(page)
-        back_btn.setFixedSize(QtCore.QSize(60, 60))
-        back_btn.setFlat(True)
-        back_btn.setPixmap(QtGui.QPixmap(":/ui/media/btn_icons/back.svg"))
-        back_btn.clicked.connect(lambda: self._popup_stack.setCurrentIndex(0))
-        hdr.addWidget(back_btn)
-
-        title_font = QtGui.QFont()
-        title_font.setPointSize(18)
-        title_lbl = QtWidgets.QLabel("Select Spool", page)
-        title_lbl.setFont(title_font)
-        title_lbl.setFixedHeight(60)
-        title_lbl.setStyleSheet("color: white; background: transparent;")
-        title_lbl.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
-        hdr.addWidget(title_lbl, 1)
 
         blank = QtWidgets.QWidget(self)
         blank.setFixedSize(60, 60)
         hdr.addWidget(blank)
 
+        title_font = QtGui.QFont()
+        title_font.setPointSize(18)
+        self._spoolman_title_lbl = QtWidgets.QLabel("Select Spool", page)
+        self._spoolman_title_lbl.setFont(title_font)
+        self._spoolman_title_lbl.setFixedHeight(60)
+        self._spoolman_title_lbl.setStyleSheet("color: white; background: transparent;")
+        self._spoolman_title_lbl.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        hdr.addWidget(self._spoolman_title_lbl, 1)
+        back_btn = IconButton(page)
+        back_btn.setFixedSize(QtCore.QSize(60, 60))
+        back_btn.setFlat(True)
+        back_btn.setPixmap(QtGui.QPixmap(":/ui/media/btn_icons/back.svg"))
+        back_btn.clicked.connect(lambda: self.popup.hide())
+        hdr.addWidget(back_btn)
+
         root.addLayout(hdr)
+
+        vertical_layout = QtWidgets.QHBoxLayout()
 
         frame = BlocksCustomFrame(page)
         frame_lay = QtWidgets.QVBoxLayout(frame)
@@ -363,7 +374,6 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self._spool_list_view.setModel(self._spool_model)
         self._spool_list_view.setItemDelegate(self._spool_delegate)
         self._spool_delegate.item_selected.connect(self._on_spool_selected)
-
         self._spool_load_widget = LoadingOverlayWidget(
             frame, LoadingOverlayWidget.AnimationGIF.DEFAULT
         )
@@ -398,7 +408,14 @@ class FilamentTab(QtWidgets.QStackedWidget):
                 callback=self._add_spool_page.on_add_spool_result,
             )
         )
-        self._add_spool_page.accepted.connect(self._add_popup.hide)
+        self._add_spool_page.accepted.connect(
+            lambda: {
+                self.ws.api.spoolman_proxy(
+                    "GET", "/v1/spool", callback=self.on_spools_received
+                ),
+                self._add_popup.hide(),
+            }
+        )
 
         self._add_spool_page.open_add_filament.connect(
             lambda: self._add_stack.setCurrentIndex(1)
@@ -410,6 +427,12 @@ class FilamentTab(QtWidgets.QStackedWidget):
                 callback=self._add_filament_page.on_add_filament_result,
             )
         )
+        self._add_filament_page.request_add_manufacturer.connect(
+            lambda body: self.ws.api.add_manufacturer(
+                body,
+                callback=self._add_filament_page.on_add_manufacturer_result,
+            )
+        )
 
         self._add_filament_page.accepted.connect(
             lambda: self._add_stack.setCurrentIndex(0)
@@ -418,7 +441,73 @@ class FilamentTab(QtWidgets.QStackedWidget):
             lambda: self._add_stack.setCurrentIndex(0)
         )
 
-        root.addWidget(frame, 1)
+        vertical_layout.addWidget(frame)
+
+        frame_2 = BlocksCustomFrame(page)
+        frame_2_lay = QtWidgets.QVBoxLayout(frame_2)
+        frame_2_lay.setContentsMargins(4, 4, 4, 4)
+        key_font = QtGui.QFont()
+        key_font.setPointSize(12)
+
+        val_font = QtGui.QFont()
+        val_font.setPointSize(14)
+
+        def _add_row(title_text: str) -> QtWidgets.QLabel:
+            row = QtWidgets.QHBoxLayout()
+            row.setSpacing(4)
+            title = QtWidgets.QLabel(title_text, self)
+            title.setFont(key_font)
+            title.setStyleSheet("color: rgb(180,180,180); background: transparent;")
+            title.setFixedHeight(32)
+            title.setMinimumWidth(80)
+            title.setMaximumWidth(110)
+            value = QtWidgets.QLabel("—", self)
+            value.setFont(val_font)
+            value.setStyleSheet("color: white; background: transparent;")
+            value.setFixedHeight(32)
+            value.setAlignment(
+                QtCore.Qt.AlignmentFlag.AlignRight
+                | QtCore.Qt.AlignmentFlag.AlignVCenter
+            )
+            row.addWidget(title, 0)
+            row.addWidget(value, 1)
+            frame_2_lay.addLayout(row)
+            return value
+
+        self.filament_name_label = _add_row("Name:")
+        self.vendor_label = _add_row("Vendor:")
+        self.material_label = _add_row("Material:")
+        self.weight_label = _add_row("Remaining:")
+
+        font = QtGui.QFont()
+        font.setPointSize(17)
+
+        self.skip_btn = BlocksCustomButton(frame_2)
+        self.skip_btn.setText("Skip")
+        self.skip_btn.setFixedSize(QtCore.QSize(230, 80))
+        self.skip_btn.setFont(font)
+        self.skip_btn.setPixmap(
+            QtGui.QPixmap(":/arrow_icons/media/btn_icons/right_arrow.svg")
+        )
+        self.skip_btn.clicked.connect(self.handle_skip_button)
+
+        self.accept_btn = BlocksCustomButton(frame_2)
+        self.accept_btn.setText("Accept")
+        self.accept_btn.setFixedSize(QtCore.QSize(230, 80))
+        self.accept_btn.setPixmap(QtGui.QPixmap(":/dialog/media/btn_icons/yes.svg"))
+        self.accept_btn.setFont(font)
+        self.accept_btn.clicked.connect(lambda: self._on_spool_selected())
+
+        frame_2_lay.addWidget(
+            self.skip_btn, alignment=QtCore.Qt.AlignmentFlag.AlignHCenter
+        )
+        frame_2_lay.addWidget(
+            self.accept_btn, alignment=QtCore.Qt.AlignmentFlag.AlignHCenter
+        )
+
+        vertical_layout.addWidget(frame_2)
+        root.addLayout(vertical_layout, 1)
+
         return page
 
     def handle_skip_button(self):
@@ -445,19 +534,25 @@ class FilamentTab(QtWidgets.QStackedWidget):
         """
         if self.popup.isVisible():
             return
+        self.ws.api.spoolman_proxy("GET", "/v1/spool", callback=self.on_spools_received)
         if not self.popup_gates:
             if force:
                 self.pre_gate_idx = {"gate": 0}
-                self._popup_title_lbl.setText("Load filament information")
+                msg = (
+                    f"{self._material_filter} Filament Info"
+                    if self._material_filter
+                    else "Load filament information"
+                )
+                self._popup_title_lbl.setText(msg)
+                self._spoolman_title_lbl.setText(msg)
             else:
                 return
         else:
             self.pre_gate_idx = self.popup_gates.popleft()
             gate = self.pre_gate_idx.get("gate", -1)
             self._popup_title_lbl.setText(f"Filament Detected — Gate {gate}")
+            self._spoolman_title_lbl.setText(f"Filament Detected — Gate {gate}")
 
-        self._popup_stack.setCurrentIndex(0)
-        self._selected_spool_id = -2
         self.popup.show()
 
     @QtCore.pyqtSlot(int, str, str, "PyQt_PyObject", name="open-pregate-popup")
@@ -466,6 +561,10 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self._popup_material.setText(material)
         self._popup_temp.setText(str(temp))
         self._popup_callback = callback
+        self._material_filter = material
+
+        self._add_spool_page.setFilter(material)
+        self._add_filament_page.setData(material, temp)
         self.handle_popup(True)
 
     def on_popup_accept(self):
@@ -479,9 +578,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
         except ValueError:
             temp = -1
 
-        parts = [f"MMU_GATE_MAP GATE={gate}"]
-        if self._selected_spool_id not in (-2, -1):
-            parts.append(f"SPOOLID={self._selected_spool_id}")
+        parts = [f"MMU_GATE_MAP GATE={gate} SPOOLID=-1"]
         if name:
             parts.append(f'NAME="{name}"')
         if material:
@@ -505,6 +602,8 @@ class FilamentTab(QtWidgets.QStackedWidget):
 
         self._reset_popup()
         self.popup.hide()
+        self._add_spool_page.setFilter(None)
+        self._add_filament_page.setData("---", 0)
         self.handle_popup()
 
     def _reset_popup(self):
@@ -518,11 +617,15 @@ class FilamentTab(QtWidgets.QStackedWidget):
         """Handles the result from the API call to get spools for the spoolman page."""
         self._spool_load_widget.hide()
         self._spool_list_view.show()
+
+        self.reset_spool_info()
+
         if result.get("error") is not None:
             return
         spools = result.get("response")
         if not isinstance(spools, list):
             return
+
         self._spool_id_map = {}
         self._spool_model.clear()
         self._spool_delegate.clear()
@@ -538,6 +641,12 @@ class FilamentTab(QtWidgets.QStackedWidget):
             filament = spool.get("filament") or {}
             name = filament.get("name") or f"Spool #{spool_id}"
             material = filament.get("material") or ""
+            if (
+                self._material_filter
+                and self._material_filter.lower() not in material.lower()
+            ):
+                continue
+
             self._spool_model.add_item(
                 ListItem(
                     text=name,
@@ -549,31 +658,67 @@ class FilamentTab(QtWidgets.QStackedWidget):
                 )
             )
             self._spool_id_map[name] = spool
+        self.update()
 
-    @QtCore.pyqtSlot(ListItem, name="on-spool-selected")
-    def _on_spool_selected(self, item: ListItem) -> None:
-        if not item:
-            return
-        if item.text == "+ Add Spool":
-            self._on_add_spool_request()
+    def _on_spool_selected(self) -> None:
+        item = self._spool_model.get_selected_item()
+        if item is None:
             return
         spool = self._spool_id_map.get(item.text)
+
+        if self.sender() != self.accept_btn:
+            if item.text == "+ Add Spool":
+                self._add_popup.show()
+                return
+            if spool is None:
+                return
+            self.accept_btn.setEnabled(True)
+            filament = spool.get("filament") or {}
+            self.filament_name_label.setText(item.text)
+            self.material_label.setText(filament.get("material", "N/A"))
+            self.weight_label.setText(
+                f"{spool.get('remaining_weight')} g"
+                if spool.get("remaining_weight") is not None
+                else "N/A"
+            )
+            self.vendor_label.setText(
+                filament.get("vendor", "N/A").get("name", "N/A")
+                if filament.get("vendor")
+                else "N/A"
+            )
+
+            return
         if not spool:
             return
         filament = spool.get("filament") or {}
-        self._selected_spool_id = spool.get("id", -2)
-        self._popup_name.setText(filament.get("name") or "")
-        self._popup_color.setText(filament.get("color_hex") or "ffffff")
-        self._popup_material.setText(filament.get("material") or "")
-        temp = filament.get("settings_extruder_temp")
-        self._popup_temp.setText(str(temp) if temp is not None else "")
-        self._popup_stack.setCurrentIndex(0)
+        f_id = spool.get("id", -1)
+        f_name = filament.get("name", "N/A")
+        f_color = filament.get("color_hex", "ffffff")
+        f_material = filament.get("material", "")
+        f_temp = filament.get("settings_extruder_temp", -1)
+        gate = self.pre_gate_idx.get("gate", 0)
 
-    def _on_spoolman_clicked(self):
-        self._spool_list_view.hide()
-        self._spool_load_widget.show()
-        self._popup_stack.setCurrentIndex(1)
-        self.ws.api.spoolman_proxy("GET", "/v1/spool", callback=self.on_spools_received)
+        self.accept_btn.setEnabled(False)
+        self.popup.hide()
+        self._add_spool_page.setFilter(None)
+        self._add_filament_page.setData("---", 0)
+        self.run_gcode.emit(
+            f"MMU_GATE_MAP GATE={gate} SPOOLID={f_id} NAME='{f_name}' MATERIAL='{f_material}' COLOR='{f_color}' TEMP={f_temp} QUIET=1"
+        )
+        if self._popup_callback is not None:
+            try:
+                self._popup_callback()
+            except Exception as e:
+                logger.error(f"Error executing pre-gate accept callback: {e}")
+            finally:
+                self._popup_callback = None
+
+    def reset_spool_info(self):
+        self.filament_name_label.setText("N/A")
+        self.material_label.setText("N/A")
+        self.weight_label.setText("N/A")
+        self.vendor_label.setText("N/A")
+        self.accept_btn.setEnabled(False)
 
     @staticmethod
     def _make_color_pixmap(filament: dict) -> QtGui.QPixmap:
@@ -633,7 +778,6 @@ class FilamentTab(QtWidgets.QStackedWidget):
 
     @QtCore.pyqtSlot(str, int, name="on-popup-temp-change")
     def _on_popup_temp_change(self, _name: str, value: int) -> None:
-        self._selected_spool_id = -1
         self._popup_temp.setText(str(value))
 
     def _on_show_keyboard(
@@ -658,8 +802,6 @@ class FilamentTab(QtWidgets.QStackedWidget):
     def _on_qwerty_value_selected(self, value: str) -> None:
         self._qwerty.hide()
         if self._current_field:
-            if self._current_field in (self._popup_name, self._popup_material):
-                self._selected_spool_id = -1
             self._current_field.setText(value)
             self._current_field.editingFinished.emit()
 
@@ -736,10 +878,6 @@ class FilamentTab(QtWidgets.QStackedWidget):
         if mmu_state.action == "Loading" or mmu_state.action == "Unloading":
             self.load_state = True
             self.call_load_panel.emit(True, mmu_state.action)
-
-    def _on_add_spool_request(self):
-        self._add_spool_page.reset()
-        self._add_popup.show()
 
     def setupUi(self):
         self.resize(710, 410)

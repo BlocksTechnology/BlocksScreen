@@ -2,8 +2,8 @@
 """Write the BLOCKS logo splash to /dev/fb0 and cache as raw bytes.
 
 Two modes:
-  default       — write to /dev/fb0 and save cache (no VT switch; X11 activates tty7 itself)
-  --precompute  — render and save cache only (no fb0 write)
+  default       - write to /dev/fb0 and save cache (no VT switch; X11 activates tty7 itself)
+  --precompute  - render and save cache only (no fb0 write)
 
 The raw cache is consumed by bs-pre-stop.py (ExecStop) and bs-splash-holder.py
 (tty8 boot splash); the PNG by feh in ExecStopPost.
@@ -81,7 +81,7 @@ def _render(w: int, h: int, Image, ImageDraw, ImageFont) -> Any:
         bg.paste(logo, (x, logo_y), logo)
         text_y = logo_y + lh + 24
     else:
-        # Fallback: no logo — draw a placeholder card
+        # Fallback: no logo - draw a placeholder card
         card_w, card_h = 500, 160
         cx, cy = (w - card_w) // 2, (h - card_h) // 2
         draw.rectangle(
@@ -200,14 +200,14 @@ def main() -> None:
         return
 
     # Write logo to fb0 so fbcon on tty7 shows it immediately when X11 activates tty7.
-    # We do NOT switch VTs or set KD_GRAPHICS here — X11 does VT_ACTIVATE(7) itself
+    # We do NOT switch VTs or set KD_GRAPHICS here - X11 does VT_ACTIVATE(7) itself
     # at startup (that init step is not affected by -novtswitch), which keeps tty8
     # active with the splash visible until X11 is truly ready to take over the display.
     try:
         with open("/dev/fb0", "wb") as fb:
             fb.write(fb_data)
     except PermissionError:
-        _log("Permission denied on /dev/fb0 — check 'video' group membership")
+        _log("Permission denied on /dev/fb0 - check 'video' group membership")
     except OSError as e:
         _log(f"fb0 write error: {e}")
 

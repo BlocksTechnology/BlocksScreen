@@ -5,6 +5,7 @@ import contextlib
 import json
 import logging
 import os
+import secrets
 import shutil
 import tempfile
 import time
@@ -29,6 +30,8 @@ from updater.executor import (
     apt_upgrade,
     check_apt_status,
     check_git_status,
+    classify_apt_error,
+    enable_service,
     git_checkout,
     git_clone,
     git_fetch,
@@ -39,7 +42,6 @@ from updater.executor import (
     git_repair,
     git_reset_to_hash,
     is_git_repo,
-    enable_service,
     restart_service,
     restart_service_noblock,
     run_hook,
@@ -50,12 +52,51 @@ from updater.locking import process_lock, restart_sentinel_path
 from updater.models import ComponentConfig, ComponentStatus
 
 _STATE_PATH = Path.home() / ".cache" / "blockscreen" / "updater_state.json"
-# SD-backed map of component name to pre-update hash; if present at boot, revert.
+# SD-backed batch map name->pre-update hash; present at boot = revert those repos.
 _INFLIGHT_PATH = Path.home() / ".cache" / "blockscreen" / "updater_inflight.json"
 _HISTORY_PATH = Path.home() / ".cache" / "blockscreen" / "update_history.jsonl"
 # Cap the history so a device running for years cannot fill the SD card.
 _HISTORY_MAX_BYTES = 1_000_000
 _HISTORY_KEEP_LINES = 2000
+
+# Circuit-breaker backoff for network ops (apt, git fetch): skip while cooling down so a failure can't storm-retry.
+_APT_BACKOFF_BASE_S = 30.0
+_APT_BACKOFF_MAX_S = 1800.0
+_APT_PERMANENT_COOLDOWN_S = 3600.0
+_FETCH_BACKOFF_BASE_S = 30.0
+_FETCH_BACKOFF_MAX_S = 900.0
+
+
+class _Backoff:
+    """Per-dependency circuit breaker: skip work while cooling_down(); trip() on failure, reset() on success."""
+
+    def __init__(self, base: float, cap: float, permanent: float = 0.0) -> None:
+        """Configure the base, capped, and (optional) permanent-failure delays in seconds."""
+        self._base = base
+        self._cap = cap
+        self._permanent = permanent
+        self._until = 0.0
+        self._delay = 0.0
+
+    def cooling_down(self) -> bool:
+        """Return True while the last failure's backoff window has not elapsed."""
+        return time.monotonic() < self._until
+
+    def trip(self, *, permanent: bool = False) -> None:
+        """Open the breaker: permanent = fixed cooldown, else capped exponential delay + jitter."""
+        if permanent and self._permanent:
+            delay = self._permanent
+        else:
+            self._delay = min(max(self._delay * 2, self._base), self._cap)
+            delay = self._delay
+        jitter = secrets.SystemRandom().uniform(0, delay * 0.1)
+        self._until = time.monotonic() + delay + jitter
+
+    def reset(self) -> None:
+        """Close the breaker after a success."""
+        self._until = 0.0
+        self._delay = 0.0
+
 
 # git's empty tree as provisioning prev_hash: diff hooks see all files as new.
 _GIT_EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
@@ -113,6 +154,10 @@ class UpdateService:
         self._last_status_time: float = 0.0
         self._fetch_times: dict[str, float] = {}
         self._component_pip_cache: dict[str, str] = {}
+        self._apt_backoff = _Backoff(
+            _APT_BACKOFF_BASE_S, _APT_BACKOFF_MAX_S, _APT_PERMANENT_COOLDOWN_S
+        )
+        self._fetch_backoff: dict[str, _Backoff] = {}
         self._state_path = _STATE_PATH
         self._inflight_path = _INFLIGHT_PATH
         self._history_path = _HISTORY_PATH
@@ -141,7 +186,7 @@ class UpdateService:
                     cache_ttl_seconds=0 if force else 86_400, exclude=c.apt_exclude
                 )
             elif c.path is None or not c.path.exists():
-                # Missing opted-in components surface as needs_install; others skip.
+                # Missing opted-in comps surface as needs_install; rest stay skipped.
                 if c.install_if_missing and c.url:
                     results[c.name] = ComponentStatus(name=c.name, needs_install=True)
                 return
@@ -149,14 +194,25 @@ class UpdateService:
                 now = time.monotonic()
                 async with self._git_lock:
                     last = self._fetch_times.get(c.name, 0.0)
-                    skip_fetch = not force and (now - last) < self._FETCH_TTL
+                    breaker = self._fetch_backoff.get(c.name)
+                    skip_fetch = not force and (
+                        (now - last) < self._FETCH_TTL
+                        or (breaker is not None and breaker.cooling_down())
+                    )
                 status = await check_git_status(
                     c.name, c.path, c.branch, c.version, skip_fetch
                 )
-                # Record fetch time only on success so offline fetches retry.
-                if not skip_fetch and status.error is None:
+                # Record success; back off a failing fetch per-component so it can't storm the poll.
+                if not skip_fetch:
                     async with self._git_lock:
-                        self._fetch_times[c.name] = now
+                        if status.error is None:
+                            self._fetch_times[c.name] = now
+                            self._fetch_backoff.pop(c.name, None)
+                        else:
+                            self._fetch_backoff.setdefault(
+                                c.name,
+                                _Backoff(_FETCH_BACKOFF_BASE_S, _FETCH_BACKOFF_MAX_S),
+                            ).trip()
             results[c.name] = status
 
         gathered = await asyncio.gather(
@@ -359,7 +415,7 @@ class UpdateService:
                     self._log.error("%s: hook failed: %s", c.name, hook_err)
                     await self._abort_batch(batch, prev, touched, restarted, "hook")
                     return
-            # Restart each unique service once; record it BEFORE so abort re-restarts it.
+            # Restart each unique svc once; bounced marked BEFORE so abort re-restarts.
             self._log.info("git batch: restart phase")
             seen: set[str] = set()
             ui_components: list[ComponentConfig] = []
@@ -1137,7 +1193,12 @@ class UpdateService:
                 )
             return False
 
+    def _apt_failed(self, err: str) -> None:
+        """Open the apt breaker, classifying the failure as permanent or transient."""
+        self._apt_backoff.trip(permanent=classify_apt_error(err) == "permanent")
+
     async def _run_apt_update(self, component: ComponentConfig) -> bool:
+        """Refresh + upgrade apt packages under the apt lock (system component update path)."""
         _apt_cache = Path.home() / ".cache" / "blockscreen" / "apt_status_cache.json"
         async with self._apt_lock:
             return await self._run_apt_update_locked(component, _apt_cache)
@@ -1146,9 +1207,13 @@ class UpdateService:
         self, component: ComponentConfig, _apt_cache: Path
     ) -> bool:
         try:
+            if self._apt_backoff.cooling_down():
+                self._log.debug("apt cooling down; skipping update")
+                return self._cb_error_done(component.name, "apt cooling down")
             ok, err = await apt_update()
             if not ok:
                 self._log.error("apt_update failed: %s", err)
+                self._apt_failed(err)
                 _apt_cache.unlink(missing_ok=True)
                 return self._cb_error_done(component.name, "network")
             self._cb("on_step", component.name, 1, 2)
@@ -1162,6 +1227,7 @@ class UpdateService:
             ok, err = await apt_upgrade(exclude=component.apt_exclude)
             if not ok:
                 self._log.error("apt_upgrade failed: %s", err)
+                self._apt_failed(err)
                 _apt_cache.unlink(missing_ok=True)
                 rollback_ok, rollback_err = await _apt_get_fix_broken()
                 if rollback_ok:
@@ -1191,6 +1257,7 @@ class UpdateService:
 
             self._cb("on_component_done", component.name, True)
             _apt_cache.unlink(missing_ok=True)
+            self._apt_backoff.reset()
             return True
         except asyncio.CancelledError:
             self._log.warning("%s: apt update cancelled", component.name)
@@ -1289,15 +1356,25 @@ class UpdateService:
             await self._background_apt_upgrade_locked()
 
     async def _background_apt_upgrade_locked(self) -> None:
+        if self._apt_backoff.cooling_down():
+            self._log.debug("apt cooling down; skipping background upgrade")
+            return
         self._log.info("background apt upgrade: starting")
         ok, err = await apt_update()
         if not ok:
             self._log.warning("background apt-get update failed: %s", err)
+            self._apt_failed(err)
             return
-        ok, err = await apt_upgrade()
+        # Honor the apt excludes: a silent background kernel/firmware bump is the brick risk they prevent.
+        exclude = tuple(
+            pat for c in self._components if c.kind == "apt" for pat in c.apt_exclude
+        )
+        ok, err = await apt_upgrade(exclude=exclude)
         if not ok:
             self._log.warning("background apt upgrade failed: %s", err)
+            self._apt_failed(err)
             return
+        self._apt_backoff.reset()
         self._log.info("background apt upgrade: packages done")
         autoremove_ok, autoremove_err = await apt_autoremove()
         if not autoremove_ok:

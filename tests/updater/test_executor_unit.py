@@ -16,6 +16,7 @@ from updater.executor import (
     apt_upgrade,
     check_apt_status,
     check_git_status,
+    classify_apt_error,
     git_checkout,
     git_clone,
     git_commits_behind,
@@ -1062,3 +1063,25 @@ class TestEnableService:
     async def test_none_name(self):
         ok, _ = await enable_service(None)
         assert ok is False
+
+
+class TestClassifyAptError:
+    @pytest.mark.parametrize(
+        "err",
+        [
+            "sudo: /usr/local/sbin/bs-apt-helper: command not found",
+            "No such file or directory",
+            "sudo: a password is required",
+            "Permission denied",
+            "user is not allowed to execute",
+        ],
+    )
+    def test_permanent(self, err):
+        assert classify_apt_error(err) == "permanent"
+
+    @pytest.mark.parametrize(
+        "err",
+        ["Could not resolve host", "Temporary failure", "dpkg lock held", ""],
+    )
+    def test_transient(self, err):
+        assert classify_apt_error(err) == "transient"

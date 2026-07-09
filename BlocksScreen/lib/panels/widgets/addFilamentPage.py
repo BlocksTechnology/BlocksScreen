@@ -1,5 +1,7 @@
 import typing
 
+from lib.panels.widgets.basePopup import BasePopup
+from lib.panels.widgets.colorWheelWidget import ColorWheelWidget
 from lib.panels.widgets.keyboardPage import CustomQwertyKeyboard
 from lib.panels.widgets.numpadPage import CustomNumpad
 from lib.utils.blocks_button import BlocksCustomButton
@@ -7,13 +9,14 @@ from lib.utils.blocks_frame import BlocksCustomFrame
 from lib.utils.blocks_linedit import BlocksCustomLinEdit
 from lib.utils.icon_button import IconButton
 from PyQt6 import QtCore, QtGui, QtWidgets
-from lib.panels.widgets.basePopup import BasePopup
-from lib.panels.widgets.colorWheelWidget import ColorWheelWidget
 
 
 class AddFilamentPage(QtWidgets.QWidget):
     request_add_filament: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         dict, name="request-add-filament"
+    )
+    request_add_manufacturer: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        dict, name="request-add-manufacturer"
     )
     accepted: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(name="accepted")
     cancelled: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(name="cancelled")
@@ -54,6 +57,20 @@ class AddFilamentPage(QtWidgets.QWidget):
         self.request_numpad[str, int, "PyQt_PyObject", int, int].connect(
             self.on_numpad_request
         )
+
+    def setData(self, material: str, extruder_temp: int):
+        self._material_field.setText(material)
+        self._ext_temp_field.setText(str(extruder_temp))
+        self.update()
+
+    def reset(self):
+        self._name_field.setText("")
+        self._material_field.setText("---")
+        self._color_field.setText("ffffff")
+        self._ext_temp_field.setText("---")
+        self._bed_temp_field.setText("---")
+        self._density_field.setText("---")
+        self._vendor_field.setText("---")
 
     @QtCore.pyqtSlot(dict, name="on-add-filament-result")
     def on_add_filament_result(self, result: dict) -> None:
@@ -145,7 +162,7 @@ class AddFilamentPage(QtWidgets.QWidget):
         ext_temp = self._ext_temp_field.text().strip()
         bed_temp = self._bed_temp_field.text().strip()
         density_text = self._density_field.text().strip()
-        diameter_text = self._diameter_field.text().strip()
+        vendor_text = self._vendor_field.text().strip()
 
         if name:
             body["name"] = name
@@ -165,12 +182,23 @@ class AddFilamentPage(QtWidgets.QWidget):
             body["density"] = float(density_text)
         except ValueError:
             body["density"] = 1.24
-        try:
-            body["diameter"] = float(diameter_text)
-        except ValueError:
-            body["diameter"] = 1.75
+
+        body["diameter"] = 1.75  # Default diameter, can be modified later if needed
+        if not vendor_text == "---":
+            self.request_add_manufacturer.emit({"name": vendor_text})
+            self.request_filament_body = body
+            return
 
         self.request_add_filament.emit(body)
+
+    def on_add_manufacturer_result(self, result: dict) -> None:
+        if result.get("error") is None:
+            vendor_id = result.get("response", {}).get("id")
+            if vendor_id is not None:
+                self.request_filament_body["vendor_id"] = vendor_id
+                self.request_add_filament.emit(self.request_filament_body)
+        else:
+            ...
 
     def _build_ui(self) -> None:
         def _f(pt: int) -> QtGui.QFont:
@@ -264,7 +292,7 @@ class AddFilamentPage(QtWidgets.QWidget):
         self._ext_temp_field = _make_field(right_frame)
         self._bed_temp_field = _make_field(right_frame)
         self._density_field = _make_field(right_frame)
-        self._diameter_field = _make_field(right_frame)
+        self._vendor_field = _make_field(right_frame)
 
         right_lay.addWidget(_key_lbl("Extruder Temp (°C):", right_frame))
         right_lay.addWidget(self._ext_temp_field)
@@ -282,11 +310,11 @@ class AddFilamentPage(QtWidgets.QWidget):
         dens_col.addWidget(self._density_field)
         dd_row.addLayout(dens_col)
 
-        diam_col = QtWidgets.QVBoxLayout()
-        diam_col.setSpacing(4)
-        diam_col.addWidget(_key_lbl("Diameter (mm):", right_frame))
-        diam_col.addWidget(self._diameter_field)
-        dd_row.addLayout(diam_col)
+        vend_col = QtWidgets.QVBoxLayout()
+        vend_col.setSpacing(4)
+        vend_col.addWidget(_key_lbl("Vendor:", right_frame))
+        vend_col.addWidget(self._vendor_field)
+        dd_row.addLayout(vend_col)
 
         right_lay.addLayout(dd_row)
         right_lay.addStretch(1)
@@ -300,7 +328,7 @@ class AddFilamentPage(QtWidgets.QWidget):
         self._ext_temp_field.setText("220")
         self._bed_temp_field.setText("60")
         self._density_field.setText("1.24")
-        self._diameter_field.setText("1.75")
+        self._vendor_field.setText("---")
 
         self._name_field.clicked.connect(lambda: self._show_keyboard(self._name_field))
         self._material_field.clicked.connect(
@@ -328,8 +356,8 @@ class AddFilamentPage(QtWidgets.QWidget):
         self._density_field.clicked.connect(
             lambda: self._show_keyboard(self._density_field, max_char=5)
         )
-        self._diameter_field.clicked.connect(
-            lambda: self._show_keyboard(self._diameter_field, max_char=4)
+        self._vendor_field.clicked.connect(
+            lambda: self._show_keyboard(self._vendor_field, max_char=65)
         )
 
         self._color_field.textChanged.connect(self._update_swatch)

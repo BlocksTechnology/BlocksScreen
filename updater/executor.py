@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 UPDATER_SERVICE = "BlocksScreen-updater.service"
 
-# Hook budget: a dependency-heavy hook can run minutes; a timeout aborts the batch.
+# Hook budget: a deps-heavy hook (Spoolman uv sync) runs minutes; timeout = abort.
 HOOK_TIMEOUT = 600.0
 
 GIT = "/usr/bin/git"
@@ -696,9 +696,9 @@ def _apt_env() -> dict[str, str]:
 def _apt_cmd(verb: str, pkgs: Sequence[str] = ()) -> list[str]:
     """Build the sudo apt argv via the root-owned wrapper.
 
-    The wrapper is the only apt command sudoers grants; install-updater.sh
-    deploys it before the daemon restarts onto this code, so it is always
-    present. It owns the lock/conffile -o options and validates its args.
+    The wrapper is the only apt command sudoers grants. bs-bootstrap reinstalls it
+    when missing (an old-installer box can have the service but not the wrapper); until
+    that self-heal runs a missing wrapper surfaces as a plain 'command not found'.
     """
     return [SUDO, str(APT_HELPER), verb, *pkgs]
 
@@ -787,6 +787,19 @@ async def _apt_restore_packages(snapshot_path: Path) -> tuple[bool, str]:
         logger.error("dpkg --set-selections failed: %s", msg)
         return False, msg
     return await _run(_apt_cmd("dselect-upgrade"), timeout=120.0, env=_apt_env())
+
+
+def classify_apt_error(err: str) -> str:
+    """Classify an apt failure: 'permanent' won't clear by retrying, 'transient' might."""
+    lowered = err.lower()
+    permanent = (
+        "command not found",
+        "no such file or directory",
+        "a password is required",
+        "permission denied",
+        "not allowed to execute",
+    )
+    return "permanent" if any(p in lowered for p in permanent) else "transient"
 
 
 async def apt_update() -> tuple[bool, str]:

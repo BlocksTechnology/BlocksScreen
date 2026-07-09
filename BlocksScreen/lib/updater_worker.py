@@ -42,6 +42,7 @@ class UpdaterWorker(QtCore.QObject):
     recover_done = QtCore.pyqtSignal(str, bool)
     busy_changed = QtCore.pyqtSignal(bool)
     daemon_unavailable = QtCore.pyqtSignal()
+    update_rejected = QtCore.pyqtSignal()  # daemon refused the request (already busy)
     request_reconnect = QtCore.pyqtSignal()
     proxy_connected = QtCore.pyqtSignal()
 
@@ -149,8 +150,10 @@ class UpdaterWorker(QtCore.QObject):
             await asyncio.sleep(0)
 
         try:
-            busy = await self._proxy.get_busy()
-        except sdbus.SdBusBaseError as exc:
+            # Bounded: an unresponsive daemon holding an open socket must not hang reconnect forever.
+            async with asyncio.timeout(10):
+                busy = await self._proxy.get_busy()
+        except (sdbus.SdBusBaseError, TimeoutError) as exc:
             # Proxy is lazy; this first call proves the daemon is reachable.
             _log.warning("get_busy failed on (re)connect: %s - scheduling retry", exc)
             self.daemon_unavailable.emit()
@@ -295,6 +298,7 @@ class UpdaterWorker(QtCore.QObject):
             accepted = await self._proxy.update_all()
             if not accepted:
                 _log.warning("update_all was rejected: daemon is busy")
+                self.update_rejected.emit()
         except sdbus.SdBusBaseError as exc:
             self._handle_proxy_error(exc, "update_all")
 
@@ -304,6 +308,7 @@ class UpdaterWorker(QtCore.QObject):
             accepted = await self._proxy.update_component(name)
             if not accepted:
                 _log.warning("update_component(%r) was rejected: daemon is busy", name)
+                self.update_rejected.emit()
         except sdbus.SdBusBaseError as exc:
             self._handle_proxy_error(exc, "update_component")
 

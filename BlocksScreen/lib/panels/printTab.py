@@ -346,9 +346,9 @@ class PrintTab(QtWidgets.QStackedWidget):
             pass
         self.sliderPage.value_selected.connect(callback)
         self.sliderPage.set_name(name)
-        self.sliderPage.set_slider_position(int(current_value))
         self.sliderPage.set_slider_minimum(min_value)
         self.sliderPage.set_slider_maximum(max_value)
+        self.sliderPage.set_slider_position(int(current_value))
         self.change_page(self.indexOf(self.sliderPage))
 
     @QtCore.pyqtSlot(str, str, name="delete_file")
