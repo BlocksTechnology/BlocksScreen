@@ -270,7 +270,7 @@ class TestHandleStatusReady:
         page._post_update_status_pending = True
         with qtbot.waitSignal(page.call_load_panel, timeout=200) as blocker:
             page.handle_status_ready(_make_payload())
-        assert blocker.args == [False, ""]
+        assert blocker.args == [False, "", False]
         assert page._post_update_status_pending is False
 
     def test_does_not_emit_call_load_panel_on_normal_refresh(self, page, qtbot):
@@ -312,7 +312,7 @@ class TestHandleBusyChanged:
         page._overlay_shown = True
         with qtbot.waitSignal(page.call_load_panel, timeout=200) as blocker:
             page.handle_busy_changed(False)
-        assert blocker.args == [False, ""]
+        assert blocker.args == [False, "",False]
         assert page._overlay_shown is False
 
     def test_true_starts_elapsed_timer(self, page):
@@ -413,13 +413,13 @@ class TestHandleStepComplete:
     def test_emits_call_load_panel_with_step_message(self, page, qtbot):
         with qtbot.waitSignal(page.call_load_panel, timeout=200) as blocker:
             page.handle_step_complete("klipper", 1, 4)
-        assert blocker.args == [True, "klipper: fetching"]
+        assert blocker.args == [True, "klipper: fetching",False]
         page._progress_label.setText.assert_called_with("Step 1/4")
 
     def test_unknown_steps_falls_back_to_working(self, page, qtbot):
         with qtbot.waitSignal(page.call_load_panel, timeout=200) as blocker:
             page.handle_step_complete("moonraker", 99, 4)
-        assert blocker.args == [True, "moonraker: working"]
+        assert blocker.args == [True, "moonraker: working",False]
         page._progress_label.setText.assert_called_with("Step 99/4")
 
 
