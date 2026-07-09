@@ -33,7 +33,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
     request_change_tab = QtCore.pyqtSignal(int, name="request_change_tab")
     request_toolhead_count = QtCore.pyqtSignal(int, name="toolhead_number_received")
     run_gcode = QtCore.pyqtSignal(str, name="run_gcode")
-    call_load_panel = QtCore.pyqtSignal(bool, str, name="call-load-panel")
+    call_load_panel = QtCore.pyqtSignal(bool, str, bool, name="call-load-panel")
 
     def __init__(
         self, parent, printer: Printer, ws, config, amu_manager: AMUManager
@@ -871,13 +871,13 @@ class FilamentTab(QtWidgets.QStackedWidget):
         if self.load_state:
             if mmu_state.action == "Idle":
                 self.load_state = False
-                self.call_load_panel.emit(False, "")
+                self.call_load_panel.emit(False, "", True)
                 return
-            self.call_load_panel.emit(True, mmu_state.action)
+            self.call_load_panel.emit(True, mmu_state.action, True)
 
         if mmu_state.action == "Loading" or mmu_state.action == "Unloading":
             self.load_state = True
-            self.call_load_panel.emit(True, mmu_state.action)
+            self.call_load_panel.emit(True, mmu_state.action, True)
 
     def setupUi(self):
         self.resize(710, 410)

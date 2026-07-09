@@ -31,7 +31,7 @@ class UpdatePage(QtWidgets.QWidget):
         bool, name="update-available"
     )
     call_load_panel: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
-        bool, str, name="call-load-panel"
+        bool, str, bool, name="call-load-panel"
     )
     disable_popups: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         bool, name="disable-popups"
@@ -111,7 +111,7 @@ class UpdatePage(QtWidgets.QWidget):
             self._busy = False
             self._overlay_shown = False
             self.show_loading(False)
-            self.call_load_panel.emit(False, "")
+            self.call_load_panel.emit(False, "", False)
             self._show_toast(
                 "Update is taking longer than expected - tap refresh to check status"
             )
@@ -335,7 +335,7 @@ class UpdatePage(QtWidgets.QWidget):
             self.show_loading(False)
             if self._post_update_status_pending:
                 _log.debug("status_ready: emitting call_load_panel(False)")
-                self.call_load_panel.emit(False, "")
+                self.call_load_panel.emit(False, "", False)
                 self._post_update_status_pending = False
         else:
             _log.debug("status_ready: skipping loadscreen dismiss (busy=True)")
@@ -364,7 +364,7 @@ class UpdatePage(QtWidgets.QWidget):
             self.update_all_btn.setEnabled(True)
             if self._overlay_shown:
                 self._overlay_shown = False
-                self.call_load_panel.emit(False, "")
+                self.call_load_panel.emit(False, "", False)
             self._request_status_debounced()
 
     @QtCore.pyqtSlot(name="on-update-all-clicked")
@@ -408,7 +408,7 @@ class UpdatePage(QtWidgets.QWidget):
     def _do_update(self) -> None:
         self._overlay_shown = True
         self.request_update.emit("")
-        self.call_load_panel.emit(True, "Updating all components ...")
+        self.call_load_panel.emit(True, "Updating all components ...", False)
 
     @QtCore.pyqtSlot(str, int, int, name="handle-step-complete")
     def handle_step_complete(self, name: str, step: int, total: int) -> None:
@@ -425,7 +425,7 @@ class UpdatePage(QtWidgets.QWidget):
         self._overlay_shown = True
         overlay_msg = f"{name}: {label}"
         self._progress_label.setText(f"Step {step}/{total}")
-        self.call_load_panel.emit(True, overlay_msg)
+        self.call_load_panel.emit(True, overlay_msg, False)
 
     def _show_toast(self, message: str, *, success: bool = False) -> None:
         color = "#4caf50" if success else "#ef5350"
@@ -447,7 +447,7 @@ class UpdatePage(QtWidgets.QWidget):
         self._busy = False
         self._overlay_shown = False
         self.show_loading(False)
-        self.call_load_panel.emit(False, "")
+        self.call_load_panel.emit(False, "", False)
         self._show_toast("Another update is already in progress")
 
     def handle_rollback_done(self, name: str, success: bool) -> None:

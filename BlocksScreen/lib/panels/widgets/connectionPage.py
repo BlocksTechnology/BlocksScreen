@@ -113,7 +113,7 @@ class ConnectionPage(QtWidgets.QFrame):
         name="notification_button_clicked"
     )
     call_load_panel: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
-        bool, str, name="call-load-panel"
+        bool, str, bool, name="call-load-panel"
     )
     call_cancel_panel: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         bool, name="call-cancel-panel"
@@ -221,7 +221,7 @@ class ConnectionPage(QtWidgets.QFrame):
         self._firmware_restarting_pending = False
         self._restart_10s_timer.stop()
         self._restart_30s_timer.stop()
-        self.call_load_panel.emit(False, "")
+        self.call_load_panel.emit(False, "", False)
 
     def _add_dot(self) -> None:
         self.dot_count += 1
@@ -285,7 +285,9 @@ class ConnectionPage(QtWidgets.QFrame):
         self._escalated_to_klipper_restart = False
         self._firmware_restarting_pending = True
         self.call_load_panel.emit(
-            True, "Restarting firmware…" if is_firmware else "Restarting printer…"
+            True,
+            "Restarting firmware…" if is_firmware else "Restarting printer…",
+            False,
         )
         self._restart_10s_timer.start()
         self._restart_30s_timer.start()
@@ -295,12 +297,12 @@ class ConnectionPage(QtWidgets.QFrame):
             self.restart_klipper_clicked.emit()
 
     def _on_restart_10s_elapsed(self) -> None:
-        self.call_load_panel.emit(True, "Still restarting, please wait…")
+        self.call_load_panel.emit(True, "Still restarting, please wait…", False)
 
     def _on_restart_30s_elapsed(self) -> None:
         if self._last_restart_was_firmware and not self._escalated_to_klipper_restart:
             self._escalated_to_klipper_restart = True
-            self.call_load_panel.emit(True, "Restarting printer...")
+            self.call_load_panel.emit(True, "Restarting printer...", False)
             self.restart_klipper_clicked.emit()
             self._restart_30s_timer.start()
             return
@@ -360,7 +362,7 @@ class ConnectionPage(QtWidgets.QFrame):
     def showEvent(self, a0: QtGui.QShowEvent | None) -> None:  # noqa: N802
         if self.conn_toggle:
             self.ws.api.refresh_update_status()
-            self.call_load_panel.emit(False, "")
+            self.call_load_panel.emit(False, "", False)
             self.call_cancel_panel.emit(False)
         super().showEvent(a0)
 

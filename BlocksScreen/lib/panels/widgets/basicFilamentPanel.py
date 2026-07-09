@@ -25,7 +25,7 @@ class FilamentTypes(enum.Enum):
 
 class BasicFilamentPanel(QtWidgets.QStackedWidget):
     run_gcode = QtCore.pyqtSignal(str, name="run_gcode")
-    call_load_panel = QtCore.pyqtSignal(bool, str, name="call-load-panel")
+    call_load_panel = QtCore.pyqtSignal(bool, str, bool, name="call-load-panel")
     request_back = QtCore.pyqtSignal(name="request_back")
     request_change_tab = QtCore.pyqtSignal(int, name="request_change_tab")
     filament_selected = QtCore.pyqtSignal(
@@ -155,12 +155,12 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         if "state" in status.keys():
             if not status["state"]:
                 self.target_temp = 0
-                self.call_load_panel.emit(False, "")
+                self.call_load_panel.emit(False, "", False)
                 if self.state == "paused":
                     self.request_change_tab.emit(0)
                 return
         self.call_load_panel.emit(
-            True, f"Loading Filament\n{status['step'].capitalize()}"
+            True, f"Loading Filament\n{status['step'].capitalize()}", False
         )
 
     @QtCore.pyqtSlot(dict, name="on_unload_filament")
@@ -169,10 +169,10 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         if "state" in status.keys():
             if not status["state"]:
                 self.target_temp = 0
-                self.call_load_panel.emit(False, "")
+                self.call_load_panel.emit(False, "", False)
                 return
         self.call_load_panel.emit(
-            True, f"Unloading Filament\n{status['step'].capitalize()}"
+            True, f"Unloading Filament\n{status['step'].capitalize()}", False
         )
 
     @QtCore.pyqtSlot(int, int, name="load_filament")
