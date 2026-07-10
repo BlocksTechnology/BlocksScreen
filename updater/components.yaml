@@ -12,6 +12,7 @@ components:
     url: https://github.com/Klipper3d/klipper
     service: klipper.service
     reset_mode: hard
+    branch: wip/Happy-Hare-Integration
     order: 2
     restart_ui: true
 
@@ -27,7 +28,7 @@ components:
     type: git
     path: ~/RF50-Klipper
     url: https://github.com/BlocksTechnology/RF50-Klipper
-    branch: main
+    branch: wip/feat/beacon
     service: klipper.service
     reset_mode: hard
     order: 10
@@ -65,6 +66,7 @@ components:
   - name: BlocksScreen
     type: git
     path: ~/BlocksScreen
+    branch: dev
     url: https://github.com/BlocksTechnology/BlocksScreen
     service: BlocksScreen.service
     reset_mode: hard
