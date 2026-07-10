@@ -197,6 +197,9 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         self.run_gcode.emit(
             f"""SAVE_VARIABLE VARIABLE=filament_type VALUE='"{filament.value.name}"'"""
         )
+        if not self.mmu_configured:
+            self.run_gcode.emit("LOAD_FILAMENT")
+            return
         self.run_gcode.emit("MMU_LOAD")
 
     @QtCore.pyqtSlot(str, int, name="unload_filament")
@@ -219,6 +222,9 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         self.run_gcode.emit(
             f"""SAVE_VARIABLE VARIABLE=filament_type VALUE='"{FilamentTypes.UNKNOWN.value.name}"'"""
         )
+        if not self.mmu_configured:
+            self.run_gcode.emit("UNLOAD_FILAMENT")
+            return
         self.run_gcode.emit("MMU_UNLOAD")
 
     def open_pre_gate_popup(self, filament_type: FilamentTypes):
