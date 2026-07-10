@@ -250,6 +250,7 @@ class UpdaterInterface(
             or s.packages_upgradable > 0
             or s.has_local_changes
             or s.needs_install
+            or s.branch_mismatch
             # Errored git repos included: the update flow self-heals them.
             or (s.error is not None and s.kind != "apt")
         }

@@ -5,9 +5,24 @@ withouth a real D-Bus session bus.
 """
 
 import sys
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
+
+@pytest.fixture(autouse=True)
+def _guard_git_clean():
+    """Never run a real `git clean` in tests (it would wipe untracked files in real repos).
+
+    Only guards when updater.service is already imported; force-importing it would
+    corrupt the no-sdbus CLI tests that mask updater modules in sys.modules.
+    """
+    svc_mod = sys.modules.get("updater.service")
+    if svc_mod is None or not hasattr(svc_mod, "git_clean"):
+        yield
+        return
+    with patch.object(svc_mod, "git_clean", new=AsyncMock(return_value=(True, ""))):
+        yield
 
 
 class _FakeDbusBase:

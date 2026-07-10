@@ -33,6 +33,7 @@ from updater.executor import (
     classify_apt_error,
     enable_service,
     git_checkout,
+    git_clean,
     git_clone,
     git_fetch,
     git_get_current_branch,
@@ -104,6 +105,8 @@ _GIT_EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
 # UI services (our D-Bus client): no-block restart so self-update can't kill the batch.
 _UI_SERVICE = "BlocksScreen.service"
 _FIRE_AND_FORGET_SERVICES = frozenset({_UI_SERVICE})
+# Fallback klipper unit for restart_klipper if no klipper component is configured.
+_KLIPPER_SERVICE = "klipper.service"
 
 # Deploy flag for BlocksScreen-deploy.path: runs install-updater.sh in its own cgroup.
 _DEPLOY_FLAG = Path.home() / ".config" / "blockscreen" / ".run-install-updater"
@@ -166,6 +169,11 @@ class UpdateService:
     def has_component(self, name: str) -> bool:
         """Return True if a component with the given name is registered."""
         return any(c.name == name for c in self._components)
+
+    def _klipper_service(self) -> str:
+        """restart_klipper target: the klipper component's service, else the default."""
+        comp = next((c for c in self._components if c.name == "klipper"), None)
+        return comp.service if comp and comp.service else _KLIPPER_SERVICE
 
     def component_stubs(self) -> list[tuple[str, str]]:
         """Return (name, kind) pairs for all registered components."""
@@ -434,6 +442,17 @@ class UpdateService:
                 restarted.append(c.service)
                 self._log.info("git batch: restarting %s (verified)", c.service)
                 if not await self._restart_one(c.service):
+                    await self._abort_batch(batch, prev, touched, restarted, "restart")
+                    return
+            # Bounce klipper once for restart_klipper components that aren't klipper.
+            klipper_svc = self._klipper_service()
+            if any(c.restart_klipper for c in batch) and klipper_svc not in seen:
+                seen.add(klipper_svc)
+                restarted.append(klipper_svc)
+                self._log.info(
+                    "git batch: restarting %s (restart_klipper)", klipper_svc
+                )
+                if not await self._restart_one(klipper_svc):
                     await self._abort_batch(batch, prev, touched, restarted, "restart")
                     return
             # Persist success BEFORE UI restart: a committed update is never reverted.
@@ -990,8 +1009,17 @@ class UpdateService:
                     return (False, "corrupt")
                 self._history("repair", component.name, detail=rmsg[:80])
 
+        # Switch to the target branch FIRST so reset/pull act on the right branch.
+        if component.branch:
+            # hard mode forces past untracked collisions (build artifacts).
+            force = component.reset_mode == "hard"
+            ok, err = await git_checkout(component.path, component.branch, force=force)
+            if not ok:
+                self._log.error("%s: git_checkout failed: %s", component.name, err)
+                return (False, "branch")
+
         if component.reset_mode == "hard":
-            # Reset to the remote ref, not HEAD, discarding diverged local commits.
+            # Force the (now current) branch to its remote tip, dropping divergence.
             if component.branch:
                 hard_ref = f"origin/{component.branch}"
             else:
@@ -1009,20 +1037,19 @@ class UpdateService:
             if not ok:
                 self._log.error("%s: version pin failed: %s", component.name, err)
                 return (False, "version")
-        elif component.branch:
-            ok, err = await git_checkout(component.path, component.branch)
-            if not ok:
-                self._log.error("%s: git_checkout failed: %s", component.name, err)
-                return (False, "branch")
+        elif component.reset_mode != "hard":
+            # Soft mode: fast-forward (branch already checked out, or default).
             ok, err = await git_pull(component.path)
             if not ok:
                 self._log.error("%s: git_pull failed: %s", component.name, err)
                 return (False, "conflict")
-        else:
-            ok, err = await git_pull(component.path)
+
+        if component.reset_mode == "hard":
+            # Drop stray untracked files so a hard component matches origin exactly.
+            # Best-effort: content is already correct; leftovers must not block updates.
+            ok, err = await git_clean(component.path)
             if not ok:
-                self._log.error("%s: git_pull failed: %s", component.name, err)
-                return (False, "conflict")
+                self._log.warning("%s: git clean failed: %s", component.name, err)
         return (True, "")
 
     async def _restart_one(self, service: str) -> bool:
@@ -1133,6 +1160,12 @@ class UpdateService:
             ):
                 await self._rollback(component, prev_hash, "restart")
                 return False
+            # Bounce klipper too when requested and it isn't the component's own service.
+            klipper_svc = self._klipper_service()
+            if component.restart_klipper and component.service != klipper_svc:
+                if not await self._restart_one(klipper_svc):
+                    await self._rollback(component, prev_hash, "restart")
+                    return False
 
             self._history("update_success", component.name, new_hash=new_hash[:12])
             self._cb("on_component_done", component.name, True)

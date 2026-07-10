@@ -233,11 +233,13 @@ async def check_git_status(
     if current_hash == "":
         logger.error("Failed at git_hash operation")
         return ComponentStatus(name=name, error="Failed at git_hash operation")
+    current_branch = await git_get_current_branch(path)
     if branch:
         remote_ref = f"origin/{branch}"
     else:
-        current_branch = await git_get_current_branch(path)
         remote_ref = f"origin/{current_branch}" if current_branch else "origin/HEAD"
+    # Configured branch != checked-out branch: needs an update to switch.
+    branch_mismatch = bool(branch) and current_branch != branch
     if version:
         commits_behind = 0
     else:
@@ -277,6 +279,7 @@ async def check_git_status(
         has_local_changes=has_local_changes,
         current_version=current_version,
         remote_version=remote_version,
+        branch_mismatch=branch_mismatch,
     )
 
 
@@ -596,7 +599,9 @@ async def git_describe(path: Path, ref: str | None = None) -> str:
     return output.strip() if ok else ""
 
 
-async def git_checkout(path: Path | None, branch: str) -> tuple[bool, str]:
+async def git_checkout(
+    path: Path | None, branch: str, *, force: bool = False
+) -> tuple[bool, str]:
     if path is None:
         return (False, "path not found")
 
@@ -609,8 +614,17 @@ async def git_checkout(path: Path | None, branch: str) -> tuple[bool, str]:
     if current_branch == branch:
         return (True, "already on branch")
 
+    # force: overwrite untracked collisions (e.g. build artifacts) that block a switch.
+    cmd = [GIT, "checkout", "-f", branch] if force else [GIT, "checkout", branch]
     # Generous: a big checkout on slow SD can pass 10s; SIGTERM = half-written tree.
-    return await _run([GIT, "checkout", branch], cwd=path, timeout=60.0)
+    return await _run(cmd, cwd=path, timeout=60.0)
+
+
+async def git_clean(path: Path | None) -> tuple[bool, str]:
+    """Remove untracked files/dirs (keeps .gitignored build state like klipper .config)."""
+    if path is None:
+        return (False, "path not found")
+    return await _run([GIT, "clean", "-fd"], cwd=path, timeout=60.0)
 
 
 async def check_apt_status(

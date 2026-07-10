@@ -145,6 +145,7 @@ class UpdatePage(QtWidgets.QWidget):
             status.commits_behind
             or status.packages_upgradable > 0
             or status.has_local_changes
+            or status.branch_mismatch
             or (status.error is not None and status.kind != "apt")
         )
 
