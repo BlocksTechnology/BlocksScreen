@@ -10,6 +10,7 @@ import shutil
 import tempfile
 import time
 from asyncio import Lock
+from collections.abc import Callable
 from pathlib import Path
 from typing import Protocol
 
@@ -84,6 +85,20 @@ async def get_service_nrestarts(service: str = "BlocksScreen.service") -> int:
     )
     value = out.strip() if ok else ""
     return int(value) if value.isdigit() else 0
+
+
+def _ensure_comp(state: dict, name: str) -> dict:
+    """Return state[name] as a dict, replacing a corrupt non-dict entry in place."""
+    comp = state.get(name)
+    if not isinstance(comp, dict):
+        comp = {}
+        state[name] = comp
+    return comp
+
+
+def _is_sha(val: object) -> bool:
+    """True only for a syntactically valid git hash (guards corrupt/non-str state)."""
+    return isinstance(val, str) and bool(_GIT_SHA_RE.match(val))
 
 
 class _Backoff:
@@ -695,16 +710,17 @@ class UpdateService:
             self._log.error("bless_healthy: invalid hash format for %s", name)
             return False
         nrestarts_baseline = await get_service_nrestarts(_UI_SERVICE)
-        state = await asyncio.to_thread(self._read_state)
-        if name not in state:
-            state[name] = {}
-        state[name]["last_good"] = hash_val
-        if "golden" not in state[name]:
-            state[name]["golden"] = hash_val
-        state[name]["fast_attempt"] = 0
-        state[name]["nrestarts_baseline"] = nrestarts_baseline
-        state[name].pop("last_failed_remote", None)
-        ok = await asyncio.to_thread(self._write_state, state)
+
+        def _apply(state: dict) -> None:
+            comp = _ensure_comp(state, name)
+            comp["last_good"] = hash_val
+            if not _is_sha(comp.get("golden")):
+                comp["golden"] = hash_val  # seed once, or repair a corrupt golden
+            comp["fast_attempt"] = 0
+            comp["nrestarts_baseline"] = nrestarts_baseline
+            comp.pop("last_failed_remote", None)
+
+        ok = await self._mutate_state(_apply)
         if ok:
             self._nrestarts_samples[name] = []
             await asyncio.to_thread(self._clear_fault_marker)
@@ -764,16 +780,15 @@ class UpdateService:
         if component is None:
             self._log.error("run_recovery_rung: component %s not found", name)
             return False
-        state = await asyncio.to_thread(self._read_state)
-        if name not in state:
-            state[name] = {}
         attempt = min(max(attempt, 1), 3)
-        state[name]["fast_attempt"] = attempt
         # Persist the counter on entry so a skipped/failed rung still escalates next time.
-        await asyncio.to_thread(self._write_state, state)
+        await self._mutate_state(
+            lambda s: _ensure_comp(s, name).update(fast_attempt=attempt)
+        )
+        comp_state = (await asyncio.to_thread(self._read_state)).get(name, {})
         if attempt == 1:
-            last_good = state[name].get("last_good")
-            if last_good and _GIT_SHA_RE.match(last_good):
+            last_good = comp_state.get("last_good")
+            if _is_sha(last_good):
                 self._log.info("recovery rung 1: reset to last_good %s", last_good[:8])
                 if component.path:
                     async with self._git_lock:
@@ -783,7 +798,6 @@ class UpdateService:
                         return False
                 ok = await self._restart_ui_service()
                 if ok:
-                    await asyncio.to_thread(self._write_state, state)
                     self._history(
                         "recovery_rung1", name, ok=True, reverted_to=last_good[:12]
                     )
@@ -810,15 +824,16 @@ class UpdateService:
                 self._log.error("reset to %s failed", _HEAL_REMOTE_REF)
                 return False
             # Persist the tip before restart so an unbootable tip is never retried.
-            state[name]["last_failed_remote"] = tip
-            await asyncio.to_thread(self._write_state, state)
+            await self._mutate_state(
+                lambda s: _ensure_comp(s, name).update(last_failed_remote=tip)
+            )
             ok = await self._restart_ui_service()
             if ok:
                 self._history("recovery_rung2", name, ok=True, reverted_to=tip[:12])
             return ok
         else:
-            golden = state[name].get("golden")
-            if golden and _GIT_SHA_RE.match(golden):
+            golden = comp_state.get("golden")
+            if _is_sha(golden):
                 self._log.info("recovery rung 3: reset to golden %s", golden[:8])
                 if component.path:
                     async with self._git_lock:
@@ -828,8 +843,6 @@ class UpdateService:
                         return False
                 ok = await self._restart_ui_service()
                 if ok:
-                    state[name]["fast_attempt"] = 3
-                    await asyncio.to_thread(self._write_state, state)
                     self._history(
                         "recovery_rung3", name, ok=True, reverted_to=golden[:12]
                     )
@@ -870,7 +883,9 @@ class UpdateService:
     async def _handle_crash_loop(self, nrestarts: int) -> None:
         """Run one recovery rung for the UI, or saturate if the ladder is exhausted."""
         state = await asyncio.to_thread(self._read_state)
-        current = int(state.get(_UI_COMPONENT, {}).get("fast_attempt", 0) or 0)
+        comp = state.get(_UI_COMPONENT, {})
+        raw = comp.get("fast_attempt", 0) if isinstance(comp, dict) else 0
+        current = raw if isinstance(raw, int) and not isinstance(raw, bool) else 0
         attempt = current + 1
         if attempt > 3:
             self._log.error("self-heal: fast recovery saturated; staying on golden")
@@ -905,8 +920,11 @@ class UpdateService:
         """One forward-heal pass: attempt the new origin/main tip if we are in fallback."""
         state = await asyncio.to_thread(self._read_state)
         comp_state = state.get(_UI_COMPONENT, {})
-        if int(comp_state.get("fast_attempt", 0) or 0) < 2:
-            return False  # healthy or not yet in deep fallback
+        if not isinstance(comp_state, dict):
+            return False
+        raw = comp_state.get("fast_attempt", 0)
+        if not (isinstance(raw, int) and not isinstance(raw, bool)) or raw < 2:
+            return False  # healthy, not yet in deep fallback, or corrupt counter
         component = next((c for c in self._components if c.name == _UI_COMPONENT), None)
         if component is None or not component.path:
             return False
@@ -924,10 +942,13 @@ class UpdateService:
             ok_reset, _ = await git_reset_to_hash(component.path, _HEAL_REMOTE_REF)
         if not ok_reset:
             return False
-        comp_state["fast_attempt"] = 0
-        comp_state["last_failed_remote"] = tip
-        state[_UI_COMPONENT] = comp_state
-        await asyncio.to_thread(self._write_state, state)
+
+        def _apply(s: dict) -> None:
+            comp = _ensure_comp(s, _UI_COMPONENT)
+            comp["fast_attempt"] = 0
+            comp["last_failed_remote"] = tip
+
+        await self._mutate_state(_apply)
         post = await get_service_nrestarts(_UI_SERVICE)
         self._rebaseline_samples(_UI_COMPONENT, post)
         ok = await self._restart_ui_service()
@@ -1044,35 +1065,47 @@ class UpdateService:
 
     async def _reconcile_self_heal_state(self) -> None:
         """Validate self-heal state fields; drop corrupt hashes, clamp counter."""
-        state = await asyncio.to_thread(self._read_state)
-        changed = False
-        for name, comp_state in state.items():
-            if not isinstance(comp_state, dict):
-                continue
-            for field in ("last_good", "golden", "last_failed_remote"):
-                if field in comp_state:
-                    val = comp_state[field]
-                    if not isinstance(val, str) or not _GIT_SHA_RE.match(val):
+        async with self._state_lock:
+            state = await asyncio.to_thread(self._read_state)
+            changed = False
+            for name, comp_state in list(state.items()):
+                if not isinstance(comp_state, dict):
+                    self._log.warning("reconcile: %s entry not a dict - dropping", name)
+                    del state[name]
+                    changed = True
+                    continue
+                for field in ("last_good", "golden", "last_failed_remote"):
+                    if field in comp_state:
+                        val = comp_state[field]
+                        if not isinstance(val, str) or not _GIT_SHA_RE.match(val):
+                            self._log.warning(
+                                "reconcile: %s %s corrupt/invalid - dropping",
+                                name,
+                                field,
+                            )
+                            del comp_state[field]
+                            changed = True
+                if "fast_attempt" in comp_state:
+                    val = comp_state["fast_attempt"]
+                    if isinstance(val, bool) or not isinstance(val, int):
                         self._log.warning(
-                            "reconcile: %s %s corrupt/invalid - dropping", name, field
+                            "reconcile: %s fast_attempt not an int - dropping", name
                         )
-                        del comp_state[field]
+                        del comp_state["fast_attempt"]
                         changed = True
-            if "fast_attempt" in comp_state:
-                val = comp_state["fast_attempt"]
-                if isinstance(val, int):
-                    clamped = min(max(val, 0), 3)
-                    if clamped != val:
-                        self._log.info(
-                            "reconcile: %s fast_attempt clamped %d -> %d",
-                            name,
-                            val,
-                            clamped,
-                        )
-                        comp_state["fast_attempt"] = clamped
-                        changed = True
-        if changed:
-            await asyncio.to_thread(self._write_state, state)
+                    else:
+                        clamped = min(max(val, 0), 3)
+                        if clamped != val:
+                            self._log.info(
+                                "reconcile: %s fast_attempt clamped %d -> %d",
+                                name,
+                                val,
+                                clamped,
+                            )
+                            comp_state["fast_attempt"] = clamped
+                            changed = True
+            if changed:
+                await asyncio.to_thread(self._write_state, state)
 
     async def _rollback(
         self, component: ComponentConfig, prev_hash: str, reason: str
@@ -1708,6 +1741,13 @@ class UpdateService:
         except OSError:
             self._log.error("Failed to write state file")
             return False
+
+    async def _mutate_state(self, mutate: Callable[[dict], None]) -> bool:
+        """Atomically read-modify-write the state file under the state lock."""
+        async with self._state_lock:
+            state = await asyncio.to_thread(self._read_state)
+            mutate(state)
+            return await asyncio.to_thread(self._write_state, state)
 
     @staticmethod
     def _fsync_dir(path: Path) -> None:

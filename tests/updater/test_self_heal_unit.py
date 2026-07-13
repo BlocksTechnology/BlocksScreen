@@ -113,7 +113,7 @@ class TestBlessHealthy:
             state_before = {
                 "BlocksScreen": {
                     "prev_hash": "old_hash",
-                    "golden": "original_golden",
+                    "golden": "c" * 40,
                     "fast_attempt": 2,
                 }
             }
@@ -125,7 +125,7 @@ class TestBlessHealthy:
 
             assert ok
             state_after = svc._read_state()
-            assert state_after["BlocksScreen"]["golden"] == "original_golden"
+            assert state_after["BlocksScreen"]["golden"] == "c" * 40
             assert state_after["BlocksScreen"]["last_good"] == "a" * 40
 
         asyncio.run(run_test())
@@ -679,5 +679,162 @@ class TestNRestartsReader:
                     "BlocksScreen.service"
                 )
             assert got == 0
+
+        asyncio.run(run_test())
+
+
+class TestStateConcurrency:
+    """A bless that lands while a recovery/forward-heal is mid git-reset must not be lost."""
+
+    def test_bless_during_rung1_is_not_clobbered(self, tmp_path: Path):
+        async def run_test():
+            svc = UpdateService()
+            svc._state_path = tmp_path / "state.json"
+            svc._write_state(
+                {
+                    "BlocksScreen": {
+                        "last_good": "a" * 40,
+                        "golden": "a" * 40,
+                        "fast_attempt": 1,
+                    }
+                }
+            )
+            entered = asyncio.Event()
+            release = asyncio.Event()
+
+            async def slow_reset(_path, _ref):
+                entered.set()
+                await release.wait()
+                return (True, "")
+
+            new_hash = "b" * 40
+            with (
+                patch("updater.service.git_reset_to_hash", side_effect=slow_reset),
+                patch("updater.service.get_service_nrestarts", return_value=0),
+                patch.object(svc, "_restart_ui_service", return_value=True),
+            ):
+                rung = asyncio.create_task(svc.run_recovery_rung("BlocksScreen", 1))
+                await entered.wait()
+                await svc.bless_healthy("BlocksScreen", new_hash)
+                release.set()
+                await rung
+
+            after = svc._read_state()["BlocksScreen"]
+            assert after["last_good"] == new_hash
+            assert after["fast_attempt"] == 0
+
+        asyncio.run(run_test())
+
+    def test_bless_during_forward_heal_is_not_clobbered(self, tmp_path: Path):
+        async def run_test():
+            svc = UpdateService()
+            svc._state_path = tmp_path / "state.json"
+            svc._write_state(
+                {
+                    "BlocksScreen": {
+                        "last_good": "a" * 40,
+                        "golden": "a" * 40,
+                        "fast_attempt": 2,
+                    }
+                }
+            )
+            entered = asyncio.Event()
+            release = asyncio.Event()
+
+            async def slow_reset(_path, _ref):
+                entered.set()
+                await release.wait()
+                return (True, "")
+
+            new_hash = "b" * 40
+            with (
+                patch("updater.service.git_fetch", return_value=(True, "")),
+                patch("updater.service.git_ref_hash", return_value="c" * 40),
+                patch("updater.service.git_reset_to_hash", side_effect=slow_reset),
+                patch("updater.service.get_service_nrestarts", return_value=0),
+                patch.object(svc, "_restart_ui_service", return_value=True),
+            ):
+                heal = asyncio.create_task(svc._forward_heal_once())
+                await entered.wait()
+                await svc.bless_healthy("BlocksScreen", new_hash)
+                release.set()
+                await heal
+
+            after = svc._read_state()["BlocksScreen"]
+            assert after["last_good"] == new_hash
+
+        asyncio.run(run_test())
+
+
+class TestCorruptionHardening:
+    """A corrupt/tampered state file must never crash the supervisor or brick self-heal."""
+
+    def test_reconcile_drops_non_dict_component_entry(self, tmp_path: Path):
+        async def run_test():
+            svc = UpdateService()
+            svc._state_path = tmp_path / "state.json"
+            svc._write_state(
+                {"BlocksScreen": "not-a-dict", "klipper": {"last_good": "a" * 40}}
+            )
+            await svc._reconcile_self_heal_state()
+            state = svc._read_state()
+            assert "BlocksScreen" not in state
+            assert state["klipper"]["last_good"] == "a" * 40
+
+        asyncio.run(run_test())
+
+    def test_handle_crash_loop_tolerates_non_dict_entry(self, tmp_path: Path):
+        async def run_test():
+            svc = UpdateService()
+            svc._state_path = tmp_path / "state.json"
+            svc._write_state({"BlocksScreen": "not-a-dict"})
+            with (
+                patch("updater.service.get_service_nrestarts", return_value=0),
+                patch("updater.service._RECOVERY_SETTLE_S", 0),
+                patch.object(svc, "run_recovery_rung", return_value=True),
+            ):
+                await svc._handle_crash_loop(6)  # must not raise
+
+        asyncio.run(run_test())
+
+    def test_bless_coerces_non_dict_component_entry(self, tmp_path: Path):
+        async def run_test():
+            svc = UpdateService()
+            svc._state_path = tmp_path / "state.json"
+            svc._write_state({"BlocksScreen": "not-a-dict"})
+            with patch("updater.service.get_service_nrestarts", return_value=0):
+                ok = await svc.bless_healthy("BlocksScreen", "b" * 40)  # must not raise
+            assert ok
+            comp = svc._read_state()["BlocksScreen"]
+            assert comp["last_good"] == "b" * 40
+            assert comp["fast_attempt"] == 0
+
+        asyncio.run(run_test())
+
+    def test_bless_repairs_invalid_golden(self, tmp_path: Path):
+        async def run_test():
+            svc = UpdateService()
+            svc._state_path = tmp_path / "state.json"
+            svc._write_state({"BlocksScreen": {"golden": "xyz", "last_good": 123}})
+            with patch("updater.service.get_service_nrestarts", return_value=0):
+                await svc.bless_healthy("BlocksScreen", "b" * 40)
+            comp = svc._read_state()["BlocksScreen"]
+            assert comp["golden"] == "b" * 40  # invalid golden repaired
+            assert comp["last_good"] == "b" * 40
+
+        asyncio.run(run_test())
+
+    def test_handle_crash_loop_tolerates_non_int_fast_attempt(self, tmp_path: Path):
+        async def run_test():
+            svc = UpdateService()
+            svc._state_path = tmp_path / "state.json"
+            svc._write_state({"BlocksScreen": {"fast_attempt": "three"}})
+            with (
+                patch("updater.service.get_service_nrestarts", return_value=0),
+                patch("updater.service._RECOVERY_SETTLE_S", 0),
+                patch.object(svc, "run_recovery_rung", return_value=True) as m_rung,
+            ):
+                await svc._handle_crash_loop(6)  # must not raise
+                m_rung.assert_awaited_once_with("BlocksScreen", 1)
 
         asyncio.run(run_test())
