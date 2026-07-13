@@ -862,7 +862,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
                 self.printer.print_stats_update[str, float].connect(
                     self.amupage.on_print_stats_update
                 )
-
+                self.amupage.call_load_panel.connect(self.call_load_panel)
                 self.amupage.request_keyboard.connect(self._on_show_keyboard)
                 self.amupage.request_color_wheel.connect(self._open_color_wheel)
 
