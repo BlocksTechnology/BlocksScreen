@@ -620,13 +620,6 @@ async def git_checkout(
     return await _run(cmd, cwd=path, timeout=60.0)
 
 
-async def git_clean(path: Path | None) -> tuple[bool, str]:
-    """Remove untracked files/dirs (keeps .gitignored build state like klipper .config)."""
-    if path is None:
-        return (False, "path not found")
-    return await _run([GIT, "clean", "-fd"], cwd=path, timeout=60.0)
-
-
 async def check_apt_status(
     cache_ttl_seconds: int = 86_400, exclude: tuple[str, ...] = ()
 ) -> ComponentStatus:
@@ -806,6 +799,11 @@ async def _apt_restore_packages(snapshot_path: Path) -> tuple[bool, str]:
 def classify_apt_error(err: str) -> str:
     """Classify an apt failure: 'permanent' won't clear by retrying, 'transient' might."""
     lowered = err.lower()
+    # A missing apt helper self-heals once bootstrap installs it: retry, never a 1h cooldown.
+    if str(APT_HELPER).lower() in lowered and (
+        "command not found" in lowered or "no such file" in lowered
+    ):
+        return "transient"
     permanent = (
         "command not found",
         "no such file or directory",

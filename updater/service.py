@@ -33,7 +33,6 @@ from updater.executor import (
     classify_apt_error,
     enable_service,
     git_checkout,
-    git_clean,
     git_clone,
     git_fetch,
     git_get_current_branch,
@@ -313,17 +312,20 @@ class UpdateService:
             if c.kind == "git" and c.path is not None and is_git_repo(c.path)
         ]
         offline: list[str] = []
-        async with self._git_lock:
-            for c in targets:
-                now = time.monotonic()
+        # Lock guards only _fetch_times; git_fetch runs outside it (as check_status).
+        for c in targets:
+            now = time.monotonic()
+            async with self._git_lock:
                 # Skip if fetched <30s ago; apply phase still skips its own fetch.
-                if now - self._fetch_times.get(c.name, 0.0) < 30:
-                    continue
-                ok, err = await git_fetch(c.path)
-                if ok:
+                recent = now - self._fetch_times.get(c.name, 0.0) < 30
+            if recent:
+                continue
+            ok, err = await git_fetch(c.path)
+            if ok:
+                async with self._git_lock:
                     self._fetch_times[c.name] = now
-                elif not await git_has_corruption(c.path, hint=err):
-                    offline.append(c.name)
+            elif not await git_has_corruption(c.path, hint=err):
+                offline.append(c.name)
         if offline:
             msg = "network error during pre-flight fetch - no components changed"
             self._log.error("update_all: %s (failed: %s)", msg, offline)
@@ -511,8 +513,14 @@ class UpdateService:
         self._log.warning(
             "aborting batch (reason=%s): reverting %d repo(s)", reason, len(touched)
         )
+        revert_ok = True
         for c in touched:
-            await git_reset_to_hash(c.path, prev[c.name])
+            ok, _ = await git_reset_to_hash(c.path, prev[c.name])
+            if not ok:
+                revert_ok = False
+                self._log.error(
+                    "abort: %s reset to %s failed", c.name, prev[c.name][:12]
+                )
         # Repos are back at prev_hash: the batch is resolved, drop the marker.
         await asyncio.to_thread(self._clear_inflight)
         restart_ok = True
@@ -520,16 +528,17 @@ class UpdateService:
             if not await self._restart_one(service):
                 restart_ok = False
                 self._log.error("abort: %s did not recover after revert", service)
+        rollback_ok = revert_ok and restart_ok
         for c in batch:
             self._history(
                 "rollback",
                 c.name,
                 reason=reason,
                 reverted_to=prev[c.name][:12],
-                ok=restart_ok,
+                ok=rollback_ok,
             )
             self._cb("on_error", c.name, reason)
-            self._cb("on_rollback", c.name, restart_ok)
+            self._cb("on_rollback", c.name, rollback_ok)
             self._cb("on_component_done", c.name, False)
 
     async def _apply_deferred_restart(self) -> None:
@@ -1019,7 +1028,7 @@ class UpdateService:
                 return (False, "branch")
 
         if component.reset_mode == "hard":
-            # Force the (now current) branch to its remote tip, dropping divergence.
+            # Reset the (now current) branch to its remote tip, discarding divergence.
             if component.branch:
                 hard_ref = f"origin/{component.branch}"
             else:
@@ -1043,13 +1052,6 @@ class UpdateService:
             if not ok:
                 self._log.error("%s: git_pull failed: %s", component.name, err)
                 return (False, "conflict")
-
-        if component.reset_mode == "hard":
-            # Drop stray untracked files so a hard component matches origin exactly.
-            # Best-effort: content is already correct; leftovers must not block updates.
-            ok, err = await git_clean(component.path)
-            if not ok:
-                self._log.warning("%s: git clean failed: %s", component.name, err)
         return (True, "")
 
     async def _restart_one(self, service: str) -> bool:

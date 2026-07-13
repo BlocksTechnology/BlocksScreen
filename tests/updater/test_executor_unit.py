@@ -18,7 +18,6 @@ from updater.executor import (
     check_git_status,
     classify_apt_error,
     git_checkout,
-    git_clean,
     git_clone,
     git_commits_behind,
     git_describe,
@@ -592,23 +591,6 @@ class TestGitCheckout:
         assert argv[:3] == ["/usr/bin/git", "checkout", "-f"]
 
 
-class TestGitClean:
-    @pytest.mark.asyncio
-    async def test_runs_clean_fd(self, tmp_path):
-        proc = _make_proc(0, b"", b"")
-        exec_mock = AsyncMock(return_value=proc)
-        with patch("asyncio.create_subprocess_exec", exec_mock):
-            ok, _ = await git_clean(tmp_path)
-        assert ok is True
-        argv = list(exec_mock.call_args_list[0].args)
-        assert argv == ["/usr/bin/git", "clean", "-fd"]
-
-    @pytest.mark.asyncio
-    async def test_none_path(self):
-        ok, _ = await git_clean(None)
-        assert ok is False
-
-
 class TestAptUpdate:
     @pytest.mark.asyncio
     async def test_success(self):
@@ -1120,7 +1102,6 @@ class TestClassifyAptError:
     @pytest.mark.parametrize(
         "err",
         [
-            "sudo: /usr/local/sbin/bs-apt-helper: command not found",
             "No such file or directory",
             "sudo: a password is required",
             "Permission denied",
@@ -1132,7 +1113,15 @@ class TestClassifyAptError:
 
     @pytest.mark.parametrize(
         "err",
-        ["Could not resolve host", "Temporary failure", "dpkg lock held", ""],
+        [
+            "Could not resolve host",
+            "Temporary failure",
+            "dpkg lock held",
+            "",
+            # A missing apt helper self-heals once bootstrap installs it.
+            "sudo: /usr/local/sbin/bs-apt-helper: command not found",
+            "/usr/local/sbin/bs-apt-helper: no such file or directory",
+        ],
     )
     def test_transient(self, err):
         assert classify_apt_error(err) == "transient"

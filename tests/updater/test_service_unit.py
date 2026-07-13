@@ -225,23 +225,32 @@ class TestGitUpdate:
 
     @pytest.mark.asyncio
     async def test_rollback_on_pull_failure(self):
+        # Soft mode is the only path that pulls (hard mode advances via reset).
         cb = MagicMock()
+        component = ComponentConfig(
+            name="test",
+            kind="git",
+            path=Path("/fake/path"),
+            service="test.service",
+            reset_mode="soft",
+        )
         with (
             patch("pathlib.Path.exists", return_value=True),
             patch("updater.service.git_get_hash", return_value="abc123"),
             patch("updater.service.git_fetch", return_value=(True, "")),
             patch("updater.service.git_pull", return_value=(False, "merge conflict")),
             patch("updater.service.restart_service", return_value=(True, "")),
+            patch("updater.service.wait_for_service_active", return_value=True),
             patch(
                 "updater.service.git_reset_to_hash", return_value=(True, "")
             ) as mock_reset,
         ):
             svc = UpdateService(callback=cb)
-            result = await svc.update_component("klipper")
+            result = await svc._run_git_update(component)
         assert result is False
-        mock_reset.assert_called()  # hard reset (HEAD) + rollback
-        cb.on_rollback.assert_called_once_with("klipper", True)
-        cb.on_component_done.assert_called_once_with("klipper", False)
+        mock_reset.assert_called_once()  # rollback only (soft mode has no pre-reset)
+        cb.on_rollback.assert_called_once_with("test", True)
+        cb.on_component_done.assert_called_once_with("test", False)
 
     @pytest.mark.asyncio
     async def test_emits_step_progress_in_order(self, tmp_path):
@@ -280,8 +289,10 @@ class TestGitUpdate:
             patch("pathlib.Path.exists", return_value=True),
             patch("updater.service.git_get_hash", return_value="abc123"),
             patch("updater.service.git_fetch", return_value=(True, "")),
+            patch("updater.service.git_checkout", return_value=(True, "")),
             patch("updater.service.git_pull", return_value=(True, "")),
             patch("updater.service.restart_service", return_value=(True, "")),
+            patch("updater.service.wait_for_service_active", return_value=True),
             patch(
                 "updater.service.UpdateService._install_dependencies",
                 return_value=(False, "missing packages"),
@@ -293,7 +304,7 @@ class TestGitUpdate:
             svc = UpdateService(callback=cb)
             result = await svc.update_component("klipper")
         assert result is False
-        mock_reset.assert_called()  # hard reset (HEAD) + rollback
+        mock_reset.assert_called()  # staging hard reset + rollback
         cb.on_rollback.assert_called_once_with("klipper", True)
         cb.on_component_done.assert_called_once_with("klipper", False)
 
@@ -400,8 +411,7 @@ class TestGitUpdate:
 
     @pytest.mark.asyncio
     async def test_branch_hard_checks_out_then_resets_target(self):
-        # Branch switch must checkout FIRST, then hard-reset the target branch to
-        # its remote tip - no ff-only pull that a diverged local branch would break.
+        # Branch switch: checkout FIRST, then hard-reset target (no ff-only pull).
         component = ComponentConfig(
             name="test",
             kind="git",
@@ -422,10 +432,6 @@ class TestGitUpdate:
                 "updater.service.git_reset_to_hash",
                 side_effect=lambda *a, **k: call_order.append("reset") or (True, ""),
             ) as mock_reset,
-            patch(
-                "updater.service.git_clean",
-                side_effect=lambda *a, **k: call_order.append("clean") or (True, ""),
-            ) as mock_clean,
             patch("updater.service.git_pull", return_value=(True, "")) as mock_pull,
             patch(
                 "updater.service.UpdateService._install_dependencies",
@@ -444,10 +450,8 @@ class TestGitUpdate:
             mock_reset.assert_called_once_with(
                 Path("/fake/path"), "origin/testing_branch"
             )
-            mock_clean.assert_called_once_with(Path("/fake/path"))
             mock_pull.assert_not_called()  # hard mode advances via reset, not pull
-            # checkout, then reset target, then clean stray untracked files.
-            assert call_order == ["checkout", "reset", "clean"]
+            assert call_order == ["checkout", "reset"]  # checkout first, then reset
 
     @pytest.mark.asyncio
     async def test_rollback_on_version_failure(self):
@@ -878,8 +882,79 @@ class TestAtomicBatch:
                 [cfg]
             )  # only cfg in batch; klipper just configures
         restarted = {c.args[0] for c in mock_rs.call_args_list}
-        assert "klipper-custom.service" in restarted
-        assert "klipper.service" not in restarted
+        assert restarted == {"crowsnest.service", "klipper-custom.service"}
+
+    @pytest.mark.asyncio
+    async def test_restart_klipper_batch_abort_rerestarts_bounced(self, tmp_path):
+        """A failed klipper restart aborts and re-restarts already-bounced services."""
+        cb = MagicMock()
+        comp = self._git(tmp_path, "cfg", 2, "crowsnest.service")
+        comp.restart_klipper = True
+        svc = UpdateService(callback=cb)
+        svc._components = [comp]
+        svc._state_path = tmp_path / "state.json"
+
+        def _rs(service, *a, **k):
+            return (False, "boom") if service == "klipper.service" else (True, "")
+
+        with (
+            patch(
+                "updater.service.UpdateService._stage_component",
+                return_value=(True, ""),
+            ),
+            patch(
+                "updater.service.UpdateService._install_dependencies",
+                return_value=(True, ""),
+            ),
+            patch("updater.service.run_hook", return_value=(True, "")),
+            patch("updater.service.restart_service", side_effect=_rs) as mock_rs,
+            patch("updater.service.wait_for_service_active", return_value=True),
+            patch("updater.service.git_reset_to_hash", return_value=(True, "")),
+            patch.object(UpdateService, "_apply_deferred_restart", new=AsyncMock()),
+        ):
+            await svc._run_git_batch([comp])
+        calls = [c.args[0] for c in mock_rs.call_args_list]
+        assert calls.count("crowsnest.service") >= 2  # phase + abort re-restart
+        assert "klipper.service" in calls
+        cb.on_component_done.assert_called_once_with("cfg", False)
+
+    @pytest.mark.asyncio
+    async def test_restart_klipper_single_update_path(self, tmp_path):
+        """restart_klipper on a single-component update bounces klipper too."""
+        cb = MagicMock()
+        comp = self._git(tmp_path, "cfg", 2, "crowsnest.service")
+        comp.restart_klipper = True
+        svc = UpdateService(callback=cb)
+        svc._components = [comp]
+        svc._state_path = tmp_path / "state.json"
+        svc._inflight_path = tmp_path / "inflight.json"
+        svc._history_path = tmp_path / "history.jsonl"
+        with (
+            patch("updater.service.is_git_repo", return_value=True),
+            patch("updater.service.git_get_hash", return_value="a" * 40),
+            patch(
+                "updater.service._assert_https_remote",
+                return_value=(True, "https://github.com/x/y"),
+            ),
+            patch(
+                "updater.service.UpdateService._stage_component",
+                return_value=(True, ""),
+            ),
+            patch(
+                "updater.service.UpdateService._install_dependencies",
+                return_value=(True, ""),
+            ),
+            patch("updater.service.run_hook", return_value=(True, "")),
+            patch(
+                "updater.service.restart_service", return_value=(True, "")
+            ) as mock_rs,
+            patch("updater.service.wait_for_service_active", return_value=True),
+            patch.object(UpdateService, "_apply_deferred_restart", new=AsyncMock()),
+        ):
+            result = await svc._run_git_update(comp)
+        assert result is True
+        restarted = {c.args[0] for c in mock_rs.call_args_list}
+        assert restarted == {"crowsnest.service", "klipper.service"}
 
     @pytest.mark.asyncio
     async def test_cancel_after_commit_does_not_revert(self, tmp_path):
@@ -928,6 +1003,26 @@ class TestAtomicBatch:
         mock_rs.assert_not_called()
         assert cb.on_rollback.call_count == 2
         assert all(c.args[1] is True for c in cb.on_rollback.call_args_list)
+
+    @pytest.mark.asyncio
+    async def test_abort_reports_rollback_false_when_revert_fails(self, tmp_path):
+        """A failed git revert during abort must report rollback as unsuccessful."""
+        cb = MagicMock()
+        svc, comps = self._svc(tmp_path, cb, n=2)
+        with (
+            patch(
+                "updater.service.UpdateService._stage_component",
+                side_effect=[(True, ""), (False, "conflict")],
+            ),
+            patch(
+                "updater.service.git_reset_to_hash",
+                return_value=(False, "disk full"),
+            ),
+            patch("updater.service.restart_service"),
+        ):
+            await svc._run_git_batch(comps)
+        assert cb.on_rollback.call_count == 2
+        assert all(c.args[1] is False for c in cb.on_rollback.call_args_list)
 
     @pytest.mark.asyncio
     async def test_deps_failure_reverts_all_no_restart(self, tmp_path):
