@@ -38,3 +38,5 @@ class ComponentStatus:
     needs_install: bool = False
     # Checked-out branch differs from configured branch (switch needed).
     branch_mismatch: bool = False
+    # Actual checked-out branch, surfaced for debugging branch switches.
+    current_branch: str = ""

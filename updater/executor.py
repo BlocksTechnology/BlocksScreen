@@ -280,6 +280,7 @@ async def check_git_status(
         current_version=current_version,
         remote_version=remote_version,
         branch_mismatch=branch_mismatch,
+        current_branch=current_branch,
     )
 
 
