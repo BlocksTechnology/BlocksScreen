@@ -251,6 +251,12 @@ class UpdaterWorker(QtCore.QObject):
         _log.info("trigger_cancel: cancelling active update (E-stop)")
         self._submit(self._call_cancel())
 
+    def trigger_bless(self, name: str = "BlocksScreen") -> None:
+        """Mark the running build healthy so the daemon records it as last_good."""
+        if not self._require_proxy():
+            return
+        self._submit(self._call_bless(name))
+
     def shutdown(self) -> None:
         """Cancel all tasks and stop the event loop; close() runs in _run_loop after stop."""  # noqa: E501
         self._shutting_down = True
@@ -334,6 +340,13 @@ class UpdaterWorker(QtCore.QObject):
             await self._proxy.cancel()
         except sdbus.SdBusBaseError as exc:
             self._handle_proxy_error(exc, "cancel")
+
+    async def _call_bless(self, name: str) -> None:
+        """Bless the current build; empty hash lets the daemon resolve HEAD."""
+        try:
+            await self._proxy.bless_healthy(name, "")
+        except sdbus.SdBusBaseError as exc:
+            self._handle_proxy_error(exc, "bless_healthy")
 
     # --- Signal listeners ------------------------------------------
 

@@ -43,6 +43,10 @@ def build_parser() -> argparse.ArgumentParser:
     rec.add_argument("name")
     rec.add_argument("--hard", action="store_true")
 
+    bles = sub.add_parser("bless")
+    bles.add_argument("name")
+    bles.add_argument("hash", nargs="?", default="")
+
     return parser
 
 
@@ -148,6 +152,11 @@ async def main() -> None:
         case "recover":
             with _cli_lock():
                 await svc.recover(args.name, hard=args.hard)
+        case "bless":
+            with _cli_lock():
+                ok = await svc.bless_healthy(args.name, args.hash)
+                if not ok:
+                    raise SystemExit(1)
         case None:
             build_parser().print_help()
 

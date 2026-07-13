@@ -165,6 +165,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.printer.extruder_update.connect(self.update_page.set_heater_target)
         self.printer.heater_bed_update.connect(self.update_page.set_heater_target)
         self.updater_worker = UpdaterWorker()
+        self._bless_armed = False
         self.update_page.hide()
         self.conn_window.call_cancel_panel.connect(self.handle_cancel_print)
         self.installEventFilter(self.conn_window)
@@ -185,6 +186,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ws.connected_signal.connect(
             self.conn_window.on_websocket_connection_achieved
         )
+        self.ws.connected_signal.connect(self._arm_health_bless)
         self.ws.connection_lost.connect(self.conn_window.on_websocket_connection_lost)
         self.ws.klippy_state_signal.connect(self._on_klippy_state)
         self.ws.klippy_state_signal.connect(self.conn_window.on_klippy_state)
@@ -456,6 +458,23 @@ class MainWindow(QtWidgets.QMainWindow):
             self._klipper_restart_timeout.stop()
             if not self._post_update_reconnect:
                 self.loadscreen.hide()
+
+    @QtCore.pyqtSlot(name="arm-health-bless")
+    def _arm_health_bless(self) -> None:
+        """On first moonraker connect, arm a one-shot to bless this build as healthy."""
+        if self._bless_armed:
+            return
+        self._bless_armed = True
+        QtCore.QTimer.singleShot(60_000, self._emit_health_bless)
+
+    @QtCore.pyqtSlot(name="emit-health-bless")
+    def _emit_health_bless(self) -> None:
+        """Bless the running build if moonraker is still reachable after the debounce."""
+        if not getattr(self.ws, "connected", False):
+            _logger.info("health bless skipped: moonraker not connected")
+            return
+        _logger.info("health bless: marking current build as known-good")
+        self.updater_worker.trigger_bless()
 
     @QtCore.pyqtSlot(name="on-klipper-restart-timeout")
     def _on_klipper_restart_timeout(self) -> None:

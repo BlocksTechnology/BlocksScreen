@@ -550,6 +550,14 @@ async def git_get_hash(path: Path | None) -> str:
     return output.strip() if ok else ""
 
 
+async def git_ref_hash(path: Path | None, ref: str) -> str:
+    """Resolve an arbitrary ref (e.g. origin/main) to its commit hash, or empty."""
+    if path is None:
+        return ""
+    ok, output = await _run([GIT, "rev-parse", ref], cwd=path, timeout=10.0)
+    return output.strip() if ok else ""
+
+
 async def git_commits_behind(path: Path, remote_ref: str = "origin/HEAD") -> int:
     """Return how many commits the local branch is behind remote_ref."""
     ok, output = await _run(
