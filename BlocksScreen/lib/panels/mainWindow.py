@@ -1006,17 +1006,23 @@ class MainWindow(QtWidgets.QMainWindow):
         show_popup: bool,
     ) -> bool:
         rule = match_message(source, text)
+
         if rule is not None:
             if rule.severity == Severity.IGNORE:
                 return True
+            if rule.severity == Severity.ERROR:
+                self.show_loadscreen(False, "", True)
+
             self.show_notifications.emit(
                 source_id, rule.full_display, rule.severity.value, show_popup
             )
             return True
+
         elif fallback:
             self.show_notifications.emit(
                 source_id, text, Severity.ERROR.value, show_popup
             )
+            self.show_loadscreen(False, "", True)
             return True
         return False
 
@@ -1056,6 +1062,9 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.show_notifications.emit(
                     _gcode_msg_type, _message, Severity.INFO.value, True
                 )
+                return
+            elif _gcode_msg_type == "LOAD":
+                self.show_loadscreen(True, "OPEN LOAD BY GCODE", False)
                 return
 
             elif _gcode_msg_type == "!!":
