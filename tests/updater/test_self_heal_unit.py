@@ -483,6 +483,28 @@ class TestRecoveryLadder:
 
         asyncio.run(run_test())
 
+    def test_rung2_records_failed_tip_even_if_restart_fails(self, tmp_path: Path):
+        async def run_test():
+            svc = UpdateService()
+            svc._state_path = tmp_path / "state.json"
+            svc._write_state({"BlocksScreen": {"prev_hash": "old", "fast_attempt": 1}})
+            with (
+                patch("updater.service.git_fetch") as m_fetch,
+                patch("updater.service.git_ref_hash") as m_ref,
+                patch("updater.service.git_reset_to_hash") as m_reset,
+                patch.object(svc, "_restart_ui_service") as m_restart,
+            ):
+                m_fetch.return_value = (True, "")
+                m_ref.return_value = "b" * 40
+                m_reset.return_value = (True, "")
+                m_restart.return_value = False  # tip fails to boot
+                ok = await svc.run_recovery_rung("BlocksScreen", 2)
+            assert not ok
+            # last_failed_remote must persist so forward-heal never retries this bad tip.
+            assert svc._read_state()["BlocksScreen"]["last_failed_remote"] == "b" * 40
+
+        asyncio.run(run_test())
+
     def test_rung2_offline_fetch_does_not_reset(self, tmp_path: Path):
         async def run_test():
             svc = UpdateService()

@@ -823,10 +823,11 @@ class UpdateService:
             if not ok_reset:
                 self._log.error("reset to %s failed", _HEAL_REMOTE_REF)
                 return False
+            # Persist the tip before restart so an unbootable tip is never retried.
             state[name]["last_failed_remote"] = tip
+            await asyncio.to_thread(self._write_state, state)
             ok = await self._restart_ui_service()
             if ok:
-                await asyncio.to_thread(self._write_state, state)
                 self._history("recovery_rung2", name, ok=True, reverted_to=tip[:12])
             return ok
         else:
