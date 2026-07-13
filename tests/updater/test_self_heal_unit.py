@@ -650,19 +650,34 @@ class TestForwardHeal:
 
 class TestNRestartsReader:
     def test_get_service_nrestarts_parses_value(self):
-        from types import SimpleNamespace
+        async def run_test():
+            with patch("updater.service._run") as m_run:
+                m_run.return_value = (True, "7\n")
+                got = await updater_service.get_service_nrestarts(
+                    "BlocksScreen.service"
+                )
+            assert got == 7
 
-        with patch("updater.service.subprocess.run") as m_run:
-            m_run.return_value = SimpleNamespace(stdout="7\n")
-            assert updater_service.get_service_nrestarts("BlocksScreen.service") == 7
+        asyncio.run(run_test())
 
     def test_get_service_nrestarts_non_numeric_returns_zero(self):
-        from types import SimpleNamespace
+        async def run_test():
+            with patch("updater.service._run") as m_run:
+                m_run.return_value = (True, "[not set]\n")
+                got = await updater_service.get_service_nrestarts(
+                    "BlocksScreen.service"
+                )
+            assert got == 0
 
-        with patch("updater.service.subprocess.run") as m_run:
-            m_run.return_value = SimpleNamespace(stdout="[not set]\n")
-            assert updater_service.get_service_nrestarts("BlocksScreen.service") == 0
+        asyncio.run(run_test())
 
-    def test_get_service_nrestarts_subprocess_error_returns_zero(self):
-        with patch("updater.service.subprocess.run", side_effect=OSError):
-            assert updater_service.get_service_nrestarts("BlocksScreen.service") == 0
+    def test_get_service_nrestarts_failed_call_returns_zero(self):
+        async def run_test():
+            with patch("updater.service._run") as m_run:
+                m_run.return_value = (False, "boom")
+                got = await updater_service.get_service_nrestarts(
+                    "BlocksScreen.service"
+                )
+            assert got == 0
+
+        asyncio.run(run_test())

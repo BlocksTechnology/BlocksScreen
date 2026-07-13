@@ -7,7 +7,6 @@ import logging
 import os
 import secrets
 import shutil
-import subprocess
 import tempfile
 import time
 from asyncio import Lock
@@ -78,24 +77,12 @@ _NRESTARTS_WINDOW_S = 180.0
 _NRESTARTS_THRESHOLD = 5
 
 
-def get_service_nrestarts(service: str = "BlocksScreen.service") -> int:
-    """Read a systemd unit's NRestarts via `systemctl show` (0 if unavailable).
-
-    Sync on purpose: called through asyncio.to_thread so the daemon loop stays
-    non-blocking. Mirrors the executor's read-only `systemctl is-active` pattern
-    (no sudo needed for `show`).
-    """
-    try:
-        proc = subprocess.run(
-            [SYSTEMCTL, "show", service, "-p", "NRestarts", "--value"],
-            capture_output=True,
-            text=True,
-            timeout=10.0,
-            check=False,
-        )
-    except (OSError, subprocess.SubprocessError):
-        return 0
-    value = proc.stdout.strip()
+async def get_service_nrestarts(service: str = "BlocksScreen.service") -> int:
+    """Read a systemd unit's NRestarts via `systemctl show` (0 if unavailable)."""
+    ok, out = await _run(
+        [SYSTEMCTL, "show", service, "-p", "NRestarts", "--value"], timeout=10.0
+    )
+    value = out.strip() if ok else ""
     return int(value) if value.isdigit() else 0
 
 
@@ -143,8 +130,7 @@ _KLIPPER_SERVICE = "klipper.service"
 _UI_COMPONENT = "BlocksScreen"
 # Forward-heal always targets the curated-stable channel, not the configured branch.
 _HEAL_REMOTE_REF = "origin/main"
-# Settle window after a recovery rung: one debounce (60s) plus margin, so a new
-# build gets a fair chance to bless before the next rung is counted or escalated.
+# Settle window after a rung (debounce plus margin) so a new build can bless first.
 _RECOVERY_SETTLE_S = 90.0
 # Slow forward-heal cadence base and jitter spread (seconds), per fleet OTA practice.
 _FORWARD_HEAL_BASE_S = 1800.0
@@ -708,7 +694,7 @@ class UpdateService:
         if not _GIT_SHA_RE.match(hash_val):
             self._log.error("bless_healthy: invalid hash format for %s", name)
             return False
-        nrestarts_baseline = await asyncio.to_thread(get_service_nrestarts, _UI_SERVICE)
+        nrestarts_baseline = await get_service_nrestarts(_UI_SERVICE)
         state = await asyncio.to_thread(self._read_state)
         if name not in state:
             state[name] = {}
@@ -874,7 +860,7 @@ class UpdateService:
         while True:
             await asyncio.sleep(_NRESTARTS_POLL_INTERVAL_S)
             try:
-                nrestarts = await asyncio.to_thread(get_service_nrestarts, _UI_SERVICE)
+                nrestarts = await get_service_nrestarts(_UI_SERVICE)
             except Exception as exc:  # noqa: BLE001
                 self._log.debug("supervise_ui: NRestarts read failed: %s", exc)
                 continue
@@ -895,7 +881,7 @@ class UpdateService:
         self._log.warning("self-heal: crash-loop -> recovery attempt %d", attempt)
         ok = await self.run_recovery_rung(_UI_COMPONENT, attempt)
         self._cb("on_recover", _UI_COMPONENT, ok)
-        post = await asyncio.to_thread(get_service_nrestarts, _UI_SERVICE)
+        post = await get_service_nrestarts(_UI_SERVICE)
         self._rebaseline_samples(_UI_COMPONENT, post)
         await asyncio.sleep(_RECOVERY_SETTLE_S)
 
@@ -942,7 +928,7 @@ class UpdateService:
         comp_state["last_failed_remote"] = tip
         state[_UI_COMPONENT] = comp_state
         await asyncio.to_thread(self._write_state, state)
-        post = await asyncio.to_thread(get_service_nrestarts, _UI_SERVICE)
+        post = await get_service_nrestarts(_UI_SERVICE)
         self._rebaseline_samples(_UI_COMPONENT, post)
         ok = await self._restart_ui_service()
         self._history("forward_heal", _UI_COMPONENT, ok=ok, reverted_to=tip[:12])
