@@ -115,7 +115,7 @@ class MainWindow(QtWidgets.QMainWindow):
         str, str, int, bool, name="show-notifications"
     )
 
-    call_load_panel = QtCore.pyqtSignal(bool, str, name="call-load-panel")
+    call_load_panel = QtCore.pyqtSignal(bool, str, bool, name="call-load-panel")
 
     def __init__(self):
         """Set up UI, instantiate subsystems, and wire all inter-component signals."""
@@ -375,32 +375,35 @@ class MainWindow(QtWidgets.QMainWindow):
         self.cancelpage.repaint()
         self.cancelpage.show()
 
-    @QtCore.pyqtSlot(bool, str, name="show-load-page")
-    def show_loadscreen(self, show: bool = True, msg: str = ""):
+    @QtCore.pyqtSlot(bool, str, bool, name="show-load-page")
+    def show_loadscreen(
+        self, show: bool = True, msg: str = "", force: bool = False
+    ) -> None:
         """Show or hide the loading overlay, guarded by the calling panel's visibility."""
         _sender = self.sender()
+        if not force:
+            if _sender is self.update_page:
+                self._update_in_progress = show
+            if not show and self._post_update_reconnect:
+                return
+            elif not show and self._update_in_progress:
+                return
+            elif not show and self._klipper_auto_restart_pending:
+                return
 
-        if _sender is self.update_page:
-            self._update_in_progress = show
-        if not show and self._post_update_reconnect:
-            return
-        elif not show and self._update_in_progress:
-            return
-        elif not show and self._klipper_auto_restart_pending:
-            return
+            if _sender == self.filamentPanel:
+                if not self.filamentPanel.isVisible():
+                    return
+            if _sender == self.controlPanel:
+                if not self.controlPanel.isVisible():
+                    return
+            if _sender == self.printPanel:
+                if not self.printPanel.isVisible():
+                    return
+            if _sender == self.utilitiesPanel:
+                if not self.utilitiesPanel.isVisible():
+                    return
 
-        if _sender == self.filamentPanel:
-            if not self.filamentPanel.isVisible():
-                return
-        if _sender == self.controlPanel:
-            if not self.controlPanel.isVisible():
-                return
-        if _sender == self.printPanel:
-            if not self.printPanel.isVisible():
-                return
-        if _sender == self.utilitiesPanel:
-            if not self.utilitiesPanel.isVisible():
-                return
         self.loadwidget.set_status_message(msg)
         if show:
             self.loadscreen.show()
@@ -984,17 +987,23 @@ class MainWindow(QtWidgets.QMainWindow):
         show_popup: bool,
     ) -> bool:
         rule = match_message(source, text)
+
         if rule is not None:
             if rule.severity == Severity.IGNORE:
                 return True
+            if rule.severity == Severity.ERROR:
+                self.show_loadscreen(False, "", True)
+
             self.show_notifications.emit(
                 source_id, rule.full_display, rule.severity.value, show_popup
             )
             return True
+
         elif fallback:
             self.show_notifications.emit(
                 source_id, text, Severity.ERROR.value, show_popup
             )
+            self.show_loadscreen(False, "", True)
             return True
         return False
 
@@ -1034,6 +1043,9 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.show_notifications.emit(
                     _gcode_msg_type, _message, Severity.INFO.value, True
                 )
+                return
+            elif _gcode_msg_type == "LOAD":
+                self.show_loadscreen(True, "OPEN LOAD BY GCODE", False)
                 return
 
             elif _gcode_msg_type == "!!":
