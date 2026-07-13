@@ -197,6 +197,7 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         self.run_gcode.emit(
             f"""SAVE_VARIABLE VARIABLE=filament_type VALUE='"{filament.value.name}"'"""
         )
+        self.call_load_panel.emit(True, "Loading", True)
         if not self.mmu_configured:
             self.run_gcode.emit("LOAD_FILAMENT")
             return
@@ -222,6 +223,8 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         self.run_gcode.emit(
             f"""SAVE_VARIABLE VARIABLE=filament_type VALUE='"{FilamentTypes.UNKNOWN.value.name}"'"""
         )
+
+        self.call_load_panel.emit(True, "Unloading", True)
         if not self.mmu_configured:
             self.run_gcode.emit("UNLOAD_FILAMENT")
             return
