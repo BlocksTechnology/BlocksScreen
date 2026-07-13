@@ -636,6 +636,7 @@ IGNORED_RULE = MessageRule(
 
 _IGNORED: tuple[re.Pattern, ...] = (
     re.compile(r"REMOVED log_path=", re.I),
+    re.compile(r"Alert: Automatically heating extruder to gatemap temp", re.I),
     # add more patterns as needed,
 )
 
