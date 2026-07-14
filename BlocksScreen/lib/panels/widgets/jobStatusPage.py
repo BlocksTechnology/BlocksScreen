@@ -430,9 +430,9 @@ class JobStatusWidget(QtWidgets.QWidget):
             self._file_position = float(value)
         elif field == "progress":
             self._raw_progress = float(value)
-        if not self.isVisible():
-            return
-        if field in ("file_position", "progress"):
+        else:
+            return  # is_active and other fields have nothing to render
+        if self.isVisible():
             self.printing_progress_bar.set_progress(self._compute_progress())
 
     def _compute_progress(self) -> float:

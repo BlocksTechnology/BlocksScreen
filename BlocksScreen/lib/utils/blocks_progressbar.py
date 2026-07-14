@@ -24,7 +24,6 @@ class CustomProgressBar(QtWidgets.QProgressBar):
         self._padding = 50
         self._pixmap: QtGui.QPixmap = QtGui.QPixmap()
         self._pixmap_cached: QtGui.QPixmap = QtGui.QPixmap()
-        self._pixmap_dirty: bool = True
         self._bar_color = QtGui.QColor(223, 223, 223)
         self.setMinimumSize(100, 100)
         self._inner_rect: QtCore.QRectF = QtCore.QRectF()
