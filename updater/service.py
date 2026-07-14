@@ -12,7 +12,7 @@ import time
 from asyncio import Lock
 from collections.abc import Callable
 from pathlib import Path
-from typing import Protocol
+from typing import Protocol, TypeGuard
 
 from updater.components import load_components
 from updater.executor import (
@@ -96,7 +96,7 @@ def _ensure_comp(state: dict, name: str) -> dict:
     return comp
 
 
-def _is_sha(val: object) -> bool:
+def _is_sha(val: object) -> TypeGuard[str]:
     """True only for a syntactically valid git hash (guards corrupt/non-str state)."""
     return isinstance(val, str) and bool(_GIT_SHA_RE.match(val))
 
@@ -786,6 +786,9 @@ class UpdateService:
             lambda s: _ensure_comp(s, name).update(fast_attempt=attempt)
         )
         comp_state = (await asyncio.to_thread(self._read_state)).get(name, {})
+        # entry-counter write above may not have persisted; state may still be corrupt
+        if not isinstance(comp_state, dict):
+            comp_state = {}
         if attempt == 1:
             last_good = comp_state.get("last_good")
             if _is_sha(last_good):
@@ -1046,10 +1049,12 @@ class UpdateService:
                 if ok:
                     self._history("boot_repair", c.name, detail=msg[:80])
                     continue
+                comp_state = (await asyncio.to_thread(self._read_state)).get(c.name, {})
+                # a power cut can corrupt state.json too: entry may be a non-dict
                 prev = (
-                    (await asyncio.to_thread(self._read_state))
-                    .get(c.name, {})
-                    .get("prev_hash")
+                    comp_state.get("prev_hash")
+                    if isinstance(comp_state, dict)
+                    else None
                 )
                 if prev and _GIT_SHA_RE.match(prev):
                     rok, _ = await git_reset_to_hash(c.path, prev)
