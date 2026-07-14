@@ -51,6 +51,7 @@ components:
     reset_mode: hard
     order: 25
     restart_ui: false
+    install_if_missing: true
 
   - name: crowsnest
     type: git
