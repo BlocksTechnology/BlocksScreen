@@ -838,3 +838,41 @@ class TestCorruptionHardening:
                 m_rung.assert_awaited_once_with("BlocksScreen", 1)
 
         asyncio.run(run_test())
+
+    def test_run_recovery_rung_survives_corrupt_state_with_failed_write(self, tmp_path):
+        """Compound fault (updater_stress.py): a corrupt non-dict entry plus a failed
+        counter-write leaves the re-read state corrupt, so the rung must guard before
+        .get on it instead of crashing with AttributeError."""
+
+        async def run_test():
+            svc = UpdateService()
+            svc._state_path = tmp_path / "state.json"
+            svc._write_state({"BlocksScreen": "not-a-dict"})
+            with patch.object(svc, "_write_state", return_value=False):
+                ok = await svc.run_recovery_rung("BlocksScreen", 1)  # must not raise
+            assert not ok
+
+        asyncio.run(run_test())
+
+    def test_reconcile_locked_survives_corrupt_state_and_failed_repair(self, tmp_path):
+        """Boot heal (updater_stress.py): a corrupt non-dict entry plus an unreadable
+        HEAD and a failed git_repair must not crash _reconcile_locked."""
+
+        async def run_test():
+            svc = UpdateService()
+            svc._state_path = tmp_path / "state.json"
+            repo = tmp_path / "repo"
+            repo.mkdir()  # or the heal-loop short-circuits on not path.exists()
+            ui = next(c for c in svc._components if c.name == "BlocksScreen")
+            ui.path = repo
+            svc._write_state({"BlocksScreen": "not-a-dict"})
+            with (
+                patch("updater.service.git_get_hash", return_value=""),
+                patch(
+                    "updater.service.git_repair", return_value=(False, "repair fail")
+                ),
+            ):
+                await svc._reconcile_locked()  # must not raise
+            assert "BlocksScreen" not in svc._read_state()  # entry sanitized away
+
+        asyncio.run(run_test())
