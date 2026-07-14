@@ -45,6 +45,16 @@ components:
     reset_mode: hard
     order: 13
 
+  - name: katapult
+    type: git
+    path: ~/katapult
+    url: https://github.com/arksine/katapult
+    branch: master
+    reset_mode: hard
+    order: 25
+    restart_ui: false
+    install_if_missing: true
+
   - name: crowsnest
     type: git
     path: ~/crowsnest
