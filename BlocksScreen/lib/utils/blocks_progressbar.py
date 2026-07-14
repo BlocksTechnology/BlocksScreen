@@ -9,7 +9,6 @@ class CustomProgressBar(QtWidgets.QProgressBar):
         QtWidgets (QtWidget): Parent widget
 
     Raises:
-        ValueError: Thrown when setting progress is not between 0.0 and 1.0
         ValueError: Thrown when setting bar color is not between 0 and 255.
 
     """
@@ -84,19 +83,15 @@ class CustomProgressBar(QtWidgets.QProgressBar):
         self._inner_rect = self._calculate_inner_geometry()
         return QtCore.QSize(100, 100)
 
-    def setValue(self, value: float) -> None:
-        """Set progress value
+    def set_progress(self, fraction: float) -> None:
+        """Set progress from a 0.0-1.0 fraction (clamped)."""
+        self.progress_value = max(0.0, min(fraction, 1.0)) * 100
+        self.update()
 
-        Args:
-            value (float): Progress value between 0.0 and 1.0
-
-        Raises:
-            ValueError: If provided value in not between 0.0 and 1.0
-        """
-        if not (0 <= value <= 100):
-            raise ValueError("Argument `value` expected value between 0.0 and 1.0 ")
-        value *= 100
-        self.progress_value = value
+    def reset(self) -> None:
+        """Clear progress back to 0%."""
+        self.progress_value = 0
+        super().reset()
         self.update()
 
     def set_bar_color(self, red: int, green: int, blue: int) -> None:
