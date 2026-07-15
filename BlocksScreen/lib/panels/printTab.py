@@ -72,6 +72,7 @@ class PrintTab(QtWidgets.QStackedWidget):
     call_cancel_panel: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         bool, name="call-load-panel"
     )
+    in_case_error = QtCore.pyqtSignal(name="in-case-error")
 
     def __init__(
         self,
@@ -157,6 +158,7 @@ class PrintTab(QtWidgets.QStackedWidget):
             self.filesPage_widget.on_usb_files_loaded
         )
         self.jobStatusPage_widget = JobStatusWidget(self)
+        self.in_case_error.connect(self.jobStatusPage_widget.handleErrors)
         self.addWidget(self.jobStatusPage_widget)
         self.confirmPage_widget.on_accept.connect(
             self.jobStatusPage_widget.on_print_start

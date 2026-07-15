@@ -94,6 +94,7 @@ class JobStatusWidget(QtWidgets.QWidget):
         self._gcode_start_byte = 0
         self._gcode_end_byte = 0
         self._layer_frozen = False
+        self.swicth_state = True
         self._setupUI()
         self.cancel_print_dialog = BasePopup(self, floating=True)
         self.tune_menu_btn.clicked.connect(self.tune_clicked.emit)
@@ -180,6 +181,10 @@ class JobStatusWidget(QtWidgets.QWidget):
             pass
         self.cancel_print_dialog.open()
 
+    @QtCore.pyqtSlot(name="in-error-case")
+    def handleErrors(self):
+        self.pause_printing_btn.setEnabled(True)
+
     def _reset_job_display(self) -> None:
         """Clear all per-job layer/progress state so a new print never shows
         stale values. Runs for both screen- and Mainsail-initiated prints
@@ -230,13 +235,11 @@ class JobStatusWidget(QtWidgets.QWidget):
     def pause_resume_print(self) -> None:
         """Handle pause/resume print job button clicked"""
         self.pause_printing_btn.setEnabled(False)
-        QtCore.QTimer.singleShot(
-            10000, lambda: self.pause_printing_btn.setEnabled(True)
-        )
         if self._internal_print_status == "printing":
             # Snapshot the layer on click so the park Z-lift never bumps it.
             self._layer_frozen = True
             self.print_pause.emit()
+            self.swicth_state = True
         if self._internal_print_status == "paused":
             self.print_resume.emit()
 
@@ -258,14 +261,10 @@ class JobStatusWidget(QtWidgets.QWidget):
             self.pause_printing_btn.setPixmap(
                 QtGui.QPixmap(":/ui/media/btn_icons/play.svg")
             )
+            self.swicth_state = False
             event_state = "pause"
         elif lstate == "printing":
             self._layer_frozen = False
-            self.pause_printing_btn.setEnabled(True)
-            self.pause_printing_btn.setText("Pause")
-            self.pause_printing_btn.setPixmap(
-                QtGui.QPixmap(":/ui/media/btn_icons/pause.svg")
-            )
             event_state = "start"
 
         self._internal_print_status = lstate
@@ -434,6 +433,12 @@ class JobStatusWidget(QtWidgets.QWidget):
             return  # is_active and other fields have nothing to render
         if self.isVisible():
             self.printing_progress_bar.set_progress(self._compute_progress())
+        if not self.swicth_state:
+            self.pause_printing_btn.setEnabled(True)
+            self.pause_printing_btn.setText("Pause")
+            self.pause_printing_btn.setPixmap(
+                QtGui.QPixmap(":/ui/media/btn_icons/pause.svg")
+            )
 
     def _compute_progress(self) -> float:
         """File-relative progress [0, 1], matching Mainsail's default.
