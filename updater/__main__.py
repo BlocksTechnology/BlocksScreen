@@ -43,6 +43,10 @@ def build_parser() -> argparse.ArgumentParser:
     rec.add_argument("name")
     rec.add_argument("--hard", action="store_true")
 
+    bles = sub.add_parser("bless")
+    bles.add_argument("name")
+    bles.add_argument("hash", nargs="?", default="")
+
     return parser
 
 
@@ -126,15 +130,33 @@ async def main() -> None:
             for s in sorted(result.values(), key=lambda c: c.name):
                 if s.error:
                     print(f"{s.name}: ERROR: {s.error}")
+                elif s.branch_mismatch:
+                    print(f"{s.name}: branch switch needed")
+                elif s.needs_install:
+                    print(f"{s.name}: install required")
                 elif s.packages_upgradable > 0:
                     print(f"{s.name}: {s.packages_upgradable} packages upgradable")
                 elif s.commits_behind > 0:
                     print(f"{s.name}: {s.commits_behind} commits behind")
+                elif s.has_local_changes:
+                    print(f"{s.name}: local changes")
                 else:
                     print(f"{s.name}: up to date")
+                if args.verbose:
+                    print(
+                        f"    branch={s.current_branch or '?'} mismatch={s.branch_mismatch} "
+                        f"behind={s.commits_behind} needs_install={s.needs_install} "
+                        f"local_changes={s.has_local_changes} pkgs={s.packages_upgradable} "
+                        f"hash={s.current_hash[:8]}"
+                    )
         case "recover":
             with _cli_lock():
                 await svc.recover(args.name, hard=args.hard)
+        case "bless":
+            with _cli_lock():
+                ok = await svc.bless_healthy(args.name, args.hash)
+                if not ok:
+                    raise SystemExit(1)
         case None:
             build_parser().print_help()
 

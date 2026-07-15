@@ -105,7 +105,10 @@ class UpdaterInterface(
         self._status_pending: bool = False
         self._invalid_requests: int = 0
         self._spawn(self._svc.reconcile(), name="boot_reconcile")
+        self._spawn(self._svc.background_prime_nrestarts(), name="boot_prime_nrestarts")
         self._spawn(self._periodic_status_check(), name="periodic_status_check")
+        self._spawn(self._svc.supervise_ui(), name="supervise_ui")
+        self._spawn(self._svc.forward_heal_ui(), name="forward_heal_ui")
 
     def _spawn(self, coro, *, name: str | None = None) -> asyncio.Task:
         """Create a task and hold a strong reference so GC cannot cancel it."""
@@ -220,6 +223,14 @@ class UpdaterInterface(
         self._spawn(self._run_recover(name, hard), name=f"recover_{name}")
         return True
 
+    @sdbus.dbus_method_async(input_signature="ss", result_signature="b")
+    async def bless_healthy(self, name: str, hash_val: str) -> bool:
+        """D-Bus method: bless a component as healthy (known-good)."""
+        if not self._validate_component_name(name):
+            _log.warning("bless_healthy called with unknown component %r", name)
+            return False
+        return await self._svc.bless_healthy(name, hash_val)
+
     async def _run_update_all(self) -> None:
         ran = False
         try:
@@ -250,6 +261,7 @@ class UpdaterInterface(
             or s.packages_upgradable > 0
             or s.has_local_changes
             or s.needs_install
+            or s.branch_mismatch
             # Errored git repos included: the update flow self-heals them.
             or (s.error is not None and s.kind != "apt")
         }

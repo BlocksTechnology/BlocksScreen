@@ -578,6 +578,18 @@ class TestGitCheckout:
         assert ok is False
         assert "branch not found" in out
 
+    @pytest.mark.asyncio
+    async def test_force_adds_f_flag(self, tmp_path):
+        # force=True overwrites untracked collisions that would abort a plain switch.
+        branch_proc = _make_proc(0, b"main\n", b"")
+        checkout_proc = _make_proc(0, b"", b"")
+        exec_mock = AsyncMock(side_effect=[branch_proc, checkout_proc])
+        with patch("asyncio.create_subprocess_exec", exec_mock):
+            ok, _ = await git_checkout(tmp_path, "develop", force=True)
+        assert ok is True
+        argv = list(exec_mock.call_args_list[1].args)
+        assert argv[:3] == ["/usr/bin/git", "checkout", "-f"]
+
 
 class TestAptUpdate:
     @pytest.mark.asyncio
@@ -802,6 +814,27 @@ class TestCheckGitStatus:
         assert result.current_hash == "abc1234"
         assert result.commits_behind == 2
         assert result.has_local_changes is False
+        assert result.branch_mismatch is False
+
+    @pytest.mark.asyncio
+    async def test_branch_mismatch_flagged_when_on_wrong_branch(self, tmp_path):
+        # Configured branch differs from checked-out branch: flag it even at 0 behind.
+        procs = [
+            _make_proc(0, b"abc1234\n", b""),  # git_get_hash
+            _make_proc(0, b"main\n", b""),  # git_get_current_branch
+            _make_proc(0, b"0\n", b""),  # git_commits_behind (0, not ahead)
+            _make_proc(0, b"https://github.com/x/y\n", b""),  # git_remote_url
+            _make_proc(0, b"", b""),  # git_is_dirty (clean)
+            _make_proc(0, b"v1.0\n", b""),  # git_describe current
+            _make_proc(0, b"v1.0\n", b""),  # git_describe remote
+        ]
+        exec_mock = AsyncMock(side_effect=procs)
+        with patch("asyncio.create_subprocess_exec", exec_mock):
+            result = await check_git_status(
+                "klipper", tmp_path, branch="wip/feat/beacon", skip_fetch=True
+            )
+        assert result.commits_behind == 0
+        assert result.branch_mismatch is True
 
 
 class TestCheckAptStatus:
@@ -1069,7 +1102,6 @@ class TestClassifyAptError:
     @pytest.mark.parametrize(
         "err",
         [
-            "sudo: /usr/local/sbin/bs-apt-helper: command not found",
             "No such file or directory",
             "sudo: a password is required",
             "Permission denied",
@@ -1081,7 +1113,15 @@ class TestClassifyAptError:
 
     @pytest.mark.parametrize(
         "err",
-        ["Could not resolve host", "Temporary failure", "dpkg lock held", ""],
+        [
+            "Could not resolve host",
+            "Temporary failure",
+            "dpkg lock held",
+            "",
+            # A missing apt helper self-heals once bootstrap installs it.
+            "sudo: /usr/local/sbin/bs-apt-helper: command not found",
+            "/usr/local/sbin/bs-apt-helper: no such file or directory",
+        ],
     )
     def test_transient(self, err):
         assert classify_apt_error(err) == "transient"
