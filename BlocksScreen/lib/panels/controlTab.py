@@ -7,9 +7,9 @@ import typing
 from functools import partial
 
 from lib.moonrakerComm import MoonWebSocket
+from lib.panels.widgets.basePopup import BasePopup
 from lib.panels.widgets.numpadPage import CustomNumpad
 from lib.panels.widgets.optionCardWidget import OptionCard
-from lib.panels.widgets.popupDialogWidget import Popup
 from lib.panels.widgets.printcorePage import SwapPrintcorePage
 from lib.panels.widgets.probeHelperPage import ProbeHelper
 from lib.panels.widgets.slider_selector_page import SliderPage
@@ -65,15 +65,11 @@ class ControlTab(QtWidgets.QStackedWidget):
         super().__init__(parent)
         self.panel = Ui_controlStackedWidget()
         self.panel.setupUi(self)
-
-        self.popup = Popup(self)
-
         self.ws: MoonWebSocket = ws
         self.printer: Printer = printer
         self._true_zero_state: bool | None = None
         self.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
         self.timers = []
-        self.ztilt_state = False
         self.extruder_info: dict = {}
         self.bed_info: dict = {}
         self.toolhead_info: dict = {}
@@ -84,6 +80,7 @@ class ControlTab(QtWidgets.QStackedWidget):
         self.extrude_page_message: str = ""
         self.move_length: float = 1.0
         self.move_speed: float = 25.0
+        self.ztilt_result_screen = BasePopup(self, False, False)
         self.probe_helper_page = ProbeHelper(self)
         self.probe_helper_page.toggle_conn_page.connect(self.toggle_conn_page)
         self.probe_helper_page.disable_popups.connect(self.disable_popups)
@@ -300,10 +297,19 @@ class ControlTab(QtWidgets.QStackedWidget):
 
         self.printer.printer_config.connect(self.on_printer_config)
         self.printer.request_object_subscription_signal.connect(self._on_object_list)
+        self.ztilt_result_screen_timer = QtCore.QTimer()
+        self.ztilt_result_screen_timer.setSingleShot(True)
+        self.ztilt_result_screen_timer.setInterval(5000)
+        self.ztilt_result_screen_timer.timeout.connect(self.ztilt_result_screen.hide)
 
     def _handle_z_tilt_object_update(self, value, state):
+        if not self.isVisible():
+            return
         if state:
             self.call_load_panel.emit(False, "", False)
+            self.ztilt_result_screen.set_message("Z-axis calibration was successful.")
+            self.ztilt_result_screen.show()
+            self.ztilt_result_screen_timer.start()
 
     @QtCore.pyqtSlot(str, str, float, name="on_fan_update")
     @QtCore.pyqtSlot(str, str, int, name="on_fan_update")
@@ -455,6 +461,11 @@ class ControlTab(QtWidgets.QStackedWidget):
                     tolerance = float(match.group(4))
                     if retries_done == retries_total:
                         self.call_load_panel.emit(False, "", False)
+                        self.ztilt_result_screen.set_message(
+                            "Something went wrong during Z-axis calibration."
+                        )
+                        self.ztilt_result_screen.show()
+                        self.ztilt_result_screen_timer.start()
                         return
                     self.call_load_panel.emit(
                         True,
