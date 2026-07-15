@@ -181,7 +181,6 @@ class JobStatusWidget(QtWidgets.QWidget):
             pass
         self.cancel_print_dialog.open()
 
-
     @QtCore.pyqtSlot(name="in-error-case")
     def handleErrors(self):
         self.pause_printing_btn.setEnabled(True)
@@ -240,7 +239,7 @@ class JobStatusWidget(QtWidgets.QWidget):
             # Snapshot the layer on click so the park Z-lift never bumps it.
             self._layer_frozen = True
             self.print_pause.emit()
-            self.swicth_state= True
+            self.swicth_state = True
         if self._internal_print_status == "paused":
             self.print_resume.emit()
 
@@ -439,8 +438,7 @@ class JobStatusWidget(QtWidgets.QWidget):
             self.pause_printing_btn.setText("Pause")
             self.pause_printing_btn.setPixmap(
                 QtGui.QPixmap(":/ui/media/btn_icons/pause.svg")
-                )
-
+            )
 
     def _compute_progress(self) -> float:
         """File-relative progress [0, 1], matching Mainsail's default.

@@ -1068,7 +1068,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 )
                 return
             elif _gcode_msg_type == "LOAD":
-                self.show_loadscreen(True, _message , False)
+                self.show_loadscreen(True, _message, False)
                 return
 
             elif _gcode_msg_type == "!!":
