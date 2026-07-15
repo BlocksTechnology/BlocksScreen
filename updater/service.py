@@ -1045,12 +1045,12 @@ class UpdateService:
                 if await git_get_hash(c.path) != "":
                     continue
                 self._log.warning("reconcile: %s HEAD unreadable - repairing", c.name)
-                ok, msg = await git_repair(c.path)
-                if ok:
+                _branch = c.branch or "main"
+                ok, msg = await git_repair(c.path, _branch)
+                if ok and await git_get_hash(c.path) != "":
                     self._history("boot_repair", c.name, detail=msg[:80])
                     continue
                 comp_state = (await asyncio.to_thread(self._read_state)).get(c.name, {})
-                # a power cut can corrupt state.json too: entry may be a non-dict
                 prev = (
                     comp_state.get("prev_hash")
                     if isinstance(comp_state, dict)
