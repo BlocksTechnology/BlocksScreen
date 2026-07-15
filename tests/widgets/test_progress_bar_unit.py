@@ -2,13 +2,13 @@
 
 import pytest
 
-from lib.utils.blocks_progressbar import CustomProgressBar
+from BlocksScreen.lib.utils.blocks_progressbar import CustomProgressBar
 
 
 @pytest.fixture()
 def bar(qtbot):
     """Create a CustomProgressBar registered with qtbot."""
-    w = CustomProgressBar()
+    w = CustomProgressBar(parent=None)
     qtbot.addWidget(w)
     return w
 
@@ -26,7 +26,8 @@ class TestSetProgress:
 
     def test_clamps_above_one(self, bar):
         bar.set_progress(1.4)
-        assert bar.progress_value == 100
+        progress = bar.progress_value
+        assert progress == 100
 
     def test_clamps_below_zero(self, bar):
         bar.set_progress(-0.2)
