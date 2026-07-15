@@ -1,5 +1,6 @@
 import typing
-from PyQt6 import QtWidgets, QtGui, QtCore
+
+from PyQt6 import QtCore, QtGui, QtWidgets
 
 
 class CustomProgressBar(QtWidgets.QProgressBar):

@@ -1604,7 +1604,7 @@ class TestReconcile:
             svc = UpdateService()
             svc._components = [comp]
             await svc.reconcile()
-        mock_repair.assert_called_once_with(comp.path)
+        mock_repair.assert_called_once_with(comp.path, "main")
 
     @pytest.mark.asyncio
     async def test_repair_failure_falls_back_to_prev_hash_reset(self, tmp_path):
