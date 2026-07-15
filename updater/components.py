@@ -126,6 +126,7 @@ def _validate_component(data: dict) -> ComponentConfig | None:
             url=str(url) if url else None,
             install_if_missing=install_if_missing,
             restart_ui=bool(data.get("restart_ui", False)),
+            restart_klipper=bool(data.get("restart_klipper", False)),
         )
     apt_order = 50
     try:

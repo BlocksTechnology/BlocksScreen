@@ -233,11 +233,13 @@ async def check_git_status(
     if current_hash == "":
         logger.error("Failed at git_hash operation")
         return ComponentStatus(name=name, error="Failed at git_hash operation")
+    current_branch = await git_get_current_branch(path)
     if branch:
         remote_ref = f"origin/{branch}"
     else:
-        current_branch = await git_get_current_branch(path)
         remote_ref = f"origin/{current_branch}" if current_branch else "origin/HEAD"
+    # Configured branch != checked-out branch: needs an update to switch.
+    branch_mismatch = bool(branch) and current_branch != branch
     if version:
         commits_behind = 0
     else:
@@ -277,6 +279,8 @@ async def check_git_status(
         has_local_changes=has_local_changes,
         current_version=current_version,
         remote_version=remote_version,
+        branch_mismatch=branch_mismatch,
+        current_branch=current_branch,
     )
 
 
@@ -546,6 +550,14 @@ async def git_get_hash(path: Path | None) -> str:
     return output.strip() if ok else ""
 
 
+async def git_ref_hash(path: Path | None, ref: str) -> str:
+    """Resolve an arbitrary ref (e.g. origin/main) to its commit hash, or empty."""
+    if path is None:
+        return ""
+    ok, output = await _run([GIT, "rev-parse", ref], cwd=path, timeout=10.0)
+    return output.strip() if ok else ""
+
+
 async def git_commits_behind(path: Path, remote_ref: str = "origin/HEAD") -> int:
     """Return how many commits the local branch is behind remote_ref."""
     ok, output = await _run(
@@ -596,7 +608,9 @@ async def git_describe(path: Path, ref: str | None = None) -> str:
     return output.strip() if ok else ""
 
 
-async def git_checkout(path: Path | None, branch: str) -> tuple[bool, str]:
+async def git_checkout(
+    path: Path | None, branch: str, *, force: bool = False
+) -> tuple[bool, str]:
     if path is None:
         return (False, "path not found")
 
@@ -609,8 +623,10 @@ async def git_checkout(path: Path | None, branch: str) -> tuple[bool, str]:
     if current_branch == branch:
         return (True, "already on branch")
 
+    # force: overwrite untracked collisions (e.g. build artifacts) that block a switch.
+    cmd = [GIT, "checkout", "-f", branch] if force else [GIT, "checkout", branch]
     # Generous: a big checkout on slow SD can pass 10s; SIGTERM = half-written tree.
-    return await _run([GIT, "checkout", branch], cwd=path, timeout=60.0)
+    return await _run(cmd, cwd=path, timeout=60.0)
 
 
 async def check_apt_status(
@@ -792,6 +808,11 @@ async def _apt_restore_packages(snapshot_path: Path) -> tuple[bool, str]:
 def classify_apt_error(err: str) -> str:
     """Classify an apt failure: 'permanent' won't clear by retrying, 'transient' might."""
     lowered = err.lower()
+    # A missing apt helper self-heals once bootstrap installs it: retry, never a 1h cooldown.
+    if str(APT_HELPER).lower() in lowered and (
+        "command not found" in lowered or "no such file" in lowered
+    ):
+        return "transient"
     permanent = (
         "command not found",
         "no such file or directory",

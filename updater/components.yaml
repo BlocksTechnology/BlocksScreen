@@ -4,6 +4,8 @@ poll_interval_minutes: 1440
 # ~/printer_data/config/blockscreen_updater.yaml, merged by name):
 #   url: https://...          https-only clone URL (install_if_missing needs it)
 #   install_if_missing: true  clone + deps + hook when the path is absent
+#   restart_ui: true          also restart BlocksScreen after this component updates
+#   restart_klipper: true     also restart klipper after this component updates
 
 components:
   - name: klipper

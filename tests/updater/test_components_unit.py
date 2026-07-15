@@ -268,6 +268,24 @@ components:
             components, poll = load_components()
         assert any(c.name == "my-plugin" for c in components)
 
+    def test_restart_klipper_flag_parsed(self):
+        yaml_text = """
+components:
+    - name: cfg
+      type: git
+      path: ~/cfg
+      branch: master
+      order: 10
+      restart_klipper: true
+"""
+        with (
+            patch("builtins.open", _mock_load(yaml_text)),
+            patch("pathlib.Path.exists", return_value=False),
+        ):
+            components, _ = load_components()
+        cfg = next(c for c in components if c.name == "cfg")
+        assert cfg.restart_klipper is True
+
     def test_invalid_branch_name_skipped(self, caplog):
         bad_yaml = """
 components:
