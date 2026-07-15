@@ -114,6 +114,7 @@ class MainWindow(QtWidgets.QMainWindow):
     show_notifications: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         str, str, int, bool, name="show-notifications"
     )
+    in_case_error = QtCore.pyqtSignal(name="in-case-error")
 
     call_load_panel = QtCore.pyqtSignal(bool, str, bool, name="call-load-panel")
 
@@ -193,6 +194,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.printer.webhooks_update.connect(self.conn_window.webhook_update)
         self.printPanel.request_back.connect(slot=self.global_back)
         self.printPanel.on_cancel_print.connect(slot=self.on_cancel_print)
+        self.in_case_error.connect(self.printPanel.in_case_error)
 
         self.show_notifications.connect(self.notiPage.new_notication)
 
@@ -1012,6 +1014,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 return True
             if rule.severity == Severity.ERROR:
                 self.show_loadscreen(False, "", True)
+                self.in_case_error.emit()
 
             self.show_notifications.emit(
                 source_id, rule.full_display, rule.severity.value, show_popup
@@ -1023,6 +1026,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 source_id, text, Severity.ERROR.value, show_popup
             )
             self.show_loadscreen(False, "", True)
+            self.in_case_error.emit()
             return True
         return False
 
