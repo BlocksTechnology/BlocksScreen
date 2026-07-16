@@ -665,6 +665,26 @@ class TestUpdateAll:
                 await svc.update_all()
         mock_batch.assert_not_called()
 
+    @pytest.mark.asyncio
+    async def test_dead_branch_dropped_not_aborting_batch(self, tmp_path):
+        # A deleted-upstream branch must be dropped so BlocksScreen still updates.
+        dead = self._git(tmp_path, "klipper", 2)
+        dead.branch = "wip/deleted"
+        good = self._git(tmp_path, "BlocksScreen", 99)
+        good.branch = "dev"
+        with (
+            patch("updater.service.UpdateService._preflight_fetch", return_value=True),
+            patch("updater.service.UpdateService._run_git_batch") as mock_batch,
+            patch(
+                "updater.service.git_ref_hash",
+                side_effect=lambda path, ref: "" if "deleted" in ref else "a" * 40,
+            ),
+        ):
+            svc = UpdateService()
+            svc._components = [dead, good]
+            await svc.update_all()
+        assert [c.name for c in mock_batch.call_args[0][0]] == ["BlocksScreen"]
+
 
 class TestAtomicBatch:
     """_run_git_batch: stage all → deps → hooks → restart each service once; all-or-nothing."""

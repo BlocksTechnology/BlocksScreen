@@ -326,6 +326,18 @@ class UpdateService:
                 continue  # path is now absent: the provision pass below clones fresh
             self._log.error("%s: %s is not a git repository - skipping", c.name, c.path)
             self._cb_error_done(c.name, "not a git repository - reinstall required")
+        # A dead configured branch must not abort the batch and brick BlocksScreen.
+        for c in list(batch):
+            if c.branch and not await git_ref_hash(c.path, f"origin/{c.branch}"):
+                batch.remove(c)
+                self._log.error(
+                    "%s: branch origin/%s does not resolve (deleted upstream?) - skipping",
+                    c.name,
+                    c.branch,
+                )
+                self._cb_error_done(
+                    c.name, f"branch origin/{c.branch} not found - fix components.yaml"
+                )
         provision = [
             c
             for c in sorted_components
