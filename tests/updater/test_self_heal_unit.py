@@ -871,6 +871,7 @@ class TestCorruptionHardening:
                 patch(
                     "updater.service.git_repair", return_value=(False, "repair fail")
                 ),
+                patch.object(UpdateService, "_reclone_component", return_value=False),
             ):
                 await svc._reconcile_locked()  # must not raise
             assert "BlocksScreen" not in svc._read_state()  # entry sanitized away

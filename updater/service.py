@@ -353,16 +353,38 @@ class UpdateService:
         for c in provision:
             await self._provision_component(c)
 
+    async def provision_missing(self) -> bool:
+        """Clone absent install_if_missing components without waiting for a manual
+        Update (e.g. one added by a self-update); existing repos untouched. Returns
+        True if anything was provisioned."""
+        missing = [
+            c
+            for c in self._components
+            if c.install_if_missing
+            and c.url
+            and (c.path is None or not c.path.exists())
+        ]
+        if not missing:
+            return False
+        provisioned = False
+        with process_lock() as acquired:
+            if not acquired:
+                self._log.info("provision_missing: update in progress, deferring")
+                return False
+            for c in missing:
+                if c.path is None or not c.path.exists():  # recheck under lock
+                    await self._provision_component(c)
+                    provisioned = True
+        return provisioned
+
     async def _preflight_fetch(
         self, sorted_components: list[ComponentConfig], all_components: list
     ) -> bool:
         """Fetch every existing git component up-front (network phase).
 
-        Decoupling the download from the apply means a mid-sequence connection
-        drop aborts before anything is checked out, instead of leaving an
-        applied/unapplied skew across components. A pre-fetched component skips
-        its own fetch in the apply phase (recorded fetch time). Repos that need
-        cloning or are corrupt are left to self-heal in their own flow.
+        Decoupling download from apply means a mid-sequence drop aborts before
+        anything is checked out (no applied/unapplied skew). A pre-fetched
+        component skips its apply-phase fetch; missing/corrupt repos self-heal.
         """
         # Non-repo dirs excluded: their fetch failure is not "offline" (see update_all).
         targets = [
@@ -396,11 +418,10 @@ class UpdateService:
     async def _run_git_batch(self, batch: list[ComponentConfig]) -> None:
         """Apply existing git components all-or-nothing.
 
-        Stage every repo, then deps, then hooks, then restart each unique service
-        once. While staging/deps/hooks run nothing has been restarted, so the live
-        services still execute the old code - an abort then just reverts git and
-        restarts nothing. A restart-phase failure reverts git AND re-restarts the
-        services already bounced so they come back on the old code.
+        Stage every repo, then deps, hooks, then restart each unique service once.
+        Nothing is restarted during stage/deps/hooks, so an abort just reverts git
+        and restarts nothing. A restart-phase failure reverts git AND re-restarts
+        the already-bounced services back onto the old code.
         """
         prev: dict[str, str] = {}
         for c in batch:
@@ -601,17 +622,14 @@ class UpdateService:
             self._cb("on_component_done", c.name, False)
 
     async def _apply_deferred_restart(self) -> None:
-        """Apply a daemon restart/reinstall a hook deferred during this batch.
+        """Apply a daemon restart/reinstall hook deferred during this batch.
 
-        Hooks running under the updater record `install`/`code` to the tmpfs
-        sentinel instead of restarting the daemon mid-batch. Called once, after
-        success is recorded and the UI restart is queued:
-          - `install`: touch the deploy flag so BlocksScreen-deploy.path runs
-            install-updater out-of-band (its own cgroup, post-batch).
-          - `code`: self-test the new on-disk updater; only if it imports
-            cleanly, `--no-block` restart the daemon onto it. Otherwise keep the
-            running daemon and let the next reboot adopt it. Never raises: a
-            completed update must stand regardless of what happens here.
+        Hooks record `install`/`code` to the tmpfs sentinel instead of restarting
+        mid-batch. Called once after success + UI restart: `install` touches the
+        deploy flag (BlocksScreen-deploy.path runs install-updater out-of-band);
+        `code` self-tests the new updater and `--no-block` restarts onto it only if
+        it imports, else the next reboot adopts it. Never raises: a completed update
+        must stand regardless.
         """
         try:
             sentinel = restart_sentinel_path()
@@ -707,10 +725,9 @@ class UpdateService:
         return ok
 
     async def bless_healthy(self, name: str, hash_val: str) -> bool:
-        """Mark a component as healthy (known-good) after a debounce; snapshots baseline.
+        """Mark a component healthy (known-good) after a debounce; snapshots baseline.
 
-        An empty hash_val means "bless the component's current HEAD": the UI does
-        not need to compute a hash, it just says it is healthy.
+        Empty hash_val blesses the current HEAD (UI need not compute a hash).
         """
         component = next((c for c in self._components if c.name == name), None)
         if component is None:
@@ -747,8 +764,7 @@ class UpdateService:
     def _check_crash_loop(self, name: str, nrestarts: int) -> bool:
         """Return True if NRestarts rose by >= 5 within the trailing 180s window.
 
-        Compares against the oldest in-window sample (largest rise, since NRestarts
-        is monotonic), then records the current sample and prunes aged-out ones.
+        Compared against the oldest in-window sample; records+prunes samples.
         """
         if name not in self._nrestarts_samples:
             self._nrestarts_samples[name] = []  # fresh device: start tracking now
@@ -881,9 +897,9 @@ class UpdateService:
     async def supervise_ui(self) -> None:
         """Poll the UI service NRestarts and drive the recovery ladder on a crash-loop.
 
-        The single-attempt-in-flight guard is the loop itself: at most one rung runs
-        per crash-loop, then detection is re-baselined and a settle window elapses so
-        a new build gets a fair chance to bless before the next rung is counted.
+        The loop itself is the single-attempt-in-flight guard: at most one rung per
+        crash-loop, then detection re-baselines and a settle window elapses so a new
+        build can bless before the next rung is counted.
         """
         while True:
             await asyncio.sleep(_NRESTARTS_POLL_INTERVAL_S)
@@ -918,8 +934,7 @@ class UpdateService:
     async def forward_heal_ui(self) -> None:
         """Slowly re-check origin/main and re-attempt an upgrade once a fix ships.
 
-        Jittered and connectivity-gated: desynchronized polls avoid a fleet stampede
-        and a failed fetch (offline) is skipped without churn.
+        Jittered + connectivity-gated: avoids a fleet stampede and offline churn.
         """
         while True:
             delay = _FORWARD_HEAL_BASE_S + secrets.randbelow(
@@ -992,16 +1007,12 @@ class UpdateService:
     async def reconcile(self) -> None:
         """Heal repos left damaged by a power loss mid-update, for every component.
 
-        start.sh only repairs the BlocksScreen repo; this covers klipper/moonraker/
-        config repos too. The gate is the cheap `rev-parse HEAD` (mirrors start.sh's
-        `cat-file -e HEAD`) so a healthy boot pays almost nothing; deeper corruption
-        is caught on demand by the normal update flow. Offline-safe: git_repair
-        fetches when it can, else we reset to the last recorded good hash.
-
-        Held under the shared process lock so the boot-time heal cannot interleave
-        its git resets/repairs with a near-simultaneous user update or CLI run on
-        the same repo. If another updater holds the lock, skip: that run is already
-        mutating the repos, and any real damage is re-detected on demand.
+        start.sh only repairs BlocksScreen; this covers klipper/moonraker/config too.
+        The gate is a cheap `rev-parse HEAD` so a healthy boot pays almost nothing;
+        deeper corruption is caught on demand. Offline-safe: git_repair fetches when
+        it can, else resets to the last recorded good hash. Held under the process
+        lock so the boot heal can't interleave with a user update/CLI run; if another
+        updater holds it, skip (that run is already mutating; damage re-detects later).
         """
         with process_lock() as acquired:
             if not acquired:
@@ -1014,10 +1025,9 @@ class UpdateService:
     async def _revert_inflight(self) -> None:
         """Revert any update cut off mid-flight by a power loss before it committed.
 
-        The in-flight marker maps each batch component to the commit it was on
-        before staging. Its mere presence at boot means a batch did not reach a
-        terminal outcome, so every listed repo is hard-reset back to that commit
-        and the marker is cleared. A repo already on its prev_hash is left alone.
+        The in-flight marker maps each batch component to its pre-staging commit; its
+        presence at boot means a batch didn't finish, so each listed repo is
+        hard-reset back and the marker cleared. A repo already there is left alone.
         """
         inflight = await asyncio.to_thread(self._read_inflight)
         if not inflight:
@@ -1061,6 +1071,9 @@ class UpdateService:
                 ok, msg = await git_repair(c.path, _branch)
                 if ok and await git_get_hash(c.path) != "":
                     self._history("boot_repair", c.name, detail=msg[:80])
+                    continue
+                if await self._reclone_component(c) and await git_get_hash(c.path):
+                    self._history("boot_reclone", c.name)
                     continue
                 comp_state = (await asyncio.to_thread(self._read_state)).get(c.name, {})
                 prev = (
@@ -1179,9 +1192,8 @@ class UpdateService:
     ):
         """Await coro, re-emitting on_step every `interval` seconds.
 
-        A HOOK_TIMEOUT-bounded hook can run silent longer than the client's
-        360s busy watchdog; the pings keep it fed. Cancellation propagates to
-        the inner task so its subprocess is still killed.
+        A HOOK_TIMEOUT-bounded hook can run silent past the client's 360s busy
+        watchdog; the pings keep it fed. Cancellation propagates to the inner task.
         """
         task = asyncio.ensure_future(coro)
         try:
@@ -1221,8 +1233,7 @@ class UpdateService:
     def _history(self, event: str, name: str, **fields: object) -> None:
         """Append one event to the persistent update-history log (OBS-1).
 
-        journald is volatile on this image, so this on-SD JSONL log is the
-        durable record of update outcomes for field diagnosis.
+        journald is volatile here, so this on-SD JSONL is the durable field record.
         """
         entry = {
             "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
@@ -1295,10 +1306,9 @@ class UpdateService:
     async def _provision_component(self, component: ComponentConfig) -> bool:
         """Clone and set up a missing opted-in component.
 
-        A fresh component has no prev_hash to roll back to, so any failure deletes
-        the partial clone (clean slate to retry next Update) rather than rolling
-        back. Service install is delegated to the component's hook, mirroring the
-        existing update flow.
+        A fresh component has no prev_hash, so any failure deletes the partial clone
+        (clean slate to retry) instead of rolling back. Service install is delegated
+        to the component's hook, as in the update flow.
         """
         if not component.url:
             return self._cb_error_done(component.name, "no clone url")
@@ -1380,12 +1390,49 @@ class UpdateService:
             )
             return await self._fail_provision(component, "unexpected_error")
 
+    async def _reclone_component(self, component: ComponentConfig) -> bool:
+        """Reclone an unrepairable repo: fresh clone to a temp dir, then atomic swap."""
+        if not component.url or component.path is None:
+            return False
+        path = component.path
+        tmp = path.parent / f".{path.name}.reclone-tmp"
+        old = path.parent / f".{path.name}.reclone-old"
+        for stale in (tmp, old):  # clear orphans from a crashed prior reclone
+            await asyncio.to_thread(shutil.rmtree, stale, ignore_errors=True)
+        self._log.warning("%s: recloning from %s", component.name, component.url)
+        ok, err = await git_clone(component.url, tmp, component.branch)
+        if not ok:
+            await asyncio.to_thread(shutil.rmtree, tmp, ignore_errors=True)
+            self._log.error("%s: reclone clone failed: %s", component.name, err)
+            return False
+        if component.version:
+            vok, verr = await git_reset_to_hash(tmp, component.version)
+            if not vok:
+                await asyncio.to_thread(shutil.rmtree, tmp, ignore_errors=True)
+                self._log.error("%s: reclone pin failed: %s", component.name, verr)
+                return False
+        try:
+            # move old aside first: renaming onto a nonempty dir is ENOTEMPTY
+            if path.exists():
+                await asyncio.to_thread(os.rename, path, old)
+            await asyncio.to_thread(os.rename, tmp, path)
+        except OSError as exc:
+            if not path.exists() and old.exists():  # restore after a half-done swap
+                with contextlib.suppress(OSError):
+                    await asyncio.to_thread(os.rename, old, path)
+            await asyncio.to_thread(shutil.rmtree, tmp, ignore_errors=True)
+            self._log.error("%s: reclone swap failed: %s", component.name, exc)
+            return False
+        await asyncio.to_thread(shutil.rmtree, old, ignore_errors=True)
+        self._history("reclone", component.name, url=component.url)
+        self._log.warning("%s: recloned successfully", component.name)
+        return True
+
     async def _stage_component(self, component: ComponentConfig) -> tuple[bool, str]:
         """Bring the working tree to its target ref: fetch-gate + reset/checkout/pull.
 
-        No deps/hook/restart and no rollback - the caller decides what to do on
-        failure. Returns (ok, reason) where reason is one of
-        network/corrupt/reset/version/branch/conflict.
+        No deps/hook/restart and no rollback (caller decides on failure). Returns
+        (ok, reason), reason one of network/corrupt/reset/version/branch/conflict.
         """
         if component.path is None:
             return (False, "path not found")
@@ -1403,9 +1450,12 @@ class UpdateService:
                     return (False, "network")
                 self._log.warning("%s: corrupt repo, repairing", component.name)
                 rok, rmsg = await git_repair(component.path)
-                if not rok:
+                if rok:
+                    self._history("repair", component.name, detail=rmsg[:80])
+                elif await self._reclone_component(component):  # deepest rung
+                    self._history("repair", component.name, detail="recloned")
+                else:
                     return (False, "corrupt")
-                self._history("repair", component.name, detail=rmsg[:80])
 
         # Switch to the target branch FIRST so reset/pull act on the right branch.
         if component.branch:
@@ -1459,9 +1509,8 @@ class UpdateService:
     async def _run_git_update(self, component: ComponentConfig) -> bool:
         """Update a single existing git component, rolling back on any failure.
 
-        Shares its git mechanics (_stage_component) with the multi-component batch;
-        keeps its own per-component rollback since a single update has no peers to
-        coordinate.
+        Shares its git mechanics (_stage_component) with the batch; keeps its own
+        per-component rollback since a single update has no peers to coordinate.
         """
         if component.path is None:
             return self._cb_error_done(component.name, "path not found")
@@ -1780,8 +1829,7 @@ class UpdateService:
     async def background_apt_upgrade(self) -> None:
         """Run apt update + upgrade + autoremove silently after every Update click.
 
-        Uses apt-get upgrade (never dist-upgrade) so the Debian release never changes.
-        Never reports to the UI - failures are logged only.
+        apt-get upgrade (never dist-upgrade) so the release can't change; UI-silent.
         """
         async with self._apt_lock:
             await self._background_apt_upgrade_locked()

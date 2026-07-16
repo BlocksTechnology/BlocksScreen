@@ -841,6 +841,23 @@ class TestCheckGitStatus:
         assert result.commits_behind == 0
         assert result.branch_mismatch is True
 
+    @pytest.mark.asyncio
+    async def test_dead_configured_branch_reports_actionable_error(self, tmp_path):
+        # origin/<branch> deleted upstream: report "fix components.yaml", not the
+        # generic git_commits_behind failure.
+        procs = [
+            _make_proc(0, b"abc1234\n", b""),  # git_get_hash
+            _make_proc(0, b"wip/dead\n", b""),  # git_get_current_branch
+            _make_proc(128, b"", b"fatal: unknown revision\n"),  # git_commits_behind -1
+            _make_proc(128, b"", b"fatal: unknown revision\n"),  # git_ref_hash -> ""
+        ]
+        exec_mock = AsyncMock(side_effect=procs)
+        with patch("asyncio.create_subprocess_exec", exec_mock):
+            result = await check_git_status(
+                "klipper", tmp_path, branch="wip/dead", skip_fetch=True
+            )
+        assert result.error == "branch origin/wip/dead not found - fix components.yaml"
+
 
 class TestCheckAptStatus:
     @pytest.mark.asyncio

@@ -166,10 +166,9 @@ def _merge(base: list[dict], override: list[dict]) -> list[dict]:
 
 
 def load_components() -> tuple[list[ComponentConfig], float]:
-    """Load and validate component definitions from bundled YAML, merged with user override.
+    """Load/validate components from bundled YAML merged with the user override.
 
-    Returns:
-        A tuple of (list of ComponentConfig, poll_interval in seconds).
+    Returns (list of ComponentConfig, poll_interval in seconds).
     """
     try:
         import yaml  # noqa: PLC0415

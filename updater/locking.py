@@ -1,9 +1,8 @@
 """Cross-process advisory lock shared by the updater daemon and the CLI.
 
-A single flock-backed lockfile is the only thing serializing mutating git/apt
-work between the long-running daemon and a `python -m updater update` CLI run:
-the daemon's asyncio locks are in-process only. Both sides acquire the same path
-non-blocking, so whoever is second fails fast instead of corrupting a repo.
+A single flock-backed lockfile serializes mutating git/apt work between the
+daemon and a `python -m updater update` CLI run (asyncio locks are in-process
+only); both acquire it non-blocking so the second caller fails fast.
 """
 
 from __future__ import annotations
@@ -36,12 +35,11 @@ def lock_path() -> Path:
 
 
 def restart_sentinel_path() -> Path:
-    """Return the sentinel a self-update hook writes instead of restarting.
+    """Return the sentinel a self-update hook writes instead of restarting mid-batch.
 
-    Hooks running under the updater append `install`/`code` here rather than
-    restarting the daemon mid-batch; the daemon reads it once the batch is done.
-    Preferring /run (tmpfs) means it clears on reboot, so a crash can never
-    trigger a spurious restart later; the safe floor is 'adopt on next reboot'.
+    Hooks append `install`/`code` here; the daemon reads it once the batch ends.
+    Prefer /run (tmpfs) so it clears on reboot: a crash can't trigger a spurious
+    restart later (safe floor: adopt on next reboot).
     """
     return _runtime_dir() / "updater-restart-needed"
 
@@ -50,9 +48,8 @@ def restart_sentinel_path() -> Path:
 def process_lock() -> Iterator[bool]:
     """Acquire the shared updater lock non-blocking.
 
-    Yields True if acquired, False if another updater process (daemon or CLI)
-    holds it. The fd stays open for the whole `with` block - closing it on exit
-    is what releases the lock.
+    Yields True if acquired, else False (another daemon/CLI holds it). The fd
+    stays open for the whole `with` block; closing it on exit releases the lock.
     """
     try:
         f = open(lock_path(), "w")  # noqa: SIM115, PTH123

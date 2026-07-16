@@ -14,6 +14,10 @@ enable_system_updates: False
 [update_manager mainsail]
 type: web
 
+[update_manager klipper]
+type: git_repo
+path: ~/klipper
+
 [update_manager RF50-Klipper]
 type: git_repo
 path: ~/RF50-Klipper
@@ -44,6 +48,7 @@ def test_owned_blocks_commented_others_untouched(tmp_path: Path) -> None:
     conf = tmp_path / "moonraker.conf"
     conf.write_text(_CONF)
     out = _run(conf)
+    assert "#[update_manager klipper]" in out  # updater owns klipper, not moonraker
     assert "#[update_manager RF50-Klipper]" in out
     assert "#[update_manager crowsnest]" in out
     assert "[update_manager mainsail]" in out  # web client kept

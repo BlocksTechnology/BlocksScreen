@@ -1590,6 +1590,170 @@ class TestProvisionMissingComponent:
         cb.on_component_done.assert_called_once_with("newcomp", True)
 
 
+class TestProvisionMissing:
+    """provision_missing clones absent opted-in components outside a user Update."""
+
+    def _comp(self, tmp_path: Path, *, name: str = "Spoolman") -> ComponentConfig:
+        return ComponentConfig(
+            name=name,
+            kind="git",
+            path=tmp_path / name,
+            branch="master",
+            url=f"https://github.com/test/{name}",
+            install_if_missing=True,
+        )
+
+    @pytest.mark.asyncio
+    async def test_provisions_absent_opted_in_component(self, tmp_path):
+        comp = self._comp(tmp_path)  # path does not exist
+        with (
+            patch("updater.service.process_lock", lambda: nullcontext(True)),
+            patch.object(
+                UpdateService, "_provision_component", return_value=True
+            ) as mock_prov,
+        ):
+            svc = UpdateService()
+            svc._components = [comp]
+            did = await svc.provision_missing()
+        assert did is True
+        mock_prov.assert_awaited_once_with(comp)
+
+    @pytest.mark.asyncio
+    async def test_present_component_is_never_provisioned(self, tmp_path):
+        comp = self._comp(tmp_path)
+        comp.path.mkdir()  # already on disk
+        with (
+            patch("updater.service.process_lock", lambda: nullcontext(True)),
+            patch.object(UpdateService, "_provision_component") as mock_prov,
+        ):
+            svc = UpdateService()
+            svc._components = [comp]
+            did = await svc.provision_missing()
+        assert did is False
+        mock_prov.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_not_opted_in_is_skipped(self, tmp_path):
+        comp = self._comp(tmp_path)
+        comp.install_if_missing = False  # absent but not declared installable
+        with (
+            patch("updater.service.process_lock", lambda: nullcontext(True)),
+            patch.object(UpdateService, "_provision_component") as mock_prov,
+        ):
+            svc = UpdateService()
+            svc._components = [comp]
+            did = await svc.provision_missing()
+        assert did is False
+        mock_prov.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_defers_when_process_lock_held(self, tmp_path):
+        # A concurrent update owns the lock: provisioning defers, never races it.
+        comp = self._comp(tmp_path)
+        with (
+            patch("updater.service.process_lock", lambda: nullcontext(False)),
+            patch.object(UpdateService, "_provision_component") as mock_prov,
+        ):
+            svc = UpdateService()
+            svc._components = [comp]
+            did = await svc.provision_missing()
+        assert did is False
+        mock_prov.assert_not_called()
+
+
+class TestReclone:
+    """_reclone_component: temp-clone + atomic swap as the deepest corruption rung."""
+
+    def _comp(self, tmp_path: Path) -> ComponentConfig:
+        path = tmp_path / "klipper"
+        path.mkdir()
+        (path / "corrupt").write_text("x")  # marker proving the tree got replaced
+        return ComponentConfig(
+            name="klipper",
+            kind="git",
+            path=path,
+            url="https://github.com/test/klipper",
+            branch="master",
+        )
+
+    @staticmethod
+    def _fake_clone(url, dest, branch):
+        Path(dest).mkdir()
+        (Path(dest) / ".git").mkdir()
+        (Path(dest) / "fresh").write_text("y")
+        return (True, "")
+
+    @pytest.mark.asyncio
+    async def test_swaps_in_fresh_clone(self, tmp_path):
+        comp = self._comp(tmp_path)
+        with patch("updater.service.git_clone", side_effect=self._fake_clone):
+            svc = UpdateService()
+            svc._components = [comp]
+            ok = await svc._reclone_component(comp)
+        assert ok is True
+        assert (comp.path / "fresh").exists()  # fresh clone swapped in
+        assert not (comp.path / "corrupt").exists()  # old tree gone
+        assert not (comp.path.parent / ".klipper.reclone-old").exists()
+        assert not (comp.path.parent / ".klipper.reclone-tmp").exists()
+
+    @pytest.mark.asyncio
+    async def test_clone_failure_leaves_original_intact(self, tmp_path):
+        comp = self._comp(tmp_path)
+        with patch("updater.service.git_clone", return_value=(False, "boom")):
+            svc = UpdateService()
+            svc._components = [comp]
+            ok = await svc._reclone_component(comp)
+        assert ok is False
+        assert (comp.path / "corrupt").exists()  # original untouched on clone failure
+        assert not (comp.path.parent / ".klipper.reclone-tmp").exists()
+
+    @pytest.mark.asyncio
+    async def test_no_url_returns_false(self, tmp_path):
+        comp = self._comp(tmp_path)
+        comp.url = None
+        with patch("updater.service.git_clone") as mock_clone:
+            svc = UpdateService()
+            svc._components = [comp]
+            ok = await svc._reclone_component(comp)
+        assert ok is False
+        mock_clone.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_stage_reclones_when_repair_fails(self, tmp_path):
+        comp = self._comp(tmp_path)
+        with (
+            patch("updater.service.git_fetch", return_value=(False, "corrupt")),
+            patch("updater.service.git_has_corruption", return_value=True),
+            patch("updater.service.git_repair", return_value=(False, "unrepairable")),
+            patch.object(
+                UpdateService, "_reclone_component", return_value=True
+            ) as mock_reclone,
+            patch("updater.service.git_checkout", return_value=(True, "")),
+            patch("updater.service.git_reset_to_hash", return_value=(True, "")),
+        ):
+            svc = UpdateService()
+            svc._components = [comp]
+            ok, _reason = await svc._stage_component(comp)
+        assert ok is True
+        mock_reclone.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_reconcile_reclones_when_repair_fails(self, tmp_path):
+        comp = self._comp(tmp_path)
+        with (
+            patch("updater.service.process_lock", lambda: nullcontext(True)),
+            patch("updater.service.git_get_hash", side_effect=["", "abc123"]),
+            patch("updater.service.git_repair", return_value=(False, "unrepairable")),
+            patch.object(
+                UpdateService, "_reclone_component", return_value=True
+            ) as mock_reclone,
+        ):
+            svc = UpdateService()
+            svc._components = [comp]
+            await svc.reconcile()
+        mock_reclone.assert_awaited_once()
+
+
 class TestReconcile:
     """Boot-time repo healing for every component (Blocker 1)."""
 

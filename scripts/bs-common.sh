@@ -48,7 +48,7 @@ bs_disable_overlapping_update_managers() {
     local conf="$1" tag="${2:-bs-common}"
     [ -f "$conf" ] || return 1
     grep -q "blocksscreen-single-owner" "$conf" && return 1
-    local owned="RF50-Klipper happy-hare Klippain-ShakeTune mainsail-config crowsnest"
+    local owned="klipper RF50-Klipper happy-hare Klippain-ShakeTune mainsail-config crowsnest"
     local tmp
     # Same-dir temp + atomic rename: a power cut can never truncate moonraker.conf.
     tmp="$(mktemp -p "$(dirname "$conf")" .moonraker.conf.XXXXXX)" || return 1

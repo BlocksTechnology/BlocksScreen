@@ -19,11 +19,8 @@ _STATUS_PATH = Path("/run/blockscreen/updater_status.json")
 
 
 class DbusProgressCallback:
-    """Adapter that forwards ProgressCallback events to D-Bus signals.
-
-    Holds a reference to the server interface so each on_* call invokes
-    the corresponding signal's .emit() - decoupling UpdateService from D-Bus.
-    """
+    """Forward ProgressCallback events to D-Bus signals (decouples UpdateService
+    from D-Bus): each on_* call invokes the matching signal's .emit()."""
 
     def __init__(self, iface: UpdaterInterface) -> None:
         self._iface = iface
@@ -55,11 +52,8 @@ class UpdaterInterface(
     sdbus.DbusInterfaceCommonAsync,
     interface_name="com.blockscreen.Updater",
 ):
-    """D-Bus interface contract shared by server and client proxy.
-
-    Signals are declared once here, sdbus replaces each descriptor with
-    emit machinery on the server side and an async-iterable on the client.
-    """
+    """D-Bus contract shared by server and client proxy: signals declared once,
+    sdbus swaps each for server-side emit machinery / client-side async-iterable."""
 
     @sdbus.dbus_signal_async("sii")
     def step_complete(self) -> tuple[str, int, int]:
@@ -186,6 +180,8 @@ class UpdaterInterface(
         while True:
             try:
                 await self._emit_status()
+                if await self._svc.provision_missing():
+                    await self._emit_status()  # reflect freshly-installed components
             except Exception as exc:  # noqa: BLE001
                 _log.error("periodic_check failed: %s", exc)
             await asyncio.sleep(self._svc.poll_interval)

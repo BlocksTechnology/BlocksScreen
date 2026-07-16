@@ -45,14 +45,10 @@ _STALE_LOCK_AGE_THRESHOLD_S = 10.0
 
 
 def _clear_stale_git_index_lock(path: Path) -> bool:
-    """Remove .git/index.lock only if it is stale (older than threshold).
+    """Remove .git/index.lock only if stale (mtime age >= threshold).
 
-    A stale lock is left by a SIGKILL'd or interrupted git operation. Only
-    remove if mtime indicates lock is NOT held by a live git process (age >=
-    threshold). At runtime, a fresh lock may indicate a concurrent legitimate
-    git op; yanking it would corrupt that op. Returns True if lock was
-    removed or did not exist; False if lock exists but is too fresh to safely
-    remove.
+    A fresh lock may belong to a live/concurrent git op; yanking it would corrupt
+    that op. Returns True if removed or absent, False if too fresh to remove.
     """
     lock_path = path / ".git" / "index.lock"
     if not lock_path.exists():
@@ -161,10 +157,9 @@ def _validate_git_ref(ref: str) -> bool:
 
 
 def _resolve_component_pip(path: Path | None) -> str:
-    """Find the pip binary for a component's venv; falls back to system pip if none found.
+    """Find the component venv's pip, else system pip.
 
-    SEC: Validate venv paths are under component or parent; reject symlinks to prevent
-    arbitrary venv hijacking.
+    SEC: only accept venv paths under the component/parent; reject symlink escapes.
     """
     if path is None:
         logger.warning("Path not found, using system pip")
@@ -198,10 +193,9 @@ def _resolve_component_pip(path: Path | None) -> str:
 
 
 async def _list_upgradable_packages() -> tuple[bool, list[str]]:
-    """Return (success, list_of_package_names) from apt list --upgradable.
+    """Return (success, package_names) from apt list --upgradable.
 
-    SEC: Validate package names against Debian naming rules to prevent
-    injection attacks even if apt output is malformed.
+    SEC: validate names against Debian rules to resist injection via malformed output.
     """
     ok, output = await _run([APT, "list", "--upgradable"], timeout=30.0)
     if not ok:
@@ -277,6 +271,14 @@ async def check_git_status(
     else:
         commits_behind = await git_commits_behind(path, remote_ref)
     if commits_behind == -1:
+        # a configured branch whose origin ref is gone is a config error, not transient
+        if branch and not await git_ref_hash(path, remote_ref):
+            return ComponentStatus(
+                name=name,
+                current_hash=current_hash,
+                current_branch=current_branch,
+                error=f"branch {remote_ref} not found - fix components.yaml",
+            )
         logger.error("Failed at git_commits_behind operation")
         return ComponentStatus(
             name=name, error="Failed at git_commits_behind operation"
@@ -375,11 +377,8 @@ async def git_fetch(
 ) -> tuple[bool, str]:
     """Fetch all remotes for the repo at path.
 
-    prune_remotes=False skips the extra-remote cleanup; pass False during status
-    checks where pruning is unnecessary and adds ~2 subprocess spawns per repo.
-
-    A corrupt local ref (null SHA from an interrupted write) makes --prune abort
-    the whole fetch and silently disables every update; on that failure the
+    prune_remotes=False skips extra-remote cleanup (unneeded in status checks). A
+    corrupt local ref makes --prune abort the whole fetch; on that failure the
     named ref is deleted and the fetch retried once.
     """
     if path is None:
@@ -410,8 +409,7 @@ async def git_clone(
 ) -> tuple[bool, str]:
     """Clone url into path (https-only), optionally at branch. Returns (ok, message).
 
-    Large repos (klipper, moonraker) can take a while, so the timeout is generous.
-    git creates the leaf directory; the parent (home) must already exist.
+    Timeout is generous for large repos; git makes the leaf dir, parent must exist.
     """
     if not path:
         return (False, "path error")
@@ -427,12 +425,11 @@ async def git_clone(
 
 
 async def git_reset_to_hash(path: Path | None, prev_hash: str = "") -> tuple[bool, str]:
-    """Hard-reset repo at path directly to prev_hash without fetching.
+    """Hard-reset repo at path directly to prev_hash (no fetch).
 
-    This is the rollback/heal primitive (abort, boot revert, recover), so the
-    timeout is generous: a reset across a large delta on a slow SD card must
-    not be SIGTERM'd mid-checkout in exactly the path meant to fix things.
-    If reset fails with an index.lock error, clears it and retries once.
+    The rollback/heal primitive (abort, boot revert, recover); generous timeout so
+    a large reset on a slow SD card isn't SIGTERM'd mid-checkout. Clears an
+    index.lock error and retries once.
     """
     if not path:
         return (False, "path error")
@@ -471,10 +468,9 @@ _GIT_OBJ_SHA_RE = re.compile(r"\b([0-9a-f]{40})\b")
 async def git_has_corruption(path: Path | None, hint: str = "") -> bool:
     """True if `hint` or git fsck shows object corruption.
 
-    `hint` (e.g. a failed fetch's stderr) is checked first: `git fsck
-    --connectivity-only` validates reachability, not object content, so it can
-    miss a corrupt blob that already broke the fetch. The fetch error is the
-    reliable signal in that case.
+    `hint` (e.g. a failed fetch's stderr) is checked first: fsck
+    --connectivity-only validates reachability not content, so it can miss a
+    corrupt blob the fetch already tripped on.
     """
     if path is None:
         return False
@@ -507,12 +503,9 @@ def _prune_empty_loose_objects(objects: Path) -> int:
 async def _quarantine_corrupt_objects(path: Path) -> int:
     """Move loose objects that `git fsck --full` flags as corrupt out of the way.
 
-    `git_has_corruption` uses `fsck --connectivity-only`, which never reads blob
-    content and so cannot see a non-empty object with a bad zlib header - exactly
-    what a power cut mid-write produces. A plain re-fetch will NOT replace such an
-    object because git still finds a file at that name. `fsck --full` reads object
-    content and names the bad ones; we move (not delete) them so a re-fetch
-    re-downloads them, and a misdiagnosis stays recoverable. Returns count moved.
+    connectivity-only fsck misses a bad-zlib object (power cut mid-write) and a
+    re-fetch won't replace it (file still there); fsck --full names them and we
+    move (not delete) them so a re-fetch restores them. Returns count moved.
     """
     ok, out = await _run(
         [GIT, "fsck", "--full", "--no-dangling", "--no-progress"],
@@ -550,14 +543,11 @@ async def _quarantine_corrupt_objects(path: Path) -> int:
 
 
 async def git_repair(path: Path, branch: str = "main") -> tuple[bool, str]:
-    """Prune 0-byte loose objects, re-fetch, and re-verify. Mirrors start.sh recovery.
+    """Prune 0-byte loose objects, re-fetch, re-verify. Mirrors start.sh recovery.
 
-    If empty-object pruning plus a fetch does not clear the corruption, escalate to
-    quarantining non-empty corrupt loose objects (`fsck --full`) and re-fetch once
-    more. Working tree is untouched (delete/move + fetch only), so tracked-but-
-    modified files survive. If fetch fails with index.lock error, clears lock and
-    retries. Branch parameter is used to repair corrupt HEAD (fallback to "main").
-    Returns (ok, message).
+    If that doesn't clear it, quarantine non-empty corrupt objects (`fsck --full`)
+    and re-fetch once more. Working tree untouched (delete/move + fetch only);
+    `branch` repairs a corrupt HEAD (fallback "main"). Returns (ok, message).
     """
     _clear_stale_git_index_lock(path)
     objects = path / ".git" / "objects"
@@ -706,9 +696,9 @@ async def git_checkout(
 async def check_apt_status(
     cache_ttl_seconds: int = 86_400, exclude: tuple[str, ...] = ()
 ) -> ComponentStatus:
-    """Return apt ComponentStatus from cache, refreshing via apt-get if older than cache_ttl_seconds.
+    """Return cached apt ComponentStatus, refreshing via apt-get past the TTL.
 
-    SEC: Validate cache file ownership and permissions to prevent privilege escalation.
+    SEC: validate cache ownership/permissions to prevent privilege escalation.
     """
     path = Path.home() / ".cache" / "blockscreen" / "apt_status_cache.json"
     exclude_key = "|".join(sorted(exclude))
@@ -786,19 +776,16 @@ def _apt_env() -> dict[str, str]:
 def _apt_cmd(verb: str, pkgs: Sequence[str] = ()) -> list[str]:
     """Build the sudo apt argv via the root-owned wrapper.
 
-    The wrapper is the only apt command sudoers grants. bs-bootstrap reinstalls it
-    when missing (an old-installer box can have the service but not the wrapper); until
-    that self-heal runs a missing wrapper surfaces as a plain 'command not found'.
+    The wrapper is the only apt command sudoers grants; bs-bootstrap reinstalls it
+    when missing (an old box may have the service but not the wrapper).
     """
     return [SUDO, str(APT_HELPER), verb, *pkgs]
 
 
 async def _apt_snapshot_packages() -> tuple[bool, Path | None]:
-    """Snapshot current package state with dpkg --get-selections to temp file.
+    """Snapshot package state via dpkg --get-selections to a temp file (no sudo).
 
-    Returns (success, snapshot_path).
-    Path is stored at ~/.cache/blockscreen/apt_pre_upgrade_snapshot.txt.
-    No sudo required for dpkg --get-selections.
+    Returns (success, snapshot_path) under ~/.cache/blockscreen/.
     """
     snapshot_path = (
         Path.home() / ".cache" / "blockscreen" / "apt_pre_upgrade_snapshot.txt"
@@ -827,21 +814,19 @@ async def _apt_snapshot_packages() -> tuple[bool, Path | None]:
 
 
 async def _apt_get_fix_broken() -> tuple[bool, str]:
-    """Run apt-get -f install -y to fix broken package state.
+    """Run apt-get -f install -y to unbreak package state.
 
-    Best-effort rollback after failed upgrade. May not fully restore state,
-    but aims to unbreak the system. Called only on apt_upgrade failure.
+    Best-effort post-upgrade rollback; called only on apt_upgrade failure.
     """
     return await _run(_apt_cmd("fix-broken"), timeout=120.0, env=_apt_env())
 
 
 async def _apt_restore_packages(snapshot_path: Path) -> tuple[bool, str]:
-    """Restore dpkg package *selections* from the pre-upgrade snapshot, then dselect-upgrade.
+    """Restore dpkg selections from the pre-upgrade snapshot, then dselect-upgrade.
 
-    This re-asserts which packages should be installed; it does NOT reliably
-    downgrade versions, since the prior .debs may no longer be in the apt cache.
-    Treat it as an unbreak step (keep the set consistent), not a true rollback.
-    Kernel/firmware are excluded from upgrades, bounding the blast radius.
+    Re-asserts which packages should be installed; does NOT reliably downgrade
+    versions (old .debs may be gone). An unbreak step, not a true rollback;
+    kernel/firmware excluded bounds the blast radius.
     """
     try:
         stdin_data = snapshot_path.read_bytes()
@@ -903,10 +888,9 @@ async def apt_update() -> tuple[bool, str]:
 
 
 async def apt_upgrade(exclude: tuple[str, ...] = ()) -> tuple[bool, str]:
-    """Run apt-get upgrade via explicit package list to limit blast radius.
+    """Run apt-get upgrade via an explicit package list to limit blast radius.
 
-    Always lists upgradable packages first; applies exclude regexes if any.
-    Uses 'install --only-upgrade' so only already-installed packages are touched.
+    Lists upgradables, applies excludes, uses `install --only-upgrade`.
     """
     ok, pkgs = await _list_upgradable_packages()
     if not ok:
@@ -934,9 +918,8 @@ async def run_hook(
 ) -> tuple[bool, str]:
     """Run the per-component update hook if it exists.
 
-    The 60s default suits tests and trivial hooks; the update and provisioning
-    flows pass HOOK_TIMEOUT since a hook may sync a full dependency set (e.g.
-    Spoolman's `uv sync` after its deps changed).
+    The 60s default suits tests/trivial hooks; update/provision flows pass
+    HOOK_TIMEOUT since a hook may sync a full dep set (e.g. Spoolman's `uv sync`).
     """
     hook = (_HOOKS_DIR / f"{name}.sh").resolve()  # SEC: resolve symlinks
     try:
@@ -967,11 +950,10 @@ async def enable_service(name: str | None) -> tuple[bool, str]:
 
 
 async def wait_for_service_active(name: str, timeout: float = 90.0) -> bool:
-    """Poll systemctl is-active until the service is active or timeout expires.
+    """Poll systemctl is-active until active or timeout.
 
-    `systemctl is-active --wait` does not exist (--wait applies only to
-    start/restart/is-system-running/kill and is silently ignored here), so an
-    explicit poll loop is required to ride out 'activating' after a restart.
+    `is-active --wait` doesn't exist (--wait is ignored here), so an explicit poll
+    is needed to ride out 'activating' after a restart.
     """
     if not _SERVICE_RE.match(name):
         logger.warning("wait_for_service_active: invalid service name %r", name)
@@ -998,9 +980,8 @@ async def wait_for_service_active(name: str, timeout: float = 90.0) -> bool:
 async def restart_service_noblock(name: str | None) -> tuple[bool, str]:
     """Queue a service restart without waiting (systemctl --no-block).
 
-    For the UI service that hosts the updater's D-Bus client: a blocking restart
-    tears down that client, and a slow restart could time out and abort the
-    in-flight update. Fire-and-forget and let it reload on its own.
+    For the UI service hosting the updater's D-Bus client: a blocking restart
+    tears it down and could time out the in-flight update. Fire-and-forget.
     """
     if name is None:
         return (False, "service name is None")
@@ -1012,10 +993,9 @@ async def restart_service_noblock(name: str | None) -> tuple[bool, str]:
 async def verify_updater_importable(component_path: Path | None) -> bool:
     """Self-test the new on-disk updater code before restarting into it.
 
-    Imports the updater package in a fresh interpreter from component_path. A
-    new updater that fails to import must never restart the daemon onto itself:
-    that would take down the only field update path. On failure the caller keeps
-    the running (old) daemon and lets the next reboot adopt the new code.
+    Imports the updater package in a fresh interpreter from component_path: a new
+    updater that fails to import must never restart the daemon onto itself (that
+    kills the only field update path). On failure keep the old daemon.
     """
     if component_path is None or not component_path.exists():
         return False
@@ -1032,10 +1012,9 @@ async def verify_updater_importable(component_path: Path | None) -> bool:
 async def restart_service(name: str | None) -> tuple[bool, str]:
     """Restart a systemd service, recovering from a start-limit hit.
 
-    If `restart` fails (commonly "start request repeated too quickly"), clear the
-    rate-limit/failed state with `reset-failed` and retry once. `systemctl kill`
-    is NOT used as a fallback: it does not clear a start-limit and is not covered
-    by the scoped NOPASSWD sudoers rules, so it would prompt for a password.
+    If `restart` fails (e.g. "start request repeated too quickly"), `reset-failed`
+    and retry once. `systemctl kill` is NOT a fallback: it neither clears a
+    start-limit nor is covered by the scoped NOPASSWD rules (would prompt).
     """
     if name is None:
         return (False, "service name is None")
