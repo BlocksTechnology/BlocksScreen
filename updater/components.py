@@ -105,6 +105,16 @@ def _validate_component(data: dict) -> ComponentConfig | None:
             )
             url = None
 
+        reset_mode = data.get("reset_mode", "hard")
+        if reset_mode not in ("hard", "soft"):
+            # An unknown value must not silently take the soft path (fleet default is hard).
+            logger.warning(
+                "Component %r has invalid reset_mode %r - using 'hard'",
+                name,
+                reset_mode,
+            )
+            reset_mode = "hard"
+
         install_if_missing = bool(data.get("install_if_missing", False))
         if install_if_missing and not url:
             logger.warning(
@@ -119,7 +129,7 @@ def _validate_component(data: dict) -> ComponentConfig | None:
             kind=comp_type,
             path=resolved,
             service=str(service) if service else None,
-            reset_mode=data.get("reset_mode", "hard"),
+            reset_mode=reset_mode,
             order=order,
             branch=str(branch) if branch else None,
             version=str(version) if version else None,
@@ -151,8 +161,12 @@ def _validate_component(data: dict) -> ComponentConfig | None:
 
 def _merge(base: list[dict], override: list[dict]) -> list[dict]:
     """Merge override entries into base by name; unknown override names are appended."""
-    base_by_name = {c["name"]: dict(c) for c in base if "name" in c}
+    base_by_name = {
+        c["name"]: dict(c) for c in base if isinstance(c, dict) and "name" in c
+    }
     for entry in override:
+        if not isinstance(entry, dict):
+            continue
         entry_name = entry.get("name")
         if not entry_name:
             continue
@@ -225,6 +239,9 @@ def load_components() -> tuple[list[ComponentConfig], float]:
             logger.exception("Failed to load override YAML %s", OVERRIDE_PATH)
     configs: list[ComponentConfig] = []
     for entry in raw_components:
+        if not isinstance(entry, dict):
+            logger.warning("Component entry is not a mapping - skipped: %r", entry)
+            continue
         cfg = _validate_component(entry)
         if cfg is not None:
             configs.append(cfg)

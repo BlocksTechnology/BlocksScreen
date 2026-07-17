@@ -108,8 +108,17 @@ class UpdaterInterface(
         """Create a task and hold a strong reference so GC cannot cancel it."""
         task = asyncio.get_running_loop().create_task(coro, name=name)
         self._background_tasks.add(task)
-        task.add_done_callback(self._background_tasks.discard)
+        task.add_done_callback(self._task_done)
         return task
+
+    def _task_done(self, task: asyncio.Task) -> None:
+        """Drop the task ref and log its exception now, not at some later GC."""
+        self._background_tasks.discard(task)
+        if task.cancelled():
+            return
+        exc = task.exception()
+        if exc is not None:
+            _log.error("task %r failed", task.get_name(), exc_info=exc)
 
     def _set_busy(self, busy: bool) -> None:  # noqa: FBT001
         """Emit busy_changed only on state transitions to avoid redundant signals."""

@@ -63,8 +63,7 @@ components:
     reset_mode: hard
     order: 20
 
-  # Provisioned by hooks/Spoolman.sh (uv sync from source + stub client/dist);
-  # backend-only, used via the moonraker API.
+  # Provisioned by hooks/Spoolman.sh
   - name: Spoolman
     type: git
     path: ~/Spoolman
@@ -78,7 +77,7 @@ components:
   - name: BlocksScreen
     type: git
     path: ~/BlocksScreen
-    branch: dev
+    branch: main
     url: https://github.com/BlocksTechnology/BlocksScreen
     service: BlocksScreen.service
     reset_mode: hard

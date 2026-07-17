@@ -438,3 +438,40 @@ class TestProvisionConfig:
         assert cfg is not None
         assert cfg.url is None
         assert cfg.install_if_missing is False
+
+
+def test_invalid_reset_mode_coerced_to_hard(caplog):
+    bad_yaml = """
+components:
+    - name: klipper
+      type: git
+      path: ~/klipper
+      reset_mode: Hard
+      order: 10
+"""
+    with (
+        patch("builtins.open", _mock_load(bad_yaml)),
+        patch("pathlib.Path.exists", return_value=False),
+        caplog.at_level(logging.WARNING, logger="updater.components"),
+    ):
+        configs, _ = load_components()
+    assert configs[-1].reset_mode == "hard"  # typo must not become the soft path
+    assert any("invalid reset_mode" in r.message for r in caplog.records)
+
+
+def test_non_dict_component_entry_skipped(caplog):
+    bad_yaml = """
+components:
+    - just-a-string
+    - name: klipper
+      type: git
+      path: ~/klipper
+      order: 10
+"""
+    with (
+        patch("builtins.open", _mock_load(bad_yaml)),
+        patch("pathlib.Path.exists", return_value=False),
+        caplog.at_level(logging.WARNING, logger="updater.components"),
+    ):
+        configs, _ = load_components()
+    assert [c.name for c in configs if c.kind == "git"] == ["klipper"]

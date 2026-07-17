@@ -16,6 +16,7 @@ from updater.executor import (
     _make_clean_env,
     _repair_corrupt_head,
     _remove_broken_loose_ref,
+    git_default_branch,
     _run,
     apt_update,
     apt_upgrade,
@@ -1298,3 +1299,32 @@ class TestCorruptionSignatures:
             "asyncio.create_subprocess_exec", new_callable=AsyncMock, return_value=proc
         ):
             assert await git_has_corruption(Path("/x")) is True
+
+
+class TestGitDefaultBranch:
+    """git_default_branch: HEAD symref, else origin/HEAD target, else master."""
+
+    @pytest.mark.asyncio
+    async def test_prefers_head_symref(self, tmp_path):
+        with patch(
+            "updater.executor._run", return_value=(True, "master\n")
+        ) as mock_run:
+            assert await git_default_branch(tmp_path) == "master"
+        assert mock_run.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_falls_back_to_origin_head(self, tmp_path):
+        with patch(
+            "updater.executor._run",
+            side_effect=[(False, ""), (True, "origin/master\n")],
+        ):
+            assert await git_default_branch(tmp_path) == "master"
+
+    @pytest.mark.asyncio
+    async def test_last_resort_is_master(self, tmp_path):
+        with patch("updater.executor._run", side_effect=[(False, ""), (False, "")]):
+            assert await git_default_branch(tmp_path) == "master"
+
+    @pytest.mark.asyncio
+    async def test_none_path_returns_master(self):
+        assert await git_default_branch(None) == "master"

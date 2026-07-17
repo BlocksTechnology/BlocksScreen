@@ -8,6 +8,10 @@ _BSENV_USER="blocks"
 _BSENV_HOME=$(getent passwd "$_BSENV_USER" | cut -d: -f6)
 BSENV="${BLOCKSSCREEN_VENV:-${_BSENV_HOME}/.BlocksScreen-env}"
 
+# A root pull must not leave root-owned dists in the blocks venv (breaks later pip runs).
+_as_blocks() { if [ "$(id -u)" = "0" ]; then runuser -u "$_BSENV_USER" -- "$@"; else "$@"; fi; }
+_own() { [ "$(id -u)" = "0" ] && chown "$_BSENV_USER" "$1" 2>/dev/null || true; }
+
 # shellcheck source=/dev/null
 if [ -f "$SCRIPT_PATH/bs-common.sh" ]; then . "$SCRIPT_PATH/bs-common.sh"; fi
 
@@ -23,12 +27,13 @@ SENTINEL="$BSENV/.blockscreen-reqs-hash"
 ATTEMPT="$BSENV/.blockscreen-reqs-attempt"
 if [ ! -f "$SENTINEL" ] || [ "$(cat "$SENTINEL")" != "$REQS_HASH" ]; then
     echo "[post-merge] requirements changed - pre-installing deps (this may take a few minutes) ..."
-    if "$BSENV/bin/pip" install --quiet \
+    if _as_blocks "$BSENV/bin/pip" install --quiet \
         --only-binary :all: \
         --no-binary sdbus,sdbus-networkmanager \
         --upgrade-strategy=only-if-needed \
         -r "$BS_PATH/scripts/requirements.txt"; then
         echo "$REQS_HASH" >"$SENTINEL"
+        _own "$SENTINEL"
         rm -f "$ATTEMPT" 2>/dev/null || true
         echo "[post-merge] deps installed"
     else
@@ -38,9 +43,11 @@ if [ ! -f "$SENTINEL" ] || [ "$(cat "$SENTINEL")" != "$REQS_HASH" ]; then
         case "$_cnt" in '' | *[!0-9]*) _cnt=0 ;; esac
         if [ "$_prev" = "$REQS_HASH" ]; then _cnt=$((_cnt + 1)); else _cnt=1; fi
         echo "$REQS_HASH $_cnt" >"$ATTEMPT"
+        _own "$ATTEMPT"
         if [ "$_cnt" -ge 3 ]; then
             echo "[post-merge] deps failed ${_cnt}x; giving up to stop thrash (venv left as-is)"
             echo "$REQS_HASH" >"$SENTINEL"
+            _own "$SENTINEL"
         fi
     fi
 fi
@@ -55,7 +62,7 @@ if [ ! -f /etc/systemd/system/BlocksScreen-updater.service ]; then
 fi
 
 # 4. Precompute splash cache so the first Qt restart shows the right logo.
-"$BSENV/bin/python3.11" "$SCRIPT_PATH/bs-splash.py" --precompute 2>/dev/null || true
+_as_blocks "$BSENV/bin/python3.11" "$SCRIPT_PATH/bs-splash.py" --precompute 2>/dev/null || true
 
 
 # Under the daemon's own pull a restart here aborts the batch: defer via sentinel.

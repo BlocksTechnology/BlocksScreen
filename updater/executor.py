@@ -542,12 +542,14 @@ async def _quarantine_corrupt_objects(path: Path) -> int:
     return moved
 
 
-async def git_repair(path: Path, branch: str = "main") -> tuple[bool, str]:
+async def git_repair(path: Path, branch: str | None = None) -> tuple[bool, str]:
     """Prune 0-byte loose objects, re-fetch, re-verify. Mirrors start.sh recovery.
 
     If that doesn't clear it, quarantine non-empty corrupt objects (`fsck --full`)
     and re-fetch once more. Working tree untouched (delete/move + fetch only);
-    `branch` repairs a corrupt HEAD (fallback "main"). Returns (ok, message).
+    `branch` repairs a corrupt HEAD (None = derive the repo's own default, so a
+    branchless master-default component is not misrepaired to main). Returns
+    (ok, message).
     """
     _clear_stale_git_index_lock(path)
     objects = path / ".git" / "objects"
@@ -595,13 +597,14 @@ async def _is_head_readable(path: Path) -> bool:
     return ok
 
 
-async def _repair_corrupt_head(path: Path, branch: str = "main") -> bool:
+async def _repair_corrupt_head(path: Path, branch: str | None = None) -> bool:
     """Try to repair a corrupt HEAD by rewriting it to a valid symbolic ref.
 
     Returns True if HEAD was repaired or is already readable.
     """
     if await _is_head_readable(path):
         return True
+    branch = branch or await git_default_branch(path)
     ok, _msg = await _run(
         [GIT, "symbolic-ref", "HEAD", f"refs/heads/{branch}"],
         cwd=path,
@@ -662,6 +665,27 @@ async def git_get_current_branch(path: Path) -> str:
         [GIT, "rev-parse", "--abbrev-ref", "HEAD"], cwd=path, timeout=10.0
     )
     return output.strip() if ok else ""
+
+
+async def git_default_branch(path: Path | None) -> str:
+    """Best-effort default branch: HEAD's symref, else origin/HEAD's target, else master.
+
+    HEAD's symref survives a missing commit object (plain-text ref file), so a
+    corrupt repo still reports the branch it was on.
+    """
+    if path is None:
+        return "master"
+    ok, out = await _run(
+        [GIT, "symbolic-ref", "--short", "HEAD"], cwd=path, timeout=10.0
+    )
+    if ok and out.strip():
+        return out.strip()
+    ok, out = await _run(
+        [GIT, "rev-parse", "--abbrev-ref", "origin/HEAD"], cwd=path, timeout=10.0
+    )
+    if ok and out.strip().startswith("origin/"):
+        return out.strip().removeprefix("origin/")
+    return "master"
 
 
 async def git_describe(path: Path, ref: str | None = None) -> str:
@@ -1020,12 +1044,14 @@ async def restart_service(name: str | None) -> tuple[bool, str]:
         return (False, "service name is None")
     if not _SERVICE_RE.match(name):
         return (False, f"service name {name!r} is invalid")
-    ok, err = await _run([SUDO, SYSTEMCTL, "restart", name], timeout=30.0)
+    # 120s: a blocking restart of a Type=notify unit waits for READY (up to its
+    # TimeoutStartSec=90s default); 30s used to under-wait a slow cold UI start.
+    ok, err = await _run([SUDO, SYSTEMCTL, "restart", name], timeout=120.0)
     if ok:
         return (True, "")
     logger.warning("systemctl restart %s failed (%s); reset-failed + retry", name, err)
     await _run([SUDO, SYSTEMCTL, "reset-failed", name], timeout=10.0)
-    ok, err2 = await _run([SUDO, SYSTEMCTL, "restart", name], timeout=30.0)
+    ok, err2 = await _run([SUDO, SYSTEMCTL, "restart", name], timeout=120.0)
     if ok:
         return (True, f"recovered via reset-failed (first error: {err})")
     return (False, err2)

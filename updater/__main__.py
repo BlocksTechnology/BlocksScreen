@@ -121,9 +121,12 @@ async def main() -> None:
         case "update":
             with _cli_lock():
                 if args.name is None:
-                    await svc.update_all()
+                    ok = await svc.update_all()
                 else:
-                    await svc.update_component(args.name)
+                    ok = await svc.update_component(args.name)
+            if not ok:
+                # Scripts/harnesses rely on the exit code, not just the log.
+                raise SystemExit(1)
         case "status":
             result = await svc.check_status()
             for s in sorted(result.values(), key=lambda c: c.name):

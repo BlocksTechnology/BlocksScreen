@@ -6,6 +6,8 @@ DefaultDependencies=no
 Type=oneshot
 User=root
 ExecStart=/bin/bash BS_DIR/scripts/install-updater.sh
-ExecStartPost=/bin/rm -f BS_PRIMARY_HOME/.config/blockscreen/.run-install-updater
+# ExecStopPost also runs when ExecStart fails: a persistent failure must not
+# leave the flag set and storm the path unit into its start limit.
+ExecStopPost=-/bin/rm -f BS_PRIMARY_HOME/.config/blockscreen/.run-install-updater
 StandardOutput=journal
 StandardError=journal
