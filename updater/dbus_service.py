@@ -19,13 +19,14 @@ _STATUS_PATH = Path("/run/blockscreen/updater_status.json")
 
 
 class DbusProgressCallback:
-    """Forward ProgressCallback events to D-Bus signals (decouples UpdateService
-    from D-Bus): each on_* call invokes the matching signal's .emit()."""
+    """Forward ProgressCallback events to D-Bus signals (decouples UpdateService"""
 
     def __init__(self, iface: UpdaterInterface) -> None:
+        """Bind the callback to the D-Bus interface whose signals it emits."""
         self._iface = iface
 
     def on_step(self, name: str, step: int, total: int) -> None:
+        """Emit step_complete and write the current step to the status file."""
         self._iface.step_complete.emit((name, step, total))
         try:
             _STATUS_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -36,15 +37,19 @@ class DbusProgressCallback:
             _log.debug("status write failed: %s", e)
 
     def on_component_done(self, name: str, success: bool) -> None:  # noqa: FBT001
+        """Emit the component_done signal."""
         self._iface.component_done.emit((name, success))
 
     def on_error(self, name: str, reason: str) -> None:
+        """Emit the error signal."""
         self._iface.error.emit((name, reason))
 
     def on_rollback(self, name: str, success: bool) -> None:  # noqa: FBT001
+        """Emit the rollback signal."""
         self._iface.rollback.emit((name, success))
 
     def on_recover(self, name: str, success: bool) -> None:  # noqa: FBT001
+        """Emit the recover_done signal."""
         self._iface.recover_done.emit((name, success))
 
 
@@ -52,8 +57,7 @@ class UpdaterInterface(
     sdbus.DbusInterfaceCommonAsync,
     interface_name="com.blockscreen.Updater",
 ):
-    """D-Bus contract shared by server and client proxy: signals declared once,
-    sdbus swaps each for server-side emit machinery / client-side async-iterable."""
+    """D-Bus contract shared by server and client proxy: signals declared once,"""
 
     @sdbus.dbus_signal_async("sii")
     def step_complete(self) -> tuple[str, int, int]:
@@ -91,6 +95,7 @@ class UpdaterInterface(
         raise NotImplementedError
 
     def __init__(self) -> None:
+        """Wire the service and busy state, then spawn the boot, poll, and self-heal tasks."""
         super().__init__()
         self._svc = UpdateService(callback=DbusProgressCallback(self))
         self._busy: bool = False
@@ -128,10 +133,7 @@ class UpdaterInterface(
             self.busy_changed.emit((busy,))
 
     def _validate_component_name(self, name: str) -> bool:
-        """SEC: verify component exists to prevent abuse on unknown names.
-
-        Also rate-limits invalid requests to detect/prevent fuzzing attacks.
-        """
+        """SEC: verify component exists to prevent abuse on unknown names."""
         is_valid = self._svc.has_component(name)
         if not is_valid:
             self._invalid_requests += 1
@@ -237,6 +239,7 @@ class UpdaterInterface(
         return await self._svc.bless_healthy(name, hash_val)
 
     async def _run_update_all(self) -> None:
+        """Run update_all under the process lock, then a background apt pass; always clears busy."""
         ran = False
         try:
             with process_lock() as acquired:
@@ -258,6 +261,7 @@ class UpdaterInterface(
             )
 
     async def _update_all_locked(self) -> None:
+        """Update only the components whose status is dirty."""
         statuses = await self._svc.check_status()
         dirty = {
             name
@@ -276,6 +280,7 @@ class UpdaterInterface(
             _log.info("update_all: no dirty components found")
 
     async def _run_update_component(self, name: str) -> None:
+        """Run a single-component update under the process lock; always clears busy."""
         try:
             with process_lock() as acquired:
                 if not acquired:
@@ -289,6 +294,7 @@ class UpdaterInterface(
             self._set_busy(busy=False)
 
     async def _run_recover(self, name: str, hard: bool) -> None:  # noqa: FBT001
+        """Run a recover under the process lock; always clears busy."""
         try:
             with process_lock() as acquired:
                 if not acquired:

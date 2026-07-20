@@ -2660,3 +2660,117 @@ class TestReviewHardeningFixes:
                 svc = UpdateService()
                 svc._components = [good]
                 assert await svc.update_all() is expected
+
+
+class TestUpdaterDowngradeGuard:
+    """Refuse switching the host onto a tree without the updater (field brick)."""
+
+    def _bs(self, tmp_path: Path) -> ComponentConfig:
+        path = tmp_path / "BlocksScreen"
+        (path / ".git").mkdir(parents=True)
+        return ComponentConfig(
+            name="BlocksScreen",
+            kind="git",
+            path=path,
+            service="BlocksScreen.service",
+            branch="main",
+        )
+
+    @pytest.mark.asyncio
+    async def test_stage_refuses_target_without_updater(self, tmp_path):
+        comp = self._bs(tmp_path)
+        svc = UpdateService(callback=MagicMock())
+        svc._components = [comp]
+        with (
+            patch("updater.service.git_fetch", return_value=(True, "")),
+            patch("updater.service.git_ref_hash", return_value="a" * 40),
+            # target lacks updater/
+            patch("updater.service.git_tree_has_path", return_value=False),
+            patch("updater.service.git_checkout") as mock_checkout,
+        ):
+            ok, reason = await svc._stage_component(comp)
+        assert ok is False
+        assert "refusing" in reason
+        mock_checkout.assert_not_called()  # never switched onto the brick
+
+    @pytest.mark.asyncio
+    async def test_stage_allows_target_with_updater(self, tmp_path):
+        comp = self._bs(tmp_path)
+        svc = UpdateService(callback=MagicMock())
+        svc._components = [comp]
+        with (
+            patch("updater.service.git_fetch", return_value=(True, "")),
+            patch("updater.service.git_ref_hash", return_value="a" * 40),
+            patch("updater.service.git_tree_has_path", return_value=True),
+            patch("updater.service.git_checkout", return_value=(True, "")) as mc,
+            patch("updater.service.git_reset_to_hash", return_value=(True, "")),
+        ):
+            ok, _ = await svc._stage_component(comp)
+        assert ok is True
+        mc.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_single_update_refusal_no_rollback_clears_marker(self, tmp_path):
+        comp = self._bs(tmp_path)
+        cb = MagicMock()
+        svc = UpdateService(callback=cb)
+        svc._components = [comp]
+        svc._state_path = tmp_path / "state.json"
+        svc._inflight_path = tmp_path / "inflight.json"
+        with (
+            patch("updater.service.git_get_hash", return_value="a" * 40),
+            patch(
+                "updater.service._assert_https_remote",
+                return_value=(True, "https://x"),
+            ),
+            patch("updater.service.git_fetch", return_value=(True, "")),
+            patch("updater.service.git_ref_hash", return_value="a" * 40),
+            patch("updater.service.git_tree_has_path", return_value=False),
+            patch("updater.service.git_reset_to_hash") as mock_reset,
+        ):
+            assert await svc._run_git_update(comp) is False
+        mock_reset.assert_not_called()  # nothing moved: no rollback
+        assert not (tmp_path / "inflight.json").exists()
+        assert "refusing" in cb.on_error.call_args[0][1]
+
+    @pytest.mark.asyncio
+    async def test_batch_drops_host_keeps_others(self, tmp_path):
+        bs = self._bs(tmp_path)
+        klip_path = tmp_path / "klipper"
+        (klip_path / ".git").mkdir(parents=True)
+        klip = ComponentConfig(
+            name="klipper", kind="git", path=klip_path, service="klipper.service"
+        )
+        cb = MagicMock()
+        svc = UpdateService(callback=cb)
+        svc._components = [klip, bs]
+        svc._state_path = tmp_path / "state.json"
+        svc._inflight_path = tmp_path / "inflight.json"
+
+        async def fake_tree(path, ref, repo_path):
+            return "klipper" in str(path)  # only klipper target has updater/
+
+        with (
+            patch("updater.service.git_get_hash", return_value="a" * 40),
+            patch(
+                "updater.service._assert_https_remote",
+                return_value=(True, "https://x"),
+            ),
+            patch("updater.service.git_fetch", return_value=(True, "")),
+            patch("updater.service.git_ref_hash", return_value="a" * 40),
+            patch("updater.service.git_tree_has_path", side_effect=fake_tree),
+            patch("updater.service.git_checkout", return_value=(True, "")),
+            patch("updater.service.git_reset_to_hash", return_value=(True, "")),
+            patch(
+                "updater.service.UpdateService._install_dependencies",
+                return_value=(True, ""),
+            ),
+            patch("updater.service.run_hook", return_value=(True, "")),
+            patch("updater.service.restart_service", return_value=(True, "")),
+            patch("updater.service.wait_for_service_active", return_value=True),
+            patch.object(UpdateService, "_apply_deferred_restart", new=AsyncMock()),
+        ):
+            result = await svc._run_git_batch([klip, bs])
+        assert result is False  # BlocksScreen dropped
+        done = {c.args[0]: c.args[1] for c in cb.on_component_done.call_args_list}
+        assert done == {"klipper": True, "BlocksScreen": False}

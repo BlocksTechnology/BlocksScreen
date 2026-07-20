@@ -74,13 +74,21 @@ def _validate_component(data: dict) -> ComponentConfig | None:
             return None
 
         branch = data.get("branch")
-        if branch is not None and not _GIT_BRANCH_RE.match(str(branch)):
-            logger.warning(
-                "Component %r has invalid branch name %r, skipped",
-                name,
-                branch,
-            )
-            return None
+        if branch is not None:
+            branch = str(branch)
+            # Strip a stray remote prefix: `origin/x` would fetch `origin/origin/x`.
+            if branch.startswith("origin/"):
+                logger.warning(
+                    "Component %r branch %r has an 'origin/' prefix - stripping it",
+                    name,
+                    branch,
+                )
+                branch = branch[len("origin/") :]
+            if not _GIT_BRANCH_RE.match(branch):
+                logger.warning(
+                    "Component %r has invalid branch name %r, skipped", name, branch
+                )
+                return None
 
         version = data.get("version")
         if version is not None and not _GIT_VERSION_RE.match(str(version)):
@@ -180,10 +188,7 @@ def _merge(base: list[dict], override: list[dict]) -> list[dict]:
 
 
 def load_components() -> tuple[list[ComponentConfig], float]:
-    """Load/validate components from bundled YAML merged with the user override.
-
-    Returns (list of ComponentConfig, poll_interval in seconds).
-    """
+    """Load/validate components from bundled YAML merged with the user override."""
     try:
         import yaml  # noqa: PLC0415
     except ImportError:

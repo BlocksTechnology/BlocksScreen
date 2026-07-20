@@ -475,3 +475,23 @@ components:
     ):
         configs, _ = load_components()
     assert [c.name for c in configs if c.kind == "git"] == ["klipper"]
+
+
+def test_origin_prefixed_branch_is_stripped(caplog):
+    bad_yaml = """
+components:
+    - name: BlocksScreen
+      type: git
+      path: ~/BlocksScreen
+      branch: origin/Release-2.0
+      order: 99
+"""
+    with (
+        patch("builtins.open", _mock_load(bad_yaml)),
+        patch("pathlib.Path.exists", return_value=False),
+        caplog.at_level(logging.WARNING, logger="updater.components"),
+    ):
+        configs, _ = load_components()
+    bs = next(c for c in configs if c.name == "BlocksScreen")
+    assert bs.branch == "Release-2.0"  # stray origin/ prefix stripped
+    assert any("origin/" in r.message for r in caplog.records)

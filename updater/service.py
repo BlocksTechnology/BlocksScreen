@@ -42,6 +42,7 @@ from updater.executor import (
     git_has_corruption,
     git_pull,
     git_ref_hash,
+    git_tree_has_path,
     git_repair,
     git_reset_to_hash,
     is_git_repo,
@@ -143,6 +144,8 @@ _KLIPPER_SERVICE = "klipper.service"
 
 # Self-heal: the UI component name (components.yaml) that the supervisor watches.
 _UI_COMPONENT = "BlocksScreen"
+# Marker file proving updater exists: absence at target ref aborts update (lack bricks Type=notify host with no self-heal).
+_UPDATER_MARKER = "updater/dbus_service.py"
 # Forward-heal always targets the curated-stable channel, not the configured branch.
 _HEAL_REMOTE_REF = "origin/main"
 # Settle window after a rung (debounce plus margin) so a new build can bless first.
@@ -156,33 +159,53 @@ _DEPLOY_FLAG = Path.home() / ".config" / "blockscreen" / ".run-install-updater"
 
 
 class ProgressCallback(Protocol):
-    def on_step(self, name: str, step: int, total: int) -> None: ...
-    def on_component_done(self, name: str, success: bool) -> None: ...
-    def on_error(self, name: str, reason: str) -> None: ...
-    def on_rollback(self, name: str, success: bool) -> None: ...
-    def on_recover(self, name: str, success: bool) -> None: ...
+    def on_step(self, name: str, step: int, total: int) -> None:
+        """Report a numbered progress step for a component."""
+        ...
+
+    def on_component_done(self, name: str, success: bool) -> None:
+        """Report a component's final success or failure."""
+        ...
+
+    def on_error(self, name: str, reason: str) -> None:
+        """Report a non-recoverable error for a component."""
+        ...
+
+    def on_rollback(self, name: str, success: bool) -> None:
+        """Report a rollback attempt's outcome."""
+        ...
+
+    def on_recover(self, name: str, success: bool) -> None:
+        """Report a recover attempt's outcome."""
+        ...
 
 
 class LoggingCallback:
     def __init__(self) -> None:
+        """Create the logging progress callback."""
         self._log = logging.getLogger("updater")
 
     def on_step(self, name: str, step: int, total: int) -> None:
+        """Log a progress step."""
         self._log.info("%s step %d/%d", name, step, total)
 
     def on_component_done(self, name: str, success: bool) -> None:
+        """Log a component's success or failure."""
         if success:
             self._log.info("%s done(ok=True)", name)
         else:
             self._log.error("%s done(ok=False)", name)
 
     def on_error(self, name: str, reason: str) -> None:
+        """Log a component error."""
         self._log.error("%s error: %s", name, reason)
 
     def on_rollback(self, name: str, success: bool) -> None:
+        """Log a rollback outcome."""
         self._log.warning("%s rollback (ok=%s)", name, success)
 
     def on_recover(self, name: str, success: bool) -> None:
+        """Log a recover outcome."""
         self._log.info("%s recover (ok=%s)", name, success)
 
 
@@ -192,6 +215,7 @@ class UpdateService:
     _FETCH_TTL: float = 300.0
 
     def __init__(self, callback: ProgressCallback | None = None) -> None:
+        """Load components and initialize locks, caches, and self-heal tracking."""
         self._components, self.poll_interval = load_components()
         self._git_lock = Lock()
         self._state_lock = Lock()
@@ -226,14 +250,11 @@ class UpdateService:
         return [(c.name, c.kind) for c in self._components]
 
     async def check_status(self, force: bool = False) -> dict[str, ComponentStatus]:
-        """Concurrently check status of all components.
-
-        force=True bypasses the fetch TTL so git fetch always runs.
-        Use for explicit user-triggered refreshes.
-        """
+        """Concurrently check status of all components."""
         results: dict[str, ComponentStatus] = {}
 
         async def _check_one(c: ComponentConfig) -> None:
+            """Fetch and record one component's status into the results dict."""
             if c.kind == "apt":
                 # force bypasses the apt cache, mirroring the git fetch TTL bypass.
                 status = await check_apt_status(
@@ -292,14 +313,7 @@ class UpdateService:
         return await self._run_git_update(component)
 
     async def update_all(self, names: set[str] | None = None) -> bool:
-        """Update components: apt independently, existing git as one phased batch.
-
-        apt packages and missing-component provisioning are independent of the
-        git code set, so they run outside the batch. One failing component never
-        stops the others: it is reported, reverted and dropped while the rest
-        continue. Returns True only if every attempted component succeeded (CLI
-        exit-code contract).
-        """
+        """Update components: apt independently, existing git as one phased batch."""
         components = (
             self._components
             if names is None
@@ -364,9 +378,7 @@ class UpdateService:
         return ok
 
     async def provision_missing(self) -> bool:
-        """Clone absent install_if_missing components without waiting for a manual
-        Update (e.g. one added by a self-update); existing repos untouched. Returns
-        True if anything was provisioned."""
+        """Clone absent install_if_missing components without waiting for a manual"""
         missing = [
             c
             for c in self._components
@@ -390,13 +402,7 @@ class UpdateService:
     async def _preflight_fetch(
         self, sorted_components: list[ComponentConfig]
     ) -> set[str]:
-        """Fetch every existing git component up-front (network phase).
-
-        Decoupling download from apply catches an unreachable remote before
-        anything is checked out. Returns the names whose fetch failed (offline);
-        the caller drops just those and continues. A pre-fetched component skips
-        its apply-phase fetch; missing/corrupt repos self-heal.
-        """
+        """Fetch every existing git component up-front (network phase)."""
         # Non-repo dirs excluded: their fetch failure is not "offline" (see update_all).
         targets = [
             c
@@ -426,15 +432,7 @@ class UpdateService:
         return offline
 
     async def _run_git_batch(self, batch: list[ComponentConfig]) -> bool:
-        """Apply existing git components with per-component failure isolation.
-
-        Phased: stage all, deps all, hooks all, then restart each unique service
-        once. A component failing a pre-restart phase is reverted and dropped
-        while the rest continue; a restart failure reverts every component behind
-        that service and re-restarts it onto the old code. Nothing restarts
-        before the restart phase, so a power cut mid-way still reverts at boot.
-        Returns True only if every batched component succeeded.
-        """
+        """Apply existing git components with per-component failure isolation."""
         prev: dict[str, str] = {}
         alive: list[ComponentConfig] = []
         for c in batch:
@@ -482,8 +480,7 @@ class UpdateService:
         )
         touched: list[ComponentConfig] = []
         restarted: list[str] = []
-        # Repos whose failure-revert itself failed: kept in the in-flight marker
-        # so the boot reconcile retries them (never the committed survivors).
+        # Repos whose revert failed: kept in in-flight marker so boot reconcile retries them, not committed survivors.
         pending_revert: dict[str, str] = {}
         committed = False
         try:
@@ -548,8 +545,7 @@ class UpdateService:
                     pending_revert[c.name] = prev[c.name]
                 touched.remove(c)
             alive = survivors
-            # Restart each unique svc once; a failure reverts every component
-            # behind that service and re-restarts it onto the old code.
+            # Restart each unique service once; failure reverts all components behind it and re-restarts onto old code.
             self._log.info("git batch: restart phase")
             seen: set[str] = set()
             ui_components: list[ComponentConfig] = []
@@ -597,8 +593,7 @@ class UpdateService:
                             pending_revert[m.name] = prev[m.name]
                         alive.remove(m)
                         touched.remove(m)
-                        # Its own service already runs the new code: put it back
-                        # on the old, unless a surviving component shares it.
+                        # Service runs new code: revert it to old code unless a surviving component shares the service.
                         shared = any(o.service == m.service for o in alive)
                         if m.service and m.service in restarted and not shared:
                             if not await self._restart_one(m.service):
@@ -711,11 +706,7 @@ class UpdateService:
     async def _drop_component(
         self, component: ComponentConfig, prev_hash: str, reason: str
     ) -> bool:
-        """Revert one failed component and report it; the rest of the batch continues.
-
-        Returns True when the revert succeeded; False means the caller must keep
-        the repo in the in-flight marker for a boot-time retry.
-        """
+        """Revert one failed component and report it; the rest of the batch continues."""
         self._log.warning(
             "%s: dropped from batch (reason=%s), reverting to %s",
             component.name,
@@ -741,15 +732,7 @@ class UpdateService:
             await asyncio.to_thread(self._clear_inflight)
 
     async def _apply_deferred_restart(self) -> None:
-        """Apply a daemon restart/reinstall hook deferred during this batch.
-
-        Hooks record `install`/`code` to the tmpfs sentinel instead of restarting
-        mid-batch. Called once after success + UI restart: `install` touches the
-        deploy flag (BlocksScreen-deploy.path runs install-updater out-of-band);
-        `code` self-tests the new updater and `--no-block` restarts onto it only if
-        it imports, else the next reboot adopts it. Never raises: a completed update
-        must stand regardless.
-        """
+        """Apply a daemon restart/reinstall hook deferred during this batch."""
         try:
             sentinel = restart_sentinel_path()
             reason = await asyncio.to_thread(self._read_clear_sentinel, sentinel)
@@ -846,10 +829,7 @@ class UpdateService:
         return ok
 
     async def bless_healthy(self, name: str, hash_val: str) -> bool:
-        """Mark a component healthy (known-good) after a debounce; snapshots baseline.
-
-        Empty hash_val blesses the current HEAD (UI need not compute a hash).
-        """
+        """Mark a component healthy (known-good) after a debounce; snapshots baseline."""
         component = next((c for c in self._components if c.name == name), None)
         if component is None:
             self._log.error("bless_healthy: component %s not found", name)
@@ -862,6 +842,7 @@ class UpdateService:
         nrestarts_baseline = await get_service_nrestarts(_UI_SERVICE)
 
         def _apply(state: dict) -> None:
+            """Set last_good, seed golden once, reset the attempt counter and baseline."""
             comp = _ensure_comp(state, name)
             comp["last_good"] = hash_val
             if not _is_sha(comp.get("golden")):
@@ -883,10 +864,7 @@ class UpdateService:
         return ok
 
     def _check_crash_loop(self, name: str, nrestarts: int) -> bool:
-        """Return True if NRestarts rose by >= 5 within the trailing 180s window.
-
-        Compared against the oldest in-window sample; records+prunes samples.
-        """
+        """Return True if NRestarts rose by >= 5 within the trailing 180s window."""
         if name not in self._nrestarts_samples:
             self._nrestarts_samples[name] = []  # fresh device: start tracking now
         samples = self._nrestarts_samples[name]
@@ -971,6 +949,15 @@ class UpdateService:
                         "recovery rung 2: %s unresolved", _HEAL_REMOTE_REF
                     )
                     return False
+                # Never heal the host onto a pre-updater tip (would re-brick, not fix).
+                if name == _UI_COMPONENT and not await git_tree_has_path(
+                    component.path, _HEAL_REMOTE_REF, _UPDATER_MARKER
+                ):
+                    self._log.error(
+                        "recovery rung 2: %s lacks the updater package - skipping",
+                        _HEAL_REMOTE_REF,
+                    )
+                    return False
                 ok_reset, _ = await git_reset_to_hash(component.path, _HEAL_REMOTE_REF)
             if not ok_reset:
                 self._log.error("reset to %s failed", _HEAL_REMOTE_REF)
@@ -1016,12 +1003,7 @@ class UpdateService:
         self._nrestarts_samples[name] = [(time.monotonic(), nrestarts)]
 
     async def supervise_ui(self) -> None:
-        """Poll the UI service NRestarts and drive the recovery ladder on a crash-loop.
-
-        The loop itself is the single-attempt-in-flight guard: at most one rung per
-        crash-loop, then detection re-baselines and a settle window elapses so a new
-        build can bless before the next rung is counted.
-        """
+        """Poll the UI service NRestarts and drive the recovery ladder on a crash-loop."""
         while True:
             await asyncio.sleep(_NRESTARTS_POLL_INTERVAL_S)
             try:
@@ -1053,10 +1035,7 @@ class UpdateService:
         await asyncio.sleep(_RECOVERY_SETTLE_S)
 
     async def forward_heal_ui(self) -> None:
-        """Slowly re-check origin/main and re-attempt an upgrade once a fix ships.
-
-        Jittered + connectivity-gated: avoids a fleet stampede and offline churn.
-        """
+        """Slowly re-check origin/main and re-attempt an upgrade once a fix ships."""
         while True:
             delay = _FORWARD_HEAL_BASE_S + secrets.randbelow(
                 int(_FORWARD_HEAL_JITTER_S) + 1
@@ -1086,6 +1065,15 @@ class UpdateService:
             tip = await git_ref_hash(component.path, _HEAL_REMOTE_REF)
         if not tip or tip == comp_state.get("last_failed_remote"):
             return False  # no new stable tip since the last failure
+        # Never forward-heal onto a pre-updater tip (would brick, not upgrade).
+        if not await git_tree_has_path(
+            component.path, _HEAL_REMOTE_REF, _UPDATER_MARKER
+        ):
+            self._log.warning(
+                "forward-heal: %s lacks the updater package - skipping",
+                _HEAL_REMOTE_REF,
+            )
+            return False
         self._log.info(
             "forward-heal: new %s tip %s, upgrading", _HEAL_REMOTE_REF, tip[:8]
         )
@@ -1095,6 +1083,7 @@ class UpdateService:
             return False
 
         def _apply(s: dict) -> None:
+            """Reset the attempt counter and record the healed tip."""
             comp = _ensure_comp(s, _UI_COMPONENT)
             comp["fast_attempt"] = 0
             comp["last_failed_remote"] = tip
@@ -1126,15 +1115,7 @@ class UpdateService:
             self._log.warning("failed to clear self-heal fault marker")
 
     async def reconcile(self) -> None:
-        """Heal repos left damaged by a power loss mid-update, for every component.
-
-        start.sh only repairs BlocksScreen; this covers klipper/moonraker/config too.
-        The gate is a cheap `rev-parse HEAD` so a healthy boot pays almost nothing;
-        deeper corruption is caught on demand. Offline-safe: git_repair fetches when
-        it can, else resets to the last recorded good hash. Held under the process
-        lock so the boot heal can't interleave with a user update/CLI run; if another
-        updater holds it, skip (that run is already mutating; damage re-detects later).
-        """
+        """Heal repos left damaged by a power loss mid-update, for every component."""
         with process_lock() as acquired:
             if not acquired:
                 self._log.info(
@@ -1144,12 +1125,7 @@ class UpdateService:
             await self._reconcile_locked()
 
     async def _revert_inflight(self) -> None:
-        """Revert any update cut off mid-flight by a power loss before it committed.
-
-        The in-flight marker maps each batch component to its pre-staging commit; its
-        presence at boot means a batch didn't finish, so each listed repo is
-        hard-reset back and the marker cleared. A repo already there is left alone.
-        """
+        """Revert any update cut off mid-flight by a power loss before it committed."""
         inflight = await asyncio.to_thread(self._read_inflight)
         if not inflight:
             return
@@ -1179,6 +1155,7 @@ class UpdateService:
         await asyncio.to_thread(self._clear_inflight)
 
     async def _reconcile_locked(self) -> None:
+        """Boot heal under the lock: revert in-flight, repair repos, run reclone hooks, sanitize state."""
         await self._revert_inflight()
         self._log.info("reconcile: boot-checking git components for damage")
         recloned: list[ComponentConfig] = []
@@ -1214,8 +1191,7 @@ class UpdateService:
                     self._log.error(
                         "reconcile: %s unrepairable, no recorded prev_hash", c.name
                     )
-        # Outside _git_lock: a reclone drops in-repo artifacts (e.g. Spoolman's
-        # .venv); the hook rebuilds them, best-effort, without blocking status.
+        # Reclone drops in-repo artifacts (e.g. Spoolman's .venv); hook rebuilds them best-effort outside _git_lock.
         for c in recloned:
             try:
                 new_hash = await git_get_hash(c.path)
@@ -1278,6 +1254,7 @@ class UpdateService:
     async def _rollback(
         self, component: ComponentConfig, prev_hash: str, reason: str
     ) -> None:
+        """Reset one component to prev_hash, restart its service, and report failure."""
         self._log.warning(
             "%s: rolling back to %s (reason=%s)", component.name, prev_hash[:8], reason
         )
@@ -1333,11 +1310,7 @@ class UpdateService:
     async def _ping_while(
         self, coro, name: str, step: int, total: int, interval: float = 60.0
     ):
-        """Await coro, re-emitting on_step every `interval` seconds.
-
-        A HOOK_TIMEOUT-bounded hook can run silent past the client's 360s busy
-        watchdog; the pings keep it fed. Cancellation propagates to the inner task.
-        """
+        """Await coro, re-emitting on_step every `interval` seconds."""
         task = asyncio.ensure_future(coro)
         try:
             while True:
@@ -1369,15 +1342,13 @@ class UpdateService:
                 return
 
     def _cb_error_done(self, name: str, reason: str) -> bool:
+        """Emit on_error and on_component_done(False); return False."""
         self._cb("on_error", name, reason)
         self._cb("on_component_done", name, False)
         return False
 
     def _history(self, event: str, name: str, **fields: object) -> None:
-        """Append one event to the persistent update-history log (OBS-1).
-
-        journald is volatile here, so this on-SD JSONL is the durable field record.
-        """
+        """Append one event to the persistent update-history log (OBS-1)."""
         entry = {
             "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             "event": event,
@@ -1436,11 +1407,7 @@ class UpdateService:
             await asyncio.to_thread(shutil.rmtree, component.path, ignore_errors=True)
 
     async def _fail_provision(self, component: ComponentConfig, reason: str) -> bool:
-        """Remove the partial clone, log, and report failure.
-
-        No prev_hash to roll back to, so the clean slate is deleting the clone.
-        The unit is enabled only after a clean start, so nothing is left enabled.
-        """
+        """Remove the partial clone, log, and report failure."""
         await self._remove_clone(component)
         self._history("install_failed", component.name, reason=reason)
         self._log.warning(
@@ -1449,12 +1416,7 @@ class UpdateService:
         return self._cb_error_done(component.name, reason)
 
     async def _provision_component(self, component: ComponentConfig) -> bool:
-        """Clone and set up a missing opted-in component.
-
-        A fresh component has no prev_hash, so any failure deletes the partial clone
-        (clean slate to retry) instead of rolling back. Service install is delegated
-        to the component's hook, as in the update flow.
-        """
+        """Clone and set up a missing opted-in component."""
         if not component.url:
             return self._cb_error_done(component.name, "no clone url")
         self._log.info("%s: provisioning via clone %s", component.name, component.url)
@@ -1575,12 +1537,17 @@ class UpdateService:
         self._log.warning("%s: recloned successfully", component.name)
         return True
 
-    async def _stage_component(self, component: ComponentConfig) -> tuple[bool, str]:
-        """Bring the working tree to its target ref: fetch-gate + reset/checkout/pull.
+    @staticmethod
+    def _self_update_target(component: ComponentConfig) -> str:
+        """The ref _stage_component would move the host to (version/branch/HEAD)."""
+        if component.version:
+            return component.version
+        if component.branch:
+            return f"origin/{component.branch}"
+        return "origin/HEAD"
 
-        No deps/hook/restart and no rollback (caller decides on failure). Returns
-        (ok, reason), reason one of network/corrupt/reset/version/branch/conflict.
-        """
+    async def _stage_component(self, component: ComponentConfig) -> tuple[bool, str]:
+        """Bring the working tree to its target ref: fetch-gate + reset/checkout/pull."""
         if component.path is None:
             return (False, "path not found")
         async with self._git_lock:
@@ -1612,6 +1579,19 @@ class UpdateService:
                 False,
                 f"branch origin/{component.branch} not found - fix components.yaml",
             )
+
+        # Updater host must never checkout code lacking updater: Type=notify unit lacks sd_notify READY causes crash loop with no self-heal.
+        if component.name == _UI_COMPONENT:
+            target = self._self_update_target(component)
+            if target and not await git_tree_has_path(
+                component.path, target, _UPDATER_MARKER
+            ):
+                self._log.error(
+                    "%s: target %s lacks the updater package - refusing brick downgrade",
+                    component.name,
+                    target,
+                )
+                return (False, "refusing downgrade past updater")
 
         # Switch to the target branch FIRST so reset/pull act on the right branch.
         if component.branch:
@@ -1663,11 +1643,7 @@ class UpdateService:
         return True
 
     async def _run_git_update(self, component: ComponentConfig) -> bool:
-        """Update a single existing git component, rolling back on any failure.
-
-        Shares its git mechanics (_stage_component) with the batch; keeps its own
-        per-component rollback since a single update has no peers to coordinate.
-        """
+        """Update a single existing git component, rolling back on any failure."""
         if component.path is None:
             return self._cb_error_done(component.name, "path not found")
         if not component.path.exists():
@@ -1719,6 +1695,7 @@ class UpdateService:
                 if (
                     stage_reason in ("network", "corrupt")
                     or "not found" in stage_reason
+                    or "refusing" in stage_reason
                 ):
                     await asyncio.to_thread(self._clear_inflight)
                     return self._cb_error_done(component.name, stage_reason)
@@ -1840,6 +1817,7 @@ class UpdateService:
     async def _run_apt_update_locked(
         self, component: ComponentConfig, _apt_cache: Path
     ) -> bool:
+        """apt refresh, upgrade, and autoremove under the apt lock with snapshot rollback."""
         try:
             if self._apt_backoff.cooling_down():
                 self._log.debug("apt cooling down; skipping update")
@@ -1904,6 +1882,7 @@ class UpdateService:
             raise
 
     def _read_state(self) -> dict:
+        """Return the self-heal state dict, empty on missing/corrupt/wrong-shape."""
         try:
             data = json.loads(self._state_path.read_text())
         except (FileNotFoundError, json.JSONDecodeError):
@@ -1912,6 +1891,7 @@ class UpdateService:
         return data if isinstance(data, dict) else {}
 
     def _read_inflight(self) -> dict[str, str]:
+        """Return the in-flight batch marker as a name->prev_hash dict."""
         try:
             data = json.loads(self._inflight_path.read_text())
         except (FileNotFoundError, json.JSONDecodeError):
@@ -1952,6 +1932,7 @@ class UpdateService:
             self._log.warning("Failed to clear in-flight marker")
 
     def _write_state(self, data: dict) -> bool:
+        """Atomically write the self-heal state file (temp, fsync, replace)."""
         try:
             self._state_path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
             # SEC: atomic write via temp file prevents symlink attacks and partial writes
@@ -1983,6 +1964,7 @@ class UpdateService:
 
     @staticmethod
     def _fsync_dir(path: Path) -> None:
+        """fsync a directory so a contained rename survives power loss."""
         try:
             fd = os.open(path, os.O_RDONLY)
             try:
@@ -1993,14 +1975,12 @@ class UpdateService:
             pass
 
     async def background_apt_upgrade(self) -> None:
-        """Run apt update + upgrade + autoremove silently after every Update click.
-
-        apt-get upgrade (never dist-upgrade) so the release can't change; UI-silent.
-        """
+        """Run apt update + upgrade + autoremove silently after every Update click."""
         async with self._apt_lock:
             await self._background_apt_upgrade_locked()
 
     async def _background_apt_upgrade_locked(self) -> None:
+        """Silent apt update, upgrade, and autoremove honoring the apt excludes."""
         if self._apt_backoff.cooling_down():
             self._log.debug("apt cooling down; skipping background upgrade")
             return

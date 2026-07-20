@@ -83,10 +83,7 @@ async def _run_daemon() -> None:
 
 
 def _watchdog_ping_interval() -> float:
-    """Half of systemd's WatchdogSec (per sd_notify(3)), or 15s if unset/invalid.
-
-    Reads WATCHDOG_USEC so the heartbeat stays correct if WatchdogSec is retuned.
-    """
+    """Half of systemd's WatchdogSec (per sd_notify(3)), or 15s if unset/invalid."""
     try:
         watchdog_usec = int(os.environ.get("WATCHDOG_USEC", "0"))
     except ValueError:
