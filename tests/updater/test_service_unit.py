@@ -266,6 +266,11 @@ class TestGitUpdate:
             patch("updater.service.git_checkout", return_value=(True, "")),
             patch("updater.service.git_reset_to_hash", return_value=(True, "")),
             patch("updater.service.git_pull", return_value=(True, "")),
+            patch("updater.service.git_ref_hash", return_value="a" * 40),
+            patch(
+                "updater.service._assert_https_remote",
+                return_value=(True, "https://github.com/test/repo"),
+            ),
             patch(
                 "updater.service.UpdateService._install_dependencies",
                 return_value=(True, ""),
@@ -321,6 +326,11 @@ class TestGitUpdate:
             patch("updater.service.git_checkout", return_value=(True, "")),
             patch("updater.service.git_reset_to_hash", return_value=(True, "")),
             patch("updater.service.git_pull", return_value=(True, "")),
+            patch("updater.service.git_ref_hash", return_value="a" * 40),
+            patch(
+                "updater.service._assert_https_remote",
+                return_value=(True, "https://github.com/test/repo"),
+            ),
             patch(
                 "updater.service.UpdateService._install_dependencies",
                 return_value=(True, ""),
@@ -346,6 +356,11 @@ class TestGitUpdate:
             patch("updater.service.git_checkout", return_value=(True, "")),
             patch("updater.service.git_reset_to_hash", return_value=(True, "")),
             patch("updater.service.git_pull", return_value=(True, "")),
+            patch("updater.service.git_ref_hash", return_value="a" * 40),
+            patch(
+                "updater.service._assert_https_remote",
+                return_value=(True, "https://github.com/test/repo"),
+            ),
             patch(
                 "updater.service.UpdateService._install_dependencies",
                 return_value=(True, ""),
@@ -2247,6 +2262,7 @@ class TestHookTimeoutBudget:
             patch("updater.service.git_pull", return_value=(True, "")),
             patch("updater.service.git_reset_to_hash", return_value=(True, "")),
             patch("updater.service.git_get_current_branch", return_value="master"),
+            patch("updater.service.git_ref_hash", return_value="a" * 40),
             patch(
                 "updater.service.UpdateService._install_dependencies",
                 return_value=(True, ""),
