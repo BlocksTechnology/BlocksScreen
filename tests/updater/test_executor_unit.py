@@ -41,6 +41,7 @@ from updater.executor import (
     restart_service,
     restart_service_noblock,
     run_hook,
+    wait_for_http_ready,
 )
 
 
@@ -1328,3 +1329,24 @@ class TestGitDefaultBranch:
     @pytest.mark.asyncio
     async def test_none_path_returns_master(self):
         assert await git_default_branch(None) == "master"
+
+
+class TestWaitForHttpReady:
+    @pytest.mark.asyncio
+    async def test_returns_true_on_2xx(self):
+        with patch("updater.executor._http_probe", return_value=True):
+            assert await wait_for_http_ready("http://127.0.0.1:7912/x") is True
+
+    @pytest.mark.asyncio
+    async def test_times_out_when_never_ready(self):
+        with patch("updater.executor._http_probe", return_value=False):
+            assert await wait_for_http_ready("http://127.0.0.1:7912/x", timeout=0) is False
+
+    @pytest.mark.asyncio
+    async def test_polls_until_ready(self):
+        with (
+            patch("updater.executor._http_probe", side_effect=[False, True]) as probe,
+            patch("updater.executor.asyncio.sleep", new=AsyncMock()),
+        ):
+            assert await wait_for_http_ready("http://127.0.0.1:7912/x") is True
+        assert probe.call_count == 2

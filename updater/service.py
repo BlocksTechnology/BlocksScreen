@@ -50,6 +50,7 @@ from updater.executor import (
     restart_service_noblock,
     run_hook,
     verify_updater_importable,
+    wait_for_http_ready,
     wait_for_service_active,
 )
 from updater.locking import process_lock, restart_sentinel_path
@@ -644,7 +645,7 @@ class UpdateService:
             self._cb("on_step", c.name, 4, 4)
             restarted.append(c.service)
             self._log.info("git batch: restarting %s (verified)", c.service)
-            if await self._restart_one(c.service):
+            if await self._restart_one(c.service, c.health_url):
                 continue
             failed = True
             for m in [m for m in alive if m.service == c.service]:
@@ -1490,7 +1491,9 @@ class UpdateService:
         else:
             # A failed revert keeps the marker so boot _revert_inflight retries it.
             self._log.warning("rollback: revert failed - keeping in-flight marker")
-        if component.service and not await self._restart_one(component.service):
+        if component.service and not await self._restart_one(
+            component.service, component.health_url
+        ):
             ok = False
         self._history(
             "rollback", component.name, reason=reason, reverted_to=prev_hash[:12], ok=ok
@@ -1643,16 +1646,11 @@ class UpdateService:
     async def _provision_restart_service(
         self, component: ComponentConfig
     ) -> str | None:
-        """Restart+enable the provisioned service; return a fail reason or None on success."""
+        """Restart+health-check+enable the provisioned service; fail reason or None."""
         if not component.service:
             return None
-        svc_ok, svc_err = await restart_service(component.service)
-        if not svc_ok:
-            self._log.error("%s: provision restart: %s", component.name, svc_err)
+        if not await self._restart_one(component.service, component.health_url):
             return "restart"
-        if not await wait_for_service_active(component.service, timeout=90.0):
-            self._log.error("%s: provisioned service not active", component.name)
-            return "restart_timeout"
         # Enable only after a clean start (no boot-looping failed unit).
         en_ok, en_err = await enable_service(component.service)
         if not en_ok:
@@ -1898,7 +1896,7 @@ class UpdateService:
             return guard
         return await self._stage_apply_ref(component)
 
-    async def _restart_one(self, service: str) -> bool:
+    async def _restart_one(self, service: str, health_url: str | None = None) -> bool:
         """Restart a service and verify it came active (kill-fallback aware)."""
         self._log.info("restarting %s and waiting for active", service)
         ok, err = await restart_service(service)
@@ -1907,6 +1905,9 @@ class UpdateService:
             return False
         if not await wait_for_service_active(service, timeout=90.0):
             self._log.error("%s did not become active after restart", service)
+            return False
+        if health_url and not await wait_for_http_ready(health_url):
+            self._log.error("%s active but health check failed", service)
             return False
         self._log.info("%s active after restart", service)
         return True
@@ -2022,7 +2023,7 @@ class UpdateService:
         if (
             component.service
             and not fire_and_forget
-            and not await self._restart_one(component.service)
+            and not await self._restart_one(component.service, component.health_url)
         ):
             await self._rollback(component, prev_hash, "restart")
             return False, ""

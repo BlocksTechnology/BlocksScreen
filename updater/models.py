@@ -19,6 +19,7 @@ class ComponentConfig:
     install_if_missing: bool = False
     restart_ui: bool = False
     restart_klipper: bool = False
+    health_url: str | None = None
 
 
 @dataclass(frozen=True)

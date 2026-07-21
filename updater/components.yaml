@@ -73,6 +73,7 @@ components:
     reset_mode: hard
     order: 21
     install_if_missing: true
+    health_url: http://127.0.0.1:7912/api/v1/health
 
   - name: BlocksScreen
     type: git

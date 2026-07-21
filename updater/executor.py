@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import http.client
 import json
 import logging
 import os
@@ -12,6 +13,7 @@ import tempfile
 import time
 from collections.abc import Sequence
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from updater.locking import restart_sentinel_path
 from updater.models import ComponentStatus
@@ -996,6 +998,34 @@ async def wait_for_service_active(name: str, timeout: float = 90.0) -> bool:
         output.strip(),
     )
     return False
+
+
+def _http_probe(url: str) -> bool:
+    """One blocking GET; True only on a 2xx from the loopback health URL."""
+    parts = urlsplit(url)
+    conn = http.client.HTTPConnection(
+        parts.hostname or "127.0.0.1", parts.port or 80, timeout=5.0
+    )
+    try:
+        conn.request("GET", parts.path or "/")
+        return 200 <= conn.getresponse().status < 300
+    except (OSError, http.client.HTTPException):
+        return False
+    finally:
+        conn.close()
+
+
+async def wait_for_http_ready(url: str, timeout: float = 120.0) -> bool:
+    """Poll a component's loopback health URL until it returns 2xx or timeout."""
+    deadline = asyncio.get_running_loop().time() + timeout
+    while True:
+        if await asyncio.to_thread(_http_probe, url):
+            logger.info("health check ok: %s", url)
+            return True
+        if asyncio.get_running_loop().time() >= deadline:
+            logger.warning("health check timed out after %.0fs: %s", timeout, url)
+            return False
+        await asyncio.sleep(2.0)
 
 
 async def restart_service_noblock(name: str | None) -> tuple[bool, str]:

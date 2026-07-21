@@ -15,6 +15,9 @@ _GIT_BRANCH_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._/-]*$")
 _GIT_VERSION_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._/+-]*$")
 _COMPONENT_NAME_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_-]*$")
 _GIT_URL_RE = re.compile(r"^https://[a-zA-Z0-9._~:/?#\[\]@!$&'()*+,;=%-]+$")
+_HEALTH_URL_RE = re.compile(
+    r"^http://(127\.0\.0\.1|localhost)(:\d{1,5})?/[a-zA-Z0-9._~:/?#\[\]@!$&'()*+,;=%-]*$"
+)
 _SERVICE_BANNED = set("/\\;&|$`") | {" ", "\t"}
 OVERRIDE_PATH = Path("~/printer_data/config/blockscreen_updater.yaml").expanduser()
 
@@ -72,6 +75,16 @@ def _parse_git_url(name: str, url: object) -> object:
         )
         return None
     return url
+
+
+def _parse_health_url(name: str, url: object) -> str | None:
+    """Accept only a loopback http readiness URL; drop anything else."""
+    if url is None:
+        return None
+    if not _HEALTH_URL_RE.match(str(url)):
+        logger.warning("Component %r has non-loopback health_url %r - dropping", name, url)
+        return None
+    return str(url)
 
 
 def _parse_reset_mode(name: str, reset_mode: object) -> str:
@@ -143,6 +156,7 @@ def _validate_git_component(name: str, data: dict) -> ComponentConfig | None:
         install_if_missing=install_if_missing,
         restart_ui=bool(data.get("restart_ui", False)),
         restart_klipper=bool(data.get("restart_klipper", False)),
+        health_url=_parse_health_url(name, data.get("health_url")),
     )
 
 
