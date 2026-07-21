@@ -4,10 +4,10 @@ from enum import IntEnum, StrEnum
 
 
 class GateStatus(IntEnum):
-    UNKNOWN = 0
+    EMPTY = 0
     AVAILABLE = 1
     AVAILABLE_FROM_BUFFER = 2
-    EMPTY = -1
+    UNKNOWN = -1
 
 
 class FilamentPos(IntEnum):
