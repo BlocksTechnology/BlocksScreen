@@ -380,7 +380,7 @@ class UpdateService:
         msg = f"insufficient disk space ({free_mb:.0f} MB free, need 200 MB)"
         self._log.error("update_all: %s", msg)
         for c in components:
-            self._cb("on_error", c.name, msg)
+            self._cb_error_done(c.name, msg)
         return False
 
     async def _filter_offline_batch(
@@ -506,7 +506,8 @@ class UpdateService:
             if not await asyncio.to_thread(self._write_state, state):
                 return False
             # Mark in-flight so a pre-commit power cut is reverted on next boot.
-            await asyncio.to_thread(self._write_inflight, prev.copy())
+            if not await asyncio.to_thread(self._write_inflight, prev.copy()):
+                return False
         return True
 
     async def _security_check_batch(
@@ -1953,7 +1954,15 @@ class UpdateService:
                     ),
                     "",
                 )
-            await asyncio.to_thread(self._write_inflight, {component.name: prev_hash})
+            if not await asyncio.to_thread(
+                self._write_inflight, {component.name: prev_hash}
+            ):
+                return (
+                    self._cb_error_done(
+                        component.name, "failed to write in-flight marker"
+                    ),
+                    "",
+                )
         ok, reason = await _assert_https_remote(component.path)
         if not ok:
             self._log.error("SEC-4 remote check failed: %s", reason)

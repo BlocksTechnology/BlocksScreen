@@ -378,7 +378,7 @@ async def _prune_broken_refs(path: Path, output: str) -> bool:
     """Delete corrupt refs named in a failed fetch. Returns True if any were."""
     pruned = False
     for ref in dict.fromkeys(_BROKEN_REF_RE.findall(output)):
-        if not ref.startswith("refs/") or any(c.isspace() for c in ref):
+        if not ref.startswith("refs/") or ".." in ref or any(c.isspace() for c in ref):
             continue
         ok, _ = await _run([GIT, "update-ref", "-d", ref], cwd=path, timeout=10.0)
         if not ok:
@@ -826,6 +826,7 @@ async def _apt_snapshot_packages() -> tuple[bool, Path | None]:
     snapshot_path = (
         Path.home() / ".cache" / "blockscreen" / "apt_pre_upgrade_snapshot.txt"
     )
+    tmp: Path | None = None
     try:
         snapshot_path.parent.mkdir(parents=True, mode=0o0700, exist_ok=True)
         ok, output = await _run([DPKG, "--get-selections"], timeout=15.0)
@@ -846,6 +847,9 @@ async def _apt_snapshot_packages() -> tuple[bool, Path | None]:
         return True, snapshot_path
     except (IOError, ValueError) as e:
         logger.error("apt snapshot error: %s", e)
+        if tmp is not None:
+            with contextlib.suppress(OSError):
+                tmp.unlink()
         return False, None
 
 

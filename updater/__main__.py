@@ -156,7 +156,8 @@ async def main() -> None:
                 _print_component_status(s, args.verbose)
         case "recover":
             with _cli_lock():
-                await svc.recover(args.name, hard=args.hard)
+                if not await svc.recover(args.name, hard=args.hard):
+                    raise SystemExit(1)
         case "bless":
             with _cli_lock():
                 ok = await svc.bless_healthy(args.name, args.hash)
