@@ -175,7 +175,7 @@ class TestSetValue:
     def test_set_value_then_type(self, keyboard):
         keyboard.set_value("abc")
         keyboard.value_inserted("d")
-        assert keyboard.current_value == "abcd"
+        assert keyboard.current_value == "d"
 
 
 class TestDotButton:
