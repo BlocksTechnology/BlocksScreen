@@ -56,6 +56,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self._spool_id_map: dict[str, dict] = {}
         self._current_field: QtWidgets.QLineEdit | None = None
         self._color_target_field = None
+        self._material_filter: str | None = None
         self.moonraker_run = True
 
         self.amu_manager.mmu_state_changed.connect(self.on_mmu_state_changed)
@@ -512,7 +513,6 @@ class FilamentTab(QtWidgets.QStackedWidget):
 
     def handle_skip_button(self):
         gate = self.pre_gate_idx.get("gate", 0)
-        self.popup.hide()
         self._reset_popup()
         self.run_gcode.emit(
             f"MMU_GATE_MAP GATE={gate} MATERIAL=N/A NAME=N/A COLOR=FFFFFF SPOOLID=-1 TEMP=250 QUIET=1"
@@ -524,6 +524,12 @@ class FilamentTab(QtWidgets.QStackedWidget):
                 logger.error(f"Error executing pre-gate accept callback: {e}")
             finally:
                 self._popup_callback = None
+
+        self.popup.hide()
+        self._material_filter = None
+        self._add_spool_page.setFilter(None)
+        self._add_filament_page.setData("---", 0)
+        self.handle_popup()
 
     def handle_popup(self, force=False):
         """Handles showing the popup for pre-gate filament detection.
@@ -602,6 +608,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
 
         self._reset_popup()
         self.popup.hide()
+        self._material_filter = None
         self._add_spool_page.setFilter(None)
         self._add_filament_page.setData("---", 0)
         self.handle_popup()
@@ -700,6 +707,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
 
         self.accept_btn.setEnabled(False)
         self.popup.hide()
+        self._material_filter = None
         self._add_spool_page.setFilter(None)
         self._add_filament_page.setData("---", 0)
         self.run_gcode.emit(
@@ -712,6 +720,8 @@ class FilamentTab(QtWidgets.QStackedWidget):
                 logger.error(f"Error executing pre-gate accept callback: {e}")
             finally:
                 self._popup_callback = None
+
+        self.handle_popup()
 
     def reset_spool_info(self):
         self.filament_name_label.setText("N/A")
@@ -818,21 +828,30 @@ class FilamentTab(QtWidgets.QStackedWidget):
             self._color_target_field.editingFinished.emit()
             self._color_target_field = None
 
+    def _clear_gate_map(self, gate_info) -> None:
+        """Blank a gate's map entry when its filament runs out."""
+        if gate_info.spool_id == -1 and gate_info.material in (None, "", "N/A"):
+            return  # already blank
+
+        self.run_gcode.emit(
+            f"MMU_GATE_MAP GATE={gate_info.index} MATERIAL= TEMP=-1 COLOR= SPOOLID=-1 NAME= QUIET=1"
+        )
+
     def on_mmu_state_changed(self, mmu_state):
         """Handles changes in the MMU state from the AMU manager to update the UI and show the load panel when loading/unloading."""
         for gate_info in mmu_state.gates:
             previous_state = self._previous_gate_states.get(gate_info.index)
-            self._previous_gate_states[gate_info.index] = gate_info.status in [
+            current_state = gate_info.status in [
                 GateStatus.AVAILABLE,
                 GateStatus.AVAILABLE_FROM_BUFFER,
             ]
-            if (
-                previous_state is False
-                and self._previous_gate_states[gate_info.index] is True
-            ):
+            self._previous_gate_states[gate_info.index] = current_state
+
+            if previous_state is False and current_state is True:
                 self.popup_gates.append({"gate": gate_info.index})
-                if len(mmu_state.gates) > 1:
-                    self.handle_popup()
+                self.handle_popup()
+            elif previous_state is True and gate_info.status == GateStatus.EMPTY:
+                self._clear_gate_map(gate_info)
 
         if not self.amu_configured:
             if len(mmu_state.gates) > 1:
