@@ -2173,6 +2173,23 @@ class TestInflightRollback:
         mock_reset.assert_not_called()
         assert svc._read_inflight() == {}  # marker still cleared
 
+    @pytest.mark.asyncio
+    async def test_revert_failed_reset_keeps_marker_for_retry(self, tmp_path):
+        """A failed boot revert keeps the entry marked so the next boot retries it."""
+        comp = self._git(tmp_path)
+        svc = UpdateService()
+        svc._components = [comp]
+        svc._inflight_path = tmp_path / "inflight.json"
+        svc._write_inflight({"klipper": "a" * 40})
+        with (
+            patch("updater.service.git_get_hash", return_value="b" * 40),
+            patch(
+                "updater.service.git_reset_to_hash", return_value=(False, "disk full")
+            ),
+        ):
+            await svc._revert_inflight()
+        assert svc._read_inflight() == {"klipper": "a" * 40}  # kept for retry
+
 
 class TestPingWhile:
     @pytest.mark.asyncio
@@ -2595,9 +2612,7 @@ class TestReviewHardeningFixes:
 
         with (
             patch("updater.service._NRESTARTS_POLL_INTERVAL_S", 0.001),
-            patch(
-                "updater.service.get_service_nrestarts", side_effect=fake_nrestarts
-            ),
+            patch("updater.service.get_service_nrestarts", side_effect=fake_nrestarts),
             patch.object(UpdateService, "_check_crash_loop", return_value=True),
             patch.object(
                 UpdateService, "_handle_crash_loop", side_effect=RuntimeError("boom")
@@ -2615,7 +2630,7 @@ class TestReviewHardeningFixes:
         svc._state_path = tmp_path / "state.json"
         svc._state_path.write_text("[1, 2, 3]")  # valid JSON, wrong shape
         assert await svc.recover("klipper") is False
-        svc._state_path.write_text("{\"klipper\": \"not-a-dict\"}")
+        svc._state_path.write_text('{"klipper": "not-a-dict"}')
         assert await svc.recover("klipper") is False
 
     @pytest.mark.asyncio
@@ -2624,7 +2639,7 @@ class TestReviewHardeningFixes:
         svc = UpdateService(callback=MagicMock())
         svc._components = [comp]
         svc._inflight_path = tmp_path / "inflight.json"
-        svc._inflight_path.write_text("{\"klipper\": 42, \"ghost\": null}")
+        svc._inflight_path.write_text('{"klipper": 42, "ghost": null}')
         with patch("updater.service.git_reset_to_hash") as mock_reset:
             await svc._revert_inflight()  # must not raise
         mock_reset.assert_not_called()
@@ -2650,9 +2665,7 @@ class TestReviewHardeningFixes:
         good = self._git(tmp_path, "klipper")
         for batch_result, expected in ((True, True), (False, False)):
             with (
-                patch.object(
-                    UpdateService, "_preflight_fetch", return_value=set()
-                ),
+                patch.object(UpdateService, "_preflight_fetch", return_value=set()),
                 patch.object(
                     UpdateService, "_run_git_batch", return_value=batch_result
                 ),

@@ -323,7 +323,7 @@ class UpdaterInterface(
         """D-Bus method: cancel the running update or recover task and wait for cleanup."""
         cancelled_tasks: list[asyncio.Task] = []
         for task in list(self._background_tasks):
-            name = task.get_name() or ""
+            name = task.get_name()
             if name.startswith(("update_", "recover_")):
                 task.cancel()
                 cancelled_tasks.append(task)

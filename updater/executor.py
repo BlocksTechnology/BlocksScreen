@@ -69,10 +69,8 @@ def _clear_stale_git_index_lock(path: Path) -> bool:
 
 def _kill_proc_group(proc, sig):
     """Kill a process group; suppress errors if already gone."""
-    try:
+    with contextlib.suppress(ProcessLookupError, PermissionError):
         os.killpg(os.getpgid(proc.pid), sig)
-    except (ProcessLookupError, PermissionError):
-        pass  # process already gone
 
 
 def _make_clean_env() -> dict[str, str]:
@@ -229,6 +227,51 @@ async def _count_apt_upgradable(exclude: tuple[str, ...] = ()) -> int:
     return len(pkgs)
 
 
+async def _git_status_preflight(
+    name: str, path: Path, skip_fetch: bool
+) -> tuple[str, ComponentStatus | None]:
+    """Fetch (unless skipped) + read current hash; return (hash, None) or ('', error)."""
+    if not skip_fetch:
+        result, output = await git_fetch(path, prune_remotes=False)
+        if not result:
+            logger.error("Failed at git_fetch operation, %s", output)
+            return "", ComponentStatus(name=name, error=output)
+    current_hash = await git_get_hash(path)
+    if current_hash == "":
+        logger.error("Failed at git_hash operation")
+        return "", ComponentStatus(name=name, error="Failed at git_hash operation")
+    return current_hash, None
+
+
+async def _commits_behind_or_error(
+    path: Path,
+    name: str,
+    branch: str | None,
+    version: str | None,
+    remote_ref: str,
+    current_hash: str,
+    current_branch: str,
+) -> tuple[int, ComponentStatus | None]:
+    """Resolve commits-behind; return (n, None) or (-1, error ComponentStatus)."""
+    if version:
+        return 0, None
+    commits_behind = await git_commits_behind(path, remote_ref)
+    if commits_behind != -1:
+        return commits_behind, None
+    # a configured branch whose origin ref is gone is a config error, not transient
+    if branch and not await git_ref_hash(path, remote_ref):
+        return -1, ComponentStatus(
+            name=name,
+            current_hash=current_hash,
+            current_branch=current_branch,
+            error=f"branch {remote_ref} not found - fix components.yaml",
+        )
+    logger.error("Failed at git_commits_behind operation")
+    return -1, ComponentStatus(
+        name=name, error="Failed at git_commits_behind operation"
+    )
+
+
 async def check_git_status(
     name: str,
     path: Path | None,
@@ -239,15 +282,9 @@ async def check_git_status(
     """Return a ComponentStatus snapshot for a git-based component."""
     if path is None or not path.exists():
         return ComponentStatus(name=name, error=f"path {path} does not exist")
-    if not skip_fetch:
-        result, output = await git_fetch(path, prune_remotes=False)
-        if not result:
-            logger.error("Failed at git_fetch operation, %s", output)
-            return ComponentStatus(name=name, error=output)
-    current_hash = await git_get_hash(path)
-    if current_hash == "":
-        logger.error("Failed at git_hash operation")
-        return ComponentStatus(name=name, error="Failed at git_hash operation")
+    current_hash, err = await _git_status_preflight(name, path, skip_fetch)
+    if err is not None:
+        return err
     current_branch = await git_get_current_branch(path)
     if branch:
         remote_ref = f"origin/{branch}"
@@ -255,23 +292,11 @@ async def check_git_status(
         remote_ref = f"origin/{current_branch}" if current_branch else "origin/HEAD"
     # Configured branch != checked-out branch: needs an update to switch.
     branch_mismatch = bool(branch) and current_branch != branch
-    if version:
-        commits_behind = 0
-    else:
-        commits_behind = await git_commits_behind(path, remote_ref)
-    if commits_behind == -1:
-        # a configured branch whose origin ref is gone is a config error, not transient
-        if branch and not await git_ref_hash(path, remote_ref):
-            return ComponentStatus(
-                name=name,
-                current_hash=current_hash,
-                current_branch=current_branch,
-                error=f"branch {remote_ref} not found - fix components.yaml",
-            )
-        logger.error("Failed at git_commits_behind operation")
-        return ComponentStatus(
-            name=name, error="Failed at git_commits_behind operation"
-        )
+    commits_behind, err = await _commits_behind_or_error(
+        path, name, branch, version, remote_ref, current_hash, current_branch
+    )
+    if err is not None:
+        return err
     (
         remote_url,
         has_local_changes,
@@ -510,12 +535,12 @@ async def _quarantine_corrupt_objects(path: Path) -> int:
     return moved
 
 
-async def git_repair(path: Path, branch: str | None = None) -> tuple[bool, str]:
-    """Prune 0-byte loose objects, re-fetch, re-verify. Mirrors start.sh recovery."""
+async def _git_repair_cleanup_fetch(path: Path) -> tuple[bool, str, int]:
+    """Clear locks, prune empty loose objects, fetch (retrying past a stale index.lock)."""
     _clear_stale_git_index_lock(path)
     objects = path / ".git" / "objects"
     if not objects.is_dir():
-        return (False, "no .git/objects directory")
+        return (False, "no .git/objects directory", 0)
     removed = _prune_empty_loose_objects(objects)
     logger.warning("git_repair: removed %d empty object(s) from %s", removed, path)
     ok, out = await git_fetch(path, prune_remotes=False)
@@ -523,11 +548,14 @@ async def git_repair(path: Path, branch: str | None = None) -> tuple[bool, str]:
         _clear_stale_git_index_lock(path)
         ok, out = await git_fetch(path, prune_remotes=False)
     if not ok:
-        return (False, f"fetch after cleanup failed: {out}")
-    if not await git_has_corruption(path):
-        if not await _repair_corrupt_head(path, branch):
-            return (False, "repaired objects but HEAD still unreadable")
-        return (True, f"repaired ({removed} empty objects removed)")
+        return (False, f"fetch after cleanup failed: {out}", removed)
+    return (True, "", removed)
+
+
+async def _git_repair_after_quarantine(
+    path: Path, branch: str | None, removed: int
+) -> tuple[bool, str]:
+    """Quarantine corrupt objects, re-fetch, re-verify HEAD when object cleanup wasn't enough."""
     quarantined = await _quarantine_corrupt_objects(path)
     if quarantined == 0:
         return (False, "still corrupt after fetch (no quarantinable objects found)")
@@ -542,6 +570,18 @@ async def git_repair(path: Path, branch: str | None = None) -> tuple[bool, str]:
         True,
         f"repaired ({removed} empty + {quarantined} corrupt object(s) removed)",
     )
+
+
+async def git_repair(path: Path, branch: str | None = None) -> tuple[bool, str]:
+    """Prune 0-byte loose objects, re-fetch, re-verify. Mirrors start.sh recovery."""
+    ok, msg, removed = await _git_repair_cleanup_fetch(path)
+    if not ok:
+        return (False, msg)
+    if not await git_has_corruption(path):
+        if not await _repair_corrupt_head(path, branch):
+            return (False, "repaired objects but HEAD still unreadable")
+        return (True, f"repaired ({removed} empty objects removed)")
+    return await _git_repair_after_quarantine(path, branch, removed)
 
 
 async def git_get_hash(path: Path | None) -> str:
@@ -684,13 +724,10 @@ async def git_checkout(
     return await _run(cmd, cwd=path, timeout=60.0)
 
 
-async def check_apt_status(
-    cache_ttl_seconds: int = 86_400, exclude: tuple[str, ...] = ()
-) -> ComponentStatus:
-    """Return cached apt ComponentStatus, refreshing via apt-get past the TTL."""
-    path = Path.home() / ".cache" / "blockscreen" / "apt_status_cache.json"
-    exclude_key = "|".join(sorted(exclude))
-    packages_upgradable = -1
+def _read_apt_cache(
+    path: Path, cache_ttl_seconds: int, exclude_key: str
+) -> ComponentStatus | None:
+    """Return a cached apt ComponentStatus if fresh + owner-safe, else None."""
     try:
         if path.exists():
             stat = path.stat()
@@ -712,34 +749,51 @@ async def check_apt_status(
                 )
     except (json.JSONDecodeError, IOError, ValueError) as e:
         logger.warning("apt cache miss %s", e)
+    return None
+
+
+def _write_apt_cache(path: Path, packages_upgradable: int, exclude_key: str) -> None:
+    """Atomically persist the apt upgradable count + exclude key to the cache file."""
+    tmp_path = None
+    try:
+        path.parent.mkdir(parents=True, mode=0o0700, exist_ok=True)
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            dir=path.parent,
+            delete=False,
+            prefix=".apt_cache_",
+            suffix=".tmp",
+        ) as f:
+            json.dump(
+                {
+                    "packages_upgradable": packages_upgradable,
+                    "exclude_key": exclude_key,
+                    "cached_ts": time.time(),
+                },
+                f,
+            )
+            tmp_path = Path(f.name)
+        tmp_path.chmod(0o600)
+        tmp_path.replace(path)
+    except (json.JSONDecodeError, IOError, ValueError) as e:
+        if tmp_path is not None and tmp_path.exists():
+            tmp_path.unlink(missing_ok=True)
+        logger.error("writing cache apt data: %s", e)
+
+
+async def check_apt_status(
+    cache_ttl_seconds: int = 86_400, exclude: tuple[str, ...] = ()
+) -> ComponentStatus:
+    """Return cached apt ComponentStatus, refreshing via apt-get past the TTL."""
+    path = Path.home() / ".cache" / "blockscreen" / "apt_status_cache.json"
+    exclude_key = "|".join(sorted(exclude))
+    cached = _read_apt_cache(path, cache_ttl_seconds, exclude_key)
+    if cached is not None:
+        return cached
 
     packages_upgradable = await _count_apt_upgradable(exclude=exclude)
     if packages_upgradable >= 0:
-        tmp_path = None
-        try:
-            path.parent.mkdir(parents=True, mode=0o0700, exist_ok=True)
-            with tempfile.NamedTemporaryFile(
-                mode="w",
-                dir=path.parent,
-                delete=False,
-                prefix=".apt_cache_",
-                suffix=".tmp",
-            ) as f:
-                json.dump(
-                    {
-                        "packages_upgradable": packages_upgradable,
-                        "exclude_key": exclude_key,
-                        "cached_ts": time.time(),
-                    },
-                    f,
-                )
-                tmp_path = Path(f.name)
-            tmp_path.chmod(0o600)
-            tmp_path.replace(path)
-        except (json.JSONDecodeError, IOError, ValueError) as e:
-            if tmp_path is not None and tmp_path.exists():
-                tmp_path.unlink(missing_ok=True)
-            logger.error("writing cache apt data: %s", e)
+        _write_apt_cache(path, packages_upgradable, exclude_key)
 
     if packages_upgradable < 0:
         return ComponentStatus(
