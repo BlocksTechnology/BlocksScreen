@@ -11,10 +11,11 @@ from BlocksScreen.devices.amu.models import (
 
 class TestGateStatus:
     def test_values(self) -> None:
-        assert GateStatus.UNKNOWN == 0
+        assert GateStatus.EMPTY == 0
         assert GateStatus.AVAILABLE == 1
         assert GateStatus.AVAILABLE_FROM_BUFFER == 2
-        assert GateStatus.EMPTY == -1
+        assert GateStatus.UNKNOWN == -1
+
 
     def test_is_int_enum(self) -> None:
         assert isinstance(GateStatus.AVAILABLE, int)
@@ -115,7 +116,7 @@ class TestMMUState:
             "reason_for_pause": "",
             "has_bypass": False,
             "spoolman_support": "push",
-            "gate_status": [1, -1],
+            "gate_status": [1, 0],
             "gate_material": ["PLA", ""],
             "gate_color": ["ff0000", ""],
             "gate_color_rgb": [(1.0, 0.0, 0.0), (0.0, 0.0, 0.0)],
