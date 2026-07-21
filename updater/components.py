@@ -82,7 +82,9 @@ def _parse_health_url(name: str, url: object) -> str | None:
     if url is None:
         return None
     if not _HEALTH_URL_RE.match(str(url)):
-        logger.warning("Component %r has non-loopback health_url %r - dropping", name, url)
+        logger.warning(
+            "Component %r has non-loopback health_url %r - dropping", name, url
+        )
         return None
     return str(url)
 
