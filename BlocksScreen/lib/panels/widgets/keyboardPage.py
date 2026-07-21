@@ -91,6 +91,7 @@ class CustomQwertyKeyboard(QtWidgets.QDialog):
         self._key_buttons: list[QtWidgets.QPushButton] = []
         self._pattern: str = ""
         self._max_length: int = 0
+        self.firsttime: bool = True
 
         self._setup_ui()
         self.setCursor(QtCore.Qt.CursorShape.BlankCursor)
@@ -213,6 +214,7 @@ class CustomQwertyKeyboard(QtWidgets.QDialog):
 
     def show(self) -> None:
         self._geometry_calc()
+        self.firsttime = True
         return super().show()
 
     def handle_keyboard_layout(self) -> None:
@@ -244,6 +246,11 @@ class CustomQwertyKeyboard(QtWidgets.QDialog):
 
     def value_inserted(self, value: str) -> None:
         """Handle key press: append char, delete, or submit on enter."""
+
+        if self.firsttime:
+            self.current_value = ""
+            self.firsttime = False
+
         if value == "&&":
             value = "&"
 
