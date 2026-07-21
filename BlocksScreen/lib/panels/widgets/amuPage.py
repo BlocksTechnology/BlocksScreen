@@ -129,18 +129,9 @@ class AMUpage(QtWidgets.QStackedWidget):
             return
         self.status = mmu_state
         for i in range(len(mmu_state.gates)):
-            self.addSpool(mmu_state.gates[i])
+            self.carousel.addSpool(mmu_state.gates[i], mmu_state.filament_pos)
         self.update()
         self._on_selection(mmu_state.gate)
-
-    def addSpool(self, gate_info: GateInfo):
-        self.carousel.addSpool(
-            QtGui.QColor("#" + str(gate_info.color)[:6]),
-            gate_info.index,
-            gate_info.material,
-            int(gate_info.temperature or 0),
-            gate_info.status,
-        )
 
     def _select_gate(self, idx: int):
         self.carousel.selectIndex(self.current_index)
@@ -151,9 +142,9 @@ class AMUpage(QtWidgets.QStackedWidget):
             return
         btn = self.carousel.buttons[idx]
         self.current_index = idx
+        self.info_panel.setFilamentStatus(self.status)
         self.info_panel.update_for_slot(idx, btn)
         self.carousel.selectIndex(idx)
-        self.info_panel.setFilamentStatus(self.status)
 
     def _on_gate_temp_change(self, _name: str, value: int) -> None:
         self.info_panel._lbl_temp.setText(str(value))
