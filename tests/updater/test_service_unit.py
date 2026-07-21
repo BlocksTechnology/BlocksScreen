@@ -704,6 +704,26 @@ class TestUpdateAll:
             await svc.update_all()
         assert [c.name for c in mock_batch.call_args[0][0]] == ["BlocksScreen"]
 
+    @pytest.mark.asyncio
+    async def test_dead_current_branch_dropped_when_unconfigured(self, tmp_path):
+        # No configured branch + deleted current branch must also be dropped.
+        dead = self._git(tmp_path, "klipper", 2)  # branch=None -> uses current
+        good = self._git(tmp_path, "BlocksScreen", 99)
+        good.branch = "dev"
+        with (
+            patch("updater.service.UpdateService._preflight_fetch", return_value=set()),
+            patch("updater.service.UpdateService._run_git_batch") as mock_batch,
+            patch("updater.service.git_get_current_branch", return_value="wip/gone"),
+            patch(
+                "updater.service.git_ref_hash",
+                side_effect=lambda path, ref: "" if "gone" in ref else "a" * 40,
+            ),
+        ):
+            svc = UpdateService()
+            svc._components = [dead, good]
+            await svc.update_all()
+        assert [c.name for c in mock_batch.call_args[0][0]] == ["BlocksScreen"]
+
 
 class TestAtomicBatch:
     """_run_git_batch: phased stage/deps/hooks/restart; failures drop per component."""

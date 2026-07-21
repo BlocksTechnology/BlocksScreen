@@ -410,19 +410,22 @@ class UpdateService:
         return ok
 
     async def _filter_dead_branch_batch(self, batch: list[ComponentConfig]) -> bool:
-        """Drop components whose configured branch no longer resolves upstream."""
-        # A dead configured branch must not abort the batch and brick BlocksScreen.
+        """Drop components whose effective upstream ref (configured or current) is gone."""
+        # A dead ref (configured or deleted current branch) must not abort the batch.
         ok = True
         for c in batch.copy():
-            if c.branch and not await git_ref_hash(c.path, f"origin/{c.branch}"):
+            branch = c.branch
+            if not branch and c.path is not None:
+                branch = await git_get_current_branch(c.path)
+            if branch and not await git_ref_hash(c.path, f"origin/{branch}"):
                 batch.remove(c)
                 self._log.error(
-                    "%s: branch origin/%s does not resolve (deleted upstream?) - skipping",
+                    "%s: origin/%s does not resolve (deleted upstream?) - skipping",
                     c.name,
-                    c.branch,
+                    branch,
                 )
                 ok = self._cb_error_done(
-                    c.name, f"branch origin/{c.branch} not found - fix components.yaml"
+                    c.name, f"branch origin/{branch} not found - fix components.yaml"
                 )
         return ok
 
