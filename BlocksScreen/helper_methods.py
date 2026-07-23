@@ -344,3 +344,22 @@ def get_file_name(filename: str | None) -> str:
     if not filename:
         return ""
     return pathlib.PurePosixPath(filename.replace("\\", "/")).name
+
+
+def get_parent_dir(path: str) -> str:
+    """Return the parent directory of *path*, POSIX-style (for root-level)."""
+    parent = pathlib.PurePosixPath(path.removeprefix("/")).parent
+    return "" if str(parent) == "." else str(parent)
+
+
+def is_usb_mount(path: str) -> bool:
+    """Return True if *path* is a top-level USB mount."""
+    return "/" not in path and path.startswith("USB-")
+
+
+def resolve_thumbnail_path(
+    gcode_root: pathlib.Path, requested_path: str, relative_path: str
+) -> pathlib.Path:
+    """Resolve a thumbnails absolute path from the *requested* gcode path"""
+    parent = pathlib.PurePosixPath(requested_path.removeprefix("/")).parent
+    return gcode_root / parent / relative_path

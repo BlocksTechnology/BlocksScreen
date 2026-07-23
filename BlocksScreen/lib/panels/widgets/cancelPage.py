@@ -1,5 +1,6 @@
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_frame import BlocksCustomFrame
+from lib.utils import thumbnail_loader
 from lib.utils.blocks_label import BlocksLabel
 from PyQt6 import QtCore, QtGui, QtWidgets
 import typing
@@ -8,10 +9,7 @@ from lib.moonrakerComm import MoonWebSocket
 
 
 class CancelPage(QtWidgets.QWidget):
-    """Update GUI Page,
-    retrieves from moonraker available clients and adds functionality
-    for updating or recovering them
-    """
+    """Cancel print page with client list and recovery functionality."""
 
     request_file_info: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         str, name="request_file_info"
@@ -99,20 +97,25 @@ class CancelPage(QtWidgets.QWidget):
 
     def _show_screen_thumbnail(self, dict):
         try:
-            thumbnails = dict["thumbnail_images"]
+            thumbnails = dict["thumbnail_paths"]
 
-            last_thumb = QtGui.QPixmap.fromImage(thumbnails[-1])
+            last_thumb = QtGui.QPixmap(thumbnails[-1])
 
             if last_thumb.isNull():
-                last_thumb = QtGui.QPixmap(
-                    "BlocksScreen/lib/ui/resources/media/logoblocks400x300.png"
-                )
+                last_thumb = self._embedded_pixmap(dict.get("filename", ""))
         except Exception as e:
             print(e)
-            last_thumb = QtGui.QPixmap(
-                "BlocksScreen/lib/ui/resources/media/logoblocks400x300.png"
-            )
+            last_thumb = self._embedded_pixmap(dict.get("filename", ""))
         self.set_pixmap(last_thumb)
+
+    def _embedded_pixmap(self, gcode_path: str) -> QtGui.QPixmap:
+        """Cached embedded thumbnail (read-only USB fallback), else the logo placeholder."""
+        pixmap = thumbnail_loader.cached_pixmap(gcode_path)
+        if pixmap is not None:
+            return pixmap
+        return QtGui.QPixmap(
+            "BlocksScreen/lib/ui/resources/media/logoblocks400x300.png"
+        )
 
     def _setupUI(self) -> None:
         """Setup widget ui"""

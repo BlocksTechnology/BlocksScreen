@@ -27,6 +27,7 @@
 
 
 import logging
+from urllib.parse import quote
 
 import requests
 from requests import Request, Response
@@ -44,18 +45,16 @@ class UncallableError(Exception):
 
 
 class MoonRest:
-    """MoonRest Basic API for sending end posting requests to MoonrakerAPI
-
-    Raises:
-        UncallableError: An error occurred when the request type invalid
-    """
+    """MoonRest API for GET/POST requests to Moonraker."""
 
     timeout = 3
 
-    def __init__(self, host: str = "localhost", port: int = 7125, api_key=False):
+    def __init__(
+        self, host: str = "localhost", port: int = 7125, api_key: str | None = None
+    ):
         self._host = host
         self._port = port
-        self._api_key = api_key
+        self._api_key: str | None = api_key
 
     @property
     def build_endpoint(self):
@@ -63,12 +62,7 @@ class MoonRest:
         return f"http://{self._host}:{self._port}"
 
     def get_oneshot_token(self):
-        """Requests Moonraker API for a oneshot token to be used on
-        API key authentication
-
-        Returns:
-            str: A oneshot token
-        """
+        """Request oneshot token from Moonraker for API key authentication."""
         # Response data is generally an object itself, however for some requests this may simply be an "ok" string.
         response = self.get_request(method="access/oneshot_token")
         if response is None:
@@ -80,40 +74,25 @@ class MoonRest:
         )
 
     def get_server_info(self):
-        """GET MoonrakerAPI /server/info
-
-        Returns:
-            dict: server info from Moonraker
-        """
+        """Fetch server info from Moonraker."""
         return self.get_request(method="server/info")
 
     def get_spool(self, spool_id: int) -> dict | None:
-        """GET /server/spoolman/spool/{spool_id} via Moonraker
-
-        Returns spool dict on success, None on HTTP/network/JSON error.
-        """
+        """Fetch spool info from Moonraker; None on any error."""
         response = self.get_request(f"server/spoolman/spool/{spool_id}")
         if not isinstance(response, dict):
             return None
         return response.get("result")
 
     def set_spool_used_weight(self, spool_id: int, weight: float) -> bool:
-        """POST /server/spoolman/spool/{spool_id} to update used_weight.
-
-        Returns True on sucess, False on any error.
-        """
+        """Update spool used_weight via Moonraker; True on success."""
         response = self.post_request(
             f"server/spoolman/spool/{spool_id}", json={"used_weight": weight}
         )
         return response is not None
 
     def firmware_restart(self):
-        """firmware_restart
-            POST to /printer/firmware_restart to firmware restart Klipper
-
-        Returns:
-            str: Returns an 'ok' from Moonraker
-        """
+        """POST firmware_restart to Moonraker."""
         return self.post_request(method="printer/firmware_restart")
 
     def post_request(self, method, data=None, json=None, json_response=True):
@@ -134,6 +113,27 @@ class MoonRest:
             json_response=json,
             timeout=timeout,
         )
+
+    def get_gcode_header(self, rel_path: str, max_bytes: int = 131072) -> bytes | None:
+        """GET the first *max_bytes* of a gcode file (embedded-thumbnail parse)."""
+        url = f"{self.build_endpoint}/server/files/gcodes/{quote(rel_path)}"
+        headers = {"Range": f"bytes=0-{max_bytes - 1}"}
+        if self._api_key:
+            headers["x-api-key"] = self._api_key
+        try:
+            with requests.get(
+                url, headers=headers, stream=True, timeout=self.timeout
+            ) as resp:
+                resp.raise_for_status()
+                data = bytearray()
+                for chunk in resp.iter_content(chunk_size=65536):
+                    data.extend(chunk)
+                    if len(data) >= max_bytes:
+                        break
+                return bytes(data)
+        except Exception as exc:
+            logger.info("gcode header fetch failed for %s: %s", rel_path, exc)
+            return None
 
     def _request(
         self,

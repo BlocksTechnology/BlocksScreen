@@ -2,6 +2,7 @@ import os
 import typing
 
 import helper_methods
+from lib.utils import thumbnail_loader
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_frame import BlocksCustomFrame
 from lib.utils.blocks_label import BlocksLabel
@@ -27,6 +28,8 @@ class ConfirmWidget(QtWidgets.QWidget):
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_AcceptTouchEvents, True)
         self.thumbnail: QtGui.QImage = self._blocksthumbnail
         self._thumbnails: typing.List = []
+        self._current_gcode: str = ""
+        self._loader_connected: bool = False
         self.directory = "gcodes"
         self.filename = ""
         self.confirm_button.clicked.connect(
@@ -49,12 +52,9 @@ class ConfirmWidget(QtWidgets.QWidget):
         self.directory = directory
         self.filename = filename
         self.cf_file_name.setText(self.filename)
-        self._thumbnails = filedata.get("thumbnail_images", [])
-        if self._thumbnails:
-            _biggest_thumbnail = self._thumbnails[-1]  # Show last which is biggest
-            self.thumbnail = QtGui.QImage(_biggest_thumbnail)
-        else:
-            self.thumbnail = self._blocksthumbnail
+        self._current_gcode = text.removeprefix("/")
+        self._thumbnails = filedata.get("thumbnail_paths", [])
+        self.thumbnail = self._resolve_thumbnail()
         _total_filament = filedata.get("filament_weight_total")
         _estimated_time = filedata.get("estimated_time")
         if isinstance(_estimated_time, str):
@@ -87,15 +87,32 @@ class ConfirmWidget(QtWidgets.QWidget):
         self.cf_info_tr.setText(f"{time_label}")
         self.repaint()
 
+    def _resolve_thumbnail(self) -> QtGui.QImage:
+        """Biggest on-disk thumbnail, else a cached/queued embedded one, else placeholder."""
+        if self._thumbnails:
+            disk = QtGui.QImage(self._thumbnails[-1])
+            if not disk.isNull():
+                return disk
+        loader = thumbnail_loader.get_loader()
+        if loader is None:
+            return self._blocksthumbnail
+        if not self._loader_connected:
+            loader.ready.connect(self._on_embedded_ready)
+            self._loader_connected = True
+        cached = loader.cached(self._current_gcode)
+        if cached is not None and not cached.isNull():
+            return cached
+        loader.request_embedded(self._current_gcode)
+        return self._blocksthumbnail
+
+    def _on_embedded_ready(self, gcode_path: str, image: object) -> None:
+        """Swap in an embedded thumbnail that arrived for the shown file."""
+        if gcode_path == self._current_gcode and image and not image.isNull():
+            self.thumbnail = image
+            self.repaint()
+
     def estimate_print_time(self, seconds: int) -> list:
-        """Convert time in seconds format to days, hours, minutes, seconds.
-
-        Args:
-            seconds (int): Seconds
-
-        Returns:
-            list: list that contains the converted information [days, hours, minutes, seconds]
-        """
+        """Convert seconds to [days, hours, minutes, seconds]."""
         num_min, seconds = divmod(seconds, 60)
         num_hours, minutes = divmod(num_min, 60)
         days, hours = divmod(num_hours, 24)

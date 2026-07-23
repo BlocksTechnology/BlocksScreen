@@ -393,7 +393,7 @@ class TestOnFileInfo:
             "object_height": 10.0,
             "layer_height": 0.2,
             "first_layer_height": 0.2,
-            "thumbnail_images": [],
+            "thumbnail_paths": [],
         }
 
     def test_load_correct_info(self, widget):

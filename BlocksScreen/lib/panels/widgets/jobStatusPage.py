@@ -12,6 +12,7 @@ from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_label import BlocksLabel
 from lib.utils.blocks_progressbar import CustomProgressBar
 from lib.utils.display_button import DisplayButton
+from lib.utils import thumbnail_loader
 from lib.utils.flowguard import FlowguardWidget
 from PyQt6 import QtCore, QtGui, QtWidgets
 
@@ -19,14 +20,7 @@ logger = logging.getLogger(__name__)
 
 
 class JobStatusWidget(QtWidgets.QWidget):
-    """Job status widget page, page shown when there is a active print job.
-
-    Enables mid print printer tuning and inspection of print progress.
-
-
-    Args:
-        QtWidgets (QtWidgets.QWidget): Parent widget
-    """
+    """Job status page for active print jobs, with mid-print tuning and progress."""
 
     print_start: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         str, name="print_start"
@@ -125,10 +119,7 @@ class JobStatusWidget(QtWidgets.QWidget):
             self.request_file_info.emit(self._current_file_name)
 
     def eventFilter(self, sender_obj: QtCore.QObject, event: events.QEvent) -> bool:
-        """Filter events,
-
-        currently only filters events from `self.thumbnail_view` QGraphicsView widget
-        """
+        """Filter events from thumbnail_view QGraphicsView."""
         if (
             sender_obj == self.thumbnail_view
             and event.type() == QtCore.QEvent.Type.MouseButtonPress
@@ -143,8 +134,11 @@ class JobStatusWidget(QtWidgets.QWidget):
             px for thumb in thumbnails if not (px := QtGui.QPixmap(thumb)).isNull()
         ]
         if not self.thumbnail_graphics:
-            logger.debug("Unable to load thumbnails, no thumbnails provided")
-            return
+            embedded = self._embedded_pixmap()
+            if embedded is None:
+                logger.debug("Unable to load thumbnails, no thumbnails provided")
+                return
+            self.thumbnail_graphics = [embedded]
         self._ensure_thumbnail_widget()
         _biggest_thumb = self.thumbnail_graphics[-1]
         scene = QtWidgets.QGraphicsScene()
@@ -166,6 +160,12 @@ class JobStatusWidget(QtWidgets.QWidget):
         self.thumbnail_view.setScene(scene)
         self.printing_progress_bar.set_inner_pixmap(self.thumbnail_graphics[-1])
 
+    def _embedded_pixmap(self) -> QtGui.QPixmap | None:
+        """Cached embedded thumbnail (read-only USB fallback) as a pixmap, or None."""
+        return thumbnail_loader.cached_pixmap(
+            (self.file_metadata or {}).get("filename", "")
+        )
+
     @QtCore.pyqtSlot(name="handle-cancel")
     def handleCancel(self) -> None:
         """Handle cancel print job dialog"""
@@ -186,9 +186,7 @@ class JobStatusWidget(QtWidgets.QWidget):
         self.pause_printing_btn.setEnabled(True)
 
     def _reset_job_display(self) -> None:
-        """Clear all per-job layer/progress state so a new print never shows
-        stale values. Runs for both screen- and Mainsail-initiated prints
-        (see ``on_print_start`` and the filename-change branch)."""
+        """Clear per-job state; runs for screen and Mainsail prints."""
         self.total_layers = "?"
         self.total_layer_reported = False
         self.layer_fallback = False
@@ -227,7 +225,7 @@ class JobStatusWidget(QtWidgets.QWidget):
         self._gcode_start_byte = int(metadata.get("gcode_start_byte", 0) or 0)
         self._gcode_end_byte = int(metadata.get("gcode_end_byte", 0) or 0)
         self.file_metadata = metadata
-        self._load_thumbnails(*metadata.get("thumbnail_images", ()))
+        self._load_thumbnails(*metadata.get("thumbnail_paths", ()))
         # Reconnect mid-print: metadata just arrived, recompute the current layer now.
         if self._filament_used > 0:
             self._update_layer_from_z()
@@ -244,9 +242,7 @@ class JobStatusWidget(QtWidgets.QWidget):
             self.print_resume.emit()
 
     def _handle_print_state(self, state: str) -> None:
-        """Handle print state change received from
-        printer_status object updated
-        """
+        """Handle print state change from printer_status."""
         lstate = state.lower()
         _was_active = self._internal_print_status in ("printing", "paused")
         event_state = lstate
@@ -317,12 +313,7 @@ class JobStatusWidget(QtWidgets.QWidget):
     @QtCore.pyqtSlot(str, float, name="on_print_stats_update")
     @QtCore.pyqtSlot(str, str, name="on_print_stats_update")
     def on_print_stats_update(self, field: str, value: dict | float | str) -> None:
-        """Process updates from the ``print_stats`` printer object.
-
-        Args:
-            field: The name of the updated field.
-            value: The value for the field.
-        """
+        """Process print_stats updates."""
         if isinstance(value, str):
             if "state" in field:
                 self._handle_print_state(value)
@@ -418,12 +409,7 @@ class JobStatusWidget(QtWidgets.QWidget):
     @QtCore.pyqtSlot(str, float, name="virtual_sdcard_update")
     @QtCore.pyqtSlot(str, bool, name="virtual_sdcard_update")
     def virtual_sdcard_update(self, field: str, value: float | bool) -> None:
-        """Handle virtual sdcard
-
-        Args:
-            field (str): Name of the updated field on the virtual_sdcard object
-            value (float | bool): The updated information for the corresponding field
-        """
+        """Handle virtual_sdcard updates."""
         # Track position/progress always so the bar is correct on next show.
         if field == "file_position":
             self._file_position = float(value)
@@ -441,12 +427,7 @@ class JobStatusWidget(QtWidgets.QWidget):
             )
 
     def _compute_progress(self) -> float:
-        """File-relative progress [0, 1], matching Mainsail's default.
-
-        From Mainsail's getPrintPercentByFilepositionRelative (getters.ts):
-        clip file position to gcode_start_byte/gcode_end_byte so start macros
-        read 0% and end gcode isn't counted; fall back to virtual_sdcard.progress.
-        """
+        """File-relative progress [0, 1] matching Mainsail (clipped to gcode_start/end)."""
         start = self._gcode_start_byte
         end = self._gcode_end_byte
         if start and end and end > start:

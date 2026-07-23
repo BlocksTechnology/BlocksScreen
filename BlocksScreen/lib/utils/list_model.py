@@ -1,5 +1,6 @@
 import typing
-from dataclasses import dataclass, field
+from collections import OrderedDict
+from dataclasses import dataclass
 
 from PyQt6 import QtCore, QtGui, QtWidgets  # pylint: disable=import-error
 
@@ -32,13 +33,6 @@ class ListItem:
     height: int = 60
     notificate: bool = False
 
-    # stores width and heitgh of the button so we dont need to recalculate it every time
-    _cache: typing.Dict[int, int] = field(default_factory=dict)
-
-    def clear_cache(self):
-        """Call this if text or font size changes dynamically"""
-        self._cache.clear()
-
 
 class EntryListModel(QtCore.QAbstractListModel):
     """List model Subclassed QAbstractListModel"""
@@ -56,41 +50,6 @@ class EntryListModel(QtCore.QAbstractListModel):
         """Gets model row count"""
         return len(self.entries)
 
-    def deleteLater(self) -> None:
-        """subclass for deleting the object"""
-        return super().deleteLater()
-
-    def remove_item(self, item: ListItem) -> None:
-        """Removes one row item from the model"""
-        if item in self.entries:
-            index = self.entries.index(item)
-            self.beginRemoveRows(QtCore.QModelIndex(), index, index)
-            self.entries.pop(index)
-            self.endRemoveRows()
-
-    def delete_duplicates(self) -> None:
-        """
-        Removes items that have identical text, color, and
-        last time entry (get(-1)).
-        """
-        seen_identifiers: set[tuple[str, str, str]] = set()
-        unique_entries: list[ListItem] = []
-
-        for item in self.entries:
-            text_val = item.text
-            color_val = item.color
-            time_val = item._cache.get(-1)
-
-            identifier = (text_val, color_val, time_val)
-
-            if identifier not in seen_identifiers:
-                unique_entries.append(item)
-                seen_identifiers.add(identifier)
-
-        self.beginResetModel()
-        self.entries = unique_entries
-        self.endResetModel()
-
     def clear(self) -> None:
         """Clear model rows"""
         self.beginResetModel()
@@ -105,14 +64,7 @@ class EntryListModel(QtCore.QAbstractListModel):
         self.endInsertRows()
 
     def remove_item_by_text(self, text: str) -> bool:
-        """Remove item from model by its text value.
-
-        Args:
-            text: The text value of the item to remove.
-
-        Returns:
-            True if item was found and removed, False otherwise.
-        """
+        """Remove item by text value; True if found, False otherwise."""
         for i, item in enumerate(self.entries):
             if item.text == text:
                 self.beginRemoveRows(QtCore.QModelIndex(), i, i)
@@ -129,11 +81,7 @@ class EntryListModel(QtCore.QAbstractListModel):
         self.endInsertRows()
 
     def remove_item_at(self, position: int) -> bool:
-        """Remove item at a specific position.
-
-        Returns:
-            True if item was removed, False if position is out of range.
-        """
+        """Remove item at position; True if removed, False if out of range."""
         if position < 0 or position >= len(self.entries):
             return False
         self.beginRemoveRows(QtCore.QModelIndex(), position, position)
@@ -149,14 +97,7 @@ class EntryListModel(QtCore.QAbstractListModel):
         return None
 
     def update_item_at(self, position: int, item: ListItem) -> bool:
-        """Update an existing item's display data in-place.
-
-        Copies visual fields (left_icon, right_text, right_icon) from
-        *item* into the entry at *position* and emits ``dataChanged``.
-
-        Returns:
-            True if updated, False if position is out of range.
-        """
+        """Update item at position (left_icon, right_text, right_icon); emit dataChanged."""
         if position < 0 or position >= len(self.entries):
             return False
         existing = self.entries[position]
@@ -172,10 +113,7 @@ class EntryListModel(QtCore.QAbstractListModel):
         desired: list[ListItem],
         key_fn: typing.Callable[[ListItem], str],
     ) -> None:
-        """Diff current entries against *desired* and apply minimal mutations.
-
-        Uses *key_fn* to derive a unique identity string for each item.
-        """
+        """Diff against desired entries and apply minimal mutations using key_fn."""
         desired_keys = {key_fn(d) for d in desired}
         self._remove_stale_entries(desired_keys, key_fn)
 
@@ -306,22 +244,24 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
         super().__init__()
         self.prev_index: int = 0
         self.height: int = 60
-        self._scaled_cache: dict[tuple[int, int, int], QtGui.QPixmap] = {}
+        self._scaled_cache: OrderedDict[tuple[int, int, int], QtGui.QPixmap] = (
+            OrderedDict()
+        )
+        self._tinted_cache: OrderedDict[tuple[int, int, int, str], QtGui.QPixmap] = (
+            OrderedDict()
+        )
+        self._arrow_cache: dict[bool, QtGui.QPixmap] = {}
 
     def _get_scaled(
         self,
         pixmap: QtGui.QPixmap,
         size: QtCore.QSize,
     ) -> QtGui.QPixmap:
-        """Return *pixmap* scaled to *size*, using a cache to avoid
-        re-scaling the same icon every paint frame.
-
-        The cache key is (QPixmap.cacheKey(), width, height) which
-        correctly invalidates when the source pixmap changes.
-        """
+        """Return scaled pixmap (cached by cacheKey, width, height)."""
         key = (pixmap.cacheKey(), size.width(), size.height())
         cached = self._scaled_cache.get(key)
         if cached is not None:
+            self._scaled_cache.move_to_end(key)
             return cached
         scaled = pixmap.scaled(
             size,
@@ -329,14 +269,44 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
             QtCore.Qt.TransformationMode.SmoothTransformation,
         )
         self._scaled_cache[key] = scaled
-        # Prevent unbounded growth — 64 entries covers all wifi
-        # bar variants × protected/open × left/right icons easily.
+        # Bound growth: LRU-evict past 64 (covers all wifi/icon variants).
         if len(self._scaled_cache) > 64:
-            # Drop oldest half
-            keys = list(self._scaled_cache)
-            for k in keys[:32]:
-                del self._scaled_cache[k]
+            self._scaled_cache.popitem(last=False)
         return scaled
+
+    def _get_tinted(
+        self,
+        pixmap: QtGui.QPixmap,
+        size: QtCore.QSize,
+        color: str,
+    ) -> QtGui.QPixmap:
+        """Return *pixmap* scaled to *size* and tinted *color*, cached per paint."""
+        key = (pixmap.cacheKey(), size.width(), size.height(), color)
+        cached = self._tinted_cache.get(key)
+        if cached is not None:
+            self._tinted_cache.move_to_end(key)
+            return cached
+        scaled = self._get_scaled(pixmap, size)
+        tinted = QtGui.QPixmap(scaled.size())
+        tinted.fill(QtCore.Qt.GlobalColor.transparent)
+        p = QtGui.QPainter(tinted)
+        p.drawPixmap(0, 0, scaled)
+        p.setCompositionMode(QtGui.QPainter.CompositionMode.CompositionMode_SourceIn)
+        p.fillRect(tinted.rect(), QtGui.QColor(color))
+        p.end()
+        self._tinted_cache[key] = tinted
+        if len(self._tinted_cache) > 64:
+            self._tinted_cache.popitem(last=False)
+        return tinted
+
+    def _expand_arrow(self, expanded: bool) -> QtGui.QPixmap:
+        """Lazily load + cache the expand/collapse arrow pixmap (no per-paint decode)."""
+        arrow = self._arrow_cache.get(expanded)
+        if arrow is None:
+            name = "arrow_down" if expanded else "arrow_right"
+            arrow = QtGui.QPixmap(f":/arrow_icons/media/btn_icons/{name}.svg")
+            self._arrow_cache[expanded] = arrow
+        return arrow
 
     def clear(self) -> None:
         """Clears delegate indexing"""
@@ -345,9 +315,7 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
     def sizeHint(
         self, option: QtWidgets.QStyleOptionViewItem, index: QtCore.QModelIndex
     ):
-        """
-        Calculates size AND determines if expansion is needed.
-        """
+        """Calculate size and determine expansion need."""
         item: ListItem = index.data(QtCore.Qt.ItemDataRole.UserRole)
         target_width = option.rect.width()
 
@@ -397,8 +365,6 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
         )
 
         final_height = max(item.height, text_rect.height() - 1)
-        # Cache it
-        item._cache[target_width] = final_height + 20
         return QtCore.QSize(target_width, int(final_height * 1.2))
 
     def paint(
@@ -422,11 +388,7 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
             painter.restore()
             return
         if item.allow_expand and item.needs_expansion:
-            item.right_icon = (
-                QtGui.QPixmap(":/arrow_icons/media/btn_icons/arrow_down.svg")
-                if item.is_expanded
-                else QtGui.QPixmap(":/arrow_icons/media/btn_icons/arrow_right.svg")
-            )
+            item.right_icon = self._expand_arrow(item.is_expanded)
 
         # Background Color
         pressed_color = QtGui.QColor("#1A8FBF")
@@ -449,15 +411,10 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
         )
 
         if item.right_icon:
-            icon_scaled = item.right_icon.scaled(
-                ellipse_rect.size().toSize(),
-                QtCore.Qt.AspectRatioMode.KeepAspectRatio,
-                QtCore.Qt.TransformationMode.SmoothTransformation,
+            icon_scaled = self._get_scaled(
+                item.right_icon, ellipse_rect.size().toSize()
             )
-            painter.drawPixmap(
-                ellipse_rect.toRect(),
-                icon_scaled,
-            )
+            painter.drawPixmap(ellipse_rect.toRect(), icon_scaled)
 
         left_margin = 10
         left_icon_rect = QtCore.QRectF(
@@ -468,32 +425,14 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
         )
 
         if item.left_icon:
-            l_icon_scaled = item.left_icon.scaled(
-                int(left_icon_rect.width()),
-                int(left_icon_rect.height()),
-                QtCore.Qt.AspectRatioMode.KeepAspectRatio,
-                QtCore.Qt.TransformationMode.SmoothTransformation,
+            icon_size = QtCore.QSize(
+                int(left_icon_rect.width()), int(left_icon_rect.height())
             )
-
             if item.color_left_icon:
-                tinted = QtGui.QPixmap(l_icon_scaled.size())
-                tinted.fill(QtCore.Qt.GlobalColor.transparent)
-                p2 = QtGui.QPainter(tinted)
-                p2.drawPixmap(0, 0, l_icon_scaled)
-                p2.setCompositionMode(
-                    QtGui.QPainter.CompositionMode.CompositionMode_SourceIn
-                )
-                p2.fillRect(tinted.rect(), QtGui.QColor(item.color))
-                p2.end()
-                painter.drawPixmap(
-                    left_icon_rect.toRect(),
-                    tinted,
-                )
+                left_pixmap = self._get_tinted(item.left_icon, icon_size, item.color)
             else:
-                painter.drawPixmap(
-                    left_icon_rect.toRect(),
-                    l_icon_scaled,
-                )
+                left_pixmap = self._get_scaled(item.left_icon, icon_size)
+            painter.drawPixmap(left_icon_rect.toRect(), left_pixmap)
 
         text_margin = int(
             rect.right() - ellipse_size - ellipse_margin - rect.height() * 0.10
