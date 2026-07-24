@@ -7,20 +7,25 @@ _ACCENT = "26, 143, 191"
 
 _STYLE = f"""
     QComboBox {{
-        background-color: black;
+        background-color: rgba({_ACCENT}, 0.08);
         color: white;
-        border: 1px solid rgba({_ACCENT}, 0.5);
-        border-radius: 8px;
+        border: none;
+        border-radius: 12px;
         padding: 4px 12px;
         font-size: 22px;
     }}
-    QComboBox QAbstractItemView::item {{ font-size: 22px; }}
+    QComboBox QAbstractItemView::item {{
+        font-size: 22px;
+        border-radius: 12px;
+        padding: 6px;
+    }}
     QComboBox::drop-down {{ border: none; width: 34px; }}
     QComboBox::down-arrow {{ image: none; }}
     QComboBox QAbstractItemView {{
         background-color: black;
         color: white;
-        selection-background-color: rgba({_ACCENT}, 0.6);
+        border: none;
+        selection-background-color: rgba({_ACCENT}, 0.35);
         selection-color: white;
         outline: none;
     }}

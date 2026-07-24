@@ -35,7 +35,17 @@ _FIELD_LABELS: dict[str, str] = {
     "mmu_print": "MMU Print",
 }
 # Internal fields not meaningful to the user.
-_HIDDEN_FIELDS: frozenset[str] = frozenset({"thumbnails", "thumbnail_paths", "uuid"})
+_HIDDEN_FIELDS: frozenset[str] = frozenset(
+    {
+        "thumbnails",
+        "thumbnail_paths",
+        "uuid",
+        "size",
+        "gcode_start_byte",
+        "gcode_end_byte",
+        "filament_name",
+    }
+)
 
 
 class FileMetadataWidget(QtWidgets.QWidget):
@@ -127,18 +137,22 @@ class FileMetadataWidget(QtWidgets.QWidget):
         cell = QtWidgets.QHBoxLayout()
         cell.setContentsMargins(0, 0, 0, 0)
         key_label = QtWidgets.QLabel(label, parent=self._rows_container)
-        key_label.setStyleSheet("background: transparent; color: #B8B8B8;")
-        key_label.setAlignment(
-            QtCore.Qt.AlignmentFlag.AlignLeft | QtCore.Qt.AlignmentFlag.AlignVCenter
+        key_label.setStyleSheet(
+            "background: transparent; color: #B8B8B8; font-size: 18px;"
         )
-        value_label = QtWidgets.QLabel(value, parent=self._rows_container)
-        value_label.setStyleSheet("background: transparent; color: white;")
-        value_label.setWordWrap(True)
-        value_label.setAlignment(
+        key_label.setAlignment(
             QtCore.Qt.AlignmentFlag.AlignRight | QtCore.Qt.AlignmentFlag.AlignVCenter
         )
-        cell.addWidget(key_label, 1)
+        value_label = QtWidgets.QLabel(value, parent=self._rows_container)
+        value_label.setStyleSheet(
+            "background: transparent; color: white; font-size: 18px;"
+        )
+        value_label.setWordWrap(True)
+        value_label.setAlignment(
+            QtCore.Qt.AlignmentFlag.AlignLeft | QtCore.Qt.AlignmentFlag.AlignVCenter
+        )
         cell.addWidget(value_label, 1)
+        cell.addWidget(key_label, 1)
         self._rows_layout.addLayout(cell, row, col)
 
     def _clear_rows(self) -> None:
