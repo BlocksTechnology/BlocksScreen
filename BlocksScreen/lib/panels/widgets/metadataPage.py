@@ -56,6 +56,19 @@ _UNITS: dict[str, str] = {
     "first_layer_bed_temp": " °C",
     "chamber_temp": " °C",
 }
+# Typical first-layer nozzle temp (°C) by material, fallback when metadata omits it.
+_FILAMENT_NOZZLE_TEMP: dict[str, int] = {
+    "PLA": 210,
+    "PETG": 235,
+    "ABS": 240,
+    "ASA": 240,
+    "TPU": 220,
+    "PC": 260,
+    "NYLON": 250,
+    "PVA": 200,
+    "HIPS": 240,
+    "PP": 230,
+}
 # Internal fields not meaningful to the user.
 _HIDDEN_FIELDS: frozenset[str] = frozenset(
     {
@@ -94,7 +107,11 @@ class FileMetadataWidget(QtWidgets.QWidget):
         """Populate the page with metadata grouped into titled category cards."""
         self.title_label.setText(os.path.basename(text))
         self._clear_rows()
-        data = filedata or {}
+        data = dict(filedata or {})
+        if not data.get("first_layer_extr_temp"):
+            temp = self._filament_nozzle_temp(data.get("filament_type"))
+            if temp is not None:
+                data["first_layer_extr_temp"] = temp
         placed = 0
         for title, keys in _CATEGORIES:
             pairs: list[tuple[str, str]] = []
@@ -113,6 +130,16 @@ class FileMetadataWidget(QtWidgets.QWidget):
             placed = 1
         for row in range((placed + 1) // 2):
             self._rows_layout.setRowStretch(row, 1)
+
+    def _filament_nozzle_temp(self, filament_type: object) -> int | None:
+        """Typical nozzle temp matched to the filament material, or None if unknown."""
+        if not isinstance(filament_type, str):
+            return None
+        name = filament_type.upper()
+        for material, temp in _FILAMENT_NOZZLE_TEMP.items():
+            if material in name:
+                return temp
+        return None
 
     def _humanize(self, key: str) -> str:
         """Map a metadata key to its display label."""
@@ -193,6 +220,7 @@ class FileMetadataWidget(QtWidgets.QWidget):
         header_font = QtGui.QFont()
         header_font.setFamily("Momcake")
         header_font.setPointSize(16)
+        header_font.setBold(True)
         header.setFont(header_font)
         header.setStyleSheet("background: transparent; color: white;")
         header.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
