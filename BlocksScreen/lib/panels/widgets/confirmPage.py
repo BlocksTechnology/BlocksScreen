@@ -207,6 +207,18 @@ class ConfirmWidget(QtWidgets.QWidget):
         self.cf_file_name.setObjectName("cf_file_name")
         self.cf_header_title.addWidget(self.cf_file_name)
 
+        self.file_info_btn = IconButton(self)
+        self.file_info_btn.setMinimumSize(QtCore.QSize(60, 60))
+        self.file_info_btn.setMaximumSize(QtCore.QSize(60, 60))
+        self.file_info_btn.setFlat(True)
+        self.file_info_btn.setProperty(
+            "icon_pixmap", QtGui.QPixmap(":/files/media/btn_icons/file_icon.svg")
+        )
+        self.file_info_btn.setObjectName("file_info_btn")
+        self.cf_header_title.addWidget(
+            self.file_info_btn, 0, QtCore.Qt.AlignmentFlag.AlignRight
+        )
+
         self.back_btn = IconButton(self)
         self.back_btn.setMinimumSize(QtCore.QSize(60, 60))
         self.back_btn.setMaximumSize(QtCore.QSize(60, 60))
@@ -246,18 +258,6 @@ class ConfirmWidget(QtWidgets.QWidget):
             QtCore.Qt.AlignmentFlag.AlignLeft | QtCore.Qt.AlignmentFlag.AlignVCenter
         )
         self.info_layout.addWidget(self.cf_info_tf)
-
-        self.file_info_btn = IconButton(self.info_frame)
-        self.file_info_btn.setMinimumSize(QtCore.QSize(60, 60))
-        self.file_info_btn.setMaximumSize(QtCore.QSize(60, 60))
-        self.file_info_btn.setFlat(True)
-        self.file_info_btn.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/files/media/btn_icons/file_icon.svg")
-        )
-        self.file_info_btn.setObjectName("file_info_btn")
-        self.info_layout.addWidget(
-            self.file_info_btn, 0, QtCore.Qt.AlignmentFlag.AlignLeft
-        )
 
         self.cf_info_tr = QtWidgets.QLabel(parent=self.info_frame)
 

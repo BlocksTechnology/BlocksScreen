@@ -43,8 +43,8 @@ class FilesPage(QtWidgets.QWidget):
         "usb": ":/ui/media/btn_icons/usb_icon.svg",
         "back": ":/ui/media/btn_icons/back.svg",
         "refresh": ":/ui/media/btn_icons/refresh.svg",
-        "sort_desc": ":/arrow_icons/media/btn_icons/arrow_down.svg",
-        "sort_asc": ":/arrow_icons/media/btn_icons/arrow_up.svg",
+        "sort_desc": ":/arrow_icons/media/btn_icons/sort_desc.svg",
+        "sort_asc": ":/arrow_icons/media/btn_icons/sort_asc.svg",
     }
 
     def __init__(self, parent: typing.Optional[QtWidgets.QWidget] = None) -> None:
