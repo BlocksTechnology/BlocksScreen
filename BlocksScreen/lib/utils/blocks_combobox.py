@@ -18,13 +18,19 @@ _STYLE = f"""
         font-size: 22px;
         border-radius: 12px;
         padding: 6px;
+        margin: 2px 4px;
+        background-color: rgba({_ACCENT}, 0.08);
     }}
-    QComboBox::drop-down {{ border: none; width: 34px; }}
+    QComboBox QAbstractItemView::item:selected {{
+        background-color: rgba({_ACCENT}, 0.35);
+    }}
+    QComboBox::drop-down {{ border: none; width: 0px; }}
     QComboBox::down-arrow {{ image: none; }}
     QComboBox QAbstractItemView {{
         background-color: black;
         color: white;
         border: none;
+        padding: 4px;
         selection-background-color: rgba({_ACCENT}, 0.35);
         selection-color: white;
         outline: none;
@@ -94,27 +100,6 @@ class BlocksComboBox(QtWidgets.QComboBox):
             self,
         )
         painter.drawText(rect, QtCore.Qt.AlignmentFlag.AlignCenter, text)
-        arrow_rect = self.style().subControlRect(
-            QtWidgets.QStyle.ComplexControl.CC_ComboBox,
-            opt,
-            QtWidgets.QStyle.SubControl.SC_ComboBoxArrow,
-            self,
-        )
-        self._draw_arrow(painter, arrow_rect)
-
-    def _draw_arrow(self, painter: QtGui.QPainter, rect: QtCore.QRect) -> None:
-        """Draw a small black downward triangle in the drop-down area."""
-        cx, cy, half = rect.center().x(), rect.center().y(), 6
-        points = QtGui.QPolygonF(
-            [
-                QtCore.QPointF(cx - half, cy - half / 2),
-                QtCore.QPointF(cx + half, cy - half / 2),
-                QtCore.QPointF(cx, cy + half),
-            ]
-        )
-        painter.setPen(QtCore.Qt.GlobalColor.white)
-        painter.setBrush(QtCore.Qt.GlobalColor.white)
-        painter.drawPolygon(points)
 
     def set_options(self, options: list[str]) -> None:
         """Repopulate options, preserving the current selection when still present."""

@@ -44,6 +44,8 @@ _HIDDEN_FIELDS: frozenset[str] = frozenset(
         "gcode_start_byte",
         "gcode_end_byte",
         "filament_name",
+        "filename",
+        "path",
     }
 )
 
@@ -138,7 +140,7 @@ class FileMetadataWidget(QtWidgets.QWidget):
         cell.setContentsMargins(0, 0, 0, 0)
         key_label = QtWidgets.QLabel(label, parent=self._rows_container)
         key_label.setStyleSheet(
-            "background: transparent; color: #B8B8B8; font-size: 18px;"
+            "background: transparent; color: white; font-size: 18px;"
         )
         key_label.setAlignment(
             QtCore.Qt.AlignmentFlag.AlignRight | QtCore.Qt.AlignmentFlag.AlignVCenter
@@ -214,6 +216,7 @@ class FileMetadataWidget(QtWidgets.QWidget):
         self.back_btn.setObjectName("md_back_btn")
         header.addWidget(self.back_btn, 0, QtCore.Qt.AlignmentFlag.AlignRight)
         outer.addLayout(header)
+        outer.addSpacing(20)
 
         self._scroll_area = QtWidgets.QScrollArea(self)
         self._scroll_area.setWidgetResizable(True)
