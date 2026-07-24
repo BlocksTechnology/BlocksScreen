@@ -95,7 +95,7 @@ class FileMetadataWidget(QtWidgets.QWidget):
         self.title_label.setText(os.path.basename(text))
         self._clear_rows()
         data = filedata or {}
-        shown = False
+        placed = 0
         for title, keys in _CATEGORIES:
             pairs: list[tuple[str, str]] = []
             for key in keys:
@@ -106,11 +106,12 @@ class FileMetadataWidget(QtWidgets.QWidget):
                     continue
                 pairs.append((self._humanize(key), formatted))
             if pairs:
-                self._add_category_card(title, pairs)
-                shown = True
-        if not shown:
-            self._add_category_card("Info", [("No metadata available", "")])
-        self._rows_layout.addStretch(1)
+                self._add_category_card(title, pairs, placed)
+                placed += 1
+        if placed == 0:
+            self._add_category_card("Info", [("No metadata available", "")], 0)
+            placed = 1
+        self._rows_layout.setRowStretch((placed + 1) // 2, 1)
 
     def _humanize(self, key: str) -> str:
         """Map a metadata key to its display label."""
@@ -171,8 +172,10 @@ class FileMetadataWidget(QtWidgets.QWidget):
             return f"{hours}h {minutes}m"
         return f"{minutes}m"
 
-    def _add_category_card(self, title: str, pairs: list[tuple[str, str]]) -> None:
-        """Add a titled card holding a two-column grid of key/value rows."""
+    def _add_category_card(
+        self, title: str, pairs: list[tuple[str, str]], position: int
+    ) -> None:
+        """Add a titled card (2 per row) holding a two-column key/value grid."""
         card = QtWidgets.QFrame(parent=self._rows_container)
         card.setObjectName("md_card")
         card.setStyleSheet(
@@ -190,14 +193,15 @@ class FileMetadataWidget(QtWidgets.QWidget):
         card_layout.addWidget(header)
         grid = QtWidgets.QGridLayout()
         grid.setContentsMargins(0, 0, 0, 0)
-        grid.setHorizontalSpacing(24)
+        grid.setHorizontalSpacing(14)
         grid.setVerticalSpacing(2)
         grid.setColumnStretch(0, 1)
-        grid.setColumnStretch(1, 1)
         for index, (label, value) in enumerate(pairs):
-            self._add_row(grid, label, value, index // 2, index % 2)
+            self._add_row(grid, label, value, index, 0)
         card_layout.addLayout(grid)
-        self._rows_layout.addWidget(card)
+        self._rows_layout.addWidget(
+            card, position // 2, position % 2, QtCore.Qt.AlignmentFlag.AlignTop
+        )
 
     def _add_row(
         self, grid: QtWidgets.QGridLayout, label: str, value: str, row: int, col: int
@@ -304,9 +308,12 @@ class FileMetadataWidget(QtWidgets.QWidget):
 
         self._rows_container = QtWidgets.QWidget()
         self._rows_container.setStyleSheet("background: transparent;")
-        self._rows_layout = QtWidgets.QVBoxLayout(self._rows_container)
+        self._rows_layout = QtWidgets.QGridLayout(self._rows_container)
         self._rows_layout.setContentsMargins(12, 0, 12, 0)
-        self._rows_layout.setSpacing(8)
+        self._rows_layout.setHorizontalSpacing(8)
+        self._rows_layout.setVerticalSpacing(8)
+        self._rows_layout.setColumnStretch(0, 1)
+        self._rows_layout.setColumnStretch(1, 1)
         self._scroll_area.setWidget(self._rows_container)
         viewport = self._scroll_area.viewport()
         QtWidgets.QScroller.grabGesture(
