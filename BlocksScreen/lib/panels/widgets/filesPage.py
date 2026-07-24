@@ -39,12 +39,12 @@ class FilesPage(QtWidgets.QWidget):
     ICON_PATHS = {
         "back_folder": ":/ui/media/btn_icons/back_folder.svg",
         "folder": ":/ui/media/btn_icons/folderIcon.svg",
-        "right_arrow": ":/arrow_icons/media/btn_icons/right_arrow.svg",
+        "right_arrow": ":/arrow_icons/media/btn_icons/arrow_right.svg",
         "usb": ":/ui/media/btn_icons/usb_icon.svg",
         "back": ":/ui/media/btn_icons/back.svg",
         "refresh": ":/ui/media/btn_icons/refresh.svg",
-        "sort_desc": ":/arrow_icons/media/btn_icons/down_arrow.svg",
-        "sort_asc": ":/arrow_icons/media/btn_icons/up_arrow.svg",
+        "sort_desc": ":/arrow_icons/media/btn_icons/arrow_down.svg",
+        "sort_asc": ":/arrow_icons/media/btn_icons/arrow_up.svg",
     }
 
     def __init__(self, parent: typing.Optional[QtWidgets.QWidget] = None) -> None:
@@ -637,6 +637,13 @@ class FilesPage(QtWidgets.QWidget):
 
         layout.addStretch(1)
 
+        # Sort key selector
+        self._sort_combo = BlocksComboBox(parent=self)
+        for name in self.SORTING_TYPES:
+            self._sort_combo.addItem(name)
+        self._sort_combo.currentTextChanged.connect(self._on_sort_key_changed)
+        layout.addWidget(self._sort_combo, 0, QtCore.Qt.AlignmentFlag.AlignVCenter)
+
         # Sort order toggle (ascending/descending)
         self._sort_order_btn = IconButton(parent=self)
         self._sort_order_btn.setMinimumSize(QtCore.QSize(60, 60))
@@ -646,13 +653,6 @@ class FilesPage(QtWidgets.QWidget):
         self._sort_order_btn.clicked.connect(self._on_sort_order_toggled)
         self._update_sort_order_icon()
         layout.addWidget(self._sort_order_btn, 0, QtCore.Qt.AlignmentFlag.AlignVCenter)
-
-        # Sort key selector
-        self._sort_combo = BlocksComboBox(parent=self)
-        for name in self.SORTING_TYPES:
-            self._sort_combo.addItem(name)
-        self._sort_combo.currentTextChanged.connect(self._on_sort_key_changed)
-        layout.addWidget(self._sort_combo, 0, QtCore.Qt.AlignmentFlag.AlignVCenter)
 
         layout.addStretch(1)
 

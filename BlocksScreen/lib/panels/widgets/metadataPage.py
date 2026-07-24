@@ -175,13 +175,6 @@ class FileMetadataWidget(QtWidgets.QWidget):
 
         header = QtWidgets.QHBoxLayout()
         header.setObjectName("md_header")
-        spacer = QtWidgets.QSpacerItem(
-            60,
-            60,
-            QtWidgets.QSizePolicy.Policy.Fixed,
-            QtWidgets.QSizePolicy.Policy.Fixed,
-        )
-        header.addItem(spacer)
 
         self.title_label = BlocksLabel(parent=self)
         self.title_label.setMinimumSize(QtCore.QSize(0, 60))
@@ -191,9 +184,11 @@ class FileMetadataWidget(QtWidgets.QWidget):
         font.setPointSize(24)
         self.title_label.setFont(font)
         self.title_label.setStyleSheet("background: transparent; color: white;")
-        self.title_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.title_label.setAlignment(
+            QtCore.Qt.AlignmentFlag.AlignLeft | QtCore.Qt.AlignmentFlag.AlignVCenter
+        )
         self.title_label.setObjectName("md_title_label")
-        header.addWidget(self.title_label)
+        header.addWidget(self.title_label, 1)
 
         self.back_btn = IconButton(self)
         self.back_btn.setMinimumSize(QtCore.QSize(60, 60))
@@ -221,4 +216,11 @@ class FileMetadataWidget(QtWidgets.QWidget):
         self._rows_layout.setContentsMargins(20, 0, 20, 0)
         self._rows_layout.setSpacing(10)
         self._scroll_area.setWidget(self._rows_container)
+        viewport = self._scroll_area.viewport()
+        QtWidgets.QScroller.grabGesture(
+            viewport, QtWidgets.QScroller.ScrollerGestureType.TouchGesture
+        )
+        QtWidgets.QScroller.grabGesture(
+            viewport, QtWidgets.QScroller.ScrollerGestureType.LeftMouseButtonGesture
+        )
         outer.addWidget(self._scroll_area)
