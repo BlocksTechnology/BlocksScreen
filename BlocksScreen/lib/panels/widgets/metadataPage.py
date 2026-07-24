@@ -159,9 +159,9 @@ class FileMetadataWidget(QtWidgets.QWidget):
             QtCore.Qt.AlignmentFlag.AlignLeft | QtCore.Qt.AlignmentFlag.AlignVCenter
         )
         cell.addStretch(1)
-        cell.addWidget(key_label, 0)
-        cell.addWidget(sep_label, 0)
         cell.addWidget(value_label, 0)
+        cell.addWidget(sep_label, 0)
+        cell.addWidget(key_label, 0)
         cell.addStretch(1)
         self._rows_layout.addLayout(cell, row, col)
 

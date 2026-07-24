@@ -31,7 +31,6 @@ _STYLE = f"""
         background-color: #10242E;
         color: white;
         border: none;
-        border-radius: 12px;
         padding: 4px;
         selection-background-color: rgba({_ACCENT}, 0.90);
         selection-color: white;
@@ -72,6 +71,8 @@ class BlocksComboBox(QtWidgets.QComboBox):
 
     def __init__(self, parent: QtWidgets.QWidget | None = None) -> None:
         super().__init__(parent)
+        # A real QListView guarantees the ::item stylesheet rules apply.
+        self.setView(QtWidgets.QListView(self))
         self.setStyleSheet(_STYLE)
         self.setItemDelegate(_TouchRowDelegate(self))
         self.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
@@ -83,13 +84,9 @@ class BlocksComboBox(QtWidgets.QComboBox):
         super().showPopup()
         popup = self.findChild(QtWidgets.QFrame)
         if popup is not None:
-            popup.setAttribute(
-                QtCore.Qt.WidgetAttribute.WA_TranslucentBackground, True
-            )
-            popup.setAttribute(
-                QtCore.Qt.WidgetAttribute.WA_NoSystemBackground, True
-            )
-            popup.setStyleSheet("background: transparent;")
+            # Opaque fill (no radius/translucency) avoids white corners on the
+            # popup window without needing a compositor.
+            popup.setStyleSheet("background: #10242E;")
             below = self.mapToGlobal(self.rect().bottomLeft()).y()
             popup.move(popup.x(), below)
 
