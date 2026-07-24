@@ -179,19 +179,19 @@ class FileMetadataWidget(QtWidgets.QWidget):
             "#md_card { background: rgba(26, 143, 191, 0.12); border-radius: 12px; }"
         )
         card_layout = QtWidgets.QVBoxLayout(card)
-        card_layout.setContentsMargins(16, 12, 16, 12)
-        card_layout.setSpacing(8)
+        card_layout.setContentsMargins(12, 6, 12, 6)
+        card_layout.setSpacing(2)
         header = QtWidgets.QLabel(title, parent=card)
         header_font = QtGui.QFont()
         header_font.setFamily("Momcake")
-        header_font.setPointSize(16)
+        header_font.setPointSize(13)
         header.setFont(header_font)
         header.setStyleSheet("background: transparent; color: #1A8FBF;")
         card_layout.addWidget(header)
         grid = QtWidgets.QGridLayout()
         grid.setContentsMargins(0, 0, 0, 0)
-        grid.setHorizontalSpacing(40)
-        grid.setVerticalSpacing(8)
+        grid.setHorizontalSpacing(24)
+        grid.setVerticalSpacing(2)
         grid.setColumnStretch(0, 1)
         grid.setColumnStretch(1, 1)
         for index, (label, value) in enumerate(pairs):
@@ -203,10 +203,10 @@ class FileMetadataWidget(QtWidgets.QWidget):
         self, grid: QtWidgets.QGridLayout, label: str, value: str, row: int, col: int
     ) -> None:
         """Place a single key/value cell into a card's two-column grid."""
-        value_style = "background: transparent; color: white; font-size: 14px;"
+        value_style = "background: transparent; color: white; font-size: 12px;"
         title_style = (
             "background: transparent; color: white; "
-            "font-size: 15px; font-weight: bold;"
+            "font-size: 13px; font-weight: bold;"
         )
         cell = QtWidgets.QHBoxLayout()
         cell.setContentsMargins(0, 0, 0, 0)
@@ -268,11 +268,11 @@ class FileMetadataWidget(QtWidgets.QWidget):
         header.setObjectName("md_header")
 
         self.title_label = BlocksLabel(parent=self)
-        self.title_label.setMinimumSize(QtCore.QSize(0, 60))
-        self.title_label.setMaximumSize(QtCore.QSize(16777215, 60))
+        self.title_label.setMinimumSize(QtCore.QSize(0, 44))
+        self.title_label.setMaximumSize(QtCore.QSize(16777215, 44))
         font = QtGui.QFont()
         font.setFamily("Momcake")
-        font.setPointSize(24)
+        font.setPointSize(20)
         self.title_label.setFont(font)
         self.title_label.setStyleSheet("background: transparent; color: white;")
         self.title_label.setAlignment(
@@ -291,7 +291,7 @@ class FileMetadataWidget(QtWidgets.QWidget):
         self.back_btn.setObjectName("md_back_btn")
         header.addWidget(self.back_btn, 0, QtCore.Qt.AlignmentFlag.AlignRight)
         outer.addLayout(header)
-        outer.addSpacing(20)
+        outer.addSpacing(6)
 
         self._scroll_area = QtWidgets.QScrollArea(self)
         self._scroll_area.setWidgetResizable(True)
@@ -305,8 +305,8 @@ class FileMetadataWidget(QtWidgets.QWidget):
         self._rows_container = QtWidgets.QWidget()
         self._rows_container.setStyleSheet("background: transparent;")
         self._rows_layout = QtWidgets.QVBoxLayout(self._rows_container)
-        self._rows_layout.setContentsMargins(20, 0, 20, 0)
-        self._rows_layout.setSpacing(16)
+        self._rows_layout.setContentsMargins(12, 0, 12, 0)
+        self._rows_layout.setSpacing(8)
         self._scroll_area.setWidget(self._rows_container)
         viewport = self._scroll_area.viewport()
         QtWidgets.QScroller.grabGesture(
