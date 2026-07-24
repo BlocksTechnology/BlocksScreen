@@ -29,6 +29,7 @@ class FilesPage(QtWidgets.QWidget):
 
     SORTING_TYPES: tuple[str, ...] = (
         "Last Print",
+        "Print Time",
         "Name",
         "Filament",
         "Nozzle Size",
@@ -349,6 +350,10 @@ class FilesPage(QtWidgets.QWidget):
         if self._sort_key == "Last Print":
             cached = self._lookup_meta(name, meta) or {}
             return cached.get("print_start_time") or 0
+        if self._sort_key == "Print Time":
+            cached = self._lookup_meta(name, meta) or {}
+            est = cached.get("estimated_time", 0)
+            return est if isinstance(est, (int, float)) else 0
         if self._sort_key == "Nozzle Size":
             cached = self._lookup_meta(name, meta) or {}
             nozzle = cached.get("nozzle_diameter", -1.0)
