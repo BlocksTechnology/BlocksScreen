@@ -135,6 +135,25 @@ class MoonRest:
             logger.info("gcode header fetch failed for %s: %s", rel_path, exc)
             return None
 
+    def get_gcode_tail(self, rel_path: str, max_bytes: int = 65536) -> bytes | None:
+        """GET the last *max_bytes* of a gcode file (slicer metadata-footer parse)."""
+        url = f"{self.build_endpoint}/server/files/gcodes/{quote(rel_path)}"
+        headers = {"Range": f"bytes=-{max_bytes}"}
+        if self._api_key:
+            headers["x-api-key"] = self._api_key
+        try:
+            with requests.get(
+                url, headers=headers, stream=True, timeout=self.timeout
+            ) as resp:
+                resp.raise_for_status()
+                data = bytearray()
+                for chunk in resp.iter_content(chunk_size=65536):
+                    data.extend(chunk)
+                return bytes(data)
+        except Exception as exc:
+            logger.info("gcode tail fetch failed for %s: %s", rel_path, exc)
+            return None
+
     def _request(
         self,
         request_type,

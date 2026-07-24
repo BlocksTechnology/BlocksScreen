@@ -1,10 +1,8 @@
-"""Themed, touch-friendly combobox matching the BlocksScreen accent theme."""
-
 from __future__ import annotations
 
 from PyQt6 import QtCore, QtWidgets
 
-# BlocksScreen accent (#1A8FBF), matching the existing network VLAN selector.
+# BlocksScreen accent (#1A8FBF)
 _ACCENT = "26, 143, 191"
 
 _STYLE = f"""

@@ -1,6 +1,6 @@
 """Unit tests for embedded-thumbnail parsing + off-thread ThumbnailLoader."""
 
-from BlocksScreen.lib.utils.thumbnail_loader import (
+from BlocksScreen.lib.utils.gcode_loader import (
     ThumbnailLoader,
     parse_embedded_thumbnail,
 )

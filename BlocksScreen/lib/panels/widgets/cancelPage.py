@@ -1,6 +1,6 @@
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_frame import BlocksCustomFrame
-from lib.utils import thumbnail_loader
+from lib.utils import gcode_loader
 from lib.utils.blocks_label import BlocksLabel
 from PyQt6 import QtCore, QtGui, QtWidgets
 import typing
@@ -110,7 +110,7 @@ class CancelPage(QtWidgets.QWidget):
 
     def _embedded_pixmap(self, gcode_path: str) -> QtGui.QPixmap:
         """Cached embedded thumbnail (read-only USB fallback), else the logo placeholder."""
-        pixmap = thumbnail_loader.cached_pixmap(gcode_path)
+        pixmap = gcode_loader.cached_pixmap(gcode_path)
         if pixmap is not None:
             return pixmap
         return QtGui.QPixmap(

@@ -11,6 +11,7 @@ import events
 import helper_methods
 from events import ReceivedFileData
 from lib.moonrakerComm import MoonWebSocket
+from lib.utils import gcode_loader
 from PyQt6 import QtCore, QtWidgets
 
 logger = logging.getLogger(__name__)
@@ -142,6 +143,7 @@ class Files(QtCore.QObject):
         str, list, name="usb_files_loaded"
     )  # (usb_path, files)
     GCODE_EXTENSION = ".gcode"
+    USB_PREFIX = "USB-"
     GCODE_PATH = "~/printer_data/gcodes"
 
     def __init__(self, parent: QtCore.QObject, ws: MoonWebSocket) -> None:
@@ -162,6 +164,9 @@ class Files(QtCore.QObject):
         # Track pending USB preload requests (ordered FIFO queue)
         self._pending_usb_preloads: set[str] = set()
         self._usb_preload_queue: deque[str] = deque()
+        # Client-side USB metadata: size/modified staged per path, plus lazy loader.
+        self._usb_meta_base: dict[str, dict] = {}
+        self._meta_loader: gcode_loader.GcodeMetadataLoader | None = None
 
         self._connect_signals()
         self._install_event_filter()
@@ -401,8 +406,44 @@ class Files(QtCore.QObject):
 
     @staticmethod
     def _has_inline_metadata(file_data: dict) -> bool:
-        """True if an extended dir entry already carries gcode metadata."""
-        return "estimated_time" in file_data or "thumbnails" in file_data
+        """True if an extended dir entry carries real metadata, not just a thumbnail."""
+        return "estimated_time" in file_data
+
+    def _is_usb_gcode(self, full_path: str) -> bool:
+        """True for gcode files living under a USB mount symlink."""
+        return full_path.removeprefix("/").startswith(self.USB_PREFIX)
+
+    def _usb_metadata_loader(self) -> gcode_loader.GcodeMetadataLoader:
+        """Lazily create + wire the client-side USB metadata loader (once)."""
+        if self._meta_loader is None:
+            loader = (
+                gcode_loader.get_metadata_loader()
+                or gcode_loader.configure_metadata(self.ws._moonRest)
+            )
+            loader.ready.connect(self._on_usb_metadata_ready)
+            self._meta_loader = loader
+        return self._meta_loader
+
+    def _request_gcode_metadata(
+        self, full_path: str, file_data: dict | None = None
+    ) -> None:
+        """USB gcodes: client-parse (Moonraker can't scan them); else ask Moonraker."""
+        if not self._is_usb_gcode(full_path):
+            self.request_file_metadata.emit(full_path)
+            return
+        rel = full_path.removeprefix("/")
+        if file_data:
+            self._usb_meta_base[rel] = {
+                "size": file_data.get("size", 0),
+                "modified": file_data.get("modified", 0.0),
+            }
+        self._usb_metadata_loader().request(rel)
+
+    @QtCore.pyqtSlot(str, dict)
+    def _on_usb_metadata_ready(self, full_path: str, meta: dict) -> None:
+        """Feed client-parsed USB metadata through the standard pipeline."""
+        base = self._usb_meta_base.pop(full_path, {})
+        self._process_metadata(base | meta, full_path)
 
     def handle_metadata_error(self, error_data: typing.Union[str, dict]) -> None:
         """Handle metadata request error from Moonraker and emit signal."""
@@ -455,7 +496,7 @@ class Files(QtCore.QObject):
 
                 full_path = f"{usb_path}/{filename}"
                 if filename.lower().endswith(self.GCODE_EXTENSION):
-                    self.request_file_metadata.emit(full_path)
+                    self._request_gcode_metadata(full_path, file_data)
 
         # Cache the files
         self._usb_files_cache[usb_path] = files
@@ -509,7 +550,7 @@ class Files(QtCore.QObject):
             if self._has_inline_metadata(file_data):
                 self._process_metadata(file_data, full)
             else:
-                self.request_file_metadata.emit(full)
+                self._request_gcode_metadata(full, file_data)
 
     @QtCore.pyqtSlot(str, str, name="on_request_delete_file")
     def on_request_delete_file(self, filename: str, directory: str = "gcodes") -> None:

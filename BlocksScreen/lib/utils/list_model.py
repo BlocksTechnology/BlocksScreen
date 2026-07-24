@@ -63,6 +63,27 @@ class EntryListModel(QtCore.QAbstractListModel):
         self.entries.append(item)
         self.endInsertRows()
 
+    def remove_item(self, item: ListItem) -> None:
+        """Remove one row item from the model by identity."""
+        if item in self.entries:
+            index = self.entries.index(item)
+            self.beginRemoveRows(QtCore.QModelIndex(), index, index)
+            self.entries.pop(index)
+            self.endRemoveRows()
+
+    def delete_duplicates(self) -> None:
+        """Drop entries sharing identical text, color, and last time value."""
+        seen: set[tuple[str, str, typing.Any]] = set()
+        unique: list[ListItem] = []
+        for item in self.entries:
+            key = (item.text, item.color, item._cache.get(-1))
+            if key not in seen:
+                unique.append(item)
+                seen.add(key)
+        self.beginResetModel()
+        self.entries = unique
+        self.endResetModel()
+
     def remove_item_by_text(self, text: str) -> bool:
         """Remove item by text value; True if found, False otherwise."""
         for i, item in enumerate(self.entries):
@@ -243,6 +264,7 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
         """Initialise the delegate with a scaled-pixmap cache and default item height."""
         super().__init__()
         self.prev_index: int = 0
+        self._press_pos: QtCore.QPointF | None = None
         self.height: int = 60
         self._scaled_cache: OrderedDict[tuple[int, int, int], QtGui.QPixmap] = (
             OrderedDict()
@@ -531,6 +553,23 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
         if event.type() == QtCore.QEvent.Type.MouseButtonPress:
             if item and item.not_clickable:
                 return True
+            # Record the press origin so a scroll drag is not mistaken for a tap.
+            self._press_pos = event.position()
+            return False
+
+        if event.type() == QtCore.QEvent.Type.MouseButtonRelease:
+            if item and item.not_clickable:
+                return True
+
+            # Ignore releases that drifted far enough to be a scroll gesture.
+            press_pos = self._press_pos
+            self._press_pos = None
+            if press_pos is not None:
+                # Fingers drift more than a mouse, so double the platform drag slop.
+                threshold = QtWidgets.QApplication.startDragDistance() * 2
+                delta = event.position() - press_pos
+                if abs(delta.x()) + abs(delta.y()) > threshold:
+                    return False
 
             if item.callback and callable(item.callback):
                 item.callback()

@@ -11,12 +11,13 @@ from lib.panels.widgets.basePopup import BasePopup
 from lib.panels.widgets.confirmPage import ConfirmWidget
 from lib.panels.widgets.filesPage import FilesPage
 from lib.panels.widgets.jobStatusPage import JobStatusWidget
+from lib.panels.widgets.metadataPage import FileMetadataWidget
 from lib.panels.widgets.numpadPage import CustomNumpad
 from lib.panels.widgets.sensorsPanel import SensorsWindow
 from lib.panels.widgets.slider_selector_page import SliderPage
 from lib.panels.widgets.tunePage import TuneWidget
 from lib.printer import Printer
-from lib.utils import thumbnail_loader
+from lib.utils import gcode_loader
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.display_button import DisplayButton
 from PyQt6 import QtCore, QtGui, QtWidgets
@@ -73,7 +74,7 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.setupMainPrintPage()
         self.ws: MoonWebSocket = ws
         # Shared embedded-thumbnail fallback for read-only USB drives.
-        thumbnail_loader.configure(ws._moonRest)
+        gcode_loader.configure(ws._moonRest)
         self.printer: Printer = printer
         self.config: BlocksScreenConfig = get_configparser()
         # TODO: Get the gcode path from the configfile by asking the websocket first
@@ -105,6 +106,16 @@ class PrintTab(QtWidgets.QStackedWidget):
             lambda: self.change_page(self.indexOf(self.confirmPage_widget))
         )
         self.filesPage_widget.back_btn.clicked.connect(self.back_button)
+
+        self.metadataPage_widget = FileMetadataWidget(self)
+        self.addWidget(self.metadataPage_widget)
+        self.confirmPage_widget.show_metadata.connect(
+            self.metadataPage_widget.on_show_widget
+        )
+        self.confirmPage_widget.show_metadata.connect(
+            lambda: self.change_page(self.indexOf(self.metadataPage_widget))
+        )
+        self.metadataPage_widget.back_btn.clicked.connect(self.back_button)
         self.file_data.fileinfo.connect(self.filesPage_widget.on_fileinfo)
 
         self.file_data.on_dirs.connect(self.filesPage_widget.on_directories)

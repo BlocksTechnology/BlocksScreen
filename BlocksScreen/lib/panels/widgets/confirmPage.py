@@ -2,7 +2,7 @@ import os
 import typing
 
 import helper_methods
-from lib.utils import thumbnail_loader
+from lib.utils import gcode_loader
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_frame import BlocksCustomFrame
 from lib.utils.blocks_label import BlocksLabel
@@ -20,6 +20,9 @@ class ConfirmWidget(QtWidgets.QWidget):
     on_delete: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         str, str, name="delete_file"
     )
+    show_metadata: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        str, dict, name="show_metadata"
+    )
 
     def __init__(self, parent) -> None:
         super().__init__(parent)
@@ -32,12 +35,16 @@ class ConfirmWidget(QtWidgets.QWidget):
         self._loader_connected: bool = False
         self.directory = "gcodes"
         self.filename = ""
+        self._filedata: dict = {}
         self.confirm_button.clicked.connect(
             lambda: self.on_accept.emit(
                 str(os.path.join(self.directory, self.filename))
             )
         )
         self.back_btn.clicked.connect(self.request_back.emit)
+        self.file_info_btn.clicked.connect(
+            lambda: self.show_metadata.emit(self._current_gcode, self._filedata)
+        )
         self.delete_file_button.clicked.connect(
             lambda: self.on_delete.emit(self.filename, self.directory)
         )
@@ -53,6 +60,7 @@ class ConfirmWidget(QtWidgets.QWidget):
         self.filename = filename
         self.cf_file_name.setText(self.filename)
         self._current_gcode = text.removeprefix("/")
+        self._filedata = filedata
         self._thumbnails = filedata.get("thumbnail_paths", [])
         self.thumbnail = self._resolve_thumbnail()
         _total_filament = filedata.get("filament_weight_total")
@@ -93,7 +101,7 @@ class ConfirmWidget(QtWidgets.QWidget):
             disk = QtGui.QImage(self._thumbnails[-1])
             if not disk.isNull():
                 return disk
-        loader = thumbnail_loader.get_loader()
+        loader = gcode_loader.get_loader()
         if loader is None:
             return self._blocksthumbnail
         if not self._loader_connected:
@@ -181,14 +189,18 @@ class ConfirmWidget(QtWidgets.QWidget):
         self.cf_header_title = QtWidgets.QHBoxLayout()
         self.cf_header_title.setObjectName("cf_header_title")
 
-        self.spacer = QtWidgets.QSpacerItem(
-            60,
-            60,
-            QtWidgets.QSizePolicy.Policy.Fixed,
-            QtWidgets.QSizePolicy.Policy.Fixed,
+        self.file_info_btn = IconButton(self)
+        self.file_info_btn.setMinimumSize(QtCore.QSize(60, 60))
+        self.file_info_btn.setMaximumSize(QtCore.QSize(60, 60))
+        self.file_info_btn.setFlat(True)
+        self.file_info_btn.setProperty(
+            "icon_pixmap",
+            QtGui.QPixmap(":/files/media/btn_icons/file_icon.svg"),
         )
-        self.spacer.setGeometry(QtCore.QRect(0, 0, 60, 60))
-        self.cf_header_title.addItem(self.spacer)
+        self.file_info_btn.setObjectName("file_info_btn")
+        self.cf_header_title.addWidget(
+            self.file_info_btn, 0, QtCore.Qt.AlignmentFlag.AlignRight
+        )
         sizePolicy = QtWidgets.QSizePolicy(
             QtWidgets.QSizePolicy.Policy.Expanding,
             QtWidgets.QSizePolicy.Policy.Expanding,

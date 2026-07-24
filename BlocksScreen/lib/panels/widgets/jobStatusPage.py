@@ -12,7 +12,7 @@ from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_label import BlocksLabel
 from lib.utils.blocks_progressbar import CustomProgressBar
 from lib.utils.display_button import DisplayButton
-from lib.utils import thumbnail_loader
+from lib.utils import gcode_loader
 from lib.utils.flowguard import FlowguardWidget
 from PyQt6 import QtCore, QtGui, QtWidgets
 
@@ -162,7 +162,7 @@ class JobStatusWidget(QtWidgets.QWidget):
 
     def _embedded_pixmap(self) -> QtGui.QPixmap | None:
         """Cached embedded thumbnail (read-only USB fallback) as a pixmap, or None."""
-        return thumbnail_loader.cached_pixmap(
+        return gcode_loader.cached_pixmap(
             (self.file_metadata or {}).get("filename", "")
         )
 

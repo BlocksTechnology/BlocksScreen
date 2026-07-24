@@ -3,8 +3,8 @@ import logging
 import typing
 
 import helper_methods
-from lib.utils.blocks_Scrollbar import CustomScrollBar
 from lib.utils.blocks_combobox import BlocksComboBox
+from lib.utils.blocks_Scrollbar import CustomScrollBar
 from lib.utils.icon_button import IconButton
 from lib.utils.list_model import EntryDelegate, EntryListModel, ListItem
 from PyQt6 import QtCore, QtGui, QtWidgets
@@ -27,6 +27,14 @@ class FilesPage(QtWidgets.QWidget):
     LEFT_FONT_SIZE = 17
     RIGHT_FONT_SIZE = 12
 
+    SORTING_TYPES: tuple[str, ...] = (
+        "Last Print",
+        "Name",
+        "Filament",
+        "Nozzle Size",
+        "Import Order",
+    )
+
     # Icon paths
     ICON_PATHS = {
         "back_folder": ":/ui/media/btn_icons/back_folder.svg",
@@ -35,6 +43,8 @@ class FilesPage(QtWidgets.QWidget):
         "usb": ":/ui/media/btn_icons/usb_icon.svg",
         "back": ":/ui/media/btn_icons/back.svg",
         "refresh": ":/ui/media/btn_icons/refresh.svg",
+        "sort_desc": ":/arrow_icons/media/btn_icons/down_arrow.svg",
+        "sort_asc": ":/arrow_icons/media/btn_icons/up_arrow.svg",
     }
 
     def __init__(self, parent: typing.Optional[QtWidgets.QWidget] = None) -> None:
@@ -45,7 +55,8 @@ class FilesPage(QtWidgets.QWidget):
         self._directories: list[dict] = []
         self._curr_dir: str = ""
         self._pending_action: bool = False
-        self._material_filter: str = "All"
+        self._sort_key: str = self.SORTING_TYPES[0]
+        self._sort_descending: bool = True
         self._icons: dict[str, QtGui.QPixmap] = {}
 
         self._model = EntryListModel()
@@ -213,6 +224,13 @@ class FilesPage(QtWidgets.QWidget):
         # Request fresh data for root directory
         self.request_dir_info[str].emit("")
 
+    @QtCore.pyqtSlot(str, name="on_usb_removed")
+    def on_usb_removed(self, _device_path: str = "") -> None:
+        """Return to the gcodes root when a USB drive is removed while inside its folder."""
+        if self._curr_dir.removeprefix("/").startswith(self.USB_PREFIX):
+            logger.info("USB removed while inside its folder, returning to root")
+            self.on_directory_error()
+
     @QtCore.pyqtSlot(ListItem, name="on_item_selected")
     def _on_item_selected(self, item: ListItem) -> None:
         """Handle list item selection."""
@@ -252,7 +270,6 @@ class FilesPage(QtWidgets.QWidget):
         """Rebuild the model from backing data via keyed reconcile."""
         self._pending_action = False
         meta = self._metadata_map()
-        self._refresh_material_options(meta)
         is_root = not self._curr_dir or self._curr_dir == "/"
         if is_root and not self._file_list and not self._directories:
             self._model.clear()
@@ -295,37 +312,57 @@ class FilesPage(QtWidgets.QWidget):
         ]
 
     def _desired_file_items(self, meta: dict) -> list[ListItem]:
-        """Gcode file rows (material-filtered), sorted by modified time, newest first."""
-        rows = sorted(self._file_list, key=lambda f: f.get("modified", 0), reverse=True)
-        items: list[ListItem] = []
-        for f in rows:
-            name = f.get("filename", f.get("path", ""))
-            if name.lower().endswith(self.GCODE_EXTENSION) and self._matches_filter(
-                name, meta
-            ):
-                items.append(self._make_file_item(name, meta))
-        return items
+        """Gcode file rows ordered by the active sort key and direction."""
+        files = [
+            f
+            for f in self._file_list
+            if f.get("filename", f.get("path", ""))
+            .lower()
+            .endswith(self.GCODE_EXTENSION)
+        ]
+        if self._sort_key != "Import Order":
+            files.sort(
+                key=lambda f: self._sort_value(f, meta),
+                reverse=self._sort_descending,
+            )
+        return [
+            self._make_file_item(f.get("filename", f.get("path", "")), meta)
+            for f in files
+        ]
 
-    def _matches_filter(self, filename: str, meta: dict | None = None) -> bool:
-        """True if the file passes the active material filter."""
-        if self._material_filter in ("", "All"):
-            return True
-        cached = self._lookup_meta(filename, meta)
-        return bool(cached) and self._material_filter in self._material_set(cached)
+    def _sort_value(self, filedata: dict, meta: dict) -> object:
+        """Comparable key for the active sort column (uniform type per column)."""
+        name = filedata.get("filename", filedata.get("path", ""))
+        if self._sort_key == "Last Print":
+            cached = self._lookup_meta(name, meta) or {}
+            return cached.get("print_start_time") or 0
+        if self._sort_key == "Nozzle Size":
+            cached = self._lookup_meta(name, meta) or {}
+            nozzle = cached.get("nozzle_diameter", -1.0)
+            return nozzle if isinstance(nozzle, (int, float)) else -1.0
+        if self._sort_key == "Filament":
+            cached = self._lookup_meta(name, meta) or {}
+            return self._filament_label(cached.get("filament_type")).lower()
+        return name.lower()
 
-    def _on_material_filter_changed(self, material: str) -> None:
-        """Apply the selected material filter and rebuild the list."""
-        self._material_filter = material or "All"
+    def _on_sort_key_changed(self, sort_key: str) -> None:
+        """Apply the selected sort column and rebuild the list."""
+        self._sort_key = sort_key or self.SORTING_TYPES[0]
         self._build_file_list()
 
-    def _refresh_material_options(self, meta: dict) -> None:
-        """Sync combobox options to the materials present in the current directory."""
-        materials: set[str] = set()
-        for cached in meta.values():
-            if cached:
-                materials |= self._material_set(cached)
-        self._material_combo.set_options(["All", *sorted(materials)])
-        self._material_filter = self._material_combo.currentText() or "All"
+    def _on_sort_order_toggled(self) -> None:
+        """Flip the sort direction, refresh the toggle icon, and rebuild."""
+        self._sort_descending = not self._sort_descending
+        self._update_sort_order_icon()
+        self._build_file_list()
+
+    def _update_sort_order_icon(self) -> None:
+        """Point the order-toggle button at the icon for the current direction."""
+        key = "sort_desc" if self._sort_descending else "sort_asc"
+        self._sort_order_btn.setProperty(
+            "icon_pixmap", QtGui.QPixmap(self.ICON_PATHS[key])
+        )
+        self._sort_order_btn.update()
 
     def _make_back_folder_item(self) -> ListItem:
         """The leading Go Back navigation row."""
@@ -600,13 +637,22 @@ class FilesPage(QtWidgets.QWidget):
 
         layout.addStretch(1)
 
-        # Material filter
-        self._material_combo = BlocksComboBox(parent=self)
-        self._material_combo.addItem("All")
-        self._material_combo.currentTextChanged.connect(
-            self._on_material_filter_changed
-        )
-        layout.addWidget(self._material_combo, 0, QtCore.Qt.AlignmentFlag.AlignVCenter)
+        # Sort order toggle (ascending/descending)
+        self._sort_order_btn = IconButton(parent=self)
+        self._sort_order_btn.setMinimumSize(QtCore.QSize(60, 60))
+        self._sort_order_btn.setMaximumSize(QtCore.QSize(60, 60))
+        self._sort_order_btn.setFlat(True)
+        self._sort_order_btn.setObjectName("sort_order_btn")
+        self._sort_order_btn.clicked.connect(self._on_sort_order_toggled)
+        self._update_sort_order_icon()
+        layout.addWidget(self._sort_order_btn, 0, QtCore.Qt.AlignmentFlag.AlignVCenter)
+
+        # Sort key selector
+        self._sort_combo = BlocksComboBox(parent=self)
+        for name in self.SORTING_TYPES:
+            self._sort_combo.addItem(name)
+        self._sort_combo.currentTextChanged.connect(self._on_sort_key_changed)
+        layout.addWidget(self._sort_combo, 0, QtCore.Qt.AlignmentFlag.AlignVCenter)
 
         layout.addStretch(1)
 

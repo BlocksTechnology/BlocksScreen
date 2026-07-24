@@ -40,14 +40,16 @@ def _texts(page):
 
 
 class TestBuildFileList:
-    def test_root_sorts_dirs_alpha_then_files_by_modified_desc(self, page):
-        """Root shows dirs alphabetically, then files newest-first, no Go Back."""
+    def test_root_sorts_dirs_alpha_then_files_by_last_print_desc(self, page):
+        """Root shows dirs alphabetically, then files most-recently-printed first."""
         page._curr_dir = ""
         page._directories = [{"dirname": "beta"}, {"dirname": "alpha"}]
         page._file_list = [
             {"filename": "old.gcode", "modified": 1},
             {"filename": "new.gcode", "modified": 9},
         ]
+        page._files_data["old.gcode"] = {"print_start_time": 1}
+        page._files_data["new.gcode"] = {"print_start_time": 9}
         page._build_file_list()
         assert _texts(page) == ["alpha", "beta", "new", "old"]
 
@@ -206,46 +208,71 @@ class TestMaterialFilter:
         """'Unknown' is not offered as a filterable material."""
         assert page._material_set({"filament_type": "Unknown"}) == set()
 
-    def test_matches_filter_multi_material(self, page):
-        """A multi-material file matches each of its materials, not others."""
-        page._curr_dir = ""
-        page._files_data["m.gcode"] = {"filament_type": "PLA,PETG"}
-        page._material_filter = "PETG"
-        assert page._matches_filter("m.gcode") is True
-        page._material_filter = "ABS"
-        assert page._matches_filter("m.gcode") is False
 
-    def test_combobox_filters_list(self, page):
-        """Selecting a material in the combobox hides non-matching files."""
-        page._curr_dir = ""
-        page._file_list = [
-            {"filename": "pla.gcode", "modified": 2},
-            {"filename": "petg.gcode", "modified": 1},
-        ]
-        page._files_data["pla.gcode"] = {
-            "filename": "pla.gcode",
-            "filament_type": "PLA",
-        }
-        page._files_data["petg.gcode"] = {
-            "filename": "petg.gcode",
-            "filament_type": "PETG",
-        }
-        page._build_file_list()
-        page._material_combo.setCurrentText("PLA")
-        assert _texts(page) == ["pla"]
-
-    def test_options_reflect_directory_materials(self, page):
-        """Combobox options are 'All' plus the distinct materials in the directory."""
-        page._curr_dir = ""
-        page._file_list = [
-            {"filename": "a.gcode", "modified": 2},
-            {"filename": "b.gcode", "modified": 1},
-        ]
-        page._files_data["a.gcode"] = {"filename": "a.gcode", "filament_type": "PLA"}
-        page._files_data["b.gcode"] = {"filename": "b.gcode", "filament_type": "PETG"}
-        page._build_file_list()
+class TestSorting:
+    def test_combobox_lists_all_sorting_types(self, page):
+        """The sort combobox offers every SORTING_TYPES value in order."""
         options = [
-            page._material_combo.itemText(i)
-            for i in range(page._material_combo.count())
+            page._sort_combo.itemText(i) for i in range(page._sort_combo.count())
         ]
-        assert options == ["All", "PETG", "PLA"]
+        assert options == list(FilesPage.SORTING_TYPES)
+
+    def test_sort_by_name_ascending(self, page):
+        """Picking Name with ascending order sorts files A-Z by display name."""
+        page._curr_dir = ""
+        page._file_list = [
+            {"filename": "banana.gcode", "modified": 9},
+            {"filename": "apple.gcode", "modified": 1},
+        ]
+        page._sort_descending = False
+        page._sort_combo.setCurrentText("Name")
+        assert _texts(page) == ["apple", "banana"]
+
+    def test_last_print_descending_is_most_recent_first(self, page):
+        """The default Last Print + descending order lists recently printed first."""
+        page._curr_dir = ""
+        page._file_list = [
+            {"filename": "old.gcode", "modified": 1},
+            {"filename": "new.gcode", "modified": 9},
+        ]
+        page._files_data["old.gcode"] = {"print_start_time": 1}
+        page._files_data["new.gcode"] = {"print_start_time": 9}
+        assert page._sort_key == "Last Print"  # default column
+        page._build_file_list()
+        assert _texts(page) == ["new", "old"]
+
+    def test_order_toggle_reverses_list(self, page):
+        """Toggling sort order flips direction and rebuilds the list."""
+        page._curr_dir = ""
+        page._file_list = [
+            {"filename": "apple.gcode", "modified": 1},
+            {"filename": "banana.gcode", "modified": 9},
+        ]
+        page._sort_combo.setCurrentText("Name")  # descending default -> Z..A
+        assert _texts(page) == ["banana", "apple"]
+        page._on_sort_order_toggled()
+        assert page._sort_descending is False
+        assert _texts(page) == ["apple", "banana"]
+
+    def test_sort_import_order_preserves_insertion_order(self, page):
+        """The Import Order sort key leaves files in their backing-list order."""
+        page._curr_dir = ""
+        page._file_list = [
+            {"filename": "zeta.gcode", "modified": 1},
+            {"filename": "alpha.gcode", "modified": 9},
+        ]
+        page._sort_combo.setCurrentText("Import Order")
+        assert _texts(page) == ["zeta", "alpha"]
+
+    def test_sort_by_nozzle_size(self, page):
+        """The Nozzle Size key orders files by their cached nozzle_diameter."""
+        page._curr_dir = ""
+        page._file_list = [
+            {"filename": "big.gcode", "modified": 1},
+            {"filename": "small.gcode", "modified": 2},
+        ]
+        page._files_data["big.gcode"] = {"nozzle_diameter": 0.8}
+        page._files_data["small.gcode"] = {"nozzle_diameter": 0.4}
+        page._sort_descending = False
+        page._sort_combo.setCurrentText("Nozzle Size")
+        assert _texts(page) == ["small", "big"]
