@@ -34,6 +34,28 @@ _FIELD_LABELS: dict[str, str] = {
     "filament_change_count": "Filament Changes",
     "mmu_print": "MMU Print",
 }
+# First-layer temps re-labeled to plain extruder/bed names.
+_FIELD_LABELS["first_layer_extr_temp"] = "Extruder Temp"
+_FIELD_LABELS["first_layer_bed_temp"] = "Bed Temp"
+# Titled sections and the ordered keys shown under each.
+_CATEGORIES: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("General", ("slicer", "slicer_version", "print_start_time", "estimated_time", "mmu_print")),
+    ("Geometry", ("object_height", "layer_height", "nozzle_diameter")),
+    ("Temperatures", ("first_layer_extr_temp", "first_layer_bed_temp", "chamber_temp")),
+    (
+        "Filament",
+        ("filament_type", "filament_total", "filament_weight_total", "filament_change_count"),
+    ),
+)
+# Units appended to numeric values.
+_UNITS: dict[str, str] = {
+    "object_height": " mm",
+    "layer_height": " mm",
+    "nozzle_diameter": " mm",
+    "first_layer_extr_temp": " °C",
+    "first_layer_bed_temp": " °C",
+    "chamber_temp": " °C",
+}
 # Internal fields not meaningful to the user.
 _HIDDEN_FIELDS: frozenset[str] = frozenset(
     {
@@ -46,6 +68,10 @@ _HIDDEN_FIELDS: frozenset[str] = frozenset(
         "filament_name",
         "filename",
         "path",
+        "layer_count",
+        "modified",
+        "first_layer_height",
+        "job_id",
     }
 )
 
@@ -65,28 +91,39 @@ class FileMetadataWidget(QtWidgets.QWidget):
 
     @QtCore.pyqtSlot(str, dict, name="on_show_widget")
     def on_show_widget(self, text: str, filedata: dict | None = None) -> None:
-        """Populate the page with all metadata fields for the given file."""
+        """Populate the page with metadata grouped into titled category cards."""
         self.title_label.setText(os.path.basename(text))
         self._clear_rows()
-        pairs: list[tuple[str, str]] = []
-        for key, value in (filedata or {}).items():
-            if key in _HIDDEN_FIELDS:
-                continue
-            formatted = self._format_value(key, value)
-            if formatted is None:
-                continue
-            pairs.append((self._humanize(key), formatted))
-        if not pairs:
-            pairs.append(("No metadata available", ""))
-        for index, (label, value) in enumerate(pairs):
-            self._add_row(label, value, index // 2, index % 2)
-        self._rows_layout.setRowStretch(self._rows_layout.rowCount(), 1)
+        data = filedata or {}
+        shown = False
+        for title, keys in _CATEGORIES:
+            pairs: list[tuple[str, str]] = []
+            for key in keys:
+                if key in _HIDDEN_FIELDS:
+                    continue
+                formatted = self._format_value(key, data.get(key))
+                if formatted is None:
+                    continue
+                pairs.append((self._humanize(key), formatted))
+            if pairs:
+                self._add_category_card(title, pairs)
+                shown = True
+        if not shown:
+            self._add_category_card("Info", [("No metadata available", "")])
+        self._rows_layout.addStretch(1)
 
     def _humanize(self, key: str) -> str:
         """Map a metadata key to its display label."""
         return _FIELD_LABELS.get(key, key.replace("_", " ").title())
 
     def _format_value(self, key: str, value: object) -> str | None:
+        """Render a metadata value as text with its unit, or None to skip it."""
+        base = self._raw_value(key, value)
+        if base is None:
+            return None
+        return f"{base}{_UNITS.get(key, '')}"
+
+    def _raw_value(self, key: str, value: object) -> str | None:
         """Render a metadata value as text, or None to skip it."""
         if value is None or value == "" or value == []:
             return None
@@ -134,8 +171,38 @@ class FileMetadataWidget(QtWidgets.QWidget):
             return f"{hours}h {minutes}m"
         return f"{minutes}m"
 
-    def _add_row(self, label: str, value: str, row: int, col: int) -> None:
-        """Place a single key/value cell into the two-column grid."""
+    def _add_category_card(self, title: str, pairs: list[tuple[str, str]]) -> None:
+        """Add a titled card holding a two-column grid of key/value rows."""
+        card = QtWidgets.QFrame(parent=self._rows_container)
+        card.setObjectName("md_card")
+        card.setStyleSheet(
+            "#md_card { background: rgba(26, 143, 191, 0.12); border-radius: 12px; }"
+        )
+        card_layout = QtWidgets.QVBoxLayout(card)
+        card_layout.setContentsMargins(16, 12, 16, 12)
+        card_layout.setSpacing(8)
+        header = QtWidgets.QLabel(title, parent=card)
+        header_font = QtGui.QFont()
+        header_font.setFamily("Momcake")
+        header_font.setPointSize(16)
+        header.setFont(header_font)
+        header.setStyleSheet("background: transparent; color: #1A8FBF;")
+        card_layout.addWidget(header)
+        grid = QtWidgets.QGridLayout()
+        grid.setContentsMargins(0, 0, 0, 0)
+        grid.setHorizontalSpacing(40)
+        grid.setVerticalSpacing(8)
+        grid.setColumnStretch(0, 1)
+        grid.setColumnStretch(1, 1)
+        for index, (label, value) in enumerate(pairs):
+            self._add_row(grid, label, value, index // 2, index % 2)
+        card_layout.addLayout(grid)
+        self._rows_layout.addWidget(card)
+
+    def _add_row(
+        self, grid: QtWidgets.QGridLayout, label: str, value: str, row: int, col: int
+    ) -> None:
+        """Place a single key/value cell into a card's two-column grid."""
         value_style = "background: transparent; color: white; font-size: 14px;"
         title_style = (
             "background: transparent; color: white; "
@@ -163,7 +230,7 @@ class FileMetadataWidget(QtWidgets.QWidget):
         cell.addWidget(sep_label, 0)
         cell.addWidget(key_label, 0)
         cell.addStretch(1)
-        self._rows_layout.addLayout(cell, row, col)
+        grid.addLayout(cell, row, col)
 
     def _clear_rows(self) -> None:
         """Remove every row currently in the list."""
@@ -237,12 +304,9 @@ class FileMetadataWidget(QtWidgets.QWidget):
 
         self._rows_container = QtWidgets.QWidget()
         self._rows_container.setStyleSheet("background: transparent;")
-        self._rows_layout = QtWidgets.QGridLayout(self._rows_container)
+        self._rows_layout = QtWidgets.QVBoxLayout(self._rows_container)
         self._rows_layout.setContentsMargins(20, 0, 20, 0)
-        self._rows_layout.setHorizontalSpacing(40)
-        self._rows_layout.setVerticalSpacing(10)
-        self._rows_layout.setColumnStretch(0, 1)
-        self._rows_layout.setColumnStretch(1, 1)
+        self._rows_layout.setSpacing(16)
         self._scroll_area.setWidget(self._rows_container)
         viewport = self._scroll_area.viewport()
         QtWidgets.QScroller.grabGesture(

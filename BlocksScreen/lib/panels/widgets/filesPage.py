@@ -330,7 +330,10 @@ class FilesPage(QtWidgets.QWidget):
             .lower()
             .endswith(self.GCODE_EXTENSION)
         ]
-        if self._sort_key != "Import Order":
+        if self._sort_key == "Import Order":
+            if not self._sort_descending:
+                files.reverse()
+        else:
             files.sort(
                 key=lambda f: self._sort_value(f, meta),
                 reverse=self._sort_descending,
