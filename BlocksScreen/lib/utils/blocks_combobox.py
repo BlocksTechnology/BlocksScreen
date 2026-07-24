@@ -4,6 +4,8 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 
 # BlocksScreen accent (#1A8FBF)
 _ACCENT = "26, 143, 191"
+# Font size shared by the shown title and the popup rows.
+_FONT_PX = 22
 
 _STYLE = f"""
     QComboBox {{
@@ -12,10 +14,10 @@ _STYLE = f"""
         border: none;
         border-radius: 12px;
         padding: 4px 12px;
-        font-size: 22px;
+        font-size: {_FONT_PX}px;
     }}
     QComboBox QAbstractItemView::item {{
-        font-size: 22px;
+        font-size: {_FONT_PX}px;
         border-radius: 12px;
         padding: 6px;
         margin: 2px 4px;
@@ -61,9 +63,10 @@ class _TouchRowDelegate(QtWidgets.QStyledItemDelegate):
         return size
 
     def initStyleOption(self, option, index):
-        """Center popup row text horizontally."""
+        """Center popup rows and match the shown title's font size."""
         super().initStyleOption(option, index)
         option.displayAlignment = QtCore.Qt.AlignmentFlag.AlignCenter
+        option.font.setPixelSize(_FONT_PX)
 
 
 class BlocksComboBox(QtWidgets.QComboBox):
