@@ -35,7 +35,7 @@ _FIELD_LABELS: dict[str, str] = {
     "mmu_print": "MMU Print",
 }
 # First-layer temps re-labeled to plain extruder/bed names.
-_FIELD_LABELS["first_layer_extr_temp"] = "Extruder Temp"
+_FIELD_LABELS["first_layer_extr_temp"] = "Nozzle Temp"
 _FIELD_LABELS["first_layer_bed_temp"] = "Bed Temp"
 # Titled sections and the ordered keys shown under each.
 _CATEGORIES: tuple[tuple[str, tuple[str, ...]], ...] = (
@@ -111,7 +111,8 @@ class FileMetadataWidget(QtWidgets.QWidget):
         if placed == 0:
             self._add_category_card("Info", [("No metadata available", "")], 0)
             placed = 1
-        self._rows_layout.setRowStretch((placed + 1) // 2, 1)
+        for row in range((placed + 1) // 2):
+            self._rows_layout.setRowStretch(row, 1)
 
     def _humanize(self, key: str) -> str:
         """Map a metadata key to its display label."""
@@ -181,6 +182,10 @@ class FileMetadataWidget(QtWidgets.QWidget):
         card.setStyleSheet(
             "#md_card { background: rgba(26, 143, 191, 0.12); border-radius: 12px; }"
         )
+        card.setSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Expanding,
+            QtWidgets.QSizePolicy.Policy.Expanding,
+        )
         card_layout = QtWidgets.QVBoxLayout(card)
         card_layout.setContentsMargins(12, 6, 12, 6)
         card_layout.setSpacing(2)
@@ -189,7 +194,8 @@ class FileMetadataWidget(QtWidgets.QWidget):
         header_font.setFamily("Momcake")
         header_font.setPointSize(16)
         header.setFont(header_font)
-        header.setStyleSheet("background: transparent; color: #1A8FBF;")
+        header.setStyleSheet("background: transparent; color: white;")
+        header.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         card_layout.addWidget(header)
         grid = QtWidgets.QGridLayout()
         grid.setContentsMargins(0, 0, 0, 0)
@@ -199,9 +205,7 @@ class FileMetadataWidget(QtWidgets.QWidget):
         for index, (label, value) in enumerate(pairs):
             self._add_row(grid, label, value, index, 0)
         card_layout.addLayout(grid)
-        self._rows_layout.addWidget(
-            card, position // 2, position % 2, QtCore.Qt.AlignmentFlag.AlignTop
-        )
+        self._rows_layout.addWidget(card, position // 2, position % 2)
 
     def _add_row(
         self, grid: QtWidgets.QGridLayout, label: str, value: str, row: int, col: int
@@ -218,7 +222,7 @@ class FileMetadataWidget(QtWidgets.QWidget):
         key_label = QtWidgets.QLabel(label, parent=self._rows_container)
         key_label.setStyleSheet(title_style)
         key_label.setAlignment(
-            QtCore.Qt.AlignmentFlag.AlignRight | QtCore.Qt.AlignmentFlag.AlignVCenter
+            QtCore.Qt.AlignmentFlag.AlignLeft | QtCore.Qt.AlignmentFlag.AlignVCenter
         )
         sep_label = QtWidgets.QLabel(": ", parent=self._rows_container)
         sep_label.setStyleSheet(title_style)
@@ -227,13 +231,12 @@ class FileMetadataWidget(QtWidgets.QWidget):
         value_label.setStyleSheet(value_style)
         value_label.setWordWrap(True)
         value_label.setAlignment(
-            QtCore.Qt.AlignmentFlag.AlignLeft | QtCore.Qt.AlignmentFlag.AlignVCenter
+            QtCore.Qt.AlignmentFlag.AlignRight | QtCore.Qt.AlignmentFlag.AlignVCenter
         )
+        cell.addWidget(key_label, 0)
+        cell.addWidget(sep_label, 0)
         cell.addStretch(1)
         cell.addWidget(value_label, 0)
-        cell.addWidget(sep_label, 0)
-        cell.addWidget(key_label, 0)
-        cell.addStretch(1)
         grid.addLayout(cell, row, col)
 
     def _clear_rows(self) -> None:
