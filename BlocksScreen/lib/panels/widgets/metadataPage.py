@@ -294,6 +294,7 @@ class FileMetadataWidget(QtWidgets.QWidget):
 
     def _setupUI(self) -> None:
         """Build the header and scrollable metadata list."""
+        self.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
         self.setMinimumSize(QtCore.QSize(710, 400))
         self.setMaximumSize(QtCore.QSize(720, 420))
         outer = QtWidgets.QVBoxLayout(self)
