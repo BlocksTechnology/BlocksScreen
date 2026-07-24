@@ -1,6 +1,6 @@
 import typing
 from collections import OrderedDict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from PyQt6 import QtCore, QtGui, QtWidgets  # pylint: disable=import-error
 
@@ -32,6 +32,8 @@ class ListItem:
 
     height: int = 60
     notificate: bool = False
+
+    _cache: typing.Dict[int, int] = field(default_factory=dict)
 
 
 class EntryListModel(QtCore.QAbstractListModel):
