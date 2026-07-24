@@ -39,9 +39,9 @@ _FIELD_LABELS["first_layer_extr_temp"] = "Nozzle Temp"
 _FIELD_LABELS["first_layer_bed_temp"] = "Bed Temp"
 # Titled sections and the ordered keys shown under each.
 _CATEGORIES: tuple[tuple[str, tuple[str, ...]], ...] = (
-    ("General", ("slicer", "slicer_version", "print_start_time", "estimated_time", "mmu_print")),
-    ("Geometry", ("object_height", "layer_height", "nozzle_diameter")),
-    ("Temperatures", ("first_layer_extr_temp", "first_layer_bed_temp", "chamber_temp")),
+    ("General", ("estimated_time", "slicer", "slicer_version", "print_start_time", "mmu_print")),
+    ("Geometry", ("nozzle_diameter", "layer_height", "object_height")),
+    ("Temperature", ("first_layer_extr_temp", "first_layer_bed_temp", "chamber_temp")),
     (
         "Filament",
         ("filament_type", "filament_total", "filament_weight_total", "filament_change_count"),
