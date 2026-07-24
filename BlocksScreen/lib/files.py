@@ -538,8 +538,13 @@ class Files(QtCore.QObject):
                 self._directories[dirname] = dir_data
         for file_data in data.get("files", []):
             filename = file_data.get("filename", file_data.get("path", ""))
-            if filename:
-                self._files[filename] = file_data
+            if not filename:
+                continue
+            # Moonraker lists a USB symlink under files; treat it as a browsable dir.
+            if helper_methods.is_usb_mount(filename):
+                self._directories[filename] = file_data | {"dirname": filename}
+                continue
+            self._files[filename] = file_data
 
     def _dispatch_metadata(self) -> None:
         """Use inline gcode metadata; request (full path) only what is missing."""

@@ -173,6 +173,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.printPanel = PrintTab(
             self.ui.printTab, self.file_data, self.ws, self.printer
         )
+        self.usb_manager.usb_mounted.connect(
+            self.printPanel.filesPage_widget.on_usb_added
+        )
         self.usb_manager.usb_hardware_removed.connect(
             self.printPanel.filesPage_widget.on_usb_removed
         )

@@ -7,9 +7,9 @@ _ACCENT = "26, 143, 191"
 
 _STYLE = f"""
     QComboBox {{
-        background-color: rgb(210, 210, 210);
-        color: black;
-        border: 1px solid rgba(0, 0, 0, 60);
+        background-color: black;
+        color: white;
+        border: 1px solid rgba({_ACCENT}, 0.5);
         border-radius: 8px;
         padding: 4px 12px;
         font-size: 22px;
@@ -18,12 +18,24 @@ _STYLE = f"""
     QComboBox::drop-down {{ border: none; width: 34px; }}
     QComboBox::down-arrow {{ image: none; }}
     QComboBox QAbstractItemView {{
-        background-color: rgb(210, 210, 210);
-        color: black;
+        background-color: black;
+        color: white;
         selection-background-color: rgba({_ACCENT}, 0.6);
         selection-color: white;
         outline: none;
     }}
+    QComboBox QAbstractItemView QScrollBar:vertical {{
+        background: transparent;
+        width: 8px;
+        margin: 0px;
+    }}
+    QComboBox QAbstractItemView QScrollBar::handle:vertical {{
+        background: rgba({_ACCENT}, 0.8);
+        border-radius: 4px;
+        min-height: 24px;
+    }}
+    QComboBox QAbstractItemView QScrollBar::add-line:vertical,
+    QComboBox QAbstractItemView QScrollBar::sub-line:vertical {{ height: 0px; }}
 """
 
 
@@ -53,10 +65,18 @@ class BlocksComboBox(QtWidgets.QComboBox):
         self.setMinimumSize(QtCore.QSize(200, 50))
         self.setMaximumHeight(50)
 
+    def showPopup(self) -> None:
+        """Open the drop-down list directly below the button, never above it."""
+        super().showPopup()
+        popup = self.findChild(QtWidgets.QFrame)
+        if popup is not None:
+            below = self.mapToGlobal(self.rect().bottomLeft()).y()
+            popup.move(popup.x(), below)
+
     def paintEvent(self, event: QtGui.QPaintEvent) -> None:
         """Paint the combo with its current text horizontally centered."""
         painter = QtWidgets.QStylePainter(self)
-        painter.setPen(QtCore.Qt.GlobalColor.black)
+        painter.setPen(QtCore.Qt.GlobalColor.white)
         opt = QtWidgets.QStyleOptionComboBox()
         self.initStyleOption(opt)
         text = opt.currentText
@@ -87,8 +107,8 @@ class BlocksComboBox(QtWidgets.QComboBox):
                 QtCore.QPointF(cx, cy + half),
             ]
         )
-        painter.setPen(QtCore.Qt.GlobalColor.black)
-        painter.setBrush(QtCore.Qt.GlobalColor.black)
+        painter.setPen(QtCore.Qt.GlobalColor.white)
+        painter.setBrush(QtCore.Qt.GlobalColor.white)
         painter.drawPolygon(points)
 
     def set_options(self, options: list[str]) -> None:

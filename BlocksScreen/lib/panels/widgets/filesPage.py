@@ -224,12 +224,22 @@ class FilesPage(QtWidgets.QWidget):
         # Request fresh data for root directory
         self.request_dir_info[str].emit("")
 
+    @QtCore.pyqtSlot(str, str, name="on_usb_added")
+    def on_usb_added(self, _device_path: str = "", _symlink: str = "") -> None:
+        """Re-fetch the current directory so a newly mounted USB folder shows up."""
+        logger.info("USB mounted, refreshing current directory")
+        self.request_dir_info[str].emit(self._curr_dir)
+
     @QtCore.pyqtSlot(str, name="on_usb_removed")
     def on_usb_removed(self, _device_path: str = "") -> None:
-        """Return to the gcodes root when a USB drive is removed while inside its folder."""
-        if self._curr_dir.removeprefix("/").startswith(self.USB_PREFIX):
+        """Return to root when inside the USB folder, else refresh so it disappears."""
+        current = self._curr_dir.removeprefix("/")
+        if current.startswith(self.USB_PREFIX):
             logger.info("USB removed while inside its folder, returning to root")
             self.on_directory_error()
+        else:
+            logger.info("USB removed, refreshing current directory")
+            self.request_dir_info[str].emit(self._curr_dir)
 
     @QtCore.pyqtSlot(ListItem, name="on_item_selected")
     def _on_item_selected(self, item: ListItem) -> None:

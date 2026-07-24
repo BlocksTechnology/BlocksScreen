@@ -56,18 +56,19 @@ class FileMetadataWidget(QtWidgets.QWidget):
         """Populate the page with all metadata fields for the given file."""
         self.title_label.setText(os.path.basename(text))
         self._clear_rows()
-        rows = 0
+        pairs: list[tuple[str, str]] = []
         for key, value in (filedata or {}).items():
             if key in _HIDDEN_FIELDS:
                 continue
             formatted = self._format_value(key, value)
             if formatted is None:
                 continue
-            self._add_row(self._humanize(key), formatted)
-            rows += 1
-        if rows == 0:
-            self._add_row("No metadata available", "")
-        self._rows_layout.addStretch(1)
+            pairs.append((self._humanize(key), formatted))
+        if not pairs:
+            pairs.append(("No metadata available", ""))
+        for index, (label, value) in enumerate(pairs):
+            self._add_row(label, value, index // 2, index % 2)
+        self._rows_layout.setRowStretch(self._rows_layout.rowCount(), 1)
 
     def _humanize(self, key: str) -> str:
         """Map a metadata key to its display label."""
@@ -121,10 +122,10 @@ class FileMetadataWidget(QtWidgets.QWidget):
             return f"{hours}h {minutes}m"
         return f"{minutes}m"
 
-    def _add_row(self, label: str, value: str) -> None:
-        """Append a single key/value row to the list."""
-        row = QtWidgets.QHBoxLayout()
-        row.setContentsMargins(0, 0, 0, 0)
+    def _add_row(self, label: str, value: str, row: int, col: int) -> None:
+        """Place a single key/value cell into the two-column grid."""
+        cell = QtWidgets.QHBoxLayout()
+        cell.setContentsMargins(0, 0, 0, 0)
         key_label = QtWidgets.QLabel(label, parent=self._rows_container)
         key_label.setStyleSheet("background: transparent; color: #B8B8B8;")
         key_label.setAlignment(
@@ -136,9 +137,9 @@ class FileMetadataWidget(QtWidgets.QWidget):
         value_label.setAlignment(
             QtCore.Qt.AlignmentFlag.AlignRight | QtCore.Qt.AlignmentFlag.AlignVCenter
         )
-        row.addWidget(key_label, 1)
-        row.addWidget(value_label, 1)
-        self._rows_layout.addLayout(row)
+        cell.addWidget(key_label, 1)
+        cell.addWidget(value_label, 1)
+        self._rows_layout.addLayout(cell, row, col)
 
     def _clear_rows(self) -> None:
         """Remove every row currently in the list."""
@@ -211,9 +212,12 @@ class FileMetadataWidget(QtWidgets.QWidget):
 
         self._rows_container = QtWidgets.QWidget()
         self._rows_container.setStyleSheet("background: transparent;")
-        self._rows_layout = QtWidgets.QVBoxLayout(self._rows_container)
+        self._rows_layout = QtWidgets.QGridLayout(self._rows_container)
         self._rows_layout.setContentsMargins(20, 0, 20, 0)
-        self._rows_layout.setSpacing(10)
+        self._rows_layout.setHorizontalSpacing(40)
+        self._rows_layout.setVerticalSpacing(10)
+        self._rows_layout.setColumnStretch(0, 1)
+        self._rows_layout.setColumnStretch(1, 1)
         self._scroll_area.setWidget(self._rows_container)
         viewport = self._scroll_area.viewport()
         QtWidgets.QScroller.grabGesture(
