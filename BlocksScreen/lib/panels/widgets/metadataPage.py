@@ -136,28 +136,32 @@ class FileMetadataWidget(QtWidgets.QWidget):
 
     def _add_row(self, label: str, value: str, row: int, col: int) -> None:
         """Place a single key/value cell into the two-column grid."""
-        style = "background: transparent; color: white; font-size: 14px;"
+        value_style = "background: transparent; color: white; font-size: 14px;"
+        title_style = (
+            "background: transparent; color: white; "
+            "font-size: 15px; font-weight: bold;"
+        )
         cell = QtWidgets.QHBoxLayout()
         cell.setContentsMargins(0, 0, 0, 0)
         cell.setSpacing(0)
-        value_label = QtWidgets.QLabel(value, parent=self._rows_container)
-        value_label.setStyleSheet(style)
-        value_label.setWordWrap(True)
-        value_label.setAlignment(
+        key_label = QtWidgets.QLabel(label, parent=self._rows_container)
+        key_label.setStyleSheet(title_style)
+        key_label.setAlignment(
             QtCore.Qt.AlignmentFlag.AlignRight | QtCore.Qt.AlignmentFlag.AlignVCenter
         )
-        sep_label = QtWidgets.QLabel(" : ", parent=self._rows_container)
-        sep_label.setStyleSheet(style)
+        sep_label = QtWidgets.QLabel(": ", parent=self._rows_container)
+        sep_label.setStyleSheet(title_style)
         sep_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignVCenter)
-        key_label = QtWidgets.QLabel(label, parent=self._rows_container)
-        key_label.setStyleSheet(style)
-        key_label.setAlignment(
+        value_label = QtWidgets.QLabel(value, parent=self._rows_container)
+        value_label.setStyleSheet(value_style)
+        value_label.setWordWrap(True)
+        value_label.setAlignment(
             QtCore.Qt.AlignmentFlag.AlignLeft | QtCore.Qt.AlignmentFlag.AlignVCenter
         )
         cell.addStretch(1)
-        cell.addWidget(value_label, 0)
-        cell.addWidget(sep_label, 0)
         cell.addWidget(key_label, 0)
+        cell.addWidget(sep_label, 0)
+        cell.addWidget(value_label, 0)
         cell.addStretch(1)
         self._rows_layout.addLayout(cell, row, col)
 

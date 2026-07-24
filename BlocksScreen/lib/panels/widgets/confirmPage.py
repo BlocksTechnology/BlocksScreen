@@ -215,8 +215,8 @@ class ConfirmWidget(QtWidgets.QWidget):
             "icon_pixmap", QtGui.QPixmap(":/files/media/btn_icons/file_icon.svg")
         )
         self.file_info_btn.setObjectName("file_info_btn")
-        self.cf_header_title.addWidget(
-            self.file_info_btn, 0, QtCore.Qt.AlignmentFlag.AlignRight
+        self.cf_header_title.insertWidget(
+            0, self.file_info_btn, 0, QtCore.Qt.AlignmentFlag.AlignLeft
         )
 
         self.back_btn = IconButton(self)

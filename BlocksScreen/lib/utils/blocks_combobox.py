@@ -83,6 +83,13 @@ class BlocksComboBox(QtWidgets.QComboBox):
         super().showPopup()
         popup = self.findChild(QtWidgets.QFrame)
         if popup is not None:
+            popup.setAttribute(
+                QtCore.Qt.WidgetAttribute.WA_TranslucentBackground, True
+            )
+            popup.setAttribute(
+                QtCore.Qt.WidgetAttribute.WA_NoSystemBackground, True
+            )
+            popup.setStyleSheet("background: transparent;")
             below = self.mapToGlobal(self.rect().bottomLeft()).y()
             popup.move(popup.x(), below)
 
