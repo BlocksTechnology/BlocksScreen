@@ -184,7 +184,7 @@ class FileMetadataWidget(QtWidgets.QWidget):
         header = QtWidgets.QLabel(title, parent=card)
         header_font = QtGui.QFont()
         header_font.setFamily("Momcake")
-        header_font.setPointSize(13)
+        header_font.setPointSize(16)
         header.setFont(header_font)
         header.setStyleSheet("background: transparent; color: #1A8FBF;")
         card_layout.addWidget(header)
@@ -203,10 +203,10 @@ class FileMetadataWidget(QtWidgets.QWidget):
         self, grid: QtWidgets.QGridLayout, label: str, value: str, row: int, col: int
     ) -> None:
         """Place a single key/value cell into a card's two-column grid."""
-        value_style = "background: transparent; color: white; font-size: 12px;"
+        value_style = "background: transparent; color: white; font-size: 16px;"
         title_style = (
             "background: transparent; color: white; "
-            "font-size: 13px; font-weight: bold;"
+            "font-size: 17px; font-weight: bold;"
         )
         cell = QtWidgets.QHBoxLayout()
         cell.setContentsMargins(0, 0, 0, 0)
