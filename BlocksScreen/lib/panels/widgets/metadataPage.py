@@ -125,15 +125,14 @@ class FileMetadataWidget(QtWidgets.QWidget):
         """Append a single key/value row to the list."""
         row = QtWidgets.QHBoxLayout()
         row.setContentsMargins(0, 0, 0, 0)
-        key_label = BlocksLabel(parent=self._rows_container)
-        key_label.setText(label)
+        key_label = QtWidgets.QLabel(label, parent=self._rows_container)
         key_label.setStyleSheet("background: transparent; color: #B8B8B8;")
         key_label.setAlignment(
             QtCore.Qt.AlignmentFlag.AlignLeft | QtCore.Qt.AlignmentFlag.AlignVCenter
         )
-        value_label = BlocksLabel(parent=self._rows_container)
-        value_label.setText(value)
+        value_label = QtWidgets.QLabel(value, parent=self._rows_container)
         value_label.setStyleSheet("background: transparent; color: white;")
+        value_label.setWordWrap(True)
         value_label.setAlignment(
             QtCore.Qt.AlignmentFlag.AlignRight | QtCore.Qt.AlignmentFlag.AlignVCenter
         )

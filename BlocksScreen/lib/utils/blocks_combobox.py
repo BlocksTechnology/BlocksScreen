@@ -7,23 +7,18 @@ _ACCENT = "26, 143, 191"
 
 _STYLE = f"""
     QComboBox {{
-        background-color: white;
+        background-color: rgb(210, 210, 210);
         color: black;
         border: 1px solid rgba(0, 0, 0, 60);
         border-radius: 8px;
         padding: 4px 12px;
         font-size: 22px;
-        font-weight: 600;
     }}
     QComboBox QAbstractItemView::item {{ font-size: 22px; }}
     QComboBox::drop-down {{ border: none; width: 34px; }}
-    QComboBox::down-arrow {{
-        image: url(:/arrow_icons/media/btn_icons/arrow_down.svg);
-        width: 18px;
-        height: 18px;
-    }}
+    QComboBox::down-arrow {{ image: none; }}
     QComboBox QAbstractItemView {{
-        background-color: white;
+        background-color: rgb(210, 210, 210);
         color: black;
         selection-background-color: rgba({_ACCENT}, 0.6);
         selection-color: white;
@@ -74,6 +69,27 @@ class BlocksComboBox(QtWidgets.QComboBox):
             self,
         )
         painter.drawText(rect, QtCore.Qt.AlignmentFlag.AlignCenter, text)
+        arrow_rect = self.style().subControlRect(
+            QtWidgets.QStyle.ComplexControl.CC_ComboBox,
+            opt,
+            QtWidgets.QStyle.SubControl.SC_ComboBoxArrow,
+            self,
+        )
+        self._draw_arrow(painter, arrow_rect)
+
+    def _draw_arrow(self, painter: QtGui.QPainter, rect: QtCore.QRect) -> None:
+        """Draw a small black downward triangle in the drop-down area."""
+        cx, cy, half = rect.center().x(), rect.center().y(), 6
+        points = QtGui.QPolygonF(
+            [
+                QtCore.QPointF(cx - half, cy - half / 2),
+                QtCore.QPointF(cx + half, cy - half / 2),
+                QtCore.QPointF(cx, cy + half),
+            ]
+        )
+        painter.setPen(QtCore.Qt.GlobalColor.black)
+        painter.setBrush(QtCore.Qt.GlobalColor.black)
+        painter.drawPolygon(points)
 
     def set_options(self, options: list[str]) -> None:
         """Repopulate options, preserving the current selection when still present."""
