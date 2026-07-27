@@ -31,6 +31,9 @@ class SpoolmanPage(QtWidgets.QWidget):
     request_add_filament: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         dict, name="request-add-filament"
     )
+    request_add_manufacturer: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        dict, name="request-add-manufacturer"
+    )
     request_back: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         name="request_back"
     )
@@ -58,6 +61,9 @@ class SpoolmanPage(QtWidgets.QWidget):
         self._add_spool_page.cancelled.connect(self._add_popup.hide)
 
         self._add_filament_page.request_add_filament.connect(self.request_add_filament)
+        self._add_filament_page.request_add_manufacturer.connect(
+            self.request_add_manufacturer
+        )
         self._add_filament_page.accepted.connect(
             lambda: self._add_stack.setCurrentIndex(0)
         )
@@ -515,3 +521,8 @@ class SpoolmanPage(QtWidgets.QWidget):
     def on_add_filament_result(self, result: dict) -> None:
         """Handle results for adding a filament."""
         self._add_filament_page.on_add_filament_result(result)
+
+    @QtCore.pyqtSlot(dict, name="on-add-manufacturer-result")
+    def on_add_manufacturer_result(self, result: dict) -> None:
+        """Handle results for adding a manufacturer/vendor."""
+        self._add_filament_page.on_add_manufacturer_result(result)

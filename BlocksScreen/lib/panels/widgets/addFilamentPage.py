@@ -65,11 +65,11 @@ class AddFilamentPage(QtWidgets.QWidget):
 
     def reset(self):
         self._name_field.setText("")
-        self._material_field.setText("---")
+        self._material_field.setText("PLA")
         self._color_field.setText("ffffff")
-        self._ext_temp_field.setText("---")
-        self._bed_temp_field.setText("---")
-        self._density_field.setText("---")
+        self._ext_temp_field.setText("220")
+        self._bed_temp_field.setText("60")
+        self._density_field.setText("1.24")
         self._vendor_field.setText("---")
 
     @QtCore.pyqtSlot(dict, name="on-add-filament-result")

@@ -69,9 +69,9 @@ class AddSpoolPage(QtWidgets.QWidget):
         self.request_filaments.emit()
 
     def setFilter(self, material: str | None = None) -> None:
-        """Set a material filter for the filament list. Call before reset()."""
-        self.reset()
+        """Set a material filter and reload the filament list."""
         self._material_filter = material
+        self.reset()
 
     @QtCore.pyqtSlot(dict, name="on-filaments-received")
     def on_filaments_received(self, result: dict) -> None:
