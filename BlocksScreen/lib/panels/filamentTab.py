@@ -160,6 +160,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
         load_layout.addWidget(self.load_status_label)
 
         self.load_status_widget = MmuToolmapWidget(load_container)
+        self.load_status_widget.set_left_text("Auxiliar Extruder")
         load_layout.addWidget(self.load_status_widget)
 
         self.load_popup.add_widget(load_container)
@@ -883,6 +884,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
 
         if not self.amu_configured:
             if len(mmu_state.gates) > 1:
+                self.load_status_widget.set_left_text("AMU")
                 self.amupage = AMUpage(
                     self.amu_manager, parent=self, load_popup=self.load_popup
                 )
@@ -913,7 +915,8 @@ class FilamentTab(QtWidgets.QStackedWidget):
                 )
                 self.amupage.request_keyboard.connect(self._on_show_keyboard)
                 self.amupage.request_color_wheel.connect(self._open_color_wheel)
-
+            else:
+                self.load_status_widget.set_left_text("Auxiliar Extruder")
             self.amu_configured = True
 
         self.load_status_widget.set_filament_pos(

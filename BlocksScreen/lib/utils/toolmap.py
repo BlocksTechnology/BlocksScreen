@@ -59,6 +59,8 @@ class MmuToolmapWidget(QtWidgets.QWidget):
         self._current_temp = 0.0
         self._target_temp = 0.0
 
+        self.lefttext: str = "AMU"
+
         self._heat_dot_count = 0
         self._heat_dot_timer = QtCore.QTimer(self)
         self._heat_dot_timer.setInterval(1000)
@@ -92,6 +94,11 @@ class MmuToolmapWidget(QtWidgets.QWidget):
     def set_sensor(self, name: str, active: bool) -> None:
         """Set the active state of a sensor marker ("mmu_pre_gate", "mmu_gate", "toolhead")."""
         self._sensors[name] = active
+        self.update()
+
+    def set_left_text(self, text: str) -> None:
+        """sets left box title (e.g. "AMU" , "AUXILIAR EXTRUDER")"""
+        self.lefttext = text
         self.update()
 
     def set_action(self, action: str) -> None:
@@ -199,7 +206,10 @@ class MmuToolmapWidget(QtWidgets.QWidget):
 
         painter.setPen(QtGui.QColor("#FFFFFF"))
         painter.setFont(self._zone_font)
-        for zone, name in ((self._GATE_ZONE, "AMU"), (self._TOOLHEAD_ZONE, "Toolhead")):
+        for zone, name in (
+            (self._GATE_ZONE, self.lefttext),
+            (self._TOOLHEAD_ZONE, "Toolhead"),
+        ):
             painter.drawText(
                 QtCore.QRectF(zone.left(), zone.top() + 12, zone.width(), 14),
                 QtCore.Qt.AlignmentFlag.AlignHCenter,
