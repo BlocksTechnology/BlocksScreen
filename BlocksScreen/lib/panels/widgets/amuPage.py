@@ -121,9 +121,7 @@ class AMUpage(QtWidgets.QStackedWidget):
                     self.main_back_button.clicked.disconnect()
                 except TypeError:
                     pass
-                self.main_back_button.clicked.connect(
-                    lambda: self.request_back.emit()
-                )
+                self.main_back_button.clicked.connect(lambda: self.request_back.emit())
 
     def on_mmu_state_changed(self, mmu_state):
         """Refresh the carousel and the info panel's selected gate from live MMU state."""
