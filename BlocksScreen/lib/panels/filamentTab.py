@@ -20,6 +20,7 @@ from lib.utils.blocks_frame import BlocksCustomFrame
 from lib.utils.blocks_linedit import BlocksCustomLinEdit
 from lib.utils.icon_button import IconButton
 from lib.utils.list_model import EntryDelegate, EntryListModel, ListItem
+from lib.utils.toolmap import MmuToolmapWidget
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 logger = logging.getLogger(__name__)
@@ -58,8 +59,13 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self._color_target_field = None
         self.moonraker_run = True
 
-        self.amu_manager.mmu_state_changed.connect(self.on_mmu_state_changed)
         self._setup_pre_gate_popup()
+        self._setup_load_popup()
+        self.amu_manager.mmu_state_changed.connect(self.on_mmu_state_changed)
+
+        self._extruder_current_temp = 0.0
+        self._extruder_target_temp = 0.0
+        self.printer.extruder_update.connect(self.on_extruder_update)
 
         self.spoolmanPanel = SpoolmanPage(self)
         self.addWidget(self.spoolmanPanel)
@@ -97,7 +103,9 @@ class FilamentTab(QtWidgets.QStackedWidget):
             )
         )
 
-        self._basic_panel = BasicFilamentPanel(self.printer, self.cfg, parent=self)
+        self._basic_panel = BasicFilamentPanel(
+            self.printer, self.cfg, parent=self, load_popup=self.load_popup
+        )
         self._basic_panel.run_gcode.connect(self.run_gcode)
         self._basic_panel.call_load_panel.connect(self.call_load_panel)
         self._basic_panel.request_back.connect(self.request_back)
@@ -136,6 +144,41 @@ class FilamentTab(QtWidgets.QStackedWidget):
             index (int): page index
         """
         self.request_change_page.emit(1, index)
+
+    def _setup_load_popup(self) -> None:
+        self.load_popup = BasePopup(self, floating=False, dialog=False)
+        load_container = QtWidgets.QWidget(self.load_popup)
+        load_layout = QtWidgets.QVBoxLayout(load_container)
+
+        self.load_status_label = QtWidgets.QLabel(load_container)
+        self.load_status_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        label_font = QtGui.QFont()
+        label_font.setPointSize(20)
+        self.load_status_label.setFont(label_font)
+        self.load_status_label.setStyleSheet("color: #ffffff; background: transparent;")
+        self.load_status_label.setMaximumHeight(100)
+        load_layout.addWidget(self.load_status_label)
+
+        self.load_status_widget = MmuToolmapWidget(load_container)
+        load_layout.addWidget(self.load_status_widget)
+
+        self.load_popup.add_widget(load_container)
+
+    @QtCore.pyqtSlot(str, str, float, name="on-extruder-update")
+    def on_extruder_update(
+        self, extruder_name: str, field: str, new_value: float
+    ) -> None:
+        if extruder_name != "extruder":
+            return
+        if field == "temperature":
+            self._extruder_current_temp = new_value
+        elif field == "target":
+            self._extruder_target_temp = new_value
+        else:
+            return
+        self.load_status_widget.set_temps(
+            self._extruder_current_temp, self._extruder_target_temp
+        )
 
     def _setup_pre_gate_popup(self) -> None:
         self._numpad = CustomNumpad(self)
@@ -836,7 +879,9 @@ class FilamentTab(QtWidgets.QStackedWidget):
 
         if not self.amu_configured:
             if len(mmu_state.gates) > 1:
-                self.amupage = AMUpage(self.amu_manager, parent=self)
+                self.amupage = AMUpage(
+                    self.amu_manager, parent=self, load_popup=self.load_popup
+                )
                 self.addWidget(self.amupage)
                 try:
                     self.removeWidget(self._basic_panel)
@@ -862,24 +907,41 @@ class FilamentTab(QtWidgets.QStackedWidget):
                 self.printer.print_stats_update[str, float].connect(
                     self.amupage.on_print_stats_update
                 )
-                self.amupage.call_load_panel.connect(self.call_load_panel)
                 self.amupage.request_keyboard.connect(self._on_show_keyboard)
                 self.amupage.request_color_wheel.connect(self._open_color_wheel)
 
             self.amu_configured = True
 
+        self.load_status_widget.set_filament_pos(
+            mmu_state.filament_pos, mmu_state.bowden_progress
+        )
+        for sensor_name in ("mmu_pre_gate", "mmu_gate", "toolhead"):
+            self.load_status_widget.set_sensor(
+                sensor_name, bool(mmu_state.sensors.get(sensor_name))
+            )
+        self.load_status_widget.set_action(mmu_state.action)
+
+        gate_info = mmu_state.current_gate_info
+        raw_color = (
+            str(gate_info.color).lstrip("#")[:6]
+            if gate_info and gate_info.color
+            else ""
+        )
+        parsed_color = QtGui.QColor("#" + raw_color) if raw_color else QtGui.QColor()
+        if parsed_color.isValid():
+            self.load_status_widget.set_gate_color(parsed_color)
+
+        self.load_status_label.setText(mmu_state.action)
+
         if self.load_state:
             if mmu_state.action == "Idle":
                 self.load_state = False
-                self.call_load_panel.emit(False, "", True)
+                self.load_popup.hide()
                 if not len(mmu_state.gates) > 1:
                     self._basic_panel.change_page(0)
-                return
-            self.call_load_panel.emit(True, mmu_state.action, True)
-
-        if mmu_state.action == "Loading" or mmu_state.action == "Unloading":
+        elif mmu_state.action in ("Loading", "Unloading"):
             self.load_state = True
-            self.call_load_panel.emit(True, mmu_state.action, True)
+            self.load_popup.show()
 
     def setupUi(self):
         self.resize(710, 410)
