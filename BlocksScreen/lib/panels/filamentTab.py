@@ -1,6 +1,5 @@
 import logging
 from collections import deque
-from typing import Deque
 
 from devices.amu import AMUManager
 from devices.amu.models import GateStatus
@@ -53,7 +52,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
 
         self._previous_gate_states: dict[int, bool] = {}
         self.pre_gate_idx = {}
-        self.popup_gates: Deque = deque()
+        self.popup_gates: deque = deque()
         self._spool_id_map: dict[str, dict] = {}
         self._current_field: QtWidgets.QLineEdit | None = None
         self._color_target_field = None
@@ -124,6 +123,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self.run_gcode.connect(self.ws.api.run_gcode)
 
     def handle_moonraker_components(self):
+        """Build the pre-gate popup pages once, choosing spoolman vs. manual-entry order."""
         if self.moonraker_run:
             components = self.ws._moonRest.get_server_info()
             if "spoolman" not in components["result"].get("components", []):
@@ -168,6 +168,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
     def on_extruder_update(
         self, extruder_name: str, field: str, new_value: float
     ) -> None:
+        """Track the extruder's current/target temp and feed it to the load status widget."""
         if extruder_name != "extruder":
             return
         if field == "temperature":
@@ -554,6 +555,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
         return page
 
     def handle_skip_button(self):
+        """Map the pending pre-gate gate to an empty spool and dismiss the popup."""
         gate = self.pre_gate_idx.get("gate", 0)
         self.popup.hide()
         self._reset_popup()
@@ -600,6 +602,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
 
     @QtCore.pyqtSlot(int, str, str, "PyQt_PyObject", name="open-pregate-popup")
     def open_pregate_popup(self, temp, material, name, callback=None):
+        """Open the pre-gate popup pre-filled with a detected filament's info and *callback*."""
         self._popup_name.setText(name)
         self._popup_material.setText(material)
         self._popup_temp.setText(str(temp))
@@ -757,6 +760,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
                 self._popup_callback = None
 
     def reset_spool_info(self):
+        """Clear the selected-spool detail labels back to their placeholder state."""
         self.filament_name_label.setText("N/A")
         self.material_label.setText("N/A")
         self.weight_label.setText("N/A")
@@ -944,6 +948,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
             self.load_popup.show()
 
     def setupUi(self):
+        """Build the tab's landing page (title + Filament Control / Spoolman buttons)."""
         self.resize(710, 410)
         self.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
         widget = QtWidgets.QWidget()

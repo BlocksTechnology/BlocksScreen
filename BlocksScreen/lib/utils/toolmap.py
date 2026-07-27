@@ -83,14 +83,20 @@ class MmuToolmapWidget(QtWidgets.QWidget):
         self.update()
 
     def set_gate_color(self, color: QtGui.QColor) -> None:
+        """Set the color of the filament fill bar, e.g. from the selected gate's spool color."""
         self._gate_color = color
         self.update()
 
     def set_sensor(self, name: str, active: bool) -> None:
+        """Set the active state of a sensor marker ("mmu_pre_gate", "mmu_gate", "toolhead")."""
         self._sensors[name] = active
         self.update()
 
     def set_action(self, action: str) -> None:
+        """Set the current MMU action (e.g. "Idle", "Loading", "Unloading", "Heating").
+
+        Starts/stops the heating-dot animation timer as needed.
+        """
         self._action = action
         if action == "Heating":
             if not self._heat_dot_timer.isActive():
@@ -107,11 +113,20 @@ class MmuToolmapWidget(QtWidgets.QWidget):
         self.update()
 
     def set_temps(self, current: float, target: float) -> None:
+        """Set the extruder current/target temperatures shown under the heating message."""
         self._current_temp = current
         self._target_temp = target
         self.update()
 
     def set_filament_pos(self, pos: FilamentPos, bowden_progress: float = -1.0) -> None:
+        """Animate the fill bar to the local-coordinate x matching the given filament position.
+
+        Args:
+            pos: Current position of the filament in the MMU/extruder path.
+            bowden_progress: Percentage (0-100) through the bowden tube; only used
+                when pos is START_BOWDEN/IN_BOWDEN and >= 0, otherwise the fill
+                snaps to fixed checkpoints for that position.
+        """
         self._filament_pos = pos
         self._bowden_progress = bowden_progress
         self._animate_fill_to(self._compute_fill_height())

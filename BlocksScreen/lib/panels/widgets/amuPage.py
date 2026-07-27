@@ -103,6 +103,7 @@ class AMUpage(QtWidgets.QStackedWidget):
     @QtCore.pyqtSlot(str, float, name="on_print_stats_update")
     @QtCore.pyqtSlot(str, str, name="on_print_stats_update")
     def on_print_stats_update(self, field: str, value: dict | float | str) -> None:
+        """Rewire the back button between "request_back" and "change to tab 0" based on print state."""
         if isinstance(value, str):
             if "state" in field:
                 self.state = value
@@ -126,6 +127,7 @@ class AMUpage(QtWidgets.QStackedWidget):
                     )
 
     def on_mmu_state_changed(self, mmu_state):
+        """Refresh the carousel and the info panel's selected gate from live MMU state."""
         if mmu_state is None:
             return
         self.status = mmu_state
@@ -135,6 +137,7 @@ class AMUpage(QtWidgets.QStackedWidget):
         self._on_selection(mmu_state.gate)
 
     def addSpool(self, gate_info: GateInfo):
+        """Add or refresh a gate's carousel button from its GateInfo."""
         self.carousel.addSpool(
             QtGui.QColor("#" + str(gate_info.color)[:6]),
             gate_info.index,

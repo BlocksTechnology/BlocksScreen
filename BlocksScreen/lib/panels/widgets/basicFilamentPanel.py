@@ -239,6 +239,7 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         self.run_gcode.emit("MMU_UNLOAD")
 
     def open_pre_gate_popup(self, filament_type: FilamentTypes):
+        """Emit filament_selected so the pre-gate popup can confirm the gate before loading."""
         callback_action = partial(self.load_filament, 0, filament_type)
 
         self.filament_selected.emit(
@@ -249,6 +250,7 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         )
 
     def on_mmu_state_changed(self, mmu_state):
+        """Wire load buttons to the pre-gate flow on first MMU state, and track filament state."""
         if mmu_state is None:
             return
 
@@ -285,12 +287,15 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
             self.filament_page_unload_btn.setEnabled(True)
 
     def change_page(self, index: int) -> None:
+        """Switch this stacked widget to the page at *index*."""
         self.setCurrentIndex(index)
 
     def back_button(self) -> None:
+        """Emit request_back to signal the parent tab to navigate away."""
         self.request_back.emit()
 
     def find_routine_objects(self):
+        """Return whether load/unload gcode macros are available on the printer."""
         if not self.printer:
             return
         _available_objects = self.printer.available_objects
