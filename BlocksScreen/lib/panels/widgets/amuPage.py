@@ -104,27 +104,26 @@ class AMUpage(QtWidgets.QStackedWidget):
     @QtCore.pyqtSlot(str, str, name="on_print_stats_update")
     def on_print_stats_update(self, field: str, value: dict | float | str) -> None:
         """Rewire the back button between "request_back" and "change to tab 0" based on print state."""
-        if isinstance(value, str):
-            if "state" in field:
-                self.state = value
-                if value in ("printing", "pausing", "paused", "resuming"):
-                    try:
-                        self.main_back_button.clicked.disconnect()
-                    except TypeError:
-                        pass
+        if isinstance(value, str) and "state" in field:
+            self.state = value
+            if value in ("printing", "pausing", "paused", "resuming"):
+                try:
+                    self.main_back_button.clicked.disconnect()
+                except TypeError:
+                    pass
 
-                    self.main_back_button.clicked.connect(
-                        lambda: self.request_change_tab.emit(0)
-                    )
+                self.main_back_button.clicked.connect(
+                    lambda: self.request_change_tab.emit(0)
+                )
 
-                else:
-                    try:
-                        self.main_back_button.clicked.disconnect()
-                    except TypeError:
-                        pass
-                    self.main_back_button.clicked.connect(
-                        lambda: self.request_back.emit()
-                    )
+            else:
+                try:
+                    self.main_back_button.clicked.disconnect()
+                except TypeError:
+                    pass
+                self.main_back_button.clicked.connect(
+                    lambda: self.request_back.emit()
+                )
 
     def on_mmu_state_changed(self, mmu_state):
         """Refresh the carousel and the info panel's selected gate from live MMU state."""

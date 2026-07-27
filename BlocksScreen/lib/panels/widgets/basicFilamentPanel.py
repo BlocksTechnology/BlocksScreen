@@ -39,7 +39,7 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         UNLOADED = enum.auto()
 
         def __repr__(self) -> str:
-            return "<%s.%s>" % (self.__class__.__name__, self._name_)
+            return f"<{self.__class__.__name__}.{self._name_}>"
 
     def __init__(
         self, printer: Printer, cfg, parent=None, load_popup: BasePopup | None = None
@@ -156,14 +156,13 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
     @QtCore.pyqtSlot(dict, name="on_load_filament")
     def on_load_filament(self, status: dict):
         """slot to handle load macro status updates"""
-        if "state" in status:
-            if not status["state"]:
-                self.target_temp = 0
-                self.call_load_panel.emit(False, "", False)
-                self.change_page(0)
-                if self.state == "paused":
-                    self.request_change_tab.emit(0)
-                return
+        if "state" in status and not status["state"]:
+            self.target_temp = 0
+            self.call_load_panel.emit(False, "", False)
+            self.change_page(0)
+            if self.state == "paused":
+                self.request_change_tab.emit(0)
+            return
         self.call_load_panel.emit(
             True, f"Loading Filament\n{status['step'].capitalize()}", False
         )
@@ -171,12 +170,11 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
     @QtCore.pyqtSlot(dict, name="on_unload_filament")
     def on_unload_filament(self, status: dict):
         """slot to handle unload macro status updates"""
-        if "state" in status:
-            if not status["state"]:
-                self.target_temp = 0
-                self.call_load_panel.emit(False, "", False)
-                self.change_page(0)
-                return
+        if "state" in status and not status["state"]:
+            self.target_temp = 0
+            self.call_load_panel.emit(False, "", False)
+            self.change_page(0)
+            return
         self.call_load_panel.emit(
             True, f"Unloading Filament\n{status['step'].capitalize()}", False
         )
@@ -299,17 +297,15 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         if not self.printer:
             return
         _available_objects = self.printer.available_objects
-        if "load_filament" in _available_objects.keys():
+        if "load_filament" in _available_objects:
             self.has_load_unload_objects = True
             return True
-        if "unload_filament" in _available_objects.keys():
+        if "unload_filament" in _available_objects:
             self.has_load_unload_objects = True
             return True
-        if "gcode_macro LOAD_FILAMENT" in _available_objects.keys():
+        if "gcode_macro LOAD_FILAMENT" in _available_objects:
             return True
-        if "gcode_macro UNLOAD_FILAMENT" in _available_objects.keys():
-            return True
-        return False
+        return "gcode_macro UNLOAD_FILAMENT" in _available_objects
 
     def _setupInfoBox(self):
         root = BlocksCustomFrame(parent=self.filament_control_page)

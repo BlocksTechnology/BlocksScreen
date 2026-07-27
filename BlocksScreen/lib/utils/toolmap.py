@@ -1,9 +1,11 @@
+import typing
+
 from devices.amu.models import FilamentPos
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 
 class MmuToolmapWidget(QtWidgets.QWidget):
-    _POS = {
+    _POS: typing.ClassVar[dict[str, int]] = {
         "BEFORE_PRE_GATE": 40,
         "AFTER_GATE": 70,
         "START_BOWDEN": 135,

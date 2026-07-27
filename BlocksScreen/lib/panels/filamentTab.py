@@ -565,7 +565,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
         if self._popup_callback is not None:
             try:
                 self._popup_callback()
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 - arbitrary caller-supplied callback
                 logger.error(f"Error executing pre-gate accept callback: {e}")
             finally:
                 self._popup_callback = None
@@ -641,7 +641,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
         if self._popup_callback is not None:
             try:
                 self._popup_callback()
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 - arbitrary caller-supplied callback
                 logger.error(f"Error executing pre-gate accept callback: {e}")
             finally:
                 self._popup_callback = None
@@ -754,7 +754,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
         if self._popup_callback is not None:
             try:
                 self._popup_callback()
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 - arbitrary caller-supplied callback
                 logger.error(f"Error executing pre-gate accept callback: {e}")
             finally:
                 self._popup_callback = None
