@@ -13,7 +13,7 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 # Human-readable labels for known Moonraker gcode-metadata keys.
 _FIELD_LABELS: dict[str, str] = {
     "print_start_time": "Last Print",
-    "print_duration": "Print Duration",
+    "print_duration": "Last Print Duration",
     "slicer": "Slicer",
     "slicer_version": "Slicer Version",
     "layer_count": "Layer Count",
