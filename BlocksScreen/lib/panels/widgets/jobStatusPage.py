@@ -12,6 +12,7 @@ from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_label import BlocksLabel
 from lib.utils.blocks_progressbar import CustomProgressBar
 from lib.utils.display_button import DisplayButton
+from lib.utils.icon_button import IconButton
 from lib.utils import gcode_loader
 from lib.utils.flowguard import FlowguardWidget
 from PyQt6 import QtCore, QtGui, QtWidgets
@@ -51,6 +52,9 @@ class JobStatusWidget(QtWidgets.QWidget):
     )
     request_file_info: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         str, name="request_file_info"
+    )
+    show_metadata: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        str, dict, name="show_metadata"
     )
     call_cancel_panel = QtCore.pyqtSignal(bool, name="call-load-panel")
 
@@ -93,6 +97,7 @@ class JobStatusWidget(QtWidgets.QWidget):
         self._setupUI()
         self.cancel_print_dialog = BasePopup(self, floating=True)
         self.tune_menu_btn.clicked.connect(self.tune_clicked.emit)
+        self.js_file_name_icon.clicked.connect(self._on_file_info_clicked)
         self.pause_printing_btn.clicked.connect(self.pause_resume_print)
         self.stop_printing_btn.clicked.connect(self.handleCancel)
 
@@ -112,6 +117,12 @@ class JobStatusWidget(QtWidgets.QWidget):
             self.headerWidget,
         ):
             widget.setVisible(not expand)
+
+    @QtCore.pyqtSlot(name="on_file_info_clicked")
+    def _on_file_info_clicked(self) -> None:
+        """Open the metadata page for the file currently printing."""
+        if self._current_file_name:
+            self.show_metadata.emit(self._current_file_name, self.file_metadata or {})
 
     def showEvent(self, a0) -> None:
         """Reimplemented method, handle `show` Event"""
@@ -506,14 +517,11 @@ class JobStatusWidget(QtWidgets.QWidget):
         font = QtGui.QFont()
         font.setFamily("Montserrat")
         font.setPointSize(14)
-        self.js_file_name_icon = BlocksLabel(parent=self)
+        self.js_file_name_icon = IconButton(self)
         self.js_file_name_icon.setSizePolicy(sizePolicy)
         self.js_file_name_icon.setMinimumSize(QtCore.QSize(60, 60))
         self.js_file_name_icon.setMaximumSize(QtCore.QSize(60, 60))
-        self.js_file_name_icon.setLayoutDirection(QtCore.Qt.LayoutDirection.RightToLeft)
-        self.js_file_name_icon.setStyleSheet("background: transparent; color: white;")
-        self.js_file_name_icon.setText("")
-        self.js_file_name_icon.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.js_file_name_icon.setFlat(True)
         self.js_file_name_icon.setProperty(
             "icon_pixmap",
             QtGui.QPixmap(":/files/media/btn_icons/file_icon.svg"),

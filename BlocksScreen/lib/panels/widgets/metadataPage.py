@@ -5,6 +5,7 @@ from pathlib import Path
 
 from lib.utils.blocks_label import BlocksLabel
 from lib.utils.blocks_Scrollbar import CustomScrollBar
+from lib.utils import gcode_loader
 from lib.utils.icon_button import IconButton
 from PyQt6 import QtCore, QtGui, QtWidgets
 
@@ -13,6 +14,7 @@ _FIELD_LABELS: dict[str, str] = {
     "size": "File Size",
     "modified": "Modified",
     "print_start_time": "Last Print",
+    "print_duration": "Print Duration",
     "job_id": "Job ID",
     "slicer": "Slicer",
     "slicer_version": "Slicer Version",
@@ -24,9 +26,8 @@ _FIELD_LABELS: dict[str, str] = {
     "nozzle_diameter": "Nozzle Size",
     "layer_height": "Layer Height",
     "first_layer_height": "First Layer Height",
-    "first_layer_extr_temp": "Nozzle Temp",
-    "first_layer_bed_temp": "Bed Temp",
-    "chamber_temp": "Chamber Temp",
+    "first_layer_extr_temp": "Nozzle Temperature",
+    "first_layer_bed_temp": "Bed Temperature",
     "filament_name": "Filament Name",
     "filament_type": "Filament Type",
     "filament_total": "Filament Length",
@@ -38,10 +39,17 @@ _FIELD_LABELS: dict[str, str] = {
 _CATEGORIES: tuple[tuple[str, tuple[str, ...]], ...] = (
     (
         "General",
-        ("estimated_time", "slicer", "slicer_version", "print_start_time", "mmu_print"),
+        (
+            "estimated_time",
+            "print_duration",
+            "slicer",
+            "slicer_version",
+            "print_start_time",
+            "mmu_print",
+        ),
     ),
     ("Geometry", ("nozzle_diameter", "layer_height", "object_height")),
-    ("Temperature", ("first_layer_extr_temp", "first_layer_bed_temp", "chamber_temp")),
+    ("Temperature", ("first_layer_extr_temp", "first_layer_bed_temp")),
     (
         "Filament",
         (
@@ -59,7 +67,6 @@ _UNITS: dict[str, str] = {
     "nozzle_diameter": " mm",
     "first_layer_extr_temp": " °C",
     "first_layer_bed_temp": " °C",
-    "chamber_temp": " °C",
 }
 # Typical first-layer nozzle temp (°C) by material, fallback when metadata omits it.
 _FILAMENT_NOZZLE_TEMP: dict[str, int] = {
@@ -85,6 +92,8 @@ class FileMetadataWidget(QtWidgets.QWidget):
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
+        self._data: dict = {}
+        self._history_connected: bool = False
         self._setupUI()
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_AcceptTouchEvents, True)
         self.back_btn.clicked.connect(self.request_back.emit)
@@ -93,13 +102,20 @@ class FileMetadataWidget(QtWidgets.QWidget):
     def on_show_widget(self, text: str, filedata: dict | None = None) -> None:
         """Populate the page with metadata grouped into titled category cards."""
         self.title_label.setText(Path(text).name)
-        self._clear_rows()
         data = dict(filedata or {})
         cur = data.get("first_layer_extr_temp")
         if not isinstance(cur, (int, float)) or cur <= 0:
             temp = self._filament_nozzle_temp(data.get("filament_type"))
             if temp is not None:
                 data["first_layer_extr_temp"] = temp
+        self._data = data
+        self._request_print_duration()
+        self._render()
+
+    def _render(self) -> None:
+        """Lay out the cached metadata as titled category cards."""
+        self._clear_rows()
+        data = self._data
         placed = 0
         for title, keys in _CATEGORIES:
             pairs: list[tuple[str, str]] = []
@@ -138,11 +154,39 @@ class FileMetadataWidget(QtWidgets.QWidget):
             return None
         return f"{base}{_UNITS.get(key, '')}"
 
+    def _request_print_duration(self) -> None:
+        """Ask Moonraker history for the elapsed print time of this file's last job."""
+        if self._data.get("print_duration") is not None:
+            return
+        job_id = self._data.get("job_id")
+        loader = gcode_loader.get_history_loader()
+        if not job_id or loader is None:
+            return
+        if not self._history_connected:
+            loader.ready.connect(self._on_history_ready)
+            self._history_connected = True
+        loader.request(str(job_id))
+
+    @QtCore.pyqtSlot(str, dict)
+    def _on_history_ready(self, uid: str, job: dict) -> None:
+        """Show the elapsed print time once the history entry arrives."""
+        if str(self._data.get("job_id") or "") != uid:
+            return
+        duration = job.get("print_duration")
+        if not isinstance(duration, (int, float)) or duration <= 0:
+            return
+        self._data["print_duration"] = duration
+        self._render()
+
     def _raw_value(self, key: str, value: object) -> str | None:
         """Render a metadata value as text, or None to skip it."""
         if value is None or value in ("", [], {}, "Unknown"):
             return None
-        if isinstance(value, (int, float)) and not isinstance(value, bool) and value == -1:
+        if (
+            isinstance(value, (int, float))
+            and not isinstance(value, bool)
+            and value == -1
+        ):
             return None
         if isinstance(value, bool):
             return "Yes" if value else "No"
@@ -158,7 +202,9 @@ class FileMetadataWidget(QtWidgets.QWidget):
             return QtCore.QDateTime.fromSecsSinceEpoch(int(value)).toString(
                 "yyyy-MM-dd hh:mm"
             )
-        if key == "estimated_time" and isinstance(value, (int, float)):
+        if key in ("estimated_time", "print_duration") and isinstance(
+            value, (int, float)
+        ):
             return self._format_duration(int(value)) if value > 0 else None
         if isinstance(value, float):
             return f"{value:g}"

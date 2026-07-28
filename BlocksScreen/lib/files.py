@@ -58,7 +58,6 @@ class FileMetadata:
     first_layer_height: float = -1.0
     first_layer_extr_temp: float = -1.0
     first_layer_bed_temp: float = -1.0
-    chamber_temp: float = -1.0
     filament_name: str = "Unknown"
     nozzle_diameter: float = -1.0
     slicer: str = "Unknown"
@@ -100,7 +99,6 @@ class FileMetadata:
             first_layer_height=safe_get("first_layer_height", -1.0),
             first_layer_extr_temp=safe_get("first_layer_extr_temp", -1.0),
             first_layer_bed_temp=safe_get("first_layer_bed_temp", -1.0),
-            chamber_temp=safe_get("chamber_temp", -1.0),
             filament_name=safe_get("filament_name", "Unknown") or "Unknown",
             nozzle_diameter=safe_get("nozzle_diameter", -1.0),
             slicer=safe_get("slicer", "Unknown") or "Unknown",

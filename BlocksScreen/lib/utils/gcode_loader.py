@@ -126,9 +126,6 @@ def parse_gcode_metadata(header: bytes, footer: bytes) -> dict:
     ) is not None:
         if (temp := _to_float(raw)) is not None:
             meta["first_layer_bed_temp"] = temp
-    if (raw := first("chamber_temperature", "chamber_temp")) is not None:
-        if (temp := _to_float(raw)) is not None:
-            meta["chamber_temp"] = temp
 
     if (banner := _BANNER_RE.search(text)) is not None:
         meta["slicer"], meta["slicer_version"] = banner.group(1), banner.group(2)
@@ -283,10 +280,76 @@ class GcodeMetadataLoader(QtCore.QObject):
         self.ready.emit(gcode_path, meta)
 
 
+# --- Job-history loader ------------------------------------------------------
+
+
+class _HistorySignals(QtCore.QObject):
+    """Carries a worker result back to the UI thread (QRunnable can't hold signals)."""
+
+    result = QtCore.pyqtSignal(str, dict)  # (job_uid, job entry)
+
+
+class _HistoryTask(QtCore.QRunnable):
+    """Fetches one Moonraker job-history entry off the UI thread."""
+
+    def __init__(self, rest, uid: str, signals: _HistorySignals) -> None:
+        super().__init__()
+        self._rest = rest
+        self._uid = uid
+        self._signals = signals
+
+    @QtCore.pyqtSlot()
+    def run(self) -> None:
+        """Emit the job entry, or an empty dict when history has no answer."""
+        job = self._rest.get_history_job(self._uid)
+        self._signals.result.emit(self._uid, job or {})
+
+
+class PrintHistoryLoader(QtCore.QObject):
+    """Serves past job entries via a capped thread pool + bounded LRU cache."""
+
+    ready = QtCore.pyqtSignal(str, dict)  # (job_uid, job entry)
+
+    _CACHE_MAX = 32
+
+    def __init__(self, rest, parent: QtCore.QObject | None = None) -> None:
+        super().__init__(parent)
+        self._rest = rest
+        self._pool = QtCore.QThreadPool(self)
+        self._pool.setMaxThreadCount(1)  # history is a rare, low-priority lookup
+        self._cache: OrderedDict[str, dict] = OrderedDict()
+        self._inflight: set[str] = set()
+        self._signals = _HistorySignals()
+        self._signals.result.connect(self._on_result)
+
+    def request(self, uid: str) -> None:
+        """Fetch a job entry off-thread; emits ready() when available."""
+        cached = self._cache.get(uid)
+        if cached is not None:
+            self._cache.move_to_end(uid)
+            self.ready.emit(uid, cached)
+            return
+        if not uid or self._rest is None or uid in self._inflight:
+            return
+        self._inflight.add(uid)
+        self._pool.start(_HistoryTask(self._rest, uid, self._signals))
+
+    def _on_result(self, uid: str, job: dict) -> None:
+        """Cache the entry (LRU-bounded) and notify listeners."""
+        self._inflight.discard(uid)
+        if not job:
+            return
+        if len(self._cache) >= self._CACHE_MAX:
+            self._cache.popitem(last=False)
+        self._cache[uid] = job
+        self.ready.emit(uid, job)
+
+
 # --- Shared module singletons ------------------------------------------------
 
 _thumb_loader: ThumbnailLoader | None = None
 _meta_loader: GcodeMetadataLoader | None = None
+_history_loader: PrintHistoryLoader | None = None
 
 
 def configure(rest) -> ThumbnailLoader:
@@ -311,6 +374,18 @@ def configure_metadata(rest) -> GcodeMetadataLoader:
 def get_metadata_loader() -> GcodeMetadataLoader | None:
     """Return the shared metadata loader, or None if not configured yet."""
     return _meta_loader
+
+
+def configure_history(rest) -> PrintHistoryLoader:
+    """Create the shared job-history loader from a MoonRest client (call once)."""
+    global _history_loader
+    _history_loader = PrintHistoryLoader(rest)
+    return _history_loader
+
+
+def get_history_loader() -> PrintHistoryLoader | None:
+    """Return the shared job-history loader, or None if not configured yet."""
+    return _history_loader
 
 
 def cached_pixmap(gcode_path: str) -> QtGui.QPixmap | None:
