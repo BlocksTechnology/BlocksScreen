@@ -3,9 +3,10 @@
 import typing
 from pathlib import Path
 
+import helper_methods
+
 from lib.utils.blocks_label import BlocksLabel
 from lib.utils.blocks_Scrollbar import CustomScrollBar
-from lib.utils import gcode_loader
 from lib.utils.icon_button import IconButton
 from PyQt6 import QtCore, QtGui, QtWidgets
 
@@ -92,8 +93,6 @@ class FileMetadataWidget(QtWidgets.QWidget):
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
-        self._data: dict = {}
-        self._history_connected: bool = False
         self._setupUI()
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_AcceptTouchEvents, True)
         self.back_btn.clicked.connect(self.request_back.emit)
@@ -108,14 +107,7 @@ class FileMetadataWidget(QtWidgets.QWidget):
             temp = self._filament_nozzle_temp(data.get("filament_type"))
             if temp is not None:
                 data["first_layer_extr_temp"] = temp
-        self._data = data
-        self._request_print_duration()
-        self._render()
-
-    def _render(self) -> None:
-        """Lay out the cached metadata as titled category cards."""
         self._clear_rows()
-        data = self._data
         placed = 0
         for title, keys in _CATEGORIES:
             pairs: list[tuple[str, str]] = []
@@ -154,30 +146,6 @@ class FileMetadataWidget(QtWidgets.QWidget):
             return None
         return f"{base}{_UNITS.get(key, '')}"
 
-    def _request_print_duration(self) -> None:
-        """Ask Moonraker history for the elapsed print time of this file's last job."""
-        if self._data.get("print_duration") is not None:
-            return
-        job_id = self._data.get("job_id")
-        loader = gcode_loader.get_history_loader()
-        if not job_id or loader is None:
-            return
-        if not self._history_connected:
-            loader.ready.connect(self._on_history_ready)
-            self._history_connected = True
-        loader.request(str(job_id))
-
-    @QtCore.pyqtSlot(str, dict)
-    def _on_history_ready(self, uid: str, job: dict) -> None:
-        """Show the elapsed print time once the history entry arrives."""
-        if str(self._data.get("job_id") or "") != uid:
-            return
-        duration = job.get("print_duration")
-        if not isinstance(duration, (int, float)) or duration <= 0:
-            return
-        self._data["print_duration"] = duration
-        self._render()
-
     def _raw_value(self, key: str, value: object) -> str | None:
         """Render a metadata value as text, or None to skip it."""
         if value is None or value in ("", [], {}, "Unknown"):
@@ -191,7 +159,7 @@ class FileMetadataWidget(QtWidgets.QWidget):
         if isinstance(value, bool):
             return "Yes" if value else "No"
         if key == "filament_weight_total" and isinstance(value, (int, float)):
-            return f"{value / 1000:.2f}kg" if value > 499 else f"{value:.2f}g"
+            return helper_methods.format_weight(value)
         if key == "filament_total" and isinstance(value, (int, float)):
             return f"{value / 1000:.2f}m"
         if key in ("size", "gcode_start_byte", "gcode_end_byte") and isinstance(
@@ -205,7 +173,7 @@ class FileMetadataWidget(QtWidgets.QWidget):
         if key in ("estimated_time", "print_duration") and isinstance(
             value, (int, float)
         ):
-            return self._format_duration(int(value)) if value > 0 else None
+            return helper_methods.format_duration(int(value)) if value > 0 else None
         if isinstance(value, float):
             return f"{value:g}"
         if isinstance(value, (list, tuple)):
@@ -220,19 +188,6 @@ class FileMetadataWidget(QtWidgets.QWidget):
                 return f"{size:.0f}{unit}" if unit == "B" else f"{size:.2f}{unit}"
             size /= 1024
         return f"{num}B"
-
-    def _format_duration(self, seconds: int) -> str:
-        """Human-readable duration from seconds."""
-        if seconds <= 0:
-            return "??"
-        days, rem = divmod(seconds, 86400)
-        hours, rem = divmod(rem, 3600)
-        minutes, _ = divmod(rem, 60)
-        if days > 0:
-            return f"{days}d {hours}h {minutes}m"
-        if hours > 0:
-            return f"{hours}h {minutes}m"
-        return f"{minutes}m"
 
     def _add_category_card(
         self, title: str, pairs: list[tuple[str, str]], position: int

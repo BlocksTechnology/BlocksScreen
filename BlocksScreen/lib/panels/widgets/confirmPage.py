@@ -63,36 +63,17 @@ class ConfirmWidget(QtWidgets.QWidget):
         self._filedata = filedata
         self._thumbnails = filedata.get("thumbnail_paths", [])
         self.thumbnail = self._resolve_thumbnail()
-        _total_filament = filedata.get("filament_weight_total")
-        _estimated_time = filedata.get("estimated_time")
-        if isinstance(_estimated_time, str):
-            seconds = 0
-        else:
-            seconds = _estimated_time
-
-        days, hours, minutes, _ = helper_methods.estimate_print_time(seconds)
-        if seconds <= 0:
-            time_str = "??"
-        elif seconds < 60:
-            time_str = "less than 1 minute"
-        else:
-            if days > 0:
-                time_str = f"{days}d {hours}h {minutes}m"
-            elif hours > 0:
-                time_str = f"{hours}h {minutes}m"
-            else:
-                time_str = f"{minutes}m"
-        if _total_filament == 0:
-            _total_filament = "Unknown"
-        elif _total_filament > 499:
-            _total_filament /= 1000
-            _total_filament = str("%.2f" % _total_filament) + "kg"
-        else:
-            _total_filament = str("%.2f" % _total_filament) + "g"
-        filament_label = f"Total Filament: {_total_filament}"
-        time_label = f"Slicer time: {time_str}"
-        self.cf_info_tf.setText(f"{filament_label}")
-        self.cf_info_tr.setText(f"{time_label}")
+        weight = filedata.get("filament_weight_total")
+        estimated = filedata.get("estimated_time")
+        seconds = int(estimated) if isinstance(estimated, (int, float)) else 0
+        time_str = helper_methods.format_duration(seconds) if seconds > 0 else "??"
+        filament_str = (
+            helper_methods.format_weight(weight)
+            if isinstance(weight, (int, float)) and weight > 0
+            else "Unknown"
+        )
+        self.cf_info_tf.setText(f"Total Filament: {filament_str}")
+        self.cf_info_tr.setText(f"Slicer time: {time_str}")
         self.repaint()
 
     def _resolve_thumbnail(self) -> QtGui.QImage:

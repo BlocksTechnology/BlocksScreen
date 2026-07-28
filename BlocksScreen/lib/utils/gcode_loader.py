@@ -7,6 +7,7 @@ import binascii
 import logging
 import re
 from collections import OrderedDict
+from collections.abc import Callable
 
 from PyQt6 import QtCore, QtGui
 
@@ -70,6 +71,51 @@ def _parse_time(value: str) -> int | None:
     return _to_int(value)
 
 
+def _unquote(value: str) -> str:
+    """Slicer values are often quoted."""
+    return value.strip('"')
+
+
+def _first_token(value: str) -> str:
+    """First entry of a possibly multi-extruder ";"-separated value."""
+    return value.strip('"').split(";")[0].strip()
+
+
+# (output key, converter, slicer keys in priority order).
+_FIELD_SPECS: tuple[
+    tuple[str, Callable[[str], object | None], tuple[str, ...]], ...
+] = (
+    (
+        "estimated_time",
+        _parse_time,
+        ("estimated printing time (normal mode)", "estimated printing time", "time"),
+    ),
+    ("filament_total", _to_float, ("filament used [mm]", "filament used")),
+    (
+        "filament_weight_total",
+        _to_float,
+        ("total filament used [g]", "filament used [g]"),
+    ),
+    ("layer_count", _to_int, ("total layers count", "layer_count")),
+    ("object_height", _to_float, ("max_z_height", "object_height", "maxz")),
+    ("filament_type", _first_token, ("filament_type", "filament used type")),
+    ("filament_name", _unquote, ("filament_settings_id", "filament_name")),
+    ("nozzle_diameter", _to_float, ("nozzle_diameter",)),
+    ("layer_height", _to_float, ("layer_height",)),
+    ("first_layer_height", _to_float, ("first_layer_height",)),
+    (
+        "first_layer_extr_temp",
+        _to_float,
+        ("first_layer_temperature", "first_layer_extruder_temp"),
+    ),
+    (
+        "first_layer_bed_temp",
+        _to_float,
+        ("first_layer_bed_temperature", "first_layer_bed_temp"),
+    ),
+)
+
+
 def parse_gcode_metadata(header: bytes, footer: bytes) -> dict:
     """Moonraker-shaped metadata dict parsed from a gcode header + footer blob."""
     text = (
@@ -78,54 +124,13 @@ def parse_gcode_metadata(header: bytes, footer: bytes) -> dict:
     kv = {k.strip().lower(): v.strip() for k, v in _KV_RE.findall(text)}
     meta: dict = {}
 
-    def first(*keys: str) -> str | None:
-        for key in keys:
-            if key in kv:
-                return kv[key]
-        return None
-
-    if (
-        raw := first(
-            "estimated printing time (normal mode)", "estimated printing time", "time"
-        )
-    ) is not None:
-        if (secs := _parse_time(raw)) is not None:
-            meta["estimated_time"] = secs
-    if (raw := first("filament used [mm]", "filament used")) is not None:
-        if (mm := _to_float(raw)) is not None:
-            meta["filament_total"] = mm
-    if (raw := first("total filament used [g]", "filament used [g]")) is not None:
-        if (grams := _to_float(raw)) is not None:
-            meta["filament_weight_total"] = grams
-    if (raw := first("total layers count", "layer_count")) is not None:
-        if (count := _to_int(raw)) is not None:
-            meta["layer_count"] = count
-    if (raw := first("max_z_height", "object_height", "maxz")) is not None:
-        if (height := _to_float(raw)) is not None:
-            meta["object_height"] = height
-    if (raw := first("filament_type", "filament used type")) is not None:
-        meta["filament_type"] = raw.strip('"').split(";")[0].strip()
-    if (raw := first("filament_settings_id", "filament_name")) is not None:
-        meta["filament_name"] = raw.strip('"')
-    if (raw := first("nozzle_diameter")) is not None:
-        if (dia := _to_float(raw)) is not None:
-            meta["nozzle_diameter"] = dia
-    if (raw := first("layer_height")) is not None:
-        if (lh := _to_float(raw)) is not None:
-            meta["layer_height"] = lh
-    if (raw := first("first_layer_height")) is not None:
-        if (flh := _to_float(raw)) is not None:
-            meta["first_layer_height"] = flh
-    if (
-        raw := first("first_layer_temperature", "first_layer_extruder_temp")
-    ) is not None:
-        if (temp := _to_float(raw)) is not None:
-            meta["first_layer_extr_temp"] = temp
-    if (
-        raw := first("first_layer_bed_temperature", "first_layer_bed_temp")
-    ) is not None:
-        if (temp := _to_float(raw)) is not None:
-            meta["first_layer_bed_temp"] = temp
+    for out_key, convert, keys in _FIELD_SPECS:
+        raw = next((kv[key] for key in keys if key in kv), None)
+        if raw is None:
+            continue
+        value = convert(raw)
+        if value is not None:
+            meta[out_key] = value
 
     if (banner := _BANNER_RE.search(text)) is not None:
         meta["slicer"], meta["slicer_version"] = banner.group(1), banner.group(2)
@@ -280,76 +285,10 @@ class GcodeMetadataLoader(QtCore.QObject):
         self.ready.emit(gcode_path, meta)
 
 
-# --- Job-history loader ------------------------------------------------------
-
-
-class _HistorySignals(QtCore.QObject):
-    """Carries a worker result back to the UI thread (QRunnable can't hold signals)."""
-
-    result = QtCore.pyqtSignal(str, dict)  # (job_uid, job entry)
-
-
-class _HistoryTask(QtCore.QRunnable):
-    """Fetches one Moonraker job-history entry off the UI thread."""
-
-    def __init__(self, rest, uid: str, signals: _HistorySignals) -> None:
-        super().__init__()
-        self._rest = rest
-        self._uid = uid
-        self._signals = signals
-
-    @QtCore.pyqtSlot()
-    def run(self) -> None:
-        """Emit the job entry, or an empty dict when history has no answer."""
-        job = self._rest.get_history_job(self._uid)
-        self._signals.result.emit(self._uid, job or {})
-
-
-class PrintHistoryLoader(QtCore.QObject):
-    """Serves past job entries via a capped thread pool + bounded LRU cache."""
-
-    ready = QtCore.pyqtSignal(str, dict)  # (job_uid, job entry)
-
-    _CACHE_MAX = 32
-
-    def __init__(self, rest, parent: QtCore.QObject | None = None) -> None:
-        super().__init__(parent)
-        self._rest = rest
-        self._pool = QtCore.QThreadPool(self)
-        self._pool.setMaxThreadCount(1)  # history is a rare, low-priority lookup
-        self._cache: OrderedDict[str, dict] = OrderedDict()
-        self._inflight: set[str] = set()
-        self._signals = _HistorySignals()
-        self._signals.result.connect(self._on_result)
-
-    def request(self, uid: str) -> None:
-        """Fetch a job entry off-thread; emits ready() when available."""
-        cached = self._cache.get(uid)
-        if cached is not None:
-            self._cache.move_to_end(uid)
-            self.ready.emit(uid, cached)
-            return
-        if not uid or self._rest is None or uid in self._inflight:
-            return
-        self._inflight.add(uid)
-        self._pool.start(_HistoryTask(self._rest, uid, self._signals))
-
-    def _on_result(self, uid: str, job: dict) -> None:
-        """Cache the entry (LRU-bounded) and notify listeners."""
-        self._inflight.discard(uid)
-        if not job:
-            return
-        if len(self._cache) >= self._CACHE_MAX:
-            self._cache.popitem(last=False)
-        self._cache[uid] = job
-        self.ready.emit(uid, job)
-
-
 # --- Shared module singletons ------------------------------------------------
 
 _thumb_loader: ThumbnailLoader | None = None
 _meta_loader: GcodeMetadataLoader | None = None
-_history_loader: PrintHistoryLoader | None = None
 
 
 def configure(rest) -> ThumbnailLoader:
@@ -374,18 +313,6 @@ def configure_metadata(rest) -> GcodeMetadataLoader:
 def get_metadata_loader() -> GcodeMetadataLoader | None:
     """Return the shared metadata loader, or None if not configured yet."""
     return _meta_loader
-
-
-def configure_history(rest) -> PrintHistoryLoader:
-    """Create the shared job-history loader from a MoonRest client (call once)."""
-    global _history_loader
-    _history_loader = PrintHistoryLoader(rest)
-    return _history_loader
-
-
-def get_history_loader() -> PrintHistoryLoader | None:
-    """Return the shared job-history loader, or None if not configured yet."""
-    return _history_loader
 
 
 def cached_pixmap(gcode_path: str) -> QtGui.QPixmap | None:

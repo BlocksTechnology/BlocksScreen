@@ -563,16 +563,7 @@ class FilesPage(QtWidgets.QWidget):
         """Format print time in human-readable form."""
         if seconds <= 0:
             return "Unknown time"
-        if seconds < 60:
-            return f"{seconds}s"
-
-        days, hours, minutes, _ = helper_methods.estimate_print_time(seconds)
-
-        if days > 0:
-            return f"{days}d {hours}h {minutes}m"
-        if hours > 0:
-            return f"{hours}h {minutes}m"
-        return f"{minutes}m"
+        return helper_methods.format_duration(seconds)
 
     def _get_display_name(self, filename: str) -> str:
         """Get display name from filename (without path and extension)."""

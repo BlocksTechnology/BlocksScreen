@@ -375,9 +375,7 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
         if item.right_icon:
             right_reserved += ellipse_size
 
-        text_avail_width = target_width - left_reserved - right_reserved
-        if text_avail_width < 50:
-            text_avail_width = 50
+        text_avail_width = max(target_width - left_reserved - right_reserved, 50)
 
         single_line_width = fm.horizontalAdvance(item.text)
 

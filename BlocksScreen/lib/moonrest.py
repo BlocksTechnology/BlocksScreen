@@ -91,17 +91,6 @@ class MoonRest:
         )
         return response is not None
 
-    def get_history_job(self, uid: str) -> dict | None:
-        """Fetch a past job entry from Moonraker history; None on any error."""
-        response = self.get_request(f"server/history/job?uid={quote(str(uid))}")
-        if not isinstance(response, dict):
-            return None
-        result = response.get("result")
-        if not isinstance(result, dict):
-            return None
-        job = result.get("job")
-        return job if isinstance(job, dict) else None
-
     def firmware_restart(self):
         """POST firmware_restart to Moonraker."""
         return self.post_request(method="printer/firmware_restart")

@@ -829,9 +829,11 @@ class MoonAPI(QtCore.QObject):
         """Request history reset"""
         raise NotImplementedError
 
-    def history_get_job(self, uid: str):
-        """Request job history"""
-        raise NotImplementedError
+    def history_get_job(self, uid: str, callback=None) -> bool:
+        """Request a past job entry; callback gets {"job": {...}}"""
+        return self._ws.send_request(
+            method="server.history.get_job", params={"uid": uid}, callback=callback
+        )
 
     def history_delete_job(self, uid: str):
         """Request delete job history"""

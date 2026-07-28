@@ -1,3 +1,4 @@
+import contextlib
 import logging
 import typing
 
@@ -12,8 +13,8 @@ from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_label import BlocksLabel
 from lib.utils.blocks_progressbar import CustomProgressBar
 from lib.utils.display_button import DisplayButton
-from lib.utils.icon_button import IconButton
 from lib.utils import gcode_loader
+from lib.utils.icon_button import IconButton
 from lib.utils.flowguard import FlowguardWidget
 from PyQt6 import QtCore, QtGui, QtWidgets
 
@@ -202,13 +203,11 @@ class JobStatusWidget(QtWidgets.QWidget):
         self.cancel_print_dialog.set_message(
             "Are you sure you \n want to cancel \n the current print job?"
         )
-        try:
+        with contextlib.suppress(TypeError):
             self.cancel_print_dialog.accepted.connect(
                 self.print_cancel,
                 QtCore.Qt.ConnectionType.UniqueConnection,  # type: ignore
             )
-        except TypeError:
-            pass
         self.cancel_print_dialog.open()
 
     @QtCore.pyqtSlot(name="in-error-case")

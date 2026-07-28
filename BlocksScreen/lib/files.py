@@ -66,6 +66,7 @@ class FileMetadata:
     gcode_end_byte: int = 0
     print_start_time: float | None = None
     job_id: str | None = None
+    print_duration: float | None = None
 
     def to_dict(self) -> dict:
         """All fields as a plain dict for signal emission (deep-copied containers)."""
@@ -107,6 +108,7 @@ class FileMetadata:
             gcode_end_byte=safe_get("gcode_end_byte", 0),
             print_start_time=data.get("print_start_time"),
             job_id=data.get("job_id"),
+            print_duration=data.get("print_duration"),
         )
 
 
@@ -135,6 +137,8 @@ class Files(QtCore.QObject):
     dir_added = QtCore.pyqtSignal(dict, name="dir_added")
     dir_removed = QtCore.pyqtSignal(str, name="dir_removed")
     full_refresh_needed = QtCore.pyqtSignal(name="full_refresh_needed")
+    # Emitted from the websocket thread to hop the history reply onto this thread.
+    _history_job = QtCore.pyqtSignal(str, dict, name="history_job")
 
     # Signal for preloaded USB files
     usb_files_loaded = QtCore.pyqtSignal(
@@ -176,6 +180,7 @@ class Files(QtCore.QObject):
         self.request_dir_info[str].connect(self.ws.api.get_dir_information)
         self.request_file_metadata.connect(self.ws.api.get_gcode_metadata)
         self.request_scan_metadata.connect(self.ws.api.scan_gcode_metadata)
+        self._history_job.connect(self._on_history_job)
         self.request_dir_info[str].connect(self._track_requested_dir)
         self.request_dir_info[str, bool].connect(
             lambda directory, _extended: self._track_requested_dir(directory)
@@ -409,7 +414,27 @@ class Files(QtCore.QObject):
         self._files_metadata[filename] = metadata
         self._metadata_retry_count.pop(filename.removeprefix("/"), None)
         self.fileinfo.emit(metadata.to_dict())
+        self._request_print_duration(filename, metadata)
         logger.debug("Metadata loaded: %s", filename)
+
+    def _request_print_duration(self, filename: str, metadata: FileMetadata) -> None:
+        """Ask history for how long this file's last job actually took."""
+        if not metadata.job_id or metadata.print_duration is not None:
+            return
+        self.ws.api.history_get_job(
+            str(metadata.job_id),
+            lambda result, name=filename: self._history_job.emit(name, result or {}),
+        )
+
+    @QtCore.pyqtSlot(str, dict, name="on_history_job")
+    def _on_history_job(self, filename: str, result: dict) -> None:
+        """Merge the elapsed print time into the cached metadata and re-emit it."""
+        metadata = self._files_metadata.get(filename)
+        duration = (result.get("job") or {}).get("print_duration")
+        if metadata is None or not isinstance(duration, (int, float)) or duration <= 0:
+            return
+        metadata.print_duration = float(duration)
+        self.fileinfo.emit(metadata.to_dict())
 
     @staticmethod
     def _has_inline_metadata(file_data: dict) -> bool:

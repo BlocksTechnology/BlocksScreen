@@ -294,6 +294,23 @@ def estimate_print_time(seconds: int) -> list[int]:
     return [days, hours, mins, secs]
 
 
+def format_duration(seconds: int) -> str:
+    """Human "1d 2h 3m" duration; sub-minute values render as seconds."""
+    if seconds < 60:
+        return f"{seconds}s"
+    days, hours, mins, _ = estimate_print_time(seconds)
+    if days > 0:
+        return f"{days}d {hours}h {mins}m"
+    if hours > 0:
+        return f"{hours}h {mins}m"
+    return f"{mins}m"
+
+
+def format_weight(grams: float) -> str:
+    """Filament mass in grams, switching to kg past 499g."""
+    return f"{grams / 1000:.2f}kg" if grams > 499 else f"{grams:.2f}g"
+
+
 def normalize(
     value: float,
     r_min: float = 0.0,

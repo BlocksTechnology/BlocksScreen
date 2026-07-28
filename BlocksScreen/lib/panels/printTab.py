@@ -75,7 +75,6 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.ws: MoonWebSocket = ws
         # Shared embedded-thumbnail fallback for read-only USB drives.
         gcode_loader.configure(ws._moonRest)
-        gcode_loader.configure_history(ws._moonRest)
         self.printer: Printer = printer
         self.config: BlocksScreenConfig = get_configparser()
         # TODO: Get the gcode path from the configfile by asking the websocket first
