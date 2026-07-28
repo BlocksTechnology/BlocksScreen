@@ -56,7 +56,7 @@ class FileMetadata:
     filament_weight_total: float = -1.0
     layer_height: float = -1.0
     first_layer_height: float = -1.0
-    first_layer_extruder_temp: float = -1.0
+    first_layer_extr_temp: float = -1.0
     first_layer_bed_temp: float = -1.0
     chamber_temp: float = -1.0
     filament_name: str = "Unknown"
@@ -98,7 +98,7 @@ class FileMetadata:
             filament_weight_total=safe_get("filament_weight_total", -1.0),
             layer_height=safe_get("layer_height", -1.0),
             first_layer_height=safe_get("first_layer_height", -1.0),
-            first_layer_extruder_temp=safe_get("first_layer_extruder_temp", -1.0),
+            first_layer_extr_temp=safe_get("first_layer_extr_temp", -1.0),
             first_layer_bed_temp=safe_get("first_layer_bed_temp", -1.0),
             chamber_temp=safe_get("chamber_temp", -1.0),
             filament_name=safe_get("filament_name", "Unknown") or "Unknown",
@@ -373,7 +373,16 @@ class Files(QtCore.QObject):
         if "server.files.metadata" in method:
             self._process_metadata(data)
         elif "server.files.get_directory" in method:
-            self._process_directory_info(data)
+            requested_dir = self._requested_dir_from_params(params)
+            self._process_directory_info(data, requested_dir)
+
+    def _requested_dir_from_params(self, params: typing.Any) -> str:
+        """Gcodes-root-relative dir from the request entry [method, params, callback]."""
+        try:
+            path = params[1].get("path", "")
+        except (IndexError, TypeError, AttributeError):
+            return ""
+        return path.removeprefix("gcodes/").strip("/")
 
     def _track_requested_dir(self, directory: str) -> None:
         """Remember the last requested gcode dir for full-path resolution."""
@@ -503,9 +512,9 @@ class Files(QtCore.QObject):
         self.usb_files_loaded.emit(usb_path, files)
         logger.info(f"Preloaded {len(files)} files from USB: {usb_path}")
 
-    def _process_directory_info(self, data: dict) -> None:
+    def _process_directory_info(self, data: dict, requested_dir: str = "") -> None:
         """Publish a directory listing and dispatch its gcode metadata."""
-        matched_usb = self._match_usb_preload()
+        matched_usb = self._match_usb_preload(requested_dir)
         if matched_usb:
             self._pending_usb_preloads.discard(matched_usb)
             self._process_usb_directory_info(matched_usb, data)
@@ -521,12 +530,13 @@ class Files(QtCore.QObject):
         )
         self._dispatch_metadata()
 
-    def _match_usb_preload(self) -> str | None:
-        """Pop the next queued USB preload if it matches a pending request."""
-        if not self._usb_preload_queue:
+    def _match_usb_preload(self, requested_dir: str) -> str | None:
+        """Return the pending USB preload whose path matches this response, else None."""
+        if not requested_dir or requested_dir not in self._pending_usb_preloads:
             return None
-        candidate = self._usb_preload_queue.popleft()
-        return candidate if candidate in self._pending_usb_preloads else None
+        if requested_dir in self._usb_preload_queue:
+            self._usb_preload_queue.remove(requested_dir)
+        return requested_dir
 
     def _populate_directory(self, data: dict) -> None:
         """Replace backing dir/file maps from a directory response."""

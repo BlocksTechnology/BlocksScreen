@@ -56,6 +56,7 @@ class FilesPage(QtWidgets.QWidget):
         self._directories: list[dict] = []
         self._curr_dir: str = ""
         self._pending_action: bool = False
+        self._rebuild_pending: bool = False
         self._sort_key: str = self.SORTING_TYPES[0]
         self._sort_descending: bool = True
         self._icons: dict[str, QtGui.QPixmap] = {}
@@ -111,7 +112,7 @@ class FilesPage(QtWidgets.QWidget):
             return
         self._files_data[filename] = filedata
         if self.isVisible():
-            self._build_file_list()
+            self._schedule_rebuild()
 
     @QtCore.pyqtSlot(str, list, name="on_usb_files_loaded")
     def on_usb_files_loaded(self, usb_path: str, files: list) -> None:
@@ -276,6 +277,19 @@ class FilesPage(QtWidgets.QWidget):
     def _item_key(item: ListItem) -> str:
         """Stable identity for reconcile: dirs/back vs files, namespaced by text."""
         return f"{'d' if item.left_icon else 'f'}:{item.text}"
+
+    def _schedule_rebuild(self) -> None:
+        """Coalesce bursts of metadata arrivals into one deferred rebuild."""
+        if self._rebuild_pending:
+            return
+        self._rebuild_pending = True
+        QtCore.QTimer.singleShot(0, self._flush_rebuild)
+
+    def _flush_rebuild(self) -> None:
+        """Run the coalesced rebuild if still visible."""
+        self._rebuild_pending = False
+        if self.isVisible():
+            self._build_file_list()
 
     def _build_file_list(self) -> None:
         """Rebuild the model from backing data via keyed reconcile."""

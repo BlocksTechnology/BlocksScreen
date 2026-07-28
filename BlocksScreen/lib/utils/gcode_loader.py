@@ -120,7 +120,7 @@ def parse_gcode_metadata(header: bytes, footer: bytes) -> dict:
         raw := first("first_layer_temperature", "first_layer_extruder_temp")
     ) is not None:
         if (temp := _to_float(raw)) is not None:
-            meta["first_layer_extruder_temp"] = temp
+            meta["first_layer_extr_temp"] = temp
     if (
         raw := first("first_layer_bed_temperature", "first_layer_bed_temp")
     ) is not None:

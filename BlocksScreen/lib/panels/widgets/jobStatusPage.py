@@ -78,6 +78,7 @@ class JobStatusWidget(QtWidgets.QWidget):
     def __init__(self, parent) -> None:
         super().__init__(parent)
         self.thumbnail_graphics = []
+        self._loader_connected = False
         self.layer_fallback = False
         self.total_layer_reported = False
         self._displayed_layer = 0
@@ -162,9 +163,27 @@ class JobStatusWidget(QtWidgets.QWidget):
 
     def _embedded_pixmap(self) -> QtGui.QPixmap | None:
         """Cached embedded thumbnail (read-only USB fallback) as a pixmap, or None."""
+        self._ensure_loader_connected()
         return gcode_loader.cached_pixmap(
             (self.file_metadata or {}).get("filename", "")
         )
+
+    def _ensure_loader_connected(self) -> None:
+        """Connect once so a late embedded thumbnail repaints instead of staying blank."""
+        if self._loader_connected:
+            return
+        loader = gcode_loader.get_loader()
+        if loader is None:
+            return
+        loader.ready.connect(self._on_embedded_ready)
+        self._loader_connected = True
+
+    def _on_embedded_ready(self, gcode_path: str, image: object) -> None:
+        """Repaint when the embedded thumbnail for the current file finishes loading."""
+        filename = (self.file_metadata or {}).get("filename", "").removeprefix("/")
+        if not filename or gcode_path != filename or self.thumbnail_graphics:
+            return
+        self._load_thumbnails(*(self.file_metadata or {}).get("thumbnail_paths", ()))
 
     @QtCore.pyqtSlot(name="handle-cancel")
     def handleCancel(self) -> None:

@@ -232,8 +232,12 @@ class EntryListModel(QtCore.QAbstractListModel):
         if role == EntryListModel.ExpandRole:
             item = self.entries[index.row()]
             item.is_expanded = value
-            self.layoutChanged.emit()
-            self.dataChanged.emit(index, index, [EntryListModel.ExpandRole])
+            self.dataChanged.emit(
+                index,
+                index,
+                [EntryListModel.ExpandRole, QtCore.Qt.ItemDataRole.SizeHintRole],
+            )
+            return True
         if role == QtCore.Qt.ItemDataRole.UserRole:
             self.dataChanged.emit(index, index, [QtCore.Qt.ItemDataRole.UserRole])
             return True
@@ -573,32 +577,30 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
                 if abs(delta.x()) + abs(delta.y()) > threshold:
                     return False
 
+            # Expand-arrow hit-test before callback so an arrow tap does not also fire it.
+            if (
+                self.prev_index is not None
+                and item.allow_expand
+                and item.needs_expansion
+            ):
+                ellipse_size = item.height * 0.8
+                ellipse_margin = (item.height - ellipse_size) / 2
+                ellipse_rect = QtCore.QRectF(
+                    option.rect.right() - ellipse_margin - ellipse_size,
+                    option.rect.top() + ellipse_margin,
+                    ellipse_size,
+                    ellipse_size,
+                )
+                if ellipse_rect.contains(event.position()):
+                    new_state = not item.is_expanded
+                    model.setData(index, new_state, EntryListModel.ExpandRole)
+                    return True
+
             if item.callback and callable(item.callback):
                 item.callback()
 
             if self.prev_index is None:
                 return False
-
-            ellipse_size = item.height * 0.8
-            ellipse_margin = (item.height - ellipse_size) / 2
-            ellipse_rect = QtCore.QRectF(
-                option.rect.right() - ellipse_margin - ellipse_size,
-                option.rect.top() + ellipse_margin,
-                ellipse_size,
-                ellipse_size,
-            )
-            pos = event.position()
-
-            # --- Logic Check ---
-            # Only allow toggle if allow_expand AND text actually needs expansion
-            if (
-                ellipse_rect.contains(pos)
-                and item.allow_expand
-                and item.needs_expansion
-            ):
-                new_state = not item.is_expanded
-                model.setData(index, new_state, EntryListModel.ExpandRole)
-                return True
 
             if self.prev_index != index.row():
                 prev_index: QtCore.QModelIndex = model.index(self.prev_index)

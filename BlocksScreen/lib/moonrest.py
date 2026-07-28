@@ -146,10 +146,13 @@ class MoonRest:
                 url, headers=headers, stream=True, timeout=self.timeout
             ) as resp:
                 resp.raise_for_status()
+                # 200 (Range ignored) streams whole file; keep bounded trailing window to cap RAM.
                 data = bytearray()
                 for chunk in resp.iter_content(chunk_size=65536):
                     data.extend(chunk)
-                return bytes(data)
+                    if len(data) > 2 * max_bytes:
+                        del data[:-max_bytes]
+                return bytes(data[-max_bytes:])
         except Exception as exc:
             logger.info("gcode tail fetch failed for %s: %s", rel_path, exc)
             return None

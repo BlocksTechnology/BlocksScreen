@@ -1,7 +1,7 @@
 """File metadata detail page: lists every available gcode metadata field."""
 
-import os
 import typing
+from pathlib import Path
 
 from lib.utils.blocks_label import BlocksLabel
 from lib.utils.blocks_Scrollbar import CustomScrollBar
@@ -24,8 +24,8 @@ _FIELD_LABELS: dict[str, str] = {
     "nozzle_diameter": "Nozzle Size",
     "layer_height": "Layer Height",
     "first_layer_height": "First Layer Height",
-    "first_layer_extr_temp": "First Layer Nozzle Temp",
-    "first_layer_bed_temp": "First Layer Bed Temp",
+    "first_layer_extr_temp": "Nozzle Temp",
+    "first_layer_bed_temp": "Bed Temp",
     "chamber_temp": "Chamber Temp",
     "filament_name": "Filament Name",
     "filament_type": "Filament Type",
@@ -34,17 +34,22 @@ _FIELD_LABELS: dict[str, str] = {
     "filament_change_count": "Filament Changes",
     "mmu_print": "MMU Print",
 }
-# First-layer temps re-labeled to plain extruder/bed names.
-_FIELD_LABELS["first_layer_extr_temp"] = "Nozzle Temp"
-_FIELD_LABELS["first_layer_bed_temp"] = "Bed Temp"
 # Titled sections and the ordered keys shown under each.
 _CATEGORIES: tuple[tuple[str, tuple[str, ...]], ...] = (
-    ("General", ("estimated_time", "slicer", "slicer_version", "print_start_time", "mmu_print")),
+    (
+        "General",
+        ("estimated_time", "slicer", "slicer_version", "print_start_time", "mmu_print"),
+    ),
     ("Geometry", ("nozzle_diameter", "layer_height", "object_height")),
     ("Temperature", ("first_layer_extr_temp", "first_layer_bed_temp", "chamber_temp")),
     (
         "Filament",
-        ("filament_type", "filament_total", "filament_weight_total", "filament_change_count"),
+        (
+            "filament_type",
+            "filament_total",
+            "filament_weight_total",
+            "filament_change_count",
+        ),
     ),
 )
 # Units appended to numeric values.
@@ -69,24 +74,6 @@ _FILAMENT_NOZZLE_TEMP: dict[str, int] = {
     "HIPS": 240,
     "PP": 230,
 }
-# Internal fields not meaningful to the user.
-_HIDDEN_FIELDS: frozenset[str] = frozenset(
-    {
-        "thumbnails",
-        "thumbnail_paths",
-        "uuid",
-        "size",
-        "gcode_start_byte",
-        "gcode_end_byte",
-        "filament_name",
-        "filename",
-        "path",
-        "layer_count",
-        "modified",
-        "first_layer_height",
-        "job_id",
-    }
-)
 
 
 class FileMetadataWidget(QtWidgets.QWidget):
@@ -105,10 +92,11 @@ class FileMetadataWidget(QtWidgets.QWidget):
     @QtCore.pyqtSlot(str, dict, name="on_show_widget")
     def on_show_widget(self, text: str, filedata: dict | None = None) -> None:
         """Populate the page with metadata grouped into titled category cards."""
-        self.title_label.setText(os.path.basename(text))
+        self.title_label.setText(Path(text).name)
         self._clear_rows()
         data = dict(filedata or {})
-        if not data.get("first_layer_extr_temp"):
+        cur = data.get("first_layer_extr_temp")
+        if not isinstance(cur, (int, float)) or cur <= 0:
             temp = self._filament_nozzle_temp(data.get("filament_type"))
             if temp is not None:
                 data["first_layer_extr_temp"] = temp
@@ -116,8 +104,6 @@ class FileMetadataWidget(QtWidgets.QWidget):
         for title, keys in _CATEGORIES:
             pairs: list[tuple[str, str]] = []
             for key in keys:
-                if key in _HIDDEN_FIELDS:
-                    continue
                 formatted = self._format_value(key, data.get(key))
                 if formatted is None:
                     continue
@@ -154,7 +140,9 @@ class FileMetadataWidget(QtWidgets.QWidget):
 
     def _raw_value(self, key: str, value: object) -> str | None:
         """Render a metadata value as text, or None to skip it."""
-        if value is None or value == "" or value == []:
+        if value is None or value in ("", [], {}, "Unknown"):
+            return None
+        if isinstance(value, (int, float)) and not isinstance(value, bool) and value == -1:
             return None
         if isinstance(value, bool):
             return "Yes" if value else "No"
@@ -171,7 +159,7 @@ class FileMetadataWidget(QtWidgets.QWidget):
                 "yyyy-MM-dd hh:mm"
             )
         if key == "estimated_time" and isinstance(value, (int, float)):
-            return self._format_duration(int(value))
+            return self._format_duration(int(value)) if value > 0 else None
         if isinstance(value, float):
             return f"{value:g}"
         if isinstance(value, (list, tuple)):
@@ -241,8 +229,7 @@ class FileMetadataWidget(QtWidgets.QWidget):
         """Place a single key/value cell into a card's two-column grid."""
         value_style = "background: transparent; color: white; font-size: 16px;"
         title_style = (
-            "background: transparent; color: white; "
-            "font-size: 17px; font-weight: bold;"
+            "background: transparent; color: white; font-size: 17px; font-weight: bold;"
         )
         cell = QtWidgets.QHBoxLayout()
         cell.setContentsMargins(0, 0, 0, 0)
