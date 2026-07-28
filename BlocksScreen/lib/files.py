@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import typing
 from collections import deque
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from enum import StrEnum, auto
 from pathlib import Path
 
@@ -139,6 +139,7 @@ class Files(QtCore.QObject):
     full_refresh_needed = QtCore.pyqtSignal(name="full_refresh_needed")
     # Emitted from the websocket thread to hop the history reply onto this thread.
     _history_job = QtCore.pyqtSignal(str, dict, name="history_job")
+    _thumbnails_ready = QtCore.pyqtSignal(str, object, name="thumbnails_ready")
 
     # Signal for preloaded USB files
     usb_files_loaded = QtCore.pyqtSignal(
@@ -169,6 +170,8 @@ class Files(QtCore.QObject):
         # Client-side USB metadata: size/modified staged per path, plus lazy loader.
         self._usb_meta_base: dict[str, dict] = {}
         self._meta_loader: gcode_loader.GcodeMetadataLoader | None = None
+        # Files already probed via server.files.thumbnails (ask once).
+        self._thumbs_probed: set[str] = set()
 
         self._connect_signals()
         self._install_event_filter()
@@ -181,6 +184,7 @@ class Files(QtCore.QObject):
         self.request_file_metadata.connect(self.ws.api.get_gcode_metadata)
         self.request_scan_metadata.connect(self.ws.api.scan_gcode_metadata)
         self._history_job.connect(self._on_history_job)
+        self._thumbnails_ready.connect(self._on_thumbnails)
         self.request_dir_info[str].connect(self._track_requested_dir)
         self.request_dir_info[str, bool].connect(
             lambda directory, _extended: self._track_requested_dir(directory)
@@ -219,19 +223,16 @@ class Files(QtCore.QObject):
         self.request_dir_info[str, bool].emit("", True)
 
     def handle_filelist_changed(self, data: typing.Union[dict, list]) -> None:
-        """Handle notify_filelist_changed from Moonraker."""
+        """Handle notify_filelist_changed from Moonraker; params may batch entries."""
         if isinstance(data, dict) and "params" in data:
             data = data.get("params", [])
+        entries = data if isinstance(data, list) else [data]
+        for entry in entries:
+            if isinstance(entry, dict):
+                self._apply_filelist_change(entry)
 
-        if isinstance(data, list):
-            if len(data) > 0:
-                data = data[0]
-            else:
-                return
-
-        if not isinstance(data, dict):
-            return
-
+    def _apply_filelist_change(self, data: dict) -> None:
+        """Route one filelist notification entry to its action handler."""
         action_str = data.get("action", "")
         action = FileAction.from_string(action_str)
         item = data.get("item", {})
@@ -415,6 +416,7 @@ class Files(QtCore.QObject):
         self._metadata_retry_count.pop(filename.removeprefix("/"), None)
         self.fileinfo.emit(metadata.to_dict())
         self._request_print_duration(filename, metadata)
+        self._request_thumbnails(filename, metadata)
         logger.debug("Metadata loaded: %s", filename)
 
     def _request_print_duration(self, filename: str, metadata: FileMetadata) -> None:
@@ -430,11 +432,44 @@ class Files(QtCore.QObject):
     def _on_history_job(self, filename: str, result: dict) -> None:
         """Merge the elapsed print time into the cached metadata and re-emit it."""
         metadata = self._files_metadata.get(filename)
-        duration = (result.get("job") or {}).get("print_duration")
+        job = result.get("job") or {}
+        duration = job.get("print_duration")
+        # Cancelled/errored/in-progress jobs stopped early, so their elapsed time lies.
+        if job.get("status") != "completed":
+            return
         if metadata is None or not isinstance(duration, (int, float)) or duration <= 0:
             return
-        metadata.print_duration = float(duration)
-        self.fileinfo.emit(metadata.to_dict())
+        updated = replace(metadata, print_duration=float(duration))
+        self._files_metadata[filename] = updated
+        self.fileinfo.emit(updated.to_dict())
+
+    def _request_thumbnails(self, filename: str, metadata: FileMetadata) -> None:
+        """Ask Moonraker for extracted thumbnail paths, cheaper than a header fetch."""
+        if metadata.thumbnail_paths or self._is_usb_gcode(filename):
+            return
+        if filename in self._thumbs_probed:
+            return
+        self._thumbs_probed.add(filename)
+        self.ws.api.get_gcode_thumbnail(
+            filename.removeprefix("/"),
+            lambda result, name=filename: self._thumbnails_ready.emit(name, result),
+        )
+
+    @QtCore.pyqtSlot(str, object, name="on_thumbnails")
+    def _on_thumbnails(self, filename: str, result: object) -> None:
+        """Store thumbnail paths (gcode-root relative) and re-emit the metadata."""
+        metadata = self._files_metadata.get(filename)
+        entries = result if isinstance(result, list) else []
+        paths = [
+            str(self.gcode_path / t["thumbnail_path"])
+            for t in entries
+            if isinstance(t, dict) and isinstance(t.get("thumbnail_path"), str)
+        ]
+        if metadata is None or not paths:
+            return
+        updated = replace(metadata, thumbnail_paths=paths)
+        self._files_metadata[filename] = updated
+        self.fileinfo.emit(updated.to_dict())
 
     @staticmethod
     def _has_inline_metadata(file_data: dict) -> bool:

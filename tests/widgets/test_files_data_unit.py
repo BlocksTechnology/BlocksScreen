@@ -101,3 +101,81 @@ class TestProcessDirectoryInfo:
         files.request_file_metadata.connect(seen.append)
         files._process_directory_info(resp)
         assert seen == ["sub/x.gcode"]
+
+
+class TestHistoryPrintDuration:
+    def test_history_reply_updates_frozen_metadata(self, files, qtbot):
+        """A history reply re-emits fileinfo with print_duration (FileMetadata is frozen)."""
+        files._process_metadata(
+            {"filename": "a.gcode", "modified": 2, "job_id": "000023"}
+        )
+        with qtbot.waitSignal(files.fileinfo, timeout=500) as blocker:
+            files._on_history_job(
+                "a.gcode", {"job": {"print_duration": 61.2, "status": "completed"}}
+            )
+        assert blocker.args[0]["print_duration"] == pytest.approx(61.2)
+        assert files._files_metadata["a.gcode"].print_duration == pytest.approx(61.2)
+
+    def test_history_reply_ignored_when_absent(self, files, qtbot):
+        """A job with no usable duration leaves the cache untouched."""
+        files._process_metadata({"filename": "a.gcode", "modified": 2})
+        with qtbot.assertNotEmitted(files.fileinfo):
+            files._on_history_job(
+                "a.gcode", {"job": {"print_duration": 0, "status": "completed"}}
+            )
+        assert files._files_metadata["a.gcode"].print_duration is None
+
+    def test_cancelled_job_duration_is_ignored(self, files, qtbot):
+        """A cancelled run stopped early, so its elapsed time does not describe the file."""
+        files._process_metadata({"filename": "a.gcode", "modified": 2})
+        with qtbot.assertNotEmitted(files.fileinfo):
+            files._on_history_job(
+                "a.gcode", {"job": {"print_duration": 61.2, "status": "cancelled"}}
+            )
+        assert files._files_metadata["a.gcode"].print_duration is None
+
+
+class TestFilelistNotifications:
+    def test_every_batched_entry_is_applied(self, files):
+        """Moonraker batches params, so all entries must reach a handler, not just the first."""
+        files.handle_filelist_changed(
+            {
+                "params": [
+                    {"action": "create_file", "item": {"path": "a.gcode"}},
+                    {"action": "create_file", "item": {"path": "b.gcode"}},
+                ]
+            }
+        )
+        assert {"a.gcode", "b.gcode"} <= set(files._files)
+
+    def test_bare_dict_notification_still_works(self, files):
+        """A non-batched notification stays supported."""
+        files.handle_filelist_changed(
+            {"action": "create_file", "item": {"path": "a.gcode"}}
+        )
+        assert "a.gcode" in files._files
+
+
+class TestThumbnailProbe:
+    def test_probes_moonraker_when_metadata_has_no_thumbnails(self, files, qtbot):
+        """A scanned gcode without thumbnails is probed once and re-emitted with paths."""
+        files._process_metadata({"filename": "a.gcode", "modified": 2})
+        assert files.ws.api.get_gcode_thumbnail.call_count == 1
+        with qtbot.waitSignal(files.fileinfo, timeout=500) as blocker:
+            files._on_thumbnails("a.gcode", [{"thumbnail_path": "sub/.thumbs/a.png"}])
+        assert blocker.args[0]["thumbnail_paths"] == [
+            str(files.gcode_path / "sub/.thumbs/a.png")
+        ]
+        files._process_metadata({"filename": "a.gcode", "modified": 3})
+        assert files.ws.api.get_gcode_thumbnail.call_count == 1
+
+    def test_no_probe_when_thumbnails_already_known(self, files):
+        """Inline thumbnails make the extra round trip pointless."""
+        files._process_metadata(
+            {
+                "filename": "a.gcode",
+                "modified": 2,
+                "thumbnails": [{"relative_path": ".thumbs/a.png"}],
+            }
+        )
+        files.ws.api.get_gcode_thumbnail.assert_not_called()

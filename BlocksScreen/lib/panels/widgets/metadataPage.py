@@ -12,24 +12,17 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 
 # Human-readable labels for known Moonraker gcode-metadata keys.
 _FIELD_LABELS: dict[str, str] = {
-    "size": "File Size",
-    "modified": "Modified",
     "print_start_time": "Last Print",
     "print_duration": "Print Duration",
-    "job_id": "Job ID",
     "slicer": "Slicer",
     "slicer_version": "Slicer Version",
-    "gcode_start_byte": "G-code Start Byte",
-    "gcode_end_byte": "G-code End Byte",
     "layer_count": "Layer Count",
     "object_height": "Object Height",
     "estimated_time": "Estimated Time",
     "nozzle_diameter": "Nozzle Size",
     "layer_height": "Layer Height",
-    "first_layer_height": "First Layer Height",
     "first_layer_extr_temp": "Nozzle Temperature",
     "first_layer_bed_temp": "Bed Temperature",
-    "filament_name": "Filament Name",
     "filament_type": "Filament Type",
     "filament_total": "Filament Length",
     "filament_weight_total": "Filament Weight",
@@ -49,7 +42,7 @@ _CATEGORIES: tuple[tuple[str, tuple[str, ...]], ...] = (
             "mmu_print",
         ),
     ),
-    ("Geometry", ("nozzle_diameter", "layer_height", "object_height")),
+    ("Geometry", ("nozzle_diameter", "layer_height", "object_height", "layer_count")),
     ("Temperature", ("first_layer_extr_temp", "first_layer_bed_temp")),
     (
         "Filament",

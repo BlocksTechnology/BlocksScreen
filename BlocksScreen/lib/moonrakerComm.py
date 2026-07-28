@@ -554,12 +554,14 @@ class MoonAPI(QtCore.QObject):
         )
 
     @QtCore.pyqtSlot(name="api_get_gcode_thumbnail")
-    def get_gcode_thumbnail(self, filename_dir: str):
-        """Request gcode thumbnail"""
-        if isinstance(filename_dir, str) is False or filename_dir is None:
+    def get_gcode_thumbnail(self, filename_dir: str, callback=None) -> bool:
+        """Request the thumbnail paths Moonraker already extracted for a gcode."""
+        if not isinstance(filename_dir, str):
             return False
         return self._ws.send_request(
-            method="server.files.thumbnails", params={"filename": filename_dir}
+            method="server.files.thumbnails",
+            params={"filename": filename_dir},
+            callback=callback,
         )
 
     @QtCore.pyqtSlot(str, str, name="api-delete-file")

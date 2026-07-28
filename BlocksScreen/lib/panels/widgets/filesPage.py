@@ -736,7 +736,7 @@ class FilesPage(QtWidgets.QWidget):
         list_widget.setProperty("selectionMode", "NoSelection")
         list_widget.setStyleSheet("background: transparent;")
         list_widget.setDefaultDropAction(QtCore.Qt.DropAction.IgnoreAction)
-        list_widget.setUniformItemSizes(True)
+        # No setUniformItemSizes: expanded rows return a taller sizeHint.
         list_widget.setObjectName("list_widget")
         list_widget.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
         list_widget.setSelectionBehavior(

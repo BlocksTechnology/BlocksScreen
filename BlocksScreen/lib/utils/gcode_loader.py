@@ -81,39 +81,32 @@ def _first_token(value: str) -> str:
     return value.strip('"').split(";")[0].strip()
 
 
-# (output key, converter, slicer keys in priority order).
-_FIELD_SPECS: tuple[
-    tuple[str, Callable[[str], object | None], tuple[str, ...]], ...
-] = (
-    (
-        "estimated_time",
-        _parse_time,
-        ("estimated printing time (normal mode)", "estimated printing time", "time"),
-    ),
-    ("filament_total", _to_float, ("filament used [mm]", "filament used")),
-    (
-        "filament_weight_total",
-        _to_float,
-        ("total filament used [g]", "filament used [g]"),
-    ),
-    ("layer_count", _to_int, ("total layers count", "layer_count")),
-    ("object_height", _to_float, ("max_z_height", "object_height", "maxz")),
-    ("filament_type", _first_token, ("filament_type", "filament used type")),
-    ("filament_name", _unquote, ("filament_settings_id", "filament_name")),
-    ("nozzle_diameter", _to_float, ("nozzle_diameter",)),
-    ("layer_height", _to_float, ("layer_height",)),
-    ("first_layer_height", _to_float, ("first_layer_height",)),
-    (
-        "first_layer_extr_temp",
-        _to_float,
-        ("first_layer_temperature", "first_layer_extruder_temp"),
-    ),
-    (
-        "first_layer_bed_temp",
-        _to_float,
-        ("first_layer_bed_temperature", "first_layer_bed_temp"),
-    ),
-)
+# Slicer comment key -> (output field, converter); first alias present wins.
+_FIELD_ALIASES: dict[str, tuple[str, Callable[[str], object | None]]] = {
+    "estimated printing time (normal mode)": ("estimated_time", _parse_time),
+    "estimated printing time": ("estimated_time", _parse_time),
+    "time": ("estimated_time", _parse_time),
+    "filament used [mm]": ("filament_total", _to_float),
+    "filament used": ("filament_total", _to_float),
+    "total filament used [g]": ("filament_weight_total", _to_float),
+    "filament used [g]": ("filament_weight_total", _to_float),
+    "total layers count": ("layer_count", _to_int),
+    "layer_count": ("layer_count", _to_int),
+    "max_z_height": ("object_height", _to_float),
+    "object_height": ("object_height", _to_float),
+    "maxz": ("object_height", _to_float),
+    "filament_type": ("filament_type", _first_token),
+    "filament used type": ("filament_type", _first_token),
+    "filament_settings_id": ("filament_name", _unquote),
+    "filament_name": ("filament_name", _unquote),
+    "nozzle_diameter": ("nozzle_diameter", _to_float),
+    "layer_height": ("layer_height", _to_float),
+    "first_layer_height": ("first_layer_height", _to_float),
+    "first_layer_temperature": ("first_layer_extr_temp", _to_float),
+    "first_layer_extruder_temp": ("first_layer_extr_temp", _to_float),
+    "first_layer_bed_temperature": ("first_layer_bed_temp", _to_float),
+    "first_layer_bed_temp": ("first_layer_bed_temp", _to_float),
+}
 
 
 def parse_gcode_metadata(header: bytes, footer: bytes) -> dict:
@@ -124,12 +117,10 @@ def parse_gcode_metadata(header: bytes, footer: bytes) -> dict:
     kv = {k.strip().lower(): v.strip() for k, v in _KV_RE.findall(text)}
     meta: dict = {}
 
-    for out_key, convert, keys in _FIELD_SPECS:
-        raw = next((kv[key] for key in keys if key in kv), None)
-        if raw is None:
+    for alias, (out_key, convert) in _FIELD_ALIASES.items():
+        if out_key in meta or alias not in kv:
             continue
-        value = convert(raw)
-        if value is not None:
+        if (value := convert(kv[alias])) is not None:
             meta[out_key] = value
 
     if (banner := _BANNER_RE.search(text)) is not None:
@@ -140,64 +131,78 @@ def parse_gcode_metadata(header: bytes, footer: bytes) -> dict:
     return meta
 
 
-# --- Thumbnail loader --------------------------------------------------------
+# --- Off-thread loaders ------------------------------------------------------
 
 
-class _ThumbnailSignals(QtCore.QObject):
+def _fetch_thumbnail(rest, gcode_path: str) -> QtGui.QImage | None:
+    """Range-fetch a gcode header and decode its embedded thumbnail."""
+    header = rest.get_gcode_header(gcode_path)
+    png = parse_embedded_thumbnail(header) if header else None
+    if not png:
+        return None
+    image = QtGui.QImage()
+    return image if image.loadFromData(png, "PNG") and not image.isNull() else None
+
+
+def _fetch_metadata(rest, gcode_path: str) -> dict:
+    """Range-fetch both ends of a gcode and parse its slicer metadata."""
+    header = rest.get_gcode_header(gcode_path) or b""
+    footer = rest.get_gcode_tail(gcode_path) or b""
+    return parse_gcode_metadata(header, footer) if (header or footer) else {}
+
+
+class _LoaderSignals(QtCore.QObject):
     """Carries a worker result back to the UI thread (QRunnable can't hold signals)."""
 
-    result = QtCore.pyqtSignal(str, object)  # (gcode_path, QImage | None)
+    result = QtCore.pyqtSignal(str, object)  # (gcode_path, payload)
 
 
-class _EmbeddedThumbnailTask(QtCore.QRunnable):
-    """Fetches + parses one gcode's embedded thumbnail off the UI thread."""
+class _FetchTask(QtCore.QRunnable):
+    """Runs one loader's fetch + parse for a single gcode off the UI thread."""
 
-    def __init__(self, rest, gcode_path: str, signals: _ThumbnailSignals) -> None:
+    def __init__(self, rest, gcode_path: str, fetch, signals: _LoaderSignals) -> None:
         super().__init__()
         self._rest = rest
         self._gcode_path = gcode_path
+        self._fetch = fetch
         self._signals = signals
 
     @QtCore.pyqtSlot()
     def run(self) -> None:
-        """Decode to QImage in the worker; the slot converts to pixmap on the UI thread."""
-        image = None
-        header = self._rest.get_gcode_header(self._gcode_path)
-        if header:
-            png = parse_embedded_thumbnail(header)
-            if png:
-                candidate = QtGui.QImage()
-                if candidate.loadFromData(png, "PNG") and not candidate.isNull():
-                    image = candidate
-        self._signals.result.emit(self._gcode_path, image)
+        """Fetch in the worker; the loader caches + re-emits on the UI thread."""
+        try:
+            payload = self._fetch(self._rest, self._gcode_path)
+        except Exception:  # a bad file must not kill the pool thread
+            logger.exception("gcode fetch failed for %s", self._gcode_path)
+            payload = None
+        self._signals.result.emit(self._gcode_path, payload)
 
 
-class ThumbnailLoader(QtCore.QObject):
-    """Serves embedded gcode thumbnails via a capped thread pool + bounded LRU cache."""
-
-    ready = QtCore.pyqtSignal(str, object)  # (gcode_path, QImage)
+class _GcodeLoader(QtCore.QObject):
+    """Serves parsed gcode data via a capped thread pool + bounded LRU cache."""
 
     _CACHE_MAX = 32
+    _fetch = staticmethod(_fetch_thumbnail)
 
     def __init__(self, rest, parent: QtCore.QObject | None = None) -> None:
         super().__init__(parent)
         self._rest = rest
         self._pool = QtCore.QThreadPool(self)
-        self._pool.setMaxThreadCount(2)  # bound concurrent decodes on the 2GB Pi
-        self._cache: OrderedDict[str, QtGui.QImage] = OrderedDict()
+        self._pool.setMaxThreadCount(2)  # bound concurrent fetches on the 2GB Pi
+        self._cache: OrderedDict[str, object] = OrderedDict()
         self._inflight: set[str] = set()
-        self._signals = _ThumbnailSignals()
+        self._signals = _LoaderSignals()
         self._signals.result.connect(self._on_result)
 
-    def cached(self, gcode_path: str) -> QtGui.QImage | None:
-        """Return an already-fetched thumbnail (promoted to MRU), or None."""
-        image = self._cache.get(gcode_path)
-        if image is not None:
+    def cached(self, gcode_path: str):
+        """Return an already-fetched payload (promoted to MRU), or None."""
+        payload = self._cache.get(gcode_path)
+        if payload is not None:
             self._cache.move_to_end(gcode_path)
-        return image
+        return payload
 
-    def request_embedded(self, gcode_path: str) -> None:
-        """Fetch a gcode's embedded thumbnail off-thread; emits ready() when available."""
+    def request(self, gcode_path: str) -> None:
+        """Fetch off-thread; emits ready() once the payload is available."""
         cached = self.cached(gcode_path)
         if cached is not None:
             self.ready.emit(gcode_path, cached)
@@ -205,84 +210,37 @@ class ThumbnailLoader(QtCore.QObject):
         if not gcode_path or self._rest is None or gcode_path in self._inflight:
             return
         self._inflight.add(gcode_path)
-        self._pool.start(_EmbeddedThumbnailTask(self._rest, gcode_path, self._signals))
+        self._pool.start(_FetchTask(self._rest, gcode_path, self._fetch, self._signals))
 
-    def _on_result(self, gcode_path: str, image: object) -> None:
-        """Cache the decoded image (LRU-bounded) and notify listeners."""
+    def _on_result(self, gcode_path: str, payload: object) -> None:
+        """Cache the payload (LRU-bounded) and notify listeners."""
         self._inflight.discard(gcode_path)
-        if image is None:
+        if payload is None or payload == {}:
             return
         if len(self._cache) >= self._CACHE_MAX:
             self._cache.popitem(last=False)
-        self._cache[gcode_path] = image
-        self.ready.emit(gcode_path, image)
+        self._cache[gcode_path] = payload
+        self.ready.emit(gcode_path, payload)
 
 
-# --- Metadata loader ---------------------------------------------------------
+class ThumbnailLoader(_GcodeLoader):
+    """Embedded gcode thumbnails, decoded off the UI thread."""
+
+    ready = QtCore.pyqtSignal(str, object)  # (gcode_path, QImage)
+
+    _CACHE_MAX = 32
+    _fetch = staticmethod(_fetch_thumbnail)
+
+    request_embedded = _GcodeLoader.request
 
 
-class _MetadataSignals(QtCore.QObject):
-    """Carries a worker result back to the UI thread (QRunnable can't hold signals)."""
-
-    result = QtCore.pyqtSignal(str, dict)  # (gcode_path, metadata)
-
-
-class _MetadataTask(QtCore.QRunnable):
-    """Fetches a gcode's header + footer and parses its metadata off the UI thread."""
-
-    def __init__(self, rest, gcode_path: str, signals: _MetadataSignals) -> None:
-        super().__init__()
-        self._rest = rest
-        self._gcode_path = gcode_path
-        self._signals = signals
-
-    @QtCore.pyqtSlot()
-    def run(self) -> None:
-        """Range-fetch both ends of the file, parse, and emit the metadata dict."""
-        header = self._rest.get_gcode_header(self._gcode_path) or b""
-        footer = self._rest.get_gcode_tail(self._gcode_path) or b""
-        meta = parse_gcode_metadata(header, footer) if (header or footer) else {}
-        self._signals.result.emit(self._gcode_path, meta)
-
-
-class GcodeMetadataLoader(QtCore.QObject):
-    """Serves client-parsed gcode metadata via a capped thread pool + bounded LRU cache."""
+class GcodeMetadataLoader(_GcodeLoader):
+    """Client-parsed metadata for gcodes Moonraker cannot scan (USB)."""
 
     ready = QtCore.pyqtSignal(str, dict)  # (gcode_path, metadata)
 
     _CACHE_MAX = 64
-
-    def __init__(self, rest, parent: QtCore.QObject | None = None) -> None:
-        super().__init__(parent)
-        self._rest = rest
-        self._pool = QtCore.QThreadPool(self)
-        self._pool.setMaxThreadCount(2)  # bound concurrent fetches on the 2GB Pi
-        self._cache: OrderedDict[str, dict] = OrderedDict()
-        self._inflight: set[str] = set()
-        self._signals = _MetadataSignals()
-        self._signals.result.connect(self._on_result)
-
-    def request(self, gcode_path: str) -> None:
-        """Fetch + parse a gcode's metadata off-thread; emits ready() when available."""
-        cached = self._cache.get(gcode_path)
-        if cached is not None:
-            self._cache.move_to_end(gcode_path)
-            self.ready.emit(gcode_path, cached)
-            return
-        if not gcode_path or self._rest is None or gcode_path in self._inflight:
-            return
-        self._inflight.add(gcode_path)
-        self._pool.start(_MetadataTask(self._rest, gcode_path, self._signals))
-
-    def _on_result(self, gcode_path: str, meta: dict) -> None:
-        """Cache the parsed metadata (LRU-bounded) and notify listeners."""
-        self._inflight.discard(gcode_path)
-        if not meta:
-            return
-        if len(self._cache) >= self._CACHE_MAX:
-            self._cache.popitem(last=False)
-        self._cache[gcode_path] = meta
-        self.ready.emit(gcode_path, meta)
+    _fetch = staticmethod(_fetch_metadata)
 
 
 # --- Shared module singletons ------------------------------------------------
