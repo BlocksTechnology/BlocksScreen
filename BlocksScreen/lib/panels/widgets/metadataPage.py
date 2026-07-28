@@ -77,6 +77,50 @@ _FILAMENT_NOZZLE_TEMP: dict[str, int] = {
 }
 
 
+def _format_bytes(num: int) -> str:
+    """Human-readable byte size."""
+    size = float(num)
+    for unit in ("B", "KB", "MB", "GB"):
+        if size < 1024 or unit == "GB":
+            return f"{size:.0f}{unit}" if unit == "B" else f"{size:.2f}{unit}"
+        size /= 1024
+    return f"{num}B"
+
+
+def _format_timestamp(value: float) -> str:
+    """Epoch seconds as a local wall-clock stamp."""
+    return QtCore.QDateTime.fromSecsSinceEpoch(int(value)).toString("yyyy-MM-dd hh:mm")
+
+
+def _format_seconds(value: float) -> str | None:
+    """A duration, or None when the slicer never filled it in."""
+    return helper_methods.format_duration(int(value)) if value > 0 else None
+
+
+# Per-key renderers for numeric values; keys not listed fall back to plain text.
+_NUMERIC_RENDERERS: dict[str, typing.Callable[[float], str | None]] = {
+    "filament_weight_total": helper_methods.format_weight,
+    "filament_total": lambda value: f"{value / 1000:.2f}m",
+    "size": lambda value: _format_bytes(int(value)),
+    "gcode_start_byte": lambda value: _format_bytes(int(value)),
+    "gcode_end_byte": lambda value: _format_bytes(int(value)),
+    "modified": _format_timestamp,
+    "print_start_time": _format_timestamp,
+    "estimated_time": _format_seconds,
+    "print_duration": _format_seconds,
+}
+
+
+def _numeric_value(key: str, value: int | float) -> str | None:
+    """Render a numeric field, dropping the -1 "unknown" sentinel slicers emit."""
+    if value == -1:
+        return None
+    render = _NUMERIC_RENDERERS.get(key)
+    if render is not None:
+        return render(value)
+    return f"{value:g}" if isinstance(value, float) else str(value)
+
+
 class FileMetadataWidget(QtWidgets.QWidget):
     """Scrollable list of every available metadata field for a gcode file."""
 
@@ -143,44 +187,13 @@ class FileMetadataWidget(QtWidgets.QWidget):
         """Render a metadata value as text, or None to skip it."""
         if value is None or value in ("", [], {}, "Unknown"):
             return None
-        if (
-            isinstance(value, (int, float))
-            and not isinstance(value, bool)
-            and value == -1
-        ):
-            return None
         if isinstance(value, bool):
             return "Yes" if value else "No"
-        if key == "filament_weight_total" and isinstance(value, (int, float)):
-            return helper_methods.format_weight(value)
-        if key == "filament_total" and isinstance(value, (int, float)):
-            return f"{value / 1000:.2f}m"
-        if key in ("size", "gcode_start_byte", "gcode_end_byte") and isinstance(
-            value, (int, float)
-        ):
-            return self._format_bytes(int(value))
-        if key in ("modified", "print_start_time") and isinstance(value, (int, float)):
-            return QtCore.QDateTime.fromSecsSinceEpoch(int(value)).toString(
-                "yyyy-MM-dd hh:mm"
-            )
-        if key in ("estimated_time", "print_duration") and isinstance(
-            value, (int, float)
-        ):
-            return helper_methods.format_duration(int(value)) if value > 0 else None
-        if isinstance(value, float):
-            return f"{value:g}"
+        if isinstance(value, (int, float)):
+            return _numeric_value(key, value)
         if isinstance(value, (list, tuple)):
             return ", ".join(str(v) for v in value)
         return str(value)
-
-    def _format_bytes(self, num: int) -> str:
-        """Human-readable byte size."""
-        size = float(num)
-        for unit in ("B", "KB", "MB", "GB"):
-            if size < 1024 or unit == "GB":
-                return f"{size:.0f}{unit}" if unit == "B" else f"{size:.2f}{unit}"
-            size /= 1024
-        return f"{num}B"
 
     def _add_category_card(
         self, title: str, pairs: list[tuple[str, str]], position: int

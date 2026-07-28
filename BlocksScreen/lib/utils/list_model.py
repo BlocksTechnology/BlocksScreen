@@ -554,59 +554,82 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
     ):
         """Capture view model events"""
         item = index.data(QtCore.Qt.ItemDataRole.UserRole)
-        if event.type() == QtCore.QEvent.Type.MouseButtonPress:
-            if item and item.not_clickable:
-                return True
+        press = event.type() == QtCore.QEvent.Type.MouseButtonPress
+        release = event.type() == QtCore.QEvent.Type.MouseButtonRelease
+        if (press or release) and item and item.not_clickable:
+            return True
+        if press:
             # Record the press origin so a scroll drag is not mistaken for a tap.
             self._press_pos = event.position()
             return False
-
-        if event.type() == QtCore.QEvent.Type.MouseButtonRelease:
-            if item and item.not_clickable:
-                return True
-
-            # Ignore releases that drifted far enough to be a scroll gesture.
-            press_pos = self._press_pos
-            self._press_pos = None
-            if press_pos is not None:
-                # Fingers drift more than a mouse, so double the platform drag slop.
-                threshold = QtWidgets.QApplication.startDragDistance() * 2
-                delta = event.position() - press_pos
-                if abs(delta.x()) + abs(delta.y()) > threshold:
-                    return False
-
-            # Expand-arrow hit-test before callback so an arrow tap does not also fire it.
-            if (
-                self.prev_index is not None
-                and item.allow_expand
-                and item.needs_expansion
-            ):
-                ellipse_size = item.height * 0.8
-                ellipse_margin = (item.height - ellipse_size) / 2
-                ellipse_rect = QtCore.QRectF(
-                    option.rect.right() - ellipse_margin - ellipse_size,
-                    option.rect.top() + ellipse_margin,
-                    ellipse_size,
-                    ellipse_size,
-                )
-                if ellipse_rect.contains(event.position()):
-                    new_state = not item.is_expanded
-                    model.setData(index, new_state, EntryListModel.ExpandRole)
-                    return True
-
-            if item.callback and callable(item.callback):
-                item.callback()
-
-            if self.prev_index is None:
-                return False
-
-            if self.prev_index != index.row():
-                prev_index: QtCore.QModelIndex = model.index(self.prev_index)
-                if prev_index.isValid():
-                    model.setData(prev_index, False, EntryListModel.EnableRole)
-                self.prev_index = index.row()
-
-            model.setData(index, True, EntryListModel.EnableRole)
-            self.item_selected.emit(item)
-            return True
+        if release:
+            return self._on_release(event, model, option, index, item)
         return False
+
+    def _on_release(
+        self,
+        event: QtCore.QEvent,
+        model: EntryListModel,
+        option: QtWidgets.QStyleOptionViewItem,
+        index: QtCore.QModelIndex,
+        item: ListItem,
+    ) -> bool:
+        """Turn a release into a drag, an arrow toggle or a row selection."""
+        if self._is_drag(event):
+            return False
+        # Expand-arrow hit-test before callback so an arrow tap does not also fire it.
+        if self._toggle_expand(event, model, option, index, item):
+            return True
+        if item.callback and callable(item.callback):
+            item.callback()
+        if self.prev_index is None:
+            return False
+        self._select_row(model, index, item)
+        return True
+
+    def _is_drag(self, event: QtCore.QEvent) -> bool:
+        """A release that drifted far from its press is a scroll gesture, not a tap."""
+        press_pos = self._press_pos
+        self._press_pos = None
+        if press_pos is None:
+            return False
+        # Fingers drift more than a mouse, so double the platform drag slop.
+        threshold = QtWidgets.QApplication.startDragDistance() * 2
+        delta = event.position() - press_pos
+        return abs(delta.x()) + abs(delta.y()) > threshold
+
+    def _toggle_expand(
+        self,
+        event: QtCore.QEvent,
+        model: EntryListModel,
+        option: QtWidgets.QStyleOptionViewItem,
+        index: QtCore.QModelIndex,
+        item: ListItem,
+    ) -> bool:
+        """Flip expansion when the tap landed on the arrow, else report a miss."""
+        if self.prev_index is None or not item.allow_expand or not item.needs_expansion:
+            return False
+        ellipse_size = item.height * 0.8
+        ellipse_margin = (item.height - ellipse_size) / 2
+        ellipse_rect = QtCore.QRectF(
+            option.rect.right() - ellipse_margin - ellipse_size,
+            option.rect.top() + ellipse_margin,
+            ellipse_size,
+            ellipse_size,
+        )
+        if not ellipse_rect.contains(event.position()):
+            return False
+        model.setData(index, not item.is_expanded, EntryListModel.ExpandRole)
+        return True
+
+    def _select_row(
+        self, model: EntryListModel, index: QtCore.QModelIndex, item: ListItem
+    ) -> None:
+        """Disable the previously selected row, enable this one and announce it."""
+        if self.prev_index != index.row():
+            prev_index: QtCore.QModelIndex = model.index(self.prev_index)
+            if prev_index.isValid():
+                model.setData(prev_index, False, EntryListModel.EnableRole)
+            self.prev_index = index.row()
+        model.setData(index, True, EntryListModel.EnableRole)
+        self.item_selected.emit(item)
