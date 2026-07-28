@@ -166,6 +166,43 @@ class TestFilelistNotifications:
         assert "a.gcode" in files._files
 
 
+class TestUsbMountNotifications:
+    """A USB symlink at the gcodes root arrives as a file event, not a dir event."""
+
+    @pytest.mark.parametrize("action", ["create_file", "modify_file"])
+    def test_symlink_event_becomes_a_directory(self, files, qtbot, action):
+        """Whichever file action Moonraker picks, the mount must surface as a directory."""
+        with qtbot.waitSignal(files.dir_added, timeout=500) as sig:
+            files.handle_filelist_changed(
+                {"action": action, "item": {"path": "USB-TESTE"}}
+            )
+        assert sig.args[0]["dirname"] == "USB-TESTE"
+        assert "USB-TESTE" in files._directories
+
+    def test_fallback_symlink_name_is_recognised(self, files, qtbot):
+        """An unlabelled stick is linked as 'USB DRIVE', which must count as a mount too."""
+        with qtbot.waitSignal(files.dir_added, timeout=500):
+            files.handle_filelist_changed(
+                {"action": "modify_file", "item": {"path": "USB DRIVE 1"}}
+            )
+        assert "USB DRIVE 1" in files._directories
+
+    def test_leading_slash_is_tolerated(self, files, qtbot):
+        """Moonraker paths are sometimes rooted, the mount check must not care."""
+        with qtbot.waitSignal(files.dir_added, timeout=500):
+            files.handle_filelist_changed(
+                {"action": "modify_file", "item": {"path": "/USB-TESTE"}}
+            )
+
+    def test_plain_file_modification_is_untouched(self, files, qtbot):
+        """The USB re-route must not swallow ordinary gcode modifications."""
+        with qtbot.waitSignal(files.file_modified, timeout=500):
+            files.handle_filelist_changed(
+                {"action": "modify_file", "item": {"path": "a.gcode"}}
+            )
+        assert "a.gcode" in files._files
+
+
 class TestThumbnailProbe:
     def test_probes_moonraker_when_metadata_has_no_thumbnails(self, files, qtbot):
         """A scanned gcode without thumbnails is probed once and re-emitted with paths."""

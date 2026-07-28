@@ -31,3 +31,14 @@ class TestPathHelpers:
         assert is_usb_mount("USB-BLOCKS/sub") is False
         assert is_usb_mount("gcodes") is False
 
+    def test_usb_mount_tolerates_leading_slash(self):
+        assert is_usb_mount("/USB-BLOCKS") is True
+
+    def test_usb_mount_accepts_unlabelled_stick_name(self):
+        assert is_usb_mount("USB DRIVE") is True
+        assert is_usb_mount("USB DRIVE 2") is True
+
+    def test_usb_mount_rejects_empty(self):
+        assert is_usb_mount("") is False
+        assert is_usb_mount("/") is False
+

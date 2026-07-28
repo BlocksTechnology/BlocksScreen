@@ -16,6 +16,9 @@ import struct
 
 logger = logging.getLogger(__name__)
 
+# Symlink names udisks2.add_symlink can produce, kept in sync with USB_LINK_PREFIXES there.
+USB_LINK_PREFIXES: tuple[str, ...] = ("USB-", "USB DRIVE")
+
 try:
     ctypes.cdll.LoadLibrary("libXext.so.6")
     libxext = ctypes.CDLL("libXext.so.6")
@@ -370,8 +373,9 @@ def get_parent_dir(path: str) -> str:
 
 
 def is_usb_mount(path: str) -> bool:
-    """Return True if *path* is a top-level USB mount."""
-    return "/" not in path and path.startswith("USB-")
+    """Return True if *path* is a top-level USB mount, under either name add_symlink gives."""
+    name = path.strip("/")
+    return bool(name) and "/" not in name and name.startswith(USB_LINK_PREFIXES)
 
 
 def resolve_thumbnail_path(

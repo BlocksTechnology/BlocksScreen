@@ -291,7 +291,16 @@ class Files(QtCore.QObject):
     def _handle_file_modified(self, item: dict, _: dict) -> None:
         """Handle file modification."""
         path = item.get("path", "")
-        if not path or not path.lower().endswith(self.GCODE_EXTENSION):
+        if not path:
+            return
+
+        # A USB symlink at the gcodes root reaches us as a file event, often modify_file.
+        if helper_methods.is_usb_mount(path):
+            item["dirname"] = path
+            self._handle_dir_created(item, {})
+            return
+
+        if not path.lower().endswith(self.GCODE_EXTENSION):
             return
 
         self._files[path] = item

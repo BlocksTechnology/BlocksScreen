@@ -23,6 +23,8 @@ class FilesPage(QtWidgets.QWidget):
     # Constants
     GCODE_EXTENSION = ".gcode"
     USB_PREFIX = "USB-"
+    # Moonraker indexes the fresh symlink asynchronously, so refresh once more after it.
+    USB_SETTLE_MS = 1500
     ITEM_HEIGHT = 80
     LEFT_FONT_SIZE = 17
     RIGHT_FONT_SIZE = 12
@@ -230,6 +232,11 @@ class FilesPage(QtWidgets.QWidget):
     def on_usb_added(self, _device_path: str = "", _symlink: str = "") -> None:
         """Re-fetch the current directory so a newly mounted USB folder shows up."""
         logger.info("USB mounted, refreshing current directory")
+        self.request_dir_info[str].emit(self._curr_dir)
+        QtCore.QTimer.singleShot(self.USB_SETTLE_MS, self._refresh_current_dir)
+
+    def _refresh_current_dir(self) -> None:
+        """Ask Moonraker for the current directory again, used by delayed retries."""
         self.request_dir_info[str].emit(self._curr_dir)
 
     @QtCore.pyqtSlot(str, name="on_usb_removed")
