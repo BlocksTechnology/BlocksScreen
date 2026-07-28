@@ -76,7 +76,6 @@ class TestProcessDirectoryInfo:
 
     def test_subdir_inline_emits_full_path(self, files, qtbot):
         """Bare subdir filenames are emitted as full USB/subdir paths (BUG-2 + thumbs)."""
-        files._requested_dir = "USB-BLOCKS"
         resp = _dir_response(
             [
                 {
@@ -90,17 +89,28 @@ class TestProcessDirectoryInfo:
         )
         seen = {}
         files.fileinfo.connect(lambda d: seen.update(d))
-        files._process_directory_info(resp)
+        files._process_directory_info(resp, "USB-BLOCKS")
         assert seen.get("filename") == "USB-BLOCKS/cube.gcode"
 
     def test_missing_metadata_requests_full_path(self, files, qtbot):
         """Fallback metadata request uses the full subdir path, not the bare name."""
-        files._requested_dir = "sub"
         resp = _dir_response([{"filename": "x.gcode", "modified": 1}], [])
         seen = []
         files.request_file_metadata.connect(seen.append)
-        files._process_directory_info(resp)
+        files._process_directory_info(resp, "sub")
         assert seen == ["sub/x.gcode"]
+
+    def test_interleaved_dir_responses_use_their_own_dir(self, files):
+        """A late response must resolve against the dir it asked for, not the newest one."""
+        seen = []
+        files.request_file_metadata.connect(seen.append)
+        files._process_directory_info(
+            _dir_response([{"filename": "a.gcode", "modified": 1}], []), "dirA"
+        )
+        files._process_directory_info(
+            _dir_response([{"filename": "b.gcode", "modified": 1}], []), "dirB"
+        )
+        assert seen == ["dirA/a.gcode", "dirB/b.gcode"]
 
 
 class TestHistoryPrintDuration:

@@ -159,7 +159,6 @@ class Files(QtCore.QObject):
         self._files_metadata: dict[str, FileMetadata] = {}
         self._metadata_retry_count: dict[str, int] = {}
         self._current_directory: str = ""
-        self._requested_dir: str = ""
         self._initial_load_complete: bool = False
         self.gcode_path = Path(self.GCODE_PATH).expanduser()
         # USB preloaded files cache: usb_path -> list of files
@@ -185,10 +184,6 @@ class Files(QtCore.QObject):
         self.request_scan_metadata.connect(self.ws.api.scan_gcode_metadata)
         self._history_job.connect(self._on_history_job)
         self._thumbnails_ready.connect(self._on_thumbnails)
-        self.request_dir_info[str].connect(self._track_requested_dir)
-        self.request_dir_info[str, bool].connect(
-            lambda directory, _extended: self._track_requested_dir(directory)
-        )
 
     def _install_event_filter(self) -> None:
         """Install event filter on application instance."""
@@ -388,14 +383,11 @@ class Files(QtCore.QObject):
             return ""
         return path.removeprefix("gcodes/").strip("/")
 
-    def _track_requested_dir(self, directory: str) -> None:
-        """Remember the last requested gcode dir for full-path resolution."""
-        self._requested_dir = directory.removeprefix("/")
-
-    def _full_gcode_path(self, filename: str) -> str:
+    def _full_gcode_path(self, filename: str, directory: str) -> str:
         """Full gcode-root-relative path from a bare dir-listing filename."""
         bare = filename.removeprefix("/")
-        return f"{self._requested_dir}/{bare}" if self._requested_dir else bare
+        parent = directory.removeprefix("/").strip("/")
+        return f"{parent}/{bare}" if parent else bare
 
     def _process_metadata(self, data: dict, full_path: str | None = None) -> None:
         """Build FileMetadata (thumbnails resolved from full path) and emit fileinfo."""
@@ -586,7 +578,7 @@ class Files(QtCore.QObject):
             len(self._directories),
             len(self._files),
         )
-        self._dispatch_metadata()
+        self._dispatch_metadata(requested_dir)
 
     def _match_usb_preload(self, requested_dir: str) -> str | None:
         """Return the pending USB preload whose path matches this response, else None."""
@@ -614,12 +606,12 @@ class Files(QtCore.QObject):
                 continue
             self._files[filename] = file_data
 
-    def _dispatch_metadata(self) -> None:
+    def _dispatch_metadata(self, requested_dir: str = "") -> None:
         """Use inline gcode metadata; request (full path) only what is missing."""
         for filename, file_data in self._files.items():
             if not filename.lower().endswith(self.GCODE_EXTENSION):
                 continue
-            full = self._full_gcode_path(filename)
+            full = self._full_gcode_path(filename, requested_dir)
             if self._has_inline_metadata(file_data):
                 self._process_metadata(file_data, full)
             else:
