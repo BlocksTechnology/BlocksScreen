@@ -156,6 +156,7 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
             if not status["state"]:
                 self.target_temp = 0
                 self.call_load_panel.emit(False, "", False)
+                self.change_page(0)
                 if self.state == "paused":
                     self.request_change_tab.emit(0)
                 return
@@ -170,6 +171,7 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
             if not status["state"]:
                 self.target_temp = 0
                 self.call_load_panel.emit(False, "", False)
+                self.change_page(0)
                 return
         self.call_load_panel.emit(
             True, f"Unloading Filament\n{status['step'].capitalize()}", False
