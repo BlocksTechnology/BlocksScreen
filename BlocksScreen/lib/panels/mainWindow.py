@@ -202,7 +202,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.filamentPanel.request_change_page.connect(slot=self.global_change_page)
         self.controlPanel.request_back_button.connect(slot=self.global_back)
         self.controlPanel.request_change_page.connect(slot=self.global_change_page)
-        self.utilitiesPanel.request_back_button.connect(slot=self.global_back)
+        self.utilitiesPanel.request_back.connect(slot=self.global_back)
         self.utilitiesPanel.request_change_page.connect(slot=self.global_change_page)
         self.utilitiesPanel.update_available.connect(self.on_update_available)
         self.notification_btn.clicked.connect(self.notiPage.show_notification_panel)
