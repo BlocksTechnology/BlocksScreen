@@ -24,11 +24,12 @@ class Printer(QtCore.QObject):
     fan_update = QtCore.pyqtSignal(
         [str, str, float], [str, str, int], name="fan_update"
     )
-    chamber_update = QtCore.pyqtSignal(name="chamber_update")
 
     idle_timeout_update = QtCore.pyqtSignal(
         [str, float], [str, str], name="idle_timeout_update"
     )
+
+    save_variables_update = QtCore.pyqtSignal(dict, name="save_variables_update")
 
     gcode_move_update = QtCore.pyqtSignal(
         [str, list], [str, float], [str, bool], name="gcode_move_update"
@@ -42,10 +43,14 @@ class Printer(QtCore.QObject):
     print_stats_update = QtCore.pyqtSignal(
         [str, dict], [str, float], [str, str], name="print_stats_update"
     )
-    display_update = QtCore.pyqtSignal([str, str], [str, float], name="display_update")
-    temperature_sensor_update = QtCore.pyqtSignal(
-        str, str, float, name="temperature_sensor_update"
+    mmu_update = QtCore.pyqtSignal(
+        [str, dict], [str, list], [str, int], [str, str], name="mmu_update"
     )
+
+    flowguard_update = QtCore.pyqtSignal([str, dict], name="flowguard_update")
+
+    display_update = QtCore.pyqtSignal([str, str], [str, float], name="display_update")
+    sensor_update = QtCore.pyqtSignal(str, str, float, name="sensor_update")
     temperature_fan_update = QtCore.pyqtSignal(
         str, str, float, name="temperature_fan_update"
     )
@@ -62,8 +67,8 @@ class Printer(QtCore.QObject):
     gcode_macro_update = QtCore.pyqtSignal(str, dict, name="gcode_macro_update")
     webhooks_update = QtCore.pyqtSignal(str, str, name="webhooks_update")
 
-    load_filament_update = QtCore.pyqtSignal(bool, name="load_filament_update")
-    unload_filament_update = QtCore.pyqtSignal(bool, name="unload_filament_update")
+    load_filament_update = QtCore.pyqtSignal(dict, name="load_filament_update")
+    unload_filament_update = QtCore.pyqtSignal(dict, name="unload_filament_update")
 
     query_printer_object = QtCore.pyqtSignal(dict, name="query_printer_object")
     save_config_pending: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
@@ -72,7 +77,6 @@ class Printer(QtCore.QObject):
     printer_config: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         dict, name="printer_config"
     )
-
     configfile_update: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         dict, name="configfile_update"
     )
@@ -93,9 +97,20 @@ class Printer(QtCore.QObject):
     gcode_response: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         list, name="gcode_response"
     )
+
+    klippy_state_changed: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        str, name="klippy-state-changed"
+    )
+    object_updated: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        str, str, dict, name="object-updated"
+    )
+
     extruder_number: int = 0
     available_gcode_commands: dict = {}
     available_objects: dict = {}
+    _TRUE_ZERO_PROBES: typing.ClassVar[frozenset[str]] = frozenset(
+        {"beacon", "cartographer", "btt_eddy_usb"}
+    )
     configfile: dict = {}
     printing: bool = False
     printing_state: str = ""
@@ -110,7 +125,7 @@ class Printer(QtCore.QObject):
         self.ws = ws
         self.active_extruder_name: str = ""
         self.available_filament_sensors: dict = {}
-        self.has_chamber: bool = False
+        self.force_true_zero_offset: bool = False
 
         _heater_attributes: dict = {
             "current_temperature": 0.0,
@@ -126,6 +141,17 @@ class Printer(QtCore.QObject):
         self.request_available_objects_signal.connect(self.ws.api.get_available_objects)
         self.request_object_subscription_signal.connect(self.ws.api.object_subscription)
         self.query_printer_object.connect(self.ws.api.object_query)
+        self._klippy_callback: typing.Callable[[str], None] | None = None
+        self._callbacks: dict[str, typing.Callable[[dict, str], None]] = {}
+        self._webhooks_state: str = ""
+        self._webhooks_state_message: str = ""
+
+    @property
+    def uses_true_zero_offset(self) -> bool:
+        """Return True if the active probe uses true-zero offset (no persistent z-offset needed)."""
+        return self.force_true_zero_offset or bool(
+            self._TRUE_ZERO_PROBES & set(self.available_objects)
+        )
 
     def clear_printer_objs(self) -> None:
         """Clear all tracking of printer object"""
@@ -138,6 +164,33 @@ class Printer(QtCore.QObject):
         self.printer_busy = False
         self.current_loaded_file = ""
         self.current_loaded_file_metadata = ""
+
+    def __inject_callback(
+        self, object_type: str, callback: typing.Callable[[dict, str], None]
+    ) -> None:
+        """Internal: insert a validated callback into the dispatch table."""
+        if not object_type or not callable(callback):
+            logger.warning(
+                "register_callback: invalid args object_type=%r callable=%s",
+                object_type,
+                callable(callback),
+            )
+            return
+        self._callbacks[object_type] = callback
+
+    def register_callback(
+        self, object_type: str, callback: typing.Callable[[dict, str], None]
+    ) -> None:
+        """Register an external callback for a Moonraker object type.
+
+        When Moonraker sends an update for ``object_type``, ``callback(values, name)``
+        is called directly — no intermediate signal required.
+
+        Args:
+            object_type: Moonraker object key, e.g. ``"mmu"`` or ``"filament_switch_sensor"``.
+            callback: Callable with signature ``(values: dict, name: str) -> None``.
+        """
+        self.__inject_callback(object_type, callback)
 
     @QtCore.pyqtSlot(str, name="on_klippy_status")
     def on_klippy_status(self, state: str):
@@ -153,7 +206,13 @@ class Printer(QtCore.QObject):
                 "virtual_sdcard": None,
             }
             self.query_printer_object.emit(_query_request)
+            if self._klippy_callback is not None:
+                self._klippy_callback(state)
+            self.klippy_state_changed.emit(state)
             return
+        if self._klippy_callback is not None:
+            self._klippy_callback(state)
+        self.klippy_state_changed.emit(state)
         self.clear_printer_objs()  # All other states clear it
 
     @QtCore.pyqtSlot(list, name="on_object_list")
@@ -271,6 +330,9 @@ class Printer(QtCore.QObject):
         _object_type, _object_name = tuple(_split + [""] * max(0, 2 - len(_split)))
         if name.startswith("extruder"):
             _object_name = name
+        if _object_type in self._callbacks:
+            self._callbacks[_object_type](values, _object_name)
+        self.object_updated.emit(_object_type, _object_name, values)
         if hasattr(self, f"_{_object_type}_object_updated"):
             _callback = getattr(self, f"_{_object_type}_object_updated")
             if callable(_callback):
@@ -305,17 +367,25 @@ class Printer(QtCore.QObject):
             value (dict): _description_
             name (str, optional): _description_. Defaults to "".
         """
-        if "state" in value.keys() and "state_message" in value.keys():
-            self.webhooks_update.emit(value["state"], value["state_message"])
+        if "state" in value.keys() or "state_message" in value.keys():
+            self._webhooks_state = value.get("state", self._webhooks_state)
+            self._webhooks_state_message = value.get(
+                "state_message", self._webhooks_state_message
+            )
+            self.webhooks_update.emit(
+                self._webhooks_state, self._webhooks_state_message
+            )
             logger.debug("Webhooks message received")
-            _state: str = value["state"]
+            _state: str = self._webhooks_state
+            if _state == "shutdown":
+                return
             _state_upper = _state[0].upper()
             _state_call = f"{_state_upper}{_state[1:]}"
             if hasattr(events, f"Klippy{_state_call}"):
                 _event_callback = getattr(events, f"Klippy{_state_call}")
                 if callable(_event_callback):
                     try:
-                        event = _event_callback(value["state"], value["state_message"])
+                        event = _event_callback(_state, self._webhooks_state_message)
                         instance = QtWidgets.QApplication.instance()
                         if instance is not None and isinstance(event, QtCore.QEvent):
                             instance.sendEvent(self.parent(), event)
@@ -323,10 +393,38 @@ class Printer(QtCore.QObject):
                             raise TypeError("QApplication.instance is None type.")
                     except Exception as e:
                         logger.debug(
-                            "Unable to send internal Klippy %s notification : %e",
+                            "Unable to send internal Klippy %s notification : %s",
                             _state_call,
                             e,
                         )
+
+    def _save_variables_object_updated(
+        self, value: dict, name: str = "saved_variables"
+    ) -> None:
+        self.save_variables_update.emit(value)
+
+    def _mmu_object_updated(self, value: dict, name: str = "mmu") -> None:
+        if "action" in value:
+            self.mmu_update[str, str].emit("action", value["action"])
+
+        if "filament" in value:
+            self.mmu_update[str, str].emit(
+                "filament", value["filament"]
+            )  # THIS IS EXTRUDER SENSOR ONLY
+
+        if "gate" in value:
+            self.mmu_update[str, int].emit("gate", value["gate"])
+
+        if "active_filament" in value:
+            self.mmu_update[str, dict].emit("active_filament", value["active_filament"])
+
+        if "gate_status" in value:
+            self.mmu_update[str, list].emit("gate_status", value["gate_status"])
+
+        if "flowguard" in value:
+            self.flowguard_update[str, dict].emit("flowguard", value["flowguard"])
+
+        # i only putted the most relevant ones, there are some other parameters that can be added later if needed
 
     def _gcode_move_object_updated(self, value: dict, name: str = "gcode_move") -> None:
         if "speed_factor" in value.keys():
@@ -433,9 +531,6 @@ class Printer(QtCore.QObject):
         if "power" in value.keys():
             self.heater_bed_update.emit(heater_name, "power", value["power"])
 
-    def _chamber_object_updated(self, value: dict, heater_name: str = "chamber"):
-        self.has_chamber = True
-
     def _fan_object_updated(self, value: dict, fan_name: str = "fan") -> None:
         if "speed" in value.keys():
             self.fan_update[str, str, float].emit("fan", "speed", value["speed"])
@@ -499,38 +594,6 @@ class Printer(QtCore.QObject):
                 "file_position", float(values["file_position"])
             )
 
-    def send_print_event(self, event: str):
-        """Dispatches a print event throughout the gui
-
-        Args:
-            event (str): event name
-
-        Raises:
-            TypeError: Thrown when QApplication is None
-        """
-        _print_state_upper = event[0].upper()
-        _print_state_call = f"{_print_state_upper}{event[1:]}"
-        if hasattr(events, f"Print{_print_state_call}"):
-            logger.debug(
-                "Print Event Caught, print is %s, calling event %s",
-                _print_state_call,
-                f"Print{_print_state_call}",
-            )
-            _event_callback: QtCore.QEvent = getattr(
-                events, f"Print{_print_state_call}"
-            )
-            if callable(_event_callback):
-                try:
-                    instance = QtWidgets.QApplication.instance()
-                    if instance:
-                        instance.postEvent(self.window(), _event_callback)
-                    else:
-                        raise TypeError("QApplication.instance expected non None value")
-                except Exception as e:
-                    logger.info(
-                        "Unexpected error while posting print job start event: %s", e
-                    )
-
     def _print_stats_object_updated(
         self, values: dict, name: str = "print_stats"
     ) -> None:
@@ -554,7 +617,6 @@ class Printer(QtCore.QObject):
             self.printing_state = values.get("state", None)
             if not self.printing_state:
                 return
-            self.send_print_event(self.printing_state)
             if values["state"] == "standby" or values["state"] == "error":
                 self.print_file_loaded = False
                 self.printing = False
@@ -579,21 +641,35 @@ class Printer(QtCore.QObject):
         self, values: dict, temperature_sensor_name: str
     ) -> None:
         if "temperature" in values.keys():
-            self.temperature_sensor_update.emit(
+            self.sensor_update.emit(
                 temperature_sensor_name, "temperature", values["temperature"]
             )
         if "measured_min_temp" in values.keys():
-            self.temperature_sensor_update.emit(
+            self.sensor_update.emit(
                 temperature_sensor_name,
                 "measured_min_temp",
                 values["measured_min_temp"],
             )
         if "measured_max_temp" in values.keys():
-            self.temperature_sensor_update.emit(
+            self.sensor_update.emit(
                 temperature_sensor_name,
                 "measured_max_temp",
                 values["measured_max_temp"],
             )
+        if "humidity" in values.keys():
+            self.sensor_update.emit(
+                temperature_sensor_name, "humidity", values["humidity"]
+            )
+
+    def _aht10_object_updated(
+        self,
+        values: dict[str, float],
+        sensor_name: str,
+    ) -> None:
+        if "temperature" in values.keys():
+            self.sensor_update.emit(sensor_name, "temperature", values["temperature"])
+        if "humidity" in values.keys():
+            self.sensor_update.emit(sensor_name, "humidity", values["humidity"])
 
     def _temperature_fan_object_updated(
         self, values: dict, temperature_fan_name: str = ""
@@ -734,9 +810,8 @@ class Printer(QtCore.QObject):
 
     # TODO: testing needed here idk if does work
     def _unload_filament_object_updated(self, values: dict, name: str) -> None:
-        if "state" in values.keys():
-            self.unload_filament_update[bool].emit(values["state"])
+        self.unload_filament_update[dict].emit(values)
 
     def _load_filament_object_updated(self, values: dict, name: str) -> None:
         if "state" in values.keys():
-            self.load_filament_update[bool].emit(values["state"])
+            self.load_filament_update[dict].emit(values)

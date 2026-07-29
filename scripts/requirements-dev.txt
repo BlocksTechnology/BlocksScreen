@@ -9,6 +9,7 @@ pytest-asyncio
 PyQt6
 docstr_coverage
 bandit
+requests>=2.32.5
 
 # Test suite plugins
 pytest-qt

@@ -1,15 +1,18 @@
+"""Control tab extruder page: manual extrude/retract with feedrate and length picks."""
+
 import typing
 
-from PyQt6 import QtCore, QtGui, QtWidgets
-
+from lib.printer import Printer
+from lib.utils.blocks_button import BlocksCustomButton
+from lib.utils.blocks_label import BlocksLabel
 from lib.utils.check_button import BlocksCustomCheckButton
 from lib.utils.icon_button import IconButton
-from lib.utils.blocks_label import BlocksLabel
-from lib.utils.blocks_button import BlocksCustomButton
-from lib.printer import Printer
+from PyQt6 import QtCore, QtGui, QtWidgets
 
 
 class ExtruderPage(QtWidgets.QWidget):
+    """Filament extrude/retract page of the control tab."""
+
     run_gcode_signal: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         str, name="run_gcode"
     )
@@ -23,7 +26,8 @@ class ExtruderPage(QtWidgets.QWidget):
     ) -> None:
         super().__init__(parent)
 
-        self.setObjectName("probe_offset_page")
+        self.setObjectName("extruder_page")
+        self.extrude_list: list[int] = [2, 4, 8]
         self._setupUi()
 
         self.update()
@@ -57,19 +61,22 @@ class ExtruderPage(QtWidgets.QWidget):
                 caller=self.extrude_select_length_100_btn, value=100
             )
         )
-        self.extrude_select_feedrate_2_btn.toggled.connect(
+        self.extrude_select_feedrate_low_btn.toggled.connect(
             lambda: self.handle_toggle_extrude_feedrate(
-                caller=self.extrude_select_feedrate_2_btn, value=2
+                caller=self.extrude_select_feedrate_low_btn,
+                value=self.extrude_list[0],
             )
         )
-        self.extrude_select_feedrate_5_btn.toggled.connect(
+        self.extrude_select_feedrate_middle_btn.toggled.connect(
             lambda: self.handle_toggle_extrude_feedrate(
-                caller=self.extrude_select_feedrate_5_btn, value=5
+                caller=self.extrude_select_feedrate_middle_btn,
+                value=self.extrude_list[1],
             )
         )
-        self.extrude_select_feedrate_10_btn.toggled.connect(
+        self.extrude_select_feedrate_high_btn.toggled.connect(
             lambda: self.handle_toggle_extrude_feedrate(
-                caller=self.extrude_select_feedrate_10_btn, value=10
+                caller=self.extrude_select_feedrate_high_btn,
+                value=self.extrude_list[2],
             )
         )
 
@@ -142,6 +149,7 @@ class ExtruderPage(QtWidgets.QWidget):
         self.extrude_length = value
 
     def paintEvent(self, a0: QtGui.QPaintEvent | None) -> None:
+        """Refresh the info label while the extrude page is visible."""
         if self.extrude_page.isVisible():
             self.exp_info_label.setText(self.extrude_page_message)
         return super().paintEvent(a0)
@@ -326,46 +334,54 @@ class ExtruderPage(QtWidgets.QWidget):
             "extrude_select_feedrate_group"
         )
 
-        self.extrude_select_feedrate_2_btn = BlocksCustomCheckButton(
+        self.extrude_select_feedrate_low_btn = BlocksCustomCheckButton(
             parent=self.layoutWidget1
         )
-        self.extrude_select_feedrate_2_btn.setSizePolicy(sizePolicy)
-        self.extrude_select_feedrate_2_btn.setFont(font)
-        self.extrude_select_feedrate_2_btn.setCheckable(True)
-        self.extrude_select_feedrate_2_btn.setChecked(True)
-        self.extrude_select_feedrate_2_btn.setObjectName(
-            "extrude_select_feedrate_2_btn"
+        self.extrude_select_feedrate_low_btn.setSizePolicy(sizePolicy)
+        self.extrude_select_feedrate_low_btn.setFont(font)
+        self.extrude_select_feedrate_low_btn.setCheckable(True)
+        self.extrude_select_feedrate_low_btn.setChecked(True)
+        self.extrude_select_feedrate_low_btn.setObjectName(
+            "extrude_select_feedrate_low_btn"
         )
 
-        self.extrude_select_feedrate_group.addButton(self.extrude_select_feedrate_2_btn)
-        self.exp_feedrate_content_layout.addWidget(self.extrude_select_feedrate_2_btn)
+        self.extrude_select_feedrate_group.addButton(
+            self.extrude_select_feedrate_low_btn
+        )
+        self.exp_feedrate_content_layout.addWidget(self.extrude_select_feedrate_low_btn)
 
-        self.extrude_select_feedrate_5_btn = BlocksCustomCheckButton(
+        self.extrude_select_feedrate_middle_btn = BlocksCustomCheckButton(
             parent=self.layoutWidget1
         )
-        self.extrude_select_feedrate_5_btn.setSizePolicy(sizePolicy)
-        self.extrude_select_feedrate_5_btn.setFont(font)
-        self.extrude_select_feedrate_5_btn.setCheckable(True)
-        self.extrude_select_feedrate_5_btn.setObjectName(
-            "extrude_select_feedrate_5_btn"
+        self.extrude_select_feedrate_middle_btn.setSizePolicy(sizePolicy)
+        self.extrude_select_feedrate_middle_btn.setFont(font)
+        self.extrude_select_feedrate_middle_btn.setCheckable(True)
+        self.extrude_select_feedrate_middle_btn.setObjectName(
+            "extrude_select_feedrate_middle_btn"
         )
 
-        self.extrude_select_feedrate_group.addButton(self.extrude_select_feedrate_5_btn)
-        self.exp_feedrate_content_layout.addWidget(self.extrude_select_feedrate_5_btn)
+        self.extrude_select_feedrate_group.addButton(
+            self.extrude_select_feedrate_middle_btn
+        )
+        self.exp_feedrate_content_layout.addWidget(
+            self.extrude_select_feedrate_middle_btn
+        )
 
-        self.extrude_select_feedrate_10_btn = BlocksCustomCheckButton(
+        self.extrude_select_feedrate_high_btn = BlocksCustomCheckButton(
             parent=self.layoutWidget1
         )
-        self.extrude_select_feedrate_10_btn.setSizePolicy(sizePolicy)
-        self.extrude_select_feedrate_10_btn.setFont(font)
-        self.extrude_select_feedrate_10_btn.setCheckable(True)
-        self.extrude_select_feedrate_10_btn.setObjectName(
-            "extrude_select_feedrate_10_btn"
+        self.extrude_select_feedrate_high_btn.setSizePolicy(sizePolicy)
+        self.extrude_select_feedrate_high_btn.setFont(font)
+        self.extrude_select_feedrate_high_btn.setCheckable(True)
+        self.extrude_select_feedrate_high_btn.setObjectName(
+            "extrude_select_feedrate_high_btn"
         )
         self.extrude_select_feedrate_group.addButton(
-            self.extrude_select_feedrate_10_btn
+            self.extrude_select_feedrate_high_btn
         )
-        self.exp_feedrate_content_layout.addWidget(self.extrude_select_feedrate_10_btn)
+        self.exp_feedrate_content_layout.addWidget(
+            self.extrude_select_feedrate_high_btn
+        )
         self.exp_vertical_content_layout.addWidget(self.exp_feedrate_group_box)
 
         self.exp_movement_content_layout = QtWidgets.QVBoxLayout()
@@ -484,14 +500,14 @@ class ExtruderPage(QtWidgets.QWidget):
         self.exp_feedrate_group_box.setTitle(
             _translate("controlStackedWidget", "Extrude Feedrate (mm/s)")
         )
-        self.extrude_select_feedrate_2_btn.setText(
-            _translate("controlStackedWidget", "2")
+        self.extrude_select_feedrate_low_btn.setText(
+            _translate("controlStackedWidget", str(self.extrude_list[0]))
         )
-        self.extrude_select_feedrate_5_btn.setText(
-            _translate("controlStackedWidget", "5")
+        self.extrude_select_feedrate_middle_btn.setText(
+            _translate("controlStackedWidget", str(self.extrude_list[1]))
         )
-        self.extrude_select_feedrate_10_btn.setText(
-            _translate("controlStackedWidget", "10")
+        self.extrude_select_feedrate_high_btn.setText(
+            _translate("controlStackedWidget", str(self.extrude_list[2]))
         )
         self.exp_unextrude_btn.setText(_translate("controlStackedWidget", "Retract"))
         self.exp_extrude_btn.setText(_translate("controlStackedWidget", "Extrude"))

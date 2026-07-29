@@ -1,0 +1,32 @@
+{
+    "exit_code_by_key": {
+        "BlocksScreen.lib.network.models.x_is_connectable_security__mutmut_1": null,
+        "BlocksScreen.lib.network.models.x_signal_to_bars__mutmut_1": null,
+        "BlocksScreen.lib.network.models.x_signal_to_bars__mutmut_2": null,
+        "BlocksScreen.lib.network.models.x_signal_to_bars__mutmut_3": null,
+        "BlocksScreen.lib.network.models.x_signal_to_bars__mutmut_4": null,
+        "BlocksScreen.lib.network.models.x_signal_to_bars__mutmut_5": null,
+        "BlocksScreen.lib.network.models.x_signal_to_bars__mutmut_6": null,
+        "BlocksScreen.lib.network.models.x_signal_to_bars__mutmut_7": null,
+        "BlocksScreen.lib.network.models.x_signal_to_bars__mutmut_8": null,
+        "BlocksScreen.lib.network.models.x_signal_to_bars__mutmut_9": null,
+        "BlocksScreen.lib.network.models.x_is_hidden_ssid__mutmut_1": null,
+        "BlocksScreen.lib.network.models.x_is_hidden_ssid__mutmut_2": null,
+        "BlocksScreen.lib.network.models.x_is_hidden_ssid__mutmut_3": null,
+        "BlocksScreen.lib.network.models.x_is_hidden_ssid__mutmut_4": null,
+        "BlocksScreen.lib.network.models.x_is_hidden_ssid__mutmut_5": null,
+        "BlocksScreen.lib.network.models.x_is_hidden_ssid__mutmut_6": null,
+        "BlocksScreen.lib.network.models.x_is_hidden_ssid__mutmut_7": null,
+        "BlocksScreen.lib.network.models.x_is_hidden_ssid__mutmut_8": null,
+        "BlocksScreen.lib.network.models.x_is_hidden_ssid__mutmut_9": null,
+        "BlocksScreen.lib.network.models.x_is_hidden_ssid__mutmut_10": null,
+        "BlocksScreen.lib.network.models.x_is_hidden_ssid__mutmut_11": null,
+        "BlocksScreen.lib.network.models.x_is_hidden_ssid__mutmut_12": null,
+        "BlocksScreen.lib.network.models.x_is_hidden_ssid__mutmut_13": null,
+        "BlocksScreen.lib.network.models.x_is_hidden_ssid__mutmut_14": null,
+        "BlocksScreen.lib.network.models.x_is_hidden_ssid__mutmut_15": null
+    },
+    "durations_by_key": {},
+    "type_check_error_by_key": {},
+    "estimated_durations_by_key": {}
+}

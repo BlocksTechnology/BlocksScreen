@@ -1,16 +1,16 @@
-import typing
-import re
-from lib.utils.icon_button import IconButton
-from helper_methods import normalize
+"""Control tab fans page: one card per fan with a slider popup for speed changes."""
 
-from PyQt6 import QtCore, QtGui, QtWidgets
+import re
+import typing
 
 from lib.panels.widgets.optionCardWidget import OptionCard
+from lib.utils.gcode import fan_speed_gcode
+from lib.utils.icon_button import IconButton
+from PyQt6 import QtCore, QtGui, QtWidgets
 
 
 class FansPage(QtWidgets.QWidget):
-    tune_display_buttons: dict = {}
-    card_options: dict = {}
+    """Fan control page of the control tab."""
 
     request_slider_page = QtCore.pyqtSignal(
         str, int, "PyQt_PyObject", int, int, name="on_slidePage_request"
@@ -25,8 +25,10 @@ class FansPage(QtWidgets.QWidget):
         self,
         parent: typing.Optional["QtWidgets.QWidget"],
     ) -> None:
-        super(FansPage, self).__init__(parent)
+        super().__init__(parent)
 
+        self.tune_display_buttons: dict = {}
+        self.card_options: dict = {}
         self._setup_ui()
         self.fans_back_btn.clicked.connect(self.request_back_button.emit)
 
@@ -38,9 +40,7 @@ class FansPage(QtWidgets.QWidget):
 
     @QtCore.pyqtSlot(str, str, float, name="on_fan_update")
     @QtCore.pyqtSlot(str, str, int, name="on_fan_update")
-    def on_fan_object_update(
-        self, name: str, field: str, new_value: int | float
-    ) -> None:
+    def on_fan_object_update(self, name: str, field: str, new_value: float) -> None:
         """Slot that receives updates from fan objects.
 
         Args:
@@ -112,18 +112,7 @@ class FansPage(QtWidgets.QWidget):
             name (str): fan name
             new_value (int): value from 0 to 255 to set fans speed
         """
-        if "speed" in name.lower():
-            self.speed_factor_override = new_value / 100
-            self.run_gcode_signal.emit(f"M220 S{new_value}")
-        if name.lower() == "fan":
-            self.run_gcode_signal.emit(
-                f"M106 S{int(round((normalize(float(new_value / 100), 0.0, 1.0, 0, 255))))}"
-            )  # [0, 255] Range
-        else:
-            name = name.replace(" ", "_")
-            self.run_gcode_signal.emit(
-                f'SET_FAN_SPEED FAN="{name}" SPEED={float(new_value / 100.00)}'
-            )  # [0.0, 1.0] Range
+        self.run_gcode_signal.emit(fan_speed_gcode(name, new_value))
 
     def _setup_ui(self) -> None:
         self.setObjectName("fans_page")
@@ -207,13 +196,20 @@ class FansPage(QtWidgets.QWidget):
         self.fans_content_layout.setObjectName("fans_content_layout")
         self.verticalLayout.addLayout(self.fans_content_layout)
 
-        self.verticalLayout.addItem(spacerItem11)
+        spacerItem12 = QtWidgets.QSpacerItem(
+            20,
+            111,
+            QtWidgets.QSizePolicy.Policy.Minimum,
+            QtWidgets.QSizePolicy.Policy.Expanding,
+        )
+        self.verticalLayout.addItem(spacerItem12)
 
         widget.setLayout(self.verticalLayout)
 
         self.retranslateUi()
 
     def retranslateUi(self):
+        """Apply translated text to every widget on the page."""
         _translate = QtCore.QCoreApplication.translate
         self.fans_title_label.setText(_translate("controlStackedWidget", "Fans"))
         self.fans_back_btn.setText(_translate("controlStackedWidget", "Back"))

@@ -1,0 +1,5 @@
+<RCC>
+  <qresource prefix="graphics">
+    <file>media/graphics/babystep_graphic.png</file>
+  </qresource>
+</RCC>

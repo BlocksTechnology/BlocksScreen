@@ -1,0 +1,85 @@
+poll_interval_minutes: 1440
+
+# Optional keys (also settable per-unit in
+# ~/printer_data/config/blockscreen_updater.yaml, merged by name):
+#   url: https://...          https-only clone URL (install_if_missing needs it)
+#   install_if_missing: true  clone + deps + hook when the path is absent
+#   restart_ui: true          also restart BlocksScreen after this component updates
+#   restart_klipper: true     also restart klipper after this component updates
+
+components:
+  - name: klipper
+    type: git
+    path: ~/klipper
+    url: https://github.com/Klipper3d/klipper
+    service: klipper.service
+    reset_mode: hard
+    branch: wip/Happy-Hare-Integration
+    order: 2
+    restart_ui: true
+
+  - name: moonraker
+    type: git
+    path: ~/moonraker
+    url: https://github.com/Arksine/moonraker
+    service: moonraker.service
+    reset_mode: hard
+    order: 3
+
+  - name: RF50-Klipper
+    type: git
+    path: ~/RF50-Klipper
+    url: https://github.com/BlocksTechnology/RF50-Klipper
+    branch: wip/feat/beacon
+    service: klipper.service
+    reset_mode: hard
+    order: 10
+    restart_ui: true
+
+  - name: mainsail-config
+    type: git
+    path: ~/mainsail-config
+    url: https://github.com/mainsail-crew/mainsail-config
+    branch: master
+    service: klipper.service
+    reset_mode: hard
+    order: 13
+
+  - name: katapult
+    type: git
+    path: ~/katapult
+    url: https://github.com/arksine/katapult
+    branch: master
+    reset_mode: hard
+    order: 25
+    restart_ui: false
+    install_if_missing: true
+
+  - name: crowsnest
+    type: git
+    path: ~/crowsnest
+    url: https://github.com/mainsail-crew/crowsnest
+    service: crowsnest.service
+    reset_mode: hard
+    order: 20
+
+  # Provisioned by hooks/Spoolman.sh (uv sync from source + stub client/dist);
+  # backend-only, used via the moonraker API.
+  - name: Spoolman
+    type: git
+    path: ~/Spoolman
+    url: https://github.com/Donkie/Spoolman
+    branch: master
+    service: Spoolman.service
+    reset_mode: hard
+    order: 21
+    install_if_missing: true
+
+  - name: BlocksScreen
+    type: git
+    path: ~/BlocksScreen
+    branch: dev
+    url: https://github.com/BlocksTechnology/BlocksScreen
+    service: BlocksScreen.service
+    reset_mode: hard
+    order: 99

@@ -1,27 +1,26 @@
 from __future__ import annotations
 
+import contextlib
+import logging
 import re
 import typing
 
 from lib.moonrakerComm import MoonWebSocket
-from lib.panels.widgets.numpadPage import CustomNumpad
-from lib.panels.widgets.slider_selector_page import SliderPage
-
-from lib.panels.widgets.ControlTab.printcorePage import SwapPrintcorePage
-from lib.panels.widgets.ControlTab.probeHelperPage import ProbeHelper
-from lib.panels.widgets.ControlTab.fansPage import FansPage
-from lib.panels.widgets.ControlTab.temperaturePage import TemperaturePage
-
+from lib.panels.widgets.basePopup import BasePopup
 from lib.panels.widgets.ControlTab.axisPage import AxisPage
 from lib.panels.widgets.ControlTab.extruderPage import ExtruderPage
+from lib.panels.widgets.ControlTab.fansPage import FansPage
+from lib.panels.widgets.ControlTab.printcorePage import SwapPrintcorePage
+from lib.panels.widgets.ControlTab.probeHelperPage import ProbeHelper
+from lib.panels.widgets.ControlTab.temperaturePage import TemperaturePage
+from lib.panels.widgets.numpadPage import CustomNumpad
+from lib.panels.widgets.slider_selector_page import SliderPage
 from lib.printer import Printer
-
-from PyQt6 import QtCore, QtGui, QtWidgets
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.icon_button import IconButton
-import logging
+from PyQt6 import QtCore, QtGui, QtWidgets
 
-logger = logging.getLogger(__name__)
+_logger = logging.getLogger(__name__)
 
 
 class ControlTab(QtWidgets.QStackedWidget):
@@ -43,6 +42,9 @@ class ControlTab(QtWidgets.QStackedWidget):
     disable_popups: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         bool, name="disable-popups"
     )
+    lock_ui: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        bool, name="lock-ui"
+    )
     request_numpad: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         [str, int, "PyQt_PyObject"],
         [str, int, "PyQt_PyObject", int, int],
@@ -51,7 +53,7 @@ class ControlTab(QtWidgets.QStackedWidget):
     request_file_info: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         str, name="request-file-info"
     )
-    call_load_panel = QtCore.pyqtSignal(bool, str, name="call-load-panel")
+    call_load_panel = QtCore.pyqtSignal(bool, str, bool, name="call-load-panel")
     toggle_conn_page = QtCore.pyqtSignal(bool, name="call-load-panel")
 
     def __init__(
@@ -67,14 +69,21 @@ class ControlTab(QtWidgets.QStackedWidget):
         self.back_button.clicked.connect(lambda: self._button_change(False))
         self.ws: MoonWebSocket = ws
         self.printer: Printer = printer
+        self._true_zero_state: bool | None = None
+        self._motion_active: bool = False
         self.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
         self.timers = []
         self.ztilt_state = False
-
+        self.ztilt_result_screen = BasePopup(self, False, False)
+        self.ztilt_result_screen_timer = QtCore.QTimer()
+        self.ztilt_result_screen_timer.setSingleShot(True)
+        self.ztilt_result_screen_timer.setInterval(5000)
+        self.ztilt_result_screen_timer.timeout.connect(self.ztilt_result_screen.hide)
         self.probe_helper_page = ProbeHelper(self)
         self.addWidget(self.probe_helper_page)
         self.probe_helper_page.toggle_conn_page.connect(self.toggle_conn_page)
         self.probe_helper_page.disable_popups.connect(self.disable_popups)
+        self.probe_helper_page.lock_ui.connect(self.lock_ui)
         self.probe_helper_page.call_load_panel.connect(self.call_load_panel)
 
         self.printcores_page = SwapPrintcorePage(self)
@@ -111,6 +120,7 @@ class ControlTab(QtWidgets.QStackedWidget):
         self.temperature_page.run_gcode_signal.connect(self.run_gcode_signal)
 
         self.numpadPage = CustomNumpad(self)
+        self.numpadPage.setMaximumHeight(400)
         self.numpadPage.request_back.connect(self.request_back_button)
         self.addWidget(self.numpadPage)
 
@@ -154,6 +164,8 @@ class ControlTab(QtWidgets.QStackedWidget):
             self.temperature_page.on_heater_bed_update
         )
 
+        self.printer.printer_config.connect(self.temperature_page.on_printer_config)
+        self.printer.request_object_subscription_signal.connect(self._on_object_list)
         self.run_gcode_signal.connect(self.ws.api.run_gcode)
         # # @ object temperature change clicked
         self.printcores_page.pc_accept.clicked.connect(self.handle_swapcore)
@@ -175,6 +187,7 @@ class ControlTab(QtWidgets.QStackedWidget):
         self._button_change(False)
 
     def _button_change(self, active: bool):
+        self._motion_active = active
         for btn in [
             self.cp_button_1,
             self.cp_button_2,
@@ -183,10 +196,8 @@ class ControlTab(QtWidgets.QStackedWidget):
             self.cp_button_5,
             self.cp_button_6,
         ]:
-            try:
+            with contextlib.suppress(RuntimeError, TypeError):
                 btn.clicked.disconnect()
-            except Exception as e:
-                logger.error(e)
         if active:
             self.cp_header_title.setText("Montion")
             self.cp_button_1.setText("Auto Home")
@@ -271,6 +282,7 @@ class ControlTab(QtWidgets.QStackedWidget):
             self.cp_button_5.show()
             self.cp_content_layout.removeWidget(self.blank)
             self.blank.hide()
+        self._apply_true_zero_layout()
         self.repaint()
 
     def showEvent(self, a0: QtGui.QShowEvent | None) -> None:
@@ -278,8 +290,13 @@ class ControlTab(QtWidgets.QStackedWidget):
         return super().showEvent(a0)
 
     def _handle_z_tilt_object_update(self, value, state):
+        if not self.isVisible():
+            return
         if state:
-            self.call_load_panel.emit(False, "")
+            self.call_load_panel.emit(False, "", False)
+            self.ztilt_result_screen.set_message("Z-axis calibration was successful.")
+            self.ztilt_result_screen.show()
+            self.ztilt_result_screen_timer.start()
 
     @QtCore.pyqtSlot(str, int, "PyQt_PyObject", name="on_slidePage_request")
     @QtCore.pyqtSlot(str, int, "PyQt_PyObject", int, int, name="on_slidePage_request")
@@ -291,32 +308,31 @@ class ControlTab(QtWidgets.QStackedWidget):
         min_value: int = 0,
         max_value: int = 100,
     ) -> None:
-        try:
+        with contextlib.suppress(RuntimeError, TypeError):
             self.sliderPage.value_selected.disconnect()
-        except Exception as e:
-            logger.error(e)
         self.sliderPage.value_selected.connect(callback)
         self.sliderPage.set_name(name)
-        self.sliderPage.set_slider_position(int(current_value))
         self.sliderPage.set_slider_minimum(min_value)
         self.sliderPage.set_slider_maximum(max_value)
+        self.sliderPage.set_slider_position(int(current_value))
         self.change_page(self.indexOf(self.sliderPage))
 
     def handle_printcoreupdate(self, value: dict):
-        if value["swapping"] == "idle":
+        _swapping = value.get("swapping")
+        if _swapping is None or _swapping == "idle":
             return
 
-        if value["swapping"] == "in_pos":
-            self.call_load_panel.emit(False, "")
+        if _swapping == "in_pos":
+            self.call_load_panel.emit(False, "", False)
             self.printcores_page.show()
             self.disable_popups.emit(True)
             self.printcores_page.setText(
                 "Please Insert Print Core \n \n Afterwards click continue"
             )
-        if value["swapping"] == "unloading":
-            self.call_load_panel.emit(True, "Unloading print core")
-        if value["swapping"] == "cleaning":
-            self.call_load_panel.emit(True, "Cleaning print core")
+        if _swapping == "unloading":
+            self.call_load_panel.emit(True, "Unloading print core", False)
+        if _swapping == "cleaning":
+            self.call_load_panel.emit(True, "Cleaning print core", False)
 
     def _handle_gcode_response(self, messages: list):
         """Handle gcode response for Z-tilt adjustment"""
@@ -339,16 +355,26 @@ class ControlTab(QtWidgets.QStackedWidget):
                     probed_range = float(match.group(3))
                     tolerance = float(match.group(4))
                     if retries_done == retries_total:
-                        self.call_load_panel.emit(False, "")
+                        self.call_load_panel.emit(False, "", False)
+                        self.ztilt_result_screen.set_message(
+                            "Something went wrong during Z-axis calibration."
+                        )
+                        self.ztilt_result_screen.show()
+                        self.ztilt_result_screen_timer.start()
                         return
                     self.call_load_panel.emit(
                         True,
-                        f"Retries: {retries_done}/{retries_total} | Range: {probed_range:.6f} | Tolerance: {tolerance:.6f}",
+                        f"Retries: {retries_done}/{retries_total}"
+                        f" | Range: {probed_range:.6f}"
+                        f" | Tolerance: {tolerance:.6f}",
+                        False,
                     )
 
     def handle_ztilt(self):
         """Handle Z-Tilt Adjustment"""
-        self.call_load_panel.emit(True, "Please wait, performing Z-axis calibration.")
+        self.call_load_panel.emit(
+            True, "Please wait, performing Z-axis calibration.", False
+        )
         self.run_gcode_signal.emit("G28\nM400")
         self.run_gcode_signal.emit("Z_TILT_ADJUST")
 
@@ -362,11 +388,40 @@ class ControlTab(QtWidgets.QStackedWidget):
         if state.lower() == "startup":
             self.printcores_page.setText("Almost done \n be patient")
             return
+        self._true_zero_state = None
+        self._apply_true_zero_layout()
+
+    @QtCore.pyqtSlot(dict, name="_on_object_list")
+    def _on_object_list(self, objects: dict) -> None:
+        """Track whether the printer reports a true zero offset probe"""
+        has_true_zero = self.printer.uses_true_zero_offset
+        if has_true_zero == self._true_zero_state:
+            return
+        self._true_zero_state = has_true_zero
+        self._apply_true_zero_layout()
+
+    def _apply_true_zero_layout(self) -> None:
+        """Hide nozzle calibration and lift the fans button when true zero is used"""
+        if self._motion_active:
+            self.cp_button_3.setVisible(True)
+            self._place_fans_btn(row=2)
+            return
+        has_true_zero = bool(self._true_zero_state)
+        self.cp_button_3.setVisible(not has_true_zero)
+        self._place_fans_btn(row=1 if has_true_zero else 2)
+
+    def _place_fans_btn(self, row: int) -> None:
+        """Move the fans button to the given grid row"""
+        self.cp_content_layout.removeWidget(self.cp_button_5)
+        self.cp_content_layout.addWidget(self.cp_button_5, row, 0, 1, 1)
+        # When fans moves to row 1, row 2 is empty: pin its height so the
+        # grid doesn't shrink and shift the "Control" header.
+        self.cp_content_layout.setRowMinimumHeight(2, 80 if row == 1 else 0)
 
     def show_swapcore(self):
         """Show swap printcore"""
         self.run_gcode_signal.emit("CHANGE_PRINTCORES")
-        self.call_load_panel.emit(True, "Preparing to swap print core")
+        self.call_load_panel.emit(True, "Preparing to swap print core", False)
 
     def handle_swapcore(self):
         """Handle swap printcore routine finish"""
@@ -384,6 +439,9 @@ class ControlTab(QtWidgets.QStackedWidget):
         max_value: int = 100,
     ) -> None:
         """Handles numpad widget request"""
+
+        with contextlib.suppress(RuntimeError, TypeError):
+            self.numpadPage.value_selected.disconnect()
         self.numpadPage.value_selected.connect(callback)
         self.numpadPage.set_name(name)
         self.numpadPage.set_value(current_value)

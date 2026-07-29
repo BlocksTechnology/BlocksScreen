@@ -1,0 +1,36 @@
+[Unit]
+Description=BlocksScreen X.Org Session
+StartLimitIntervalSec=0
+After=systemd-user-sessions.service plymouth-quit-wait.service
+ConditionPathExists=/dev/tty0
+Wants=dbus.socket systemd-logind.service
+After=dbus.socket systemd-logind.service
+Wants=BlocksScreen-bootstrap.service
+After=BlocksScreen-bootstrap.service
+Wants=BlocksScreen-splash-holder.service
+After=BlocksScreen-splash-holder.service
+
+[Service]
+Type=simple
+User=blocks
+Group=blocksscreen
+PAMName=login
+Environment=XDG_SESSION_TYPE=x11
+TTYPath=/dev/tty7
+StandardInput=tty
+UtmpIdentifier=tty7
+UtmpMode=user
+WorkingDirectory=/home/blocks/BlocksScreen
+ExecStartPre=+/usr/bin/chvt 7
+ExecStartPre=-/usr/bin/rm -f /tmp/.X0-lock /tmp/.X11-unix/X0
+ExecStartPre=-/bin/bash /home/blocks/BlocksScreen/scripts/bs-ensure-xauth.sh /home/blocks/.Xauthority
+ExecStartPre=-+/usr/bin/timeout 3 /usr/bin/plymouth quit
+ExecStartPre=-+/usr/bin/pkill -x plymouthd
+ExecStartPre=-+/home/blocks/.BlocksScreen-env/bin/python3.11 /home/blocks/BlocksScreen/scripts/bs-splash.py
+ExecStart=/usr/bin/xinit /home/blocks/BlocksScreen/scripts/bs-xorg-init.sh -- :0 vt7 -keeptty -novtswitch -nocursor -auth /home/blocks/.Xauthority
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+
+[Install]
+WantedBy=multi-user.target

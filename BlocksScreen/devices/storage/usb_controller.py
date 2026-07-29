@@ -1,6 +1,6 @@
 import logging
-import os
 import typing
+import pathlib
 from PyQt6 import QtCore
 
 from .udisks2 import UDisksDBusAsync
@@ -38,13 +38,19 @@ class USBManager(QtCore.QObject):
 
     def __init__(self, parent: QtCore.QObject, gcodes_dir: str | None) -> None:
         super().__init__(parent)
-        self.gcodes_dir: str = gcodes_dir or os.path.expanduser("~/printer_data/gcodes")
-        if not (os.path.isdir(self.gcodes_dir) and os.path.exists(self.gcodes_dir)):
+
+        self.gcodes_dir: pathlib.Path = (
+            pathlib.Path(gcodes_dir)
+            if gcodes_dir
+            else pathlib.Path.home() / "printer_data" / "gcodes"
+        )
+
+        if not (self.gcodes_dir.is_dir() and self.gcodes_dir.exists()):
             logging.info("Provided gcodes directory does not exist.")
+
         self.udisks: UDisksDBusAsync = UDisksDBusAsync(
             parent=self, gcodes_dir=self.gcodes_dir
         )
-        # self.banner = BannerPopup(self)
         self.banner = BannerPopup()
         self._restart_type: ResType = "always"
         self.udisks.start(self.udisks.Priority.InheritPriority)

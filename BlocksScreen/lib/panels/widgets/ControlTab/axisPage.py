@@ -1,12 +1,15 @@
-import typing
+"""Control tab axis page: jog XYZ, pick move length/speed, home and disable steppers."""
 
-from PyQt6 import QtCore, QtGui, QtWidgets
+import typing
 
 from lib.utils.check_button import BlocksCustomCheckButton
 from lib.utils.icon_button import IconButton
+from PyQt6 import QtCore, QtGui, QtWidgets
 
 
 class AxisPage(QtWidgets.QWidget):
+    """Axis movement page of the control tab."""
+
     run_gcode_signal: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         str, name="run_gcode"
     )
@@ -17,7 +20,7 @@ class AxisPage(QtWidgets.QWidget):
     def __init__(self, parent: QtWidgets.QWidget) -> None:
         super().__init__(parent)
 
-        self.setObjectName("probe_offset_page")
+        self.setObjectName("axis_page")
         self._setupUi()
 
         self.update()
@@ -517,6 +520,7 @@ class AxisPage(QtWidgets.QWidget):
         self.retranslateUi()
 
     def retranslateUi(self):
+        """Apply translated text to every widget on the page."""
         _translate = QtCore.QCoreApplication.translate
         self.mva_x_label.setText(_translate("controlStackedWidget", "X:"))
         self.mva_y_label.setText(_translate("controlStackedWidget", "Y:"))

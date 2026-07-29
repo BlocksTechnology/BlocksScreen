@@ -1,0 +1,16 @@
+<RCC>
+  <qresource prefix="icons">
+    <file>media/main_menu/ICON_control.png</file>
+    <file>media/main_menu/ICON_control_blocked.png</file>
+    <file>media/main_menu/ICON_control_pressed.png</file>
+    <file>media/main_menu/ICON_filament.png</file>
+    <file>media/main_menu/ICON_filament_pressed.png</file>
+    <file>media/main_menu/ICON_filamente_blocked.png</file>
+    <file>media/main_menu/ICON_home.png</file>
+    <file>media/main_menu/ICON_home_blocked.png</file>
+    <file>media/main_menu/ICON_home_pressed.png</file>
+    <file>media/main_menu/ICON_utilities.png</file>
+    <file>media/main_menu/ICON_utilities_blocked.png</file>
+    <file>media/main_menu/ICON_utilities_pressed.png</file>
+  </qresource>
+</RCC>

@@ -1,11 +1,15 @@
+import logging
 import re
 import typing
 
-from helper_methods import normalize
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.display_button import DisplayButton
 from lib.utils.icon_button import IconButton
 from PyQt6 import QtCore, QtGui, QtWidgets
+
+from lib.utils.gcode import fan_speed_gcode
+
+_logger = logging.getLogger(__name__)
 
 
 class TuneWidget(QtWidgets.QWidget):
@@ -36,69 +40,82 @@ class TuneWidget(QtWidgets.QWidget):
     speed_factor_override: float = 1.0
     extruder_target: int = 0
     bed_target: int = 0
-    tune_display_buttons: dict = {}
 
     def __init__(self, parent) -> None:
         super().__init__(parent)
+        self.tune_display_buttons: dict = {}
         self.setObjectName("tune_page")
         self._setupUI()
         self.sensors_menu_btn.clicked.connect(self.request_sensorsPage.emit)
         self.tune_babystep_menu_btn.clicked.connect(self.request_bbpPage.emit)
         self.tune_back_btn.clicked.connect(self.request_back)
-        self.bed_display.clicked.connect(
-            lambda: self.request_numpad[str, int, "PyQt_PyObject", int, int].emit(
-                "Bed",
-                int(round(self.bed_target)),
-                self.on_numpad_change,
-                0,
-                120,  # TODO: Get this value from printer objects
-            )
-        )
-        self.extruder_display.clicked.connect(
-            lambda: self.request_numpad[str, int, "PyQt_PyObject", int, int].emit(
-                "Extruder",
-                int(round(self.extruder_target)),
-                self.on_numpad_change,
-                0,
-                300,  # TODO: Get this value from printer objects
-            )
-        )
         self.speed_display.clicked.connect(
             lambda: self.request_sliderPage[str, int, "PyQt_PyObject", int, int].emit(
                 "Speed",
                 int(self.speed_factor_override * 100),
-                self.on_slider_change,
+                self._on_speed_slider_change,
                 10,
                 300,
             )
         )
 
+    @QtCore.pyqtSlot(dict, name="printer_config")
+    def on_printer_config(self, config: dict) -> None:
+        """Slot that receives the full printer configuration,
+
+        Additionally, this method configures the signal connections
+        between controllable heaters and numpad calls
+        """
+        try:
+            self.extruder_display.clicked.disconnect()
+            self.bed_display.clicked.disconnect()
+        except Exception:
+            _logger.debug("Signals were not connected")
+        extruder = config.get("extruder", None) or {}
+        bed = config.get("heater_bed", None) or {}
+        e_min_temp = extruder.get("min_temp", 0)
+        e_max_temp = extruder.get("max_temp", 300)
+        b_max_temp = bed.get("max_temp", 100)
+        b_min_temp = bed.get("min_temp", 0)
+        # Configure numpads
+        self.extruder_display.clicked.connect(
+            lambda: self.request_numpad[str, int, "PyQt_PyObject", int, int].emit(
+                "Extruder",
+                int(round(self.extruder_target)),
+                self.on_numpad_change,
+                int(e_min_temp),
+                int(e_max_temp),
+            )
+        )
+        self.bed_display.clicked.connect(
+            lambda: self.request_numpad[str, int, "PyQt_PyObject", int, int].emit(
+                "Bed",
+                int(round(self.bed_target)),
+                self.on_numpad_change,
+                int(b_min_temp),
+                int(b_max_temp),
+            )
+        )
+
     @QtCore.pyqtSlot(str, int, name="on_numpad_change")
     def on_numpad_change(self, name: str, new_value: int) -> None:
-        """Handle numpad value inserted"""
+        """Handle numpad value inserted."""
         if "bed" in name.lower():
             name = "heater_bed"
         elif "extruder" in name.lower():
             name = "extruder"
         self.run_gcode.emit(f"SET_HEATER_TEMPERATURE HEATER={name} TARGET={new_value}")
 
+    @QtCore.pyqtSlot(str, int)
+    def _on_speed_slider_change(self, _name: str, new_value: int) -> None:
+        """Handle print speed slider change."""
+        self.speed_factor_override = new_value / 100
+        self.run_gcode.emit(f"M220 S{new_value}")
+
     @QtCore.pyqtSlot(str, int, name="on_slider_change")
     def on_slider_change(self, name: str, new_value: int) -> None:
-        """Handle slider page value inserted"""
-        if "speed" in name.lower():
-            self.speed_factor_override = new_value / 100
-            self.run_gcode.emit(f"M220 S{new_value}")
-
-        if "fan" in name.lower():
-            if name.lower() == "fan":
-                self.run_gcode.emit(
-                    f"M106 S{int(round((normalize(float(new_value / 100), 0.0, 1.0, 0, 255))))}"
-                )  # [0, 255] Range
-            else:
-                name = name.replace(" ", "_")
-                self.run_gcode.emit(
-                    f"SET_FAN_SPEED FAN={name} SPEED={float(new_value / 100.00)}"
-                )  # [0.0, 1.0] Range
+        """Handle fan slider value change."""
+        self.run_gcode.emit(fan_speed_gcode(name, new_value))
 
     @QtCore.pyqtSlot(str, str, float, name="on_fan_update")
     @QtCore.pyqtSlot(str, str, int, name="on_fan_update")
@@ -113,6 +130,8 @@ class TuneWidget(QtWidgets.QWidget):
             new_value (int | float): New value for field name
         """
         fields = name.split()
+        if not fields:
+            return
         first_field = fields[0]
         second_field = fields[1] if len(fields) > 1 else None
         name = second_field.replace("_", " ") if second_field else name

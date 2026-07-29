@@ -1,22 +1,44 @@
+import re
 import typing
-from PyQt6 import QtCore, QtGui, QtWidgets
+from dataclasses import dataclass
 from enum import Enum, auto
-from lib.moonrakerComm import MoonWebSocket
-from lib.printer import Printer
-from lib.utils.blocks_button import BlocksCustomButton
-from lib.panels.widgets.basePopup import BasePopup
-from lib.panels.widgets.UtilitiesTab.infoPage import InfoPage
-from lib.panels.widgets.UtilitiesTab.ledsPage import LedsPage
-from lib.panels.widgets.UtilitiesTab.ledssliderPage import LedsSliderPage
-from lib.panels.widgets.UtilitiesTab.troubleshootPage import TroubleshootPage
-from lib.panels.widgets.UtilitiesTab.inputshaperPage import InputShaperPage
-from lib.panels.widgets.UtilitiesTab.inputshaperResultPage import InputShaperResultsPage
-from lib.panels.widgets.UtilitiesTab.axismaintPage import AxisMaintenancePage
-from lib.panels.widgets.UtilitiesTab.routineCheckPage import RoutineCheckPage
-from lib.panels.widgets.UtilitiesTab.rc_page import RoutineCheckAnswerPage
-import logging
+from functools import partial
 
-logger = logging.getLogger(__name__)
+from lib.moonrakerComm import MoonWebSocket
+from lib.panels.widgets.basePopup import BasePopup
+from lib.panels.widgets.inputshaperPage import InputShaperPage
+from lib.panels.widgets.optionCardWidget import OptionCard
+from lib.panels.widgets.troubleshootPage import TroubleshootPage
+from lib.printer import Printer
+from lib.ui.utilitiesStackedWidget_ui import Ui_utilitiesStackedWidget
+from lib.utils.blocks_button import BlocksCustomButton
+from lib.utils.toggleAnimatedButton import ToggleAnimatedButton
+from PyQt6 import QtCore, QtGui, QtWidgets
+
+
+@dataclass
+class LedState:
+    """Represents the state of an LED light."""
+
+    led_type: str
+    red: int = 0
+    green: int = 0
+    blue: int = 0
+    white: int = 255
+    state: str = "on"
+
+    def get_gcode(self, name: str) -> str:
+        """Generates the G-code command for the current state."""
+        if self.state == "off":
+            return f"SET_LED LED={name} RED=0 GREEN=0 BLUE=0 WHITE=0"
+        if self.led_type == "white":
+            return f"SET_LED LED={name} WHITE={self.white / 255:.2f}"
+        # Default to RGB
+        return (
+            f"SET_LED LED={name} RED={self.red / 255:.2f} "
+            f"GREEN={self.green / 255:.2f} BLUE={self.blue / 255:.2f} "
+            f"WHITE={self.white / 255:.2f}"
+        )
 
 
 class Process(Enum):
@@ -28,345 +50,675 @@ class Process(Enum):
 
 
 class UtilitiesTab(QtWidgets.QStackedWidget):
-    request_back_button = QtCore.pyqtSignal(name="request-back-button")
+    _LED_TYPES: frozenset[str] = frozenset({"led", "neopixel", "dotstar"})
 
+    request_back: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        name="request-back"
+    )
     request_change_page: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         int, int, name="request-change-page"
     )
+    request_available_objects_signal: typing.ClassVar[QtCore.pyqtSignal] = (
+        QtCore.pyqtSignal(name="get-available-objects")
+    )
     run_gcode_signal: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         str, name="run-gcode"
+    )
+    request_numpad_signal: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        int,
+        str,
+        str,
+        "PyQt_PyObject",
+        QtWidgets.QStackedWidget,
+        name="request-numpad",
     )
     subscribe_config: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         [list, "PyQt_PyObject"],
         [str, "PyQt_PyObject"],
         name="on-subscribe-config",
     )
+    on_update_message: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        dict, name="handle-update-message"
+    )
+
+    update_available: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        bool, name="update-available"
+    )
+
     show_update_page: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         bool, name="show-update-page"
     )
-    on_object_list = QtCore.pyqtSignal(list, name="on-object-list")
-    call_load_panel = QtCore.pyqtSignal(bool, str, name="call-load-panel")
+    call_load_panel = QtCore.pyqtSignal(bool, str, bool, name="call-load-panel")
 
     def __init__(
         self, parent: QtWidgets.QWidget, ws: MoonWebSocket, printer: Printer
     ) -> None:
         super().__init__(parent)
 
-        self._setupUi()
+        self.panel = Ui_utilitiesStackedWidget()
+        self.panel.setupUi(self)
 
         self.ws = ws
         self.printer: Printer = printer
         self.troubleshoot_page: TroubleshootPage = TroubleshootPage(self)
 
-        self.run_gcode_signal.connect(self.ws.api.run_gcode)
+        # --- State Variables ---
+        self.objects: dict = {
+            "fans": {},
+            "axis": {"x": "indf", "y": "indf", "z": "indf"},
+            "bheat": {"Bed_Heater": "indf"},
+            "extrude": {"extruder": "indf"},
+            "leds": {},
+        }
+        self.x_inputshaper: dict = {}
+        self.stepper_limits: dict = {}
 
+        self.current_object: typing.Optional[str] = None
+        self.current_process: typing.Optional[Process] = None
+        self.axis_in: str = "x"
+        self.amount: int = 1
+        self.tb: bool = False
+        self.cg = None
+        self.aut: bool = False
+
+        self._is_timeout_timer: QtCore.QTimer = QtCore.QTimer(self)
+        self._is_timeout_timer.setSingleShot(True)
+        self._is_timeout_timer.setInterval(300_000)  # 5 min: longest plausible IS run
+        self._is_timeout_timer.timeout.connect(self._on_is_timeout)
+
+        # --- PixMap ---
+        self._led_pixmap = QtGui.QPixmap(":/ui/media/btn_icons/LEDs.svg")
+        # --- UI Setup ---
         self.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
-
-        self.info_page = InfoPage(self)
-        self.addWidget(self.info_page)
-        self.info_page.request_back.connect(self.request_back_button)
-
-        self.leds_slider_page = LedsSliderPage(self)
-        self.addWidget(self.leds_slider_page)
-        self.leds_slider_page.run_gcode_signal.connect(self.run_gcode_signal)
-        self.leds_slider_page.request_back.connect(
-            lambda: self.request_back_button.emit()
+        self.panel.update_btn.clicked.connect(
+            lambda: self.show_update_page[bool].emit(False)
         )
-        self.leds_slider_page.request_change_page.connect(self.change_page)
 
-        self.leds_page = LedsPage(self)
-        self.addWidget(self.leds_page)
-        self.on_object_list.connect(self.leds_page.on_object_list)
-        self.leds_page.request_ledslider_page.connect(self.on_leds_slider_request)
-        self.leds_page.request_back.connect(lambda: self.request_back_button.emit())
-
-        self.is_page = InputShaperResultsPage(self)
-        self.addWidget(self.is_page)
-        self.printer.gcode_response.connect(self.is_page.handle_gcode_response)
+        self.is_page = InputShaperPage(self)
         self.is_page.call_load_panel.connect(self.call_load_panel)
-        self.is_page.run_gcode_signal.connect(self.run_gcode_signal)
+        self.addWidget(self.is_page)
 
-        self.input_shaper_page = InputShaperPage(self)
-        self.addWidget(self.input_shaper_page)
-        self.input_shaper_page.request_is_results_page.connect(
-            lambda: self.change_page(self.indexOf(self.is_page))
-        )
-        self.input_shaper_page.request_back_button.connect(lambda: self.change_page(0))
-        self.input_shaper_page.run_gcode_signal.connect(self.run_gcode_signal)
-        self.input_shaper_page.call_load_panel.connect(self.call_load_panel)
-        self.input_shaper_page.set_aut.connect(self.is_page.set_aut)
+        self.dialog_page = BasePopup(self, dialog=True, floating=True)
+        self.addWidget(self.dialog_page)
 
-        self.axis_page = AxisMaintenancePage(self)
-        self.addWidget(self.axis_page)
-        self.axis_page.request_back_button.connect(self.request_back_button)
-        self.axis_page.set_dialog_popup.connect(self.set_dialog_axismaintenace_popup)
-        self.axis_page.show_waiting_page.connect(self.show_waiting_page)
-        self.axis_page.call_load_panel.connect(self.call_load_panel)
-        self.axis_page.run_gcode_signal.connect(self.run_gcode_signal)
+        # --- Back Buttons ---
+        for button in (
+            self.panel.leds_back_btn,
+            self.panel.info_back_btn,
+            self.panel.leds_slider_back_btn,
+            self.panel.input_shaper_back_btn,
+            self.panel.routine_check_back_btn,
+            self.is_page.update_back_btn,
+        ):
+            button.clicked.connect(self.back_button)
 
-        self.routine_check_page = RoutineCheckPage(self)
-        self.addWidget(self.routine_check_page)
-        self.routine_check_page.run_gcode_signal.connect(self.run_gcode_signal)
-        self.routine_check_page.request_back_button.connect(self.request_back_button)
-        self.on_object_list.connect(self.routine_check_page.on_object_list)
-        self.routine_check_page.set_rc_page.connect(self.set_rc_page)
-        self.routine_check_page.show_waiting_page.connect(self.show_waiting_page)
-        self.routine_check_page.request_troubleshoot_page.connect(
-            self.troubleshoot_request
+        # --- Page Navigation ---
+        self._connect_page_change(self.panel.utilities_axes_btn, self.panel.axes_page)
+        self._connect_page_change(
+            self.panel.utilities_input_shaper_btn, self.panel.input_shaper_page
         )
+        self._connect_page_change(self.panel.utilities_info_btn, self.panel.info_page)
+        self._connect_page_change(
+            self.panel.utilities_routine_check_btn, self.panel.routines_page
+        )
+        self._connect_page_change(self.panel.am_cancel, self.panel.utilities_page)
 
-        self.rc_page = RoutineCheckAnswerPage(self)
-        self.addWidget(self.rc_page)
-        self.rc_page.on_rc_asnwer.connect(self.routine_check_page.on_routine_answer)
-        self.rc_page.request_back_button.connect(self.request_back_button)
-
-        self.utilities_info_btn.clicked.connect(
-            lambda: self.change_page(self.indexOf(self.info_page))
-        )
-        self.utilities_leds_btn.clicked.connect(
-            lambda: self.change_page(self.indexOf(self.leds_page))
-        )
-        self.utilities_axes_btn.clicked.connect(
-            lambda: self.change_page(self.indexOf(self.axis_page))
-        )
-        self.utilities_routine_check_btn.clicked.connect(
-            lambda: self.change_page(self.indexOf(self.routine_check_page))
-        )
-        self.utilities_input_shaper_btn.clicked.connect(
-            lambda: self.change_page(self.indexOf(self.input_shaper_page))
+        self._connect_page_change(self.panel.axes_back_btn, self.panel.utilities_page)
+        self._connect_page_change(
+            self.troubleshoot_page.tb_back_btn, self.panel.utilities_page
         )
 
-        self.update_btn.clicked.connect(lambda: self.show_update_page[bool].emit(False))
-
-        self.is_page.action_btn.clicked.connect(
-            lambda: self.change_page(self.indexOf(self.input_shaper_page))
+        # --- Routines ---
+        self.panel.rc_fans.clicked.connect(partial(self.run_routine, Process.FAN))
+        self.panel.rc_bheat.clicked.connect(
+            partial(self.run_routine, Process.BED_HEATER)
         )
+        self.panel.rc_ext.clicked.connect(partial(self.run_routine, Process.EXTRUDER))
+        self.panel.rc_axis.clicked.connect(partial(self.run_routine, Process.AXIS))
+        self.panel.rc_no.clicked.connect(self.on_routine_answer)
+        self.panel.rc_yes.clicked.connect(self.on_routine_answer)
 
-        self.dialogpopup = BasePopup(self, False, True)
-        self.addWidget(self.dialogpopup)
+        # --- Axis Maintenance ---
+        self.panel.am_execute.clicked.connect(self.axis_maintenance)
+        self.panel.toggle_led_button.state = ToggleAnimatedButton.State.ON
 
+        # --- LEDs ---
+        # self.panel.leds_r_slider.sliderReleased.connect(self.update_led_values)
+        # self.panel.leds_g_slider.sliderReleased.connect(self.update_led_values)
+        # self.panel.leds_b_slider.sliderReleased.connect(self.update_led_values)
+        self.panel.leds_w_slider.sliderReleased.connect(self.update_led_values)
+        self.panel.toggle_led_button.clicked.connect(self.toggle_led_state)
+
+        # --- Websocket/Printer Signals ---
+        self.run_gcode_signal.connect(self.ws.api.run_gcode)
+        self.is_page.run_gcode_signal.connect(self.ws.api.run_gcode)
         self.subscribe_config[str, "PyQt_PyObject"].connect(
             self.printer.on_subscribe_config
         )
         self.subscribe_config[list, "PyQt_PyObject"].connect(
             self.printer.on_subscribe_config
         )
+        self.printer.gcode_response.connect(self.handle_gcode_response)
 
+        # --- Initialize Printer Communication ---
         self.printer.printer_config.connect(self.on_printer_config_received)
+        self.printer.gcode_move_update.connect(self.on_gcode_move_update)
 
-    def on_leds_slider_request(self, led, name=str, single=bool):
-        """request leds slider page to show
-
-        Args:
-            led (_type_): led
-            name (_type_, optional): Leds name. Defaults to str.
-            single (_type_, optional): if its only 1 led. Defaults to bool.
-        """
-        self.change_page(self.indexOf(self.leds_slider_page))
-        self.leds_slider_page.set_slider(
-            led_state=led, name=str(name), single=bool(single)
+        self.panel.update_btn.setPixmap(
+            QtGui.QPixmap(":/system/media/btn_icons/update-software-icon.svg")
         )
+
+        # ---- Input Shaper ----
+        self.automatic_is = OptionCard(
+            self,
+            "Automatic\nInput Shaper",
+            "Automatic Input Shaper",
+            QtGui.QPixmap(":/input_shaper/media/btn_icons/input_shaper_auto.svg"),
+        )  # type: ignore
+        self.automatic_is.setObjectName("Automatic_IS_Card")
+        self.panel.is_content_layout.addWidget(
+            self.automatic_is, alignment=QtCore.Qt.AlignmentFlag.AlignHCenter
+        )
+        self.automatic_is.continue_clicked.connect(
+            lambda: self.handle_is("SHAPER_CALIBRATE")
+        )
+
+        self.manual_is = OptionCard(
+            self,
+            "Manual\nInput Shaper",
+            "Manual Input Shaper",
+            QtGui.QPixmap(":/input_shaper/media/btn_icons/input_shaper_manual.svg"),
+        )  # type: ignore
+        self.manual_is.setObjectName("Manual_IS_Card")
+        self.panel.is_content_layout.addWidget(
+            self.manual_is, alignment=QtCore.Qt.AlignmentFlag.AlignHCenter
+        )
+        self.manual_is.continue_clicked.connect(lambda: self.handle_is(""))
+
+        self.is_types: dict = {}
+        self.is_aut_types: dict = {}
+        self.dialog_page.accepted.connect(
+            lambda: self.handle_is("SHAPER_CALIBRATE AXIS=Y")
+        )
+        self.dialog_page.rejected.connect(
+            lambda: self.handle_is("SHAPER_CALIBRATE AXIS=X")
+        )
+
+        self.is_page.action_btn.clicked.connect(
+            lambda: self.change_page(self.indexOf(self.panel.input_shaper_page))
+        )
+
+    def handle_gcode_response(self, data: list[str]) -> None:
+        """
+        Parses a Klipper Input Shaper console message and updates self.is_types.
+        """
+
+        if not isinstance(data, list) or len(data) != 1 or not isinstance(data[0], str):
+            print(
+                f"WARNING: Invalid input format. Expected a list with one string. Received: {data}"
+            )
+            return
+
+        message = data[0]
+
+        pattern_fitted = re.compile(
+            r"Fitted shaper '(?P<name>\w+)' frequency = (?P<freq>[\d\.]+) Hz \(vibrations = (?P<vib>[\d\.]+)%"
+        )
+        match_fitted = pattern_fitted.search(message)
+
+        if match_fitted:
+            name = match_fitted.group("name")
+            freq = float(match_fitted.group("freq"))
+            vib = float(match_fitted.group("vib"))
+            current_data = self.is_types.get(name, {})
+            current_data.update(
+                {
+                    "frequency": freq,
+                    "vibration": vib,
+                    "max_accel": current_data.get("max_accel", 0.0),
+                }
+            )
+            self.is_types[name] = current_data
+
+            return
+        pattern_accel = re.compile(
+            r"To avoid too much smoothing with '(?P<name>\w+)', suggested max_accel <= (?P<accel>[\d\.]+) mm/sec\^2"
+        )
+        match_accel = pattern_accel.search(message)
+
+        if match_accel:
+            name = match_accel.group("name")
+            accel = float(match_accel.group("accel"))
+
+            if name in self.is_types and isinstance(self.is_types[name], dict):
+                self.is_types[name]["max_accel"] = accel
+            else:
+                self.is_types[name] = self.is_types.get(name, {})
+                self.is_types[name]["max_accel"] = accel
+            return
+
+        pattern_recommended = re.compile(
+            r"Recommended shaper_type_(?P<axis>[xy]) = (?P<type>\w+), shaper_freq_(?P=axis) = (?P<freq>[\d\.]+) Hz"
+        )
+        match_recommended = pattern_recommended.search(message)
+        if match_recommended:
+            axis = match_recommended.group("axis")
+            recommended_type = match_recommended.group("type")
+            self.is_types["Axis"] = axis
+            if self.aut:
+                self.is_aut_types[axis] = recommended_type
+                if len(self.is_aut_types) == 2:
+                    self.run_gcode_signal.emit("SAVE_CONFIG")
+                    self._is_timeout_timer.stop()
+                    self.call_load_panel.emit(False, "", False)
+                    self.aut = False
+                    return
+                return
+
+            reordered = {recommended_type: self.is_types[recommended_type]}
+            for key, value in self.is_types.items():
+                if key not in ("suggested_type", recommended_type, "Axis"):
+                    reordered[key] = value
+
+            self.is_page.set_type_dictionary(self.is_types)
+            first_key = next(iter(reordered.keys()), None)
+            for key in reordered.keys():
+                if key == first_key:
+                    self.is_page.add_type_entry(key, "Recommended type")
+                else:
+                    self.is_page.add_type_entry(key)
+
+            self.is_page.build_model_list()
+            self._is_timeout_timer.stop()
+            self.call_load_panel.emit(False, "", False)
+            return
+
+    def handle_is(self, gcode: str) -> None:
+        if gcode == "SHAPER_CALIBRATE":
+            self.run_gcode_signal.emit("G28\nM400")
+            self.aut = True
+            self.run_gcode_signal.emit(gcode)
+        elif gcode == "":
+            self.dialog_page.confirm_background_color("#dfdfdf")
+            self.dialog_page.cancel_background_color("#dfdfdf")
+            self.dialog_page.cancel_font_color("#000000")
+            self.dialog_page.confirm_font_color("#000000")
+            self.dialog_page.cancel_button_text("X axis")
+            self.dialog_page.confirm_button_text("Y axis")
+            self.dialog_page.set_message(
+                "Select the axis you want to execute the input shaper on:"
+            )
+            self.dialog_page.show()
+            return
+        else:
+            self.run_gcode_signal.emit("G28\nM400")
+            self.run_gcode_signal.emit(gcode)
+            self.change_page(self.indexOf(self.is_page))
+
+        self._is_timeout_timer.start()
+        self.call_load_panel.emit(True, "Running Input Shaper...", False)
+
+    def _on_is_timeout(self) -> None:
+        self.call_load_panel.emit(False, "", False)
+
+    @QtCore.pyqtSlot(list, name="on_object_list")
+    def on_object_list(self, object_list: list) -> None:
+        """Handle receiving printer object list"""
+        self.cg = object_list
+        for obj in self.cg:
+            base_name = obj.split()[0]
+
+            # Only accept 'fan_generic' or 'fan'
+            if base_name == "fan_generic" or base_name == "fan":
+                self.objects["fans"][obj.removeprefix(base_name + " ")] = "indef"
+        self._update_leds_from_config()
+
+    @QtCore.pyqtSlot(dict, name="on_object_config")
+    @QtCore.pyqtSlot(list, name="on_object_config")
+    def on_object_config(self, config: typing.Union[dict, list]) -> None:
+        """Handle receiving printer object configurations"""
+        if not config:
+            return
+        config_items = [config] if isinstance(config, dict) else config
+        for item in config_items:
+            for key, value in item.items():
+                if (
+                    key.startswith("stepper_")
+                    and isinstance(value, dict)
+                    and key not in self.stepper_limits
+                ):
+                    pos_min = value.get("position_min")
+                    pos_max = value.get("position_max")
+                    if pos_min is not None or pos_max is not None:
+                        min_val = (
+                            float(pos_min) if pos_min is not None else -float("inf")
+                        )
+                        max_val = (
+                            float(pos_max) if pos_max is not None else float("inf")
+                        )
+                        endstop_raw = value.get("position_endstop")
+                        endstop = float(endstop_raw) if endstop_raw is not None else 0.0
+                        homes_at_min = abs(endstop - min_val) <= abs(endstop - max_val)
+                        self.stepper_limits[key] = {
+                            "min": min_val,
+                            "max": max_val,
+                            "homes_at_min": homes_at_min,
+                        }
 
     def on_printer_config_received(self, config: dict) -> None:
         """Handle printer configuration"""
         for axis in ("x", "y", "z"):
             self.subscribe_config[str, "PyQt_PyObject"].emit(
-                f"stepper_{axis}", self.axis_page.on_object_config
+                f"stepper_{axis}", self.on_object_config
             )
 
-    def set_rc_page(self, title: str, message: str):
-        """sets routine check title and message
+    @QtCore.pyqtSlot(str, list, name="on_gcode_move_update")
+    def on_gcode_move_update(self, name: str, value: list) -> None:
+        """Handle gcode move"""
+        if not value:
+            return
+        if name == "gcode_position":
+            ...
 
-        Args:
-            title (str): The title
-            message (str): message
-        """
-        self.rc_page.setTitle(title)
-        self.rc_page.setMessage(message)
+    def run_routine(self, process: Process):
+        """Run check routine for available processes"""
+        self.current_process = process
+        routine_configs = {
+            Process.FAN: ("fans", "fan is spinning"),
+            Process.AXIS: ("axis", "axis is moving"),
+            Process.BED_HEATER: ("bheat", "bed is heating"),
+            Process.EXTRUDER: ("extrude", "extruder is being tested"),
+        }
+        if process not in routine_configs:
+            return
+        obj_key, message = routine_configs[process]
+        obj_list = list(self.objects.get(obj_key, {}).keys())
+        if not self._advance_routine_object(obj_list):
+            if self.tb:
+                self.troubleshoot_request()
+                self.tb = False
+            else:
+                self.change_page(self.indexOf(self.panel.utilities_page))
 
-    @QtCore.pyqtSlot(str, "PyQt_PyObject", name="set-dialog-popup")
-    def set_dialog_axismaintenace_popup(self, label: str, callback):
-        """Set text on routine page"""
-        self.dialogpopup.set_message(label)
+            return
+        if self.tb:
+            self.troubleshoot_request()
+            self.tb = False
+            self.current_object = None
+            self.current_process = None
+            return
+        message = (
+            f"Please check if the {self.current_object}\nis functioning correctly."
+        )
+        if process == Process.AXIS:
+            message = f"Please ensure the {self.current_object} axis moves correctly."
+        elif process in [Process.BED_HEATER, Process.EXTRUDER]:
+            message = "Please check if the temperature reaches 60°C. \n it may take a few moments."
+
+        self.set_routine_check_page(
+            f"Running routine for: {self.current_object}", message
+        )
+        self.show_waiting_page(
+            self.indexOf(self.panel.rc_page),
+            message,
+            20000 if process == Process.AXIS else 0,
+        )
+        self._send_routine_gcode()
+
+    def _advance_routine_object(self, obj_list: list) -> bool:
+        if not obj_list:
+            is_first_run = self.current_object is None
+            self.current_object = obj_list[0] if is_first_run and obj_list else "done"
+            return is_first_run
+        if self.current_object not in obj_list:
+            if self.current_process == Process.AXIS:
+                self.run_gcode_signal.emit("G28")
+            self.current_object = obj_list[0]
+            return True
         try:
-            self.dialogpopup.disconnect()
-        except Exception as e:
-            logger.error(e)
-        self.dialogpopup.accepted.connect(callback)
+            current_index = obj_list.index(self.current_object)
+            if current_index + 1 < len(obj_list):
+                self.current_object = obj_list[current_index + 1]
+                return True
+            else:
+                self.current_object = None
+                return False
+        except ValueError:
+            self.current_object = obj_list[0]
+            return True
 
-    @QtCore.pyqtSlot(str, int, bool, name="show-waiting-page")
-    def show_waiting_page(self, label: str, time_ms: int, popup: bool):
-        """Show placeholder page"""
-        self.call_load_panel.emit(True, label)
-        if popup:
-            QtCore.QTimer.singleShot(time_ms, lambda: self.dialogpopup.open())
+    def on_routine_answer(self) -> None:
+        """Handle routine ongoing process"""
+        if self.current_process is None or self.current_object is None:
+            return
+        if self.sender() == self.panel.rc_yes:
+            answer = "yes"
         else:
-            QtCore.QTimer.singleShot(
-                time_ms, lambda: self.change_page(self.indexOf(self.rc_page))
+            answer = "no"
+            self.tb = True
+        process_map = {
+            Process.FAN: ("fans", self.current_object),
+            Process.AXIS: ("axis", self.current_object),
+            Process.BED_HEATER: ("bheat", "Bed_Heater"),
+            Process.EXTRUDER: ("extrude", "extruder"),
+        }
+        if self.current_process in process_map:
+            obj_key, item_key = process_map[self.current_process]
+            self.objects[obj_key][item_key] = answer
+            if self.current_process in [Process.BED_HEATER, Process.EXTRUDER]:
+                self.run_gcode_signal.emit("TURN_OFF_HEATERS")
+
+            if self.current_process == Process.FAN:
+                self.run_gcode_signal.emit("M107")
+                for i in self.objects["fans"]:
+                    self.run_gcode_signal.emit(
+                        f"SET_FAN_SPEED FAN={i.removeprefix('fan_generic ')} SPEED=0\nM400"
+                    )
+
+            self.run_routine(self.current_process)
+        elif self.current_process == Process.AXIS_MAINTENANCE:
+            if answer == "yes":
+                self._run_AXIS_MAINTENANCE_gcode(self.current_object)
+            else:
+                self.change_page(self.indexOf(self.panel.axes_page))
+
+    def _send_routine_gcode(self):
+        """Send the correct G-code for the current process and object."""
+        if self.current_process == Process.FAN:
+            fan_name = self.current_object or next(iter(self.objects["fans"]), None)
+            if fan_name:
+                if fan_name == "fan":
+                    self.run_gcode_signal.emit("M106 S255\nM400")
+                else:
+                    self.run_gcode_signal.emit(
+                        f"SET_FAN_SPEED FAN={fan_name.removeprefix('fan_generic ')} SPEED=0.8\nM400"
+                    )
+
+            return
+
+        if self.current_process == Process.AXIS:
+            if gcode := self._routine_check_axis_gcode(self.current_object):
+                self.run_gcode_signal.emit(f"{gcode}\nM400")
+            return
+
+        gcode_map = {
+            Process.BED_HEATER: "SET_HEATER_TEMPERATURE HEATER=heater_bed TARGET=60",
+            Process.EXTRUDER: "SET_HEATER_TEMPERATURE HEATER=extruder TARGET=60",
+        }
+
+        if gcode := gcode_map.get(self.current_process):
+            self.run_gcode_signal.emit(f"{gcode}\nM400")
+
+    def _routine_check_axis_gcode(self, axis: str, margin: float = 70.0) -> str:
+        limits = self.stepper_limits.get(f"stepper_{axis}")
+        if not limits:
+            return ""
+
+        span = limits["max"] - limits["min"]
+        if span <= 0:
+            return ""
+
+        effective_margin = margin
+        if span - (2 * margin) <= 0:
+            effective_margin = span * 0.1
+
+        distance = span - (2 * effective_margin)
+        if distance <= 0:
+            return ""
+
+        sign = 1 if limits.get("homes_at_min", True) else -1
+        axis_upper = axis.upper()
+
+        out = f"G1 {axis_upper}{sign * distance:.2f} F6000"
+        back = f"G1 {axis_upper}{-sign * (distance - 10):.2f} F6000"
+        moves = f"{out}\n{back}"
+        if axis == "x":
+            moves += "\nG90\nG1 X250 F6000"
+
+        return f"G91\n{moves}"
+
+    def set_routine_check_page(self, title: str, label: str):
+        """Set text on routine page"""
+        self.panel.rc_tittle.setText(title)
+        self.panel.rc_label.setText(label)
+
+    def update_led_values(self) -> None:
+        """Update led state and color values"""
+        if self.current_object not in self.objects["leds"]:
+            return
+        led_state: LedState = self.objects["leds"][self.current_object]
+        led_state.white = int(self.panel.leds_w_slider.value() * 255 / 100)
+        self.save_led_state()
+
+    def _update_leds_from_config(self):
+        layout = self.panel.leds_content_layout
+
+        while layout.count():
+            if (child := layout.takeAt(0)) and child.widget():
+                child.widget().deleteLater()  # type: ignore
+
+        led_names = []
+        if not self.cg:
+            return
+
+        # Collect LED names - match Klipper LED hardware types only
+        for obj in self.cg:
+            parts = obj.split()
+            if len(parts) >= 2 and parts[0] in self._LED_TYPES:
+                name = parts[1]
+                led_names.append(name)
+                self.objects["leds"][name] = LedState(led_type="white")
+
+        max_columns = 3
+        buttons = []  # store references to created buttons
+
+        # Create LED buttons
+        for i, name in enumerate(led_names):
+            if self.panel.leds_widget:
+                button = BlocksCustomButton()
+                button.setFixedSize(200, 70)
+                button.setText(name)
+                button.setProperty("class", "menu_btn")
+                button.setPixmap(self._led_pixmap)
+                row, col = divmod(i, max_columns)
+                layout.addWidget(button, row, col)
+                button.clicked.connect(partial(self.handle_led_button, name))
+                buttons.append(button)
+
+        try:
+            self.panel.utilities_leds_btn.clicked.disconnect()
+        except (RuntimeError, TypeError):
+            pass
+        if len(buttons) == 1:
+            self.panel.utilities_leds_btn.clicked.connect(
+                partial(self.handle_led_button, led_names[0])
+            )
+        elif len(buttons) > 1:
+            self._connect_page_change(
+                self.panel.utilities_leds_btn, self.panel.leds_page
             )
 
-    @QtCore.pyqtSlot(name="request-troubleshoot-page")
+    def toggle_led_state(self) -> None:
+        """Toggle leds"""
+        if self.current_object not in self.objects["leds"]:
+            return
+        led_state: LedState = self.objects["leds"][self.current_object]
+        if led_state.state == "off":
+            led_state.state = "on"
+            self.panel.toggle_led_button.state = ToggleAnimatedButton.State.ON
+        else:
+            led_state.state = "off"
+            self.panel.toggle_led_button.state = ToggleAnimatedButton.State.OFF
+        self.save_led_state()
+
+    def handle_led_button(self, name: str) -> None:
+        """Handle led button clicked"""
+        self.current_object = name
+        led_state: LedState = self.objects["leds"].get(name)
+        if not led_state:
+            return
+        is_rgb = led_state.led_type == "rgb"
+        self.panel.leds_w_slider.setVisible(not is_rgb)
+        self.panel.leds_w_slider.setValue(led_state.white)
+        self.change_page(self.indexOf(self.panel.leds_slider_page))
+
+    def save_led_state(self):
+        """Save led state"""
+        if self.current_object:
+            if self.current_object in self.objects["leds"]:
+                led_state: LedState = self.objects["leds"][self.current_object]
+                self.run_gcode_signal.emit(led_state.get_gcode(self.current_object))
+
+    def axis_maintenance(self) -> None:
+        """Routine, checks axis movement for printer debugging"""
+        self.current_process = Process.AXIS_MAINTENANCE
+        self.current_object = (
+            self.panel.axis_maintenance_gb.checkedButton().text().lower()
+        )
+        self.run_gcode_signal.emit(f"AXIS_MAINTENANCE_{self.current_object}\nM400")
+        self.set_routine_check_page(
+            "Axis Maintenance",
+            f"Insert oil on the {self.current_object.upper()} axis before confirming.",
+        )
+        self.show_waiting_page(
+            self.indexOf(self.panel.rc_page),
+            f"Homing {self.current_object.upper()} axis...",
+            20000,
+        )
+
+    def _run_AXIS_MAINTENANCE_gcode(self, axis: str):
+        stepper_key = f"stepper_{axis}"
+        if stepper_key in self.stepper_limits:
+            self.run_gcode_signal.emit(f"AXIS_MAINTENANCE_FINISH_{axis}\nM400")
+            self.show_waiting_page(
+                self.indexOf(self.panel.axes_page),
+                f"Running maintenance cycle on {axis.upper()} axis...",
+                5000,
+            )
+        else:
+            self.change_page(self.indexOf(self.panel.axes_page))
+
     def troubleshoot_request(self) -> None:
         """Show troubleshoot page"""
         self.troubleshoot_page.show()
 
+    def show_waiting_page(self, page_to_go_to: int, label: str, time_ms: int):
+        """Show placeholder page"""
+        self.call_load_panel.emit(True, label, False)
+        QtCore.QTimer.singleShot(time_ms, lambda: self.change_page(page_to_go_to))
+
+    def _connect_page_change(self, button: QtWidgets.QWidget, page: QtWidgets.QWidget):
+        if isinstance(button, QtWidgets.QAbstractButton):
+            button.clicked.connect(lambda: self.change_page(self.indexOf(page)))
+
     def change_page(self, index: int):
         """Request change page by index"""
-        self.request_change_page.emit(3, index)
+        self.call_load_panel.emit(False, "", False)
+        self.troubleshoot_page.hide()
+        if index < self.count():
+            self.request_change_page.emit(3, index)
 
-    def _setupUi(self):
-        self.resize(710, 410)
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.Preferred, QtWidgets.QSizePolicy.Policy.Minimum
-        )
-        sizePolicy.setHorizontalStretch(0)
-        sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(self.sizePolicy().hasHeightForWidth())
-        self.setSizePolicy(sizePolicy)
-        self.setMinimumSize(QtCore.QSize(710, 410))
-        self.setMaximumSize(QtCore.QSize(710, 410))
-
-        widget = QtWidgets.QWidget()
-        widget.setMinimumSize(QtCore.QSize(710, 410))
-        widget.setMaximumSize(QtCore.QSize(710, 410))
-        widget.setObjectName("utilities_page")
-        self.verticalLayout = QtWidgets.QVBoxLayout(self)
-        self.verticalLayout.setObjectName("verticalLayout")
-
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Minimum
-        )
-        sizePolicy.setHorizontalStretch(0)
-        sizePolicy.setVerticalStretch(0)
-
-        font = QtGui.QFont()
-        font.setFamily("Momcake")
-        font.setPointSize(24)
-        font.setBold(True)
-        font.setWeight(75)
-
-        self.utilities_header_layout = QtWidgets.QHBoxLayout()
-        self.utilities_header_layout.setObjectName("utilities_header_layout")
-
-        self.utilities_title_label = QtWidgets.QLabel(parent=self)
-        self.utilities_title_label.setSizePolicy(sizePolicy)
-        self.utilities_title_label.setMinimumSize(QtCore.QSize(0, 60))
-        self.utilities_title_label.setMaximumSize(QtCore.QSize(16777215, 60))
-        self.utilities_title_label.setFont(font)
-        self.utilities_title_label.setStyleSheet(
-            "background: transparent; color: white;"
-        )
-        self.utilities_title_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
-        self.utilities_title_label.setObjectName("utilities_title_label")
-
-        self.utilities_header_layout.addWidget(self.utilities_title_label)
-        self.verticalLayout.addLayout(self.utilities_header_layout)
-        self.utilities_content_layout = QtWidgets.QGridLayout()
-
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.Expanding,
-            QtWidgets.QSizePolicy.Policy.Expanding,
-        )
-        sizePolicy.setHorizontalStretch(0)
-        sizePolicy.setVerticalStretch(0)
-
-        font = QtGui.QFont()
-        font.setFamily("Momcake")
-        font.setPointSize(19)
-
-        self.utilities_content_layout.setObjectName("utilities_content_layout")
-        self.utilities_axes_btn = BlocksCustomButton(parent=self)
-        self.utilities_axes_btn.setSizePolicy(sizePolicy)
-        self.utilities_axes_btn.setMinimumSize(QtCore.QSize(250, 80))
-        self.utilities_axes_btn.setMaximumSize(QtCore.QSize(250, 80))
-        self.utilities_axes_btn.setFont(font)
-        self.utilities_axes_btn.setProperty(
-            "icon_pixmap",
-            QtGui.QPixmap(":/motion/media/btn_icons/axis_maintenance.svg"),
-        )
-        self.utilities_axes_btn.setObjectName("utilities_axes_btn")
-
-        self.utilities_content_layout.addWidget(self.utilities_axes_btn, 1, 1, 1, 1)
-
-        self.update_btn = BlocksCustomButton(parent=self)
-        self.update_btn.setSizePolicy(sizePolicy)
-        self.update_btn.setMinimumSize(QtCore.QSize(250, 80))
-        self.update_btn.setMaximumSize(QtCore.QSize(250, 80))
-        self.update_btn.setFont(font)
-        self.update_btn.setProperty(
-            "icon_pixmap",
-            QtGui.QPixmap(":/system/media/btn_icons/update-software-icon.svg"),
-        )
-
-        self.update_btn.setObjectName("update_btn")
-
-        self.utilities_content_layout.addWidget(self.update_btn, 2, 0, 1, 1)
-        self.utilities_routine_check_btn = BlocksCustomButton(parent=self)
-        self.utilities_routine_check_btn.setSizePolicy(sizePolicy)
-        self.utilities_routine_check_btn.setMinimumSize(QtCore.QSize(250, 80))
-        self.utilities_routine_check_btn.setMaximumSize(QtCore.QSize(250, 80))
-        self.utilities_routine_check_btn.setFont(font)
-        self.utilities_routine_check_btn.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/routine.svg")
-        )
-        self.utilities_routine_check_btn.setObjectName("utilities_routine_check_btn")
-
-        self.utilities_content_layout.addWidget(
-            self.utilities_routine_check_btn, 1, 0, 1, 1
-        )
-
-        self.utilities_input_shaper_btn = BlocksCustomButton(parent=self)
-        self.utilities_input_shaper_btn.setSizePolicy(sizePolicy)
-        self.utilities_input_shaper_btn.setMinimumSize(QtCore.QSize(250, 80))
-        self.utilities_input_shaper_btn.setMaximumSize(QtCore.QSize(250, 80))
-        self.utilities_input_shaper_btn.setFont(font)
-        self.utilities_input_shaper_btn.setProperty(
-            "icon_pixmap",
-            QtGui.QPixmap(":/input_shaper/media/btn_icons/input_shaper.svg"),
-        )
-        self.utilities_input_shaper_btn.setObjectName("utilities_input_shaper_btn")
-
-        self.utilities_content_layout.addWidget(
-            self.utilities_input_shaper_btn, 2, 1, 1, 1
-        )
-
-        self.utilities_info_btn = BlocksCustomButton(parent=self)
-        self.utilities_info_btn.setSizePolicy(sizePolicy)
-        self.utilities_info_btn.setMinimumSize(QtCore.QSize(250, 80))
-        self.utilities_info_btn.setMaximumSize(QtCore.QSize(250, 80))
-        self.utilities_info_btn.setFont(font)
-        self.utilities_info_btn.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/info.svg")
-        )
-
-        self.utilities_info_btn.setObjectName("utilities_info_btn")
-
-        self.utilities_content_layout.addWidget(self.utilities_info_btn, 0, 0, 1, 1)
-        self.utilities_leds_btn = BlocksCustomButton(parent=self)
-        self.utilities_leds_btn.setSizePolicy(sizePolicy)
-        self.utilities_leds_btn.setMinimumSize(QtCore.QSize(250, 80))
-        self.utilities_leds_btn.setMaximumSize(QtCore.QSize(250, 80))
-        self.utilities_leds_btn.setFont(font)
-        self.utilities_leds_btn.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/LEDs.svg")
-        )
-        self.utilities_leds_btn.setObjectName("utilities_leds_btn")
-        self.utilities_content_layout.addWidget(self.utilities_leds_btn, 0, 1, 1, 1)
-
-        self.verticalLayout.addLayout(self.utilities_content_layout)
-
-        widget.setLayout(self.verticalLayout)
-        self.addWidget(widget)
-
-        self.retranslateUi()
-
-    def retranslateUi(self):
-        _translate = QtCore.QCoreApplication.translate
-        self.setWindowTitle(_translate("self", "StackedWidget"))
-        self.utilities_title_label.setText(_translate("self", "Utilities"))
-        self.utilities_axes_btn.setText(_translate("self", "Axis\nMaint."))
-        self.update_btn.setText(_translate("self", "Update"))
-        self.utilities_routine_check_btn.setText(_translate("self", "Routine\nCheck"))
-        self.utilities_input_shaper_btn.setText(_translate("self", "Input\nShaper"))
-        self.utilities_info_btn.setText(_translate("self", "Info"))
-        self.utilities_leds_btn.setText(_translate("self", "LED's"))
+    @QtCore.pyqtSlot(name="request-back")
+    def back_button(self) -> None:
+        """Request back"""
+        self.request_back.emit()
