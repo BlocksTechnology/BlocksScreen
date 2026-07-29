@@ -15,7 +15,7 @@ class AxisPage(QtWidgets.QWidget):
     )
     request_back = QtCore.pyqtSignal(name="request_back")
 
-    call_load_panel = QtCore.pyqtSignal(bool, str, name="call-load-panel")
+    call_load_panel = QtCore.pyqtSignal(bool, str, bool, name="call-load-panel")
 
     def __init__(self, parent: QtWidgets.QWidget) -> None:
         super().__init__(parent)
@@ -132,7 +132,7 @@ class AxisPage(QtWidgets.QWidget):
             self.mva_z_value_label.setText(f"{values[2]:.3f}")
 
             if values[0] == "252,50" and values[1] == "250" and values[2] == "50":
-                self.call_load_panel.emit(False, "")
+                self.call_load_panel.emit(False, "", False)
 
     def _setup_ui(self) -> None:
         """Build the axis page: jog pads, step selector, and status labels."""
