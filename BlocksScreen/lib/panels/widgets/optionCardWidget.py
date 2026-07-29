@@ -201,6 +201,7 @@ class OptionCard(QtWidgets.QAbstractButton):
         painter.end()
 
     def _setup_ui(self) -> None:
+        """Build the option card: icon, title, and continue button."""
         self.setObjectName("option_card")
         self.resize(200, 300)
         sizePolicy = QtWidgets.QSizePolicy(
@@ -278,10 +279,6 @@ class OptionCard(QtWidgets.QAbstractButton):
             QtWidgets.QSizePolicy.Policy.Minimum,
             QtWidgets.QSizePolicy.Policy.Expanding,
         )
-        self._retranslate_ui()
-        QtCore.QMetaObject.connectSlotsByName(self)
-
-    def _retranslate_ui(self) -> None:
         _translate = QtCore.QCoreApplication.translate
         self.setWindowTitle(_translate("option_card", "Frame"))
         self.option_text.setText(_translate("option_card", "TextLabel"))

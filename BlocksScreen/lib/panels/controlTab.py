@@ -454,6 +454,7 @@ class ControlTab(QtWidgets.QStackedWidget):
         self.request_change_page.emit(2, index)
 
     def _setup_ui(self) -> None:
+        """Build the control tab page: header, back button, and option grid."""
         self.resize(710, 410)
         self.blank = QtWidgets.QWidget()
         self.blank.setMinimumSize(QtCore.QSize(250, 80))
@@ -612,9 +613,6 @@ class ControlTab(QtWidgets.QStackedWidget):
         widget.setLayout(self.verticalLayout)
         self.addWidget(widget)
 
-        self._retranslate_ui()
-
-    def _retranslate_ui(self) -> None:
         _translate = QtCore.QCoreApplication.translate
         self.setWindowTitle(_translate("controlStackedWidget", "StackedWidget"))
         self.cp_header_title.setText(_translate("controlStackedWidget", "Control"))

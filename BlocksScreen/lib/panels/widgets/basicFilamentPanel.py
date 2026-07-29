@@ -345,6 +345,7 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         return root
 
     def _setup_ui(self) -> None:
+        """Build the basic filament panel: load/unload controls and status labels."""
         self.setObjectName("self")
         self.resize(710, 411)
 

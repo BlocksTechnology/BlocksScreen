@@ -135,6 +135,7 @@ class AxisPage(QtWidgets.QWidget):
                 self.call_load_panel.emit(False, "")
 
     def _setup_ui(self) -> None:
+        """Build the axis page: jog pads, step selector, and status labels."""
         widget = QtWidgets.QWidget(parent=self)
         widget.setMinimumSize(QtCore.QSize(710, 410))
         widget.setMaximumSize(QtCore.QSize(710, 410))
@@ -517,10 +518,6 @@ class AxisPage(QtWidgets.QWidget):
         self.verticalLayout.addLayout(self.horizontalLayout_6)
         widget.setLayout(self.verticalLayout)
 
-        self._retranslate_ui()
-
-    def _retranslate_ui(self) -> None:
-        """Apply translated text to every widget on the page."""
         _translate = QtCore.QCoreApplication.translate
         self.mva_x_label.setText(_translate("controlStackedWidget", "X:"))
         self.mva_y_label.setText(_translate("controlStackedWidget", "Y:"))

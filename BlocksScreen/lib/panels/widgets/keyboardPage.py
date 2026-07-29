@@ -316,6 +316,7 @@ class CustomQwertyKeyboard(QtWidgets.QDialog):
         return btn
 
     def _setup_ui(self) -> None:
+        """Build the keyboard page: qwerty grid, numpad, and input row."""
         self.setObjectName("self")
         self.resize(800, 480)
         self.setMaximumSize(QtCore.QSize(800, 480))

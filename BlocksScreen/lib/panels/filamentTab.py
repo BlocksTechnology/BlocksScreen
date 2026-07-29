@@ -47,8 +47,8 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self.amu_manager: AMUManager = amu_manager
         self.amu_configured = False
         self._popup_callback = None
-        self.ui = self._setup_ui()
-        self.change_page(self.indexOf(self.ui))
+        self._setup_ui()
+        self.change_page(self.indexOf(self.filament_control_page))
 
         self._previous_gate_states: dict[int, bool] = {}
         self.pre_gate_idx = {}
@@ -879,7 +879,8 @@ class FilamentTab(QtWidgets.QStackedWidget):
             self.load_state = True
             self.call_load_panel.emit(True, mmu_state.action, True)
 
-    def _setup_ui(self) -> QtWidgets.QWidget:
+    def _setup_ui(self) -> None:
+        """Build the filament control page and add it to the stack."""
         self.resize(710, 410)
         self.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
         widget = QtWidgets.QWidget()
@@ -987,8 +988,8 @@ class FilamentTab(QtWidgets.QStackedWidget):
             2, int(87.5)
         )  # dont ask how i got this value , it was try and repeat
 
+        self.filament_control_page = widget
         self.addWidget(widget)
         self.fp_header_title.setText("Filament")
         self.fp_button_1.setText("Filament\nControl")
         self.fp_button_2.setText("Spoolman")
-        return widget

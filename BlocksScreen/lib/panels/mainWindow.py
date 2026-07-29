@@ -1724,12 +1724,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.header_main_layout.setStretch(3, 1)
         self.setCentralWidget(self.main_widget)
 
-        self._retranslate_ui()
-        self.main_content_widget.setCurrentIndex(3)
-        QtCore.QMetaObject.connectSlotsByName(self)
-
-    def _retranslate_ui(self) -> None:
-        """Apply translated text and style properties to header widgets."""
         _translate = QtCore.QCoreApplication.translate
         self.setWindowTitle(_translate("MainWindow", "MainWindow"))
         self.notification_btn.setProperty(
@@ -1762,3 +1756,4 @@ class MainWindow(QtWidgets.QMainWindow):
             "button_type", _translate("MainWindow", "icon_text")
         )
         self.wifi_button.setProperty("button_type", _translate("MainWindow", "icon"))
+        self.main_content_widget.setCurrentIndex(3)

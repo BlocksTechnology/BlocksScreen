@@ -115,6 +115,7 @@ class FansPage(QtWidgets.QWidget):
         self.run_gcode_signal.emit(fan_speed_gcode(name, new_value))
 
     def _setup_ui(self) -> None:
+        """Build the fans page: header, back button, and fan slider area."""
         self.setObjectName("fans_page")
         widget = QtWidgets.QWidget(parent=self)
         widget.setGeometry(QtCore.QRect(0, 0, 720, 420))
@@ -206,10 +207,6 @@ class FansPage(QtWidgets.QWidget):
 
         widget.setLayout(self.verticalLayout)
 
-        self._retranslate_ui()
-
-    def _retranslate_ui(self) -> None:
-        """Apply translated text to every widget on the page."""
         _translate = QtCore.QCoreApplication.translate
         self.fans_title_label.setText(_translate("controlStackedWidget", "Fans"))
         self.fans_back_btn.setText(_translate("controlStackedWidget", "Back"))

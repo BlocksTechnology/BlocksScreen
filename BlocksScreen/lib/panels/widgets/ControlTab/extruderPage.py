@@ -155,6 +155,7 @@ class ExtruderPage(QtWidgets.QWidget):
         return super().paintEvent(a0)
 
     def _setup_ui(self) -> None:
+        """Build the extruder page: extrude/retract controls and status labels."""
         widget = QtWidgets.QWidget(parent=self)
         widget.setMinimumSize(QtCore.QSize(710, 410))
         widget.setMaximumSize(QtCore.QSize(710, 410))
@@ -479,9 +480,6 @@ class ExtruderPage(QtWidgets.QWidget):
         self.verticalLayout.addLayout(self.exp_vertical_content_layout)
         widget.setLayout(self.verticalLayout)
 
-        self._retranslate_ui()
-
-    def _retranslate_ui(self) -> None:
         _translate = QtCore.QCoreApplication.translate
         self.exp_title_label.setText(_translate("controlStackedWidget", "Extrude"))
         self.exp_back_btn.setText(_translate("controlStackedWidget", "Back"))

@@ -110,6 +110,7 @@ class TemperaturePage(QtWidgets.QWidget):
             self.bed_temp_display.secondary_text = f"{new_value:.1f}"
 
     def _setup_ui(self) -> None:
+        """Build the temperature page: heater cards and preset controls."""
         self.setObjectName("temperature_page")
         widget = QtWidgets.QWidget(parent=self)
         widget.setGeometry(QtCore.QRect(0, 0, 720, 420))
@@ -292,10 +293,6 @@ class TemperaturePage(QtWidgets.QWidget):
 
         widget.setLayout(self.verticalLayout)
 
-        self._retranslate_ui()
-
-    def _retranslate_ui(self) -> None:
-        """Apply translated text to every widget on the page."""
         _translate = QtCore.QCoreApplication.translate
         self.temp_header_title.setText(
             _translate("controlStackedWidget", "Temperature")
