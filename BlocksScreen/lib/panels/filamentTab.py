@@ -47,7 +47,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self.amu_manager: AMUManager = amu_manager
         self.amu_configured = False
         self._popup_callback = None
-        self.ui = self.setupUi()
+        self.ui = self._setup_ui()
         self.change_page(self.indexOf(self.ui))
 
         self._previous_gate_states: dict[int, bool] = {}
@@ -879,7 +879,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
             self.load_state = True
             self.call_load_panel.emit(True, mmu_state.action, True)
 
-    def setupUi(self):
+    def _setup_ui(self) -> QtWidgets.QWidget:
         self.resize(710, 410)
         self.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
         widget = QtWidgets.QWidget()
@@ -991,3 +991,4 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self.fp_header_title.setText("Filament")
         self.fp_button_1.setText("Filament\nControl")
         self.fp_button_2.setText("Spoolman")
+        return widget

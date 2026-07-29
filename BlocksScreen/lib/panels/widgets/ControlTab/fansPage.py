@@ -206,9 +206,9 @@ class FansPage(QtWidgets.QWidget):
 
         widget.setLayout(self.verticalLayout)
 
-        self.retranslateUi()
+        self._retranslate_ui()
 
-    def retranslateUi(self):
+    def _retranslate_ui(self) -> None:
         """Apply translated text to every widget on the page."""
         _translate = QtCore.QCoreApplication.translate
         self.fans_title_label.setText(_translate("controlStackedWidget", "Fans"))

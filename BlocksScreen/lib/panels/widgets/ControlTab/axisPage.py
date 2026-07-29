@@ -21,7 +21,7 @@ class AxisPage(QtWidgets.QWidget):
         super().__init__(parent)
 
         self.setObjectName("axis_page")
-        self._setupUi()
+        self._setup_ui()
 
         self.update()
 
@@ -134,7 +134,7 @@ class AxisPage(QtWidgets.QWidget):
             if values[0] == "252,50" and values[1] == "250" and values[2] == "50":
                 self.call_load_panel.emit(False, "")
 
-    def _setupUi(self) -> None:
+    def _setup_ui(self) -> None:
         widget = QtWidgets.QWidget(parent=self)
         widget.setMinimumSize(QtCore.QSize(710, 410))
         widget.setMaximumSize(QtCore.QSize(710, 410))
@@ -517,9 +517,9 @@ class AxisPage(QtWidgets.QWidget):
         self.verticalLayout.addLayout(self.horizontalLayout_6)
         widget.setLayout(self.verticalLayout)
 
-        self.retranslateUi()
+        self._retranslate_ui()
 
-    def retranslateUi(self):
+    def _retranslate_ui(self) -> None:
         """Apply translated text to every widget on the page."""
         _translate = QtCore.QCoreApplication.translate
         self.mva_x_label.setText(_translate("controlStackedWidget", "X:"))

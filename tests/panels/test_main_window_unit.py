@@ -62,7 +62,8 @@ def _make_nav_window(print_state: str) -> SimpleNamespace:
         _print_state=print_state,
         printPanel=print_panel,
         filamentPanel=MagicMock(),
-        ui=SimpleNamespace(main_content_widget=main_content, printTab=print_tab),
+        main_content_widget=main_content,
+        printTab=print_tab,
     )
     for name in (
         "_is_job_active",

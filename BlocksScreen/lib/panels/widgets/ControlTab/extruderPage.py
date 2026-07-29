@@ -28,7 +28,7 @@ class ExtruderPage(QtWidgets.QWidget):
 
         self.setObjectName("extruder_page")
         self.extrude_list: list[int] = [2, 4, 8]
-        self._setupUi()
+        self._setup_ui()
 
         self.update()
 
@@ -154,7 +154,7 @@ class ExtruderPage(QtWidgets.QWidget):
             self.exp_info_label.setText(self.extrude_page_message)
         return super().paintEvent(a0)
 
-    def _setupUi(self) -> None:
+    def _setup_ui(self) -> None:
         widget = QtWidgets.QWidget(parent=self)
         widget.setMinimumSize(QtCore.QSize(710, 410))
         widget.setMaximumSize(QtCore.QSize(710, 410))
@@ -479,9 +479,9 @@ class ExtruderPage(QtWidgets.QWidget):
         self.verticalLayout.addLayout(self.exp_vertical_content_layout)
         widget.setLayout(self.verticalLayout)
 
-        self.retranslateUi()
+        self._retranslate_ui()
 
-    def retranslateUi(self):
+    def _retranslate_ui(self) -> None:
         _translate = QtCore.QCoreApplication.translate
         self.exp_title_label.setText(_translate("controlStackedWidget", "Extrude"))
         self.exp_back_btn.setText(_translate("controlStackedWidget", "Back"))

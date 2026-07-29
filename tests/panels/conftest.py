@@ -9,6 +9,7 @@ module before the real module is imported.
 
 import sys
 import types
+from pathlib import Path
 from unittest.mock import MagicMock
 
 _STUB_MODULES = (
@@ -39,7 +40,6 @@ _STUB_MODULES = (
     "lib.panels.widgets.MainWindow.updatePage",
     "lib.printer",
     "lib.ui",
-    "lib.ui.mainWindow_ui",
     "lib.ui.resources",
     "lib.ui.resources.background_resources_rc",
     "lib.ui.resources.font_rc",
@@ -56,6 +56,13 @@ for _name in _STUB_MODULES:
     _mod = types.ModuleType(_name)
     _mod.__path__ = []  # marks it as a package so submodule imports resolve
     sys.modules[_name] = _mod
+
+# MainWindow builds pure-PyQt6 widgets from lib.utils directly, so those stay
+# real: re-point lib.utils at the source tree (earlier suites may have left a
+# MagicMock there, which is not importable as a package).
+_utils = types.ModuleType("lib.utils")
+_utils.__path__ = [str(Path(__file__).parents[2] / "BlocksScreen" / "lib" / "utils")]
+sys.modules["lib.utils"] = _utils
 
 # events.* is referenced as a bare attribute in type annotations
 # (e.g. ``event: events.WebSocketMessageReceived``), evaluated eagerly at
@@ -87,6 +94,5 @@ sys.modules[f"{_MW}.connectionPage"].ConnectionPage = MagicMock
 sys.modules[f"{_MW}.notificationPage"].NotificationPage = MagicMock
 sys.modules[f"{_MW}.updatePage"].UpdatePage = MagicMock
 sys.modules["lib.printer"].Printer = MagicMock
-sys.modules["lib.ui.mainWindow_ui"].Ui_MainWindow = MagicMock
 sys.modules["lib.updater_worker"].UpdaterWorker = MagicMock
 sys.modules["screensaver"].ScreenSaver = MagicMock

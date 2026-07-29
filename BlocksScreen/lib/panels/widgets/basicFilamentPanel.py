@@ -51,7 +51,7 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         self.has_load_unload_objects = None
         self.filament_buttons_list = []
         self.mmu_configured = False
-        self._setupUi()
+        self._setup_ui()
         self.filament_state = self.FilamentStates.UNKNOWN
 
         self.setCurrentIndex(0)
@@ -344,7 +344,7 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
 
         return root
 
-    def _setupUi(self):
+    def _setup_ui(self) -> None:
         self.setObjectName("self")
         self.resize(710, 411)
 

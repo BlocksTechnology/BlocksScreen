@@ -64,7 +64,7 @@ class ControlTab(QtWidgets.QStackedWidget):
         /,
     ) -> None:
         super().__init__(parent)
-        self.setupUi()
+        self._setup_ui()
 
         self.back_button.clicked.connect(lambda: self._button_change(False))
         self.ws: MoonWebSocket = ws
@@ -453,7 +453,7 @@ class ControlTab(QtWidgets.QStackedWidget):
         """Handles changing page"""
         self.request_change_page.emit(2, index)
 
-    def setupUi(self):
+    def _setup_ui(self) -> None:
         self.resize(710, 410)
         self.blank = QtWidgets.QWidget()
         self.blank.setMinimumSize(QtCore.QSize(250, 80))
@@ -612,9 +612,9 @@ class ControlTab(QtWidgets.QStackedWidget):
         widget.setLayout(self.verticalLayout)
         self.addWidget(widget)
 
-        self.retranslateUi()
+        self._retranslate_ui()
 
-    def retranslateUi(self):
+    def _retranslate_ui(self) -> None:
         _translate = QtCore.QCoreApplication.translate
         self.setWindowTitle(_translate("controlStackedWidget", "StackedWidget"))
         self.cp_header_title.setText(_translate("controlStackedWidget", "Control"))

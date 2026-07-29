@@ -25,7 +25,7 @@ class OptionCard(QtWidgets.QAbstractButton):
         self.name = name
         self.card_text = text
         self.doubleT: bool = False
-        self._setupUi(self)
+        self._setup_ui()
         self.option_icon.setAttribute(
             QtCore.Qt.WidgetAttribute.WA_TransparentForMouseEvents
         )
@@ -200,29 +200,29 @@ class OptionCard(QtWidgets.QAbstractButton):
 
         painter.end()
 
-    def _setupUi(self, option_card):
-        option_card.setObjectName("option_card")
-        option_card.resize(200, 300)
+    def _setup_ui(self) -> None:
+        self.setObjectName("option_card")
+        self.resize(200, 300)
         sizePolicy = QtWidgets.QSizePolicy(
             QtWidgets.QSizePolicy.Policy.MinimumExpanding,
             QtWidgets.QSizePolicy.Policy.Ignored,
         )
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(option_card.sizePolicy().hasHeightForWidth())
-        option_card.setSizePolicy(sizePolicy)
-        option_card.setMinimumSize(QtCore.QSize(200, 300))
-        option_card.setMaximumSize(QtCore.QSize(200, 300))
-        self.verticalLayout = QtWidgets.QVBoxLayout(option_card)
+        sizePolicy.setHeightForWidth(self.sizePolicy().hasHeightForWidth())
+        self.setSizePolicy(sizePolicy)
+        self.setMinimumSize(QtCore.QSize(200, 300))
+        self.setMaximumSize(QtCore.QSize(200, 300))
+        self.verticalLayout = QtWidgets.QVBoxLayout(self)
         self.verticalLayout.setContentsMargins(0, 0, -1, -1)
         self.verticalLayout.setObjectName("verticalLayout")
-        self.option_icon = IconButton(parent=option_card)
+        self.option_icon = IconButton(parent=self)
         self.option_icon.setMinimumSize(QtCore.QSize(200, 150))
         self.option_icon.setObjectName("option_icon")
         _button_font = QtGui.QFont()
         _button_font.setBold(True)
         _button_font.setPointSize(20)
-        self.secondtext = QtWidgets.QLabel(parent=option_card)
+        self.secondtext = QtWidgets.QLabel(parent=self)
         self.secondtext.setText("%")
         self.secondtext.setStyleSheet("color:white")
         self.secondtext.setFont(_button_font)
@@ -230,7 +230,7 @@ class OptionCard(QtWidgets.QAbstractButton):
         self.secondtext.setWordWrap(True)
         self.secondtext.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self.secondtext.hide()
-        self.line_separator = QtWidgets.QFrame(parent=option_card)
+        self.line_separator = QtWidgets.QFrame(parent=self)
         self.line_separator.setFrameShape(QtWidgets.QFrame.Shape.HLine)
         self.line_separator.setFrameShadow(QtWidgets.QFrame.Shadow.Sunken)
         self.line_separator.setMinimumSize(150, 2)
@@ -241,7 +241,7 @@ class OptionCard(QtWidgets.QAbstractButton):
             0,
             QtCore.Qt.AlignmentFlag.AlignHCenter | QtCore.Qt.AlignmentFlag.AlignVCenter,
         )
-        self.option_text = QtWidgets.QLabel(parent=option_card)
+        self.option_text = QtWidgets.QLabel(parent=self)
         self.option_text.setMinimumSize(QtCore.QSize(200, 50))
         self.option_text.setObjectName("option_text")
         self.option_text.setWordWrap(True)
@@ -252,7 +252,7 @@ class OptionCard(QtWidgets.QAbstractButton):
         self.option_text.setPalette(_palette)
 
         self.option_text.setFont(_button_font)
-        self.continue_button = IconButton(parent=option_card)
+        self.continue_button = IconButton(parent=self)
         sizePolicy = QtWidgets.QSizePolicy(
             QtWidgets.QSizePolicy.Policy.MinimumExpanding,
             QtWidgets.QSizePolicy.Policy.MinimumExpanding,
@@ -278,12 +278,12 @@ class OptionCard(QtWidgets.QAbstractButton):
             QtWidgets.QSizePolicy.Policy.Minimum,
             QtWidgets.QSizePolicy.Policy.Expanding,
         )
-        self._retranslateUi(option_card)
-        QtCore.QMetaObject.connectSlotsByName(option_card)
+        self._retranslate_ui()
+        QtCore.QMetaObject.connectSlotsByName(self)
 
-    def _retranslateUi(self, option_card):
+    def _retranslate_ui(self) -> None:
         _translate = QtCore.QCoreApplication.translate
-        option_card.setWindowTitle(_translate("option_card", "Frame"))
+        self.setWindowTitle(_translate("option_card", "Frame"))
         self.option_text.setText(_translate("option_card", "TextLabel"))
         self.continue_button.setProperty(
             "button_type", _translate("option_card", "icon")
