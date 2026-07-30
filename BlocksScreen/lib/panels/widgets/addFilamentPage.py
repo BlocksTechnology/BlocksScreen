@@ -29,6 +29,7 @@ class AddFilamentPage(QtWidgets.QWidget):
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self._keyboard_field: QtWidgets.QLineEdit | None = None
+        self._color_hex = "ffffff"
 
         self._build_ui()
 
@@ -66,7 +67,7 @@ class AddFilamentPage(QtWidgets.QWidget):
     def reset(self):
         self._name_field.setText("")
         self._material_field.setText("---")
-        self._color_field.setText("ffffff")
+        self._set_color("ffffff")
         self._ext_temp_field.setText("---")
         self._bed_temp_field.setText("---")
         self._density_field.setText("---")
@@ -135,30 +136,37 @@ class AddFilamentPage(QtWidgets.QWidget):
         self._bed_temp_field.setText(str(value))
 
     def _open_color_wheel(self) -> None:
-        self.color_whell.set_color_hex(
-            self._color_field.text().strip().lstrip("#") or "ffffff"
-        )
+        self.color_whell.set_color_hex(self._color_hex or "ffffff")
         self._color_whell_popup.show()
 
     @QtCore.pyqtSlot(str, name="on-color-selected")
     def _on_color_selected(self, hex_str: str) -> None:
-        self._color_field.setText(hex_str)
+        self._set_color(hex_str)
 
-    def _update_swatch(self) -> None:
-        hex_text = self._color_field.text().strip("#").strip()
-        if len(hex_text) == 6:
-            color = QtGui.QColor(f"#{hex_text}")
-            self._color_swatch.setStyleSheet(
-                f"border-radius: 8px;"
-                f"background: rgb({color.red()},{color.green()},{color.blue()});"
-                f"border: 2px solid rgba(255,255,255,80);"
-            )
+    def _set_color(self, hex_str: str) -> None:
+        """Stores *hex_str* (what the Spoolman API needs) and updates the
+        RGB text label + swatch preview shown to the user."""
+        hex_text = hex_str.strip().lstrip("#")
+        if len(hex_text) != 6:
+            return
+        self._color_hex = hex_text
+        color = QtGui.QColor(f"#{hex_text}")
+        self._color_field.setText(
+            f"<span style='color:#ff0000;'>R</span>:{color.red()}  "
+            f"<span style='color:#00ff00;'>G</span>:{color.green()}  "
+            f"<span style='color:#0000ff;'>B</span>:{color.blue()}"
+        )
+        self._color_swatch.setStyleSheet(
+            f"border-radius: 8px;"
+            f"background: rgb({color.red()},{color.green()},{color.blue()});"
+            f"border: 2px solid rgba(255,255,255,80);"
+        )
 
     def _on_submit(self) -> None:
         body: dict = {}
         name = self._name_field.text().strip()
         material = self._material_field.text().strip()
-        color_hex = self._color_field.text().strip().strip("#")
+        color_hex = self._color_hex
         ext_temp = self._ext_temp_field.text().strip()
         bed_temp = self._bed_temp_field.text().strip()
         density_text = self._density_field.text().strip()
@@ -184,7 +192,7 @@ class AddFilamentPage(QtWidgets.QWidget):
             body["density"] = 1.24
 
         body["diameter"] = 1.75  # Default diameter, can be modified later if needed
-        if not vendor_text == "---":
+        if vendor_text != "---":
             self.request_add_manufacturer.emit({"name": vendor_text})
             self.request_filament_body = body
             return
@@ -232,7 +240,7 @@ class AddFilamentPage(QtWidgets.QWidget):
         blank.setFixedSize(60, 60)
         hdr.addWidget(blank)
 
-        title_lbl = QtWidgets.QLabel("Add Filament", self)
+        title_lbl = QtWidgets.QLabel("New Filament", self)
         title_lbl.setFont(_f(22))
         title_lbl.setFixedHeight(60)
         title_lbl.setStyleSheet("color: white; background: transparent;")
@@ -257,13 +265,19 @@ class AddFilamentPage(QtWidgets.QWidget):
 
         self._name_field = _make_field(left_frame)
         self._material_field = _make_field(left_frame)
-        self._color_field = _make_field(left_frame)
+
+        self._color_field = QtWidgets.QLabel(left_frame)
+        self._color_field.setFont(_f(14))
+        self._color_field.setFixedHeight(46)
+        self._color_field.setStyleSheet("color: rgb(255, 255, 255);")
 
         self._color_swatch = QtWidgets.QLabel(left_frame)
         self._color_swatch.setFixedSize(70, 70)
         self._color_swatch.setStyleSheet(
             "border-radius: 8px; background: #ffffff; border: 2px solid rgba(255,255,255,80);"
         )
+        self._color_swatch.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
+        self._color_swatch.mousePressEvent = lambda event: self._open_color_wheel()
 
         left_lay.addWidget(_key_lbl("Name:", left_frame))
         left_lay.addWidget(self._name_field)
@@ -271,13 +285,13 @@ class AddFilamentPage(QtWidgets.QWidget):
         left_lay.addWidget(_key_lbl("Material:", left_frame))
         left_lay.addWidget(self._material_field)
 
-        left_lay.addWidget(_key_lbl("Color (hex):", left_frame))
+        left_lay.addWidget(_key_lbl("Color:", left_frame))
         color_row = QtWidgets.QHBoxLayout()
         color_row.setSpacing(30)
         color_row.setContentsMargins(0, 0, 0, 0)
-        self._color_field.setMaximumWidth(100)
-        color_row.addWidget(self._color_field)
+        self._color_field.setMaximumWidth(220)
         color_row.addWidget(self._color_swatch)
+        color_row.addWidget(self._color_field)
         color_row.addStretch(1)
         left_lay.addLayout(color_row)
 
@@ -324,7 +338,7 @@ class AddFilamentPage(QtWidgets.QWidget):
 
         self._name_field.setPlaceholderText("e.g. PLA Generic")
         self._material_field.setText("PLA")
-        self._color_field.setText("ffffff")
+        self._set_color("ffffff")
         self._ext_temp_field.setText("220")
         self._bed_temp_field.setText("60")
         self._density_field.setText("1.24")
@@ -334,7 +348,6 @@ class AddFilamentPage(QtWidgets.QWidget):
         self._material_field.clicked.connect(
             lambda: self._show_keyboard(self._material_field)
         )
-        self._color_field.clicked.connect(self._open_color_wheel)
         self._ext_temp_field.clicked.connect(
             lambda: self.request_numpad[str, int, "PyQt_PyObject", int, int].emit(
                 "Extruder Temp",
@@ -360,13 +373,18 @@ class AddFilamentPage(QtWidgets.QWidget):
             lambda: self._show_keyboard(self._vendor_field, max_char=65)
         )
 
-        self._color_field.textChanged.connect(self._update_swatch)
-
+        spacer = QtWidgets.QSpacerItem(
+            5,
+            5,
+            QtWidgets.QSizePolicy.Policy.Minimum,
+            QtWidgets.QSizePolicy.Policy.Minimum,
+        )
+        root.addItem(spacer)
         # Submit
         submit_btn = BlocksCustomButton(self)
-        submit_btn.setFixedSize(220, 80)
+        submit_btn.setFixedSize(400, 80)
         submit_btn.setFont(_f(16))
-        submit_btn.setText("Add\nFilament")
+        submit_btn.setText("New Filament")
         submit_btn.setPixmap(
             QtGui.QPixmap(":/filament_related/media/btn_icons/add filament.svg")
         )

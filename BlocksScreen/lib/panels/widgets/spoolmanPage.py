@@ -192,7 +192,7 @@ class SpoolmanPage(QtWidgets.QWidget):
 
         self.model.add_item(
             ListItem(
-                text="+ Add Spool",
+                text=" Add Spool",
                 left_icon=self._make_add_pixmap(),
                 _lfontsize=14,
                 height=60,
@@ -239,7 +239,7 @@ class SpoolmanPage(QtWidgets.QWidget):
         """Handle when a spool item is clicked in the list."""
         if not item:
             return
-        if item.text == "+ Add Spool":
+        if item.text == " Add Spool":
             self._on_add_spool_clicked()
             return
         self._selected_spool = self._display_name_to_spool.get(item.text)
@@ -420,6 +420,14 @@ class SpoolmanPage(QtWidgets.QWidget):
         white_palette.setColor(
             white_palette.ColorRole.WindowText, QtGui.QColor("#FFFFFF")
         )
+
+        spacer = QtWidgets.QSpacerItem(
+            30,
+            30,
+            QtWidgets.QSizePolicy.Policy.Minimum,
+            QtWidgets.QSizePolicy.Policy.Minimum,
+        )
+        info_layout.addItem(spacer)
 
         def _add_row(title_text: str) -> QtWidgets.QLabel:
             row = QtWidgets.QHBoxLayout()

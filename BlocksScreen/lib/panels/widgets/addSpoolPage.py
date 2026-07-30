@@ -59,6 +59,9 @@ class AddSpoolPage(QtWidgets.QWidget):
         """Clear state and trigger a fresh filament fetch. Call before showing."""
         self._selected_filament_id = None
         self._submit_btn.setEnabled(False)
+        self._lot_field.setEnabled(False)
+        self._weight_field.setEnabled(False)
+        self._location_field.setEnabled(False)
         self._location_field.clear()
         self._lot_field.clear()
         self._weight_field.clear()
@@ -87,7 +90,7 @@ class AddSpoolPage(QtWidgets.QWidget):
         self._fil_delegate.clear()
         self._fil_model.add_item(
             ListItem(
-                text="+ Add Filament",
+                text=" New Filament",
                 left_icon=self._make_add_pixmap(),
                 _lfontsize=14,
                 height=60,
@@ -142,12 +145,15 @@ class AddSpoolPage(QtWidgets.QWidget):
     def _on_filament_selected(self, item: ListItem) -> None:
         if not item:
             return
-        if item.text == "+ Add Filament":
+        if item.text == " New Filament":
             self.open_add_filament.emit()
             return
         filament = self._filament_id_map.get(item.text)
         if filament:
             self._selected_filament_id = filament.get("id")
+            self._lot_field.setEnabled(True)
+            self._weight_field.setEnabled(True)
+            self._location_field.setEnabled(True)
             self._submit_btn.setEnabled(True)
 
     def _show_keyboard(
