@@ -234,6 +234,11 @@ class SpoolmanPage(QtWidgets.QWidget):
 
         self.spool_list_widget.blockSignals(False)
 
+        if self._display_name_to_spool:
+            self._no_spools_label.hide()
+        else:
+            self._no_spools_label.show()
+
     @QtCore.pyqtSlot(ListItem, name="on-item-clicked")
     def on_item_clicked(self, item: ListItem) -> None:
         """Handle when a spool item is clicked in the list."""
@@ -398,9 +403,19 @@ class SpoolmanPage(QtWidgets.QWidget):
             QtWidgets.QScroller.ScrollerGestureType.LeftMouseButtonGesture,
         )
 
+        self._no_spools_label = QtWidgets.QLabel("No spools found", list_frame)
+        self._no_spools_label.setWordWrap(True)
+        self._no_spools_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self._no_spools_label.setStyleSheet("color: gray;")
+        no_spools_font = QtGui.QFont()
+        no_spools_font.setPointSize(13)
+        self._no_spools_label.setFont(no_spools_font)
+        self._no_spools_label.hide()
+
         list_layout = QtWidgets.QVBoxLayout()
         list_layout.setContentsMargins(4, 4, 4, 4)
         list_layout.addWidget(self.spool_list_widget, 1)
+        list_layout.addWidget(self._no_spools_label)
         list_frame.setLayout(list_layout)
         main_layout.addWidget(list_frame, 3)
 

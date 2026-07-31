@@ -67,6 +67,7 @@ class AddSpoolPage(QtWidgets.QWidget):
         self._weight_field.clear()
         self._fil_list_view.hide()
         self._fil_load_widget.show()
+        self._no_filaments_label.hide()
         self._fil_model.clear()
         self._fil_delegate.clear()
         self.request_filaments.emit()
@@ -118,6 +119,16 @@ class AddSpoolPage(QtWidgets.QWidget):
             )
             self._filament_id_map[name] = fil
             self.update()
+
+        if self._filament_id_map:
+            self._no_filaments_label.hide()
+        else:
+            self._no_filaments_label.setText(
+                f'No filaments found for "{self._material_filter}"'
+                if self._material_filter
+                else "No filaments found"
+            )
+            self._no_filaments_label.show()
 
     @staticmethod
     def _make_add_pixmap() -> QtGui.QPixmap:
@@ -346,6 +357,16 @@ class AddSpoolPage(QtWidgets.QWidget):
         left_lay.addWidget(self._fil_list_view, 1)
         left_lay.addWidget(self._fil_load_widget, 1)
         self._fil_list_view.hide()
+
+        self._no_filaments_label = QtWidgets.QLabel("", left_frame)
+        self._no_filaments_label.setWordWrap(True)
+        self._no_filaments_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self._no_filaments_label.setStyleSheet("color: gray;")
+        no_fil_font = QtGui.QFont()
+        no_fil_font.setPointSize(13)
+        self._no_filaments_label.setFont(no_fil_font)
+        self._no_filaments_label.hide()
+        left_lay.addWidget(self._no_filaments_label)
 
         body.addWidget(left_frame, 1)
 
