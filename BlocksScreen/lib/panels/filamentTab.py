@@ -511,6 +511,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
         return page
 
     def handle_skip_button(self):
+        """Handles the skip button action from the pre-gate popup to send the appropriate G-code to map the gate to no spool."""
         gate = self.pre_gate_idx.get("gate", 0)
         self.popup.hide()
         self._reset_popup()
@@ -557,6 +558,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
 
     @QtCore.pyqtSlot(int, str, str, "PyQt_PyObject", name="open-pregate-popup")
     def open_pregate_popup(self, temp, material, name, callback=None):
+        """Opens the pre-gate popup with the provided filament information."""
         self._popup_name.setText(name)
         self._popup_material.setText(material)
         self._popup_temp.setText(str(temp))
@@ -714,6 +716,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
                 self._popup_callback = None
 
     def reset_spool_info(self):
+        """Resets the spool information labels and disables the accept button."""
         self.filament_name_label.setText("N/A")
         self.material_label.setText("N/A")
         self.weight_label.setText("N/A")
