@@ -96,6 +96,11 @@ class FilamentTab(QtWidgets.QStackedWidget):
                 body, callback=self.spoolmanPanel.on_add_filament_result
             )
         )
+        self.spoolmanPanel.request_add_manufacturer.connect(
+            lambda body: self.ws.api.add_manufacturer(
+                body, callback=self.spoolmanPanel.on_add_manufacturer_result
+            )
+        )
 
         self._basic_panel = BasicFilamentPanel(self.printer, self.cfg, parent=self)
         self._basic_panel.run_gcode.connect(self.run_gcode)
