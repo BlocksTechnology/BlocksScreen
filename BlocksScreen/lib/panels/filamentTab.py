@@ -122,6 +122,14 @@ class FilamentTab(QtWidgets.QStackedWidget):
 
         self.run_gcode.connect(self.ws.api.run_gcode)
 
+    def in_case_error(self):
+        """Reset the popup and spool info in case of an error."""
+        self._reset_popup()
+        self.reset_spool_info()
+        self._add_spool_page.setFilter(None)
+        self._add_filament_page.setData("---", 0)
+        self.load_popup.hide()
+
     def handle_moonraker_components(self):
         """Build the pre-gate popup pages once, choosing spoolman vs. manual-entry order."""
         if self.moonraker_run:
