@@ -2,6 +2,7 @@ import enum
 import logging
 from functools import partial
 
+from devices.amu.models import FilamentPos, GateStatus
 from lib.filament import Filament
 from lib.panels.widgets.popupDialogWidget import Popup
 from lib.printer import Printer
@@ -256,10 +257,13 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
                 btn.clicked.connect(partial(self.open_pre_gate_popup, _filament_type))
             self.mmu_configured = True
 
-        if mmu_state.filament == "Loaded":
-            self.filament_state = self.FilamentStates.LOADED
-        else:
+        if mmu_state.filament_pos == FilamentPos.UNLOADED:
             self.filament_state = self.FilamentStates.UNLOADED
+            gate_info = mmu_state.current_gate_info
+            status = gate_info.status if gate_info is not None else GateStatus.UNKNOWN
+            self.filament_page_load_btn.setEnabled(status != GateStatus.EMPTY)
+        else:
+            self.filament_state = self.FilamentStates.LOADED
 
     @property
     def filament_state(self):

@@ -13,13 +13,30 @@ _project_root = Path(__file__).resolve().parent.parent.parent
 if str(_project_root) not in sys.path:
     sys.path.insert(0, str(_project_root))
 
-for _pkg in ("lib", "lib.panels", "lib.panels.widgets", "lib.utils"):
+for _pkg in (
+    "lib",
+    "lib.panels",
+    "lib.panels.widgets",
+    "lib.utils",
+    "devices",
+    "devices.amu",
+):
     sys.modules.pop(_pkg, None)
 
 _lib_mod = types.ModuleType("lib")
 _lib_mod.__path__ = [str(_project_root / "BlocksScreen" / "lib")]
 _lib_mod.__package__ = "lib"
 sys.modules["lib"] = _lib_mod
+
+_devices_mod = types.ModuleType("devices")
+_devices_mod.__path__ = [str(_project_root / "BlocksScreen" / "devices")]
+_devices_mod.__package__ = "devices"
+sys.modules["devices"] = _devices_mod
+
+_devices_amu_mod = types.ModuleType("devices.amu")
+_devices_amu_mod.__path__ = [str(_project_root / "BlocksScreen" / "devices" / "amu")]
+_devices_amu_mod.__package__ = "devices.amu"
+sys.modules["devices.amu"] = _devices_amu_mod
 
 for _mod_name in ("events", "helper_methods"):
     _mod_path = _project_root / "BlocksScreen" / f"{_mod_name}.py"
