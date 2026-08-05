@@ -96,6 +96,11 @@ class FilamentTab(QtWidgets.QStackedWidget):
                 body, callback=self.spoolmanPanel.on_add_filament_result
             )
         )
+        self.spoolmanPanel.request_add_manufacturer.connect(
+            lambda body: self.ws.api.add_manufacturer(
+                body, callback=self.spoolmanPanel.on_add_manufacturer_result
+            )
+        )
 
         self._basic_panel = BasicFilamentPanel(self.printer, self.cfg, parent=self)
         self._basic_panel.run_gcode.connect(self.run_gcode)
@@ -382,6 +387,16 @@ class FilamentTab(QtWidgets.QStackedWidget):
         frame_lay.addWidget(self._spool_load_widget, 1)
         self._spool_list_view.hide()
 
+        self._no_spools_label = QtWidgets.QLabel("", frame)
+        self._no_spools_label.setWordWrap(True)
+        self._no_spools_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self._no_spools_label.setStyleSheet("color: gray;")
+        no_spools_font = QtGui.QFont()
+        no_spools_font.setPointSize(13)
+        self._no_spools_label.setFont(no_spools_font)
+        self._no_spools_label.hide()
+        frame_lay.addWidget(self._no_spools_label)
+
         self._add_spool_page = AddSpoolPage(self)
         self._add_filament_page = AddFilamentPage(self)
 
@@ -617,6 +632,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
         """Handles the result from the API call to get spools for the spoolman page."""
         self._spool_load_widget.hide()
         self._spool_list_view.show()
+        self._no_spools_label.hide()
 
         self.reset_spool_info()
 
@@ -659,6 +675,16 @@ class FilamentTab(QtWidgets.QStackedWidget):
             )
             self._spool_id_map[name] = spool
         self.update()
+
+        if self._spool_id_map:
+            self._no_spools_label.hide()
+        else:
+            self._no_spools_label.setText(
+                f'No spools found for "{self._material_filter}"'
+                if self._material_filter
+                else "No spools found"
+            )
+            self._no_spools_label.show()
 
     def _on_spool_selected(self) -> None:
         item = self._spool_model.get_selected_item()

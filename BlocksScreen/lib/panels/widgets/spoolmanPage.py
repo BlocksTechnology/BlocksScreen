@@ -31,6 +31,9 @@ class SpoolmanPage(QtWidgets.QWidget):
     request_add_filament: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         dict, name="request-add-filament"
     )
+    request_add_manufacturer: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        dict, name="request-add-manufacturer"
+    )
     request_back: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         name="request_back"
     )
@@ -58,6 +61,9 @@ class SpoolmanPage(QtWidgets.QWidget):
         self._add_spool_page.cancelled.connect(self._add_popup.hide)
 
         self._add_filament_page.request_add_filament.connect(self.request_add_filament)
+        self._add_filament_page.request_add_manufacturer.connect(
+            self.request_add_manufacturer
+        )
         self._add_filament_page.accepted.connect(
             lambda: self._add_stack.setCurrentIndex(0)
         )
@@ -192,7 +198,7 @@ class SpoolmanPage(QtWidgets.QWidget):
 
         self.model.add_item(
             ListItem(
-                text="+ Add Spool",
+                text=" Add Spool",
                 left_icon=self._make_add_pixmap(),
                 _lfontsize=14,
                 height=60,
@@ -234,12 +240,17 @@ class SpoolmanPage(QtWidgets.QWidget):
 
         self.spool_list_widget.blockSignals(False)
 
+        if self._display_name_to_spool:
+            self._no_spools_label.hide()
+        else:
+            self._no_spools_label.show()
+
     @QtCore.pyqtSlot(ListItem, name="on-item-clicked")
     def on_item_clicked(self, item: ListItem) -> None:
         """Handle when a spool item is clicked in the list."""
         if not item:
             return
-        if item.text == "+ Add Spool":
+        if item.text == " Add Spool":
             self._on_add_spool_clicked()
             return
         self._selected_spool = self._display_name_to_spool.get(item.text)
@@ -398,9 +409,19 @@ class SpoolmanPage(QtWidgets.QWidget):
             QtWidgets.QScroller.ScrollerGestureType.LeftMouseButtonGesture,
         )
 
+        self._no_spools_label = QtWidgets.QLabel("No spools found", list_frame)
+        self._no_spools_label.setWordWrap(True)
+        self._no_spools_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self._no_spools_label.setStyleSheet("color: gray;")
+        no_spools_font = QtGui.QFont()
+        no_spools_font.setPointSize(13)
+        self._no_spools_label.setFont(no_spools_font)
+        self._no_spools_label.hide()
+
         list_layout = QtWidgets.QVBoxLayout()
         list_layout.setContentsMargins(4, 4, 4, 4)
         list_layout.addWidget(self.spool_list_widget, 1)
+        list_layout.addWidget(self._no_spools_label)
         list_frame.setLayout(list_layout)
         main_layout.addWidget(list_frame, 3)
 
@@ -420,6 +441,14 @@ class SpoolmanPage(QtWidgets.QWidget):
         white_palette.setColor(
             white_palette.ColorRole.WindowText, QtGui.QColor("#FFFFFF")
         )
+
+        spacer = QtWidgets.QSpacerItem(
+            30,
+            30,
+            QtWidgets.QSizePolicy.Policy.Minimum,
+            QtWidgets.QSizePolicy.Policy.Minimum,
+        )
+        info_layout.addItem(spacer)
 
         def _add_row(title_text: str) -> QtWidgets.QLabel:
             row = QtWidgets.QHBoxLayout()
@@ -515,3 +544,8 @@ class SpoolmanPage(QtWidgets.QWidget):
     def on_add_filament_result(self, result: dict) -> None:
         """Handle results for adding a filament."""
         self._add_filament_page.on_add_filament_result(result)
+
+    @QtCore.pyqtSlot(dict, name="on-add-manufacturer-result")
+    def on_add_manufacturer_result(self, result: dict) -> None:
+        """Handle results for adding a manufacturer/vendor."""
+        self._add_filament_page.on_add_manufacturer_result(result)

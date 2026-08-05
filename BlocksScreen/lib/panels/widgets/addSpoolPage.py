@@ -59,19 +59,23 @@ class AddSpoolPage(QtWidgets.QWidget):
         """Clear state and trigger a fresh filament fetch. Call before showing."""
         self._selected_filament_id = None
         self._submit_btn.setEnabled(False)
+        self._lot_field.setEnabled(False)
+        self._weight_field.setEnabled(False)
+        self._location_field.setEnabled(False)
         self._location_field.clear()
         self._lot_field.clear()
         self._weight_field.clear()
         self._fil_list_view.hide()
         self._fil_load_widget.show()
+        self._no_filaments_label.hide()
         self._fil_model.clear()
         self._fil_delegate.clear()
         self.request_filaments.emit()
 
     def setFilter(self, material: str | None = None) -> None:
-        """Set a material filter for the filament list. Call before reset()."""
-        self.reset()
+        """Set a material filter and reload the filament list."""
         self._material_filter = material
+        self.reset()
 
     @QtCore.pyqtSlot(dict, name="on-filaments-received")
     def on_filaments_received(self, result: dict) -> None:
@@ -87,7 +91,7 @@ class AddSpoolPage(QtWidgets.QWidget):
         self._fil_delegate.clear()
         self._fil_model.add_item(
             ListItem(
-                text="+ Add Filament",
+                text=" New Filament",
                 left_icon=self._make_add_pixmap(),
                 _lfontsize=14,
                 height=60,
@@ -116,6 +120,16 @@ class AddSpoolPage(QtWidgets.QWidget):
             self._filament_id_map[name] = fil
             self.update()
 
+        if self._filament_id_map:
+            self._no_filaments_label.hide()
+        else:
+            self._no_filaments_label.setText(
+                f'No filaments found for "{self._material_filter}"'
+                if self._material_filter
+                else "No filaments found"
+            )
+            self._no_filaments_label.show()
+
     @staticmethod
     def _make_add_pixmap() -> QtGui.QPixmap:
         pixmap = QtGui.QPixmap(32, 32)
@@ -142,12 +156,15 @@ class AddSpoolPage(QtWidgets.QWidget):
     def _on_filament_selected(self, item: ListItem) -> None:
         if not item:
             return
-        if item.text == "+ Add Filament":
+        if item.text == " New Filament":
             self.open_add_filament.emit()
             return
         filament = self._filament_id_map.get(item.text)
         if filament:
             self._selected_filament_id = filament.get("id")
+            self._lot_field.setEnabled(True)
+            self._weight_field.setEnabled(True)
+            self._location_field.setEnabled(True)
             self._submit_btn.setEnabled(True)
 
     def _show_keyboard(
@@ -340,6 +357,16 @@ class AddSpoolPage(QtWidgets.QWidget):
         left_lay.addWidget(self._fil_list_view, 1)
         left_lay.addWidget(self._fil_load_widget, 1)
         self._fil_list_view.hide()
+
+        self._no_filaments_label = QtWidgets.QLabel("", left_frame)
+        self._no_filaments_label.setWordWrap(True)
+        self._no_filaments_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self._no_filaments_label.setStyleSheet("color: gray;")
+        no_fil_font = QtGui.QFont()
+        no_fil_font.setPointSize(13)
+        self._no_filaments_label.setFont(no_fil_font)
+        self._no_filaments_label.hide()
+        left_lay.addWidget(self._no_filaments_label)
 
         body.addWidget(left_frame, 1)
 
