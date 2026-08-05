@@ -105,9 +105,6 @@ class _ColorWheel(QtWidgets.QWidget):
         self.update()
         self.hue_sat_changed.emit(self._hue, self._sat)
 
-    # def mousePressEvent(self, event: QtGui.QMouseEvent) -> None:
-    #     self._pick(event.position())
-
     def mouseMoveEvent(self, event: QtGui.QMouseEvent) -> None:
         if event.buttons() & QtCore.Qt.MouseButton.LeftButton:
             self._pick(event.position())
@@ -208,7 +205,6 @@ class ColorWheelWidget(QtWidgets.QWidget):
         root.setContentsMargins(12, 8, 12, 8)
         root.setSpacing(8)
 
-        # ── Header ──────────────────────────────────────────────────────
         header = QtWidgets.QHBoxLayout()
         header.setContentsMargins(0, 0, 0, 0)
 
@@ -230,22 +226,18 @@ class ColorWheelWidget(QtWidgets.QWidget):
         header.addWidget(back_btn)
         root.addLayout(header)
 
-        # ── Body ─────────────────────────────────────────────────────────
         body = QtWidgets.QHBoxLayout()
         body.setSpacing(16)
 
-        # Left: colour wheel, vertically centred
         self._wheel = _ColorWheel(self, diameter=260)
         self._wheel.hue_sat_changed.connect(self._on_hue_sat)
         body.addWidget(self._wheel, 0, QtCore.Qt.AlignmentFlag.AlignVCenter)
 
-        # Right: card containing all controls
         card = BlocksCustomFrame(self)
         card_lay = QtWidgets.QVBoxLayout(card)
         card_lay.setContentsMargins(14, 14, 14, 14)
         card_lay.setSpacing(10)
 
-        # Combined swatch + hex code — one element instead of two
         self._swatch = BlocksLabel(card)
         self._swatch.setFixedHeight(76)
         self._swatch.rounded = True
@@ -256,7 +248,6 @@ class ColorWheelWidget(QtWidgets.QWidget):
         self._swatch.setFont(swatch_font)
         card_lay.addWidget(self._swatch)
 
-        # Brightness row
         card_lay.addWidget(
             _lbl("Brightness", 22, QtGui.QColor(160, 160, 160), card, 30)
         )
@@ -275,6 +266,7 @@ class ColorWheelWidget(QtWidgets.QWidget):
         f.setPointSize(16)
         select_btn.setFont(f)
         select_btn.setText("Select")
+        select_btn.setPixmap(QtGui.QPixmap(":/dialog/media/btn_icons/yes.svg"))
         select_btn.clicked.connect(self._on_select)
         card_lay.addWidget(select_btn, 0, QtCore.Qt.AlignmentFlag.AlignHCenter)
 
