@@ -3,6 +3,7 @@ import typing
 from devices.amu import AMUManager
 from devices.amu.models import GateInfo
 from lib.panels.widgets.amuWidgets import SpoolCarousel, SpoolInfoPanel
+from lib.panels.widgets.basePopup import BasePopup
 from lib.utils.blocks_frame import BlocksCustomFrame
 from lib.utils.icon_button import IconButton
 from PyQt6 import QtCore, QtGui, QtWidgets
@@ -29,13 +30,13 @@ class AMUpage(QtWidgets.QStackedWidget):
     request_change_tab: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         int, name="request_change_tab"
     )
-    call_load_panel = QtCore.pyqtSignal(bool, str, bool, name="call-load-panel")
 
-    def __init__(self, amu_manager, parent=None):
+    def __init__(self, amu_manager, parent=None, load_popup: BasePopup | None = None):
         super().__init__(parent)
         self.current_index = -1
         self.amu_manager: AMUManager = amu_manager
         self._build_ui()
+        self.load_popup = load_popup
 
         self.main_back_button.clicked.connect(self.request_back)
 
@@ -84,13 +85,13 @@ class AMUpage(QtWidgets.QStackedWidget):
         self.info_panel.loadRequested.connect(
             lambda: {
                 self.amu_manager.load_gate(),
-                self.call_load_panel.emit(True, "Loading", True),
+                self.load_popup.show(),
             }
         )
         self.info_panel.unloadRequested.connect(
             lambda: {
                 self.amu_manager.unload(),
-                self.call_load_panel.emit(True, "Unloading", True),
+                self.load_popup.show(),
             }
         )
         self.info_panel.ejectRequested.connect(self.amu_manager.eject_gate)
@@ -102,29 +103,28 @@ class AMUpage(QtWidgets.QStackedWidget):
     @QtCore.pyqtSlot(str, float, name="on_print_stats_update")
     @QtCore.pyqtSlot(str, str, name="on_print_stats_update")
     def on_print_stats_update(self, field: str, value: dict | float | str) -> None:
-        if isinstance(value, str):
-            if "state" in field:
-                self.state = value
-                if value in ("printing", "pausing", "paused", "resuming"):
-                    try:
-                        self.main_back_button.clicked.disconnect()
-                    except TypeError:
-                        pass
+        """Rewire the back button between "request_back" and "change to tab 0" based on print state."""
+        if isinstance(value, str) and "state" in field:
+            self.state = value
+            if value in ("printing", "pausing", "paused", "resuming"):
+                try:
+                    self.main_back_button.clicked.disconnect()
+                except TypeError:
+                    pass
 
-                    self.main_back_button.clicked.connect(
-                        lambda: self.request_change_tab.emit(0)
-                    )
+                self.main_back_button.clicked.connect(
+                    lambda: self.request_change_tab.emit(0)
+                )
 
-                else:
-                    try:
-                        self.main_back_button.clicked.disconnect()
-                    except TypeError:
-                        pass
-                    self.main_back_button.clicked.connect(
-                        lambda: self.request_back.emit()
-                    )
+            else:
+                try:
+                    self.main_back_button.clicked.disconnect()
+                except TypeError:
+                    pass
+                self.main_back_button.clicked.connect(lambda: self.request_back.emit())
 
     def on_mmu_state_changed(self, mmu_state):
+        """Refresh the carousel and the info panel's selected gate from live MMU state."""
         if mmu_state is None:
             return
         self.status = mmu_state
@@ -134,6 +134,7 @@ class AMUpage(QtWidgets.QStackedWidget):
         self._on_selection(mmu_state.gate)
 
     def addSpool(self, gate_info: GateInfo):
+        """Add or refresh a gate's carousel button from its GateInfo."""
         self.carousel.addSpool(
             QtGui.QColor("#" + str(gate_info.color)[:6]),
             gate_info.index,

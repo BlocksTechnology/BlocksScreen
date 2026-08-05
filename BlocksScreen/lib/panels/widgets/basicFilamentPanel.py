@@ -3,6 +3,7 @@ import logging
 from functools import partial
 
 from lib.filament import Filament
+from lib.panels.widgets.basePopup import BasePopup
 from lib.panels.widgets.popupDialogWidget import Popup
 from lib.printer import Printer
 from lib.utils.blocks_button import BlocksCustomButton
@@ -38,9 +39,11 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         UNLOADED = enum.auto()
 
         def __repr__(self) -> str:
-            return "<%s.%s>" % (self.__class__.__name__, self._name_)
+            return f"<{self.__class__.__name__}.{self._name_}>"
 
-    def __init__(self, printer: Printer, cfg, parent=None) -> None:
+    def __init__(
+        self, printer: Printer, cfg, parent=None, load_popup: BasePopup | None = None
+    ) -> None:
         super().__init__(parent)
         self.printer = printer
         self.cfg = cfg
@@ -51,6 +54,7 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         self.has_load_unload_objects = None
         self.filament_buttons_list = []
         self.mmu_configured = False
+        self.load_popup = load_popup
         self._setupUi()
         self.filament_state = self.FilamentStates.UNKNOWN
 
@@ -152,14 +156,13 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
     @QtCore.pyqtSlot(dict, name="on_load_filament")
     def on_load_filament(self, status: dict):
         """slot to handle load macro status updates"""
-        if "state" in status.keys():
-            if not status["state"]:
-                self.target_temp = 0
-                self.call_load_panel.emit(False, "", False)
-                self.change_page(0)
-                if self.state == "paused":
-                    self.request_change_tab.emit(0)
-                return
+        if "state" in status and not status["state"]:
+            self.target_temp = 0
+            self.call_load_panel.emit(False, "", False)
+            self.change_page(0)
+            if self.state == "paused":
+                self.request_change_tab.emit(0)
+            return
         self.call_load_panel.emit(
             True, f"Loading Filament\n{status['step'].capitalize()}", False
         )
@@ -167,12 +170,11 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
     @QtCore.pyqtSlot(dict, name="on_unload_filament")
     def on_unload_filament(self, status: dict):
         """slot to handle unload macro status updates"""
-        if "state" in status.keys():
-            if not status["state"]:
-                self.target_temp = 0
-                self.call_load_panel.emit(False, "", False)
-                self.change_page(0)
-                return
+        if "state" in status and not status["state"]:
+            self.target_temp = 0
+            self.call_load_panel.emit(False, "", False)
+            self.change_page(0)
+            return
         self.call_load_panel.emit(
             True, f"Unloading Filament\n{status['step'].capitalize()}", False
         )
@@ -199,10 +201,11 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         self.run_gcode.emit(
             f"""SAVE_VARIABLE VARIABLE=filament_type VALUE='"{filament.value.name}"'"""
         )
-        self.call_load_panel.emit(True, "Loading", True)
         if not self.mmu_configured:
+            self.call_load_panel.emit(True, "Loading", True)
             self.run_gcode.emit("LOAD_FILAMENT")
             return
+        self.load_popup.show()
         self.run_gcode.emit("MMU_LOAD")
 
     @QtCore.pyqtSlot(str, int, name="unload_filament")
@@ -226,13 +229,15 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
             f"""SAVE_VARIABLE VARIABLE=filament_type VALUE='"{FilamentTypes.UNKNOWN.value.name}"'"""
         )
 
-        self.call_load_panel.emit(True, "Unloading", True)
         if not self.mmu_configured:
+            self.call_load_panel.emit(True, "Unloading", True)
             self.run_gcode.emit("UNLOAD_FILAMENT")
             return
+        self.load_popup.show()
         self.run_gcode.emit("MMU_EJECT")
 
     def open_pre_gate_popup(self, filament_type: FilamentTypes):
+        """Emit filament_selected so the pre-gate popup can confirm the gate before loading."""
         callback_action = partial(self.load_filament, 0, filament_type)
 
         self.filament_selected.emit(
@@ -243,6 +248,7 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         )
 
     def on_mmu_state_changed(self, mmu_state):
+        """Wire load buttons to the pre-gate flow on first MMU state, and track filament state."""
         if mmu_state is None:
             return
 
@@ -279,26 +285,27 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
             self.filament_page_unload_btn.setEnabled(True)
 
     def change_page(self, index: int) -> None:
+        """Switch this stacked widget to the page at *index*."""
         self.setCurrentIndex(index)
 
     def back_button(self) -> None:
+        """Emit request_back to signal the parent tab to navigate away."""
         self.request_back.emit()
 
     def find_routine_objects(self):
+        """Return whether load/unload gcode macros are available on the printer."""
         if not self.printer:
             return
         _available_objects = self.printer.available_objects
-        if "load_filament" in _available_objects.keys():
+        if "load_filament" in _available_objects:
             self.has_load_unload_objects = True
             return True
-        if "unload_filament" in _available_objects.keys():
+        if "unload_filament" in _available_objects:
             self.has_load_unload_objects = True
             return True
-        if "gcode_macro LOAD_FILAMENT" in _available_objects.keys():
+        if "gcode_macro LOAD_FILAMENT" in _available_objects:
             return True
-        if "gcode_macro UNLOAD_FILAMENT" in _available_objects.keys():
-            return True
-        return False
+        return "gcode_macro UNLOAD_FILAMENT" in _available_objects
 
     def _setupInfoBox(self):
         root = BlocksCustomFrame(parent=self.filament_control_page)

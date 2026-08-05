@@ -1,210 +1,320 @@
-from PyQt6 import QtWidgets, QtGui, QtCore
-from enum import IntEnum
+import typing
+
+from devices.amu.models import FilamentPos
+from PyQt6 import QtCore, QtGui, QtWidgets
 
 
-class FilamentPos(IntEnum):
-    """State-machine position of the filament inside the MMU/extruder path."""
+class MmuToolmapWidget(QtWidgets.QWidget):
+    _POS: typing.ClassVar[dict[str, int]] = {
+        "BEFORE_PRE_GATE": 40,
+        "AFTER_GATE": 70,
+        "START_BOWDEN": 135,
+        "MID_BOWDEN": 221,
+        "END_BOWDEN": 290,
+        "EXTRUDER": 295,
+        "TOOLHEAD": 325,
+        "NOZZLE_START": 371,
+    }
 
-    UNKNOWN = -1
-    UNLOADED = 0
-    HOMED_GATE = 1
-    START_BOWDEN = 2
-    IN_BOWDEN = 3
-    END_BOWDEN = 4
-    HOMED_ENTRY = 5
-    HOMED_EXTRUDER = 6
-    EXTRUDER_ENTRY = 7
-    HOMED_TS = 8
-    IN_EXTRUDER = 9
-    LOADED = 10
+    _H_VIEW_W = 440
+    _H_VIEW_H = 130
 
+    _TUBE_Y = 58
+    _TUBE_THICKNESS = 14
+    _TUBE_START_X = 25
+    _TAPER_START_X = 400
+    _NOZZLE_TIP_X = 408
+    _NOZZLE_FILL_START_X = 380
 
-class FilamentPathWidget(QtWidgets.QWidget):
+    _GATE_ZONE = QtCore.QRectF(10, 8, 150, _H_VIEW_H - 16)
+    _TOOLHEAD_ZONE = QtCore.QRectF(290, 8, 85, _H_VIEW_H - 16)
+
+    _OUTLINE = QtGui.QColor("#ffffff")
+    _ZONE_BG = QtGui.QColor("#38465B7E")
+    _MUTED_TEXT = QtGui.QColor("#B4B4B4")
+    _ACTIVE = QtGui.QColor("#2ec4a0")
+    _HEATING = QtGui.QColor("#FF9800")
+
+    _HEAT_ZONE = QtCore.QRectF(160, 20, 130, 30)
+
     def __init__(self, parent=None):
         super().__init__(parent)
 
-        self.filament_position = FilamentPos.UNLOADED
-        self.gate_name = "T0"
-
-        # Animation property for smooth transitions
-        self._animation_progress = 0.0
-        self._target_progress = 0.0
-        self._animation = QtCore.QPropertyAnimation(self, b"animationProgress")
-        self._animation.setDuration(800)  # 800ms transition
-        self._animation.setEasingCurve(QtCore.QEasingCurve.Type.InOutCubic)
-
-        # Colors matching FlowGuard style
-        self._fill_color = QtGui.QColor(100, 200, 255)
-        self._node_color = QtGui.QColor(180, 180, 180)
-
-        # Font
-        self._label_font = QtGui.QFont("Segoe UI", 9)
-        self._label_font.setBold(True)
-
-        self.setMinimumSize(60, 200)
+        self.setMinimumSize(680, 260)
         self.setSizePolicy(
-            QtWidgets.QSizePolicy.Policy.Fixed, QtWidgets.QSizePolicy.Policy.Expanding
+            QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Fixed
         )
 
-    @QtCore.pyqtProperty(float)
-    def animationProgress(self):
-        """Property for QPropertyAnimation"""
-        return self._animation_progress
+        self._label_font = QtGui.QFont("Segoe UI", 10)
+        self._zone_font = QtGui.QFont()
+        self._zone_font.setBold(True)
+        self._zone_font.setPointSize(9)
+        self._temp_font = QtGui.QFont()
+        self._temp_font.setPointSize(8)
 
-    @animationProgress.setter
-    def animationProgress(self, value):
-        """Setter for animation progress - triggers repaint"""
-        self._animation_progress = value
-        self.update()
+        self._filament_pos = FilamentPos.UNLOADED
+        self._bowden_progress = -1.0
+        self._gate_color = QtGui.QColor("#787878")
+        self._action = ""
+        self._current_temp = 0.0
+        self._target_temp = 0.0
 
-    def set_filament_position(self, position: FilamentPos) -> None:
-        """Set the current filament position with smooth animation"""
-        self.filament_position = position
+        self.lefttext: str = "AMU"
 
-        # Get target percentage
-        target = self._get_position_percentage(position)
+        self._heat_dot_count = 0
+        self._heat_dot_timer = QtCore.QTimer(self)
+        self._heat_dot_timer.setInterval(1000)
+        self._heat_dot_timer.timeout.connect(self._add_heat_dot)
 
-        # Animate from current progress to target
-        self._animation.stop()
-        self._animation.setStartValue(self._animation_progress)
-        self._animation.setEndValue(target)
-        self._animation.start()
-
-    def set_gate_name(self, name: str) -> None:
-        """Set the gate/tool name"""
-        self.gate_name = name
-        self.update()
-
-    def _get_position_percentage(self, position: FilamentPos) -> float:
-        """Convert FilamentPos to percentage along the path (0.0 to 1.0)"""
-        position_map = {
-            FilamentPos.UNKNOWN: 0.0,
-            FilamentPos.UNLOADED: 0.0,
-            FilamentPos.HOMED_GATE: 0.15,
-            FilamentPos.START_BOWDEN: 0.25,
-            FilamentPos.IN_BOWDEN: 0.45,
-            FilamentPos.END_BOWDEN: 0.65,
-            FilamentPos.HOMED_ENTRY: 0.70,
-            FilamentPos.HOMED_EXTRUDER: 0.75,
-            FilamentPos.EXTRUDER_ENTRY: 0.80,
-            FilamentPos.HOMED_TS: 0.85,
-            FilamentPos.IN_EXTRUDER: 0.92,
-            FilamentPos.LOADED: 1.0,
+        self._sensors = {
+            "mmu_pre_gate": False,
+            "mmu_gate": False,
+            "toolhead": False,
         }
-        return position_map.get(position, 0.0)
 
-    def _draw_vertical_path(self, painter: QtGui.QPainter) -> None:
-        """Draw the vertical path bar"""
-        rect = self.rect()
+        self._fill_progress = 0.0
+        self._fill_animation = QtCore.QPropertyAnimation(self, b"fillProgress")
+        self._fill_animation.setDuration(500)
+        self._fill_animation.setEasingCurve(QtCore.QEasingCurve.Type.InOutCubic)
 
-        top_margin = 30
-        bottom_margin = 30
+    @QtCore.pyqtProperty(float)
+    def fillProgress(self):
+        return self._fill_progress
 
-        bar_width = 30
-        bar_x = int(rect.width() / 2 - bar_width / 2)
-        bar_y = top_margin
-        bar_height = rect.height() - top_margin - bottom_margin
+    @fillProgress.setter
+    def fillProgress(self, value):
+        self._fill_progress = value
+        self.update()
 
-        # Draw background track
-        bg_pen = QtGui.QPen(QtGui.QColor(40, 40, 40), 2)
-        painter.setPen(bg_pen)
-        painter.setBrush(QtGui.QColor(25, 25, 25))
+    def set_gate_color(self, color: QtGui.QColor) -> None:
+        """Set the color of the filament fill bar, e.g. from the selected gate's spool color."""
+        self._gate_color = color
+        self.update()
 
-        track_rect = QtCore.QRectF(bar_x, bar_y, bar_width, bar_height)
-        painter.drawRect(track_rect)
+    def set_sensor(self, name: str, active: bool) -> None:
+        """Set the active state of a sensor marker ("mmu_pre_gate", "mmu_gate", "toolhead")."""
+        self._sensors[name] = active
+        self.update()
 
-        # Draw filament fill (from bottom up) using animated progress
-        if self._animation_progress > 0.0:
-            fill_height = self._animation_progress * bar_height
+    def set_left_text(self, text: str) -> None:
+        """sets left box title (e.g. "AMU" , "AUXILIAR EXTRUDER")"""
+        self.lefttext = text
+        self.update()
 
-            painter.setPen(QtCore.Qt.PenStyle.NoPen)
-            painter.setBrush(self._fill_color)
+    def set_action(self, action: str) -> None:
+        """Set the current MMU action (e.g. "Idle", "Loading", "Unloading", "Heating").
 
-            fill_rect = QtCore.QRectF(bar_x, bar_y, bar_width, fill_height)
-            painter.drawRect(fill_rect)
+        Starts/stops the heating-dot animation timer as needed.
+        """
+        self._action = action
+        if action == "Heating":
+            if not self._heat_dot_timer.isActive():
+                self._heat_dot_count = 0
+                self._heat_dot_timer.start()
+        else:
+            self._heat_dot_timer.stop()
+        self.update()
 
-        # Draw position nodes
-        center_x = bar_x + bar_width / 2
+    def _add_heat_dot(self) -> None:
+        self._heat_dot_count += 1
+        if self._heat_dot_count > 3:
+            self._heat_dot_count = 0
+        self.update()
 
-        # Pre-Gate node (top)
-        pregate_y = bar_y
-        painter.setPen(QtGui.QPen(self._node_color, 2))
-        painter.setBrush(QtGui.QColor(25, 25, 25))
-        painter.drawEllipse(QtCore.QPointF(center_x, pregate_y), 5, 5)
+    def set_temps(self, current: float, target: float) -> None:
+        """Set the extruder current/target temperatures shown under the heating message."""
+        self._current_temp = current
+        self._target_temp = target
+        self.update()
 
-        # Extruder box (middle ~75% down)
-        extruder_y = bar_y + bar_height * 0.70
-        box_height = 40
-        box_y = extruder_y - box_height / 2
+    def set_filament_pos(self, pos: FilamentPos, bowden_progress: float = -1.0) -> None:
+        """Animate the fill bar to the local-coordinate x matching the given filament position.
 
-        pen = QtGui.QPen(QtGui.QColor(0, 150, 150), 2)
-        painter.setPen(pen)
-        painter.setBrush(QtCore.Qt.BrushStyle.NoBrush)
+        Args:
+            pos: Current position of the filament in the MMU/extruder path.
+            bowden_progress: Percentage (0-100) through the bowden tube; only used
+                when pos is START_BOWDEN/IN_BOWDEN and >= 0, otherwise the fill
+                snaps to fixed checkpoints for that position.
+        """
+        self._filament_pos = pos
+        self._bowden_progress = bowden_progress
+        self._animate_fill_to(self._compute_fill_height())
 
-        box_rect = QtCore.QRectF(bar_x - 3, box_y, bar_width + 6, box_height)
-        painter.drawRect(box_rect)
+    def _compute_fill_height(self) -> float:
+        pos = self._filament_pos
+        P = self._POS
 
-        # Hub/Gate node (bottom)
-        hub_y = bar_y + bar_height
-        painter.setPen(QtGui.QPen(self._node_color, 2))
-        painter.setBrush(QtGui.QColor(25, 25, 25))
-        painter.drawEllipse(QtCore.QPointF(center_x, hub_y), 5, 5)
+        if pos == FilamentPos.UNLOADED:
+            return P["BEFORE_PRE_GATE"]
+        if pos == FilamentPos.HOMED_GATE:
+            return P["AFTER_GATE"]
+        if (
+            pos in (FilamentPos.START_BOWDEN, FilamentPos.IN_BOWDEN)
+            and self._bowden_progress >= 0
+        ):
+            bowden_range = P["END_BOWDEN"] - P["START_BOWDEN"]
+            return P["START_BOWDEN"] + bowden_range * self._bowden_progress / 100
+        if pos == FilamentPos.START_BOWDEN:
+            return P["START_BOWDEN"]
+        if pos == FilamentPos.IN_BOWDEN:
+            return P["MID_BOWDEN"]
+        if pos in (FilamentPos.END_BOWDEN, FilamentPos.HOMED_ENTRY):
+            return P["EXTRUDER"]
+        if pos in (FilamentPos.HOMED_EXTRUDER, FilamentPos.EXTRUDER_ENTRY):
+            return P["TOOLHEAD"] - 10
+        if pos == FilamentPos.HOMED_TS:
+            return P["TOOLHEAD"]
+        if pos == FilamentPos.IN_EXTRUDER:
+            return P["TOOLHEAD"] + 13
+        if pos == FilamentPos.LOADED:
+            return P["NOZZLE_START"]
+        return 0.0
 
-    def _draw_labels(self, painter: QtGui.QPainter) -> None:
-        """Draw labels"""
-        painter.setPen(QtGui.QColor(180, 180, 180))
-        painter.setFont(self._label_font)
+    def _animate_fill_to(self, value: float) -> None:
+        self._fill_animation.stop()
+        self._fill_animation.setStartValue(self._fill_progress)
+        self._fill_animation.setEndValue(value)
+        self._fill_animation.start()
 
-        # Top label
-        top_rect = QtCore.QRectF(0, 5, self.width(), 20)
-        painter.drawText(top_rect, QtCore.Qt.AlignmentFlag.AlignCenter, self.gate_name)
-
-        # Bottom label
-        bottom_y = self.height() - 25
-        bottom_rect = QtCore.QRectF(0, bottom_y, self.width(), 20)
-        painter.drawText(bottom_rect, QtCore.Qt.AlignmentFlag.AlignCenter, "Toolhead")
+    def _transform(self) -> QtGui.QTransform:
+        scale = min(self.width() / self._H_VIEW_W, self.height() / self._H_VIEW_H)
+        offset_x = (self.width() - self._H_VIEW_W * scale) / 2
+        offset_y = (self.height() - self._H_VIEW_H * scale) / 2
+        t = QtGui.QTransform()
+        t.translate(offset_x, offset_y)
+        t.scale(scale, scale)
+        return t
 
     def paintEvent(self, event: QtGui.QPaintEvent) -> None:
-        """Paint the widget"""
         painter = QtGui.QPainter(self)
         painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
+        painter.setTransform(self._transform())
 
-        self._draw_vertical_path(painter)
-        self._draw_labels(painter)
+        self._draw_zones(painter)
+        self._draw_tube(painter)
+        self._draw_nozzle(painter)
+        self._draw_sensors(painter)
+        self._draw_heat_message(painter)
 
         painter.end()
 
+    def _draw_zones(self, painter: QtGui.QPainter) -> None:
+        painter.setPen(QtCore.Qt.PenStyle.NoPen)
+        painter.setBrush(self._ZONE_BG)
+        painter.drawRoundedRect(self._GATE_ZONE, 20, 20)
+        painter.drawRoundedRect(self._TOOLHEAD_ZONE, 20, 20)
 
-# Example usage
-if __name__ == "__main__":
-    import sys
+        painter.setPen(QtGui.QColor("#FFFFFF"))
+        painter.setFont(self._zone_font)
+        for zone, name in (
+            (self._GATE_ZONE, self.lefttext),
+            (self._TOOLHEAD_ZONE, "Toolhead"),
+        ):
+            painter.drawText(
+                QtCore.QRectF(zone.left(), zone.top() + 12, zone.width(), 14),
+                QtCore.Qt.AlignmentFlag.AlignHCenter,
+                name,
+            )
 
-    app = QtWidgets.QApplication(sys.argv)
+    def _draw_tube(self, painter: QtGui.QPainter) -> None:
+        outline = QtGui.QPainterPath()
+        outline.moveTo(self._TUBE_START_X, self._TUBE_Y)
+        outline.lineTo(self._TAPER_START_X, self._TUBE_Y)
+        outline.lineTo(self._NOZZLE_TIP_X, self._TUBE_Y + self._TUBE_THICKNESS / 2)
+        outline.lineTo(self._TAPER_START_X, self._TUBE_Y + self._TUBE_THICKNESS)
+        outline.lineTo(self._TUBE_START_X, self._TUBE_Y + self._TUBE_THICKNESS)
+        painter.setPen(QtGui.QPen(self._OUTLINE, 1))
+        painter.setBrush(QtCore.Qt.BrushStyle.NoBrush)
+        painter.drawPath(outline)
 
-    window = QtWidgets.QWidget()
-    window.setWindowTitle("Filament Path Widget Test")
-    window.setStyleSheet("background-color: #2a2a2a;")
+        painter.setPen(QtCore.Qt.PenStyle.NoPen)
+        painter.setBrush(self._gate_color)
+        fill_width = min(
+            max(0.0, self._fill_progress), self._TAPER_START_X - self._TUBE_START_X
+        )
+        painter.drawRect(
+            QtCore.QRectF(
+                self._TUBE_START_X, self._TUBE_Y, fill_width, self._TUBE_THICKNESS
+            )
+        )
 
-    layout = QtWidgets.QHBoxLayout(window)
+    def _draw_heat_message(self, painter: QtGui.QPainter) -> None:
+        if self._action != "Heating":
+            return
+        dots = ("." * self._heat_dot_count) + (" " * (3 - self._heat_dot_count))
 
-    # Add slider for testing
-    test_widget = FilamentPathWidget()
-    test_widget.set_gate_name("T0")
-    test_widget.setMaximumSize(30, 200)
-    layout.addWidget(test_widget)
+        top_zone = QtCore.QRectF(
+            self._HEAT_ZONE.left(),
+            self._HEAT_ZONE.top(),
+            self._HEAT_ZONE.width(),
+            self._HEAT_ZONE.height() / 2,
+        )
+        bottom_zone = QtCore.QRectF(
+            self._HEAT_ZONE.left(),
+            self._HEAT_ZONE.top() + self._HEAT_ZONE.height() / 2,
+            self._HEAT_ZONE.width(),
+            self._HEAT_ZONE.height() / 2,
+        )
 
-    slider_layout = QtWidgets.QVBoxLayout()
-    slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Vertical)
-    slider.setMinimum(0)
-    slider.setMaximum(10)
-    slider.valueChanged.connect(
-        lambda v: test_widget.set_filament_position(FilamentPos(v))
-    )
-    slider_layout.addWidget(QtWidgets.QLabel("Test"))
-    slider_layout.addWidget(slider)
-    layout.addLayout(slider_layout)
+        painter.setPen(self._HEATING)
+        painter.setFont(self._zone_font)
+        painter.drawText(
+            top_zone, QtCore.Qt.AlignmentFlag.AlignCenter, f"Heating{dots}"
+        )
 
-    window.resize(450, 350)
-    window.show()
+        painter.setPen(self._MUTED_TEXT)
+        painter.setFont(self._temp_font)
+        painter.drawText(
+            bottom_zone,
+            QtCore.Qt.AlignmentFlag.AlignCenter,
+            f"{self._current_temp:.0f}°/{self._target_temp:.0f}°",
+        )
 
-    sys.exit(app.exec())
+    def _draw_nozzle(self, painter: QtGui.QPainter) -> None:
+        if self._filament_pos != FilamentPos.LOADED:
+            return
+        painter.setPen(QtCore.Qt.PenStyle.NoPen)
+        painter.setBrush(self._gate_color)
+        painter.drawPolygon(
+            QtGui.QPolygonF(
+                [
+                    QtCore.QPointF(self._NOZZLE_FILL_START_X, self._TUBE_Y),
+                    QtCore.QPointF(self._TAPER_START_X, self._TUBE_Y),
+                    QtCore.QPointF(
+                        self._NOZZLE_TIP_X, self._TUBE_Y + self._TUBE_THICKNESS / 2
+                    ),
+                    QtCore.QPointF(
+                        self._TAPER_START_X, self._TUBE_Y + self._TUBE_THICKNESS
+                    ),
+                    QtCore.QPointF(
+                        self._NOZZLE_FILL_START_X, self._TUBE_Y + self._TUBE_THICKNESS
+                    ),
+                ]
+            )
+        )
+
+    def _draw_sensor_marker(
+        self, painter: QtGui.QPainter, x: float, label: str, active: bool
+    ) -> None:
+        color = self._ACTIVE if active else self._MUTED_TEXT
+        line_top_y = self._TUBE_Y + self._TUBE_THICKNESS
+
+        painter.setPen(QtGui.QPen(color, 1.5))
+        painter.drawLine(QtCore.QPointF(x, line_top_y), QtCore.QPointF(x, 96))
+
+        painter.setPen(QtCore.Qt.PenStyle.NoPen)
+        painter.setBrush(color)
+        painter.drawEllipse(QtCore.QPointF(x, line_top_y), 3.5, 3.5)
+
+        painter.setPen(color)
+        painter.setFont(self._label_font)
+        painter.drawText(
+            QtCore.QRectF(x - 30, 98, 60, 16),
+            QtCore.Qt.AlignmentFlag.AlignCenter,
+            label,
+        )
+
+    def _draw_sensors(self, painter: QtGui.QPainter) -> None:
+        self._draw_sensor_marker(painter, 50, "Pre-Gate", self._sensors["mmu_pre_gate"])
+        self._draw_sensor_marker(painter, 110, "Gate", self._sensors["mmu_gate"])
+        self._draw_sensor_marker(painter, 332, "Toolhead", self._sensors["toolhead"])
