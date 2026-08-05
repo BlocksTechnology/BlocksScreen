@@ -230,7 +230,7 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         if not self.mmu_configured:
             self.run_gcode.emit("UNLOAD_FILAMENT")
             return
-        self.run_gcode.emit("MMU_UNLOAD")
+        self.run_gcode.emit("MMU_EJECT")
 
     def open_pre_gate_popup(self, filament_type: FilamentTypes):
         callback_action = partial(self.load_filament, 0, filament_type)
