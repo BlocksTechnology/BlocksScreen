@@ -40,7 +40,7 @@ class USBManager(QtCore.QObject):
         super().__init__(parent)
 
         self.gcodes_dir: pathlib.Path = (
-            pathlib.Path(gcodes_dir)
+            pathlib.Path(gcodes_dir).expanduser()
             if gcodes_dir
             else pathlib.Path.home() / "printer_data" / "gcodes"
         )
