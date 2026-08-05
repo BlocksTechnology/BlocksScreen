@@ -234,7 +234,7 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
             self.run_gcode.emit("UNLOAD_FILAMENT")
             return
         self.load_popup.show()
-        self.run_gcode.emit("MMU_UNLOAD")
+        self.run_gcode.emit("MMU_EJECT")
 
     def open_pre_gate_popup(self, filament_type: FilamentTypes):
         """Emit filament_selected so the pre-gate popup can confirm the gate before loading."""
