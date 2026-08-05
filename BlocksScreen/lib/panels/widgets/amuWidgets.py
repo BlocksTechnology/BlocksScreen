@@ -1,211 +1,161 @@
 import typing
 
-from devices.amu.models import GateStatus
+from devices.amu.models import GateStatus, GateInfo, FilamentPos
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_linedit import BlocksCustomLinEdit
 from lib.utils.icon_button import IconButton
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Spool button
-# ──────────────────────────────────────────────────────────────────────────────
 class Spoll_button(QtWidgets.QAbstractButton):
+    _ICON_SIZE = 65
+    _UNCHECKED_OPACITY = 0.51  # 130/255
+    _GRID_GRAY = QtGui.QColor(120, 120, 120)
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.color = QtGui.QColor(0, 0, 0)
+        self.has_color = False
         self.status = GateStatus.UNKNOWN
         self.slot_id = ""
-        self.temp = 0
-        self.material = ""
-        self.weight = 0
+        self.gate_info: GateInfo = None
+        self.filament_pos: FilamentPos = FilamentPos.UNKNOWN
         self.setCheckable(True)
-        self.setMinimumHeight(100)
-        self._icon = QtGui.QPixmap(
-            ":/filament_related/media/btn_icons/loaded_spool.svg"
+        self.setMinimumHeight(80)
+
+        self._text_rect: QtCore.QRect | None = None
+        self._strip_rect: QtCore.QRect | None = None
+        self._strip_path: QtGui.QPainterPath | None = None
+
+        white = QtGui.QColor(255, 255, 255)
+        self._icons = {
+            "loaded": self._make_tinted_icon(
+                ":/filament_related/media/btn_icons/loaded_spool.svg", white
+            ),
+            "unloaded": self._make_tinted_icon(
+                ":/filament_related/media/btn_icons/half_spoll.svg", white
+            ),
+        }
+
+        self._label_pen = QtGui.QPen(white)
+        self._label_pen.setWidth(2)
+
+        self._label_font = QtGui.QFont()
+        self._label_font.setPointSize(12)
+        self._label_font.setBold(True)
+
+        self._solid_border_pen = QtGui.QPen(self._GRID_GRAY)
+        self._solid_border_pen.setWidth(2)
+
+        self._grid_border_pen = QtGui.QPen(self._GRID_GRAY)
+        self._grid_border_pen.setWidth(2)
+
+        self._grid_dark = self._GRID_GRAY.darker(150)
+        self._grid_brush = QtGui.QBrush(
+            self._GRID_GRAY.lighter(140), QtCore.Qt.BrushStyle.DiagCrossPattern
         )
-        self._unloaded_icon = QtGui.QPixmap(
-            ":/filament_related/media/btn_icons/half_spoll.svg"
+
+    def _make_tinted_icon(self, resource: str, tint: QtGui.QColor) -> QtGui.QPixmap:
+        scaled = QtGui.QPixmap(resource).scaled(
+            self._ICON_SIZE,
+            self._ICON_SIZE,
+            QtCore.Qt.AspectRatioMode.KeepAspectRatio,
+            QtCore.Qt.TransformationMode.SmoothTransformation,
         )
+        tinted = QtGui.QPixmap(scaled.size())
+        tinted.fill(QtCore.Qt.GlobalColor.transparent)
+        p = QtGui.QPainter(tinted)
+        p.drawPixmap(0, 0, scaled)
+        p.setCompositionMode(QtGui.QPainter.CompositionMode.CompositionMode_SourceIn)
+        p.fillRect(tinted.rect(), tint)
+        p.end()
+        return tinted
 
-    def setColor(self, qc: QtGui.QColor):
-        """sets button color
+    def resizeEvent(self, a0: QtGui.QResizeEvent) -> None:
+        super().resizeEvent(a0)
+        r = QtCore.QRect(self.rect())
+        r.setTop(self.height() // 9)
+        r.setBottom(self.height() // 4)
+        self._text_rect = r
 
-        Args:
-            qc (QtGui.QColor): a Qcolor representing filament color
-        """
-        self.color = qc
-        self.update()
+        self._strip_rect = self.rect().adjusted(1, 1, -1, -1)
+        self._strip_rect.setTop(int(self._strip_rect.height() * 0.85))
 
-    def setStatus(self, s: GateStatus):
-        """sets button status
+        self._strip_path = QtGui.QPainterPath()
+        self._strip_path.addRoundedRect(QtCore.QRectF(self._strip_rect), 5, 5)
 
-        Args:
-            s (GateStatus): a GateStatus representing the gate status
-        """
-        self.status = s
-        self.update()
+    def update_entry(self, gate_info: GateInfo, fm: FilamentPos):
+        raw = str(gate_info.color).lstrip("#")[:6] if gate_info.color else ""
+        parsed = QtGui.QColor("#" + raw) if raw else QtGui.QColor()
+        has_color = parsed.isValid()
+        color = parsed if has_color else QtGui.QColor(0, 0, 0)
 
-    def setGateId(self, i: int):
-        """sets button gate id
+        self.filament_pos = fm
+        self.gate_info = gate_info
+        self.status = gate_info.status
+        self.slot_id = gate_info.index
+        self.has_color = has_color
+        self.color = color
 
-        Args:
-            i (int): a integer representing the gate id
-        """
-        self.slot_id = i
-        self.update()
-
-    def setMaterial(self, mat: str):
-        """sets button material
-
-        Args:
-            mat (str): a string representing the material
-        """
-
-        self.material = mat
-        self.update()
-
-    def setWeight(self, w: int):
-        """sets gate weight
-
-        Args:
-            w (int): a integer representing the weight of the filament in grams
-        """
-        self.weight = w
-        self.update()
-
-    def setTemp(self, t: int):
-        """sets gate temp
-
-        Args:
-            t (int): a integer representing the temperature of the filament
-        """
-        self.temp = t
-        self.update()
-
-    def update_entry(
-        self,
-        color: QtGui.QColor,
-        slot_id: int,
-        status: GateStatus,
-        material: str,
-        temp: int,
-    ):
-        """updates button and repaints it
-
-        Args:
-            color (QtGui.QColor): a Qcolor representing filament color
-            slot_id (int): a integer representing the gate id
-            status (GateStatus): a GateStatus representing the gate status
-            material (str): a string representing the material
-            temp (int): a integer representing the temperature of the filament
-        """
-        self.setColor(color)
-        self.setGateId(slot_id)
-        self.setStatus(status)
-        self.setMaterial(material)
-        self.setTemp(temp)
         self.update()
 
     def paintEvent(self, a0: QtGui.QPaintEvent) -> None:
-        opt = QtWidgets.QStyleOption()
-        opt.initFrom(self)
+        if self._text_rect is None or self._strip_path is None:
+            return
 
         painter = QtGui.QPainter(self)
         painter.setRenderHint(painter.RenderHint.Antialiasing)
         painter.setRenderHint(painter.RenderHint.SmoothPixmapTransform)
-        painter.setRenderHint(painter.RenderHint.LosslessImageRendering)
 
-        self.style().drawPrimitive(
-            QtWidgets.QStyle.PrimitiveElement.PE_Widget, opt, painter, self
+        is_loaded = self.status in (
+            GateStatus.AVAILABLE,
+            GateStatus.AVAILABLE_FROM_BUFFER,
         )
+        is_active = self.has_color and is_loaded
 
-        color = QtGui.QColor(self.color)
-        white = QtGui.QColor(255, 255, 255)
-
-        pen = QtGui.QPen(white)
-        pen.setWidth(2)
-        painter.setPen(pen)
-
-        font = painter.font()
-        font.setPointSize(12)
-        font.setBold(True)
-        painter.setFont(font)
-
-        _text_rect = self.rect()
-        _text_rect.setTop(int(self.rect().height() / 9))
-
-        _text_rect.setBottom(int(self.rect().height() / 4))
-
-        _text_rect.setLeft(int(self.rect().width() - self.rect().width() * 1.6))
-        _text_rect.setRight(int(self.rect().width()))
-
+        painter.setPen(self._label_pen)
+        painter.setFont(self._label_font)
         painter.drawText(
-            _text_rect,
-            QtCore.Qt.TextFlag.TextShowMnemonic | QtCore.Qt.AlignmentFlag.AlignCenter,
-            "Gate " + str(self.slot_id),
+            self._text_rect, QtCore.Qt.AlignmentFlag.AlignCenter, f"Gate {self.slot_id}"
         )
+
         if not self.isChecked():
-            white.setAlpha(130)
-            color.setAlpha(130)
+            painter.setOpacity(self._UNCHECKED_OPACITY)
 
-        rect = self.rect().adjusted(1, 1, -1, -1)
-        rect.setY(int(rect.height() - rect.height() * 0.15))
-        painter.fillRect(rect, color)
+        if is_active:
+            painter.fillPath(self._strip_path, self.color)
+            painter.setPen(self._solid_border_pen)
+        else:
+            painter.fillPath(self._strip_path, self._grid_dark)
+            painter.fillPath(self._strip_path, self._grid_brush)
+            painter.setPen(self._grid_border_pen)
 
-        pen = QtGui.QPen(white)
-        pen.setWidth(2)
-        painter.setPen(pen)
-        rect = self.rect().adjusted(1, 1, -1, -1)
-        rect.setY(int(rect.height() - rect.height() * 0.15))
-        painter.drawRect(rect)
+        painter.setBrush(QtCore.Qt.BrushStyle.NoBrush)
+        painter.drawPath(self._strip_path)
 
-        icon_size = 65
-        icon = (
-            self._icon
-            if self.status in [GateStatus.AVAILABLE, GateStatus.AVAILABLE_FROM_BUFFER]
-            else self._unloaded_icon
-        )
-        scaled = icon.scaled(
-            icon_size,
-            icon_size,
-            QtCore.Qt.AspectRatioMode.KeepAspectRatio,
-            QtCore.Qt.TransformationMode.SmoothTransformation,
-        )
-        x = (self.width() - scaled.width()) // 2
-        y = int((self.height() - scaled.height()) // 1.1)
+        if is_loaded:
+            icon = self._icons["loaded"]
+        else:
+            icon = self._icons["unloaded"]
 
-        tinted = QtGui.QPixmap(scaled.size())
-        tinted.fill(QtCore.Qt.GlobalColor.transparent)
-        p2 = QtGui.QPainter(tinted)
-        p2.drawPixmap(0, 0, scaled)
-        p2.setCompositionMode(QtGui.QPainter.CompositionMode.CompositionMode_SourceIn)
-        p2.fillRect(tinted.rect(), white)
-        p2.end()
-        painter.drawPixmap(x, y, tinted)
+        x = (self.width() - icon.width()) // 2
+        y = int((self.height() - icon.height()) // 1.1)
+        painter.drawPixmap(x, y, icon)
 
-        tinted = QtGui.QPixmap(scaled.size())
-        tinted.fill(QtCore.Qt.GlobalColor.transparent)
-
-        painter.setPen(QtCore.Qt.PenStyle.NoPen)
         painter.end()
 
 
 class SpoolCarousel(QtWidgets.QWidget):
-    selectionChanged: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
-        int
-    )  # emits selected slot index (0-based)
-
-    VISIBLE = 4  # how many spools show at once
+    selectionChanged: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(int)
+    VISIBLE = 4
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.buttons: list[Spoll_button] = []
+        self._by_id: dict[typing.Any, Spoll_button] = {}
         self.button_group = QtWidgets.QButtonGroup(self)
         self.button_group.setExclusive(True)
         self._offset = 0  # first visible index
-
-        self._anim_group: QtCore.QParallelAnimationGroup | None = None
 
         self._build_ui()
 
@@ -221,11 +171,8 @@ class SpoolCarousel(QtWidgets.QWidget):
             QtGui.QPixmap(":/arrow_icons/media/btn_icons/arrow_right.svg")
         )
 
-        self.right_arrow.setFixedWidth(60)
-        self.left_arrow.setFixedWidth(60)
-
-        self.left_arrow.setFixedHeight(100)
-        self.right_arrow.setFixedHeight(100)
+        self.right_arrow.setFixedSize(60, 100)
+        self.left_arrow.setFixedSize(60, 100)
 
         self.left_arrow.clicked.connect(self._scroll_left)
         self.right_arrow.clicked.connect(self._scroll_right)
@@ -240,27 +187,16 @@ class SpoolCarousel(QtWidgets.QWidget):
 
         self._update_arrows()
 
-    def addSpool(
-        self,
-        color: QtGui.QColor,
-        slot_id: int,
-        material: str = "PLA",
-        temp: int = 999,
-        status: GateStatus = GateStatus.UNKNOWN,
-    ):
+    def addSpool(self, gate_info: GateInfo, fm: FilamentPos):
         """Adds or updates a spool button in the carousel"""
-        if any(btn.slot_id == slot_id for btn in self.buttons):
-            self.buttons[int(slot_id)].update_entry(
-                color, slot_id, status, material, temp
-            )
-            self.update()
+        existing = self._by_id.get(gate_info.index)
+        if existing is not None:
+            existing.update_entry(gate_info, fm)
             return
+
         btn = Spoll_button()
-        btn.setColor(color)
-        btn.setGateId(slot_id)
-        btn.setStatus(status)
-        btn.setMaterial(material)
-        btn.setTemp(temp)
+        btn.setMaximumHeight(80)
+        btn.update_entry(gate_info, fm)
         btn.setSizePolicy(
             QtWidgets.QSizePolicy.Policy.Expanding,
             QtWidgets.QSizePolicy.Policy.Preferred,
@@ -268,6 +204,8 @@ class SpoolCarousel(QtWidgets.QWidget):
         self.button_group.addButton(btn, len(self.buttons))
         btn.clicked.connect(lambda checked, b=btn: self._on_btn_clicked(b))
         self.buttons.append(btn)
+        self._by_id[gate_info.index] = btn
+        self._slot_layout.addWidget(btn)
         self._refresh_visible()
 
     def _on_btn_clicked(self, btn: Spoll_button):
@@ -275,26 +213,13 @@ class SpoolCarousel(QtWidgets.QWidget):
         self.selectionChanged.emit(idx)
 
     def _refresh_visible(self):
-        while self._slot_layout.count():
-            item = self._slot_layout.takeAt(0)
-            if item.widget():
-                item.widget().setParent(None)
+        end = self._offset + self.VISIBLE
+        for i, btn in enumerate(self.buttons):
+            btn.setVisible(self._offset <= i < end)
 
-        end = min(self._offset + self.VISIBLE, len(self.buttons))
-        for btn in self.buttons[self._offset : end]:
-            self._slot_layout.addWidget(btn)
-            btn.setSizePolicy(
-                QtWidgets.QSizePolicy.Policy.Expanding,
-                QtWidgets.QSizePolicy.Policy.Preferred,
-            )
-            btn.show()
-
-        if len(self.button_group.buttons()) <= 4:
-            self.left_arrow.hide()
-            self.right_arrow.hide()
-        else:
-            self.left_arrow.show()
-            self.right_arrow.show()
+        multi = len(self.buttons) > self.VISIBLE
+        self.left_arrow.setVisible(multi)
+        self.right_arrow.setVisible(multi)
 
         self._update_arrows()
 
@@ -320,10 +245,10 @@ class SpoolCarousel(QtWidgets.QWidget):
         return -1
 
     def selectIndex(self, idx: int):
-        """seletect a button by index
+        """select a button by index
 
         Args:
-            idx (int): the indext of the button to select
+            idx (int): the index of the button to select
         """
         if 0 <= idx < len(self.buttons):
             self.buttons[idx].setChecked(True)
@@ -340,16 +265,26 @@ class SpoolInfoPanel(QtWidgets.QWidget):
     unloadRequested: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal()
     ejectRequested: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal()
     checkRequested: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal()
-
     request_keypad = QtCore.pyqtSignal(
         "PyQt_PyObject", str, str, str, int, name="request-keyboard"
     )  # value, slot index, caller widget
+    colorSwatchClicked: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        name="color-swatch-clicked"
+    )
+    _STATUS_TEXT: dict[GateStatus, str] = {
+        GateStatus.AVAILABLE: "<span style='color:#2ec4a0'>● PRE-LOADED</span>",
+        GateStatus.AVAILABLE_FROM_BUFFER: "<span style='color:#2ec4a0'>● PRE-LOADED</span>",
+        GateStatus.EMPTY: "<span style='color:#e8445a'>○ EMPTY</span>",
+    }
+    _UNKNOWN_TEXT = "<span style='color:#aaa'>? UNKNOWN</span>"
+    _LOADED_TEXT = "<span style='color:#2ec4a0'>● LOADED</span>"
+    _STUCK_TEXT = "<span style='color:#f5a623'>⚠ Filament MID-PATH ⚠</span>"
 
     def __init__(self, amu_manager, parent=None):
         super().__init__(parent)
         self.amu_manager = amu_manager
         self._slot_index = -1
-        self.FStatus = "Unknown"
+        self.Gate = -1
         self._build_ui()
 
     def _build_ui(self):
@@ -357,206 +292,249 @@ class SpoolInfoPanel(QtWidgets.QWidget):
         root.setContentsMargins(14, 12, 14, 12)
         root.setSpacing(20)
 
-        self._swatch = QtWidgets.QLabel()
-        self._swatch.setFixedSize(52, 52)
-        self._swatch.setStyleSheet("border-radius: 2px; background: #222;")
-        root.addWidget(self._swatch, 0, QtCore.Qt.AlignmentFlag.AlignVCenter)
-
-        grid_widget = QtWidgets.QWidget()
-        grid = QtWidgets.QGridLayout(grid_widget)
-        grid.setContentsMargins(0, 0, 0, 0)
-        grid.setHorizontalSpacing(12)
-        grid.setVerticalSpacing(2)
-
         font = QtGui.QFont()
         font.setPointSize(12)
 
-        def make_key(text):
-            """Helper to create a label for the left column of the info grid."""
-            lbl = QtWidgets.QLabel(text)
-            lbl.setStyleSheet("color: rgba(255,255,255,100);")
+        cap_font = QtGui.QFont()
+        cap_font.setPointSize(10)
+
+        title_font = QtGui.QFont()
+        title_font.setPointSize(14)
+        title_font.setBold(True)
+
+        info_col = QtWidgets.QVBoxLayout()
+        info_col.setContentsMargins(0, 0, 0, 0)
+        info_col.setSpacing(12)
+
+        # header: gate name / status
+        header = QtWidgets.QHBoxLayout()
+        header.setSpacing(12)
+
+        self._swatch = QtWidgets.QLabel()
+        self._swatch.setFixedHeight(40)
+        self._swatch.setSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Fixed
+        )
+        self._swatch.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
+        self._swatch.mousePressEvent = lambda event: self.colorSwatchClicked.emit()
+
+        title_col = QtWidgets.QVBoxLayout()
+        title_col.setSpacing(0)
+
+        self._lbl_gate = QtWidgets.QLabel("Gate —")
+        self._lbl_gate.setFont(title_font)
+        self._lbl_gate.setStyleSheet("color: rgb(255,255,255);")
+
+        self._lbl_status = QtWidgets.QLabel()
+        self._lbl_status.setFont(font)
+
+        title_col.addWidget(self._lbl_gate)
+        title_col.addWidget(self._lbl_status)
+        header.addLayout(title_col, 1)
+
+        info_col.addLayout(header)
+
+        def _make_val(text="—"):
+            lbl = BlocksCustomLinEdit(self)
+            lbl.setFixedHeight(40)
+            lbl.setText(text)
             lbl.setFont(font)
             return lbl
 
-        def make_val(text="—", edit: bool = True, type: str = "keypad"):
-            """Make either an editable line edit or a static label, depending on the *edit* flag. The *type* arg determines the signal emitted on edit (numpad vs qwerty).
-
-            Args:
-                text (str, optional): _description_. Defaults to "—".
-                edit (bool, optional): _description_. Defaults to True.
-                type (str, optional): type of the input field gets ignored if edit is False. Defaults to "keypad".
-
-            Returns:
-                _type_: retuns label or line edit widget depending on the edit flag.
-            """
-
-            if edit:
-                lbl = BlocksCustomLinEdit(self)
-                lbl.setText(text)
-                lbl.setFont(font)
-                # elif type == "qwerty":
-                #     l.editingFinished.connect(lambda: self.request_numpad[str, int, "PyQt_PyObject", int, int].emit(l.text(), self._slot_index, l, 0, 0))
-            else:
-                lbl = QtWidgets.QLabel(text)
-                lbl.setStyleSheet("color: rgb(255,255,255);")
-                lbl.setFont(font)
-            return lbl
-
-        self._lbl_status = make_val(edit=False)
-        self._lbl_temp = make_val()
-        self._lbl_color = make_val()
-        self._lbl_mat = make_val()
-        self._lbl_weight = make_val()
-
-        self._lbl_color.clicked.connect(
-            lambda: self.request_keypad["PyQt_PyObject", str, str, str, int].emit(
-                self._lbl_color, "#", "", "", 6
-            )
+        self._lbl_temp = _make_val()
+        self._lbl_mat = _make_val()
+        self._color_field = BlocksCustomLinEdit(self)
+        self._color_field.hide()
+        self._color_field.editingFinished.connect(
+            lambda: self._set_color(self._color_field.text())
         )
+
         self._lbl_mat.clicked.connect(
             lambda: self.request_keypad["PyQt_PyObject", str, str, str, int].emit(
                 self._lbl_mat, "", "", "", 0
             )
         )
 
-        rows = [
-            ("Status", self._lbl_status, None),
-            ("Temperature", self._lbl_temp, "numpad"),
-            ("Color", self._lbl_color, "keypad"),
-            ("Material", self._lbl_mat, "keypad"),
-            ("Weight", self._lbl_weight, "numpad"),
-        ]
-        for i, (key, val, _) in enumerate(rows):
-            grid.addWidget(make_key(key), i, 0, QtCore.Qt.AlignmentFlag.AlignCenter)
-            grid.addWidget(val, i, 1)
+        def _make_field(
+            caption: str, widget: QtWidgets.QWidget
+        ) -> QtWidgets.QVBoxLayout:
+            box = QtWidgets.QVBoxLayout()
+            box.setSpacing(2)
+            lbl = QtWidgets.QLabel(caption)
+            lbl.setFont(cap_font)
+            lbl.setStyleSheet("color: rgba(255,255,255,100);")
+            box.addWidget(lbl)
+            box.addWidget(widget)
+            return box
 
-        root.addWidget(grid_widget, 1)
+        fields = QtWidgets.QGridLayout()
+        fields.setContentsMargins(0, 0, 0, 0)
+        fields.setHorizontalSpacing(10)
+        fields.setVerticalSpacing(8)
+        fields.addLayout(_make_field("Temperature", self._lbl_temp), 0, 0)
+        fields.addLayout(_make_field("Material", self._lbl_mat), 0, 1)
+        fields.addLayout(_make_field("Color", self._swatch), 1, 0, 1, 2)
 
-        # ── Divider ──
+        info_col.addLayout(fields)
+        info_col.addStretch(1)
+
+        # fixed width so status text can never push the divider/buttons around
+        info_widget = QtWidgets.QWidget()
+        info_widget.setLayout(info_col)
+        info_widget.setFixedWidth(300)
+        root.addWidget(info_widget)
+        root.addStretch(1)
+
         div = QtWidgets.QFrame()
         div.setFrameShape(QtWidgets.QFrame.Shape.VLine)
         div.setStyleSheet("color: white;")
         root.addWidget(div)
 
-        # ── Operation buttons ──
-        btn_col = QtWidgets.QVBoxLayout()
-        btn_col.setSpacing(6)
+        def _make_btn(text: str, icon_path: str, signal) -> BlocksCustomButton:
+            btn = BlocksCustomButton(self)
+            btn.setText(text)
+            btn.setFont(font)
+            btn.setPixmap(QtGui.QPixmap(icon_path))
+            btn.setFixedSize(150, 70)
+            btn.clicked.connect(signal.emit)
+            return btn
 
-        font = QtGui.QFont()
-        font.setPointSize(12)
-
-        self._btn_load = BlocksCustomButton(self)
-        self._btn_load.setText("Load")
-        self._btn_load.setFixedSize(140, 60)
-        self._btn_load.setFont(font)
-        self._btn_load.setPixmap(
-            QtGui.QPixmap(":/filament_related/media/btn_icons/load_filament.svg")
+        self._btn_load = _make_btn(
+            "Load",
+            ":/filament_related/media/btn_icons/load_filament.svg",
+            self.loadRequested,
         )
-        self._btn_unload = BlocksCustomButton(self)
-        self._btn_unload.setText("Unload")
-        self._btn_unload.setFont(font)
-        self._btn_unload.setPixmap(
-            QtGui.QPixmap(":/filament_related/media/btn_icons/unload_filament.svg")
+        self._btn_unload = _make_btn(
+            "Unload",
+            ":/filament_related/media/btn_icons/unload_filament.svg",
+            self.unloadRequested,
         )
-        self._btn_unload.setFixedSize(140, 60)
-        self._btn_purge = BlocksCustomButton(self)
-        self._btn_purge.setText("Eject")
-        self._btn_purge.setFont(font)
-        self._btn_purge.setPixmap(
-            QtGui.QPixmap(":/filament_related/media/btn_icons/eject.svg")
+        self._btn_purge = _make_btn(
+            "Eject",
+            ":/filament_related/media/btn_icons/eject.svg",
+            self.ejectRequested,
         )
-        self._btn_purge.setFixedSize(140, 60)
-        self._btn_cut = BlocksCustomButton(self)
-        self._btn_cut.setPixmap(
-            QtGui.QPixmap(":/filament_related/media/btn_icons/check gate 1.svg")
+        self._btn_cut = _make_btn(
+            "Check\nGate",
+            ":/filament_related/media/btn_icons/check gate 1.svg",
+            self.checkRequested,
         )
-        self._btn_cut.setText("Check\nGates")
-        self._btn_cut.setFont(font)
-        self._btn_cut.setFixedSize(140, 60)
 
-        self._btn_load.clicked.connect(lambda: self.loadRequested.emit())
-        self._btn_unload.clicked.connect(lambda: self.unloadRequested.emit())
-        self._btn_purge.clicked.connect(lambda: self.ejectRequested.emit())
-        self._btn_cut.clicked.connect(lambda: self.checkRequested.emit())
-
-        top_row = QtWidgets.QHBoxLayout()
-        top_row.setSpacing(6)
-        top_row.addWidget(self._btn_load)
-        top_row.addWidget(self._btn_unload)
-
-        bot_row = QtWidgets.QHBoxLayout()
-        bot_row.setSpacing(6)
-        bot_row.addWidget(self._btn_purge)
-        bot_row.addWidget(self._btn_cut)
-
-        btn_col.addLayout(top_row)
-        btn_col.addLayout(bot_row)
-        root.addLayout(btn_col)
+        btn_grid = QtWidgets.QGridLayout()
+        btn_grid.setSpacing(8)
+        btn_grid.addWidget(self._btn_load, 0, 0)
+        btn_grid.addWidget(self._btn_unload, 0, 1)
+        btn_grid.addWidget(self._btn_purge, 1, 0)
+        btn_grid.addWidget(self._btn_cut, 1, 1)
+        root.addLayout(btn_grid)
 
     def setFilamentStatus(self, mmu_state):
-        """updates the filament status and gate index from the mmu state"""
-        self.FStatus = mmu_state.filament
+        """Updates the active gate index from the mmu state."""
         self.Gate = mmu_state.gate
 
-    def update_for_slot(self, index: int, btn: Spoll_button):
-        """updates table based of the selected button
+    @staticmethod
+    def _button_states_for_status(status: GateStatus):
+        """Base (load, unload, purge, cut) enabled-states from gate status alone."""
+        match status:
+            case GateStatus.AVAILABLE | GateStatus.AVAILABLE_FROM_BUFFER:
+                return True, False, True, True
+            case GateStatus.EMPTY:
+                return False, False, True, True
+            case _:  # GateStatus.UNKNOWN
+                return True, True, False, True
+
+    def update_for_slot(self, index: int, btn: Spoll_button) -> None:
+        """Update the detail panel and action buttons for the selected gate slot.
 
         Args:
-            index (int): the index of the selected button
-            btn (Spoll_button): the selected button
+            index: The index of the selected button/gate.
+            btn: The selected button, carrying a GateInfo snapshot and
+                FilamentPos for that gate.
         """
         self._slot_index = index
         color = btn.color
         r, g, b = color.red(), color.green(), color.blue()
 
-        self._swatch.setStyleSheet(
-            f"border-radius: 12px;background: rgb({r},{g},{b});border: 2px solid white"
-        )
+        self._lbl_gate.setText(f"Gate {btn.slot_id}")
 
-        match btn.status:
-            case GateStatus.AVAILABLE:
-                text, en_load, en_unload, en_purge, en_cut = (
-                    "<span style='color:#2ec4a0'>● PRE-LOADED</span>",
-                    True,
-                    False,
-                    True,
-                    True,
-                )
-            case GateStatus.AVAILABLE_FROM_BUFFER:
-                text, en_load, en_unload, en_purge, en_cut = (
-                    "<span style='color:#2ec4a0'>● PRE-LOADED</span>",
-                    True,
-                    False,
-                    True,
-                    True,
-                )
-            case GateStatus.EMPTY:
-                text, en_load, en_unload, en_purge, en_cut = (
-                    "<span style='color:#e8445a'>○ EMPTY</span>",
-                    False,
-                    False,
-                    True,
-                    True,
-                )
-            case _:
-                text, en_load, en_unload, en_purge, en_cut = (
-                    "<span style='color:#aaa'>? UNKNOWN</span>",
-                    True,
-                    True,
-                    False,
-                    True,
-                )
+        gate_info = btn.gate_info
+        status = gate_info.status if gate_info is not None else GateStatus.UNKNOWN
+        en_load, en_unload, en_purge, en_cut = self._button_states_for_status(status)
+        text = self._STATUS_TEXT.get(status, self._UNKNOWN_TEXT)
 
-        if self.FStatus == "Loaded" and self._slot_index == self.Gate:
-            text = "<span style='color:#2ec4a0'>● LOADED</span>"
-            en_load = False
+        is_active_gate = index == self.Gate
+        filament_pos = btn.filament_pos
+
+        if filament_pos == FilamentPos.UNLOADED:
+            en_unload = False
+        else:
             en_unload = True
+            en_load = False
+
+            if is_active_gate:
+                en_purge = False
+                if filament_pos == FilamentPos.LOADED:
+                    text = self._LOADED_TEXT
+                else:
+                    text = self._STUCK_TEXT
+
+        spool_id = gate_info.spool_id if gate_info is not None else -1
+        if spool_id != -1:
+            text += (
+                "<span style='color:rgba(255,255,255,110)'>"
+                f" · Spoll ID {spool_id}</span>"
+            )
+
+        # fields are read-only while the gate is bound to a spoolman spool
+        editable = (
+            gate_info is not None and spool_id == -1 and status != GateStatus.EMPTY
+        )
+        for w in (self._lbl_temp, self._swatch, self._lbl_mat):
+            w.setEnabled(editable)
 
         self._lbl_status.setText(text)
-        self._lbl_temp.setText(f"{btn.temp}º")
-        self._lbl_mat.setText(f"{btn.material}" if btn.material else "—")
+        self._lbl_temp.setText(
+            f"{gate_info.temperature}º"
+            if gate_info
+            and gate_info.temperature is not None
+            and gate_info.temperature != -1
+            else "—"
+        )
+
+        self._lbl_mat.setText(
+            gate_info.material if gate_info and gate_info.material else "—"
+        )
+        color_hex = f"{r:02X}{g:02X}{b:02X}" if gate_info and gate_info.color else ""
+        self._color_field.setText(color_hex)
+        self._set_color(color_hex)
+
         self._btn_load.setEnabled(en_load)
         self._btn_unload.setEnabled(en_unload)
         self._btn_purge.setEnabled(en_purge)
         self._btn_cut.setEnabled(en_cut)
-        self._lbl_color.setText(f"#{r:02X}{g:02X}{b:02X}")
+        self.update()
+
+    def _apply_swatch(self, color: QtGui.QColor | None) -> None:
+        if color is not None:
+            self._swatch.setText("")
+            self._swatch.setStyleSheet(
+                f"border-radius: 8px;background: rgb({color.red()},{color.green()},{color.blue()});"
+                "border: 2px solid rgba(255,255,255,80);"
+            )
+        else:
+            self._swatch.setText("✕")
+            self._swatch.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+            self._swatch.setStyleSheet(
+                "border-radius: 8px;"
+                "background: rgb(40,40,40);"
+                "border: 2px dashed rgba(255,255,255,80);"
+                "color: #e8445a;"
+                "font-size: 28px; font-weight: bold;"
+            )
+
+    def _set_color(self, hex_str: str) -> None:
+        hex_text = (hex_str or "").strip().lstrip("#")
+        if len(hex_text) != 6:
+            self._apply_swatch(None)
+            return
+        self._apply_swatch(QtGui.QColor(f"#{hex_text}"))

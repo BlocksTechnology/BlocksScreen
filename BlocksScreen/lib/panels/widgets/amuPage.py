@@ -1,7 +1,6 @@
 import typing
 
 from devices.amu import AMUManager
-from devices.amu.models import GateInfo
 from lib.panels.widgets.amuWidgets import SpoolCarousel, SpoolInfoPanel
 from lib.utils.blocks_frame import BlocksCustomFrame
 from lib.utils.icon_button import IconButton
@@ -41,14 +40,14 @@ class AMUpage(QtWidgets.QStackedWidget):
 
         self.amu_manager.mmu_state_changed.connect(self.on_mmu_state_changed)
         self.on_mmu_state_changed(self.amu_manager.get_state())
-        self.info_panel._lbl_color.editingFinished.connect(
+        self.info_panel._color_field.editingFinished.connect(
             lambda: self.amu_manager.set_gate_color(
                 self.current_index,
-                self.info_panel._lbl_color.text().strip("#"),
+                self.info_panel._color_field.text().strip("#"),
             )
         )
-        self.info_panel._lbl_color.clicked.connect(
-            lambda: self.request_color_wheel.emit(self.info_panel._lbl_color)
+        self.info_panel.colorSwatchClicked.connect(
+            lambda: self.request_color_wheel.emit(self.info_panel._color_field)
         )
         self.info_panel._lbl_mat.editingFinished.connect(
             lambda: self.amu_manager.set_gate_material(
@@ -70,16 +69,6 @@ class AMUpage(QtWidgets.QStackedWidget):
                 500,
             )
         )
-        self.info_panel._lbl_weight.clicked.connect(
-            lambda: self.request_numpad[str, int, "PyQt_PyObject", int, int].emit(
-                "Weight",
-                int(self.info_panel._lbl_weight.text().strip("g")),
-                self._on_gate_weight_change,
-                0,
-                9999,
-            )
-        )
-
         self.info_panel.request_keypad.connect(self.request_keyboard)
         self.info_panel.loadRequested.connect(
             lambda: {
@@ -129,18 +118,9 @@ class AMUpage(QtWidgets.QStackedWidget):
             return
         self.status = mmu_state
         for i in range(len(mmu_state.gates)):
-            self.addSpool(mmu_state.gates[i])
+            self.carousel.addSpool(mmu_state.gates[i], mmu_state.filament_pos)
         self.update()
         self._on_selection(mmu_state.gate)
-
-    def addSpool(self, gate_info: GateInfo):
-        self.carousel.addSpool(
-            QtGui.QColor("#" + str(gate_info.color)[:6]),
-            gate_info.index,
-            gate_info.material,
-            int(gate_info.temperature or 0),
-            gate_info.status,
-        )
 
     def _select_gate(self, idx: int):
         self.carousel.selectIndex(self.current_index)
@@ -151,17 +131,13 @@ class AMUpage(QtWidgets.QStackedWidget):
             return
         btn = self.carousel.buttons[idx]
         self.current_index = idx
+        self.info_panel.setFilamentStatus(self.status)
         self.info_panel.update_for_slot(idx, btn)
         self.carousel.selectIndex(idx)
-        self.info_panel.setFilamentStatus(self.status)
 
     def _on_gate_temp_change(self, _name: str, value: int) -> None:
         self.info_panel._lbl_temp.setText(str(value))
         self.info_panel._lbl_temp.editingFinished.emit()
-
-    def _on_gate_weight_change(self, _name: str, value: int) -> None:
-        self.info_panel._lbl_weight.setText(str(value))
-        self.info_panel._lbl_weight.editingFinished.emit()
 
     def _build_ui(self):
         self.setMinimumSize(700, 420)

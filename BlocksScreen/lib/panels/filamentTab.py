@@ -373,7 +373,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self._spool_delegate = EntryDelegate()
         self._spool_list_view.setModel(self._spool_model)
         self._spool_list_view.setItemDelegate(self._spool_delegate)
-        self._spool_delegate.item_selected.connect(self._on_spool_selected)
+        self._spool_delegate.item_selected.connect(self._on_list_item_tapped)
         self._spool_load_widget = LoadingOverlayWidget(
             frame, LoadingOverlayWidget.AnimationGIF.DEFAULT
         )
@@ -496,7 +496,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self.accept_btn.setFixedSize(QtCore.QSize(230, 80))
         self.accept_btn.setPixmap(QtGui.QPixmap(":/dialog/media/btn_icons/yes.svg"))
         self.accept_btn.setFont(font)
-        self.accept_btn.clicked.connect(lambda: self._on_spool_selected())
+        self.accept_btn.clicked.connect(self._on_accept_clicked)
 
         frame_2_lay.addWidget(
             self.skip_btn, alignment=QtCore.Qt.AlignmentFlag.AlignHCenter
@@ -511,6 +511,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
         return page
 
     def handle_skip_button(self):
+        """Handles the skip button action from the pre-gate popup to send the appropriate G-code to map the gate to no spool."""
         gate = self.pre_gate_idx.get("gate", 0)
         self.popup.hide()
         self._reset_popup()
@@ -557,6 +558,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
 
     @QtCore.pyqtSlot(int, str, str, "PyQt_PyObject", name="open-pregate-popup")
     def open_pregate_popup(self, temp, material, name, callback=None):
+        """Opens the pre-gate popup with the provided filament information."""
         self._popup_name.setText(name)
         self._popup_material.setText(material)
         self._popup_temp.setText(str(temp))
@@ -660,34 +662,34 @@ class FilamentTab(QtWidgets.QStackedWidget):
             self._spool_id_map[name] = spool
         self.update()
 
-    def _on_spool_selected(self) -> None:
+    @QtCore.pyqtSlot(ListItem)
+    def _on_list_item_tapped(self, item: ListItem) -> None:
+        if item.text == "+ Add Spool":
+            self._add_popup.show()
+            return
+        spool = self._spool_id_map.get(item.text)
+        if spool is None:
+            return
+        self.accept_btn.setEnabled(True)
+        filament = spool.get("filament") or {}
+        self.filament_name_label.setText(item.text)
+        self.material_label.setText(filament.get("material", "N/A"))
+        self.weight_label.setText(
+            f"{spool.get('remaining_weight')} g"
+            if spool.get("remaining_weight") is not None
+            else "N/A"
+        )
+        self.vendor_label.setText(
+            filament.get("vendor", "N/A").get("name", "N/A")
+            if filament.get("vendor")
+            else "N/A"
+        )
+
+    def _on_accept_clicked(self) -> None:
         item = self._spool_model.get_selected_item()
         if item is None:
             return
         spool = self._spool_id_map.get(item.text)
-
-        if self.sender() != self.accept_btn:
-            if item.text == "+ Add Spool":
-                self._add_popup.show()
-                return
-            if spool is None:
-                return
-            self.accept_btn.setEnabled(True)
-            filament = spool.get("filament") or {}
-            self.filament_name_label.setText(item.text)
-            self.material_label.setText(filament.get("material", "N/A"))
-            self.weight_label.setText(
-                f"{spool.get('remaining_weight')} g"
-                if spool.get("remaining_weight") is not None
-                else "N/A"
-            )
-            self.vendor_label.setText(
-                filament.get("vendor", "N/A").get("name", "N/A")
-                if filament.get("vendor")
-                else "N/A"
-            )
-
-            return
         if not spool:
             return
         filament = spool.get("filament") or {}
@@ -714,6 +716,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
                 self._popup_callback = None
 
     def reset_spool_info(self):
+        """Resets the spool information labels and disables the accept button."""
         self.filament_name_label.setText("N/A")
         self.material_label.setText("N/A")
         self.weight_label.setText("N/A")
