@@ -1287,37 +1287,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.setSizeIncrement(QtCore.QSize(1, 1))
         self.setBaseSize(QtCore.QSize(800, 480))
         palette = QtGui.QPalette()
-        brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
-        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.WindowText, brush
-        )
-        brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
-        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Active, QtGui.QPalette.ColorRole.ButtonText, brush
-        )
-        brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
-        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Inactive,
-            QtGui.QPalette.ColorRole.WindowText,
-            brush,
-        )
-        brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
-        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Inactive,
-            QtGui.QPalette.ColorRole.ButtonText,
-            brush,
-        )
-        brush = QtGui.QBrush(QtGui.QColor(120, 120, 120))
-        brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        palette.setBrush(
-            QtGui.QPalette.ColorGroup.Disabled,
-            QtGui.QPalette.ColorRole.WindowText,
-            brush,
-        )
         brush = QtGui.QBrush(QtGui.QColor(120, 120, 120))
         brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
         palette.setBrush(
@@ -1587,12 +1556,9 @@ class MainWindow(QtWidgets.QMainWindow):
             "    background: transparent;\n"
             "}"
         )
-        self.main_header_layout.setTitle("")
         self.main_header_layout.setAlignment(
             QtCore.Qt.AlignmentFlag.AlignJustify | QtCore.Qt.AlignmentFlag.AlignVCenter
         )
-        self.main_header_layout.setFlat(True)
-        self.main_header_layout.setCheckable(False)
         self.main_header_layout.setObjectName("main_header_layout")
         self.header_main_layout = QtWidgets.QHBoxLayout(self.main_header_layout)
         self.header_main_layout.setSizeConstraint(
@@ -1602,57 +1568,40 @@ class MainWindow(QtWidgets.QMainWindow):
         self.header_main_layout.setSpacing(10)
         self.header_main_layout.setObjectName("header_main_layout")
         self.notification_btn = IconButton(parent=self.main_header_layout)
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Fixed
-        )
-        sizePolicy.setHorizontalStretch(1)
-        sizePolicy.setVerticalStretch(1)
-        sizePolicy.setHeightForWidth(
-            self.notification_btn.sizePolicy().hasHeightForWidth()
-        )
-        self.notification_btn.setSizePolicy(sizePolicy)
         self.notification_btn.setMinimumSize(QtCore.QSize(60, 60))
         self.notification_btn.setMaximumSize(QtCore.QSize(60, 60))
-        self.notification_btn.setText("")
         self.notification_btn.setIconSize(QtCore.QSize(60, 60))
-        self.notification_btn.setFlat(True)
         self.notification_btn.setProperty(
             "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/notification.svg")
         )
-        self.notification_btn.setObjectName("notification_btn")
         self.header_main_layout.addWidget(
             self.notification_btn, 0, QtCore.Qt.AlignmentFlag.AlignLeft
         )
         self.extruder_temp_display = DisplayButton(parent=self.main_header_layout)
         self.extruder_temp_display.setMinimumSize(QtCore.QSize(140, 60))
         self.extruder_temp_display.setMaximumSize(QtCore.QSize(160, 60))
-        self.extruder_temp_display.setFlat(True)
         self.extruder_temp_display.setProperty(
             "icon_pixmap",
             QtGui.QPixmap(":/extruder_related/media/btn_icons/nozzle_topbar.svg"),
         )
-        self.extruder_temp_display.setObjectName("extruder_temp_display")
         self.header_main_layout.addWidget(
             self.extruder_temp_display, 0, QtCore.Qt.AlignmentFlag.AlignHCenter
         )
         self.bed_temp_display = DisplayButton(parent=self.main_header_layout)
         self.bed_temp_display.setMinimumSize(QtCore.QSize(140, 60))
         self.bed_temp_display.setMaximumSize(QtCore.QSize(160, 60))
-        self.bed_temp_display.setFlat(True)
         self.bed_temp_display.setProperty(
             "icon_pixmap",
             QtGui.QPixmap(
                 ":/temperature_related/media/btn_icons/temperature_plate.svg"
             ),
         )
-        self.bed_temp_display.setObjectName("bed_temp_display")
         self.header_main_layout.addWidget(
             self.bed_temp_display, 0, QtCore.Qt.AlignmentFlag.AlignHCenter
         )
         self.chamber_temp_display = DisplayButton(parent=self.main_header_layout)
         self.chamber_temp_display.setMinimumSize(QtCore.QSize(140, 60))
         self.chamber_temp_display.setMaximumSize(QtCore.QSize(160, 60))
-        self.chamber_temp_display.setFlat(True)
         self.chamber_temp_display.setProperty(
             "icon_pixmap",
             QtGui.QPixmap(":/top_bar_icons/media/topbar/chamber_temp_topbar.svg"),
@@ -1661,59 +1610,46 @@ class MainWindow(QtWidgets.QMainWindow):
             "secondary_pixmap",
             QtGui.QPixmap(":/temperature_related/media/btn_icons/humidity.svg"),
         )
-        self.chamber_temp_display.setObjectName("chamber_temp_display")
         self.header_main_layout.addWidget(
             self.chamber_temp_display, 0, QtCore.Qt.AlignmentFlag.AlignHCenter
         )
         self.filament_type_icon = IconButton(parent=self.main_header_layout)
         self.filament_type_icon.setMinimumSize(QtCore.QSize(60, 60))
         self.filament_type_icon.setMaximumSize(QtCore.QSize(60, 60))
-        self.filament_type_icon.setFlat(True)
         self.filament_type_icon.setProperty(
             "icon_pixmap",
             QtGui.QPixmap(":/filament_related/media/btn_icons/load_filament.svg"),
         )
-        self.filament_type_icon.setObjectName("filament_type_icon")
         self.header_main_layout.addWidget(
             self.filament_type_icon, 0, QtCore.Qt.AlignmentFlag.AlignHCenter
         )
         self.nozzle_size_icon = IconButton(parent=self.main_header_layout)
         self.nozzle_size_icon.setMinimumSize(QtCore.QSize(60, 60))
         self.nozzle_size_icon.setMaximumSize(QtCore.QSize(60, 60))
-        self.nozzle_size_icon.setFlat(True)
         self.nozzle_size_icon.setProperty(
             "icon_pixmap",
             QtGui.QPixmap(
                 ":/temperature_related/media/btn_icons/standart_temperature.svg"
             ),
         )
-        self.nozzle_size_icon.setObjectName("nozzle_size_icon")
         self.header_main_layout.addWidget(
             self.nozzle_size_icon, 0, QtCore.Qt.AlignmentFlag.AlignHCenter
         )
-        self.wifi_button = IconButton(parent=self.main_header_layout)
-        self.wifi_button.setEnabled(True)
         sizePolicy = QtWidgets.QSizePolicy(
             QtWidgets.QSizePolicy.Policy.MinimumExpanding,
             QtWidgets.QSizePolicy.Policy.MinimumExpanding,
         )
         sizePolicy.setHorizontalStretch(1)
         sizePolicy.setVerticalStretch(1)
-        sizePolicy.setHeightForWidth(self.wifi_button.sizePolicy().hasHeightForWidth())
+        self.wifi_button = IconButton(parent=self.main_header_layout)
         self.wifi_button.setSizePolicy(sizePolicy)
         self.wifi_button.setMinimumSize(QtCore.QSize(60, 60))
         self.wifi_button.setMaximumSize(QtCore.QSize(60, 60))
-        self.wifi_button.setStyleSheet("")
-        self.wifi_button.setText("")
         self.wifi_button.setIconSize(QtCore.QSize(16, 16))
-        self.wifi_button.setCheckable(False)
-        self.wifi_button.setChecked(False)
-        self.wifi_button.setFlat(True)
         self.wifi_button.setProperty(
             "icon_pixmap",
             QtGui.QPixmap(":/network/media/btn_icons/network/3bar_wifi.svg"),
         )
-        self.wifi_button.setObjectName("wifi_button")
         self.header_main_layout.addWidget(
             self.wifi_button,
             0,
