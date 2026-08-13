@@ -40,7 +40,7 @@ sys.modules.setdefault("lib.utils.blocks_button", _button_stub)
 
 import pytest  # noqa: E402
 
-from BlocksScreen.lib.panels.widgets.basicFilamentPanel import (  # noqa: E402
+from BlocksScreen.lib.panels.widgets.FilamentTab.basicFilamentPanel import (  # noqa: E402
     BasicFilamentPanel,
 )
 
