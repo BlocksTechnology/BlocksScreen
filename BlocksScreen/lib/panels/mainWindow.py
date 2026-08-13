@@ -210,13 +210,13 @@ class MainWindow(QtWidgets.QMainWindow):
         self.extruder_temp_display.clicked.connect(
             lambda: self.global_change_page(
                 self.main_content_widget.indexOf(self.controlTab),
-                self.controlPanel.indexOf(self.controlPanel.panel.temperature_page),
+                self.controlPanel.indexOf(self.controlPanel.temperature_page),
             )
         )
         self.bed_temp_display.clicked.connect(
             lambda: self.global_change_page(
                 self.main_content_widget.indexOf(self.controlTab),
-                self.controlPanel.indexOf(self.controlPanel.panel.temperature_page),
+                self.controlPanel.indexOf(self.controlPanel.temperature_page),
             )
         )
         self.filament_type_icon.clicked.connect(
@@ -500,13 +500,13 @@ class MainWindow(QtWidgets.QMainWindow):
         self.extruder_temp_display.clicked.connect(
             lambda: self.global_change_page(
                 self.main_content_widget.indexOf(self.controlTab),
-                self.controlPanel.indexOf(self.controlPanel.panel.temperature_page),
+                self.controlPanel.indexOf(self.controlPanel.temperature_page),
             )
         )
         self.bed_temp_display.clicked.connect(
             lambda: self.global_change_page(
                 self.main_content_widget.indexOf(self.controlTab),
-                self.controlPanel.indexOf(self.controlPanel.panel.temperature_page),
+                self.controlPanel.indexOf(self.controlPanel.temperature_page),
             )
         )
 
@@ -1257,13 +1257,13 @@ class MainWindow(QtWidgets.QMainWindow):
             self.extruder_temp_display.clicked.connect(
                 lambda: self.global_change_page(
                     self.main_content_widget.indexOf(self.controlTab),
-                    self.controlPanel.indexOf(self.controlPanel.panel.temperature_page),
+                    self.controlPanel.indexOf(self.controlPanel.temperature_page),
                 )
             )
             self.bed_temp_display.clicked.connect(
                 lambda: self.global_change_page(
                     self.main_content_widget.indexOf(self.controlTab),
-                    self.controlPanel.indexOf(self.controlPanel.panel.temperature_page),
+                    self.controlPanel.indexOf(self.controlPanel.temperature_page),
                 )
             )
             return False
