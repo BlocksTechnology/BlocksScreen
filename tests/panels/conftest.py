@@ -31,11 +31,11 @@ _STUB_MODULES = (
     "lib.panels.utilitiesTab",
     "lib.panels.widgets",
     "lib.panels.widgets.basePopup",
-    "lib.panels.widgets.cancelPage",
-    "lib.panels.widgets.connectionPage",
+    "lib.panels.widgets.MainWindow.cancelPage",
+    "lib.panels.widgets.MainWindow.connectionPage",
     "lib.panels.widgets.loadWidget",
-    "lib.panels.widgets.notificationPage",
-    "lib.panels.widgets.updatePage",
+    "lib.panels.widgets.MainWindow.notificationPage",
+    "lib.panels.widgets.MainWindow.updatePage",
     "lib.printer",
     "lib.ui",
     "lib.ui.mainWindow_ui",
@@ -79,11 +79,11 @@ sys.modules["lib.panels.networkWindow"].PixmapCache = MagicMock
 sys.modules["lib.panels.printTab"].PrintTab = MagicMock
 sys.modules["lib.panels.utilitiesTab"].UtilitiesTab = MagicMock
 sys.modules["lib.panels.widgets.basePopup"].BasePopup = MagicMock
-sys.modules["lib.panels.widgets.cancelPage"].CancelPage = MagicMock
-sys.modules["lib.panels.widgets.connectionPage"].ConnectionPage = MagicMock
+sys.modules["lib.panels.widgets.MainWindow.cancelPage"].CancelPage = MagicMock
+sys.modules["lib.panels.widgets.MainWindow.connectionPage"].ConnectionPage = MagicMock
 sys.modules["lib.panels.widgets.loadWidget"].LoadingOverlayWidget = MagicMock
-sys.modules["lib.panels.widgets.notificationPage"].NotificationPage = MagicMock
-sys.modules["lib.panels.widgets.updatePage"].UpdatePage = MagicMock
+sys.modules["lib.panels.widgets.MainWindow.notificationPage"].NotificationPage = MagicMock
+sys.modules["lib.panels.widgets.MainWindow.updatePage"].UpdatePage = MagicMock
 sys.modules["lib.printer"].Printer = MagicMock
 sys.modules["lib.ui.mainWindow_ui"].Ui_MainWindow = MagicMock
 sys.modules["lib.updater_worker"].UpdaterWorker = MagicMock
