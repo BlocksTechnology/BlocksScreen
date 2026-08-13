@@ -7,6 +7,7 @@ pytest-timeout
 pytest-qt
 pytest-asyncio
 PyQt6
+numpy==2.1.0
 docstr_coverage
 bandit
 requests>=2.32.5
