@@ -1,6 +1,6 @@
 import typing
 
-from lib.panels.widgets.sensorWidget import SensorWidget
+from lib.panels.widgets.PrintTab.sensorWidget import SensorWidget
 from lib.utils.blocks_frame import BlocksCustomFrame
 from lib.utils.icon_button import IconButton
 from lib.utils.list_model import EntryDelegate, EntryListModel, ListItem
