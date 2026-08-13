@@ -831,11 +831,11 @@ class FilamentTab(QtWidgets.QStackedWidget):
                 and self._previous_gate_states[gate_info.index] is True
             ):
                 self.popup_gates.append({"gate": gate_info.index})
-                if len(mmu_state.gates) > 6:
+                if len(mmu_state.gates) > 1:
                     self.handle_popup()
 
         if not self.amu_configured:
-            if len(mmu_state.gates) > 6:
+            if len(mmu_state.gates) > 1:
                 self.amupage = AMUpage(self.amu_manager, parent=self)
                 self.addWidget(self.amupage)
                 try:
@@ -872,7 +872,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
             if mmu_state.action == "Idle":
                 self.load_state = False
                 self.call_load_panel.emit(False, "", True)
-                if not len(mmu_state.gates) > 6:
+                if not len(mmu_state.gates) > 1:
                     self._basic_panel.change_page(0)
                 return
             self.call_load_panel.emit(True, mmu_state.action, True)
