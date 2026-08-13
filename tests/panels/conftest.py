@@ -9,7 +9,18 @@ module before the real module is imported.
 
 import sys
 import types
+from pathlib import Path
 from unittest.mock import MagicMock
+
+_project_root = Path(__file__).resolve().parent.parent.parent
+
+# Other test directories (e.g. tests/lib/conftest.py) leak a bare
+# ``MagicMock()`` stub for "lib.utils" into sys.modules with no teardown,
+# which breaks the real ``lib.utils.*`` imports below on a full-suite run.
+# Clear any stale "lib"/"lib.*" entries before rebuilding our own stubs.
+for _stale in list(sys.modules):
+    if _stale == "lib" or _stale.startswith("lib."):
+        del sys.modules[_stale]
 
 _STUB_MODULES = (
     "events",
@@ -55,6 +66,11 @@ for _name in _STUB_MODULES:
     _mod = types.ModuleType(_name)
     _mod.__path__ = []  # marks it as a package so submodule imports resolve
     sys.modules[_name] = _mod
+
+# "lib.utils" is deliberately NOT in _STUB_MODULES: blocks_tabwidget,
+# display_button, and icon_button are plain PyQt6 widgets with no heavy
+# deps, so let them load for real from disk instead of stubbing them.
+sys.modules["lib"].__path__ = [str(_project_root / "BlocksScreen" / "lib")]
 
 # events.* is referenced as a bare attribute in type annotations
 # (e.g. ``event: events.WebSocketMessageReceived``), evaluated eagerly at
