@@ -1,8 +1,8 @@
 import logging
 import typing
 
-from lib.panels.widgets.addFilamentPage import AddFilamentPage
-from lib.panels.widgets.addSpoolPage import AddSpoolPage
+from lib.panels.widgets.FilamentTab.addFilamentPage import AddFilamentPage
+from lib.panels.widgets.FilamentTab.addSpoolPage import AddSpoolPage
 from lib.panels.widgets.basePopup import BasePopup
 from lib.utils.blocks_frame import BlocksCustomFrame
 from lib.utils.icon_button import IconButton

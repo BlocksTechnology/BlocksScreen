@@ -1,7 +1,7 @@
 import typing
 
 from devices.amu import AMUManager
-from lib.panels.widgets.amuWidgets import SpoolCarousel, SpoolInfoPanel
+from lib.panels.widgets.FilamentTab.amuWidgets import SpoolCarousel, SpoolInfoPanel
 from lib.panels.widgets.basePopup import BasePopup
 from lib.utils.blocks_frame import BlocksCustomFrame
 from lib.utils.icon_button import IconButton
