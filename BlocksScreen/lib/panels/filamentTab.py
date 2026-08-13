@@ -4,16 +4,16 @@ from typing import Deque
 
 from devices.amu import AMUManager
 from devices.amu.models import GateStatus
-from lib.panels.widgets.addFilamentPage import AddFilamentPage
-from lib.panels.widgets.addSpoolPage import AddSpoolPage
-from lib.panels.widgets.amuPage import AMUpage
 from lib.panels.widgets.basePopup import BasePopup
-from lib.panels.widgets.basicFilamentPanel import BasicFilamentPanel
 from lib.panels.widgets.colorWheelWidget import ColorWheelWidget
+from lib.panels.widgets.FilamentTab.addFilamentPage import AddFilamentPage
+from lib.panels.widgets.FilamentTab.addSpoolPage import AddSpoolPage
+from lib.panels.widgets.FilamentTab.amuPage import AMUpage
+from lib.panels.widgets.FilamentTab.basicFilamentPanel import BasicFilamentPanel
+from lib.panels.widgets.FilamentTab.spoolmanPage import SpoolmanPage
 from lib.panels.widgets.keyboardPage import CustomQwertyKeyboard
 from lib.panels.widgets.loadWidget import LoadingOverlayWidget
 from lib.panels.widgets.numpadPage import CustomNumpad
-from lib.panels.widgets.spoolmanPage import SpoolmanPage
 from lib.printer import Printer
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_frame import BlocksCustomFrame
@@ -47,8 +47,8 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self.amu_manager: AMUManager = amu_manager
         self.amu_configured = False
         self._popup_callback = None
-        self.ui = self.setupUi()
-        self.change_page(self.indexOf(self.ui))
+        self._setup_ui()
+        self.change_page(self.indexOf(self.filament_control_page))
 
         self._previous_gate_states: dict[int, bool] = {}
         self.pre_gate_idx = {}
@@ -831,11 +831,11 @@ class FilamentTab(QtWidgets.QStackedWidget):
                 and self._previous_gate_states[gate_info.index] is True
             ):
                 self.popup_gates.append({"gate": gate_info.index})
-                if len(mmu_state.gates) > 1:
+                if len(mmu_state.gates) > 6:
                     self.handle_popup()
 
         if not self.amu_configured:
-            if len(mmu_state.gates) > 1:
+            if len(mmu_state.gates) > 6:
                 self.amupage = AMUpage(self.amu_manager, parent=self)
                 self.addWidget(self.amupage)
                 try:
@@ -872,7 +872,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
             if mmu_state.action == "Idle":
                 self.load_state = False
                 self.call_load_panel.emit(False, "", True)
-                if not len(mmu_state.gates) > 1:
+                if not len(mmu_state.gates) > 6:
                     self._basic_panel.change_page(0)
                 return
             self.call_load_panel.emit(True, mmu_state.action, True)
@@ -881,58 +881,45 @@ class FilamentTab(QtWidgets.QStackedWidget):
             self.load_state = True
             self.call_load_panel.emit(True, mmu_state.action, True)
 
-    def setupUi(self):
+    def _setup_ui(self) -> None:
+        """Build the filament control page and add it to the stack."""
         self.resize(710, 410)
         self.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
         widget = QtWidgets.QWidget()
         widget.setMinimumSize(QtCore.QSize(710, 410))
         widget.setMaximumSize(QtCore.QSize(710, 410))
         self.setObjectName("filament_page")
-        self.verticalLayout = QtWidgets.QVBoxLayout()
+        self.verticalLayout = QtWidgets.QVBoxLayout(widget)
         self.verticalLayout.setObjectName("verticalLayout")
         self.fp_header_layout = QtWidgets.QHBoxLayout()
         self.fp_header_layout.setObjectName("fp_header_layout")
 
-        self.fp_header_layout.addItem(
-            QtWidgets.QSpacerItem(
-                60,
-                60,
-                QtWidgets.QSizePolicy.Policy.Fixed,
-                QtWidgets.QSizePolicy.Policy.Minimum,
-            )
-        )
-        self.fp_header_title = QtWidgets.QLabel(parent=self)
+        self.fp_hblank_left = QtWidgets.QWidget()
+        self.fp_hblank_left.setMinimumSize(QtCore.QSize(60, 55))
+        self.fp_hblank_left.setMaximumSize(QtCore.QSize(60, 55))
+        self.fp_header_layout.addWidget(self.fp_hblank_left)
+
+        self.fp_header_title = QtWidgets.QLabel(parent=widget)
         sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-            QtWidgets.QSizePolicy.Policy.Fixed,
-        )
-        sizePolicy.setHorizontalStretch(0)
-        sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(
-            self.fp_header_title.sizePolicy().hasHeightForWidth()
+            QtWidgets.QSizePolicy.Policy.Expanding,
+            QtWidgets.QSizePolicy.Policy.Minimum,
         )
         self.fp_header_title.setSizePolicy(sizePolicy)
-        self.fp_header_title.setMinimumSize(QtCore.QSize(300, 60))
+        self.fp_header_title.setMinimumSize(QtCore.QSize(0, 60))
         self.fp_header_title.setMaximumSize(QtCore.QSize(16777215, 60))
         font = QtGui.QFont()
         font.setFamily("Momcake")
         font.setPointSize(24)
-        font.setBold(True)
-        font.setWeight(75)
         self.fp_header_title.setFont(font)
         self.fp_header_title.setStyleSheet("background: transparent; color: white;")
         self.fp_header_title.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self.fp_header_title.setObjectName("fp_header_title")
         self.fp_header_layout.addWidget(self.fp_header_title)
 
-        self.fp_header_layout.addItem(
-            QtWidgets.QSpacerItem(
-                60,
-                60,
-                QtWidgets.QSizePolicy.Policy.Fixed,
-                QtWidgets.QSizePolicy.Policy.Minimum,
-            )
-        )
+        self.fp_hblank_right = QtWidgets.QWidget()
+        self.fp_hblank_right.setMinimumSize(QtCore.QSize(60, 55))
+        self.fp_hblank_right.setMaximumSize(QtCore.QSize(60, 55))
+        self.fp_header_layout.addWidget(self.fp_hblank_right)
 
         self.verticalLayout.addLayout(self.fp_header_layout)
         self.fp_content_layout = QtWidgets.QGridLayout()
@@ -979,16 +966,20 @@ class FilamentTab(QtWidgets.QStackedWidget):
 
         self.fp_content_layout.addWidget(self.fp_button_2, 1, 1, 1, 1)
 
-        self.verticalLayout.addLayout(self.fp_content_layout)
-        widget.setLayout(self.verticalLayout)
+        self.fp_content_layout.setRowMinimumHeight(0, 80)
+        self.fp_content_layout.setRowMinimumHeight(1, 80)
+        self.fp_content_layout.setRowMinimumHeight(2, 80)
+        self.fp_content_layout.setContentsMargins(0, 0, 0, 0)
 
-        self.fp_content_layout.setRowMinimumHeight(
-            0, int(87.5)
-        )  # 87.5 to compensate for not having margin on the rest of the buttons
-        self.fp_content_layout.setRowMinimumHeight(
-            2, int(87.5)
-        )  # dont ask how i got this value , it was try and repeat
+        fp_content_widget = QtWidgets.QWidget(parent=widget)
+        fp_content_widget.setLayout(self.fp_content_layout)
+        fp_content_widget.setSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Fixed
+        )
+        fp_content_widget.setFixedHeight(80 * 3 + self.fp_content_layout.spacing() * 2)
+        self.verticalLayout.addWidget(fp_content_widget)
 
+        self.filament_control_page = widget
         self.addWidget(widget)
         self.fp_header_title.setText("Filament")
         self.fp_button_1.setText("Filament\nControl")
