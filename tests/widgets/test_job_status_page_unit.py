@@ -56,7 +56,7 @@ for _name, _mod in [
     sys.modules[_name] = _mod  # force-set so network conftest stubs don't win
 
 import events  # noqa: F401  # ensure events is importable before jobStatusPage loads
-from lib.panels.widgets.jobStatusPage import JobStatusWidget
+from lib.panels.widgets.PrintTab.jobStatusPage import JobStatusWidget
 
 
 @pytest.fixture()
