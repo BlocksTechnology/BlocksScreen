@@ -34,39 +34,38 @@ Cyan='\033[0;36m'
 Normal='\033[0m'
 
 echo_info() {
-    printf "${Blue}$1${Normal}\n"
+    printf '%s%s%s\n' "$Blue" "$1" "$Normal"
 }
 
 echo_text() {
-    printf "${Normal}$1${Cyan}\n"
+    printf '%s%s%s\n' "$Normal" "$1" "$Cyan"
 }
 
 echo_error() {
-    printf "${Red}$1${Normal}\n"
+    printf '%s%s%s\n' "$Red" "$1" "$Normal"
 }
 
 echo_ok() {
-    printf "${Green}$1${Normal}\n"
+    printf '%s%s%s\n' "$Green" "$1" "$Normal"
 }
 
 MOONRAKER_ASVC="${HOME}/printer_data/moonraker.asvc"
 MOONRAKER_CONFIG="${HOME}/printer_data/config/moonraker.conf"
-KLIPPER_PATH="${HOME}/klipper"
-KLIPPER_VENV_PATH="${HOME}/klippy-env"
-USER_CONFIG_PATH="${HOME}/printer_data/config"
 SCRIPT_PATH=$(dirname -- "$(readlink -f -- "$0")")
 echo_info "Script Path -> ${SCRIPT_PATH}"
+# shellcheck source=/dev/null
+if [ -f "$SCRIPT_PATH/bs-common.sh" ]; then . "$SCRIPT_PATH/bs-common.sh"; fi
 BS_PATH=$(dirname "$SCRIPT_PATH")
 echo_info "BlocksScreen path ->  ${BS_PATH}"
 BSENV="${BLOCKSSCREEN_VENV:-${HOME}/.BlocksScreen-env}"
 echo_info "BlocksScreen virtual environment path -> ${BSENV}"
 PYTHON_VERSION=3.11.2
 
-XSERVER="xinit xinput x11-xserver-utils xserver-xorg-input-evdev xserver-xorg-input-libinput xserver-xorg-legacy xserver-xorg-video-fbdev"
-CAGE="cage seatd xwayland"
-PYOBJECT="pkg-config python3-dev openssl libssl-dev python3-venv"
-MISC="autoconf libdbus-glib-1-dev udiskie xdg-utils libsystemd-dev build-essential cmake"
-QTMISC=" ^libxcb.*-dev libx11-xcb-dev libglu1-mesa-dev libxrender-dev libxi-dev libxkbcommon-dev libxkbcommon-x11-dev libxcb-cursor0"
+XSERVER=(xinit xinput x11-xserver-utils xserver-xorg-input-evdev xserver-xorg-input-libinput xserver-xorg-legacy xserver-xorg-video-fbdev)
+CAGE=(cage seatd xwayland)
+PYOBJECT=(pkg-config python3-dev openssl libssl-dev python3-venv)
+MISC=(autoconf libdbus-glib-1-dev udiskie xdg-utils libsystemd-dev build-essential cmake)
+QTMISC=('^libxcb.*-dev' libx11-xcb-dev libglu1-mesa-dev libxrender-dev libxi-dev libxkbcommon-dev libxkbcommon-x11-dev libxcb-cursor0)
 
 function install_graphical_backend() {
     while true; do
@@ -80,23 +79,23 @@ function install_graphical_backend() {
             read -r -e -p "Backend Xserver or Wayland (cage)? [X/w]" BACKEND
             if [[ "$BACKEND" =~ ^[wW]$ ]]; then
                 echo_text "Installing Wayland Cage Kiosk"
-                if sudo apt install -y $CAGE; then
+                if sudo apt install -y "${CAGE[@]}"; then
                     echo_ok "Installed Cage"
                     BACKEND="W"
                     break
                 else
-                    echo_error "Installation of Cage dependencies failed ($CAGE)"
+                    echo_error "Installation of Cage dependencies failed (${CAGE[*]})"
                     exit 1
                 fi
             else
                 echo_text "Installing Xserver"
-                if sudo apt install -y $XSERVER; then
+                if sudo apt install -y "${XSERVER[@]}"; then
                     echo_ok "Installed X"
                     update_x11
                     BACKEND="X"
                     break
                 else
-                    echo_error "Installation of X-server dependencies failed ($XSERVER)"
+                    echo_error "Installation of X-server dependencies failed (${XSERVER[*]})"
                     exit 1
                 fi
             fi
@@ -126,33 +125,33 @@ function install_packages() {
     echo_info "Installing dependencies"
     echo "$_"
 
-    if sudo apt install -y $PYOBJECT; then
+    if sudo apt install -y "${PYOBJECT[@]}"; then
         echo_ok "Installed PyObject dependencies"
     else
-        echo_error "Installation of PyObject dependencies failed ($PYOBJECT)"
+        echo_error "Installation of PyObject dependencies failed (${PYOBJECT[*]})"
         exit 1
     fi
 
-    if sudo apt install -y $MISC; then
+    if sudo apt install -y "${MISC[@]}"; then
         echo_ok "Installed Misc packages"
     else
-        echo_error "Installation of Misc packages failed ($MISC)"
+        echo_error "Installation of Misc packages failed (${MISC[*]})"
         exit 1
     fi
 
-    if sudo apt install -y $QTMISC; then
+    if sudo apt install -y "${QTMISC[@]}"; then
         echo_ok "Installed PyQt6 dependencies"
     else
-        echo_error "Installation of PyQT dependencies packages failed ($QTMISC)"
+        echo_error "Installation of PyQT dependencies packages failed (${QTMISC[*]})"
         exit 1
     fi
 }
 
 function check_requirements() {
-    echo_info "Checking Python version > "$VERSION
+    echo_info "Checking Python version > ""$VERSION"
     python3 --version
 
-    if ! python3 -c 'import sys; exit(1) if sys.version_info <= ('$VERSION') else exit(0)'; then
+    if ! python3 -c 'import sys; exit(1) if sys.version_info <= ('"$VERSION"') else exit(0)'; then
         echo_error 'Not supported'
         exit 1
     fi
@@ -182,7 +181,7 @@ function install_app_python_version() {
         sudo sh /usr/src/Python-$PYTHON_VERSION/configure --enable-optimizations --prefix=/usr/local
         # sudo ./usr/src/Python-$PYTHON_VERSION/configure --enable-optimizations --prefix=/usr/local
 
-        sudo make -j $(nproc) # Compile software and try to use all cores
+        sudo make -j "$(nproc)" # Compile software and try to use all cores
 
         echo_info "Using $(nproc) Cores to compile python 3.11.2"
         echo_info "Preceding with compiling and installation with 'make altinstall'"
@@ -219,6 +218,7 @@ function create_virtualenv() {
     echo_text "Creating virtual environment"
     python${PYTHON_VERSION:0:4} -m venv "${BSENV}"
 
+    # shellcheck disable=SC1091
     if ! . "${BSENV}/bin/activate"; then
         echo_error "Could not activate the environment, try deleting ${BSENV} and retry"
         exit 1
@@ -231,10 +231,11 @@ function create_virtualenv() {
         pip3 --disable-pip-version-check install --use-pep517 --no-binary sdbus --use-feature=no-binary-enable-wheel-cache "$SDBUS_VERSION"
         pip3 --disable-pip-version-check install --extra-index-url https://www.piwheels.org/simple -r /tmp/bs-requirements.txt
     else
-        pip3 --disable-pip-version-check install -r ${BS_PATH}/scripts/requirements.txt
+        pip3 --disable-pip-version-check install -r "${BS_PATH}"/scripts/requirements.txt
     fi
-    if [ $? -gt 0 ]; then
-        echo_error "Error: pip install exited with status code $?"
+    pip_status=$?
+    if [ "$pip_status" -gt 0 ]; then
+        echo_error "Error: pip install exited with status code $pip_status"
         echo_text "Trying again with new tools..."
         sudo apt install -y build-essential cmake libsystemd-dev
         if [[ "$(uname -m)" =~ armv[67]l|aarch64 ]]; then
@@ -243,13 +244,15 @@ function create_virtualenv() {
             pip3 install --extra-index-url https://www.piwheels.org/simple --upgrade pip setuptools
             pip3 install --use-pep517 --no-binary sdbus --use-feature=no-binary-enable-wheel-cache "$SDBUS_VERSION"
             pip3 install --extra-index-url https://www.piwheels.org/simple -r /tmp/bs-requirements.txt
+            pip_status=$?
         else
             echo_info "Upgrading pip and Installing with pip setuptools and app requirements"
             pip3 install --upgrade pip setuptools
-            pip3 install -r ${BS_PATH}/scripts/requirements.txt
+            pip3 install -r "${BS_PATH}"/scripts/requirements.txt
+            pip_status=$?
             printf "\n"
         fi
-        if [ $? -gt 0 ]; then
+        if [ "$pip_status" -gt 0 ]; then
             echo_error "Unable to install dependencies, aborting install."
             deactivate
             exit 1
@@ -332,7 +335,6 @@ function create_policy() {
     echo_text "Installing PolicyKit Rules to ${RULE_FILE}..."
     sudo rm -r ${RULE_FILE}
 
-    BS_GID=$(getent group blocksscreen | awk -F: '{printf "%d", $3}')
     cat <<EOF | sudo tee ${RULE_FILE} >/dev/null
 
 polkit.addRule(function(action, subject) {
@@ -425,10 +427,8 @@ EOF
 }
 
 function add_asvc() {
-    cat <<EOF | sudo tee -a "$MOONRAKER_ASVC" >/dev/null
-    
-BlocksScreen
-EOF
+    # Delegated so the installer and the on-update self-heal share one idempotent implementation.
+    bs_ensure_asvc "$MOONRAKER_ASVC" install || true
 }
 # fix fbturbo
 function add_desktop_file() {
@@ -467,15 +467,15 @@ auto-polkit=false
 EOF
 }
 function configure_hostname_setter() {
-    # Install service file
-    if [ -d set-hostname@.service ]; then
-        echo "there is hostname service template"
+    # The old body only echoed and tested filenames with -d, so the hostname setter was never installed.
+    if [ ! -f "$SCRIPT_PATH/hostname-helper.sh" ]; then
+        echo_error "Missing hostname-helper.sh, per-board hostname not configured"
+        return 0
     fi
-
-    if [ -d hostname-helper.sh ]; then
-        # File exists
-        echo "there is hostame helper script"
-    fi
+    bash "$SCRIPT_PATH/hostname-helper.sh" || echo_error "Hostname setter failed, continuing install"
+}
+function configure_usb_max_current() {
+    bs_ensure_usb_max_current /boot/firmware/config.txt install || echo_error "usb_max_current_enable not applied, continuing install"
 }
 
 printf "\n===================================\n"
@@ -485,6 +485,7 @@ printf "\n===================================\n"
 # Run the actual installation
 echo_ok "Starting Blocks Screen installation"
 configure_hostname_setter
+configure_usb_max_current
 install_graphical_backend
 install_systemd_service
 bash "$SCRIPT_PATH/install-updater.sh"

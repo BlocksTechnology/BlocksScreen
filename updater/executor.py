@@ -83,6 +83,21 @@ def _kill_proc_group(proc, sig):
         pass  # process already gone
 
 
+async def _reap(proc, sig: int, grace: float) -> bool:
+    """Signal the group and drain within grace; True if the process is gone."""
+    if proc.returncode is None:
+        _kill_proc_group(proc, sig)
+    if proc.stdin is not None and not proc.stdin.is_closing():
+        proc.stdin.close()  # retires the cancelled feed's drain future, else it logs BrokenPipeError
+    # Must drain, not wait(): a cancelled communicate() leaves the reader paused above its
+    # 128KB buffer, so the pipe never sees EOF, never disconnects, and wait() never wakes.
+    try:
+        await asyncio.wait_for(proc.communicate(), timeout=grace)
+    except asyncio.TimeoutError:
+        return False
+    return True
+
+
 def _make_clean_env() -> dict[str, str]:
     env: dict[str, str] = {}
     for key in (
@@ -119,7 +134,7 @@ async def _run(
 ) -> tuple[bool, str]:
     """Run a subprocess, return (success, stdout_or_stderr).
 
-    On timeout: SIGTERM → 5s grace → SIGKILL.
+    On timeout: SIGTERM → 5s grace → SIGKILL → 5s grace.
     On CancelledError: SIGKILL → 2s grace, then re-raise.
     """
     proc = await asyncio.create_subprocess_exec(
@@ -136,20 +151,11 @@ async def _run(
             return True, stdout.decode(errors="replace")
         return False, stderr.decode(errors="replace")
     except asyncio.TimeoutError:
-        if proc.returncode is None:
-            _kill_proc_group(proc, signal.SIGTERM)
-        try:
-            await asyncio.wait_for(proc.wait(), timeout=5.0)
-        except asyncio.TimeoutError:
-            if proc.returncode is None:
-                _kill_proc_group(proc, signal.SIGKILL)
-            await proc.wait()
+        if not await _reap(proc, signal.SIGTERM, 5.0):
+            await _reap(proc, signal.SIGKILL, 5.0)
         return False, f"timed out after {timeout}s"
     except asyncio.CancelledError:
-        if proc.returncode is None:
-            _kill_proc_group(proc, signal.SIGKILL)
-            with contextlib.suppress(asyncio.TimeoutError):
-                await asyncio.wait_for(proc.wait(), timeout=2.0)
+        await _reap(proc, signal.SIGKILL, 2.0)
         raise
 
 
@@ -863,14 +869,10 @@ async def _apt_restore_packages(snapshot_path: Path) -> tuple[bool, str]:
             proc.communicate(input=stdin_data), timeout=60.0
         )
     except asyncio.TimeoutError:
-        _kill_proc_group(proc, signal.SIGKILL)
-        await proc.wait()
+        await _reap(proc, signal.SIGKILL, 5.0)
         return False, "dpkg --set-selections timed out"
     except asyncio.CancelledError:
-        if proc.returncode is None:
-            _kill_proc_group(proc, signal.SIGKILL)
-            with contextlib.suppress(asyncio.TimeoutError):
-                await asyncio.wait_for(proc.wait(), timeout=2.0)
+        await _reap(proc, signal.SIGKILL, 2.0)
         raise
     if proc.returncode != 0:
         msg = stderr.decode(errors="replace")

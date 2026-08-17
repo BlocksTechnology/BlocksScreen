@@ -3,6 +3,7 @@
 import sys
 import logging
 from pathlib import Path
+from types import ModuleType
 from unittest.mock import patch, mock_open, MagicMock
 
 from updater.components import load_components
@@ -332,7 +333,18 @@ class TestYamlBootstrap:
             components, poll = load_components()
         assert components == []
         assert poll == 1440 * 60.0  # default poll interval
-        assert any("not installed" in r.message for r in caplog.records)
+        assert any("missing or broken" in r.message for r in caplog.records)
+
+    def test_yaml_truncated_returns_empty_list(self, caplog):
+        """A gutted install imports fine but has no attributes, which crash-looped a field box."""
+        with (
+            patch.dict(sys.modules, {"yaml": ModuleType("yaml")}),
+            caplog.at_level(logging.ERROR, logger="updater.components"),
+        ):
+            components, poll = load_components()
+        assert components == []
+        assert poll == 1440 * 60.0
+        assert any("missing or broken" in r.message for r in caplog.records)
 
 
 class TestOverridePermissions:

@@ -173,18 +173,22 @@ def load_components() -> tuple[list[ComponentConfig], float]:
     """
     try:
         import yaml  # noqa: PLC0415
-    except ImportError:
-        logger.error("PyYAML not installed; updater unavailable until next restart")  # noqa: TRY400
+
+        # A truncated install (interrupted pip, power cut) still imports but exposes only dunders.
+        safe_load = yaml.safe_load
+        yaml_error = yaml.YAMLError
+    except (ImportError, AttributeError):
+        logger.exception("PyYAML missing or broken; updater idle until venv repair")
         return [], 1440 * 60.0
 
     bundled_path = Path(__file__).parent / "components.yaml"
     try:
         with open(bundled_path) as f:  # noqa: PTH123
-            bundled_data = yaml.safe_load(f)
+            bundled_data = safe_load(f)
     except OSError:
         logger.exception("bundled_data not found")
         return [], 1440 * 60.0
-    except yaml.YAMLError:
+    except yaml_error:
         logger.exception("Malformed YAML file")
         return [], 1440 * 60.0
 
@@ -216,7 +220,7 @@ def load_components() -> tuple[list[ComponentConfig], float]:
     if override_exists:
         try:
             with open(OVERRIDE_PATH) as f:  # noqa: PTH123
-                override_data = yaml.safe_load(f)
+                override_data = safe_load(f)
             if isinstance(override_data, dict):
                 raw_components = _merge(
                     raw_components,

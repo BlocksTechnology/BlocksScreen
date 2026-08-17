@@ -28,7 +28,7 @@
 XDG_RUNTIME_DIR=/run/user/$(id -u)
 export XDG_RUNTIME_DIR
 
-SCRIPT_PATH=$(dirname $(realpath $0))
+SCRIPT_PATH=$(dirname "$(realpath "$0")")
 BS_PATH=$(dirname "$SCRIPT_PATH")
 _BSENV_HOME=$(getent passwd "$(id -un)" | cut -d: -f6)
 BSENV="${BLOCKSSCREEN_VENV:-${_BSENV_HOME}/.BlocksScreen-env}"
@@ -91,6 +91,7 @@ fi
 git -C "$BS_PATH" config core.hooksPath scripts 2>/dev/null || true
 
 bs_migrate_moonraker_conf "$_BSENV_HOME/printer_data/config/moonraker.conf" BlocksScreen-start
+bs_ensure_install_state "$BS_PATH" "$BSENV" BlocksScreen-start
 
 # Remove stale git index lock left by an interrupted update (e.g. power loss during git reset)
 rm -f "$BS_PATH/.git/index.lock"

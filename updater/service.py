@@ -68,6 +68,9 @@ _HISTORY_KEEP_LINES = 2000
 _APT_BACKOFF_BASE_S = 30.0
 _APT_BACKOFF_MAX_S = 1800.0
 _APT_PERMANENT_COOLDOWN_S = 3600.0
+# apt-get update interval on the background poll, and floor between user-triggered refreshes.
+_APT_LIST_TTL_S = 86_400.0
+_APT_LIST_FORCE_TTL_S = 300.0
 _FETCH_BACKOFF_BASE_S = 30.0
 _FETCH_BACKOFF_MAX_S = 900.0
 
@@ -203,6 +206,7 @@ class UpdateService:
         self._apt_backoff = _Backoff(
             _APT_BACKOFF_BASE_S, _APT_BACKOFF_MAX_S, _APT_PERMANENT_COOLDOWN_S
         )
+        self._apt_list_time: float = 0.0
         self._fetch_backoff: dict[str, _Backoff] = {}
         self._state_path = _STATE_PATH
         self._inflight_path = _INFLIGHT_PATH
@@ -225,6 +229,24 @@ class UpdateService:
         """Return (name, kind) pairs for all registered components."""
         return [(c.name, c.kind) for c in self._components]
 
+    async def _refresh_apt_lists(self, force: bool) -> None:
+        """Run apt-get update: the upgradable count reads local lists and is stale without it."""
+        now = time.monotonic()
+        ttl = _APT_LIST_FORCE_TTL_S if force else _APT_LIST_TTL_S
+        # A held lock means an update is already running, and it refreshes the lists itself.
+        if (
+            (now - self._apt_list_time) < ttl
+            or self._apt_backoff.cooling_down()
+            or self._apt_lock.locked()
+        ):
+            return
+        # Rate-limit attempts, not successes, so an offline box cannot retry on every refresh.
+        self._apt_list_time = now
+        async with self._apt_lock:
+            ok, err = await apt_update()
+        if not ok:
+            self._log.warning("apt list refresh failed: %s", err)
+
     async def check_status(self, force: bool = False) -> dict[str, ComponentStatus]:
         """Concurrently check status of all components.
 
@@ -235,6 +257,7 @@ class UpdateService:
 
         async def _check_one(c: ComponentConfig) -> None:
             if c.kind == "apt":
+                await self._refresh_apt_lists(force)
                 # force bypasses the apt cache, mirroring the git fetch TTL bypass.
                 status = await check_apt_status(
                     cache_ttl_seconds=0 if force else 86_400, exclude=c.apt_exclude
@@ -336,10 +359,12 @@ class UpdateService:
         ]
         for c in apt:
             await self._run_apt_update(c)
-        if batch:
-            await self._run_git_batch(batch)
+        # Provision first: the batch ends with a fire-and-forget UI restart, so a component
+        # installed after it stays invisible to the UI until the next reboot.
         for c in provision:
             await self._provision_component(c)
+        if batch:
+            await self._run_git_batch(batch)
 
     async def _preflight_fetch(
         self, sorted_components: list[ComponentConfig], all_components: list
@@ -1628,6 +1653,7 @@ class UpdateService:
                 self._apt_failed(err)
                 _apt_cache.unlink(missing_ok=True)
                 return self._cb_error_done(component.name, "network")
+            self._apt_list_time = time.monotonic()
             self._cb("on_step", component.name, 1, 2)
 
             snapshot_ok, snapshot_path = await _apt_snapshot_packages()
@@ -1784,6 +1810,7 @@ class UpdateService:
             self._log.warning("background apt-get update failed: %s", err)
             self._apt_failed(err)
             return
+        self._apt_list_time = time.monotonic()
         # Honor the apt excludes: a silent background kernel/firmware bump is the brick risk they prevent.
         exclude = tuple(
             pat for c in self._components if c.kind == "apt" for pat in c.apt_exclude
@@ -1794,6 +1821,10 @@ class UpdateService:
             self._apt_failed(err)
             return
         self._apt_backoff.reset()
+        # Drop the count cache: the sweep upgraded, so the UI would keep showing pending packages.
+        (Path.home() / ".cache" / "blockscreen" / "apt_status_cache.json").unlink(
+            missing_ok=True
+        )
         self._log.info("background apt upgrade: packages done")
         autoremove_ok, autoremove_err = await apt_autoremove()
         if not autoremove_ok:

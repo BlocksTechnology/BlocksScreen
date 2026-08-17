@@ -21,12 +21,15 @@ fi
 cd "$COMPONENT_PATH"
 "$_uv" sync --no-dev
 
-# Spoolman won't start without client/dist (a clone has no prebuilt UI); the API
-# is all we need, so a stub satisfies the mount without an npm build.
-mkdir -p client/dist
-if [ ! -f client/dist/index.html ]; then
-    printf '<!doctype html><title>Spoolman</title>\n' >client/dist/index.html
-fi
+# Spoolman won't start without a built client dir (a clone has no prebuilt UI); the API
+# is all we need, so a stub satisfies the mount without an npm build. Stub both the old
+# (client/dist) and new (client_v2/build) layouts since upstream has moved between them.
+for _client_dir in client/dist client_v2/build; do
+    mkdir -p "$_client_dir"
+    if [ ! -f "$_client_dir/index.html" ]; then
+        printf '<!doctype html><title>Spoolman</title>\n' >"$_client_dir/index.html"
+    fi
+done
 
 if [ ! -f ".env" ] && [ -f ".env.example" ]; then
     cp .env.example .env
@@ -37,5 +40,24 @@ if ! systemctl is-active --quiet Spoolman.service 2>/dev/null; then
     sudo systemctl enable --now Spoolman.service 2>/dev/null || {
         echo "[hook:Spoolman] WARN: could not enable/start Spoolman.service - continuing"
     }
+fi
+
+# Moonraker gives up on a dead Spoolman at startup, so let the API answer before restarting it.
+for _i in $(seq 30); do
+    curl -sf -m 2 http://localhost:7912/api/v1/health 2>/dev/null | grep -q healthy && break
+    [ "$_i" -eq 30 ] && echo "[hook:Spoolman] WARN: API still unhealthy after 30s - moonraker may not connect"
+    sleep 1
+done
+
+# The venv only exists as of this hook, so patch moonraker here: any earlier caller saw no venv and skipped.
+_home=$(dirname "$COMPONENT_PATH")
+_conf="$_home/printer_data/config/moonraker.conf"
+_common="${BS_DIR:-$_home/BlocksScreen}/scripts/bs-common.sh"
+if [ -r "$_common" ] && [ -f "$_conf" ]; then
+    # shellcheck source=/dev/null
+    . "$_common"
+    if bs_ensure_spoolman_moonraker "$_conf" "hook:Spoolman"; then
+        sudo systemctl restart moonraker.service 2>/dev/null || true
+    fi
 fi
 echo "[hook:Spoolman] done"

@@ -206,6 +206,8 @@ git -C "$BS_PATH" config core.hooksPath scripts
 echo_ok "post-merge hook installed"
 
 echo_info "Installing Python requirements ..."
+# Skip pip's PyPI self-check: it stalls every install on an offline box and only prints a notice.
+export PIP_DISABLE_PIP_VERSION_CHECK=1
 # Best-effort pip self-update; must not block the requirements install below.
 "$BSENV/bin/pip" install --quiet --upgrade pip 2>/dev/null || true
 apt-get install -y --quiet libsystemd-dev python3-dev 2>/dev/null || true

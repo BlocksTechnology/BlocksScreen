@@ -121,8 +121,8 @@ class TestRun:
     async def test_timeout_terminate_succeeds_no_kill(self, tmp_path):
         proc = _make_proc(0)
         proc.returncode = None  # still running when timeout fires
-        # communicate times out; wait() after SIGTERM succeeds → no SIGKILL
-        proc.communicate = AsyncMock(side_effect=asyncio.TimeoutError)
+        # communicate times out; the drain after SIGTERM succeeds → no SIGKILL
+        proc.communicate = AsyncMock(side_effect=[asyncio.TimeoutError, (b"", b"")])
         proc.pid = 1234
         with (
             patch(
@@ -162,6 +162,18 @@ class TestRun:
                 await _run(["/bin/sleep", "999"], timeout=5.0, cwd=tmp_path)
         # Should call killpg once with SIGKILL on cancel
         assert killpg_mock.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_timeout_returns_with_flooding_child(self, tmp_path):
+        """Regression: a chatty child that ignores SIGTERM used to park _run forever."""
+        # >128KB unread output pauses the reader, so the pipe never sees EOF and
+        # a bare proc.wait() is never woken; only draining releases it.
+        script = "trap '' TERM; while :; do head -c 1000000 /dev/zero; done"
+        ok, msg = await asyncio.wait_for(
+            _run(["/bin/bash", "-c", script], timeout=0.5, cwd=tmp_path), timeout=20.0
+        )
+        assert ok is False
+        assert "timed out" in msg
 
 
 class TestGitClone:

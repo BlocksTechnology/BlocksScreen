@@ -154,6 +154,44 @@ class TestCheckStatus:
         *_, skip_fetch = mock_check.call_args.args
         assert skip_fetch is True
 
+    @pytest.mark.asyncio
+    async def test_refresh_runs_apt_update(self):
+        """The upgradable count reads local lists, so a refresh must refresh them first."""
+        component = ComponentConfig(name="system", kind="apt")
+        with (
+            patch(
+                "updater.service.load_components", return_value=([component], 3600.0)
+            ),
+            patch(
+                "updater.service.check_apt_status",
+                return_value=ComponentStatus(name="system"),
+            ),
+            patch("updater.service.apt_update", return_value=(True, "")) as mock_update,
+        ):
+            svc = UpdateService()
+            await svc.check_status(force=True)
+            mock_update.assert_awaited_once()
+            await svc.check_status(force=True)
+        assert mock_update.await_count == 1, "a repeated refresh must be rate-limited"
+
+    @pytest.mark.asyncio
+    async def test_refresh_skips_apt_update_when_cooling_down(self):
+        component = ComponentConfig(name="system", kind="apt")
+        with (
+            patch(
+                "updater.service.load_components", return_value=([component], 3600.0)
+            ),
+            patch(
+                "updater.service.check_apt_status",
+                return_value=ComponentStatus(name="system"),
+            ),
+            patch("updater.service.apt_update", return_value=(True, "")) as mock_update,
+        ):
+            svc = UpdateService()
+            svc._apt_backoff.trip()
+            await svc.check_status(force=True)
+        mock_update.assert_not_awaited()
+
 
 class TestStateFile:
     @pytest.mark.asyncio
@@ -652,6 +690,35 @@ class TestUpdateAll:
             await svc.update_all()
         assert [c.name for c in mock_batch.call_args[0][0]] == ["klipper"]
         assert mock_provision.call_args[0][0].name == "newcomp"
+
+    @pytest.mark.asyncio
+    async def test_provision_runs_before_git_batch(self, tmp_path):
+        """The batch ends by restarting the UI, so anything installed after it stays unseen."""
+        present = self._git(tmp_path, "BlocksScreen", 99)
+        missing = ComponentConfig(
+            name="Spoolman",
+            kind="git",
+            path=tmp_path / "absent",
+            order=21,
+            url="https://github.com/x/y",
+            install_if_missing=True,
+        )
+        seen: list[str] = []
+        with (
+            patch("updater.service.UpdateService._preflight_fetch", return_value=True),
+            patch(
+                "updater.service.UpdateService._run_git_batch",
+                side_effect=lambda _b: seen.append("batch"),
+            ),
+            patch(
+                "updater.service.UpdateService._provision_component",
+                side_effect=lambda _c: seen.append("provision"),
+            ),
+        ):
+            svc = UpdateService()
+            svc._components = [present, missing]
+            await svc.update_all()
+        assert seen == ["provision", "batch"]
 
     @pytest.mark.asyncio
     async def test_empty_batch_skips_git(self, tmp_path):
