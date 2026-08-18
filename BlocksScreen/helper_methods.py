@@ -16,6 +16,9 @@ import struct
 
 logger = logging.getLogger(__name__)
 
+# Symlink names udisks2.add_symlink can produce, kept in sync with USB_LINK_PREFIXES there.
+USB_LINK_PREFIXES: tuple[str, ...] = ("USB-", "USB DRIVE")
+
 try:
     ctypes.cdll.LoadLibrary("libXext.so.6")
     libxext = ctypes.CDLL("libXext.so.6")
@@ -294,6 +297,23 @@ def estimate_print_time(seconds: int) -> list[int]:
     return [days, hours, mins, secs]
 
 
+def format_duration(seconds: int) -> str:
+    """Human "1d 2h 3m" duration; sub-minute values render as seconds."""
+    if seconds < 60:
+        return f"{seconds}s"
+    days, hours, mins, _ = estimate_print_time(seconds)
+    if days > 0:
+        return f"{days}d {hours}h {mins}m"
+    if hours > 0:
+        return f"{hours}h {mins}m"
+    return f"{mins}m"
+
+
+def format_weight(grams: float) -> str:
+    """Filament mass in grams, switching to kg past 499g."""
+    return f"{grams / 1000:.2f}kg" if grams > 499 else f"{grams:.2f}g"
+
+
 def normalize(
     value: float,
     r_min: float = 0.0,
@@ -344,3 +364,23 @@ def get_file_name(filename: str | None) -> str:
     if not filename:
         return ""
     return pathlib.PurePosixPath(filename.replace("\\", "/")).name
+
+
+def get_parent_dir(path: str) -> str:
+    """Return the parent directory of *path*, POSIX-style (for root-level)."""
+    parent = pathlib.PurePosixPath(path.removeprefix("/")).parent
+    return "" if str(parent) == "." else str(parent)
+
+
+def is_usb_mount(path: str) -> bool:
+    """Return True if *path* is a top-level USB mount, under either name add_symlink gives."""
+    name = path.strip("/")
+    return bool(name) and "/" not in name and name.startswith(USB_LINK_PREFIXES)
+
+
+def resolve_thumbnail_path(
+    gcode_root: pathlib.Path, requested_path: str, relative_path: str
+) -> pathlib.Path:
+    """Resolve a thumbnails absolute path from the *requested* gcode path"""
+    parent = pathlib.PurePosixPath(requested_path.removeprefix("/")).parent
+    return gcode_root / parent / relative_path

@@ -33,6 +33,7 @@ from lib.utils.blocks_Scrollbar import CustomScrollBar
 from lib.utils.blocks_togglebutton import NetworkWidgetbuttons
 from lib.utils.check_button import BlocksCustomCheckButton
 from lib.utils.icon_button import IconButton
+from lib.utils.blocks_combobox import BlocksComboBox
 from lib.utils.list_model import EntryDelegate, EntryListModel, ListItem
 from PyQt6 import QtCore, QtGui, QtWidgets
 from PyQt6.QtCore import QTimer, pyqtSlot
@@ -44,12 +45,7 @@ STATUS_CHECK_INTERVAL_MS = 2_000
 
 
 class PixmapCache:
-    """Process-wide cache for QPixmaps loaded from Qt resource paths.
-
-    Every SVG is decoded exactly once. Qt's implicit sharing means the
-    same QPixmap can be safely referenced by any number of widgets.
-    Must only be called after QApplication is created.
-    """
+    """Process-wide QPixmap cache for SVG resource paths (after QApplication init)."""
 
     _cache: dict[str, QtGui.QPixmap] = {}
 
@@ -143,11 +139,7 @@ class IPAddressLineEdit(BlocksCustomLinEdit):
 
 
 class NetworkControlWindow(QtWidgets.QStackedWidget):
-    """Stacked-widget UI for all network control pages (Wi-Fi, Ethernet, VLAN, Hotspot).
-
-    Owns a :class:`~BlocksScreen.lib.network.facade.NetworkManager` instance and
-    mediates between the UI pages and the async D-Bus worker.
-    """
+    """Stacked-widget UI for network control (Wi-Fi, Ethernet, VLAN, Hotspot)."""
 
     update_wifi_icon = QtCore.pyqtSignal(int, name="update-wifi-icon")
 
@@ -233,13 +225,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self._prefill_ip_from_os()
 
     def _prefill_ip_from_os(self) -> None:
-        """Read the current IP via SIOCGIFADDR ioctl and show it immediately.
-
-        Bypasses NetworkManager D-Bus entirely — runs on the main thread,
-        costs a single syscall, and completes in microseconds.  Called once
-        during init so the user never sees "IP: --" if a connection was
-        already active before the UI launched.
-        """
+        """Read and display current IP via SIOCGIFADDR ioctl (synchronous, <1us)."""
         _SIOCGIFADDR = 0x8915
         for iface in ("eth0", "wlan0"):
             try:
@@ -440,11 +426,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
 
     @pyqtSlot(list)
     def _on_scan_complete(self, networks: list[NetworkInfo]) -> None:
-        """Receive scan results, filter/sort them, and rebuild the SSID list view.
-
-        Filters out the own hotspot SSID and networks with unsupported security
-        types before populating the list view.
-        """
+        """Receive scan results, filter unsupported security, rebuild SSID list."""
         hotspot_ssid = self._nm.hotspot_ssid
         filtered = [
             n
@@ -599,14 +581,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self._show_error_popup(f"Error: {message}")
 
     def _emit_status_icon(self, state: NetworkState) -> None:
-        """Emit the correct header icon key based on current state.
-
-        Ethernet -> ETHERNET, Hotspot -> HOTSPOT,
-        Wi-Fi connected -> signal-strength key, otherwise -> 0-bar.
-
-        Uses self._active_signal (the single source of truth) so the
-        header icon always matches the list icon and panel percentage.
-        """
+        """Emit header icon key (Ethernet/Hotspot/signal/0-bar) from _active_signal."""
         if state.ethernet_connected:
             self.update_wifi_icon.emit(WifiIconKey.ETHERNET)
         elif state.hotspot_enabled:
@@ -623,16 +598,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             self.update_wifi_icon.emit(WifiIconKey.from_bars(0, False))
 
     def _sync_active_network_list_icon(self, state: NetworkState) -> None:
-        """Rebuild the wifi list when the active network's signal bars or status changes.
-
-        Between scans, state polling may report a different signal strength
-        for the connected AP.  Also corrects the status label from SAVED to
-        ACTIVE when the connection establishes after the last scan ran.
-        Invalidates the item cache for that SSID so the next reconcile picks
-        up the new icon/label, without touching other items.
-
-        Uses self._active_signal as the single source of truth.
-        """
+        """Rebuild Wi-Fi list when signal/status changes; invalidate item cache."""
         if not self._cached_scan_networks or not state.current_ssid:
             self._last_active_signal_bars = -1
             return
@@ -718,8 +684,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self._sync_ethernet_panel(state)
 
     def _sync_toggle_states(self, state: NetworkState) -> None:
-        """Synchronise Wi-Fi and hotspot toggle buttons to the current NetworkState
-        without loops."""
+        """Sync Wi-Fi/hotspot toggles to NetworkState without loops."""
         if self._is_connecting:
             return
 
@@ -744,12 +709,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             )
 
     def _sync_ethernet_panel(self, state: NetworkState) -> None:
-        """Show/hide the ethernet panel and sync its toggle state.
-
-        Visibility is driven by ``ethernet_carrier`` (cable physically
-        plugged in), while the toggle position reflects the active
-        connection state (``ethernet_connected``).
-        """
+        """Show/hide ethernet panel; sync toggle to connection state (carrier + connected)."""
         eth_btn = self.ethernet_button.toggle_button
 
         with QtCore.QSignalBlocker(eth_btn):
@@ -761,12 +721,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.ethernet_button.setVisible(state.ethernet_carrier)
 
     def _display_connected_state(self, state: NetworkState) -> None:
-        """Display connected network information.
-
-        Ethernet always takes display priority — if ``ethernet_connected``
-        is True we show "Ethernet" even if a Wi-Fi SSID is still lingering
-        (e.g. during the brief overlap before NM finishes disabling wifi).
-        """
+        """Display connected network info (Ethernet > Wi-Fi)."""
         self._hide_all_info_elements()
 
         is_ethernet = state.ethernet_connected
@@ -842,11 +797,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.update()
 
     def _display_wifi_on_no_connection(self) -> None:
-        """Display info panel when Wi-Fi is on but not connected.
-
-        Uses the same layout as the connected state but shows
-        'No network connected' and empty fields.
-        """
+        """Display info panel when Wi-Fi is on but not connected."""
         self._hide_all_info_elements()
 
         self.netlist_ssuid.setText("No network connected")
@@ -1125,13 +1076,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.hotspot_password_input_field.setText(password)
 
     def _on_hotspot_config_save(self) -> None:
-        """Save hotspot configuration changes.
-
-        Reads new name/password from the UI fields, asks the worker to
-        delete old profiles and create a new one.  If the hotspot was
-        active, it will be re-activated with the new config (with a
-        loading screen shown).
-        """
+        """Save hotspot config and re-activate if needed."""
         new_name = self.hotspot_name_input_field.text().strip()
         new_password = self.hotspot_password_input_field.text().strip()
 
@@ -1286,12 +1231,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.setCurrentIndex(self.indexOf(self.wifi_static_ip_page))
 
     def _on_wifi_static_ip_apply(self) -> None:
-        """Validate static-IP fields and apply them to the current Wi-Fi connection.
-
-        Mirrors the VLAN-creation UX: navigate to the main panel immediately,
-        show the loading overlay, and clear it silently once ``reconnect_complete``
-        fires (no popup — the updated IP appears in the panel header instead).
-        """
+        """Validate and apply static IP to current Wi-Fi connection."""
         ssid = self.wifi_sip_title.text()
         ip_addr = self.wifi_sip_ip_field.text().strip()
         mask = self.wifi_sip_mask_field.text().strip()
@@ -1324,10 +1264,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self._nm.request_state_soon(delay_ms=3000)
 
     def _on_wifi_reset_dhcp(self) -> None:
-        """Reset the current Wi-Fi connection back to DHCP via the facade.
-
-        Same loading-screen pattern as static IP — no popup on success.
-        """
+        """Reset current Wi-Fi connection to DHCP."""
         ssid = self.wifi_sip_title.text()
         self.setCurrentIndex(self.indexOf(self.main_network_page))
         self._pending_operation = PendingOperation.WIFI_STATIC_IP
@@ -1338,13 +1275,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self._nm.request_state_soon(delay_ms=3000)
 
     def _build_network_list_from_scan(self, networks: list[NetworkInfo]) -> None:
-        """Build/update network list from scan results.
-
-        Uses the model's built-in reconcile() with an item cache so that
-        ListItems are only allocated for networks whose visual state
-        actually changed (different signal bars or status label).
-        Unchanged items are reused from the cache — zero allocation.
-        """
+        """Build/update network list from scan results via reconcile."""
         self.listView.blockSignals(True)
 
         desired_items: list[ListItem] = []
@@ -1381,11 +1312,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.listView.update()
 
     def _patch_cached_network_status(self, ssid: str, status: NetworkStatus) -> None:
-        """Optimistically update one entry in the scan cache and rebuild the list.
-
-        Called immediately after add/delete so the list reflects the change
-        without waiting for the next scan cycle.
-        """
+        """Update scan cache entry and rebuild list immediately."""
         self._cached_scan_networks = [
             replace(n, network_status=status) if n.ssid == ssid else n
             for n in self._cached_scan_networks
@@ -1394,13 +1321,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self._build_network_list_from_scan(self._cached_scan_networks)
 
     def _get_or_create_item(self, network: NetworkInfo) -> ListItem | None:
-        """Return a cached ListItem if the network's visual state is
-        unchanged, otherwise create a new one and update the cache.
-
-        Visual state = (signal_bars, status_label).  When both match
-        the cached entry, the existing ListItem is returned as-is —
-        no QPixmap lookup, no allocation.
-        """
+        """Return cached ListItem if unchanged (bars + label), else allocate new."""
         if network.is_hidden or is_hidden_ssid(network.ssid):
             return None
         if not is_connectable_security(network.security_type):
@@ -1683,11 +1604,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self._nm.delete_network(ssid)
 
     def _on_save_network_details(self) -> None:
-        """Save network settings changes (password / priority).
-
-        Only performs an update if the user actually changed something.
-        Shows a confirmation popup on success.
-        """
+        """Save network settings if changed; show confirmation popup."""
         ssid = self.saved_connection_network_name.text()
         password = self.saved_connection_change_password_field.text()
         priority = self._get_selected_priority()
@@ -1948,27 +1865,12 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
 
         info_layout.addWidget(self.netlist_ip)
 
-        self.netlist_vlans_combo = QtWidgets.QComboBox(
-            parent=self.mn_information_layout
-        )
+        self.netlist_vlans_combo = BlocksComboBox(parent=self.mn_information_layout)
         font = QtGui.QFont()
         font.setPointSize(11)
         self.netlist_vlans_combo.setFont(font)
         self.netlist_vlans_combo.setMinimumSize(QtCore.QSize(240, 50))
         self.netlist_vlans_combo.setMaximumSize(QtCore.QSize(250, 50))
-        self.netlist_vlans_combo.setStyleSheet("""
-            QComboBox {
-                background-color: rgba(26, 143, 191, 0.05);
-                color: rgba(255, 255, 255, 200);
-                border: 1px solid rgba(255, 255, 255, 80);
-                border-radius: 8px;
-            }
-            QComboBox QAbstractItemView {
-                background-color: rgb(40, 40, 40);
-                color: white;
-                selection-background-color: rgba(26, 143, 191, 0.6);
-            }
-        """)
 
         self.netlist_vlans_combo.setVisible(False)
         self.netlist_vlans_combo.currentIndexChanged.connect(

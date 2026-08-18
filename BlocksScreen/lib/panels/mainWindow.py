@@ -173,6 +173,13 @@ class MainWindow(QtWidgets.QMainWindow):
         self.printPanel = PrintTab(
             self.ui.printTab, self.file_data, self.ws, self.printer
         )
+        self.usb_manager.usb_mounted.connect(
+            self.printPanel.filesPage_widget.on_usb_added
+        )
+        # Only usb_unmounted, it fires per reaped symlink so the listing really changed.
+        self.usb_manager.usb_unmounted.connect(
+            self.printPanel.filesPage_widget.on_usb_removed
+        )
         if not os.environ.get("BLOCKSCREEN_DEV"):
             QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.CursorShape.BlankCursor)
         self.filamentPanel = FilamentTab(

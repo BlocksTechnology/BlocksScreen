@@ -11,11 +11,13 @@ from lib.panels.widgets.basePopup import BasePopup
 from lib.panels.widgets.confirmPage import ConfirmWidget
 from lib.panels.widgets.filesPage import FilesPage
 from lib.panels.widgets.jobStatusPage import JobStatusWidget
+from lib.panels.widgets.metadataPage import FileMetadataWidget
 from lib.panels.widgets.numpadPage import CustomNumpad
 from lib.panels.widgets.sensorsPanel import SensorsWindow
 from lib.panels.widgets.slider_selector_page import SliderPage
 from lib.panels.widgets.tunePage import TuneWidget
 from lib.printer import Printer
+from lib.utils import gcode_loader
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.display_button import DisplayButton
 from PyQt6 import QtCore, QtGui, QtWidgets
@@ -24,26 +26,7 @@ logger = logging.getLogger(__name__)
 
 
 class PrintTab(QtWidgets.QStackedWidget):
-    """QStackedWidget that contains the following widget panels:
-
-    - Main page: Simple page with a message field and a button to start a print;
-    - File list page: A file list where displayed files are selectable to be printed;
-    - Confirm page: A page to confirm or not if the selected file is to be printed;
-    - Print page: A page for controlling the ongoing job, Pause/Resume and stop functionality
-    - Tune page: Accessible only from the print page;
-    - Babystep page: Control the z_offset during a ongoing print;
-    - Change page: A page that permits changing the filament, stops the print -> change the filament -> resume the print;
-
-    Args:
-        QStackedWidget (QStackedWidget): This class is inherited from QStackedWidget from Qt6
-
-    __init__:
-        parent (QWidget | QObject): The parent for this tab.
-        file_data (Files): Class object that handles printer files.
-        ws (MoonWebSocket): Moonraker websocket instance.
-        printer (Printer): Class object that handles printer objects information.
-
-    """
+    """Stacked widget with main, files, confirm, print, tune, babystep, and filament change pages."""
 
     request_query_print_stats: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         dict, name="request_query_print_stats"
@@ -90,6 +73,8 @@ class PrintTab(QtWidgets.QStackedWidget):
 
         self.setupMainPrintPage()
         self.ws: MoonWebSocket = ws
+        # Shared embedded-thumbnail fallback for read-only USB drives.
+        gcode_loader.configure(ws._moonRest)
         self.printer: Printer = printer
         self.config: BlocksScreenConfig = get_configparser()
         # TODO: Get the gcode path from the configfile by asking the websocket first
@@ -121,29 +106,23 @@ class PrintTab(QtWidgets.QStackedWidget):
             lambda: self.change_page(self.indexOf(self.confirmPage_widget))
         )
         self.filesPage_widget.back_btn.clicked.connect(self.back_button)
-        self.filesPage_widget.request_file_info.connect(
-            self.file_data.on_request_fileinfo
+
+        self.metadataPage_widget = FileMetadataWidget(self)
+        self.addWidget(self.metadataPage_widget)
+        self.confirmPage_widget.show_metadata.connect(
+            self.metadataPage_widget.on_show_widget
         )
-        self.filesPage_widget.request_file_metadata.connect(
-            self.file_data.request_file_metadata
+        self.confirmPage_widget.show_metadata.connect(
+            lambda: self.change_page(self.indexOf(self.metadataPage_widget))
         )
+        self.metadataPage_widget.back_btn.clicked.connect(self.back_button)
         self.file_data.fileinfo.connect(self.filesPage_widget.on_fileinfo)
 
-        self.filesPage_widget.request_file_list[str].connect(
-            self.file_data.request_file_list
-        )
-        self.filesPage_widget.request_file_list.connect(
-            self.file_data.request_file_list
-        )
         self.file_data.on_dirs.connect(self.filesPage_widget.on_directories)
 
         self.filesPage_widget.request_dir_info[str].connect(
             self.file_data.request_dir_info[str]
         )
-        self.filesPage_widget.request_scan_metadata.connect(
-            self.ws.api.scan_gcode_metadata
-        )
-        self.file_data.metadata_error.connect(self.filesPage_widget.on_metadata_error)
         self.filesPage_widget.request_dir_info.connect(self.file_data.request_dir_info)
         self.file_data.on_file_list.connect(self.filesPage_widget.on_file_list)
         self.file_data.file_added.connect(self.filesPage_widget.on_file_added)
@@ -169,6 +148,12 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.jobStatusPage_widget.call_cancel_panel.connect(self.call_cancel_panel)
         self.jobStatusPage_widget.hide_request.connect(
             lambda: self.change_page(self.indexOf(self.print_page))
+        )
+        self.jobStatusPage_widget.show_metadata.connect(
+            self.metadataPage_widget.on_show_widget
+        )
+        self.jobStatusPage_widget.show_metadata.connect(
+            lambda: self.change_page(self.indexOf(self.metadataPage_widget))
         )
         self.jobStatusPage_widget.request_file_info.connect(
             self.file_data.on_request_fileinfo
@@ -295,9 +280,7 @@ class PrintTab(QtWidgets.QStackedWidget):
     @QtCore.pyqtSlot(str, float, name="on_print_stats_update")
     @QtCore.pyqtSlot(str, str, name="on_print_stats_update")
     def on_print_stats_update(self, field: str, value: dict | float | str) -> None:
-        """
-        unblocks tabs if on standby
-        """
+        """Unblock tabs if on standby."""
         if isinstance(value, str) and "state" in field and value == "standby":
             self.call_load_panel.emit(False, "", False)
             self.on_cancel_print.emit()
@@ -429,15 +412,7 @@ class PrintTab(QtWidgets.QStackedWidget):
             pass
 
     def setProperty(self, name: str, value: typing.Any) -> bool:
-        """Intercept the set property method
-
-        Args:
-            name (str): Name of the dynamic property
-            value (typing.Any): Value for the dynamic property
-
-        Returns:
-            bool: Returns to the super class
-        """
+        """Intercept property changes."""
         if name == "backgroundPixmap":
             self.background = value
         return super().setProperty(name, value)
@@ -454,11 +429,7 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.call_load_panel.emit(True, "Cancelling print...\nPlease wait", False)
 
     def change_page(self, index: int) -> None:
-        """Requests a page change page to the global manager
-
-        Args:
-            index (int): page index
-        """
+        """Request page change to global manager."""
         self.request_change_page.emit(0, index)
 
     @QtCore.pyqtSlot(name="request-back")
