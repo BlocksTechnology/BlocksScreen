@@ -9,8 +9,9 @@ import os
 import re
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
-import xml.etree.ElementTree as ET
+import xml.etree.ElementTree as ET  # nosec B405 - only ever fed our own repo's .qrc files
 from collections.abc import Callable, Iterable
 from pathlib import Path
 
@@ -154,7 +155,7 @@ def t_qrc_assets() -> tuple[str, str]:
     total = 0
     for q in qrcs:
         try:
-            root = ET.parse(q).getroot()
+            root = ET.parse(q).getroot()  # nosec B314 - only ever fed our own repo's .qrc files
         except ET.ParseError as exc:
             missing.append(f"{q.name}: malformed ({exc})")
             continue
@@ -398,7 +399,10 @@ def t_stylesheets_parse() -> tuple[str, str]:
 
 
 def _moon(path: str, timeout: float = 6.0) -> dict:
-    with urllib.request.urlopen(f"{MOONRAKER}{path}", timeout=timeout) as fh:
+    url = f"{MOONRAKER}{path}"
+    if urllib.parse.urlsplit(url).scheme not in ("http", "https"):
+        raise ValueError(f"refusing non-http(s) BS_MOONRAKER scheme: {url}")
+    with urllib.request.urlopen(url, timeout=timeout) as fh:  # nosec B310 - scheme checked above
         return json.load(fh)
 
 

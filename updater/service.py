@@ -206,7 +206,8 @@ class UpdateService:
         self._apt_backoff = _Backoff(
             _APT_BACKOFF_BASE_S, _APT_BACKOFF_MAX_S, _APT_PERMANENT_COOLDOWN_S
         )
-        self._apt_list_time: float = 0.0
+        # -inf, not 0.0: time.monotonic()'s epoch is undefined and can be near-zero on a freshly booted host, which would make a real "never refreshed" sentinel look recent.
+        self._apt_list_time: float = float("-inf")
         self._fetch_backoff: dict[str, _Backoff] = {}
         self._state_path = _STATE_PATH
         self._inflight_path = _INFLIGHT_PATH
@@ -270,7 +271,7 @@ class UpdateService:
             else:
                 now = time.monotonic()
                 async with self._git_lock:
-                    last = self._fetch_times.get(c.name, 0.0)
+                    last = self._fetch_times.get(c.name, float("-inf"))
                     breaker = self._fetch_backoff.get(c.name)
                     skip_fetch = not force and (
                         (now - last) < self._FETCH_TTL
@@ -388,7 +389,7 @@ class UpdateService:
             now = time.monotonic()
             async with self._git_lock:
                 # Skip if fetched <30s ago; apply phase still skips its own fetch.
-                recent = now - self._fetch_times.get(c.name, 0.0) < 30
+                recent = now - self._fetch_times.get(c.name, float("-inf")) < 30
             if recent:
                 continue
             ok, err = await git_fetch(c.path)
