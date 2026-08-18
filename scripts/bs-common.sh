@@ -95,9 +95,7 @@ bs_ensure_install_state() {
     return 0
 }
 
-# Pi 5 ports are capped at 600mA combined unless raised; the fleet's declared USB draw is 824mA.
-# NOT a proven fix for the RF50 MCU shutdowns (root cause unknown) - shipped anyway because the
-# oversubscription itself is real regardless of causation. Only takes effect after the next reboot.
+# Pi 5 ports cap at 600mA combined vs the fleet's 824mA declared draw; not a proven fix for the RF50 MCU shutdowns (cause unknown), shipped because the oversubscription is real regardless, takes effect after reboot.
 bs_ensure_usb_max_current() {
     local f="${1:-/boot/firmware/config.txt}" tag="${2:-bs-common}" mnt opts
     [ -f "$f" ] || return 0
@@ -119,8 +117,7 @@ bs_ensure_usb_max_current() {
     fi
     printf '\nusb_max_current_enable=1\n' | sudo tee -a "$f" >/dev/null 2>&1
     sync
-    # tee's exit status is not proof of a landed write: a prior field attempt silently no-op'd against
-    # a read-only remount while tee still reported success. Read the file back before trusting it.
+    # tee's exit status isn't proof of a landed write (a prior field attempt silently no-op'd against a ro remount), so read the file back before trusting it.
     if ! grep -qE '^[[:space:]]*usb_max_current_enable[[:space:]]*=[[:space:]]*1[[:space:]]*$' "$f" 2>/dev/null; then
         echo "[$tag] write to $f did not land, usb_max_current_enable NOT applied"
         return 1

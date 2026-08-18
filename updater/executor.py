@@ -89,11 +89,10 @@ async def _reap(proc, sig: int, grace: float) -> bool:
         _kill_proc_group(proc, sig)
     if proc.stdin is not None and not proc.stdin.is_closing():
         proc.stdin.close()  # retires the cancelled feed's drain future, else it logs BrokenPipeError
-    # Must drain, not wait(): a cancelled communicate() leaves the reader paused above its
-    # 128KB buffer, so the pipe never sees EOF, never disconnects, and wait() never wakes.
+    # Must drain not wait(): a cancelled communicate() leaves the reader paused above its 128KB buffer, so the pipe never sees EOF and wait() never wakes.
     try:
         await asyncio.wait_for(proc.communicate(), timeout=grace)
-    except asyncio.TimeoutError:
+    except TimeoutError:
         return False
     return True
 
@@ -150,7 +149,7 @@ async def _run(
         if proc.returncode == 0:
             return True, stdout.decode(errors="replace")
         return False, stderr.decode(errors="replace")
-    except asyncio.TimeoutError:
+    except TimeoutError:
         if not await _reap(proc, signal.SIGTERM, 5.0):
             await _reap(proc, signal.SIGKILL, 5.0)
         return False, f"timed out after {timeout}s"
@@ -738,7 +737,7 @@ async def check_apt_status(
                 return ComponentStatus(
                     name="system", kind="apt", packages_upgradable=packages_upgradable
                 )
-    except (json.JSONDecodeError, IOError, ValueError) as e:
+    except (OSError, json.JSONDecodeError, ValueError) as e:
         logger.warning("apt cache miss %s", e)
 
     packages_upgradable = await _count_apt_upgradable(exclude=exclude)
@@ -764,7 +763,7 @@ async def check_apt_status(
                 tmp_path = Path(f.name)
             tmp_path.chmod(0o600)
             tmp_path.replace(path)
-        except (json.JSONDecodeError, IOError, ValueError) as e:
+        except (OSError, json.JSONDecodeError, ValueError) as e:
             if tmp_path is not None and tmp_path.exists():
                 tmp_path.unlink(missing_ok=True)
             logger.error("writing cache apt data: %s", e)
@@ -827,7 +826,7 @@ async def _apt_snapshot_packages() -> tuple[bool, Path | None]:
         tmp.replace(snapshot_path)
         logger.info("apt snapshot saved to %s", snapshot_path)
         return True, snapshot_path
-    except (IOError, ValueError) as e:
+    except (OSError, ValueError) as e:
         logger.error("apt snapshot error: %s", e)
         return False, None
 
@@ -868,7 +867,7 @@ async def _apt_restore_packages(snapshot_path: Path) -> tuple[bool, str]:
         _, stderr = await asyncio.wait_for(
             proc.communicate(input=stdin_data), timeout=60.0
         )
-    except asyncio.TimeoutError:
+    except TimeoutError:
         await _reap(proc, signal.SIGKILL, 5.0)
         return False, "dpkg --set-selections timed out"
     except asyncio.CancelledError:

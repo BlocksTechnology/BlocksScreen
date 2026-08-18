@@ -359,8 +359,7 @@ class UpdateService:
         ]
         for c in apt:
             await self._run_apt_update(c)
-        # Provision first: the batch ends with a fire-and-forget UI restart, so a component
-        # installed after it stays invisible to the UI until the next reboot.
+        # Provision first: the batch ends with a fire-and-forget UI restart, so a component installed after it stays invisible until next reboot.
         for c in provision:
             await self._provision_component(c)
         if batch:

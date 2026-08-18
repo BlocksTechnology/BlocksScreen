@@ -629,8 +629,7 @@ if [ "$BURN" != 0 ]; then
         di = dw / 0.9 / pv
         printf "  %-28s %.3f A\n", "input current step", di
         r = 0
-        # Two runs stepped 0.59A and 0.76A and produced 104 and 82 mOhm from an identical sag: under
-        # ~1A the step sits inside the EXT5V ADC noise floor, so dV/dI tracks drift, not resistance.
+        # Two runs stepped 0.59A/0.76A and produced 104/82 mOhm from an identical sag: under ~1A the step sits inside the EXT5V ADC noise floor, so dV/dI tracks drift, not resistance.
         if (di < 1.0) {
             print "  step is under 1A: impedance and brownout projections suppressed, they are noise here"
         } else if (dv > 0.002) {

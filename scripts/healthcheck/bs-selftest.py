@@ -1,20 +1,5 @@
 #!/usr/bin/env python3
-"""Functional selftest for the BlocksScreen UI, emitting TSV rows for bs-healthcheck.sh.
-
-The shell healthcheck can prove the service is running and the venv imports. It cannot prove the UI
-actually renders: a missing icon, a generated _ui.py that was never regenerated after its .ui was
-edited, or a resource bundle built against assets no longer on disk all produce a process that runs,
-answers D-Bus and looks healthy while showing blank buttons on the panel.
-
-Everything here is side-effect free. Nothing is constructed that opens a socket, claims a D-Bus name
-or writes a file: widgets are built offscreen from their generated classes only, never MainWindow,
-because MainWindow starts the moonraker client and would race the live instance.
-
-Generated forms that no source file imports are reported at WARN, not FAIL: a dead file cannot break
-the running UI, but it must not be allowed to hide a real break either.
-
-Output contract, one row per assertion:  STATUS<TAB>name<TAB>detail
-"""
+"""Offscreen UI selftest emitting TSV STATUS/name/detail rows for bs-healthcheck.sh: catches render breaks (stale/missing generated forms, icons) a running D-Bus-answering process can hide; side-effect-free (no MainWindow/socket/D-Bus/file writes); unused forms WARN not FAIL."""
 
 from __future__ import annotations
 
@@ -35,7 +20,9 @@ sys.dont_write_bytecode = True
 
 # Walk up to the repo root instead of counting directories, so this script survives being moved.
 _HERE = Path(__file__).resolve()
-ROOT = next((p for p in _HERE.parents if (p / "BlocksScreen").is_dir()), _HERE.parent.parent)
+ROOT = next(
+    (p for p in _HERE.parents if (p / "BlocksScreen").is_dir()), _HERE.parent.parent
+)
 PKG = ROOT / "BlocksScreen"
 UIDIR = PKG / "lib" / "ui"
 RESDIR = UIDIR / "resources"
@@ -95,12 +82,7 @@ _RES_KEEPALIVE: list[object] = []
 
 
 def _load_resources() -> list[str]:
-    """Register every compiled resource bundle once, so :/ lookups work in any later assertion.
-
-    The module objects are kept alive on purpose: qRegisterResourceData hands Qt a pointer into the
-    module's bytes objects, so letting one be collected leaves Qt reading freed memory and the next
-    :/ read segfaults.
-    """
+    """Register every compiled resource bundle once (so :/ lookups work later); keeps module objects alive on purpose since Qt holds a pointer into their bytes and GC'ing one segfaults the next :/ read."""
     if _RES_LOADED:
         return _RES_LOADED
     _qapp()
@@ -271,7 +253,9 @@ def _ui_pairs() -> list[tuple[Path, Path]]:
 def t_ui_generated_present() -> tuple[str, str]:
     """Every .ui the app uses has its generated counterpart, or that tab comes up blank."""
     live = _live_ui_modules()
-    missing = [u.name for u, g in _ui_pairs() if not g.exists() and u.stem + "_ui" in live]
+    missing = [
+        u.name for u, g in _ui_pairs() if not g.exists() and u.stem + "_ui" in live
+    ]
     if missing:
         return "FAIL", "no generated _ui.py for: " + ", ".join(missing)
     return "PASS", f"{len(_ui_pairs())} form(s)"
@@ -280,7 +264,9 @@ def t_ui_generated_present() -> tuple[str, str]:
 def t_orphan_ui_files() -> tuple[str, str]:
     """.ui files with no generated module and no importer: leftovers, and they blur the real set."""
     live = _live_ui_modules()
-    orphan = [u.name for u, g in _ui_pairs() if not g.exists() and u.stem + "_ui" not in live]
+    orphan = [
+        u.name for u, g in _ui_pairs() if not g.exists() and u.stem + "_ui" not in live
+    ]
     if orphan:
         return "WARN", "never compiled and never imported: " + ", ".join(orphan)
     return "PASS", ""
@@ -292,11 +278,7 @@ _SHAPE = re.compile(
 
 
 def _shape(src: str) -> list[str]:
-    """Structural fingerprint of a form: object names, widget classes, resource paths.
-
-    A plain text diff is useless here because pyuic6 embeds its own version and the generating
-    machine's absolute path, so every box would warn. This compares what the form is made of.
-    """
+    """Structural fingerprint (object names, widget classes, resource paths) instead of a text diff, since pyuic6 embeds its own version and the generating machine's absolute path into every output."""
     return sorted(next(g for g in m.groups() if g) for m in _SHAPE.finditer(src))
 
 
@@ -347,8 +329,7 @@ def _build_forms(paths: Iterable[Path]) -> tuple[int, list[str]]:
             cls = getattr(mod, attr)
             if getattr(cls, "setupUi", None) is None:
                 continue
-            # setupUi is generated against whatever base class the form was drawn on, so try the
-            # plausible hosts and keep the first error: the last one is just the wrong-host noise.
+            # setupUi's base class is whatever the form was drawn on; try each plausible host, keep the first error (later ones are just wrong-host noise).
             first: Exception | None = None
             ok = False
             for host in (

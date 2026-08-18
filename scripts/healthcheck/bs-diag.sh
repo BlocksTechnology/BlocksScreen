@@ -1,10 +1,7 @@
 #!/usr/bin/env bash
 # Single entry point for the BlocksScreen field diagnostics: runs bs-healthcheck, bs-usb-diag and bs-power.
 #
-# The field has no SSH, so an operator gets one command and one transcript. Everything reachable from
-# the default path is read-only: nothing here restarts a service, writes printer config, holds a lock
-# or sends gcode. The mutating and load-testing modes (--fix, --stress, --burn, --bed) are reachable
-# only by naming the tool explicitly, never from `all`.
+# The field has no SSH, so an operator gets one command and one transcript; the default path is read-only, mutating/load-testing modes (--fix, --stress, --burn, --bed) are only reachable by naming the tool explicitly, never from `all`.
 #
 # Usage:
 #   bs-diag.sh                     same as `all`: health, then USB forensics, then power
@@ -16,9 +13,7 @@
 #   bs-diag.sh selftest [OPTS...]  UI functional selftest      (bs-selftest.py,   OPTS passed through)
 #   bs-diag.sh list                show the tools, whether each is present, and its own help
 #
-# `health` already chains `usb --check` and `selftest` internally, so `all` adds the full USB
-# forensic report and the power audit on top of it rather than repeating them. `fix` is the only
-# mutating path here and it is never reachable from `all`.
+# `health` already chains `usb --check` and `selftest` internally, so `all` adds the USB forensic report and power audit on top rather than repeating them; `fix` is the only mutating path and it's never reachable from `all`.
 set -u
 
 HERE=$(dirname -- "$(readlink -f -- "$0")")

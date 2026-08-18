@@ -1,9 +1,7 @@
 #!/usr/bin/env bash
 # USB fault forensics for boxes where inserting a flash drive shuts klipper down.
 #
-# The failure this exists to explain: an operator plugs in a USB 3.0+ stick and klipper reports
-# "Lost communication with MCU" or "Timer too close". There are four physically distinct causes and
-# they need different fixes, so guessing is expensive:
+# The failure this exists to explain: a USB 3.0+ stick makes klipper report "Lost communication with MCU" or "Timer too close", and there are four physically distinct causes needing different fixes, so guessing is expensive:
 #
 #   1. power    the stick's inrush trips the port current limit, the hub cuts VBUS for the whole
 #               port group, and the MCU browns out with it            -> dmesg "over-current change"
@@ -194,8 +192,7 @@ mcu_serials() {
     local files
     files=$(active_cfgs)
     [ -n "$files" ] || return 0
-    # Strip the inline comment too: klipper takes # and ; as inline prefixes and the stock printer.cfg
-    # ships "serial: /dev/... # Change to canbus_uuid: ... for CANbus setups" on that very line.
+    # Strip the inline comment too: klipper takes # and ; as inline prefixes, and the stock printer.cfg ships one on the serial: line itself.
     grep -hE '^[[:space:]]*serial:' $files 2>/dev/null |
         sed 's/^[[:space:]]*serial:[[:space:]]*//; s/[[:space:]]*[#;].*$//; s/[[:space:]]*$//' |
         grep '^/dev/' | sort -u
@@ -217,8 +214,7 @@ USB_PAT="$USB_PAT|uas_eh_|reset (SuperSpeed|high-speed|full-speed|low-speed)|xhc
 USB_PAT="$USB_PAT|device descriptor read|unable to enumerate|error -71|error -110|error -32|device not accepting address"
 USB_PAT="$USB_PAT|USB disconnect|usb_serial_generic_read_bulk_callback|disconnected from ttyUSB|disconnected from ttyACM"
 USB_PAT="$USB_PAT|Under-voltage|Voltage normalised|hwmon.*critical"
-# Re-enumeration lines are not faults, but a disconnect without the matching "new ... USB device" is a
-# dead port while a disconnect/reconnect pair every few seconds is a reset loop: the operator needs both.
+# Re-enumeration lines aren't faults, but a disconnect without a matching "new ... USB device" is a dead port, while one every few seconds is a reset loop: the operator needs both.
 USB_PAT="$USB_PAT|new (SuperSpeed|high-speed|full-speed|low-speed)[^ ]* USB device"
 
 kernel_usb_events() { journalctl -k -o short-unix --no-pager "$@" 2>/dev/null | grep -aE "$USB_PAT"; }
@@ -231,12 +227,7 @@ klippy_logs() {
     done
 }
 
-# Correlate every klipper shutdown against kernel USB activity in the same seconds.
-#
-# klippy.log has no per-line clock, but each session opens with
-#   "Start printer at <date> (<epoch> <monotonic>)"
-# and every "Stats <monotonic>:" line shares that monotonic base, so a shutdown line can be placed on
-# the wall clock to within one stats interval (1s) and lined up against journal timestamps.
+# Correlate every klipper shutdown against kernel USB activity in the same seconds: klippy.log has no per-line clock, but every "Start printer" / "Stats <monotonic>:" line shares one monotonic base, so a shutdown can be placed on the wall clock within one stats interval (1s) and lined up against journal timestamps.
 correlate() {
     local window="${1:-25}"
     command -v python3 >/dev/null 2>&1 || {
@@ -249,8 +240,7 @@ correlate() {
     }
     kernel_usb_events --since "-45 days" >/tmp/.bs-usb-events.$$ 2>/dev/null
     klippy_logs >/tmp/.bs-usb-logs.$$
-    # Klippy logs outlive the journal by months, so a shutdown older than the journal's first entry has
-    # no USB data at all: that is not the same as having data that shows nothing, and must not read alike.
+    # Klippy logs outlive the journal by months, so a shutdown older than the journal's first entry has no USB data at all, which must not read the same as data that shows nothing.
     local floor
     floor=$(journalctl -k -o short-unix --no-pager --since "-45 days" 2>/dev/null | head -1 | cut -d' ' -f1)
     python3 - "$window" /tmp/.bs-usb-events.$$ /tmp/.bs-usb-logs.$$ "${floor:-0}" <<'PYEOF'
@@ -310,9 +300,7 @@ for path in logs:
                 now_mono = float(m.group(1))
                 last_stats = line.rstrip()
                 continue
-            # Klipper prints its own source into tracebacks, so the literal line
-            # self._error("Unable to connect") lands in the log and looks like an event. Real
-            # messages start at column 0, traceback frames and source echoes are indented.
+            # Klipper prints its own source into tracebacks, so self._error("Unable to connect") lands in the log looking like a real event; real messages start at column 0, traceback/source lines are indented.
             if line[:1].isspace() or line.startswith(("File \"", "Traceback")):
                 continue
             if not SHUT.search(line):
@@ -326,8 +314,7 @@ if not hits:
     print("no klipper shutdown events found in %d log file(s)" % len(logs))
     sys.exit(0)
 
-# One shutdown cascades into a dozen lines, so collapse anything inside the same window. A rotated
-# log that begins mid-session carries no epoch anchor, so those collapse by message instead.
+# One shutdown cascades into a dozen lines, so collapse anything inside the same window; a rotated log that begins mid-session carries no epoch anchor, so those collapse by message instead.
 merged = []
 seen_untimed = set()
 for when, path, text, stats in hits:
@@ -431,8 +418,7 @@ resolve_mcus() {
     MCU_HUBS="$(echo "$MCU_HUBS" | tr ' ' '\n' | sort -u | tr '\n' ' ')"
 }
 
-# A bare /dev/ttyUSB0 is assigned in enumeration order, so inserting storage can hand klipper the
-# wrong device on the next boot. by-id and by-path survive it.
+# A bare /dev/ttyUSB0 is assigned in enumeration order, so inserting storage can hand klipper the wrong device on next boot; by-id and by-path survive it.
 a_serial_pinned() {
     local s loose=""
     for s in $(mcu_serials); do
@@ -444,8 +430,7 @@ a_serial_pinned() {
     }
 }
 
-# Returns 2, not 0, when no port exposes the counter: a Pi 5 can log 58 over-current trips with every
-# over_current_count still reading 0, so a green tick here would be proof of nothing on the worst boxes.
+# Returns 2, not 0, when no port exposes the counter: a Pi 5 can log 58 over-current trips with over_current_count still reading 0, so a green tick here would prove nothing on the worst boxes.
 a_no_overcurrent_counters() {
     local f n hits="" seen=0
     for f in /sys/bus/usb/devices/*-port*/over_current_count; do
@@ -496,8 +481,7 @@ a_no_enum_errors() {
     }
 }
 
-# "disconnected from ttyACM" is a usbserial-driver wording, so a cdc_acm board (Beacon, most native-USB
-# klipper MCUs) can drop off the bus all boot without matching it: match its own bus address too.
+# "disconnected from ttyACM" is usbserial-driver wording, so a cdc_acm board (Beacon, most native-USB MCUs) can drop off the bus all boot without matching it: match its own bus address too.
 a_no_mcu_disconnect() {
     local hits pat d esc
     journal_readable || return 0
@@ -558,8 +542,7 @@ a_no_uas_bound() {
     }
 }
 
-# ntfs-3g and exfat-fuse cost several times more host cpu than the in-kernel drivers, and klipper's
-# deadline is measured in milliseconds.
+# ntfs-3g and exfat-fuse cost several times more host cpu than the in-kernel drivers, and klipper's deadline is measured in milliseconds.
 a_no_fuse_storage() {
     local hits
     hits=$(awk '$3 ~ /fuse/ && $1 ~ /^\/dev\// {print $1" ("$3" on "$2")"}' /proc/mounts 2>/dev/null)
@@ -569,10 +552,7 @@ a_no_fuse_storage() {
     }
 }
 
-# Live firmware says what booted, config.txt says what boots next, and they diverge exactly when the
-# box is at risk: line added but never rebooted, or an image reflash that silently dropped it again.
-# a_no_fuse_storage only fires once a bad stick is already mounted, which in the field means after the
-# print died. This fires before one ever is: no in-kernel driver means every customer stick takes FUSE.
+# a_no_fuse_storage only fires once a bad stick is already mounted (after the print died); this fires before one ever is, since no in-kernel driver means every customer stick takes FUSE.
 a_exfat_in_kernel() {
     local missing=""
     grep -qw exfat /proc/filesystems 2>/dev/null || modinfo exfat >/dev/null 2>&1 || missing="exfat"
@@ -583,8 +563,7 @@ a_exfat_in_kernel() {
     }
 }
 
-# Raising the Pi's own budget hides an oversubscribed hub, it does not fix it: the hub still has one
-# upstream lead, and a bus-powered one may only draw 500mA through it however much its children want.
+# Raising the Pi's own budget hides an oversubscribed hub, it doesn't fix it: the hub still has one upstream lead, and a bus-powered one may only draw 500mA through it regardless of its children.
 a_hub_not_oversubscribed() {
     local h c n sum name hits=""
     for h in /sys/bus/usb/devices/*/; do
@@ -607,6 +586,7 @@ a_hub_not_oversubscribed() {
     }
 }
 
+# Live firmware says what booted, config.txt says what boots next, and they diverge exactly when the box is at risk: a line added but never rebooted, or a reflash that silently dropped it again.
 a_usb_current_budget() {
     local model cfg f live=x persisted=0
     model=$(sysread /proc/device-tree/model)

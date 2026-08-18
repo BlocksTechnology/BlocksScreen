@@ -21,9 +21,7 @@ fi
 cd "$COMPONENT_PATH"
 "$_uv" sync --no-dev
 
-# Spoolman won't start without a built client dir (a clone has no prebuilt UI); the API
-# is all we need, so a stub satisfies the mount without an npm build. Stub both the old
-# (client/dist) and new (client_v2/build) layouts since upstream has moved between them.
+# Spoolman needs a built client dir to start; stub both old (client/dist) and new (client_v2/build) layouts since we only need the API, not an npm build.
 for _client_dir in client/dist client_v2/build; do
     mkdir -p "$_client_dir"
     if [ ! -f "$_client_dir/index.html" ]; then
