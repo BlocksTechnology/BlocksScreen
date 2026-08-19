@@ -251,6 +251,12 @@ class TestGitUpdate:
         with patch("updater.service.wait_for_service_active", return_value=True):
             yield
 
+    @pytest.fixture(autouse=True)
+    def mock_git_ref_hash(self):
+        """Keep the branch-alive probe off real git; tests that need a dead branch re-patch."""
+        with patch("updater.service.git_ref_hash", return_value="a" * 40):
+            yield
+
     @pytest.mark.asyncio
     async def test_fetch_failure_reports_network_without_rollback(self):
         # Nothing is checked out before the fetch: no revert, no service restart.
@@ -2862,7 +2868,8 @@ class TestReviewHardeningFixes:
             patch.object(UpdateService, "_check_crash_loop", return_value=True),
             patch.object(
                 UpdateService, "_handle_crash_loop", side_effect=RuntimeError("boom")
-            ),pytest.raises(asyncio.CancelledError)
+            ),
+            pytest.raises(asyncio.CancelledError),
         ):
             await svc.supervise_ui()
         assert len(seen) == 2  # the loop survived the first pass exception
