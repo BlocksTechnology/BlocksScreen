@@ -287,6 +287,44 @@ components:
         cfg = next(c for c in components if c.name == "cfg")
         assert cfg.restart_klipper is True
 
+    def test_loopback_health_url_parsed(self):
+        yaml_text = """
+components:
+    - name: cfg
+      type: git
+      path: ~/cfg
+      branch: master
+      order: 10
+      health_url: http://127.0.0.1:7912/api/v1/health
+"""
+        with (
+            patch("builtins.open", _mock_load(yaml_text)),
+            patch("pathlib.Path.exists", return_value=False),
+        ):
+            components, _ = load_components()
+        cfg = next(c for c in components if c.name == "cfg")
+        assert cfg.health_url == "http://127.0.0.1:7912/api/v1/health"
+
+    def test_non_loopback_health_url_dropped(self, caplog):
+        yaml_text = """
+components:
+    - name: cfg
+      type: git
+      path: ~/cfg
+      branch: master
+      order: 10
+      health_url: http://evil.example.com/api/v1/health
+"""
+        with (
+            patch("builtins.open", _mock_load(yaml_text)),
+            patch("pathlib.Path.exists", return_value=False),
+            caplog.at_level(logging.WARNING, logger="updater.components"),
+        ):
+            components, _ = load_components()
+        cfg = next(c for c in components if c.name == "cfg")
+        assert cfg.health_url is None
+        assert any("health_url" in r.message for r in caplog.records)
+
     def test_invalid_branch_name_skipped(self, caplog):
         bad_yaml = """
 components:
@@ -450,3 +488,60 @@ class TestProvisionConfig:
         assert cfg is not None
         assert cfg.url is None
         assert cfg.install_if_missing is False
+
+
+def test_invalid_reset_mode_coerced_to_hard(caplog):
+    bad_yaml = """
+components:
+    - name: klipper
+      type: git
+      path: ~/klipper
+      reset_mode: Hard
+      order: 10
+"""
+    with (
+        patch("builtins.open", _mock_load(bad_yaml)),
+        patch("pathlib.Path.exists", return_value=False),
+        caplog.at_level(logging.WARNING, logger="updater.components"),
+    ):
+        configs, _ = load_components()
+    assert configs[-1].reset_mode == "hard"  # typo must not become the soft path
+    assert any("invalid reset_mode" in r.message for r in caplog.records)
+
+
+def test_non_dict_component_entry_skipped(caplog):
+    bad_yaml = """
+components:
+    - just-a-string
+    - name: klipper
+      type: git
+      path: ~/klipper
+      order: 10
+"""
+    with (
+        patch("builtins.open", _mock_load(bad_yaml)),
+        patch("pathlib.Path.exists", return_value=False),
+        caplog.at_level(logging.WARNING, logger="updater.components"),
+    ):
+        configs, _ = load_components()
+    assert [c.name for c in configs if c.kind == "git"] == ["klipper"]
+
+
+def test_origin_prefixed_branch_is_stripped(caplog):
+    bad_yaml = """
+components:
+    - name: BlocksScreen
+      type: git
+      path: ~/BlocksScreen
+      branch: origin/Release-2.0
+      order: 99
+"""
+    with (
+        patch("builtins.open", _mock_load(bad_yaml)),
+        patch("pathlib.Path.exists", return_value=False),
+        caplog.at_level(logging.WARNING, logger="updater.components"),
+    ):
+        configs, _ = load_components()
+    bs = next(c for c in configs if c.name == "BlocksScreen")
+    assert bs.branch == "Release-2.0"  # stray origin/ prefix stripped
+    assert any("origin/" in r.message for r in caplog.records)

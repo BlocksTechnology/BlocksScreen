@@ -16,6 +16,7 @@ from updater.executor import (
     _make_clean_env,
     _repair_corrupt_head,
     _remove_broken_loose_ref,
+    git_default_branch,
     _run,
     apt_update,
     apt_upgrade,
@@ -40,6 +41,7 @@ from updater.executor import (
     restart_service,
     restart_service_noblock,
     run_hook,
+    wait_for_http_ready,
 )
 
 
@@ -853,6 +855,23 @@ class TestCheckGitStatus:
         assert result.commits_behind == 0
         assert result.branch_mismatch is True
 
+    @pytest.mark.asyncio
+    async def test_dead_configured_branch_reports_actionable_error(self, tmp_path):
+        # origin/<branch> deleted upstream: report "fix components.yaml", not the
+        # generic git_commits_behind failure.
+        procs = [
+            _make_proc(0, b"abc1234\n", b""),  # git_get_hash
+            _make_proc(0, b"wip/dead\n", b""),  # git_get_current_branch
+            _make_proc(128, b"", b"fatal: unknown revision\n"),  # git_commits_behind -1
+            _make_proc(128, b"", b"fatal: unknown revision\n"),  # git_ref_hash -> ""
+        ]
+        exec_mock = AsyncMock(side_effect=procs)
+        with patch("asyncio.create_subprocess_exec", exec_mock):
+            result = await check_git_status(
+                "klipper", tmp_path, branch="wip/dead", skip_fetch=True
+            )
+        assert result.error == "branch origin/wip/dead not found - fix components.yaml"
+
 
 class TestCheckAptStatus:
     @pytest.mark.asyncio
@@ -1293,3 +1312,53 @@ class TestCorruptionSignatures:
             "asyncio.create_subprocess_exec", new_callable=AsyncMock, return_value=proc
         ):
             assert await git_has_corruption(Path("/x")) is True
+
+
+class TestGitDefaultBranch:
+    """git_default_branch: HEAD symref, else origin/HEAD target, else master."""
+
+    @pytest.mark.asyncio
+    async def test_prefers_head_symref(self, tmp_path):
+        with patch(
+            "updater.executor._run", return_value=(True, "master\n")
+        ) as mock_run:
+            assert await git_default_branch(tmp_path) == "master"
+        assert mock_run.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_falls_back_to_origin_head(self, tmp_path):
+        with patch(
+            "updater.executor._run",
+            side_effect=[(False, ""), (True, "origin/master\n")],
+        ):
+            assert await git_default_branch(tmp_path) == "master"
+
+    @pytest.mark.asyncio
+    async def test_last_resort_is_master(self, tmp_path):
+        with patch("updater.executor._run", side_effect=[(False, ""), (False, "")]):
+            assert await git_default_branch(tmp_path) == "master"
+
+    @pytest.mark.asyncio
+    async def test_none_path_returns_master(self):
+        assert await git_default_branch(None) == "master"
+
+
+class TestWaitForHttpReady:
+    @pytest.mark.asyncio
+    async def test_returns_true_on_2xx(self):
+        with patch("updater.executor._http_probe", return_value=True):
+            assert await wait_for_http_ready("http://127.0.0.1:7912/x") is True
+
+    @pytest.mark.asyncio
+    async def test_times_out_when_never_ready(self):
+        with patch("updater.executor._http_probe", return_value=False):
+            assert await wait_for_http_ready("http://127.0.0.1:7912/x", timeout=0) is False
+
+    @pytest.mark.asyncio
+    async def test_polls_until_ready(self):
+        with (
+            patch("updater.executor._http_probe", side_effect=[False, True]) as probe,
+            patch("updater.executor.asyncio.sleep", new=AsyncMock()),
+        ):
+            assert await wait_for_http_ready("http://127.0.0.1:7912/x") is True
+        assert probe.call_count == 2

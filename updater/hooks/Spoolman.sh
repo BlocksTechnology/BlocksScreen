@@ -1,7 +1,5 @@
 #!/bin/bash
-# Provision/update Spoolman: run-from-source (not pip-installable), so deps go in
-# via uv (provided in the BlocksScreen venv by install-updater.sh). SQLite default
-# means no sudo here; the unit is laid down + enabled by install-updater/updater.
+# Provision Spoolman via uv (run-from-source, not pip-installable); SQLite default = no sudo; unit installed by install-updater.
 set -euo pipefail
 
 if [ -z "${COMPONENT_PATH:-}" ]; then
@@ -21,7 +19,7 @@ fi
 cd "$COMPONENT_PATH"
 "$_uv" sync --no-dev
 
-# Spoolman needs a built client dir to start; stub both old (client/dist) and new (client_v2/build) layouts since we only need the API, not an npm build.
+# Stub both old (client/dist) and new (client_v2/build) layouts; the API is all we need, no npm build.
 for _client_dir in client/dist client_v2/build; do
     mkdir -p "$_client_dir"
     if [ ! -f "$_client_dir/index.html" ]; then

@@ -8,6 +8,7 @@ import socket
 from collections.abc import Iterator
 
 from updater.locking import process_lock
+from updater.models import ComponentStatus
 from updater.service import LoggingCallback, UpdateService
 
 # NOTE: sdbus imports are lazy (in _run_daemon) so the CLI works without sdbus.
@@ -83,11 +84,7 @@ async def _run_daemon() -> None:
 
 
 def _watchdog_ping_interval() -> float:
-    """Half of systemd's WatchdogSec (per sd_notify(3)), or 15s if unset/invalid.
-
-    Reading WATCHDOG_USEC from the environment keeps the heartbeat correct if the
-    unit's WatchdogSec is ever retuned, instead of hardcoding half of 30s.
-    """
+    """Half of systemd's WatchdogSec (per sd_notify(3)), or 15s if unset/invalid."""
     try:
         watchdog_usec = int(os.environ.get("WATCHDOG_USEC", "0"))
     except ValueError:
@@ -107,6 +104,31 @@ def _cli_lock() -> Iterator[None]:
         yield
 
 
+def _print_component_status(s: ComponentStatus, verbose: bool) -> None:
+    """Print a one-line status summary for a component (+ verbose detail line)."""
+    if s.error:
+        print(f"{s.name}: ERROR: {s.error}")
+    elif s.branch_mismatch:
+        print(f"{s.name}: branch switch needed")
+    elif s.needs_install:
+        print(f"{s.name}: install required")
+    elif s.packages_upgradable > 0:
+        print(f"{s.name}: {s.packages_upgradable} packages upgradable")
+    elif s.commits_behind > 0:
+        print(f"{s.name}: {s.commits_behind} commits behind")
+    elif s.has_local_changes:
+        print(f"{s.name}: local changes")
+    else:
+        print(f"{s.name}: up to date")
+    if verbose:
+        print(
+            f"    branch={s.current_branch or '?'} mismatch={s.branch_mismatch} "
+            f"behind={s.commits_behind} needs_install={s.needs_install} "
+            f"local_changes={s.has_local_changes} pkgs={s.packages_upgradable} "
+            f"hash={s.current_hash[:8]}"
+        )
+
+
 async def main() -> None:
     """Parse CLI args and dispatch to the appropriate UpdateService method."""
     args = build_parser().parse_args()
@@ -122,36 +144,20 @@ async def main() -> None:
         case "update":
             with _cli_lock():
                 if args.name is None:
-                    await svc.update_all()
+                    ok = await svc.update_all()
                 else:
-                    await svc.update_component(args.name)
+                    ok = await svc.update_component(args.name)
+            if not ok:
+                # Scripts/harnesses rely on the exit code, not just the log.
+                raise SystemExit(1)
         case "status":
             result = await svc.check_status()
             for s in sorted(result.values(), key=lambda c: c.name):
-                if s.error:
-                    print(f"{s.name}: ERROR: {s.error}")
-                elif s.branch_mismatch:
-                    print(f"{s.name}: branch switch needed")
-                elif s.needs_install:
-                    print(f"{s.name}: install required")
-                elif s.packages_upgradable > 0:
-                    print(f"{s.name}: {s.packages_upgradable} packages upgradable")
-                elif s.commits_behind > 0:
-                    print(f"{s.name}: {s.commits_behind} commits behind")
-                elif s.has_local_changes:
-                    print(f"{s.name}: local changes")
-                else:
-                    print(f"{s.name}: up to date")
-                if args.verbose:
-                    print(
-                        f"    branch={s.current_branch or '?'} mismatch={s.branch_mismatch} "
-                        f"behind={s.commits_behind} needs_install={s.needs_install} "
-                        f"local_changes={s.has_local_changes} pkgs={s.packages_upgradable} "
-                        f"hash={s.current_hash[:8]}"
-                    )
+                _print_component_status(s, args.verbose)
         case "recover":
             with _cli_lock():
-                await svc.recover(args.name, hard=args.hard)
+                if not await svc.recover(args.name, hard=args.hard):
+                    raise SystemExit(1)
         case "bless":
             with _cli_lock():
                 ok = await svc.bless_healthy(args.name, args.hash)

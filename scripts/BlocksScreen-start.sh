@@ -94,6 +94,16 @@ bs_migrate_moonraker_conf "$_BSENV_HOME/printer_data/config/moonraker.conf" Bloc
 bs_ensure_install_state "$BS_PATH" "$BSENV" BlocksScreen-start
 bs_ensure_usb_max_current /boot/firmware/config.txt BlocksScreen-start || true
 
+# Serialize the boot git surgery below with the updater daemon/CLI (their flock):
+# the daemon's boot reconcile can heal this same repo concurrently. Proceed after
+# 20s rather than hold up the UI; the fd is closed before exec'ing the UI.
+_BS_LOCK_DIR="/run/blockscreen"
+mkdir -p "$_BS_LOCK_DIR" 2>/dev/null || _BS_LOCK_DIR="$_BSENV_HOME/.cache/blockscreen"
+if exec 9>"$_BS_LOCK_DIR/updater.lock" 2>/dev/null; then
+    flock -w 20 9 2>/dev/null \
+        || echo "[BlocksScreen-start] updater lock busy - proceeding without it"
+fi
+
 # Remove stale git index lock left by an interrupted update (e.g. power loss during git reset)
 rm -f "$BS_PATH/.git/index.lock"
 
@@ -149,6 +159,9 @@ if ! "$BSENV/bin/python3.11" -m compileall -q \
     echo "BlocksScreen: source check failed - running git reset --hard HEAD to recover"
     git -C "$BS_PATH" reset --hard HEAD 2>/dev/null || true
 fi
+
+# Release the updater lock now: the exec'd UI must never inherit (and hold) it.
+exec 9>&- 2>/dev/null || true
 
 # -- Deferred bootstrap (background) ------------------------------------------
 # Heavy / network-dependent setup (apt packages, pip requirements, updater

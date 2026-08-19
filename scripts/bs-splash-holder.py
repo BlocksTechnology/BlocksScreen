@@ -93,8 +93,13 @@ def _on_sigterm(_sig: int, _frame: object) -> None:
 
 signal.signal(signal.SIGTERM, _on_sigterm)
 
-# Switch to tty8 immediately - VT switch does not require fb0.
-_activate_tty8()
+# Switch to tty8 immediately - VT switch does not require fb0. Skip when X is
+# already up (first-install start lands mid-session): stealing the VT from the
+# live GUI on tty7 would look like a bricked screen until a power cycle.
+if os.path.exists("/tmp/.X11-unix/X0"):  # nosec B108 - canonical X11 socket path
+    _log("X session present - not activating tty8")
+else:
+    _activate_tty8()
 
 # Clear tty8 and hide the cursor (no bare text): the screen stays black until the
 # splash image is written to fb0 below, so the user only ever sees the logo splash.

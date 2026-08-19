@@ -6,17 +6,30 @@
 bs_migrate_moonraker_conf() {
     local conf="$1" tag="${2:-bs-common}" patched=false
     [ -f "$conf" ] || return 0
-    cp "$conf" "${conf}.bak" 2>/dev/null || true
+    # Back up only a sane-looking conf: never overwrite a good .bak with a corrupt one.
+    if grep -q '^\[server\]' "$conf" 2>/dev/null; then
+        cp "$conf" "${conf}.bak" 2>/dev/null || true
+    fi
     # Gate on the section existing: else the sed no-ops but patched=true restarts moonraker every boot.
     if ! grep -q "enable_system_updates" "$conf" && grep -q '^\[update_manager\]$' "$conf"; then
         sed -i '/^\[update_manager\]$/a enable_system_updates: False' "$conf"
         patched=true
         echo "[$tag] moonraker.conf: disabled system apt upgrades"
     fi
-    if grep -q "managed_services: klipper moonraker" "$conf"; then
+    # Scope checks to the BlocksScreen section so an unrelated match can't re-patch every boot.
+    local bs_um_section
+    bs_um_section=$(sed -n '/^\[update_manager BlocksScreen\]/,/^\[/p' "$conf" 2>/dev/null)
+    if printf '%s\n' "$bs_um_section" | grep -q "managed_services: klipper moonraker"; then
         sed -i '/^\[update_manager BlocksScreen\]/,/^\[/ s/managed_services: klipper moonraker/managed_services: BlocksScreen/' "$conf"
         patched=true
         echo "[$tag] moonraker.conf: fixed BlocksScreen managed_services"
+    fi
+    # Old installers wrote primary_branch: master, which does not exist upstream;
+    # moonraker refuses to manage a repo whose primary branch is gone.
+    if printf '%s\n' "$bs_um_section" | grep -q "^primary_branch: master$"; then
+        sed -i '/^\[update_manager BlocksScreen\]/,/^\[/ s/^primary_branch: master$/primary_branch: main/' "$conf"
+        patched=true
+        echo "[$tag] moonraker.conf: fixed BlocksScreen primary_branch (master -> main)"
     fi
     if ! grep -q "blocksscreen-single-owner" "$conf"; then
         bs_disable_overlapping_update_managers "$conf" "$tag" && patched=true
@@ -41,7 +54,15 @@ bs_ensure_spoolman_moonraker() {
     local spoolman_dir="${conf%/printer_data/config/moonraker.conf}/Spoolman"
     [ -d "$spoolman_dir/.venv" ] || return 1
     grep -q '^\[spoolman\]' "$conf" && return 1
-    printf '\n[spoolman]\nserver: localhost:7912\n' >>"$conf"
+    # Same-dir temp + atomic rename: a power cut mid-append could truncate the conf.
+    local tmp
+    tmp="$(mktemp -p "$(dirname "$conf")" .moonraker.conf.XXXXXX)" || return 1
+    if ! { cat "$conf" && printf '\n[spoolman]\nserver: localhost:7912\n'; } >"$tmp"; then
+        rm -f "$tmp"
+        return 1
+    fi
+    chmod --reference="$conf" "$tmp" 2>/dev/null || true
+    mv -f "$tmp" "$conf"
     echo "[$tag] moonraker.conf: added [spoolman] (server: localhost:7912)"
     return 0
 }
@@ -132,7 +153,7 @@ bs_disable_overlapping_update_managers() {
     local conf="$1" tag="${2:-bs-common}"
     [ -f "$conf" ] || return 1
     grep -q "blocksscreen-single-owner" "$conf" && return 1
-    local owned="RF50-Klipper happy-hare Klippain-ShakeTune mainsail-config crowsnest"
+    local owned="klipper RF50-Klipper happy-hare Klippain-ShakeTune mainsail-config crowsnest"
     local tmp
     # Same-dir temp + atomic rename: a power cut can never truncate moonraker.conf.
     tmp="$(mktemp -p "$(dirname "$conf")" .moonraker.conf.XXXXXX)" || return 1

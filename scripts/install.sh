@@ -415,11 +415,11 @@ function add_moonraker_update() {
     
 [update_manager BlocksScreen]
 type: git_repo
-primary_branch: master
+primary_branch: main
 path: $BS_PATH
 origin: https://github.com/BlocksTechnology/BlocksScreen.git
 is_system_service: True
-managed_services: klipper moonraker
+managed_services: BlocksScreen
 virtualenv: $BSENV
 requirements: scripts/requirements.txt
 system_dependencies: scripts/system-dependencies.json

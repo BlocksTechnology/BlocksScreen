@@ -10,6 +10,10 @@ BSENV="${BLOCKSSCREEN_VENV:-${_BSENV_HOME}/.BlocksScreen-env}"
 # Skip pip's PyPI self-check: it stalls every install on an offline box and only prints a notice.
 export PIP_DISABLE_PIP_VERSION_CHECK=1
 
+# A root pull must not leave root-owned dists in the blocks venv (breaks later pip runs).
+_as_blocks() { if [ "$(id -u)" = "0" ]; then runuser -u "$_BSENV_USER" -- "$@"; else "$@"; fi; }
+_own() { [ "$(id -u)" = "0" ] && chown "$_BSENV_USER" "$1" 2>/dev/null || true; }
+
 # shellcheck source=/dev/null
 if [ -f "$SCRIPT_PATH/bs-common.sh" ]; then . "$SCRIPT_PATH/bs-common.sh"; fi
 
@@ -26,10 +30,10 @@ SENTINEL="$BSENV/.blockscreen-reqs-hash"
 ATTEMPT="$BSENV/.blockscreen-reqs-attempt"
 REINSTALL=""
 # A truncated package (interrupted pip, power cut) still imports and yields only its dunders.
-if ! "$BSENV/bin/python3.11" -c "import yaml as _m; assert len(dir(_m)) > 15" >/dev/null 2>&1; then
+if ! _as_blocks "$BSENV/bin/python3.11" -c "import yaml as _m; assert len(dir(_m)) > 15" >/dev/null 2>&1; then
     echo "[post-merge] PyYAML missing or broken - repairing before the pinned set"
     # --force-reinstall: a gutted package keeps intact dist-info, so a plain install reports it already satisfied.
-    "$BSENV/bin/pip" install --quiet --force-reinstall --no-cache-dir \
+    _as_blocks "$BSENV/bin/pip" install --quiet --force-reinstall --no-cache-dir \
         "$(grep -im1 '^PyYAML[=><]' "$REQS")" || true
     REINSTALL="--force-reinstall --no-cache-dir"
     rm -f "$SENTINEL" "$ATTEMPT" 2>/dev/null || true
@@ -43,12 +47,13 @@ fi
 if [ ! -f "$SENTINEL" ] || [ "$(cat "$SENTINEL")" != "$REQS_HASH" ]; then
     echo "[post-merge] requirements changed - pre-installing deps (this may take a few minutes) ..."
     # shellcheck disable=SC2086
-    if "$BSENV/bin/pip" install --quiet $REINSTALL \
+    if _as_blocks "$BSENV/bin/pip" install --quiet $REINSTALL \
         --only-binary :all: \
         --no-binary sdbus,sdbus-networkmanager \
         --upgrade-strategy=only-if-needed \
         -r "$REQS"; then
         echo "$REQS_HASH" >"$SENTINEL"
+        _own "$SENTINEL"
         rm -f "$ATTEMPT" 2>/dev/null || true
         echo "[post-merge] deps installed"
     else
@@ -58,9 +63,11 @@ if [ ! -f "$SENTINEL" ] || [ "$(cat "$SENTINEL")" != "$REQS_HASH" ]; then
         case "$_cnt" in '' | *[!0-9]*) _cnt=0 ;; esac
         if [ "$_prev" = "$REQS_HASH" ]; then _cnt=$((_cnt + 1)); else _cnt=1; fi
         echo "$REQS_HASH $_cnt" >"$ATTEMPT"
+        _own "$ATTEMPT"
         if [ "$_cnt" -ge 3 ]; then
             echo "[post-merge] deps failed ${_cnt}x; giving up to stop thrash (venv left as-is)"
             echo "$REQS_HASH" >"$SENTINEL"
+            _own "$SENTINEL"
         fi
     fi
 fi
@@ -82,7 +89,7 @@ if [ ! -f /etc/systemd/system/BlocksScreen-updater.service ]; then
 fi
 
 # 4. Precompute splash cache so the first Qt restart shows the right logo.
-"$BSENV/bin/python3.11" "$SCRIPT_PATH/bs-splash.py" --precompute 2>/dev/null || true
+_as_blocks "$BSENV/bin/python3.11" "$SCRIPT_PATH/bs-splash.py" --precompute 2>/dev/null || true
 
 
 # Under the daemon's own pull a restart here aborts the batch: defer via sentinel.

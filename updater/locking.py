@@ -1,10 +1,4 @@
-"""Cross-process advisory lock shared by the updater daemon and the CLI.
-
-A single flock-backed lockfile is the only thing serializing mutating git/apt
-work between the long-running daemon and a `python -m updater update` CLI run:
-the daemon's asyncio locks are in-process only. Both sides acquire the same path
-non-blocking, so whoever is second fails fast instead of corrupting a repo.
-"""
+"""Cross-process advisory lock shared by the updater daemon and the CLI."""
 
 from __future__ import annotations
 
@@ -36,24 +30,13 @@ def lock_path() -> Path:
 
 
 def restart_sentinel_path() -> Path:
-    """Return the sentinel a self-update hook writes instead of restarting.
-
-    Hooks running under the updater append `install`/`code` here rather than
-    restarting the daemon mid-batch; the daemon reads it once the batch is done.
-    Preferring /run (tmpfs) means it clears on reboot, so a crash can never
-    trigger a spurious restart later; the safe floor is 'adopt on next reboot'.
-    """
+    """Return the sentinel a self-update hook writes instead of restarting mid-batch."""
     return _runtime_dir() / "updater-restart-needed"
 
 
 @contextlib.contextmanager
 def process_lock() -> Iterator[bool]:
-    """Acquire the shared updater lock non-blocking.
-
-    Yields True if acquired, False if another updater process (daemon or CLI)
-    holds it. The fd stays open for the whole `with` block - closing it on exit
-    is what releases the lock.
-    """
+    """Acquire the shared updater lock non-blocking."""
     try:
         f = open(lock_path(), "w")  # noqa: SIM115, PTH123
     except OSError:

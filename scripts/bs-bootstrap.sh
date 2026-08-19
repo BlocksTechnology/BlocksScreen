@@ -27,8 +27,8 @@ command -v feh >/dev/null 2>&1 || _missing="$_missing feh"
 command -v xsetroot >/dev/null 2>&1 || _missing="$_missing x11-xserver-utils"
 if [ -n "$_missing" ]; then
     # shellcheck disable=SC2086
-    apt-get install -y --quiet $_missing 2>/dev/null \
-        || echo "[bs-bootstrap] apt install deferred (offline?):$_missing"
+    apt-get -o DPkg::Lock::Timeout=60 install -y --quiet $_missing 2>/dev/null \
+        || echo "[bs-bootstrap] apt install deferred (offline or dpkg busy):$_missing"
 fi
 
 # 2. Python deps. PyYAML is required by the updater daemon's component loader.
