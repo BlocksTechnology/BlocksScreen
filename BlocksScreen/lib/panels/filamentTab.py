@@ -56,7 +56,9 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self._spool_id_map: dict[str, dict] = {}
         self._current_field: QtWidgets.QLineEdit | None = None
         self._color_target_field = None
-        self.moonraker_run = True
+        self._spoolman_available: bool | None = None
+        self._popup_form_page: QtWidgets.QWidget | None = None
+        self._popup_spool_page: QtWidgets.QWidget | None = None
 
         self.amu_manager.mmu_state_changed.connect(self.on_mmu_state_changed)
         self._setup_pre_gate_popup()
@@ -115,19 +117,29 @@ class FilamentTab(QtWidgets.QStackedWidget):
 
         self.run_gcode.connect(self.ws.api.run_gcode)
 
-    def handle_moonraker_components(self):
-        if self.moonraker_run:
-            components = self.ws._moonRest.get_server_info()
-            if "spoolman" not in components["result"].get("components", []):
-                self.fp_button_2.hide()
-                self._popup_stack.addWidget(self._build_form_page())
-                self._popup_stack.addWidget(self._build_spool_page())
-            else:
-                self.fp_button_2.show()
-                self._popup_stack.addWidget(self._build_spool_page())
-                self._popup_stack.addWidget(self._build_form_page())
-                self.request_filament_change_page.emit()
-            self.moonraker_run = False
+    def handle_moonraker_components(self) -> None:
+        """Re-checks spoolman on every connect: an update can add it without restarting the UI."""
+        info = self.ws._moonRest.get_server_info()
+        if not isinstance(info, dict):
+            return  # transient REST failure: keep the current layout instead of hiding the button
+        available = "spoolman" in info.get("result", {}).get("components", [])
+        if available == self._spoolman_available:
+            return
+        self._spoolman_available = available
+        if self._popup_form_page is None:
+            self._popup_form_page = self._build_form_page()
+            self._popup_spool_page = self._build_spool_page()
+        # insertWidget moves a page already in the stack, so the popup opens on the right one.
+        pages = (
+            (self._popup_spool_page, self._popup_form_page)
+            if available
+            else (self._popup_form_page, self._popup_spool_page)
+        )
+        for i, page in enumerate(pages):
+            self._popup_stack.insertWidget(i, page)
+        self.fp_button_2.setVisible(available)
+        if available:
+            self.request_filament_change_page.emit()
 
     def change_page(self, index: int) -> None:
         """Requests a page change page to the global manager
@@ -865,8 +877,8 @@ class FilamentTab(QtWidgets.QStackedWidget):
                 self.amupage.call_load_panel.connect(self.call_load_panel)
                 self.amupage.request_keyboard.connect(self._on_show_keyboard)
                 self.amupage.request_color_wheel.connect(self._open_color_wheel)
-
-            self.amu_configured = True
+                # Latch only once the page exists: an early single-gate state must not veto a later multi-gate one.
+                self.amu_configured = True
 
         if self.load_state:
             if mmu_state.action == "Idle":

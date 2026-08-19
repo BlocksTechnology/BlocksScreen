@@ -464,6 +464,7 @@ class TestRecoveryLadder:
                 patch("updater.service.git_fetch") as m_fetch,
                 patch("updater.service.git_ref_hash") as m_ref,
                 patch("updater.service.git_reset_to_hash") as m_reset,
+                patch("updater.service.git_tree_has_path", return_value=True),
                 patch.object(svc, "_restart_ui_service") as m_restart,
             ):
                 m_fetch.return_value = (True, "")
@@ -492,6 +493,7 @@ class TestRecoveryLadder:
                 patch("updater.service.git_fetch") as m_fetch,
                 patch("updater.service.git_ref_hash") as m_ref,
                 patch("updater.service.git_reset_to_hash") as m_reset,
+                patch("updater.service.git_tree_has_path", return_value=True),
                 patch.object(svc, "_restart_ui_service") as m_restart,
             ):
                 m_fetch.return_value = (True, "")
@@ -615,6 +617,7 @@ class TestForwardHeal:
                 patch("updater.service.git_fetch") as m_fetch,
                 patch("updater.service.git_ref_hash") as m_ref,
                 patch("updater.service.git_reset_to_hash") as m_reset,
+                patch("updater.service.git_tree_has_path", return_value=True),
                 patch("updater.service.get_service_nrestarts") as m_nr,
                 patch.object(svc, "_restart_ui_service") as m_restart,
             ):
@@ -750,6 +753,7 @@ class TestStateConcurrency:
             with (
                 patch("updater.service.git_fetch", return_value=(True, "")),
                 patch("updater.service.git_ref_hash", return_value="c" * 40),
+                patch("updater.service.git_tree_has_path", return_value=True),
                 patch("updater.service.git_reset_to_hash", side_effect=slow_reset),
                 patch("updater.service.get_service_nrestarts", return_value=0),
                 patch.object(svc, "_restart_ui_service", return_value=True),
@@ -871,6 +875,7 @@ class TestCorruptionHardening:
                 patch(
                     "updater.service.git_repair", return_value=(False, "repair fail")
                 ),
+                patch.object(UpdateService, "_reclone_component", return_value=False),
             ):
                 await svc._reconcile_locked()  # must not raise
             assert "BlocksScreen" not in svc._read_state()  # entry sanitized away

@@ -1,7 +1,7 @@
 .PHONY: all init init-dev venv run lint format-check security check \
         test test-all test-unit test-network test-ui test-integration test-fast \
         coverage coverage-all coverage-network clean clean-venv \
-        docstrcov rcc rcc-all help
+        docstrcov rcc rcc-all diagnose help
 
 .DEFAULT_GOAL := help
 SHELL         := /bin/bash
@@ -84,8 +84,8 @@ format-check: ## Verify formatting without modifying files (matches CI exactly)
 	$(PYTHON) -m ruff check --target-version=py311 --config=pyproject.toml
 	$(PYTHON) -m ruff format --diff --target-version=py311 --config=pyproject.toml
 
-security: ## Run bandit security scan
-	$(PYTHON) -m bandit -c pyproject.toml -r $(SRC)
+security: ## Run bandit security scan (whole repo, matches CI scope)
+	$(PYTHON) -m bandit -c pyproject.toml -r .
 
 check: format-check lint security test-fast ## Full pre-push gate (mirrors CI)
 
@@ -135,13 +135,24 @@ coverage-all: ## Coverage including integration tests
 ##@ Documentation
 # ─────────────────────────────────────────────────────────────────────────────
 
+# Console script, not -m: docstr_coverage ships no __main__ so `-m` always errors.
 docstrcov: ## Check docstring coverage (fail-under=80%, matches CI)
-	$(PYTHON) -m docstr_coverage $(SRC) \
+	$(VENV)/bin/docstr-coverage $(SRC) \
 	    --exclude '.*/$(SRC)/lib/ui/.*?$$' \
 	    --fail-under 80 \
 	    --skip-magic --skip-init --skip-private --skip-property
 
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+##@ Diagnostics
+# ─────────────────────────────────────────────────────────────────────────────
+
+# scripts/healthcheck/ is git-ignored (bench-only), so degrade with a hint instead of a shell error.
+diagnose: ## Deep-check a running machine: health, USB forensics, power (scripts/healthcheck/, local-only, needs sudo)
+	@test -x scripts/healthcheck/bs-diag.sh \
+	  || { echo "scripts/healthcheck/ not present on this checkout (bench-only, git-ignored)"; exit 1; }
+	sudo scripts/healthcheck/bs-diag.sh all
 
 # ─────────────────────────────────────────────────────────────────────────────
 ##@ Cleanup

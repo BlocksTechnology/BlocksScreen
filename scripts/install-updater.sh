@@ -20,13 +20,22 @@ _BSENV_USER="blocks"
 _BSENV_HOME=$(getent passwd "$_BSENV_USER" | cut -d: -f6)
 BSENV="${BLOCKSSCREEN_VENV:-${_BSENV_HOME}/.BlocksScreen-env}"
 
+# Venv-mutating commands run as blocks: root-owned dists break later pip-as-blocks runs.
+_as_blocks() { if [ "$(id -u)" = "0" ]; then runuser -u "$_BSENV_USER" -- "$@"; else "$@"; fi; }
+# Atomic root install: a power cut must never leave a truncated-but-present file
+# (the [ -f ] self-heal guards would then never rewrite it).
+_install_atomic() {
+    local mode="$1" src="$2" dst="$3"
+    sudo install -m "$mode" "$src" "${dst}.new" && sudo mv -Tf "${dst}.new" "$dst"
+}
+
 echo_info "Installing D-Bus policy ..."
-sudo cp "$SCRIPT_PATH/com.blockscreen.Updater.conf" /etc/dbus-1/system.d/
+_install_atomic 0644 "$SCRIPT_PATH/com.blockscreen.Updater.conf" /etc/dbus-1/system.d/com.blockscreen.Updater.conf
 sudo systemctl reload dbus || true
 echo_ok "D-Bus policy installed"
 
 echo_info "Installing D-Bus activation file ..."
-sudo cp "$SCRIPT_PATH/com.blockscreen.Updater.service" /usr/share/dbus-1/system-services/
+_install_atomic 0644 "$SCRIPT_PATH/com.blockscreen.Updater.service" /usr/share/dbus-1/system-services/com.blockscreen.Updater.service
 echo_ok "D-Bus activation file installed"
 
 echo_info "Installing bs-apt-helper (root-owned apt wrapper) ..."
@@ -40,7 +49,8 @@ SERVICE=$(cat "$SCRIPT_PATH/BlocksScreen-updater.service")
 SERVICE=${SERVICE//BS_DIR/$BS_PATH}
 SERVICE=${SERVICE//BSENV/$BSENV}
 SERVICE=${SERVICE//BS_PRIMARY_HOME/$_BSENV_HOME}
-echo "$SERVICE" | sudo tee /etc/systemd/system/BlocksScreen-updater.service >/dev/null
+echo "$SERVICE" | sudo tee /etc/systemd/system/.BlocksScreen-updater.service.new >/dev/null
+sudo mv -Tf /etc/systemd/system/.BlocksScreen-updater.service.new /etc/systemd/system/BlocksScreen-updater.service
 sudo systemctl daemon-reload
 sudo systemctl enable BlocksScreen-updater.service
 sudo systemctl restart BlocksScreen-updater.service || true
@@ -49,7 +59,8 @@ echo_ok "BlocksScreen-updater service installed and started"
 echo_info "Installing Spoolman service unit (inactive until the updater provisions it) ..."
 SPOOLMAN_SVC=$(cat "$SCRIPT_PATH/Spoolman.service")
 SPOOLMAN_SVC=${SPOOLMAN_SVC//BS_PRIMARY_HOME/$_BSENV_HOME}
-echo "$SPOOLMAN_SVC" | sudo tee /etc/systemd/system/Spoolman.service >/dev/null
+echo "$SPOOLMAN_SVC" | sudo tee /etc/systemd/system/.Spoolman.service.new >/dev/null
+sudo mv -Tf /etc/systemd/system/.Spoolman.service.new /etc/systemd/system/Spoolman.service
 sudo systemctl daemon-reload
 echo_ok "Spoolman service unit installed"
 
@@ -81,8 +92,10 @@ else
 fi
 # Daemon self-restart target; never in components.yaml.
 _emit_svc_rules BlocksScreen-updater.service
-# Spoolman is provisioned on demand; enable rule needed for its first clean start.
+# Spoolman is provisioned on demand; enable rules needed for its first clean start
+# (hooks/Spoolman.sh uses `enable --now`; sudoers args must match exactly).
 printf 'blocks ALL=(ALL) NOPASSWD: /usr/bin/systemctl enable Spoolman.service\n' >>"$SUDOERS_TMP"
+printf 'blocks ALL=(ALL) NOPASSWD: /usr/bin/systemctl enable --now Spoolman.service\n' >>"$SUDOERS_TMP"
 if sudo visudo -cf "$SUDOERS_TMP" >/dev/null 2>&1; then
     sudo install -m 0440 "$SUDOERS_TMP" "$SUDOERS_FILE"
     echo_ok "Sudoers rules installed"
@@ -179,10 +192,12 @@ echo_info "Installing BlocksScreen-deploy path unit (sudo-free hook trigger) ...
 DEPLOY_SVC=$(cat "$SCRIPT_PATH/BlocksScreen-deploy.service")
 DEPLOY_SVC=${DEPLOY_SVC//BS_DIR/$BS_PATH}
 DEPLOY_SVC=${DEPLOY_SVC//BS_PRIMARY_HOME/$_BSENV_HOME}
-echo "$DEPLOY_SVC" | sudo tee /etc/systemd/system/BlocksScreen-deploy.service >/dev/null
+echo "$DEPLOY_SVC" | sudo tee /etc/systemd/system/.BlocksScreen-deploy.service.new >/dev/null
+sudo mv -Tf /etc/systemd/system/.BlocksScreen-deploy.service.new /etc/systemd/system/BlocksScreen-deploy.service
 DEPLOY_PATH=$(cat "$SCRIPT_PATH/BlocksScreen-deploy.path")
 DEPLOY_PATH=${DEPLOY_PATH//BS_PRIMARY_HOME/$_BSENV_HOME}
-echo "$DEPLOY_PATH" | sudo tee /etc/systemd/system/BlocksScreen-deploy.path >/dev/null
+echo "$DEPLOY_PATH" | sudo tee /etc/systemd/system/.BlocksScreen-deploy.path.new >/dev/null
+sudo mv -Tf /etc/systemd/system/.BlocksScreen-deploy.path.new /etc/systemd/system/BlocksScreen-deploy.path
 sudo systemctl daemon-reload
 sudo systemctl enable --now BlocksScreen-deploy.path
 echo_ok "BlocksScreen-deploy path unit installed"
@@ -206,24 +221,26 @@ git -C "$BS_PATH" config core.hooksPath scripts
 echo_ok "post-merge hook installed"
 
 echo_info "Installing Python requirements ..."
+# Skip pip's PyPI self-check: it stalls every install on an offline box and only prints a notice.
+export PIP_DISABLE_PIP_VERSION_CHECK=1
 # Best-effort pip self-update; must not block the requirements install below.
-"$BSENV/bin/pip" install --quiet --upgrade pip 2>/dev/null || true
-apt-get install -y --quiet libsystemd-dev python3-dev 2>/dev/null || true
+_as_blocks "$BSENV/bin/pip" install --quiet --upgrade pip 2>/dev/null || true
+sudo apt-get -o DPkg::Lock::Timeout=60 install -y --quiet libsystemd-dev python3-dev 2>/dev/null || true
 # xsetroot is used as belt-and-suspenders cursor hiding alongside the Xorg -nocursor server flag.
-sudo apt-get install -y --quiet x11-xserver-utils 2>/dev/null || true
+sudo apt-get -o DPkg::Lock::Timeout=60 install -y --quiet x11-xserver-utils 2>/dev/null || true
 # sdbus pinned; --no-binary needs libsystemd-dev; only-if-needed skips satisfied.
-"$BSENV/bin/pip" install --quiet --only-binary :all: --no-binary sdbus,sdbus-networkmanager \
+_as_blocks "$BSENV/bin/pip" install --quiet --only-binary :all: --no-binary sdbus,sdbus-networkmanager \
     --upgrade-strategy=only-if-needed \
     -r "$BS_PATH/scripts/requirements.txt" || true
 echo_ok "Python requirements installed"
 
 # uv: Spoolman's dependency installer (run-from-source); provide it for the hook.
 echo_info "Ensuring uv is available for Spoolman provisioning ..."
-"$BSENV/bin/pip" install --quiet --upgrade uv 2>/dev/null || true
+_as_blocks "$BSENV/bin/pip" install --quiet --upgrade uv 2>/dev/null || true
 echo_ok "uv ready"
 
 echo_info "Pre-generating framebuffer splash cache ..."
-"$BSENV/bin/python3.11" "$SCRIPT_PATH/bs-splash.py" --precompute 2>/dev/null || true
+_as_blocks "$BSENV/bin/python3.11" "$SCRIPT_PATH/bs-splash.py" --precompute 2>/dev/null || true
 echo_ok "Splash cache ready"
 
 echo_ok "BlocksScreen updater setup complete"

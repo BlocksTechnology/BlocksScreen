@@ -48,6 +48,7 @@ def svc():
         }
     )
     mock_svc.recover = AsyncMock()
+    mock_svc.has_fetch_failures = MagicMock(return_value=False)
     mock_svc._components = [
         ComponentConfig(name="moonraker", kind="git"),
         ComponentConfig(name="klipper", kind="git"),
