@@ -613,7 +613,5 @@ class PrintTab(QtWidgets.QStackedWidget):
 
         self.setWindowTitle("StackedWidget")
         self.main_print_btn.setText("Print")
-        self.main_print_btn.setProperty(
-            "class", "menu_btn"
-        )
+        self.main_print_btn.setProperty("class", "menu_btn")
         self.main_text_label.setText("Printer ready")

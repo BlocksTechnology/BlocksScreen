@@ -521,56 +521,26 @@ class AxisPage(QtWidgets.QWidget):
         self.mva_y_value_label.setText("0")
         self.mva_x_value_label.setText("0")
         self.mva_title_label.setText("Move Axis")
-        self.mva_title_label.setProperty(
-            "class", "title_text"
-        )
+        self.mva_title_label.setProperty("class", "title_text")
         self.mva_back_btn.setText("Back")
-        self.mva_back_btn.setProperty(
-            "class", "menu_btn"
-        )
-        self.mva_back_btn.setProperty(
-            "button_type", "icon"
-        )
-        self.mva_z_up.setProperty(
-            "button_type", "icon"
-        )
-        self.mva_z_down.setProperty(
-            "button_type", "icon"
-        )
-        self.mva_home_x_btn.setProperty(
-            "button_type", "icon"
-        )
-        self.mva_home_y_btn.setProperty(
-            "button_type", "icon"
-        )
-        self.mva_home_z_btn.setProperty(
-            "button_type", "icon"
-        )
-        self.mva_home_all_btn.setProperty(
-            "button_type", "icon"
-        )
+        self.mva_back_btn.setProperty("class", "menu_btn")
+        self.mva_back_btn.setProperty("button_type", "icon")
+        self.mva_z_up.setProperty("button_type", "icon")
+        self.mva_z_down.setProperty("button_type", "icon")
+        self.mva_home_x_btn.setProperty("button_type", "icon")
+        self.mva_home_y_btn.setProperty("button_type", "icon")
+        self.mva_home_z_btn.setProperty("button_type", "icon")
+        self.mva_home_all_btn.setProperty("button_type", "icon")
         self.mva_select_speed_25_btn.setText("25")
         self.mva_select_speed_50_btn.setText("50")
         self.mva_select_speed_100_btn.setText("100")
         self.label.setText("Move Speed mm/s")
         self.mva_select_length_1_btn.setText("1")
         self.mva_select_length_10_btn.setText("10")
-        self.mva_select_length_100_btn.setText(
-            "100"
-        )
+        self.mva_select_length_100_btn.setText("100")
         self.label_2.setText("Move Length mm")
-        self.mva_left_btn.setProperty(
-            "button_type", "icon"
-        )
-        self.mva_right_btn.setProperty(
-            "button_type", "icon"
-        )
-        self.mva_down_btn.setProperty(
-            "button_type", "icon"
-        )
-        self.mva_up_btn.setProperty(
-            "button_type", "icon"
-        )
-        self.mva_middle.setProperty(
-            "button_type", "icon"
-        )
+        self.mva_left_btn.setProperty("button_type", "icon")
+        self.mva_right_btn.setProperty("button_type", "icon")
+        self.mva_down_btn.setProperty("button_type", "icon")
+        self.mva_up_btn.setProperty("button_type", "icon")
+        self.mva_middle.setProperty("button_type", "icon")

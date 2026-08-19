@@ -1725,34 +1725,18 @@ class MainWindow(QtWidgets.QMainWindow):
         self.setCentralWidget(self.main_widget)
 
         self.setWindowTitle("MainWindow")
-        self.notification_btn.setProperty(
-            "button_type", "icon_text"
-        )
+        self.notification_btn.setProperty("button_type", "icon_text")
         self.extruder_temp_display.setText("extruder")
-        self.extruder_temp_display.setProperty(
-            "button_type", "secondary_display"
-        )
-        self.extruder_temp_display.setProperty(
-            "name", "extruder_temperature_display"
-        )
+        self.extruder_temp_display.setProperty("button_type", "secondary_display")
+        self.extruder_temp_display.setProperty("name", "extruder_temperature_display")
         self.bed_temp_display.setText("bed")
-        self.bed_temp_display.setProperty(
-            "button_type", "secondary_display"
-        )
+        self.bed_temp_display.setProperty("button_type", "secondary_display")
         self.chamber_temp_display.setText("chamber")
-        self.chamber_temp_display.setProperty(
-            "display_format", "dual"
-        )
-        self.chamber_temp_display.setProperty(
-            "button_type", "display_secondary"
-        )
+        self.chamber_temp_display.setProperty("display_format", "dual")
+        self.chamber_temp_display.setProperty("button_type", "display_secondary")
         self.filament_type_icon.setText("Filament")
-        self.filament_type_icon.setProperty(
-            "button_type", "icon_text"
-        )
+        self.filament_type_icon.setProperty("button_type", "icon_text")
         self.nozzle_size_icon.setText("nozzle")
-        self.nozzle_size_icon.setProperty(
-            "button_type", "icon_text"
-        )
+        self.nozzle_size_icon.setProperty("button_type", "icon_text")
         self.wifi_button.setProperty("button_type", "icon")
         self.main_content_widget.setCurrentIndex(3)

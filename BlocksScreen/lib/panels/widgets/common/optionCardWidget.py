@@ -281,6 +281,4 @@ class OptionCard(QtWidgets.QAbstractButton):
         )
         self.setWindowTitle("Frame")
         self.option_text.setText("TextLabel")
-        self.continue_button.setProperty(
-            "button_type", "icon"
-        )
+        self.continue_button.setProperty("button_type", "icon")

@@ -618,9 +618,7 @@ class ControlTab(QtWidgets.QStackedWidget):
 
         self.cp_button_1.setText("Motion\nControl")
         self.cp_button_2.setText("Temp.\nControl")
-        self.cp_button_3.setText(
-            "Nozzle\nCalibration"
-        )
+        self.cp_button_3.setText("Nozzle\nCalibration")
         self.cp_button_4.setText("Z-Tilt")
         self.cp_button_5.setText("Fans")
         self.cp_button_6.setText("Swap\nPrint Core")

@@ -289,17 +289,9 @@ class TemperaturePage(QtWidgets.QWidget):
         )
         self.verticalLayout.addItem(spacerItem7)
 
-        self.temp_header_title.setText(
-            "Temperature"
-        )
+        self.temp_header_title.setText("Temperature")
         self.temp_back_button.setText("Back")
-        self.extruder_temp_display.setProperty(
-            "button_type", "secondary_display"
-        )
-        self.bed_temp_display.setProperty(
-            "button_type", "secondary_display"
-        )
+        self.extruder_temp_display.setProperty("button_type", "secondary_display")
+        self.bed_temp_display.setProperty("button_type", "secondary_display")
         self.cooldown_btn.setText("Cooldown")
-        self.temperature_cooldown_btn.setText(
-            "Heatsoak"
-        )
+        self.temperature_cooldown_btn.setText("Heatsoak")

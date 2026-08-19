@@ -478,32 +478,14 @@ class ExtruderPage(QtWidgets.QWidget):
 
         self.exp_title_label.setText("Extrude")
         self.exp_back_btn.setText("Back")
-        self.exp_length_group_box.setTitle(
-            "Extrude Length (mm)"
-        )
-        self.extrude_select_length_10_btn.setText(
-            "10"
-        )
-        self.extrude_select_length_50_btn.setText(
-            "50"
-        )
-        self.extrude_select_length_100_btn.setText(
-            "100"
-        )
-        self.exp_feedrate_group_box.setTitle(
-            "Extrude Feedrate (mm/s)"
-        )
-        self.extrude_select_feedrate_low_btn.setText(
-            str(self.extrude_list[0])
-        )
-        self.extrude_select_feedrate_middle_btn.setText(
-            str(self.extrude_list[1])
-        )
-        self.extrude_select_feedrate_high_btn.setText(
-            str(self.extrude_list[2])
-        )
+        self.exp_length_group_box.setTitle("Extrude Length (mm)")
+        self.extrude_select_length_10_btn.setText("10")
+        self.extrude_select_length_50_btn.setText("50")
+        self.extrude_select_length_100_btn.setText("100")
+        self.exp_feedrate_group_box.setTitle("Extrude Feedrate (mm/s)")
+        self.extrude_select_feedrate_low_btn.setText(str(self.extrude_list[0]))
+        self.extrude_select_feedrate_middle_btn.setText(str(self.extrude_list[1]))
+        self.extrude_select_feedrate_high_btn.setText(str(self.extrude_list[2]))
         self.exp_unextrude_btn.setText("Retract")
         self.exp_extrude_btn.setText("Extrude")
-        self.exp_info_label.setText(
-            "Nozzle heating to extrude"
-        )
+        self.exp_info_label.setText("Nozzle heating to extrude")

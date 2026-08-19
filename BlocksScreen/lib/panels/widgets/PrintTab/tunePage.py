@@ -470,52 +470,22 @@ class TuneWidget(QtWidgets.QWidget):
     def _retranslateUI(self):
         self.setWindowTitle("StackedWidget")
         self.tune_title_label.setText("Tune")
-        self.tune_title_label.setProperty(
-            "class", "title_text"
-        )
-        self.tune_back_btn.setProperty(
-            "button_type", "icon"
-        )
-        self.tune_babystep_menu_btn.setText(
-            "Babystep"
-        )
-        self.tune_babystep_menu_btn.setProperty(
-            "class", "menu_btn"
-        )
-        self.tune_babystep_menu_btn.setProperty(
-            "button_type", "normal"
-        )
-        self.tune_change_filament_btn.setText(
-            "Filament\nChange"
-        )
-        self.tune_change_filament_btn.setProperty(
-            "class", "menu_btn"
-        )
-        self.tune_change_filament_btn.setProperty(
-            "button_type", "normal"
-        )
-        self.sensors_menu_btn.setProperty(
-            "class", "menu_btn"
-        )
-        self.sensors_menu_btn.setProperty(
-            "button_type", "icon"
-        )
-        self.bed_display.setProperty(
-            "name", "bed_temperature_display"
-        )
-        self.bed_display.setProperty(
-            "button_type", "display"
-        )
+        self.tune_title_label.setProperty("class", "title_text")
+        self.tune_back_btn.setProperty("button_type", "icon")
+        self.tune_babystep_menu_btn.setText("Babystep")
+        self.tune_babystep_menu_btn.setProperty("class", "menu_btn")
+        self.tune_babystep_menu_btn.setProperty("button_type", "normal")
+        self.tune_change_filament_btn.setText("Filament\nChange")
+        self.tune_change_filament_btn.setProperty("class", "menu_btn")
+        self.tune_change_filament_btn.setProperty("button_type", "normal")
+        self.sensors_menu_btn.setProperty("class", "menu_btn")
+        self.sensors_menu_btn.setProperty("button_type", "icon")
+        self.bed_display.setProperty("name", "bed_temperature_display")
+        self.bed_display.setProperty("button_type", "display")
         self.extruder_display.setProperty(
             "name",
             "extruder_temperature_display",
         )
-        self.extruder_display.setProperty(
-            "button_type", "display"
-        )
-        self.speed_display.setProperty(
-            "name", "print_speed_display"
-        )
-        self.speed_display.setProperty(
-            "button_type", "display"
-        )
+        self.extruder_display.setProperty("button_type", "display")
+        self.speed_display.setProperty("name", "print_speed_display")
+        self.speed_display.setProperty("button_type", "display")

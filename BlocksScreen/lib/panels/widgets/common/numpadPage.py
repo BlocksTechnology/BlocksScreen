@@ -393,9 +393,7 @@ class CustomNumpad(QtWidgets.QWidget):
     def _retranslateUI(self) -> None:
         self.setWindowTitle("Form")
         self.numpad_title.setText("Target Temperature")
-        self.numpad_back_btn.setProperty(
-            "button_type", "icon"
-        )
+        self.numpad_back_btn.setProperty("button_type", "icon")
         self.numpad_6.setText("6")
         self.numpad_6.setProperty("position", "right")
         self.numpad_9.setText("9")
