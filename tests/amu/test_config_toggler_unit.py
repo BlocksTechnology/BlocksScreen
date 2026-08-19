@@ -1,6 +1,5 @@
 """Unit tests for BlocksScreen.devices.amu.config_toggler."""
 
-import pytest
 from BlocksScreen.devices.amu.config_toggler import ConfigToggler
 from tests.amu.conftest import COMMENTED_CFG, UNCOMMENTED_CFG
 

@@ -20,24 +20,18 @@ logger = logging.getLogger(__name__)
 
 UPDATER_SERVICE = "BlocksScreen-updater.service"
 
+# Hook budget: a deps-heavy hook (Spoolman uv sync) runs minutes; timeout = abort.
+HOOK_TIMEOUT = 600.0
+
 GIT = "/usr/bin/git"
 PIP = "/usr/bin/pip3"
 APT = "/usr/bin/apt"
-APT_GET = "/usr/bin/apt-get"
 APT_MARK = "/usr/bin/apt-mark"
 SUDO = "/usr/bin/sudo"
 SYSTEMCTL = "/usr/bin/systemctl"
-
-# Wait up to 60s for the dpkg lock instead of failing immediately when apt-daily
-# or unattended-upgrades is mid-run (the daemon now owns apt on this image).
-_APT_LOCK_OPTS = ["-o", "DPkg::Lock::Timeout=60"]
-# Keep existing conffiles without prompting (an upgrade must never block on input).
-_APT_CONF_OPTS = [
-    "-o",
-    "Dpkg::Options::=--force-confdef",
-    "-o",
-    "Dpkg::Options::=--force-confold",
-]
+DPKG = "/usr/bin/dpkg"
+# Root-owned fixed-argv apt wrapper (owns the -o opts); installed pre-restart.
+APT_HELPER = Path("/usr/local/sbin/bs-apt-helper")
 
 _SERVICE_RE = re.compile(r"^[a-zA-Z0-9@:._-]+\.service$")
 _GIT_SHA_RE = re.compile(r"^[a-f0-9]{7,40}$")
@@ -47,6 +41,38 @@ _GIT_TAG_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._/-]*$")
 _PACKAGE_NAME_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9+\-.]*$")
 
 _HOOKS_DIR = Path(__file__).parent / "hooks"
+_STALE_LOCK_AGE_THRESHOLD_S = 10.0
+
+
+def _clear_stale_git_index_lock(path: Path) -> bool:
+    """Remove .git/index.lock only if it is stale (older than threshold).
+
+    A stale lock is left by a SIGKILL'd or interrupted git operation. Only
+    remove if mtime indicates lock is NOT held by a live git process (age >=
+    threshold). At runtime, a fresh lock may indicate a concurrent legitimate
+    git op; yanking it would corrupt that op. Returns True if lock was
+    removed or did not exist; False if lock exists but is too fresh to safely
+    remove.
+    """
+    lock_path = path / ".git" / "index.lock"
+    if not lock_path.exists():
+        return True
+    try:
+        age_s = time.time() - lock_path.stat().st_mtime
+        if age_s >= _STALE_LOCK_AGE_THRESHOLD_S:
+            logger.warning("clearing stale index.lock (age %.1fs) from %s", age_s, path)
+            lock_path.unlink()
+            return True
+        logger.debug(
+            "index.lock is fresh (age %.1fs < %.1fs threshold), not removing to avoid "
+            "corrupting concurrent git op",
+            age_s,
+            _STALE_LOCK_AGE_THRESHOLD_S,
+        )
+        return False
+    except OSError as exc:
+        logger.warning("could not age-check index.lock at %s: %s", lock_path, exc)
+        return False
 
 
 def _kill_proc_group(proc, sig):
@@ -63,22 +89,21 @@ def _make_clean_env() -> dict[str, str]:
         "PATH",
         "HOME",
         "USER",
-        "LANG",
-        # SEC: DBUS_SESSION_BUS_ADDRESS and XDG_RUNTIME_DIR intentionally excluded —
-        # hook scripts must not make D-Bus calls or access the session runtime dir.
+        # SEC: session bus + XDG runtime vars excluded; hooks must not use them.
         "TMPDIR",
     ):
         val = os.environ.get(key)
         if val is not None:
             env[key] = val
     env["GIT_TERMINAL_PROMPT"] = "0"
+    # git_fetch's broken-ref self-heal and the apt parser match English messages
+    env["LC_ALL"] = "C"
     # SEC: only copy safe SUDO_ vars; reject SUDO_ASKPASS and others
     safe_sudo = {"SUDO_USER", "SUDO_UID", "SUDO_GID"}
     for key, val in os.environ.items():
         if key in safe_sudo:
             env[key] = val
-    # Lets hooks (git post-merge, the updater's own) tell they run mid-batch and
-    # defer any daemon restart to the sentinel instead of aborting the update.
+    # Tells hooks they run mid-batch: defer daemon restarts to the sentinel.
     env["BS_UPDATER_SELF_UPDATE"] = "1"
     with contextlib.suppress(OSError):
         env["BS_UPDATER_RESTART_SENTINEL"] = str(restart_sentinel_path())
@@ -202,7 +227,7 @@ def _compile_exclude_patterns(exclude: tuple[str, ...]) -> list[re.Pattern]:
         try:
             compiled.append(re.compile(pat))
         except re.error:
-            logger.warning("invalid apt_exclude regex %r — skipping", pat)
+            logger.warning("invalid apt_exclude regex %r - skipping", pat)
     return compiled
 
 
@@ -240,11 +265,13 @@ async def check_git_status(
     if current_hash == "":
         logger.error("Failed at git_hash operation")
         return ComponentStatus(name=name, error="Failed at git_hash operation")
+    current_branch = await git_get_current_branch(path)
     if branch:
         remote_ref = f"origin/{branch}"
     else:
-        current_branch = await git_get_current_branch(path)
         remote_ref = f"origin/{current_branch}" if current_branch else "origin/HEAD"
+    # Configured branch != checked-out branch: needs an update to switch.
+    branch_mismatch = bool(branch) and current_branch != branch
     if version:
         commits_behind = 0
     else:
@@ -284,7 +311,14 @@ async def check_git_status(
         has_local_changes=has_local_changes,
         current_version=current_version,
         remote_version=remote_version,
+        branch_mismatch=branch_mismatch,
+        current_branch=current_branch,
     )
+
+
+def is_git_repo(path: Path | None) -> bool:
+    """True if path exists and has a .git entry (a non-repo dir can never fetch)."""
+    return path is not None and (path / ".git").exists()
 
 
 async def git_is_dirty(path: Path) -> bool:
@@ -311,6 +345,31 @@ async def git_prune_extra_remotes(path: Path) -> None:
             logger.warning("failed to remove remote %r from %s: %s", remote, path, err)
 
 
+_BROKEN_REF_RE = re.compile(r"cannot lock ref '([^']+)'")
+
+
+def _remove_broken_loose_ref(path: Path, ref: str) -> None:
+    """Delete a corrupt loose ref and its reflog when `update-ref -d` cannot."""
+    git_dir = path / ".git"
+    for p in (git_dir / ref, git_dir / "logs" / ref):
+        with contextlib.suppress(OSError):
+            p.unlink()
+
+
+async def _prune_broken_refs(path: Path, output: str) -> bool:
+    """Delete corrupt refs named in a failed fetch. Returns True if any were."""
+    pruned = False
+    for ref in dict.fromkeys(_BROKEN_REF_RE.findall(output)):
+        if not ref.startswith("refs/") or any(c.isspace() for c in ref):
+            continue
+        ok, _ = await _run([GIT, "update-ref", "-d", ref], cwd=path, timeout=10.0)
+        if not ok:
+            await asyncio.to_thread(_remove_broken_loose_ref, path, ref)
+        logger.warning("git_fetch: pruned broken ref %r in %s", ref, path)
+        pruned = True
+    return pruned
+
+
 async def git_fetch(
     path: Path | None, *, prune_remotes: bool = True
 ) -> tuple[bool, str]:
@@ -318,16 +377,22 @@ async def git_fetch(
 
     prune_remotes=False skips the extra-remote cleanup; pass False during status
     checks where pruning is unnecessary and adds ~2 subprocess spawns per repo.
+
+    A corrupt local ref (null SHA from an interrupted write) makes --prune abort
+    the whole fetch and silently disables every update; on that failure the
+    named ref is deleted and the fetch retried once.
     """
     if path is None:
         return (False, "path does not exist")
     if prune_remotes:
         await git_prune_extra_remotes(path)
-    # --atomic: all-or-nothing ref update (no partial refs on a dropped connection);
-    # --prune: drop refs deleted upstream so stale tracking refs don't accumulate.
-    return await _run(
-        [GIT, "fetch", "--all", "--atomic", "--prune"], cwd=path, timeout=60.0
-    )
+    cmd = [GIT, "fetch", "--all", "--atomic", "--prune"]
+    ok, out = await _run(cmd, cwd=path, timeout=60.0)
+    if ok or "reference broken" not in out:
+        return (ok, out)
+    if not await _prune_broken_refs(path, out):
+        return (ok, out)
+    return await _run(cmd, cwd=path, timeout=60.0)
 
 
 async def git_pull(path: Path | None) -> tuple[bool, str]:
@@ -362,18 +427,28 @@ async def git_clone(
 
 
 async def git_reset_to_hash(path: Path | None, prev_hash: str = "") -> tuple[bool, str]:
-    """Hard-reset repo at path directly to prev_hash without fetching."""
+    """Hard-reset repo at path directly to prev_hash without fetching.
+
+    This is the rollback/heal primitive (abort, boot revert, recover), so the
+    timeout is generous: a reset across a large delta on a slow SD card must
+    not be SIGTERM'd mid-checkout in exactly the path meant to fix things.
+    If reset fails with an index.lock error, clears it and retries once.
+    """
     if not path:
         return (False, "path error")
     if prev_hash == "":
         return (False, "prev_hash does not exist")
     if not _validate_git_ref(prev_hash):
         return (False, f"invalid git ref: {prev_hash!r}")
-    return await _run([GIT, "reset", "--hard", prev_hash], cwd=path, timeout=10.0)
+    ok, err = await _run([GIT, "reset", "--hard", prev_hash], cwd=path, timeout=60.0)
+    if ok:
+        return (ok, err)
+    if "index.lock" in err and _clear_stale_git_index_lock(path):
+        return await _run([GIT, "reset", "--hard", prev_hash], cwd=path, timeout=60.0)
+    return (ok, err)
 
 
-# Object-corruption signatures. Kept narrow so generic failures like
-# "fatal: not a git repository" are NOT treated as corruption.
+# Narrow corruption signatures: "not a git repository" etc. must not match.
 _GIT_CORRUPT_SIGNATURES = (
     "corrupt",
     "is empty",
@@ -382,7 +457,15 @@ _GIT_CORRUPT_SIGNATURES = (
     "missing blob",
     "missing tree",
     "missing commit",
+    "unable to unpack",
+    "inflate: data stream error",
 )
+
+# Quarantine dir inside .git/objects so it never appears as untracked.
+_QUARANTINE_DIRNAME = "objects-corrupt"
+# fsck names corrupt objects by path (.git/objects/ab/<38hex>) or 40-hex SHA.
+_GIT_OBJ_PATH_RE = re.compile(r"objects/([0-9a-f]{2})/([0-9a-f]{38})")
+_GIT_OBJ_SHA_RE = re.compile(r"\b([0-9a-f]{40})\b")
 
 
 async def git_has_corruption(path: Path | None, hint: str = "") -> bool:
@@ -405,15 +488,8 @@ async def git_has_corruption(path: Path | None, hint: str = "") -> bool:
     return any(k in out for k in _GIT_CORRUPT_SIGNATURES)
 
 
-async def git_repair(path: Path) -> tuple[bool, str]:
-    """Prune 0-byte loose objects, re-fetch, and re-verify. Mirrors start.sh recovery.
-
-    Working tree is untouched (delete + fetch only), so tracked-but-modified files
-    survive. Returns (ok, message).
-    """
-    objects = path / ".git" / "objects"
-    if not objects.is_dir():
-        return (False, "no .git/objects directory")
+def _prune_empty_loose_objects(objects: Path) -> int:
+    """Delete 0-byte loose objects (the classic power-loss signature). Returns count."""
     removed = 0
     for sub in objects.iterdir():
         if len(sub.name) != 2 or not sub.is_dir():
@@ -425,13 +501,94 @@ async def git_repair(path: Path) -> tuple[bool, str]:
                     removed += 1
             except OSError:
                 continue
+    return removed
+
+
+async def _quarantine_corrupt_objects(path: Path) -> int:
+    """Move loose objects that `git fsck --full` flags as corrupt out of the way.
+
+    `git_has_corruption` uses `fsck --connectivity-only`, which never reads blob
+    content and so cannot see a non-empty object with a bad zlib header - exactly
+    what a power cut mid-write produces. A plain re-fetch will NOT replace such an
+    object because git still finds a file at that name. `fsck --full` reads object
+    content and names the bad ones; we move (not delete) them so a re-fetch
+    re-downloads them, and a misdiagnosis stays recoverable. Returns count moved.
+    """
+    ok, out = await _run(
+        [GIT, "fsck", "--full", "--no-dangling", "--no-progress"],
+        cwd=path,
+        timeout=120.0,
+    )
+    if ok:
+        return 0  # fsck --full clean: corruption is elsewhere (e.g. a packfile)
+    objects = path / ".git" / "objects"
+    quarantine = objects / _QUARANTINE_DIRNAME
+    candidates: set[Path] = set()
+    for line in out.splitlines():
+        m = _GIT_OBJ_PATH_RE.search(line)
+        if m:
+            candidates.add(objects / m.group(1) / m.group(2))
+            continue
+        if any(k in line for k in ("corrupt", "unable to unpack", "missing", "empty")):
+            sha = _GIT_OBJ_SHA_RE.search(line)
+            if sha:
+                s = sha.group(1)
+                candidates.add(objects / s[:2] / s[2:])
+    moved = 0
+    for obj in candidates:
+        if not obj.is_file():
+            continue  # e.g. a "missing blob" object that does not exist on disk
+        try:
+            dest = quarantine / obj.parent.name
+            dest.mkdir(parents=True, exist_ok=True)
+            obj.replace(dest / obj.name)
+            moved += 1
+        except OSError as exc:
+            logger.warning("git_repair: could not quarantine %s: %s", obj, exc)
+    logger.warning("git_repair: quarantined %d corrupt object(s) from %s", moved, path)
+    return moved
+
+
+async def git_repair(path: Path, branch: str = "main") -> tuple[bool, str]:
+    """Prune 0-byte loose objects, re-fetch, and re-verify. Mirrors start.sh recovery.
+
+    If empty-object pruning plus a fetch does not clear the corruption, escalate to
+    quarantining non-empty corrupt loose objects (`fsck --full`) and re-fetch once
+    more. Working tree is untouched (delete/move + fetch only), so tracked-but-
+    modified files survive. If fetch fails with index.lock error, clears lock and
+    retries. Branch parameter is used to repair corrupt HEAD (fallback to "main").
+    Returns (ok, message).
+    """
+    _clear_stale_git_index_lock(path)
+    objects = path / ".git" / "objects"
+    if not objects.is_dir():
+        return (False, "no .git/objects directory")
+    removed = _prune_empty_loose_objects(objects)
     logger.warning("git_repair: removed %d empty object(s) from %s", removed, path)
     ok, out = await git_fetch(path, prune_remotes=False)
+    if not ok and "index.lock" in out:
+        _clear_stale_git_index_lock(path)
+        ok, out = await git_fetch(path, prune_remotes=False)
     if not ok:
         return (False, f"fetch after cleanup failed: {out}")
+    if not await git_has_corruption(path):
+        if not await _repair_corrupt_head(path, branch):
+            return (False, "repaired objects but HEAD still unreadable")
+        return (True, f"repaired ({removed} empty objects removed)")
+    quarantined = await _quarantine_corrupt_objects(path)
+    if quarantined == 0:
+        return (False, "still corrupt after fetch (no quarantinable objects found)")
+    ok, out = await git_fetch(path, prune_remotes=False)
+    if not ok:
+        return (False, f"fetch after quarantine failed: {out}")
     if await git_has_corruption(path):
-        return (False, "still corrupt after fetch")
-    return (True, f"repaired ({removed} empty objects removed)")
+        return (False, "still corrupt after quarantine + fetch")
+    if not await _repair_corrupt_head(path, branch):
+        return (False, "repaired objects but HEAD still unreadable")
+    return (
+        True,
+        f"repaired ({removed} empty + {quarantined} corrupt object(s) removed)",
+    )
 
 
 async def git_get_hash(path: Path | None) -> str:
@@ -439,6 +596,39 @@ async def git_get_hash(path: Path | None) -> str:
     if path is None:
         return ""
     ok, output = await _run([GIT, "rev-parse", "HEAD"], cwd=path, timeout=10.0)
+    return output.strip() if ok else ""
+
+
+async def _is_head_readable(path: Path) -> bool:
+    """Return True if HEAD is readable and points to a valid commit."""
+    ok, _out = await _run([GIT, "rev-parse", "HEAD"], cwd=path, timeout=10.0)
+    return ok
+
+
+async def _repair_corrupt_head(path: Path, branch: str = "main") -> bool:
+    """Try to repair a corrupt HEAD by rewriting it to a valid symbolic ref.
+
+    Returns True if HEAD was repaired or is already readable.
+    """
+    if await _is_head_readable(path):
+        return True
+    ok, _msg = await _run(
+        [GIT, "symbolic-ref", "HEAD", f"refs/heads/{branch}"],
+        cwd=path,
+        timeout=10.0,
+    )
+    if ok:
+        logger.warning("repair_corrupt_head: rewrote HEAD for %s", path)
+        return True
+    logger.warning("repair_corrupt_head: failed to rewrite HEAD for %s", path)
+    return False
+
+
+async def git_ref_hash(path: Path | None, ref: str) -> str:
+    """Resolve an arbitrary ref (e.g. origin/main) to its commit hash, or empty."""
+    if path is None:
+        return ""
+    ok, output = await _run([GIT, "rev-parse", ref], cwd=path, timeout=10.0)
     return output.strip() if ok else ""
 
 
@@ -492,7 +682,9 @@ async def git_describe(path: Path, ref: str | None = None) -> str:
     return output.strip() if ok else ""
 
 
-async def git_checkout(path: Path | None, branch: str) -> tuple[bool, str]:
+async def git_checkout(
+    path: Path | None, branch: str, *, force: bool = False
+) -> tuple[bool, str]:
     if path is None:
         return (False, "path not found")
 
@@ -505,7 +697,10 @@ async def git_checkout(path: Path | None, branch: str) -> tuple[bool, str]:
     if current_branch == branch:
         return (True, "already on branch")
 
-    return await _run([GIT, "checkout", branch], cwd=path, timeout=10.0)
+    # force: overwrite untracked collisions (e.g. build artifacts) that block a switch.
+    cmd = [GIT, "checkout", "-f", branch] if force else [GIT, "checkout", branch]
+    # Generous: a big checkout on slow SD can pass 10s; SIGTERM = half-written tree.
+    return await _run(cmd, cwd=path, timeout=60.0)
 
 
 async def check_apt_status(
@@ -588,13 +783,14 @@ def _apt_env() -> dict[str, str]:
     return env
 
 
-def _apt_get(args: list[str], *, keep_conffiles: bool = False) -> list[str]:
-    """Build a sudo apt-get argv with the dpkg-lock wait always applied.
+def _apt_cmd(verb: str, pkgs: Sequence[str] = ()) -> list[str]:
+    """Build the sudo apt argv via the root-owned wrapper.
 
-    keep_conffiles adds --force-confdef/--force-confold for unpacking operations.
+    The wrapper is the only apt command sudoers grants. bs-bootstrap reinstalls it
+    when missing (an old-installer box can have the service but not the wrapper); until
+    that self-heal runs a missing wrapper surfaces as a plain 'command not found'.
     """
-    opts = [*_APT_LOCK_OPTS, *(_APT_CONF_OPTS if keep_conffiles else [])]
-    return [SUDO, APT_GET, *opts, *args]
+    return [SUDO, str(APT_HELPER), verb, *pkgs]
 
 
 async def _apt_snapshot_packages() -> tuple[bool, Path | None]:
@@ -609,10 +805,7 @@ async def _apt_snapshot_packages() -> tuple[bool, Path | None]:
     )
     try:
         snapshot_path.parent.mkdir(parents=True, mode=0o0700, exist_ok=True)
-        ok, output = await _run(
-            ["/usr/bin/dpkg", "--get-selections"],
-            timeout=15.0,
-        )
+        ok, output = await _run([DPKG, "--get-selections"], timeout=15.0)
         if not ok:
             logger.warning("dpkg --get-selections failed: %s", output)
             return False, None
@@ -639,11 +832,7 @@ async def _apt_get_fix_broken() -> tuple[bool, str]:
     Best-effort rollback after failed upgrade. May not fully restore state,
     but aims to unbreak the system. Called only on apt_upgrade failure.
     """
-    return await _run(
-        _apt_get(["-f", "install", "-y"], keep_conffiles=True),
-        timeout=120.0,
-        env=_apt_env(),
-    )
+    return await _run(_apt_cmd("fix-broken"), timeout=120.0, env=_apt_env())
 
 
 async def _apt_restore_packages(snapshot_path: Path) -> tuple[bool, str]:
@@ -661,8 +850,8 @@ async def _apt_restore_packages(snapshot_path: Path) -> tuple[bool, str]:
         return False, str(e)
     proc = await asyncio.create_subprocess_exec(
         SUDO,
-        "/usr/bin/dpkg",
-        "--set-selections",
+        str(APT_HELPER),
+        "set-selections",
         stdin=asyncio.subprocess.PIPE,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
@@ -687,16 +876,30 @@ async def _apt_restore_packages(snapshot_path: Path) -> tuple[bool, str]:
         msg = stderr.decode(errors="replace")
         logger.error("dpkg --set-selections failed: %s", msg)
         return False, msg
-    return await _run(
-        _apt_get(["dselect-upgrade", "-y"], keep_conffiles=True),
-        timeout=120.0,
-        env=_apt_env(),
+    return await _run(_apt_cmd("dselect-upgrade"), timeout=120.0, env=_apt_env())
+
+
+def classify_apt_error(err: str) -> str:
+    """Classify an apt failure: 'permanent' won't clear by retrying, 'transient' might."""
+    lowered = err.lower()
+    # A missing apt helper self-heals once bootstrap installs it: retry, never a 1h cooldown.
+    if str(APT_HELPER).lower() in lowered and (
+        "command not found" in lowered or "no such file" in lowered
+    ):
+        return "transient"
+    permanent = (
+        "command not found",
+        "no such file or directory",
+        "a password is required",
+        "permission denied",
+        "not allowed to execute",
     )
+    return "permanent" if any(p in lowered for p in permanent) else "transient"
 
 
 async def apt_update() -> tuple[bool, str]:
     """Run apt-get update to refresh package lists."""
-    return await _run(_apt_get(["update"]), timeout=120.0, env=_apt_env())
+    return await _run(_apt_cmd("update"), timeout=120.0, env=_apt_env())
 
 
 async def apt_upgrade(exclude: tuple[str, ...] = ()) -> tuple[bool, str]:
@@ -714,16 +917,12 @@ async def apt_upgrade(exclude: tuple[str, ...] = ()) -> tuple[bool, str]:
     if not pkgs:
         return True, "no packages to upgrade"
 
-    return await _run(
-        _apt_get(["install", "--only-upgrade", "-y", *pkgs], keep_conffiles=True),
-        timeout=300.0,
-        env=_apt_env(),
-    )
+    return await _run(_apt_cmd("upgrade", pkgs), timeout=300.0, env=_apt_env())
 
 
 async def apt_autoremove() -> tuple[bool, str]:
     """Run apt-get autoremove -y to remove orphaned packages after an upgrade."""
-    return await _run(_apt_get(["autoremove", "-y"]), timeout=120.0, env=_apt_env())
+    return await _run(_apt_cmd("autoremove"), timeout=120.0, env=_apt_env())
 
 
 async def run_hook(
@@ -731,8 +930,14 @@ async def run_hook(
     path: Path | None,
     new_hash: str,
     prev_hash: str,
+    timeout: float = 60.0,
 ) -> tuple[bool, str]:
-    """Run the per-component update hook if it exists."""
+    """Run the per-component update hook if it exists.
+
+    The 60s default suits tests and trivial hooks; the update and provisioning
+    flows pass HOOK_TIMEOUT since a hook may sync a full dependency set (e.g.
+    Spoolman's `uv sync` after its deps changed).
+    """
     hook = (_HOOKS_DIR / f"{name}.sh").resolve()  # SEC: resolve symlinks
     try:
         hook.relative_to(_HOOKS_DIR.resolve())  # SEC: prevent path traversal
@@ -749,7 +954,16 @@ async def run_hook(
             "PREV_HASH": prev_hash,
         }
     )
-    return await _run([str(hook)], env=env, timeout=60.0)
+    return await _run([str(hook)], env=env, timeout=timeout)
+
+
+async def enable_service(name: str | None) -> tuple[bool, str]:
+    """Enable a systemd unit so a newly provisioned service survives reboot."""
+    if name is None:
+        return (False, "service name is None")
+    if not _SERVICE_RE.match(name):
+        return (False, f"service name {name!r} is invalid")
+    return await _run([SUDO, SYSTEMCTL, "enable", name], timeout=15.0)
 
 
 async def wait_for_service_active(name: str, timeout: float = 90.0) -> bool:

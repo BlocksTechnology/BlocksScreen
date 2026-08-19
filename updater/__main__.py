@@ -10,8 +10,7 @@ from collections.abc import Iterator
 from updater.locking import process_lock
 from updater.service import LoggingCallback, UpdateService
 
-# NOTE: sdbus and updater.dbus_service are imported lazily inside _run_daemon so
-# the status/update/recover CLI works on an interpreter without sdbus installed.
+# NOTE: sdbus imports are lazy (in _run_daemon) so the CLI works without sdbus.
 
 
 def _sd_notify(msg: str) -> None:
@@ -30,8 +29,6 @@ def _sd_notify(msg: str) -> None:
 
 def build_parser() -> argparse.ArgumentParser:
     """Build the CLI argument parser with update, status, and recover subcommands."""
-    # Subcommands
-    # update [name] , status, recover <name> [--hard]
     parser = argparse.ArgumentParser(prog="python -m updater")
     parser.add_argument("--verbose", action="store_true")
     sub = parser.add_subparsers(dest="command")
@@ -45,6 +42,10 @@ def build_parser() -> argparse.ArgumentParser:
     rec = sub.add_parser("recover")
     rec.add_argument("name")
     rec.add_argument("--hard", action="store_true")
+
+    bles = sub.add_parser("bless")
+    bles.add_argument("name")
+    bles.add_argument("hash", nargs="?", default="")
 
     return parser
 
@@ -62,21 +63,36 @@ async def _run_daemon() -> None:
     try:
         await bus.request_name_async("com.blockscreen.Updater", 0)
     except sdbus.SdBusBaseError as exc:
-        _log.error("failed to claim D-Bus name: %s — another instance running?", exc)
-        return
+        # Exit nonzero (not READY) so systemd Restart=always retries until the name frees.
+        _log.error("failed to claim D-Bus name: %s - another instance running?", exc)
+        raise SystemExit(1) from exc
     _log.info("updater daemon running on com.blockscreen.Updater")
     _sd_notify("READY=1")
     loop = asyncio.get_running_loop()
     stop_event = asyncio.Event()
     loop.add_signal_handler(signal.SIGTERM, stop_event.set)
     loop.add_signal_handler(signal.SIGINT, stop_event.set)
+    ping_interval = _watchdog_ping_interval()
     while not stop_event.is_set():
         _sd_notify("WATCHDOG=1")
         try:
-            await asyncio.wait_for(stop_event.wait(), timeout=15.0)
+            await asyncio.wait_for(stop_event.wait(), timeout=ping_interval)
         except asyncio.TimeoutError:
             pass
     _log.info("updater daemon shutting down")
+
+
+def _watchdog_ping_interval() -> float:
+    """Half of systemd's WatchdogSec (per sd_notify(3)), or 15s if unset/invalid.
+
+    Reading WATCHDOG_USEC from the environment keeps the heartbeat correct if the
+    unit's WatchdogSec is ever retuned, instead of hardcoding half of 30s.
+    """
+    try:
+        watchdog_usec = int(os.environ.get("WATCHDOG_USEC", "0"))
+    except ValueError:
+        watchdog_usec = 0
+    return watchdog_usec / 2_000_000 if watchdog_usec > 0 else 15.0
 
 
 @contextlib.contextmanager
@@ -114,15 +130,33 @@ async def main() -> None:
             for s in sorted(result.values(), key=lambda c: c.name):
                 if s.error:
                     print(f"{s.name}: ERROR: {s.error}")
+                elif s.branch_mismatch:
+                    print(f"{s.name}: branch switch needed")
+                elif s.needs_install:
+                    print(f"{s.name}: install required")
                 elif s.packages_upgradable > 0:
                     print(f"{s.name}: {s.packages_upgradable} packages upgradable")
                 elif s.commits_behind > 0:
                     print(f"{s.name}: {s.commits_behind} commits behind")
+                elif s.has_local_changes:
+                    print(f"{s.name}: local changes")
                 else:
                     print(f"{s.name}: up to date")
+                if args.verbose:
+                    print(
+                        f"    branch={s.current_branch or '?'} mismatch={s.branch_mismatch} "
+                        f"behind={s.commits_behind} needs_install={s.needs_install} "
+                        f"local_changes={s.has_local_changes} pkgs={s.packages_upgradable} "
+                        f"hash={s.current_hash[:8]}"
+                    )
         case "recover":
             with _cli_lock():
                 await svc.recover(args.name, hard=args.hard)
+        case "bless":
+            with _cli_lock():
+                ok = await svc.bless_healthy(args.name, args.hash)
+                if not ok:
+                    raise SystemExit(1)
         case None:
             build_parser().print_help()
 

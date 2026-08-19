@@ -67,11 +67,12 @@ class PrintTab(QtWidgets.QStackedWidget):
         name="on_cancel_print"
     )
     call_load_panel: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
-        bool, str, name="call-load-panel"
+        bool, str, bool, name="call-load-panel"
     )
     call_cancel_panel: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         bool, name="call-load-panel"
     )
+    in_case_error = QtCore.pyqtSignal(name="in-case-error")
 
     def __init__(
         self,
@@ -157,6 +158,7 @@ class PrintTab(QtWidgets.QStackedWidget):
             self.filesPage_widget.on_usb_files_loaded
         )
         self.jobStatusPage_widget = JobStatusWidget(self)
+        self.in_case_error.connect(self.jobStatusPage_widget.handleErrors)
         self.addWidget(self.jobStatusPage_widget)
         self.confirmPage_widget.on_accept.connect(
             self.jobStatusPage_widget.on_print_start
@@ -297,7 +299,7 @@ class PrintTab(QtWidgets.QStackedWidget):
         unblocks tabs if on standby
         """
         if isinstance(value, str) and "state" in field and value == "standby":
-            self.call_load_panel.emit(False, "")
+            self.call_load_panel.emit(False, "", False)
             self.on_cancel_print.emit()
             if not self._finish_print_handled and self._cancel_z_snapshot != 0:
                 self._active_z_offset = self._cancel_z_snapshot
@@ -346,9 +348,9 @@ class PrintTab(QtWidgets.QStackedWidget):
             pass
         self.sliderPage.value_selected.connect(callback)
         self.sliderPage.set_name(name)
-        self.sliderPage.set_slider_position(int(current_value))
         self.sliderPage.set_slider_minimum(min_value)
         self.sliderPage.set_slider_maximum(max_value)
+        self.sliderPage.set_slider_position(int(current_value))
         self.change_page(self.indexOf(self.sliderPage))
 
     @QtCore.pyqtSlot(str, str, name="delete_file")
@@ -449,7 +451,7 @@ class PrintTab(QtWidgets.QStackedWidget):
         ):
             self._cancel_z_snapshot = self._active_z_offset
         self.ws.api.cancel_print()
-        self.call_load_panel.emit(True, "Cancelling print...\nPlease wait")
+        self.call_load_panel.emit(True, "Cancelling print...\nPlease wait", False)
 
     def change_page(self, index: int) -> None:
         """Requests a page change page to the global manager

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import builtins
 import fcntl
 import sys
@@ -59,3 +60,42 @@ def test_cli_lock_rejects_concurrent_run(monkeypatch, tmp_path):
     finally:
         fcntl.flock(holder, fcntl.LOCK_UN)
         holder.close()
+
+
+def test_status_surfaces_branch_mismatch(monkeypatch, capsys):
+    """CLI status must report a branch_mismatch component, not print 'up to date'."""
+    from updater import __main__ as cli
+    from updater.models import ComponentStatus
+
+    async def fake_check_status(self):
+        return {
+            "RF50-Klipper": ComponentStatus(name="RF50-Klipper", branch_mismatch=True)
+        }
+
+    monkeypatch.setattr(cli.UpdateService, "check_status", fake_check_status)
+    monkeypatch.setattr(sys, "argv", ["updater", "status"])
+    asyncio.run(cli.main())
+    out = capsys.readouterr().out
+    assert "RF50-Klipper: branch switch needed" in out
+
+
+class TestWatchdogPingInterval:
+    """The watchdog heartbeat reads WatchdogSec from the environment (sd_notify(3))."""
+
+    def test_reads_half_of_watchdog_usec(self, monkeypatch):
+        from updater.__main__ import _watchdog_ping_interval
+
+        monkeypatch.setenv("WATCHDOG_USEC", "30000000")  # 30s
+        assert _watchdog_ping_interval() == 15.0
+
+    def test_falls_back_to_15s_when_unset(self, monkeypatch):
+        from updater.__main__ import _watchdog_ping_interval
+
+        monkeypatch.delenv("WATCHDOG_USEC", raising=False)
+        assert _watchdog_ping_interval() == 15.0
+
+    def test_falls_back_to_15s_when_invalid(self, monkeypatch):
+        from updater.__main__ import _watchdog_ping_interval
+
+        monkeypatch.setenv("WATCHDOG_USEC", "not-a-number")
+        assert _watchdog_ping_interval() == 15.0
