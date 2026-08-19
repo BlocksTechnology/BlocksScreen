@@ -18,6 +18,8 @@ from updater.service import UpdateService
 
 _log = logging.getLogger(__name__)
 _STATUS_PATH = Path("/run/blockscreen/updater_status.json")
+# Poll again this soon while a git fetch is failing: a boot-time DNS miss must not hide updates for a full poll interval.
+_FETCH_RETRY_INTERVAL_S = 300.0
 
 
 class DbusProgressCallback:
@@ -183,14 +185,18 @@ class UpdaterInterface(
         self.status_ready.emit((json_payload,))
 
     async def _periodic_status_check(self) -> None:
-        """Emit status shortly after startup, then at the configured poll interval."""
+        """Emit status shortly after startup, then at the poll interval - or sooner while fetches fail."""
         await asyncio.sleep(3.0)
         while True:
             try:
                 await self._emit_status()
             except Exception as exc:  # noqa: BLE001
                 _log.error("periodic_check failed: %s", exc)
-            await asyncio.sleep(self._svc.poll_interval)
+            interval = self._svc.poll_interval
+            if self._svc.has_fetch_failures():
+                interval = min(_FETCH_RETRY_INTERVAL_S, interval)
+                _log.info("fetch failures pending - re-polling in %.0fs", interval)
+            await asyncio.sleep(interval)
 
     @sdbus.dbus_method_async(result_signature="b")
     async def update_all(self) -> bool:

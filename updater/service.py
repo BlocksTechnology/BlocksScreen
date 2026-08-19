@@ -256,6 +256,11 @@ class UpdateService:
         if not ok:
             self._log.warning("apt list refresh failed: %s", err)
 
+    def has_fetch_failures(self) -> bool:
+        """True while any component's git fetch is failing (entry is popped on success)."""
+        # No _git_lock: a plain dict truthiness read has no await point, so it cannot interleave.
+        return bool(self._fetch_backoff)
+
     async def check_status(self, force: bool = False) -> dict[str, ComponentStatus]:
         """Concurrently check status of all components.
 

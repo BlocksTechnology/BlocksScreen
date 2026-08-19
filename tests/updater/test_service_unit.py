@@ -58,6 +58,15 @@ class TestBackoff:
         assert isinstance(svc._apt_backoff, updater_service._Backoff)
         assert svc._fetch_backoff == {}
 
+    def test_has_fetch_failures_tracks_breaker_entries(self):
+        """The poll loop's retry signal: True only while a component's fetch breaker is registered."""
+        svc = UpdateService()
+        assert not svc.has_fetch_failures()
+        svc._fetch_backoff["Spoolman"] = updater_service._Backoff(base=30, cap=900)
+        assert svc.has_fetch_failures()
+        svc._fetch_backoff.pop("Spoolman")
+        assert not svc.has_fetch_failures()
+
 
 class TestHistoryLog:
     def test_history_appends_jsonl_entry(self, tmp_path: Path):
