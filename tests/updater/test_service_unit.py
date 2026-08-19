@@ -832,6 +832,49 @@ class TestAtomicBatch:
         assert not svc._inflight_path.exists()  # cleared by _abort_batch
 
     @pytest.mark.asyncio
+    async def test_inflight_marker_kept_when_abort_revert_fails(self, tmp_path):
+        """A failed revert keeps the marker so boot reconcile retries it."""
+        cb = MagicMock()
+        svc, comps = self._svc(tmp_path, cb, n=2)
+        svc._inflight_path = tmp_path / "inflight.json"
+        with (
+            patch(
+                "updater.service.UpdateService._stage_component",
+                side_effect=[(True, ""), (False, "conflict")],
+            ),
+            patch(
+                "updater.service.UpdateService._install_dependencies",
+                return_value=(True, ""),
+            ),
+            patch("updater.service.git_reset_to_hash", return_value=(False, "boom")),
+        ):
+            await svc._run_git_batch(comps)
+        assert svc._inflight_path.exists()
+        assert cb.on_component_done.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_abort_completes_when_revert_raises(self, tmp_path):
+        """A raising revert must not skip the marker decision or the error reports."""
+        cb = MagicMock()
+        svc, comps = self._svc(tmp_path, cb, n=2)
+        svc._inflight_path = tmp_path / "inflight.json"
+        with (
+            patch(
+                "updater.service.UpdateService._stage_component",
+                side_effect=[(True, ""), (False, "conflict")],
+            ),
+            patch(
+                "updater.service.UpdateService._install_dependencies",
+                return_value=(True, ""),
+            ),
+            patch("updater.service.git_reset_to_hash", side_effect=OSError("disk")),
+        ):
+            await svc._run_git_batch(comps)
+        assert svc._inflight_path.exists()
+        assert cb.on_component_done.call_count == 2
+        assert all(c.args[1] is False for c in cb.on_component_done.call_args_list)
+
+    @pytest.mark.asyncio
     async def test_restart_ui_component_also_restarts_ui(self, tmp_path):
         """A klipper/RF50-style restart_ui component refreshes BlocksScreen too."""
         cb = MagicMock()
@@ -1166,12 +1209,33 @@ class TestAtomicBatch:
             patch(
                 "updater.service.git_reset_to_hash", return_value=(True, "")
             ) as mock_reset,
+            pytest.raises(asyncio.CancelledError),
         ):
-            with pytest.raises(asyncio.CancelledError):
-                await svc._run_git_batch(comps)
+            await svc._run_git_batch(comps)
         # Both touched repos reverted by the shielded abort before re-raise.
         assert mock_reset.call_count == 2
         assert cb.on_error.call_args[0][1] == "cancelled"
+
+    @pytest.mark.asyncio
+    async def test_cancel_reverts_only_touched_repos(self, tmp_path):
+        """Revert scope is the staged prefix: an untouched repo must be left alone."""
+        cb = MagicMock()
+        svc, comps = self._svc(tmp_path, cb, n=3)
+        with (
+            patch(
+                "updater.service.UpdateService._stage_component",
+                side_effect=[(True, ""), asyncio.CancelledError()],
+            ),
+            patch(
+                "updater.service.git_reset_to_hash", return_value=(True, "")
+            ) as mock_reset,
+            pytest.raises(asyncio.CancelledError),
+        ):
+            await svc._run_git_batch(comps)
+        assert [c.args[0] for c in mock_reset.call_args_list] == [
+            comps[0].path,
+            comps[1].path,
+        ]
 
     @pytest.mark.asyncio
     async def test_prev_hash_empty_aborts_before_any_change(self, tmp_path):

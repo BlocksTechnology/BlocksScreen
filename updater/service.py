@@ -189,6 +189,14 @@ class LoggingCallback:
         self._log.info("%s recover (ok=%s)", name, success)
 
 
+class _StepFailed(Exception):
+    """Stage/deps/hook failure carrying the recovery reason for the caller's abort path."""
+
+    def __init__(self, reason: str) -> None:
+        super().__init__(reason)
+        self.reason = reason
+
+
 class UpdateService:
     """Async service that orchestrates component status checks and updates."""
 
@@ -406,23 +414,18 @@ class UpdateService:
             return False
         return True
 
-    async def _run_git_batch(self, batch: list[ComponentConfig]) -> None:
-        """Apply existing git components all-or-nothing.
-
-        Stage every repo, then deps, then hooks, then restart each unique service
-        once. While staging/deps/hooks run nothing has been restarted, so the live
-        services still execute the old code - an abort then just reverts git and
-        restarts nothing. A restart-phase failure reverts git AND re-restarts the
-        services already bounced so they come back on the old code.
-        """
+    async def _begin_git_transaction(
+        self, batch: list[ComponentConfig]
+    ) -> dict[str, str] | None:
+        """Capture, persist and mark in-flight the rollback point of every component; None on failure."""
         prev: dict[str, str] = {}
         for c in batch:
             ph = await git_get_hash(c.path)
             if ph == "":
-                self._log.error("%s: prev_hash empty - aborting batch", c.name)
+                self._log.error("%s: prev_hash empty - aborting", c.name)
                 for b in batch:
                     self._cb_error_done(b.name, "prev_hash empty")
-                return
+                return None
             prev[c.name] = ph
         async with self._state_lock:
             state = await asyncio.to_thread(self._read_state)
@@ -431,7 +434,7 @@ class UpdateService:
             if not await asyncio.to_thread(self._write_state, state):
                 for b in batch:
                     self._cb_error_done(b.name, "failed to persist rollback point")
-                return
+                return None
             # Mark in-flight so a pre-commit power cut is reverted on next boot.
             await asyncio.to_thread(self._write_inflight, dict(prev))
         for c in batch:
@@ -442,61 +445,101 @@ class UpdateService:
                 await asyncio.to_thread(self._clear_inflight)
                 for b in batch:
                     self._cb_error_done(b.name, "insecure remote")
-                return
+                return None
             self._history("update_start", c.name, prev_hash=prev[c.name][:12])
+        return prev
 
+    async def _run_git_steps(
+        self,
+        batch: list[ComponentConfig],
+        prev: dict[str, str],
+        touched: list[ComponentConfig],
+        *,
+        label: str,
+    ) -> dict[str, str]:
+        """Run steps 1-3 (stage, deps, hook); raise _StepFailed so the caller can recover.
+
+        ``touched`` is caller-owned and appended to as repos are staged, so every
+        recovery path (including cancel) reverts exactly those and no untouched repo.
+        """
+        self._log.info("%s: stage phase (%d repo(s))", label, len(batch))
+        for c in batch:
+            self._cb("on_step", c.name, 1, 4)
+            touched.append(c)  # mark before staging so a partial stage is reverted
+            ok, reason = await self._stage_component(c)
+            if not ok:
+                raise _StepFailed(reason)
+        self._log.info("%s: deps phase", label)
+        for c in batch:
+            self._cb("on_step", c.name, 2, 4)
+            deps_ok, deps_err = await self._install_dependencies(c)
+            if not deps_ok:
+                self._log.warning("%s: deps failed: %s", c.name, deps_err)
+                raise _StepFailed("deps")
+        self._log.info("%s: hook phase", label)
+        new_hashes: dict[str, str] = {}
+        for c in batch:
+            self._cb("on_step", c.name, 3, 4)
+            new_hashes[c.name] = await git_get_hash(c.path)
+            self._log.info(
+                "%s hook: %s %s -> %s",
+                label,
+                c.name,
+                prev[c.name][:8],
+                new_hashes[c.name][:8],
+            )
+            hook_ok, hook_err = await self._ping_while(
+                run_hook(
+                    c.name,
+                    c.path,
+                    new_hashes[c.name],
+                    prev[c.name],
+                    timeout=HOOK_TIMEOUT,
+                ),
+                c.name,
+                3,
+                4,
+            )
+            if not hook_ok:
+                self._log.error("%s: hook failed: %s", c.name, hook_err)
+                raise _StepFailed("hook")
+        return new_hashes
+
+    async def _run_git_batch(self, batch: list[ComponentConfig]) -> None:
+        """Apply existing git components all-or-nothing.
+
+        Stage every repo, then deps, then hooks, then restart each unique service
+        once. While staging/deps/hooks run nothing has been restarted, so the live
+        services still execute the old code - an abort then just reverts git and
+        restarts nothing. A restart-phase failure reverts git AND re-restarts the
+        services already bounced so they come back on the old code.
+        """
+        prev = await self._begin_git_transaction(batch)
+        if prev is None:
+            return
         self._log.info(
             "git batch start: %d component(s): %s",
             len(batch),
             ", ".join(f"{c.name}->{c.service or '-'}" for c in batch),
         )
-        touched: list[ComponentConfig] = []
         restarted: list[str] = []
+        # Filled by _run_git_steps as it stages, so cancel/crash reverts exactly these.
+        touched: list[ComponentConfig] = []
         committed = False
+
+        async def abort(reason: str) -> None:
+            """Revert the staged repos and re-restart the services already bounced."""
+            await self._abort_batch(batch, prev, touched, restarted, reason)
+
         try:
-            self._log.info("git batch: stage phase (%d repo(s))", len(batch))
-            for c in batch:
-                self._cb("on_step", c.name, 1, 4)
-                touched.append(c)  # mark before staging so a partial stage is reverted
-                ok, reason = await self._stage_component(c)
-                if not ok:
-                    await self._abort_batch(batch, prev, touched, restarted, reason)
-                    return
-            self._log.info("git batch: deps phase")
-            for c in batch:
-                self._cb("on_step", c.name, 2, 4)
-                deps_ok, deps_err = await self._install_dependencies(c)
-                if not deps_ok:
-                    self._log.warning("%s: deps failed: %s", c.name, deps_err)
-                    await self._abort_batch(batch, prev, touched, restarted, "deps")
-                    return
-            self._log.info("git batch: hook phase")
-            new_hashes: dict[str, str] = {}
-            for c in batch:
-                self._cb("on_step", c.name, 3, 4)
-                new_hashes[c.name] = await git_get_hash(c.path)
-                self._log.info(
-                    "git batch hook: %s %s -> %s",
-                    c.name,
-                    prev[c.name][:8],
-                    new_hashes[c.name][:8],
+            try:
+                new_hashes = await self._run_git_steps(
+                    batch, prev, touched, label="git batch"
                 )
-                hook_ok, hook_err = await self._ping_while(
-                    run_hook(
-                        c.name,
-                        c.path,
-                        new_hashes[c.name],
-                        prev[c.name],
-                        timeout=HOOK_TIMEOUT,
-                    ),
-                    c.name,
-                    3,
-                    4,
-                )
-                if not hook_ok:
-                    self._log.error("%s: hook failed: %s", c.name, hook_err)
-                    await self._abort_batch(batch, prev, touched, restarted, "hook")
-                    return
+            except _StepFailed as exc:
+                # Nested so an abort() failure still lands in the outer handler below.
+                await abort(exc.reason)
+                return
             # Restart each unique svc once; bounced marked BEFORE so abort re-restarts.
             self._log.info("git batch: restart phase")
             seen: set[str] = set()
@@ -516,7 +559,7 @@ class UpdateService:
                 restarted.append(c.service)
                 self._log.info("git batch: restarting %s (verified)", c.service)
                 if not await self._restart_one(c.service):
-                    await self._abort_batch(batch, prev, touched, restarted, "restart")
+                    await abort("restart")
                     return
             # Bounce klipper once for restart_klipper components that aren't klipper.
             klipper_svc = self._klipper_service()
@@ -527,7 +570,7 @@ class UpdateService:
                     "git batch: restarting %s (restart_klipper)", klipper_svc
                 )
                 if not await self._restart_one(klipper_svc):
-                    await self._abort_batch(batch, prev, touched, restarted, "restart")
+                    await abort("restart")
                     return
             # Persist success BEFORE UI restart: a committed update is never reverted.
             for c in batch:
@@ -561,17 +604,14 @@ class UpdateService:
             if committed:
                 raise
             self._log.warning("git batch cancelled - aborting")
-            await self._shielded(
-                self._abort_batch(batch, prev, touched, restarted, "cancelled"),
-                "git batch cancel-abort",
-            )
+            await self._shielded(abort("cancelled"), "git batch cancel-abort")
             raise
         except Exception:  # noqa: BLE001
             if committed:
                 self._log.error("post-commit error (update stands)", exc_info=True)
                 return
             self._log.error("git batch unexpected error", exc_info=True)
-            await self._abort_batch(batch, prev, touched, restarted, "unexpected_error")
+            await abort("unexpected_error")
 
     async def _abort_batch(
         self,
@@ -587,17 +627,31 @@ class UpdateService:
         )
         revert_ok = True
         for c in touched:
-            ok, _ = await git_reset_to_hash(c.path, prev[c.name])
+            # Contained per repo: one failure must not skip the rest of the recovery.
+            try:
+                ok, _ = await git_reset_to_hash(c.path, prev[c.name])
+            except Exception:  # noqa: BLE001
+                ok = False
+                self._log.error("abort: %s revert raised", c.name, exc_info=True)
             if not ok:
                 revert_ok = False
                 self._log.error(
                     "abort: %s reset to %s failed", c.name, prev[c.name][:12]
                 )
-        # Repos are back at prev_hash: the batch is resolved, drop the marker.
-        await asyncio.to_thread(self._clear_inflight)
+        if revert_ok:
+            # Repos are back at prev_hash: the batch is resolved, drop the marker.
+            await asyncio.to_thread(self._clear_inflight)
+        else:
+            # Keep it so boot reconcile retries the revert (it skips repos already back).
+            self._log.error("abort: revert incomplete - keeping in-flight marker")
         restart_ok = True
         for service in restarted:
-            if not await self._restart_one(service):
+            try:
+                recovered = await self._restart_one(service)
+            except Exception:  # noqa: BLE001
+                recovered = False
+                self._log.error("abort: %s restart raised", service, exc_info=True)
+            if not recovered:
                 restart_ok = False
                 self._log.error("abort: %s did not recover after revert", service)
         rollback_ok = revert_ok and restart_ok
@@ -1140,13 +1194,33 @@ class UpdateService:
     async def _rollback(
         self, component: ComponentConfig, prev_hash: str, reason: str
     ) -> None:
+        """Revert one component to prev_hash, restart its service, report the outcome."""
         self._log.warning(
             "%s: rolling back to %s (reason=%s)", component.name, prev_hash[:8], reason
         )
-        ok, _ = await git_reset_to_hash(component.path, prev_hash)
-        await asyncio.to_thread(self._clear_inflight)
-        if component.service and not await self._restart_one(component.service):
+        # Contained: a raising revert must still restart the service and report.
+        try:
+            ok, _ = await git_reset_to_hash(component.path, prev_hash)
+        except Exception:  # noqa: BLE001
             ok = False
+            self._log.error("%s: revert raised", component.name, exc_info=True)
+        if ok:
+            await asyncio.to_thread(self._clear_inflight)
+        else:
+            # Keep the marker so boot reconcile retries the revert (idempotent).
+            self._log.error(
+                "%s: revert failed - keeping in-flight marker", component.name
+            )
+        if component.service:
+            try:
+                recovered = await self._restart_one(component.service)
+            except Exception:  # noqa: BLE001
+                recovered = False
+                self._log.error(
+                    "%s: restart raised during rollback", component.name, exc_info=True
+                )
+            if not recovered:
+                ok = False
         self._history(
             "rollback", component.name, reason=reason, reverted_to=prev_hash[:12], ok=ok
         )
@@ -1497,63 +1571,31 @@ class UpdateService:
                 component.name, "not a git repository - reinstall required"
             )
 
-        prev_hash = await git_get_hash(component.path)
-        if prev_hash == "":
-            self._log.error("prev_hash is empty")
-            return self._cb_error_done(component.name, "prev_hash empty")
-        async with self._state_lock:
-            state = await asyncio.to_thread(self._read_state)
-            state[component.name] = {"prev_hash": prev_hash}
-            if not await asyncio.to_thread(self._write_state, state):
-                return self._cb_error_done(
-                    component.name, "failed to persist rollback point"
-                )
-            await asyncio.to_thread(self._write_inflight, {component.name: prev_hash})
-        ok, reason = await _assert_https_remote(component.path)
-        if not ok:
-            self._log.error("SEC-4 remote check failed: %s", reason)
-            # Nothing staged: drop the marker (avoids a spurious boot revert).
-            await asyncio.to_thread(self._clear_inflight)
-            return self._cb_error_done(component.name, "insecure remote")
-        self._history("update_start", component.name, prev_hash=prev_hash[:12])
+        prev = await self._begin_git_transaction([component])
+        if prev is None:
+            return False
+        prev_hash = prev[component.name]
 
         committed = False
+
+        async def rollback(reason: str) -> None:
+            """Revert this component, except after a reset that changed nothing."""
+            if reason == "reset":
+                await asyncio.to_thread(self._clear_inflight)
+                self._cb_error_done(component.name, "reset")
+                return
+            await self._rollback(component, prev_hash, reason)
+
         try:
-            self._cb("on_step", component.name, 1, 4)
-            stage_ok, stage_reason = await self._stage_component(component)
-            if not stage_ok:
-                # Failed pre-update reset changed nothing, so nothing to roll back.
-                if stage_reason == "reset":
-                    await asyncio.to_thread(self._clear_inflight)
-                    return self._cb_error_done(component.name, "reset")
-                await self._rollback(component, prev_hash, stage_reason)
+            try:
+                new_hashes = await self._run_git_steps(
+                    [component], prev, [], label=component.name
+                )
+            except _StepFailed as exc:
+                # Nested so a rollback() failure still lands in the outer handler below.
+                await rollback(exc.reason)
                 return False
-
-            self._cb("on_step", component.name, 2, 4)
-            deps_ok, deps_err = await self._install_dependencies(component)
-            if not deps_ok:
-                self._log.warning("dependencies error: %s", deps_err)
-                await self._rollback(component, prev_hash, "deps")
-                return False
-
-            self._cb("on_step", component.name, 3, 4)
-            new_hash = await git_get_hash(component.path)
-            hook_ok, hook_err = await self._ping_while(
-                run_hook(
-                    component.name,
-                    component.path,
-                    new_hash,
-                    prev_hash,
-                    timeout=HOOK_TIMEOUT,
-                ),
-                component.name,
-                3,
-                4,
-            )
-            if not hook_ok:
-                self._log.error("hook failed for %s: %s", component.name, hook_err)
-                await self._rollback(component, prev_hash, "hook")
-                return False
+            new_hash = new_hashes[component.name]
 
             self._cb("on_step", component.name, 4, 4)
             fire_and_forget = component.service in _FIRE_AND_FORGET_SERVICES
@@ -1562,14 +1604,17 @@ class UpdateService:
                 and not fire_and_forget
                 and not await self._restart_one(component.service)
             ):
-                await self._rollback(component, prev_hash, "restart")
+                await rollback("restart")
                 return False
             # Bounce klipper too when requested and it isn't the component's own service.
             klipper_svc = self._klipper_service()
-            if component.restart_klipper and component.service != klipper_svc:
-                if not await self._restart_one(klipper_svc):
-                    await self._rollback(component, prev_hash, "restart")
-                    return False
+            if (
+                component.restart_klipper
+                and component.service != klipper_svc
+                and not await self._restart_one(klipper_svc)
+            ):
+                await rollback("restart")
+                return False
 
             self._history("update_success", component.name, new_hash=new_hash[:12])
             self._cb("on_component_done", component.name, True)
@@ -1602,8 +1647,7 @@ class UpdateService:
                 prev_hash[:8],
             )
             await self._shielded(
-                self._rollback(component, prev_hash, "cancelled"),
-                f"{component.name} cancel-rollback",
+                rollback("cancelled"), f"{component.name} cancel-rollback"
             )
             raise
         except Exception as exc:  # noqa: BLE001
@@ -1621,7 +1665,7 @@ class UpdateService:
                 exc_info=True,
             )
             try:
-                await self._rollback(component, prev_hash, "unexpected_error")
+                await rollback("unexpected_error")
             except Exception:  # noqa: BLE001
                 self._log.error(
                     "%s: rollback after unexpected error failed",

@@ -1,10 +1,13 @@
+import logging
+import typing
+
+from lib.moonrakerComm import MoonWebSocket
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_frame import BlocksCustomFrame
 from lib.utils.blocks_label import BlocksLabel
 from PyQt6 import QtCore, QtGui, QtWidgets
-import typing
 
-from lib.moonrakerComm import MoonWebSocket
+_logger = logging.getLogger(__name__)
 
 
 class CancelPage(QtWidgets.QWidget):
@@ -107,8 +110,8 @@ class CancelPage(QtWidgets.QWidget):
                 last_thumb = QtGui.QPixmap(
                     "BlocksScreen/lib/ui/resources/media/logoblocks400x300.png"
                 )
-        except Exception as e:
-            print(e)
+        except Exception:
+            _logger.exception("Thumbnail unavailable, falling back to the logo")
             last_thumb = QtGui.QPixmap(
                 "BlocksScreen/lib/ui/resources/media/logoblocks400x300.png"
             )
