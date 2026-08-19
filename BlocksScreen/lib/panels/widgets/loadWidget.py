@@ -42,7 +42,9 @@ class LoadingOverlayWidget(QtWidgets.QLabel):
 
         else:
             try:
-                loading_config = config.loading
+                loading_config = config["loading"]
+                if loading_config is None:
+                    raise KeyError("missing [loading] section")
                 animation_path = loading_config.get(
                     str(initial_anim_type.name),
                 )
