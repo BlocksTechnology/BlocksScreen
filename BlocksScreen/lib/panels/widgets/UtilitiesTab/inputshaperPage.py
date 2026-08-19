@@ -23,7 +23,7 @@ class InputShaperPage(QtWidgets.QWidget):
             super().__init__(parent)
         else:
             super().__init__()
-        self._setupUI()
+        self._setup_ui()
         self.selected_item: ListItem | None = None
         self.ongoing_update: bool = False
         self.type_dict: dict = {}
@@ -133,7 +133,7 @@ class InputShaperPage(QtWidgets.QWidget):
         )
         self.model.add_item(item)
 
-    def _setupUI(self) -> None:
+    def _setup_ui(self) -> None:
         """Setup UI for updatePage"""
         font_id = QtGui.QFontDatabase.addApplicationFont(
             ":/font/media/fonts for text/Momcake-Bold.ttf"

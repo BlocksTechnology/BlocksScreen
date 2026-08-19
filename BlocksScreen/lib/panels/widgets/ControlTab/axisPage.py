@@ -136,9 +136,6 @@ class AxisPage(QtWidgets.QWidget):
 
     def _setup_ui(self) -> None:
         """Build the axis page: jog pads, step selector, and status labels."""
-        widget = QtWidgets.QWidget(parent=self)
-        widget.setMinimumSize(QtCore.QSize(710, 410))
-        widget.setMaximumSize(QtCore.QSize(710, 410))
         self.setObjectName("move_axis_page")
         self.verticalLayout = QtWidgets.QVBoxLayout(self)
         self.verticalLayout.setObjectName("verticalLayout")
@@ -516,66 +513,64 @@ class AxisPage(QtWidgets.QWidget):
         self.mva_z_value_label.setObjectName("mva_z_value_label")
         self.horizontalLayout_6.addWidget(self.mva_z_value_label)
         self.verticalLayout.addLayout(self.horizontalLayout_6)
-        widget.setLayout(self.verticalLayout)
 
-        _translate = QtCore.QCoreApplication.translate
-        self.mva_x_label.setText(_translate("controlStackedWidget", "X:"))
-        self.mva_y_label.setText(_translate("controlStackedWidget", "Y:"))
-        self.mva_z_label.setText(_translate("controlStackedWidget", "Z:"))
-        self.mva_z_value_label.setText(_translate("controlStackedWidget", "0"))
-        self.mva_y_value_label.setText(_translate("controlStackedWidget", "0"))
-        self.mva_x_value_label.setText(_translate("controlStackedWidget", "0"))
-        self.mva_title_label.setText(_translate("controlStackedWidget", "Move Axis"))
+        self.mva_x_label.setText("X:")
+        self.mva_y_label.setText("Y:")
+        self.mva_z_label.setText("Z:")
+        self.mva_z_value_label.setText("0")
+        self.mva_y_value_label.setText("0")
+        self.mva_x_value_label.setText("0")
+        self.mva_title_label.setText("Move Axis")
         self.mva_title_label.setProperty(
-            "class", _translate("controlStackedWidget", "title_text")
+            "class", "title_text"
         )
-        self.mva_back_btn.setText(_translate("controlStackedWidget", "Back"))
+        self.mva_back_btn.setText("Back")
         self.mva_back_btn.setProperty(
-            "class", _translate("controlStackedWidget", "menu_btn")
+            "class", "menu_btn"
         )
         self.mva_back_btn.setProperty(
-            "button_type", _translate("controlStackedWidget", "icon")
+            "button_type", "icon"
         )
         self.mva_z_up.setProperty(
-            "button_type", _translate("controlStackedWidget", "icon")
+            "button_type", "icon"
         )
         self.mva_z_down.setProperty(
-            "button_type", _translate("controlStackedWidget", "icon")
+            "button_type", "icon"
         )
         self.mva_home_x_btn.setProperty(
-            "button_type", _translate("controlStackedWidget", "icon")
+            "button_type", "icon"
         )
         self.mva_home_y_btn.setProperty(
-            "button_type", _translate("controlStackedWidget", "icon")
+            "button_type", "icon"
         )
         self.mva_home_z_btn.setProperty(
-            "button_type", _translate("controlStackedWidget", "icon")
+            "button_type", "icon"
         )
         self.mva_home_all_btn.setProperty(
-            "button_type", _translate("controlStackedWidget", "icon")
+            "button_type", "icon"
         )
-        self.mva_select_speed_25_btn.setText(_translate("controlStackedWidget", "25"))
-        self.mva_select_speed_50_btn.setText(_translate("controlStackedWidget", "50"))
-        self.mva_select_speed_100_btn.setText(_translate("controlStackedWidget", "100"))
-        self.label.setText(_translate("controlStackedWidget", "Move Speed mm/s"))
-        self.mva_select_length_1_btn.setText(_translate("controlStackedWidget", "1"))
-        self.mva_select_length_10_btn.setText(_translate("controlStackedWidget", "10"))
+        self.mva_select_speed_25_btn.setText("25")
+        self.mva_select_speed_50_btn.setText("50")
+        self.mva_select_speed_100_btn.setText("100")
+        self.label.setText("Move Speed mm/s")
+        self.mva_select_length_1_btn.setText("1")
+        self.mva_select_length_10_btn.setText("10")
         self.mva_select_length_100_btn.setText(
-            _translate("controlStackedWidget", "100")
+            "100"
         )
-        self.label_2.setText(_translate("controlStackedWidget", "Move Length mm"))
+        self.label_2.setText("Move Length mm")
         self.mva_left_btn.setProperty(
-            "button_type", _translate("controlStackedWidget", "icon")
+            "button_type", "icon"
         )
         self.mva_right_btn.setProperty(
-            "button_type", _translate("controlStackedWidget", "icon")
+            "button_type", "icon"
         )
         self.mva_down_btn.setProperty(
-            "button_type", _translate("controlStackedWidget", "icon")
+            "button_type", "icon"
         )
         self.mva_up_btn.setProperty(
-            "button_type", _translate("controlStackedWidget", "icon")
+            "button_type", "icon"
         )
         self.mva_middle.setProperty(
-            "button_type", _translate("controlStackedWidget", "icon")
+            "button_type", "icon"
         )

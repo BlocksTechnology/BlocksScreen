@@ -279,9 +279,8 @@ class OptionCard(QtWidgets.QAbstractButton):
             QtWidgets.QSizePolicy.Policy.Minimum,
             QtWidgets.QSizePolicy.Policy.Expanding,
         )
-        _translate = QtCore.QCoreApplication.translate
-        self.setWindowTitle(_translate("option_card", "Frame"))
-        self.option_text.setText(_translate("option_card", "TextLabel"))
+        self.setWindowTitle("Frame")
+        self.option_text.setText("TextLabel")
         self.continue_button.setProperty(
-            "button_type", _translate("option_card", "icon")
+            "button_type", "icon"
         )

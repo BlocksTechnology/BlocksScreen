@@ -44,7 +44,7 @@ def page(qapp):
         self._chevron_right = MagicMock()
         self._chevron_down = MagicMock()
 
-    setup_patch = patch.object(UpdatePage, "_setupUI", _mock_setup)
+    setup_patch = patch.object(UpdatePage, "_setup_ui", _mock_setup)
     setup_patch.start()
     pg = UpdatePage()
     setup_patch.stop()

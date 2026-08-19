@@ -202,7 +202,7 @@ class _NetworkWidgetbuttonsStub(QtWidgets.QWidget):
 
 
 class _BlocksCustomCheckButtonStub(QtWidgets.QCheckBox):
-    """BlocksCustomCheckButton stand-in — adds setFlat() used in _setupUI."""
+    """BlocksCustomCheckButton stand-in — adds setFlat() used in _setup_ui."""
 
     def setFlat(self, v: bool) -> None:
         pass
@@ -263,13 +263,13 @@ _STUB_MODULES = {
         "EntryListModel": _EntryListModelStub,
         "ListItem": _ListItemStub,
     },
-    "lib.panels.widgets.keyboardPage": {
+    "lib.panels.widgets.common.keyboardPage": {
         "CustomQwertyKeyboard": _KeyboardStub,
     },
-    "lib.panels.widgets.loadWidget": {
+    "lib.panels.widgets.common.loadWidget": {
         "LoadingOverlayWidget": _LoadingOverlayStub,
     },
-    "lib.panels.widgets.popupDialogWidget": {
+    "lib.panels.widgets.common.popupDialogWidget": {
         "Popup": _PopupStub,
     },
 }
@@ -301,7 +301,7 @@ _mock_configfile_mod.get_configparser = MagicMock(return_value=_mock_cfg_instanc
 sys.modules["configfile"] = _mock_configfile_mod
 
 # Now safe to import the actual network package
-from BlocksScreen.lib.network.models import (  # noqa: E402
+from BlocksScreen.lib.network.models import (
     ConnectionPriority,
     ConnectivityState,
     NetworkInfo,

@@ -17,7 +17,7 @@ class NetworkWidgetbuttons(QtWidgets.QWidget):
             ":/filament_related/media/btn_icons/filament_sensor_turn_on.svg"
         )
 
-        self._setupUI()
+        self._setup_ui()
         self.tb = self.toggle_button
 
     def text(self) -> str:
@@ -84,7 +84,7 @@ class NetworkWidgetbuttons(QtWidgets.QWidget):
         self.toggle_button.repaint()
         return super().setDisabled(a0)
 
-    def _setupUI(self):
+    def _setup_ui(self):
         _policy = QtWidgets.QSizePolicy.Policy.MinimumExpanding
         size_policy = QtWidgets.QSizePolicy(_policy, _policy)
         size_policy.setHeightForWidth(self.sizePolicy().hasHeightForWidth())

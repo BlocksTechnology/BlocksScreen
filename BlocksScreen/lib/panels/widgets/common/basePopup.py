@@ -40,7 +40,7 @@ class BasePopup(QtWidgets.QDialog):
         self.confirm_ft_color = "#ffffff"
         self.cancel_ft_color = "#ffffff"
 
-        self.setupUI()
+        self._setup_ui()
         self.update()
 
         if floating:
@@ -258,7 +258,7 @@ class BasePopup(QtWidgets.QDialog):
         painter.drawRoundedRect(rect, self.border_radius, self.border_radius)
         painter.end()
 
-    def setupUI(self) -> None:
+    def _setup_ui(self) -> None:
         self.vlayout = QtWidgets.QVBoxLayout(self)
         self.setObjectName("MyParent")
         self.label = QtWidgets.QLabel("Test Message", self)

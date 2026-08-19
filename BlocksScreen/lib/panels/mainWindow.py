@@ -22,10 +22,10 @@ from lib.panels.filamentTab import FilamentTab
 from lib.panels.networkWindow import NetworkControlWindow, PixmapCache
 from lib.panels.printTab import PrintTab
 from lib.panels.utilitiesTab import UtilitiesTab
-from lib.panels.widgets.basePopup import BasePopup
+from lib.panels.widgets.common.basePopup import BasePopup
 from lib.panels.widgets.MainWindow.cancelPage import CancelPage
 from lib.panels.widgets.MainWindow.connectionPage import ConnectionPage
-from lib.panels.widgets.loadWidget import LoadingOverlayWidget
+from lib.panels.widgets.common.loadWidget import LoadingOverlayWidget
 from lib.panels.widgets.MainWindow.notificationPage import NotificationPage
 from lib.panels.widgets.MainWindow.updatePage import UpdatePage
 from lib.printer import Printer
@@ -1724,36 +1724,35 @@ class MainWindow(QtWidgets.QMainWindow):
         self.header_main_layout.setStretch(3, 1)
         self.setCentralWidget(self.main_widget)
 
-        _translate = QtCore.QCoreApplication.translate
-        self.setWindowTitle(_translate("MainWindow", "MainWindow"))
+        self.setWindowTitle("MainWindow")
         self.notification_btn.setProperty(
-            "button_type", _translate("MainWindow", "icon_text")
+            "button_type", "icon_text"
         )
-        self.extruder_temp_display.setText(_translate("MainWindow", "extruder"))
+        self.extruder_temp_display.setText("extruder")
         self.extruder_temp_display.setProperty(
-            "button_type", _translate("MainWindow", "secondary_display")
+            "button_type", "secondary_display"
         )
         self.extruder_temp_display.setProperty(
-            "name", _translate("MainWindow", "extruder_temperature_display")
+            "name", "extruder_temperature_display"
         )
-        self.bed_temp_display.setText(_translate("MainWindow", "bed"))
+        self.bed_temp_display.setText("bed")
         self.bed_temp_display.setProperty(
-            "button_type", _translate("MainWindow", "secondary_display")
+            "button_type", "secondary_display"
         )
-        self.chamber_temp_display.setText(_translate("MainWindow", "chamber"))
+        self.chamber_temp_display.setText("chamber")
         self.chamber_temp_display.setProperty(
-            "display_format", _translate("MainWindow", "dual")
+            "display_format", "dual"
         )
         self.chamber_temp_display.setProperty(
-            "button_type", _translate("MainWindow", "display_secondary")
+            "button_type", "display_secondary"
         )
-        self.filament_type_icon.setText(_translate("MainWindow", "Filament"))
+        self.filament_type_icon.setText("Filament")
         self.filament_type_icon.setProperty(
-            "button_type", _translate("MainWindow", "icon_text")
+            "button_type", "icon_text"
         )
-        self.nozzle_size_icon.setText(_translate("MainWindow", "nozzle"))
+        self.nozzle_size_icon.setText("nozzle")
         self.nozzle_size_icon.setProperty(
-            "button_type", _translate("MainWindow", "icon_text")
+            "button_type", "icon_text"
         )
-        self.wifi_button.setProperty("button_type", _translate("MainWindow", "icon"))
+        self.wifi_button.setProperty("button_type", "icon")
         self.main_content_widget.setCurrentIndex(3)

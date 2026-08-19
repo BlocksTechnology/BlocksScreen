@@ -31,8 +31,8 @@ _STUB_MODULES = (
     "lib.panels.printTab",
     "lib.panels.utilitiesTab",
     "lib.panels.widgets",
-    "lib.panels.widgets.basePopup",
-    "lib.panels.widgets.loadWidget",
+    "lib.panels.widgets.common.basePopup",
+    "lib.panels.widgets.common.loadWidget",
     "lib.panels.widgets.MainWindow",
     "lib.panels.widgets.MainWindow.cancelPage",
     "lib.panels.widgets.MainWindow.connectionPage",
@@ -86,8 +86,8 @@ sys.modules["lib.panels.networkWindow"].NetworkControlWindow = MagicMock
 sys.modules["lib.panels.networkWindow"].PixmapCache = MagicMock
 sys.modules["lib.panels.printTab"].PrintTab = MagicMock
 sys.modules["lib.panels.utilitiesTab"].UtilitiesTab = MagicMock
-sys.modules["lib.panels.widgets.basePopup"].BasePopup = MagicMock
-sys.modules["lib.panels.widgets.loadWidget"].LoadingOverlayWidget = MagicMock
+sys.modules["lib.panels.widgets.common.basePopup"].BasePopup = MagicMock
+sys.modules["lib.panels.widgets.common.loadWidget"].LoadingOverlayWidget = MagicMock
 _MW = "lib.panels.widgets.MainWindow"
 sys.modules[f"{_MW}.cancelPage"].CancelPage = MagicMock
 sys.modules[f"{_MW}.connectionPage"].ConnectionPage = MagicMock

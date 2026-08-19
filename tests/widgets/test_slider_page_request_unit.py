@@ -45,7 +45,7 @@ for _stubbed in [_m for _m in sys.modules if _m.startswith("lib.panels.widgets")
 
 from lib.panels.controlTab import ControlTab  # noqa: E402
 from lib.panels.printTab import PrintTab  # noqa: E402
-from lib.panels.widgets.slider_selector_page import SliderPage  # noqa: E402
+from lib.panels.widgets.common.slider_selector_page import SliderPage  # noqa: E402
 
 
 @pytest.fixture

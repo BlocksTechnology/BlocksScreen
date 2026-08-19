@@ -112,8 +112,6 @@ class TemperaturePage(QtWidgets.QWidget):
     def _setup_ui(self) -> None:
         """Build the temperature page: heater cards and preset controls."""
         self.setObjectName("temperature_page")
-        widget = QtWidgets.QWidget(parent=self)
-        widget.setGeometry(QtCore.QRect(0, 0, 720, 420))
         self.verticalLayout = QtWidgets.QVBoxLayout(self)
         self.verticalLayout.setObjectName("verticalLayout")
         spacerItem3 = QtWidgets.QSpacerItem(
@@ -291,20 +289,17 @@ class TemperaturePage(QtWidgets.QWidget):
         )
         self.verticalLayout.addItem(spacerItem7)
 
-        widget.setLayout(self.verticalLayout)
-
-        _translate = QtCore.QCoreApplication.translate
         self.temp_header_title.setText(
-            _translate("controlStackedWidget", "Temperature")
+            "Temperature"
         )
-        self.temp_back_button.setText(_translate("controlStackedWidget", "Back"))
+        self.temp_back_button.setText("Back")
         self.extruder_temp_display.setProperty(
-            "button_type", _translate("controlStackedWidget", "secondary_display")
+            "button_type", "secondary_display"
         )
         self.bed_temp_display.setProperty(
-            "button_type", _translate("controlStackedWidget", "secondary_display")
+            "button_type", "secondary_display"
         )
-        self.cooldown_btn.setText(_translate("controlStackedWidget", "Cooldown"))
+        self.cooldown_btn.setText("Cooldown")
         self.temperature_cooldown_btn.setText(
-            _translate("controlStackedWidget", "Heatsoak")
+            "Heatsoak"
         )

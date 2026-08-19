@@ -26,7 +26,7 @@ class CancelPage(QtWidgets.QWidget):
     def __init__(self, parent: QtWidgets.QWidget, ws: MoonWebSocket) -> None:
         super().__init__(parent)
         self.ws: MoonWebSocket = ws
-        self._setupUI()
+        self._setup_ui()
         self.filename = ""
 
         self.confirm_button.clicked.connect(lambda: self._handle_accept())
@@ -114,7 +114,7 @@ class CancelPage(QtWidgets.QWidget):
             )
         self.set_pixmap(last_thumb)
 
-    def _setupUI(self) -> None:
+    def _setup_ui(self) -> None:
         """Setup widget ui"""
         sizePolicy = QtWidgets.QSizePolicy(
             QtWidgets.QSizePolicy.Policy.MinimumExpanding,

@@ -45,7 +45,7 @@ class TuneWidget(QtWidgets.QWidget):
         super().__init__(parent)
         self.tune_display_buttons: dict = {}
         self.setObjectName("tune_page")
-        self._setupUI()
+        self._setup_ui()
         self.sensors_menu_btn.clicked.connect(self.request_sensorsPage.emit)
         self.tune_babystep_menu_btn.clicked.connect(self.request_bbpPage.emit)
         self.tune_back_btn.clicked.connect(self.request_back)
@@ -242,7 +242,7 @@ class TuneWidget(QtWidgets.QWidget):
         if self.isVisible():
             self.speed_display.setText(str(f"{int(self.speed_factor_override * 100)}%"))
 
-    def _setupUI(self) -> None:
+    def _setup_ui(self) -> None:
         sizePolicy = QtWidgets.QSizePolicy(
             QtWidgets.QSizePolicy.Policy.MinimumExpanding,
             QtWidgets.QSizePolicy.Policy.MinimumExpanding,
@@ -468,55 +468,54 @@ class TuneWidget(QtWidgets.QWidget):
         self._retranslateUI()
 
     def _retranslateUI(self):
-        _translate = QtCore.QCoreApplication.translate
-        self.setWindowTitle(_translate("printStackedWidget", "StackedWidget"))
-        self.tune_title_label.setText(_translate("printStackedWidget", "Tune"))
+        self.setWindowTitle("StackedWidget")
+        self.tune_title_label.setText("Tune")
         self.tune_title_label.setProperty(
-            "class", _translate("printStackedWidget", "title_text")
+            "class", "title_text"
         )
         self.tune_back_btn.setProperty(
-            "button_type", _translate("printStackedWidget", "icon")
+            "button_type", "icon"
         )
         self.tune_babystep_menu_btn.setText(
-            _translate("printStackedWidget", "Babystep")
+            "Babystep"
         )
         self.tune_babystep_menu_btn.setProperty(
-            "class", _translate("printStackedWidget", "menu_btn")
+            "class", "menu_btn"
         )
         self.tune_babystep_menu_btn.setProperty(
-            "button_type", _translate("printStackedWidget", "normal")
+            "button_type", "normal"
         )
         self.tune_change_filament_btn.setText(
-            _translate("printStackedWidget", "Filament\nChange")
+            "Filament\nChange"
         )
         self.tune_change_filament_btn.setProperty(
-            "class", _translate("printStackedWidget", "menu_btn")
+            "class", "menu_btn"
         )
         self.tune_change_filament_btn.setProperty(
-            "button_type", _translate("printStackedWidget", "normal")
+            "button_type", "normal"
         )
         self.sensors_menu_btn.setProperty(
-            "class", _translate("printStackedWidget", "menu_btn")
+            "class", "menu_btn"
         )
         self.sensors_menu_btn.setProperty(
-            "button_type", _translate("printStackedWidget", "icon")
+            "button_type", "icon"
         )
         self.bed_display.setProperty(
-            "name", _translate("printStackedWidget", "bed_temperature_display")
+            "name", "bed_temperature_display"
         )
         self.bed_display.setProperty(
-            "button_type", _translate("printStackedWidget", "display")
+            "button_type", "display"
         )
         self.extruder_display.setProperty(
             "name",
-            _translate("printStackedWidget", "extruder_temperature_display"),
+            "extruder_temperature_display",
         )
         self.extruder_display.setProperty(
-            "button_type", _translate("printStackedWidget", "display")
+            "button_type", "display"
         )
         self.speed_display.setProperty(
-            "name", _translate("printStackedWidget", "print_speed_display")
+            "name", "print_speed_display"
         )
         self.speed_display.setProperty(
-            "button_type", _translate("printStackedWidget", "display")
+            "button_type", "display"
         )

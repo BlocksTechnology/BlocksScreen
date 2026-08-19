@@ -1,9 +1,9 @@
 import typing
 
-from lib.panels.widgets.basePopup import BasePopup
-from lib.panels.widgets.keyboardPage import CustomQwertyKeyboard
-from lib.panels.widgets.loadWidget import LoadingOverlayWidget
-from lib.panels.widgets.numpadPage import CustomNumpad
+from lib.panels.widgets.common.basePopup import BasePopup
+from lib.panels.widgets.common.keyboardPage import CustomQwertyKeyboard
+from lib.panels.widgets.common.loadWidget import LoadingOverlayWidget
+from lib.panels.widgets.common.numpadPage import CustomNumpad
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_frame import BlocksCustomFrame
 from lib.utils.blocks_linedit import BlocksCustomLinEdit

@@ -3,7 +3,7 @@ import logging
 from functools import partial
 
 from lib.filament import Filament
-from lib.panels.widgets.popupDialogWidget import Popup
+from lib.panels.widgets.common.popupDialogWidget import Popup
 from lib.printer import Printer
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_frame import BlocksCustomFrame

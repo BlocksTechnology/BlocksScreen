@@ -6,15 +6,15 @@ import re
 import typing
 
 from lib.moonrakerComm import MoonWebSocket
-from lib.panels.widgets.basePopup import BasePopup
+from lib.panels.widgets.common.basePopup import BasePopup
 from lib.panels.widgets.ControlTab.axisPage import AxisPage
 from lib.panels.widgets.ControlTab.extruderPage import ExtruderPage
 from lib.panels.widgets.ControlTab.fansPage import FansPage
 from lib.panels.widgets.ControlTab.printcorePage import SwapPrintcorePage
 from lib.panels.widgets.ControlTab.probeHelperPage import ProbeHelper
 from lib.panels.widgets.ControlTab.temperaturePage import TemperaturePage
-from lib.panels.widgets.numpadPage import CustomNumpad
-from lib.panels.widgets.slider_selector_page import SliderPage
+from lib.panels.widgets.common.numpadPage import CustomNumpad
+from lib.panels.widgets.common.slider_selector_page import SliderPage
 from lib.printer import Printer
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.icon_button import IconButton
@@ -613,15 +613,14 @@ class ControlTab(QtWidgets.QStackedWidget):
         widget.setLayout(self.verticalLayout)
         self.addWidget(widget)
 
-        _translate = QtCore.QCoreApplication.translate
-        self.setWindowTitle(_translate("controlStackedWidget", "StackedWidget"))
-        self.cp_header_title.setText(_translate("controlStackedWidget", "Control"))
+        self.setWindowTitle("StackedWidget")
+        self.cp_header_title.setText("Control")
 
-        self.cp_button_1.setText(_translate("controlStackedWidget", "Motion\nControl"))
-        self.cp_button_2.setText(_translate("controlStackedWidget", "Temp.\nControl"))
+        self.cp_button_1.setText("Motion\nControl")
+        self.cp_button_2.setText("Temp.\nControl")
         self.cp_button_3.setText(
-            _translate("controlStackedWidget", "Nozzle\nCalibration")
+            "Nozzle\nCalibration"
         )
-        self.cp_button_4.setText(_translate("controlStackedWidget", "Z-Tilt"))
-        self.cp_button_5.setText(_translate("controlStackedWidget", "Fans"))
-        self.cp_button_6.setText(_translate("controlStackedWidget", "Swap\nPrint Core"))
+        self.cp_button_4.setText("Z-Tilt")
+        self.cp_button_5.setText("Fans")
+        self.cp_button_6.setText("Swap\nPrint Core")

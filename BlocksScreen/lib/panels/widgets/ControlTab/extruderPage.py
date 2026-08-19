@@ -156,9 +156,6 @@ class ExtruderPage(QtWidgets.QWidget):
 
     def _setup_ui(self) -> None:
         """Build the extruder page: extrude/retract controls and status labels."""
-        widget = QtWidgets.QWidget(parent=self)
-        widget.setMinimumSize(QtCore.QSize(710, 410))
-        widget.setMaximumSize(QtCore.QSize(710, 410))
         self.setObjectName("fans_page")
         self.extrude_page = QtWidgets.QWidget()
         self.extrude_page.setMinimumSize(QtCore.QSize(710, 400))
@@ -478,37 +475,35 @@ class ExtruderPage(QtWidgets.QWidget):
         self.exp_vertical_content_layout.addLayout(self.exp_movement_content_layout)
         self.exp_vertical_content_layout.setStretch(2, 1)
         self.verticalLayout.addLayout(self.exp_vertical_content_layout)
-        widget.setLayout(self.verticalLayout)
 
-        _translate = QtCore.QCoreApplication.translate
-        self.exp_title_label.setText(_translate("controlStackedWidget", "Extrude"))
-        self.exp_back_btn.setText(_translate("controlStackedWidget", "Back"))
+        self.exp_title_label.setText("Extrude")
+        self.exp_back_btn.setText("Back")
         self.exp_length_group_box.setTitle(
-            _translate("controlStackedWidget", "Extrude Length (mm)")
+            "Extrude Length (mm)"
         )
         self.extrude_select_length_10_btn.setText(
-            _translate("controlStackedWidget", "10")
+            "10"
         )
         self.extrude_select_length_50_btn.setText(
-            _translate("controlStackedWidget", "50")
+            "50"
         )
         self.extrude_select_length_100_btn.setText(
-            _translate("controlStackedWidget", "100")
+            "100"
         )
         self.exp_feedrate_group_box.setTitle(
-            _translate("controlStackedWidget", "Extrude Feedrate (mm/s)")
+            "Extrude Feedrate (mm/s)"
         )
         self.extrude_select_feedrate_low_btn.setText(
-            _translate("controlStackedWidget", str(self.extrude_list[0]))
+            str(self.extrude_list[0])
         )
         self.extrude_select_feedrate_middle_btn.setText(
-            _translate("controlStackedWidget", str(self.extrude_list[1]))
+            str(self.extrude_list[1])
         )
         self.extrude_select_feedrate_high_btn.setText(
-            _translate("controlStackedWidget", str(self.extrude_list[2]))
+            str(self.extrude_list[2])
         )
-        self.exp_unextrude_btn.setText(_translate("controlStackedWidget", "Retract"))
-        self.exp_extrude_btn.setText(_translate("controlStackedWidget", "Extrude"))
+        self.exp_unextrude_btn.setText("Retract")
+        self.exp_extrude_btn.setText("Extrude")
         self.exp_info_label.setText(
-            _translate("controlStackedWidget", "Nozzle heating to extrude")
+            "Nozzle heating to extrude"
         )

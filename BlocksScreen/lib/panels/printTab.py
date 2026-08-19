@@ -7,13 +7,13 @@ from configfile import BlocksScreenConfig, get_configparser
 from lib.files import Files
 from lib.moonrakerComm import MoonWebSocket
 from lib.panels.widgets.PrintTab.babystepPage import BabystepPage
-from lib.panels.widgets.basePopup import BasePopup
+from lib.panels.widgets.common.basePopup import BasePopup
 from lib.panels.widgets.PrintTab.confirmPage import ConfirmWidget
 from lib.panels.widgets.PrintTab.filesPage import FilesPage
 from lib.panels.widgets.PrintTab.jobStatusPage import JobStatusWidget
-from lib.panels.widgets.numpadPage import CustomNumpad
+from lib.panels.widgets.common.numpadPage import CustomNumpad
 from lib.panels.widgets.PrintTab.sensorsPanel import SensorsWindow
-from lib.panels.widgets.slider_selector_page import SliderPage
+from lib.panels.widgets.common.slider_selector_page import SliderPage
 from lib.panels.widgets.PrintTab.tunePage import TuneWidget
 from lib.printer import Printer
 from lib.utils.blocks_button import BlocksCustomButton
@@ -611,10 +611,9 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.main_text_label.setObjectName("main_text_label")
         self.addWidget(self.print_page)
 
-        _translate = QtCore.QCoreApplication.translate
-        self.setWindowTitle(_translate("printStackedWidget", "StackedWidget"))
-        self.main_print_btn.setText(_translate("printStackedWidget", "Print"))
+        self.setWindowTitle("StackedWidget")
+        self.main_print_btn.setText("Print")
         self.main_print_btn.setProperty(
-            "class", _translate("printStackedWidget", "menu_btn")
+            "class", "menu_btn"
         )
-        self.main_text_label.setText(_translate("printStackedWidget", "Printer ready"))
+        self.main_text_label.setText("Printer ready")

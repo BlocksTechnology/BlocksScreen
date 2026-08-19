@@ -17,7 +17,7 @@ class CustomNumpad(QtWidgets.QWidget):
         parent,
     ) -> None:
         super().__init__(parent)
-        self._setupUI()
+        self._setup_ui()
         self.current_value: str = "0"
         self.name: str = ""
         self.min_value: int = 0
@@ -108,7 +108,7 @@ class CustomNumpad(QtWidgets.QWidget):
         """Updates the text of the min/max label."""
         self.min_max_label.setText(f"Range: {self.min_value} - {self.max_value}")
 
-    def _setupUI(self) -> None:
+    def _setup_ui(self) -> None:
         self.setCursor(QtGui.QCursor(QtCore.Qt.CursorShape.BlankCursor))
 
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_AcceptTouchEvents, True)
@@ -391,28 +391,27 @@ class CustomNumpad(QtWidgets.QWidget):
         QtCore.QMetaObject.connectSlotsByName(self)
 
     def _retranslateUI(self) -> None:
-        _translate = QtCore.QCoreApplication.translate
-        self.setWindowTitle(_translate("customNumpad", "Form"))
-        self.numpad_title.setText(_translate("customNumpad", "Target Temperature"))
+        self.setWindowTitle("Form")
+        self.numpad_title.setText("Target Temperature")
         self.numpad_back_btn.setProperty(
-            "button_type", _translate("customNumpad", "icon")
+            "button_type", "icon"
         )
-        self.numpad_6.setText(_translate("customNumpad", "6"))
-        self.numpad_6.setProperty("position", _translate("customNumpad", "right"))
-        self.numpad_9.setText(_translate("customNumpad", "9"))
-        self.numpad_9.setProperty("position", _translate("customNumpad", "right"))
-        self.numpad_8.setText(_translate("customNumpad", "8"))
-        self.numpad_2.setText(_translate("customNumpad", "2"))
-        self.numpad_0.setText(_translate("customNumpad", "0"))
-        self.numpad_0.setProperty("position", _translate("customNumpad", "down"))
-        self.numpad_3.setText(_translate("customNumpad", "3"))
-        self.numpad_3.setProperty("position", _translate("customNumpad", "right"))
-        self.numpad_4.setText(_translate("customNumpad", "4"))
-        self.numpad_4.setProperty("position", _translate("customNumpad", "left"))
-        self.numpad_5.setText(_translate("customNumpad", "5"))
-        self.numpad_1.setText(_translate("customNumpad", "1"))
-        self.numpad_1.setProperty("position", _translate("customNumpad", "left"))
-        self.numpad_enter.setProperty("button_type", _translate("customNumpad", "icon"))
-        self.numpad_7.setText(_translate("customNumpad", "7"))
-        self.numpad_7.setProperty("position", _translate("customNumpad", "left"))
-        self.numpad_clear.setProperty("button_type", _translate("customNumpad", "icon"))
+        self.numpad_6.setText("6")
+        self.numpad_6.setProperty("position", "right")
+        self.numpad_9.setText("9")
+        self.numpad_9.setProperty("position", "right")
+        self.numpad_8.setText("8")
+        self.numpad_2.setText("2")
+        self.numpad_0.setText("0")
+        self.numpad_0.setProperty("position", "down")
+        self.numpad_3.setText("3")
+        self.numpad_3.setProperty("position", "right")
+        self.numpad_4.setText("4")
+        self.numpad_4.setProperty("position", "left")
+        self.numpad_5.setText("5")
+        self.numpad_1.setText("1")
+        self.numpad_1.setProperty("position", "left")
+        self.numpad_enter.setProperty("button_type", "icon")
+        self.numpad_7.setText("7")
+        self.numpad_7.setProperty("position", "left")
+        self.numpad_clear.setProperty("button_type", "icon")

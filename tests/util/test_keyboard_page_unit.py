@@ -25,12 +25,12 @@ sys.modules.setdefault("lib.utils.icon_button", _icon_stub)
 # Force-reload the real module — the network conftest registers a stub
 # that lacks the layout constants we need.
 for _key in [
-    "lib.panels.widgets.keyboardPage",
-    "BlocksScreen.lib.panels.widgets.keyboardPage",
+    "lib.panels.widgets.common.keyboardPage",
+    "BlocksScreen.lib.panels.widgets.common.keyboardPage",
 ]:
     sys.modules.pop(_key, None)
 
-from BlocksScreen.lib.panels.widgets.keyboardPage import (  # noqa: E402
+from BlocksScreen.lib.panels.widgets.common.keyboardPage import (  # noqa: E402
     _LOWERCASE,
     _NUM_KEYS,
     _NUMBERS,

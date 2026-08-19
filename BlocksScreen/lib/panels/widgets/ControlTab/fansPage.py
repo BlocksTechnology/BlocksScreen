@@ -3,7 +3,7 @@
 import re
 import typing
 
-from lib.panels.widgets.optionCardWidget import OptionCard
+from lib.panels.widgets.common.optionCardWidget import OptionCard
 from lib.utils.gcode import fan_speed_gcode
 from lib.utils.icon_button import IconButton
 from PyQt6 import QtCore, QtGui, QtWidgets
@@ -117,8 +117,6 @@ class FansPage(QtWidgets.QWidget):
     def _setup_ui(self) -> None:
         """Build the fans page: header, back button, and fan slider area."""
         self.setObjectName("fans_page")
-        widget = QtWidgets.QWidget(parent=self)
-        widget.setGeometry(QtCore.QRect(0, 0, 720, 420))
 
         self.verticalLayout = QtWidgets.QVBoxLayout(self)
         self.verticalLayout.setObjectName("verticalLayout")
@@ -205,8 +203,5 @@ class FansPage(QtWidgets.QWidget):
         )
         self.verticalLayout.addItem(spacerItem12)
 
-        widget.setLayout(self.verticalLayout)
-
-        _translate = QtCore.QCoreApplication.translate
-        self.fans_title_label.setText(_translate("controlStackedWidget", "Fans"))
-        self.fans_back_btn.setText(_translate("controlStackedWidget", "Back"))
+        self.fans_title_label.setText("Fans")
+        self.fans_back_btn.setText("Back")
