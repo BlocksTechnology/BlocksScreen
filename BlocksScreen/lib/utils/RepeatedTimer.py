@@ -5,7 +5,7 @@ from collections.abc import Callable
 logger = logging.getLogger(__name__)
 
 
-class RepeatedTimer(threading.Thread):
+class RepeatedTimer:
     """Periodic callback driven by one long-lived thread per start/stop cycle."""
 
     def __init__(
@@ -17,7 +17,6 @@ class RepeatedTimer(threading.Thread):
         **kwargs,
     ):
         """Initialize a repeating timer that invokes callback every timeout seconds."""
-        super().__init__(daemon=True)
         self.name = name
         self._timeout = timeout
         self._function = callback
@@ -26,16 +25,13 @@ class RepeatedTimer(threading.Thread):
 
         self._lock = threading.Lock()
         self.running = False
-        self.timeoutEvent = threading.Event()
         self.stopEvent = threading.Event()
         self._timer: threading.Thread | None = None
         self.startTimer()
 
-    def _run(self) -> None:
-        """Tick until stopped; wait() doubles as the sleep and the cancel signal."""
-        # wait() returns True only when stopEvent is set, so a stop exits immediately
-        # instead of burning the rest of the period.
-        while not self.stopEvent.wait(self._timeout):
+    def _run(self, stopEvent: threading.Event) -> None:
+        """Tick until stopEvent is set; wait() is both the sleep and the cancel."""
+        while not stopEvent.wait(self._timeout):
             if not callable(self._function):
                 continue
             try:
@@ -43,17 +39,21 @@ class RepeatedTimer(threading.Thread):
             except Exception:
                 # One bad tick must not kill the thread and silently stop the timer.
                 logger.exception("RepeatedTimer %s callback raised", self.name)
-        with self._lock:
-            self.running = False
 
     def startTimer(self) -> None:
         """Start timer"""
         with self._lock:
             if self.running:
                 return
-            self.stopEvent.clear()
+            # New event per generation so a thread still in a slow callback cannot resume
+            self.stopEvent = threading.Event()
             try:
-                timer = threading.Thread(target=self._run, name=self.name, daemon=True)
+                timer = threading.Thread(
+                    target=self._run,
+                    args=(self.stopEvent,),
+                    name=self.name,
+                    daemon=True,
+                )
                 self._timer = timer
                 self.running = True
             except Exception as e:
@@ -72,8 +72,8 @@ class RepeatedTimer(threading.Thread):
             timer = self._timer
             self._timer = None
             self.running = False
-            # Set unconditionally so a stop during the callback still cancels the loop.
+            # Unconditional: a stop during the callback must still cancel the loop
             self.stopEvent.set()
-        # Bounded join: never stall the GUI thread waiting on a slow callback.
+        # Bounded join: never stall the caller on a slow callback
         if timer is not threading.current_thread():
             timer.join(timeout=0.1)
