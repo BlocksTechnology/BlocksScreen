@@ -3,13 +3,18 @@
 from __future__ import annotations
 
 import asyncio
+import os
+import time
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from updater.executor import (
+    _clear_stale_git_index_lock,
+    _is_head_readable,
     _make_clean_env,
+    _repair_corrupt_head,
     _remove_broken_loose_ref,
     _run,
     apt_update,
@@ -578,6 +583,18 @@ class TestGitCheckout:
         assert ok is False
         assert "branch not found" in out
 
+    @pytest.mark.asyncio
+    async def test_force_adds_f_flag(self, tmp_path):
+        # force=True overwrites untracked collisions that would abort a plain switch.
+        branch_proc = _make_proc(0, b"main\n", b"")
+        checkout_proc = _make_proc(0, b"", b"")
+        exec_mock = AsyncMock(side_effect=[branch_proc, checkout_proc])
+        with patch("asyncio.create_subprocess_exec", exec_mock):
+            ok, _ = await git_checkout(tmp_path, "develop", force=True)
+        assert ok is True
+        argv = list(exec_mock.call_args_list[1].args)
+        assert argv[:3] == ["/usr/bin/git", "checkout", "-f"]
+
 
 class TestAptUpdate:
     @pytest.mark.asyncio
@@ -802,6 +819,27 @@ class TestCheckGitStatus:
         assert result.current_hash == "abc1234"
         assert result.commits_behind == 2
         assert result.has_local_changes is False
+        assert result.branch_mismatch is False
+
+    @pytest.mark.asyncio
+    async def test_branch_mismatch_flagged_when_on_wrong_branch(self, tmp_path):
+        # Configured branch differs from checked-out branch: flag it even at 0 behind.
+        procs = [
+            _make_proc(0, b"abc1234\n", b""),  # git_get_hash
+            _make_proc(0, b"main\n", b""),  # git_get_current_branch
+            _make_proc(0, b"0\n", b""),  # git_commits_behind (0, not ahead)
+            _make_proc(0, b"https://github.com/x/y\n", b""),  # git_remote_url
+            _make_proc(0, b"", b""),  # git_is_dirty (clean)
+            _make_proc(0, b"v1.0\n", b""),  # git_describe current
+            _make_proc(0, b"v1.0\n", b""),  # git_describe remote
+        ]
+        exec_mock = AsyncMock(side_effect=procs)
+        with patch("asyncio.create_subprocess_exec", exec_mock):
+            result = await check_git_status(
+                "klipper", tmp_path, branch="wip/feat/beacon", skip_fetch=True
+            )
+        assert result.commits_behind == 0
+        assert result.branch_mismatch is True
 
 
 class TestCheckAptStatus:
@@ -877,6 +915,11 @@ class TestCorruption:
                 new_callable=AsyncMock,
                 return_value=False,
             ),
+            patch(
+                "updater.executor._repair_corrupt_head",
+                new_callable=AsyncMock,
+                return_value=True,
+            ),
         ):
             ok, _msg = await git_repair(tmp_path)
         assert ok is True
@@ -930,6 +973,11 @@ class TestCorruption:
                 new_callable=AsyncMock,
                 return_value=1,
             ) as mock_quarantine,
+            patch(
+                "updater.executor._repair_corrupt_head",
+                new_callable=AsyncMock,
+                return_value=True,
+            ),
         ):
             ok, msg = await git_repair(tmp_path)
         assert ok is True
@@ -1069,7 +1117,6 @@ class TestClassifyAptError:
     @pytest.mark.parametrize(
         "err",
         [
-            "sudo: /usr/local/sbin/bs-apt-helper: command not found",
             "No such file or directory",
             "sudo: a password is required",
             "Permission denied",
@@ -1081,7 +1128,156 @@ class TestClassifyAptError:
 
     @pytest.mark.parametrize(
         "err",
-        ["Could not resolve host", "Temporary failure", "dpkg lock held", ""],
+        [
+            "Could not resolve host",
+            "Temporary failure",
+            "dpkg lock held",
+            "",
+            # A missing apt helper self-heals once bootstrap installs it.
+            "sudo: /usr/local/sbin/bs-apt-helper: command not found",
+            "/usr/local/sbin/bs-apt-helper: no such file or directory",
+        ],
     )
     def test_transient(self, err):
         assert classify_apt_error(err) == "transient"
+
+
+class TestStaleIndexLockHandling:
+    @pytest.mark.asyncio
+    async def test_clear_stale_git_index_lock_removes_old_lock(self, tmp_path):
+
+        lock_path = tmp_path / ".git" / "index.lock"
+        lock_path.parent.mkdir(parents=True)
+        lock_path.write_text("")
+        lock_path.touch()
+
+        st = lock_path.stat()
+        os.utime(lock_path, (st.st_atime, time.time() - 30))
+        assert _clear_stale_git_index_lock(tmp_path) is True
+        assert not lock_path.exists()
+
+    @pytest.mark.asyncio
+    async def test_clear_stale_git_index_lock_preserves_fresh_lock(self, tmp_path):
+        lock_path = tmp_path / ".git" / "index.lock"
+        lock_path.parent.mkdir(parents=True)
+        lock_path.write_text("")
+        assert _clear_stale_git_index_lock(tmp_path) is False
+        assert lock_path.exists()
+
+    @pytest.mark.asyncio
+    async def test_clear_stale_git_index_lock_no_lock(self, tmp_path):
+
+        assert _clear_stale_git_index_lock(tmp_path) is True
+
+    @pytest.mark.asyncio
+    async def test_git_reset_to_hash_clears_lock_on_index_lock_error(self):
+        fail_proc = _make_proc(1, b"", b"error: index.lock blocked git")
+        ok_proc = _make_proc(0, b"abc123\n", b"")
+        procs = [fail_proc, ok_proc]
+        idx = [0]
+
+        async def mock_exec(*_args, **_kwargs):
+            result = procs[idx[0]]
+            idx[0] = min(idx[0] + 1, len(procs) - 1)
+            return result
+
+        with (
+            patch(
+                "updater.executor._clear_stale_git_index_lock", return_value=True
+            ) as mock_clear,
+            patch(
+                "asyncio.create_subprocess_exec",
+                new_callable=AsyncMock,
+                side_effect=mock_exec,
+            ),
+        ):
+            ok, _msg = await git_reset_to_hash(Path("/x"), "abc123")
+        assert ok is True
+        mock_clear.assert_called_once_with(Path("/x"))
+
+
+class TestCorruptHeadHandling:
+    @pytest.mark.asyncio
+    async def test_is_head_readable_true_when_valid(self):
+        proc = _make_proc(0, b"abc123\n", b"")
+        with patch(
+            "asyncio.create_subprocess_exec", new_callable=AsyncMock, return_value=proc
+        ):
+            assert await _is_head_readable(Path("/x")) is True
+
+    @pytest.mark.asyncio
+    async def test_is_head_readable_false_when_corrupt(self):
+        proc = _make_proc(1, b"", b"fatal: Not a git repository")
+        with patch(
+            "asyncio.create_subprocess_exec", new_callable=AsyncMock, return_value=proc
+        ):
+            assert await _is_head_readable(Path("/x")) is False
+
+    @pytest.mark.asyncio
+    async def test_repair_corrupt_head_succeeds_when_head_already_readable(self):
+        proc = _make_proc(0, b"", b"")
+        with patch(
+            "asyncio.create_subprocess_exec", new_callable=AsyncMock, return_value=proc
+        ):
+            ok = await _repair_corrupt_head(Path("/x"), "main")
+        assert ok is True
+
+    @pytest.mark.asyncio
+    async def test_repair_corrupt_head_fixes_by_symbolic_ref(self):
+        fail_proc = _make_proc(1, b"", b"fatal: corrupt HEAD")
+        ok_proc = _make_proc(0, b"", b"")
+        procs = [fail_proc, ok_proc]
+        idx = [0]
+
+        async def mock_exec(*_args, **_kwargs):
+            result = procs[idx[0]]
+            idx[0] = min(idx[0] + 1, len(procs) - 1)
+            return result
+
+        with patch(
+            "asyncio.create_subprocess_exec",
+            new_callable=AsyncMock,
+            side_effect=mock_exec,
+        ):
+            ok = await _repair_corrupt_head(Path("/x"), "main")
+        assert ok is True
+
+    @pytest.mark.asyncio
+    async def test_repair_corrupt_head_uses_custom_branch(self):
+        fail_proc = _make_proc(1, b"", b"fatal: corrupt HEAD")
+        ok_proc = _make_proc(0, b"", b"")
+        procs = [fail_proc, ok_proc]
+        idx = [0]
+
+        async def mock_exec(*_args, **_kwargs):
+            result = procs[idx[0]]
+            idx[0] = min(idx[0] + 1, len(procs) - 1)
+            return result
+
+        with patch(
+            "asyncio.create_subprocess_exec",
+            new_callable=AsyncMock,
+            side_effect=mock_exec,
+        ) as mock_exec_obj:
+            ok = await _repair_corrupt_head(Path("/x"), "dev")
+        assert ok is True
+        calls = mock_exec_obj.call_args_list
+        assert any("refs/heads/dev" in str(call) for call in calls)
+
+
+class TestCorruptionSignatures:
+    @pytest.mark.asyncio
+    async def test_has_corruption_detects_unable_to_unpack(self):
+        proc = _make_proc(1, b"", b"error: unable to unpack objects\n")
+        with patch(
+            "asyncio.create_subprocess_exec", new_callable=AsyncMock, return_value=proc
+        ):
+            assert await git_has_corruption(Path("/x")) is True
+
+    @pytest.mark.asyncio
+    async def test_has_corruption_detects_inflate_error(self):
+        proc = _make_proc(1, b"", b"error: inflate: data stream error\n")
+        with patch(
+            "asyncio.create_subprocess_exec", new_callable=AsyncMock, return_value=proc
+        ):
+            assert await git_has_corruption(Path("/x")) is True

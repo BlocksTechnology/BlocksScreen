@@ -41,6 +41,38 @@ _GIT_TAG_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._/-]*$")
 _PACKAGE_NAME_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9+\-.]*$")
 
 _HOOKS_DIR = Path(__file__).parent / "hooks"
+_STALE_LOCK_AGE_THRESHOLD_S = 10.0
+
+
+def _clear_stale_git_index_lock(path: Path) -> bool:
+    """Remove .git/index.lock only if it is stale (older than threshold).
+
+    A stale lock is left by a SIGKILL'd or interrupted git operation. Only
+    remove if mtime indicates lock is NOT held by a live git process (age >=
+    threshold). At runtime, a fresh lock may indicate a concurrent legitimate
+    git op; yanking it would corrupt that op. Returns True if lock was
+    removed or did not exist; False if lock exists but is too fresh to safely
+    remove.
+    """
+    lock_path = path / ".git" / "index.lock"
+    if not lock_path.exists():
+        return True
+    try:
+        age_s = time.time() - lock_path.stat().st_mtime
+        if age_s >= _STALE_LOCK_AGE_THRESHOLD_S:
+            logger.warning("clearing stale index.lock (age %.1fs) from %s", age_s, path)
+            lock_path.unlink()
+            return True
+        logger.debug(
+            "index.lock is fresh (age %.1fs < %.1fs threshold), not removing to avoid "
+            "corrupting concurrent git op",
+            age_s,
+            _STALE_LOCK_AGE_THRESHOLD_S,
+        )
+        return False
+    except OSError as exc:
+        logger.warning("could not age-check index.lock at %s: %s", lock_path, exc)
+        return False
 
 
 def _kill_proc_group(proc, sig):
@@ -233,11 +265,13 @@ async def check_git_status(
     if current_hash == "":
         logger.error("Failed at git_hash operation")
         return ComponentStatus(name=name, error="Failed at git_hash operation")
+    current_branch = await git_get_current_branch(path)
     if branch:
         remote_ref = f"origin/{branch}"
     else:
-        current_branch = await git_get_current_branch(path)
         remote_ref = f"origin/{current_branch}" if current_branch else "origin/HEAD"
+    # Configured branch != checked-out branch: needs an update to switch.
+    branch_mismatch = bool(branch) and current_branch != branch
     if version:
         commits_behind = 0
     else:
@@ -277,6 +311,8 @@ async def check_git_status(
         has_local_changes=has_local_changes,
         current_version=current_version,
         remote_version=remote_version,
+        branch_mismatch=branch_mismatch,
+        current_branch=current_branch,
     )
 
 
@@ -396,6 +432,7 @@ async def git_reset_to_hash(path: Path | None, prev_hash: str = "") -> tuple[boo
     This is the rollback/heal primitive (abort, boot revert, recover), so the
     timeout is generous: a reset across a large delta on a slow SD card must
     not be SIGTERM'd mid-checkout in exactly the path meant to fix things.
+    If reset fails with an index.lock error, clears it and retries once.
     """
     if not path:
         return (False, "path error")
@@ -403,7 +440,12 @@ async def git_reset_to_hash(path: Path | None, prev_hash: str = "") -> tuple[boo
         return (False, "prev_hash does not exist")
     if not _validate_git_ref(prev_hash):
         return (False, f"invalid git ref: {prev_hash!r}")
-    return await _run([GIT, "reset", "--hard", prev_hash], cwd=path, timeout=60.0)
+    ok, err = await _run([GIT, "reset", "--hard", prev_hash], cwd=path, timeout=60.0)
+    if ok:
+        return (ok, err)
+    if "index.lock" in err and _clear_stale_git_index_lock(path):
+        return await _run([GIT, "reset", "--hard", prev_hash], cwd=path, timeout=60.0)
+    return (ok, err)
 
 
 # Narrow corruption signatures: "not a git repository" etc. must not match.
@@ -415,6 +457,8 @@ _GIT_CORRUPT_SIGNATURES = (
     "missing blob",
     "missing tree",
     "missing commit",
+    "unable to unpack",
+    "inflate: data stream error",
 )
 
 # Quarantine dir inside .git/objects so it never appears as untracked.
@@ -505,25 +549,32 @@ async def _quarantine_corrupt_objects(path: Path) -> int:
     return moved
 
 
-async def git_repair(path: Path) -> tuple[bool, str]:
+async def git_repair(path: Path, branch: str = "main") -> tuple[bool, str]:
     """Prune 0-byte loose objects, re-fetch, and re-verify. Mirrors start.sh recovery.
 
     If empty-object pruning plus a fetch does not clear the corruption, escalate to
     quarantining non-empty corrupt loose objects (`fsck --full`) and re-fetch once
     more. Working tree is untouched (delete/move + fetch only), so tracked-but-
-    modified files survive. Returns (ok, message).
+    modified files survive. If fetch fails with index.lock error, clears lock and
+    retries. Branch parameter is used to repair corrupt HEAD (fallback to "main").
+    Returns (ok, message).
     """
+    _clear_stale_git_index_lock(path)
     objects = path / ".git" / "objects"
     if not objects.is_dir():
         return (False, "no .git/objects directory")
     removed = _prune_empty_loose_objects(objects)
     logger.warning("git_repair: removed %d empty object(s) from %s", removed, path)
     ok, out = await git_fetch(path, prune_remotes=False)
+    if not ok and "index.lock" in out:
+        _clear_stale_git_index_lock(path)
+        ok, out = await git_fetch(path, prune_remotes=False)
     if not ok:
         return (False, f"fetch after cleanup failed: {out}")
     if not await git_has_corruption(path):
+        if not await _repair_corrupt_head(path, branch):
+            return (False, "repaired objects but HEAD still unreadable")
         return (True, f"repaired ({removed} empty objects removed)")
-    # A non-empty loose object is corrupt: quarantine and re-fetch it.
     quarantined = await _quarantine_corrupt_objects(path)
     if quarantined == 0:
         return (False, "still corrupt after fetch (no quarantinable objects found)")
@@ -532,6 +583,8 @@ async def git_repair(path: Path) -> tuple[bool, str]:
         return (False, f"fetch after quarantine failed: {out}")
     if await git_has_corruption(path):
         return (False, "still corrupt after quarantine + fetch")
+    if not await _repair_corrupt_head(path, branch):
+        return (False, "repaired objects but HEAD still unreadable")
     return (
         True,
         f"repaired ({removed} empty + {quarantined} corrupt object(s) removed)",
@@ -543,6 +596,39 @@ async def git_get_hash(path: Path | None) -> str:
     if path is None:
         return ""
     ok, output = await _run([GIT, "rev-parse", "HEAD"], cwd=path, timeout=10.0)
+    return output.strip() if ok else ""
+
+
+async def _is_head_readable(path: Path) -> bool:
+    """Return True if HEAD is readable and points to a valid commit."""
+    ok, _out = await _run([GIT, "rev-parse", "HEAD"], cwd=path, timeout=10.0)
+    return ok
+
+
+async def _repair_corrupt_head(path: Path, branch: str = "main") -> bool:
+    """Try to repair a corrupt HEAD by rewriting it to a valid symbolic ref.
+
+    Returns True if HEAD was repaired or is already readable.
+    """
+    if await _is_head_readable(path):
+        return True
+    ok, _msg = await _run(
+        [GIT, "symbolic-ref", "HEAD", f"refs/heads/{branch}"],
+        cwd=path,
+        timeout=10.0,
+    )
+    if ok:
+        logger.warning("repair_corrupt_head: rewrote HEAD for %s", path)
+        return True
+    logger.warning("repair_corrupt_head: failed to rewrite HEAD for %s", path)
+    return False
+
+
+async def git_ref_hash(path: Path | None, ref: str) -> str:
+    """Resolve an arbitrary ref (e.g. origin/main) to its commit hash, or empty."""
+    if path is None:
+        return ""
+    ok, output = await _run([GIT, "rev-parse", ref], cwd=path, timeout=10.0)
     return output.strip() if ok else ""
 
 
@@ -596,7 +682,9 @@ async def git_describe(path: Path, ref: str | None = None) -> str:
     return output.strip() if ok else ""
 
 
-async def git_checkout(path: Path | None, branch: str) -> tuple[bool, str]:
+async def git_checkout(
+    path: Path | None, branch: str, *, force: bool = False
+) -> tuple[bool, str]:
     if path is None:
         return (False, "path not found")
 
@@ -609,8 +697,10 @@ async def git_checkout(path: Path | None, branch: str) -> tuple[bool, str]:
     if current_branch == branch:
         return (True, "already on branch")
 
+    # force: overwrite untracked collisions (e.g. build artifacts) that block a switch.
+    cmd = [GIT, "checkout", "-f", branch] if force else [GIT, "checkout", branch]
     # Generous: a big checkout on slow SD can pass 10s; SIGTERM = half-written tree.
-    return await _run([GIT, "checkout", branch], cwd=path, timeout=60.0)
+    return await _run(cmd, cwd=path, timeout=60.0)
 
 
 async def check_apt_status(
@@ -792,6 +882,11 @@ async def _apt_restore_packages(snapshot_path: Path) -> tuple[bool, str]:
 def classify_apt_error(err: str) -> str:
     """Classify an apt failure: 'permanent' won't clear by retrying, 'transient' might."""
     lowered = err.lower()
+    # A missing apt helper self-heals once bootstrap installs it: retry, never a 1h cooldown.
+    if str(APT_HELPER).lower() in lowered and (
+        "command not found" in lowered or "no such file" in lowered
+    ):
+        return "transient"
     permanent = (
         "command not found",
         "no such file or directory",

@@ -114,8 +114,9 @@ class MainWindow(QtWidgets.QMainWindow):
     show_notifications: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         str, str, int, bool, name="show-notifications"
     )
+    in_case_error = QtCore.pyqtSignal(name="in-case-error")
 
-    call_load_panel = QtCore.pyqtSignal(bool, str, name="call-load-panel")
+    call_load_panel = QtCore.pyqtSignal(bool, str, bool, name="call-load-panel")
 
     _EVT_WS_MSG: typing.ClassVar[QtCore.QEvent.Type] = (
         events.WebSocketMessageReceived.type()
@@ -177,6 +178,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.printer.extruder_update.connect(self.update_page.set_heater_target)
         self.printer.heater_bed_update.connect(self.update_page.set_heater_target)
         self.updater_worker = UpdaterWorker()
+        self._bless_armed = False
         self.update_page.hide()
         self.conn_window.call_cancel_panel.connect(self.handle_cancel_print)
         self.installEventFilter(self.conn_window)
@@ -197,12 +199,14 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ws.connected_signal.connect(
             self.conn_window.on_websocket_connection_achieved
         )
+        self.ws.connected_signal.connect(self._arm_health_bless)
         self.ws.connection_lost.connect(self.conn_window.on_websocket_connection_lost)
         self.ws.klippy_state_signal.connect(self._on_klippy_state)
         self.ws.klippy_state_signal.connect(self.conn_window.on_klippy_state)
         self.printer.webhooks_update.connect(self.conn_window.webhook_update)
         self.printPanel.request_back.connect(slot=self.global_back)
         self.printPanel.on_cancel_print.connect(slot=self.on_cancel_print)
+        self.in_case_error.connect(self.printPanel.in_case_error)
 
         self.show_notifications.connect(self.notiPage.new_notication)
 
@@ -387,32 +391,35 @@ class MainWindow(QtWidgets.QMainWindow):
         self.cancelpage.repaint()
         self.cancelpage.show()
 
-    @QtCore.pyqtSlot(bool, str, name="show-load-page")
-    def show_loadscreen(self, show: bool = True, msg: str = ""):
+    @QtCore.pyqtSlot(bool, str, bool, name="show-load-page")
+    def show_loadscreen(
+        self, show: bool = True, msg: str = "", force: bool = False
+    ) -> None:
         """Show or hide the loading overlay, guarded by the calling panel's visibility."""
         _sender = self.sender()
+        if not force:
+            if _sender is self.update_page:
+                self._update_in_progress = show
+            if not show and self._post_update_reconnect:
+                return
+            elif not show and self._update_in_progress:
+                return
+            elif not show and self._klipper_auto_restart_pending:
+                return
 
-        if _sender is self.update_page:
-            self._update_in_progress = show
-        if not show and self._post_update_reconnect:
-            return
-        elif not show and self._update_in_progress:
-            return
-        elif not show and self._klipper_auto_restart_pending:
-            return
+            if _sender == self.filamentPanel:
+                if not self.filamentPanel.isVisible():
+                    return
+            if _sender == self.controlPanel:
+                if not self.controlPanel.isVisible():
+                    return
+            if _sender == self.printPanel:
+                if not self.printPanel.isVisible():
+                    return
+            if _sender == self.utilitiesPanel:
+                if not self.utilitiesPanel.isVisible():
+                    return
 
-        if _sender == self.filamentPanel:
-            if not self.filamentPanel.isVisible():
-                return
-        if _sender == self.controlPanel:
-            if not self.controlPanel.isVisible():
-                return
-        if _sender == self.printPanel:
-            if not self.printPanel.isVisible():
-                return
-        if _sender == self.utilitiesPanel:
-            if not self.utilitiesPanel.isVisible():
-                return
         self.loadwidget.set_status_message(msg)
         if show:
             self.loadscreen.show()
@@ -465,6 +472,23 @@ class MainWindow(QtWidgets.QMainWindow):
             self._klipper_restart_timeout.stop()
             if not self._post_update_reconnect:
                 self.loadscreen.hide()
+
+    @QtCore.pyqtSlot(name="arm-health-bless")
+    def _arm_health_bless(self) -> None:
+        """On first moonraker connect, arm a one-shot to bless this build as healthy."""
+        if self._bless_armed:
+            return
+        self._bless_armed = True
+        QtCore.QTimer.singleShot(60_000, self._emit_health_bless)
+
+    @QtCore.pyqtSlot(name="emit-health-bless")
+    def _emit_health_bless(self) -> None:
+        """Bless the running build if moonraker is still reachable after the debounce."""
+        if not getattr(self.ws, "connected", False):
+            _logger.info("health bless skipped: moonraker not connected")
+            return
+        _logger.info("health bless: marking current build as known-good")
+        self.updater_worker.trigger_bless()
 
     @QtCore.pyqtSlot(name="on-klipper-restart-timeout")
     def _on_klipper_restart_timeout(self) -> None:
@@ -996,17 +1020,25 @@ class MainWindow(QtWidgets.QMainWindow):
         show_popup: bool,
     ) -> bool:
         rule = match_message(source, text)
+
         if rule is not None:
             if rule.severity == Severity.IGNORE:
                 return True
+            if rule.severity == Severity.ERROR:
+                self.show_loadscreen(False, "", True)
+                self.in_case_error.emit()
+
             self.show_notifications.emit(
                 source_id, rule.full_display, rule.severity.value, show_popup
             )
             return True
+
         elif fallback:
             self.show_notifications.emit(
                 source_id, text, Severity.ERROR.value, show_popup
             )
+            self.show_loadscreen(False, "", True)
+            self.in_case_error.emit()
             return True
         return False
 
@@ -1046,6 +1078,9 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.show_notifications.emit(
                     _gcode_msg_type, _message, Severity.INFO.value, True
                 )
+                return
+            elif _gcode_msg_type == "LOAD":
+                self.show_loadscreen(True, _message, False)
                 return
 
             elif _gcode_msg_type == "!!":

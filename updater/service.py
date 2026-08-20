@@ -10,14 +10,16 @@ import shutil
 import tempfile
 import time
 from asyncio import Lock
+from collections.abc import Callable
 from pathlib import Path
-from typing import Protocol
+from typing import Protocol, TypeGuard
 
 from updater.components import load_components
 from updater.executor import (
     _GIT_SHA_RE,
     HOOK_TIMEOUT,
     PIP,
+    SYSTEMCTL,
     UPDATER_SERVICE,
     _apt_get_fix_broken,
     _apt_restore_packages,
@@ -39,6 +41,7 @@ from updater.executor import (
     git_get_hash,
     git_has_corruption,
     git_pull,
+    git_ref_hash,
     git_repair,
     git_reset_to_hash,
     is_git_repo,
@@ -54,6 +57,8 @@ from updater.models import ComponentConfig, ComponentStatus
 _STATE_PATH = Path.home() / ".cache" / "blockscreen" / "updater_state.json"
 # SD-backed batch map name->pre-update hash; present at boot = revert those repos.
 _INFLIGHT_PATH = Path.home() / ".cache" / "blockscreen" / "updater_inflight.json"
+# Self-heal fault marker: present = fast recovery saturated (golden also looped).
+_FAULT_MARKER_PATH = Path.home() / ".cache" / "blockscreen" / "selfheal_fault.json"
 _HISTORY_PATH = Path.home() / ".cache" / "blockscreen" / "update_history.jsonl"
 # Cap the history so a device running for years cannot fill the SD card.
 _HISTORY_MAX_BYTES = 1_000_000
@@ -65,6 +70,35 @@ _APT_BACKOFF_MAX_S = 1800.0
 _APT_PERMANENT_COOLDOWN_S = 3600.0
 _FETCH_BACKOFF_BASE_S = 30.0
 _FETCH_BACKOFF_MAX_S = 900.0
+
+# Self-heal: NRestarts polling interval (seconds) for crash-loop detection.
+_NRESTARTS_POLL_INTERVAL_S = 15.0
+# Trailing window for crash-loop detection: 5+ restarts in 180 seconds.
+_NRESTARTS_WINDOW_S = 180.0
+_NRESTARTS_THRESHOLD = 5
+
+
+async def get_service_nrestarts(service: str = "BlocksScreen.service") -> int:
+    """Read a systemd unit's NRestarts via `systemctl show` (0 if unavailable)."""
+    ok, out = await _run(
+        [SYSTEMCTL, "show", service, "-p", "NRestarts", "--value"], timeout=10.0
+    )
+    value = out.strip() if ok else ""
+    return int(value) if value.isdigit() else 0
+
+
+def _ensure_comp(state: dict, name: str) -> dict:
+    """Return state[name] as a dict, replacing a corrupt non-dict entry in place."""
+    comp = state.get(name)
+    if not isinstance(comp, dict):
+        comp = {}
+        state[name] = comp
+    return comp
+
+
+def _is_sha(val: object) -> TypeGuard[str]:
+    """True only for a syntactically valid git hash (guards corrupt/non-str state)."""
+    return isinstance(val, str) and bool(_GIT_SHA_RE.match(val))
 
 
 class _Backoff:
@@ -104,6 +138,18 @@ _GIT_EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
 # UI services (our D-Bus client): no-block restart so self-update can't kill the batch.
 _UI_SERVICE = "BlocksScreen.service"
 _FIRE_AND_FORGET_SERVICES = frozenset({_UI_SERVICE})
+# Fallback klipper unit for restart_klipper if no klipper component is configured.
+_KLIPPER_SERVICE = "klipper.service"
+
+# Self-heal: the UI component name (components.yaml) that the supervisor watches.
+_UI_COMPONENT = "BlocksScreen"
+# Forward-heal always targets the curated-stable channel, not the configured branch.
+_HEAL_REMOTE_REF = "origin/main"
+# Settle window after a rung (debounce plus margin) so a new build can bless first.
+_RECOVERY_SETTLE_S = 90.0
+# Slow forward-heal cadence base and jitter spread (seconds), per fleet OTA practice.
+_FORWARD_HEAL_BASE_S = 1800.0
+_FORWARD_HEAL_JITTER_S = 300.0
 
 # Deploy flag for BlocksScreen-deploy.path: runs install-updater.sh in its own cgroup.
 _DEPLOY_FLAG = Path.home() / ".config" / "blockscreen" / ".run-install-updater"
@@ -161,11 +207,19 @@ class UpdateService:
         self._state_path = _STATE_PATH
         self._inflight_path = _INFLIGHT_PATH
         self._history_path = _HISTORY_PATH
+        self._fault_marker_path = _FAULT_MARKER_PATH
         self._log = logging.getLogger("updater")
+        # Self-heal: trailing-window sample ring for crash-loop detection.
+        self._nrestarts_samples: dict[str, list[tuple[float, int]]] = {}
 
     def has_component(self, name: str) -> bool:
         """Return True if a component with the given name is registered."""
         return any(c.name == name for c in self._components)
+
+    def _klipper_service(self) -> str:
+        """restart_klipper target: the klipper component's service, else the default."""
+        comp = next((c for c in self._components if c.name == "klipper"), None)
+        return comp.service if comp and comp.service else _KLIPPER_SERVICE
 
     def component_stubs(self) -> list[tuple[str, str]]:
         """Return (name, kind) pairs for all registered components."""
@@ -305,17 +359,20 @@ class UpdateService:
             if c.kind == "git" and c.path is not None and is_git_repo(c.path)
         ]
         offline: list[str] = []
-        async with self._git_lock:
-            for c in targets:
-                now = time.monotonic()
+        # Lock guards only _fetch_times; git_fetch runs outside it (as check_status).
+        for c in targets:
+            now = time.monotonic()
+            async with self._git_lock:
                 # Skip if fetched <30s ago; apply phase still skips its own fetch.
-                if now - self._fetch_times.get(c.name, 0.0) < 30:
-                    continue
-                ok, err = await git_fetch(c.path)
-                if ok:
+                recent = now - self._fetch_times.get(c.name, 0.0) < 30
+            if recent:
+                continue
+            ok, err = await git_fetch(c.path)
+            if ok:
+                async with self._git_lock:
                     self._fetch_times[c.name] = now
-                elif not await git_has_corruption(c.path, hint=err):
-                    offline.append(c.name)
+            elif not await git_has_corruption(c.path, hint=err):
+                offline.append(c.name)
         if offline:
             msg = "network error during pre-flight fetch - no components changed"
             self._log.error("update_all: %s (failed: %s)", msg, offline)
@@ -436,6 +493,17 @@ class UpdateService:
                 if not await self._restart_one(c.service):
                     await self._abort_batch(batch, prev, touched, restarted, "restart")
                     return
+            # Bounce klipper once for restart_klipper components that aren't klipper.
+            klipper_svc = self._klipper_service()
+            if any(c.restart_klipper for c in batch) and klipper_svc not in seen:
+                seen.add(klipper_svc)
+                restarted.append(klipper_svc)
+                self._log.info(
+                    "git batch: restarting %s (restart_klipper)", klipper_svc
+                )
+                if not await self._restart_one(klipper_svc):
+                    await self._abort_batch(batch, prev, touched, restarted, "restart")
+                    return
             # Persist success BEFORE UI restart: a committed update is never reverted.
             for c in batch:
                 self._history(
@@ -492,8 +560,14 @@ class UpdateService:
         self._log.warning(
             "aborting batch (reason=%s): reverting %d repo(s)", reason, len(touched)
         )
+        revert_ok = True
         for c in touched:
-            await git_reset_to_hash(c.path, prev[c.name])
+            ok, _ = await git_reset_to_hash(c.path, prev[c.name])
+            if not ok:
+                revert_ok = False
+                self._log.error(
+                    "abort: %s reset to %s failed", c.name, prev[c.name][:12]
+                )
         # Repos are back at prev_hash: the batch is resolved, drop the marker.
         await asyncio.to_thread(self._clear_inflight)
         restart_ok = True
@@ -501,16 +575,17 @@ class UpdateService:
             if not await self._restart_one(service):
                 restart_ok = False
                 self._log.error("abort: %s did not recover after revert", service)
+        rollback_ok = revert_ok and restart_ok
         for c in batch:
             self._history(
                 "rollback",
                 c.name,
                 reason=reason,
                 reverted_to=prev[c.name][:12],
-                ok=restart_ok,
+                ok=rollback_ok,
             )
             self._cb("on_error", c.name, reason)
-            self._cb("on_rollback", c.name, restart_ok)
+            self._cb("on_rollback", c.name, rollback_ok)
             self._cb("on_component_done", c.name, False)
 
     async def _apply_deferred_restart(self) -> None:
@@ -619,6 +694,289 @@ class UpdateService:
         self._cb("on_recover", name, ok)
         return ok
 
+    async def bless_healthy(self, name: str, hash_val: str) -> bool:
+        """Mark a component as healthy (known-good) after a debounce; snapshots baseline.
+
+        An empty hash_val means "bless the component's current HEAD": the UI does
+        not need to compute a hash, it just says it is healthy.
+        """
+        component = next((c for c in self._components if c.name == name), None)
+        if component is None:
+            self._log.error("bless_healthy: component %s not found", name)
+            return False
+        if not hash_val:
+            hash_val = await git_get_hash(component.path)
+        if not _GIT_SHA_RE.match(hash_val):
+            self._log.error("bless_healthy: invalid hash format for %s", name)
+            return False
+        nrestarts_baseline = await get_service_nrestarts(_UI_SERVICE)
+
+        def _apply(state: dict) -> None:
+            comp = _ensure_comp(state, name)
+            comp["last_good"] = hash_val
+            if not _is_sha(comp.get("golden")):
+                comp["golden"] = hash_val  # seed once, or repair a corrupt golden
+            comp["fast_attempt"] = 0
+            comp["nrestarts_baseline"] = nrestarts_baseline
+            comp.pop("last_failed_remote", None)
+
+        ok = await self._mutate_state(_apply)
+        if ok:
+            self._nrestarts_samples[name] = []
+            await asyncio.to_thread(self._clear_fault_marker)
+            self._log.info(
+                "bless_healthy: %s blessed to %s (baseline=%d)",
+                name,
+                hash_val[:8],
+                nrestarts_baseline,
+            )
+        return ok
+
+    def _check_crash_loop(self, name: str, nrestarts: int) -> bool:
+        """Return True if NRestarts rose by >= 5 within the trailing 180s window.
+
+        Compares against the oldest in-window sample (largest rise, since NRestarts
+        is monotonic), then records the current sample and prunes aged-out ones.
+        """
+        if name not in self._nrestarts_samples:
+            self._nrestarts_samples[name] = []  # fresh device: start tracking now
+        samples = self._nrestarts_samples[name]
+        now = time.monotonic()
+        window_start = now - _NRESTARTS_WINDOW_S
+        for ts, nr in samples:
+            if ts >= window_start:
+                delta = nrestarts - nr
+                if delta >= _NRESTARTS_THRESHOLD:
+                    self._log.warning(
+                        "crash-loop detected: %s delta=%d in 180s window", name, delta
+                    )
+                    return True
+                break
+        samples.append((now, nrestarts))
+        samples[:] = [(ts, nr) for ts, nr in samples if ts >= window_start]
+        return False
+
+    def _prime_nrestarts_sample_ring(self) -> None:
+        """Initialize sample ring from persisted baseline on daemon start."""
+        state = self._read_state()
+        for name, comp_state in state.items():
+            baseline = comp_state.get("nrestarts_baseline", 0)
+            if (
+                isinstance(baseline, int)
+                and baseline > 0
+                and name not in self._nrestarts_samples
+            ):
+                self._nrestarts_samples[name] = [(time.monotonic(), baseline)]
+
+    async def background_prime_nrestarts(self) -> None:
+        """Background task: prime NRestarts sample ring on startup."""
+        await asyncio.sleep(0.5)
+        await asyncio.to_thread(self._prime_nrestarts_sample_ring)
+        self._log.info("NRestarts sample ring primed")
+
+    async def run_recovery_rung(self, name: str, attempt: int) -> bool:
+        """Execute one rung of the recovery ladder for a component."""
+        component = next((c for c in self._components if c.name == name), None)
+        if component is None:
+            self._log.error("run_recovery_rung: component %s not found", name)
+            return False
+        attempt = min(max(attempt, 1), 3)
+        # Persist the counter on entry so a skipped/failed rung still escalates next time.
+        await self._mutate_state(
+            lambda s: _ensure_comp(s, name).update(fast_attempt=attempt)
+        )
+        comp_state = (await asyncio.to_thread(self._read_state)).get(name, {})
+        # entry-counter write above may not have persisted; state may still be corrupt
+        if not isinstance(comp_state, dict):
+            comp_state = {}
+        if attempt == 1:
+            last_good = comp_state.get("last_good")
+            if _is_sha(last_good):
+                self._log.info("recovery rung 1: reset to last_good %s", last_good[:8])
+                if component.path:
+                    async with self._git_lock:
+                        ok, _ = await git_reset_to_hash(component.path, last_good)
+                    if not ok:
+                        self._log.error("reset to last_good failed")
+                        return False
+                ok = await self._restart_ui_service()
+                if ok:
+                    self._history(
+                        "recovery_rung1", name, ok=True, reverted_to=last_good[:12]
+                    )
+                return ok
+            self._log.warning("recovery rung 1: no valid last_good, skipping")
+            return False
+        elif attempt == 2:
+            self._log.info("recovery rung 2: fetch %s and reset", _HEAL_REMOTE_REF)
+            if not component.path:
+                return False
+            async with self._git_lock:
+                ok_fetch, _ = await git_fetch(component.path)
+                if not ok_fetch:
+                    self._log.warning("recovery rung 2: fetch failed (offline?)")
+                    return False
+                tip = await git_ref_hash(component.path, _HEAL_REMOTE_REF)
+                if not tip:
+                    self._log.warning(
+                        "recovery rung 2: %s unresolved", _HEAL_REMOTE_REF
+                    )
+                    return False
+                ok_reset, _ = await git_reset_to_hash(component.path, _HEAL_REMOTE_REF)
+            if not ok_reset:
+                self._log.error("reset to %s failed", _HEAL_REMOTE_REF)
+                return False
+            # Persist the tip before restart so an unbootable tip is never retried.
+            await self._mutate_state(
+                lambda s: _ensure_comp(s, name).update(last_failed_remote=tip)
+            )
+            ok = await self._restart_ui_service()
+            if ok:
+                self._history("recovery_rung2", name, ok=True, reverted_to=tip[:12])
+            return ok
+        else:
+            golden = comp_state.get("golden")
+            if _is_sha(golden):
+                self._log.info("recovery rung 3: reset to golden %s", golden[:8])
+                if component.path:
+                    async with self._git_lock:
+                        ok, _ = await git_reset_to_hash(component.path, golden)
+                    if not ok:
+                        self._log.error("reset to golden failed")
+                        return False
+                ok = await self._restart_ui_service()
+                if ok:
+                    self._history(
+                        "recovery_rung3", name, ok=True, reverted_to=golden[:12]
+                    )
+                return ok
+            self._log.warning("recovery rung 3: no valid golden, skipping")
+            return False
+
+    async def _restart_ui_service(self) -> bool:
+        """Restart the BlocksScreen UI service; return True if successful."""
+        restart_ok, restart_err = await restart_service(_UI_SERVICE)
+        if restart_ok:
+            restart_ok = await wait_for_service_active(_UI_SERVICE, timeout=90.0)
+        if not restart_ok:
+            self._log.error("restart_ui_service failed: %s", restart_err)
+        return restart_ok
+
+    def _rebaseline_samples(self, name: str, nrestarts: int) -> None:
+        """Reset the detection ring so only crashes AFTER a rung count toward the next."""
+        self._nrestarts_samples[name] = [(time.monotonic(), nrestarts)]
+
+    async def supervise_ui(self) -> None:
+        """Poll the UI service NRestarts and drive the recovery ladder on a crash-loop.
+
+        The single-attempt-in-flight guard is the loop itself: at most one rung runs
+        per crash-loop, then detection is re-baselined and a settle window elapses so
+        a new build gets a fair chance to bless before the next rung is counted.
+        """
+        while True:
+            await asyncio.sleep(_NRESTARTS_POLL_INTERVAL_S)
+            try:
+                nrestarts = await get_service_nrestarts(_UI_SERVICE)
+            except Exception as exc:  # noqa: BLE001
+                self._log.debug("supervise_ui: NRestarts read failed: %s", exc)
+                continue
+            if self._check_crash_loop(_UI_COMPONENT, nrestarts):
+                await self._handle_crash_loop(nrestarts)
+
+    async def _handle_crash_loop(self, nrestarts: int) -> None:
+        """Run one recovery rung for the UI, or saturate if the ladder is exhausted."""
+        state = await asyncio.to_thread(self._read_state)
+        comp = state.get(_UI_COMPONENT, {})
+        raw = comp.get("fast_attempt", 0) if isinstance(comp, dict) else 0
+        current = raw if isinstance(raw, int) and not isinstance(raw, bool) else 0
+        attempt = current + 1
+        if attempt > 3:
+            self._log.error("self-heal: fast recovery saturated; staying on golden")
+            self._history("recovery_saturated", _UI_COMPONENT, ok=False)
+            await asyncio.to_thread(self._write_fault_marker, "fast recovery saturated")
+            self._rebaseline_samples(_UI_COMPONENT, nrestarts)
+            return
+        self._log.warning("self-heal: crash-loop -> recovery attempt %d", attempt)
+        ok = await self.run_recovery_rung(_UI_COMPONENT, attempt)
+        self._cb("on_recover", _UI_COMPONENT, ok)
+        post = await get_service_nrestarts(_UI_SERVICE)
+        self._rebaseline_samples(_UI_COMPONENT, post)
+        await asyncio.sleep(_RECOVERY_SETTLE_S)
+
+    async def forward_heal_ui(self) -> None:
+        """Slowly re-check origin/main and re-attempt an upgrade once a fix ships.
+
+        Jittered and connectivity-gated: desynchronized polls avoid a fleet stampede
+        and a failed fetch (offline) is skipped without churn.
+        """
+        while True:
+            delay = _FORWARD_HEAL_BASE_S + secrets.randbelow(
+                int(_FORWARD_HEAL_JITTER_S) + 1
+            )
+            await asyncio.sleep(delay)
+            try:
+                await self._forward_heal_once()
+            except Exception as exc:  # noqa: BLE001
+                self._log.debug("forward_heal_ui: %s", exc)
+
+    async def _forward_heal_once(self) -> bool:
+        """One forward-heal pass: attempt the new origin/main tip if we are in fallback."""
+        state = await asyncio.to_thread(self._read_state)
+        comp_state = state.get(_UI_COMPONENT, {})
+        if not isinstance(comp_state, dict):
+            return False
+        raw = comp_state.get("fast_attempt", 0)
+        if not (isinstance(raw, int) and not isinstance(raw, bool)) or raw < 2:
+            return False  # healthy, not yet in deep fallback, or corrupt counter
+        component = next((c for c in self._components if c.name == _UI_COMPONENT), None)
+        if component is None or not component.path:
+            return False
+        async with self._git_lock:
+            ok_fetch, _ = await git_fetch(component.path)
+            if not ok_fetch:
+                return False  # offline: connectivity gate
+            tip = await git_ref_hash(component.path, _HEAL_REMOTE_REF)
+        if not tip or tip == comp_state.get("last_failed_remote"):
+            return False  # no new stable tip since the last failure
+        self._log.info(
+            "forward-heal: new %s tip %s, upgrading", _HEAL_REMOTE_REF, tip[:8]
+        )
+        async with self._git_lock:
+            ok_reset, _ = await git_reset_to_hash(component.path, _HEAL_REMOTE_REF)
+        if not ok_reset:
+            return False
+
+        def _apply(s: dict) -> None:
+            comp = _ensure_comp(s, _UI_COMPONENT)
+            comp["fast_attempt"] = 0
+            comp["last_failed_remote"] = tip
+
+        await self._mutate_state(_apply)
+        post = await get_service_nrestarts(_UI_SERVICE)
+        self._rebaseline_samples(_UI_COMPONENT, post)
+        ok = await self._restart_ui_service()
+        self._history("forward_heal", _UI_COMPONENT, ok=ok, reverted_to=tip[:12])
+        return ok
+
+    def _write_fault_marker(self, reason: str) -> None:
+        """Record that fast recovery saturated so a human/telemetry can see it later."""
+        try:
+            self._fault_marker_path.parent.mkdir(
+                mode=0o700, parents=True, exist_ok=True
+            )
+            self._fault_marker_path.write_text(
+                json.dumps({"reason": reason, "ts": time.time()})
+            )
+        except OSError:
+            self._log.warning("failed to write self-heal fault marker")
+
+    def _clear_fault_marker(self) -> None:
+        """Clear the saturation fault marker after a successful bless."""
+        try:
+            self._fault_marker_path.unlink(missing_ok=True)
+        except OSError:
+            self._log.warning("failed to clear self-heal fault marker")
+
     async def reconcile(self) -> None:
         """Heal repos left damaged by a power loss mid-update, for every component.
 
@@ -687,14 +1045,16 @@ class UpdateService:
                 if await git_get_hash(c.path) != "":
                     continue
                 self._log.warning("reconcile: %s HEAD unreadable - repairing", c.name)
-                ok, msg = await git_repair(c.path)
-                if ok:
+                _branch = c.branch or "main"
+                ok, msg = await git_repair(c.path, _branch)
+                if ok and await git_get_hash(c.path) != "":
                     self._history("boot_repair", c.name, detail=msg[:80])
                     continue
+                comp_state = (await asyncio.to_thread(self._read_state)).get(c.name, {})
                 prev = (
-                    (await asyncio.to_thread(self._read_state))
-                    .get(c.name, {})
-                    .get("prev_hash")
+                    comp_state.get("prev_hash")
+                    if isinstance(comp_state, dict)
+                    else None
                 )
                 if prev and _GIT_SHA_RE.match(prev):
                     rok, _ = await git_reset_to_hash(c.path, prev)
@@ -706,6 +1066,51 @@ class UpdateService:
                     self._log.error(
                         "reconcile: %s unrepairable, no recorded prev_hash", c.name
                     )
+        await self._reconcile_self_heal_state()
+
+    async def _reconcile_self_heal_state(self) -> None:
+        """Validate self-heal state fields; drop corrupt hashes, clamp counter."""
+        async with self._state_lock:
+            state = await asyncio.to_thread(self._read_state)
+            changed = False
+            for name, comp_state in list(state.items()):
+                if not isinstance(comp_state, dict):
+                    self._log.warning("reconcile: %s entry not a dict - dropping", name)
+                    del state[name]
+                    changed = True
+                    continue
+                for field in ("last_good", "golden", "last_failed_remote"):
+                    if field in comp_state:
+                        val = comp_state[field]
+                        if not isinstance(val, str) or not _GIT_SHA_RE.match(val):
+                            self._log.warning(
+                                "reconcile: %s %s corrupt/invalid - dropping",
+                                name,
+                                field,
+                            )
+                            del comp_state[field]
+                            changed = True
+                if "fast_attempt" in comp_state:
+                    val = comp_state["fast_attempt"]
+                    if isinstance(val, bool) or not isinstance(val, int):
+                        self._log.warning(
+                            "reconcile: %s fast_attempt not an int - dropping", name
+                        )
+                        del comp_state["fast_attempt"]
+                        changed = True
+                    else:
+                        clamped = min(max(val, 0), 3)
+                        if clamped != val:
+                            self._log.info(
+                                "reconcile: %s fast_attempt clamped %d -> %d",
+                                name,
+                                val,
+                                clamped,
+                            )
+                            comp_state["fast_attempt"] = clamped
+                            changed = True
+            if changed:
+                await asyncio.to_thread(self._write_state, state)
 
     async def _rollback(
         self, component: ComponentConfig, prev_hash: str, reason: str
@@ -990,8 +1395,17 @@ class UpdateService:
                     return (False, "corrupt")
                 self._history("repair", component.name, detail=rmsg[:80])
 
+        # Switch to the target branch FIRST so reset/pull act on the right branch.
+        if component.branch:
+            # hard mode forces past untracked collisions (build artifacts).
+            force = component.reset_mode == "hard"
+            ok, err = await git_checkout(component.path, component.branch, force=force)
+            if not ok:
+                self._log.error("%s: git_checkout failed: %s", component.name, err)
+                return (False, "branch")
+
         if component.reset_mode == "hard":
-            # Reset to the remote ref, not HEAD, discarding diverged local commits.
+            # Reset the (now current) branch to its remote tip, discarding divergence.
             if component.branch:
                 hard_ref = f"origin/{component.branch}"
             else:
@@ -1009,16 +1423,8 @@ class UpdateService:
             if not ok:
                 self._log.error("%s: version pin failed: %s", component.name, err)
                 return (False, "version")
-        elif component.branch:
-            ok, err = await git_checkout(component.path, component.branch)
-            if not ok:
-                self._log.error("%s: git_checkout failed: %s", component.name, err)
-                return (False, "branch")
-            ok, err = await git_pull(component.path)
-            if not ok:
-                self._log.error("%s: git_pull failed: %s", component.name, err)
-                return (False, "conflict")
-        else:
+        elif component.reset_mode != "hard":
+            # Soft mode: fast-forward (branch already checked out, or default).
             ok, err = await git_pull(component.path)
             if not ok:
                 self._log.error("%s: git_pull failed: %s", component.name, err)
@@ -1133,6 +1539,12 @@ class UpdateService:
             ):
                 await self._rollback(component, prev_hash, "restart")
                 return False
+            # Bounce klipper too when requested and it isn't the component's own service.
+            klipper_svc = self._klipper_service()
+            if component.restart_klipper and component.service != klipper_svc:
+                if not await self._restart_one(klipper_svc):
+                    await self._rollback(component, prev_hash, "restart")
+                    return False
 
             self._history("update_success", component.name, new_hash=new_hash[:12])
             self._cb("on_component_done", component.name, True)
@@ -1334,6 +1746,13 @@ class UpdateService:
         except OSError:
             self._log.error("Failed to write state file")
             return False
+
+    async def _mutate_state(self, mutate: Callable[[dict], None]) -> bool:
+        """Atomically read-modify-write the state file under the state lock."""
+        async with self._state_lock:
+            state = await asyncio.to_thread(self._read_state)
+            mutate(state)
+            return await asyncio.to_thread(self._write_state, state)
 
     @staticmethod
     def _fsync_dir(path: Path) -> None:

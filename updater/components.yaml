@@ -4,6 +4,8 @@ poll_interval_minutes: 1440
 # ~/printer_data/config/blockscreen_updater.yaml, merged by name):
 #   url: https://...          https-only clone URL (install_if_missing needs it)
 #   install_if_missing: true  clone + deps + hook when the path is absent
+#   restart_ui: true          also restart BlocksScreen after this component updates
+#   restart_klipper: true     also restart klipper after this component updates
 
 components:
   - name: klipper
@@ -12,6 +14,7 @@ components:
     url: https://github.com/Klipper3d/klipper
     service: klipper.service
     reset_mode: hard
+    branch: master
     order: 2
     restart_ui: true
 
@@ -27,7 +30,7 @@ components:
     type: git
     path: ~/RF50-Klipper
     url: https://github.com/BlocksTechnology/RF50-Klipper
-    branch: main
+    branch: Release-2.0
     service: klipper.service
     reset_mode: hard
     order: 10
@@ -41,6 +44,16 @@ components:
     service: klipper.service
     reset_mode: hard
     order: 13
+
+  - name: katapult
+    type: git
+    path: ~/katapult
+    url: https://github.com/arksine/katapult
+    branch: master
+    reset_mode: hard
+    order: 25
+    restart_ui: false
+    install_if_missing: true
 
   - name: crowsnest
     type: git
@@ -65,6 +78,7 @@ components:
   - name: BlocksScreen
     type: git
     path: ~/BlocksScreen
+    branch: Release-2.0
     url: https://github.com/BlocksTechnology/BlocksScreen
     service: BlocksScreen.service
     reset_mode: hard

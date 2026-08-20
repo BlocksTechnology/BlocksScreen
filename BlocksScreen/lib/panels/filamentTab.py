@@ -33,7 +33,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
     request_change_tab = QtCore.pyqtSignal(int, name="request_change_tab")
     request_toolhead_count = QtCore.pyqtSignal(int, name="toolhead_number_received")
     run_gcode = QtCore.pyqtSignal(str, name="run_gcode")
-    call_load_panel = QtCore.pyqtSignal(bool, str, name="call-load-panel")
+    call_load_panel = QtCore.pyqtSignal(bool, str, bool, name="call-load-panel")
 
     def __init__(
         self, parent, printer: Printer, ws, config, amu_manager: AMUManager
@@ -862,7 +862,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
                 self.printer.print_stats_update[str, float].connect(
                     self.amupage.on_print_stats_update
                 )
-
+                self.amupage.call_load_panel.connect(self.call_load_panel)
                 self.amupage.request_keyboard.connect(self._on_show_keyboard)
                 self.amupage.request_color_wheel.connect(self._open_color_wheel)
 
@@ -871,13 +871,15 @@ class FilamentTab(QtWidgets.QStackedWidget):
         if self.load_state:
             if mmu_state.action == "Idle":
                 self.load_state = False
-                self.call_load_panel.emit(False, "")
+                self.call_load_panel.emit(False, "", True)
+                if not len(mmu_state.gates) > 1:
+                    self._basic_panel.change_page(0)
                 return
-            self.call_load_panel.emit(True, mmu_state.action)
+            self.call_load_panel.emit(True, mmu_state.action, True)
 
         if mmu_state.action == "Loading" or mmu_state.action == "Unloading":
             self.load_state = True
-            self.call_load_panel.emit(True, mmu_state.action)
+            self.call_load_panel.emit(True, mmu_state.action, True)
 
     def setupUi(self):
         self.resize(710, 410)
