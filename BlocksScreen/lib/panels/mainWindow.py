@@ -388,7 +388,14 @@ class MainWindow(QtWidgets.QMainWindow):
         if not force:
             if _sender is self.update_page:
                 self._update_in_progress = show
-            if not show and self._post_update_reconnect or not show and self._update_in_progress or not show and self._klipper_auto_restart_pending:
+            if (
+                not show
+                and self._post_update_reconnect
+                or not show
+                and self._update_in_progress
+                or not show
+                and self._klipper_auto_restart_pending
+            ):
                 return
 
             if _sender == self.filamentPanel:

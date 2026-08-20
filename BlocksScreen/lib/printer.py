@@ -790,7 +790,6 @@ class Printer(QtCore.QObject):
 
         self.configfile_update.emit(values)  # Signal config update
 
-
     def _gcode_object_updated(self, values: dict, name: str = "gcode_object") -> None:
         if not values.get("commands"):
             return
