@@ -141,6 +141,13 @@ class EntryListModel(QtCore.QAbstractListModel):
         self.endRemoveRows()
         return True
 
+    def get_selected_item(self) -> ListItem | None:
+        """Return the currently selected item, or None."""
+        for item in self.entries:
+            if item.selected:
+                return item
+        return None
+
     def update_item_at(self, position: int, item: ListItem) -> bool:
         """Update an existing item's display data in-place.
 

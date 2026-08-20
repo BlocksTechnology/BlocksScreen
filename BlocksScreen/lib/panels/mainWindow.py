@@ -9,7 +9,7 @@ from configfile import BlocksScreenConfig, get_configparser
 from devices.amu import AMUManager
 from devices.storage import USBManager
 from lib.files import Files
-from lib.klipper_message_filter import (  # noqa: F405
+from lib.klipper_message_filter import (
     MessageSource,
     Severity,
     match_message,
@@ -114,12 +114,13 @@ class MainWindow(QtWidgets.QMainWindow):
     show_notifications: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         str, str, int, bool, name="show-notifications"
     )
+    in_case_error = QtCore.pyqtSignal(name="in-case-error")
 
-    call_load_panel = QtCore.pyqtSignal(bool, str, name="call-load-panel")
+    call_load_panel = QtCore.pyqtSignal(bool, str, bool, name="call-load-panel")
 
     def __init__(self):
         """Set up UI, instantiate subsystems, and wire all inter-component signals."""
-        super(MainWindow, self).__init__()
+        super().__init__()
         self.config: BlocksScreenConfig = get_configparser()
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
@@ -165,6 +166,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.printer.extruder_update.connect(self.update_page.set_heater_target)
         self.printer.heater_bed_update.connect(self.update_page.set_heater_target)
         self.updater_worker = UpdaterWorker()
+        self._bless_armed = False
         self.update_page.hide()
         self.conn_window.call_cancel_panel.connect(self.handle_cancel_print)
         self.installEventFilter(self.conn_window)
@@ -185,12 +187,14 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ws.connected_signal.connect(
             self.conn_window.on_websocket_connection_achieved
         )
+        self.ws.connected_signal.connect(self._arm_health_bless)
         self.ws.connection_lost.connect(self.conn_window.on_websocket_connection_lost)
         self.ws.klippy_state_signal.connect(self._on_klippy_state)
         self.ws.klippy_state_signal.connect(self.conn_window.on_klippy_state)
         self.printer.webhooks_update.connect(self.conn_window.webhook_update)
         self.printPanel.request_back.connect(slot=self.global_back)
         self.printPanel.on_cancel_print.connect(slot=self.on_cancel_print)
+        self.in_case_error.connect(self.printPanel.in_case_error)
 
         self.show_notifications.connect(self.notiPage.new_notication)
 
@@ -290,6 +294,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.updater_worker.error_occurred.connect(
             self.update_page.handle_error_occurred
         )
+        self.updater_worker.update_rejected.connect(
+            self.update_page.handle_update_rejected
+        )
         self.updater_worker.rollback_done.connect(self.update_page.handle_rollback_done)
         self.updater_worker.recover_done.connect(self.update_page.handle_recover_done)
         self.ws.klippy_state_signal.connect(self._on_klippy_state)
@@ -313,7 +320,7 @@ class MainWindow(QtWidgets.QMainWindow):
         )
         self.loadscreen.add_widget(self.loadwidget)
         self.controlPanel.toggle_conn_page.connect(self.conn_window.set_toggle)
-        self.cancelpage = CancelPage(self, ws=self.ws)
+        self.cancelpage = CancelPage(self)
         self.cancelpage.request_file_info.connect(self.file_data.on_request_fileinfo)
         self.cancelpage.run_gcode.connect(self.ws.api.run_gcode)
         self.printer.print_stats_update[str, str].connect(
@@ -326,8 +333,16 @@ class MainWindow(QtWidgets.QMainWindow):
             self.cancelpage.on_print_stats_update
         )
         self.file_data.fileinfo.connect(self.cancelpage._show_screen_thumbnail)
+        # Reprint routes through on_print_start for the same full reset as a fresh print.
+        self.cancelpage.reprint_start.connect(
+            self.printPanel.jobStatusPage_widget.on_print_start
+        )
         self.printPanel.call_cancel_panel.connect(self.handle_cancel_print)
         self.printer.display_update.connect(self._handle_display_status)
+
+        # Source of truth for job activity; keeps print tab off the main page mid-job.
+        self._print_state = "standby"
+        self.printer.print_stats_update[str, str].connect(self._track_print_state)
 
         self.print_status = "idle"
         self.ui.chamber_temp_display.hide()
@@ -351,39 +366,51 @@ class MainWindow(QtWidgets.QMainWindow):
         if not show:
             self.cancelpage.hide()
             return
+        # Defer so a concurrent E-stop (klippy shutdown) is seen before we decide.
+        QtCore.QTimer.singleShot(0, self._show_cancel_page_if_operational)
 
+    def _show_cancel_page_if_operational(self) -> None:
+        # E-stop/shutdown aborts the print with an error too; the connection page handles that, not the cancel page.
+        if not self._klippy_ready:
+            return
         self.cancelpage.setGeometry(0, 0, self.width(), self.height())
         self.cancelpage.raise_()
         self.cancelpage.updateGeometry()
         self.cancelpage.repaint()
         self.cancelpage.show()
 
-    @QtCore.pyqtSlot(bool, str, name="show-load-page")
-    def show_loadscreen(self, show: bool = True, msg: str = ""):
+    @QtCore.pyqtSlot(bool, str, bool, name="show-load-page")
+    def show_loadscreen(
+        self, show: bool = True, msg: str = "", force: bool = False
+    ) -> None:
         """Show or hide the loading overlay, guarded by the calling panel's visibility."""
         _sender = self.sender()
+        if not force:
+            if _sender is self.update_page:
+                self._update_in_progress = show
+            if (
+                not show
+                and self._post_update_reconnect
+                or not show
+                and self._update_in_progress
+                or not show
+                and self._klipper_auto_restart_pending
+            ):
+                return
 
-        if _sender is self.update_page:
-            self._update_in_progress = show
-        if not show and self._post_update_reconnect:
-            return
-        elif not show and self._update_in_progress:
-            return
-        elif not show and self._klipper_auto_restart_pending:
-            return
+            if _sender == self.filamentPanel:
+                if not self.filamentPanel.isVisible():
+                    return
+            if _sender == self.controlPanel:
+                if not self.controlPanel.isVisible():
+                    return
+            if _sender == self.printPanel:
+                if not self.printPanel.isVisible():
+                    return
+            if _sender == self.utilitiesPanel:
+                if not self.utilitiesPanel.isVisible():
+                    return
 
-        if _sender == self.filamentPanel:
-            if not self.filamentPanel.isVisible():
-                return
-        if _sender == self.controlPanel:
-            if not self.controlPanel.isVisible():
-                return
-        if _sender == self.printPanel:
-            if not self.printPanel.isVisible():
-                return
-        if _sender == self.utilitiesPanel:
-            if not self.utilitiesPanel.isVisible():
-                return
         self.loadwidget.set_status_message(msg)
         if show:
             self.loadscreen.show()
@@ -422,6 +449,7 @@ class MainWindow(QtWidgets.QMainWindow):
             state == "disconnected"
             and not self._klipper_auto_restart_pending
             and not self._update_in_progress
+            and not self.conn_window.manual_restart_pending
         ):
             _logger.info("Klipper disconnected — auto-restarting service")
             self._klipper_auto_restart_pending = True
@@ -435,6 +463,23 @@ class MainWindow(QtWidgets.QMainWindow):
             self._klipper_restart_timeout.stop()
             if not self._post_update_reconnect:
                 self.loadscreen.hide()
+
+    @QtCore.pyqtSlot(name="arm-health-bless")
+    def _arm_health_bless(self) -> None:
+        """On first moonraker connect, arm a one-shot to bless this build as healthy."""
+        if self._bless_armed:
+            return
+        self._bless_armed = True
+        QtCore.QTimer.singleShot(60_000, self._emit_health_bless)
+
+    @QtCore.pyqtSlot(name="emit-health-bless")
+    def _emit_health_bless(self) -> None:
+        """Bless the running build if moonraker is still reachable after the debounce."""
+        if not getattr(self.ws, "connected", False):
+            _logger.info("health bless skipped: moonraker not connected")
+            return
+        _logger.info("health bless: marking current build as known-good")
+        self.updater_worker.trigger_bless()
 
     @QtCore.pyqtSlot(name="on-klipper-restart-timeout")
     def _on_klipper_restart_timeout(self) -> None:
@@ -630,6 +675,38 @@ class MainWindow(QtWidgets.QMainWindow):
             )
         self.ui.header_main_layout.setEnabled(not locked)
 
+    @QtCore.pyqtSlot(str, str, name="track_print_state")
+    def _track_print_state(self, field: str, value: str) -> None:
+        """Track ``print_stats.state`` as the source of truth for job activity."""
+        if field == "state":
+            self._print_state = value
+
+    def _is_job_active(self) -> bool:
+        """True while a job occupies the printer; paused included so runout pauses hold the page."""
+        return self._print_state in ("printing", "paused")
+
+    def _print_tab_index(self) -> int:
+        """Tab index of the print tab in the main content widget."""
+        return self.ui.main_content_widget.indexOf(self.ui.printTab)
+
+    def _job_status_index(self) -> int:
+        """Panel index of the job-status page inside the print tab."""
+        return self.printPanel.indexOf(self.printPanel.jobStatusPage_widget)
+
+    def _main_print_index(self) -> int:
+        """Panel index of the main print page inside the print tab."""
+        return self.printPanel.indexOf(self.printPanel.print_page)
+
+    def _guard_print_panel(self, tab_index: int, panel_index: int) -> int:
+        """Redirect the main print page to job status while a job is active."""
+        if (
+            tab_index == self._print_tab_index()
+            and panel_index == self._main_print_index()
+            and self._is_job_active()
+        ):
+            return self._job_status_index()
+        return panel_index
+
     def reset_tab_indexes(self):
         """
         Used to grantee all tabs reset to their
@@ -637,10 +714,8 @@ class MainWindow(QtWidgets.QMainWindow):
         """
         self.filamentPanel.setCurrentIndex(0)
 
-        if self.print_status == "printing":
-            self.printPanel.setCurrentIndex(
-                self.printPanel.indexOf(self.printPanel.jobStatusPage_widget)
-            )
+        if self._is_job_active():
+            self.printPanel.setCurrentIndex(self._job_status_index())
             return
         self.printPanel.setCurrentIndex(0)
         self.controlPanel.setCurrentIndex(0)
@@ -708,6 +783,7 @@ class MainWindow(QtWidgets.QMainWindow):
             )
 
         self.show_loadscreen(False)
+        panel_index = self._guard_print_panel(tab_index, panel_index)
         current_page = [
             self.ui.main_content_widget.currentIndex(),
             self.current_panel_index(),
@@ -745,8 +821,10 @@ class MainWindow(QtWidgets.QMainWindow):
         if not bool(self.index_stack):
             _logger.debug("Index stack is empty, cannot go back any further")
             return
-        self.ui.main_content_widget.setCurrentIndex(self.index_stack[-1][0])
-        self.set_current_panel_index(self.index_stack[-1][1])
+        _tab, _panel = self.index_stack[-1]
+        _panel = self._guard_print_panel(_tab, _panel)
+        self.ui.main_content_widget.setCurrentIndex(_tab)
+        self.set_current_panel_index(_panel)
         self.index_stack.pop()  # Remove the last position.
         _logger.debug("Successfully went back a page.")
 
@@ -848,15 +926,8 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.printer_object_report_signal[list].emit(_objects_response_list)
             if "query" in method:
                 if isinstance(data["status"], dict):
-                    _object_report = [data["status"]]
-                    _object_report_keys = data["status"].items()
-                    _object_report_list_dict: list = []
-                    for _, key in enumerate(_object_report_keys):
-                        _helper_dict: dict = {key[0]: key[1]}
-                        _object_report_list_dict.append(_helper_dict)
-                    self.printer_object_report_signal[list].emit(
-                        _object_report_list_dict
-                    )
+                    _object_report_list = [data["status"], data["eventtime"]]
+                    self.printer_object_report_signal[list].emit(_object_report_list)
 
     @api_handler
     def _handle_notify_klippy_message(self, method, data, metadata) -> None:
@@ -940,17 +1011,25 @@ class MainWindow(QtWidgets.QMainWindow):
         show_popup: bool,
     ) -> bool:
         rule = match_message(source, text)
+
         if rule is not None:
             if rule.severity == Severity.IGNORE:
                 return True
+            if rule.severity == Severity.ERROR:
+                self.show_loadscreen(False, "", True)
+                self.in_case_error.emit()
+
             self.show_notifications.emit(
                 source_id, rule.full_display, rule.severity.value, show_popup
             )
             return True
+
         elif fallback:
             self.show_notifications.emit(
                 source_id, text, Severity.ERROR.value, show_popup
             )
+            self.show_loadscreen(False, "", True)
+            self.in_case_error.emit()
             return True
         return False
 
@@ -990,6 +1069,9 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.show_notifications.emit(
                     _gcode_msg_type, _message, Severity.INFO.value, True
                 )
+                return
+            elif _gcode_msg_type == "LOAD":
+                self.show_loadscreen(True, _message, False)
                 return
 
             elif _gcode_msg_type == "!!":

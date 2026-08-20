@@ -26,15 +26,21 @@ Coverage targets
 from unittest.mock import MagicMock, patch
 
 import pytest
-from PyQt6 import QtCore, QtGui, QtWidgets
+from PyQt6 import QtGui, QtWidgets
 
-from BlocksScreen.lib.network.models import (ConnectionPriority,
-                                             ConnectionResult,
-                                             ConnectivityState, NetworkInfo,
-                                             NetworkState, NetworkStatus,
-                                             PendingOperation, SavedNetwork,
-                                             SecurityType, WifiIconKey,
-                                             signal_to_bars)
+from BlocksScreen.lib.network.models import (
+    ConnectionPriority,
+    ConnectionResult,
+    ConnectivityState,
+    NetworkInfo,
+    NetworkState,
+    NetworkStatus,
+    PendingOperation,
+    SavedNetwork,
+    SecurityType,
+    WifiIconKey,
+    signal_to_bars,
+)
 from BlocksScreen.lib.panels.networkWindow import NetworkControlWindow
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -602,7 +608,6 @@ class TestLoadingStateMachine:
         assert w._is_connecting
 
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # _on_operation_complete
 # ─────────────────────────────────────────────────────────────────────────────
@@ -884,7 +889,6 @@ class TestHandleLoadTimeout:
             w._handle_load_timeout()
             mock_err.assert_called_once()
         assert not w.loadingwidget.isVisible()
-
 
 
 # ─────────────────────────────────────────────────────────────────────────────

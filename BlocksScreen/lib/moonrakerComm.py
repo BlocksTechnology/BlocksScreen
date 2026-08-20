@@ -22,7 +22,7 @@ class OneShotTokenError(Exception):
     """Raised when unable to get oneshot token to connect to a websocket"""
 
     def __init__(self, message="Unable to get oneshot token", errors=None) -> None:
-        super(OneShotTokenError).__init__(message, errors)
+        super().__init__(message)
         self.errors = errors
         self.message = message
 
@@ -910,6 +910,10 @@ class MoonAPI(QtCore.QObject):
     def add_filament(self, body: dict, callback=None) -> bool:
         """Create a new filament (POST /v1/filament)."""
         return self.spoolman_proxy("POST", "/v1/filament", body=body, callback=callback)
+
+    def add_manufacturer(self, body: dict, callback=None) -> bool:
+        """Create a new manufacturer (POST /v1/vendor)."""
+        return self.spoolman_proxy("POST", "/v1/vendor", body=body, callback=callback)
 
     def update_spool(self, spool_id: int, body: dict, callback=None) -> bool:
         """Update spool attributes (PATCH /v1/spool/{id})."""

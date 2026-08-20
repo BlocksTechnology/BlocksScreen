@@ -29,6 +29,7 @@ class AMUpage(QtWidgets.QStackedWidget):
     request_change_tab: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         int, name="request_change_tab"
     )
+    call_load_panel = QtCore.pyqtSignal(bool, str, bool, name="call-load-panel")
 
     def __init__(self, amu_manager, parent=None):
         super().__init__(parent)
@@ -80,8 +81,18 @@ class AMUpage(QtWidgets.QStackedWidget):
         )
 
         self.info_panel.request_keypad.connect(self.request_keyboard)
-        self.info_panel.loadRequested.connect(self.amu_manager.load_gate)
-        self.info_panel.unloadRequested.connect(self.amu_manager.unload)
+        self.info_panel.loadRequested.connect(
+            lambda: {
+                self.amu_manager.load_gate(),
+                self.call_load_panel.emit(True, "Loading", True),
+            }
+        )
+        self.info_panel.unloadRequested.connect(
+            lambda: {
+                self.amu_manager.unload(),
+                self.call_load_panel.emit(True, "Unloading", True),
+            }
+        )
         self.info_panel.ejectRequested.connect(self.amu_manager.eject_gate)
         self.info_panel.checkRequested.connect(self.amu_manager.check_gate)
 

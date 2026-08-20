@@ -143,6 +143,8 @@ class Printer(QtCore.QObject):
         self.query_printer_object.connect(self.ws.api.object_query)
         self._klippy_callback: typing.Callable[[str], None] | None = None
         self._callbacks: dict[str, typing.Callable[[dict, str], None]] = {}
+        self._webhooks_state: str = ""
+        self._webhooks_state_message: str = ""
 
     @property
     def uses_true_zero_offset(self) -> bool:
@@ -377,10 +379,16 @@ class Printer(QtCore.QObject):
             value (dict): _description_
             name (str, optional): _description_. Defaults to "".
         """
-        if "state" in value and "state_message" in value:
-            self.webhooks_update.emit(value["state"], value["state_message"])
+        if "state" in value or "state_message" in value:
+            self._webhooks_state = value.get("state", self._webhooks_state)
+            self._webhooks_state_message = value.get(
+                "state_message", self._webhooks_state_message
+            )
+            self.webhooks_update.emit(
+                self._webhooks_state, self._webhooks_state_message
+            )
             logger.debug("Webhooks message received")
-            _state: str = value["state"]
+            _state: str = self._webhooks_state
             if _state == "shutdown":
                 return
             _state_upper = _state[0].upper()
@@ -389,7 +397,7 @@ class Printer(QtCore.QObject):
                 _event_callback = getattr(events, f"Klippy{_state_call}")
                 if callable(_event_callback):
                     try:
-                        event = _event_callback(value["state"], value["state_message"])
+                        event = _event_callback(_state, self._webhooks_state_message)
                         instance = QtWidgets.QApplication.instance()
                         if instance is not None and isinstance(event, QtCore.QEvent):
                             instance.postEvent(self.parent(), event)
@@ -601,41 +609,6 @@ class Printer(QtCore.QObject):
                 "file_position", float(values["file_position"])
             )
 
-    def send_print_event(self, event: str):
-        """Dispatches a print event throughout the gui
-
-        Args:
-            event (str): event name
-
-        Raises:
-            TypeError: Thrown when QApplication is None
-        """
-        if not event:
-            return
-        _print_state_upper = event[0].upper()
-        _print_state_call = f"{_print_state_upper}{event[1:]}"
-        if hasattr(events, f"Print{_print_state_call}"):
-            logger.debug(
-                "Print Event Caught, print is %s, calling event %s",
-                _print_state_call,
-                f"Print{_print_state_call}",
-            )
-            _event_callback = getattr(events, f"Print{_print_state_call}")
-            if callable(_event_callback):
-                try:
-                    instance = QtWidgets.QApplication.instance()
-                    # Printer is a QObject, not QWidget — use parent()
-                    # to reach the MainWindow (which has the event handler).
-                    target = self.parent()
-                    if instance and target:
-                        instance.postEvent(target, _event_callback())
-                    elif not instance:
-                        raise TypeError("QApplication.instance expected non None value")
-                except Exception as e:
-                    logger.info(
-                        "Unexpected error while posting print job start event: %s", e
-                    )
-
     def _print_stats_object_updated(
         self, values: dict, name: str = "print_stats"
     ) -> None:
@@ -659,7 +632,6 @@ class Printer(QtCore.QObject):
             self.printing_state = values.get("state") or ""
             if not self.printing_state:
                 return
-            self.send_print_event(self.printing_state)
             if values["state"] == "standby" or values["state"] == "error":
                 self.print_file_loaded = False
                 self.printing = False
@@ -699,7 +671,7 @@ class Printer(QtCore.QObject):
                 "measured_max_temp",
                 values["measured_max_temp"],
             )
-        if "humidity" in values.keys():
+        if "humidity" in values:
             self.sensor_update.emit(
                 temperature_sensor_name, "humidity", values["humidity"]
             )
@@ -709,9 +681,9 @@ class Printer(QtCore.QObject):
         values: dict[str, float],
         sensor_name: str,
     ) -> None:
-        if "temperature" in values.keys():
+        if "temperature" in values:
             self.sensor_update.emit(sensor_name, "temperature", values["temperature"])
-        if "humidity" in values.keys():
+        if "humidity" in values:
             self.sensor_update.emit(sensor_name, "humidity", values["humidity"])
 
     def _temperature_fan_object_updated(
@@ -797,7 +769,6 @@ class Printer(QtCore.QObject):
         # * values argument can come with many different types for this macro so handle them in another place
 
         self.gcode_macro_update.emit(gcode_macro_name, values)
-        return
 
     def _configfile_object_updated(
         self, values: dict, name: str = "configfile"
@@ -819,8 +790,6 @@ class Printer(QtCore.QObject):
 
         self.configfile_update.emit(values)  # Signal config update
 
-        return
-
     def _gcode_object_updated(self, values: dict, name: str = "gcode_object") -> None:
         if not values.get("commands"):
             return
@@ -830,7 +799,6 @@ class Printer(QtCore.QObject):
 
     def _manual_probe_object_updated(self, values: dict, name: str) -> None:
         self.manual_probe_update[dict].emit(values)
-        return
 
     def _probe_object_updated(self, values: dict, name: str) -> None:
         # TODO
@@ -856,5 +824,5 @@ class Printer(QtCore.QObject):
         self.unload_filament_update[dict].emit(values)
 
     def _load_filament_object_updated(self, values: dict, name: str) -> None:
-        if "state" in values.keys():
+        if "state" in values:
             self.load_filament_update[dict].emit(values)

@@ -1,8 +1,6 @@
 from .components import load_components
 
-# NOTE: dbus_service (which imports sdbus) is intentionally NOT imported here so
-# that the CLI (status/update/recover) runs on an interpreter without sdbus. The
-# daemon imports updater.dbus_service explicitly.
+# dbus_service (imports sdbus) intentionally not imported here: CLI runs without sdbus.
 from .executor import (
     apt_update,
     apt_upgrade,
