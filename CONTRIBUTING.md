@@ -15,7 +15,7 @@ Check existing issues before opening a new one
 
 Include reproduction steps, logs, and system details
 
-Use clear, respectful language—this helps us triage faster
+Use clear, respectful language, this helps us triage faster
 
 # 📄 Code Contributions (Future Policy)
 When contributions open, we will require:
@@ -36,4 +36,4 @@ Pull requests with major refactors or new modules
 Code copied from other projects without attribution
 
 # 🤝 Respect & Collaboration
-We value respectful, transparent collaboration. All interactions must follow our Code of Conduct—(you can link to one later if needed).
+We value respectful, transparent collaboration. All interactions must follow our Code of Conduct (you can link to one later if needed).

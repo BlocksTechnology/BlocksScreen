@@ -1,4 +1,4 @@
-"""tests/panels/conftest.py — stub MainWindow's heavy dependency tree.
+"""tests/panels/conftest.py - stub MainWindow's heavy dependency tree.
 
 MainWindow pulls in nearly every subsystem (devices, tabs, updater, D-Bus
 comms, generated UI/resource modules) purely to build the widget tree.
@@ -58,7 +58,7 @@ for _name in _STUB_MODULES:
 
 # events.* is referenced as a bare attribute in type annotations
 # (e.g. ``event: events.WebSocketMessageReceived``), evaluated eagerly at
-# class-definition time — needs to resolve any attribute, not just a fixed set.
+# class-definition time - needs to resolve any attribute, not just a fixed set.
 sys.modules["events"] = MagicMock()
 
 sys.modules["configfile"].BlocksScreenConfig = MagicMock

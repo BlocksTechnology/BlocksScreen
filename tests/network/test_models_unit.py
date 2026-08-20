@@ -50,7 +50,7 @@ class TestSecurityType:
         assert "nonexistent" not in [m.value for m in SecurityType]
 
     def test_equality_with_string(self):
-        """str(Enum) based — SecurityType.OPEN == 'open' because it's a str enum."""
+        """str(Enum) based - SecurityType.OPEN == 'open' because it's a str enum."""
         assert SecurityType.OPEN == "open"
         assert SecurityType.WPA2_PSK == "wpa2-psk"
 
@@ -149,7 +149,7 @@ class TestPendingOperation:
         assert op2 not in (PendingOperation.WIFI_OFF, PendingOperation.HOTSPOT_OFF)
 
     def test_falsy_none(self):
-        """PendingOperation.NONE == 0 is falsy — useful for bool checks."""
+        """PendingOperation.NONE == 0 is falsy - useful for bool checks."""
         assert not PendingOperation.NONE
         assert PendingOperation.CONNECT  # non-zero is truthy
 
@@ -174,7 +174,7 @@ class TestPendingOperation:
         assert PendingOperation.ETHERNET_OFF == 7
 
     def test_ethernet_operations_are_truthy(self):
-        """ETHERNET_ON/OFF are non-zero — truthy for loading guards."""
+        """ETHERNET_ON/OFF are non-zero - truthy for loading guards."""
         assert PendingOperation.ETHERNET_ON
         assert PendingOperation.ETHERNET_OFF
 
@@ -208,7 +208,7 @@ class TestSignalToBars:
         assert signal_to_bars(100) == 4
 
     def test_boundary_25_returns_1(self):
-        """At exactly 25% the signal is fair threshold — returns 1 (not 2)."""
+        """At exactly 25% the signal is fair threshold - returns 1 (not 2)."""
         assert signal_to_bars(25) == 1
 
     def test_boundary_50_returns_3(self):
@@ -312,7 +312,7 @@ class TestWifiIconKey:
                 assert key.is_protected is protected
 
     def test_is_int_enum(self):
-        """WifiIconKey values are plain ints — cheap cross-thread signalling."""
+        """WifiIconKey values are plain ints - cheap cross-thread signalling."""
         for member in WifiIconKey:
             assert isinstance(member.value, int)
 
@@ -374,7 +374,7 @@ class TestNetworkInfo:
         assert info.status == "Active"
 
     def test_status_saved_over_open(self):
-        """Saved status label takes priority — open is derived from security_type."""
+        """Saved status label takes priority - open is derived from security_type."""
         info = NetworkInfo(
             ssid="X",
             network_status=NetworkStatus.SAVED,
@@ -405,7 +405,7 @@ class TestNetworkInfo:
         assert a != b
 
     def test_hashable(self, make_network_info):
-        """Frozen dataclass is hashable — can be used in sets."""
+        """Frozen dataclass is hashable - can be used in sets."""
         info = make_network_info()
         s = {info}
         assert info in s
@@ -510,7 +510,7 @@ class TestNetworkState:
         assert s.ethernet_connected is False
 
     def test_full_state_snapshot(self):
-        """All fields set — verifies the dataclass accepts all parameters."""
+        """All fields set - verifies the dataclass accepts all parameters."""
         s = NetworkState(
             connectivity=ConnectivityState.FULL,
             current_ssid="HomeWifi",

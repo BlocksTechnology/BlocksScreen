@@ -32,7 +32,7 @@ import pytest
 from PyQt6.QtCore import Qt
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Gate — skip entire module when opt-in flag is absent
+# Gate - skip entire module when opt-in flag is absent
 # ─────────────────────────────────────────────────────────────────────────────
 _ENABLED = os.environ.get("NM_INTEGRATION_TESTS", "0") == "1"
 _SKIP = pytest.mark.skipif(not _ENABLED, reason="NM_INTEGRATION_TESTS not set")
@@ -107,7 +107,7 @@ def real_worker(qapp):
     try:
         from BlocksScreen.lib.network.worker import NetworkManagerWorker
     except ImportError as exc:
-        # Real sdbus packages not installed on this host — skip gracefully.
+        # Real sdbus packages not installed on this host - skip gracefully.
         sys.modules.update(_saved_stubs)
         if _path_was_added and sys.path and sys.path[0] == _bs_dir:
             sys.path.pop(0)
@@ -330,7 +330,7 @@ class TestRealIpHelpers:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Destructive write tests — TEST_-prefixed profiles only
+# Destructive write tests - TEST_-prefixed profiles only
 # ─────────────────────────────────────────────────────────────────────────────
 
 

@@ -1,8 +1,8 @@
 """Guard: compiled deps must stay at the field-validated aarch64 known-good pins.
 
 These packages need an aarch64 wheel (or a clean source build) to install on the
-Pi 5 field hardware. Bumping them silently — as automated dependency PRs have
-done before — breaks the on-device ``pip install`` (PyQt6 6.10.0 has no aarch64
+Pi 5 field hardware. Bumping them silently - as automated dependency PRs have
+done before - breaks the on-device ``pip install`` (PyQt6 6.10.0 has no aarch64
 wheel, sdbus 0.14.1's wheel imports broken), which then thrashes the boot and
 post-merge paths. This test fails if any compiled pin drifts away from the
 known-good set, forcing an explicit on-hardware import test before the bump.
@@ -29,7 +29,7 @@ _PIN_RE = re.compile(r"^\s*([A-Za-z0-9_.\-]+)\s*==\s*([^\s#]+)")
 
 
 def _normalize(name: str) -> str:
-    """Canonicalize a distribution name (PEP 503 — case/underscore-insensitive)."""
+    """Canonicalize a distribution name (PEP 503 - case/underscore-insensitive)."""
     return name.replace("_", "-").lower()
 
 
