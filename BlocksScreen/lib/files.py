@@ -588,7 +588,7 @@ class Files(QtCore.QObject):
     def _process_directory_info(self, data: dict) -> None:
         """Process directory info response."""
         # Check if this is a USB preload response.
-        # Match by FIFO queue — Moonraker responds to get_dir_information in order.
+        # Match by FIFO queue - Moonraker responds to get_dir_information in order.
         matched_usb = None
 
         if self._usb_preload_queue:

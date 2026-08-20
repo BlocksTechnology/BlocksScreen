@@ -13,12 +13,12 @@ class ListItem:
     _rfontsize: int = 0
     _lfontsize: int = 0
 
-    callback: typing.Optional[typing.Callable] = None
+    callback: typing.Callable | None = None
 
     color: str = "#dfdfdf"
     color_left_icon: bool = False
-    right_icon: typing.Optional[QtGui.QPixmap] = None
-    left_icon: typing.Optional[QtGui.QPixmap] = None
+    right_icon: QtGui.QPixmap | None = None
+    left_icon: QtGui.QPixmap | None = None
 
     selected: bool = False
     allow_check: bool = True
@@ -32,7 +32,7 @@ class ListItem:
     height: int = 60
     notificate: bool = False
 
-    _cache: typing.Dict[int, int] = field(default_factory=dict)
+    _cache: dict[int, int] = field(default_factory=dict)
 
     def clear_cache(self):
         """Call this if text or font size changes dynamically"""
@@ -308,8 +308,13 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
         self._scaled_cache: dict[tuple[int, int, int], QtGui.QPixmap] = {}
         self._tinted_cache: dict[tuple[int, str], QtGui.QPixmap] = {}
         self._font_cache: dict[int, tuple[QtGui.QFont, QtGui.QFontMetrics]] = {}
+        # Base the font cache was built from, a restyle must invalidate it
+        self._font_base: QtGui.QFont | None = None
         self._path_cache: dict[tuple[int, int], QtGui.QPainterPath] = {}
-        # Pre-computed colors — avoids QColor allocation + setAlpha per paint frame
+        self._geometry_cache: dict[
+            tuple[int, int], tuple[float, float, QtCore.QRectF, QtCore.QRectF]
+        ] = {}
+        # Pre-computed colors - avoids QColor allocation + setAlpha per paint frame
         self._color_pressed_sel = QtGui.QColor("#1A8FBF")
         self._color_pressed_sel.setAlpha(90)
         self._color_pressed_unsel = QtGui.QColor("#1A8FBF")
@@ -317,7 +322,7 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
         self._color_text = QtGui.QColor(255, 255, 255)
         self._color_secondary = QtGui.QColor(160, 160, 160)
         self._color_notification = QtGui.QColor(226, 31, 31)
-        # Arrow icons loaded once — avoids QPixmap(resource) parse per paint frame
+        # Arrow icons loaded once - avoids QPixmap(resource) parse per paint frame
         self._arrow_down = QtGui.QPixmap(":/arrow_icons/media/btn_icons/arrow_down.svg")
         self._arrow_right = QtGui.QPixmap(
             ":/arrow_icons/media/btn_icons/arrow_right.svg"
@@ -344,7 +349,7 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
             QtCore.Qt.TransformationMode.SmoothTransformation,
         )
         self._scaled_cache[key] = scaled
-        # Prevent unbounded growth — 64 entries covers all wifi
+        # Prevent unbounded growth - 64 entries covers all wifi
         # bar variants × protected/open × left/right icons easily.
         if len(self._scaled_cache) > 64:
             keys = list(self._scaled_cache)
@@ -355,6 +360,14 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
     def _get_font_metrics(
         self, base_font: QtGui.QFont, point_size: int
     ) -> tuple[QtGui.QFont, QtGui.QFontMetrics]:
+        """Return *base_font* at *point_size* with its metrics, cached per size.
+
+        ``paint`` passes the painter font and ``sizeHint`` the option font, so the
+        cache is keyed on size alone but dropped whenever the base font changes.
+        """
+        if self._font_base != base_font:
+            self._font_cache.clear()
+            self._font_base = QtGui.QFont(base_font)
         cached = self._font_cache.get(point_size)
         if cached is None:
             if point_size != base_font.pointSize():
@@ -410,17 +423,13 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
             left_reserved = (base_h * 0.1) + ellipse_size + 8
 
         if item._lfontsize > 0 and item._lfontsize != option.font.pointSize():
-            f = QtGui.QFont(option.font)
-            f.setPointSize(item._lfontsize)
-            fm = QtGui.QFontMetrics(f)
+            fm = self._get_font_metrics(option.font, item._lfontsize)[1]
         else:
             fm = option.fontMetrics
 
         if item.right_text:
             if item._rfontsize > 0 and item._rfontsize != option.font.pointSize():
-                fr = QtGui.QFont(option.font)
-                fr.setPointSize(item._rfontsize)
-                fmr = QtGui.QFontMetrics(fr)
+                fmr = self._get_font_metrics(option.font, item._rfontsize)[1]
             else:
                 fmr = option.fontMetrics
             right_reserved += fmr.horizontalAdvance(item.right_text) + 10
@@ -429,8 +438,7 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
             right_reserved += ellipse_size
 
         text_avail_width = target_width - left_reserved - right_reserved
-        if text_avail_width < 50:
-            text_avail_width = 50
+        text_avail_width = max(text_avail_width, 50)
 
         single_line_width = fm.horizontalAdvance(item.text)
 
@@ -446,7 +454,6 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
         )
 
         final_height = max(item.height, text_rect.height() - 1)
-        item._cache[target_width] = final_height + 20
         return QtCore.QSize(target_width, int(final_height * 1.2))
 
     def paint(
@@ -467,7 +474,7 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
 
         rect = option.rect.adjusted(2, 2, -2, -2)
         w, h = rect.width(), rect.height()
-        # Translate so all geometry is relative to (0,0) — enables path cache hits
+        # Translate so all geometry is relative to (0,0) - enables path cache hits
         # across items (all rows share the same w/h in a fixed-width list view).
         painter.translate(rect.x(), rect.y())
 
@@ -477,27 +484,42 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
             path = QtGui.QPainterPath()
             path.addRoundedRect(QtCore.QRectF(0, 0, w, h), 12, 12)
             self._path_cache[path_key] = path
+            # Expanded rows produce a new height each time, keep the dict bounded
+            if len(self._path_cache) > 32:
+                for k in list(self._path_cache)[:16]:
+                    del self._path_cache[k]
 
         if item.allow_expand and item.needs_expansion:
             item.right_icon = (
                 self._arrow_down if item.is_expanded else self._arrow_right
             )
 
-        pressed_color = (
-            self._color_pressed_sel if item.selected else self._color_pressed_unsel
+        # fillPath takes its brush as an argument, the painter pen/brush are unused here
+        painter.fillPath(
+            path,
+            self._color_pressed_sel if item.selected else self._color_pressed_unsel,
         )
-        painter.setPen(QtCore.Qt.PenStyle.NoPen)
-        painter.setBrush(pressed_color)
-        painter.fillPath(path, pressed_color)
 
-        ellipse_size = item.height * 0.8
-        ellipse_margin = (item.height - ellipse_size) / 2
-        ellipse_rect = QtCore.QRectF(
-            w - ellipse_margin - ellipse_size,
-            ellipse_margin,
-            ellipse_size,
-            ellipse_size,
-        )
+        geom_key = (w, item.height)
+        geometry = self._geometry_cache.get(geom_key)
+        if geometry is None:
+            ellipse_size = item.height * 0.8
+            ellipse_margin = (item.height - ellipse_size) / 2
+            geometry = (
+                ellipse_size,
+                ellipse_margin,
+                QtCore.QRectF(
+                    w - ellipse_margin - ellipse_size,
+                    ellipse_margin,
+                    ellipse_size,
+                    ellipse_size,
+                ),
+                QtCore.QRectF(
+                    ellipse_margin, ellipse_margin, ellipse_size, ellipse_size
+                ),
+            )
+            self._geometry_cache[geom_key] = geometry
+        ellipse_size, ellipse_margin, ellipse_rect, left_icon_rect = geometry
 
         if item.right_icon:
             icon_scaled = self._get_scaled(
@@ -506,12 +528,6 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
             painter.drawPixmap(ellipse_rect.toRect(), icon_scaled)
 
         left_margin = 10
-        left_icon_rect = QtCore.QRectF(
-            ellipse_margin,
-            ellipse_margin,
-            ellipse_size,
-            ellipse_size,
-        )
 
         if item.left_icon:
             l_icon_scaled = self._get_scaled(

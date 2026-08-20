@@ -149,6 +149,7 @@ class ControlTab(QtWidgets.QStackedWidget):
         self.panel.motion_extrude_btn.clicked.connect(
             partial(self.change_page, self.indexOf(self.panel.extrude_page))
         )
+        self.panel.motion_extrude_btn.clicked.connect(self._refresh_extrude_message)
         self.panel.motion_move_axis_btn.clicked.connect(
             partial(self.change_page, self.indexOf(self.panel.move_axis_page))
         )
@@ -313,9 +314,7 @@ class ControlTab(QtWidgets.QStackedWidget):
 
     @QtCore.pyqtSlot(str, str, float, name="on_fan_update")
     @QtCore.pyqtSlot(str, str, int, name="on_fan_update")
-    def on_fan_object_update(
-        self, name: str, field: str, new_value: int | float
-    ) -> None:
+    def on_fan_object_update(self, name: str, field: str, new_value: float) -> None:
         """Slot that receives updates from fan objects.
 
         Args:
@@ -548,7 +547,7 @@ class ControlTab(QtWidgets.QStackedWidget):
         layout = self.panel.cp_content_layout
         layout.removeWidget(self.panel.cp_fans_btn)
         layout.addWidget(self.panel.cp_fans_btn, row, 0, 1, 1)
-        # When fans moves to row 1, row 2 is empty — pin its height so the
+        # When fans moves to row 1, row 2 is empty - pin its height so the
         # grid doesn't shrink and shift the "Control" header.
         layout.setRowMinimumHeight(2, 80 if row == 1 else 0)
 
@@ -754,8 +753,6 @@ class ControlTab(QtWidgets.QStackedWidget):
             self.panel.bed_temp_display.secondary_text = f"{new_value:.1f}"
         self.bed_info.update({f"{name}": {f"{field}": new_value}})
 
-    def paintEvent(self, a0: QtGui.QPaintEvent) -> None:
-        """Handles ControlTab Widget painting"""
-        if self.panel.extrude_page.isVisible():
-            self.panel.exp_info_label.setText(self.extrude_page_message)
-        return super().paintEvent(a0)
+    def _refresh_extrude_message(self) -> None:
+        """Push the extrude status to the label, paintEvent used to do this"""
+        self.panel.exp_info_label.setText(self.extrude_page_message)

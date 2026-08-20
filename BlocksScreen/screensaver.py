@@ -43,7 +43,7 @@ class ScreenSaver(QtCore.QObject):
 
         if event.type().value in self._TOUCH_INTS:
             if self.touch_blocked:
-                # Screen may be off — query DPMS only in this rare state
+                # Screen may be off - query DPMS only in this rare state
                 dpms_info = helper_methods.get_dpms_info()
                 if (
                     dpms_info.get("state")

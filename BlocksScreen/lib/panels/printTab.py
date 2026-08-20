@@ -486,7 +486,7 @@ class PrintTab(QtWidgets.QStackedWidget):
 
     @QtCore.pyqtSlot(name="finish_print_signal")
     def finish_print_signal(self) -> None:
-        """Behaviour when the print ends — but only once."""
+        """Behaviour when the print ends - but only once."""
         if self._finish_print_handled:
             return
         self.on_cancel_print.emit()

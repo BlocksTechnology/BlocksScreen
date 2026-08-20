@@ -48,7 +48,7 @@ def _run_git(path: pathlib.Path, args: list[str]) -> subprocess.CompletedProcess
         raise NotADirectoryError(f"Not a directory: {path}")
     return subprocess.run(
         ["git", "-C", str(path)] + args, capture_output=True, text=True, timeout=2
-    )  # nosec B603 — path validated above, no shell=True
+    )  # nosec B603 - path validated above, no shell=True
 
 
 def is_git_dirty(path: pathlib.Path | str):
@@ -533,7 +533,7 @@ class ConfigManager:
                         )
 
                     else:
-                        # Target has no SAVE_CONFIG block yet — use source as-is
+                        # Target has no SAVE_CONFIG block yet - use source as-is
                         merged = _sfl
 
                 else:

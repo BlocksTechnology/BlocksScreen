@@ -21,6 +21,7 @@ class SliderPage(QtWidgets.QWidget):
     def __init__(self, parent) -> None:
         super().__init__(parent)
         self.name: str = ""
+        self._widget_rect = QtCore.QRect()
         self.increase_button_icon = QtGui.QPixmap(
             ":/arrow_icons/media/btn_icons/right_arrow.svg"
         )
@@ -36,6 +37,8 @@ class SliderPage(QtWidgets.QWidget):
         self.back_button.clicked.connect(self.request_back.emit)
         self.back_button.clicked.connect(self.value_selected.disconnect)
         self.slider.sliderReleased.connect(self.on_slider_value_change)
+        self.slider.valueChanged.connect(self._refresh_value_label)
+        self._refresh_value_label()
         self.increase_button.pressed.connect(
             lambda: {
                 (self.slider.setSliderPosition(self.slider.sliderPosition() + 5)),
@@ -59,6 +62,7 @@ class SliderPage(QtWidgets.QWidget):
     def set_name(self, name: str) -> None:
         """Sets the header name for the page"""
         self.name = name
+        self.object_name_label.setText(str(name))
 
     def set_slider_position(self, value: int) -> None:
         """Set slider position from value, updates the widget"""
@@ -72,15 +76,21 @@ class SliderPage(QtWidgets.QWidget):
         """Set slider maximum value"""
         self.slider.setMaximum(value)
 
+    def _refresh_value_label(self) -> None:
+        """Track the slider live, setText from paintEvent is a paint loop hazard"""
+        self.current_value_label.setText(f"{self.slider.value()} %")
+
+    def resizeEvent(self, a0: QtGui.QResizeEvent | None) -> None:
+        """Re-implemented method, cache the background blit rect"""
+        self._widget_rect = self.rect()
+        super().resizeEvent(a0)
+
     def paintEvent(self, a0: QtGui.QPaintEvent) -> None:
         """Custom painting for the widget"""
         painter = QtGui.QPainter(self)
         painter.setRenderHint(painter.RenderHint.Antialiasing)
-        painter.setRenderHint(painter.RenderHint.LosslessImageRendering)
         painter.setRenderHint(painter.RenderHint.TextAntialiasing)
-        painter.drawPixmap(self.rect(), self.background, self.rect())
-        self.current_value_label.setText(str(self.slider.value()) + " " + "%")
-        self.object_name_label.setText(str(self.name))
+        painter.drawPixmap(self._widget_rect, self.background, self._widget_rect)
         painter.end()
 
     def _setupUI(self) -> None:

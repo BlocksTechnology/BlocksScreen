@@ -77,7 +77,7 @@ class JobStatusWidget(QtWidgets.QWidget):
             instance.postEvent(self.window(), event)
         else:
             logger.error(
-                "QApplication.instance() is None — cannot post %s",
+                "QApplication.instance() is None - cannot post %s",
                 type(event).__name__,
             )
 
@@ -647,7 +647,6 @@ class JobStatusWidget(QtWidgets.QWidget):
         self.thumbnail_view.setRenderHints(
             QtGui.QPainter.RenderHint.Antialiasing
             | QtGui.QPainter.RenderHint.SmoothPixmapTransform
-            | QtGui.QPainter.RenderHint.LosslessImageRendering
         )
         self.thumbnail_view.setViewportUpdateMode(
             QtWidgets.QGraphicsView.ViewportUpdateMode.SmartViewportUpdate

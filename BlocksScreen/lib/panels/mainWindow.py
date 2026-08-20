@@ -9,7 +9,7 @@ from configfile import BlocksScreenConfig, get_configparser
 from devices.amu import AMUManager
 from devices.storage import USBManager
 from lib.files import Files
-from lib.klipper_message_filter import (  # noqa: F405
+from lib.klipper_message_filter import (
     MessageSource,
     Severity,
     match_message,
@@ -132,7 +132,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def __init__(self):
         """Set up UI, instantiate subsystems, and wire all inter-component signals."""
-        super(MainWindow, self).__init__()
+        super().__init__()
         self.config: BlocksScreenConfig = get_configparser()
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
@@ -388,7 +388,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.cancelpage.setGeometry(0, 0, self.width(), self.height())
         self.cancelpage.raise_()
         self.cancelpage.updateGeometry()
-        self.cancelpage.repaint()
         self.cancelpage.show()
 
     @QtCore.pyqtSlot(bool, str, bool, name="show-load-page")
@@ -400,11 +399,14 @@ class MainWindow(QtWidgets.QMainWindow):
         if not force:
             if _sender is self.update_page:
                 self._update_in_progress = show
-            if not show and self._post_update_reconnect:
-                return
-            elif not show and self._update_in_progress:
-                return
-            elif not show and self._klipper_auto_restart_pending:
+            if (
+                not show
+                and self._post_update_reconnect
+                or not show
+                and self._update_in_progress
+                or not show
+                and self._klipper_auto_restart_pending
+            ):
                 return
 
             if _sender == self.filamentPanel:
@@ -444,7 +446,6 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.update_page.raise_()
         self.update_page.updateGeometry()
-        self.update_page.repaint()
         self.update_page.show()
 
     @QtCore.pyqtSlot(str, name="on-klippy-state")
@@ -452,7 +453,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._klippy_ready = state == "ready"
         if state == "shutdown":
             if self._update_in_progress:
-                _logger.warning("Klipper E-stop detected — cancelling active update")
+                _logger.warning("Klipper E-stop detected - cancelling active update")
                 self.updater_worker.trigger_cancel()
         elif (
             state == "disconnected"
@@ -460,7 +461,7 @@ class MainWindow(QtWidgets.QMainWindow):
             and not self._update_in_progress
             and not self.conn_window.manual_restart_pending
         ):
-            _logger.info("Klipper disconnected — auto-restarting service")
+            _logger.info("Klipper disconnected - auto-restarting service")
             self._klipper_auto_restart_pending = True
             self.loadwidget.set_status_message("Restarting Klipper...")
             self.loadscreen.show()
@@ -493,7 +494,7 @@ class MainWindow(QtWidgets.QMainWindow):
     @QtCore.pyqtSlot(name="on-klipper-restart-timeout")
     def _on_klipper_restart_timeout(self) -> None:
         _logger.warning(
-            "Klipper auto-restart timed out after 30 s — showing connection page"
+            "Klipper auto-restart timed out after 30 s - showing connection page"
         )
         self._klipper_auto_restart_pending = False
         self.loadscreen.hide()
@@ -533,7 +534,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._reconnect_timer.stop()
         # update_page.handle_daemon_unavailable (connected to the same signal)
         # resets the page; routing through handle_busy_changed here would issue
-        # a status request that fails and re-emits daemon_unavailable — a storm.
+        # a status request that fails and re-emits daemon_unavailable - a storm.
         self.show_loadscreen(False, "")
 
     @QtCore.pyqtSlot(name="on-post-update-reconnect")
@@ -545,7 +546,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self._update_in_progress,
         )
         if self.ws.connected:
-            # Moonraker never restarted — overlay will be dismissed by handle_status_ready
+            # Moonraker never restarted - overlay will be dismissed by handle_status_ready
             # once the post-update status refresh completes (via _post_update_status_pending).
             return
         self._post_update_reconnect = True
@@ -602,7 +603,6 @@ class MainWindow(QtWidgets.QMainWindow):
         """Signal render for red dot on utilities tab icon and Update button"""
         self.ui.main_content_widget.setNotification(3, state)
         self.utilitiesPanel.panel.update_btn.setShowNotification(state)
-        self.repaint()
 
     def enable_tab_bar(self) -> bool:
         """Enables the tab bar

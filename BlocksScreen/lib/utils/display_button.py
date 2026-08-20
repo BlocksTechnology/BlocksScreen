@@ -47,14 +47,14 @@ class DisplayButton(QtWidgets.QPushButton):
         self.icon_pixmap = pixmap
         self._icon_cache = QtGui.QPixmap()
         self._icon_cache_size = QtCore.QSize()
-        self.repaint()
+        self.update()
 
     def setSecondaryPixmap(self, pixmap: QtGui.QPixmap) -> None:
         """Set secondary widget pixmap"""
         self.icon_pixmap_secondary = pixmap
         self._icon_secondary_cache = QtGui.QPixmap()
         self._icon_secondary_cache_size = QtCore.QSize()
-        self.repaint()
+        self.update()
 
     def _get_font(self, point_size: int) -> QtGui.QFont:
         cached = self._font_cache.get(point_size)
@@ -223,21 +223,21 @@ class DisplayButton(QtWidgets.QPushButton):
                         QtCore.Qt.TextFlag.TextShowMnemonic
                         | QtCore.Qt.AlignmentFlag.AlignHCenter
                         | QtCore.Qt.AlignmentFlag.AlignVCenter,
-                        str(self.text()) if self.text() else str("?"),
+                        str(self.text()) if self.text() else "?",
                     )
                     painter.drawText(
                         _stl_rect,
                         QtCore.Qt.TextFlag.TextShowMnemonic
                         | QtCore.Qt.AlignmentFlag.AlignHCenter
                         | QtCore.Qt.AlignmentFlag.AlignVCenter,
-                        str(self.secondary_text) if self.secondary_text else str("?"),
+                        str(self.secondary_text) if self.secondary_text else "?",
                     )
                     painter.drawText(
                         _mtl_rect,
                         QtCore.Qt.TextFlag.TextShowMnemonic
                         | QtCore.Qt.AlignmentFlag.AlignHCenter
                         | QtCore.Qt.AlignmentFlag.AlignVCenter,
-                        str("/"),
+                        "/",
                     )
                 elif self.display_format == "upper_downer":
                     _mtl = QtCore.QRectF(
@@ -384,7 +384,7 @@ class DisplayButton(QtWidgets.QPushButton):
                     QtCore.Qt.TextFlag.TextShowMnemonic
                     | QtCore.Qt.AlignmentFlag.AlignHCenter
                     | QtCore.Qt.AlignmentFlag.AlignVCenter,
-                    str(self.text()) if self.text() else str("?"),
+                    str(self.text()) if self.text() else "?",
                 )
                 painter.setPen(QtCore.Qt.PenStyle.NoPen)
         _ = painter.end()
@@ -394,8 +394,10 @@ class DisplayButton(QtWidgets.QPushButton):
         """Re-implemented method, set widget properties"""
         if name == "icon_pixmap":
             self.icon_pixmap = value
+            self._icon_cache_size = QtCore.QSize()
         if name == "secondary_pixmap":
             self.icon_pixmap_secondary = value
+            self._icon_secondary_cache_size = QtCore.QSize()
         elif name == "button_type":
             self._button_type = value
         elif name == "display_format":

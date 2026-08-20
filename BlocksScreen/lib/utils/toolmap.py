@@ -1,5 +1,6 @@
-from PyQt6 import QtWidgets, QtGui, QtCore
 from enum import IntEnum
+
+from PyQt6 import QtCore, QtGui, QtWidgets
 
 
 class FilamentPos(IntEnum):
@@ -17,6 +18,22 @@ class FilamentPos(IntEnum):
     HOMED_TS = 8
     IN_EXTRUDER = 9
     LOADED = 10
+
+
+_POSITION_PERCENT: dict[FilamentPos, float] = {
+    FilamentPos.UNKNOWN: 0.0,
+    FilamentPos.UNLOADED: 0.0,
+    FilamentPos.HOMED_GATE: 0.15,
+    FilamentPos.START_BOWDEN: 0.25,
+    FilamentPos.IN_BOWDEN: 0.45,
+    FilamentPos.END_BOWDEN: 0.65,
+    FilamentPos.HOMED_ENTRY: 0.70,
+    FilamentPos.HOMED_EXTRUDER: 0.75,
+    FilamentPos.EXTRUDER_ENTRY: 0.80,
+    FilamentPos.HOMED_TS: 0.85,
+    FilamentPos.IN_EXTRUDER: 0.92,
+    FilamentPos.LOADED: 1.0,
+}
 
 
 class FilamentPathWidget(QtWidgets.QWidget):
@@ -40,6 +57,26 @@ class FilamentPathWidget(QtWidgets.QWidget):
         # Font
         self._label_font = QtGui.QFont("Segoe UI", 9)
         self._label_font.setBold(True)
+
+        # Constant paint state, the widget animates so nothing here may be per frame
+        self._track_pen = QtGui.QPen(QtGui.QColor(40, 40, 40), 2)
+        self._node_pen = QtGui.QPen(self._node_color, 2)
+        self._box_pen = QtGui.QPen(QtGui.QColor(0, 150, 150), 2)
+        self._dark_brush = QtGui.QBrush(QtGui.QColor(25, 25, 25))
+        self._fill_brush = QtGui.QBrush(self._fill_color)
+        self._label_pen = QtGui.QPen(QtGui.QColor(180, 180, 180))
+
+        # Size dependent paint state, rebuilt on resize
+        self._geometry_valid = False
+        self._bar_x = 0.0
+        self._bar_y = 0.0
+        self._bar_height = 0.0
+        self._track_rect = QtCore.QRectF()
+        self._box_rect = QtCore.QRectF()
+        self._pregate_point = QtCore.QPointF()
+        self._hub_point = QtCore.QPointF()
+        self._top_rect = QtCore.QRectF()
+        self._bottom_rect = QtCore.QRectF()
 
         self.setMinimumSize(60, 200)
         self.setSizePolicy(
@@ -77,95 +114,93 @@ class FilamentPathWidget(QtWidgets.QWidget):
 
     def _get_position_percentage(self, position: FilamentPos) -> float:
         """Convert FilamentPos to percentage along the path (0.0 to 1.0)"""
-        position_map = {
-            FilamentPos.UNKNOWN: 0.0,
-            FilamentPos.UNLOADED: 0.0,
-            FilamentPos.HOMED_GATE: 0.15,
-            FilamentPos.START_BOWDEN: 0.25,
-            FilamentPos.IN_BOWDEN: 0.45,
-            FilamentPos.END_BOWDEN: 0.65,
-            FilamentPos.HOMED_ENTRY: 0.70,
-            FilamentPos.HOMED_EXTRUDER: 0.75,
-            FilamentPos.EXTRUDER_ENTRY: 0.80,
-            FilamentPos.HOMED_TS: 0.85,
-            FilamentPos.IN_EXTRUDER: 0.92,
-            FilamentPos.LOADED: 1.0,
-        }
-        return position_map.get(position, 0.0)
+        return _POSITION_PERCENT.get(position, 0.0)
 
-    def _draw_vertical_path(self, painter: QtGui.QPainter) -> None:
-        """Draw the vertical path bar"""
-        rect = self.rect()
+    def resizeEvent(self, a0: QtGui.QResizeEvent | None) -> None:
+        """Re-implemented method, drop the size dependent paint state"""
+        self._geometry_valid = False
+        super().resizeEvent(a0)
+
+    def _ensure_geometry(self) -> None:
+        """Rebuild the bar, node and label rects after a resize"""
+        if self._geometry_valid:
+            return
 
         top_margin = 30
         bottom_margin = 30
-
         bar_width = 30
-        bar_x = int(rect.width() / 2 - bar_width / 2)
-        bar_y = top_margin
-        bar_height = rect.height() - top_margin - bottom_margin
+        self._bar_x = float(int(self.width() / 2 - bar_width / 2))
+        self._bar_y = float(top_margin)
+        self._bar_height = float(self.height() - top_margin - bottom_margin)
 
+        self._track_rect = QtCore.QRectF(
+            self._bar_x, self._bar_y, bar_width, self._bar_height
+        )
+
+        center_x = self._bar_x + bar_width / 2
+        self._pregate_point = QtCore.QPointF(center_x, self._bar_y)
+        self._hub_point = QtCore.QPointF(center_x, self._bar_y + self._bar_height)
+
+        # Extruder box (middle ~70% down)
+        box_height = 40
+        box_y = self._bar_y + self._bar_height * 0.70 - box_height / 2
+        self._box_rect = QtCore.QRectF(
+            self._bar_x - 3, box_y, bar_width + 6, box_height
+        )
+
+        self._top_rect = QtCore.QRectF(0, 5, self.width(), 20)
+        self._bottom_rect = QtCore.QRectF(0, self.height() - 25, self.width(), 20)
+        self._geometry_valid = True
+
+    def _draw_vertical_path(self, painter: QtGui.QPainter) -> None:
+        """Draw the vertical path bar"""
         # Draw background track
-        bg_pen = QtGui.QPen(QtGui.QColor(40, 40, 40), 2)
-        painter.setPen(bg_pen)
-        painter.setBrush(QtGui.QColor(25, 25, 25))
-
-        track_rect = QtCore.QRectF(bar_x, bar_y, bar_width, bar_height)
-        painter.drawRect(track_rect)
+        painter.setPen(self._track_pen)
+        painter.setBrush(self._dark_brush)
+        painter.drawRect(self._track_rect)
 
         # Draw filament fill (from bottom up) using animated progress
         if self._animation_progress > 0.0:
-            fill_height = self._animation_progress * bar_height
-
             painter.setPen(QtCore.Qt.PenStyle.NoPen)
-            painter.setBrush(self._fill_color)
-
-            fill_rect = QtCore.QRectF(bar_x, bar_y, bar_width, fill_height)
-            painter.drawRect(fill_rect)
-
-        # Draw position nodes
-        center_x = bar_x + bar_width / 2
+            painter.setBrush(self._fill_brush)
+            painter.drawRect(
+                QtCore.QRectF(
+                    self._bar_x,
+                    self._bar_y,
+                    self._track_rect.width(),
+                    self._animation_progress * self._bar_height,
+                )
+            )
 
         # Pre-Gate node (top)
-        pregate_y = bar_y
-        painter.setPen(QtGui.QPen(self._node_color, 2))
-        painter.setBrush(QtGui.QColor(25, 25, 25))
-        painter.drawEllipse(QtCore.QPointF(center_x, pregate_y), 5, 5)
+        painter.setPen(self._node_pen)
+        painter.setBrush(self._dark_brush)
+        painter.drawEllipse(self._pregate_point, 5, 5)
 
-        # Extruder box (middle ~75% down)
-        extruder_y = bar_y + bar_height * 0.70
-        box_height = 40
-        box_y = extruder_y - box_height / 2
-
-        pen = QtGui.QPen(QtGui.QColor(0, 150, 150), 2)
-        painter.setPen(pen)
+        # Extruder box (middle ~70% down)
+        painter.setPen(self._box_pen)
         painter.setBrush(QtCore.Qt.BrushStyle.NoBrush)
-
-        box_rect = QtCore.QRectF(bar_x - 3, box_y, bar_width + 6, box_height)
-        painter.drawRect(box_rect)
+        painter.drawRect(self._box_rect)
 
         # Hub/Gate node (bottom)
-        hub_y = bar_y + bar_height
-        painter.setPen(QtGui.QPen(self._node_color, 2))
-        painter.setBrush(QtGui.QColor(25, 25, 25))
-        painter.drawEllipse(QtCore.QPointF(center_x, hub_y), 5, 5)
+        painter.setPen(self._node_pen)
+        painter.setBrush(self._dark_brush)
+        painter.drawEllipse(self._hub_point, 5, 5)
 
     def _draw_labels(self, painter: QtGui.QPainter) -> None:
         """Draw labels"""
-        painter.setPen(QtGui.QColor(180, 180, 180))
+        painter.setPen(self._label_pen)
         painter.setFont(self._label_font)
-
-        # Top label
-        top_rect = QtCore.QRectF(0, 5, self.width(), 20)
-        painter.drawText(top_rect, QtCore.Qt.AlignmentFlag.AlignCenter, self.gate_name)
-
-        # Bottom label
-        bottom_y = self.height() - 25
-        bottom_rect = QtCore.QRectF(0, bottom_y, self.width(), 20)
-        painter.drawText(bottom_rect, QtCore.Qt.AlignmentFlag.AlignCenter, "Toolhead")
+        painter.drawText(
+            self._top_rect, QtCore.Qt.AlignmentFlag.AlignCenter, self.gate_name
+        )
+        painter.drawText(
+            self._bottom_rect, QtCore.Qt.AlignmentFlag.AlignCenter, "Toolhead"
+        )
 
     def paintEvent(self, event: QtGui.QPaintEvent) -> None:
         """Paint the widget"""
+        self._ensure_geometry()
         painter = QtGui.QPainter(self)
         painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
 

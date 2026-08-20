@@ -252,9 +252,9 @@ class SpoolmanPage(QtWidgets.QWidget):
         filament = spool.get("filament") or {}
         vendor = filament.get("vendor") or {}
 
-        self.filament_name_label.setText(filament.get("name") or "—")
-        self.vendor_label.setText(vendor.get("name") or "—")
-        self.material_label.setText(filament.get("material") or "—")
+        self.filament_name_label.setText(filament.get("name") or "-")
+        self.vendor_label.setText(vendor.get("name") or "-")
+        self.material_label.setText(filament.get("material") or "-")
 
         remaining = spool.get("remaining_weight")
         initial = spool.get("initial_weight")
@@ -263,12 +263,12 @@ class SpoolmanPage(QtWidgets.QWidget):
         elif remaining is not None:
             self.weight_label.setText(f"{remaining:.0f} g")
         else:
-            self.weight_label.setText("—")
+            self.weight_label.setText("-")
 
         extruder = filament.get("settings_extruder_temp")
         bed = filament.get("settings_bed_temp")
-        extruder_str = f"{extruder}°C" if extruder is not None else "—"
-        bed_str = f"{bed}°C" if bed is not None else "—"
+        extruder_str = f"{extruder}°C" if extruder is not None else "-"
+        bed_str = f"{bed}°C" if bed is not None else "-"
         self.temps_label.setText(f"{extruder_str} / {bed_str}")
 
         self._update_color_swatches(filament)
@@ -430,7 +430,7 @@ class SpoolmanPage(QtWidgets.QWidget):
             title.setFixedHeight(32)
             title.setMinimumWidth(80)
             title.setMaximumWidth(110)
-            value = QtWidgets.QLabel("—", self)
+            value = QtWidgets.QLabel("-", self)
             value.setFont(val_font)
             value.setStyleSheet("color: white; background: transparent;")
             value.setFixedHeight(32)

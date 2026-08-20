@@ -50,7 +50,7 @@ class StreamToLogger(TextIO):
                     self._original.write(message)
                     self._original.flush()
                 except OSError:
-                    # Original stream closed or broken pipe — continue logging
+                    # Original stream closed or broken pipe - continue logging
                     self._original = None
 
             self._buffer += message
@@ -544,7 +544,7 @@ class CrashHandler:
             self._original_threading_excepthook(args)
 
         # Force exit if configured (for systemd restart)
-        # Skip for daemon threads — transient errors in background workers
+        # Skip for daemon threads - transient errors in background workers
         # (network, D-Bus) should not kill the whole process.
         if self._exit_on_crash:
             thread = args.thread

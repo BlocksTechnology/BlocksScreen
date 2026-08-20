@@ -139,7 +139,6 @@ class BlocksCustomButton(QtWidgets.QAbstractButton):
         painter = QtGui.QPainter(self)
         painter.setRenderHint(painter.RenderHint.Antialiasing, True)
         painter.setRenderHint(painter.RenderHint.SmoothPixmapTransform, True)
-        painter.setRenderHint(painter.RenderHint.LosslessImageRendering, True)
         _rect = self.rect()
         _style = self.style()
         if not _style or not _rect:

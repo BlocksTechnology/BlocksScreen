@@ -75,7 +75,7 @@ class NetworkManagerWorker(QObject):
         self._running: bool = False
         self._system_bus: sdbus.SdBus | None = None
 
-        # Path strings only — read-proxies are always created fresh.
+        # Path strings only - read-proxies are always created fresh.
         self._primary_wifi_path: str = ""
         self._primary_wifi_iface: str = ""
         self._primary_wired_path: str = ""
@@ -103,7 +103,7 @@ class NetworkManagerWorker(QObject):
         # Tracked for cancellation during shutdown.
         self._listener_tasks: list[asyncio.Task] = []
 
-        # Asyncio loop — created here, driven on the daemon thread.
+        # Asyncio loop - created here, driven on the daemon thread.
         self.stop_event = asyncio.Event()
         self.stop_event.clear()
         self._asyncio_loop: asyncio.AbstractEventLoop = asyncio.new_event_loop()
@@ -357,11 +357,11 @@ class NetworkManagerWorker(QObject):
             logger.error("Failed to detect interfaces: %s", exc)
 
         if not self._primary_wifi_path and not self._primary_wired_path:
-            # Both absent — likely D-Bus not ready yet or no hardware present.
+            # Both absent - likely D-Bus not ready yet or no hardware present.
             logger.warning("No network interfaces detected after scan")
             self.error_occurred.emit("wifi_unavailable", "No network device found")
         elif not self._primary_wifi_path:
-            # Ethernet-only or Wi-Fi driver still loading — log but don't alarm.
+            # Ethernet-only or Wi-Fi driver still loading - log but don't alarm.
             logger.warning("No Wi-Fi interface detected; ethernet-only mode")
 
     async def _enforce_boot_mutual_exclusion(self) -> None:
@@ -371,14 +371,14 @@ class NetworkManagerWorker(QObject):
         startup.  If ethernet is active and the Wi-Fi radio is on, the Wi-Fi
         device is disconnected and the radio is disabled, then we wait up to
         8 s for the radio to confirm it is off.  Failures are logged but not
-        propagated — a non-fatal best-effort action at boot.
+        propagated - a non-fatal best-effort action at boot.
         """
         try:
             if not await self._is_ethernet_connected():
                 return
             if not await self._nm().wireless_enabled:
                 return
-            logger.info("Boot: ethernet active + Wi-Fi enabled — disabling Wi-Fi")
+            logger.info("Boot: ethernet active + Wi-Fi enabled - disabling Wi-Fi")
             if self._primary_wifi_path:
                 try:
                     await self._wifi().disconnect()
@@ -432,7 +432,7 @@ class NetworkManagerWorker(QObject):
                 if not self._running:
                     return
                 logger.warning(
-                    "Listener '%s' failed: %s — restarting in %.1f s",
+                    "Listener '%s' failed: %s - restarting in %.1f s",
                     name,
                     exc,
                     _LISTENER_RESTART_DELAY,
@@ -470,7 +470,7 @@ class NetworkManagerWorker(QObject):
     async def _listen_ap_added(self) -> None:
         """React to new access points appearing in scan results.
 
-        Triggers a debounced scan rebuild (not a full rescan — NM has
+        Triggers a debounced scan rebuild (not a full rescan - NM has
         already updated its internal AP list).
         """
         if not self._signal_wifi:
@@ -517,7 +517,7 @@ class NetworkManagerWorker(QObject):
         """React to Wi-Fi device state transitions.
 
         Detects enabled/disabled, connecting, disconnected transitions
-        instantly — complements the NM global ``state_changed`` signal
+        instantly - complements the NM global ``state_changed`` signal
         which may not fire for all device-level transitions.
         """
         if not self._signal_wifi:
@@ -582,7 +582,7 @@ class NetworkManagerWorker(QObject):
         )
 
     def _fire_state_rebuild(self) -> None:
-        """Debounce callback — spawns the actual async state rebuild."""
+        """Debounce callback - spawns the actual async state rebuild."""
         self._state_debounce_handle = None
         if self._running:
             self._track_task(
@@ -606,7 +606,7 @@ class NetworkManagerWorker(QObject):
         )
 
     def _fire_scan_rebuild(self) -> None:
-        """Debounce callback — spawns the async scan rebuild."""
+        """Debounce callback - spawns the async scan rebuild."""
         self._scan_debounce_handle = None
         if self._running:
             self._track_task(
@@ -710,7 +710,7 @@ class NetworkManagerWorker(QObject):
         try:
             return await self._generic(self._primary_wired_path).state >= 30
         except Exception:
-            # D-Bus read failed; carrier state unknown — treat as no carrier.
+            # D-Bus read failed; carrier state unknown - treat as no carrier.
             return False
 
     async def _wait_for_wifi_radio(self, desired: bool, timeout: float = 3.0) -> bool:
@@ -762,7 +762,7 @@ class NetworkManagerWorker(QObject):
             ):
                 logger.info(
                     "Runtime mutual exclusion: ethernet active + "
-                    "Wi-Fi — disabling Wi-Fi"
+                    "Wi-Fi - disabling Wi-Fi"
                 )
                 if self._primary_wifi_path:
                     try:
@@ -781,7 +781,7 @@ class NetworkManagerWorker(QObject):
     def _get_ip_os_fallback(iface: str) -> str:
         """Return the IPv4 address for *iface* via a raw ioctl SIOCGIFADDR call.
 
-        Used as a fallback when the NM D-Bus IPv4Config path returns nothing —
+        Used as a fallback when the NM D-Bus IPv4Config path returns nothing -
         common immediately after DHCP on slower hardware.
         """
         if not iface:
@@ -1393,14 +1393,14 @@ class NetworkManagerWorker(QObject):
             has_psk = bool((rsn_flags & 0x100) or wpa_flags)
             if has_psk:
                 logger.debug(
-                    "SAE transition for '%s' — using wpa-psk + PMF optional",
+                    "SAE transition for '%s' - using wpa-psk + PMF optional",
                     ssid,
                 )
                 props["802-11-wireless-security"] = {
                     "key-mgmt": ("s", "wpa-psk"),
                     "auth-alg": ("s", "open"),
                     "psk": ("s", password),
-                    "pmf": ("u", 2),  # OPTIONAL — required for SAE-transition APs
+                    "pmf": ("u", 2),  # OPTIONAL - required for SAE-transition APs
                 }
             else:
                 logger.debug("Pure SAE detected for '%s'", ssid)
@@ -1408,7 +1408,7 @@ class NetworkManagerWorker(QObject):
                     "key-mgmt": ("s", "sae"),
                     "auth-alg": ("s", "open"),
                     "psk": ("s", password),
-                    "pmf": ("u", 3),  # REQUIRED — mandatory for pure WPA3-SAE
+                    "pmf": ("u", 3),  # REQUIRED - mandatory for pure WPA3-SAE
                 }
         elif security in (
             SecurityType.WPA2_PSK,

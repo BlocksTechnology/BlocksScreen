@@ -202,7 +202,7 @@ class MMUState:
                     scalar_fields["endless_spool_groups"]
                 )
             return dataclasses.replace(self, **scalar_fields)
-        # Gate arrays changed — need full rebuild, but we lost the raw arrays
+        # Gate arrays changed - need full rebuild, but we lost the raw arrays
         # Pass current gate data + diff into from_status
         gate_data = {
             "gate_status": [g.status for g in self.gates],

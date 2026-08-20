@@ -461,7 +461,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
             title.setFixedHeight(32)
             title.setMinimumWidth(80)
             title.setMaximumWidth(110)
-            value = QtWidgets.QLabel("—", self)
+            value = QtWidgets.QLabel("-", self)
             value.setFont(val_font)
             value.setStyleSheet("color: white; background: transparent;")
             value.setFixedHeight(32)
@@ -550,8 +550,8 @@ class FilamentTab(QtWidgets.QStackedWidget):
         else:
             self.pre_gate_idx = self.popup_gates.popleft()
             gate = self.pre_gate_idx.get("gate", -1)
-            self._popup_title_lbl.setText(f"Filament Detected — Gate {gate}")
-            self._spoolman_title_lbl.setText(f"Filament Detected — Gate {gate}")
+            self._popup_title_lbl.setText(f"Filament Detected - Gate {gate}")
+            self._spoolman_title_lbl.setText(f"Filament Detected - Gate {gate}")
 
         self.popup.show()
 

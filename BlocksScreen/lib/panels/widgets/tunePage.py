@@ -4,10 +4,9 @@ import typing
 
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.display_button import DisplayButton
+from lib.utils.gcode import fan_speed_gcode
 from lib.utils.icon_button import IconButton
 from PyQt6 import QtCore, QtGui, QtWidgets
-
-from lib.utils.gcode import fan_speed_gcode
 
 _logger = logging.getLogger(__name__)
 
@@ -110,7 +109,12 @@ class TuneWidget(QtWidgets.QWidget):
     def _on_speed_slider_change(self, _name: str, new_value: int) -> None:
         """Handle print speed slider change."""
         self.speed_factor_override = new_value / 100
+        self._refresh_speed_display()
         self.run_gcode.emit(f"M220 S{new_value}")
+
+    def _refresh_speed_display(self) -> None:
+        """Push the speed override to the display, paintEvent used to do this"""
+        self.speed_display.setText(f"{int(self.speed_factor_override * 100)}%")
 
     @QtCore.pyqtSlot(str, int, name="on_slider_change")
     def on_slider_change(self, name: str, new_value: int) -> None:
@@ -119,9 +123,7 @@ class TuneWidget(QtWidgets.QWidget):
 
     @QtCore.pyqtSlot(str, str, float, name="on_fan_update")
     @QtCore.pyqtSlot(str, str, int, name="on_fan_update")
-    def on_fan_object_update(
-        self, name: str, field: str, new_value: int | float
-    ) -> None:
+    def on_fan_object_update(self, name: str, field: str, new_value: float) -> None:
         """Slot Method that receives information from fan objects
 
         Args:
@@ -203,7 +205,7 @@ class TuneWidget(QtWidgets.QWidget):
         """Handle gcode move update"""
         if "speed_factor" in field:
             self.speed_factor_override = value
-            self.speed_display.setText(str(f"{int(self.speed_factor_override * 100)}%"))
+            self._refresh_speed_display()
 
     @QtCore.pyqtSlot(str, str, float, name="on_extruder_update")
     def on_extruder_temperature_change(
@@ -236,11 +238,6 @@ class TuneWidget(QtWidgets.QWidget):
             self.bed_display.setText(f"{new_value:.1f}")
         if field == "target":
             self.bed_target = int(new_value)
-
-    def paintEvent(self, a0: QtGui.QPaintEvent) -> None:
-        """Re-implemented method, paint widget"""
-        if self.isVisible():
-            self.speed_display.setText(str(f"{int(self.speed_factor_override * 100)}%"))
 
     def _setupUI(self) -> None:
         sizePolicy = QtWidgets.QSizePolicy(

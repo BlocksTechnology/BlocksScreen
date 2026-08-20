@@ -468,7 +468,7 @@ class ProbeHelper(QtWidgets.QWidget):
                         True, "Heating nozzle\nCleaning before calibration...", False
                     )
                 elif prev_temp > 0:
-                    # Heater turned off — brushing is starting
+                    # Heater turned off - brushing is starting
                     self.call_load_panel.emit(
                         True, "Cleaning nozzle...\nPlease wait", False
                     )
@@ -566,7 +566,7 @@ class ProbeHelper(QtWidgets.QWidget):
         _was_active = self.helper_start
         self.helper_start = is_active
         if is_active and self._calib_phase == _CalibPhase.PROBE_ACTIVE:
-            # Probe session started — CLEAN_NOZZLE/homing phase is over.
+            # Probe session started - CLEAN_NOZZLE/homing phase is over.
             self._calib_phase = _CalibPhase.IDLE
         elif not is_active and _was_active:
             # A manual probe session ended (external abort or normal completion).
@@ -622,7 +622,7 @@ class ProbeHelper(QtWidgets.QWidget):
                 error_msg,
             )
             return
-        # Not calibrating — mainWindow already handles the notification.
+        # Not calibrating - mainWindow already handles the notification.
         if not self.helper_start and self._calib_phase == _CalibPhase.IDLE:
             return
         logger.error("Error Response: %s", error_msg)

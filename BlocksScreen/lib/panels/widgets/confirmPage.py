@@ -20,13 +20,17 @@ class ConfirmWidget(QtWidgets.QWidget):
         str, str, name="delete_file"
     )
 
+    # Defaults so an early resizeEvent during _setupUI is a no-op
+    _pixmap_item: QtWidgets.QGraphicsPixmapItem | None = None
+    _thumbnail_key: tuple | None = None
+
     def __init__(self, parent) -> None:
         super().__init__(parent)
         self._setupUI()
         self.setMouseTracking(True)
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_AcceptTouchEvents, True)
         self.thumbnail: QtGui.QImage = self._blocksthumbnail
-        self._thumbnails: typing.List = []
+        self._thumbnails: list = []
         self.directory = "gcodes"
         self.filename = ""
         self.confirm_button.clicked.connect(
@@ -38,6 +42,7 @@ class ConfirmWidget(QtWidgets.QWidget):
         self.delete_file_button.clicked.connect(
             lambda: self.on_delete.emit(self.filename, self.directory)
         )
+        self._update_thumbnail()
 
     @QtCore.pyqtSlot(str, dict, name="on_show_widget")
     def on_show_widget(self, text: str, filedata: dict | None = None) -> None:
@@ -85,7 +90,7 @@ class ConfirmWidget(QtWidgets.QWidget):
         time_label = f"Slicer time: {time_str}"
         self.cf_info_tf.setText(f"{filament_label}")
         self.cf_info_tr.setText(f"{time_label}")
-        self.repaint()
+        self._update_thumbnail()
 
     def estimate_print_time(self, seconds: int) -> list:
         """Convert time in seconds format to days, hours, minutes, seconds.
@@ -101,49 +106,46 @@ class ConfirmWidget(QtWidgets.QWidget):
         days, hours = divmod(num_hours, 24)
         return [days, hours, minutes, seconds]
 
-    def hide(self):
-        """Hide widget"""
+    def hideEvent(self, a0: QtGui.QHideEvent | None) -> None:
+        """Re-implemented method, QStackedWidget bypasses hide() so clear state here"""
         self.directory = ""
         self.filename = ""
-        return super().hide()
+        super().hideEvent(a0)
 
-    def paintEvent(self, event: QtGui.QPaintEvent) -> None:
-        """Re-implemented method, paint widget"""
-        if not self.isVisible():
-            self.directory = ""
-            self.filename = ""
-        if not hasattr(self, "_scene"):
-            self._scene = QtWidgets.QGraphicsScene(self)
-            self.cf_thumbnail.setScene(self._scene)
+    def _update_thumbnail(self) -> None:
+        """Rescale and centre the thumbnail, only on a new image or a resize"""
+        if self._pixmap_item is None:
+            return
 
-        # Scene rectangle (available display area)
         graphics_rect = self.cf_thumbnail.rect().toRectF()
+        target = graphics_rect.size().toSize()
+        key = (self.thumbnail.cacheKey(), target.width(), target.height())
+        if key == self._thumbnail_key:
+            return
+        self._thumbnail_key = key
 
-        # Scale pixmap preserving aspect ratio
         pixmap = QtGui.QPixmap.fromImage(self.thumbnail).scaled(
-            graphics_rect.size().toSize(),
+            target,
             QtCore.Qt.AspectRatioMode.KeepAspectRatio,
             QtCore.Qt.TransformationMode.SmoothTransformation,
         )
-
-        # Centering offsets
-        adjusted_x = (graphics_rect.width() - pixmap.width()) / 2.0
-        adjusted_y = (graphics_rect.height() - pixmap.height()) / 2.0
-
-        # Update existing pixmap item or create it once
-        if not hasattr(self, "_pixmap_item"):
-            self._pixmap_item = QtWidgets.QGraphicsPixmapItem(pixmap)
-            self._scene.addItem(self._pixmap_item)
-        else:
-            self._pixmap_item.setPixmap(pixmap)
-
-        self._pixmap_item.setPos(adjusted_x, adjusted_y)
+        self._pixmap_item.setPixmap(pixmap)
+        self._pixmap_item.setPos(
+            (graphics_rect.width() - pixmap.width()) / 2.0,
+            (graphics_rect.height() - pixmap.height()) / 2.0,
+        )
         self._scene.setSceneRect(graphics_rect)
+
+    def resizeEvent(self, a0: QtGui.QResizeEvent | None) -> None:
+        """Re-implemented method, the thumbnail is sized from the view rect"""
+        super().resizeEvent(a0)
+        self._update_thumbnail()
 
     def showEvent(self, a0: QtGui.QShowEvent) -> None:
         """Re-implemented method, Handle widget show event"""
         if not self.thumbnail:
             self.cf_thumbnail.close()
+        self._update_thumbnail()
         return super().showEvent(a0)
 
     def _setupUI(self) -> None:
@@ -322,3 +324,8 @@ class ConfirmWidget(QtWidgets.QWidget):
         self._blocksthumbnail = QtGui.QImage(
             "BlocksScreen/lib/ui/resources/media/logoblocks400x300.png"
         )
+
+        self._scene = QtWidgets.QGraphicsScene(self)
+        self._pixmap_item = QtWidgets.QGraphicsPixmapItem()
+        self._scene.addItem(self._pixmap_item)
+        self.cf_thumbnail.setScene(self._scene)

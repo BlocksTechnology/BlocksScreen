@@ -1,5 +1,6 @@
 import enum
 import typing
+
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 
@@ -192,19 +193,14 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
 
     def paintEvent(self, a0: QtGui.QPaintEvent) -> None:
         """Re-implemented method, paint widget"""
-        option = QtWidgets.QStyleOptionButton()
-        option.initFrom(self)
-        option.state |= QtWidgets.QStyle.StateFlag.State_Off
-        option.state |= QtWidgets.QStyle.StateFlag.State_On
-        option.state |= QtWidgets.QStyle.StateFlag.State_Active
-
-        _rect = self.contentsRect()
+        rect_norm = self.contentsRect().toRectF().normalized()
         bg_color = self.backgroundColor
+        handle_size = rect_norm.height() * 0.80
         self.handle_ellipseRect = QtCore.QRectF(
             self._handle_position,
-            ((_rect.toRectF().normalized().height() * 0.20) // 2),
-            (_rect.toRectF().normalized().height() * 0.80),
-            (_rect.toRectF().normalized().height() * 0.80),
+            ((rect_norm.height() * 0.20) // 2),
+            handle_size,
+            handle_size,
         )
         self.handlePath.clear()
         self.handlePath.addEllipse(self.handle_ellipseRect)
@@ -213,7 +209,6 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
         painter.setRenderHint(painter.RenderHint.SmoothPixmapTransform)
         painter.setBackgroundMode(QtCore.Qt.BGMode.TransparentMode)
 
-        rect_norm = _rect.toRectF().normalized()
         min_x = rect_norm.x()
         max_x = rect_norm.x() + rect_norm.width() - rect_norm.height() * 0.80
         progress = (self._handle_position - min_x) / (max_x - min_x)
