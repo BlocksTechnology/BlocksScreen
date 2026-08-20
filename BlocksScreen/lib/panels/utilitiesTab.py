@@ -88,7 +88,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
     show_update_page: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         bool, name="show-update-page"
     )
-    call_load_panel = QtCore.pyqtSignal(bool, str, name="call-load-panel")
+    call_load_panel = QtCore.pyqtSignal(bool, str, bool, name="call-load-panel")
 
     def __init__(
         self, parent: QtWidgets.QWidget, ws: MoonWebSocket, printer: Printer
@@ -310,7 +310,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
                 if len(self.is_aut_types) == 2:
                     self.run_gcode_signal.emit("SAVE_CONFIG")
                     self._is_timeout_timer.stop()
-                    self.call_load_panel.emit(False, "")
+                    self.call_load_panel.emit(False, "", False)
                     self.aut = False
                     return
                 return
@@ -330,7 +330,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
 
             self.is_page.build_model_list()
             self._is_timeout_timer.stop()
-            self.call_load_panel.emit(False, "")
+            self.call_load_panel.emit(False, "", False)
             return
 
     def handle_is(self, gcode: str) -> None:
@@ -356,10 +356,10 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
             self.change_page(self.indexOf(self.is_page))
 
         self._is_timeout_timer.start()
-        self.call_load_panel.emit(True, "Running Input Shaper...")
+        self.call_load_panel.emit(True, "Running Input Shaper...", False)
 
     def _on_is_timeout(self) -> None:
-        self.call_load_panel.emit(False, "")
+        self.call_load_panel.emit(False, "", False)
 
     @QtCore.pyqtSlot(list, name="on_object_list")
     def on_object_list(self, object_list: list) -> None:
@@ -390,13 +390,19 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
                     pos_min = value.get("position_min")
                     pos_max = value.get("position_max")
                     if pos_min is not None or pos_max is not None:
+                        min_val = (
+                            float(pos_min) if pos_min is not None else -float("inf")
+                        )
+                        max_val = (
+                            float(pos_max) if pos_max is not None else float("inf")
+                        )
+                        endstop_raw = value.get("position_endstop")
+                        endstop = float(endstop_raw) if endstop_raw is not None else 0.0
+                        homes_at_min = abs(endstop - min_val) <= abs(endstop - max_val)
                         self.stepper_limits[key] = {
-                            "min": float(pos_min)
-                            if pos_min is not None
-                            else -float("inf"),
-                            "max": float(pos_max)
-                            if pos_max is not None
-                            else float("inf"),
+                            "min": min_val,
+                            "max": max_val,
+                            "homes_at_min": homes_at_min,
                         }
 
     def on_printer_config_received(self, config: dict) -> None:
@@ -428,13 +434,6 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         obj_key, message = routine_configs[process]
         obj_list = list(self.objects.get(obj_key, {}).keys())
         if not self._advance_routine_object(obj_list):
-            if process == Process.FAN:
-                self.run_gcode_signal.emit("M107")
-                for i in self.objects["fans"]:
-                    self.run_gcode_signal.emit(
-                        f"SET_FAN_SPEED FAN={i.removeprefix('fan_generic ')} SPEED=0\nM400"
-                    )
-
             if self.tb:
                 self.troubleshoot_request()
                 self.tb = False
@@ -442,7 +441,12 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
                 self.change_page(self.indexOf(self.panel.utilities_page))
 
             return
-
+        if self.tb:
+            self.troubleshoot_request()
+            self.tb = False
+            self.current_object = None
+            self.current_process = None
+            return
         message = (
             f"Please check if the {self.current_object}\nis functioning correctly."
         )
@@ -457,7 +461,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         self.show_waiting_page(
             self.indexOf(self.panel.rc_page),
             message,
-            10000 if process == Process.AXIS else 0,
+            20000 if process == Process.AXIS else 0,
         )
         self._send_routine_gcode()
 
@@ -503,6 +507,14 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
             self.objects[obj_key][item_key] = answer
             if self.current_process in [Process.BED_HEATER, Process.EXTRUDER]:
                 self.run_gcode_signal.emit("TURN_OFF_HEATERS")
+
+            if self.current_process == Process.FAN:
+                self.run_gcode_signal.emit("M107")
+                for i in self.objects["fans"]:
+                    self.run_gcode_signal.emit(
+                        f"SET_FAN_SPEED FAN={i.removeprefix('fan_generic ')} SPEED=0\nM400"
+                    )
+
             self.run_routine(self.current_process)
         elif self.current_process == Process.AXIS_MAINTENANCE:
             if answer == "yes":
@@ -524,22 +536,46 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
 
             return
 
+        if self.current_process == Process.AXIS:
+            if gcode := self._routine_check_axis_gcode(self.current_object):
+                self.run_gcode_signal.emit(f"{gcode}\nM400")
+            return
+
         gcode_map = {
             Process.BED_HEATER: "SET_HEATER_TEMPERATURE HEATER=heater_bed TARGET=60",
             Process.EXTRUDER: "SET_HEATER_TEMPERATURE HEATER=extruder TARGET=60",
-            (Process.AXIS, "x"): "G91\nG1 X250 F1000\nG1 X-250 F1000",
-            (Process.AXIS, "y"): "G91\nG1 Y-250 F1000\nG1 Y250 F1000",
-            (Process.AXIS, "z"): "G91\nG1 Z250 F1000\nG1 Z-250 F1000",
         }
 
-        key = (
-            (self.current_process, self.current_object)
-            if self.current_process == Process.AXIS
-            else self.current_process
-        )
-
-        if gcode := gcode_map.get(key):
+        if gcode := gcode_map.get(self.current_process):
             self.run_gcode_signal.emit(f"{gcode}\nM400")
+
+    def _routine_check_axis_gcode(self, axis: str, margin: float = 70.0) -> str:
+        limits = self.stepper_limits.get(f"stepper_{axis}")
+        if not limits:
+            return ""
+
+        span = limits["max"] - limits["min"]
+        if span <= 0:
+            return ""
+
+        effective_margin = margin
+        if span - (2 * margin) <= 0:
+            effective_margin = span * 0.1
+
+        distance = span - (2 * effective_margin)
+        if distance <= 0:
+            return ""
+
+        sign = 1 if limits.get("homes_at_min", True) else -1
+        axis_upper = axis.upper()
+
+        out = f"G1 {axis_upper}{sign * distance:.2f} F6000"
+        back = f"G1 {axis_upper}{-sign * (distance - 10):.2f} F6000"
+        moves = f"{out}\n{back}"
+        if axis == "x":
+            moves += "\nG90\nG1 X250 F6000"
+
+        return f"G91\n{moves}"
 
     def set_routine_check_page(self, title: str, label: str):
         """Set text on routine page"""
@@ -647,7 +683,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         self.show_waiting_page(
             self.indexOf(self.panel.rc_page),
             f"Homing {self.current_object.upper()} axis...",
-            5000,
+            20000,
         )
 
     def _run_AXIS_MAINTENANCE_gcode(self, axis: str):
@@ -668,7 +704,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
 
     def show_waiting_page(self, page_to_go_to: int, label: str, time_ms: int):
         """Show placeholder page"""
-        self.call_load_panel.emit(True, label)
+        self.call_load_panel.emit(True, label, False)
         QtCore.QTimer.singleShot(time_ms, lambda: self.change_page(page_to_go_to))
 
     def _connect_page_change(self, button: QtWidgets.QWidget, page: QtWidgets.QWidget):
@@ -677,7 +713,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
 
     def change_page(self, index: int):
         """Request change page by index"""
-        self.call_load_panel.emit(False, "")
+        self.call_load_panel.emit(False, "", False)
         self.troubleshoot_page.hide()
         if index < self.count():
             self.request_change_page.emit(3, index)

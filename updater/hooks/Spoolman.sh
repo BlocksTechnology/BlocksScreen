@@ -31,4 +31,11 @@ fi
 if [ ! -f ".env" ] && [ -f ".env.example" ]; then
     cp .env.example .env
 fi
+
+if ! systemctl is-active --quiet Spoolman.service 2>/dev/null; then
+    echo "[hook:Spoolman] enabling and starting Spoolman.service"
+    sudo systemctl enable --now Spoolman.service 2>/dev/null || {
+        echo "[hook:Spoolman] WARN: could not enable/start Spoolman.service - continuing"
+    }
+fi
 echo "[hook:Spoolman] done"

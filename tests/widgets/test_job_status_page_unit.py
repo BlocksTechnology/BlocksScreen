@@ -27,6 +27,9 @@ def _make_stub(base):
         def setPixmap(self, *a):
             pass
 
+        def set_progress(self, *a):  # real CustomProgressBar takes a 0-1 float
+            pass
+
     return Stub
 
 
@@ -81,10 +84,6 @@ class TestOnPrintStart:
         widget.on_print_start("test.gcode")
         assert widget._print_duration == 0.0
 
-    def test_sets_status_to_printing(self, widget):
-        widget.on_print_start("test.gcode")
-        assert widget._internal_print_status == "printing"
-
     def test_emits_print_start_signal(self, widget, qtbot):
         with qtbot.waitSignal(widget.print_start, timeout=500) as sig:
             widget.on_print_start("my_file.gcode")
@@ -98,9 +97,9 @@ class TestHandlePrintState:
         with qtbot.waitSignal(widget.show_request, timeout=500):
             widget._handle_print_state("printing")
 
-    def test_paused_emits_show_request(self, widget, qtbot):
-        with qtbot.waitSignal(widget.show_request, timeout=500):
-            widget._handle_print_state("paused")
+    # def test_paused_emits_show_request(self, widget, qtbot):
+    #    with qtbot.waitSignal(widget.show_request, timeout=500):
+    #        widget._handle_print_state("paused")
 
     def test_complete_emits_print_finish(self, widget, qtbot):
         with qtbot.waitSignal(widget.print_finish, timeout=500):
@@ -123,6 +122,19 @@ class TestHandlePrintState:
         widget._current_file_name = "print.gcode"
         widget._handle_print_state("error")
         assert widget._current_file_name == ""
+
+    @pytest.mark.parametrize("state", ["error", "complete"])
+    def test_finished_print_opens_cancel_page(self, widget, qtbot, state):
+        widget._internal_print_status = "printing"
+        with qtbot.waitSignal(widget.call_cancel_panel, timeout=500) as sig:
+            widget._handle_print_state(state)
+        assert sig.args == [True]
+
+    @pytest.mark.parametrize("state", ["error", "complete"])
+    def test_stale_end_when_idle_does_not_open_cancel_page(self, widget, qtbot, state):
+        widget._internal_print_status = ""
+        with qtbot.assertNotEmitted(widget.call_cancel_panel):
+            widget._handle_print_state(state)
 
 
 class TestOnPrintStatsUpdate:
@@ -155,7 +167,7 @@ class TestOnPrintStatsUpdate:
 
 
 class TestOnGcodeMoveUpdate:
-    """on_gcode_move_update computes layer from Z position."""
+    """on_gcode_move_update computes layer from Z, gated on filament advancing."""
 
     def _ready_widget(self, widget):
         """Put widget in the state where gcode_move_update should fire."""
@@ -170,34 +182,88 @@ class TestOnGcodeMoveUpdate:
             "first_layer_height": 0.2,
         }
 
-    def test_no_update_when_hidden(self, widget):
+    def _feed(self, widget, z, filament_used):
+        """Report a Z move then filament progress, as the printer would."""
+        widget.on_gcode_move_update("gcode_position", [0, 0, z, 0])
+        widget.on_print_stats_update("filament_used", float(filament_used))
+
+    def test_calculates_layer_from_z(self, widget):
+        self._ready_widget(widget)
+        self._feed(widget, 0.4, 1)  # z=0.4 -> layer 2
+        assert widget.layer_display_button.text() == "2"
+
+    def test_updates_when_hidden(self, widget):
         self._ready_widget(widget)
         widget.hide()
-        widget.on_gcode_move_update("gcode_position", [0, 0, 1.0, 0])
-        assert widget.layer_display_button.text() == "sentinel"
+        self._feed(widget, 0.4, 1)
+        assert widget.layer_display_button.text() == "2"
 
     def test_no_update_wrong_field(self, widget):
         self._ready_widget(widget)
+        widget._filament_used = 1
         widget.on_gcode_move_update("position", [0, 0, 1.0, 0])
         assert widget.layer_display_button.text() == "sentinel"
 
     def test_no_update_when_not_printing(self, widget):
         self._ready_widget(widget)
         widget._internal_print_status = "paused"
-        widget.on_gcode_move_update("gcode_position", [0, 0, 1.0, 0])
+        self._feed(widget, 1.0, 1)
         assert widget.layer_display_button.text() == "sentinel"
 
     def test_no_update_when_duration_zero(self, widget):
         self._ready_widget(widget)
         widget._print_duration = 0.0
-        widget.on_gcode_move_update("gcode_position", [0, 0, 1.0, 0])
+        self._feed(widget, 1.0, 1)
         assert widget.layer_display_button.text() == "sentinel"
 
-    def test_calculates_layer_from_z(self, widget):
+    def test_bedmesh_ignored(self, widget):
+        """Bed mesh probing lifts Z but extrudes nothing (filament_used=0): stay at 0."""
         self._ready_widget(widget)
-        # z=0.4, layer_height=0.2, first=0.2 -> ceil ((0.4-0.2)/ 0.2 + 1) = 2
-        widget.on_gcode_move_update("gcode_position", [0, 0, 0.4, 0])
+        widget.on_gcode_move_update("gcode_position", [0, 0, 15.0, 0])  # probe height
+        widget.on_print_stats_update("filament_used", 0.0)
+        assert widget.layer_display_button.text() == "sentinel"
+
+    def test_park_zlift_ignored(self, widget):
+        """Z-lift with no filament advance (Happy Hare pause park) must not bump the layer."""
+        self._ready_widget(widget)
+        self._feed(widget, 0.8, 1)  # layer 4
+        assert widget.layer_display_button.text() == "4"
+        widget.on_gcode_move_update(
+            "gcode_position", [0, 0, 15.0, 0]
+        )  # park, no extrusion
+        assert widget.layer_display_button.text() == "4"
+
+    def test_layer_tracks_extruding_z(self, widget):
+        """Layer follows Z on extruding moves; may regress on a Z drop (Mainsail)."""
+        self._ready_widget(widget)
+        self._feed(widget, 0.8, 1)  # layer 4
+        assert widget.layer_display_button.text() == "4"
+        self._feed(widget, 0.4, 2)  # layer 2
         assert widget.layer_display_button.text() == "2"
+
+    def test_reported_total_layer_not_overridden_by_estimate(self, widget):
+        """Klipper-reported total_layer wins over the geometry estimate."""
+        self._ready_widget(widget)
+        widget.on_print_stats_update("info", {"total_layer": 999})
+        assert widget.total_layer_reported is True
+        self._feed(widget, 0.4, 1)
+        assert widget.layer_display_button.secondary_text == "999"
+
+    def test_reconnect_midprint_shows_current_and_total(self, widget):
+        """Restart mid-print: filament already used + late metadata must fill both fields."""
+        widget.show()
+        widget._internal_print_status = "printing"
+        widget.layer_fallback = True
+        widget._print_duration = 500.0
+        widget.on_print_stats_update("filament_used", 1234.0)  # already printing
+        widget.on_gcode_move_update(
+            "gcode_position", [0, 0, 0.8, 0]
+        )  # z=0.8 -> layer 4
+        widget.on_fileinfo(
+            {"object_height": 10.0, "layer_height": 0.2, "first_layer_height": 0.2}
+        )
+        assert widget.layer_display_button.text() == "4"
+        assert widget.layer_display_button.secondary_text != ""
 
 
 class TestVirtualSdcardUpdate:
@@ -207,25 +273,52 @@ class TestVirtualSdcardUpdate:
         from unittest.mock import patch
 
         widget.hide()
-        with patch.object(widget.printing_progress_bar, "setValue") as mock_test:
-            widget.virtual_sdcard_update("progress", 50)
+        with patch.object(widget.printing_progress_bar, "set_progress") as mock_test:
+            widget.virtual_sdcard_update("progress", 0.5)
         mock_test.assert_not_called()
 
     def test_progress_field_sets_value(self, widget):
         from unittest.mock import patch
 
         widget.show()
-        with patch.object(widget.printing_progress_bar, "setValue") as mock_test:
-            widget.virtual_sdcard_update("progress", 75)
-        mock_test.assert_called_once_with(75)
+        with patch.object(widget.printing_progress_bar, "set_progress") as mock_test:
+            widget.virtual_sdcard_update("progress", 0.75)
+        mock_test.assert_called_once_with(0.75)
 
     def test_non_progress_field_ignored(self, widget):
         from unittest.mock import patch
 
         widget.hide()
-        with patch.object(widget.printing_progress_bar, "setValue") as mock_test:
+        with patch.object(widget.printing_progress_bar, "set_progress") as mock_test:
             widget.virtual_sdcard_update("is_active", True)
         mock_test.assert_not_called()
+
+
+class TestOnFlowguardUpdate:
+    """on_flowguard_update applies only the keys present in the payload."""
+
+    def _mock_flowrate(self, widget):
+        from unittest.mock import MagicMock
+
+        widget.flowrate.setValue = MagicMock()
+        widget.flowrate.set_max_clog = MagicMock()
+        widget.flowrate.set_max_tangle = MagicMock()
+
+    def test_partial_payload_does_not_raise(self, widget):
+        self._mock_flowrate(widget)
+        widget.on_flowguard_update("flowguard", {"level": 42})
+        widget.flowrate.setValue.assert_called_once_with(42)
+        widget.flowrate.set_max_clog.assert_not_called()
+        widget.flowrate.set_max_tangle.assert_not_called()
+
+    def test_full_payload_sets_all_fields(self, widget):
+        self._mock_flowrate(widget)
+        widget.on_flowguard_update(
+            "flowguard", {"level": 10, "max_clog": 20, "max_tangle": 30}
+        )
+        widget.flowrate.setValue.assert_called_once_with(10)
+        widget.flowrate.set_max_clog.assert_called_once_with(20)
+        widget.flowrate.set_max_tangle.assert_called_once_with(30)
 
 
 class TestPauseResumePrint:
@@ -319,13 +412,121 @@ class TestOnFileInfo:
         widget.on_fileinfo(_metadata)
         assert widget.file_metadata is _metadata
 
-    def test_layer_display_reset_to_zero(self, widget):
+    def test_layer_display_not_reset_when_already_reporting(self, widget):
+        """Re-showing after Tune redelivers cached metadata; must not reset the live layer."""
         widget.layer_display_button.setText("99")
         _metadata = self._ready_widget(widget)
         widget.on_fileinfo(_metadata)
-        assert widget.layer_display_button.text() == "0"
+        assert widget.layer_display_button.text() == "99"
 
     def test_secondary_text_set_to_total_layers(self, widget):
         _metadata = self._ready_widget(widget)
         widget.on_fileinfo(_metadata)
         assert widget.layer_display_button.secondary_text == "20"
+
+
+class TestComputeProgress:
+    """_compute_progress mirrors Mainsail file-relative progress."""
+
+    def _bounds(self, widget):
+        widget._gcode_start_byte = 100
+        widget._gcode_end_byte = 1100
+
+    def test_relative_midway(self, widget):
+        self._bounds(widget)
+        widget._file_position = 600
+        assert widget._compute_progress() == pytest.approx(0.5)
+
+    def test_before_start_is_zero(self, widget):
+        """Start-macro bytes (mesh/plate cal) report 0%."""
+        self._bounds(widget)
+        widget._file_position = 50
+        assert widget._compute_progress() == 0.0
+
+    def test_after_end_is_one(self, widget):
+        """Excluded end gcode reports 100%."""
+        self._bounds(widget)
+        widget._file_position = 5000
+        assert widget._compute_progress() == 1.0
+
+    def test_fallback_to_raw_without_bytes(self, widget):
+        widget._gcode_start_byte = 0
+        widget._gcode_end_byte = 0
+        widget._raw_progress = 0.42
+        assert widget._compute_progress() == 0.42
+
+
+class TestResetOnNewFile:
+    """A new filename clears stale layer/total; a repeat does not."""
+
+    def test_new_filename_clears_stale_total(self, widget):
+        widget._current_file_name = "old.gcode"
+        widget.total_layers = "690"
+        widget.layer_display_button.secondary_text = "690"
+        widget.on_print_stats_update("filename", "new.gcode")
+        assert widget.total_layers == "?"
+        assert widget.layer_display_button.secondary_text == "?"
+
+    def test_same_filename_does_not_reset(self, widget):
+        widget._current_file_name = "same.gcode"
+        widget.layer_display_button.secondary_text = "250"
+        widget.on_print_stats_update("filename", "same.gcode")
+        assert widget.layer_display_button.secondary_text == "250"
+
+
+class TestPauseFreeze:
+    """Layer is frozen across a pause so the park Z-lift never bumps it."""
+
+    def test_pause_click_freezes(self, widget):
+        widget._internal_print_status = "printing"
+        widget.pause_resume_print()
+        assert widget._layer_frozen is True
+
+    def test_paused_state_freezes(self, widget):
+        widget._handle_print_state("paused")
+        assert widget._layer_frozen is True
+
+    def test_printing_state_unfreezes(self, widget):
+        widget._layer_frozen = True
+        widget._handle_print_state("printing")
+        assert widget._layer_frozen is False
+
+    def test_frozen_ignores_reported_layer(self, widget):
+        widget._layer_frozen = True
+        widget.layer_display_button.setText("4")
+        widget.on_print_stats_update("info", {"current_layer": 80})
+        assert widget.layer_display_button.text() == "4"
+
+    def test_frozen_blocks_z_recompute(self, widget):
+        widget.show()
+        widget._internal_print_status = "printing"
+        widget.layer_fallback = True
+        widget._print_duration = 10.0
+        widget.file_metadata = {
+            "object_height": 10.0,
+            "layer_height": 0.2,
+            "first_layer_height": 0.2,
+        }
+        widget.layer_display_button.setText("4")
+        widget._layer_frozen = True
+        widget.on_gcode_move_update("gcode_position", [0, 0, 15.0, 0])
+        widget.on_print_stats_update("filament_used", 5.0)
+        assert widget.layer_display_button.text() == "4"
+
+
+class TestCompletionDisplay:
+    """A completed print shows the final layer=total and is not blanked."""
+
+    def _complete(self, widget):
+        widget._internal_print_status = "printing"
+        widget.total_layers = "250"
+        widget.total_layer_reported = True
+        widget._handle_print_state("complete")
+
+    def test_shows_final_layer(self, widget):
+        self._complete(widget)
+        assert widget.layer_display_button.text() == "250"
+
+    def test_total_not_blanked(self, widget):
+        self._complete(widget)
+        assert widget.total_layers == "250"

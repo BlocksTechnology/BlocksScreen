@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import builtins
 import fcntl
 import sys
@@ -59,6 +60,23 @@ def test_cli_lock_rejects_concurrent_run(monkeypatch, tmp_path):
     finally:
         fcntl.flock(holder, fcntl.LOCK_UN)
         holder.close()
+
+
+def test_status_surfaces_branch_mismatch(monkeypatch, capsys):
+    """CLI status must report a branch_mismatch component, not print 'up to date'."""
+    from updater import __main__ as cli
+    from updater.models import ComponentStatus
+
+    async def fake_check_status(self):
+        return {
+            "RF50-Klipper": ComponentStatus(name="RF50-Klipper", branch_mismatch=True)
+        }
+
+    monkeypatch.setattr(cli.UpdateService, "check_status", fake_check_status)
+    monkeypatch.setattr(sys, "argv", ["updater", "status"])
+    asyncio.run(cli.main())
+    out = capsys.readouterr().out
+    assert "RF50-Klipper: branch switch needed" in out
 
 
 class TestWatchdogPingInterval:

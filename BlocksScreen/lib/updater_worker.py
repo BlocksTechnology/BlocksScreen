@@ -22,10 +22,7 @@ _log = logging.getLogger(__name__)
 
 _RECONNECT_DELAYS = (5.0, 15.0, 30.0, 60.0)
 
-# Max seconds of *silence* from a busy daemon before declaring it gone.
-# Progress signals refresh the deadline, so long multi-component updates
-# (big apt upgrades, several klipper restarts) never trip it as long as
-# the daemon keeps reporting steps.
+# Max silence from a busy daemon; progress signals refresh the deadline.
 _BUSY_IDLE_LIMIT = 360.0
 
 
@@ -45,6 +42,7 @@ class UpdaterWorker(QtCore.QObject):
     recover_done = QtCore.pyqtSignal(str, bool)
     busy_changed = QtCore.pyqtSignal(bool)
     daemon_unavailable = QtCore.pyqtSignal()
+    update_rejected = QtCore.pyqtSignal()  # daemon refused the request (already busy)
     request_reconnect = QtCore.pyqtSignal()
     proxy_connected = QtCore.pyqtSignal()
 
@@ -147,16 +145,16 @@ class UpdaterWorker(QtCore.QObject):
             self._listener_tasks.append(task)
             task.add_done_callback(self._on_listener_done)
 
-        # Let each listener enter its async-for and register its D-Bus signal
-        # subscription before we poll current state (one sleep(0) per task).
+        # One sleep(0) per task lets each listener register its subscription.
         for _ in listeners:
             await asyncio.sleep(0)
 
         try:
-            busy = await self._proxy.get_busy()
-        except sdbus.SdBusBaseError as exc:
-            # Proxy creation is lazy; this first real call is what proves the
-            # daemon is actually reachable. Treat failure as daemon-down.
+            # Bounded: an unresponsive daemon holding an open socket must not hang reconnect forever.
+            async with asyncio.timeout(10):
+                busy = await self._proxy.get_busy()
+        except (sdbus.SdBusBaseError, TimeoutError) as exc:
+            # Proxy is lazy; this first call proves the daemon is reachable.
             _log.warning("get_busy failed on (re)connect: %s - scheduling retry", exc)
             self.daemon_unavailable.emit()
             self._schedule_reconnect()
@@ -253,6 +251,12 @@ class UpdaterWorker(QtCore.QObject):
         _log.info("trigger_cancel: cancelling active update (E-stop)")
         self._submit(self._call_cancel())
 
+    def trigger_bless(self, name: str = "BlocksScreen") -> None:
+        """Mark the running build healthy so the daemon records it as last_good."""
+        if not self._require_proxy():
+            return
+        self._submit(self._call_bless(name))
+
     def shutdown(self) -> None:
         """Cancel all tasks and stop the event loop; close() runs in _run_loop after stop."""  # noqa: E501
         self._shutting_down = True
@@ -300,6 +304,7 @@ class UpdaterWorker(QtCore.QObject):
             accepted = await self._proxy.update_all()
             if not accepted:
                 _log.warning("update_all was rejected: daemon is busy")
+                self.update_rejected.emit()
         except sdbus.SdBusBaseError as exc:
             self._handle_proxy_error(exc, "update_all")
 
@@ -309,6 +314,7 @@ class UpdaterWorker(QtCore.QObject):
             accepted = await self._proxy.update_component(name)
             if not accepted:
                 _log.warning("update_component(%r) was rejected: daemon is busy", name)
+                self.update_rejected.emit()
         except sdbus.SdBusBaseError as exc:
             self._handle_proxy_error(exc, "update_component")
 
@@ -334,6 +340,13 @@ class UpdaterWorker(QtCore.QObject):
             await self._proxy.cancel()
         except sdbus.SdBusBaseError as exc:
             self._handle_proxy_error(exc, "cancel")
+
+    async def _call_bless(self, name: str) -> None:
+        """Bless the current build; empty hash lets the daemon resolve HEAD."""
+        try:
+            await self._proxy.bless_healthy(name, "")
+        except sdbus.SdBusBaseError as exc:
+            self._handle_proxy_error(exc, "bless_healthy")
 
     # --- Signal listeners ------------------------------------------
 

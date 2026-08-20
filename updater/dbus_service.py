@@ -105,7 +105,10 @@ class UpdaterInterface(
         self._status_pending: bool = False
         self._invalid_requests: int = 0
         self._spawn(self._svc.reconcile(), name="boot_reconcile")
+        self._spawn(self._svc.background_prime_nrestarts(), name="boot_prime_nrestarts")
         self._spawn(self._periodic_status_check(), name="periodic_status_check")
+        self._spawn(self._svc.supervise_ui(), name="supervise_ui")
+        self._spawn(self._svc.forward_heal_ui(), name="forward_heal_ui")
 
     def _spawn(self, coro, *, name: str | None = None) -> asyncio.Task:
         """Create a task and hold a strong reference so GC cannot cancel it."""
@@ -220,12 +223,22 @@ class UpdaterInterface(
         self._spawn(self._run_recover(name, hard), name=f"recover_{name}")
         return True
 
+    @sdbus.dbus_method_async(input_signature="ss", result_signature="b")
+    async def bless_healthy(self, name: str, hash_val: str) -> bool:
+        """D-Bus method: bless a component as healthy (known-good)."""
+        if not self._validate_component_name(name):
+            _log.warning("bless_healthy called with unknown component %r", name)
+            return False
+        return await self._svc.bless_healthy(name, hash_val)
+
     async def _run_update_all(self) -> None:
         ran = False
         try:
             with process_lock() as acquired:
                 if not acquired:
                     _log.warning("update_all: a CLI run holds the lock; skipping")
+                    # Surface the rejection so the UI toasts instead of going silent.
+                    self.error.emit(("updater", "another update is running"))
                     return
                 ran = True
                 await self._update_all_locked()
@@ -233,8 +246,7 @@ class UpdaterInterface(
             _log.error("_run_update_all failed: %s", exc, exc_info=True)
         finally:
             self._set_busy(busy=False)
-        # Only run the silent apt pass if we actually held the lock - otherwise a
-        # CLI run owns the update and is responsible for apt.
+        # Silent apt pass only if we held the lock; else the CLI run owns apt.
         if ran:
             self._spawn(
                 self._svc.background_apt_upgrade(), name="background_apt_upgrade"
@@ -249,8 +261,8 @@ class UpdaterInterface(
             or s.packages_upgradable > 0
             or s.has_local_changes
             or s.needs_install
-            # Errored git repos (e.g. a corrupt repo) are included so the one
-            # "Update" button reaches them; the update flow self-heals them.
+            or s.branch_mismatch
+            # Errored git repos included: the update flow self-heals them.
             or (s.error is not None and s.kind != "apt")
         }
         if dirty:
@@ -263,6 +275,7 @@ class UpdaterInterface(
             with process_lock() as acquired:
                 if not acquired:
                     _log.warning("update_component: a CLI run holds the lock; skipping")
+                    self.error.emit((name, "another update is running"))
                     return
                 await self._svc.update_component(name)
         except Exception as exc:  # noqa: BLE001
@@ -275,6 +288,7 @@ class UpdaterInterface(
             with process_lock() as acquired:
                 if not acquired:
                     _log.warning("recover: a CLI run holds the lock; skipping")
+                    self.error.emit((name, "another update is running"))
                     return
                 await self._svc.recover(name, hard)
         except Exception as exc:  # noqa: BLE001
@@ -304,9 +318,7 @@ class UpdaterInterface(
                 cancelled_tasks.append(task)
                 _log.info("cancelled task %r", name)
         if cancelled_tasks:
-            # asyncio.wait (unlike a cancelled gather) never re-cancels the
-            # tasks, so an in-flight rollback is not interrupted a second time.
-            # Budget covers git reset + service restart + active-wait.
+            # asyncio.wait never re-cancels: rollback isn't interrupted again.
             _done, pending = await asyncio.wait(cancelled_tasks, timeout=150.0)
             if pending:
                 _log.error(

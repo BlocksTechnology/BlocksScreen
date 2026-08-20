@@ -85,13 +85,36 @@ class BlocksCustomButton(QtWidgets.QAbstractButton):
             self._is_flat = flat
             self.update()  # Schedule repaint
 
-    def isFlat(self) -> bool:
-        """Get flat property
+    def resizeEvent(self, e: QtGui.QResizeEvent) -> None:
+        """Recompute cached geometry only when size actually changes"""
+        super().resizeEvent(e)
+        self._update_geometry()
 
-        Returns:
-            bool: Button has 'flat' appearance enabled
-        """
-        return self._is_flat
+    def _update_geometry(self) -> None:
+        """Rebuild button_ellipse/button_background."""
+        rect = self.rect().toRectF().normalized()
+        height = rect.height()
+
+        path = QtGui.QPainterPath()
+        path.addRoundedRect(
+            0,
+            0,
+            rect.width(),
+            height,
+            height / 2.0,
+            height / 2.0,
+            QtCore.Qt.SizeMode.AbsoluteSize,
+        )
+
+        self.button_ellipse = QtCore.QRectF(
+            rect.left() + height * 0.05,
+            rect.top() + height * 0.05,
+            height * 0.90,
+            height * 0.90,
+        )
+        icon_path = QtGui.QPainterPath()
+        icon_path.addEllipse(self.button_ellipse)
+        self.button_background = path.subtracted(icon_path)
 
     def setAutoDefault(self, _):
         """Disable auto default behavior"""
@@ -102,7 +125,7 @@ class BlocksCustomButton(QtWidgets.QAbstractButton):
         if name == "icon_pixmap":
             self.icon_pixmap = value
         if name == "name":
-            self._name = name
+            self._name = value
         if name == "text_color":
             self.text_color = QtGui.QColor(value)
         self.update()
@@ -117,7 +140,6 @@ class BlocksCustomButton(QtWidgets.QAbstractButton):
         _style = self.style()
         if not _style or not _rect:
             return
-        # Flat button control
         opt = QtWidgets.QStyleOptionButton()
         if (
             not self._is_flat
@@ -127,7 +149,6 @@ class BlocksCustomButton(QtWidgets.QAbstractButton):
             _style.drawControl(
                 QtWidgets.QStyle.ControlElement.CE_PushButtonLabel, opt, painter, self
             )
-        # Determine background and text colors based on state
         if not self.isEnabled():
             bg_color_tuple = ButtonColors.DISABLED_BG.value
             current_text_color = QtGui.QColor(*ButtonColors.DISABLED_TEXT_COLOR.value)
@@ -140,107 +161,106 @@ class BlocksCustomButton(QtWidgets.QAbstractButton):
 
         bg_color = QtGui.QColor(*bg_color_tuple)
 
-        path = QtGui.QPainterPath()
-        xRadius = self.rect().toRectF().normalized().height() / 2.0
-        yRadius = self.rect().toRectF().normalized().height() / 2.0
         painter.setBackgroundMode(QtCore.Qt.BGMode.TransparentMode)
-        path.addRoundedRect(
-            0,
-            0,
-            self.rect().toRectF().normalized().width(),
-            self.rect().toRectF().normalized().height(),
-            xRadius,
-            yRadius,
-            QtCore.Qt.SizeMode.AbsoluteSize,
-        )
-        icon_path = QtGui.QPainterPath()
-        self.button_ellipse = QtCore.QRectF(
-            self.rect().toRectF().normalized().left()
-            + self.rect().toRectF().normalized().height() * 0.05,
-            self.rect().toRectF().normalized().top()
-            + self.rect().toRectF().normalized().height() * 0.05,
-            (self.rect().toRectF().normalized().height() * 0.90),
-            (self.rect().toRectF().normalized().height() * 0.90),
-        )
-        icon_path.addEllipse(self.button_ellipse)
-        self.button_background = path.subtracted(icon_path)
+
+        if self.button_background is None:
+            self._update_geometry()
+
         painter.setPen(QtCore.Qt.PenStyle.NoPen)
         painter.setBrush(bg_color)
         painter.fillPath(self.button_background, bg_color)
-        _parent_rect = self.button_ellipse.toRect()
-        _icon_rect = QtCore.QRectF(
-            _parent_rect.left() * 2.8,
-            _parent_rect.top() * 2.8,
-            _parent_rect.width() * 0.80,
-            _parent_rect.height() * 0.80,
-        )
+
         if not self.icon_pixmap.isNull():
-            _icon_scaled = self.icon_pixmap.scaled(
-                _icon_rect.size().toSize(),
-                QtCore.Qt.AspectRatioMode.KeepAspectRatio,
-                QtCore.Qt.TransformationMode.SmoothTransformation,
-            )
-            scaled_width = _icon_scaled.width()
-            scaled_height = _icon_scaled.height()
-            adjusted_x = (_icon_rect.width() - scaled_width) / 2.0
-            adjusted_y = (_icon_rect.height() - scaled_height) / 2.0
-            adjusted_icon_rect = QtCore.QRectF(
-                _icon_rect.x() + adjusted_x,
-                _icon_rect.y() + adjusted_y,
-                scaled_width,
-                scaled_height,
-            )
-            tinted_icon_pixmap = QtGui.QPixmap(_icon_scaled.size())
-            tinted_icon_pixmap.fill(QtCore.Qt.GlobalColor.transparent)
-            if not self.isEnabled():
-                tinted_icon_pixmap = QtGui.QPixmap(_icon_scaled.size())
-                tinted_icon_pixmap.fill(QtCore.Qt.GlobalColor.transparent)
-                icon_painter = QtGui.QPainter(tinted_icon_pixmap)
-                icon_painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
-                icon_painter.setRenderHint(
-                    QtGui.QPainter.RenderHint.SmoothPixmapTransform
-                )
-                icon_painter.drawPixmap(0, 0, _icon_scaled)
-                icon_painter.setCompositionMode(
-                    QtGui.QPainter.CompositionMode.CompositionMode_SourceAtop
-                )
-                tint = QtGui.QColor(
-                    bg_color.red(), bg_color.green(), bg_color.blue(), 120
-                )
-                icon_painter.fillRect(tinted_icon_pixmap.rect(), tint)
-                icon_painter.end()
-                final_pixmap = tinted_icon_pixmap
-            else:
-                final_pixmap = _icon_scaled
-            destination_point = adjusted_icon_rect.toRect().topLeft()
-            painter.drawPixmap(destination_point, final_pixmap)
+            self._paint_pixmap(painter, bg_color)
+
         if self.text():
             self._paint_text(painter, _rect, current_text_color)
+
         if self._show_notification:
             self._paint_notification(painter)
 
         painter.end()
 
+    def _paint_pixmap(self, painter: QtGui.QPainter, bg_color: QtGui.QColor) -> None:
+
+        hole = self.button_ellipse
+        icon_size = hole.width() * 0.80
+        _icon_rect = QtCore.QRectF(
+            hole.center().x() - icon_size / 2.0,
+            hole.center().y() - icon_size / 2.0,
+            icon_size,
+            icon_size,
+        )
+        _icon_scaled = self.icon_pixmap.scaled(
+            _icon_rect.size().toSize(),
+            QtCore.Qt.AspectRatioMode.KeepAspectRatio,
+            QtCore.Qt.TransformationMode.SmoothTransformation,
+        )
+        scaled_width = _icon_scaled.width()
+        scaled_height = _icon_scaled.height()
+        adjusted_x = (_icon_rect.width() - scaled_width) / 2.0
+        adjusted_y = (_icon_rect.height() - scaled_height) / 2.0
+        adjusted_icon_rect = QtCore.QRectF(
+            _icon_rect.x() + adjusted_x,
+            _icon_rect.y() + adjusted_y,
+            scaled_width,
+            scaled_height,
+        )
+        if not self.isEnabled():
+            tinted_icon_pixmap = QtGui.QPixmap(_icon_scaled.size())
+            tinted_icon_pixmap.fill(QtCore.Qt.GlobalColor.transparent)
+            icon_painter = QtGui.QPainter(tinted_icon_pixmap)
+            icon_painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
+            icon_painter.setRenderHint(QtGui.QPainter.RenderHint.SmoothPixmapTransform)
+            icon_painter.drawPixmap(0, 0, _icon_scaled)
+            icon_painter.setCompositionMode(
+                QtGui.QPainter.CompositionMode.CompositionMode_SourceAtop
+            )
+            tint = QtGui.QColor(bg_color.red(), bg_color.green(), bg_color.blue(), 120)
+            icon_painter.fillRect(tinted_icon_pixmap.rect(), tint)
+            icon_painter.end()
+            final_pixmap = tinted_icon_pixmap
+        else:
+            final_pixmap = _icon_scaled
+        destination_point = adjusted_icon_rect.toRect().topLeft()
+        painter.drawPixmap(destination_point, final_pixmap)
+
     def _paint_text(
         self, painter: QtGui.QPainter, rect: QtCore.QRect, text_color: QtGui.QColor
     ) -> None:
-        _text_rect = rect
-        _text_rect2 = rect
-        _text_rect2.setWidth(self.width() - int(self.button_ellipse.width()))
-        _text_rect2.setLeft(int(self.button_ellipse.width()))
-        _text_rect.setWidth(self.width() - int(self.button_ellipse.width()))
-        _text_rect.setLeft(int(self.button_ellipse.width()))
+        content_left = int(self.button_ellipse.right())
+        right_margin = int(rect.height() * 0.25)
+        _text_rect = QtCore.QRect(
+            content_left,
+            rect.top(),
+            max(self.width() - content_left - right_margin, 0),
+            rect.height(),
+        )
         _pen = painter.pen()
         _pen.setStyle(QtCore.Qt.PenStyle.SolidLine)
         _pen.setWidth(1)
         _pen.setColor(text_color)
         painter.setPen(_pen)
-        _text_rect.setWidth(self.width() - int(self.button_ellipse.width() * 1.4))
-        _text_rect.setLeft(int(self.button_ellipse.width()))
+
+        text = str(self.text())
+        _metrics = painter.fontMetrics()
+        text_width = max(
+            (_metrics.horizontalAdvance(line) for line in text.split("\n")),
+            default=0,
+        )
+        if text_width <= _text_rect.width():
+            align = QtCore.Qt.AlignmentFlag.AlignCenter
+        else:
+            align = (
+                QtCore.Qt.AlignmentFlag.AlignLeft | QtCore.Qt.AlignmentFlag.AlignVCenter
+            )
+
         painter.drawText(
             _text_rect,
-            QtCore.Qt.TextFlag.TextShowMnemonic | QtCore.Qt.AlignmentFlag.AlignCenter,
-            str(self.text()),
+            QtCore.Qt.TextFlag.TextShowMnemonic
+            | QtCore.Qt.TextFlag.TextDontClip
+            | align,
+            text,
         )
         painter.setPen(QtCore.Qt.PenStyle.NoPen)
 

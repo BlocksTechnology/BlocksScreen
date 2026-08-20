@@ -7,7 +7,8 @@ bs_migrate_moonraker_conf() {
     local conf="$1" tag="${2:-bs-common}" patched=false
     [ -f "$conf" ] || return 0
     cp "$conf" "${conf}.bak" 2>/dev/null || true
-    if ! grep -q "enable_system_updates" "$conf"; then
+    # Gate on the section existing: else the sed no-ops but patched=true restarts moonraker every boot.
+    if ! grep -q "enable_system_updates" "$conf" && grep -q '^\[update_manager\]$' "$conf"; then
         sed -i '/^\[update_manager\]$/a enable_system_updates: False' "$conf"
         patched=true
         echo "[$tag] moonraker.conf: disabled system apt upgrades"
@@ -49,8 +50,9 @@ bs_disable_overlapping_update_managers() {
     grep -q "blocksscreen-single-owner" "$conf" && return 1
     local owned="RF50-Klipper happy-hare Klippain-ShakeTune mainsail-config crowsnest"
     local tmp
-    tmp="$(mktemp)" || return 1
-    awk -v owned="$owned" '
+    # Same-dir temp + atomic rename: a power cut can never truncate moonraker.conf.
+    tmp="$(mktemp -p "$(dirname "$conf")" .moonraker.conf.XXXXXX)" || return 1
+    if awk -v owned="$owned" '
         BEGIN { n = split(owned, a, " "); for (i = 1; i <= n; i++) own[a[i]] = 1 }
         /^\[/ {
             insec = 0
@@ -60,8 +62,13 @@ bs_disable_overlapping_update_managers() {
             }
         }
         { if (insec) print "#" $0; else print }
-    ' "$conf" > "$tmp" && cat "$tmp" > "$conf"
-    rm -f "$tmp"
+    ' "$conf" > "$tmp"; then
+        chmod --reference="$conf" "$tmp" 2>/dev/null || true
+        mv -f "$tmp" "$conf"
+    else
+        rm -f "$tmp"
+        return 1
+    fi
     printf '\n# blocksscreen-single-owner applied by %s\n' "$tag" >> "$conf"
     echo "[$tag] moonraker.conf: disabled Moonraker management of daemon-owned repos"
 }
@@ -74,7 +81,9 @@ bs_sync_service_files() {
         local src="$1" dst="$2"
         [ -f "$src" ] || return 0
         if ! diff -q "$dst" "$src" >/dev/null 2>&1; then
-            sudo cp "$src" "$dst" && echo "[$tag] updated $(basename "$dst")" || true
+            # Atomic install: a truncated BlocksScreen.service unit cannot self-heal.
+            sudo cp "$src" "${dst}.new" && sudo mv -Tf "${dst}.new" "$dst" \
+                && echo "[$tag] updated $(basename "$dst")" || true
             need_reload=true
         fi
     }

@@ -3,7 +3,8 @@ set -euo pipefail
 
 SCRIPT_PATH=$(dirname -- "$(readlink -f -- "$0")")
 BS_PATH=$(dirname "$SCRIPT_PATH")
-_BSENV_USER="${SUDO_USER:-$USER}"
+# Hardcode 'blocks' like the other scripts: $USER=root under a root pull would derive /root and skip every patch.
+_BSENV_USER="blocks"
 _BSENV_HOME=$(getent passwd "$_BSENV_USER" | cut -d: -f6)
 BSENV="${BLOCKSSCREEN_VENV:-${_BSENV_HOME}/.BlocksScreen-env}"
 
@@ -14,8 +15,7 @@ bs_migrate_moonraker_conf "$_BSENV_HOME/printer_data/config/moonraker.conf" post
 
 changed=$(git -C "$BS_PATH" diff ORIG_HEAD HEAD --name-only 2>/dev/null || true)
 
-# ── Pre-flight: run all heavy prep before any restart ────────────────────────
-# Everything here is idempotent - safe to re-run on every merge.
+# Pre-flight: heavy prep before any restart; everything here is idempotent.
 
 # 1. Pre-install pip requirements so the next service start is instant.
 REQS_HASH=$(md5sum "$BS_PATH/scripts/requirements.txt" | cut -d' ' -f1)
@@ -32,10 +32,7 @@ if [ ! -f "$SENTINEL" ] || [ "$(cat "$SENTINEL")" != "$REQS_HASH" ]; then
         rm -f "$ATTEMPT" 2>/dev/null || true
         echo "[post-merge] deps installed"
     else
-        # An atomic -r failure (e.g. a dep without an aarch64 wheel) must not
-        # re-thrash on every pull. Retry a few times - covering transient or
-        # offline failures - then accept the partial venv so the sentinel
-        # advances and the boot path stops retrying a known-failing set.
+        # Retry atomic -r failures 3x, then accept the partial venv to stop thrash.
         _prev=$(cut -d' ' -f1 "$ATTEMPT" 2>/dev/null || true)
         _cnt=$(cut -d' ' -f2 "$ATTEMPT" 2>/dev/null || true)
         case "$_cnt" in '' | *[!0-9]*) _cnt=0 ;; esac
@@ -60,13 +57,8 @@ fi
 # 4. Precompute splash cache so the first Qt restart shows the right logo.
 "$BSENV/bin/python3.11" "$SCRIPT_PATH/bs-splash.py" --precompute 2>/dev/null || true
 
-# ─────────────────────────────────────────────────────────────────────────────
 
-# ── Service restart based on what changed ────────────────────────────────────
-# When run by the updater daemon's own `git pull` (mid-batch, inside its cgroup),
-# restarting the daemon here would SIGTERM the cgroup and abort+revert the
-# update. In that case record the reason to the sentinel and let the daemon act
-# once, after the batch completes. Manual pulls (no env) restart as before.
+# Under the daemon's own pull a restart here aborts the batch: defer via sentinel.
 _record_or() {
     local _reason="$1"; shift
     if [ -n "${BS_UPDATER_SELF_UPDATE:-}" ] && [ -n "${BS_UPDATER_RESTART_SENTINEL:-}" ]; then
@@ -78,12 +70,12 @@ _record_or() {
     fi
 }
 
-if echo "$changed" | grep -qE '^scripts/BlocksScreen-updater\.service$|^scripts/BlocksScreen-bootstrap\.service$|^scripts/com\.blockscreen\.Updater\.conf$|^scripts/install-updater\.sh$'; then
+if echo "$changed" | grep -qE '^scripts/BlocksScreen-updater\.service$|^scripts/BlocksScreen-bootstrap\.service$|^scripts/com\.blockscreen\.Updater\.conf$|^scripts/install-updater\.sh$|^scripts/bs-apt-helper\.sh$'; then
     echo "[post-merge] Updater install files changed - reinstalling updater ..."
     _record_or install sudo bash "$SCRIPT_PATH/install-updater.sh"
 elif echo "$changed" | grep -qE '^scripts/bs-splash-holder\.py$'; then
-    echo "[post-merge] Splash-holder script changed - restarting ..."
-    sudo systemctl restart --no-block BlocksScreen-splash-holder.service || true
+    # Do NOT restart the holder live: it would re-grab tty8 and steal the display from the running GUI (soft-brick). The new script applies at next boot.
+    echo "[post-merge] Splash-holder script changed - applies on next boot (not restarting)."
 elif echo "$changed" | grep -qE '^updater/'; then
     echo "[post-merge] Updater code changed - restarting daemon ..."
     _record_or code sudo systemctl restart BlocksScreen-updater.service

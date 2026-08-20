@@ -1,5 +1,7 @@
 <RCC>
   <qresource prefix="top_bar_icons">
+    <file>media/topbar/pp_filament_topbar.svg</file>
+    <file>media/topbar/pc_filament_topbar.svg</file>
     <file>media/topbar/abs_filament_topbar.svg</file>
     <file>media/topbar/bed_temp_topbar.svg</file>
     <file>media/topbar/chamber_temp_topbar.svg</file>

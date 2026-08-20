@@ -65,7 +65,7 @@ class JobStatusWidget(QtWidgets.QWidget):
     file_metadata: dict | None = None
     total_layers = "?"
     _print_duration: float = 0.0
-    _VALID_STATES: typing.ClassVar[frozenset[str]] = frozenset({"printing", "paused"})
+    _VALID_STATES: typing.ClassVar[frozenset[str]] = frozenset({"printing"})
     _INVALID_STATES: typing.ClassVar[frozenset[str]] = frozenset(
         {"cancelled", "complete", "error", "standby"}
     )
@@ -85,6 +85,17 @@ class JobStatusWidget(QtWidgets.QWidget):
         super().__init__(parent)
         self.thumbnail_graphics = []
         self.layer_fallback = False
+        self.total_layer_reported = False
+        self._displayed_layer = 0
+        self._last_z = 0.0
+        self._filament_used = 0.0
+        self._file_position = 0.0
+        self._raw_progress = 0.0
+        self._gcode_start_byte = 0
+        self._gcode_end_byte = 0
+        self._layer_frozen = False
+        self._awaiting_resume = False
+        self._resume_baseline = 0.0
         self._setupUI()
         self.cancel_print_dialog = BasePopup(self, floating=True)
         self.tune_menu_btn.clicked.connect(self.tune_clicked.emit)
@@ -96,25 +107,21 @@ class JobStatusWidget(QtWidgets.QWidget):
         """Toggle thumbnail expansion"""
         if not self.thumbnail_view.scene():
             return
-        if not self.thumbnail_view.isVisible():
-            self.thumbnail_view.show()
-            self.progressWidget.hide()
-            self.contentWidget.hide()
-            self.printing_progress_bar.hide()
-            self.btnWidget.hide()
-            self.headerWidget.hide()
-            self.flowrateWidget.hide()
-            return
-        self.thumbnail_view.hide()
-        self.progressWidget.show()
-        self.contentWidget.show()
-        self.printing_progress_bar.show()
-        self.flowrateWidget.show()
-        self.btnWidget.show()
-        self.headerWidget.show()
+        expand = not self.thumbnail_view.isVisible()
+        self.thumbnail_view.setVisible(expand)
+        for widget in (
+            self.progressWidget,
+            self.contentWidget,
+            self.printing_progress_bar,
+            self.flowrateWidget,
+            self.btnWidget,
+            self.headerWidget,
+        ):
+            widget.setVisible(not expand)
 
     def showEvent(self, a0) -> None:
         """Reimplemented method, handle `show` Event"""
+        super().showEvent(a0)
         if self._current_file_name:
             self.request_file_info.emit(self._current_file_name)
 
@@ -167,47 +174,73 @@ class JobStatusWidget(QtWidgets.QWidget):
             "Are you sure you \n want to cancel \n the current print job?"
         )
         try:
-            self.cancel_print_dialog.accepted.disconnect(self.print_cancel)
+            self.cancel_print_dialog.accepted.connect(
+                self.print_cancel,
+                QtCore.Qt.ConnectionType.UniqueConnection,  # type: ignore
+            )
         except TypeError:
             pass
-        self.cancel_print_dialog.accepted.connect(self.print_cancel)
         self.cancel_print_dialog.open()
+
+    @QtCore.pyqtSlot(name="in-error-case")
+    def handleErrors(self):
+        self.pause_printing_btn.setEnabled(True)
+
+    def _reset_job_display(self) -> None:
+        """Clear all per-job layer/progress state so a new print never shows
+        stale values. Runs for both screen- and Mainsail-initiated prints
+        (see ``on_print_start`` and the filename-change branch)."""
+        self.total_layers = "?"
+        self.total_layer_reported = False
+        self.layer_fallback = False
+        self._layer_frozen = False
+        self._awaiting_resume = False
+        self._resume_baseline = 0.0
+        self._displayed_layer = 0
+        self._last_z = 0.0
+        self._filament_used = 0.0
+        self._file_position = 0.0
+        self._raw_progress = 0.0
+        self._gcode_start_byte = 0
+        self._gcode_end_byte = 0
+        self._print_duration = 0.0
+        self.layer_display_button.setText("0")
+        self.layer_display_button.secondary_text = "?"
+        self.print_time_display_button.setText("?")
+        self.printing_progress_bar.reset()
 
     @QtCore.pyqtSlot(str, name="on_print_start")
     def on_print_start(self, file: str) -> None:
         """Start a print job, show job status page"""
         self._current_file_name = file
         self.js_file_name_label.setText(self._current_file_name)
-        self.layer_display_button.setText("0")
-        self.print_time_display_button.setText("?")
-        self.printing_progress_bar.reset()
-        self._print_duration = 0.0
-        self._internal_print_status = "printing"
+        self._reset_job_display()
         self.request_file_info.emit(file)
         self.print_start.emit(file)
         self._post_event(events.PrintStart(self._current_file_name, self.file_metadata))
 
     @QtCore.pyqtSlot(dict, name="on_fileinfo")
     def on_fileinfo(self, metadata: dict) -> None:
-        """Handle received file information/metadata.
-
-        Loads thumbnail and layer count regardless of visibility so they
-        are ready when the widget is shown.
-        """
+        """Handle received file info/metadata (loads regardless of visibility)."""
+        # Metadata has no current_layer (that's live print_stats); don't reset it here.
         layer_count = metadata.get("layer_count", -1)
         self.total_layers = str(layer_count) if layer_count >= 0 else "---"
-        self.layer_display_button.setText("0")
+        self.total_layer_reported = layer_count >= 0
         self.layer_display_button.secondary_text = self.total_layers
+        self._gcode_start_byte = int(metadata.get("gcode_start_byte", 0) or 0)
+        self._gcode_end_byte = int(metadata.get("gcode_end_byte", 0) or 0)
         self.file_metadata = metadata
         self._load_thumbnails(*metadata.get("thumbnail_images", ()))
+        # Reconnect mid-print: metadata just arrived, recompute the current layer now.
+        if self._filament_used > 0:
+            self._update_layer_from_z()
 
     def pause_resume_print(self) -> None:
         """Handle pause/resume print job button clicked"""
         self.pause_printing_btn.setEnabled(False)
-        QtCore.QTimer.singleShot(
-            10000, lambda: self.pause_printing_btn.setEnabled(True)
-        )
         if self._internal_print_status == "printing":
+            # Snapshot the layer on click so the park Z-lift never bumps it.
+            self._layer_frozen = True
             self.print_pause.emit()
         if self._internal_print_status == "paused":
             self.print_resume.emit()
@@ -217,40 +250,62 @@ class JobStatusWidget(QtWidgets.QWidget):
         printer_status object updated
         """
         lstate = state.lower()
+        _was_active = self._internal_print_status in ("printing", "paused")
         event_state = lstate
+        is_valid = lstate in self._VALID_STATES
         is_invalid = lstate in self._INVALID_STATES
-        if lstate in self._VALID_STATES:
-            self._internal_print_status = lstate
-            if lstate == "paused":
-                self.pause_printing_btn.setEnabled(True)
-                self.pause_printing_btn.setText("Resume")
-                self.pause_printing_btn.setPixmap(
-                    QtGui.QPixmap(":/ui/media/btn_icons/play.svg")
-                )
-                event_state = "pause"
-            elif lstate == "printing":
-                self.pause_printing_btn.setEnabled(True)
-                self.pause_printing_btn.setText("Pause")
-                self.pause_printing_btn.setPixmap(
-                    QtGui.QPixmap(":/ui/media/btn_icons/pause.svg")
-                )
-                event_state = "start"
 
-        if lstate in self._VALID_STATES:
+        if lstate == "paused":
+            # Freeze the layer for the whole pause (covers auto-pause too).
+            self._layer_frozen = True
+            self.pause_printing_btn.setEnabled(True)
+            self.pause_printing_btn.setText("Resume")
+            self.pause_printing_btn.setPixmap(
+                QtGui.QPixmap(":/ui/media/btn_icons/play.svg")
+            )
+            self._awaiting_resume = False
+            event_state = "pause"
+        elif lstate == "printing":
+            self._layer_frozen = False
+            self.pause_printing_btn.setText("Pause")
+            self.pause_printing_btn.setPixmap(
+                QtGui.QPixmap(":/ui/media/btn_icons/pause.svg")
+            )
+            if self._internal_print_status != "printing":
+                self._awaiting_resume = True
+                self._resume_baseline = self._file_position
+            elif not self._awaiting_resume:
+                self.pause_printing_btn.setEnabled(True)
+            event_state = "start"
+
+        self._internal_print_status = lstate
+
+        if is_valid:
             self.request_query_print_stats.emit({"print_stats": ["filename"]})
             self.call_cancel_panel.emit(False)
             self.show_request.emit()
         elif is_invalid:
             if lstate == "complete":
                 self.print_finish.emit()
+                # Show the finished job as 100% on its final layer.
+                self.printing_progress_bar.set_progress(1.0)
+                if self.total_layer_reported:
+                    self.layer_display_button.setText(str(self.total_layers))
+            # Completed/errored print reuses the cancel page as the reprint prompt.
+            if lstate in ("complete", "error") and _was_active:
+                self.call_cancel_panel.emit(True)
             self.hide_request.emit()
         # Capture state before clearing so the event carries the real data.
         _event_file = self._current_file_name
         _event_meta = self.file_metadata
         if is_invalid:
+            # Keep the final layer/total visible until the next print resets it.
             self._internal_print_status = ""
             self._current_file_name = ""
-            self.total_layers = "?"
+            self._layer_frozen = False
+            self._awaiting_resume = False
+            self._last_z = 0.0
+            self._filament_used = 0.0
             self._print_duration = 0.0
             self.file_metadata = None
         # Send Event on Print state
@@ -261,11 +316,14 @@ class JobStatusWidget(QtWidgets.QWidget):
             )
 
     @QtCore.pyqtSlot(str, dict, name="flowguard_update")
-    def on_flowguard_update(self, str, dict):
+    def on_flowguard_update(self, field: str, value: dict) -> None:
         """Handle flowguard update"""
-        self.flowrate.setValue(dict["level"])
-        self.flowrate.set_max_clog(dict["max_clog"])
-        self.flowrate.set_max_tangle(dict["max_tangle"])
+        if "level" in value:
+            self.flowrate.setValue(value["level"])
+        if "max_clog" in value:
+            self.flowrate.set_max_clog(value["max_clog"])
+        if "max_tangle" in value:
+            self.flowrate.set_max_tangle(value["max_tangle"])
 
     @QtCore.pyqtSlot(str, dict, name="on_print_stats_update")
     @QtCore.pyqtSlot(str, float, name="on_print_stats_update")
@@ -281,10 +339,16 @@ class JobStatusWidget(QtWidgets.QWidget):
             if "state" in field:
                 self._handle_print_state(value)
             elif "filename" in field:
+                _new_file = bool(value) and value != self._current_file_name
                 self._current_file_name = value
                 if self.js_file_name_label.text().lower() != value.lower():
                     self.js_file_name_label.setText(self._current_file_name)
-                if self.isVisible():
+                # New file (e.g. Mainsail-started print): clear stale
+                # layer/progress before its metadata arrives.
+                if _new_file:
+                    self._reset_job_display()
+                # Fetch metadata even when hidden so layers recover on reconnect.
+                if value:
                     self.request_file_info.emit(value)
         # Layer info must be processed regardless of visibility so
         # Klipper's runtime values always override metadata defaults.
@@ -293,21 +357,31 @@ class JobStatusWidget(QtWidgets.QWidget):
                 if value["total_layer"] is not None:
                     self.total_layers = value["total_layer"]
                     self.layer_display_button.secondary_text = str(self.total_layers)
+                    self.total_layer_reported = True
                 else:
                     self.total_layers = "---"
+                    self.total_layer_reported = False
 
             if "current_layer" in value:
-                if value["current_layer"] is not None:
-                    self.layer_display_button.setText(f"{int(value['current_layer'])}")
+                if self._layer_frozen:
+                    pass  # Hold the snapshot while paused.
+                elif value["current_layer"] is not None:
+                    _reported_layer = int(value["current_layer"])
+                    self.layer_display_button.setText(str(_reported_layer))
+                    self._displayed_layer = _reported_layer
                     self.layer_fallback = False
                 else:
-                    self.layer_display_button.setText("---")
+                    # No info.current_layer from Klipper: compute from Z instead.
                     self.layer_fallback = True
         elif isinstance(value, float):
-            # print_duration tracked regardless of visibility (gates Z fallback)
+            # print_duration + filament_used tracked regardless of visibility (gate Z fallback)
             if "print_duration" in field:
                 self._print_duration = value
-            if self.isVisible() and "total_duration" in field:
+            elif "filament_used" in field:
+                self._filament_used = value
+                if value > 0:
+                    self._update_layer_from_z()
+            elif self.isVisible() and "total_duration" in field:
                 _time = estimate_print_time(int(value))
                 _print_time_string = (
                     f"{_time[0]}Day {_time[1]}H {_time[2]}min {_time[3]} s"
@@ -318,45 +392,40 @@ class JobStatusWidget(QtWidgets.QWidget):
 
     @QtCore.pyqtSlot(str, list, name="on_gcode_move_update")
     def on_gcode_move_update(self, field: str, value: list) -> None:
-        """Z-position fallback for layer count display.
+        """Remember live Z; the layer is recomputed from it when filament advances."""
+        if "gcode_position" in field and len(value) > 2:
+            self._last_z = float(value[2])
 
-        Only runs when Klipper does not provide
-        ``print_stats.info.current_layer`` (``layer_fallback`` is True)
-        AND ``print_duration > 0``.  The ``print_duration`` gate
-        matches Mainsail's ``getPrintCurrentLayer`` getter which
-        prevents layer updates during pre-print procedures (heating,
-        nozzle cleaning).
-        """
+    def _update_layer_from_z(self) -> None:
+        """Recompute fallback layer from last Z on filament advance, so park/travel Z is ignored (Mainsail getPrintCurrentLayer)."""
         if (
-            not self.isVisible()
-            or "gcode_position" not in field
-            or self._internal_print_status != "printing"
+            self._internal_print_status != "printing"
+            or self._layer_frozen  # held while paused (park Z-lift ignored)
             or not self.layer_fallback
-            or self._print_duration <= 0  # Mainsail: skip during pre-print procedures
-            or len(value) <= 2
+            or self._print_duration <= 0  # skip pre-print homing/purge moves
         ):
             return
         meta = self.file_metadata
         if not meta:
             return
-        object_height = float(meta.get("object_height", 0))
         layer_height = float(meta.get("layer_height", 0))
-        first_layer_height = float(meta.get("first_layer_height", 0))
         if layer_height <= 0:
             return
-        # Mainsail getPrintMaxLayers fallback
+        first_layer_height = float(meta.get("first_layer_height", 0))
         _max_layers = calculate_max_layers(
-            object_height, layer_height, first_layer_height
+            float(meta.get("object_height", 0)), layer_height, first_layer_height
         )
-        if _max_layers > 0:
+        if not self.total_layer_reported and _max_layers > 0:
             self.layer_display_button.secondary_text = str(_max_layers)
         _current_layer = calculate_current_layer(
-            z_position=value[2],
+            z_position=self._last_z,
             layer_height=layer_height,
             first_layer_height=first_layer_height,
             max_layers=_max_layers,
         )
-        self.layer_display_button.setText(str(_current_layer))
+        if _current_layer != self._displayed_layer:
+            self._displayed_layer = _current_layer
+            self.layer_display_button.setText(str(_current_layer))
 
     @QtCore.pyqtSlot(str, float, name="virtual_sdcard_update")
     @QtCore.pyqtSlot(str, bool, name="virtual_sdcard_update")
@@ -367,10 +436,35 @@ class JobStatusWidget(QtWidgets.QWidget):
             field (str): Name of the updated field on the virtual_sdcard object
             value (float | bool): The updated information for the corresponding field
         """
-        if not self.isVisible():
-            return
-        if field == "progress":
-            self.printing_progress_bar.setValue(value)
+        # Track position/progress always so the bar is correct on next show.
+        if field == "file_position":
+            self._file_position = float(value)
+        elif field == "progress":
+            self._raw_progress = float(value)
+        else:
+            return  # is_active and other fields have nothing to render
+        if self._awaiting_resume and self._file_position > self._resume_baseline:
+            self._awaiting_resume = False
+            self.pause_printing_btn.setEnabled(True)
+        if self.isVisible():
+            self.printing_progress_bar.set_progress(self._compute_progress())
+
+    def _compute_progress(self) -> float:
+        """File-relative progress [0, 1], matching Mainsail's default.
+
+        From Mainsail's getPrintPercentByFilepositionRelative (getters.ts):
+        clip file position to gcode_start_byte/gcode_end_byte so start macros
+        read 0% and end gcode isn't counted; fall back to virtual_sdcard.progress.
+        """
+        start = self._gcode_start_byte
+        end = self._gcode_end_byte
+        if start and end and end > start:
+            if self._file_position <= start:
+                return 0.0
+            if self._file_position >= end:
+                return 1.0
+            return (self._file_position - start) / (end - start)
+        return self._raw_progress
 
     def _setupUI(self) -> None:
         """Setup widget ui"""
