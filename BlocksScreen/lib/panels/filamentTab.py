@@ -871,6 +871,8 @@ class FilamentTab(QtWidgets.QStackedWidget):
             if mmu_state.action == "Idle":
                 self.load_state = False
                 self.call_load_panel.emit(False, "", True)
+                if not len(mmu_state.gates) > 1:
+                    self._basic_panel.change_page(0)
                 return
             self.call_load_panel.emit(True, mmu_state.action, True)
 

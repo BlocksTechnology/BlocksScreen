@@ -156,6 +156,7 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
             if not status["state"]:
                 self.target_temp = 0
                 self.call_load_panel.emit(False, "", False)
+                self.change_page(0)
                 if self.state == "paused":
                     self.request_change_tab.emit(0)
                 return
@@ -170,6 +171,7 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
             if not status["state"]:
                 self.target_temp = 0
                 self.call_load_panel.emit(False, "", False)
+                self.change_page(0)
                 return
         self.call_load_panel.emit(
             True, f"Unloading Filament\n{status['step'].capitalize()}", False
@@ -228,7 +230,7 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         if not self.mmu_configured:
             self.run_gcode.emit("UNLOAD_FILAMENT")
             return
-        self.run_gcode.emit("MMU_UNLOAD")
+        self.run_gcode.emit("MMU_EJECT")
 
     def open_pre_gate_popup(self, filament_type: FilamentTypes):
         callback_action = partial(self.load_filament, 0, filament_type)
