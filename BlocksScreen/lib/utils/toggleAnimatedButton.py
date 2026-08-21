@@ -37,6 +37,10 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
         self.icon_pixmap: QtGui.QPixmap = QtGui.QPixmap()
         self._icon_cache: QtGui.QPixmap = QtGui.QPixmap()
         self._icon_cache_size: QtCore.QSize = QtCore.QSize()
+        # Built here too, so paintEvent is safe before the first showEvent.
+        self.trailPath: QtGui.QPainterPath = QtGui.QPainterPath()
+        self.handlePath: QtGui.QPainterPath = QtGui.QPainterPath()
+        self.handle_ellipseRect: QtCore.QRectF = QtCore.QRectF()
         self._backgroundColor: QtGui.QColor = QtGui.QColor(223, 223, 223)
         self._handleColor: QtGui.QColor = QtGui.QColor(255, 100, 10)
 
@@ -60,6 +64,21 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
         self.slide_animation.setEasingCurve(QtCore.QEasingCurve().Type.InOutQuart)
         self.pressed.connect(self.setup_animation)
 
+    def _rebuild_trail(self) -> None:
+        """Rebuild the trail path for the current geometry."""
+        rect_norm = self.contentsRect().toRectF().normalized()
+        radius = rect_norm.height() // 2.0
+        self.trailPath = QtGui.QPainterPath()
+        self.trailPath.addRoundedRect(
+            0,
+            0,
+            rect_norm.width(),
+            rect_norm.height(),
+            radius,
+            radius,
+            QtCore.Qt.SizeMode.AbsoluteSize,
+        )
+
     def resizeEvent(self, a0: QtGui.QResizeEvent) -> None:
         """Re-implemented method, handle widget resize event"""
         self.handle_radius = (
@@ -73,6 +92,7 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
             - self._handle_ONPosition
             - self.handle_radius * 2
         )
+        self._rebuild_trail()  # trail is geometry-derived, so it must follow a resize
         return super().resizeEvent(a0)
 
     def sizeHint(self) -> QtCore.QSize:
@@ -137,19 +157,7 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
     def showEvent(self, a0: QtGui.QShowEvent) -> None:
         """Re-implemented method, widget show"""
         _rect = self.contentsRect()
-        self.trailPath: QtGui.QPainterPath = QtGui.QPainterPath()
-        self.handlePath: QtGui.QPainterPath = QtGui.QPainterPath()
-        xRadius = _rect.toRectF().normalized().height() // 2.0
-        yRadius = _rect.toRectF().normalized().height() // 2.0
-        self.trailPath.addRoundedRect(
-            0,
-            0,
-            _rect.toRectF().normalized().width(),
-            _rect.toRectF().normalized().height(),
-            xRadius,
-            yRadius,
-            QtCore.Qt.SizeMode.AbsoluteSize,
-        )
+        self._rebuild_trail()
         self._handle_position = (
             self._handle_ONPosition
             if self.state == ToggleAnimatedButton.State.OFF
