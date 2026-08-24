@@ -468,7 +468,7 @@ class ProbeHelper(QtWidgets.QWidget):
                         True, "Heating nozzle\nCleaning before calibration...", False
                     )
                 elif prev_temp > 0:
-                    # Heater turned off — brushing is starting
+                    # Heater turned off - brushing is starting
                     self.call_load_panel.emit(
                         True, "Cleaning nozzle...\nPlease wait", False
                     )
@@ -551,7 +551,7 @@ class ProbeHelper(QtWidgets.QWidget):
         if not update:
             return
 
-        is_active = update.get("is_active", None)
+        is_active = update.get("is_active")
         if (z_upper := update.get("z_position_upper")) is not None:
             self.old_offset_info.setText(f"{round(z_upper, 3) or 0.0:.3f} mm")
         if (z_pos := update.get("z_position")) is not None:
@@ -566,7 +566,7 @@ class ProbeHelper(QtWidgets.QWidget):
         _was_active = self.helper_start
         self.helper_start = is_active
         if is_active and self._calib_phase == _CalibPhase.PROBE_ACTIVE:
-            # Probe session started — CLEAN_NOZZLE/homing phase is over.
+            # Probe session started - CLEAN_NOZZLE/homing phase is over.
             self._calib_phase = _CalibPhase.IDLE
         elif not is_active and _was_active:
             # A manual probe session ended (external abort or normal completion).
@@ -590,7 +590,10 @@ class ProbeHelper(QtWidgets.QWidget):
             return
         if self.isVisible():
             if data[0].startswith("!!"):  # An error occurred
-                if "already in a manual z probe" in data[0].strip("!! ").lower():
+                if (
+                    "already in a manual z probe"
+                    in data[0].removeprefix("!!").strip().lower()
+                ):
                     self._hide_option_cards()
                     self.helper_start = True
                     self._toggle_tool_buttons(True)
@@ -622,7 +625,7 @@ class ProbeHelper(QtWidgets.QWidget):
                 error_msg,
             )
             return
-        # Not calibrating — mainWindow already handles the notification.
+        # Not calibrating - mainWindow already handles the notification.
         if not self.helper_start and self._calib_phase == _CalibPhase.IDLE:
             return
         logger.error("Error Response: %s", error_msg)

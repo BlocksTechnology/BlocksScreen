@@ -15,6 +15,14 @@ class ButtonColors(enum.Enum):
     NOTIFICATION_DOT = (226, 31, 31)
 
 
+# Prebuilt from the static enum tuples, these were 2 QColor allocs per paint
+_NORMAL_BG_COLOR = QtGui.QColor(*ButtonColors.NORMAL_BG.value)
+_PRESSED_BG_COLOR = QtGui.QColor(*ButtonColors.PRESSED_BG.value)
+_DISABLED_BG_COLOR = QtGui.QColor(*ButtonColors.DISABLED_BG.value)
+_DISABLED_TEXT_COLOR = QtGui.QColor(*ButtonColors.DISABLED_TEXT_COLOR.value)
+_NOTIFICATION_COLOR = QtGui.QColor(*ButtonColors.NOTIFICATION_DOT.value)
+
+
 class BlocksCustomButton(QtWidgets.QAbstractButton):
     def __init__(
         self,
@@ -34,6 +42,8 @@ class BlocksCustomButton(QtWidgets.QAbstractButton):
         self.text_color: QtGui.QColor = QtGui.QColor(*ButtonColors.TEXT_COLOR.value)
         self._show_notification: bool = False
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_AcceptTouchEvents, True)
+        self._icon_cache: QtGui.QPixmap = QtGui.QPixmap()
+        self._icon_cache_size: QtCore.QSize = QtCore.QSize()
 
     def setShowNotification(self, show: bool) -> None:
         """Set notification on button"""
@@ -63,6 +73,8 @@ class BlocksCustomButton(QtWidgets.QAbstractButton):
     def setPixmap(self, pixmap: QtGui.QPixmap) -> None:
         """Set button pixmap"""
         self.icon_pixmap = pixmap
+        self._icon_cache = QtGui.QPixmap()
+        self._icon_cache_size = QtCore.QSize()
         self.update()
 
     def mousePressEvent(self, e: QtGui.QMouseEvent) -> None:
@@ -130,12 +142,11 @@ class BlocksCustomButton(QtWidgets.QAbstractButton):
             self.text_color = QtGui.QColor(value)
         self.update()
 
-    def paintEvent(self, e: typing.Optional[QtGui.QPaintEvent]):
+    def paintEvent(self, e: QtGui.QPaintEvent | None):
         """Re-implemented method, paint widget"""
         painter = QtGui.QPainter(self)
         painter.setRenderHint(painter.RenderHint.Antialiasing, True)
         painter.setRenderHint(painter.RenderHint.SmoothPixmapTransform, True)
-        painter.setRenderHint(painter.RenderHint.LosslessImageRendering, True)
         _rect = self.rect()
         _style = self.style()
         if not _style or not _rect:
@@ -150,16 +161,14 @@ class BlocksCustomButton(QtWidgets.QAbstractButton):
                 QtWidgets.QStyle.ControlElement.CE_PushButtonLabel, opt, painter, self
             )
         if not self.isEnabled():
-            bg_color_tuple = ButtonColors.DISABLED_BG.value
-            current_text_color = QtGui.QColor(*ButtonColors.DISABLED_TEXT_COLOR.value)
+            bg_color = _DISABLED_BG_COLOR
+            current_text_color = _DISABLED_TEXT_COLOR
         elif self.isDown():
-            bg_color_tuple = ButtonColors.PRESSED_BG.value
+            bg_color = _PRESSED_BG_COLOR
             current_text_color = self.text_color
         else:
-            bg_color_tuple = ButtonColors.NORMAL_BG.value
+            bg_color = _NORMAL_BG_COLOR
             current_text_color = self.text_color
-
-        bg_color = QtGui.QColor(*bg_color_tuple)
 
         painter.setBackgroundMode(QtCore.Qt.BGMode.TransparentMode)
 
@@ -191,11 +200,16 @@ class BlocksCustomButton(QtWidgets.QAbstractButton):
             icon_size,
             icon_size,
         )
-        _icon_scaled = self.icon_pixmap.scaled(
-            _icon_rect.size().toSize(),
-            QtCore.Qt.AspectRatioMode.KeepAspectRatio,
-            QtCore.Qt.TransformationMode.SmoothTransformation,
-        )
+        # Rescale only when the target size changes; it is fixed between resizes
+        target_size = _icon_rect.size().toSize()
+        if target_size != self._icon_cache_size:
+            self._icon_cache = self.icon_pixmap.scaled(
+                target_size,
+                QtCore.Qt.AspectRatioMode.KeepAspectRatio,
+                QtCore.Qt.TransformationMode.SmoothTransformation,
+            )
+            self._icon_cache_size = target_size
+        _icon_scaled = self._icon_cache
         scaled_width = _icon_scaled.width()
         scaled_height = _icon_scaled.height()
         adjusted_x = (_icon_rect.width() - scaled_width) / 2.0
@@ -267,8 +281,7 @@ class BlocksCustomButton(QtWidgets.QAbstractButton):
     def _paint_notification(self, painter: QtGui.QPainter) -> None:
         dot_diameter = min(14, self.height() * 0.35)
         dot_x = self.width() - dot_diameter
-        notification_color = QtGui.QColor(*ButtonColors.NOTIFICATION_DOT.value)
-        painter.setBrush(notification_color)
+        painter.setBrush(_NOTIFICATION_COLOR)
         painter.setPen(QtCore.Qt.PenStyle.NoPen)
         dot_rect = QtCore.QRectF(dot_x, 0, dot_diameter, dot_diameter)
         painter.drawEllipse(dot_rect)

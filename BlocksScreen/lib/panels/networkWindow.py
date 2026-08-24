@@ -97,7 +97,7 @@ class IPAddressLineEdit(BlocksCustomLinEdit):
         self,
         parent: QtWidgets.QWidget | None = None,
         *,
-        placeholder: str = "0.0.0.0",  # nosec B104 — UI placeholder text, not a socket bind
+        placeholder: str = "0.0.0.0",  # nosec B104 - UI placeholder text, not a socket bind
     ) -> None:
         """Initialise the IP-address input field with regex validation and optional placeholder."""
         super().__init__(parent)
@@ -119,9 +119,7 @@ class IPAddressLineEdit(BlocksCustomLinEdit):
         txt = self.text().strip()
         if txt.isdigit():
             n = int(txt)
-            if 0 <= n <= 32:
-                return True
-            return False
+            return 0 <= n <= 32
 
         try:
             _ipaddress.IPv4Network(f"0.0.0.0/{txt}", strict=False)
@@ -129,6 +127,7 @@ class IPAddressLineEdit(BlocksCustomLinEdit):
         except ValueError:
             return False
 
+    @pyqtSlot(str)
     def _on_text_changed(self, text: str) -> None:
         """Update the field border colour in real-time as the user types."""
         if not text:
@@ -235,7 +234,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
     def _prefill_ip_from_os(self) -> None:
         """Read the current IP via SIOCGIFADDR ioctl and show it immediately.
 
-        Bypasses NetworkManager D-Bus entirely — runs on the main thread,
+        Bypasses NetworkManager D-Bus entirely - runs on the main thread,
         costs a single syscall, and completes in microseconds.  Called once
         during init so the user never sees "IP: --" if a connection was
         already active before the UI launched.
@@ -258,7 +257,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
     @pyqtSlot()
     def _on_reconnect_complete(self) -> None:
         """Navigate back to the main panel after a static-IP or DHCP-reset operation."""
-        logger.debug("reconnect_complete received — navigating to main_network_page")
+        logger.debug("reconnect_complete received - navigating to main_network_page")
         self.setCurrentIndex(self.indexOf(self.main_network_page))
 
     def _init_timers(self) -> None:
@@ -311,7 +310,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             and state.wifi_enabled
             and not self._is_connecting
         ):
-            logger.info("Ethernet connected — turning off Wi-Fi")
+            logger.info("Ethernet connected - turning off Wi-Fi")
             self._was_ethernet_connected = True
             wifi_btn = self.wifi_button.toggle_button
             hotspot_btn = self.hotspot_button.toggle_button
@@ -355,7 +354,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
                     self._display_disconnected_state()
                     self._emit_status_icon(state)
                     return
-                # Still transitioning — keep loading visible
+                # Still transitioning - keep loading visible
                 return
 
             # Hotspot ON: complete when hotspot_enabled + SSID + IP
@@ -412,15 +411,13 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
                     self._display_connected_state(state)
                     self._emit_status_icon(state)
                     return
-                # IP not yet correct — keep loading visible
+                # IP not yet correct - keep loading visible
                 return
 
             return
 
         # Normal (not connecting) display updates.
-        if state.ethernet_connected:
-            self._display_connected_state(state)
-        elif (
+        if state.ethernet_connected or (
             state.current_ssid
             and state.current_ip
             and state.connectivity
@@ -536,7 +533,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
                     )
             elif self._pending_operation == PendingOperation.WIFI_STATIC_IP:
                 # Loading cleared by state machine (IP appears) or reconnect_complete.
-                # No popup — the updated IP in the header is the confirmation.
+                # No popup - the updated IP in the header is the confirmation.
                 pass
             else:
                 self._show_info_popup(result.message)
@@ -566,7 +563,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             ):
                 logger.debug(
                     "Transient NM device-mismatch during wifi activation "
-                    "— retrying in 2 s: %s",
+                    "- retrying in 2 s: %s",
                     result.message,
                 )
                 ssid = self._target_ssid
@@ -619,7 +616,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
                 WifiIconKey.from_signal(self._active_signal, False)
             )
         else:
-            # Disconnected / no connection — 0-bar unprotected
+            # Disconnected / no connection - 0-bar unprotected
             self.update_wifi_icon.emit(WifiIconKey.from_bars(0, False))
 
     def _sync_active_network_list_icon(self, state: NetworkState) -> None:
@@ -650,7 +647,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         status_needs_update = cached_active is not None and not cached_active.is_active
 
         if new_bars == self._last_active_signal_bars and not status_needs_update:
-            return  # No visual change — skip the rebuild
+            return  # No visual change - skip the rebuild
 
         # Invalidate cache for the active SSID so _get_or_create_item
         # creates a fresh ListItem with the updated signal icon and status.
@@ -763,7 +760,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
     def _display_connected_state(self, state: NetworkState) -> None:
         """Display connected network information.
 
-        Ethernet always takes display priority — if ``ethernet_connected``
+        Ethernet always takes display priority - if ``ethernet_connected``
         is True we show "Ethernet" even if a Wi-Fi SSID is still lingering
         (e.g. during the brief overlap before NM finishes disabling wifi).
         """
@@ -787,16 +784,13 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             self.netlist_vlans_combo.blockSignals(True)
             self.netlist_vlans_combo.clear()
             self.netlist_vlans_combo.addItem(
-                f"Ethernet — {state.current_ip or '--'}",
+                f"Ethernet - {state.current_ip or '--'}",
                 state.current_ip or "",
             )
             for v in state.active_vlans:
-                if v.is_dhcp:
-                    ip_label = v.ip_address or "DHCP"
-                else:
-                    ip_label = v.ip_address or "--"
+                ip_label = v.ip_address or ("DHCP" if v.is_dhcp else "--")
                 self.netlist_vlans_combo.addItem(
-                    f"VLAN {v.vlan_id} — {ip_label}",
+                    f"VLAN {v.vlan_id} - {ip_label}",
                     v.ip_address or "",
                 )
             self.netlist_vlans_combo.setCurrentIndex(0)
@@ -827,7 +821,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.update()
 
     def _display_disconnected_state(self) -> None:
-        """Display disconnected state — both toggles OFF."""
+        """Display disconnected state - both toggles OFF."""
         self._hide_all_info_elements()
 
         self.mn_info_box.setVisible(True)
@@ -918,6 +912,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         """Hide the loading widget and re-enable the full UI."""
         self._set_loading_state(False)
 
+    @pyqtSlot()
     def _handle_load_timeout(self) -> None:
         """Hide the loading widget if it is still visible after the timeout fires."""
         if not self.loadingwidget.isVisible():
@@ -950,13 +945,13 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             self._display_connected_state(state)
             return
 
-        # Static IP / DHCP reset — if a state with an IP has arrived, accept it.
+        # Static IP / DHCP reset - if a state with an IP has arrived, accept it.
         if self._pending_operation == PendingOperation.WIFI_STATIC_IP:
             if state.current_ip:
                 self._clear_loading()
                 self._display_connected_state(state)
                 return
-            # No IP yet after timeout — clear loading and show whatever state we have.
+            # No IP yet after timeout - clear loading and show whatever state we have.
             self._clear_loading()
             if state.current_ssid:
                 self._display_connected_state(state)
@@ -1039,7 +1034,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
 
         self._nm.set_wifi_enabled(True)
 
-        # NOTE: set_wifi_enabled is dispatched to the worker — cached state
+        # NOTE: set_wifi_enabled is dispatched to the worker - cached state
         # is STALE here (may still show ethernet).  Always proceed to the
         # saved-network connection path.
 
@@ -1052,7 +1047,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             return
 
         # Sort by priority descending (highest priority first),
-        # then by timestamp as tiebreaker — this gives "reconnect to
+        # then by timestamp as tiebreaker - this gives "reconnect to
         # highest-priority saved network" behaviour.
         wifi_networks.sort(key=lambda n: (n.priority, n.timestamp), reverse=True)
 
@@ -1201,6 +1196,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             self.qrcode_img.clearPixmap()
             self.qrcode_img.setText("QR error")
 
+    @pyqtSlot()
     def _on_ethernet_button_clicked(self) -> None:
         """Navigate to the ethernet/VLAN settings page when the ethernet button is clicked."""
         if (
@@ -1211,6 +1207,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             return
         self.setCurrentIndex(self.indexOf(self.vlan_page))
 
+    @pyqtSlot()
     def _on_vlan_apply(self) -> None:
         """Validate VLAN fields and call ``create_vlan_connection`` on the facade."""
         vlan_id = self.vlan_id_spinbox.value()
@@ -1252,18 +1249,21 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         )
         self._nm.request_state_soon(delay_ms=3000)
 
+    @pyqtSlot()
     def _on_vlan_delete(self) -> None:
         """Read the VLAN ID from the spinbox and request deletion via the facade."""
         vlan_id = self.vlan_id_spinbox.value()
         self._nm.delete_vlan_connection(vlan_id)
         self._show_warning_popup(f"VLAN {vlan_id} profile removed.")
 
+    @pyqtSlot(int)
     def _on_interface_combo_changed(self, index: int) -> None:
         """Swap the displayed IP when the user selects a different interface."""
         ip = self.netlist_vlans_combo.itemData(index)
         if ip is not None:
             self.netlist_ip.setText(f"IP: {ip}" if ip else "IP: --")
 
+    @pyqtSlot()
     def _on_wifi_static_ip_clicked(self) -> None:
         """Navigate from saved details page to WiFi static IP page."""
         ssid = self.snd_name.text()
@@ -1275,7 +1275,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.wifi_sip_dns2_field.clear()
 
         # Enable "Reset to DHCP" only when the profile is currently using a
-        # static IP — if it is already DHCP there is nothing to reset.
+        # static IP - if it is already DHCP there is nothing to reset.
         saved = self._nm.get_saved_network(ssid)
         is_dhcp = saved.is_dhcp if saved else True
         self.wifi_sip_dhcp_button.setEnabled(not is_dhcp)
@@ -1285,12 +1285,13 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
 
         self.setCurrentIndex(self.indexOf(self.wifi_static_ip_page))
 
+    @pyqtSlot()
     def _on_wifi_static_ip_apply(self) -> None:
         """Validate static-IP fields and apply them to the current Wi-Fi connection.
 
         Mirrors the VLAN-creation UX: navigate to the main panel immediately,
         show the loading overlay, and clear it silently once ``reconnect_complete``
-        fires (no popup — the updated IP appears in the panel header instead).
+        fires (no popup - the updated IP appears in the panel header instead).
         """
         ssid = self.wifi_sip_title.text()
         ip_addr = self.wifi_sip_ip_field.text().strip()
@@ -1323,10 +1324,11 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self._nm.update_wifi_static_ip(ssid, ip_addr, mask, gateway, dns1, dns2)
         self._nm.request_state_soon(delay_ms=3000)
 
+    @pyqtSlot()
     def _on_wifi_reset_dhcp(self) -> None:
         """Reset the current Wi-Fi connection back to DHCP via the facade.
 
-        Same loading-screen pattern as static IP — no popup on success.
+        Same loading-screen pattern as static IP - no popup on success.
         """
         ssid = self.wifi_sip_title.text()
         self.setCurrentIndex(self.indexOf(self.main_network_page))
@@ -1343,7 +1345,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         Uses the model's built-in reconcile() with an item cache so that
         ListItems are only allocated for networks whose visual state
         actually changed (different signal bars or status label).
-        Unchanged items are reused from the cache — zero allocation.
+        Unchanged items are reused from the cache - zero allocation.
         """
         self.listView.blockSignals(True)
 
@@ -1398,7 +1400,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         unchanged, otherwise create a new one and update the cache.
 
         Visual state = (signal_bars, status_label).  When both match
-        the cached entry, the existing ListItem is returned as-is —
+        the cached entry, the existing ListItem is returned as-is -
         no QPixmap lookup, no allocation.
         """
         if network.is_hidden or is_hidden_ssid(network.ssid):
@@ -1546,7 +1548,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         else:
             self._initial_priority = ConnectionPriority.MEDIUM
 
-        # Signal strength — for the active network, use the unified
+        # Signal strength - for the active network, use the unified
         # _active_signal so the details page matches the main panel
         # and header icon exactly.
         is_active = ssid == self._nm.current_ssid
@@ -1658,6 +1660,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
 
         self.add_network_validation_button.setEnabled(True)
 
+    @pyqtSlot()
     def _on_activate_network(self) -> None:
         """Activate the network shown on the saved-connection page."""
         ssid = self.saved_connection_network_name.text()
@@ -1676,12 +1679,14 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.setCurrentIndex(self.indexOf(self.main_network_page))
         self._nm.connect_network(ssid)
 
+    @pyqtSlot()
     def _on_delete_network(self) -> None:
         """Delete the profile shown on the saved-connection page and navigate back."""
         ssid = self.saved_connection_network_name.text()
         self._target_ssid = ssid
         self._nm.delete_network(ssid)
 
+    @pyqtSlot()
     def _on_save_network_details(self) -> None:
         """Save network settings changes (password / priority).
 
@@ -1712,6 +1717,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
 
         self.saved_connection_change_password_field.clear()
 
+    @pyqtSlot()
     def _on_hidden_network_connect(self) -> None:
         """Connect to hidden network - non-blocking."""
         ssid = self.hidden_network_ssid_field.text().strip()
@@ -3327,7 +3333,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.vlan_id_spinbox.setValue(1)
         self.vlan_id_spinbox.lineEdit().setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
         self.vlan_id_spinbox.lineEdit().setReadOnly(True)
-        # Prevent text selection when stepping — deselect after each value change
+        # Prevent text selection when stepping - deselect after each value change
         self.vlan_id_spinbox.valueChanged.connect(
             lambda: self.vlan_id_spinbox.lineEdit().deselect()
         )
@@ -3586,6 +3592,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.wifi_sip_apply_button.clicked.connect(self._on_wifi_static_ip_apply)
         self.wifi_sip_dhcp_button.clicked.connect(self._on_wifi_reset_dhcp)
 
+    @pyqtSlot()
     def _on_wifi_button_clicked(self) -> None:
         """Navigate to the Wi-Fi scan page, starting or stopping scan polling as needed."""
         if (
@@ -3768,12 +3775,14 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self._qwerty.show()
         field.clearFocus()
 
+    @pyqtSlot()
     def _on_qwerty_go_back(self) -> None:
         """Hide the keyboard and return to the previously active panel."""
         if self._previous_panel:
             self._qwerty.hide()
             self.setCurrentIndex(self.indexOf(self._previous_panel))
 
+    @pyqtSlot(str)
     def _on_qwerty_value_selected(self, value: str) -> None:
         """Apply the keyboard-selected *value* to the previously focused input field."""
         if self._previous_panel:
@@ -3782,6 +3791,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         if self._current_field:
             self._current_field.setText(value)
 
+    @pyqtSlot(int)
     def _handle_scrollbar_change(self, value: int) -> None:
         """Synchronise the custom scrollbar thumb to the list-view scroll position."""
         self.verticalScrollBar.blockSignals(True)
@@ -3845,6 +3855,5 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         parent_size = self.parent().size()
         self.setGeometry(0, 0, parent_size.width(), parent_size.height())
         self.updateGeometry()
-        self.repaint()
         self.show()
         self._nm.scan_networks()

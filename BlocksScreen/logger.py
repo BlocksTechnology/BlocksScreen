@@ -50,7 +50,7 @@ class StreamToLogger(TextIO):
                     self._original.write(message)
                     self._original.flush()
                 except OSError:
-                    # Original stream closed or broken pipe — continue logging
+                    # Original stream closed or broken pipe - continue logging
                     self._original = None
 
             self._buffer += message
@@ -349,7 +349,8 @@ class CrashHandler:
         """Install exception hooks."""
         # Setup faulthandler for C-level crashes (segfaults, etc.)
         try:
-            self._fault_file = open(self._fault_log_path, "w")
+            # faulthandler needs this handle open for the whole process lifetime
+            self._fault_file = open(self._fault_log_path, "w")  # noqa: SIM115
             faulthandler.enable(file=self._fault_file, all_threads=True)
 
             # Also dump traceback on SIGUSR1 (useful for debugging hangs)
@@ -544,7 +545,7 @@ class CrashHandler:
             self._original_threading_excepthook(args)
 
         # Force exit if configured (for systemd restart)
-        # Skip for daemon threads — transient errors in background workers
+        # Skip for daemon threads - transient errors in background workers
         # (network, D-Bus) should not kill the whole process.
         if self._exit_on_crash:
             thread = args.thread

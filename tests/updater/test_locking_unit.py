@@ -27,7 +27,7 @@ def test_acquire_then_second_attempt_fails(monkeypatch, tmp_path):
         # A second independent open()+flock of the same file must fail fast.
         with process_lock() as second:
             assert second is False
-    # Released after the outer context — re-acquire succeeds.
+    # Released after the outer context - re-acquire succeeds.
     with process_lock() as third:
         assert third is True
 

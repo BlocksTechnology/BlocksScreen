@@ -54,6 +54,7 @@ class InputShaperPage(QtWidgets.QWidget):
         self.call_load_panel.emit(True, "Updating...", False)
         self.repeated_request_status.start(2000)
 
+    @QtCore.pyqtSlot()
     def reset_view_model(self) -> None:
         """Clears items from ListView
         (Resets `QAbstractListModel` by clearing entries)
@@ -103,6 +104,7 @@ class InputShaperPage(QtWidgets.QWidget):
 
         self.action_btn.show()
 
+    @QtCore.pyqtSlot()
     def handle_ism_confirm(self) -> None:
         current_info = self.type_dict.get(self.currentItem.text, {})
         frequency = current_info.get("frequency", "N/A")

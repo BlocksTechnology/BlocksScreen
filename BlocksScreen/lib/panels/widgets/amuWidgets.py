@@ -11,6 +11,8 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 # Spool button
 # ──────────────────────────────────────────────────────────────────────────────
 class Spoll_button(QtWidgets.QAbstractButton):
+    ICON_SIZE = 65
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.color = QtGui.QColor(0, 0, 0)
@@ -28,6 +30,30 @@ class Spoll_button(QtWidgets.QAbstractButton):
             ":/filament_related/media/btn_icons/half_spoll.svg"
         )
 
+        # Constant paint state
+        self._opt = QtWidgets.QStyleOption()
+        self._white = QtGui.QColor(255, 255, 255)
+        self._white_dim = QtGui.QColor(255, 255, 255, 130)
+        self._pen = QtGui.QPen(self._white)
+        self._pen.setWidth(2)
+        self._pen_dim = QtGui.QPen(self._white_dim)
+        self._pen_dim.setWidth(2)
+        self._font = QtGui.QFont()
+        self._font.setPointSize(12)
+        self._font.setBold(True)
+        self._color_dim = QtGui.QColor(self.color)
+        self._color_dim.setAlpha(130)
+        self._gate_text = "Gate "
+
+        # Size dependent paint state, rebuilt on resize
+        self._w = 0
+        self._h = 0
+        self._text_rect = QtCore.QRect()
+        self._bar_rect = QtCore.QRect()
+
+        # Scaled and tinted icons, keyed by (loaded, checked)
+        self._tinted: dict[tuple[bool, bool], tuple[QtGui.QPixmap, int, int]] = {}
+
     def setColor(self, qc: QtGui.QColor):
         """sets button color
 
@@ -35,6 +61,8 @@ class Spoll_button(QtWidgets.QAbstractButton):
             qc (QtGui.QColor): a Qcolor representing filament color
         """
         self.color = qc
+        self._color_dim = QtGui.QColor(qc)
+        self._color_dim.setAlpha(130)
         self.update()
 
     def setStatus(self, s: GateStatus):
@@ -53,6 +81,7 @@ class Spoll_button(QtWidgets.QAbstractButton):
             i (int): a integer representing the gate id
         """
         self.slot_id = i
+        self._gate_text = "Gate " + str(i)
         self.update()
 
     def setMaterial(self, mat: str):
@@ -107,87 +136,82 @@ class Spoll_button(QtWidgets.QAbstractButton):
         self.setTemp(temp)
         self.update()
 
-    def paintEvent(self, a0: QtGui.QPaintEvent) -> None:
-        opt = QtWidgets.QStyleOption()
-        opt.initFrom(self)
-
-        painter = QtGui.QPainter(self)
-        painter.setRenderHint(painter.RenderHint.Antialiasing)
-        painter.setRenderHint(painter.RenderHint.SmoothPixmapTransform)
-        painter.setRenderHint(painter.RenderHint.LosslessImageRendering)
-
-        self.style().drawPrimitive(
-            QtWidgets.QStyle.PrimitiveElement.PE_Widget, opt, painter, self
+    def _tinted_icon(self, checked: bool) -> tuple[QtGui.QPixmap, int, int]:
+        """Cache the scaled and tinted icon, rebuilding it per paint is the hot cost"""
+        loaded = self.status in (
+            GateStatus.AVAILABLE,
+            GateStatus.AVAILABLE_FROM_BUFFER,
         )
+        key = (loaded, checked)
+        cached = self._tinted.get(key)
+        if cached is not None:
+            return cached
 
-        color = QtGui.QColor(self.color)
-        white = QtGui.QColor(255, 255, 255)
-
-        pen = QtGui.QPen(white)
-        pen.setWidth(2)
-        painter.setPen(pen)
-
-        font = painter.font()
-        font.setPointSize(12)
-        font.setBold(True)
-        painter.setFont(font)
-
-        _text_rect = self.rect()
-        _text_rect.setTop(int(self.rect().height() / 9))
-
-        _text_rect.setBottom(int(self.rect().height() / 4))
-
-        _text_rect.setLeft(int(self.rect().width() - self.rect().width() * 1.6))
-        _text_rect.setRight(int(self.rect().width()))
-
-        painter.drawText(
-            _text_rect,
-            QtCore.Qt.TextFlag.TextShowMnemonic | QtCore.Qt.AlignmentFlag.AlignCenter,
-            "Gate " + str(self.slot_id),
-        )
-        if not self.isChecked():
-            white.setAlpha(130)
-            color.setAlpha(130)
-
-        rect = self.rect().adjusted(1, 1, -1, -1)
-        rect.setY(int(rect.height() - rect.height() * 0.15))
-        painter.fillRect(rect, color)
-
-        pen = QtGui.QPen(white)
-        pen.setWidth(2)
-        painter.setPen(pen)
-        rect = self.rect().adjusted(1, 1, -1, -1)
-        rect.setY(int(rect.height() - rect.height() * 0.15))
-        painter.drawRect(rect)
-
-        icon_size = 65
-        icon = (
-            self._icon
-            if self.status in [GateStatus.AVAILABLE, GateStatus.AVAILABLE_FROM_BUFFER]
-            else self._unloaded_icon
-        )
+        icon = self._icon if loaded else self._unloaded_icon
         scaled = icon.scaled(
-            icon_size,
-            icon_size,
+            self.ICON_SIZE,
+            self.ICON_SIZE,
             QtCore.Qt.AspectRatioMode.KeepAspectRatio,
             QtCore.Qt.TransformationMode.SmoothTransformation,
         )
-        x = (self.width() - scaled.width()) // 2
-        y = int((self.height() - scaled.height()) // 1.1)
-
         tinted = QtGui.QPixmap(scaled.size())
         tinted.fill(QtCore.Qt.GlobalColor.transparent)
         p2 = QtGui.QPainter(tinted)
         p2.drawPixmap(0, 0, scaled)
         p2.setCompositionMode(QtGui.QPainter.CompositionMode.CompositionMode_SourceIn)
-        p2.fillRect(tinted.rect(), white)
+        p2.fillRect(tinted.rect(), self._white if checked else self._white_dim)
         p2.end()
-        painter.drawPixmap(x, y, tinted)
 
-        tinted = QtGui.QPixmap(scaled.size())
-        tinted.fill(QtCore.Qt.GlobalColor.transparent)
+        entry = (tinted, scaled.width(), scaled.height())
+        self._tinted[key] = entry
+        return entry
 
-        painter.setPen(QtCore.Qt.PenStyle.NoPen)
+    def resizeEvent(self, a0: QtGui.QResizeEvent | None) -> None:
+        """Re-implemented method, rebuild the cached paint geometry"""
+        rect = self.rect()
+        self._w = rect.width()
+        self._h = rect.height()
+
+        self._text_rect = QtCore.QRect(rect)
+        self._text_rect.setTop(int(self._h / 9))
+        self._text_rect.setBottom(int(self._h / 4))
+        self._text_rect.setLeft(int(self._w - self._w * 1.6))
+        self._text_rect.setRight(self._w)
+
+        self._bar_rect = rect.adjusted(1, 1, -1, -1)
+        bar_height = self._bar_rect.height()
+        self._bar_rect.setY(int(bar_height - bar_height * 0.15))
+
+        super().resizeEvent(a0)
+
+    def paintEvent(self, a0: QtGui.QPaintEvent) -> None:
+        checked = self.isChecked()
+        self._opt.initFrom(self)
+
+        painter = QtGui.QPainter(self)
+        painter.setRenderHint(painter.RenderHint.Antialiasing)
+        painter.setRenderHint(painter.RenderHint.SmoothPixmapTransform)
+
+        self.style().drawPrimitive(
+            QtWidgets.QStyle.PrimitiveElement.PE_Widget, self._opt, painter, self
+        )
+
+        painter.setPen(self._pen)
+        painter.setFont(self._font)
+        painter.drawText(
+            self._text_rect,
+            QtCore.Qt.TextFlag.TextShowMnemonic | QtCore.Qt.AlignmentFlag.AlignCenter,
+            self._gate_text,
+        )
+
+        painter.fillRect(self._bar_rect, self.color if checked else self._color_dim)
+        painter.setPen(self._pen if checked else self._pen_dim)
+        painter.drawRect(self._bar_rect)
+
+        tinted, icon_w, icon_h = self._tinted_icon(checked)
+        painter.drawPixmap(
+            (self._w - icon_w) // 2, int((self._h - icon_h) // 1.1), tinted
+        )
         painter.end()
 
 
@@ -298,11 +322,13 @@ class SpoolCarousel(QtWidgets.QWidget):
 
         self._update_arrows()
 
+    @QtCore.pyqtSlot()
     def _scroll_left(self):
         if self._offset > 0:
             self._offset -= 1
             self._refresh_visible()
 
+    @QtCore.pyqtSlot()
     def _scroll_right(self):
         if self._offset + self.VISIBLE < len(self.buttons):
             self._offset += 1
@@ -378,11 +404,11 @@ class SpoolInfoPanel(QtWidgets.QWidget):
             lbl.setFont(font)
             return lbl
 
-        def make_val(text="—", edit: bool = True, type: str = "keypad"):
+        def make_val(text="-", edit: bool = True, type: str = "keypad"):
             """Make either an editable line edit or a static label, depending on the *edit* flag. The *type* arg determines the signal emitted on edit (numpad vs qwerty).
 
             Args:
-                text (str, optional): _description_. Defaults to "—".
+                text (str, optional): _description_. Defaults to "-".
                 edit (bool, optional): _description_. Defaults to True.
                 type (str, optional): type of the input field gets ignored if edit is False. Defaults to "keypad".
 
@@ -554,7 +580,7 @@ class SpoolInfoPanel(QtWidgets.QWidget):
 
         self._lbl_status.setText(text)
         self._lbl_temp.setText(f"{btn.temp}º")
-        self._lbl_mat.setText(f"{btn.material}" if btn.material else "—")
+        self._lbl_mat.setText(f"{btn.material}" if btn.material else "-")
         self._btn_load.setEnabled(en_load)
         self._btn_unload.setEnabled(en_unload)
         self._btn_purge.setEnabled(en_purge)

@@ -77,7 +77,7 @@ class JobStatusWidget(QtWidgets.QWidget):
             instance.postEvent(self.window(), event)
         else:
             logger.error(
-                "QApplication.instance() is None — cannot post %s",
+                "QApplication.instance() is None - cannot post %s",
                 type(event).__name__,
             )
 
@@ -235,6 +235,7 @@ class JobStatusWidget(QtWidgets.QWidget):
         if self._filament_used > 0:
             self._update_layer_from_z()
 
+    @QtCore.pyqtSlot()
     def pause_resume_print(self) -> None:
         """Handle pause/resume print job button clicked"""
         self.pause_printing_btn.setEnabled(False)
@@ -647,7 +648,6 @@ class JobStatusWidget(QtWidgets.QWidget):
         self.thumbnail_view.setRenderHints(
             QtGui.QPainter.RenderHint.Antialiasing
             | QtGui.QPainter.RenderHint.SmoothPixmapTransform
-            | QtGui.QPainter.RenderHint.LosslessImageRendering
         )
         self.thumbnail_view.setViewportUpdateMode(
             QtWidgets.QGraphicsView.ViewportUpdateMode.SmartViewportUpdate

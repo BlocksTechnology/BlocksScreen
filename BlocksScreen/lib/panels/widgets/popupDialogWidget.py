@@ -1,6 +1,5 @@
 import enum
 from collections import deque
-from typing import Deque
 
 from lib.utils.icon_button import IconButton
 from PyQt6 import QtCore, QtGui, QtWidgets
@@ -26,11 +25,13 @@ class Popup(QtWidgets.QDialog):
         super().__init__(parent)
         self.timeout_timer = QtCore.QTimer(self)
         self.timeout_timer.setSingleShot(True)
-        self.messages: Deque = deque()
+        self.messages: deque = deque()
         self.isShown = False
-        self.persistent_notifications: Deque = deque()
+        self.persistent_notifications: deque = deque()
         self.message_type: Popup.MessageType = Popup.MessageType.INFO
         self.default_background_color = QtGui.QColor(164, 164, 164)
+        self._gradient: QtGui.QRadialGradient | None = None
+        self._gradient_key: tuple[QtCore.QRect, Popup.MessageType] | None = None
         self.info_icon = QtGui.QPixmap(":ui/media/btn_icons/info.svg")
         self.warning_icon = QtGui.QPixmap(":ui/media/btn_icons/warning.svg")
         self.error_icon = QtGui.QPixmap(":ui/media/btn_icons/error.svg")
@@ -59,12 +60,14 @@ class Popup(QtWidgets.QDialog):
         self.timeout_timer.timeout.connect(lambda: self.slide_out_animation.start())
         self.actionbtn.clicked.connect(self.slide_out_animation.start)
 
+    @QtCore.pyqtSlot()
     def on_slide_in_finished(self):
         """Handle slide in animation finished"""
         if self.userInput:
             return
         self.timeout_timer.start()
 
+    @QtCore.pyqtSlot()
     def on_slide_out_finished(self):
         """Handle slide out animation finished"""
         self.hide()
@@ -143,6 +146,7 @@ class Popup(QtWidgets.QDialog):
         )
         return self._add_popup()
 
+    @QtCore.pyqtSlot()
     def _add_popup(self) -> None:
         """Add popup to queue"""
         if self.isShown:
@@ -213,23 +217,29 @@ class Popup(QtWidgets.QDialog):
         painter = QtGui.QPainter(self)
         painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing, True)
 
-        _base_color = self.default_background_color
-        if self.message_type == Popup.MessageType.INFO:
-            _base_color = Popup.ColorCode.INFO.value
-        elif self.message_type == Popup.MessageType.ERROR:
-            _base_color = Popup.ColorCode.ERROR.value
-        elif self.message_type == Popup.MessageType.WARNING:
-            _base_color = Popup.ColorCode.WARNING.value
+        rect = self.rect()
+        # Gradient only depends on rect and message type, both stable across frames
+        key = (rect, self.message_type)
+        if self._gradient is None or self._gradient_key != key:
+            _base_color = self.default_background_color
+            if self.message_type == Popup.MessageType.INFO:
+                _base_color = Popup.ColorCode.INFO.value
+            elif self.message_type == Popup.MessageType.ERROR:
+                _base_color = Popup.ColorCode.ERROR.value
+            elif self.message_type == Popup.MessageType.WARNING:
+                _base_color = Popup.ColorCode.WARNING.value
 
-        center_point = QtCore.QPointF(self.rect().center())
-        gradient = QtGui.QRadialGradient(center_point, self.rect().width() / 2.0)
+            gradient = QtGui.QRadialGradient(
+                QtCore.QPointF(rect.center()), rect.width() / 2.0
+            )
+            gradient.setColorAt(0, _base_color)
+            gradient.setColorAt(1.0, _base_color.darker(160))
+            self._gradient = gradient
+            self._gradient_key = (QtCore.QRect(rect), self.message_type)
 
-        gradient.setColorAt(0, _base_color)
-        gradient.setColorAt(1.0, _base_color.darker(160))
-
-        painter.setBrush(gradient)
+        painter.setBrush(self._gradient)
         painter.setPen(QtCore.Qt.PenStyle.NoPen)
-        painter.drawRoundedRect(self.rect(), 10, 10)
+        painter.drawRoundedRect(rect, 10, 10)
 
     def _setupUI(self) -> None:
         self.horizontal_layout = QtWidgets.QHBoxLayout(self)

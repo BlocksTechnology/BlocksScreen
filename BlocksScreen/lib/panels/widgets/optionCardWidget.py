@@ -1,7 +1,7 @@
 import typing
 
-from PyQt6 import QtCore, QtGui, QtWidgets
 from lib.utils.icon_button import IconButton
+from PyQt6 import QtCore, QtGui, QtWidgets
 
 
 class OptionCard(QtWidgets.QAbstractButton):
@@ -25,6 +25,10 @@ class OptionCard(QtWidgets.QAbstractButton):
         self.name = name
         self.card_text = text
         self.doubleT: bool = False
+        # Paint caches, geometry ones invalidated on resize
+        self._background: QtGui.QPainterPath | None = None
+        self._gradient: QtGui.QRadialGradient | None = None
+        self._idle_color = self._dim(self.color)
         self._setupUi(self)
         self.option_icon.setAttribute(
             QtCore.Qt.WidgetAttribute.WA_TransparentForMouseEvents
@@ -46,15 +50,20 @@ class OptionCard(QtWidgets.QAbstractButton):
         self.set_card_icon(icon)
         self.set_card_text(text)
 
+    @staticmethod
+    def _dim(color: QtGui.QColor) -> QtGui.QColor:
+        """Idle shade of the card, every channel at 70%"""
+        return QtGui.QColor(*(int(component * 0.70) for component in color.getRgb()))
+
     def disable_button(self) -> None:
         """Disable widget button"""
         self.continue_button.setDisabled(True)
-        self.repaint()
+        self.update()
 
     def enable_button(self) -> None:
         """Enable widget button"""
         self.continue_button.setEnabled(True)
-        self.repaint()
+        self.update()
 
     def set_card_icon(self, pixmap: QtGui.QPixmap) -> None:
         """Set widget icon"""
@@ -65,12 +74,12 @@ class OptionCard(QtWidgets.QAbstractButton):
             QtCore.Qt.TransformationMode.SmoothTransformation,
         )
         self.option_icon.setPixmap(scaled)
-        self.repaint()
+        self.update()
 
     def set_card_text(self, text: str) -> None:
         """Set widget text"""
         self.option_text.setText(text)
-        self.repaint()
+        self.update()
 
     def set_card_text_color(self, color: QtGui.QColor) -> None:
         """Set widget text color"""
@@ -78,12 +87,19 @@ class OptionCard(QtWidgets.QAbstractButton):
         _palette = self.option_text.palette()
         _palette.setColor(QtGui.QPalette.ColorRole.WindowText, color)
         self.option_text.setPalette(_palette)
-        self.repaint()
+        self.update()
 
     def set_background_color(self, color: QtGui.QColor) -> None:
         """Set widget background color"""
         self.color = color
-        self.repaint()
+        self._idle_color = self._dim(color)
+        self.update()
+
+    def resizeEvent(self, a0: QtGui.QResizeEvent) -> None:
+        """Re-implemented method, drop the size dependent paint caches"""
+        self._background = None
+        self._gradient = None
+        return super().resizeEvent(a0)
 
     def enterEvent(self, event: QtGui.QEnterEvent) -> None:
         """Re-implemented method, highlight widget edges"""
@@ -146,57 +162,37 @@ class OptionCard(QtWidgets.QAbstractButton):
 
     def paintEvent(self, a0: QtGui.QPaintEvent) -> None:
         """Re-implemented method, paint widget"""
-        # Rounded background edges
-        background_path = QtGui.QPainterPath()
-        background_path.addRoundedRect(
-            self.rect().toRectF(), 20.0, 20.0, QtCore.Qt.SizeMode.AbsoluteSize
-        )
+        rect_f = self.rect().toRectF()
+        hovered = self.underMouse()
 
-        bg_color = (
-            QtGui.QColor(self.color)
-            if self.underMouse()
-            else QtGui.QColor(
-                *(
-                    map(
-                        lambda component: int(component * 0.70),
-                        self.color.getRgb(),
-                    )
-                )
+        if self._background is None:
+            # Rounded background edges
+            background_path = QtGui.QPainterPath()
+            background_path.addRoundedRect(
+                rect_f, 20.0, 20.0, QtCore.Qt.SizeMode.AbsoluteSize
             )
-        )
+            self._background = background_path
 
-        painter = QtGui.QPainter()
-        painter.begin(self)
+        painter = QtGui.QPainter(self)
         painter.setRenderHint(painter.RenderHint.Antialiasing)
         painter.setRenderHint(painter.RenderHint.SmoothPixmapTransform)
-        painter.setRenderHint(painter.RenderHint.LosslessImageRendering)
-        painter.fillPath(background_path, bg_color)
-        if self.underMouse():
-            _pen = QtGui.QPen()
-            _pen.setStyle(QtCore.Qt.PenStyle.SolidLine)
-            _pen.setJoinStyle(QtCore.Qt.PenJoinStyle.RoundJoin)
-            _pen.setCapStyle(QtCore.Qt.PenCapStyle.RoundCap)
-            _color = QtGui.QColor(self.highlight_color)
-            _color2 = QtGui.QColor(self.highlight_color)
-            _color3 = QtGui.QColor(self.highlight_color)
-            _color.setAlpha(30)
-            _color2.setAlpha(30)
-            _color3.setAlpha(2)
-            _pen.setColor(_color)
-            _gradient = QtGui.QRadialGradient(
-                QtCore.QPointF(
-                    self.rect().toRectF().left() + 10,
-                    self.rect().toRectF().top(),
-                ),
-                330.0,
-                self.rect().toRectF().center(),
-            )
-            _gradient.setColorAt(0, _color)
-            _gradient.setColorAt(0.5, _color2)
-            _gradient.setColorAt(1, _color3)
-            painter.setBrush(_gradient)
-            painter.setPen(QtCore.Qt.PenStyle.NoPen)
-            painter.fillPath(background_path, painter.brush())
+        painter.fillPath(self._background, self.color if hovered else self._idle_color)
+        if hovered:
+            if self._gradient is None:
+                _color = QtGui.QColor(self.highlight_color)
+                _color.setAlpha(30)
+                _edge = QtGui.QColor(self.highlight_color)
+                _edge.setAlpha(2)
+                _gradient = QtGui.QRadialGradient(
+                    QtCore.QPointF(rect_f.left() + 10, rect_f.top()),
+                    330.0,
+                    rect_f.center(),
+                )
+                _gradient.setColorAt(0, _color)
+                _gradient.setColorAt(0.5, _color)
+                _gradient.setColorAt(1, _edge)
+                self._gradient = _gradient
+            painter.fillPath(self._background, self._gradient)
 
         painter.end()
 

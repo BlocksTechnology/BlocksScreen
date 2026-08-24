@@ -223,6 +223,7 @@ class ConnectionPage(QtWidgets.QFrame):
         self._restart_30s_timer.stop()
         self.call_load_panel.emit(False, "", False)
 
+    @QtCore.pyqtSlot()
     def _add_dot(self) -> None:
         self.dot_count += 1
         if self.dot_count > 3:
@@ -276,6 +277,7 @@ class ConnectionPage(QtWidgets.QFrame):
             lower.startswith(key) for key in ConnectionPage._AUTO_RECOVER_CONTEXTS
         )
 
+    @QtCore.pyqtSlot()
     def _on_restart_clicked(self) -> None:
         if self._state == ConnectionState.WEBSOCKET_LOST:
             self.retry_connection_clicked.emit()
@@ -296,9 +298,11 @@ class ConnectionPage(QtWidgets.QFrame):
         else:
             self.restart_klipper_clicked.emit()
 
+    @QtCore.pyqtSlot()
     def _on_restart_10s_elapsed(self) -> None:
         self.call_load_panel.emit(True, "Still restarting, please wait…", False)
 
+    @QtCore.pyqtSlot()
     def _on_restart_30s_elapsed(self) -> None:
         if self._last_restart_was_firmware and not self._escalated_to_klipper_restart:
             self._escalated_to_klipper_restart = True
@@ -308,6 +312,7 @@ class ConnectionPage(QtWidgets.QFrame):
             return
         self._stop_restart_overlay()
 
+    @QtCore.pyqtSlot()
     def _on_update_page_clicked(self) -> None:
         self.update_button_clicked.emit(True)
 

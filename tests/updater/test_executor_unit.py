@@ -1,4 +1,4 @@
-"""Tests for updater.executor — all subprocess calls use asyncio."""
+"""Tests for updater.executor - all subprocess calls use asyncio."""
 
 from __future__ import annotations
 

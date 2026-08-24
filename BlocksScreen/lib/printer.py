@@ -184,7 +184,7 @@ class Printer(QtCore.QObject):
         """Register an external callback for a Moonraker object type.
 
         When Moonraker sends an update for ``object_type``, ``callback(values, name)``
-        is called directly — no intermediate signal required.
+        is called directly - no intermediate signal required.
 
         Args:
             object_type: Moonraker object key, e.g. ``"mmu"`` or ``"filament_switch_sensor"``.
@@ -614,7 +614,7 @@ class Printer(QtCore.QObject):
             )
         if "state" in values.keys():
             self.print_stats_update[str, str].emit("state", values["state"])
-            self.printing_state = values.get("state", None)
+            self.printing_state = values.get("state")
             if not self.printing_state:
                 return
             if values["state"] == "standby" or values["state"] == "error":

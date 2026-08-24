@@ -8,6 +8,16 @@ class ScreenSaver(QtCore.QObject):
     dpms_suspend_timeout = helper_methods.get_dpms_timeouts().get("suspend_timeout")
     dpms_standby_timeout = helper_methods.get_dpms_timeouts().get("standby_timeout")
     touch_blocked: bool = False
+    _TOUCH_INTS: frozenset = frozenset(
+        e.value
+        for e in (
+            QtCore.QEvent.Type.TouchBegin,
+            QtCore.QEvent.Type.TouchUpdate,
+            QtCore.QEvent.Type.TouchEnd,
+            QtCore.QEvent.Type.MouseButtonPress,
+            QtCore.QEvent.Type.MouseButtonDblClick,
+        )
+    )
 
     def __init__(self, parent) -> None:
         super().__init__()
@@ -16,9 +26,7 @@ class ScreenSaver(QtCore.QObject):
             "screensaver", fallback=None
         )
         if not self.screensaver_config:
-            self.blank_timeout = (
-                self.dpms_standby_timeout if self.dpms_standby_timeout else 900000
-            )
+            self.blank_timeout = self.dpms_standby_timeout or 900000
         else:
             self.blank_timeout = self.screensaver_config.getint(
                 "timeout", default=500000
@@ -31,33 +39,29 @@ class ScreenSaver(QtCore.QObject):
     def eventFilter(self, object, event) -> bool:
         """Filter touch events considering DPMS Screen state"""
 
-        if event.type() in (  # Block Touch Filter and Wake Touch Filter
-            QtCore.QEvent.Type.TouchBegin,
-            QtCore.QEvent.Type.TouchUpdate,
-            QtCore.QEvent.Type.TouchEnd,
-            QtCore.QEvent.Type.MouseButtonPress,
-            QtCore.QEvent.Type.MouseButtonDblClick,
-        ):
-            dpms_info = helper_methods.get_dpms_info()
-            if (
-                dpms_info.get("state")
-                in (
-                    helper_methods.DPMSState.OFF,
-                    helper_methods.DPMSState.STANDBY,
-                    helper_methods.DPMSState.SUSPEND,
-                )
-                or self.touch_blocked
-            ):
-                if not self.timer.isActive():
-                    self.touch_blocked = False
-                    helper_methods.set_dpms_mode(helper_methods.DPMSState.ON)
-                    self.timer.start()
-                    return True  # filter out the event, block touch events on the application
-            else:
-                self.timer.stop()
-                self.timer.start()
+        if event.type().value in self._TOUCH_INTS:
+            if self.touch_blocked:
+                # Screen may be off - query DPMS only in this rare state
+                dpms_info = helper_methods.get_dpms_info()
+                if (
+                    dpms_info.get("state")
+                    in (
+                        helper_methods.DPMSState.OFF,
+                        helper_methods.DPMSState.STANDBY,
+                        helper_methods.DPMSState.SUSPEND,
+                    )
+                    or self.touch_blocked
+                ):
+                    if not self.timer.isActive():
+                        self.touch_blocked = False
+                        helper_methods.set_dpms_mode(helper_methods.DPMSState.ON)
+                        self.timer.start()
+                        return True  # filter out the event, block touch events on the application
+            self.timer.stop()
+            self.timer.start()
         return False
 
+    @QtCore.pyqtSlot()
     def check_dpms(self) -> None:
         """Checks the X11 extension dpms for the status of the screen"""
         self.touch_blocked = True

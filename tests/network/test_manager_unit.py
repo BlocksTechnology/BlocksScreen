@@ -1,6 +1,6 @@
 """Unit tests for BlocksScreen.lib.network.manager.NetworkManager.
 
-The worker and its asyncio thread are mocked — these tests verify the
+The worker and its asyncio thread are mocked - these tests verify the
 manager's caching, signal forwarding, lifecycle, scan/poll deferred-init,
 and public API without any D-Bus interaction.
 

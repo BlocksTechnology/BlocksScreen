@@ -11,10 +11,10 @@ class BlocksLabel(QtWidgets.QLabel):
         super().__init__(parent, *args, **kwargs)
 
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_AcceptTouchEvents, True)
-        self.icon_pixmap: typing.Optional[QtGui.QPixmap] = None
+        self.icon_pixmap: QtGui.QPixmap | None = None
         self._text: str = ""
-        self._background_color: typing.Optional[QtGui.QColor] = None
-        self._border_color: typing.Optional[QtGui.QColor] = None
+        self._background_color: QtGui.QColor | None = None
+        self._border_color: QtGui.QColor | None = None
         self._rounded: bool = False
         self._marquee: bool = True
         self.timer = QtCore.QTimer()
@@ -35,18 +35,50 @@ class BlocksLabel(QtWidgets.QLabel):
         self._glow_color: QtGui.QColor = QtGui.QColor("#E95757")
         self._animation_speed: int = 300
         self.glow_animation = QtCore.QPropertyAnimation(self, b"glow_color")
-        self.glow_animation.setEasingCurve(QtCore.QEasingCurve().Type.InOutQuart)
+        self.glow_animation.setEasingCurve(QtCore.QEasingCurve.Type.InOutQuart)
         self.glow_animation.setDuration(self.animation_speed)
         self.glow_animation.finished.connect(self.change_glow_direction)
-        self.glow_animation.finished.connect(self.repaint)
+        self.glow_animation.finished.connect(self.update)
         self.total_scroll_width: float = 0.0
         self.text_width: float = 0.0
         self.label_width: float = 0.0
         self.icon_margin: int = 5
         self.first_run = True
+        # Paint caches, invalidated on resize/font change
+        self._font_metrics: QtGui.QFontMetrics | None = None
+        self._baseline_offset: float = 0.0
+        self._background_path: QtGui.QPainterPath | None = None
+        self._glow_path: QtGui.QPainterPath | None = None
+        self._icon_cache: QtGui.QPixmap | None = None
+        self._icon_cache_size: QtCore.QSize = QtCore.QSize()
+        self._icon_target: QtCore.QRectF = QtCore.QRectF()
+
+    def _invalidate_geometry_cache(self) -> None:
+        """Drop every cache whose value depends on the widget size"""
+        self._background_path = None
+        self._glow_path = None
+        self._icon_cache = None
+        self._icon_cache_size = QtCore.QSize()
+
+    def _metrics(self) -> QtGui.QFontMetrics:
+        """Cached QFontMetrics, rebuilt only on font change"""
+        if self._font_metrics is None:
+            self._font_metrics = self.fontMetrics()
+            self._baseline_offset = (
+                self._font_metrics.ascent() - self._font_metrics.descent()
+            ) / 2.0
+        return self._font_metrics
+
+    def changeEvent(self, a0: QtCore.QEvent | None) -> None:
+        """Re-implemented method, invalidate the metrics cache when the font changes"""
+        if a0 is not None and a0.type() == QtCore.QEvent.Type.FontChange:
+            self._font_metrics = None
+            self.update_text_metrics()
+        super().changeEvent(a0)
 
     def resizeEvent(self, a0: QtGui.QResizeEvent) -> None:
         """Re-implemented method, handle widget resize event"""
+        self._invalidate_geometry_cache()
         self.update_text_metrics()
         return super().resizeEvent(a0)
 
@@ -62,11 +94,15 @@ class BlocksLabel(QtWidgets.QLabel):
     def setPixmap(self, a0: QtGui.QPixmap) -> None:
         """Set widget pixmap"""
         self.icon_pixmap = a0
+        self._icon_cache = None
+        self._icon_cache_size = QtCore.QSize()
         self.update()
 
     def clearPixmap(self) -> None:
         """Clear the current pixmap."""
         self.icon_pixmap = None
+        self._icon_cache = None
+        self._icon_cache_size = QtCore.QSize()
         self.update()
 
     def setText(self, text: str) -> None:
@@ -76,7 +112,7 @@ class BlocksLabel(QtWidgets.QLabel):
         self.update_text_metrics()
 
     @property
-    def background_color(self) -> typing.Optional[QtGui.QColor]:
+    def background_color(self) -> QtGui.QColor | None:
         """Widget background color"""
         return self._background_color
 
@@ -85,7 +121,7 @@ class BlocksLabel(QtWidgets.QLabel):
         self._background_color = color
 
     @property
-    def border_color(self) -> typing.Optional[QtGui.QColor]:
+    def border_color(self) -> QtGui.QColor | None:
         """Widget border color"""
         return self._border_color
 
@@ -129,7 +165,7 @@ class BlocksLabel(QtWidgets.QLabel):
     @glow_color.setter
     def glow_color(self, color: QtGui.QColor) -> None:
         self._glow_color = color
-        self.repaint()
+        self.update()
 
     @QtCore.pyqtSlot(name="start_glow_animation")
     def start_glow_animation(self) -> None:
@@ -154,7 +190,7 @@ class BlocksLabel(QtWidgets.QLabel):
 
     def update_text_metrics(self) -> None:
         """Handle widget text metrics"""
-        font_metrics = self.fontMetrics()
+        font_metrics = self._metrics()
         self.text_width = font_metrics.horizontalAdvance(self._text)
         self.label_width = self.contentsRect().width()
         self.total_scroll_width = float(self.text_width + self.marquee_spacing)
@@ -177,8 +213,9 @@ class BlocksLabel(QtWidgets.QLabel):
     def stop_scroll(self) -> None:
         """Stop marquee text scroll effect"""
         self.timer.stop()
-        self.repaint()
+        self.update()
 
+    @QtCore.pyqtSlot()
     def _scroll_text(self) -> None:
         """Smoothly scroll the text leftwards."""
         if not self._marquee or self.paused:
@@ -192,49 +229,18 @@ class BlocksLabel(QtWidgets.QLabel):
             self.scroll_pos = 0.0
         self.update()
 
-    def paintEvent(self, a0: QtGui.QPaintEvent) -> None:
-        """Re-implemented method, paint widget"""
-        qp = QtGui.QPainter(self)
-        qp.setRenderHint(qp.RenderHint.Antialiasing, True)
-        qp.setRenderHint(qp.RenderHint.SmoothPixmapTransform, True)
-        qp.setRenderHint(qp.RenderHint.LosslessImageRendering, True)
-        rect = self.contentsRect()
-        if self._background_color:
-            qp.setBrush(self._background_color)
-            qp.setPen(QtCore.Qt.PenStyle.NoPen)
-            if self._rounded:
-                path = QtGui.QPainterPath()
-                path.addRoundedRect(QtCore.QRectF(rect), 10, 10)
-                qp.fillPath(path, self._background_color)
-            else:
-                qp.fillRect(rect, self._background_color)
+    def _background(self, rect: QtCore.QRect) -> QtGui.QPainterPath:
+        """Cached rounded background path for the current size"""
+        if self._background_path is None:
+            path = QtGui.QPainterPath()
+            path.addRoundedRect(QtCore.QRectF(rect), 10, 10)
+            self._background_path = path
+        return self._background_path
 
-        if self.icon_pixmap:
-            icon_rect = QtCore.QRectF(
-                0.0 + self.icon_margin,
-                0.0 + self.icon_margin,
-                self.width() - self.icon_margin,
-                self.height() - self.icon_margin,
-            )
-            _icon_scaled = self.icon_pixmap.scaled(
-                icon_rect.size().toSize(),
-                QtCore.Qt.AspectRatioMode.KeepAspectRatio,
-                QtCore.Qt.TransformationMode.SmoothTransformation,
-            )
-            scaled_width = _icon_scaled.width()
-            scaled_height = _icon_scaled.height()
-            adjusted_x = (icon_rect.width() - scaled_width) // 2.0
-            adjusted_y = (icon_rect.height() - scaled_height) // 2.0
-            adjusted_icon = QtCore.QRectF(
-                icon_rect.x() + adjusted_x,
-                icon_rect.y() + adjusted_y,
-                scaled_width,
-                scaled_height,
-            )
-            qp.drawPixmap(adjusted_icon, _icon_scaled, _icon_scaled.rect().toRectF())
-        if self.glow_animation.state() == self.glow_animation.State.Running:
+    def _glow(self, rect: QtCore.QRectF) -> QtGui.QPainterPath:
+        """Cached glow ring path; the boolean subtract only depends on the size"""
+        if self._glow_path is None:
             big_rect = QtGui.QPainterPath()
-            rect = self.contentsRect().toRectF()
             big_rect.addRoundedRect(rect, 10.0, 10.0, QtCore.Qt.SizeMode.AbsoluteSize)
             sub_rect = QtCore.QRectF(
                 (rect.width() - rect.width() * 0.99) / 2,
@@ -247,23 +253,65 @@ class BlocksLabel(QtWidgets.QLabel):
                 sub_rect, 10.0, 10.0, QtCore.Qt.SizeMode.AbsoluteSize
             )
             subtracted = big_rect.subtracted(sub_path)
-            qp.setCompositionMode(qp.CompositionMode.CompositionMode_SourceOver)
             subtracted.setFillRule(QtCore.Qt.FillRule.OddEvenFill)
-            qp.fillPath(subtracted, self.glow_color)
+            self._glow_path = subtracted
+        return self._glow_path
+
+    def _paint_icon(self, qp: QtGui.QPainter) -> None:
+        """Draw the overlay icon, rescaling only when the target size changes"""
+        icon_rect = QtCore.QRectF(
+            0.0 + self.icon_margin,
+            0.0 + self.icon_margin,
+            self.width() - self.icon_margin,
+            self.height() - self.icon_margin,
+        )
+        target_size = icon_rect.size().toSize()
+        if self._icon_cache is None or target_size != self._icon_cache_size:
+            self._icon_cache = self.icon_pixmap.scaled(
+                target_size,
+                QtCore.Qt.AspectRatioMode.KeepAspectRatio,
+                QtCore.Qt.TransformationMode.SmoothTransformation,
+            )
+            self._icon_cache_size = target_size
+            scaled_width = self._icon_cache.width()
+            scaled_height = self._icon_cache.height()
+            adjusted_x = (icon_rect.width() - scaled_width) // 2.0
+            adjusted_y = (icon_rect.height() - scaled_height) // 2.0
+            self._icon_target = QtCore.QRectF(
+                icon_rect.x() + adjusted_x,
+                icon_rect.y() + adjusted_y,
+                scaled_width,
+                scaled_height,
+            )
+        _icon_scaled = self._icon_cache
+        qp.drawPixmap(self._icon_target, _icon_scaled, _icon_scaled.rect().toRectF())
+
+    def paintEvent(self, a0: QtGui.QPaintEvent) -> None:
+        """Re-implemented method, paint widget"""
+        qp = QtGui.QPainter(self)
+        qp.setRenderHint(qp.RenderHint.Antialiasing, True)
+        qp.setRenderHint(qp.RenderHint.SmoothPixmapTransform, True)
+        rect = self.contentsRect()
+        if self._background_color:
+            qp.setBrush(self._background_color)
+            qp.setPen(QtCore.Qt.PenStyle.NoPen)
+            if self._rounded:
+                qp.fillPath(self._background(rect), self._background_color)
+            else:
+                qp.fillRect(rect, self._background_color)
+
+        if self.icon_pixmap:
+            self._paint_icon(qp)
+
+        if self.glow_animation.state() == self.glow_animation.State.Running:
+            qp.setCompositionMode(qp.CompositionMode.CompositionMode_SourceOver)
+            qp.fillPath(self._glow(rect.toRectF()), self.glow_color)
+
         if self._text:
-            text_option = QtGui.QTextOption(self.alignment())
-            text_option.setWrapMode(QtGui.QTextOption.WrapMode.NoWrap)
             qp.save()
             qp.setClipRect(rect)
-            baseline_y = (
-                rect.y()
-                + (
-                    rect.height()
-                    + self.fontMetrics().ascent()
-                    - self.fontMetrics().descent()
-                )
-                / 2
-            )
+            self._metrics()
+            baseline_y = rect.y() + rect.height() / 2 + self._baseline_offset
 
             if self.text_width > self.label_width:
                 qp.drawText(

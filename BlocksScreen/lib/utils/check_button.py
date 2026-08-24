@@ -1,5 +1,3 @@
-import typing
-
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 
@@ -11,15 +9,21 @@ class BlocksCustomCheckButton(QtWidgets.QAbstractButton):
         parent (QWidget): Parent of the button
     """
 
+    CHECKED_BG = QtGui.QColor(223, 223, 223)
+    CHECKED_TEXT = QtGui.QColor(0, 0, 0)
+    DOWN_BG = QtGui.QColor(164, 164, 164, 90)
+    IDLE_BG = QtGui.QColor(0, 0, 0, 90)
+    IDLE_TEXT = QtGui.QColor(255, 255, 255)
+
     def __init__(
         self,
         parent: QtWidgets.QWidget,
     ) -> None:
         super().__init__(parent)
-        self.button_ellipse = None
         self._text: str = ""
         self.font = QtGui.QFont("Momcake", 14)
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_AcceptTouchEvents, True)
+        self._path: QtGui.QPainterPath | None = None
 
     def setFlat(self, flat) -> None:
         """Disable setFlat behavior"""
@@ -45,49 +49,47 @@ class BlocksCustomCheckButton(QtWidgets.QAbstractButton):
         self.update()
         return
 
-    def paintEvent(self, e: typing.Optional[QtGui.QPaintEvent]):
+    def resizeEvent(self, a0: QtGui.QResizeEvent | None) -> None:
+        """Re-implemented method, drop the cached background path"""
+        self._path = None
+        super().resizeEvent(a0)
+
+    def paintEvent(self, e: QtGui.QPaintEvent | None):
         """Re-implemented method, paint widget, optimized for performance."""
 
         painter = QtGui.QPainter(self)
         rect_f = self.rect().toRectF().normalized()
         painter.setRenderHint(painter.RenderHint.Antialiasing, True)
-        height = rect_f.height()
-
-        radius = height / 5.0
-        self.button_ellipse = QtCore.QRectF(
-            rect_f.left() + height * 0.05,
-            rect_f.top() + height * 0.05,
-            (height * 0.40),
-            (height * 0.40),
-        )
 
         if self.isChecked():
-            bg_color = QtGui.QColor(223, 223, 223)
-            text_color = QtGui.QColor(0, 0, 0)
+            bg_color = self.CHECKED_BG
+            text_color = self.CHECKED_TEXT
         elif self.isDown():
-            bg_color = QtGui.QColor(164, 164, 164, 90)
-            text_color = QtGui.QColor(255, 255, 255)
+            bg_color = self.DOWN_BG
+            text_color = self.IDLE_TEXT
         else:
-            bg_color = QtGui.QColor(0, 0, 0, 90)
-            text_color = QtGui.QColor(255, 255, 255)
+            bg_color = self.IDLE_BG
+            text_color = self.IDLE_TEXT
 
-        path = QtGui.QPainterPath()
-        path.addRoundedRect(
-            rect_f,
-            radius,
-            radius,
-            QtCore.Qt.SizeMode.AbsoluteSize,
-        )
+        if self._path is None:
+            radius = rect_f.height() / 5.0
+            path = QtGui.QPainterPath()
+            path.addRoundedRect(
+                rect_f,
+                radius,
+                radius,
+                QtCore.Qt.SizeMode.AbsoluteSize,
+            )
+            self._path = path
 
-        painter.setPen(QtCore.Qt.PenStyle.NoPen)
-        painter.setBrush(bg_color)
-        painter.fillPath(path, bg_color)
+        # fillPath takes its brush as an argument and never strokes, no pen/brush needed
+        painter.fillPath(self._path, bg_color)
 
-        if self.text():
+        if self._text:
             painter.setPen(text_color)
             painter.setFont(self.font)
             painter.drawText(
                 rect_f,
                 QtCore.Qt.AlignmentFlag.AlignCenter,
-                str(self.text()),
+                self._text,
             )

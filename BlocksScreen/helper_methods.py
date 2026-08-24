@@ -262,7 +262,7 @@ def calculate_current_layer(
     layer = math.ceil((z_position - first_layer_height) / layer_height + 1)
     if max_layers > 0 and layer > max_layers:
         return max_layers
-    return layer if layer > 0 else 0
+    return max(0, layer)
 
 
 def calculate_max_layers(

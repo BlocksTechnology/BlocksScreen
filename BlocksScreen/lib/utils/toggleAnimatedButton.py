@@ -1,5 +1,6 @@
 import enum
 import typing
+
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 
@@ -34,6 +35,12 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
         )
 
         self.icon_pixmap: QtGui.QPixmap = QtGui.QPixmap()
+        self._icon_cache: QtGui.QPixmap = QtGui.QPixmap()
+        self._icon_cache_size: QtCore.QSize = QtCore.QSize()
+        # Built here too, so paintEvent is safe before the first showEvent.
+        self.trailPath: QtGui.QPainterPath = QtGui.QPainterPath()
+        self.handlePath: QtGui.QPainterPath = QtGui.QPainterPath()
+        self.handle_ellipseRect: QtCore.QRectF = QtCore.QRectF()
         self._backgroundColor: QtGui.QColor = QtGui.QColor(223, 223, 223)
         self._handleColor: QtGui.QColor = QtGui.QColor(255, 100, 10)
 
@@ -57,6 +64,21 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
         self.slide_animation.setEasingCurve(QtCore.QEasingCurve().Type.InOutQuart)
         self.pressed.connect(self.setup_animation)
 
+    def _rebuild_trail(self) -> None:
+        """Rebuild the trail path for the current geometry."""
+        rect_norm = self.contentsRect().toRectF().normalized()
+        radius = rect_norm.height() // 2.0
+        self.trailPath = QtGui.QPainterPath()
+        self.trailPath.addRoundedRect(
+            0,
+            0,
+            rect_norm.width(),
+            rect_norm.height(),
+            radius,
+            radius,
+            QtCore.Qt.SizeMode.AbsoluteSize,
+        )
+
     def resizeEvent(self, a0: QtGui.QResizeEvent) -> None:
         """Re-implemented method, handle widget resize event"""
         self.handle_radius = (
@@ -70,6 +92,7 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
             - self._handle_ONPosition
             - self.handle_radius * 2
         )
+        self._rebuild_trail()
         return super().resizeEvent(a0)
 
     def sizeHint(self) -> QtCore.QSize:
@@ -134,19 +157,7 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
     def showEvent(self, a0: QtGui.QShowEvent) -> None:
         """Re-implemented method, widget show"""
         _rect = self.contentsRect()
-        self.trailPath: QtGui.QPainterPath = QtGui.QPainterPath()
-        self.handlePath: QtGui.QPainterPath = QtGui.QPainterPath()
-        xRadius = _rect.toRectF().normalized().height() // 2.0
-        yRadius = _rect.toRectF().normalized().height() // 2.0
-        self.trailPath.addRoundedRect(
-            0,
-            0,
-            _rect.toRectF().normalized().width(),
-            _rect.toRectF().normalized().height(),
-            xRadius,
-            yRadius,
-            QtCore.Qt.SizeMode.AbsoluteSize,
-        )
+        self._rebuild_trail()
         self._handle_position = (
             self._handle_ONPosition
             if self.state == ToggleAnimatedButton.State.OFF
@@ -163,13 +174,14 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
     def setPixmap(self, pixmap: QtGui.QPixmap) -> None:
         """Set widget pixmap"""
         self.icon_pixmap = pixmap
-        # self.repaint()
+        self._icon_cache = QtGui.QPixmap()
+        self._icon_cache_size = QtCore.QSize()
         self.update()
 
     @QtCore.pyqtSlot(name="clicked")
     def setup_animation(self) -> None:
         """Setup widget animation"""
-        if not self.slide_animation.state == self.slide_animation.State.Running:
+        if self.slide_animation.state != self.slide_animation.State.Running:
             self.slide_animation.setEndValue(
                 self._handle_ONPosition
                 if self.state == ToggleAnimatedButton.State.OFF
@@ -181,7 +193,7 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
         """Re-implemented method, handle mouse press events"""
         if self.trailPath:
             if self.trailPath.contains(e.pos().toPointF()) and self.underMouse():
-                if not self.slide_animation.state == self.slide_animation.State.Running:
+                if self.slide_animation.state != self.slide_animation.State.Running:
                     self._state = ToggleAnimatedButton.State(not self._state.value)
                     self.stateChange.emit(self._state)
                     super().mousePressEvent(e)
@@ -189,35 +201,27 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
 
     def paintEvent(self, a0: QtGui.QPaintEvent) -> None:
         """Re-implemented method, paint widget"""
-        option = QtWidgets.QStyleOptionButton()
-        option.initFrom(self)
-        option.state |= QtWidgets.QStyle.StateFlag.State_Off
-        option.state |= QtWidgets.QStyle.StateFlag.State_On
-        option.state |= QtWidgets.QStyle.StateFlag.State_Active
-
-        _rect = self.contentsRect()
+        rect_norm = self.contentsRect().toRectF().normalized()
         bg_color = self.backgroundColor
-        self.handlePath: QtGui.QPainterPath = QtGui.QPainterPath()
+        handle_size = rect_norm.height() * 0.80
         self.handle_ellipseRect = QtCore.QRectF(
             self._handle_position,
-            ((_rect.toRectF().normalized().height() * 0.20) // 2),
-            (_rect.toRectF().normalized().height() * 0.80),
-            (_rect.toRectF().normalized().height() * 0.80),
+            ((rect_norm.height() * 0.20) // 2),
+            handle_size,
+            handle_size,
         )
+        self.handlePath.clear()
         self.handlePath.addEllipse(self.handle_ellipseRect)
         painter = QtGui.QPainter(self)
         painter.setRenderHint(painter.RenderHint.Antialiasing)
         painter.setRenderHint(painter.RenderHint.SmoothPixmapTransform)
         painter.setBackgroundMode(QtCore.Qt.BGMode.TransparentMode)
-        painter.setRenderHint(painter.RenderHint.LosslessImageRendering)
 
-        rect_norm = _rect.toRectF().normalized()
         min_x = rect_norm.x()
         max_x = rect_norm.x() + rect_norm.width() - rect_norm.height() * 0.80
         progress = (self._handle_position - min_x) / (max_x - min_x)
         progress = max(0.0, min(1.0, progress))
 
-        # Inline color interpolation (no separate functions)
         r = (
             self._handleOFFcolor.red()
             + (self._handleONcolor.red() - self._handleOFFcolor.red()) * progress
@@ -235,7 +239,8 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
             + (self._handleONcolor.alpha() - self._handleOFFcolor.alpha()) * progress
         )
 
-        self.handleColor = QtGui.QColor(int(r), int(g), int(b), int(a))
+        computed_handle_color = QtGui.QColor(int(r), int(g), int(b), int(a))
+        self._handleColor = computed_handle_color
 
         painter.fillPath(
             self.trailPath,
@@ -243,7 +248,7 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
         )
         painter.fillPath(
             self.handlePath,
-            self.handleColor if self.isEnabled() else self.disable_handle_color,
+            computed_handle_color if self.isEnabled() else self.disable_handle_color,
         )
 
         if not self.icon_pixmap.isNull():
@@ -254,12 +259,15 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
                 self.handle_ellipseRect.width() * 0.90,
                 self.handle_ellipseRect.height() * 0.90,
             )
-            _icon_scaled = self.icon_pixmap.scaled(
-                _icon_rect.size().toSize(),
-                QtCore.Qt.AspectRatioMode.KeepAspectRatio,
-                QtCore.Qt.TransformationMode.SmoothTransformation,
-            )
-            # Calculate the actual QRect for the scaled pixmap (centering it if needed)
+            target_size = _icon_rect.size().toSize()
+            if target_size != self._icon_cache_size:
+                self._icon_cache = self.icon_pixmap.scaled(
+                    target_size,
+                    QtCore.Qt.AspectRatioMode.KeepAspectRatio,
+                    QtCore.Qt.TransformationMode.SmoothTransformation,
+                )
+                self._icon_cache_size = target_size
+            _icon_scaled = self._icon_cache
             scaled_width = _icon_scaled.width()
             scaled_height = _icon_scaled.height()
             adjusted_x = (_icon_rect.width() - scaled_width) // 2.0
@@ -271,8 +279,8 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
                 scaled_height,
             )
             painter.drawPixmap(
-                adjusted_icon_rect,  # Target area (center adjusted)
-                _icon_scaled,  # Scaled pixmap
-                _icon_scaled.rect().toRectF(),  # Entire source (scaled) pixmap
+                adjusted_icon_rect,
+                _icon_scaled,
+                _icon_scaled.rect().toRectF(),
             )
         painter.end()

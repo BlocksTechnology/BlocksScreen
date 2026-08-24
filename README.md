@@ -23,7 +23,7 @@ Let us know if there is any issue or bug by reporting it on the repo issues tab.
 Feel free to contact us on [Github](https://github.com/BlocksTechnology) | [LinkedIn](https://www.linkedin.com/company/blockstec/) | [Website](https://blockstec.com) 
 
 
-For inquiries related to licensing, attribution, or project documentation—excluding feature requests or code contributions—please contact Blocks Technology at: 
+For inquiries related to licensing, attribution, or project documentation, excluding feature requests or code contributions, please contact Blocks Technology at: 
 
 [info@blockstec.com](mailto:info@blockstec.com) 
 

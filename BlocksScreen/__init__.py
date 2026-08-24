@@ -1,1 +1,1 @@
-"""BlocksScreen — GUI for BLOCKS 3D Printers running Klipper."""
+"""BlocksScreen - GUI for BLOCKS 3D Printers running Klipper."""
