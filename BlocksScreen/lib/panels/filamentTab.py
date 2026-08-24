@@ -115,6 +115,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
 
         self.run_gcode.connect(self.ws.api.run_gcode)
 
+    @QtCore.pyqtSlot()
     def handle_moonraker_components(self):
         if self.moonraker_run:
             components = self.ws._moonRest.get_server_info()
@@ -510,6 +511,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
 
         return page
 
+    @QtCore.pyqtSlot()
     def handle_skip_button(self):
         gate = self.pre_gate_idx.get("gate", 0)
         self.popup.hide()
@@ -567,6 +569,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self._add_filament_page.setData(material, temp)
         self.handle_popup(True)
 
+    @QtCore.pyqtSlot()
     def on_popup_accept(self):
         """Handles the accept action from the pre-gate popup to send the appropriate G-code to map the gate to the spool."""
         gate = self.pre_gate_idx.get("gate", 0)
@@ -660,6 +663,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
             self._spool_id_map[name] = spool
         self.update()
 
+    @QtCore.pyqtSlot()
     def _on_spool_selected(self) -> None:
         item = self._spool_model.get_selected_item()
         if item is None:
@@ -752,6 +756,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
         painter.end()
         return pixmap
 
+    @QtCore.pyqtSlot(str, int, "PyQt_PyObject", int, int)
     def _open_numpad(
         self,
         name: str,
@@ -780,6 +785,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
     def _on_popup_temp_change(self, _name: str, value: int) -> None:
         self._popup_temp.setText(str(value))
 
+    @QtCore.pyqtSlot("PyQt_PyObject", str, str, str, int)
     def _on_show_keyboard(
         self,
         field: QtWidgets.QLineEdit,
@@ -796,15 +802,18 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self._qwerty.setMaxLength(max_char)
         self._qwerty.show()
 
+    @QtCore.pyqtSlot()
     def _on_qwerty_go_back(self) -> None:
         self._qwerty.hide()
 
+    @QtCore.pyqtSlot(str)
     def _on_qwerty_value_selected(self, value: str) -> None:
         self._qwerty.hide()
         if self._current_field:
             self._current_field.setText(value)
             self._current_field.editingFinished.emit()
 
+    @QtCore.pyqtSlot("PyQt_PyObject")
     def _open_color_wheel(self, field) -> None:
         self._color_target_field = field
         self._color_wheel.set_color_hex(field.text().strip("#") or "ffffff")
@@ -818,6 +827,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
             self._color_target_field.editingFinished.emit()
             self._color_target_field = None
 
+    @QtCore.pyqtSlot(object)
     def on_mmu_state_changed(self, mmu_state):
         """Handles changes in the MMU state from the AMU manager to update the UI and show the load panel when loading/unloading."""
         for gate_info in mmu_state.gates:

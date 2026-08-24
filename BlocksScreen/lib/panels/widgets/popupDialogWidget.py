@@ -60,12 +60,14 @@ class Popup(QtWidgets.QDialog):
         self.timeout_timer.timeout.connect(lambda: self.slide_out_animation.start())
         self.actionbtn.clicked.connect(self.slide_out_animation.start)
 
+    @QtCore.pyqtSlot()
     def on_slide_in_finished(self):
         """Handle slide in animation finished"""
         if self.userInput:
             return
         self.timeout_timer.start()
 
+    @QtCore.pyqtSlot()
     def on_slide_out_finished(self):
         """Handle slide out animation finished"""
         self.hide()
@@ -144,6 +146,7 @@ class Popup(QtWidgets.QDialog):
         )
         return self._add_popup()
 
+    @QtCore.pyqtSlot()
     def _add_popup(self) -> None:
         """Add popup to queue"""
         if self.isShown:

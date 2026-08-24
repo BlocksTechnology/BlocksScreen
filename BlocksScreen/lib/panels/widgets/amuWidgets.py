@@ -322,11 +322,13 @@ class SpoolCarousel(QtWidgets.QWidget):
 
         self._update_arrows()
 
+    @QtCore.pyqtSlot()
     def _scroll_left(self):
         if self._offset > 0:
             self._offset -= 1
             self._refresh_visible()
 
+    @QtCore.pyqtSlot()
     def _scroll_right(self):
         if self._offset + self.VISIBLE < len(self.buttons):
             self._offset += 1

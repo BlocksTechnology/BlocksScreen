@@ -51,7 +51,7 @@ class EntryListModel(QtCore.QAbstractListModel):
         super().__init__()
         self.entries: list[ListItem] = entries or []
 
-    def rowCount(self, parent=QtCore.QModelIndex()) -> int:
+    def rowCount(self, parent=QtCore.QModelIndex()) -> int:  # noqa: B008
         """Gets model row count"""
         return len(self.entries)
 

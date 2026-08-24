@@ -40,7 +40,7 @@ def _sub(needle: str) -> Callable[[str], bool]:
 
 
 def _re(pattern: str) -> Callable[[str], bool]:
-    compiled_text = re.compile(pattern, re.I)
+    compiled_text = re.compile(pattern, re.IGNORECASE)
     return lambda text: compiled_text.search(text) is not None
 
 
@@ -642,8 +642,8 @@ IGNORED_RULE = MessageRule(
 )
 
 _IGNORED: tuple[re.Pattern, ...] = (
-    re.compile(r"REMOVED log_path=", re.I),
-    re.compile(r"Alert: Automatically heating extruder to gatemap temp", re.I),
+    re.compile(r"REMOVED log_path=", re.IGNORECASE),
+    re.compile(r"Alert: Automatically heating extruder to gatemap temp", re.IGNORECASE),
     # add more patterns as needed,
 )
 

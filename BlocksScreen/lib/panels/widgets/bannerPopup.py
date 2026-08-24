@@ -51,7 +51,7 @@ class BannerPopup(QtWidgets.QWidget):
         self.actionbtn.clicked.connect(self.slide_out_animation.start)
 
     def event(self, a0):
-        if a0.type() in (QtCore.QEvent.Type.MouseButtonPress,):
+        if a0.type() == QtCore.QEvent.Type.MouseButtonPress:
             if self.rect().contains(a0.position().toPoint()):
                 self.timeout_timer.stop()
                 self.slide_out_animation.setStartValue(
@@ -62,10 +62,12 @@ class BannerPopup(QtWidgets.QWidget):
 
         return super().event(a0)
 
+    @QtCore.pyqtSlot()
     def on_slide_in_finished(self):
         """Handle slide in animation finished"""
         self.timeout_timer.start()
 
+    @QtCore.pyqtSlot()
     def on_slide_out_finished(self):
         """Handle slide out animation finished"""
         self.hide()
@@ -121,6 +123,7 @@ class BannerPopup(QtWidgets.QWidget):
         )
         return self._add_popup()
 
+    @QtCore.pyqtSlot()
     def _add_popup(self) -> None:
         """Add popup to queue"""
         if self.isShown:

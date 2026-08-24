@@ -99,11 +99,7 @@ def check_broken_symlinks(dir: pathlib.Path) -> list[pathlib.Path]:
     try:
         if not (dir.exists() or dir.is_dir()):
             return []
-        broken: list[pathlib.Path] = []
-        for path in dir.rglob("*"):
-            if path.is_symlink() and not path.exists():
-                broken.append(path)
-        return broken
+        return [p for p in dir.rglob("*") if p.is_symlink() and not p.exists()]
     except Exception:
         return []
 

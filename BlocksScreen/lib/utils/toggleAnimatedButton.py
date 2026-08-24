@@ -92,7 +92,7 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
             - self._handle_ONPosition
             - self.handle_radius * 2
         )
-        self._rebuild_trail()  # trail is geometry-derived, so it must follow a resize
+        self._rebuild_trail()
         return super().resizeEvent(a0)
 
     def sizeHint(self) -> QtCore.QSize:
@@ -181,7 +181,7 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
     @QtCore.pyqtSlot(name="clicked")
     def setup_animation(self) -> None:
         """Setup widget animation"""
-        if not self.slide_animation.state == self.slide_animation.State.Running:
+        if self.slide_animation.state != self.slide_animation.State.Running:
             self.slide_animation.setEndValue(
                 self._handle_ONPosition
                 if self.state == ToggleAnimatedButton.State.OFF
@@ -193,7 +193,7 @@ class ToggleAnimatedButton(QtWidgets.QAbstractButton):
         """Re-implemented method, handle mouse press events"""
         if self.trailPath:
             if self.trailPath.contains(e.pos().toPointF()) and self.underMouse():
-                if not self.slide_animation.state == self.slide_animation.State.Running:
+                if self.slide_animation.state != self.slide_animation.State.Running:
                     self._state = ToggleAnimatedButton.State(not self._state.value)
                     self.stateChange.emit(self._state)
                     super().mousePressEvent(e)

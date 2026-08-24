@@ -61,6 +61,7 @@ class AMUManager(QtCore.QObject):
         self._pre_gate_sensors: dict[int, bool] = {}
         self.spool_fetched.connect(self._apply_spool_data)
 
+    @QtCore.pyqtSlot(int, dict)
     def _apply_spool_data(self, gate: int, data: dict) -> None:
         """Apply Spoolman spool data to local gate state and sync to Klipper.
 

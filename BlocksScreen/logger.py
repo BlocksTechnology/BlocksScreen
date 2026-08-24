@@ -349,7 +349,8 @@ class CrashHandler:
         """Install exception hooks."""
         # Setup faulthandler for C-level crashes (segfaults, etc.)
         try:
-            self._fault_file = open(self._fault_log_path, "w")
+            # faulthandler needs this handle open for the whole process lifetime
+            self._fault_file = open(self._fault_log_path, "w")  # noqa: SIM115
             faulthandler.enable(file=self._fault_file, all_threads=True)
 
             # Also dump traceback on SIGUSR1 (useful for debugging hangs)

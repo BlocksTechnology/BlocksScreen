@@ -119,6 +119,17 @@ class LoadingOverlayWidget(QtWidgets.QLabel):
             self.movie.stop()
         return super().close()
 
+    def _spinner_rect(self) -> QtCore.QRect:
+        """Rotation-invariant arc bounds, the only pixels the timer dirties"""
+        half = self.ARC_SIZE // 2 + self._arc_pen.width()
+        return QtCore.QRect(
+            self.width() // 2 - half,
+            int(self.height() * 0.4) - half,
+            half * 2,
+            half * 2,
+        )
+
+    @QtCore.pyqtSlot()
     def _update_animation(self) -> None:
         self._angle = (self._angle + 5) % 360
         if self._is_span_growing:
@@ -131,7 +142,7 @@ class LoadingOverlayWidget(QtWidgets.QLabel):
             if self._span_angle <= self.min_length:
                 self._span_angle = self.min_length
                 self._is_span_growing = True
-        self.update()
+        self.update(self._spinner_rect())
 
     def paintEvent(self, a0: QtGui.QPaintEvent | None) -> None:
         """Re-implemented method, paint widget"""

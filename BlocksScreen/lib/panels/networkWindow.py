@@ -119,9 +119,7 @@ class IPAddressLineEdit(BlocksCustomLinEdit):
         txt = self.text().strip()
         if txt.isdigit():
             n = int(txt)
-            if 0 <= n <= 32:
-                return True
-            return False
+            return 0 <= n <= 32
 
         try:
             _ipaddress.IPv4Network(f"0.0.0.0/{txt}", strict=False)
@@ -129,6 +127,7 @@ class IPAddressLineEdit(BlocksCustomLinEdit):
         except ValueError:
             return False
 
+    @pyqtSlot(str)
     def _on_text_changed(self, text: str) -> None:
         """Update the field border colour in real-time as the user types."""
         if not text:
@@ -789,10 +788,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
                 state.current_ip or "",
             )
             for v in state.active_vlans:
-                if v.is_dhcp:
-                    ip_label = v.ip_address or "DHCP"
-                else:
-                    ip_label = v.ip_address or "--"
+                ip_label = v.ip_address or ("DHCP" if v.is_dhcp else "--")
                 self.netlist_vlans_combo.addItem(
                     f"VLAN {v.vlan_id} - {ip_label}",
                     v.ip_address or "",
@@ -916,6 +912,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         """Hide the loading widget and re-enable the full UI."""
         self._set_loading_state(False)
 
+    @pyqtSlot()
     def _handle_load_timeout(self) -> None:
         """Hide the loading widget if it is still visible after the timeout fires."""
         if not self.loadingwidget.isVisible():
@@ -1199,6 +1196,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             self.qrcode_img.clearPixmap()
             self.qrcode_img.setText("QR error")
 
+    @pyqtSlot()
     def _on_ethernet_button_clicked(self) -> None:
         """Navigate to the ethernet/VLAN settings page when the ethernet button is clicked."""
         if (
@@ -1209,6 +1207,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             return
         self.setCurrentIndex(self.indexOf(self.vlan_page))
 
+    @pyqtSlot()
     def _on_vlan_apply(self) -> None:
         """Validate VLAN fields and call ``create_vlan_connection`` on the facade."""
         vlan_id = self.vlan_id_spinbox.value()
@@ -1250,18 +1249,21 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         )
         self._nm.request_state_soon(delay_ms=3000)
 
+    @pyqtSlot()
     def _on_vlan_delete(self) -> None:
         """Read the VLAN ID from the spinbox and request deletion via the facade."""
         vlan_id = self.vlan_id_spinbox.value()
         self._nm.delete_vlan_connection(vlan_id)
         self._show_warning_popup(f"VLAN {vlan_id} profile removed.")
 
+    @pyqtSlot(int)
     def _on_interface_combo_changed(self, index: int) -> None:
         """Swap the displayed IP when the user selects a different interface."""
         ip = self.netlist_vlans_combo.itemData(index)
         if ip is not None:
             self.netlist_ip.setText(f"IP: {ip}" if ip else "IP: --")
 
+    @pyqtSlot()
     def _on_wifi_static_ip_clicked(self) -> None:
         """Navigate from saved details page to WiFi static IP page."""
         ssid = self.snd_name.text()
@@ -1283,6 +1285,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
 
         self.setCurrentIndex(self.indexOf(self.wifi_static_ip_page))
 
+    @pyqtSlot()
     def _on_wifi_static_ip_apply(self) -> None:
         """Validate static-IP fields and apply them to the current Wi-Fi connection.
 
@@ -1321,6 +1324,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self._nm.update_wifi_static_ip(ssid, ip_addr, mask, gateway, dns1, dns2)
         self._nm.request_state_soon(delay_ms=3000)
 
+    @pyqtSlot()
     def _on_wifi_reset_dhcp(self) -> None:
         """Reset the current Wi-Fi connection back to DHCP via the facade.
 
@@ -1656,6 +1660,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
 
         self.add_network_validation_button.setEnabled(True)
 
+    @pyqtSlot()
     def _on_activate_network(self) -> None:
         """Activate the network shown on the saved-connection page."""
         ssid = self.saved_connection_network_name.text()
@@ -1674,12 +1679,14 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.setCurrentIndex(self.indexOf(self.main_network_page))
         self._nm.connect_network(ssid)
 
+    @pyqtSlot()
     def _on_delete_network(self) -> None:
         """Delete the profile shown on the saved-connection page and navigate back."""
         ssid = self.saved_connection_network_name.text()
         self._target_ssid = ssid
         self._nm.delete_network(ssid)
 
+    @pyqtSlot()
     def _on_save_network_details(self) -> None:
         """Save network settings changes (password / priority).
 
@@ -1710,6 +1717,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
 
         self.saved_connection_change_password_field.clear()
 
+    @pyqtSlot()
     def _on_hidden_network_connect(self) -> None:
         """Connect to hidden network - non-blocking."""
         ssid = self.hidden_network_ssid_field.text().strip()
@@ -3584,6 +3592,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.wifi_sip_apply_button.clicked.connect(self._on_wifi_static_ip_apply)
         self.wifi_sip_dhcp_button.clicked.connect(self._on_wifi_reset_dhcp)
 
+    @pyqtSlot()
     def _on_wifi_button_clicked(self) -> None:
         """Navigate to the Wi-Fi scan page, starting or stopping scan polling as needed."""
         if (
@@ -3766,12 +3775,14 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self._qwerty.show()
         field.clearFocus()
 
+    @pyqtSlot()
     def _on_qwerty_go_back(self) -> None:
         """Hide the keyboard and return to the previously active panel."""
         if self._previous_panel:
             self._qwerty.hide()
             self.setCurrentIndex(self.indexOf(self._previous_panel))
 
+    @pyqtSlot(str)
     def _on_qwerty_value_selected(self, value: str) -> None:
         """Apply the keyboard-selected *value* to the previously focused input field."""
         if self._previous_panel:
@@ -3780,6 +3791,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         if self._current_field:
             self._current_field.setText(value)
 
+    @pyqtSlot(int)
     def _handle_scrollbar_change(self, value: int) -> None:
         """Synchronise the custom scrollbar thumb to the list-view scroll position."""
         self.verticalScrollBar.blockSignals(True)

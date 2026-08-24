@@ -77,8 +77,7 @@ class SerialScanner:
         d.firmware = self._detect_firmware(symlink_name)
 
         s = symlink_name
-        if s.startswith("usb-"):
-            s = s[4:]
+        s = s.removeprefix("usb-")
 
         if "-if" in s:
             if_pos = s.rfind("-if")

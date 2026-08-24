@@ -551,7 +551,7 @@ class ProbeHelper(QtWidgets.QWidget):
         if not update:
             return
 
-        is_active = update.get("is_active", None)
+        is_active = update.get("is_active")
         if (z_upper := update.get("z_position_upper")) is not None:
             self.old_offset_info.setText(f"{round(z_upper, 3) or 0.0:.3f} mm")
         if (z_pos := update.get("z_position")) is not None:
@@ -590,7 +590,10 @@ class ProbeHelper(QtWidgets.QWidget):
             return
         if self.isVisible():
             if data[0].startswith("!!"):  # An error occurred
-                if "already in a manual z probe" in data[0].strip("!! ").lower():
+                if (
+                    "already in a manual z probe"
+                    in data[0].removeprefix("!!").strip().lower()
+                ):
                     self._hide_option_cards()
                     self.helper_start = True
                     self._toggle_tool_buttons(True)

@@ -7,6 +7,9 @@ any pixel difference is a cache that failed to invalidate.
 
 Runs two ways, deliberately: `pytest tests/paint` for CI, or `python
 test_paint_cache_oracle.py` standalone so it needs nothing installed on the printer.
+
+Green here proves nothing on its own: after changing a cache key, run `make mutants` to
+confirm these oracles still turn red on a deliberately broken widget.
 """
 
 from __future__ import annotations
@@ -264,8 +267,7 @@ def _build(spec_id: str, bot: _Bot) -> _Spec:
     if spec_id == "toggle_animated":
         tb = _load("toggleAnimatedButton").ToggleAnimatedButton
 
-        # state is a plain property typed to State and stateChange is pyqtSignal(State);
-        # assigning a bool emits the wrong type through the signal and segfaults PyQt6.
+        # stateChange is pyqtSignal(State), so assigning a bool segfaults PyQt6.
         def tstate(on, pm):
             def apply(w):
                 w.setPixmap(pm)

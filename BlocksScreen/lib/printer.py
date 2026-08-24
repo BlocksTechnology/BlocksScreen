@@ -614,7 +614,7 @@ class Printer(QtCore.QObject):
             )
         if "state" in values.keys():
             self.print_stats_update[str, str].emit("state", values["state"])
-            self.printing_state = values.get("state", None)
+            self.printing_state = values.get("state")
             if not self.printing_state:
                 return
             if values["state"] == "standby" or values["state"] == "error":

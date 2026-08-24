@@ -2584,4 +2584,4 @@ class NetworkManagerWorker(QObject):
             if 0 <= prefix <= 32:
                 return prefix
             raise ValueError(f"CIDR prefix out of range: {prefix}")
-        return bin(int(ipaddress.IPv4Address(stripped))).count("1")
+        return int(ipaddress.IPv4Address(stripped)).bit_count()

@@ -55,6 +55,7 @@ class SliderPage(QtWidgets.QWidget):
         )
         self.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
 
+    @QtCore.pyqtSlot()
     def on_slider_value_change(self) -> None:
         """Handles slider position changes"""
         self.value_selected.emit(self.name, self.slider.value())
@@ -76,6 +77,7 @@ class SliderPage(QtWidgets.QWidget):
         """Set slider maximum value"""
         self.slider.setMaximum(value)
 
+    @QtCore.pyqtSlot()
     def _refresh_value_label(self) -> None:
         """Track the slider live, setText from paintEvent is a paint loop hazard"""
         self.current_value_label.setText(f"{self.slider.value()} %")

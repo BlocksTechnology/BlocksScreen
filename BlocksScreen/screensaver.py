@@ -26,9 +26,7 @@ class ScreenSaver(QtCore.QObject):
             "screensaver", fallback=None
         )
         if not self.screensaver_config:
-            self.blank_timeout = (
-                self.dpms_standby_timeout if self.dpms_standby_timeout else 900000
-            )
+            self.blank_timeout = self.dpms_standby_timeout or 900000
         else:
             self.blank_timeout = self.screensaver_config.getint(
                 "timeout", default=500000
@@ -63,6 +61,7 @@ class ScreenSaver(QtCore.QObject):
             self.timer.start()
         return False
 
+    @QtCore.pyqtSlot()
     def check_dpms(self) -> None:
         """Checks the X11 extension dpms for the status of the screen"""
         self.touch_blocked = True

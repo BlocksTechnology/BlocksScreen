@@ -62,10 +62,7 @@ class ConfirmWidget(QtWidgets.QWidget):
             self.thumbnail = self._blocksthumbnail
         _total_filament = filedata.get("filament_weight_total")
         _estimated_time = filedata.get("estimated_time")
-        if isinstance(_estimated_time, str):
-            seconds = 0
-        else:
-            seconds = _estimated_time
+        seconds = 0 if isinstance(_estimated_time, str) else _estimated_time
 
         days, hours, minutes, _ = helper_methods.estimate_print_time(seconds)
         if seconds <= 0:

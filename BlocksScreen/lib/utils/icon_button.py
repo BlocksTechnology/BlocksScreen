@@ -15,6 +15,11 @@ class IconButton(QtWidgets.QPushButton):
         self.text_color: QtGui.QColor = QtGui.QColor(255, 255, 255)
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_AcceptTouchEvents, True)
         self.pressed_bg_color = QtGui.QColor(223, 223, 223, 70)  # Set to solid white
+        # Constant paint state, these were a QBrush and a QPen alloc per paint
+        self._pressed_brush = QtGui.QBrush(self.pressed_bg_color)
+        self._text_pen = QtGui.QPen(self.text_color)
+        self._text_pen.setStyle(QtCore.Qt.PenStyle.SolidLine)
+        self._text_pen.setWidthF(0.8)
         # Paint cache, invalidated on pixmap change and on target size change
         self._icon_cache: QtGui.QPixmap = QtGui.QPixmap()
         self._icon_cache_size: QtCore.QSize = QtCore.QSize()
@@ -52,15 +57,9 @@ class IconButton(QtWidgets.QPushButton):
         painter.setRenderHint(painter.RenderHint.SmoothPixmapTransform, True)
 
         if self.isDown():
-            painter.setBrush(QtGui.QBrush(self.pressed_bg_color))
+            painter.setBrush(self._pressed_brush)
             painter.setPen(QtCore.Qt.PenStyle.NoPen)
             painter.drawRoundedRect(self.rect().toRectF(), 6, 6)
-        _pen = QtGui.QPen()
-        _pen.setStyle(QtCore.Qt.PenStyle.NoPen)
-        _pen.setColor(self.text_color)
-        _pen.setWidthF(0.8)
-
-        painter.setPen(_pen)
 
         y = 15.0 if self.text_formatting else 5.0
         if self.isDown():
@@ -111,8 +110,8 @@ class IconButton(QtWidgets.QPushButton):
                     self.height() - _icon_rect.height(),
                 )
 
-            _pen.setStyle(QtCore.Qt.PenStyle.SolidLine)
-            painter.setPen(_pen)
+            self._text_pen.setColor(self.text_color)
+            painter.setPen(self._text_pen)
 
             painter.drawText(
                 adjusted_rectF,

@@ -70,8 +70,8 @@ class TuneWidget(QtWidgets.QWidget):
             self.bed_display.clicked.disconnect()
         except Exception:
             _logger.debug("Signals were not connected")
-        extruder = config.get("extruder", None) or {}
-        bed = config.get("heater_bed", None) or {}
+        extruder = config.get("extruder") or {}
+        bed = config.get("heater_bed") or {}
         e_min_temp = extruder.get("min_temp", 0)
         e_max_temp = extruder.get("max_temp", 300)
         b_max_temp = bed.get("max_temp", 100)

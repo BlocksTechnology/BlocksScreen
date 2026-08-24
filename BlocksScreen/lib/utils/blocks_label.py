@@ -215,6 +215,7 @@ class BlocksLabel(QtWidgets.QLabel):
         self.timer.stop()
         self.update()
 
+    @QtCore.pyqtSlot()
     def _scroll_text(self) -> None:
         """Smoothly scroll the text leftwards."""
         if not self._marquee or self.paused:

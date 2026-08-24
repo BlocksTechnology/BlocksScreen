@@ -808,6 +808,7 @@ class MainWindow(QtWidgets.QMainWindow):
             f"Requested page change -> Tab index : {requested_page[0]} | panel index : {requested_page[1]}",
         )
 
+    @QtCore.pyqtSlot(int)
     def global_change_tab(self, tab_index: int) -> None:
         """Changes the current tab while keeping the current panel page index if possible
 
@@ -896,7 +897,8 @@ class MainWindow(QtWidgets.QMainWindow):
         if "ok" in data:
             return
         if "update" in method:
-            if ("status" or "refresh") in method:
+            # Known bug, this is only "status" in method, fix belongs to the dispatch rework
+            if ("status" or "refresh") in method:  # noqa: SIM222
                 self.on_update_message.emit(dict(data))
 
     @api_handler

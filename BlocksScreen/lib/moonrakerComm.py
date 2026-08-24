@@ -325,7 +325,9 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
                 "Unexpected error while creating websocket message event: %s", e
             )
 
-    def send_request(self, method: str, params: dict = {}, callback=None) -> bool:
+    def send_request(
+        self, method: str, params: dict | None = None, callback=None
+    ) -> bool:
         """Send a request over the websocket
 
         Args:
@@ -340,6 +342,7 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
         if not self.connected or self.ws is None:
             return False
 
+        params = {} if params is None else params
         self._request_id += 1
         self.request_table[self._request_id] = [method, params, callback]
         packet = {

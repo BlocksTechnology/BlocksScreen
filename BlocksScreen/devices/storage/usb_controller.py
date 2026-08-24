@@ -86,6 +86,7 @@ class USBManager(QtCore.QObject):
         self.udisks.close()
         self.deleteLater()
 
+    @QtCore.pyqtSlot()
     def _handle_full_restart(self) -> None:
         if self.need_restart:
             self.udisks.start(self.udisks.Priority.InheritPriority)
@@ -106,7 +107,7 @@ class USBManager(QtCore.QObject):
         if type not in ("always", "none"):
             logging.info("Unknown restart type %s", (type,))
         if type == "always":
-            if not self._restart_type == "always":
+            if self._restart_type != "always":
                 self.udisks.finished.connect(self._handle_monitor_finished)
         else:
             try:

@@ -648,6 +648,7 @@ class FilesPage(QtWidgets.QWidget):
         self._list_widget.blockSignals(False)
         self._list_widget.update()
 
+    @QtCore.pyqtSlot()
     def _delayed_scrollbar_update(self) -> None:
         """Update scrollbar after model changes."""
         QtCore.QTimer.singleShot(10, self._setup_scrollbar)
@@ -848,6 +849,7 @@ class FilesPage(QtWidgets.QWidget):
                 return True
         return False
 
+    @QtCore.pyqtSlot(int)
     def _handle_scrollbar_value_changed(self, value: int) -> None:
         """Sync scrollbar with list widget."""
         self._scrollbar.blockSignals(True)

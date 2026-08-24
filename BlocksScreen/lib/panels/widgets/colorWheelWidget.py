@@ -167,15 +167,18 @@ class ColorWheelWidget(QtWidgets.QWidget):
         self._swatch.setText(f"#{color.name().lstrip('#').upper()}")
         self._swatch.update()
 
+    @QtCore.pyqtSlot(float, float)
     def _on_hue_sat(self, hue: float, sat: float) -> None:
         self._hue = hue
         self._sat = sat
         self._sync_all()
 
+    @QtCore.pyqtSlot(int)
     def _on_brightness(self, value: int) -> None:
         self._val = value / 100.0
         self._sync_all()
 
+    @QtCore.pyqtSlot()
     def _on_select(self) -> None:
         self.color_selected.emit(self._current_color().name().lstrip("#"))
         self.request_back.emit()

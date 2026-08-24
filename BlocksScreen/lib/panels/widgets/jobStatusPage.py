@@ -235,6 +235,7 @@ class JobStatusWidget(QtWidgets.QWidget):
         if self._filament_used > 0:
             self._update_layer_from_z()
 
+    @QtCore.pyqtSlot()
     def pause_resume_print(self) -> None:
         """Handle pause/resume print job button clicked"""
         self.pause_printing_btn.setEnabled(False)
