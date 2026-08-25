@@ -6,12 +6,14 @@ import os
 import socket as _socket
 import struct
 import threading
+from collections.abc import Awaitable, Callable
 from uuid import uuid4
 
 import sdbus
 from configfile import get_configparser
 from PyQt6.QtCore import QObject, pyqtSignal
 from sdbus_async import networkmanager as dbus_nm
+from sdbus_async.networkmanager import exceptions as nm_exc
 
 from .models import (
     ConnectionPriority,
@@ -37,6 +39,13 @@ _CAN_RELOAD_CONNECTIONS: bool = os.getuid() == 0
 _DEBOUNCE_DELAY: float = 0.8
 # Delay before restarting a failed signal listener (seconds).
 _LISTENER_RESTART_DELAY: float = 3.0
+# Ceiling for the listener restart back-off (seconds).
+_LISTENER_RESTART_MAX_DELAY: float = 60.0
+# Back-off bounds for reopening the system bus when it is not up at boot.
+_BUS_RETRY_DELAY: float = 1.0
+_BUS_RETRY_MAX_DELAY: float = 30.0
+# Upper bound on awaiting cancelled tasks during shutdown (seconds).
+_SHUTDOWN_DRAIN_TIMEOUT: float = 2.0
 # Timeout for _wait_for_connection: must cover 802.11 handshake + DHCP.
 _WIFI_CONNECT_TIMEOUT: float = 20.0
 
@@ -73,7 +82,10 @@ class NetworkManagerWorker(QObject):
         """
         super().__init__()
         self._running: bool = False
+        self._stopping: bool = False
         self._system_bus: sdbus.SdBus | None = None
+        # Set once no interface was found, so rediscovery does not re-alarm the UI.
+        self._no_iface_reported: bool = False
 
         # Path strings only — read-proxies are always created fresh.
         self._primary_wifi_path: str = ""
@@ -103,9 +115,9 @@ class NetworkManagerWorker(QObject):
         # Tracked for cancellation during shutdown.
         self._listener_tasks: list[asyncio.Task] = []
 
-        # Asyncio loop — created here, driven on the daemon thread.
-        self.stop_event = asyncio.Event()
-        self.stop_event.clear()
+        # Serialises interface rediscovery across the listener tasks.
+        self._rediscover_lock = asyncio.Lock()
+
         self._asyncio_loop: asyncio.AbstractEventLoop = asyncio.new_event_loop()
         self._asyncio_thread = threading.Thread(
             target=self._run_asyncio_loop,
@@ -115,21 +127,34 @@ class NetworkManagerWorker(QObject):
         self._asyncio_thread.start()
 
     def _run_asyncio_loop(self) -> None:
-        """Open the system D-Bus and run the asyncio event loop on this thread."""
+        """Run the asyncio event loop on this thread, bootstrapping the bus on it."""
         asyncio.set_event_loop(self._asyncio_loop)
-        try:
-            self._system_bus = sdbus.sd_bus_open_system()
-            sdbus.set_default_bus(self._system_bus)
-            self._track_task(
-                self._asyncio_loop.create_task(self._async_initialize(), name="nm_init")
-            )
-            logger.debug(
-                "D-Bus opened on asyncio thread '%s'",
-                threading.current_thread().name,
-            )
-        except Exception as exc:
-            logger.error("Failed to open system D-Bus: %s", exc)
+        self._track_task(
+            self._asyncio_loop.create_task(self._async_bootstrap(), name="nm_bootstrap")
+        )
         self._asyncio_loop.run_forever()
+
+    async def _async_bootstrap(self) -> None:
+        """Open the system D-Bus with back-off, then initialise; dbus may lag us at boot."""
+        delay = _BUS_RETRY_DELAY
+        while not self._stopping:
+            try:
+                self._system_bus = sdbus.sd_bus_open_system()
+                sdbus.set_default_bus(self._system_bus)
+                logger.debug(
+                    "D-Bus opened on asyncio thread '%s'",
+                    threading.current_thread().name,
+                )
+                await self._async_initialize()
+                return
+            except Exception as exc:
+                self._system_bus = None
+                logger.error(
+                    "Failed to open system D-Bus: %s - retrying in %.1f s", exc, delay
+                )
+                self.error_occurred.emit("initialize", f"No D-Bus connection: {exc}")
+                await asyncio.sleep(delay)
+                delay = min(delay * 2, _BUS_RETRY_MAX_DELAY)
 
     def _track_task(self, task: asyncio.Task) -> None:
         """Register a background task so it is cancelled on shutdown."""
@@ -138,12 +163,8 @@ class NetworkManagerWorker(QObject):
 
     async def _async_shutdown(self) -> None:
         """Tear down all async state and stop the event loop."""
+        self._stopping = True
         self._running = False
-
-        for task in self._listener_tasks:
-            if not task.done():
-                task.cancel()
-        self._listener_tasks.clear()
 
         if self._state_debounce_handle:
             self._state_debounce_handle.cancel()
@@ -152,10 +173,7 @@ class NetworkManagerWorker(QObject):
             self._scan_debounce_handle.cancel()
             self._scan_debounce_handle = None
 
-        self._signal_nm = None
-        self._signal_wifi = None
-        self._signal_wired = None
-        self._signal_settings = None
+        self._reset_signal_proxies()
 
         self._primary_wifi_path = ""
         self._primary_wifi_iface = ""
@@ -164,13 +182,40 @@ class NetworkManagerWorker(QObject):
         self._iface_to_device_path.clear()
         self._saved_cache.clear()
 
-        for task in list(self._background_tasks):
-            if not task.done():
-                task.cancel()
+        # Await cancellation: dropping the bus mid-call is what hangs shutdown.
+        current = asyncio.current_task()
+        pending = [
+            task
+            for task in {*self._listener_tasks, *self._background_tasks}
+            if task is not current and not task.done()
+        ]
+        for task in pending:
+            task.cancel()
+        if pending:
+            try:
+                await asyncio.wait_for(
+                    asyncio.gather(*pending, return_exceptions=True),
+                    timeout=_SHUTDOWN_DRAIN_TIMEOUT,
+                )
+            except TimeoutError:
+                logger.warning(
+                    "%d task(s) did not stop within %.1f s",
+                    sum(1 for t in pending if not t.done()),
+                    _SHUTDOWN_DRAIN_TIMEOUT,
+                )
+        self._listener_tasks.clear()
         self._background_tasks.clear()
+
         self._system_bus = None
         logger.info("NetworkManagerWorker async shutdown complete")
         self._asyncio_loop.call_soon_threadsafe(self._asyncio_loop.stop)
+
+    def _reset_signal_proxies(self) -> None:
+        """Drop the persistent signal proxies so they are rebuilt against a fresh bus."""
+        self._signal_nm = None
+        self._signal_wifi = None
+        self._signal_wired = None
+        self._signal_settings = None
 
     def _nm(self) -> dbus_nm.NetworkManager:
         """Return a fresh NetworkManager root D-Bus proxy."""
@@ -305,13 +350,14 @@ class NetworkManagerWorker(QObject):
                 self._hotspot_config.security,
             )
 
+            # Listeners first: AccessPointAdded fired during the initial scan is lost otherwise.
+            await self._start_signal_listeners()
+
             if self._primary_wifi_path:
                 try:
                     await self._wifi().request_scan({})
                 except Exception as exc:
                     logger.debug("Initial Wi-Fi scan request ignored: %s", exc)
-
-            await self._start_signal_listeners()
 
             logger.info(
                 "NetworkManagerWorker initialised on thread '%s' "
@@ -337,7 +383,7 @@ class NetworkManagerWorker(QObject):
             for device_path in devices:
                 device = self._generic(device_path)
                 device_type = await device.device_type
-                iface_name = await self._generic(device_path).interface
+                iface_name = await device.interface
                 if iface_name:
                     self._iface_to_device_path[iface_name] = device_path
 
@@ -357,12 +403,15 @@ class NetworkManagerWorker(QObject):
             logger.error("Failed to detect interfaces: %s", exc)
 
         if not self._primary_wifi_path and not self._primary_wired_path:
-            # Both absent — likely D-Bus not ready yet or no hardware present.
             logger.warning("No network interfaces detected after scan")
-            self.error_occurred.emit("wifi_unavailable", "No network device found")
-        elif not self._primary_wifi_path:
-            # Ethernet-only or Wi-Fi driver still loading — log but don't alarm.
-            logger.warning("No Wi-Fi interface detected; ethernet-only mode")
+            # Emit once: rediscovery reruns this on every listener restart.
+            if not self._no_iface_reported:
+                self._no_iface_reported = True
+                self.error_occurred.emit("wifi_unavailable", "No network device found")
+        else:
+            self._no_iface_reported = False
+            if not self._primary_wifi_path:
+                logger.warning("No Wi-Fi interface detected; ethernet-only mode")
 
     async def _enforce_boot_mutual_exclusion(self) -> None:
         """Disable Wi-Fi at boot if ethernet is already connected.
@@ -419,10 +468,12 @@ class NetworkManagerWorker(QObject):
         logger.info("Started %d D-Bus signal listeners", len(self._listener_tasks))
 
     async def _resilient_listener(
-        self, name: str, listener_fn: "asyncio.coroutines"
+        self, name: str, listener_fn: Callable[[], Awaitable[None]]
     ) -> None:
-        """Wrapper that restarts *listener_fn* on failure with back-off."""
+        """Restart *listener_fn* on failure or early return, with back-off."""
+        delay = _LISTENER_RESTART_DELAY
         while self._running:
+            started = self._asyncio_loop.time()
             try:
                 await listener_fn()
             except asyncio.CancelledError:
@@ -432,19 +483,45 @@ class NetworkManagerWorker(QObject):
                 if not self._running:
                     return
                 logger.warning(
-                    "Listener '%s' failed: %s — restarting in %.1f s",
-                    name,
-                    exc,
-                    _LISTENER_RESTART_DELAY,
+                    "Listener '%s' failed: %s - restarting in %.1f s", name, exc, delay
                 )
-                # Rebuild signal proxies in case the bus was reset
-                self._signal_nm = None
-                self._signal_wifi = None
-                self._signal_wired = None
-                self._signal_settings = None
-                await asyncio.sleep(_LISTENER_RESTART_DELAY)
-                if self._running:
-                    self._ensure_signal_proxies()
+                self._reset_signal_proxies()
+
+            # Only guaranteed suspension point; also covers the early-return path.
+            if self._asyncio_loop.time() - started >= _LISTENER_RESTART_DELAY:
+                delay = _LISTENER_RESTART_DELAY
+            await asyncio.sleep(delay)
+            if not self._running:
+                return
+            await self._recover_signal_sources()
+            delay = min(delay * 2, _LISTENER_RESTART_MAX_DELAY)
+
+    async def _primary_paths_alive(self) -> bool:
+        """False when a cached device path is unset or no longer exported by NetworkManager."""
+        if not self._primary_wifi_path and not self._primary_wired_path:
+            return False
+        for path, proxy in (
+            (self._primary_wifi_path, self._wifi),
+            (self._primary_wired_path, self._wired),
+        ):
+            if not path:
+                continue
+            try:
+                await proxy(path).state
+            except Exception:
+                return False
+        return True
+
+    async def _recover_signal_sources(self) -> None:
+        """Re-detect interfaces when a path is missing or went stale across an NM restart."""
+        if not await self._primary_paths_alive():
+            async with self._rediscover_lock:
+                if not await self._primary_paths_alive():
+                    self._reset_signal_proxies()
+                    self._primary_wifi_path = ""
+                    self._primary_wired_path = ""
+                    await self._detect_interfaces()
+        self._ensure_signal_proxies()
 
     async def _listen_nm_state_changed(self) -> None:
         """React to NetworkManager global state transitions."""
@@ -698,6 +775,16 @@ class NetworkManagerWorker(QObject):
             logger.debug("Error checking ethernet state: %s", exc)
             return False
 
+    async def _wifi_activation_failed(self) -> bool:
+        """Return True if the Wi-Fi device is in NM's terminal FAILED state (120)."""
+        if not self._primary_wifi_path:
+            return False
+        try:
+            return await self._generic(self._primary_wifi_path).state == 120
+        except Exception as exc:
+            logger.debug("Error checking Wi-Fi device state: %s", exc)
+            return False
+
     async def _has_ethernet_carrier(self) -> bool:
         """Return True if the primary wired device has a physical link (state >= 30).
 
@@ -727,6 +814,42 @@ class NetworkManagerWorker(QObject):
                     logger.debug("Polling wireless_enabled failed: %s", exc)
                     _logged = True
             await asyncio.sleep(0.25)
+        return False
+
+    async def _wifi_hardware_enabled(self) -> bool:
+        """False only when an rfkill switch blocks the radio, making soft toggles no-ops."""
+        try:
+            return bool(await self._nm().wireless_hardware_enabled)
+        except Exception as exc:
+            logger.debug("Reading wireless_hardware_enabled failed: %s", exc)
+            return True
+
+    async def _ensure_networking_enabled(self, timeout: float = 8.0) -> bool:
+        """Flip NM's master networking switch back on if `nmcli networking off` set it."""
+        try:
+            if await self._nm().networking_enabled:
+                return True
+        except Exception as exc:
+            logger.debug("Reading networking_enabled failed: %s", exc)
+            return True
+
+        logger.warning("NetworkManager networking is off - re-enabling")
+        try:
+            await self._nm().enable(True)
+        except Exception as exc:
+            logger.error("Enable(true) failed: %s", exc)
+            return False
+
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + timeout
+        while loop.time() < deadline:
+            await asyncio.sleep(0.25)
+            try:
+                if await self._nm().networking_enabled:
+                    return True
+            except Exception:
+                pass
+        logger.error("networking_enabled stayed false after %.1f s", timeout)
         return False
 
     async def _wait_for_wifi_device_ready(self, timeout: float = 8.0) -> bool:
@@ -801,8 +924,8 @@ class NetworkManagerWorker(QObject):
         if not self._system_bus:
             return NetworkState()
         try:
-            connectivity_value = await self._nm().check_connectivity()
-            connectivity = self._map_connectivity(connectivity_value)
+            wifi_iface = self._get_wifi_iface_name()
+            connectivity = await self._read_connectivity()
             wifi_enabled = bool(await self._nm().wireless_enabled)
             current_ssid = await self._get_current_ssid()
 
@@ -817,7 +940,7 @@ class NetworkManagerWorker(QObject):
                     )
                 current_ssid = ""
             elif current_ssid:
-                current_ip = await self._get_ip_by_interface("wlan0")
+                current_ip = await self._get_ip_by_interface(wifi_iface)
                 if not current_ip:
                     current_ip = await self._get_current_ip()
             else:
@@ -829,12 +952,12 @@ class NetworkManagerWorker(QObject):
             ):
                 for _iface in (
                     self._primary_wired_iface or "eth0",
-                    "wlan0",
+                    wifi_iface,
                 ):
                     _fallback = self._get_ip_os_fallback(_iface)
                     if _fallback:
                         current_ip = _fallback
-                        if _iface != "wlan0":
+                        if _iface != wifi_iface:
                             eth_connected = True
                         logger.debug("OS fallback IP for '%s': %s", _iface, _fallback)
                         break
@@ -860,7 +983,7 @@ class NetworkManagerWorker(QObject):
             if hotspot_enabled:
                 sec_type = self._hotspot_config.security
                 if not current_ip:
-                    current_ip = await self._get_ip_by_interface("wlan0")
+                    current_ip = await self._get_ip_by_interface(wifi_iface)
 
             return NetworkState(
                 connectivity=connectivity,
@@ -886,15 +1009,21 @@ class NetworkManagerWorker(QObject):
         except ValueError:
             return ConnectivityState.UNKNOWN
 
+    async def _read_connectivity(self) -> ConnectivityState:
+        """Cached connectivity property, active probe only if UNKNOWN."""
+        nm = self._nm()
+        state = self._map_connectivity(await nm.connectivity)
+        if state is ConnectivityState.UNKNOWN:
+            state = self._map_connectivity(await nm.check_connectivity())
+        return state
+
     async def _async_check_connectivity(self) -> None:
         """Query NM connectivity and emit connectivity_changed."""
         try:
             if not self._system_bus:
                 self.connectivity_changed.emit(ConnectivityState.UNKNOWN)
                 return
-            self.connectivity_changed.emit(
-                self._map_connectivity(await self._nm().check_connectivity())
-            )
+            self.connectivity_changed.emit(await self._read_connectivity())
         except Exception as exc:
             logger.error("Failed to check connectivity: %s", exc)
             self.connectivity_changed.emit(ConnectivityState.UNKNOWN)
@@ -997,12 +1126,7 @@ class NetworkManagerWorker(QObject):
                 self.networks_scanned.emit([])
                 return
 
-            try:
-                await self._wifi().request_scan({})
-            except Exception as exc:
-                logger.debug(
-                    "Scan request ignored (already scanning or radio off): %s", exc
-                )
+            await self._request_scan_if_allowed()
 
             if await self._wifi().last_scan == -1:
                 self.networks_scanned.emit([])
@@ -1015,19 +1139,22 @@ class NetworkManagerWorker(QObject):
             networks: list[NetworkInfo] = []
             seen_ssids: set[str] = set()
 
-            for ap_path in ap_paths:
-                try:
-                    info = await self._parse_ap(ap_path, current_ssid, saved_ssids)
-                    if (
-                        info
-                        and info.ssid not in seen_ssids
-                        and not is_hidden_ssid(info.ssid)
-                        and (info.signal_strength > 0 or info.is_active)
-                    ):
-                        networks.append(info)
-                        seen_ssids.add(info.ssid)
-                except Exception as exc:
-                    logger.debug("Failed to parse AP %s: %s", ap_path, exc)
+            parsed = await asyncio.gather(
+                *(self._parse_ap(p, current_ssid, saved_ssids) for p in ap_paths),
+                return_exceptions=True,
+            )
+            for ap_path, info in zip(ap_paths, parsed):
+                if isinstance(info, BaseException):
+                    logger.debug("Failed to parse AP %s: %s", ap_path, info)
+                    continue
+                if (
+                    info
+                    and info.ssid not in seen_ssids
+                    and not is_hidden_ssid(info.ssid)
+                    and (info.signal_strength > 0 or info.is_active)
+                ):
+                    networks.append(info)
+                    seen_ssids.add(info.ssid)
 
             networks.sort(key=lambda n: (-n.network_status, -n.signal_strength))
             self.networks_scanned.emit(networks)
@@ -1036,6 +1163,21 @@ class NetworkManagerWorker(QObject):
             logger.error("Failed to scan networks: %s", exc)
             self.error_occurred.emit("scan_networks", str(exc))
             self.networks_scanned.emit([])
+
+    async def _request_scan_if_allowed(self) -> None:
+        """Ask NM to rescan, but only from a device state where it accepts the call."""
+        try:
+            state = await self._generic(self._primary_wifi_path).state
+        except Exception as exc:
+            logger.debug("Scan skipped, device state unreadable: %s", exc)
+            return
+        if not 30 <= state <= 100:
+            logger.debug("Scan skipped, device state %s not ready", state)
+            return
+        try:
+            await self._wifi().request_scan({})
+        except Exception as exc:
+            logger.debug("Scan request ignored: %s", exc)
 
     async def _get_all_ap_properties(self, ap_path: str) -> dict[str, object]:
         """Fetch all D-Bus properties for an AccessPoint in one round-trip."""
@@ -1047,6 +1189,28 @@ class NetworkManagerWorker(QObject):
             logger.debug("GetAll failed for AP %s: %s", ap_path, exc)
             return {}
 
+    async def _gather_ap_properties(
+        self, ap_paths: list[str]
+    ) -> list[tuple[str, dict[str, object]]]:
+        """Read every AP's properties in one concurrent batch, preserving order."""
+        props = await asyncio.gather(
+            *(self._get_all_ap_properties(p) for p in ap_paths)
+        )
+        return list(zip(ap_paths, props))
+
+    async def _gather_settings(self, paths: list[str]) -> list[tuple[str, dict]]:
+        """Read every profile's settings in one concurrent batch, dropping failures."""
+
+        async def one(path: str) -> tuple[str, dict | None]:
+            try:
+                return path, await self._conn_settings(path).get_settings()
+            except Exception as exc:
+                logger.debug("GetSettings failed for %s: %s", path, exc)
+                return path, None
+
+        results = await asyncio.gather(*(one(p) for p in paths))
+        return [(p, s) for p, s in results if s is not None]
+
     async def _build_signal_map(self) -> dict[str, int]:
         """Return a mapping of lowercase SSID to best-seen signal strength (0-100)."""
         signal_map: dict[str, int] = {}
@@ -1054,9 +1218,8 @@ class NetworkManagerWorker(QObject):
             return signal_map
         try:
             ap_paths = await self._wifi().access_points
-            for ap_path in ap_paths:
+            for _, props in await self._gather_ap_properties(ap_paths):
                 try:
-                    props = await self._get_all_ap_properties(ap_path)
                     ssid = self._decode_ssid(props.get("ssid", b""))
                     if ssid:
                         strength = int(props.get("strength", 0))
@@ -1111,6 +1274,25 @@ class NetworkManagerWorker(QObject):
             max_bitrate=int(props.get("max_bitrate", 0)),
             security_type=security,
         )
+
+    @staticmethod
+    def _classify_settings_error(exc: Exception) -> ConnectionResult | None:
+        """Map a typed NM settings error to a user-facing result, or None if unrecognised."""
+        if isinstance(exc, nm_exc.NmSettingsPermissionDeniedError):
+            return ConnectionResult(
+                False, "Not authorised to change networks", "insufficient_privileges"
+            )
+        if isinstance(exc, nm_exc.NmConnectionInvalidPropertyError):
+            return ConnectionResult(
+                False, "Wrong password, try again.", "invalid_password"
+            )
+        # Fallback for NM builds that return an untyped error.
+        err = str(exc).lower()
+        if "psk" in err and ("invalid" in err or "property" in err):
+            return ConnectionResult(
+                False, "Wrong password, try again.", "invalid_password"
+            )
+        return None
 
     @staticmethod
     def _decode_ssid(raw: object) -> str:
@@ -1177,13 +1359,13 @@ class NetworkManagerWorker(QObject):
         if not self._system_bus:
             return []
         try:
-            connections = await self._nm_settings().list_connections()
-            signal_map = await self._build_signal_map()
+            connections, signal_map = await asyncio.gather(
+                self._nm_settings().list_connections(), self._build_signal_map()
+            )
             saved: list[SavedNetwork] = []
 
-            for conn_path in connections:
+            for conn_path, settings in await self._gather_settings(connections):
                 try:
-                    settings = await self._conn_settings(conn_path).get_settings()
                     if settings["connection"]["type"][1] != "802-11-wireless":
                         continue
 
@@ -1270,16 +1452,12 @@ class NetworkManagerWorker(QObject):
             await self._delete_network_impl(ssid)
             self._invalidate_saved_cache()
 
-        try:
-            await self._wifi().request_scan({})
-        except Exception as exc:
-            logger.debug("Pre-connect scan request ignored: %s", exc)
+        await self._request_scan_if_allowed()
 
         ap_paths = await self._wifi().get_all_access_points()
         target_ap_path: str | None = None
         target_ap_props: dict[str, object] = {}
-        for ap_path in ap_paths:
-            props = await self._get_all_ap_properties(ap_path)
+        for ap_path, props in await self._gather_ap_properties(ap_paths):
             if self._decode_ssid(props.get("ssid", b"")) == ssid:
                 target_ap_path = ap_path
                 target_ap_props = props
@@ -1303,14 +1481,9 @@ class NetworkManagerWorker(QObject):
             nm_settings = self._nm_settings()
             conn_path = await nm_settings.add_connection(conn_props)
         except Exception as exc:
-            err_str = str(exc).lower()
-            if "psk" in err_str and ("invalid" in err_str or "property" in err_str):
-                return ConnectionResult(
-                    False,
-                    "Wrong password, try again.",
-                    "invalid_password",
-                )
-            return ConnectionResult(False, str(exc), "add_failed")
+            return self._classify_settings_error(exc) or ConnectionResult(
+                False, str(exc), "add_failed"
+            )
 
         if _CAN_RELOAD_CONNECTIONS:
             try:
@@ -1452,12 +1625,11 @@ class NetworkManagerWorker(QObject):
         """Poll until *ssid* is active and has an IP, or until *timeout* expires.
 
         Starts with a 1.5 s initial delay to let NM begin the association.
-        Returns False early if the SSID disappears for 3 consecutive polls.
+        Gives up early only once the Wi-Fi device reports a terminal failure.
         """
         loop = asyncio.get_running_loop()
         deadline = loop.time() + timeout
         await asyncio.sleep(1.5)
-        consecutive_empty = 0
         while loop.time() < deadline:
             try:
                 current = await self._get_current_ssid()
@@ -1465,11 +1637,9 @@ class NetworkManagerWorker(QObject):
                     ip = await self._get_current_ip()
                     if ip:
                         return True
-                    consecutive_empty = 0
-                else:
-                    consecutive_empty += 1
-                    if consecutive_empty >= 3:
-                        return False
+                elif await self._wifi_activation_failed():
+                    logger.debug("Wi-Fi device reported failure while joining %s", ssid)
+                    return False
             except Exception as exc:
                 logger.debug("Connection wait poll failed: %s", exc)
             await asyncio.sleep(0.5)
@@ -1513,9 +1683,8 @@ class NetworkManagerWorker(QObject):
         """Search NM settings for an infrastructure profile matching *ssid* directly."""
         try:
             connections = await self._nm_settings().list_connections()
-            for conn_path in connections:
+            for conn_path, settings in await self._gather_settings(connections):
                 try:
-                    settings = await self._conn_settings(conn_path).get_settings()
                     if settings["connection"]["type"][1] != "802-11-wireless":
                         continue
                     conn_ssid = settings["802-11-wireless"]["ssid"][1].decode()
@@ -1629,11 +1798,11 @@ class NetworkManagerWorker(QObject):
             props = await cs.get_settings()
             await self._merge_wifi_secrets(cs, props)
 
-            if password and "802-11-wireless-security" in props:
-                props["802-11-wireless-security"]["psk"] = (
-                    "s",
-                    password,
-                )
+            if password:
+                # NM omits the security section for open profiles; recreate it.
+                sec = props.setdefault("802-11-wireless-security", {})
+                sec.setdefault("key-mgmt", ("s", "wpa-psk"))
+                sec["psk"] = ("s", password)
 
             if priority is not None:
                 props["connection"]["autoconnect-priority"] = (
@@ -1647,14 +1816,9 @@ class NetworkManagerWorker(QObject):
             return ConnectionResult(True, f"Network '{ssid}' updated")
         except Exception as exc:
             logger.error("Update failed for '%s': %s", ssid, exc)
-            err_str = str(exc).lower()
-            if "psk" in err_str and ("invalid" in err_str or "property" in err_str):
-                return ConnectionResult(
-                    False,
-                    "Wrong password, try again.",
-                    "invalid_password",
-                )
-            return ConnectionResult(False, str(exc), "update_failed")
+            return self._classify_settings_error(exc) or ConnectionResult(
+                False, str(exc), "update_failed"
+            )
 
     async def _async_set_wifi_enabled(self, enabled: bool) -> None:
         """Enable or disable the Wi-Fi radio, handling ethernet mutual exclusion."""
@@ -1667,6 +1831,19 @@ class NetworkManagerWorker(QObject):
             if enabled and await self._is_ethernet_connected():
                 await self._async_disconnect_ethernet()
 
+            if enabled:
+                if not await self._wifi_hardware_enabled():
+                    self.connection_result.emit(
+                        ConnectionResult(False, "Wi-Fi is blocked by a hardware switch")
+                    )
+                    return
+                if not await self._ensure_networking_enabled():
+                    self.connection_result.emit(
+                        ConnectionResult(False, "NetworkManager networking is disabled")
+                    )
+                    return
+
+            ok = True
             current = await self._nm().wireless_enabled
             if current != enabled:
                 if not enabled:
@@ -1681,16 +1858,18 @@ class NetworkManagerWorker(QObject):
 
                 await self._nm().wireless_enabled.set_async(enabled)
 
-                if not await self._wait_for_wifi_radio(enabled, timeout=8.0):
+                ok = await self._wait_for_wifi_radio(enabled, timeout=8.0)
+                if not ok:
                     logger.warning(
                         "Wi-Fi radio did not reach %s within 8 s",
                         "enabled" if enabled else "disabled",
                     )
 
+            word = "enabled" if enabled else "disabled"
             self.connection_result.emit(
                 ConnectionResult(
-                    True,
-                    f"Wi-Fi {'enabled' if enabled else 'disabled'}",
+                    ok,
+                    f"Wi-Fi {word}" if ok else f"Wi-Fi could not be {word}",
                 )
             )
             self.state_changed.emit(await self._build_current_state())
@@ -2061,7 +2240,9 @@ class NetworkManagerWorker(QObject):
                 if current and current.lower() == ssid.lower():
                     found_ip = await self._get_current_ip() or ""
                     if not found_ip:
-                        found_ip = self._get_ip_os_fallback("wlan0") or ""
+                        found_ip = (
+                            self._get_ip_os_fallback(self._get_wifi_iface_name()) or ""
+                        )
             except Exception as exc:
                 logger.debug(
                     "IP address lookup during connection wait ignored: %s", exc
@@ -2471,26 +2652,41 @@ class NetworkManagerWorker(QObject):
             logger.debug("Error deactivating '%s': %s", conn_id, exc)
         return False
 
-    async def _delete_all_connections_by_id(self, conn_id: str) -> int:
-        """Delete every NM connection profile whose id exactly matches *conn_id*."""
+    @staticmethod
+    def _setting(settings: dict, section: str, key: str, default: str = "") -> str:
+        """Unwrap a NM settings value from its (signature, value) variant tuple."""
+        try:
+            return settings.get(section, {}).get(key, (None, default))[1]
+        except (TypeError, IndexError, KeyError):
+            return default
+
+    async def _delete_connections_where(
+        self, match: Callable[[dict], bool], label: str
+    ) -> int:
+        """Delete every profile whose settings satisfy *match*, returning the count."""
         deleted = 0
         try:
-            connections = await self._nm_settings().list_connections()
-            for conn_path in connections:
+            paths = await self._nm_settings().list_connections()
+            for conn_path, settings in await self._gather_settings(paths):
                 try:
-                    cs = self._conn_settings(conn_path)
-                    settings = await cs.get_settings()
-                    cid = settings.get("connection", {}).get("id", (None, ""))[1]
-                    if cid == conn_id:
-                        await cs.delete()
-                        deleted += 1
+                    if not match(settings):
+                        continue
+                    await self._conn_settings(conn_path).delete()
+                    deleted += 1
+                    logger.debug("Deleted profile at %s (%s)", conn_path, label)
                 except Exception as exc:
                     logger.debug(
-                        "Skipping connection in cleanup for '%s': %s", conn_id, exc
+                        "Skip %s during '%s' cleanup: %s", conn_path, label, exc
                     )
         except Exception as exc:
-            logger.error("Cleanup for '%s' failed: %s", conn_id, exc)
+            logger.error("Cleanup for '%s' failed: %s", label, exc)
         return deleted
+
+    async def _delete_all_connections_by_id(self, conn_id: str) -> int:
+        """Delete every NM connection profile whose id exactly matches *conn_id*."""
+        return await self._delete_connections_where(
+            lambda s: self._setting(s, "connection", "id") == conn_id, conn_id
+        )
 
     async def _delete_all_ap_mode_connections(self) -> int:
         """Delete all saved Wi-Fi connections in AP mode.
@@ -2500,67 +2696,23 @@ class NetworkManagerWorker(QObject):
         old AP-mode profiles accumulate in NetworkManager and NM may
         auto-activate them on the next boot.
         """
-        deleted = 0
-        try:
-            connections = await self._nm_settings().list_connections()
-            for conn_path in connections:
-                try:
-                    cs = self._conn_settings(conn_path)
-                    settings = await cs.get_settings()
-                    conn_type = settings.get("connection", {}).get("type", (None, ""))[
-                        1
-                    ]
-                    if conn_type != "802-11-wireless":
-                        continue
-                    mode = settings.get("802-11-wireless", {}).get("mode", (None, ""))[
-                        1
-                    ]
-                    if mode == "ap":
-                        conn_id = settings.get("connection", {}).get("id", (None, ""))[
-                            1
-                        ]
-                        await cs.delete()
-                        deleted += 1
-                        logger.debug(
-                            "Removed stale AP profile '%s' at %s", conn_id, conn_path
-                        )
-                except Exception as exc:
-                    logger.debug("Skipping connection in AP profile cleanup: %s", exc)
-        except Exception as exc:
-            logger.error("Failed to remove stale AP profiles: %s", exc)
+
+        def is_ap_profile(s: dict) -> bool:
+            return (
+                self._setting(s, "connection", "type") == "802-11-wireless"
+                and self._setting(s, "802-11-wireless", "mode") == "ap"
+            )
+
+        deleted = await self._delete_connections_where(is_ap_profile, "stale AP mode")
         if deleted:
             self._invalidate_saved_cache()
         return deleted
 
     async def _delete_connections_by_id(self, ssid: str) -> int:
         """Delete every NM connection profile whose id matches *ssid* (case-insensitive)."""
-        deleted = 0
-        try:
-            connections = await self._nm_settings().list_connections()
-            for conn_path in connections:
-                try:
-                    cs = self._conn_settings(conn_path)
-                    settings = await cs.get_settings()
-                    conn_id = settings.get("connection", {}).get("id", (None, ""))[1]
-                    if conn_id.lower() == ssid.lower():
-                        await cs.delete()
-                        deleted += 1
-                        logger.debug(
-                            "Deleted stale profile '%s' at %s",
-                            conn_id,
-                            conn_path,
-                        )
-                except Exception as exc:
-                    logger.debug(
-                        "Skip connection %s during cleanup: %s",
-                        conn_path,
-                        exc,
-                    )
-        except Exception as exc:
-            logger.error(
-                "Failed to enumerate connections for cleanup: %s",
-                exc,
-            )
+        deleted = await self._delete_connections_where(
+            lambda s: self._setting(s, "connection", "id").lower() == ssid.lower(), ssid
+        )
         if deleted:
             self._invalidate_saved_cache()
         return deleted
@@ -2584,4 +2736,5 @@ class NetworkManagerWorker(QObject):
             if 0 <= prefix <= 32:
                 return prefix
             raise ValueError(f"CIDR prefix out of range: {prefix}")
-        return bin(int(ipaddress.IPv4Address(stripped))).count("1")
+        # IPv4Network rejects non-contiguous masks such as 255.0.255.0.
+        return ipaddress.IPv4Network(f"0.0.0.0/{stripped}").prefixlen

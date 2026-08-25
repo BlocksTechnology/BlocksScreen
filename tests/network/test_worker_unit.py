@@ -50,6 +50,9 @@ def _make_worker(qapp, *, running=True, with_wifi=True, with_wired=False):
 
     # Core state — mirrors real __init__
     w._running = running
+    w._stopping = False
+    w._no_iface_reported = False
+    w._rediscover_lock = asyncio.Lock()
     w._system_bus = MagicMock(name="mock_system_bus")
     w._primary_wifi_path = (
         "/org/freedesktop/NetworkManager/Devices/2" if with_wifi else ""
@@ -90,6 +93,9 @@ def _bare_worker(qapp):
     ):
         w = NetworkManagerWorker()
     w._running = False
+    w._stopping = False
+    w._no_iface_reported = False
+    w._rediscover_lock = asyncio.Lock()
     w._system_bus = None
     w._primary_wifi_path = ""
     w._primary_wifi_iface = ""
@@ -121,6 +127,9 @@ def _make(qapp, *, running=True, wifi=True, wired=True):
     ):
         w = NetworkManagerWorker()
     w._running = running
+    w._stopping = False
+    w._no_iface_reported = False
+    w._rediscover_lock = asyncio.Lock()
     w._system_bus = MagicMock(name="mock_bus")
     w._primary_wifi_path = "/org/freedesktop/NetworkManager/Devices/2" if wifi else ""
     w._primary_wifi_iface = "wlan0" if wifi else ""
@@ -144,6 +153,20 @@ def _make(qapp, *, running=True, wifi=True, wired=True):
     w._asyncio_loop = MagicMock()
     w._asyncio_thread = MagicMock()
     return w
+
+
+class TestFixtureParity:
+    """The factories above bypass __init__, so new attributes must be mirrored there."""
+
+    def test_factories_cover_real_init_attrs(self, qapp):
+        with patch.object(NetworkManagerWorker, "_run_asyncio_loop"):
+            real = NetworkManagerWorker()
+        real._asyncio_thread.join(timeout=2.0)
+        real._asyncio_loop.close()
+        expected = set(vars(real))
+        for factory in (_make_worker, _bare_worker, _make):
+            missing = expected - set(vars(factory(qapp)))
+            assert not missing, f"{factory.__name__} missing {sorted(missing)}"
 
 
 def _wire(w, *, nm=None, wifi_proxy=None, wired_proxy=None, settings=None):
@@ -555,18 +578,33 @@ class TestCheckConnectivity:
     @pytest.mark.asyncio
     async def test_emits_correct_state(self, qapp):
         w = _make_worker(qapp)
-        nm_proxy = AsyncProxyMock(check_connectivity=AsyncMock(return_value=3))
+        nm_proxy = AsyncProxyMock(connectivity=3)
         w._nm = _ProxyFactory(nm_proxy)
         received = []
         w.connectivity_changed.connect(lambda c: received.append(c))
         await w._async_check_connectivity()
         assert received == [ConnectivityState.LIMITED]
+        nm_proxy.check_connectivity.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_unknown_property_falls_back_to_active_probe(self, qapp):
+        w = _make_worker(qapp)
+        nm_proxy = AsyncProxyMock(
+            connectivity=0, check_connectivity=AsyncMock(return_value=4)
+        )
+        w._nm = _ProxyFactory(nm_proxy)
+        received = []
+        w.connectivity_changed.connect(lambda c: received.append(c))
+        await w._async_check_connectivity()
+        assert received == [ConnectivityState.FULL]
+        nm_proxy.check_connectivity.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_emits_unknown_on_error(self, qapp):
         w = _make_worker(qapp)
         nm_proxy = AsyncProxyMock(
-            check_connectivity=AsyncMock(side_effect=Exception("D-Bus error"))
+            connectivity=0,
+            check_connectivity=AsyncMock(side_effect=Exception("D-Bus error")),
         )
         w._nm = _ProxyFactory(nm_proxy)
         received = []
@@ -766,7 +804,7 @@ class TestBuildCurrentState:
     async def test_connected_state(self, qapp):
         w = _make_worker(qapp)
         nm_proxy = AsyncProxyMock(
-            check_connectivity=AsyncMock(return_value=4),
+            connectivity=4,
             wireless_enabled=True,
             primary_connection="/",
             active_connections=[],
@@ -785,7 +823,7 @@ class TestBuildCurrentState:
     async def test_connected_with_ssid_gets_signal_and_security(self, qapp):
         w = _make_worker(qapp)
         nm_proxy = AsyncProxyMock(
-            check_connectivity=AsyncMock(return_value=4),
+            connectivity=4,
             wireless_enabled=True,
         )
         w._nm = _ProxyFactory(nm_proxy)
@@ -817,7 +855,7 @@ class TestBuildCurrentState:
         w = _make_worker(qapp)
         w._hotspot_config.ssid = "TestHotspot"
         nm_proxy = AsyncProxyMock(
-            check_connectivity=AsyncMock(return_value=4),
+            connectivity=4,
             wireless_enabled=True,
         )
         w._nm = _ProxyFactory(nm_proxy)
@@ -839,7 +877,7 @@ class TestBuildCurrentState:
         w._hotspot_config.ssid = "PrinterHotspot"
         w._is_hotspot_active = True
         nm_proxy = AsyncProxyMock(
-            check_connectivity=AsyncMock(return_value=4),
+            connectivity=4,
             wireless_enabled=True,
         )
         w._nm = _ProxyFactory(nm_proxy)
@@ -859,7 +897,7 @@ class TestBuildCurrentState:
     async def test_ethernet_connected_included_in_state(self, qapp):
         w = _make_worker(qapp, with_wired=True)
         nm_proxy = AsyncProxyMock(
-            check_connectivity=AsyncMock(return_value=4),
+            connectivity=4,
             wireless_enabled=False,
         )
         w._nm = _ProxyFactory(nm_proxy)
@@ -877,7 +915,8 @@ class TestBuildCurrentState:
     async def test_exception_returns_default(self, qapp):
         w = _make_worker(qapp)
         nm_proxy = AsyncProxyMock(
-            check_connectivity=AsyncMock(side_effect=RuntimeError("bang"))
+            connectivity=0,
+            check_connectivity=AsyncMock(side_effect=RuntimeError("bang")),
         )
         w._nm = _ProxyFactory(nm_proxy)
         state = await w._build_current_state()
@@ -1875,11 +1914,15 @@ class TestAsyncShutdown:
 
     def test_clears_listener_tasks(self, qapp):
         w = _make(qapp)
-        mock_task = MagicMock()
-        mock_task.done.return_value = False
-        w._listener_tasks = [mock_task]
-        _run(w._async_shutdown())
-        mock_task.cancel.assert_called_once()
+
+        async def _body():
+            task = asyncio.create_task(asyncio.sleep(30))
+            w._listener_tasks = [task]
+            await w._async_shutdown()
+            return task
+
+        task = _run(_body())
+        assert task.cancelled()
         assert w._listener_tasks == []
 
     def test_cancels_debounce_handles(self, qapp):
