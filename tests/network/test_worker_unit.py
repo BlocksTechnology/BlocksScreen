@@ -719,11 +719,25 @@ class TestGetCurrentIp:
         w = _make_worker(qapp)
         nm_proxy = AsyncProxyMock(primary_connection="/active/1")
         w._nm = _ProxyFactory(nm_proxy)
-        active_proxy = AsyncProxyMock(ip4_config="/ip4/1")
+        active_proxy = AsyncProxyMock(
+            ip4_config="/ip4/1", connection_type="802-11-wireless"
+        )
         w._active_conn = lambda path: active_proxy
         ipv4_proxy = AsyncProxyMock(address_data=[{"address": ("s", "192.168.1.50")}])
         w._ipv4 = lambda path: ipv4_proxy
         assert await w._get_current_ip() == "192.168.1.50"
+
+    @pytest.mark.asyncio
+    async def test_vpn_primary_is_ignored(self, qapp):
+        w = _make_worker(qapp)
+        w._nm = _ProxyFactory(AsyncProxyMock(primary_connection="/active/1"))
+        w._active_conn = lambda path: AsyncProxyMock(
+            ip4_config="/ip4/1", connection_type="tun"
+        )
+        w._ipv4 = lambda path: AsyncProxyMock(
+            address_data=[{"address": ("s", "100.75.1.69")}]
+        )
+        assert await w._get_current_ip() == ""
 
     @pytest.mark.asyncio
     async def test_exception_returns_empty(self, qapp):
@@ -733,6 +747,34 @@ class TestGetCurrentIp:
         )
         w._nm = lambda: nm_proxy
         assert await w._get_current_ip() == ""
+
+
+class TestActiveApSignal:
+    @pytest.mark.asyncio
+    async def test_returns_strength_of_active_ap(self, qapp):
+        w = _make_worker(qapp)
+        w._wifi = _ProxyFactory(AsyncProxyMock(active_access_point="/ap/1"))
+        w._ap = lambda path: AsyncProxyMock(strength=72)
+        assert await w._active_ap_signal() == 72
+
+    @pytest.mark.asyncio
+    async def test_no_wifi_device_returns_zero(self, qapp):
+        w = _make_worker(qapp, with_wifi=False)
+        assert await w._active_ap_signal() == 0
+
+    @pytest.mark.asyncio
+    async def test_unassociated_slash_path_returns_zero(self, qapp):
+        w = _make_worker(qapp)
+        w._wifi = _ProxyFactory(AsyncProxyMock(active_access_point="/"))
+        assert await w._active_ap_signal() == 0
+
+    @pytest.mark.asyncio
+    async def test_exception_returns_zero(self, qapp):
+        w = _make_worker(qapp)
+        w._wifi = _ProxyFactory(
+            AsyncProxyMock(active_access_point=AsyncMock(side_effect=Exception("gone")))
+        )
+        assert await w._active_ap_signal() == 0
 
 
 class TestGetIpByInterface:
@@ -1904,6 +1946,10 @@ class TestMaskToPrefix:
     def test_invalid_raises(self):
         with pytest.raises(ValueError):
             NetworkManagerWorker._mask_to_prefix("33")
+
+    def test_non_contiguous_mask_rejected(self):
+        with pytest.raises(ValueError, match="Invalid subnet mask"):
+            NetworkManagerWorker._mask_to_prefix("255.0.255.0")
 
 
 class TestAsyncShutdown:
