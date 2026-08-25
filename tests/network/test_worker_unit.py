@@ -2359,6 +2359,43 @@ class TestDisconnectEthernetAsync:
         _run(w._async_disconnect_ethernet())
         w._set_wired_profiles_autoconnect.assert_awaited_once_with(False)
 
+    def test_already_inactive_is_not_an_error(self, qapp):
+        w = _make(qapp)
+        wired = AsyncProxyMock()
+        wired.disconnect = AsyncMock(
+            side_effect=RuntimeError("This device is not active")
+        )
+        _wire(w, wired_proxy=wired)
+        w._is_ethernet_connected = AsyncMock(return_value=False)
+        w._deactivate_all_vlans = AsyncMock()
+        with patch.object(_worker_mod.logger, "error") as err:
+            _run(w._async_disconnect_ethernet())
+        err.assert_not_called()
+
+    def test_persists_choice_even_when_already_inactive(self, qapp):
+        w = _make(qapp)
+        wired = AsyncProxyMock()
+        wired.disconnect = AsyncMock(
+            side_effect=RuntimeError("This device is not active")
+        )
+        _wire(w, wired_proxy=wired)
+        w._is_ethernet_connected = AsyncMock(return_value=False)
+        w._deactivate_all_vlans = AsyncMock()
+        w._set_wired_profiles_autoconnect = AsyncMock()
+        _run(w._async_disconnect_ethernet())
+        w._set_wired_profiles_autoconnect.assert_awaited_once_with(False)
+
+    def test_persists_choice_even_when_teardown_fails(self, qapp):
+        w = _make(qapp)
+        wired = AsyncProxyMock()
+        wired.disconnect = AsyncMock(side_effect=RuntimeError("boom"))
+        _wire(w, wired_proxy=wired)
+        w._is_ethernet_connected = AsyncMock(return_value=False)
+        w._deactivate_all_vlans = AsyncMock()
+        w._set_wired_profiles_autoconnect = AsyncMock()
+        _run(w._async_disconnect_ethernet())
+        w._set_wired_profiles_autoconnect.assert_awaited_once_with(False)
+
 
 class TestConnectEthernetAsync:
     def test_no_wired_path_emits_error(self, qapp):

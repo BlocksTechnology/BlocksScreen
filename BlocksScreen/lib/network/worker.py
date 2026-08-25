@@ -2146,18 +2146,25 @@ class NetworkManagerWorker(QObject):
             return
         try:
             await self._deactivate_all_vlans()
-            await self._wired().disconnect()
+            try:
+                await self._wired().disconnect()
+            except Exception as exc:
+                # Already inactive is the goal state, not a failure.
+                if "not active" not in str(exc).lower():
+                    raise
+                logger.debug("Ethernet already inactive: %s", exc)
             loop = asyncio.get_running_loop()
             deadline = loop.time() + 4.0
             while loop.time() < deadline:
                 await asyncio.sleep(0.5)
                 if not await self._is_ethernet_connected():
                     break
-            # Device.Autoconnect dies with NM; the profile flag is what survives.
-            await self._set_wired_profiles_autoconnect(False)
-            logger.info("Ethernet disconnected (wired profiles autoconnect off)")
+            logger.info("Ethernet disconnected")
         except Exception as exc:
             logger.error("Failed to disconnect ethernet: %s", exc)
+        finally:
+            # Only user toggles reach here, so record intent even if teardown failed.
+            await self._set_wired_profiles_autoconnect(False)
 
     async def _async_connect_ethernet(self) -> None:
         """Activate the wired device and restore saved VLANs.
