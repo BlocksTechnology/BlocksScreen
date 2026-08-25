@@ -22,6 +22,10 @@ _icon_stub = types.ModuleType("lib.utils.icon_button")
 _icon_stub.IconButton = QtWidgets.QPushButton  # type: ignore[attr-defined]
 sys.modules.setdefault("lib.utils.icon_button", _icon_stub)
 
+_numpad_stub = types.ModuleType("lib.utils.numpad_button")
+_numpad_stub.NumpadButton = QtWidgets.QPushButton  # type: ignore[attr-defined]
+sys.modules.setdefault("lib.utils.numpad_button", _numpad_stub)
+
 # Force-reload the real module — the network conftest registers a stub
 # that lacks the layout constants we need.
 for _key in [

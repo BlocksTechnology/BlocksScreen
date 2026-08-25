@@ -1621,10 +1621,10 @@ class TestUpdateNetworkImpl:
             update=AsyncMock(),
         )
         w._conn_settings = lambda path: conn_proxy
-        result = await w._update_network_impl("net", "newpass", None)
+        result = await w._update_network_impl("net", "newpass1", None)
         assert result.success is True
         call_args = conn_proxy.update.call_args[0][0]
-        assert call_args["802-11-wireless-security"]["psk"] == ("s", "newpass")
+        assert call_args["802-11-wireless-security"]["psk"] == ("s", "newpass1")
 
     @pytest.mark.asyncio
     async def test_updates_priority(self, qapp):
@@ -1781,7 +1781,7 @@ class TestAddNetworkImpl:
             interface="wlan0",
         )
         w._wifi = _ProxyFactory(wifi_proxy)
-        result = await w._add_network_impl("Ghost", "pass", 0)
+        result = await w._add_network_impl("Ghost", "password1", 0)
         assert result.error_code == "not_found"
 
     @pytest.mark.asyncio
@@ -1807,7 +1807,7 @@ class TestAddNetworkImpl:
                 "rsn_flags": 0x200,
             }
         )
-        result = await w._add_network_impl("EAPNet", "pass", 0)
+        result = await w._add_network_impl("EAPNet", "password1", 0)
         assert result.error_code == "unsupported_security"
 
 

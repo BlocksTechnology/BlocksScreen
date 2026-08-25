@@ -1,6 +1,7 @@
 import typing
 
 from lib.utils.icon_button import IconButton
+from lib.utils.numpad_button import NumpadButton
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 _LOWERCASE = list("qwertyuiopasdfghjklzxcvbnm")
@@ -61,6 +62,8 @@ _SYMBOLS = [
     "'",
     "#",
 ]
+
+_NUM_KEYS = 26
 
 
 def _make_key_font(size: int = 29) -> QtGui.QFont:
@@ -139,9 +142,8 @@ class CustomQwertyKeyboard(QtWidgets.QDialog):
             "  background-color: #212120;"
             "  color: white;"
             "}"
-            "QPushButton#numpad_key {"
-            "  font-size: 36px;"
-            "  font-weight: bold;"
+            'QPushButton[numpad_key="true"] {'
+            "  font-family: 'Momcake-Bold';"
             "}"
         )
         self.handle_keyboard_layout()
@@ -350,46 +352,66 @@ class CustomQwertyKeyboard(QtWidgets.QDialog):
         btn.setObjectName(name)
         return btn
 
-    def _create_numpad_button(self, text: str) -> QtWidgets.QPushButton:
-        """Create a numpad key that stretches to fill its grid cell."""
-        btn = QtWidgets.QPushButton(text, parent=self._numpad_widget)
+    def _create_numpad_button(self, text: str, name: str) -> NumpadButton:
+        """Create a pill key matching the CustomNumpad look."""
+        btn = NumpadButton(self._numpad_widget)
         btn.setSizePolicy(
-            QtWidgets.QSizePolicy.Policy.Expanding,
-            QtWidgets.QSizePolicy.Policy.Expanding,
+            QtWidgets.QSizePolicy.Policy.Fixed, QtWidgets.QSizePolicy.Policy.Fixed
         )
+        btn.setMinimumSize(QtCore.QSize(150, 60))
+        btn.setLayoutDirection(QtCore.Qt.LayoutDirection.RightToLeft)
         btn.setFlat(True)
-        btn.setObjectName("numpad_key")
+        btn.setText(text)
+        btn.setProperty("numpad_key", True)
+        btn.setObjectName(name)
+        return btn
+
+    def _create_numpad_icon(self, name: str, pixmap: str) -> IconButton:
+        """Create a 60x60 icon key for the numpad enter/clear actions."""
+        btn = IconButton(parent=self._numpad_widget)
+        btn.setSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Fixed, QtWidgets.QSizePolicy.Policy.Fixed
+        )
+        btn.setMinimumSize(QtCore.QSize(60, 60))
+        btn.setMaximumSize(QtCore.QSize(60, 60))
+        btn.setFlat(True)
+        btn.setProperty("icon_pixmap", QtGui.QPixmap(pixmap))
+        btn.setProperty("button_type", "icon")
+        btn.setObjectName(name)
         return btn
 
     def _setup_numpad(self) -> None:
         """Build the digits-only pad shown in place of the QWERTY rows."""
         self._numpad_widget = QtWidgets.QWidget(parent=self)
-        self._numpad_widget.setGeometry(QtCore.QRect(90, 150, 620, 296))
+        self._numpad_widget.setGeometry(QtCore.QRect(90, 150, 620, 280))
         grid = QtWidgets.QGridLayout(self._numpad_widget)
         grid.setContentsMargins(0, 0, 0, 0)
-        grid.setSpacing(8)
+        grid.setSpacing(6)
+        grid.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
 
         self._numpad_digits = []
-        for idx, digit in enumerate("123456789"):
-            btn = self._create_numpad_button(digit)
+        for idx, digit in enumerate("789456123"):
+            btn = self._create_numpad_button(digit, f"np_{digit}")
+            btn.setProperty("position", ("left", "", "right")[idx % 3])
             grid.addWidget(btn, idx // 3, idx % 3)
             self._numpad_digits.append(btn)
 
-        zero = self._create_numpad_button("0")
-        grid.addWidget(zero, 3, 0, 1, 2)
+        zero = self._create_numpad_button("0", "np_0")
+        zero.setProperty("position", "down")
+        grid.addWidget(zero, 3, 0, 1, 3, QtCore.Qt.AlignmentFlag.AlignCenter)
         self._numpad_digits.append(zero)
 
-        self.np_dot = self._create_numpad_button(".")
-        self.np_delete = self._create_numpad_button("⌫")
-        self.np_enter = self._create_numpad_button("⏎")
-        grid.addWidget(self.np_dot, 3, 2)
-        grid.addWidget(self.np_delete, 0, 3, 2, 1)
-        grid.addWidget(self.np_enter, 2, 3, 2, 1)
-
-        for col in range(4):
-            grid.setColumnStretch(col, 1)
-        for row in range(4):
-            grid.setRowStretch(row, 1)
+        self.np_dot = self._create_numpad_button(".", "np_dot")
+        self.np_dot.setProperty("position", "down")
+        self.np_delete = self._create_numpad_icon(
+            "np_delete", ":/dialog/media/btn_icons/no.svg"
+        )
+        self.np_enter = self._create_numpad_icon(
+            "np_enter", ":/dialog/media/btn_icons/yes.svg"
+        )
+        grid.addWidget(self.np_delete, 0, 3, QtCore.Qt.AlignmentFlag.AlignCenter)
+        grid.addWidget(self.np_dot, 1, 3)
+        grid.addWidget(self.np_enter, 2, 3, QtCore.Qt.AlignmentFlag.AlignCenter)
 
         self._numpad_widget.setVisible(False)
 

@@ -221,6 +221,12 @@ class _KeyboardStub(QtWidgets.QWidget):
     def set_value(self, val):
         pass
 
+    def setPattern(self, pattern):
+        self.pattern = pattern
+
+    def setNumericOnly(self, enabled):
+        self.numeric_only = enabled
+
 
 # Register parent packages first (must be real modules, not MagicMock).
 _lib_parent_packages = ("lib", "lib.panels", "lib.panels.widgets", "lib.utils")
@@ -655,6 +661,8 @@ def win(qapp):
 
         # Missing instance variables (from _init_instance_variables)
         window._initial_priority = ConnectionPriority.MEDIUM
+        window._initial_password = ""
+        window._password_ssid = ""
         window._current_network_is_open = False
         window._current_network_is_hidden = False
         window._previous_panel = None
@@ -685,6 +693,7 @@ def win(qapp):
         window.saved_connection_change_password_view = QtWidgets.QCheckBox(parent)
         window.saved_connection_signal_strength_info_frame = QtWidgets.QLabel(parent)
         window.saved_connection_security_type_info_label = QtWidgets.QLabel(parent)
+        window.saved_connection_address_info_label = QtWidgets.QLabel(parent)
         window.network_activate_btn = QtWidgets.QPushButton(parent)
         window.sn_info = QtWidgets.QLabel(parent)
         window.frame = QtWidgets.QFrame(parent)
