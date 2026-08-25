@@ -396,15 +396,15 @@ class CustomQwertyKeyboard(QtWidgets.QDialog):
             grid.addWidget(btn, idx // 3, idx % 3)
             self._numpad_digits.append(btn)
 
+        # Bottom row keeps the digit grid: "." left, "0" centred under 8/5/2.
         zero = self._create_numpad_button("0", "np_0")
         zero.setProperty("position", "down")
-        grid.addWidget(zero, 3, 0, 1, 2)
+        grid.addWidget(zero, 3, 1)
         self._numpad_digits.append(zero)
 
-        # Bottom row is "0 ." like a phone pad; the right column is delete/enter.
         self.np_dot = self._create_numpad_button(".", "np_dot")
-        self.np_dot.setProperty("position", "right")
-        grid.addWidget(self.np_dot, 3, 2)
+        self.np_dot.setProperty("position", "left")
+        grid.addWidget(self.np_dot, 3, 0)
 
         self.np_delete = self._create_numpad_icon(
             "np_delete", ":/dialog/media/btn_icons/no.svg"

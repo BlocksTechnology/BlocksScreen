@@ -2142,6 +2142,71 @@ class TestFallbackPoll:
         w._async_load_saved_networks.assert_awaited_once()
 
 
+class TestWiredProfilesAutoconnect:
+    """Device.Autoconnect dies on NM restart; only the profile flag persists."""
+
+    @staticmethod
+    def _wire_profiles(w, conn_type="802-3-ethernet", autoconnect=True):
+        nm_settings_proxy = AsyncProxyMock(
+            list_connections=AsyncMock(return_value=["/conn/eth"])
+        )
+        w._nm_settings = _ProxyFactory(nm_settings_proxy)
+        settings = {
+            "connection": {
+                "type": ("s", conn_type),
+                "autoconnect": ("b", autoconnect),
+                "timestamp": ("t", 123),
+            },
+            "ipv4": {"method": ("s", "auto")},
+        }
+        w._gather_settings = AsyncMock(return_value=[("/conn/eth", settings)])
+        conn_proxy = AsyncProxyMock(update=AsyncMock())
+        w._conn_settings = lambda path: conn_proxy
+        return conn_proxy
+
+    @pytest.mark.asyncio
+    async def test_disables_wired_profile(self, qapp):
+        w = _make_worker(qapp)
+        conn = self._wire_profiles(w, autoconnect=True)
+        await w._set_wired_profiles_autoconnect(False)
+        props = conn.update.await_args[0][0]
+        assert props["connection"]["autoconnect"] == ("b", False)
+
+    @pytest.mark.asyncio
+    async def test_strips_timestamp_nm_will_not_accept(self, qapp):
+        w = _make_worker(qapp)
+        conn = self._wire_profiles(w, autoconnect=True)
+        await w._set_wired_profiles_autoconnect(False)
+        assert "timestamp" not in conn.update.await_args[0][0]["connection"]
+
+    @pytest.mark.asyncio
+    async def test_reenables_wired_profile(self, qapp):
+        w = _make_worker(qapp)
+        conn = self._wire_profiles(w, autoconnect=False)
+        await w._set_wired_profiles_autoconnect(True)
+        assert conn.update.await_args[0][0]["connection"]["autoconnect"] == ("b", True)
+
+    @pytest.mark.asyncio
+    async def test_skips_when_already_correct(self, qapp):
+        w = _make_worker(qapp)
+        conn = self._wire_profiles(w, autoconnect=True)
+        await w._set_wired_profiles_autoconnect(True)
+        conn.update.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_ignores_non_ethernet_profiles(self, qapp):
+        w = _make_worker(qapp)
+        conn = self._wire_profiles(w, conn_type="802-11-wireless", autoconnect=True)
+        await w._set_wired_profiles_autoconnect(False)
+        conn.update.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_exception_is_non_fatal(self, qapp):
+        w = _make_worker(qapp)
+        w._nm_settings = MagicMock(side_effect=RuntimeError("boom"))
+        await w._set_wired_profiles_autoconnect(False)  # must not raise
+
+
 class TestEnsureWiredAutoconnect:
     def test_no_wired_device_returns_early(self, qapp):
         w = _make(qapp, wired=False)
@@ -2163,6 +2228,13 @@ class TestEnsureWiredAutoconnect:
         _wire(w, wired_proxy=wired)
         _run(w._ensure_wired_autoconnect())
         wired.autoconnect.set_async.assert_not_awaited()
+
+    def test_profiles_are_rearmed_too(self, qapp):
+        w = _make(qapp)
+        w._set_wired_profiles_autoconnect = AsyncMock()
+        _wire(w, wired_proxy=AsyncProxyMock(state=30, autoconnect=False))
+        _run(w._ensure_wired_autoconnect())
+        w._set_wired_profiles_autoconnect.assert_awaited_once_with(True)
 
     def test_exception_is_non_fatal(self, qapp):
         w = _make(qapp)
@@ -2275,6 +2347,17 @@ class TestDisconnectEthernetAsync:
         _run(w._async_disconnect_ethernet())
         wired.disconnect.assert_awaited_once()
         w._deactivate_all_vlans.assert_awaited_once()
+
+    def test_persists_choice_in_the_profile(self, qapp):
+        w = _make(qapp)
+        wired = AsyncProxyMock()
+        wired.disconnect = AsyncMock()
+        _wire(w, wired_proxy=wired)
+        w._is_ethernet_connected = AsyncMock(return_value=False)
+        w._deactivate_all_vlans = AsyncMock()
+        w._set_wired_profiles_autoconnect = AsyncMock()
+        _run(w._async_disconnect_ethernet())
+        w._set_wired_profiles_autoconnect.assert_awaited_once_with(False)
 
 
 class TestConnectEthernetAsync:

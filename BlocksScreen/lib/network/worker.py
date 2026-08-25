@@ -437,24 +437,38 @@ class NetworkManagerWorker(QObject):
             if not self._primary_wifi_path:
                 logger.warning("No Wi-Fi interface detected; ethernet-only mode")
 
-    async def _ensure_wired_autoconnect(self) -> None:
-        """Re-arm wired autoconnect; NM's Disconnect() latches it off for good.
+    async def _set_wired_profiles_autoconnect(self, enabled: bool) -> None:
+        """Persist autoconnect on every wired profile; Device.Autoconnect dies on NM restart."""
+        try:
+            paths = await self._nm_settings().list_connections()
+            for path, settings in await self._gather_settings(list(paths)):
+                conn = settings.get("connection", {})
+                if conn.get("type", (None, ""))[1] != "802-3-ethernet":
+                    continue
+                if bool(conn.get("autoconnect", ("b", True))[1]) == enabled:
+                    continue
+                props = {k: dict(v) for k, v in settings.items()}
+                props["connection"]["autoconnect"] = ("b", enabled)
+                props["connection"].pop("timestamp", None)
+                await self._conn_settings(path).update(props)
+                logger.info("Wired profile %s autoconnect -> %s", path, enabled)
+        except Exception as exc:
+            logger.warning("Wired profile autoconnect (%s) failed: %s", enabled, exc)
 
-        Called only when the user asks for ethernet, so the latch keeps meaning
-        "user turned it off" everywhere else.  Best-effort: never propagates.
+    async def _ensure_wired_autoconnect(self) -> None:
+        """Re-arm wired autoconnect on both the device and the saved profiles.
+
+        Called only when the user asks for ethernet, so autoconnect staying off
+        keeps meaning "user turned it off".  Best-effort: never propagates.
         """
         if not self._primary_wired_path:
             return
+        await self._set_wired_profiles_autoconnect(True)
         try:
             wired = self._generic(self._primary_wired_path)
-            state = await wired.state
-            auto = bool(await wired.autoconnect)
-            logger.debug(
-                "wired autoconnect check: state=%s autoconnect=%s", state, auto
-            )
-            if not auto:
+            if not await wired.autoconnect:
                 await wired.autoconnect.set_async(True)
-                logger.info("Re-armed wired autoconnect (was off, state=%s)", state)
+                logger.info("Re-armed wired device autoconnect")
         except Exception as exc:
             logger.warning("Wired autoconnect re-arm failed (non-fatal): %s", exc)
 
@@ -2139,8 +2153,9 @@ class NetworkManagerWorker(QObject):
                 await asyncio.sleep(0.5)
                 if not await self._is_ethernet_connected():
                     break
-            # NM latches Device.Autoconnect off here; _ensure_wired_autoconnect re-arms it.
-            logger.info("Ethernet disconnected (autoconnect now latched off by NM)")
+            # Device.Autoconnect dies with NM; the profile flag is what survives.
+            await self._set_wired_profiles_autoconnect(False)
+            logger.info("Ethernet disconnected (wired profiles autoconnect off)")
         except Exception as exc:
             logger.error("Failed to disconnect ethernet: %s", exc)
 
