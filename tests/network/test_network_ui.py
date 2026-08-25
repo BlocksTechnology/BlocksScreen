@@ -490,7 +490,6 @@ class TestOnNetworkStateChangedNormal:
         """Mark first-run as done so the normal display path runs."""
         w._is_first_run = False
         w._is_connecting = False
-        w._was_ethernet_connected = False
 
     def test_ethernet_shows_connected(self, win):
         w, _ = win
@@ -522,14 +521,13 @@ class TestOnNetworkStateChangedNormal:
         w._on_network_state_changed(_disconnected_state())
         assert w._is_first_run is False
 
-    def test_ethernet_plug_disables_wifi(self, win):
-        """Ethernet cable plugged in during Wi-Fi session -> Wi-Fi disabled."""
+    def test_ethernet_plug_keeps_wifi_enabled(self, win):
+        """Wi-Fi is the recovery path; a plugged cable must never kill the radio."""
         w, nm = win
         self._prime(w)
-        w._was_ethernet_connected = False
         state = _eth_state(wifi_enabled=True)
         w._on_network_state_changed(state)
-        nm.set_wifi_enabled.assert_called_with(False)
+        nm.set_wifi_enabled.assert_not_called()
 
 
 # ─────────────────────────────────────────────────────────────────────────────

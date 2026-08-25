@@ -307,7 +307,7 @@ _mock_configfile_mod.get_configparser = MagicMock(return_value=_mock_cfg_instanc
 sys.modules["configfile"] = _mock_configfile_mod
 
 # Now safe to import the actual network package
-from BlocksScreen.lib.network.models import (  # noqa: E402
+from BlocksScreen.lib.network.models import (
     ConnectionPriority,
     ConnectivityState,
     NetworkInfo,
@@ -577,7 +577,6 @@ def win(qapp):
         window._pending_operation = PendingOperation.NONE
         window._target_ssid = ""
         window._active_signal = 0
-        window._was_ethernet_connected = False
         window._pending_expected_ip = ""
         window._last_active_signal_bars = 0
         window._cached_scan_networks = []

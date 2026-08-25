@@ -181,7 +181,6 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self._current_network_is_hidden = False
         self._is_connecting = False
         self._target_ssid: str | None = None
-        self._was_ethernet_connected: bool = False
         self._initial_priority: ConnectionPriority = ConnectionPriority.MEDIUM
         self._initial_password: str = ""
         self._password_ssid: str = ""  # guards the async psk reply against page changes
@@ -305,30 +304,10 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             self._handle_first_run(state)
             self._emit_status_icon(state)
             self._is_first_run = False
-            self._was_ethernet_connected = state.ethernet_connected
             return
 
-        # Cable just plugged in while Wi-Fi is active -> disable Wi-Fi
-        if (
-            state.ethernet_connected
-            and not self._was_ethernet_connected
-            and state.wifi_enabled
-            and not self._is_connecting
-        ):
-            logger.info("Ethernet connected — turning off Wi-Fi")
-            self._was_ethernet_connected = True
-            wifi_btn = self.wifi_button.toggle_button
-            hotspot_btn = self.hotspot_button.toggle_button
-            with QtCore.QSignalBlocker(wifi_btn):
-                wifi_btn.state = wifi_btn.State.OFF
-            with QtCore.QSignalBlocker(hotspot_btn):
-                hotspot_btn.state = hotspot_btn.State.OFF
-            self._nm.set_wifi_enabled(False)
-            self._sync_ethernet_panel(state)
-            self._emit_status_icon(state)
-            return
-
-        self._was_ethernet_connected = state.ethernet_connected
+        # A plugged cable no longer kills the radio: route metrics already
+        # prefer eth0, and Wi-Fi is the only recovery path if the cable fails.
 
         # Ethernet panel visibility is pure hardware state (carrier +
         # connection) and must update even while a loading operation is
@@ -1544,7 +1523,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
 
         # Answered asynchronously by _on_network_password_loaded.
         self._password_ssid = ssid
-        self._initial_password = ""
+        self._initial_password = ""  # nosec B105 - empty default, not a credential
         if not network.is_open:
             self._nm.get_network_password(ssid)
 

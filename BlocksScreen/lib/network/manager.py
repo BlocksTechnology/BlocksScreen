@@ -170,8 +170,10 @@ class NetworkManager(QObject):
 
     @pyqtSlot(list)
     def _on_saved_networks_loaded(self, networks: list) -> None:
-        """Cache saved profiles, rebuild lowercase lookup map, and re-emit."""
+        """Cache saved profiles, rebuild lowercase lookup map, and re-emit if changed."""
         if self._shutting_down:
+            return
+        if networks == self._cached_saved:
             return
         self._cached_saved = networks
         self._saved_network_map = {n.ssid.lower(): n for n in networks}
