@@ -398,7 +398,7 @@ class CustomQwertyKeyboard(QtWidgets.QDialog):
 
         # Bottom row keeps the digit grid: "." left, "0" centred under 8/5/2.
         zero = self._create_numpad_button("0", "np_0")
-        zero.setProperty("position", "down")
+        zero.setProperty("position", "")
         grid.addWidget(zero, 3, 1)
         self._numpad_digits.append(zero)
 
