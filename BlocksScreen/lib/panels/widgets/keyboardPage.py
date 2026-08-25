@@ -398,20 +398,22 @@ class CustomQwertyKeyboard(QtWidgets.QDialog):
 
         zero = self._create_numpad_button("0", "np_0")
         zero.setProperty("position", "down")
-        grid.addWidget(zero, 3, 0, 1, 3, QtCore.Qt.AlignmentFlag.AlignCenter)
+        grid.addWidget(zero, 3, 0, 1, 2)
         self._numpad_digits.append(zero)
 
+        # Bottom row is "0 ." like a phone pad; the right column is delete/enter.
         self.np_dot = self._create_numpad_button(".", "np_dot")
-        self.np_dot.setProperty("position", "down")
+        self.np_dot.setProperty("position", "right")
+        grid.addWidget(self.np_dot, 3, 2)
+
         self.np_delete = self._create_numpad_icon(
             "np_delete", ":/dialog/media/btn_icons/no.svg"
         )
         self.np_enter = self._create_numpad_icon(
             "np_enter", ":/dialog/media/btn_icons/yes.svg"
         )
-        grid.addWidget(self.np_delete, 0, 3, QtCore.Qt.AlignmentFlag.AlignCenter)
-        grid.addWidget(self.np_dot, 1, 3)
-        grid.addWidget(self.np_enter, 2, 3, QtCore.Qt.AlignmentFlag.AlignCenter)
+        grid.addWidget(self.np_delete, 0, 3, 2, 1, QtCore.Qt.AlignmentFlag.AlignCenter)
+        grid.addWidget(self.np_enter, 2, 3, 2, 1, QtCore.Qt.AlignmentFlag.AlignCenter)
 
         self._numpad_widget.setVisible(False)
 

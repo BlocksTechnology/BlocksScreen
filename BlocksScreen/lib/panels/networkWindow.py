@@ -306,8 +306,8 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             self._is_first_run = False
             return
 
-        # A plugged cable no longer kills the radio: route metrics already
-        # prefer eth0, and Wi-Fi is the only recovery path if the cable fails.
+        # Exclusivity is enforced on user toggles only; plugging a cable never
+        # kills the radio behind the user's back.
 
         # Ethernet panel visibility is pure hardware state (carrier +
         # connection) and must update even while a loading operation is
@@ -666,8 +666,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         hotspot_on = False
 
         if state.ethernet_connected:
-            if state.wifi_enabled:
-                self._nm.set_wifi_enabled(False)
+            # Display only: never force the radio off here, it is the recovery path.
             self._display_connected_state(state)
         elif state.connectivity == ConnectivityState.FULL and state.current_ssid:
             wifi_on = True
@@ -710,6 +709,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         wifi_on = False
         hotspot_on = False
 
+        # One link at a time: the cable wins the display, then hotspot, then Wi-Fi.
         if state.ethernet_connected:
             pass
         elif state.hotspot_enabled:
@@ -723,6 +723,15 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             hotspot_btn.state = (
                 hotspot_btn.State.ON if hotspot_on else hotspot_btn.State.OFF
             )
+
+    def _claim_link(self, winner) -> None:
+        """Force the other two link toggles OFF; only one link may be on at a time."""
+        for btn in (self.wifi_button, self.hotspot_button, self.ethernet_button):
+            if btn is winner:
+                continue
+            toggle = btn.toggle_button
+            with QtCore.QSignalBlocker(toggle):
+                toggle.state = toggle.State.OFF
 
     def _sync_ethernet_panel(self, state: NetworkState) -> None:
         """Show/hide the ethernet panel and sync its toggle state.
@@ -1003,7 +1012,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         # when the worker emits the disconnected state.
 
     def _handle_wifi_toggle(self, is_on: bool) -> None:
-        """Enable or disable Wi-Fi, enforcing the ethernet/hotspot mutual-exclusion rule."""
+        """Enable or disable Wi-Fi; turning it on drops the hotspot and the cable."""
         if not is_on:
             self._target_ssid = None
             self._pending_operation = PendingOperation.WIFI_OFF
@@ -1011,18 +1020,9 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             self._nm.set_wifi_enabled(False)
             return
 
-        hotspot_btn = self.hotspot_button.toggle_button
-        eth_btn = self.ethernet_button.toggle_button
-        with QtCore.QSignalBlocker(hotspot_btn):
-            hotspot_btn.state = hotspot_btn.State.OFF
-        with QtCore.QSignalBlocker(eth_btn):
-            eth_btn.state = eth_btn.State.OFF
-
+        self._claim_link(self.wifi_button)
+        self._nm.disconnect_ethernet()
         self._nm.set_wifi_enabled(True)
-
-        # NOTE: set_wifi_enabled is dispatched to the worker — cached state
-        # is STALE here (may still show ethernet).  Always proceed to the
-        # saved-network connection path.
 
         saved = self._nm.saved_networks
         wifi_networks = [n for n in saved if "ap" not in n.mode]
@@ -1047,7 +1047,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         QTimer.singleShot(500, lambda: self._nm.connect_network(_ssid_to_connect))
 
     def _handle_hotspot_toggle(self, is_on: bool) -> None:
-        """Enable or disable the hotspot, enforcing the ethernet/Wi-Fi mutual-exclusion rule."""
+        """Enable or disable the hotspot; turning it on drops Wi-Fi client and the cable."""
         if not is_on:
             self._target_ssid = None
             self._pending_operation = PendingOperation.HOTSPOT_OFF
@@ -1055,12 +1055,8 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             self._nm.toggle_hotspot(False)
             return
 
-        wifi_btn = self.wifi_button.toggle_button
-        eth_btn = self.ethernet_button.toggle_button
-        with QtCore.QSignalBlocker(wifi_btn):
-            wifi_btn.state = wifi_btn.State.OFF
-        with QtCore.QSignalBlocker(eth_btn):
-            eth_btn.state = eth_btn.State.OFF
+        self._claim_link(self.hotspot_button)
+        self._nm.disconnect_ethernet()
 
         self._target_ssid = None
         self._pending_operation = PendingOperation.HOTSPOT_ON
@@ -1074,14 +1070,10 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self._nm.create_hotspot(hotspot_name, hotspot_pass, hotspot_sec)
 
     def _handle_ethernet_toggle(self, is_on: bool) -> None:
-        """Handle ethernet toggle with mutual exclusion."""
+        """Connect or disconnect the cable; connecting drops Wi-Fi and the hotspot."""
         if is_on:
-            wifi_btn = self.wifi_button.toggle_button
-            hotspot_btn = self.hotspot_button.toggle_button
-            with QtCore.QSignalBlocker(wifi_btn):
-                wifi_btn.state = wifi_btn.State.OFF
-            with QtCore.QSignalBlocker(hotspot_btn):
-                hotspot_btn.state = hotspot_btn.State.OFF
+            self._claim_link(self.ethernet_button)
+            self._nm.set_wifi_enabled(False)
 
             self._target_ssid = None
             self._pending_operation = PendingOperation.ETHERNET_ON

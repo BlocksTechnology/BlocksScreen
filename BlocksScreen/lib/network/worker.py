@@ -338,10 +338,13 @@ class NetworkManagerWorker(QObject):
     async def _async_initialize(self) -> None:
         """Bootstrap the worker on the asyncio thread.
 
-        Detects network interfaces, re-arms wired autoconnect, activates any
-        saved VLANs if ethernet is present, triggers an initial Wi-Fi scan, and
-        starts all D-Bus signal listeners.  Emits ``initialized`` when done
-        (even on failure, so the manager can unblock its caller).
+        Detects network interfaces, activates any saved VLANs if ethernet is
+        present, triggers an initial Wi-Fi scan, and starts all D-Bus signal
+        listeners.  Emits ``initialized`` when done (even on failure, so the
+        manager can unblock its caller).
+
+        Wired autoconnect is deliberately not re-armed here: NM's latch is what
+        persists the user's "ethernet off" choice across reboots.
         """
         try:
             if not self._system_bus:
@@ -350,7 +353,6 @@ class NetworkManagerWorker(QObject):
 
             self._running = True
             await self._detect_interfaces()
-            await self._ensure_wired_autoconnect()
 
             if await self._is_ethernet_connected():
                 await self._activate_saved_vlans()
@@ -436,11 +438,10 @@ class NetworkManagerWorker(QObject):
                 logger.warning("No Wi-Fi interface detected; ethernet-only mode")
 
     async def _ensure_wired_autoconnect(self) -> None:
-        """Re-arm wired autoconnect at boot; NM's Disconnect() latches it off for good.
+        """Re-arm wired autoconnect; NM's Disconnect() latches it off for good.
 
-        A device left in NM's manual-disconnect state stays at DISCONNECTED with
-        a live carrier until something re-activates it, so a plugged cable is
-        simply ignored.  Best-effort: failures are logged, never propagated.
+        Called only when the user asks for ethernet, so the latch keeps meaning
+        "user turned it off" everywhere else.  Best-effort: never propagates.
         """
         if not self._primary_wired_path:
             return
@@ -2144,10 +2145,9 @@ class NetworkManagerWorker(QObject):
             logger.error("Failed to disconnect ethernet: %s", exc)
 
     async def _async_connect_ethernet(self) -> None:
-        """Activate the wired device and restore saved VLANs. Wi-Fi stays up.
+        """Activate the wired device and restore saved VLANs.
 
-        Route metrics decide which link carries traffic; killing the radio here
-        would remove the only recovery path if the cable later fails.
+        Mechanism only: the one-link-at-a-time policy lives in the UI toggles.
         """
         if not self._primary_wired_path:
             self.error_occurred.emit("connect_ethernet", "No wired device found")

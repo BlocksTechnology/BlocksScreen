@@ -58,6 +58,17 @@ def test_new_ip_signal_removed():
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+def _all_on(w) -> None:
+    """Force all three link toggles ON so exclusivity is observable."""
+    for btn in (w.wifi_button, w.hotspot_button, w.ethernet_button):
+        btn.toggle_button.state = btn.toggle_button.State.ON
+
+
+def _off(btn) -> bool:
+    """True when a link toggle reads OFF."""
+    return btn.toggle_button.state == btn.toggle_button.State.OFF
+
+
 def _eth_state(**kw) -> NetworkState:
     """Minimal ethernet-connected state."""
     defaults = dict(
@@ -178,11 +189,14 @@ class TestHandleFirstRun:
         assert w.netlist_ssuid.isVisible()
         assert w.netlist_ssuid.text() == "Ethernet"
 
-    def test_ethernet_disables_wifi_if_enabled(self, win):
+    def test_ethernet_never_kills_radio_at_boot(self, win):
+        """Boot is display-only: the radio is the recovery path, never touched here."""
         w, nm = win
         state = _eth_state(wifi_enabled=True)
         w._handle_first_run(state)
-        nm.set_wifi_enabled.assert_called_once_with(False)
+        nm.set_wifi_enabled.assert_not_called()
+        wifi_btn = w.wifi_button.toggle_button
+        assert wifi_btn.state == wifi_btn.State.OFF
 
     def test_ethernet_does_not_disable_wifi_if_already_off(self, win):
         w, nm = win
@@ -754,6 +768,19 @@ class TestWifiToggle:
         w._handle_wifi_toggle(True)
         nm.set_wifi_enabled.assert_called_once_with(True)
 
+    def test_wifi_on_drops_ethernet(self, win):
+        w, nm = win
+        nm.saved_networks = []
+        w._handle_wifi_toggle(True)
+        nm.disconnect_ethernet.assert_called_once()
+
+    def test_wifi_on_turns_other_toggles_off(self, win):
+        w, nm = win
+        nm.saved_networks = []
+        _all_on(w)
+        w._handle_wifi_toggle(True)
+        assert _off(w.hotspot_button) and _off(w.ethernet_button)
+
 
 class TestHotspotToggle:
     def test_hotspot_off_calls_toggle_hotspot_false(self, win):
@@ -781,6 +808,17 @@ class TestHotspotToggle:
         w._handle_hotspot_toggle(True)
         assert w.loadingwidget.isVisible()
 
+    def test_hotspot_on_drops_ethernet(self, win):
+        w, nm = win
+        w._handle_hotspot_toggle(True)
+        nm.disconnect_ethernet.assert_called_once()
+
+    def test_hotspot_on_turns_other_toggles_off(self, win):
+        w, nm = win
+        _all_on(w)
+        w._handle_hotspot_toggle(True)
+        assert _off(w.wifi_button) and _off(w.ethernet_button)
+
 
 class TestEthernetToggle:
     def test_ethernet_on_calls_connect_ethernet(self, win):
@@ -802,6 +840,22 @@ class TestEthernetToggle:
         w, nm = win
         w._handle_ethernet_toggle(False)
         assert w._pending_operation == PendingOperation.ETHERNET_OFF
+
+    def test_ethernet_on_drops_wifi(self, win):
+        w, nm = win
+        w._handle_ethernet_toggle(True)
+        nm.set_wifi_enabled.assert_called_once_with(False)
+
+    def test_ethernet_on_turns_other_toggles_off(self, win):
+        w, nm = win
+        _all_on(w)
+        w._handle_ethernet_toggle(True)
+        assert _off(w.wifi_button) and _off(w.hotspot_button)
+
+    def test_ethernet_off_leaves_wifi_alone(self, win):
+        w, nm = win
+        w._handle_ethernet_toggle(False)
+        nm.set_wifi_enabled.assert_not_called()
 
 
 # ─────────────────────────────────────────────────────────────────────────────

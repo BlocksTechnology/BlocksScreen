@@ -2735,7 +2735,8 @@ class TestAsyncInitializeFull:
 
         assert w._running is True
         w._detect_interfaces.assert_awaited_once()
-        w._ensure_wired_autoconnect.assert_awaited_once()
+        # Boot must not re-arm: NM's latch is how "ethernet off" survives a reboot.
+        w._ensure_wired_autoconnect.assert_not_awaited()
         w._start_signal_listeners.assert_awaited_once()
         assert len(init_signals) == 1
         assert len(hotspot_info) == 1
