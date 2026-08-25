@@ -4,6 +4,7 @@ import ipaddress
 import logging
 import os
 import socket as _socket
+import string
 import struct
 import threading
 from collections.abc import Awaitable, Callable
@@ -48,6 +49,10 @@ _BUS_RETRY_MAX_DELAY: float = 30.0
 _SHUTDOWN_DRAIN_TIMEOUT: float = 2.0
 # Timeout for _wait_for_connection: must cover 802.11 handshake + DHCP.
 _WIFI_CONNECT_TIMEOUT: float = 20.0
+# WPA-PSK passphrase bounds NM enforces; 64 chars is the raw hex key.
+PSK_MIN_LENGTH: int = 8
+PSK_MAX_LENGTH: int = 63
+PSK_HEX_LENGTH: int = 64
 # Only these active-connection types may supply the IP shown to the user.
 _PHYSICAL_CONNECTION_TYPES: frozenset[str] = frozenset(
     {"802-11-wireless", "802-3-ethernet", "vlan", "bridge", "bond"}
@@ -70,6 +75,7 @@ class NetworkManagerWorker(QObject):
     connectivity_changed = pyqtSignal(ConnectivityState, name="connectivityChanged")
     error_occurred = pyqtSignal(str, str, name="errorOccurred")
     hotspot_info_ready = pyqtSignal(str, str, str, name="hotspotInfoReady")
+    network_password_loaded = pyqtSignal(str, str, name="networkPasswordLoaded")
     reconnect_complete = pyqtSignal(name="reconnectComplete")
 
     _MAX_DBUS_ERRORS_BEFORE_RECONNECT: int = 3
@@ -1386,6 +1392,21 @@ class NetworkManagerWorker(QObject):
         return None
 
     @staticmethod
+    def _validate_psk(password: str) -> ConnectionResult | None:
+        """Reject a WPA passphrase NM would refuse, so we fail before touching the profile."""
+        if PSK_MIN_LENGTH <= len(password) <= PSK_MAX_LENGTH:
+            return None
+        if len(password) == PSK_HEX_LENGTH and all(
+            c in string.hexdigits for c in password
+        ):
+            return None
+        return ConnectionResult(
+            False,
+            f"Password must be {PSK_MIN_LENGTH}-{PSK_MAX_LENGTH} characters.",
+            "invalid_password_length",
+        )
+
+    @staticmethod
     def _decode_ssid(raw: object) -> str:
         """Decode a raw SSID byte string to a UTF-8 str, replacing invalid bytes."""
         if isinstance(raw, bytes):
@@ -1476,10 +1497,9 @@ class NetworkManagerWorker(QObject):
                     )[1]
                     timestamp = settings["connection"].get("timestamp", (None, 0))[1]
                     signal = signal_map.get(ssid.lower(), 0)
-                    ipv4_method = settings.get("ipv4", {}).get(
-                        "method", (None, "auto")
-                    )[1]
-                    is_dhcp = ipv4_method != "manual"
+                    ipv4 = settings.get("ipv4", {})
+                    is_dhcp = ipv4.get("method", (None, "auto"))[1] != "manual"
+                    ip_addr, netmask, gateway, dns = self._parse_ipv4_settings(ipv4)
 
                     saved.append(
                         SavedNetwork(
@@ -1492,6 +1512,10 @@ class NetworkManagerWorker(QObject):
                             signal_strength=signal,
                             timestamp=int(timestamp or 0),
                             is_dhcp=is_dhcp,
+                            ip_address=ip_addr,
+                            netmask=netmask,
+                            gateway=gateway,
+                            dns_servers=dns,
                         )
                     )
                 except Exception as exc:
@@ -1543,6 +1567,11 @@ class NetworkManagerWorker(QObject):
                 "add_network: no wifi interface (path=%s)", self._primary_wifi_path
             )
             return ConnectionResult(False, "No Wi-Fi interface", "no_interface")
+
+        # Guard before the backup/delete below, so a bad psk cannot cost the profile.
+        if password and (bad := self._validate_psk(password)):
+            logger.info("add_network: '%s' rejected, psk len=%d", ssid, len(password))
+            return bad
 
         backup: dict | None = None
         if await self._is_known(ssid):
@@ -1960,6 +1989,11 @@ class NetworkManagerWorker(QObject):
         priority: int | None,
     ) -> ConnectionResult:
         """Merge updated password/priority into the existing NM connection settings."""
+        if password and (bad := self._validate_psk(password)):
+            logger.info(
+                "update_network: '%s' rejected, psk len=%d", ssid, len(password)
+            )
+            return bad
         conn_path = await self._get_connection_path(ssid)
         if not conn_path:
             return ConnectionResult(False, f"Network '{ssid}' not found", "not_found")
@@ -1997,6 +2031,20 @@ class NetworkManagerWorker(QObject):
             return self._classify_settings_error(exc) or ConnectionResult(
                 False, str(exc), "update_failed"
             )
+
+    async def _async_get_network_password(self, ssid: str) -> None:
+        """Fetch a saved profile's psk on demand and emit network_password_loaded."""
+        password = ""
+        try:
+            conn_path = await self._get_connection_path(ssid)
+            if conn_path:
+                cs = self._conn_settings(conn_path)
+                secrets = await cs.get_secrets("802-11-wireless-security")
+                sec = secrets.get("802-11-wireless-security", {})
+                password = str(self._unwrap(sec.get("psk", "")) or "")
+        except Exception as exc:
+            logger.debug("get_network_password: '%s' unavailable: %s", ssid, exc)
+        self.network_password_loaded.emit(ssid, password)
 
     async def _async_set_wifi_enabled(self, enabled: bool) -> None:
         """Enable or disable the Wi-Fi radio, handling ethernet mutual exclusion."""
@@ -2941,6 +2989,52 @@ class NetworkManagerWorker(QObject):
     def _nm_uint32_to_ip(uint_ip: int) -> str:
         """Convert a native-endian uint32 from NM back to a dotted-decimal IPv4 string."""
         return str(ipaddress.IPv4Address(struct.pack("=I", uint_ip)))
+
+    @staticmethod
+    def _prefix_to_mask(prefix: int) -> str:
+        """Convert an integer prefix length to a dotted-decimal subnet mask."""
+        if not 0 <= prefix <= 32:
+            return ""
+        return str(ipaddress.IPv4Network(f"0.0.0.0/{prefix}").netmask)
+
+    @classmethod
+    def _parse_ipv4_settings(cls, ipv4: dict) -> tuple[str, str, str, tuple[str, ...]]:
+        """Extract address, mask, gateway and DNS from an NM ipv4 settings dict."""
+        ip_addr, prefix = "", 0
+        try:
+            # NM keeps the legacy aau 'addresses' and the aa{sv} 'address-data'
+            # in sync; whichever is present wins.
+            addrs = ipv4.get("addresses", (None, []))[1] or []
+            if addrs:
+                ip_addr = cls._nm_uint32_to_ip(addrs[0][0])
+                prefix = int(addrs[0][1])
+            else:
+                data = ipv4.get("address-data", (None, []))[1] or []
+                if data:
+                    ip_addr = str(cls._unwrap(data[0].get("address", "")))
+                    prefix = int(cls._unwrap(data[0].get("prefix", 0)) or 0)
+        except Exception as exc:
+            logger.debug("parse_ipv4_settings: address parse failed: %s", exc)
+            ip_addr, prefix = "", 0
+
+        gateway = str(ipv4.get("gateway", (None, ""))[1] or "")
+        dns = tuple(str(d) for d in (ipv4.get("dns-data", (None, []))[1] or []))
+        if not dns:
+            try:
+                dns = tuple(
+                    cls._nm_uint32_to_ip(d)
+                    for d in ipv4.get("dns", (None, []))[1] or []
+                )
+            except Exception as exc:
+                logger.debug("parse_ipv4_settings: dns parse failed: %s", exc)
+        return ip_addr, cls._prefix_to_mask(prefix) if prefix else "", gateway, dns
+
+    @staticmethod
+    def _unwrap(value: object) -> object:
+        """Return the payload of an NM (signature, value) variant tuple."""
+        if isinstance(value, tuple) and len(value) == 2:
+            return value[1]
+        return value
 
     @staticmethod
     def _mask_to_prefix(mask_str: str) -> int:

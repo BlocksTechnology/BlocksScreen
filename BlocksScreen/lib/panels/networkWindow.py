@@ -183,6 +183,8 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self._target_ssid: str | None = None
         self._was_ethernet_connected: bool = False
         self._initial_priority: ConnectionPriority = ConnectionPriority.MEDIUM
+        self._initial_password: str = ""
+        self._password_ssid: str = ""  # guards the async psk reply against page changes
         self._pending_operation: PendingOperation = PendingOperation.NONE
         self._pending_expected_ip: str = (
             ""  # IP to wait for before clearing WIFI_STATIC_IP loading
@@ -229,6 +231,8 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self._nm.reconnect_complete.connect(self._on_reconnect_complete)
 
         self._nm.hotspot_config_updated.connect(self._on_hotspot_config_updated)
+
+        self._nm.network_password_loaded.connect(self._on_network_password_loaded)
 
         self._prefill_ip_from_os()
 
@@ -418,9 +422,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             return
 
         # Normal (not connecting) display updates.
-        if state.ethernet_connected:
-            self._display_connected_state(state)
-        elif (
+        if state.ethernet_connected or (
             state.current_ssid
             and state.current_ip
             and state.connectivity
@@ -1268,15 +1270,18 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         """Navigate from saved details page to WiFi static IP page."""
         ssid = self.snd_name.text()
         self.wifi_sip_title.setText(ssid)
-        self.wifi_sip_ip_field.clear()
-        self.wifi_sip_mask_field.clear()
-        self.wifi_sip_gateway_field.clear()
-        self.wifi_sip_dns1_field.clear()
-        self.wifi_sip_dns2_field.clear()
+
+        saved = self._nm.get_saved_network(ssid)
+        dns = saved.dns_servers if saved else ()
+        # Prefill with the profile's current static config so the mask is visible.
+        self.wifi_sip_ip_field.setText(saved.ip_address if saved else "")
+        self.wifi_sip_mask_field.setText(saved.netmask if saved else "")
+        self.wifi_sip_gateway_field.setText(saved.gateway if saved else "")
+        self.wifi_sip_dns1_field.setText(dns[0] if len(dns) > 0 else "")
+        self.wifi_sip_dns2_field.setText(dns[1] if len(dns) > 1 else "")
 
         # Enable "Reset to DHCP" only when the profile is currently using a
-        # static IP — if it is already DHCP there is nothing to reset.
-        saved = self._nm.get_saved_network(ssid)
+        # static IP; if it is already DHCP there is nothing to reset.
         is_dhcp = saved.is_dhcp if saved else True
         self.wifi_sip_dhcp_button.setEnabled(not is_dhcp)
         self.wifi_sip_dhcp_button.setToolTip(
@@ -1537,7 +1542,20 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         if self.saved_connection_change_password_view.isChecked():
             self.saved_connection_change_password_view.setChecked(False)
 
+        # Answered asynchronously by _on_network_password_loaded.
+        self._password_ssid = ssid
+        self._initial_password = ""
+        if not network.is_open:
+            self._nm.get_network_password(ssid)
+
         saved = self._nm.get_saved_network(ssid)
+
+        if saved and not saved.is_dhcp and saved.ip_address:
+            self.saved_connection_address_info_label.setText(
+                f"{saved.ip_address}\n{saved.netmask or '--'}"
+            )
+        else:
+            self.saved_connection_address_info_label.setText("DHCP")
 
         if saved:
             self._set_priority_button(saved.priority)
@@ -1692,7 +1710,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         password = self.saved_connection_change_password_field.text()
         priority = self._get_selected_priority()
 
-        password_changed = bool(password)
+        password_changed = password != self._initial_password
         priority_changed = priority != self._initial_priority
 
         if not password_changed and not priority_changed:
@@ -1701,16 +1719,25 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
 
         self._nm.update_network(
             ssid,
-            password=password or "",
+            password=password if password_changed else "",
             priority=priority.value,
         )
 
         self._nm.load_saved_networks()
 
-        # Update tracked baseline so a second press won't re-save
+        # Update tracked baselines so a second press won't re-save
         self._initial_priority = priority
+        self._initial_password = password
 
-        self.saved_connection_change_password_field.clear()
+    @QtCore.pyqtSlot(str, str)
+    def _on_network_password_loaded(self, ssid: str, password: str) -> None:
+        """Prefill the change-password field with the profile's stored psk."""
+        if ssid != self._password_ssid:
+            return
+        self._initial_password = password
+        self.saved_connection_change_password_field.setText(password)
+        if password:
+            self.saved_connection_change_password_field.setPlaceholderText("")
 
     def _on_hidden_network_connect(self) -> None:
         """Connect to hidden network - non-blocking."""
@@ -2592,6 +2619,39 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         status_layout.addWidget(self.sn_info)
 
         frame_inner_layout.addLayout(status_layout)
+
+        self.line_6 = QtWidgets.QFrame(parent=self.frame)
+        self.line_6.setFrameShape(QtWidgets.QFrame.Shape.HLine)
+        self.line_6.setFrameShadow(QtWidgets.QFrame.Shadow.Sunken)
+
+        frame_inner_layout.addWidget(self.line_6)
+
+        address_layout = QtWidgets.QHBoxLayout()
+
+        self.netlist_address_label = QtWidgets.QLabel(parent=self.frame)
+        self.netlist_address_label.setPalette(self._create_white_palette())
+        font = QtGui.QFont()
+        font.setPointSize(15)
+        self.netlist_address_label.setFont(font)
+        self.netlist_address_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.netlist_address_label.setText("IP /\nMask")
+
+        address_layout.addWidget(self.netlist_address_label)
+
+        self.saved_connection_address_info_label = QtWidgets.QLabel(parent=self.frame)
+        self.saved_connection_address_info_label.setMinimumSize(QtCore.QSize(250, 0))
+        font = QtGui.QFont()
+        font.setPointSize(11)
+        self.saved_connection_address_info_label.setFont(font)
+        self.saved_connection_address_info_label.setStyleSheet(
+            "color: rgb(255, 255, 255);"
+        )
+        self.saved_connection_address_info_label.setAlignment(
+            QtCore.Qt.AlignmentFlag.AlignCenter
+        )
+        address_layout.addWidget(self.saved_connection_address_info_label)
+
+        frame_inner_layout.addLayout(address_layout)
         info_layout.addWidget(self.frame)
         main_content_layout.addLayout(info_layout)
 
@@ -3716,7 +3776,9 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             (self.wifi_sip_dns2_field, self.wifi_static_ip_page),
         ]:
             field.clicked.connect(
-                lambda _=False, f=field, p=page: self._on_show_keyboard(p, f)
+                lambda _=False, f=field, p=page: self._on_show_keyboard(
+                    p, f, numeric=True
+                )
             )
 
     def _setup_scrollbar_signals(self) -> None:
@@ -3759,11 +3821,16 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.listView.setPalette(palette)
 
     def _on_show_keyboard(
-        self, panel: QtWidgets.QWidget, field: QtWidgets.QLineEdit
+        self,
+        panel: QtWidgets.QWidget,
+        field: QtWidgets.QLineEdit,
+        numeric: bool = False,
     ) -> None:
         """Show the QWERTY keyboard panel, saving the originating panel and input field."""
         self._previous_panel = panel
         self._current_field = field
+        self._qwerty.setPattern("ip" if numeric else "")
+        self._qwerty.setNumericOnly(numeric)
         self._qwerty.set_value(field.text())
         self._qwerty.show()
         field.clearFocus()

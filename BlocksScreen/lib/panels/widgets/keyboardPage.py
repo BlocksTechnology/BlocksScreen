@@ -62,7 +62,7 @@ _SYMBOLS = [
     "#",
 ]
 
-_NUM_KEYS = 26
+_NUMERIC = list("1234567890")
 
 
 def _make_key_font(size: int = 29) -> QtGui.QFont:
@@ -89,8 +89,10 @@ class CustomQwertyKeyboard(QtWidgets.QDialog):
         self.suffix: str = ""
         self.symbolsrun: bool = False
         self._key_buttons: list[QtWidgets.QPushButton] = []
+        self._row_widgets: list[QtWidgets.QWidget] = []
         self._pattern: str = ""
         self._max_length: int = 0
+        self._numeric_only: bool = False
 
         self._setup_ui()
         self.setCursor(QtCore.Qt.CursorShape.BlankCursor)
@@ -146,10 +148,24 @@ class CustomQwertyKeyboard(QtWidgets.QDialog):
         """Set input validation pattern: 'ip', 'hex', 'int', 'float', or '' for no pattern."""
         self._pattern = pattern
 
+    def setNumericOnly(self, enabled: bool) -> None:
+        """Show only digits and '.' for IP, mask, gateway and DNS fields."""
+        if self._numeric_only == enabled:
+            return
+        self._numeric_only = enabled
+        for widget in self._row_widgets[1:]:
+            widget.setVisible(not enabled)
+        for btn in (self.K_shift, self.K_keychange, self.K_space):
+            btn.setVisible(not enabled)
+        if enabled:
+            self.K_shift.setChecked(False)
+            self.K_keychange.setChecked(False)
+            self.symbolsrun = False
+        self.handle_keyboard_layout()
+
     def setMaxLength(self, length: int) -> None:
         """Set maximum allowed length for user input (excluding prefix/suffix)."""
-        if length < 0:
-            length = 0
+        length = max(length, 0)
         if length == 0:
             length = 999
         self._max_length = length
@@ -185,7 +201,7 @@ class CustomQwertyKeyboard(QtWidgets.QDialog):
                 return value.endswith(".")
         return True
 
-    def _get_mainWindow_widget(self) -> typing.Optional[QtWidgets.QMainWindow]:
+    def _get_mainWindow_widget(self) -> QtWidgets.QMainWindow | None:
         """Get the main application window"""
         app_instance = QtWidgets.QApplication.instance()
         if not app_instance:
@@ -217,6 +233,11 @@ class CustomQwertyKeyboard(QtWidgets.QDialog):
 
     def handle_keyboard_layout(self) -> None:
         """Update key labels based on current shift/keychange state."""
+        if self._numeric_only:
+            for btn, txt in zip(self._key_buttons, _NUMERIC):
+                btn.setText(txt)
+            return
+
         shift = self.K_shift.isChecked()
         keychange = self.K_keychange.isChecked()
 
@@ -255,6 +276,7 @@ class CustomQwertyKeyboard(QtWidgets.QDialog):
             self.setSuffix("")
             self.setPattern("")
             self.setMaxLength(0)
+            self.setNumericOnly(False)
             return
 
         if value == "clear":
@@ -368,6 +390,8 @@ class CustomQwertyKeyboard(QtWidgets.QDialog):
             btn = self._create_key_button(row3_widget, f"K_{letter}", min_w=60)
             row3_layout.addWidget(btn)
             self._key_buttons.append(btn)
+
+        self._row_widgets = [row1_widget, row2_widget, row3_widget]
 
         # Shift button (left of row 3)
         self.K_shift = QtWidgets.QPushButton(parent=self)
