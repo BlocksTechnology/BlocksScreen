@@ -939,6 +939,26 @@ class TestBuildCurrentState:
         assert state.security_type == "wpa-psk"
 
     @pytest.mark.asyncio
+    async def test_ap_mode_detected_as_hotspot_without_our_flag(self, qapp):
+        """An AP the app did not start must not be reported as a client link."""
+        w = _make_worker(qapp)
+        w._hotspot_config.ssid = "PrinterHotspot"
+        w._is_hotspot_active = False
+        nm_proxy = AsyncProxyMock(connectivity=4, wireless_enabled=True)
+        w._nm = _ProxyFactory(nm_proxy)
+        w._is_wifi_ap_mode = AsyncMock(return_value=True)
+        w._get_current_ssid = AsyncMock(return_value="FOREIGN-AP")
+        w._get_ip_by_interface = AsyncMock(return_value="10.42.0.1")
+        w._get_current_ip = AsyncMock(return_value="10.42.0.1")
+        w._is_ethernet_connected = AsyncMock(return_value=False)
+        w._has_ethernet_carrier = AsyncMock(return_value=False)
+        w._build_signal_map = AsyncMock(return_value={})
+        w._get_active_vlans = AsyncMock(return_value=[])
+
+        state = await w._build_current_state()
+        assert state.hotspot_enabled is True
+
+    @pytest.mark.asyncio
     async def test_hotspot_flag_fallback_when_dbus_ssid_empty(self, qapp):
         w = _make_worker(qapp)
         w._hotspot_config.ssid = "PrinterHotspot"
@@ -3146,7 +3166,10 @@ class TestParseIpv4Settings:
     def test_address_data_shape(self):
         ipv4 = {
             "addresses": ("aau", []),
-            "address-data": ("aa{sv}", [{"address": ("s", "10.0.0.7"), "prefix": ("u", 16)}]),
+            "address-data": (
+                "aa{sv}",
+                [{"address": ("s", "10.0.0.7"), "prefix": ("u", 16)}],
+            ),
             "gateway": ("s", "10.0.0.1"),
             "dns-data": ("as", ["1.1.1.1", "9.9.9.9"]),
         }

@@ -844,6 +844,16 @@ class NetworkManagerWorker(QObject):
         """Return True if the Wi-Fi device is in NM's terminal FAILED state (120)."""
         return await self._wifi_device_state() == 120
 
+    async def _is_wifi_ap_mode(self) -> bool:
+        """True when the radio sits in NM's AP mode (3), whoever started the hotspot."""
+        if not self._primary_wifi_path:
+            return False
+        try:
+            return int(await self._wifi(self._primary_wifi_path).mode) == 3
+        except Exception as exc:
+            logger.debug("Error reading Wi-Fi device mode: %s", exc)
+            return False
+
     async def _has_ethernet_carrier(self) -> bool:
         """Return True if the primary wired device has a physical link (state >= 30).
 
@@ -966,11 +976,18 @@ class NetworkManagerWorker(QObject):
         try:
             wifi_iface = self._get_wifi_iface_name()
             # Independent property reads: one round-trip batch instead of four.
-            connectivity, wifi_raw, current_ssid, eth_connected = await asyncio.gather(
+            (
+                connectivity,
+                wifi_raw,
+                current_ssid,
+                eth_connected,
+                ap_mode,
+            ) = await asyncio.gather(
                 self._read_connectivity(),
                 self._nm().wireless_enabled,
                 self._get_current_ssid(),
                 self._is_ethernet_connected(),
+                self._is_wifi_ap_mode(),
             )
             wifi_enabled = bool(wifi_raw)
 
@@ -979,7 +996,8 @@ class NetworkManagerWorker(QObject):
             )
             signal, sec_type = await self._wifi_signal_and_security(current_ssid)
 
-            hotspot_enabled = current_ssid == self._hotspot_config.ssid
+            # Device mode is authoritative; the SSID match only covers our own AP.
+            hotspot_enabled = bool(ap_mode) or current_ssid == self._hotspot_config.ssid
 
             if not hotspot_enabled and self._is_hotspot_active and not current_ssid:
                 hotspot_enabled = True
