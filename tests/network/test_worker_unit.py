@@ -1203,6 +1203,30 @@ class TestBuildSignalMap:
         result = await w._build_signal_map()
         assert result["samenet"] == 80
 
+    @pytest.mark.asyncio
+    async def test_stale_path_recovers_and_retries(self, qapp):
+        w = _make_worker(qapp)
+        w._recover_signal_sources = AsyncMock()
+        w._signal_map_once = AsyncMock(
+            side_effect=[RuntimeError("Object does not exist at path"), {"net": 55}]
+        )
+        assert await w._build_signal_map() == {"net": 55}
+        w._recover_signal_sources.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_returns_empty_when_retry_also_fails(self, qapp):
+        w = _make_worker(qapp)
+        w._recover_signal_sources = AsyncMock()
+        w._signal_map_once = AsyncMock(side_effect=RuntimeError("boom"))
+        assert await w._build_signal_map() == {}
+
+    @pytest.mark.asyncio
+    async def test_no_wifi_path_skips_recovery(self, qapp):
+        w = _make_worker(qapp, with_wifi=False)
+        w._recover_signal_sources = AsyncMock()
+        assert await w._build_signal_map() == {}
+        w._recover_signal_sources.assert_not_awaited()
+
 
 class TestSavedNetworkCache:
     def test_invalidate_marks_dirty(self, qapp):

@@ -1335,25 +1335,39 @@ class NetworkManagerWorker(QObject):
             return 0
 
     async def _build_signal_map(self) -> dict[str, int]:
-        """Return a mapping of lowercase SSID to best-seen signal strength (0-100)."""
-        signal_map: dict[str, int] = {}
+        """Return a mapping of lowercase SSID to best-seen signal strength (0-100).
+
+        Retries once after re-detecting interfaces so a stale Wi-Fi path cannot
+        leave every saved network stuck showing no signal.
+        """
         if not self._primary_wifi_path:
-            return signal_map
+            return {}
         try:
-            ap_paths = await self._wifi().access_points
-            for _, props in await self._gather_ap_properties(ap_paths):
-                try:
-                    ssid = self._decode_ssid(props.get("ssid", b""))
-                    if ssid:
-                        strength = int(props.get("strength", 0))
-                        key = ssid.lower()
-                        if strength > signal_map.get(key, 0):
-                            signal_map[key] = strength
-                except Exception as exc:
-                    logger.debug("Skipping AP in signal map: %s", exc)
-                    continue
+            return await self._signal_map_once()
         except Exception as exc:
-            logger.debug("Error building signal map: %s", exc)
+            logger.warning("Signal map failed (%s), re-detecting interfaces", exc)
+            try:
+                await self._recover_signal_sources()
+                return await self._signal_map_once()
+            except Exception as retry_exc:
+                logger.debug("Signal map unavailable: %s", retry_exc)
+                return {}
+
+    async def _signal_map_once(self) -> dict[str, int]:
+        """Single signal-map attempt; raises so the caller can recover and retry."""
+        signal_map: dict[str, int] = {}
+        ap_paths = await self._wifi().access_points
+        for _, props in await self._gather_ap_properties(ap_paths):
+            try:
+                ssid = self._decode_ssid(props.get("ssid", b""))
+                if ssid:
+                    strength = int(props.get("strength", 0))
+                    key = ssid.lower()
+                    if strength > signal_map.get(key, 0):
+                        signal_map[key] = strength
+            except Exception as exc:
+                logger.debug("Skipping AP in signal map: %s", exc)
+                continue
         return signal_map
 
     async def _parse_ap(
