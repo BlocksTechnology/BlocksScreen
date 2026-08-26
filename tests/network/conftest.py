@@ -1,16 +1,16 @@
-"""tests/network/conftest.py — shared fixtures for network tests.
+"""tests/network/conftest.py: shared fixtures for network tests.
 
 Mocks the D-Bus modules (sdbus, sdbus_async) BEFORE any network package
 import so that tests run without NetworkManager or a system bus.
 
-Provides ``AsyncProxyMock`` — a mock for sdbus_async D-Bus proxies where
+Provides ``AsyncProxyMock``: a mock for sdbus_async D-Bus proxies where
 property access returns awaitables (matching the real sdbus_async
 protocol) and method access returns ``AsyncMock`` callables.
 
 Widget stub modules export **real Qt base classes** (not ``MagicMock``)
 so that class inheritance in networkWindow.py works at import time.
 (``class IPAddressLineEdit(BlocksCustomLinEdit)`` requires a real type
-as its base — ``MagicMock`` triggers ``TypeError: metaclass conflict``.)
+as its base: ``MagicMock`` triggers ``TypeError: metaclass conflict``.)
 """
 
 import asyncio
@@ -34,7 +34,7 @@ _mock_sdbus = MagicMock()
 _mock_sdbus.sd_bus_open_system = MagicMock(return_value=MagicMock())
 _mock_sdbus.set_default_bus = MagicMock()
 
-# Shared D-Bus NM mock — used by both sdbus_block and sdbus_async paths.
+# Shared D-Bus NM mock: used by both sdbus_block and sdbus_async paths.
 _mock_dbus_nm = MagicMock()
 _mock_dbus_nm.enums = MagicMock()
 _mock_dbus_nm.enums.DeviceType = MagicMock()
@@ -72,7 +72,7 @@ _mock_dbus_nm.ConnectionStateReason = _ConnectionStateReason
 
 sys.modules["sdbus"] = _mock_sdbus
 
-# sdbus_block (legacy — kept for any residual imports)
+# sdbus_block (legacy: kept for any residual imports)
 _mock_sdbus_block = MagicMock()
 _mock_sdbus_block.networkmanager = _mock_dbus_nm
 sys.modules["sdbus_block"] = _mock_sdbus_block
@@ -85,10 +85,10 @@ sys.modules["sdbus_async"] = _mock_sdbus_async
 sys.modules["sdbus_async.networkmanager"] = _mock_dbus_nm
 
 
-# Widget stub modules — REAL Qt base classes (not MagicMock)
+# Widget stub modules: REAL Qt base classes (not MagicMock)
 # networkWindow.py subclasses imported widgets:
 #     class IPAddressLineEdit(BlocksCustomLinEdit): ...
-# A MagicMock cannot be used as a class base — it triggers a TypeError.
+# A MagicMock cannot be used as a class base: it triggers a TypeError.
 # We create lightweight stub modules whose exports are real Qt types.
 
 
@@ -171,7 +171,7 @@ class _EntryListModelStub(QtCore.QAbstractListModel):
         self.endResetModel()
 
     def reconcile(self, desired, key_fn):
-        """Simplified reconcile — just replace entries."""
+        """Simplified reconcile: just replace entries."""
         self.beginResetModel()
         self.entries[:] = list(desired)
         self.endResetModel()
@@ -202,14 +202,14 @@ class _NetworkWidgetbuttonsStub(QtWidgets.QWidget):
 
 
 class _BlocksCustomCheckButtonStub(QtWidgets.QCheckBox):
-    """BlocksCustomCheckButton stand-in — adds setFlat() used in _setupUI."""
+    """BlocksCustomCheckButton stand-in: adds setFlat() used in _setupUI."""
 
     def setFlat(self, v: bool) -> None:
         pass
 
 
 class _BlocksCustomLinEditStub(QtWidgets.QLineEdit):
-    """BlocksCustomLinEdit stand-in — adds clicked signal used in _setup_hidden_network_page."""
+    """BlocksCustomLinEdit stand-in: adds clicked signal used in _setup_hidden_network_page."""
 
     clicked = QtCore.pyqtSignal(name="clicked")
 
@@ -287,7 +287,7 @@ for _mod_name, _attrs in _STUB_MODULES.items():
     sys.modules["BlocksScreen." + _mod_name] = _stub
 
 
-# Mock lib.qrcode_gen (short path only) — networkWindow.py imports it as
+# Mock lib.qrcode_gen (short path only): networkWindow.py imports it as
 # ``from lib.qrcode_gen import generate_wifi_qrcode``.  The BlocksScreen.*
 # path is intentionally NOT registered here so test_qrcode_gen_unit.py can
 # still import the real module via ``BlocksScreen.lib.qrcode_gen``.
@@ -322,7 +322,7 @@ from BlocksScreen.lib.network.models import (
 sys.modules["lib.network"] = sys.modules["BlocksScreen.lib.network"]
 
 
-# AsyncProxyMock — sdbus_async D-Bus proxy mock
+# AsyncProxyMock: sdbus_async D-Bus proxy mock
 
 
 class _AwaitableProp:
@@ -356,8 +356,8 @@ class _AwaitableProp:
 class AsyncProxyMock:
     """Mock for sdbus_async D-Bus proxies.
 
-    * **Properties** -> ``_AwaitableProp`` — ``await proxy.prop`` returns value.
-    * **Methods** -> ``AsyncMock`` — ``await proxy.method()`` is configurable.
+    * **Properties** -> ``_AwaitableProp``: ``await proxy.prop`` returns value.
+    * **Methods** -> ``AsyncMock``: ``await proxy.method()`` is configurable.
     * Unknown attribute access auto-creates an ``AsyncMock`` (method).
     * Setting a plain value creates/updates an ``_AwaitableProp``.
     * Setting an ``AsyncMock`` registers it as a method.
@@ -414,7 +414,7 @@ class _ProxyFactory:
 
 
 def _run(coro):
-    """Run a single coroutine to completion — test helper for async worker methods."""
+    """Run a single coroutine to completion: test helper for async worker methods."""
     loop = asyncio.new_event_loop()
     try:
         return loop.run_until_complete(coro)
@@ -425,7 +425,7 @@ def _run(coro):
 # QApplication singleton
 @pytest.fixture(scope="session")
 def qapp():
-    """Session-scoped QApplication — created once for all tests."""
+    """Session-scoped QApplication: created once for all tests."""
     app = QtWidgets.QApplication.instance()
     if app is None:
         app = QtWidgets.QApplication([])
@@ -580,6 +580,7 @@ def win(qapp):
         window._pending_expected_ip = ""
         window._last_active_signal_bars = 0
         window._cached_scan_networks = []
+        window._last_state_summary = None
 
         # Refactored list-cache instance variables
         window._item_cache = {}
@@ -738,5 +739,5 @@ def win(qapp):
     except Exception as exc:
         traceback.print_exc()
         pytest.skip(
-            f"NetworkControlWindow not importable — {exc.__class__.__name__}: {exc}"
+            f"NetworkControlWindow not importable ({exc.__class__.__name__}: {exc})"
         )

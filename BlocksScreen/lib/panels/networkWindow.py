@@ -97,7 +97,7 @@ class IPAddressLineEdit(BlocksCustomLinEdit):
         self,
         parent: QtWidgets.QWidget | None = None,
         *,
-        placeholder: str = "0.0.0.0",  # nosec B104 — UI placeholder text, not a socket bind
+        placeholder: str = "0.0.0.0",  # nosec B104: UI placeholder text, not a socket bind
     ) -> None:
         """Initialise the IP-address input field with regex validation and optional placeholder."""
         super().__init__(parent)
@@ -190,6 +190,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         )
         self._cached_scan_networks: list[NetworkInfo] = []
         self._last_active_signal_bars: int = -1
+        self._last_state_summary: tuple | None = None
         self._active_signal: int = 0
         # Key = SSID, value = (signal_bars, status_label, ListItem).
         self._item_cache: dict[str, tuple[int, str, ListItem]] = {}
@@ -238,7 +239,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
     def _prefill_ip_from_os(self) -> None:
         """Read the current IP via SIOCGIFADDR ioctl and show it immediately.
 
-        Bypasses NetworkManager D-Bus entirely — runs on the main thread,
+        Bypasses NetworkManager D-Bus entirely: runs on the main thread,
         costs a single syscall, and completes in microseconds.  Called once
         during init so the user never sees "IP: --" if a connection was
         already active before the UI launched.
@@ -261,7 +262,6 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
     @pyqtSlot()
     def _on_reconnect_complete(self) -> None:
         """Navigate back to the main panel after a static-IP or DHCP-reset operation."""
-        logger.debug("reconnect_complete received — navigating to main_network_page")
         self.setCurrentIndex(self.indexOf(self.main_network_page))
 
     def _init_timers(self) -> None:
@@ -283,13 +283,16 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
     @pyqtSlot(NetworkState)
     def _on_network_state_changed(self, state: NetworkState) -> None:
         """React to a NetworkState update: sync toggles, populate header and connection info."""
-        logger.debug(
-            "Network state: %s, SSID: %s, IP: %s, eth: %s",
+        # The poll re-emits unchanged state; log transitions only to keep logs usable.
+        summary = (
             state.connectivity.name,
             state.current_ssid,
             state.current_ip,
             state.ethernet_connected,
         )
+        if summary != self._last_state_summary:
+            self._last_state_summary = summary
+            logger.info("Network state: %s, SSID: %s, IP: %s, eth: %s", *summary)
 
         if (
             state.current_ssid
@@ -306,15 +309,10 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             self._is_first_run = False
             return
 
-        # Exclusivity is enforced on user toggles only; plugging a cable never
-        # kills the radio behind the user's back.
+        # Exclusivity applies to user toggles only; a cable never kills the radio.
 
-        # Ethernet panel visibility is pure hardware state (carrier +
-        # connection) and must update even while a loading operation is
-        # in-flight.
+        # Pure hardware state, so it updates even mid-operation.
         self._sync_ethernet_panel(state)
-
-        # Sync toggle states (skipped when _is_connecting)
         self._sync_toggle_states(state)
 
         if self._is_connecting:
@@ -338,7 +336,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
                     self._display_disconnected_state()
                     self._emit_status_icon(state)
                     return
-                # Still transitioning — keep loading visible
+                # Still transitioning: keep loading visible
                 return
 
             # Hotspot ON: complete when hotspot_enabled + SSID + IP
@@ -395,7 +393,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
                     self._display_connected_state(state)
                     self._emit_status_icon(state)
                     return
-                # IP not yet correct — keep loading visible
+                # IP not yet correct: keep loading visible
                 return
 
             return
@@ -435,8 +433,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
 
         current_ssid = self._nm.current_ssid
         if current_ssid:
-            # Stamp the connected AP as ACTIVE so the list is correct on first
-            # render even when the scan ran before the connection fully settled.
+            # Stamp the connected AP ACTIVE; the scan may predate the connection.
             filtered = [
                 replace(net, network_status=NetworkStatus.ACTIVE)
                 if net.ssid == current_ssid
@@ -510,14 +507,12 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
                     and self._target_ssid
                     and not self._current_network_is_hidden
                 ):
-                    # Hidden networks are not in the scan cache; the next scan
-                    # will surface them once NM reports them as saved/active.
+                    # Hidden networks reach the cache only on the next scan.
                     self._patch_cached_network_status(
                         self._target_ssid, NetworkStatus.SAVED
                     )
             elif self._pending_operation == PendingOperation.WIFI_STATIC_IP:
-                # Loading cleared by state machine (IP appears) or reconnect_complete.
-                # No popup — the updated IP in the header is the confirmation.
+                # No popup: the new IP in the header is the confirmation.
                 pass
             else:
                 self._show_info_popup(result.message)
@@ -530,10 +525,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
                 self._show_error_popup(result.message)
                 return
 
-            # When switching from ethernet to wifi, NM may report a
-            # device-mismatch error because the wired profile hasn't
-            # fully deactivated yet.  Retry the connection instead of
-            # showing a confusing popup to the user.
+            # Ethernet-to-Wi-Fi races the wired teardown; retry instead of erroring.
             is_transient_mismatch = (
                 "not compatible with device" in msg_lower
                 or "mismatching interface" in msg_lower
@@ -546,8 +538,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
                 and self._target_ssid
             ):
                 logger.debug(
-                    "Transient NM device-mismatch during wifi activation "
-                    "— retrying in 2 s: %s",
+                    "Transient NM device-mismatch, retrying in 2 s: %s",
                     result.message,
                 )
                 ssid = self._target_ssid
@@ -600,7 +591,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
                 WifiIconKey.from_signal(self._active_signal, False)
             )
         else:
-            # Disconnected / no connection — 0-bar unprotected
+            # Disconnected / no connection: 0-bar unprotected
             self.update_wifi_icon.emit(WifiIconKey.from_bars(0, False))
 
     def _sync_active_network_list_icon(self, state: NetworkState) -> None:
@@ -620,10 +611,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
 
         new_bars = signal_to_bars(self._active_signal)
 
-        # Also check whether the cached status already reflects ACTIVE.
-        # If not, we must rebuild even when bars haven't changed (e.g. the
-        # scan ran before the connection was fully established and marked the
-        # network SAVED instead of ACTIVE).
+        # Rebuild on a stale SAVED status too, not only on a bar change.
         cached_active = next(
             (n for n in self._cached_scan_networks if n.ssid == state.current_ssid),
             None,
@@ -631,13 +619,11 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         status_needs_update = cached_active is not None and not cached_active.is_active
 
         if new_bars == self._last_active_signal_bars and not status_needs_update:
-            return  # No visual change — skip the rebuild
+            return  # No visual change: skip the rebuild
 
-        # Invalidate cache for the active SSID so _get_or_create_item
-        # creates a fresh ListItem with the updated signal icon and status.
+        # Drop the cached item so it is rebuilt with the new icon and status.
         self._item_cache.pop(state.current_ssid, None)
 
-        # Update the cached entry with the authoritative signal and status
         updated = [
             replace(
                 net,
@@ -753,7 +739,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
     def _display_connected_state(self, state: NetworkState) -> None:
         """Display connected network information.
 
-        Ethernet always takes display priority — if ``ethernet_connected``
+        Ethernet always takes display priority: if ``ethernet_connected``
         is True we show "Ethernet" even if a Wi-Fi SSID is still lingering
         (e.g. during the brief overlap before NM finishes disabling wifi).
         """
@@ -777,7 +763,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             self.netlist_vlans_combo.blockSignals(True)
             self.netlist_vlans_combo.clear()
             self.netlist_vlans_combo.addItem(
-                f"Ethernet — {state.current_ip or '--'}",
+                f"Ethernet: {state.current_ip or '--'}",
                 state.current_ip or "",
             )
             for v in state.active_vlans:
@@ -786,7 +772,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
                 else:
                     ip_label = v.ip_address or "--"
                 self.netlist_vlans_combo.addItem(
-                    f"VLAN {v.vlan_id} — {ip_label}",
+                    f"VLAN {v.vlan_id}: {ip_label}",
                     v.ip_address or "",
                 )
             self.netlist_vlans_combo.setCurrentIndex(0)
@@ -817,7 +803,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.update()
 
     def _display_disconnected_state(self) -> None:
-        """Display disconnected state — both toggles OFF."""
+        """Display disconnected state: both toggles OFF."""
         self._hide_all_info_elements()
 
         self.mn_info_box.setVisible(True)
@@ -940,13 +926,13 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             self._display_connected_state(state)
             return
 
-        # Static IP / DHCP reset — if a state with an IP has arrived, accept it.
+        # Static IP / DHCP reset: if a state with an IP has arrived, accept it.
         if self._pending_operation == PendingOperation.WIFI_STATIC_IP:
             if state.current_ip:
                 self._clear_loading()
                 self._display_connected_state(state)
                 return
-            # No IP yet after timeout — clear loading and show whatever state we have.
+            # No IP yet after timeout: clear loading and show whatever state we have.
             self._clear_loading()
             if state.current_ssid:
                 self._display_connected_state(state)
@@ -1008,8 +994,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         elif sender_button is eth_btn:
             self._handle_ethernet_toggle(is_on)
 
-        # Both OFF state is now handled by _on_network_state_changed
-        # when the worker emits the disconnected state.
+        # The both-off case arrives via _on_network_state_changed.
 
     def _handle_wifi_toggle(self, is_on: bool) -> None:
         """Enable or disable Wi-Fi; turning it on drops the hotspot and the cable."""
@@ -1032,9 +1017,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             self._display_wifi_on_no_connection()
             return
 
-        # Sort by priority descending (highest priority first),
-        # then by timestamp as tiebreaker — this gives "reconnect to
-        # highest-priority saved network" behaviour.
+        # Reconnect to the highest-priority saved network, newest breaking ties.
         wifi_networks.sort(key=lambda n: (n.priority, n.timestamp), reverse=True)
 
         self._target_ssid = wifi_networks[0].ssid
@@ -1251,8 +1234,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.wifi_sip_dns1_field.setText(dns[0] if len(dns) > 0 else "")
         self.wifi_sip_dns2_field.setText(dns[1] if len(dns) > 1 else "")
 
-        # Enable "Reset to DHCP" only when the profile is currently using a
-        # static IP; if it is already DHCP there is nothing to reset.
+        # Nothing to reset when the profile is already on DHCP.
         is_dhcp = saved.is_dhcp if saved else True
         self.wifi_sip_dhcp_button.setEnabled(not is_dhcp)
         self.wifi_sip_dhcp_button.setToolTip(
@@ -1266,7 +1248,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
 
         Mirrors the VLAN-creation UX: navigate to the main panel immediately,
         show the loading overlay, and clear it silently once ``reconnect_complete``
-        fires (no popup — the updated IP appears in the panel header instead).
+        fires (no popup: the updated IP appears in the panel header instead).
         """
         ssid = self.wifi_sip_title.text()
         ip_addr = self.wifi_sip_ip_field.text().strip()
@@ -1302,7 +1284,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
     def _on_wifi_reset_dhcp(self) -> None:
         """Reset the current Wi-Fi connection back to DHCP via the facade.
 
-        Same loading-screen pattern as static IP — no popup on success.
+        Same loading-screen pattern as static IP: no popup on success.
         """
         ssid = self.wifi_sip_title.text()
         self.setCurrentIndex(self.indexOf(self.main_network_page))
@@ -1319,7 +1301,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         Uses the model's built-in reconcile() with an item cache so that
         ListItems are only allocated for networks whose visual state
         actually changed (different signal bars or status label).
-        Unchanged items are reused from the cache — zero allocation.
+        Unchanged items are reused from the cache: zero allocation.
         """
         self.listView.blockSignals(True)
 
@@ -1374,8 +1356,8 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         unchanged, otherwise create a new one and update the cache.
 
         Visual state = (signal_bars, status_label).  When both match
-        the cached entry, the existing ListItem is returned as-is —
-        no QPixmap lookup, no allocation.
+        the cached entry the existing ListItem is returned as-is, with
+        no QPixmap lookup and no allocation.
         """
         if network.is_hidden or is_hidden_ssid(network.ssid):
             return None
@@ -1535,9 +1517,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         else:
             self._initial_priority = ConnectionPriority.MEDIUM
 
-        # Signal strength — for the active network, use the unified
-        # _active_signal so the details page matches the main panel
-        # and header icon exactly.
+        # _active_signal keeps this page, the main panel and the icon in step.
         is_active = ssid == self._nm.current_ssid
         if is_active and self._active_signal > 0:
             signal_value = self._active_signal
@@ -1584,10 +1564,6 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         else:
             target = self.med_priority_btn
 
-        logger.debug(
-            "Setting priority button: priority=%r -> %s", priority, target.text()
-        )
-
         target.setChecked(True)
 
         self.high_priority_btn.update()
@@ -1597,14 +1573,6 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
     def _get_selected_priority(self) -> ConnectionPriority:
         """Return the ``ConnectionPriority`` matching the currently selected radio button."""
         checked = self.priority_btn_group.checkedButton()
-        logger.debug(
-            "Priority selection: checked=%s, h=%s m=%s l=%s",
-            checked.text() if checked else "None",
-            self.high_priority_btn.isChecked(),
-            self.med_priority_btn.isChecked(),
-            self.low_priority_btn.isChecked(),
-        )
-
         if checked is self.high_priority_btn:
             return ConnectionPriority.HIGH
         elif checked is self.low_priority_btn:
@@ -3358,7 +3326,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.vlan_id_spinbox.setValue(1)
         self.vlan_id_spinbox.lineEdit().setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
         self.vlan_id_spinbox.lineEdit().setReadOnly(True)
-        # Prevent text selection when stepping — deselect after each value change
+        # Prevent text selection when stepping: deselect after each value change
         self.vlan_id_spinbox.valueChanged.connect(
             lambda: self.vlan_id_spinbox.lineEdit().deselect()
         )

@@ -26,7 +26,7 @@ _numpad_stub = types.ModuleType("lib.utils.numpad_button")
 _numpad_stub.NumpadButton = QtWidgets.QPushButton  # type: ignore[attr-defined]
 sys.modules.setdefault("lib.utils.numpad_button", _numpad_stub)
 
-# Force-reload the real module — the network conftest registers a stub
+# Force-reload the real module: the network conftest registers a stub
 # that lacks the layout constants we need.
 for _key in [
     "lib.panels.widgets.keyboardPage",
