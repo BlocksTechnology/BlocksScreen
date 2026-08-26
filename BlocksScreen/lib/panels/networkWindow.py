@@ -973,6 +973,11 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             self._nm.set_wifi_enabled(False)
             return
 
+        # Guard before touching links: a state update mid-teardown bounces the toggle.
+        self._target_ssid = None
+        self._pending_operation = PendingOperation.WIFI_ON
+        self._set_loading_state(True)
+
         self._claim_link(self.wifi_button)
         self._nm.disconnect_ethernet()
         self._nm.set_wifi_enabled(True)
@@ -981,6 +986,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         wifi_networks = [n for n in saved if "ap" not in n.mode]
 
         if not wifi_networks:
+            self._clear_loading()
             self._show_warning_popup("No saved Wi-Fi networks. Please add one first.")
             self._display_wifi_on_no_connection()
             return
@@ -989,8 +995,6 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         wifi_networks.sort(key=lambda n: (n.priority, n.timestamp), reverse=True)
 
         self._target_ssid = wifi_networks[0].ssid
-        self._pending_operation = PendingOperation.WIFI_ON
-        self._set_loading_state(True)
 
         # Non-blocking: disable hotspot then connect
         self._nm.toggle_hotspot(False)
@@ -1006,12 +1010,12 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             self._nm.toggle_hotspot(False)
             return
 
-        self._claim_link(self.hotspot_button)
-        self._nm.disconnect_ethernet()
-
         self._target_ssid = None
         self._pending_operation = PendingOperation.HOTSPOT_ON
         self._set_loading_state(True)
+
+        self._claim_link(self.hotspot_button)
+        self._nm.disconnect_ethernet()
 
         hotspot_name = self.hotspot_name_input_field.text() or ""
         hotspot_pass = self.hotspot_password_input_field.text() or ""
@@ -1023,12 +1027,12 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
     def _handle_ethernet_toggle(self, is_on: bool) -> None:
         """Connect or disconnect the cable; connecting drops Wi-Fi and the hotspot."""
         if is_on:
-            self._claim_link(self.ethernet_button)
-            self._nm.set_wifi_enabled(False)
-
             self._target_ssid = None
             self._pending_operation = PendingOperation.ETHERNET_ON
             self._set_loading_state(True)
+
+            self._claim_link(self.ethernet_button)
+            self._nm.set_wifi_enabled(False)
             self._nm.connect_ethernet()
             return
 
