@@ -1,3 +1,5 @@
+"""On-screen keyboards: full QWERTY and a numeric variant for IP and mask entry."""
+
 import typing
 
 from lib.utils.icon_button import IconButton
@@ -252,6 +254,7 @@ class CustomQwertyKeyboard(QtWidgets.QDialog):
         self.setGeometry(x, y, width, height)
 
     def show(self) -> None:
+        """Re-implemented method, recompute layout geometry before showing."""
         self._geometry_calc()
         return super().show()
 

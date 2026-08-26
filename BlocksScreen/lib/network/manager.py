@@ -1,3 +1,5 @@
+"""Qt-facing NetworkManager facade: owns the worker thread and its signals."""
+
 # pylint: disable=protected-access
 
 import asyncio

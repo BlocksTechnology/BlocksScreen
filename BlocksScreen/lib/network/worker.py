@@ -1,3 +1,5 @@
+"""Async D-Bus NetworkManager worker: signal watching, link control, state snapshots."""
+
 import asyncio
 import fcntl
 import ipaddress
@@ -1325,6 +1327,7 @@ class NetworkManagerWorker(QObject):
         """Read every profile's settings in one concurrent batch, dropping failures."""
 
         async def one(path: str) -> tuple[str, dict | None]:
+            """Fetch one profile's settings, returning None if the read fails."""
             try:
                 return path, await self._conn_settings(path).get_settings()
             except Exception as exc:
@@ -3001,6 +3004,7 @@ class NetworkManagerWorker(QObject):
         """
 
         def is_ap_profile(s: dict) -> bool:
+            """True when the settings dict describes a Wi-Fi profile in AP mode."""
             return (
                 self._setting(s, "connection", "type") == "802-11-wireless"
                 and self._setting(s, "802-11-wireless", "mode") == "ap"
