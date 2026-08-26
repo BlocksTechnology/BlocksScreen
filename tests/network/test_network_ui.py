@@ -1934,3 +1934,51 @@ class TestHotspotQRCode:
             w._show_hotspot_qr("TestAP", "testpass123", "wpa-psk")
         w.qrcode_img.clearPixmap.assert_called()
         w.qrcode_img.setText.assert_called_with("QR error")
+
+
+class TestOnNetworkPasswordLoaded:
+    """Prefill of the change-password field, including the stale-ssid guard."""
+
+    def test_matching_ssid_fills_field(self, win):
+        w, _ = win
+        w._password_ssid = "HomeNet"
+        w._on_network_password_loaded("HomeNet", "secret123")
+        assert w.saved_connection_change_password_field.text() == "secret123"
+
+    def test_matching_ssid_updates_baseline(self, win):
+        w, _ = win
+        w._password_ssid = "HomeNet"
+        w._on_network_password_loaded("HomeNet", "secret123")
+        assert w._initial_password == "secret123"
+
+    def test_non_empty_password_clears_placeholder(self, win):
+        w, _ = win
+        w._password_ssid = "HomeNet"
+        w.saved_connection_change_password_field.setPlaceholderText("Enter password")
+        w._on_network_password_loaded("HomeNet", "secret123")
+        assert w.saved_connection_change_password_field.placeholderText() == ""
+
+    def test_empty_password_keeps_placeholder(self, win):
+        w, _ = win
+        w._password_ssid = "HomeNet"
+        w.saved_connection_change_password_field.setPlaceholderText("Enter password")
+        w._on_network_password_loaded("HomeNet", "")
+        assert w.saved_connection_change_password_field.placeholderText() == (
+            "Enter password"
+        )
+
+    def test_stale_ssid_ignored(self, win):
+        """A late reply for a previously viewed network must not leak its psk."""
+        w, _ = win
+        w._password_ssid = "HomeNet"
+        w.saved_connection_change_password_field.setText("")
+        w._initial_password = ""
+        w._on_network_password_loaded("OtherNet", "othersecret")
+        assert w.saved_connection_change_password_field.text() == ""
+        assert w._initial_password == ""
+
+    def test_empty_tracked_ssid_ignores_reply(self, win):
+        w, _ = win
+        w._password_ssid = ""
+        w._on_network_password_loaded("HomeNet", "secret123")
+        assert w.saved_connection_change_password_field.text() == ""

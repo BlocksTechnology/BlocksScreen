@@ -3066,3 +3066,120 @@ class TestGetSavedNetworksHandlesMalformedEntry:
         result = _run(w._get_saved_networks_impl())
         assert len(result) == 1
         assert result[0].ssid == "GoodNet"
+
+
+class TestValidatePsk:
+    """WPA passphrase length rules NM enforces, checked before we touch a profile."""
+
+    def test_seven_chars_rejected(self):
+        result = NetworkManagerWorker._validate_psk("1234567")
+        assert result is not None
+        assert result.success is False
+        assert result.error_code == "invalid_password_length"
+
+    def test_eight_chars_accepted(self):
+        assert NetworkManagerWorker._validate_psk("12345678") is None
+
+    def test_sixty_three_chars_accepted(self):
+        assert NetworkManagerWorker._validate_psk("a" * 63) is None
+
+    def test_sixty_four_hex_accepted(self):
+        assert NetworkManagerWorker._validate_psk("a" * 64) is None
+
+    def test_sixty_four_uppercase_hex_accepted(self):
+        assert NetworkManagerWorker._validate_psk("ABCDEF01" * 8) is None
+
+    def test_sixty_four_non_hex_rejected(self):
+        assert NetworkManagerWorker._validate_psk("z" * 64) is not None
+
+    def test_sixty_five_chars_rejected(self):
+        assert NetworkManagerWorker._validate_psk("a" * 65) is not None
+
+    def test_empty_rejected(self):
+        assert NetworkManagerWorker._validate_psk("") is not None
+
+
+class TestPrefixToMask:
+    """Prefix length to dotted-decimal mask, with out-of-range guarded."""
+
+    def test_prefix_24(self):
+        assert NetworkManagerWorker._prefix_to_mask(24) == "255.255.255.0"
+
+    def test_prefix_16(self):
+        assert NetworkManagerWorker._prefix_to_mask(16) == "255.255.0.0"
+
+    def test_prefix_8(self):
+        assert NetworkManagerWorker._prefix_to_mask(8) == "255.0.0.0"
+
+    def test_prefix_0(self):
+        assert NetworkManagerWorker._prefix_to_mask(0) == "0.0.0.0"
+
+    def test_prefix_32(self):
+        assert NetworkManagerWorker._prefix_to_mask(32) == "255.255.255.255"
+
+    def test_negative_returns_empty(self):
+        assert NetworkManagerWorker._prefix_to_mask(-1) == ""
+
+    def test_above_32_returns_empty(self):
+        assert NetworkManagerWorker._prefix_to_mask(33) == ""
+
+
+class TestParseIpv4Settings:
+    """NM ipv4 settings dicts arrive in two shapes; both must parse."""
+
+    @staticmethod
+    def _uint(ip: str) -> int:
+        return NetworkManagerWorker._ip_to_nm_uint32(ip)
+
+    def test_legacy_addresses_shape(self):
+        ipv4 = {
+            "addresses": ("aau", [[self._uint("192.168.1.50"), 24, 0]]),
+            "gateway": ("s", "192.168.1.1"),
+            "dns": ("au", [self._uint("8.8.8.8")]),
+        }
+        addr, mask, gw, dns = NetworkManagerWorker._parse_ipv4_settings(ipv4)
+        assert addr == "192.168.1.50"
+        assert mask == "255.255.255.0"
+        assert gw == "192.168.1.1"
+        assert dns == ("8.8.8.8",)
+
+    def test_address_data_shape(self):
+        ipv4 = {
+            "addresses": ("aau", []),
+            "address-data": ("aa{sv}", [{"address": ("s", "10.0.0.7"), "prefix": ("u", 16)}]),
+            "gateway": ("s", "10.0.0.1"),
+            "dns-data": ("as", ["1.1.1.1", "9.9.9.9"]),
+        }
+        addr, mask, gw, dns = NetworkManagerWorker._parse_ipv4_settings(ipv4)
+        assert addr == "10.0.0.7"
+        assert mask == "255.255.0.0"
+        assert gw == "10.0.0.1"
+        assert dns == ("1.1.1.1", "9.9.9.9")
+
+    def test_dns_data_wins_over_legacy_dns(self):
+        ipv4 = {
+            "dns-data": ("as", ["1.1.1.1"]),
+            "dns": ("au", [self._uint("8.8.8.8")]),
+        }
+        _, _, _, dns = NetworkManagerWorker._parse_ipv4_settings(ipv4)
+        assert dns == ("1.1.1.1",)
+
+    def test_empty_dict_yields_blanks(self):
+        assert NetworkManagerWorker._parse_ipv4_settings({}) == ("", "", "", ())
+
+    def test_zero_prefix_yields_blank_mask(self):
+        ipv4 = {"addresses": ("aau", [[self._uint("192.168.1.50"), 0, 0]])}
+        addr, mask, _, _ = NetworkManagerWorker._parse_ipv4_settings(ipv4)
+        assert addr == "192.168.1.50"
+        assert mask == ""
+
+    def test_malformed_addresses_do_not_raise(self):
+        ipv4 = {"addresses": ("aau", [["not-an-int"]]), "gateway": ("s", "192.168.1.1")}
+        addr, mask, gw, _ = NetworkManagerWorker._parse_ipv4_settings(ipv4)
+        assert (addr, mask) == ("", "")
+        assert gw == "192.168.1.1"
+
+    def test_malformed_dns_does_not_raise(self):
+        ipv4 = {"dns": ("au", ["not-an-int"])}
+        _, _, _, dns = NetworkManagerWorker._parse_ipv4_settings(ipv4)
+        assert dns == ()

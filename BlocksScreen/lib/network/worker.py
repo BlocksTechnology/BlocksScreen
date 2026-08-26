@@ -965,52 +965,19 @@ class NetworkManagerWorker(QObject):
             return NetworkState()
         try:
             wifi_iface = self._get_wifi_iface_name()
-            connectivity = await self._read_connectivity()
-            wifi_enabled = bool(await self._nm().wireless_enabled)
-            current_ssid = await self._get_current_ssid()
+            # Independent property reads: one round-trip batch instead of four.
+            connectivity, wifi_raw, current_ssid, eth_connected = await asyncio.gather(
+                self._read_connectivity(),
+                self._nm().wireless_enabled,
+                self._get_current_ssid(),
+                self._is_ethernet_connected(),
+            )
+            wifi_enabled = bool(wifi_raw)
 
-            eth_connected = await self._is_ethernet_connected()
-            if eth_connected:
-                current_ip = await self._get_ip_by_interface(
-                    self._primary_wired_iface or "eth0"
-                )
-                if not current_ip:
-                    current_ip = self._get_ip_os_fallback(
-                        self._primary_wired_iface or "eth0"
-                    )
-                # Wi-Fi may stay up alongside the cable; keep the SSID for signal.
-            elif current_ssid:
-                current_ip = await self._get_ip_by_interface(wifi_iface)
-                if not current_ip:
-                    current_ip = await self._get_current_ip()
-            else:
-                current_ip = ""
-
-            if not current_ip and connectivity in (
-                ConnectivityState.FULL,
-                ConnectivityState.LIMITED,
-            ):
-                for _iface in (
-                    self._primary_wired_iface or "eth0",
-                    wifi_iface,
-                ):
-                    _fallback = self._get_ip_os_fallback(_iface)
-                    if _fallback:
-                        current_ip = _fallback
-                        if _iface != wifi_iface:
-                            eth_connected = True
-                        break
-
-            signal = 0
-            sec_type = ""
-            if current_ssid:
-                # The associated AP has live strength; the scan cache may be empty.
-                signal = await self._active_ap_signal()
-                if not signal:
-                    signal_map = await self._build_signal_map()
-                    signal = signal_map.get(current_ssid.lower(), 0)
-                saved = await self._get_saved_network_cached(current_ssid)
-                sec_type = saved.security_type if saved else ""
+            current_ip, eth_connected = await self._resolve_current_ip(
+                wifi_iface, current_ssid, bool(eth_connected), connectivity
+            )
+            signal, sec_type = await self._wifi_signal_and_security(current_ssid)
 
             hotspot_enabled = current_ssid == self._hotspot_config.ssid
 
@@ -1023,6 +990,9 @@ class NetworkManagerWorker(QObject):
                 if not current_ip:
                     current_ip = await self._get_ip_by_interface(wifi_iface)
 
+            carrier, vlans = await asyncio.gather(
+                self._has_ethernet_carrier(), self._get_active_vlans()
+            )
             logger.info(
                 "state: conn=%s ssid='%s' ip=%s wifi=%s eth=%s hotspot=%s sig=%d",
                 connectivity.name,
@@ -1042,12 +1012,56 @@ class NetworkManagerWorker(QObject):
                 signal_strength=signal,
                 security_type=sec_type,
                 ethernet_connected=eth_connected,
-                ethernet_carrier=await self._has_ethernet_carrier(),
-                active_vlans=await self._get_active_vlans(),
+                ethernet_carrier=carrier,
+                active_vlans=vlans,
             )
         except Exception as exc:
             logger.error("Error building current state: %s", exc)
             return NetworkState()
+
+    async def _resolve_current_ip(
+        self,
+        wifi_iface: str,
+        ssid: str,
+        eth_connected: bool,
+        connectivity: ConnectivityState,
+    ) -> tuple[str, bool]:
+        """Resolve the active IPv4 address, returning it plus the ethernet flag."""
+        wired = self._primary_wired_iface or "eth0"
+        if eth_connected:
+            # Wi-Fi may stay up alongside the cable; keep the SSID for signal.
+            current_ip = await self._get_ip_by_interface(wired)
+            if not current_ip:
+                current_ip = self._get_ip_os_fallback(wired)
+        elif ssid:
+            current_ip = await self._get_ip_by_interface(wifi_iface)
+            if not current_ip:
+                current_ip = await self._get_current_ip()
+        else:
+            current_ip = ""
+
+        if current_ip or connectivity not in (
+            ConnectivityState.FULL,
+            ConnectivityState.LIMITED,
+        ):
+            return current_ip, eth_connected
+
+        for iface in (wired, wifi_iface):
+            fallback = self._get_ip_os_fallback(iface)
+            if fallback:
+                return fallback, eth_connected or iface != wifi_iface
+        return current_ip, eth_connected
+
+    async def _wifi_signal_and_security(self, ssid: str) -> tuple[int, str]:
+        """Return the live signal strength and saved security type for ``ssid``."""
+        if not ssid:
+            return 0, ""
+        # The associated AP has live strength; the scan cache may be empty.
+        signal = await self._active_ap_signal()
+        if not signal:
+            signal = (await self._build_signal_map()).get(ssid.lower(), 0)
+        saved = await self._get_saved_network_cached(ssid)
+        return signal, saved.security_type if saved else ""
 
     @staticmethod
     def _map_connectivity(value: int) -> ConnectivityState:
@@ -1143,28 +1157,7 @@ class NetworkManagerWorker(QObject):
     async def _get_ip_by_interface(self, interface: str = "wlan0") -> str:
         """Return the IPv4 address assigned to *interface* via NM's IP4Config D-Bus object."""
         try:
-            device_path = self._iface_to_device_path.get(interface)
-            if device_path:
-                # Confirm the cached path still is this interface, not a reused one.
-                try:
-                    if await self._generic(device_path).interface != interface:
-                        logger.warning(
-                            "ip_by_iface: cached %s -> %s is stale, re-resolving",
-                            interface,
-                            device_path,
-                        )
-                        self._iface_to_device_path.pop(interface, None)
-                        device_path = ""
-                except Exception:
-                    self._iface_to_device_path.pop(interface, None)
-                    device_path = ""
-            if not device_path:
-                devices = await self._nm().get_devices()
-                for dp in devices:
-                    if await self._generic(dp).interface == interface:
-                        device_path = dp
-                        self._iface_to_device_path[interface] = dp
-                        break
+            device_path = await self._device_path_for_iface(interface)
             if not device_path:
                 return ""
             ip4_path = await self._generic(device_path).ip4_config
@@ -1177,6 +1170,35 @@ class NetworkManagerWorker(QObject):
         except Exception as exc:
             logger.error("Failed to get IP for %s: %s", interface, exc)
             return ""
+
+    async def _device_path_for_iface(self, interface: str) -> str:
+        """Return the NM device path for *interface*, refreshing a stale cache entry."""
+        device_path = self._iface_to_device_path.get(interface)
+        if device_path and not await self._cached_path_is_valid(interface, device_path):
+            device_path = ""
+        if device_path:
+            return device_path
+
+        for dp in await self._nm().get_devices():
+            if await self._generic(dp).interface == interface:
+                self._iface_to_device_path[interface] = dp
+                return dp
+        return ""
+
+    async def _cached_path_is_valid(self, interface: str, device_path: str) -> bool:
+        """Check a cached device path still maps to *interface*, dropping it if not."""
+        try:
+            if await self._generic(device_path).interface == interface:
+                return True
+            logger.warning(
+                "ip_by_iface: cached %s -> %s is stale, re-resolving",
+                interface,
+                device_path,
+            )
+        except Exception as exc:
+            logger.debug("ip_by_iface: cached %s unreadable: %s", device_path, exc)
+        self._iface_to_device_path.pop(interface, None)
+        return False
 
     async def _async_scan_networks(self) -> None:
         """Request an NM rescan, parse visible APs, and emit networks_scanned.
@@ -1586,27 +1608,12 @@ class NetworkManagerWorker(QObject):
             logger.info("add_network: '%s' rejected, psk len=%d", ssid, len(password))
             return bad
 
-        backup: dict | None = None
-        if await self._is_known(ssid):
-            backup = await self._backup_profile(ssid)
-            logger.info(
-                "add_network: replacing saved '%s' (backup=%s)", ssid, bool(backup)
-            )
-            await self._delete_network_impl(ssid)
-            self._invalidate_saved_cache()
+        backup = await self._backup_and_drop_existing(ssid)
 
         await self._request_scan_if_allowed()
 
-        ap_paths = await self._wifi().get_all_access_points()
-        target_ap_path: str | None = None
-        target_ap_props: dict[str, object] = {}
-        for ap_path, props in await self._gather_ap_properties(ap_paths):
-            if self._decode_ssid(props.get("ssid", b"")) == ssid:
-                target_ap_path = ap_path
-                target_ap_props = props
-                break
-
-        if not target_ap_path:
+        target_ap_props = await self._find_ap_props(ssid)
+        if target_ap_props is None:
             return ConnectionResult(False, f"Network '{ssid}' not found", "not_found")
 
         interface = await self._wifi().interface
@@ -1628,38 +1635,67 @@ class NetworkManagerWorker(QObject):
                 False, str(exc), "add_failed"
             )
 
-        if _CAN_RELOAD_CONNECTIONS:
-            try:
-                await self._nm_settings().reload_connections()
-            except Exception as reload_err:
-                logger.debug("reload_connections non-fatal: %s", reload_err)
+        await self._reload_connections()
 
         try:
             await self._nm().activate_connection(conn_path)
             if not await self._wait_for_connection(ssid, timeout=_WIFI_CONNECT_TIMEOUT):
-                logger.warning("add_network: '%s' never activated, rolling back", ssid)
-                await self._delete_network_impl(ssid)
-                self._invalidate_saved_cache()
-                if backup and await self._restore_profile(ssid, backup):
-                    return ConnectionResult(
-                        False,
-                        f"Could not connect to '{ssid}'.\n"
-                        "The previously saved password was kept.\n"
-                        "Please check the password and try again.",
-                        "auth_failed",
-                    )
-                return ConnectionResult(
-                    False,
-                    f"Authentication failed for '{ssid}'.\n"
-                    "The saved profile has been removed.\n"
-                    "Please check the password and try again.",
-                    "auth_failed",
-                )
+                return await self._rollback_failed_add(ssid, backup)
             logger.info("add_network: '%s' activated", ssid)
             return ConnectionResult(True, f"Network '{ssid}' added and connecting")
         except Exception as act_err:
             logger.warning("Activate after add failed: %s", act_err)
             return ConnectionResult(True, f"Network '{ssid}' added (activate manually)")
+
+    async def _reload_connections(self) -> None:
+        """Ask NM to re-read connection files; non-fatal and root-only."""
+        if not _CAN_RELOAD_CONNECTIONS:
+            return
+        try:
+            await self._nm_settings().reload_connections()
+        except Exception as reload_err:
+            logger.debug("reload_connections non-fatal: %s", reload_err)
+
+    async def _backup_and_drop_existing(self, ssid: str) -> dict | None:
+        """Back up and delete a saved profile for *ssid* so it can be re-added cleanly."""
+        if not await self._is_known(ssid):
+            return None
+        backup = await self._backup_profile(ssid)
+        logger.info("add_network: replacing saved '%s' (backup=%s)", ssid, bool(backup))
+        await self._delete_network_impl(ssid)
+        self._invalidate_saved_cache()
+        return backup
+
+    async def _find_ap_props(self, ssid: str) -> dict[str, object] | None:
+        """Return the scanned AP properties for *ssid*, or None if it is not visible."""
+        ap_paths = await self._wifi().get_all_access_points()
+        for _ap_path, props in await self._gather_ap_properties(ap_paths):
+            if self._decode_ssid(props.get("ssid", b"")) == ssid:
+                return props
+        return None
+
+    async def _rollback_failed_add(
+        self, ssid: str, backup: dict | None
+    ) -> ConnectionResult:
+        """Delete the profile that never activated and restore *backup* if there is one."""
+        logger.warning("add_network: '%s' never activated, rolling back", ssid)
+        await self._delete_network_impl(ssid)
+        self._invalidate_saved_cache()
+        if backup and await self._restore_profile(ssid, backup):
+            return ConnectionResult(
+                False,
+                f"Could not connect to '{ssid}'.\n"
+                "The previously saved password was kept.\n"
+                "Please check the password and try again.",
+                "auth_failed",
+            )
+        return ConnectionResult(
+            False,
+            f"Authentication failed for '{ssid}'.\n"
+            "The saved profile has been removed.\n"
+            "Please check the password and try again.",
+            "auth_failed",
+        )
 
     def _build_connection_properties(
         self,
@@ -1923,11 +1959,7 @@ class NetworkManagerWorker(QObject):
         try:
             await self._conn_settings(conn_path).delete()
 
-            if _CAN_RELOAD_CONNECTIONS:
-                try:
-                    await self._nm_settings().reload_connections()
-                except Exception as reload_err:
-                    logger.debug("reload_connections non-fatal: %s", reload_err)
+            await self._reload_connections()
 
             current_ssid = await self._get_current_ssid()
             if current_ssid and current_ssid.lower() == ssid.lower():
@@ -2064,56 +2096,13 @@ class NetworkManagerWorker(QObject):
             if not self._system_bus:
                 logger.warning("set_wifi_enabled(%s): no system bus", enabled)
                 return
-            # Diagnostics only: never let a log read abort the toggle.
-            try:
-                logger.info(
-                    "set_wifi_enabled(%s): radio=%s networking=%s hw=%s",
-                    enabled,
-                    await self._nm().wireless_enabled,
-                    await self._nm().networking_enabled,
-                    await self._nm().wireless_hardware_enabled,
-                )
-            except Exception as log_exc:
-                logger.debug(
-                    "set_wifi_enabled(%s): state log failed: %s", enabled, log_exc
-                )
+            await self._log_radio_state(enabled)
             if not enabled:
                 self._is_hotspot_active = False
+            if enabled and not await self._wifi_enable_preflight():
+                return
 
-            if enabled:
-                if not await self._wifi_hardware_enabled():
-                    self.connection_result.emit(
-                        ConnectionResult(False, "Wi-Fi is blocked by a hardware switch")
-                    )
-                    return
-                if not await self._ensure_networking_enabled():
-                    self.connection_result.emit(
-                        ConnectionResult(False, "NetworkManager networking is disabled")
-                    )
-                    return
-
-            ok = True
-            current = await self._nm().wireless_enabled
-            if current != enabled:
-                if not enabled:
-                    if self._primary_wifi_path:
-                        try:
-                            await self._wifi().disconnect()
-                        except Exception as exc:
-                            logger.debug(
-                                "Disconnect before Wi-Fi toggle ignored: %s", exc
-                            )
-                        await asyncio.sleep(0.5)
-
-                await self._nm().wireless_enabled.set_async(enabled)
-
-                ok = await self._wait_for_wifi_radio(enabled, timeout=8.0)
-                if not ok:
-                    logger.warning(
-                        "Wi-Fi radio did not reach %s within 8 s",
-                        "enabled" if enabled else "disabled",
-                    )
-
+            ok = await self._apply_wifi_radio(enabled)
             word = "enabled" if enabled else "disabled"
             self.connection_result.emit(
                 ConnectionResult(
@@ -2125,6 +2114,54 @@ class NetworkManagerWorker(QObject):
         except Exception as exc:
             logger.error("Failed to toggle Wi-Fi: %s", exc)
             self.error_occurred.emit("set_wifi_enabled", str(exc))
+
+    async def _log_radio_state(self, enabled: bool) -> None:
+        """Log the radio/networking flags; diagnostics only, never aborts the toggle."""
+        try:
+            logger.info(
+                "set_wifi_enabled(%s): radio=%s networking=%s hw=%s",
+                enabled,
+                await self._nm().wireless_enabled,
+                await self._nm().networking_enabled,
+                await self._nm().wireless_hardware_enabled,
+            )
+        except Exception as log_exc:
+            logger.debug("set_wifi_enabled(%s): state log failed: %s", enabled, log_exc)
+
+    async def _wifi_enable_preflight(self) -> bool:
+        """Check the rfkill switch and NM networking, emitting the reason on failure."""
+        if not await self._wifi_hardware_enabled():
+            self.connection_result.emit(
+                ConnectionResult(False, "Wi-Fi is blocked by a hardware switch")
+            )
+            return False
+        if not await self._ensure_networking_enabled():
+            self.connection_result.emit(
+                ConnectionResult(False, "NetworkManager networking is disabled")
+            )
+            return False
+        return True
+
+    async def _apply_wifi_radio(self, enabled: bool) -> bool:
+        """Set the radio flag and wait for it to settle; True if already there or reached."""
+        if await self._nm().wireless_enabled == enabled:
+            return True
+
+        if not enabled and self._primary_wifi_path:
+            try:
+                await self._wifi().disconnect()
+            except Exception as exc:
+                logger.debug("Disconnect before Wi-Fi toggle ignored: %s", exc)
+            await asyncio.sleep(0.5)
+
+        await self._nm().wireless_enabled.set_async(enabled)
+        ok = await self._wait_for_wifi_radio(enabled, timeout=8.0)
+        if not ok:
+            logger.warning(
+                "Wi-Fi radio did not reach %s within 8 s",
+                "enabled" if enabled else "disabled",
+            )
+        return ok
 
     async def _async_disconnect_ethernet(self) -> None:
         """Deactivate all VLANs, disconnect ethernet, and wait up to 4 s for teardown."""
@@ -2205,36 +2242,17 @@ class NetworkManagerWorker(QObject):
 
             iface = self._primary_wired_iface or "eth0"
 
-            try:
-                existing_conns = await self._nm_settings().list_connections()
-                for existing_path in existing_conns:
-                    try:
-                        s = await self._conn_settings(existing_path).get_settings()
-                        if (
-                            s.get("connection", {}).get("type", (None, ""))[1] == "vlan"
-                            and s.get("vlan", {}).get("id", (None, -1))[1] == vlan_id
-                            and s.get("vlan", {}).get("parent", (None, ""))[1] == iface
-                        ):
-                            self.connection_result.emit(
-                                ConnectionResult(
-                                    False,
-                                    f"VLAN {vlan_id} already exists on "
-                                    f"{iface}.\nRemove it first before "
-                                    "creating a new one.",
-                                    "duplicate_vlan",
-                                )
-                            )
-                            return
-                    except Exception as exc:
-                        logger.debug(
-                            "Skipping connection in duplicate VLAN check: %s", exc
-                        )
-                        continue
-            except Exception as dup_err:
-                logger.debug(
-                    "Duplicate VLAN check failed (non-fatal): %s",
-                    dup_err,
+            if await self._vlan_profile_exists(vlan_id, iface):
+                self.connection_result.emit(
+                    ConnectionResult(
+                        False,
+                        f"VLAN {vlan_id} already exists on "
+                        f"{iface}.\nRemove it first before "
+                        "creating a new one.",
+                        "duplicate_vlan",
+                    )
                 )
+                return
 
             vlan_conn_id = f"VLAN {vlan_id}"
 
@@ -2244,39 +2262,13 @@ class NetworkManagerWorker(QObject):
             await self._delete_all_connections_by_id(vlan_conn_id)
             await asyncio.sleep(0.5)
 
-            prefix = self._mask_to_prefix(subnet_mask)
-            ip_uint = self._ip_to_nm_uint32(ip_address)
-            gw_uint = self._ip_to_nm_uint32(gateway) if gateway else 0
-            dns_list: list[int] = []
-            if dns1:
-                dns_list.append(self._ip_to_nm_uint32(dns1))
-            if dns2:
-                dns_list.append(self._ip_to_nm_uint32(dns2))
-
-            conn_props: dict[str, object] = {
-                "connection": {
-                    "id": ("s", vlan_conn_id),
-                    "uuid": ("s", str(uuid4())),
-                    "type": ("s", "vlan"),
-                    "autoconnect": ("b", False),
-                },
-                "vlan": {
-                    "id": ("u", vlan_id),
-                    "parent": ("s", iface),
-                },
-                "ipv4": {
-                    "method": ("s", "manual"),
-                    "addresses": (
-                        "aau",
-                        [[ip_uint, prefix, gw_uint]],
-                    ),
-                    "gateway": ("s", gateway or ""),
-                    "dns": ("au", dns_list),
-                    "route-metric": ("i", 500),
-                },
-                "ipv6": {"method": ("s", "ignore")},
-            }
-
+            conn_props = self._build_vlan_properties(
+                vlan_conn_id,
+                vlan_id,
+                iface,
+                (ip_address, subnet_mask, gateway),
+                (dns1, dns2),
+            )
             conn_path = await self._nm_settings().add_connection(conn_props)
             await self._nm().activate_connection(conn_path, "/", "/")
             self.state_changed.emit(await self._build_current_state())
@@ -2290,6 +2282,62 @@ class NetworkManagerWorker(QObject):
             logger.error("Failed to create VLAN %d: %s", vlan_id, exc)
             self.error_occurred.emit("create_vlan", str(exc))
             self.state_changed.emit(await self._build_current_state())
+
+    async def _vlan_profile_exists(self, vlan_id: int, iface: str) -> bool:
+        """Check whether a VLAN profile with *vlan_id* already rides on *iface*."""
+        try:
+            for existing_path in await self._nm_settings().list_connections():
+                try:
+                    s = await self._conn_settings(existing_path).get_settings()
+                except Exception as exc:
+                    logger.debug("Skipping connection in duplicate VLAN check: %s", exc)
+                    continue
+                if (
+                    s.get("connection", {}).get("type", (None, ""))[1] == "vlan"
+                    and s.get("vlan", {}).get("id", (None, -1))[1] == vlan_id
+                    and s.get("vlan", {}).get("parent", (None, ""))[1] == iface
+                ):
+                    return True
+        except Exception as dup_err:
+            logger.debug("Duplicate VLAN check failed (non-fatal): %s", dup_err)
+        return False
+
+    def _build_vlan_properties(
+        self,
+        conn_id: str,
+        vlan_id: int,
+        iface: str,
+        ipv4: tuple[str, str, str],
+        dns: tuple[str, str],
+    ) -> dict[str, object]:
+        """Build the NM property dict for a static-IP VLAN profile on *iface*."""
+        ip_address, subnet_mask, gateway = ipv4
+        dns_list = [self._ip_to_nm_uint32(d) for d in dns if d]
+        addr = [
+            self._ip_to_nm_uint32(ip_address),
+            self._mask_to_prefix(subnet_mask),
+            self._ip_to_nm_uint32(gateway) if gateway else 0,
+        ]
+        return {
+            "connection": {
+                "id": ("s", conn_id),
+                "uuid": ("s", str(uuid4())),
+                "type": ("s", "vlan"),
+                "autoconnect": ("b", False),
+            },
+            "vlan": {
+                "id": ("u", vlan_id),
+                "parent": ("s", iface),
+            },
+            "ipv4": {
+                "method": ("s", "manual"),
+                "addresses": ("aau", [addr]),
+                "gateway": ("s", gateway or ""),
+                "dns": ("au", dns_list),
+                "route-metric": ("i", 500),
+            },
+            "ipv6": {"method": ("s", "ignore")},
+        }
 
     async def _async_delete_vlan(self, vlan_id: int) -> None:
         """Delete all NM connection profiles for *vlan_id* and emit connection_result."""
@@ -2312,82 +2360,70 @@ class NetworkManagerWorker(QObject):
         """Return a tuple of VlanInfo for all currently active VLAN connections."""
         vlans: list[VlanInfo] = []
         try:
-            active_paths = await self._nm().active_connections
-            for active_path in active_paths:
+            for active_path in await self._nm().active_connections:
                 try:
-                    ac = self._active_conn(active_path)
-                    conn_path = await ac.connection
-                    settings = await self._conn_settings(conn_path).get_settings()
-                    conn_type = settings.get("connection", {}).get("type", (None, ""))[
-                        1
-                    ]
-                    if conn_type != "vlan":
-                        continue
-
-                    vlan_id = settings.get("vlan", {}).get("id", (None, 0))[1]
-                    iface = settings.get("connection", {}).get(
-                        "interface-name", (None, "")
-                    )[1]
-                    if not iface:
-                        parent = settings.get("vlan", {}).get("parent", (None, "eth0"))[
-                            1
-                        ]
-                        iface = f"{parent}.{vlan_id}"
-
-                    ipv4_method = settings.get("ipv4", {}).get(
-                        "method", (None, "auto")
-                    )[1]
-                    is_dhcp = ipv4_method != "manual"
-
-                    dns_data = settings.get("ipv4", {}).get("dns-data", (None, []))[1]
-                    dns_servers: tuple[str, ...] = ()
-                    if dns_data:
-                        dns_servers = tuple(str(d) for d in dns_data)
-                    else:
-                        dns_raw = settings.get("ipv4", {}).get("dns", (None, []))[1]
-                        if dns_raw:
-                            dns_servers = tuple(
-                                self._nm_uint32_to_ip(d) for d in dns_raw
-                            )
-
-                    ip_addr = ""
-                    gateway = ""
-                    try:
-                        ip4_path = await self._active_conn(active_path).ip4_config
-                        if ip4_path and ip4_path != "/":
-                            ip4_cfg = self._ipv4(ip4_path)
-                            addr_data = await ip4_cfg.address_data
-                            if addr_data:
-                                ip_addr = str(addr_data[0]["address"][1])
-                            gw = await ip4_cfg.gateway
-                            if gw:
-                                gateway = str(gw)
-                    except Exception as exc:
-                        logger.debug(
-                            "D-Bus IP read for VLAN failed, falling back to OS: %s", exc
-                        )
-                        if iface:
-                            ip_addr = await self._get_ip_by_interface(iface)
-
-                    if not ip_addr and iface:
-                        ip_addr = self._get_ip_os_fallback(iface)
-
-                    vlans.append(
-                        VlanInfo(
-                            vlan_id=int(vlan_id),
-                            ip_address=ip_addr,
-                            interface=iface,
-                            gateway=gateway,
-                            dns_servers=dns_servers,
-                            is_dhcp=is_dhcp,
-                        )
-                    )
+                    vlan = await self._vlan_from_active(active_path)
                 except Exception as exc:
                     logger.debug("Skipping connection in active VLAN list: %s", exc)
                     continue
+                if vlan:
+                    vlans.append(vlan)
         except Exception as exc:
             logger.debug("Error getting active VLANs: %s", exc)
         return tuple(vlans)
+
+    async def _vlan_from_active(self, active_path: str) -> VlanInfo | None:
+        """Build VlanInfo for an active connection path, or None if it is not a VLAN."""
+        conn_path = await self._active_conn(active_path).connection
+        settings = await self._conn_settings(conn_path).get_settings()
+        conn = settings.get("connection", {})
+        if conn.get("type", (None, ""))[1] != "vlan":
+            return None
+
+        vlan_cfg = settings.get("vlan", {})
+        vlan_id = vlan_cfg.get("id", (None, 0))[1]
+        iface = conn.get("interface-name", (None, ""))[1]
+        if not iface:
+            iface = f"{vlan_cfg.get('parent', (None, 'eth0'))[1]}.{vlan_id}"
+
+        ipv4 = settings.get("ipv4", {})
+        ip_addr, gateway = await self._vlan_ip_gateway(active_path, iface)
+        return VlanInfo(
+            vlan_id=int(vlan_id),
+            ip_address=ip_addr,
+            interface=iface,
+            gateway=gateway,
+            dns_servers=self._vlan_dns(ipv4),
+            is_dhcp=ipv4.get("method", (None, "auto"))[1] != "manual",
+        )
+
+    def _vlan_dns(self, ipv4: dict) -> tuple[str, ...]:
+        """Extract DNS servers from an ipv4 settings dict, preferring ``dns-data``."""
+        dns_data = ipv4.get("dns-data", (None, []))[1]
+        if dns_data:
+            return tuple(str(d) for d in dns_data)
+        return tuple(self._nm_uint32_to_ip(d) for d in ipv4.get("dns", (None, []))[1])
+
+    async def _vlan_ip_gateway(self, active_path: str, iface: str) -> tuple[str, str]:
+        """Read a VLAN's IPv4 address and gateway, falling back to the OS on failure."""
+        ip_addr = ""
+        gateway = ""
+        try:
+            ip4_path = await self._active_conn(active_path).ip4_config
+            if ip4_path and ip4_path != "/":
+                ip4_cfg = self._ipv4(ip4_path)
+                addr_data = await ip4_cfg.address_data
+                if addr_data:
+                    ip_addr = str(addr_data[0]["address"][1])
+                gateway = str(await ip4_cfg.gateway or "")
+        except Exception as exc:
+            logger.debug("D-Bus IP read for VLAN failed, falling back to OS: %s", exc)
+            if iface:
+                ip_addr = await self._get_ip_by_interface(iface)
+
+        if not ip_addr and iface:
+            ip_addr = self._get_ip_os_fallback(iface)
+        return ip_addr, gateway
 
     async def _deactivate_all_vlans(self) -> None:
         """Deactivate all active VLAN connections via the NM D-Bus interface."""
@@ -2472,43 +2508,40 @@ class NetworkManagerWorker(QObject):
             )
             return
 
+        found_ip = await self._wait_for_profile_ip(ssid, timeout=10.0)
+        if not found_ip:
+            logger.warning("Reconnect for '%s': IP not assigned within 10 s", ssid)
+            return
+
+        logger.info("Reconnect complete for '%s': IP=%s", ssid, found_ip)
+        try:
+            self._invalidate_saved_cache()
+            self.saved_networks_loaded.emit(await self._get_saved_networks_impl())
+        except Exception as cache_err:
+            logger.debug("Cache refresh after reconnect failed: %s", cache_err)
+
+    async def _wait_for_profile_ip(self, ssid: str, timeout: float) -> str:
+        """Poll for an IPv4 address on *ssid*, returning it or "" once *timeout* elapses."""
         loop = asyncio.get_running_loop()
-        deadline = loop.time() + 10.0
+        deadline = loop.time() + timeout
         while loop.time() < deadline:
             await asyncio.sleep(1.0)
-            found_ip: str = ""
             try:
                 current = await self._get_current_ssid()
-                if current and current.lower() == ssid.lower():
-                    found_ip = await self._get_current_ip() or ""
-                    if not found_ip:
-                        found_ip = (
-                            self._get_ip_os_fallback(self._get_wifi_iface_name()) or ""
-                        )
+                if not current or current.lower() != ssid.lower():
+                    continue
+                found_ip = await self._get_current_ip() or ""
+                if not found_ip:
+                    found_ip = (
+                        self._get_ip_os_fallback(self._get_wifi_iface_name()) or ""
+                    )
+                if found_ip:
+                    return found_ip
             except Exception as exc:
                 logger.debug(
                     "IP address lookup during connection wait ignored: %s", exc
                 )
-
-            if found_ip:
-                logger.info(
-                    "Reconnect complete for '%s': IP=%s",
-                    ssid,
-                    found_ip,
-                )
-                try:
-                    self._invalidate_saved_cache()
-                    self.saved_networks_loaded.emit(
-                        await self._get_saved_networks_impl()
-                    )
-                except Exception as cache_err:
-                    logger.debug(
-                        "Cache refresh after reconnect failed: %s",
-                        cache_err,
-                    )
-                return
-
-        logger.warning("Reconnect for '%s': IP not assigned within 10 s", ssid)
+        return ""
 
     async def _async_update_wifi_static_ip(
         self,

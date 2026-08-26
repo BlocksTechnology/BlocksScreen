@@ -118,10 +118,7 @@ class IPAddressLineEdit(BlocksCustomLinEdit):
         """Return ``True`` when the current text is a valid subnet mask or CIDR prefix."""
         txt = self.text().strip()
         if txt.isdigit():
-            n = int(txt)
-            if 0 <= n <= 32:
-                return True
-            return False
+            return 0 <= int(txt) <= 32
 
         try:
             _ipaddress.IPv4Network(f"0.0.0.0/{txt}", strict=False)
@@ -129,6 +126,7 @@ class IPAddressLineEdit(BlocksCustomLinEdit):
         except ValueError:
             return False
 
+    @pyqtSlot(str)
     def _on_text_changed(self, text: str) -> None:
         """Update the field border colour in real-time as the user types."""
         if not text:
@@ -140,6 +138,45 @@ class IPAddressLineEdit(BlocksCustomLinEdit):
         except ValueError:
             self.setStyleSheet(self._INVALID_STYLE)
         self.update()
+
+
+# No SSID and no hotspot is enough; the radio itself may still be settling.
+def _link_down(_win: "NetworkControlWindow", state: NetworkState) -> bool:
+    return not state.current_ssid and not state.hotspot_enabled
+
+
+def _joined_target(win: "NetworkControlWindow", state: NetworkState) -> bool:
+    return bool(
+        win._target_ssid
+        and state.current_ssid == win._target_ssid
+        and state.current_ip
+        and state.connectivity in (ConnectivityState.FULL, ConnectivityState.LIMITED)
+    )
+
+
+# Success messages the state stream already reflects; showing a popup would be noise.
+_SILENT_SUCCESS = ("wi-fi disabled", "disconnected", "wi-fi enabled")
+# NM errors seen while the wired link tears down; a retry usually succeeds.
+_TRANSIENT_MISMATCH = (
+    "not compatible with device",
+    "mismatching interface",
+    "not available because profile",
+)
+
+
+# Pending operation -> (outcome once settled, predicate telling it has settled).
+_PENDING_OP_RULES = {
+    PendingOperation.WIFI_OFF: (False, _link_down),
+    PendingOperation.HOTSPOT_OFF: (False, _link_down),
+    PendingOperation.HOTSPOT_ON: (
+        True,
+        lambda w, s: bool(s.hotspot_enabled and s.current_ssid and s.current_ip),
+    ),
+    PendingOperation.WIFI_ON: (True, _joined_target),
+    PendingOperation.CONNECT: (True, _joined_target),
+    PendingOperation.ETHERNET_ON: (True, lambda w, s: bool(s.ethernet_connected)),
+    PendingOperation.ETHERNET_OFF: (False, lambda w, s: not s.ethernet_connected),
+}
 
 
 class NetworkControlWindow(QtWidgets.QStackedWidget):
@@ -316,86 +353,15 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self._sync_toggle_states(state)
 
         if self._is_connecting:
-            # OFF operations: complete when radio off + no connection
-            if self._pending_operation in (
-                PendingOperation.WIFI_OFF,
-                PendingOperation.HOTSPOT_OFF,
-            ):
-                if (
-                    not state.wifi_enabled
-                    and not state.hotspot_enabled
-                    and not state.current_ssid
-                ):
-                    self._clear_loading()
-                    self._display_disconnected_state()
-                    self._emit_status_icon(state)
-                    return
-                # Also catch partial-off (wifi still disabling, no ssid)
-                if not state.current_ssid and not state.hotspot_enabled:
-                    self._clear_loading()
-                    self._display_disconnected_state()
-                    self._emit_status_icon(state)
-                    return
-                # Still transitioning: keep loading visible
-                return
-
-            # Hotspot ON: complete when hotspot_enabled + SSID + IP
-            if self._pending_operation == PendingOperation.HOTSPOT_ON:
-                if state.hotspot_enabled and state.current_ssid and state.current_ip:
-                    self._clear_loading()
-                    self._display_connected_state(state)
-                    self._emit_status_icon(state)
-                    return
-                # Still waiting for hotspot to fully come up
-                return
-
-            if self._pending_operation in (
-                PendingOperation.WIFI_ON,
-                PendingOperation.CONNECT,
-            ):
-                if self._target_ssid and state.current_ssid == self._target_ssid:
-                    if state.current_ip and state.connectivity in (
-                        ConnectivityState.FULL,
-                        ConnectivityState.LIMITED,
-                    ):
-                        self._clear_loading()
-                        self._display_connected_state(state)
-                        self._emit_status_icon(state)
-                        return
-                return
-
-            if self._pending_operation == PendingOperation.ETHERNET_ON:
-                if state.ethernet_connected:
-                    self._clear_loading()
-                    self._sync_ethernet_panel(state)
-                    self._display_connected_state(state)
-                    self._emit_status_icon(state)
-                    return
-                return
-
-            if self._pending_operation == PendingOperation.ETHERNET_OFF:
-                if not state.ethernet_connected:
-                    self._clear_loading()
-                    self._sync_ethernet_panel(state)
-                    self._display_disconnected_state()
-                    self._emit_status_icon(state)
-                    return
-                return
-
-            # Wi-Fi static IP / DHCP reset: complete when we have the right IP.
-            if self._pending_operation == PendingOperation.WIFI_STATIC_IP:
-                ip = state.current_ip or ""
-                expected = self._pending_expected_ip
-                ip_matches = ip and (not expected or ip == expected)
-                if ip_matches:
-                    self._pending_expected_ip = ""
-                    self._clear_loading()
-                    self._display_connected_state(state)
-                    self._emit_status_icon(state)
-                    return
-                # IP not yet correct: keep loading visible
-                return
-
+            outcome = self._pending_op_outcome(state)
+            if outcome is None:
+                return  # Still transitioning: keep the loading screen up.
+            self._clear_loading()
+            if outcome:
+                self._display_connected_state(state)
+            else:
+                self._display_disconnected_state()
+            self._emit_status_icon(state)
             return
 
         # Normal (not connecting) display updates.
@@ -416,6 +382,21 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
 
         self._emit_status_icon(state)
         self._sync_active_network_list_icon(state)
+
+    def _pending_op_outcome(self, state: NetworkState) -> bool | None:
+        """Return the settled connected-ness of the pending operation, None while in flight."""
+        op = self._pending_operation
+
+        if op == PendingOperation.WIFI_STATIC_IP:
+            # Settles once an IP arrives that matches the one we asked for.
+            ip = state.current_ip or ""
+            if not ip or self._pending_expected_ip not in ("", ip):
+                return None
+            self._pending_expected_ip = ""
+            return True
+
+        outcome, settled = _PENDING_OP_RULES.get(op, (None, None))
+        return outcome if settled and settled(self, state) else None
 
     @pyqtSlot(list)
     def _on_scan_complete(self, networks: list[NetworkInfo]) -> None:
@@ -465,90 +446,79 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
     def _on_operation_complete(self, result: ConnectionResult) -> None:
         """Handle network operation completion."""
         logger.debug("Operation: success=%s, msg=%s", result.success, result.message)
-
         if result.success:
-            msg_lower = result.message.lower()
-            if "deleted" in msg_lower:
-                ssid_deleted = (
-                    self._target_ssid
-                )  # capture before _clear_loading wipes it
-                self._show_info_popup(result.message)
-                self._clear_loading()
-                self._display_wifi_on_no_connection()
-                self.setCurrentIndex(self.indexOf(self.main_network_page))
-                if ssid_deleted:
-                    self._patch_cached_network_status(
-                        ssid_deleted, NetworkStatus.DISCOVERED
-                    )
-            elif "hotspot" in msg_lower and "activated" in msg_lower:
-                self._show_hotspot_qr(
-                    self._nm.hotspot_ssid,
-                    self._nm.hotspot_password,
-                    self._nm.hotspot_security,
-                )
-            elif "hotspot disabled" in msg_lower:
-                self.qrcode_img.clearPixmap()
-                self.qrcode_img.setText("Hotspot not active")
-            elif "wi-fi disabled" in msg_lower:
-                pass
-            elif "config updated" in msg_lower:
-                self._show_info_popup(result.message)
-            elif any(
-                skip in msg_lower
-                for skip in (
-                    "added",
-                    "connecting",
-                    "disconnected",
-                    "wi-fi enabled",
-                )
-            ):
-                if (
-                    ("added" in msg_lower or "connecting" in msg_lower)
-                    and self._target_ssid
-                    and not self._current_network_is_hidden
-                ):
-                    # Hidden networks reach the cache only on the next scan.
-                    self._patch_cached_network_status(
-                        self._target_ssid, NetworkStatus.SAVED
-                    )
-            elif self._pending_operation == PendingOperation.WIFI_STATIC_IP:
-                # No popup: the new IP in the header is the confirmation.
-                pass
-            else:
-                self._show_info_popup(result.message)
+            self._handle_operation_success(result)
         else:
-            msg_lower = result.message.lower()
+            self._handle_operation_failure(result)
 
-            # Duplicate VLAN: clear loading and show the reason.
-            if result.error_code == "duplicate_vlan":
-                self._clear_loading()
-                self._show_error_popup(result.message)
+    def _handle_operation_success(self, result: ConnectionResult) -> None:
+        """Route a successful operation message to its UI reaction."""
+        msg = result.message.lower()
+        for keys, handler in (
+            (("deleted",), self._on_network_deleted),
+            (("hotspot", "activated"), self._on_hotspot_activated),
+            (("hotspot disabled",), self._on_hotspot_disabled),
+            (("config updated",), self._show_info_popup),
+            (("added",), self._on_network_saved),
+            (("connecting",), self._on_network_saved),
+        ):
+            if all(k in msg for k in keys):
+                handler(result.message)
                 return
 
+        # Silent successes: the state stream is the confirmation, no popup.
+        if not any(k in msg for k in _SILENT_SUCCESS) and (
+            self._pending_operation != PendingOperation.WIFI_STATIC_IP
+        ):
+            self._show_info_popup(result.message)
+
+    def _on_network_deleted(self, message: str) -> None:
+        """Return to the main page after a saved network was removed."""
+        ssid = self._target_ssid  # captured before _clear_loading wipes it
+        self._show_info_popup(message)
+        self._clear_loading()
+        self._display_wifi_on_no_connection()
+        self.setCurrentIndex(self.indexOf(self.main_network_page))
+        if ssid:
+            self._patch_cached_network_status(ssid, NetworkStatus.DISCOVERED)
+
+    def _on_hotspot_activated(self, _message: str) -> None:
+        """Show the QR code for the freshly activated hotspot."""
+        self._show_hotspot_qr(
+            self._nm.hotspot_ssid,
+            self._nm.hotspot_password,
+            self._nm.hotspot_security,
+        )
+
+    def _on_hotspot_disabled(self, _message: str) -> None:
+        """Clear the hotspot QR code."""
+        self.qrcode_img.clearPixmap()
+        self.qrcode_img.setText("Hotspot not active")
+
+    def _on_network_saved(self, _message: str) -> None:
+        """Mark the target SSID as saved in the list cache."""
+        # Hidden networks reach the cache only on the next scan.
+        if self._target_ssid and not self._current_network_is_hidden:
+            self._patch_cached_network_status(self._target_ssid, NetworkStatus.SAVED)
+
+    def _handle_operation_failure(self, result: ConnectionResult) -> None:
+        """Show the failure reason, retrying once on a transient device mismatch."""
+        msg = result.message.lower()
+        if result.error_code != "duplicate_vlan" and self._target_ssid:
             # Ethernet-to-Wi-Fi races the wired teardown; retry instead of erroring.
-            is_transient_mismatch = (
-                "not compatible with device" in msg_lower
-                or "mismatching interface" in msg_lower
-                or "not available because profile" in msg_lower
-            )
-            if (
-                is_transient_mismatch
-                and self._pending_operation
+            if any(k in msg for k in _TRANSIENT_MISMATCH) and (
+                self._pending_operation
                 in (PendingOperation.WIFI_ON, PendingOperation.CONNECT)
-                and self._target_ssid
             ):
-                logger.debug(
-                    "Transient NM device-mismatch, retrying in 2 s: %s",
-                    result.message,
-                )
+                logger.debug("Transient NM device-mismatch, retry in 2 s: %s", msg)
                 ssid = self._target_ssid
                 QTimer.singleShot(
                     2000, lambda _ssid=ssid: self._nm.connect_network(_ssid)
                 )
                 return  # Keep loading visible; state machine handles completion
 
-            self._clear_loading()
-            self._show_error_popup(result.message)
+        self._clear_loading()
+        self._show_error_popup(result.message)
 
     @pyqtSlot(str, str)
     def _on_network_error(self, operation: str, message: str) -> None:
@@ -767,10 +737,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
                 state.current_ip or "",
             )
             for v in state.active_vlans:
-                if v.is_dhcp:
-                    ip_label = v.ip_address or "DHCP"
-                else:
-                    ip_label = v.ip_address or "--"
+                ip_label = v.ip_address or ("DHCP" if v.is_dhcp else "--")
                 self.netlist_vlans_combo.addItem(
                     f"VLAN {v.vlan_id}: {ip_label}",
                     v.ip_address or "",
@@ -894,52 +861,53 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         """Hide the loading widget and re-enable the full UI."""
         self._set_loading_state(False)
 
+    @pyqtSlot()
     def _handle_load_timeout(self) -> None:
         """Hide the loading widget if it is still visible after the timeout fires."""
         if not self.loadingwidget.isVisible():
             return
 
         state = self._nm.current_state
-        if (
-            self._pending_operation == PendingOperation.HOTSPOT_ON
-            and state.hotspot_enabled
-            and state.current_ssid
-        ):
-            self._clear_loading()
-            self._display_connected_state(state)
+        if self._settle_late_success(state):
             return
-        if (
-            self._pending_operation
-            in (PendingOperation.WIFI_ON, PendingOperation.CONNECT)
-            and self._target_ssid
-        ):
-            if state.current_ssid == self._target_ssid and state.current_ip:
+        self._display_timeout_failure()
+
+    def _settle_late_success(self, state: NetworkState) -> bool:
+        """Accept an operation that completed just as the timer fired; True if handled."""
+        op = self._pending_operation
+
+        if op == PendingOperation.HOTSPOT_ON and state.hotspot_enabled:
+            if state.current_ssid:
                 self._clear_loading()
                 self._display_connected_state(state)
-                return
-        if (
-            self._pending_operation == PendingOperation.ETHERNET_ON
-            and state.ethernet_connected
-        ):
+                return True
+        elif op in (PendingOperation.WIFI_ON, PendingOperation.CONNECT):
+            if (
+                self._target_ssid
+                and state.current_ssid == self._target_ssid
+                and state.current_ip
+            ):
+                self._clear_loading()
+                self._display_connected_state(state)
+                return True
+        elif op == PendingOperation.ETHERNET_ON and state.ethernet_connected:
             self._clear_loading()
             self._sync_ethernet_panel(state)
             self._display_connected_state(state)
-            return
-
-        # Static IP / DHCP reset: if a state with an IP has arrived, accept it.
-        if self._pending_operation == PendingOperation.WIFI_STATIC_IP:
-            if state.current_ip:
-                self._clear_loading()
-                self._display_connected_state(state)
-                return
-            # No IP yet after timeout: clear loading and show whatever state we have.
+            return True
+        elif op == PendingOperation.WIFI_STATIC_IP:
+            # Never a failure: show whatever state arrived, with or without an IP.
             self._clear_loading()
-            if state.current_ssid:
+            if state.current_ip or state.current_ssid:
                 self._display_connected_state(state)
             else:
                 self._display_disconnected_state()
-            return
+            return True
 
+        return False
+
+    def _display_timeout_failure(self) -> None:
+        """Show the timeout message matching the operation that failed and re-enable the UI."""
         self._clear_loading()
         self._hide_all_info_elements()
         self._configure_info_box_centered()
@@ -1157,6 +1125,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             self.qrcode_img.clearPixmap()
             self.qrcode_img.setText("QR error")
 
+    @pyqtSlot()
     def _on_ethernet_button_clicked(self) -> None:
         """Navigate to the ethernet/VLAN settings page when the ethernet button is clicked."""
         if (
@@ -1167,6 +1136,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             return
         self.setCurrentIndex(self.indexOf(self.vlan_page))
 
+    @pyqtSlot()
     def _on_vlan_apply(self) -> None:
         """Validate VLAN fields and call ``create_vlan_connection`` on the facade."""
         vlan_id = self.vlan_id_spinbox.value()
@@ -1208,18 +1178,21 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         )
         self._nm.request_state_soon(delay_ms=3000)
 
+    @pyqtSlot()
     def _on_vlan_delete(self) -> None:
         """Read the VLAN ID from the spinbox and request deletion via the facade."""
         vlan_id = self.vlan_id_spinbox.value()
         self._nm.delete_vlan_connection(vlan_id)
         self._show_warning_popup(f"VLAN {vlan_id} profile removed.")
 
+    @pyqtSlot(int)
     def _on_interface_combo_changed(self, index: int) -> None:
         """Swap the displayed IP when the user selects a different interface."""
         ip = self.netlist_vlans_combo.itemData(index)
         if ip is not None:
             self.netlist_ip.setText(f"IP: {ip}" if ip else "IP: --")
 
+    @pyqtSlot()
     def _on_wifi_static_ip_clicked(self) -> None:
         """Navigate from saved details page to WiFi static IP page."""
         ssid = self.snd_name.text()
@@ -1243,6 +1216,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
 
         self.setCurrentIndex(self.indexOf(self.wifi_static_ip_page))
 
+    @pyqtSlot()
     def _on_wifi_static_ip_apply(self) -> None:
         """Validate static-IP fields and apply them to the current Wi-Fi connection.
 
@@ -1281,6 +1255,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self._nm.update_wifi_static_ip(ssid, ip_addr, mask, gateway, dns1, dns2)
         self._nm.request_state_soon(delay_ms=3000)
 
+    @pyqtSlot()
     def _on_wifi_reset_dhcp(self) -> None:
         """Reset the current Wi-Fi connection back to DHCP via the facade.
 
@@ -1615,6 +1590,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
 
         self.add_network_validation_button.setEnabled(True)
 
+    @pyqtSlot()
     def _on_activate_network(self) -> None:
         """Activate the network shown on the saved-connection page."""
         ssid = self.saved_connection_network_name.text()
@@ -1633,12 +1609,14 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.setCurrentIndex(self.indexOf(self.main_network_page))
         self._nm.connect_network(ssid)
 
+    @pyqtSlot()
     def _on_delete_network(self) -> None:
         """Delete the profile shown on the saved-connection page and navigate back."""
         ssid = self.saved_connection_network_name.text()
         self._target_ssid = ssid
         self._nm.delete_network(ssid)
 
+    @pyqtSlot()
     def _on_save_network_details(self) -> None:
         """Save network settings changes (password / priority).
 
@@ -1678,6 +1656,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         if password:
             self.saved_connection_change_password_field.setPlaceholderText("")
 
+    @pyqtSlot()
     def _on_hidden_network_connect(self) -> None:
         """Connect to hidden network - non-blocking."""
         ssid = self.hidden_network_ssid_field.text().strip()
@@ -3585,6 +3564,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.wifi_sip_apply_button.clicked.connect(self._on_wifi_static_ip_apply)
         self.wifi_sip_dhcp_button.clicked.connect(self._on_wifi_reset_dhcp)
 
+    @pyqtSlot()
     def _on_wifi_button_clicked(self) -> None:
         """Navigate to the Wi-Fi scan page, starting or stopping scan polling as needed."""
         if (
@@ -3774,12 +3754,14 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self._qwerty.show()
         field.clearFocus()
 
+    @pyqtSlot()
     def _on_qwerty_go_back(self) -> None:
         """Hide the keyboard and return to the previously active panel."""
         if self._previous_panel:
             self._qwerty.hide()
             self.setCurrentIndex(self.indexOf(self._previous_panel))
 
+    @pyqtSlot(str)
     def _on_qwerty_value_selected(self, value: str) -> None:
         """Apply the keyboard-selected *value* to the previously focused input field."""
         if self._previous_panel:
@@ -3788,6 +3770,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         if self._current_field:
             self._current_field.setText(value)
 
+    @pyqtSlot(int)
     def _handle_scrollbar_change(self, value: int) -> None:
         """Synchronise the custom scrollbar thumb to the list-view scroll position."""
         self.verticalScrollBar.blockSignals(True)
@@ -3851,6 +3834,5 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         parent_size = self.parent().size()
         self.setGeometry(0, 0, parent_size.width(), parent_size.height())
         self.updateGeometry()
-        self.repaint()
         self.show()
         self._nm.scan_networks()

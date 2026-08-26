@@ -346,6 +346,9 @@ class _AwaitableProp:
             return self.value == other.value
         return self.value == other
 
+    # Real sdbus property proxies are hashable; asyncio.gather() requires it.
+    __hash__ = object.__hash__
+
     def __ne__(self, other):
         return not self.__eq__(other)
 

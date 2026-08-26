@@ -228,3 +228,53 @@ class TestButtonClicks:
     def test_back_button_emits_signal(self, keyboard, qtbot):
         with qtbot.waitSignal(keyboard.request_back, timeout=1000):
             qtbot.mouseClick(keyboard.numpad_back_btn, QtCore.Qt.MouseButton.LeftButton)
+
+
+class TestNumericOnly:
+    """Numeric-only swaps the QWERTY rows for the numpad on IP/mask/gateway fields."""
+
+    _EXTRA_KEYS = ("K_shift", "K_keychange", "K_space", "K_dot", "k_delete", "k_Enter")
+
+    def test_default_is_qwerty(self, keyboard):
+        assert keyboard._numeric_only is False
+        assert keyboard._numpad_widget.isHidden()
+
+    def test_enabling_hides_qwerty_rows(self, keyboard):
+        keyboard.setNumericOnly(True)
+        assert all(w.isHidden() for w in keyboard._row_widgets)
+
+    def test_enabling_shows_numpad(self, keyboard):
+        keyboard.setNumericOnly(True)
+        assert not keyboard._numpad_widget.isHidden()
+
+    def test_enabling_hides_qwerty_only_keys(self, keyboard):
+        keyboard.setNumericOnly(True)
+        assert all(getattr(keyboard, n).isHidden() for n in self._EXTRA_KEYS)
+
+    def test_enabling_clears_shift_and_symbols(self, keyboard):
+        keyboard.K_shift.setChecked(True)
+        keyboard.symbolsrun = True
+        keyboard.setNumericOnly(True)
+        assert keyboard.K_shift.isChecked() is False
+        assert keyboard.K_keychange.isChecked() is False
+        assert keyboard.symbolsrun is False
+
+    def test_disabling_restores_qwerty(self, keyboard):
+        keyboard.setNumericOnly(True)
+        keyboard.setNumericOnly(False)
+        assert all(not w.isHidden() for w in keyboard._row_widgets)
+        assert keyboard._numpad_widget.isHidden()
+        assert all(not getattr(keyboard, n).isHidden() for n in self._EXTRA_KEYS)
+
+    def test_repeat_enable_is_a_noop(self, keyboard):
+        keyboard.setNumericOnly(True)
+        keyboard.K_shift.setChecked(True)
+        keyboard.setNumericOnly(True)
+        assert keyboard.K_shift.isChecked() is True
+
+    def test_numpad_keeps_digits_after_toggle_cycle(self, keyboard):
+        keyboard.setNumericOnly(True)
+        keyboard.setNumericOnly(False)
+        keyboard.setNumericOnly(True)
+        assert not keyboard._numpad_widget.isHidden()
+        assert keyboard._numeric_only is True

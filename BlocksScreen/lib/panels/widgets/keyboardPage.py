@@ -73,6 +73,30 @@ def _make_key_font(size: int = 29) -> QtGui.QFont:
     return font
 
 
+def _valid_ip(value: str) -> bool:
+    # Partial entry: empty octets are still being typed.
+    parts = value.split(".")
+    return len(parts) <= 4 and all(p.isdigit() and int(p) <= 255 for p in parts if p)
+
+
+def _valid_float(value: str) -> bool:
+    if not value:
+        return True
+    try:
+        float(value)
+    except ValueError:
+        return value.endswith(".")
+    return True
+
+
+_PATTERN_VALIDATORS = {
+    "ip": _valid_ip,
+    "hex": lambda v: all(c in "0123456789abcdefABCDEF" for c in v),
+    "int": lambda v: v == "" or v.lstrip("-").isdigit(),
+    "float": _valid_float,
+}
+
+
 class CustomQwertyKeyboard(QtWidgets.QDialog):
     """Custom on-screen QWERTY keyboard for touch input."""
 
@@ -197,29 +221,9 @@ class CustomQwertyKeyboard(QtWidgets.QDialog):
         )
 
     def _validate_pattern(self, value: str) -> bool:
-        if not self._pattern:
-            return True
-        if self._pattern == "ip":
-            parts = value.split(".")
-            if len(parts) > 4:
-                return False
-            for part in parts:
-                if part and (not part.isdigit() or int(part) > 255):
-                    return False
-            return True
-        if self._pattern == "hex":
-            return all(c in "0123456789abcdefABCDEF" for c in value)
-        if self._pattern == "int":
-            return value == "" or value.lstrip("-").isdigit()
-        if self._pattern == "float":
-            if not value:
-                return True
-            try:
-                float(value)
-                return True
-            except ValueError:
-                return value.endswith(".")
-        return True
+        """Return True if value is an acceptable partial entry for the active pattern."""
+        validator = _PATTERN_VALIDATORS.get(self._pattern or "")
+        return validator(value) if validator else True
 
     def _get_mainWindow_widget(self) -> QtWidgets.QMainWindow | None:
         """Get the main application window"""
@@ -251,6 +255,7 @@ class CustomQwertyKeyboard(QtWidgets.QDialog):
         self._geometry_calc()
         return super().show()
 
+    @QtCore.pyqtSlot()
     def handle_keyboard_layout(self) -> None:
         """Update key labels based on current shift/keychange state."""
         shift = self.K_shift.isChecked()
@@ -273,7 +278,7 @@ class CustomQwertyKeyboard(QtWidgets.QDialog):
         else:
             layout = _LOWERCASE
 
-        for btn, txt in zip(self._key_buttons, layout):
+        for btn, txt in zip(self._key_buttons, layout, strict=False):
             btn.setText(txt)
 
         self.K_shift.setText("#+=") if keychange else self.K_shift.setText("⇧")
