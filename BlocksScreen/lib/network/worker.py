@@ -1188,15 +1188,10 @@ class NetworkManagerWorker(QObject):
                 return ""
             ip4_path = await self._generic(device_path).ip4_config
             if not ip4_path or ip4_path == "/":
-                logger.debug(
-                    "ip_by_iface: %s (%s) has no ip4 config", interface, device_path
-                )
                 return ""
             addr_data = await self._ipv4(ip4_path).address_data
             if addr_data:
-                ip = addr_data[0]["address"][1]
-                logger.debug("ip_by_iface: %s (%s) = %s", interface, device_path, ip)
-                return ip
+                return addr_data[0]["address"][1]
             return ""
         except Exception as exc:
             logger.error("Failed to get IP for %s: %s", interface, exc)
