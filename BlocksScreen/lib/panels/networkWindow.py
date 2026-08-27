@@ -3721,7 +3721,9 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             (self.wifi_sip_dns2_field, self.wifi_static_ip_page),
         ]:
             field.clicked.connect(
-                lambda _=False, f=field, p=page: self._on_show_keyboard(p, f)
+                lambda _=False, f=field, p=page: self._on_show_keyboard(
+                    p, f, numeric=True
+                )
             )
 
     def _setup_scrollbar_signals(self) -> None:
@@ -3764,11 +3766,16 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.listView.setPalette(palette)
 
     def _on_show_keyboard(
-        self, panel: QtWidgets.QWidget, field: QtWidgets.QLineEdit
+        self,
+        panel: QtWidgets.QWidget,
+        field: QtWidgets.QLineEdit,
+        numeric: bool = False,
     ) -> None:
         """Show the QWERTY keyboard panel, saving the originating panel and input field."""
         self._previous_panel = panel
         self._current_field = field
+        self._qwerty.setPattern("ip" if numeric else "")
+        self._qwerty.setNumericOnly(numeric)
         self._qwerty.set_value(field.text())
         self._qwerty.show()
         field.clearFocus()
