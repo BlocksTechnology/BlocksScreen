@@ -1,3 +1,5 @@
+"""Async D-Bus NetworkManager worker: signal watching, link control, state snapshots."""
+
 import asyncio
 import fcntl
 import ipaddress
