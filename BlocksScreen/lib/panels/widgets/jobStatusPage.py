@@ -250,6 +250,12 @@ class JobStatusWidget(QtWidgets.QWidget):
         printer_status object updated
         """
         lstate = state.lower()
+        logger.info(
+            "DIAG _handle_print_state: raw=%r lstate=%r prev_internal=%r",
+            state,
+            lstate,
+            self._internal_print_status,
+        )
         _was_active = self._internal_print_status in ("printing", "paused")
         event_state = lstate
         is_valid = lstate in self._VALID_STATES

@@ -59,8 +59,17 @@ class CancelPage(QtWidgets.QWidget):
                 self.filename = value
                 if self.isVisible():
                     self.set_file_name(value)
-            elif "state" in field and value in self._REASON_HEADERS:
-                self.cf_info_tf.setText(self._REASON_HEADERS[value])
+            elif "state" in field:
+                logger.info(
+                    "DIAG cancelPage.on_print_stats_update: field=%r value=%r "
+                    "in_headers=%s current_text=%r",
+                    field,
+                    value,
+                    value in self._REASON_HEADERS,
+                    self.cf_info_tf.text(),
+                )
+                if value in self._REASON_HEADERS:
+                    self.cf_info_tf.setText(self._REASON_HEADERS[value])
 
     def show(self):
         self.request_file_info.emit(self.filename)
