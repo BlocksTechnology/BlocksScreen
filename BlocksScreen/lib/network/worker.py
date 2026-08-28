@@ -284,11 +284,10 @@ class NetworkManagerWorker(QObject):
     async def _async_initialize(self) -> None:
         """Bootstrap the worker on the asyncio thread.
 
-        Detects network interfaces, enforces the boot-time ethernet/Wi-Fi
-        mutual exclusion, activates any saved VLANs if ethernet is present,
-        triggers an initial Wi-Fi scan, and starts all D-Bus signal listeners.
-        Emits ``initialized`` when done (even on failure, so the manager can
-        unblock its caller).
+        Detects network interfaces, activates any saved VLANs if ethernet is
+        present, triggers an initial Wi-Fi scan, and starts all D-Bus signal
+        listeners. Emits ``initialized`` when done (even on failure, so the
+        manager can unblock its caller).
         """
         try:
             if not self._system_bus:
@@ -297,7 +296,6 @@ class NetworkManagerWorker(QObject):
 
             self._running = True
             await self._detect_interfaces()
-            await self._enforce_boot_mutual_exclusion()
 
             if await self._is_ethernet_connected():
                 await self._activate_saved_vlans()
@@ -367,31 +365,39 @@ class NetworkManagerWorker(QObject):
             # Ethernet-only or Wi-Fi driver still loading — log but don't alarm.
             logger.warning("No Wi-Fi interface detected; ethernet-only mode")
 
-    async def _enforce_boot_mutual_exclusion(self) -> None:
-        """Disable Wi-Fi at boot if ethernet is already connected.
-
-        Prevents the device from simultaneously using both interfaces at
-        startup.  If ethernet is active and the Wi-Fi radio is on, the Wi-Fi
-        device is disconnected and the radio is disabled, then we wait up to
-        8 s for the radio to confirm it is off.  Failures are logged but not
-        propagated — a non-fatal best-effort action at boot.
-        """
+    async def _set_wired_profiles_autoconnect(self, enabled: bool) -> None:
+        """Persist autoconnect on every wired profile; Device.Autoconnect dies on NM restart."""
         try:
-            if not await self._is_ethernet_connected():
-                return
-            if not await self._nm().wireless_enabled:
-                return
-            logger.info("Boot: ethernet active + Wi-Fi enabled — disabling Wi-Fi")
-            if self._primary_wifi_path:
-                try:
-                    await self._wifi().disconnect()
-                except Exception as exc:
-                    logger.debug("Pre-radio-disable disconnect ignored: %s", exc)
-            await self._nm().wireless_enabled.set_async(False)
-            await self._wait_for_wifi_radio(False, timeout=8.0)
-            self._is_hotspot_active = False
+            paths = await self._nm_settings().list_connections()
+            for path, settings in await self._gather_settings(list(paths)):
+                conn = settings.get("connection", {})
+                if conn.get("type", (None, ""))[1] != "802-3-ethernet":
+                    continue
+                if bool(conn.get("autoconnect", ("b", True))[1]) == enabled:
+                    continue
+                props = {k: dict(v) for k, v in settings.items()}
+                props["connection"]["autoconnect"] = ("b", enabled)
+                props["connection"].pop("timestamp", None)
+                await self._conn_settings(path).update(props)
+                logger.info("Wired profile %s autoconnect -> %s", path, enabled)
         except Exception as exc:
-            logger.warning("Boot mutual exclusion failed (non-fatal): %s", exc)
+            logger.warning("Wired profile autoconnect (%s) failed: %s", enabled, exc)
+
+    async def _ensure_wired_autoconnect(self) -> None:
+        """Re-arm wired autoconnect on both the device and the saved profiles.
+
+        Called only when the user asks for ethernet, so autoconnect staying off
+        keeps meaning "user turned it off". Best-effort: never propagates.
+        """
+        if not self._primary_wired_path:
+            return
+        await self._set_wired_profiles_autoconnect(True)
+        try:
+            wired = self._generic(self._primary_wired_path)
+            if not await wired.autoconnect:
+                await wired.autoconnect.set_async(True)
+        except Exception as exc:
+            logger.debug("Device autoconnect re-arm ignored: %s", exc)
 
     async def _start_signal_listeners(self) -> None:
         """Create persistent proxies and spawn all D-Bus signal listeners.
@@ -1295,9 +1301,7 @@ class NetworkManagerWorker(QObject):
         if not self._primary_wifi_path or not self._system_bus:
             return ConnectionResult(False, "No Wi-Fi interface", "no_interface")
 
-        if await self._is_known(ssid):
-            await self._delete_network_impl(ssid)
-            self._invalidate_saved_cache()
+        backup = await self._backup_and_drop_existing(ssid)
 
         try:
             await self._wifi().request_scan({})
@@ -1337,15 +1341,7 @@ class NetworkManagerWorker(QObject):
         try:
             await self._nm().activate_connection(conn_path)
             if not await self._wait_for_connection(ssid, timeout=_WIFI_CONNECT_TIMEOUT):
-                await self._delete_network_impl(ssid)
-                self._invalidate_saved_cache()
-                return ConnectionResult(
-                    False,
-                    f"Authentication failed for '{ssid}'.\n"
-                    "The saved profile has been removed.\n"
-                    "Please check the password and try again.",
-                    "auth_failed",
-                )
+                return await self._rollback_failed_add(ssid, backup)
             return ConnectionResult(True, f"Network '{ssid}' added and connecting")
         except Exception as act_err:
             logger.warning("Activate after add failed: %s", act_err)
@@ -1360,13 +1356,65 @@ class NetworkManagerWorker(QObject):
         except Exception as reload_err:
             logger.debug("reload_connections non-fatal: %s", reload_err)
 
+    async def _backup_profile(self, ssid: str) -> dict | None:
+        """Snapshot a saved profile's settings plus secrets so it can be re-added."""
+        conn_path = await self._get_connection_path(ssid)
+        if not conn_path:
+            return None
+        try:
+            cs = self._conn_settings(conn_path)
+            settings = dict(await cs.get_settings())
+            await self._merge_wifi_secrets(cs, settings)
+            settings.get("connection", {}).pop("timestamp", None)
+            logger.debug("backup_profile: '%s' sections=%s", ssid, sorted(settings))
+            return settings
+        except Exception as exc:
+            logger.warning("backup_profile: could not snapshot '%s': %s", ssid, exc)
+            return None
+
+    async def _restore_profile(self, ssid: str, settings: dict) -> bool:
+        """Re-add a backed-up profile after a failed replacement; True when restored."""
+        try:
+            await self._nm_settings().add_connection(settings)
+            self._invalidate_saved_cache()
+            logger.info("restore_profile: '%s' restored after failed add", ssid)
+            return True
+        except Exception as exc:
+            logger.error("restore_profile: could not restore '%s': %s", ssid, exc)
+            return False
+
+    async def _rollback_failed_add(
+        self, ssid: str, backup: dict | None
+    ) -> ConnectionResult:
+        """Delete the profile that never activated and restore *backup* if there is one."""
+        logger.warning("add_network: '%s' never activated, rolling back", ssid)
+        await self._delete_network_impl(ssid)
+        self._invalidate_saved_cache()
+        if backup and await self._restore_profile(ssid, backup):
+            return ConnectionResult(
+                False,
+                f"Could not connect to '{ssid}'.\n"
+                "The previously saved password was kept.\n"
+                "Please check the password and try again.",
+                "auth_failed",
+            )
+        return ConnectionResult(
+            False,
+            f"Authentication failed for '{ssid}'.\n"
+            "The saved profile has been removed.\n"
+            "Please check the password and try again.",
+            "auth_failed",
+        )
+
     async def _backup_and_drop_existing(self, ssid: str) -> dict | None:
-        """Return the scanned AP properties for *ssid*, or None if it is not visible."""
-        ap_paths = await self._wifi().get_all_access_points()
-        for _ap_path, props in await self._gather_ap_properties(ap_paths):
-            if self._decode_ssid(props.get("ssid", b"")) == ssid:
-                return props
-        return None
+        """Back up and delete a saved profile for *ssid* so it can be re-added cleanly."""
+        if not await self._is_known(ssid):
+            return None
+        backup = await self._backup_profile(ssid)
+        logger.info("add_network: replacing saved '%s' (backup=%s)", ssid, bool(backup))
+        await self._delete_network_impl(ssid)
+        self._invalidate_saved_cache()
+        return backup
 
     async def _async_connect_network(self, ssid: str) -> None:
         """Activate an existing saved Wi-Fi profile and emit connection_result."""
@@ -1592,15 +1640,12 @@ class NetworkManagerWorker(QObject):
             return ConnectionResult(False, str(exc), "update_failed")
 
     async def _async_set_wifi_enabled(self, enabled: bool) -> None:
-        """Enable or disable the Wi-Fi radio, handling ethernet mutual exclusion."""
+        """Enable or disable the Wi-Fi radio. Ethernet is left untouched."""
         try:
             if not self._system_bus:
                 return
             if not enabled:
                 self._is_hotspot_active = False
-
-            if enabled and await self._is_ethernet_connected():
-                await self._async_disconnect_ethernet()
 
             current = await self._nm().wireless_enabled
             if current != enabled:
@@ -1651,7 +1696,10 @@ class NetworkManagerWorker(QObject):
             logger.error("Failed to disconnect ethernet: %s", exc)
 
     async def _async_connect_ethernet(self) -> None:
-        """Disable Wi-Fi/hotspot, activate the wired device, and restore saved VLANs."""
+        """Activate the wired device and restore saved VLANs.
+
+        Mechanism only: the one-link-at-a-time policy lives in the UI toggles.
+        """
         if not self._primary_wired_path:
             self.error_occurred.emit("connect_ethernet", "No wired device found")
             return
@@ -1659,16 +1707,7 @@ class NetworkManagerWorker(QObject):
             if self._is_hotspot_active:
                 await self._async_toggle_hotspot(False)
 
-            if self._primary_wifi_path:
-                try:
-                    await self._wifi().disconnect()
-                except Exception as exc:
-                    logger.debug("Pre-VLAN disconnect ignored: %s", exc)
-                await asyncio.sleep(0.5)
-
-            if await self._nm().wireless_enabled:
-                await self._nm().wireless_enabled.set_async(False)
-                await self._wait_for_wifi_radio(False, timeout=8.0)
+            await self._ensure_wired_autoconnect()
 
             await self._nm().activate_connection("/", self._primary_wired_path, "/")
             await asyncio.sleep(1.5)
