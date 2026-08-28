@@ -1,6 +1,9 @@
+"""On-screen keyboards: full QWERTY and a numeric variant for IP and mask entry."""
+
 import typing
 
 from lib.utils.icon_button import IconButton
+from lib.utils.numpad_button import NumpadButton
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 _LOWERCASE = list("qwertyuiopasdfghjklzxcvbnm")
@@ -72,6 +75,30 @@ def _make_key_font(size: int = 29) -> QtGui.QFont:
     return font
 
 
+def _valid_ip(value: str) -> bool:
+    # Partial entry: empty octets are still being typed.
+    parts = value.split(".")
+    return len(parts) <= 4 and all(p.isdigit() and int(p) <= 255 for p in parts if p)
+
+
+def _valid_float(value: str) -> bool:
+    if not value:
+        return True
+    try:
+        float(value)
+    except ValueError:
+        return value.endswith(".")
+    return True
+
+
+_PATTERN_VALIDATORS = {
+    "ip": _valid_ip,
+    "hex": lambda v: all(c in "0123456789abcdefABCDEF" for c in v),
+    "int": lambda v: v == "" or v.lstrip("-").isdigit(),
+    "float": _valid_float,
+}
+
+
 class CustomQwertyKeyboard(QtWidgets.QDialog):
     """Custom on-screen QWERTY keyboard for touch input."""
 
@@ -89,8 +116,11 @@ class CustomQwertyKeyboard(QtWidgets.QDialog):
         self.suffix: str = ""
         self.symbolsrun: bool = False
         self._key_buttons: list[QtWidgets.QPushButton] = []
+        self._row_widgets: list[QtWidgets.QWidget] = []
+        self._numpad_digits: list[QtWidgets.QPushButton] = []
         self._pattern: str = ""
         self._max_length: int = 0
+        self._numeric_only: bool = False
 
         self._setup_ui()
         self.setCursor(QtCore.Qt.CursorShape.BlankCursor)
@@ -100,6 +130,13 @@ class CustomQwertyKeyboard(QtWidgets.QDialog):
 
         for btn in self._key_buttons:
             btn.clicked.connect(lambda _, b=btn: self.value_inserted(b.text()))
+
+        for btn in self._numpad_digits:
+            btn.clicked.connect(lambda _, b=btn: self.value_inserted(b.text()))
+
+        self.np_dot.clicked.connect(lambda: self.value_inserted("."))
+        self.np_delete.clicked.connect(lambda: self.value_inserted("clear"))
+        self.np_enter.clicked.connect(lambda: self.value_inserted("enter"))
 
         self.K_dot.clicked.connect(lambda: self.value_inserted("."))
         self.K_space.clicked.connect(lambda: self.value_inserted(" "))
@@ -131,6 +168,9 @@ class CustomQwertyKeyboard(QtWidgets.QDialog):
             "  background-color: #212120;"
             "  color: white;"
             "}"
+            'QPushButton[numpad_key="true"] {'
+            "  font-family: 'Momcake-Bold';"
+            "}"
         )
         self.handle_keyboard_layout()
 
@@ -146,10 +186,32 @@ class CustomQwertyKeyboard(QtWidgets.QDialog):
         """Set input validation pattern: 'ip', 'hex', 'int', 'float', or '' for no pattern."""
         self._pattern = pattern
 
+    def setNumericOnly(self, enabled: bool) -> None:
+        """Swap the QWERTY rows for a full-size numpad on IP, mask, gateway and DNS fields."""
+        if self._numeric_only == enabled:
+            return
+        self._numeric_only = enabled
+        for widget in self._row_widgets:
+            widget.setVisible(not enabled)
+        for btn in (
+            self.K_shift,
+            self.K_keychange,
+            self.K_space,
+            self.K_dot,
+            self.k_delete,
+            self.k_Enter,
+        ):
+            btn.setVisible(not enabled)
+        self._numpad_widget.setVisible(enabled)
+        if enabled:
+            self.K_shift.setChecked(False)
+            self.K_keychange.setChecked(False)
+            self.symbolsrun = False
+        self.handle_keyboard_layout()
+
     def setMaxLength(self, length: int) -> None:
         """Set maximum allowed length for user input (excluding prefix/suffix)."""
-        if length < 0:
-            length = 0
+        length = max(length, 0)
         if length == 0:
             length = 999
         self._max_length = length
@@ -161,31 +223,11 @@ class CustomQwertyKeyboard(QtWidgets.QDialog):
         )
 
     def _validate_pattern(self, value: str) -> bool:
-        if not self._pattern:
-            return True
-        if self._pattern == "ip":
-            parts = value.split(".")
-            if len(parts) > 4:
-                return False
-            for part in parts:
-                if part and (not part.isdigit() or int(part) > 255):
-                    return False
-            return True
-        if self._pattern == "hex":
-            return all(c in "0123456789abcdefABCDEF" for c in value)
-        if self._pattern == "int":
-            return value == "" or value.lstrip("-").isdigit()
-        if self._pattern == "float":
-            if not value:
-                return True
-            try:
-                float(value)
-                return True
-            except ValueError:
-                return value.endswith(".")
-        return True
+        """Return True if value is an acceptable partial entry for the active pattern."""
+        validator = _PATTERN_VALIDATORS.get(self._pattern or "")
+        return validator(value) if validator else True
 
-    def _get_mainWindow_widget(self) -> typing.Optional[QtWidgets.QMainWindow]:
+    def _get_mainWindow_widget(self) -> QtWidgets.QMainWindow | None:
         """Get the main application window"""
         app_instance = QtWidgets.QApplication.instance()
         if not app_instance:
@@ -212,9 +254,11 @@ class CustomQwertyKeyboard(QtWidgets.QDialog):
         self.setGeometry(x, y, width, height)
 
     def show(self) -> None:
+        """Re-implemented method, recompute layout geometry before showing."""
         self._geometry_calc()
         return super().show()
 
+    @QtCore.pyqtSlot()
     def handle_keyboard_layout(self) -> None:
         """Update key labels based on current shift/keychange state."""
         shift = self.K_shift.isChecked()
@@ -237,7 +281,7 @@ class CustomQwertyKeyboard(QtWidgets.QDialog):
         else:
             layout = _LOWERCASE
 
-        for btn, txt in zip(self._key_buttons, layout):
+        for btn, txt in zip(self._key_buttons, layout, strict=False):
             btn.setText(txt)
 
         self.K_shift.setText("#+=") if keychange else self.K_shift.setText("⇧")
@@ -255,6 +299,7 @@ class CustomQwertyKeyboard(QtWidgets.QDialog):
             self.setSuffix("")
             self.setPattern("")
             self.setMaxLength(0)
+            self.setNumericOnly(False)
             return
 
         if value == "clear":
@@ -315,6 +360,71 @@ class CustomQwertyKeyboard(QtWidgets.QDialog):
         btn.setObjectName(name)
         return btn
 
+    def _create_numpad_button(self, text: str, name: str) -> NumpadButton:
+        """Create a pill key matching the CustomNumpad look."""
+        btn = NumpadButton(self._numpad_widget)
+        btn.setSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Fixed, QtWidgets.QSizePolicy.Policy.Fixed
+        )
+        btn.setMinimumSize(QtCore.QSize(150, 60))
+        btn.setLayoutDirection(QtCore.Qt.LayoutDirection.RightToLeft)
+        btn.setFlat(True)
+        btn.setText(text)
+        btn.setProperty("numpad_key", True)
+        btn.setObjectName(name)
+        return btn
+
+    def _create_numpad_icon(self, name: str, pixmap: str) -> IconButton:
+        """Create a 60x60 icon key for the numpad enter/clear actions."""
+        btn = IconButton(parent=self._numpad_widget)
+        btn.setSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Fixed, QtWidgets.QSizePolicy.Policy.Fixed
+        )
+        btn.setMinimumSize(QtCore.QSize(60, 60))
+        btn.setMaximumSize(QtCore.QSize(60, 60))
+        btn.setFlat(True)
+        btn.setProperty("icon_pixmap", QtGui.QPixmap(pixmap))
+        btn.setProperty("button_type", "icon")
+        btn.setObjectName(name)
+        return btn
+
+    def _setup_numpad(self) -> None:
+        """Build the digits-only pad shown in place of the QWERTY rows."""
+        self._numpad_widget = QtWidgets.QWidget(parent=self)
+        self._numpad_widget.setGeometry(QtCore.QRect(90, 150, 620, 280))
+        grid = QtWidgets.QGridLayout(self._numpad_widget)
+        grid.setContentsMargins(0, 0, 0, 0)
+        grid.setSpacing(6)
+        grid.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+
+        self._numpad_digits = []
+        for idx, digit in enumerate("789456123"):
+            btn = self._create_numpad_button(digit, f"np_{digit}")
+            btn.setProperty("position", ("left", "", "right")[idx % 3])
+            grid.addWidget(btn, idx // 3, idx % 3)
+            self._numpad_digits.append(btn)
+
+        # Bottom row keeps the digit grid: "." left, "0" centred under 8/5/2.
+        zero = self._create_numpad_button("0", "np_0")
+        zero.setProperty("position", "")
+        grid.addWidget(zero, 3, 1)
+        self._numpad_digits.append(zero)
+
+        self.np_dot = self._create_numpad_button(".", "np_dot")
+        self.np_dot.setProperty("position", "left")
+        grid.addWidget(self.np_dot, 3, 0)
+
+        self.np_delete = self._create_numpad_icon(
+            "np_delete", ":/dialog/media/btn_icons/no.svg"
+        )
+        self.np_enter = self._create_numpad_icon(
+            "np_enter", ":/dialog/media/btn_icons/yes.svg"
+        )
+        grid.addWidget(self.np_delete, 0, 3, 2, 1, QtCore.Qt.AlignmentFlag.AlignCenter)
+        grid.addWidget(self.np_enter, 2, 3, 2, 1, QtCore.Qt.AlignmentFlag.AlignCenter)
+
+        self._numpad_widget.setVisible(False)
+
     def _setup_ui(self) -> None:
         self.setObjectName("self")
         self.resize(800, 480)
@@ -369,6 +479,8 @@ class CustomQwertyKeyboard(QtWidgets.QDialog):
             row3_layout.addWidget(btn)
             self._key_buttons.append(btn)
 
+        self._row_widgets = [row1_widget, row2_widget, row3_widget]
+
         # Shift button (left of row 3)
         self.K_shift = QtWidgets.QPushButton(parent=self)
         self.K_shift.setGeometry(QtCore.QRect(10, 280, 81, 51))
@@ -412,6 +524,8 @@ class CustomQwertyKeyboard(QtWidgets.QDialog):
         self.k_Enter.setText("\u23ce")
         self.k_Enter.setAutoRepeat(False)
         self.k_Enter.setObjectName("k_Enter")
+
+        self._setup_numpad()
 
         # Back button (top-right)
         self.numpad_back_btn = IconButton(parent=self)
