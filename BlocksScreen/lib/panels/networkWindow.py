@@ -1,3 +1,5 @@
+"""Network settings UI: Wi-Fi, ethernet and hotspot panels backed by the NM manager."""
+
 import fcntl
 import ipaddress as _ipaddress
 import logging
