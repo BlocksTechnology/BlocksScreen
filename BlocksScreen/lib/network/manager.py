@@ -43,6 +43,7 @@ class NetworkManager(QObject):
     error_occurred = pyqtSignal(str, str)
     reconnect_complete = pyqtSignal()
     hotspot_config_updated = pyqtSignal(str, str, str)
+    network_password_loaded = pyqtSignal(str, str)
 
     def __init__(self, parent: QObject | None = None) -> None:
         """Create the worker, wire all signals"""
@@ -57,7 +58,7 @@ class NetworkManager(QObject):
         self._shutting_down: bool = False
         self._worker_ready: bool = False
 
-        self._pending_futures: set["asyncio.Future"] = set()
+        self._pending_futures: set[asyncio.Future] = set()
 
         self._worker = NetworkManagerWorker()
 
@@ -72,6 +73,7 @@ class NetworkManager(QObject):
         self._worker.error_occurred.connect(self.error_occurred)
         self._worker.hotspot_info_ready.connect(self._on_hotspot_info_ready)
         self._worker.reconnect_complete.connect(self.reconnect_complete)
+        self._worker.network_password_loaded.connect(self.network_password_loaded)
         self._worker.initialized.connect(self._on_worker_initialized)
 
         # Keepalive timer: safety net for any missed D-Bus signals.
@@ -170,8 +172,10 @@ class NetworkManager(QObject):
 
     @pyqtSlot(list)
     def _on_saved_networks_loaded(self, networks: list) -> None:
-        """Cache saved profiles, rebuild lowercase lookup map, and re-emit."""
+        """Cache saved profiles, rebuild lowercase lookup map, and re-emit if changed."""
         if self._shutting_down:
+            return
+        if networks == self._cached_saved:
             return
         self._cached_saved = networks
         self._saved_network_map = {n.ssid.lower(): n for n in networks}
@@ -248,6 +252,10 @@ class NetworkManager(QObject):
     ) -> None:
         """Update the password and/or autoconnect priority for a saved profile."""
         self._schedule(self._worker._async_update_network(ssid, password, priority))
+
+    def get_network_password(self, ssid: str) -> None:
+        """Ask NM for a saved profile's psk; answered by network_password_loaded."""
+        self._schedule(self._worker._async_get_network_password(ssid))
 
     def set_wifi_enabled(self, enabled: bool) -> None:
         """Enable or disable the Wi-Fi radio."""
