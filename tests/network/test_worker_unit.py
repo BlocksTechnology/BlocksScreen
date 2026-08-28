@@ -50,7 +50,9 @@ def _make_worker(qapp, *, running=True, with_wifi=True, with_wired=False):
 
     # Core state — mirrors real __init__
     w._running = running
+    w._stopping = False
     w._system_bus = MagicMock(name="mock_system_bus")
+    w._no_iface_reported = False
     w._primary_wifi_path = (
         "/org/freedesktop/NetworkManager/Devices/2" if with_wifi else ""
     )
@@ -75,6 +77,9 @@ def _make_worker(qapp, *, running=True, with_wifi=True, with_wired=False):
     w._state_debounce_handle = None
     w._scan_debounce_handle = None
     w._listener_tasks = []
+    w._rediscover_lock = asyncio.Lock()
+    w._rediscover_gen = 0
+    w._stale_logged_gen = -1
 
     # Stubs for thread-related attrs (never used in async tests)
     w._asyncio_loop = MagicMock()
@@ -90,7 +95,9 @@ def _bare_worker(qapp):
     ):
         w = NetworkManagerWorker()
     w._running = False
+    w._stopping = False
     w._system_bus = None
+    w._no_iface_reported = False
     w._primary_wifi_path = ""
     w._primary_wifi_iface = ""
     w._primary_wired_path = ""
@@ -110,6 +117,9 @@ def _bare_worker(qapp):
     w._state_debounce_handle = None
     w._scan_debounce_handle = None
     w._listener_tasks = []
+    w._rediscover_lock = asyncio.Lock()
+    w._rediscover_gen = 0
+    w._stale_logged_gen = -1
     w._asyncio_loop = MagicMock()
     w._asyncio_thread = MagicMock()
     return w
@@ -121,7 +131,9 @@ def _make(qapp, *, running=True, wifi=True, wired=True):
     ):
         w = NetworkManagerWorker()
     w._running = running
+    w._stopping = False
     w._system_bus = MagicMock(name="mock_bus")
+    w._no_iface_reported = False
     w._primary_wifi_path = "/org/freedesktop/NetworkManager/Devices/2" if wifi else ""
     w._primary_wifi_iface = "wlan0" if wifi else ""
     w._primary_wired_path = "/org/freedesktop/NetworkManager/Devices/1" if wired else ""
@@ -141,6 +153,9 @@ def _make(qapp, *, running=True, wifi=True, wired=True):
     w._state_debounce_handle = None
     w._scan_debounce_handle = None
     w._listener_tasks = []
+    w._rediscover_lock = asyncio.Lock()
+    w._rediscover_gen = 0
+    w._stale_logged_gen = -1
     w._asyncio_loop = MagicMock()
     w._asyncio_thread = MagicMock()
     return w
@@ -702,7 +717,7 @@ class TestGetIpByInterface:
     async def test_cached_path_used(self, qapp):
         w = _make_worker(qapp)
         w._iface_to_device_path = {"wlan0": "/dev/wifi0"}
-        generic_proxy = AsyncProxyMock(ip4_config="/ip4/1")
+        generic_proxy = AsyncProxyMock(interface="wlan0", ip4_config="/ip4/1")
         w._generic = lambda path: generic_proxy
         ipv4_proxy = AsyncProxyMock(address_data=[{"address": ("s", "192.168.1.50")}])
         w._ipv4 = lambda path: ipv4_proxy
@@ -1873,13 +1888,16 @@ class TestAsyncShutdown:
         _run(w._async_shutdown())
         assert w._running is False
 
-    def test_clears_listener_tasks(self, qapp):
+    @pytest.mark.asyncio
+    async def test_clears_listener_tasks(self, qapp):
+        async def dummy():
+            await asyncio.sleep(10)
+
         w = _make(qapp)
-        mock_task = MagicMock()
-        mock_task.done.return_value = False
-        w._listener_tasks = [mock_task]
-        _run(w._async_shutdown())
-        mock_task.cancel.assert_called_once()
+        task = asyncio.create_task(dummy())
+        w._listener_tasks = [task]
+        await w._async_shutdown()
+        assert task.cancelled()
         assert w._listener_tasks == []
 
     def test_cancels_debounce_handles(self, qapp):
