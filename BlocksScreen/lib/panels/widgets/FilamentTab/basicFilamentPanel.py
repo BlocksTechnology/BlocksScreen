@@ -4,8 +4,8 @@ from functools import partial
 
 from devices.amu.models import FilamentPos, GateStatus
 from lib.filament import Filament
-from lib.panels.widgets.basePopup import BasePopup
-from lib.panels.widgets.popupDialogWidget import Popup
+from lib.panels.widgets.Common.basePopup import BasePopup
+from lib.panels.widgets.Common.popupDialogWidget import Popup
 from lib.printer import Printer
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_frame import BlocksCustomFrame

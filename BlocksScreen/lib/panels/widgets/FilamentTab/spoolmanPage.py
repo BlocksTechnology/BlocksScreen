@@ -3,7 +3,7 @@ import typing
 
 from lib.panels.widgets.FilamentTab.addFilamentPage import AddFilamentPage
 from lib.panels.widgets.FilamentTab.addSpoolPage import AddSpoolPage
-from lib.panels.widgets.basePopup import BasePopup
+from lib.panels.widgets.Common.basePopup import BasePopup
 from lib.utils.blocks_frame import BlocksCustomFrame
 from lib.utils.icon_button import IconButton
 from lib.utils.list_model import EntryDelegate, EntryListModel, ListItem

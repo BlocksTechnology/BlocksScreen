@@ -22,10 +22,10 @@ from lib.panels.filamentTab import FilamentTab
 from lib.panels.networkWindow import NetworkControlWindow, PixmapCache
 from lib.panels.printTab import PrintTab
 from lib.panels.utilitiesTab import UtilitiesTab
-from lib.panels.widgets.basePopup import BasePopup
+from lib.panels.widgets.Common.basePopup import BasePopup
 from lib.panels.widgets.MainWindow.cancelPage import CancelPage
 from lib.panels.widgets.MainWindow.connectionPage import ConnectionPage
-from lib.panels.widgets.loadWidget import LoadingOverlayWidget
+from lib.panels.widgets.Common.loadWidget import LoadingOverlayWidget
 from lib.panels.widgets.MainWindow.notificationPage import NotificationPage
 from lib.panels.widgets.MainWindow.updatePage import UpdatePage
 from lib.printer import Printer
