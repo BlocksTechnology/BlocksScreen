@@ -202,7 +202,7 @@ class _NetworkWidgetbuttonsStub(QtWidgets.QWidget):
 
 
 class _BlocksCustomCheckButtonStub(QtWidgets.QCheckBox):
-    """BlocksCustomCheckButton stand-in — adds setFlat() used in _setupUI."""
+    """BlocksCustomCheckButton stand-in — adds setFlat() used in _setup_ui."""
 
     def setFlat(self, v: bool) -> None:
         pass

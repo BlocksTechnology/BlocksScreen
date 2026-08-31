@@ -122,7 +122,7 @@ class ConnectionPage(QtWidgets.QFrame):
     def __init__(self, parent: QtWidgets.QWidget, ws: MoonWebSocket, /) -> None:
         super().__init__(parent)
         self.ws = ws
-        self._setupUI()
+        self._setup_ui()
 
         self._state: ConnectionState = ConnectionState.DISCONNECTED
         self.base_text: str = ""
@@ -377,7 +377,7 @@ class ConnectionPage(QtWidgets.QFrame):
             self._set_state(ConnectionState.KLIPPER_READY)
         return super().eventFilter(a0, a1)
 
-    def _setupUI(self) -> None:
+    def _setup_ui(self) -> None:
         self.setMinimumSize(QtCore.QSize(800, 480))
         self.setMaximumSize(QtCore.QSize(800, 480))
         self.setObjectName("ConnectionPage")

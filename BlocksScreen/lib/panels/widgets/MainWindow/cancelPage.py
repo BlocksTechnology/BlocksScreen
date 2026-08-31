@@ -24,7 +24,7 @@ class CancelPage(QtWidgets.QWidget):
 
     def __init__(self, parent: QtWidgets.QWidget) -> None:
         super().__init__(parent)
-        self._setupUI()
+        self._setup_ui()
         self.filename = ""
 
         self.confirm_button.clicked.connect(lambda: self._handle_accept())
@@ -114,7 +114,7 @@ class CancelPage(QtWidgets.QWidget):
         else:
             self.set_pixmap(fallback)
 
-    def _setupUI(self) -> None:
+    def _setup_ui(self) -> None:
         """Setup widget ui"""
         sizePolicy = QtWidgets.QSizePolicy(
             QtWidgets.QSizePolicy.Policy.MinimumExpanding,

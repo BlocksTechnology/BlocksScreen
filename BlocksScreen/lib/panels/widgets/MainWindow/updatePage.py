@@ -54,7 +54,7 @@ class UpdatePage(QtWidgets.QWidget):
         super().__init__()
         self._chevron_right: QtGui.QPixmap = QtGui.QPixmap()
         self._chevron_down: QtGui.QPixmap = QtGui.QPixmap()
-        self._setupUI()
+        self._setup_ui()
         self._statuses: dict[str, ComponentStatus] = {}
         self._font_cache: dict[int, QtGui.QFont] = {}
         self._chevron_btn: IconButton | None = None
@@ -491,7 +491,7 @@ class UpdatePage(QtWidgets.QWidget):
         self.setUpdatesEnabled(True)
         self.disable_popups.emit(loading)
 
-    def _setupUI(self) -> None:
+    def _setup_ui(self) -> None:
         bold_id = QtGui.QFontDatabase.addApplicationFont(
             ":/font/media/fonts for text/Momcake-Bold.ttf"
         )

@@ -24,7 +24,7 @@ class NotificationPage(QtWidgets.QWidget):
         self._ICON_INFO = QtGui.QPixmap(":/ui/media/btn_icons/info.svg")
         self._ICON_WARN = QtGui.QPixmap(":/ui/media/btn_icons/troubleshoot.svg")
         self._ICON_ERROR = QtGui.QPixmap(":/ui/media/btn_icons/error.svg")
-        self._setupUI()
+        self._setup_ui()
         self.cli_tracking: deque = deque()
         self.selected_item: ListItem | None = None
         self.popup = Popup(self)
@@ -167,7 +167,7 @@ class NotificationPage(QtWidgets.QWidget):
         item._cache[-1] = time
         self.model.add_item(item)
 
-    def _setupUI(self) -> None:
+    def _setup_ui(self) -> None:
         """Setup UI for updatePage"""
         sizePolicy = QtWidgets.QSizePolicy(
             QtWidgets.QSizePolicy.Policy.MinimumExpanding,
