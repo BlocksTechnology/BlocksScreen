@@ -21,9 +21,9 @@ from lib.network import (
     is_hidden_ssid,
     signal_to_bars,
 )
-from lib.panels.widgets.keyboardPage import CustomQwertyKeyboard
-from lib.panels.widgets.loadWidget import LoadingOverlayWidget
-from lib.panels.widgets.popupDialogWidget import Popup
+from lib.panels.widgets.Common.keyboardPage import CustomQwertyKeyboard
+from lib.panels.widgets.Common.loadWidget import LoadingOverlayWidget
+from lib.panels.widgets.Common.popupDialogWidget import Popup
 from lib.qrcode_gen import generate_wifi_qrcode
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_frame import BlocksCustomFrame

@@ -2,7 +2,7 @@ import enum
 import logging
 import typing
 
-from lib.panels.widgets.optionCardWidget import OptionCard
+from lib.panels.widgets.Common.optionCardWidget import OptionCard
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_label import BlocksLabel
 from lib.utils.check_button import BlocksCustomCheckButton
