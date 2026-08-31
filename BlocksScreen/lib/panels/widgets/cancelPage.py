@@ -1,17 +1,16 @@
+import logging
+import typing
+
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_frame import BlocksCustomFrame
 from lib.utils.blocks_label import BlocksLabel
 from PyQt6 import QtCore, QtGui, QtWidgets
-import typing
 
-from lib.moonrakerComm import MoonWebSocket
+logger = logging.getLogger(__name__)
 
 
 class CancelPage(QtWidgets.QWidget):
-    """Update GUI Page,
-    retrieves from moonraker available clients and adds functionality
-    for updating or recovering them
-    """
+    """Displayed when a print is cancelled; offers reprint or ignore."""
 
     request_file_info: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         str, name="request_file_info"
@@ -23,14 +22,13 @@ class CancelPage(QtWidgets.QWidget):
         str, name="run_gcode"
     )
 
-    def __init__(self, parent: QtWidgets.QWidget, ws: MoonWebSocket) -> None:
+    def __init__(self, parent: QtWidgets.QWidget) -> None:
         super().__init__(parent)
-        self.ws: MoonWebSocket = ws
         self._setupUI()
         self.filename = ""
+        self._thumbnail_scan_done: bool = False
 
         self.confirm_button.clicked.connect(lambda: self._handle_accept())
-
         self.refuse_button.clicked.connect(lambda: self._handle_refuse())
 
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_StyledBackground, True)
@@ -45,9 +43,9 @@ class CancelPage(QtWidgets.QWidget):
         self.run_gcode.emit("SDCARD_RESET_FILE")
 
     _REASON_HEADERS: typing.ClassVar[dict[str, str]] = {
-        "complete": "Print Completed",
+        "complete": "Print Finished",
         "error": "Print Error",
-        "cancelled": "Print job was\ncancelled",
+        "cancelled": "Print Canceled",
     }
 
     @QtCore.pyqtSlot(str, dict, name="on_print_stats_update")
@@ -56,11 +54,19 @@ class CancelPage(QtWidgets.QWidget):
     def on_print_stats_update(self, field: str, value: dict | float | str) -> None:
         if isinstance(value, str):
             if "filename" in field:
+                if value != self.filename:
+                    self._thumbnail_scan_done = False
                 self.filename = value
-                if self.isVisible:
+                if self.isVisible():
                     self.set_file_name(value)
-            elif "state" in field and value in self._REASON_HEADERS:
-                self.cf_info_tf.setText(self._REASON_HEADERS[value])
+            elif "state" in field:
+                if value in self._REASON_HEADERS:
+                    self.cf_info_tf.setText(self._REASON_HEADERS[value])
+                elif value == "printing":
+                    # New job started: drop any reason text left over from the
+                    # previous cycle so it can't leak through if this one ends
+                    # without hitting a state in _REASON_HEADERS.
+                    self.cf_info_tf.clear()
 
     def show(self):
         self.request_file_info.emit(self.filename)
@@ -97,22 +103,25 @@ class CancelPage(QtWidgets.QWidget):
     def set_file_name(self, file_name: str) -> None:
         self.cf_file_name.setText(file_name)
 
-    def _show_screen_thumbnail(self, dict):
-        try:
-            thumbnails = dict["thumbnail_images"]
+    def _show_screen_thumbnail(self, metadata: dict | None) -> None:
+        """Display the largest thumbnail from file metadata.
 
-            last_thumb = QtGui.QPixmap.fromImage(thumbnails[-1])
+        ``thumbnail_images`` values are pre-loaded ``QImage``
+        objects produced by ``Files._process_metadata``.
+        """
+        fallback = QtGui.QPixmap(
+            "BlocksScreen/lib/ui/resources/media/logoblocks400x300.png"
+        )
+        thumbnails = metadata.get("thumbnail_images", []) if metadata else []
+        if not thumbnails:
+            self.set_pixmap(fallback)
+            return
 
-            if last_thumb.isNull():
-                last_thumb = QtGui.QPixmap(
-                    "BlocksScreen/lib/ui/resources/media/logoblocks400x300.png"
-                )
-        except Exception as e:
-            print(e)
-            last_thumb = QtGui.QPixmap(
-                "BlocksScreen/lib/ui/resources/media/logoblocks400x300.png"
-            )
-        self.set_pixmap(last_thumb)
+        last_thumb = thumbnails[-1]
+        if isinstance(last_thumb, QtGui.QImage) and not last_thumb.isNull():
+            self.set_pixmap(QtGui.QPixmap.fromImage(last_thumb))
+        else:
+            self.set_pixmap(fallback)
 
     def _setupUI(self) -> None:
         """Setup widget ui"""
@@ -125,11 +134,9 @@ class CancelPage(QtWidgets.QWidget):
         sizePolicy.setHeightForWidth(self.sizePolicy().hasHeightForWidth())
         self.setSizePolicy(sizePolicy)
         self.setObjectName("cancelPage")
-        self.setStyleSheet(
-            """#cancelPage {
+        self.setStyleSheet("""#cancelPage {
                 background-image: url(:/background/media/1st_background.png);
-            }"""
-        )
+            }""")
         self.setMinimumSize(QtCore.QSize(800, 480))
         self.setMaximumSize(QtCore.QSize(800, 480))
         self.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)

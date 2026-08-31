@@ -1,6 +1,5 @@
-from PyQt6 import QtCore, QtGui, QtWidgets
-
 from lib.utils.icon_button import IconButton
+from PyQt6 import QtCore, QtGui, QtWidgets
 
 
 class TroubleshootPage(QtWidgets.QDialog):
@@ -9,14 +8,12 @@ class TroubleshootPage(QtWidgets.QDialog):
         parent: QtWidgets.QWidget,
     ) -> None:
         super().__init__(parent)
-        self.setStyleSheet(
-            """
+        self.setStyleSheet("""
             #troubleshoot_page { 
                 background-image: url(:/background/media/1st_background.png); 
                 border: none;
             }
-            """
-        )
+            """)
         self.setWindowFlags(
             QtCore.Qt.WindowType.Popup | QtCore.Qt.WindowType.FramelessWindowHint
         )

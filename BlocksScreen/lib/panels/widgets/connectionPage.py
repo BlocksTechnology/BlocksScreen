@@ -359,14 +359,14 @@ class ConnectionPage(QtWidgets.QFrame):
                 self._restart_10s_timer.start()
                 self._restart_30s_timer.start()
 
-    def showEvent(self, a0: QtGui.QShowEvent | None) -> None:  # noqa: N802
+    def showEvent(self, a0: QtGui.QShowEvent | None) -> None:
         if self.conn_toggle:
             self.ws.api.refresh_update_status()
             self.call_load_panel.emit(False, "", False)
             self.call_cancel_panel.emit(False)
         super().showEvent(a0)
 
-    def eventFilter(self, a0: QtCore.QObject | None, a1: QtCore.QEvent | None) -> bool:  # noqa: N802
+    def eventFilter(self, a0: QtCore.QObject | None, a1: QtCore.QEvent | None) -> bool:
         """Route Klipper custom events to _set_state"""
         if a1 is None:
             return super().eventFilter(a0, a1)
