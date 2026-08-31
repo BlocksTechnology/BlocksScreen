@@ -156,7 +156,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         super().__init__(parent) if parent else super().__init__()
 
         self._init_instance_variables()
-        self._setupUI()
+        self._setup_ui()
         self._init_timers()
         self._init_model_view()
         self._init_network_manager()
@@ -1787,7 +1787,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self._nm.refresh_state()
         super().showEvent(event)
 
-    def _setupUI(self) -> None:
+    def _setup_ui(self) -> None:
         """Build and lay out the entire stacked-widget UI tree."""
         self.setObjectName("wifi_stacked_page")
         self.resize(800, 480)

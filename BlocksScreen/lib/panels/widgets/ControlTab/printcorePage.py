@@ -14,7 +14,7 @@ class SwapPrintcorePage(QtWidgets.QDialog):
         self.setWindowFlags(
             QtCore.Qt.WindowType.Popup | QtCore.Qt.WindowType.FramelessWindowHint
         )
-        self._setupUI()
+        self._setup_ui()
         self.repaint()
 
     def setText(self, text: str) -> None:
@@ -81,7 +81,7 @@ class SwapPrintcorePage(QtWidgets.QDialog):
         self.repaint()
         return super().show()
 
-    def _setupUI(self) -> None:
+    def _setup_ui(self) -> None:
         font = QtGui.QFont()
         font.setPointSize(20)
 

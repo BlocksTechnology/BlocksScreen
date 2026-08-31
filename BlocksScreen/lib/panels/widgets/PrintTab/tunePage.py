@@ -45,7 +45,7 @@ class TuneWidget(QtWidgets.QWidget):
         super().__init__(parent)
         self.tune_display_buttons: dict = {}
         self.setObjectName("tune_page")
-        self._setupUI()
+        self._setup_ui()
         self.sensors_menu_btn.clicked.connect(self.request_sensorsPage.emit)
         self.tune_babystep_menu_btn.clicked.connect(self.request_bbpPage.emit)
         self.tune_back_btn.clicked.connect(self.request_back)
@@ -242,7 +242,7 @@ class TuneWidget(QtWidgets.QWidget):
         if self.isVisible():
             self.speed_display.setText(str(f"{int(self.speed_factor_override * 100)}%"))
 
-    def _setupUI(self) -> None:
+    def _setup_ui(self) -> None:
         sizePolicy = QtWidgets.QSizePolicy(
             QtWidgets.QSizePolicy.Policy.MinimumExpanding,
             QtWidgets.QSizePolicy.Policy.MinimumExpanding,

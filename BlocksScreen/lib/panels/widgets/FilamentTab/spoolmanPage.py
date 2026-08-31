@@ -42,7 +42,7 @@ class SpoolmanPage(QtWidgets.QWidget):
         self._selected_spool: dict | None = None
         self._display_name_to_spool: dict[str, dict] = {}
 
-        self._setupUI()
+        self._setup_ui()
         self._setup_add_popup()
         self.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
 
@@ -314,7 +314,7 @@ class SpoolmanPage(QtWidgets.QWidget):
         self._on_reload_clicked()
         return super().showEvent(event)
 
-    def _setupUI(self) -> None:  # noqa: N802
+    def _setup_ui(self) -> None:  # noqa: N802
         self.setMaximumHeight(470)
 
         size_policy = QtWidgets.QSizePolicy(
