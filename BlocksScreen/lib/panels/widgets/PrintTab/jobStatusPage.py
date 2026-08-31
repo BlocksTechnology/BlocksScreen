@@ -7,7 +7,7 @@ from helper_methods import (
     calculate_max_layers,
     estimate_print_time,
 )
-from lib.panels.widgets.basePopup import BasePopup
+from lib.panels.widgets.Common.basePopup import BasePopup
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_label import BlocksLabel
 from lib.utils.blocks_progressbar import CustomProgressBar

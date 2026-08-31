@@ -7,11 +7,11 @@ from types import MappingProxyType
 
 from PyQt6 import QtCore, QtGui, QtWidgets
 
-from BlocksScreen.lib.panels.widgets.basePopup import BasePopup
-from BlocksScreen.lib.panels.widgets.loadWidget import LoadingOverlayWidget
-from BlocksScreen.lib.utils.blocks_button import BlocksCustomButton
-from BlocksScreen.lib.utils.blocks_Scrollbar import CustomScrollBar
-from BlocksScreen.lib.utils.icon_button import IconButton
+from lib.panels.widgets.Common.basePopup import BasePopup
+from lib.panels.widgets.Common.loadWidget import LoadingOverlayWidget
+from lib.utils.blocks_button import BlocksCustomButton
+from lib.utils.blocks_Scrollbar import CustomScrollBar
+from lib.utils.icon_button import IconButton
 from updater.models import ComponentStatus
 
 _log = logging.getLogger(__name__)

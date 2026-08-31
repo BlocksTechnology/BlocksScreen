@@ -1,7 +1,7 @@
 from collections import deque
 from typing import ClassVar
 
-from lib.panels.widgets.popupDialogWidget import Popup
+from lib.panels.widgets.Common.popupDialogWidget import Popup
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_frame import BlocksCustomFrame
 from lib.utils.icon_button import IconButton
