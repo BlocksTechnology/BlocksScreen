@@ -263,13 +263,13 @@ _STUB_MODULES = {
         "EntryListModel": _EntryListModelStub,
         "ListItem": _ListItemStub,
     },
-    "lib.panels.widgets.keyboardPage": {
+    "lib.panels.widgets.Common.keyboardPage": {
         "CustomQwertyKeyboard": _KeyboardStub,
     },
-    "lib.panels.widgets.loadWidget": {
+    "lib.panels.widgets.Common.loadWidget": {
         "LoadingOverlayWidget": _LoadingOverlayStub,
     },
-    "lib.panels.widgets.popupDialogWidget": {
+    "lib.panels.widgets.Common.popupDialogWidget": {
         "Popup": _PopupStub,
     },
 }

@@ -44,7 +44,7 @@ sys.modules.setdefault("lib.utils.icon_button", _icon_btn_stub)
 @pytest.fixture(scope="module", autouse=True)
 def mock_heavy_deps():
     with pytest.MonkeyPatch.context() as mp:
-        for key in ("configfile", "BlocksScreen.lib.panels.widgets.loadWidget"):
+        for key in ("configfile", "BlocksScreen.lib.panels.widgets.Common.loadWidget"):
             mp.delitem(sys.modules, key, raising=False)
         mp.setitem(sys.modules, "configfile", MagicMock())
         yield
