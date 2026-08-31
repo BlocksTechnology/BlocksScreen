@@ -6,15 +6,15 @@ from functools import partial
 from configfile import BlocksScreenConfig, get_configparser
 from lib.files import Files
 from lib.moonrakerComm import MoonWebSocket
-from lib.panels.widgets.basePopup import BasePopup
-from lib.panels.widgets.numpadPage import CustomNumpad
+from lib.panels.widgets.Common.basePopup import BasePopup
+from lib.panels.widgets.Common.numpadPage import CustomNumpad
 from lib.panels.widgets.PrintTab.babystepPage import BabystepPage
 from lib.panels.widgets.PrintTab.confirmPage import ConfirmWidget
 from lib.panels.widgets.PrintTab.filesPage import FilesPage
 from lib.panels.widgets.PrintTab.jobStatusPage import JobStatusWidget
 from lib.panels.widgets.PrintTab.sensorsPanel import SensorsWindow
 from lib.panels.widgets.PrintTab.tunePage import TuneWidget
-from lib.panels.widgets.slider_selector_page import SliderPage
+from lib.panels.widgets.Common.slider_selector_page import SliderPage
 from lib.printer import Printer
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.display_button import DisplayButton

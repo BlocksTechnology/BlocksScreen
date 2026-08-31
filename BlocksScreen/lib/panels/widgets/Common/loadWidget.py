@@ -29,7 +29,7 @@ class LoadingOverlayWidget(QtWidgets.QLabel):
         self.max_length = 150.0
         self.length_step = 2.5
 
-        self._setupUI()
+        self._setup_ui()
 
         config: BlocksScreenConfig = get_configparser()
         animation_path = None
@@ -173,7 +173,7 @@ class LoadingOverlayWidget(QtWidgets.QLabel):
         self.repaint()
         return super().show()
 
-    def _setupUI(self) -> None:
+    def _setup_ui(self) -> None:
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_TranslucentBackground, True)
         self.gifshow = QtWidgets.QLabel("", self)
         self.gifshow.setObjectName("gifshow")

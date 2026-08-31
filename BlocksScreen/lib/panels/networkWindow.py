@@ -21,9 +21,9 @@ from lib.network import (
     is_hidden_ssid,
     signal_to_bars,
 )
-from lib.panels.widgets.keyboardPage import CustomQwertyKeyboard
-from lib.panels.widgets.loadWidget import LoadingOverlayWidget
-from lib.panels.widgets.popupDialogWidget import Popup
+from lib.panels.widgets.Common.keyboardPage import CustomQwertyKeyboard
+from lib.panels.widgets.Common.loadWidget import LoadingOverlayWidget
+from lib.panels.widgets.Common.popupDialogWidget import Popup
 from lib.qrcode_gen import generate_wifi_qrcode
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_frame import BlocksCustomFrame
@@ -156,7 +156,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         super().__init__(parent) if parent else super().__init__()
 
         self._init_instance_variables()
-        self._setupUI()
+        self._setup_ui()
         self._init_timers()
         self._init_model_view()
         self._init_network_manager()
@@ -1787,7 +1787,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self._nm.refresh_state()
         super().showEvent(event)
 
-    def _setupUI(self) -> None:
+    def _setup_ui(self) -> None:
         """Build and lay out the entire stacked-widget UI tree."""
         self.setObjectName("wifi_stacked_page")
         self.resize(800, 480)

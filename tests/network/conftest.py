@@ -202,7 +202,7 @@ class _NetworkWidgetbuttonsStub(QtWidgets.QWidget):
 
 
 class _BlocksCustomCheckButtonStub(QtWidgets.QCheckBox):
-    """BlocksCustomCheckButton stand-in — adds setFlat() used in _setupUI."""
+    """BlocksCustomCheckButton stand-in — adds setFlat() used in _setup_ui."""
 
     def setFlat(self, v: bool) -> None:
         pass
@@ -263,13 +263,13 @@ _STUB_MODULES = {
         "EntryListModel": _EntryListModelStub,
         "ListItem": _ListItemStub,
     },
-    "lib.panels.widgets.keyboardPage": {
+    "lib.panels.widgets.Common.keyboardPage": {
         "CustomQwertyKeyboard": _KeyboardStub,
     },
-    "lib.panels.widgets.loadWidget": {
+    "lib.panels.widgets.Common.loadWidget": {
         "LoadingOverlayWidget": _LoadingOverlayStub,
     },
-    "lib.panels.widgets.popupDialogWidget": {
+    "lib.panels.widgets.Common.popupDialogWidget": {
         "Popup": _PopupStub,
     },
 }

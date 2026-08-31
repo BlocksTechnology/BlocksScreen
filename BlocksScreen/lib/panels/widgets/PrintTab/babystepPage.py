@@ -40,7 +40,7 @@ class BabystepPage(QtWidgets.QWidget):
         self._z_offset_text: float = 0.0
         self._pending_z_offset: float = 0.0
 
-        self._setupUI()
+        self._setup_ui()
         self.bbp_mvup.clicked.connect(self.on_move_nozzle_close)
         self.bbp_mvdown.clicked.connect(self.on_move_nozzle_away)
         self.bbp_mvup.setEnabled(False)
@@ -129,7 +129,7 @@ class BabystepPage(QtWidgets.QWidget):
         btn.setObjectName(obj_name)
         return btn
 
-    def _setupUI(self) -> None:
+    def _setup_ui(self) -> None:
         """Setup babystep page UI."""
         btn_group = QtWidgets.QButtonGroup(self)
         btn_group.setExclusive(True)

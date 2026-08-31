@@ -3,7 +3,7 @@
 import re
 import typing
 
-from lib.panels.widgets.optionCardWidget import OptionCard
+from lib.panels.widgets.Common.optionCardWidget import OptionCard
 from lib.utils.gcode import fan_speed_gcode
 from lib.utils.icon_button import IconButton
 from PyQt6 import QtCore, QtGui, QtWidgets

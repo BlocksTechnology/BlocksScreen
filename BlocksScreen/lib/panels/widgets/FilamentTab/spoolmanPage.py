@@ -3,7 +3,7 @@ import typing
 
 from lib.panels.widgets.FilamentTab.addFilamentPage import AddFilamentPage
 from lib.panels.widgets.FilamentTab.addSpoolPage import AddSpoolPage
-from lib.panels.widgets.basePopup import BasePopup
+from lib.panels.widgets.Common.basePopup import BasePopup
 from lib.utils.blocks_frame import BlocksCustomFrame
 from lib.utils.icon_button import IconButton
 from lib.utils.list_model import EntryDelegate, EntryListModel, ListItem
@@ -42,7 +42,7 @@ class SpoolmanPage(QtWidgets.QWidget):
         self._selected_spool: dict | None = None
         self._display_name_to_spool: dict[str, dict] = {}
 
-        self._setupUI()
+        self._setup_ui()
         self._setup_add_popup()
         self.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
 
@@ -314,7 +314,7 @@ class SpoolmanPage(QtWidgets.QWidget):
         self._on_reload_clicked()
         return super().showEvent(event)
 
-    def _setupUI(self) -> None:  # noqa: N802
+    def _setup_ui(self) -> None:  # noqa: N802
         self.setMaximumHeight(470)
 
         size_policy = QtWidgets.QSizePolicy(
