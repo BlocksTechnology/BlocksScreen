@@ -114,8 +114,7 @@
    <string>MainWindow</string>
   </property>
   <property name="windowIcon">
-   <iconset theme="applications-other">
-    <normaloff>:/background/logoblocks.png</normaloff>:/background/logoblocks.png</iconset>
+   <iconset theme="applications-other"/>
   </property>
   <property name="layoutDirection">
    <enum>Qt::LeftToRight</enum>
