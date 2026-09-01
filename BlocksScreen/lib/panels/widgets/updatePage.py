@@ -5,6 +5,7 @@ import logging
 import typing
 from types import MappingProxyType
 
+from lib.utils.fonts import register_momcake
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 from BlocksScreen.lib.panels.widgets.basePopup import BasePopup
@@ -492,15 +493,10 @@ class UpdatePage(QtWidgets.QWidget):
         self.disable_popups.emit(loading)
 
     def _setupUI(self) -> None:
-        bold_id = QtGui.QFontDatabase.addApplicationFont(
-            ":/font/media/fonts for text/Momcake-Bold.ttf"
-        )
-        self._font_family = QtGui.QFontDatabase.applicationFontFamilies(bold_id)[0]
-        thin_id = QtGui.QFontDatabase.addApplicationFont(
-            ":/font/media/fonts for text/Momcake-Thin.ttf"
-        )
-        thin_families = QtGui.QFontDatabase.applicationFontFamilies(thin_id)
-        _title_family = thin_families[0] if thin_families else ""
+        # Qt files the Thin and Bold faces under one family, so both ids gave the
+        # same name here; the weight is chosen per QFont, not per family.
+        self._font_family = register_momcake()
+        _title_family = self._font_family
 
         self.setObjectName("updatePage")
         self.setStyleSheet(

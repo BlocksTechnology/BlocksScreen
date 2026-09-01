@@ -2,6 +2,7 @@ import typing
 
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_frame import BlocksCustomFrame
+from lib.utils.fonts import register_momcake
 from lib.utils.icon_button import IconButton
 from lib.utils.list_model import EntryDelegate, EntryListModel, ListItem
 from PyQt6 import QtCore, QtGui, QtWidgets
@@ -135,10 +136,7 @@ class InputShaperPage(QtWidgets.QWidget):
 
     def _setupUI(self) -> None:
         """Setup UI for updatePage"""
-        font_id = QtGui.QFontDatabase.addApplicationFont(
-            ":/font/media/fonts for text/Momcake-Bold.ttf"
-        )
-        font_family = QtGui.QFontDatabase.applicationFontFamilies(font_id)[0]
+        font_family = register_momcake()
         sizePolicy = QtWidgets.QSizePolicy(
             QtWidgets.QSizePolicy.Policy.MinimumExpanding,
             QtWidgets.QSizePolicy.Policy.MinimumExpanding,
