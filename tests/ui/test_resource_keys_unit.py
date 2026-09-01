@@ -24,10 +24,6 @@ XFAIL_KEYS = {
         "evaluate, whose real keys are the 0bar..3bar matrix; the literal "
         "disappears when the Icon enum replaces it in PR 8"
     ),
-    ":/ui/media/btn_icons/warning.svg": (
-        "no such file in any .qrc or on disk, so the warning popup renders a "
-        "blank icon; needs a new asset, not just a key fix; retired by PR 3"
-    ),
 }
 
 # Deliberately a text scan, not an AST walk: an AST walk only sees ast.Constant,
