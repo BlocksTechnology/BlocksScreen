@@ -5122,7 +5122,7 @@ Home</string>
         <bool>true</bool>
        </property>
        <property name="icon_pixmap" stdset="0">
-        <pixmap>:/button_borders/media/btn_icons/back.svg</pixmap>
+        <pixmap resource="resources/icon_resources.qrc">:/ui/media/btn_icons/back.svg</pixmap>
        </property>
        <property name="button_type" stdset="0">
         <string>icon</string>

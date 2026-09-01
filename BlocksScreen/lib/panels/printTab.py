@@ -428,20 +428,6 @@ class PrintTab(QtWidgets.QStackedWidget):
         except (RuntimeError, TypeError):
             pass
 
-    def setProperty(self, name: str, value: typing.Any) -> bool:
-        """Intercept the set property method
-
-        Args:
-            name (str): Name of the dynamic property
-            value (typing.Any): Value for the dynamic property
-
-        Returns:
-            bool: Returns to the super class
-        """
-        if name == "backgroundPixmap":
-            self.background = value
-        return super().setProperty(name, value)
-
     def handle_cancel_print(self) -> None:
         """Handles the print cancel action"""
         if (
@@ -514,10 +500,6 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.setSizePolicy(sizePolicy)
         self.setMinimumSize(QtCore.QSize(710, 410))
         self.setMaximumSize(QtCore.QSize(720, 420))
-        self.setProperty(
-            "backgroundPixmap",
-            QtGui.QPixmap(":/background/media/graphics/scroll_list_window.svg"),
-        )
         self.print_page = QtWidgets.QWidget()
         sizePolicy = QtWidgets.QSizePolicy(
             QtWidgets.QSizePolicy.Policy.MinimumExpanding,
