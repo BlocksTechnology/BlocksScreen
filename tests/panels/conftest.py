@@ -45,7 +45,6 @@ _STUB_MODULES = (
     "lib.ui.resources.graphic_resources_rc",
     "lib.ui.resources.icon_resources_rc",
     "lib.ui.resources.main_menu_resources_rc",
-    "lib.ui.resources.system_resources_rc",
     "lib.ui.resources.top_bar_resources_rc",
     "lib.updater_worker",
     "screensaver",

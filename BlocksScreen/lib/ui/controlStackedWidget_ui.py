@@ -170,7 +170,7 @@ class Ui_controlStackedWidget(object):
         self.cp_fans_btn.setStyleSheet("")
         self.cp_fans_btn.setAutoDefault(False)
         self.cp_fans_btn.setFlat(True)
-        self.cp_fans_btn.setProperty("icon_pixmap", QtGui.QPixmap(":/temperature_related/media/btn_icons/fan.svg"))
+        self.cp_fans_btn.setProperty("icon_pixmap", QtGui.QPixmap(":/fan_related/media/btn_icons/fan.svg"))
         self.cp_fans_btn.setObjectName("cp_fans_btn")
         self.cp_content_layout.addWidget(self.cp_fans_btn, 2, 0, 1, 1)
         self.cp_switch_print_core_btn = BlocksCustomButton(parent=self.control_page)

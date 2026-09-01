@@ -639,7 +639,7 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
             (
                 "load_pla_btn",
                 "PLA",
-                ":/filament_related/media/topbar/pla_filament_topbar.svg",
+                ":/top_bar_icons/media/topbar/pla_filament_topbar.svg",
                 0,
                 0,
                 FilamentTypes.PLA,
@@ -647,7 +647,7 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
             (
                 "load_petg_btn",
                 "PETG",
-                ":/filament_related/media/topbar/petg_filament_topbar.svg",
+                ":/top_bar_icons/media/topbar/petg_filament_topbar.svg",
                 0,
                 1,
                 FilamentTypes.PETG,
@@ -655,7 +655,7 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
             (
                 "load_abs_btn",
                 "ABS",
-                ":/filament_related/media/topbar/abs_filament_topbar.svg",
+                ":/top_bar_icons/media/topbar/abs_filament_topbar.svg",
                 1,
                 0,
                 FilamentTypes.ABS,
