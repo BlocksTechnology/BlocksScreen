@@ -11,9 +11,10 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from configfile import get_configparser
-from lib.panels.mainWindow import MainWindow  # noqa: E402
+from lib.panels.mainWindow import MainWindow
+from lib.utils.blocks_pixmap import BlocksPixmap
 from logger import CrashHandler, LogManager, install_crash_handler, setup_logging
-from PyQt6 import QtCore, QtGui, QtWidgets  # noqa: E402
+from PyQt6 import QtCore, QtGui, QtWidgets
 from tools.configuration_manager import ConfigManager
 
 install_crash_handler()
@@ -167,6 +168,8 @@ def _setup_sigterm(app: BlocksScreenApp) -> None:
 
 def on_quit() -> None:
     logging.info("Final exit cleanup")
+    # aboutToQuit still has a live qApp, which QPixmap destruction requires.
+    BlocksPixmap.clear()
     LogManager.shutdown()
 
 
