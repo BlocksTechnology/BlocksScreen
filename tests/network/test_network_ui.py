@@ -966,34 +966,20 @@ class TestSetupUIRunsWithoutError:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Step 4a: Helper classes — PixmapCache, WifiIconProvider, IPAddressLineEdit
+# Step 4a: Helper classes — WifiIconProvider, IPAddressLineEdit
 # ─────────────────────────────────────────────────────────────────────────────
 
 
 @pytest.mark.unit
 class TestHelperClasses:
-    def test_pixmap_cache_get_loads_and_caches(self, qapp):
-        from BlocksScreen.lib.panels.networkWindow import PixmapCache
-
-        PixmapCache._cache.clear()
-        px1 = PixmapCache.get(":/some/test/path.svg")
-        px2 = PixmapCache.get(":/some/test/path.svg")
-        assert px2 is px1  # same object from cache
-
-    def test_pixmap_cache_preload_calls_get(self, qapp):
-        from BlocksScreen.lib.panels.networkWindow import PixmapCache
-
-        PixmapCache._cache.clear()
-        paths = [":/path/a.svg", ":/path/b.svg"]
-        PixmapCache.preload(paths)
-        assert ":/path/a.svg" in PixmapCache._cache
-        assert ":/path/b.svg" in PixmapCache._cache
-
-    def test_wifi_icon_provider_get_pixmap(self, qapp):
+    def test_wifi_icon_provider_picks_the_asset_for_the_signal(self, qapp):
         from BlocksScreen.lib.panels.networkWindow import WifiIconProvider
+        from BlocksScreen.lib.utils.blocks_pixmap import BlocksPixmap, Icon
 
+        # Identity, not isNull: this suite never imports the _rc blobs, so every
+        # pixmap here is null and only the cache key tells the assets apart.
         px = WifiIconProvider.get_pixmap(75, is_protected=True)
-        assert px is not None  # returns a QPixmap (even if null in offscreen)
+        assert px is BlocksPixmap.get(Icon.WIFI_4BAR_PROTECTED)
 
     def test_ip_line_edit_is_valid_true(self, qapp):
         from BlocksScreen.lib.panels.networkWindow import IPAddressLineEdit

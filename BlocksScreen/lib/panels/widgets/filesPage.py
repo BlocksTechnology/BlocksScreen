@@ -1,8 +1,8 @@
 import json
 import logging
-import typing
 
 import helper_methods
+from lib.utils.blocks_pixmap import BlocksPixmap, Icon
 from lib.utils.blocks_Scrollbar import CustomScrollBar
 from lib.utils.icon_button import IconButton
 from lib.utils.list_model import EntryDelegate, EntryListModel, ListItem
@@ -30,17 +30,7 @@ class FilesPage(QtWidgets.QWidget):
     LEFT_FONT_SIZE = 17
     RIGHT_FONT_SIZE = 12
 
-    # Icon paths
-    ICON_PATHS = {
-        "back_folder": ":/ui/media/btn_icons/back_folder.svg",
-        "folder": ":/ui/media/btn_icons/folderIcon.svg",
-        "right_arrow": ":/arrow_icons/media/btn_icons/right_arrow.svg",
-        "usb": ":/ui/media/btn_icons/usb_icon.svg",
-        "back": ":/ui/media/btn_icons/back.svg",
-        "refresh": ":/ui/media/btn_icons/refresh.svg",
-    }
-
-    def __init__(self, parent: typing.Optional[QtWidgets.QWidget] = None) -> None:
+    def __init__(self, parent: QtWidgets.QWidget | None = None) -> None:
         super().__init__(parent)
 
         self._file_list: list[dict] = []
@@ -52,7 +42,6 @@ class FilesPage(QtWidgets.QWidget):
         self._metadata_retry_count: dict[
             str, int
         ] = {}  # Track retry count per file (max 3)
-        self._icons: dict[str, QtGui.QPixmap] = {}
 
         self._model = EntryListModel()
         self._entry_delegate = EntryDelegate()
@@ -62,7 +51,6 @@ class FilesPage(QtWidgets.QWidget):
         self._model.modelReset.connect(self._delayed_scrollbar_update)
 
         self._setup_ui()
-        self._load_icons()
         self._connect_signals()
 
         self.setMouseTracking(True)
@@ -263,7 +251,7 @@ class FilesPage(QtWidgets.QWidget):
 
         return insert_pos
 
-    def _find_file_key_by_display_name(self, display_name: str) -> typing.Optional[str]:
+    def _find_file_key_by_display_name(self, display_name: str) -> str | None:
         """Find the file key in _files_data by its display name."""
         for key in self._files_data:
             if self._get_display_name(key) == display_name:
@@ -308,7 +296,7 @@ class FilesPage(QtWidgets.QWidget):
             item = ListItem(
                 text=display_name,
                 right_text="Unknown Filament - Unknown time",
-                right_icon=self._icons.get("right_arrow"),
+                right_icon=BlocksPixmap.get(Icon.RIGHT_ARROW),
                 left_icon=None,
                 callback=None,
                 selected=False,
@@ -426,9 +414,9 @@ class FilesPage(QtWidgets.QWidget):
         insert_position = self._find_directory_insert_position(dirname)
 
         # Create the list item
-        icon = self._icons.get("folder")
+        icon = BlocksPixmap.get(Icon.FOLDERICON)
         if self._is_usb_directory(self._curr_dir, dirname):
-            icon = self._icons.get("usb")
+            icon = BlocksPixmap.get(Icon.USB_ICON)
 
         item = ListItem(
             text=str(dirname),
@@ -677,7 +665,7 @@ class FilesPage(QtWidgets.QWidget):
             item = ListItem(
                 text=display_name,
                 right_text="Unknown Filament - Unknown time",
-                right_icon=self._icons.get("right_arrow"),
+                right_icon=BlocksPixmap.get(Icon.RIGHT_ARROW),
                 left_icon=None,
                 callback=None,
                 selected=False,
@@ -691,7 +679,7 @@ class FilesPage(QtWidgets.QWidget):
         if item:
             self._model.add_item(item)
 
-    def _create_file_list_item(self, filedata: dict) -> typing.Optional[ListItem]:
+    def _create_file_list_item(self, filedata: dict) -> ListItem | None:
         """Create a ListItem from file metadata."""
         filename = filedata.get("filename", "")
         if not filename:
@@ -729,7 +717,7 @@ class FilesPage(QtWidgets.QWidget):
         return ListItem(
             text=display_name,
             right_text=f"{filament_type} - {time_str}",
-            right_icon=self._icons.get("right_arrow"),
+            right_icon=BlocksPixmap.get(Icon.RIGHT_ARROW),
             left_icon=None,  # Files have no left icon
             callback=None,
             selected=False,
@@ -747,9 +735,9 @@ class FilesPage(QtWidgets.QWidget):
             return
 
         # Choose appropriate icon
-        icon = self._icons.get("folder")
+        icon = BlocksPixmap.get(Icon.FOLDERICON)
         if self._is_usb_directory(self._curr_dir, dir_name):
-            icon = self._icons.get("usb")
+            icon = BlocksPixmap.get(Icon.USB_ICON)
 
         item = ListItem(
             text=str(dir_name),
@@ -771,7 +759,7 @@ class FilesPage(QtWidgets.QWidget):
             text="Go Back",
             right_text="",
             right_icon=None,
-            left_icon=self._icons.get("back_folder"),
+            left_icon=BlocksPixmap.get(Icon.BACK_FOLDER),
             callback=None,
             selected=False,
             allow_check=False,
@@ -936,15 +924,6 @@ class FilesPage(QtWidgets.QWidget):
 
         return name
 
-    def _load_icons(self) -> None:
-        """Load all icons into cache."""
-        self._icons = {
-            "back_folder": QtGui.QPixmap(self.ICON_PATHS["back_folder"]),
-            "folder": QtGui.QPixmap(self.ICON_PATHS["folder"]),
-            "right_arrow": QtGui.QPixmap(self.ICON_PATHS["right_arrow"]),
-            "usb": QtGui.QPixmap(self.ICON_PATHS["usb"]),
-        }
-
     def _connect_signals(self) -> None:
         """Connect internal signals."""
         # Button connections
@@ -1015,7 +994,7 @@ class FilesPage(QtWidgets.QWidget):
         self.back_btn.setMinimumSize(QtCore.QSize(60, 60))
         self.back_btn.setMaximumSize(QtCore.QSize(60, 60))
         self.back_btn.setFlat(True)
-        self.back_btn.setProperty("icon_pixmap", QtGui.QPixmap(self.ICON_PATHS["back"]))
+        self.back_btn.setProperty("icon_pixmap", BlocksPixmap.get(Icon.BACK))
         self.back_btn.setObjectName("back_btn")
         layout.addWidget(self.back_btn, 0, QtCore.Qt.AlignmentFlag.AlignLeft)
 
@@ -1024,9 +1003,7 @@ class FilesPage(QtWidgets.QWidget):
         self._reload_button.setMinimumSize(QtCore.QSize(60, 60))
         self._reload_button.setMaximumSize(QtCore.QSize(60, 60))
         self._reload_button.setFlat(True)
-        self._reload_button.setProperty(
-            "icon_pixmap", QtGui.QPixmap(self.ICON_PATHS["refresh"])
-        )
+        self._reload_button.setProperty("icon_pixmap", BlocksPixmap.get(Icon.REFRESH))
         self._reload_button.setObjectName("reload_button")
         layout.addWidget(self._reload_button, 0, QtCore.Qt.AlignmentFlag.AlignRight)
 

@@ -16,6 +16,10 @@ from typing import ClassVar
 
 from PyQt6 import QtCore, QtGui
 
+# Setup-time callers cannot know their paint size, and the widgets rescale anyway;
+# 128 clears the tallest button (90px hole, 0.8 fill) at 64 KiB a surface.
+ICON_SIZE = QtCore.QSize(128, 128)
+
 
 class Icon(StrEnum):
     """Every resource key the handwritten panels draw, one member per asset."""
@@ -133,7 +137,7 @@ class BlocksPixmap:
         return cached
 
     @classmethod
-    def get(cls, icon: Icon | str, size: QtCore.QSize) -> QtGui.QPixmap:
+    def get(cls, icon: Icon | str, size: QtCore.QSize = ICON_SIZE) -> QtGui.QPixmap:
         """Return *icon* rasterized at *size*, cached across calls."""
         key = (str(icon), size.width(), size.height())
         cached = cls._pixmaps.get(key)

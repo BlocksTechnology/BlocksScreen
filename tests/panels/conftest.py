@@ -76,7 +76,6 @@ sys.modules["lib.network"].WifiIconKey = MagicMock()
 sys.modules["lib.panels.controlTab"].ControlTab = MagicMock
 sys.modules["lib.panels.filamentTab"].FilamentTab = MagicMock
 sys.modules["lib.panels.networkWindow"].NetworkControlWindow = MagicMock
-sys.modules["lib.panels.networkWindow"].PixmapCache = MagicMock
 sys.modules["lib.panels.printTab"].PrintTab = MagicMock
 sys.modules["lib.panels.utilitiesTab"].UtilitiesTab = MagicMock
 sys.modules["lib.panels.widgets.basePopup"].BasePopup = MagicMock

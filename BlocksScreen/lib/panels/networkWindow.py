@@ -29,6 +29,7 @@ from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_frame import BlocksCustomFrame
 from lib.utils.blocks_label import BlocksLabel
 from lib.utils.blocks_linedit import BlocksCustomLinEdit
+from lib.utils.blocks_pixmap import BlocksPixmap, Icon
 from lib.utils.blocks_Scrollbar import CustomScrollBar
 from lib.utils.blocks_togglebutton import NetworkWidgetbuttons
 from lib.utils.check_button import BlocksCustomCheckButton
@@ -43,48 +44,13 @@ LOAD_TIMEOUT_MS = 30_000
 STATUS_CHECK_INTERVAL_MS = 2_000
 
 
-class PixmapCache:
-    """Process-wide cache for QPixmaps loaded from Qt resource paths.
-
-    Every SVG is decoded exactly once. Qt's implicit sharing means the
-    same QPixmap can be safely referenced by any number of widgets.
-    Must only be called after QApplication is created.
-    """
-
-    _cache: dict[str, QtGui.QPixmap] = {}
-
-    @classmethod
-    def get(cls, path: str) -> QtGui.QPixmap:
-        """Return the cached QPixmap for *path*, loading it on first access."""
-        if path not in cls._cache:
-            cls._cache[path] = QtGui.QPixmap(path)
-        return cls._cache[path]
-
-    @classmethod
-    def preload(cls, paths: list[str]) -> None:
-        """Batch-load a list of paths (called once during init)."""
-        for path in paths:
-            cls.get(path)
-
-
 class WifiIconProvider:
-    """Maps (signal_strength, is_protected) -> cached QPixmap via PixmapCache."""
-
-    _PATHS: dict[tuple[int, bool], str] = {
-        (
-            b,
-            p,
-        ): f":/network/media/btn_icons/network/{b}bar_wifi{'_protected' if p else ''}.svg"
-        for b in range(5)
-        for p in (False, True)
-    }
+    """Maps (signal_strength, is_protected) -> cached QPixmap via BlocksPixmap."""
 
     @classmethod
     def get_pixmap(cls, signal: int, is_protected: bool = False) -> QtGui.QPixmap:
         """Get pixmap for given signal strength and protection status."""
-        bars = signal_to_bars(signal)
-        path = cls._PATHS.get((bars, is_protected), cls._PATHS[(0, False)])
-        return PixmapCache.get(path)
+        return BlocksPixmap.get(Icon.wifi(signal_to_bars(signal), is_protected))
 
 
 class IPAddressLineEdit(BlocksCustomLinEdit):
@@ -418,9 +384,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             return
 
         # Normal (not connecting) display updates.
-        if state.ethernet_connected:
-            self._display_connected_state(state)
-        elif (
+        if state.ethernet_connected or (
             state.current_ssid
             and state.current_ip
             and state.connectivity
@@ -1808,12 +1772,8 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         )
 
         self._popup = Popup(self)
-        self._right_arrow_icon = PixmapCache.get(
-            ":/arrow_icons/media/btn_icons/right_arrow.svg"
-        )
-        self._hiden_network_icon = PixmapCache.get(
-            ":/network/media/btn_icons/network/0bar_wifi_protected.svg"
-        )
+        self._right_arrow_icon = BlocksPixmap.get(Icon.RIGHT_ARROW)
+        self._hiden_network_icon = BlocksPixmap.get(Icon.WIFI_0BAR_PROTECTED)
 
         self._setup_main_network_page()
         self._setup_network_list_page()
@@ -1897,9 +1857,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.network_backButton.setMinimumSize(QtCore.QSize(60, 60))
         self.network_backButton.setMaximumSize(QtCore.QSize(60, 60))
         self.network_backButton.setFlat(True)
-        self.network_backButton.setProperty(
-            "icon_pixmap", PixmapCache.get(":/ui/media/btn_icons/back.svg")
-        )
+        self.network_backButton.setProperty("icon_pixmap", BlocksPixmap.get(Icon.BACK))
 
         header_layout.addWidget(self.network_backButton)
 
@@ -2125,9 +2083,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.rescan_button.setMaximumSize(QtCore.QSize(60, 60))
         self.rescan_button.setText("Reload")
         self.rescan_button.setFlat(True)
-        self.rescan_button.setProperty(
-            "icon_pixmap", PixmapCache.get(":/ui/media/btn_icons/refresh.svg")
-        )
+        self.rescan_button.setProperty("icon_pixmap", BlocksPixmap.get(Icon.REFRESH))
         self.rescan_button.setProperty("button_type", "icon")
 
         header_layout.addWidget(self.rescan_button)
@@ -2148,9 +2104,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.nl_back_button.setMaximumSize(QtCore.QSize(60, 60))
         self.nl_back_button.setText("Back")
         self.nl_back_button.setFlat(True)
-        self.nl_back_button.setProperty(
-            "icon_pixmap", PixmapCache.get(":/ui/media/btn_icons/back.svg")
-        )
+        self.nl_back_button.setProperty("icon_pixmap", BlocksPixmap.get(Icon.BACK))
         self.nl_back_button.setProperty("class", "back_btn")
         self.nl_back_button.setProperty("button_type", "icon")
 
@@ -2278,7 +2232,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.add_network_page_backButton.setText("Back")
         self.add_network_page_backButton.setFlat(True)
         self.add_network_page_backButton.setProperty(
-            "icon_pixmap", PixmapCache.get(":/ui/media/btn_icons/back.svg")
+            "icon_pixmap", BlocksPixmap.get(Icon.BACK)
         )
         self.add_network_page_backButton.setProperty("class", "back_btn")
         self.add_network_page_backButton.setProperty("button_type", "icon")
@@ -2350,7 +2304,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.add_network_password_view.setText("View")
         self.add_network_password_view.setFlat(True)
         self.add_network_password_view.setProperty(
-            "icon_pixmap", PixmapCache.get(":/ui/media/btn_icons/unsee.svg")
+            "icon_pixmap", BlocksPixmap.get(Icon.UNSEE)
         )
         self.add_network_password_view.setProperty("class", "back_btn")
         self.add_network_password_view.setProperty("button_type", "icon")
@@ -2393,7 +2347,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.add_network_validation_button.setChecked(False)
         self.add_network_validation_button.setFlat(True)
         self.add_network_validation_button.setProperty(
-            "icon_pixmap", PixmapCache.get(":/dialog/media/btn_icons/yes.svg")
+            "icon_pixmap", BlocksPixmap.get(Icon.YES)
         )
         self.add_network_validation_button.setText("Activate")
         self.add_network_validation_button.setObjectName(
@@ -2456,7 +2410,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.saved_connection_back_button.setMaximumSize(QtCore.QSize(60, 60))
         self.saved_connection_back_button.setFlat(True)
         self.saved_connection_back_button.setProperty(
-            "icon_pixmap", PixmapCache.get(":/ui/media/btn_icons/back.svg")
+            "icon_pixmap", BlocksPixmap.get(Icon.BACK)
         )
         self.saved_connection_back_button.setProperty("class", "back_btn")
         self.saved_connection_back_button.setProperty("button_type", "icon")
@@ -2688,9 +2642,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.snd_back.setMaximumSize(QtCore.QSize(60, 60))
         self.snd_back.setText("Back")
         self.snd_back.setFlat(True)
-        self.snd_back.setProperty(
-            "icon_pixmap", PixmapCache.get(":/ui/media/btn_icons/back.svg")
-        )
+        self.snd_back.setProperty("icon_pixmap", BlocksPixmap.get(Icon.BACK))
         self.snd_back.setProperty("class", "back_btn")
         self.snd_back.setProperty("button_type", "icon")
 
@@ -2777,7 +2729,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.saved_connection_change_password_view.setText("View")
         self.saved_connection_change_password_view.setFlat(True)
         self.saved_connection_change_password_view.setProperty(
-            "icon_pixmap", PixmapCache.get(":/ui/media/btn_icons/unsee.svg")
+            "icon_pixmap", BlocksPixmap.get(Icon.UNSEE)
         )
         self.saved_connection_change_password_view.setProperty("class", "back_btn")
         self.saved_connection_change_password_view.setProperty("button_type", "icon")
@@ -2882,7 +2834,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         font.setPointSize(16)
         self.saved_details_save_btn.setFont(font)
         self.saved_details_save_btn.setProperty(
-            "icon_pixmap", PixmapCache.get(":/ui/media/btn_icons/save.svg")
+            "icon_pixmap", BlocksPixmap.get(Icon.SAVE)
         )
         self.saved_details_save_btn.setText("Save")
         bottom_btn_layout.addWidget(
@@ -2899,7 +2851,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.wifi_static_ip_btn.setText("Static\nIP")
         self.wifi_static_ip_btn.setProperty(
             "icon_pixmap",
-            PixmapCache.get(":/network/media/btn_icons/network/static_ip.svg"),
+            BlocksPixmap.get(Icon.STATIC_IP),
         )
         bottom_btn_layout.addWidget(
             self.wifi_static_ip_btn,
@@ -2944,9 +2896,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.hotspot_back_button.setMinimumSize(QtCore.QSize(60, 60))
         self.hotspot_back_button.setMaximumSize(QtCore.QSize(60, 60))
         self.hotspot_back_button.setFlat(True)
-        self.hotspot_back_button.setProperty(
-            "icon_pixmap", PixmapCache.get(":/ui/media/btn_icons/back.svg")
-        )
+        self.hotspot_back_button.setProperty("icon_pixmap", BlocksPixmap.get(Icon.BACK))
         self.hotspot_back_button.setProperty("class", "back_btn")
         self.hotspot_back_button.setProperty("button_type", "icon")
 
@@ -3065,7 +3015,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         confirm_font.setWeight(75)
         self.hotspot_change_confirm.setFont(confirm_font)
         self.hotspot_change_confirm.setProperty(
-            "icon_pixmap", PixmapCache.get(":/dialog/media/btn_icons/yes.svg")
+            "icon_pixmap", BlocksPixmap.get(Icon.YES)
         )
         self.hotspot_change_confirm.setText("Activate")
 
@@ -3109,7 +3059,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.hidden_network_back_button.setMaximumSize(QtCore.QSize(60, 60))
         self.hidden_network_back_button.setFlat(True)
         self.hidden_network_back_button.setProperty(
-            "icon_pixmap", PixmapCache.get(":/ui/media/btn_icons/back.svg")
+            "icon_pixmap", BlocksPixmap.get(Icon.BACK)
         )
         self.hidden_network_back_button.setProperty("button_type", "icon")
         header_layout.addWidget(self.hidden_network_back_button)
@@ -3190,7 +3140,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.hidden_network_password_view.setMaximumSize(QtCore.QSize(60, 60))
         self.hidden_network_password_view.setFlat(True)
         self.hidden_network_password_view.setProperty(
-            "icon_pixmap", PixmapCache.get(":/ui/media/btn_icons/unsee.svg")
+            "icon_pixmap", BlocksPixmap.get(Icon.UNSEE)
         )
         self.hidden_network_password_view.setProperty("button_type", "icon")
         password_frame_layout.addWidget(self.hidden_network_password_view)
@@ -3216,7 +3166,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.hidden_network_connect_button.setFont(font)
         self.hidden_network_connect_button.setFlat(True)
         self.hidden_network_connect_button.setProperty(
-            "icon_pixmap", PixmapCache.get(":/dialog/media/btn_icons/yes.svg")
+            "icon_pixmap", BlocksPixmap.get(Icon.YES)
         )
         self.hidden_network_connect_button.setText("Connect")
         content_layout.addWidget(
@@ -3272,9 +3222,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.vlan_back_button.setMinimumSize(QtCore.QSize(60, 60))
         self.vlan_back_button.setMaximumSize(QtCore.QSize(60, 60))
         self.vlan_back_button.setFlat(True)
-        self.vlan_back_button.setProperty(
-            "icon_pixmap", PixmapCache.get(":/ui/media/btn_icons/back.svg")
-        )
+        self.vlan_back_button.setProperty("icon_pixmap", BlocksPixmap.get(Icon.BACK))
         self.vlan_back_button.setProperty("button_type", "icon")
         header_layout.addWidget(self.vlan_back_button)
         main_layout.addLayout(header_layout)
@@ -3385,9 +3333,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.vlan_apply_button.setMaximumSize(QtCore.QSize(220, 60))
         self.vlan_apply_button.setFont(btn_font)
         self.vlan_apply_button.setText("Apply")
-        self.vlan_apply_button.setProperty(
-            "icon_pixmap", PixmapCache.get(":/ui/media/btn_icons/save.svg")
-        )
+        self.vlan_apply_button.setProperty("icon_pixmap", BlocksPixmap.get(Icon.SAVE))
         btn_layout.addWidget(
             self.vlan_apply_button, 0, QtCore.Qt.AlignmentFlag.AlignHCenter
         )
@@ -3398,7 +3344,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.vlan_delete_button.setFont(btn_font)
         self.vlan_delete_button.setText("Delete")
         self.vlan_delete_button.setProperty(
-            "icon_pixmap", PixmapCache.get(":/ui/media/btn_icons/garbage-icon.svg")
+            "icon_pixmap", BlocksPixmap.get(Icon.GARBAGE_ICON)
         )
         btn_layout.addWidget(
             self.vlan_delete_button, 0, QtCore.Qt.AlignmentFlag.AlignHCenter
@@ -3437,7 +3383,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.wifi_sip_back_button.setMaximumSize(QtCore.QSize(60, 60))
         self.wifi_sip_back_button.setFlat(True)
         self.wifi_sip_back_button.setProperty(
-            "icon_pixmap", PixmapCache.get(":/ui/media/btn_icons/back.svg")
+            "icon_pixmap", BlocksPixmap.get(Icon.BACK)
         )
         self.wifi_sip_back_button.setProperty("button_type", "icon")
         header_layout.addWidget(self.wifi_sip_back_button)
@@ -3514,7 +3460,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.wifi_sip_apply_button.setFont(btn_font)
         self.wifi_sip_apply_button.setText("Apply")
         self.wifi_sip_apply_button.setProperty(
-            "icon_pixmap", PixmapCache.get(":/ui/media/btn_icons/save.svg")
+            "icon_pixmap", BlocksPixmap.get(Icon.SAVE)
         )
         btn_layout.addWidget(
             self.wifi_sip_apply_button, 0, QtCore.Qt.AlignmentFlag.AlignVCenter
@@ -3526,7 +3472,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.wifi_sip_dhcp_button.setFont(btn_font)
         self.wifi_sip_dhcp_button.setText("Reset\nDHCP")
         self.wifi_sip_dhcp_button.setProperty(
-            "icon_pixmap", PixmapCache.get(":/ui/media/btn_icons/garbage-icon.svg")
+            "icon_pixmap", BlocksPixmap.get(Icon.GARBAGE_ICON)
         )
         btn_layout.addWidget(
             self.wifi_sip_dhcp_button,
@@ -3620,8 +3566,8 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         """Setup password visibility toggle for a button/field pair."""
         view_button.setCheckable(True)
 
-        see_icon = PixmapCache.get(":/ui/media/btn_icons/see.svg")
-        unsee_icon = PixmapCache.get(":/ui/media/btn_icons/unsee.svg")
+        see_icon = BlocksPixmap.get(Icon.SEE)
+        unsee_icon = BlocksPixmap.get(Icon.UNSEE)
 
         view_button.toggled.connect(
             lambda checked: password_field.setHidden(not checked)
@@ -3635,23 +3581,17 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
 
     def _setup_icons(self) -> None:
         """Setup button icons."""
-        self.hotspot_button.setPixmap(
-            PixmapCache.get(":/network/media/btn_icons/hotspot.svg")
-        )
-        self.wifi_button.setPixmap(
-            PixmapCache.get(":/network/media/btn_icons/wifi_config.svg")
-        )
+        self.hotspot_button.setPixmap(BlocksPixmap.get(Icon.HOTSPOT))
+        self.wifi_button.setPixmap(BlocksPixmap.get(Icon.WIFI_CONFIG))
         self.ethernet_button.setPixmap(
-            PixmapCache.get(":/network/media/btn_icons/network/ethernet_connected.svg"),
+            BlocksPixmap.get(Icon.ETHERNET_CONNECTED),
         )
         self.network_delete_btn.setProperty(
-            "icon_pixmap", PixmapCache.get(":/ui/media/btn_icons/garbage-icon.svg")
+            "icon_pixmap", BlocksPixmap.get(Icon.GARBAGE_ICON)
         )
-        self.network_activate_btn.setProperty(
-            "icon_pixmap", PixmapCache.get(":/dialog/media/btn_icons/yes.svg")
-        )
+        self.network_activate_btn.setProperty("icon_pixmap", BlocksPixmap.get(Icon.YES))
         self.network_details_btn.setProperty(
-            "icon_pixmap", PixmapCache.get(":/ui/media/btn_icons/printer_settings.svg")
+            "icon_pixmap", BlocksPixmap.get(Icon.PRINTER_SETTINGS)
         )
 
     def _setup_input_fields(self) -> None:
