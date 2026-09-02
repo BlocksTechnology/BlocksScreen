@@ -1,15 +1,4 @@
-"""One load-once registry for every Qt resource pixmap the panel draws.
-
-Loading an icon by path yields its intrinsic buffer, which for most of the
-btn_icons is a 600x600 RGBA surface costing 1.37 MiB even when it is painted at
-32px. Going through QIcon instead makes QSvgIconEngine rasterize at the
-requested size: measured on the RF50, the whole set costs 16.1 MiB at 64px
-against 273.0 MiB intrinsic, and loads in 278 ms against 848 ms.
-
-Every path lives in the Icon enum so a typo is a NameError rather than Qt's
-silent null pixmap, and tests/util/test_blocks_pixmap_unit.py proves each member
-still resolves.
-"""
+"""Load-once pixmap registry: 16.1 MiB at 64px against 273.0 MiB intrinsic on the RF50."""
 
 from enum import StrEnum
 from typing import ClassVar
@@ -124,7 +113,8 @@ class BlocksPixmap:
     _icons: ClassVar[dict[str, QtGui.QIcon]] = {}
     _pixmaps: ClassVar[dict[tuple[str, int, int], QtGui.QPixmap]] = {}
 
-    _MAX_PIXMAPS = 64
+    # An evicted entry a widget still holds only mints a duplicate.
+    _MAX_PIXMAPS = len(Icon) * 2
 
     @classmethod
     def icon(cls, icon: Icon | str) -> QtGui.QIcon:

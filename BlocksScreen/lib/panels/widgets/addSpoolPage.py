@@ -7,6 +7,7 @@ from lib.panels.widgets.numpadPage import CustomNumpad
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_frame import BlocksCustomFrame
 from lib.utils.blocks_linedit import BlocksCustomLinEdit
+from lib.utils.blocks_pixmap import BlocksPixmap, Icon
 from lib.utils.icon_button import IconButton
 from lib.utils.list_model import EntryDelegate, EntryListModel, ListItem
 from PyQt6 import QtCore, QtGui, QtWidgets
@@ -286,7 +287,7 @@ class AddSpoolPage(QtWidgets.QWidget):
         back_btn = IconButton(self)
         back_btn.setFixedSize(QtCore.QSize(60, 60))
         back_btn.setFlat(True)
-        back_btn.setPixmap(QtGui.QPixmap(":/ui/media/btn_icons/back.svg"))
+        back_btn.setPixmap(BlocksPixmap.get(Icon.BACK))
         back_btn.clicked.connect(self.cancelled)
         hdr.addWidget(back_btn)
         root.addLayout(hdr)
@@ -383,9 +384,7 @@ class AddSpoolPage(QtWidgets.QWidget):
         self._submit_btn.setText("Add Spool")
         self._submit_btn.setEnabled(False)
         self._submit_btn.clicked.connect(self._on_submit)
-        self._submit_btn.setPixmap(
-            QtGui.QPixmap(":/filament_related/media/btn_icons/add spool.svg")
-        )
+        self._submit_btn.setPixmap(BlocksPixmap.get(Icon.ADD_SPOOL))
         right_lay.addWidget(self._submit_btn)
 
         body.addWidget(right_frame, 1)

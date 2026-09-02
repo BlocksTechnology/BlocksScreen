@@ -12,8 +12,9 @@ from lib.panels.widgets.troubleshootPage import TroubleshootPage
 from lib.printer import Printer
 from lib.ui.utilitiesStackedWidget_ui import Ui_utilitiesStackedWidget
 from lib.utils.blocks_button import BlocksCustomButton
+from lib.utils.blocks_pixmap import BlocksPixmap, Icon
 from lib.utils.toggleAnimatedButton import ToggleAnimatedButton
-from PyQt6 import QtCore, QtGui, QtWidgets
+from PyQt6 import QtCore, QtWidgets
 
 
 @dataclass
@@ -127,7 +128,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         self._is_timeout_timer.timeout.connect(self._on_is_timeout)
 
         # --- PixMap ---
-        self._led_pixmap = QtGui.QPixmap(":/ui/media/btn_icons/LEDs.svg")
+        self._led_pixmap = BlocksPixmap.get(Icon.LEDS)
         # --- UI Setup ---
         self.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
         self.panel.update_btn.clicked.connect(
@@ -204,16 +205,14 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         self.printer.printer_config.connect(self.on_printer_config_received)
         self.printer.gcode_move_update.connect(self.on_gcode_move_update)
 
-        self.panel.update_btn.setPixmap(
-            QtGui.QPixmap(":/system/media/btn_icons/update-software-icon.svg")
-        )
+        self.panel.update_btn.setPixmap(BlocksPixmap.get(Icon.UPDATE_SOFTWARE_ICON))
 
         # ---- Input Shaper ----
         self.automatic_is = OptionCard(
             self,
             "Automatic\nInput Shaper",
             "Automatic Input Shaper",
-            QtGui.QPixmap(":/input_shaper/media/btn_icons/input_shaper_auto.svg"),
+            BlocksPixmap.get(Icon.INPUT_SHAPER_AUTO),
         )  # type: ignore
         self.automatic_is.setObjectName("Automatic_IS_Card")
         self.panel.is_content_layout.addWidget(
@@ -227,7 +226,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
             self,
             "Manual\nInput Shaper",
             "Manual Input Shaper",
-            QtGui.QPixmap(":/input_shaper/media/btn_icons/input_shaper_manual.svg"),
+            BlocksPixmap.get(Icon.INPUT_SHAPER_MANUAL),
         )  # type: ignore
         self.manual_is.setObjectName("Manual_IS_Card")
         self.panel.is_content_layout.addWidget(

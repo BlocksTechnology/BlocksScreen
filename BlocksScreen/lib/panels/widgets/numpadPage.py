@@ -1,3 +1,4 @@
+from lib.utils.blocks_pixmap import BlocksPixmap, Icon
 from lib.utils.icon_button import IconButton
 from lib.utils.blocks_label import BlocksLabel
 from lib.utils.numpad_button import NumpadButton
@@ -165,7 +166,7 @@ class CustomNumpad(QtWidgets.QWidget):
         self.numpad_back_btn.setSizePolicy(sizePolicy)
         self.numpad_back_btn.setMinimumSize(QtCore.QSize(60, 60))
         self.numpad_back_btn.setMaximumSize(QtCore.QSize(60, 60))
-        self.numpad_back_btn.setPixmap(QtGui.QPixmap(":ui/media/btn_icons/back.svg"))
+        self.numpad_back_btn.setPixmap(BlocksPixmap.get(Icon.BACK))
         self.numpad_back_btn.setObjectName("numpad_back_btn")
         self.header_layout.addWidget(
             self.numpad_back_btn,
@@ -366,7 +367,7 @@ class CustomNumpad(QtWidgets.QWidget):
         self.numpad_enter.setSizePolicy(sizePolicy)
         self.numpad_enter.setMinimumSize(QtCore.QSize(60, 60))
         self.numpad_enter.setFlat(True)
-        self.numpad_enter.setPixmap(QtGui.QPixmap(":/dialog/media/btn_icons/yes.svg"))
+        self.numpad_enter.setPixmap(BlocksPixmap.get(Icon.YES))
         self.numpad_enter.setObjectName("numpad_enter")
         self.button_grid_layout.addWidget(
             self.numpad_enter, 3, 0, 1, 1, QtCore.Qt.AlignmentFlag.AlignCenter
@@ -376,7 +377,7 @@ class CustomNumpad(QtWidgets.QWidget):
         self.numpad_clear.setSizePolicy(sizePolicy)
         self.numpad_clear.setMinimumSize(QtCore.QSize(60, 60))
         self.numpad_clear.setFlat(True)
-        self.numpad_clear.setPixmap(QtGui.QPixmap(":/dialog/media/btn_icons/no.svg"))
+        self.numpad_clear.setPixmap(BlocksPixmap.get(Icon.NO))
         self.numpad_clear.setObjectName("numpad_clear")
         self.button_grid_layout.addWidget(
             self.numpad_clear, 3, 2, 1, 1, QtCore.Qt.AlignmentFlag.AlignCenter

@@ -1,14 +1,4 @@
-"""Guards Qt resource keys: no broken ':/' literal, no stale blob, no font fallback.
-
-Qt resolves an unknown ':/' key to a null QPixmap with no exception, no warning
-and no log line, and it substitutes the system face for an unknown font-family
-just as quietly. The only feedback is a blank rectangle or the wrong typeface on
-the panel, which is how the keys in XFAIL_KEYS survived for months and how all 10
-topbar filament icons shipped in a fallback font. These tests turn that silent
-failure into a red test.
-
-Scans .py and .ui: Designer stores keys as bare element text, 56 such sites.
-"""
+"""Guards Qt resource keys: no broken ':/' literal, no stale blob, no font fallback."""
 
 import importlib
 import re

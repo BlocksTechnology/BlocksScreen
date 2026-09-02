@@ -1,4 +1,5 @@
 from lib.utils.blocks_button import BlocksCustomButton
+from lib.utils.blocks_pixmap import BlocksPixmap, Icon
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 
@@ -100,9 +101,7 @@ class SwapPrintcorePage(QtWidgets.QDialog):
         self.pc_cancel = BlocksCustomButton(parent=self)
         self.pc_cancel.setMinimumSize(QtCore.QSize(250, 80))
         self.pc_cancel.setMaximumSize(QtCore.QSize(250, 80))
-        self.pc_cancel.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/dialog/media/btn_icons/no.svg")
-        )
+        self.pc_cancel.setProperty("icon_pixmap", BlocksPixmap.get(Icon.NO))
         self.pc_cancel.setObjectName("pc_cancel")
         self.pc_cancel.setFont(font)
         self.pc_cancel.setText("Cancel")
@@ -110,9 +109,7 @@ class SwapPrintcorePage(QtWidgets.QDialog):
         self.pc_accept = BlocksCustomButton(parent=self)
         self.pc_accept.setMinimumSize(QtCore.QSize(250, 80))
         self.pc_accept.setMaximumSize(QtCore.QSize(250, 80))
-        self.pc_accept.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/dialog/media/btn_icons/yes.svg")
-        )
+        self.pc_accept.setProperty("icon_pixmap", BlocksPixmap.get(Icon.YES))
         self.pc_accept.setObjectName("pc_accept")
         self.pc_accept.setFont(font)
         self.pc_accept.setText("Continue?")

@@ -1,4 +1,5 @@
 from lib.utils.blocks_label import BlocksLabel
+from lib.utils.blocks_pixmap import BlocksPixmap, Icon
 from lib.utils.toggleAnimatedButton import ToggleAnimatedButton
 from PyQt6 import QtCore, QtGui, QtWidgets
 
@@ -13,8 +14,8 @@ class NetworkWidgetbuttons(QtWidgets.QWidget):
         self._icon_label = None
         self._text_label = None
         self._text: str = "la test"
-        self.icon_pixmap_fp: QtGui.QPixmap = QtGui.QPixmap(
-            ":/filament_related/media/btn_icons/filament_sensor_turn_on.svg"
+        self.icon_pixmap_fp: QtGui.QPixmap = BlocksPixmap.get(
+            Icon.FILAMENT_SENSOR_TURN_ON
         )
 
         self._setupUI()

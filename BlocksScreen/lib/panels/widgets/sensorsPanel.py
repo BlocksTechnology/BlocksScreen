@@ -2,6 +2,7 @@ import typing
 
 from lib.panels.widgets.sensorWidget import SensorWidget
 from lib.utils.blocks_frame import BlocksCustomFrame
+from lib.utils.blocks_pixmap import BlocksPixmap, Icon
 from lib.utils.fonts import register_momcake
 from lib.utils.icon_button import IconButton
 from lib.utils.list_model import EntryDelegate, EntryListModel, ListItem
@@ -166,7 +167,7 @@ class SensorsWindow(QtWidgets.QWidget):
         self.fs_back_button.setMinimumSize(QtCore.QSize(60, 60))
         self.fs_back_button.setMaximumSize(QtCore.QSize(60, 60))
         self.fs_back_button.setFlat(True)
-        self.fs_back_button.setPixmap(QtGui.QPixmap(":/ui/media/btn_icons/back.svg"))
+        self.fs_back_button.setPixmap(BlocksPixmap.get(Icon.BACK))
         self.header_content_layout.addWidget(self.fs_back_button, 0)
         self.update_page_content_layout.addLayout(self.header_content_layout, 0)
 
@@ -360,7 +361,7 @@ class SensorsWindow(QtWidgets.QWidget):
         self.info_box_layout.addWidget(
             self.no_update_placeholder, 0, QtCore.Qt.AlignmentFlag.AlignBottom
         )
-        self.pixmap = QtGui.QPixmap(":/ui/media/btn_icons/info.svg")
+        self.pixmap = BlocksPixmap.get(Icon.INFO)
         self.no_update_placeholder.hide()
         self.infobox_frame.setLayout(self.info_box_layout)
         self.main_content_layout.addWidget(self.infobox_frame, 1)

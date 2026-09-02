@@ -2,6 +2,7 @@ import logging
 import typing
 
 from lib.utils.blocks_label import BlocksLabel
+from lib.utils.blocks_pixmap import BlocksPixmap, Icon
 from lib.utils.check_button import BlocksCustomCheckButton
 from lib.utils.icon_button import IconButton
 from PyQt6 import QtCore, QtGui, QtWidgets
@@ -179,7 +180,7 @@ class BabystepPage(QtWidgets.QWidget):
         self.babystep_back_btn.setMinimumSize(QtCore.QSize(60, 60))
         self.babystep_back_btn.setMaximumSize(QtCore.QSize(60, 60))
         self.babystep_back_btn.setFlat(True)
-        self.babystep_back_btn.setPixmap(QtGui.QPixmap(":/ui/media/btn_icons/back.svg"))
+        self.babystep_back_btn.setPixmap(BlocksPixmap.get(Icon.BACK))
         header.addWidget(self.babystep_back_btn, 0)
         main_vlayout.addLayout(header)
 
@@ -226,9 +227,7 @@ class BabystepPage(QtWidgets.QWidget):
         self.bbp_babystep_graphic.setLayoutDirection(
             QtCore.Qt.LayoutDirection.RightToLeft
         )
-        self.bbp_babystep_graphic.setPixmap(
-            QtGui.QPixmap(":/graphics/media/graphics/babystep_graphic.png")
-        )
+        self.bbp_babystep_graphic.setPixmap(BlocksPixmap.source(Icon.BABYSTEP_GRAPHIC))
         self.bbp_babystep_graphic.setScaledContents(False)
         self.bbp_babystep_graphic.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
 
@@ -283,9 +282,7 @@ class BabystepPage(QtWidgets.QWidget):
         self.bbp_mvup.setMinimumSize(QtCore.QSize(80, 80))
         self.bbp_mvup.setMaximumSize(QtCore.QSize(80, 80))
         self.bbp_mvup.setFlat(True)
-        self.bbp_mvup.setPixmap(
-            QtGui.QPixmap(":/baby_step/media/btn_icons/move_nozzle_close.svg")
-        )
+        self.bbp_mvup.setPixmap(BlocksPixmap.get(Icon.MOVE_NOZZLE_CLOSE))
         move_layout.addWidget(self.bbp_mvup, 0, QtCore.Qt.AlignmentFlag.AlignRight)
 
         self.bbp_mvdown = IconButton(parent=self)
@@ -293,9 +290,7 @@ class BabystepPage(QtWidgets.QWidget):
         self.bbp_mvdown.setMinimumSize(QtCore.QSize(80, 80))
         self.bbp_mvdown.setMaximumSize(QtCore.QSize(80, 80))
         self.bbp_mvdown.setFlat(True)
-        self.bbp_mvdown.setPixmap(
-            QtGui.QPixmap(":/baby_step/media/btn_icons/move_nozzle_away.svg")
-        )
+        self.bbp_mvdown.setPixmap(BlocksPixmap.get(Icon.MOVE_NOZZLE_AWAY))
         move_layout.addWidget(self.bbp_mvdown, 0, QtCore.Qt.AlignmentFlag.AlignRight)
 
         content.addLayout(move_layout)

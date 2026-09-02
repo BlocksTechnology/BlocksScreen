@@ -1,6 +1,7 @@
 import enum
 from collections import deque
 
+from lib.utils.blocks_pixmap import BlocksPixmap, Icon
 from lib.utils.icon_button import IconButton
 from PyQt6 import QtCore, QtGui, QtWidgets
 
@@ -137,7 +138,7 @@ class BannerPopup(QtWidgets.QWidget):
             message_type = message_entry.get("type")
 
             message = "Unknown Event"
-            icon = ":ui/media/btn_icons/info.svg"
+            icon = Icon.INFO
 
             # TODO: missing usb icons
             match message_type:
@@ -149,11 +150,11 @@ class BannerPopup(QtWidgets.QWidget):
                     # icon = ""
                 case BannerPopup.MessageType.CORRUPTED:
                     message = "Usb Corrupted"
-                    icon = ":/ui/media/btn_icons/troubleshoot.svg"
+                    icon = Icon.TROUBLESHOOT
             end_rect = self._calculate_target_geometry()
             start_rect = end_rect.translated(end_rect.width() * 2, 0)
 
-            self.icon_label.setPixmap(QtGui.QPixmap(icon))
+            self.icon_label.setPixmap(BlocksPixmap.get(icon))
 
             self.slide_in_animation.setStartValue(start_rect)
             self.slide_in_animation.setEndValue(end_rect)

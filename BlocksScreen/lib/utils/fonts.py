@@ -1,12 +1,4 @@
-"""Single registration point for the bundled Momcake faces.
-
-Qt files both Momcake-Thin.ttf and Momcake-Bold.ttf under one family whose real
-name matches neither file: "Momcake Pro". Asking for "Momcake-Thin" or "Momcake"
-silently resolves to the system default, which is how every topbar filament icon
-ended up rendering in a fallback face. Registration is also process-global and
-permanent, so doing it once here removes the ordering race that came from three
-page constructors each registering on first visit.
-"""
+"""Registers the bundled Momcake faces once; Qt files both .ttf under 'Momcake Pro'."""
 
 import functools
 import logging

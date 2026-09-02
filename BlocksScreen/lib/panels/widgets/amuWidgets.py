@@ -3,6 +3,7 @@ import typing
 from devices.amu.models import GateStatus
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_linedit import BlocksCustomLinEdit
+from lib.utils.blocks_pixmap import BlocksPixmap, Icon
 from lib.utils.icon_button import IconButton
 from PyQt6 import QtCore, QtGui, QtWidgets
 
@@ -21,12 +22,8 @@ class Spoll_button(QtWidgets.QAbstractButton):
         self.weight = 0
         self.setCheckable(True)
         self.setMinimumHeight(100)
-        self._icon = QtGui.QPixmap(
-            ":/filament_related/media/btn_icons/loaded_spool.svg"
-        )
-        self._unloaded_icon = QtGui.QPixmap(
-            ":/filament_related/media/btn_icons/half_spoll.svg"
-        )
+        self._icon = BlocksPixmap.get(Icon.LOADED_SPOOL)
+        self._unloaded_icon = BlocksPixmap.get(Icon.HALF_SPOLL)
 
     def setColor(self, qc: QtGui.QColor):
         """sets button color
@@ -213,13 +210,9 @@ class SpoolCarousel(QtWidgets.QWidget):
         root = QtWidgets.QHBoxLayout(self)
 
         self.left_arrow = IconButton(self)
-        self.left_arrow.setPixmap(
-            QtGui.QPixmap(":/arrow_icons/media/btn_icons/arrow_left.svg")
-        )
+        self.left_arrow.setPixmap(BlocksPixmap.get(Icon.ARROW_LEFT))
         self.right_arrow = IconButton(self)
-        self.right_arrow.setPixmap(
-            QtGui.QPixmap(":/arrow_icons/media/btn_icons/arrow_right.svg")
-        )
+        self.right_arrow.setPixmap(BlocksPixmap.get(Icon.ARROW_RIGHT))
 
         self.right_arrow.setFixedWidth(60)
         self.left_arrow.setFixedWidth(60)
@@ -449,27 +442,19 @@ class SpoolInfoPanel(QtWidgets.QWidget):
         self._btn_load.setText("Load")
         self._btn_load.setFixedSize(140, 60)
         self._btn_load.setFont(font)
-        self._btn_load.setPixmap(
-            QtGui.QPixmap(":/filament_related/media/btn_icons/load_filament.svg")
-        )
+        self._btn_load.setPixmap(BlocksPixmap.get(Icon.LOAD_FILAMENT))
         self._btn_unload = BlocksCustomButton(self)
         self._btn_unload.setText("Unload")
         self._btn_unload.setFont(font)
-        self._btn_unload.setPixmap(
-            QtGui.QPixmap(":/filament_related/media/btn_icons/unload_filament.svg")
-        )
+        self._btn_unload.setPixmap(BlocksPixmap.get(Icon.UNLOAD_FILAMENT))
         self._btn_unload.setFixedSize(140, 60)
         self._btn_purge = BlocksCustomButton(self)
         self._btn_purge.setText("Eject")
         self._btn_purge.setFont(font)
-        self._btn_purge.setPixmap(
-            QtGui.QPixmap(":/filament_related/media/btn_icons/eject.svg")
-        )
+        self._btn_purge.setPixmap(BlocksPixmap.get(Icon.EJECT))
         self._btn_purge.setFixedSize(140, 60)
         self._btn_cut = BlocksCustomButton(self)
-        self._btn_cut.setPixmap(
-            QtGui.QPixmap(":/filament_related/media/btn_icons/check gate 1.svg")
-        )
+        self._btn_cut.setPixmap(BlocksPixmap.get(Icon.CHECK_GATE_1))
         self._btn_cut.setText("Check\nGates")
         self._btn_cut.setFont(font)
         self._btn_cut.setFixedSize(140, 60)

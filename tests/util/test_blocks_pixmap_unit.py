@@ -1,9 +1,4 @@
-"""Unit tests for the BlocksPixmap registry and the Icon key enum.
-
-Qt resolves an unknown ':/' key to a null QPixmap with no exception and no log
-line, so a typo in Icon would ship as a blank rectangle on the panel. These
-tests turn that into a red test, and pin the size win the registry exists for.
-"""
+"""Unit tests for the BlocksPixmap registry and the Icon key enum."""
 
 import importlib
 
@@ -34,6 +29,7 @@ def _resources(qapp):
 
 
 def _bytes(pixmap: QtGui.QPixmap) -> int:
+    """Return the pixmap's buffer size in bytes."""
     return pixmap.width() * pixmap.height() * pixmap.depth() // 8
 
 

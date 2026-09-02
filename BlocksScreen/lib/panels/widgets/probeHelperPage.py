@@ -5,6 +5,7 @@ import typing
 from lib.panels.widgets.optionCardWidget import OptionCard
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_label import BlocksLabel
+from lib.utils.blocks_pixmap import BlocksPixmap, Icon
 from lib.utils.check_button import BlocksCustomCheckButton
 from lib.utils.icon_button import IconButton
 from PyQt6 import QtCore, QtGui, QtWidgets
@@ -98,14 +99,10 @@ class ProbeHelper(QtWidgets.QWidget):
 
         self.setObjectName("probe_offset_page")
         self._setupUi()
-        self.inductive_icon = QtGui.QPixmap(
-            ":/z_levelling/media/btn_icons/inductive.svg"
-        )
-        self.bltouch_icon = QtGui.QPixmap(":/z_levelling/media/btn_icons/bltouch.svg")
-        self.endstop_icon = QtGui.QPixmap(
-            ":/extruder_related/media/btn_icons/switch_zoom.svg"
-        )
-        self.eddy_icon = QtGui.QPixmap(":/z_levelling/media/btn_icons/eddy_mech.svg")
+        self.inductive_icon = BlocksPixmap.get(Icon.INDUCTIVE)
+        self.bltouch_icon = BlocksPixmap.get(Icon.BLTOUCH)
+        self.endstop_icon = BlocksPixmap.get(Icon.SWITCH_ZOOM)
+        self.eddy_icon = BlocksPixmap.get(Icon.EDDY_MECH)
         self._toggle_tool_buttons(False)
         self.mb_raise_nozzle.clicked.connect(lambda: self.handle_nozzle_move("raise"))
         self.mb_lower_nozzle.clicked.connect(lambda: self.handle_nozzle_move("lower"))
@@ -788,7 +785,7 @@ class ProbeHelper(QtWidgets.QWidget):
         self.accept_button.setGeometry(QtCore.QRect(480, 340, 170, 60))
         self.accept_button.setText("Accept")
         self.accept_button.setObjectName("accept_button")
-        self.accept_button.setPixmap(QtGui.QPixmap(":/dialog/media/btn_icons/yes.svg"))
+        self.accept_button.setPixmap(BlocksPixmap.get(Icon.YES))
         self.accept_button.setVisible(False)
         font = QtGui.QFont()
         font.setPointSize(15)
@@ -798,7 +795,7 @@ class ProbeHelper(QtWidgets.QWidget):
         self.abort_button.setGeometry(QtCore.QRect(300, 340, 170, 60))
         self.abort_button.setText("Abort")
         self.abort_button.setObjectName("abort_button")
-        self.abort_button.setPixmap(QtGui.QPixmap(":/dialog/media/btn_icons/no.svg"))
+        self.abort_button.setPixmap(BlocksPixmap.get(Icon.NO))
         self.abort_button.setVisible(False)
         font = QtGui.QFont()
         font.setPointSize(15)
@@ -826,7 +823,7 @@ class ProbeHelper(QtWidgets.QWidget):
         self.po_back_button.setMaximumSize(QtCore.QSize(60, 60))
         self.po_back_button.setText("")
         self.po_back_button.setFlat(True)
-        self.po_back_button.setPixmap(QtGui.QPixmap(":/ui/media/btn_icons/back.svg"))
+        self.po_back_button.setPixmap(BlocksPixmap.get(Icon.BACK))
         self.po_back_button.setObjectName("po_back_button")
 
         self.bbp_header_layout.addWidget(
@@ -910,9 +907,7 @@ class ProbeHelper(QtWidgets.QWidget):
         self.tool_image = QtWidgets.QLabel(parent=self.frame_2)
         self.tool_image.setGeometry(QtCore.QRect(0, 30, 371, 121))
         self.tool_image.setLayoutDirection(QtCore.Qt.LayoutDirection.RightToLeft)
-        self.tool_image.setPixmap(
-            QtGui.QPixmap(":/graphics/media/graphics/babystep_graphic.png")
-        )
+        self.tool_image.setPixmap(BlocksPixmap.source(Icon.BABYSTEP_GRAPHIC))
         self.tool_image.setScaledContents(False)
         self.tool_image.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self.tool_image.setObjectName("tool_image")
@@ -968,9 +963,7 @@ class ProbeHelper(QtWidgets.QWidget):
         self.mb_lower_nozzle.setMaximumSize(QtCore.QSize(80, 80))
         self.mb_lower_nozzle.setText("")
         self.mb_lower_nozzle.setFlat(True)
-        self.mb_lower_nozzle.setPixmap(
-            QtGui.QPixmap(":/baby_step/media/btn_icons/move_nozzle_close.svg")
-        )
+        self.mb_lower_nozzle.setPixmap(BlocksPixmap.get(Icon.MOVE_NOZZLE_CLOSE))
         self.mb_lower_nozzle.setObjectName("bbp_away_from_bed")
         self.bbp_option_button_group = QtWidgets.QButtonGroup(self)
         self.bbp_option_button_group.setObjectName("bbp_option_button_group")
@@ -987,9 +980,7 @@ class ProbeHelper(QtWidgets.QWidget):
         self.mb_raise_nozzle.setMaximumSize(QtCore.QSize(80, 80))
         self.mb_raise_nozzle.setText("")
         self.mb_raise_nozzle.setFlat(True)
-        self.mb_raise_nozzle.setPixmap(
-            QtGui.QPixmap(":/baby_step/media/btn_icons/move_nozzle_away.svg")
-        )
+        self.mb_raise_nozzle.setPixmap(BlocksPixmap.get(Icon.MOVE_NOZZLE_AWAY))
         self.mb_raise_nozzle.setObjectName("bbp_close_to_bed")
         self.bbp_option_button_group.addButton(self.mb_raise_nozzle)
         self.bbp_buttons_layout.addWidget(

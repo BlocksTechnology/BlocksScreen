@@ -1,5 +1,6 @@
 import typing
 
+from lib.utils.blocks_pixmap import BlocksPixmap, Icon
 from lib.utils.icon_button import IconButton
 from PyQt6 import QtCore, QtGui, QtWidgets
 
@@ -427,9 +428,7 @@ class CustomQwertyKeyboard(QtWidgets.QDialog):
         self.numpad_back_btn.setMaximumSize(QtCore.QSize(60, 60))
         self.numpad_back_btn.setIconSize(QtCore.QSize(16, 16))
         self.numpad_back_btn.setFlat(True)
-        self.numpad_back_btn.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/back.svg")
-        )
+        self.numpad_back_btn.setProperty("icon_pixmap", BlocksPixmap.get(Icon.BACK))
         self.numpad_back_btn.setProperty("button_type", "icon")
         self.numpad_back_btn.setObjectName("numpad_back_btn")
 
