@@ -400,7 +400,7 @@ Control</string>
          <string>menu_btn</string>
         </property>
         <property name="icon_pixmap" stdset="0">
-         <pixmap resource="resources/icon_resources.qrc">:/temperature_related/media/btn_icons/fan.svg</pixmap>
+         <pixmap resource="resources/icon_resources.qrc">:/fan_related/media/btn_icons/fan.svg</pixmap>
         </property>
        </widget>
       </item>
