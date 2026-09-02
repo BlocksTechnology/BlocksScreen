@@ -3,6 +3,7 @@ import re
 import typing
 
 from lib.utils.blocks_button import BlocksCustomButton
+from lib.utils.blocks_pixmap import BlocksPixmap, Icon
 from lib.utils.display_button import DisplayButton
 from lib.utils.icon_button import IconButton
 from PyQt6 import QtCore, QtGui, QtWidgets
@@ -282,7 +283,7 @@ class TuneWidget(QtWidgets.QWidget):
         self.tune_back_btn.setMinimumSize(QtCore.QSize(60, 60))
         self.tune_back_btn.setMaximumSize(QtCore.QSize(60, 60))
         self.tune_back_btn.setFlat(True)
-        self.tune_back_btn.setPixmap(QtGui.QPixmap(":/ui/media/btn_icons/back.svg"))
+        self.tune_back_btn.setPixmap(BlocksPixmap.get(Icon.BACK))
         self.tune_header.addWidget(
             self.tune_back_btn,
             0,
@@ -311,9 +312,7 @@ class TuneWidget(QtWidgets.QWidget):
         )
         self.tune_babystep_menu_btn.setAutoDefault(False)
         self.tune_babystep_menu_btn.setFlat(True)
-        self.tune_babystep_menu_btn.setPixmap(
-            QtGui.QPixmap(":/z_levelling/media/btn_icons/baby_step_icon.svg")
-        )
+        self.tune_babystep_menu_btn.setPixmap(BlocksPixmap.get(Icon.BABY_STEP_ICON))
         self.tune_babystep_menu_btn.setObjectName("tune_babystep_menu_btn")
         self.tune_menu_buttons.addWidget(
             self.tune_babystep_menu_btn,
@@ -338,9 +337,7 @@ class TuneWidget(QtWidgets.QWidget):
         )
         self.tune_change_filament_btn.setAutoDefault(False)
         self.tune_change_filament_btn.setFlat(True)
-        self.tune_change_filament_btn.setPixmap(
-            QtGui.QPixmap(":/filament_related/media/btn_icons/change_filament.svg")
-        )
+        self.tune_change_filament_btn.setPixmap(BlocksPixmap.get(Icon.CHANGE_FILAMENT))
         self.tune_change_filament_btn.setObjectName("tune_change_filament_btn")
         self.tune_menu_buttons.addWidget(
             self.tune_change_filament_btn,
@@ -363,9 +360,7 @@ class TuneWidget(QtWidgets.QWidget):
         self.sensors_menu_btn.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
         self.sensors_menu_btn.setAutoDefault(False)
         self.sensors_menu_btn.setFlat(True)
-        self.sensors_menu_btn.setPixmap(
-            QtGui.QPixmap(":/filament_related/media/btn_icons/filament_sensor.svg")
-        )
+        self.sensors_menu_btn.setPixmap(BlocksPixmap.get(Icon.FILAMENT_SENSOR))
         self.sensors_menu_btn.setObjectName("sensors_menu_btn")
         self.tune_menu_buttons.addWidget(self.sensors_menu_btn)
         self.tune_content.addLayout(self.tune_menu_buttons, 0)
@@ -414,9 +409,7 @@ class TuneWidget(QtWidgets.QWidget):
         self.bed_display.setFont(font)
         self.bed_display.setText("")
         self.bed_display.setFlat(True)
-        self.bed_display.setPixmap(
-            QtGui.QPixmap(":/temperature_related/media/btn_icons/temperature_plate.svg")
-        )
+        self.bed_display.setPixmap(BlocksPixmap.get(Icon.TEMPERATURE_PLATE))
         self.bed_display.setObjectName("bed_display")
         self.tune_display_vertical_child_layout_1.addWidget(self.bed_display)
         self.extruder_display = DisplayButton(parent=self)
@@ -429,9 +422,7 @@ class TuneWidget(QtWidgets.QWidget):
         self.extruder_display.setMaximumSize(QtCore.QSize(150, 60))
         self.extruder_display.setText("")
         self.extruder_display.setFlat(True)
-        self.extruder_display.setPixmap(
-            QtGui.QPixmap(":/temperature_related/media/btn_icons/temperature.svg")
-        )
+        self.extruder_display.setPixmap(BlocksPixmap.get(Icon.TEMPERATURE))
         self.extruder_display.setObjectName("extruder_display")
         self.tune_display_vertical_child_layout_1.addWidget(self.extruder_display)
         self.speed_display = DisplayButton(parent=self)
@@ -444,9 +435,7 @@ class TuneWidget(QtWidgets.QWidget):
         self.speed_display.setMaximumSize(QtCore.QSize(150, 60))
         self.speed_display.setFont(font)
         self.speed_display.setFlat(True)
-        self.speed_display.setPixmap(
-            QtGui.QPixmap(":/motion/media/btn_icons/speed.svg")
-        )
+        self.speed_display.setPixmap(BlocksPixmap.get(Icon.SPEED))
         self.speed_display.setObjectName("speed_display")
         self.tune_display_vertical_child_layout_3.addWidget(self.speed_display)
         self.tune_content.addLayout(self.tune_display_horizontal_parent_layout, 1)
@@ -461,9 +450,9 @@ class TuneWidget(QtWidgets.QWidget):
         self.setContentsMargins(2, 2, 2, 2)
 
         self.path = {
-            "fan_cage": QtGui.QPixmap(":/fan_related/media/btn_icons/fan_cage.svg"),
-            "blower": QtGui.QPixmap(":/fan_related/media/btn_icons/blower.svg"),
-            "fan": QtGui.QPixmap(":/fan_related/media/btn_icons/fan.svg"),
+            "fan_cage": BlocksPixmap.get(Icon.FAN_CAGE),
+            "blower": BlocksPixmap.get(Icon.BLOWER),
+            "fan": BlocksPixmap.get(Icon.FAN),
         }
         self._retranslateUI()
 

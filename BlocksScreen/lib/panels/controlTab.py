@@ -272,12 +272,6 @@ class ControlTab(QtWidgets.QStackedWidget):
             )
         )
 
-        self.path = {
-            "fan_cage": QtGui.QPixmap(":/fan_related/media/btn_icons/fan_cage.svg"),
-            "blower": QtGui.QPixmap(":/fan_related/media/btn_icons/blower.svg"),
-            "fan": QtGui.QPixmap(":/fan_related/media/btn_icons/fan.svg"),
-        }
-
         self.panel.cp_z_tilt_btn.clicked.connect(lambda: self.handle_ztilt())
 
         self.printcores_page.pc_accept.clicked.connect(self.handle_swapcore)

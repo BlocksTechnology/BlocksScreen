@@ -281,8 +281,7 @@ for _mod_name, _attrs in _STUB_MODULES.items():
     sys.modules[_mod_name] = _stub
     sys.modules["BlocksScreen." + _mod_name] = _stub
 
-# blocks_pixmap is a pure-PyQt6 leaf: alias the real module so the identity
-# assertions in test_network_ui.py compare real cache entries, not mock children.
+# Pure-PyQt6 leaf: alias the real module so identity assertions see real cache entries.
 sys.modules["lib.utils.blocks_pixmap"] = importlib.import_module(
     "BlocksScreen.lib.utils.blocks_pixmap"
 )

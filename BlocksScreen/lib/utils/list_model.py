@@ -1,6 +1,7 @@
 import typing
 from dataclasses import dataclass, field
 
+from lib.utils.blocks_pixmap import BlocksPixmap, Icon
 from PyQt6 import QtCore, QtGui, QtWidgets  # pylint: disable=import-error
 
 
@@ -423,9 +424,9 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
             return
         if item.allow_expand and item.needs_expansion:
             item.right_icon = (
-                QtGui.QPixmap(":/arrow_icons/media/btn_icons/arrow_down.svg")
+                BlocksPixmap.get(Icon.ARROW_DOWN)
                 if item.is_expanded
-                else QtGui.QPixmap(":/arrow_icons/media/btn_icons/arrow_right.svg")
+                else BlocksPixmap.get(Icon.ARROW_RIGHT)
             )
 
         # Background Color

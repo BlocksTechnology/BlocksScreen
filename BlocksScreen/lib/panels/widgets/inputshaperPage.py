@@ -2,6 +2,7 @@ import typing
 
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_frame import BlocksCustomFrame
+from lib.utils.blocks_pixmap import BlocksPixmap, Icon
 from lib.utils.fonts import register_momcake
 from lib.utils.icon_button import IconButton
 from lib.utils.list_model import EntryDelegate, EntryListModel, ListItem
@@ -124,7 +125,7 @@ class InputShaperPage(QtWidgets.QWidget):
         item = ListItem(
             text=cli_name,
             right_text=recommended,
-            right_icon=QtGui.QPixmap(":/arrow_icons/media/btn_icons/right_arrow.svg"),
+            right_icon=BlocksPixmap.get(Icon.RIGHT_ARROW),
             selected=False,
             _lfontsize=17,
             _rfontsize=9,
@@ -176,7 +177,7 @@ class InputShaperPage(QtWidgets.QWidget):
         self.update_back_btn.setMinimumSize(QtCore.QSize(60, 60))
         self.update_back_btn.setMaximumSize(QtCore.QSize(60, 60))
         self.update_back_btn.setFlat(True)
-        self.update_back_btn.setPixmap(QtGui.QPixmap(":/ui/media/btn_icons/back.svg"))
+        self.update_back_btn.setPixmap(BlocksPixmap.get(Icon.BACK))
         self.header_content_layout.addWidget(self.update_back_btn, 0)
         self.update_page_content_layout.addLayout(self.header_content_layout, 0)
 
@@ -431,7 +432,7 @@ class InputShaperPage(QtWidgets.QWidget):
         self.action_btn.setPalette(palette)
         self.action_btn.setSizePolicy(sizePolicy)
         self.action_btn.setText("Confirm")
-        self.action_btn.setPixmap(QtGui.QPixmap(":/dialog/media/btn_icons/yes.svg"))
+        self.action_btn.setPixmap(BlocksPixmap.get(Icon.YES))
         self.button_box.addWidget(
             self.action_btn,
             0,

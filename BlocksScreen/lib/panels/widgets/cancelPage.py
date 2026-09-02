@@ -1,6 +1,7 @@
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_frame import BlocksCustomFrame
 from lib.utils.blocks_label import BlocksLabel
+from lib.utils.blocks_pixmap import BlocksPixmap, Icon
 from PyQt6 import QtCore, QtGui, QtWidgets
 import typing
 
@@ -202,9 +203,7 @@ class CancelPage(QtWidgets.QWidget):
         font = QtGui.QFont("Momcake", 18)
         self.confirm_button.setFont(font)
         self.confirm_button.setFlat(True)
-        self.confirm_button.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/dialog/media/btn_icons/yes.svg")
-        )
+        self.confirm_button.setProperty("icon_pixmap", BlocksPixmap.get(Icon.YES))
         self.confirm_button.setText("Reprint")
         # 2. Align buttons to the right
         self.cf_confirm_layout.addWidget(
@@ -216,9 +215,7 @@ class CancelPage(QtWidgets.QWidget):
         self.refuse_button.setMaximumSize(QtCore.QSize(250, 70))
         self.refuse_button.setFont(font)
         self.refuse_button.setFlat(True)
-        self.refuse_button.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/dialog/media/btn_icons/no.svg")
-        )
+        self.refuse_button.setProperty("icon_pixmap", BlocksPixmap.get(Icon.NO))
         self.refuse_button.setText("Ignore")
         # 2. Align buttons to the right
         self.cf_confirm_layout.addWidget(

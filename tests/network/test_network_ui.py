@@ -973,11 +973,11 @@ class TestSetupUIRunsWithoutError:
 @pytest.mark.unit
 class TestHelperClasses:
     def test_wifi_icon_provider_picks_the_asset_for_the_signal(self, qapp):
+        """75% signal picks the 4-bar protected asset."""
         from BlocksScreen.lib.panels.networkWindow import WifiIconProvider
         from BlocksScreen.lib.utils.blocks_pixmap import BlocksPixmap, Icon
 
-        # Identity, not isNull: this suite never imports the _rc blobs, so every
-        # pixmap here is null and only the cache key tells the assets apart.
+        # Identity not isNull: no _rc blob is imported here, so every pixmap is null.
         px = WifiIconProvider.get_pixmap(75, is_protected=True)
         assert px is BlocksPixmap.get(Icon.WIFI_4BAR_PROTECTED)
 

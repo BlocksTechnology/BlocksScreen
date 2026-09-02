@@ -10,6 +10,7 @@ from helper_methods import (
 from lib.panels.widgets.basePopup import BasePopup
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_label import BlocksLabel
+from lib.utils.blocks_pixmap import BlocksPixmap, Icon
 from lib.utils.blocks_progressbar import CustomProgressBar
 from lib.utils.display_button import DisplayButton
 from lib.utils.flowguard import FlowguardWidget
@@ -260,17 +261,13 @@ class JobStatusWidget(QtWidgets.QWidget):
             self._layer_frozen = True
             self.pause_printing_btn.setEnabled(True)
             self.pause_printing_btn.setText("Resume")
-            self.pause_printing_btn.setPixmap(
-                QtGui.QPixmap(":/ui/media/btn_icons/play.svg")
-            )
+            self.pause_printing_btn.setPixmap(BlocksPixmap.get(Icon.PLAY))
             self._awaiting_resume = False
             event_state = "pause"
         elif lstate == "printing":
             self._layer_frozen = False
             self.pause_printing_btn.setText("Pause")
-            self.pause_printing_btn.setPixmap(
-                QtGui.QPixmap(":/ui/media/btn_icons/pause.svg")
-            )
+            self.pause_printing_btn.setPixmap(BlocksPixmap.get(Icon.PAUSE))
             if self._internal_print_status != "printing":
                 self._awaiting_resume = True
                 self._resume_baseline = self._file_position
@@ -525,7 +522,7 @@ class JobStatusWidget(QtWidgets.QWidget):
         self.js_file_name_icon.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self.js_file_name_icon.setProperty(
             "icon_pixmap",
-            QtGui.QPixmap(":/files/media/btn_icons/file_icon.svg"),
+            BlocksPixmap.get(Icon.FILE_ICON),
         )
         self.js_file_name_icon.setObjectName("js_file_name_icon")
         self.js_file_name_label = BlocksLabel(parent=self)
@@ -545,27 +542,21 @@ class JobStatusWidget(QtWidgets.QWidget):
         self.pause_printing_btn.setMinimumSize(QtCore.QSize(200, 80))
         self.pause_printing_btn.setMaximumSize(QtCore.QSize(200, 80))
         self.pause_printing_btn.setFont(font)
-        self.pause_printing_btn.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/pause.svg")
-        )
+        self.pause_printing_btn.setProperty("icon_pixmap", BlocksPixmap.get(Icon.PAUSE))
         self.pause_printing_btn.setObjectName("pause_printing_btn")
         self.stop_printing_btn = BlocksCustomButton(self)
         self.stop_printing_btn.setSizePolicy(sizePolicy)
         self.stop_printing_btn.setMinimumSize(QtCore.QSize(200, 80))
         self.stop_printing_btn.setMaximumSize(QtCore.QSize(200, 80))
         self.stop_printing_btn.setFont(font)
-        self.stop_printing_btn.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/stop.svg")
-        )
+        self.stop_printing_btn.setProperty("icon_pixmap", BlocksPixmap.get(Icon.STOP))
         self.stop_printing_btn.setObjectName("stop_printing_btn")
         self.tune_menu_btn = BlocksCustomButton(self)
         self.tune_menu_btn.setSizePolicy(sizePolicy)
         self.tune_menu_btn.setMinimumSize(QtCore.QSize(200, 60))
         self.tune_menu_btn.setMaximumSize(QtCore.QSize(200, 80))
         self.tune_menu_btn.setFont(font)
-        self.tune_menu_btn.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/tune.svg")
-        )
+        self.tune_menu_btn.setProperty("icon_pixmap", BlocksPixmap.get(Icon.TUNE))
         self.tune_menu_btn.setObjectName("tune_menu_btn")
         self.job_status_btn_layout.addWidget(self.pause_printing_btn)
         self.job_status_btn_layout.addWidget(self.stop_printing_btn)
@@ -590,7 +581,7 @@ class JobStatusWidget(QtWidgets.QWidget):
         self.layer_display_button.setSizePolicy(sizePolicy)
         self.layer_display_button.setMinimumSize(QtCore.QSize(200, 80))
         self.layer_display_button.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/layers.svg")
+            "icon_pixmap", BlocksPixmap.get(Icon.LAYERS)
         )
         self.layer_display_button.setObjectName("layer_display_button")
         self.print_time_display_button = DisplayButton(self)
@@ -599,7 +590,7 @@ class JobStatusWidget(QtWidgets.QWidget):
         self.print_time_display_button.setSizePolicy(sizePolicy)
         self.print_time_display_button.setMinimumSize(QtCore.QSize(200, 80))
         self.print_time_display_button.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/time.svg")
+            "icon_pixmap", BlocksPixmap.get(Icon.TIME)
         )
         self.print_time_display_button.setObjectName("print_time_display_button")
         self.job_stats_display_layout.addWidget(

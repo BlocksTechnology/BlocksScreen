@@ -5,6 +5,7 @@ from lib.panels.widgets.addFilamentPage import AddFilamentPage
 from lib.panels.widgets.addSpoolPage import AddSpoolPage
 from lib.panels.widgets.basePopup import BasePopup
 from lib.utils.blocks_frame import BlocksCustomFrame
+from lib.utils.blocks_pixmap import BlocksPixmap, Icon
 from lib.utils.icon_button import IconButton
 from lib.utils.list_model import EntryDelegate, EntryListModel, ListItem
 from PyQt6 import QtCore, QtGui, QtWidgets
@@ -337,14 +338,14 @@ class SpoolmanPage(QtWidgets.QWidget):
         header_layout.setSpacing(0)
         header_layout.setContentsMargins(0, 0, 0, 0)
 
-        def _icon_btn(icon_path: str) -> IconButton:
+        def _icon_btn(icon: Icon) -> IconButton:
             btn = IconButton(self)
             btn.setFixedSize(QtCore.QSize(60, 60))
             btn.setFlat(True)
-            btn.setPixmap(QtGui.QPixmap(icon_path))
+            btn.setPixmap(BlocksPixmap.get(icon))
             return btn
 
-        self.reload_btn = _icon_btn(":/ui/media/btn_icons/refresh.svg")
+        self.reload_btn = _icon_btn(Icon.REFRESH)
         header_layout.addWidget(self.reload_btn)
 
         title_font = QtGui.QFont()
@@ -359,9 +360,7 @@ class SpoolmanPage(QtWidgets.QWidget):
         self.main_back_button = IconButton(parent=self)
         self.main_back_button.setMinimumSize(QtCore.QSize(60, 60))
         self.main_back_button.setMaximumSize(QtCore.QSize(60, 60))
-        self.main_back_button.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/back.svg")
-        )
+        self.main_back_button.setProperty("icon_pixmap", BlocksPixmap.get(Icon.BACK))
         self.main_back_button.setObjectName("main_back_button")
         header_layout.addWidget(self.main_back_button)
 
@@ -474,9 +473,7 @@ class SpoolmanPage(QtWidgets.QWidget):
         self.delete_btn = IconButton(self)
         self.delete_btn.setFixedSize(QtCore.QSize(60, 60))
         self.delete_btn.setFlat(True)
-        self.delete_btn.setPixmap(
-            QtGui.QPixmap(":/ui/media/btn_icons/garbage-icon.svg")
-        )
+        self.delete_btn.setPixmap(BlocksPixmap.get(Icon.GARBAGE_ICON))
         normal_layout.addWidget(self.delete_btn, 0)
 
         info_layout.addWidget(button_widget, 0, QtCore.Qt.AlignmentFlag.AlignCenter)

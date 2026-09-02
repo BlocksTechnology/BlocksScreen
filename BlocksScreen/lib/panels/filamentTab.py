@@ -18,6 +18,7 @@ from lib.printer import Printer
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_frame import BlocksCustomFrame
 from lib.utils.blocks_linedit import BlocksCustomLinEdit
+from lib.utils.blocks_pixmap import BlocksPixmap, Icon
 from lib.utils.icon_button import IconButton
 from lib.utils.list_model import EntryDelegate, EntryListModel, ListItem
 from PyQt6 import QtCore, QtGui, QtWidgets
@@ -175,7 +176,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
         back_btn = IconButton(page)
         back_btn.setFixedSize(QtCore.QSize(60, 60))
         back_btn.setFlat(True)
-        back_btn.setPixmap(QtGui.QPixmap(":/ui/media/btn_icons/back.svg"))
+        back_btn.setPixmap(BlocksPixmap.get(Icon.BACK))
         back_btn.clicked.connect(lambda: self.popup.hide())
         hdr.addWidget(back_btn)
 
@@ -290,9 +291,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
         skip_btn.setText("Skip")
         skip_btn.setFont(font)
         skip_btn.clicked.connect(self.handle_skip_button)
-        skip_btn.setPixmap(
-            QtGui.QPixmap(":/arrow_icons/media/btn_icons/right_arrow.svg")
-        )
+        skip_btn.setPixmap(BlocksPixmap.get(Icon.RIGHT_ARROW))
         btn_row.addWidget(skip_btn)
 
         accept_btn = BlocksCustomButton(page)
@@ -300,7 +299,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
         accept_btn.setText("Accept")
         accept_btn.setFont(font)
         accept_btn.clicked.connect(self.on_popup_accept)
-        accept_btn.setPixmap(QtGui.QPixmap(":/dialog/media/btn_icons/yes.svg"))
+        accept_btn.setPixmap(BlocksPixmap.get(Icon.YES))
         btn_row.addWidget(accept_btn)
 
         root.addLayout(btn_row)
@@ -331,7 +330,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
         back_btn = IconButton(page)
         back_btn.setFixedSize(QtCore.QSize(60, 60))
         back_btn.setFlat(True)
-        back_btn.setPixmap(QtGui.QPixmap(":/ui/media/btn_icons/back.svg"))
+        back_btn.setPixmap(BlocksPixmap.get(Icon.BACK))
         back_btn.clicked.connect(lambda: self.popup.hide())
         hdr.addWidget(back_btn)
 
@@ -486,15 +485,13 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self.skip_btn.setText("Skip")
         self.skip_btn.setFixedSize(QtCore.QSize(230, 80))
         self.skip_btn.setFont(font)
-        self.skip_btn.setPixmap(
-            QtGui.QPixmap(":/arrow_icons/media/btn_icons/right_arrow.svg")
-        )
+        self.skip_btn.setPixmap(BlocksPixmap.get(Icon.RIGHT_ARROW))
         self.skip_btn.clicked.connect(self.handle_skip_button)
 
         self.accept_btn = BlocksCustomButton(frame_2)
         self.accept_btn.setText("Accept")
         self.accept_btn.setFixedSize(QtCore.QSize(230, 80))
-        self.accept_btn.setPixmap(QtGui.QPixmap(":/dialog/media/btn_icons/yes.svg"))
+        self.accept_btn.setPixmap(BlocksPixmap.get(Icon.YES))
         self.accept_btn.setFont(font)
         self.accept_btn.clicked.connect(lambda: self._on_spool_selected())
 
@@ -958,7 +955,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self.fp_button_1.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
         self.fp_button_1.setProperty(
             "icon_pixmap",
-            QtGui.QPixmap(":/filament_related/media/btn_icons/load_filament.svg"),
+            BlocksPixmap.get(Icon.LOAD_FILAMENT),
         )
         self.fp_button_1.setObjectName("fp_button_1")
 
@@ -973,7 +970,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self.fp_button_2.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
         self.fp_button_2.setProperty(
             "icon_pixmap",
-            QtGui.QPixmap(":/filament_related/media/btn_icons/base dados spool 1.svg"),
+            BlocksPixmap.get(Icon.BASE_DADOS_SPOOL_1),
         )
         self.fp_button_2.setObjectName("fp_button_2")
 

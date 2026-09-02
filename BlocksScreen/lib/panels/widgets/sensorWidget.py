@@ -2,6 +2,7 @@ import enum
 import typing
 
 from lib.utils.blocks_label import BlocksLabel
+from lib.utils.blocks_pixmap import BlocksPixmap, Icon
 from lib.utils.toggleAnimatedButton import ToggleAnimatedButton
 from PyQt6 import QtCore, QtGui, QtWidgets
 
@@ -58,12 +59,10 @@ class SensorWidget(QtWidgets.QWidget):
         self._text_label = None
         self._text = self.name
         self._item_rect: QtCore.QRect = QtCore.QRect()
-        self.icon_pixmap_fp: QtGui.QPixmap = QtGui.QPixmap(
-            ":/filament_related/media/btn_icons/filament_sensor_turn_on.svg"
+        self.icon_pixmap_fp: QtGui.QPixmap = BlocksPixmap.get(
+            Icon.FILAMENT_SENSOR_TURN_ON
         )
-        self.icon_pixmap_fnp: QtGui.QPixmap = QtGui.QPixmap(
-            ":/filament_related/media/btn_icons/filament_sensor_off.svg"
-        )
+        self.icon_pixmap_fnp: QtGui.QPixmap = BlocksPixmap.get(Icon.FILAMENT_SENSOR_OFF)
         self._setupUI()
         self.toggle_button.stateChange.connect(self.toggle_sensor_state)
 
