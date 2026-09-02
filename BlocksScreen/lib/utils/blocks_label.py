@@ -11,10 +11,10 @@ class BlocksLabel(QtWidgets.QLabel):
         super().__init__(parent, *args, **kwargs)
 
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_AcceptTouchEvents, True)
-        self.icon_pixmap: typing.Optional[QtGui.QPixmap] = None
+        self.icon_pixmap: QtGui.QPixmap | None = None
         self._text: str = ""
-        self._background_color: typing.Optional[QtGui.QColor] = None
-        self._border_color: typing.Optional[QtGui.QColor] = None
+        self._background_color: QtGui.QColor | None = None
+        self._border_color: QtGui.QColor | None = None
         self._rounded: bool = False
         self._marquee: bool = True
         self.timer = QtCore.QTimer()
@@ -76,7 +76,7 @@ class BlocksLabel(QtWidgets.QLabel):
         self.update_text_metrics()
 
     @property
-    def background_color(self) -> typing.Optional[QtGui.QColor]:
+    def background_color(self) -> QtGui.QColor | None:
         """Widget background color"""
         return self._background_color
 
@@ -85,7 +85,7 @@ class BlocksLabel(QtWidgets.QLabel):
         self._background_color = color
 
     @property
-    def border_color(self) -> typing.Optional[QtGui.QColor]:
+    def border_color(self) -> QtGui.QColor | None:
         """Widget border color"""
         return self._border_color
 
@@ -209,7 +209,7 @@ class BlocksLabel(QtWidgets.QLabel):
             else:
                 qp.fillRect(rect, self._background_color)
 
-        if self.icon_pixmap:
+        if self.icon_pixmap is not None and not self.icon_pixmap.isNull():
             icon_rect = QtCore.QRectF(
                 0.0 + self.icon_margin,
                 0.0 + self.icon_margin,

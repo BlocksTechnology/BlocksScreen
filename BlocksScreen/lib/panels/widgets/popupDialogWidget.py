@@ -32,7 +32,8 @@ class Popup(QtWidgets.QDialog):
         self.message_type: Popup.MessageType = Popup.MessageType.INFO
         self.default_background_color = QtGui.QColor(164, 164, 164)
         self.info_icon = QtGui.QPixmap(":ui/media/btn_icons/info.svg")
-        self.warning_icon = QtGui.QPixmap(":ui/media/btn_icons/warning.svg")
+        # no warning asset exists yet; the yellow ColorCode carries the severity
+        self.warning_icon = QtGui.QPixmap(":ui/media/btn_icons/error.svg")
         self.error_icon = QtGui.QPixmap(":ui/media/btn_icons/error.svg")
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_TranslucentBackground, True)
         self.setMouseTracking(True)
@@ -179,6 +180,8 @@ class Popup(QtWidgets.QDialog):
                     self.icon_label.setPixmap(self.warning_icon)
                 case Popup.MessageType.ERROR:
                     self.icon_label.setPixmap(self.error_icon)
+                case _:
+                    self.icon_label.clear()
 
             end_rect = self._calculate_target_geometry()
             start_rect = end_rect.translated(0, -end_rect.height() * 2)

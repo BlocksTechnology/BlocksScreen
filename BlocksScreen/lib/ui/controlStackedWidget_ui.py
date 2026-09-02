@@ -1820,7 +1820,7 @@ class Ui_controlStackedWidget(object):
         self.z_adjust_back_button.setMaximumSize(QtCore.QSize(60, 60))
         self.z_adjust_back_button.setText("")
         self.z_adjust_back_button.setFlat(True)
-        self.z_adjust_back_button.setProperty("icon_pixmap", QtGui.QPixmap(":/button_borders/media/btn_icons/back.svg"))
+        self.z_adjust_back_button.setProperty("icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/back.svg"))
         self.z_adjust_back_button.setObjectName("z_adjust_back_button")
         self.z_adjustment_header_layout.addWidget(self.z_adjust_back_button)
         self.verticalLayoutWidget_8 = QtWidgets.QWidget(parent=self.z_adjustment_page)

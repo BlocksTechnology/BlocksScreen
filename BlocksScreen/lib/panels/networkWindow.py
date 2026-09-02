@@ -2828,9 +2828,6 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.low_priority_btn.setMaximumSize(QtCore.QSize(100, 100))
         self.low_priority_btn.setCheckable(True)
         self.low_priority_btn.setFlat(True)
-        self.low_priority_btn.setProperty(
-            "icon_pixmap", PixmapCache.get(":/ui/media/btn_icons/indf_svg.svg")
-        )
         self.low_priority_btn.setText("Low")
         self.low_priority_btn.setProperty("class", "back_btn")
         self.low_priority_btn.setProperty("button_type", "icon")
@@ -2844,9 +2841,6 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.med_priority_btn.setCheckable(True)
         self.med_priority_btn.setChecked(False)  # Don't set default checked
         self.med_priority_btn.setFlat(True)
-        self.med_priority_btn.setProperty(
-            "icon_pixmap", PixmapCache.get(":/ui/media/btn_icons/indf_svg.svg")
-        )
         self.med_priority_btn.setText("Medium")
         self.med_priority_btn.setProperty("class", "back_btn")
         self.med_priority_btn.setProperty("button_type", "icon")
@@ -2860,9 +2854,6 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self.high_priority_btn.setCheckable(True)
         self.high_priority_btn.setChecked(False)
         self.high_priority_btn.setFlat(True)
-        self.high_priority_btn.setProperty(
-            "icon_pixmap", PixmapCache.get(":/ui/media/btn_icons/indf_svg.svg")
-        )
         self.high_priority_btn.setText("High")
         self.high_priority_btn.setProperty("class", "back_btn")
         self.high_priority_btn.setProperty("button_type", "icon")

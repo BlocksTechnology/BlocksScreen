@@ -19,32 +19,10 @@ RC_PACKAGE = "BlocksScreen.lib.ui.resources"
 # Known-broken keys, measured 2026-08-31. This dict may only ever shrink:
 # test_xfail_keys_are_still_broken fails once an entry stops being broken.
 XFAIL_KEYS = {
-    ":/background/media/graphics/scroll_list_window.svg": (
-        "asset is on disk but declared by no .qrc; retired by PR 3"
-    ),
-    ":/button_borders/media/btn_icons/back.svg": (
-        "wrong prefix, real key is :/ui/media/btn_icons/back.svg; "
-        "lives in a generated _ui.py so the .ui file is the fix; retired by PR 3"
-    ),
-    ":/graphics/media/btn_icons/z_offset_adjust.svg": (
-        "asset deleted from the qrc in 927e43c (2025-06-04) and absent from "
-        "disk, yet 3 call sites still request it; retired by PR 3"
-    ),
     ":/network/media/btn_icons/network/{b}bar_wifi{": (
         "not broken at runtime: an f-string template the scanner cannot "
         "evaluate, whose real keys are the 0bar..3bar matrix; the literal "
         "disappears when the Icon enum replaces it in PR 8"
-    ),
-    ":/ui/background/media/1st_background.png": (
-        "duplicated prefix segment, real key is "
-        ":/background/media/1st_background.png; retired by PR 3"
-    ),
-    ":/ui/media/btn_icons/indf_svg.svg": (
-        "no such file in any .qrc or on disk; retired by PR 3"
-    ),
-    ":/ui/media/btn_icons/warning.svg": (
-        "no such file in any .qrc or on disk, so the warning popup renders a "
-        "blank icon; needs a new asset, not just a key fix; retired by PR 3"
     ),
 }
 

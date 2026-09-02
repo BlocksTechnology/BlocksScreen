@@ -258,9 +258,6 @@ class BabystepPage(QtWidgets.QWidget):
         self.bbp_z_offset_current_value.setText(
             f"Z: {round(self._pending_z_offset, 3) or 0.0:.3f} mm"
         )
-        self.bbp_z_offset_current_value.setPixmap(
-            QtGui.QPixmap(":/graphics/media/btn_icons/z_offset_adjust.svg")
-        )
         self.bbp_z_offset_current_value.setAlignment(
             QtCore.Qt.AlignmentFlag.AlignCenter
         )
