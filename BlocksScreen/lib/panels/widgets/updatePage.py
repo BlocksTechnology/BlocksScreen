@@ -494,8 +494,7 @@ class UpdatePage(QtWidgets.QWidget):
         self.disable_popups.emit(loading)
 
     def _setupUI(self) -> None:
-        # Qt files the Thin and Bold faces under one family, so both ids gave the
-        # same name here; the weight is chosen per QFont, not per family.
+        # Thin and Bold share one family; weight is chosen per QFont, not per family.
         self._font_family = register_momcake()
         _title_family = self._font_family
 

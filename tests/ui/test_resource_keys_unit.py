@@ -10,9 +10,7 @@ PKG_ROOT = REPO_ROOT / "BlocksScreen"
 RESOURCES = PKG_ROOT / "lib" / "ui" / "resources"
 RC_PACKAGE = "BlocksScreen.lib.ui.resources"
 
-# Known-broken keys. This dict may only ever shrink: test_xfail_keys_are_still_broken
-# fails once an entry stops being broken. Emptied 2026-09-01 when Icon replaced the
-# last f-string key template.
+# Known-broken keys, may only shrink; emptied 2026-09-01 when Icon replaced the templates.
 XFAIL_KEYS: dict[str, str] = {}
 
 # Text scan not AST (misses .ui XML); '/' drops ": %s", spaces admit Momcake keys.
@@ -21,8 +19,10 @@ _PY_LITERAL = re.compile(r'["\'](:/?[^"\'\s][^"\']*/[^"\']*)["\']')
 # .ui keys are unquoted element text: <normaloff>:/x/y.svg</normaloff>.
 _UI_LITERAL = re.compile(r">(:/?[^<\s][^<]*/[^<]*)<")
 
-# Matches the CSS in an .svg <style> block. The assets are minified one-liners, so
-# the reported line number is usually 1 and the family name is what carries.
+# Stylesheet keys carry no quote next to the ':', so the two patterns above miss them.
+_CSS_URL = re.compile(r"url\((:/?[^)\s][^)]*/[^)]*)\)")
+
+# CSS in an .svg <style> block; assets are minified, so the family name carries, not the line.
 _FONT_FAMILY = re.compile(r"font-family:\s*([^;}\"']+)")
 
 
@@ -52,7 +52,13 @@ def _qrc_keys() -> set[str]:
 def _literal_sites() -> dict[str, list[str]]:
     """Map every ':/' key under BlocksScreen/lib to its 'file:line' sites, .py and .ui alike."""
     sites: dict[str, list[str]] = {}
-    for pattern, suffix in ((_PY_LITERAL, "*.py"), (_UI_LITERAL, "*.ui")):
+    scans = (
+        (_PY_LITERAL, "*.py"),
+        (_UI_LITERAL, "*.ui"),
+        (_CSS_URL, "*.py"),
+        (_CSS_URL, "*.ui"),
+    )
+    for pattern, suffix in scans:
         for source in sorted((PKG_ROOT / "lib").rglob(suffix)):
             if source.name.endswith("_rc.py"):
                 continue
@@ -96,9 +102,7 @@ def _compiled_keys() -> set[str]:
 
     _import_blobs()
 
-    # Walk our own prefixes, never ':/'. Qt registers its own style and PDF
-    # resources into the same tree as soon as QtGui/QtWidgets is imported, and
-    # which of those appear depends on what the rest of the suite imported first.
+    # Walk our own prefixes, never ':/': Qt registers its own resources into the same tree.
     keys = set()
     for root in _qrc_prefix_roots():
         walk = QDirIterator(
@@ -184,9 +188,7 @@ def test_compiled_blobs_match_the_asset_bytes():
 
     _import_blobs()
 
-    # `make rcc` only recompiles git-modified .qrc files, so editing an asset in
-    # place leaves the XML untouched and the blob silently stale. Comparing the
-    # bytes is the only check that catches it.
+    # `make rcc` skips unmodified .qrc, so an edited asset leaves the blob silently stale.
     stale = {}
     for key, path in _qrc_entries():
         handle = QFile(key)

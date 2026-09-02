@@ -5,8 +5,7 @@ from typing import ClassVar
 
 from PyQt6 import QtCore, QtGui
 
-# Setup-time callers cannot know their paint size, and the widgets rescale anyway;
-# 128 clears the tallest button (90px hole, 0.8 fill) at 64 KiB a surface.
+# Widgets rescale anyway; 128 clears the tallest button at 64 KiB a surface.
 ICON_SIZE = QtCore.QSize(128, 128)
 
 
