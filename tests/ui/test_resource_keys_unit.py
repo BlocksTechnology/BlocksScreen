@@ -20,15 +20,10 @@ PKG_ROOT = REPO_ROOT / "BlocksScreen"
 RESOURCES = PKG_ROOT / "lib" / "ui" / "resources"
 RC_PACKAGE = "BlocksScreen.lib.ui.resources"
 
-# Known-broken keys, measured 2026-08-31. This dict may only ever shrink:
-# test_xfail_keys_are_still_broken fails once an entry stops being broken.
-XFAIL_KEYS = {
-    ":/network/media/btn_icons/network/{b}bar_wifi{": (
-        "not broken at runtime: an f-string template the scanner cannot "
-        "evaluate, whose real keys are the 0bar..3bar matrix; the literal "
-        "disappears when the Icon enum replaces it in PR 8"
-    ),
-}
+# Known-broken keys. This dict may only ever shrink: test_xfail_keys_are_still_broken
+# fails once an entry stops being broken. Emptied 2026-09-01 when Icon replaced the
+# last f-string key template.
+XFAIL_KEYS: dict[str, str] = {}
 
 # Text scan not AST (misses .ui XML); '/' drops ": %s", spaces admit Momcake keys.
 _PY_LITERAL = re.compile(r'["\'](:/?[^"\'\s][^"\']*/[^"\']*)["\']')

@@ -9,7 +9,7 @@ from configfile import BlocksScreenConfig, get_configparser
 from devices.amu import AMUManager
 from devices.storage import USBManager
 from lib.files import Files
-from lib.klipper_message_filter import (  # noqa: F405
+from lib.klipper_message_filter import (
     MessageSource,
     Severity,
     match_message,
@@ -19,7 +19,7 @@ from lib.moonrakerComm import MoonWebSocket
 from lib.network import WifiIconKey
 from lib.panels.controlTab import ControlTab
 from lib.panels.filamentTab import FilamentTab
-from lib.panels.networkWindow import NetworkControlWindow, PixmapCache
+from lib.panels.networkWindow import NetworkControlWindow
 from lib.panels.printTab import PrintTab
 from lib.panels.utilitiesTab import UtilitiesTab
 from lib.panels.widgets.basePopup import BasePopup
@@ -37,6 +37,7 @@ from lib.ui.resources.icon_resources_rc import *
 from lib.ui.resources.main_menu_resources_rc import *
 from lib.ui.resources.top_bar_resources_rc import *
 from lib.updater_worker import UpdaterWorker
+from lib.utils.blocks_pixmap import BlocksPixmap, Icon
 from lib.utils.fonts import register_momcake
 from PyQt6 import QtCore, QtGui, QtWidgets
 from screensaver import ScreenSaver
@@ -66,29 +67,15 @@ def api_handler(func):
 class HeaderWifiIconProvider:
     """Resolves WifiIconKey integer values to cached QPixmaps for the header bar."""
 
-    _WIFI_PATHS: dict[tuple[int, bool], str] = {
-        (
-            b,
-            p,
-        ): f":/network/media/btn_icons/network/{b}bar_wifi{'_protected' if p else ''}.svg"
-        for b in range(5)
-        for p in (False, True)
-    }
-    _ETHERNET_PATH = ":/network/media/btn_icons/network/ethernet_connected.svg"
-    _HOTSPOT_PATH = ":/network/media/btn_icons/hotspot.svg"
-
     @classmethod
     def get_pixmap(cls, icon_key: int) -> QtGui.QPixmap:
-        """Resolve an icon key to a QPixmap (cached via PixmapCache)."""
+        """Resolve an icon key to a QPixmap (cached via BlocksPixmap)."""
         key = WifiIconKey(icon_key)
         if key is WifiIconKey.ETHERNET:
-            return PixmapCache.get(cls._ETHERNET_PATH)
+            return BlocksPixmap.get(Icon.ETHERNET_CONNECTED)
         if key is WifiIconKey.HOTSPOT:
-            return PixmapCache.get(cls._HOTSPOT_PATH)
-        path = cls._WIFI_PATHS.get(
-            (key.bars, key.is_protected), cls._WIFI_PATHS[(0, False)]
-        )
-        return PixmapCache.get(path)
+            return BlocksPixmap.get(Icon.HOTSPOT)
+        return BlocksPixmap.get(Icon.wifi(key.bars, key.is_protected))
 
 
 class MainWindow(QtWidgets.QMainWindow):
@@ -120,7 +107,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def __init__(self):
         """Set up UI, instantiate subsystems, and wire all inter-component signals."""
-        super(MainWindow, self).__init__()
+        super().__init__()
         self.config: BlocksScreenConfig = get_configparser()
         # Before setupUi: the topbar .svg icons carry text and paint on first show.
         register_momcake()
@@ -390,11 +377,14 @@ class MainWindow(QtWidgets.QMainWindow):
         if not force:
             if _sender is self.update_page:
                 self._update_in_progress = show
-            if not show and self._post_update_reconnect:
-                return
-            elif not show and self._update_in_progress:
-                return
-            elif not show and self._klipper_auto_restart_pending:
+            if (
+                not show
+                and self._post_update_reconnect
+                or not show
+                and self._update_in_progress
+                or not show
+                and self._klipper_auto_restart_pending
+            ):
                 return
 
             if _sender == self.filamentPanel:

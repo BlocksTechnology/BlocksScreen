@@ -15,6 +15,7 @@ as its base — ``MagicMock`` triggers ``TypeError: metaclass conflict``.)
 
 import asyncio
 import enum
+import importlib
 import sys
 import types
 from dataclasses import dataclass
@@ -280,6 +281,12 @@ for _mod_name, _attrs in _STUB_MODULES.items():
     sys.modules[_mod_name] = _stub
     sys.modules["BlocksScreen." + _mod_name] = _stub
 
+# blocks_pixmap is a pure-PyQt6 leaf: alias the real module so the identity
+# assertions in test_network_ui.py compare real cache entries, not mock children.
+sys.modules["lib.utils.blocks_pixmap"] = importlib.import_module(
+    "BlocksScreen.lib.utils.blocks_pixmap"
+)
+
 
 # Mock lib.qrcode_gen (short path only) — networkWindow.py imports it as
 # ``from lib.qrcode_gen import generate_wifi_qrcode``.  The BlocksScreen.*
@@ -301,7 +308,7 @@ _mock_configfile_mod.get_configparser = MagicMock(return_value=_mock_cfg_instanc
 sys.modules["configfile"] = _mock_configfile_mod
 
 # Now safe to import the actual network package
-from BlocksScreen.lib.network.models import (  # noqa: E402
+from BlocksScreen.lib.network.models import (
     ConnectionPriority,
     ConnectivityState,
     NetworkInfo,
