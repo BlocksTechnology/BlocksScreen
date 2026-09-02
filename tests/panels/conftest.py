@@ -47,6 +47,8 @@ _STUB_MODULES = (
     "lib.ui.resources.main_menu_resources_rc",
     "lib.ui.resources.top_bar_resources_rc",
     "lib.updater_worker",
+    "lib.utils",
+    "lib.utils.fonts",
     "screensaver",
 )
 
@@ -86,4 +88,5 @@ sys.modules["lib.panels.widgets.updatePage"].UpdatePage = MagicMock
 sys.modules["lib.printer"].Printer = MagicMock
 sys.modules["lib.ui.mainWindow_ui"].Ui_MainWindow = MagicMock
 sys.modules["lib.updater_worker"].UpdaterWorker = MagicMock
+sys.modules["lib.utils.fonts"].register_momcake = MagicMock(return_value="Momcake Pro")
 sys.modules["screensaver"].ScreenSaver = MagicMock
