@@ -6,6 +6,8 @@ just as quietly. The only feedback is a blank rectangle or the wrong typeface on
 the panel, which is how the keys in XFAIL_KEYS survived for months and how all 10
 topbar filament icons shipped in a fallback font. These tests turn that silent
 failure into a red test.
+
+Scans .py and .ui: Designer stores keys as bare element text, 56 such sites.
 """
 
 import importlib
@@ -28,11 +30,11 @@ XFAIL_KEYS = {
     ),
 }
 
-# Deliberately a text scan, not an AST walk: an AST walk only sees ast.Constant,
-# so it would silently drop the wifi f-string template above. The optional slash
-# catches ":ui/..." too, which Qt resolves the same as ":/ui/..." (verified) and
-# which 6 sites in this package use. The trailing + excludes a bare ":".
-_LITERAL = re.compile(r'["\'](:/?[^"\'\s]+)["\']')
+# Text scan not AST (misses .ui XML); '/' drops ": %s", spaces admit Momcake keys.
+_PY_LITERAL = re.compile(r'["\'](:/?[^"\'\s][^"\']*/[^"\']*)["\']')
+
+# .ui keys are unquoted element text: <normaloff>:/x/y.svg</normaloff>.
+_UI_LITERAL = re.compile(r">(:/?[^<\s][^<]*/[^<]*)<")
 
 # Matches the CSS in an .svg <style> block. The assets are minified one-liners, so
 # the reported line number is usually 1 and the family name is what carries.
@@ -63,16 +65,20 @@ def _qrc_keys() -> set[str]:
 
 
 def _literal_sites() -> dict[str, list[str]]:
-    """Map every ':/' literal under BlocksScreen/lib to its 'file:line' call sites."""
+    """Map every ':/' key under BlocksScreen/lib to its 'file:line' sites, .py and .ui alike."""
     sites: dict[str, list[str]] = {}
-    for module in sorted((PKG_ROOT / "lib").rglob("*.py")):
-        if module.name.endswith("_rc.py"):
-            continue
-        text = module.read_text(errors="replace")
-        for number, line in enumerate(text.splitlines(), 1):
-            for match in _LITERAL.finditer(line):
-                where = f"{module.relative_to(REPO_ROOT)}:{number}"
-                sites.setdefault(match.group(1), []).append(where)
+    for pattern, suffix in ((_PY_LITERAL, "*.py"), (_UI_LITERAL, "*.ui")):
+        for source in sorted((PKG_ROOT / "lib").rglob(suffix)):
+            if source.name.endswith("_rc.py"):
+                continue
+            text = source.read_text(errors="replace")
+            for number, line in enumerate(text.splitlines(), 1):
+                for match in pattern.finditer(line):
+                    where = f"{source.relative_to(REPO_ROOT)}:{number}"
+                    # An iconset repeats its path on one line.
+                    seen = sites.setdefault(match.group(1), [])
+                    if where not in seen:
+                        seen.append(where)
     return sites
 
 
@@ -134,7 +140,7 @@ def test_resources_dir_is_findable():
 
 
 def test_no_broken_resource_literals():
-    """Every ':/' literal under BlocksScreen/lib resolves to a declared .qrc key."""
+    """Every ':/' key under BlocksScreen/lib, .py or .ui, resolves to a declared .qrc key."""
     keys = _qrc_keys()
     broken = {
         key: sites
