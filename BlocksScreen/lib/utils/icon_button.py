@@ -1,6 +1,8 @@
 import typing
 from PyQt6 import QtCore, QtGui, QtWidgets
 
+from lib.utils.blocks_pixmap import BlocksPixmap
+
 
 class IconButton(QtWidgets.QPushButton):
     def __init__(self, parent: QtWidgets.QWidget = None) -> None:
@@ -68,11 +70,7 @@ class IconButton(QtWidgets.QPushButton):
             _icon_rect = QtCore.QRectF(0.0, 0.0, (self.width()), (self.height() - y))
 
         if not self.icon_pixmap.isNull():
-            _icon_scaled = self.icon_pixmap.scaled(
-                _icon_rect.size().toSize(),
-                QtCore.Qt.AspectRatioMode.KeepAspectRatio,
-                QtCore.Qt.TransformationMode.SmoothTransformation,
-            )
+            _icon_scaled = BlocksPixmap.get(self.icon_pixmap, _icon_rect)
             scaled_width = _icon_scaled.width()
             scaled_height = _icon_scaled.height()
             adjusted_x = (_icon_rect.width() - scaled_width) / 2.0

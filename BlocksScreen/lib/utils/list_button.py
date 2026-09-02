@@ -1,5 +1,7 @@
 from PyQt6 import QtCore, QtGui, QtWidgets
 
+from lib.utils.blocks_pixmap import BlocksPixmap
+
 
 class ListCustomButton(QtWidgets.QPushButton):
     def __init__(self, parent=None) -> None:
@@ -144,11 +146,7 @@ class ListCustomButton(QtWidgets.QPushButton):
                 ellipse_rect.width() - icon_margin,
                 ellipse_rect.height() - icon_margin,
             )
-            icon_scaled = self.icon_pixmap.scaled(
-                icon_rect.size().toSize(),
-                QtCore.Qt.AspectRatioMode.KeepAspectRatio,
-                QtCore.Qt.TransformationMode.SmoothTransformation,
-            )
+            icon_scaled = BlocksPixmap.get(self.icon_pixmap, icon_rect)
             # Center the icon in the ellipse
             adjusted_x = icon_rect.x() + (icon_rect.width() - icon_scaled.width()) / 2.0
             adjusted_y = (
@@ -166,11 +164,7 @@ class ListCustomButton(QtWidgets.QPushButton):
 
         # Draw second icon (on the left, if present)
         if not self.second_icon_pixmap.isNull():
-            left_icon_scaled = self.second_icon_pixmap.scaled(
-                left_icon_rect.size().toSize(),
-                QtCore.Qt.AspectRatioMode.KeepAspectRatio,
-                QtCore.Qt.TransformationMode.SmoothTransformation,
-            )
+            left_icon_scaled = BlocksPixmap.get(self.second_icon_pixmap, left_icon_rect)
             # Center the icon in the rect
             adjusted_x = (
                 left_icon_rect.x()

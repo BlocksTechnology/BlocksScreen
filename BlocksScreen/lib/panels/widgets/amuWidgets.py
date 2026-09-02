@@ -163,26 +163,11 @@ class Spoll_button(QtWidgets.QAbstractButton):
             if self.status in [GateStatus.AVAILABLE, GateStatus.AVAILABLE_FROM_BUFFER]
             else self._unloaded_icon
         )
-        scaled = icon.scaled(
-            icon_size,
-            icon_size,
-            QtCore.Qt.AspectRatioMode.KeepAspectRatio,
-            QtCore.Qt.TransformationMode.SmoothTransformation,
-        )
+        scaled = BlocksPixmap.get(icon, QtCore.QSize(icon_size, icon_size))
         x = (self.width() - scaled.width()) // 2
         y = int((self.height() - scaled.height()) // 1.1)
 
-        tinted = QtGui.QPixmap(scaled.size())
-        tinted.fill(QtCore.Qt.GlobalColor.transparent)
-        p2 = QtGui.QPainter(tinted)
-        p2.drawPixmap(0, 0, scaled)
-        p2.setCompositionMode(QtGui.QPainter.CompositionMode.CompositionMode_SourceIn)
-        p2.fillRect(tinted.rect(), white)
-        p2.end()
-        painter.drawPixmap(x, y, tinted)
-
-        tinted = QtGui.QPixmap(scaled.size())
-        tinted.fill(QtCore.Qt.GlobalColor.transparent)
+        painter.drawPixmap(x, y, BlocksPixmap.tinted(scaled, white))
 
         painter.setPen(QtCore.Qt.PenStyle.NoPen)
         painter.end()

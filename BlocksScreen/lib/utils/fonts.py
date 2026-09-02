@@ -7,7 +7,6 @@ from PyQt6 import QtGui
 
 _logger = logging.getLogger(__name__)
 
-# Must match the topbar .svg font-family; test_resource_keys_unit.py guards the drift.
 MOMCAKE_FAMILY = "Momcake Pro"
 
 _FONT_PATHS = (

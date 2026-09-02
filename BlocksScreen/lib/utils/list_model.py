@@ -303,41 +303,10 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
     )
 
     def __init__(self) -> None:
-        """Initialise the delegate with a scaled-pixmap cache and default item height."""
+        """Initialise the delegate with a default item height."""
         super().__init__()
         self.prev_index: int = 0
         self.height: int = 60
-        self._scaled_cache: dict[tuple[int, int, int], QtGui.QPixmap] = {}
-
-    def _get_scaled(
-        self,
-        pixmap: QtGui.QPixmap,
-        size: QtCore.QSize,
-    ) -> QtGui.QPixmap:
-        """Return *pixmap* scaled to *size*, using a cache to avoid
-        re-scaling the same icon every paint frame.
-
-        The cache key is (QPixmap.cacheKey(), width, height) which
-        correctly invalidates when the source pixmap changes.
-        """
-        key = (pixmap.cacheKey(), size.width(), size.height())
-        cached = self._scaled_cache.get(key)
-        if cached is not None:
-            return cached
-        scaled = pixmap.scaled(
-            size,
-            QtCore.Qt.AspectRatioMode.KeepAspectRatio,
-            QtCore.Qt.TransformationMode.SmoothTransformation,
-        )
-        self._scaled_cache[key] = scaled
-        # Prevent unbounded growth — 64 entries covers all wifi
-        # bar variants × protected/open × left/right icons easily.
-        if len(self._scaled_cache) > 64:
-            # Drop oldest half
-            keys = list(self._scaled_cache)
-            for k in keys[:32]:
-                del self._scaled_cache[k]
-        return scaled
 
     def clear(self) -> None:
         """Clears delegate indexing"""
@@ -450,14 +419,9 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
         )
 
         if item.right_icon:
-            icon_scaled = item.right_icon.scaled(
-                ellipse_rect.size().toSize(),
-                QtCore.Qt.AspectRatioMode.KeepAspectRatio,
-                QtCore.Qt.TransformationMode.SmoothTransformation,
-            )
             painter.drawPixmap(
                 ellipse_rect.toRect(),
-                icon_scaled,
+                BlocksPixmap.get(item.right_icon, ellipse_rect),
             )
 
         left_margin = 10
@@ -469,32 +433,10 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
         )
 
         if item.left_icon:
-            l_icon_scaled = item.left_icon.scaled(
-                int(left_icon_rect.width()),
-                int(left_icon_rect.height()),
-                QtCore.Qt.AspectRatioMode.KeepAspectRatio,
-                QtCore.Qt.TransformationMode.SmoothTransformation,
-            )
-
+            l_icon_scaled = BlocksPixmap.get(item.left_icon, left_icon_rect)
             if item.color_left_icon:
-                tinted = QtGui.QPixmap(l_icon_scaled.size())
-                tinted.fill(QtCore.Qt.GlobalColor.transparent)
-                p2 = QtGui.QPainter(tinted)
-                p2.drawPixmap(0, 0, l_icon_scaled)
-                p2.setCompositionMode(
-                    QtGui.QPainter.CompositionMode.CompositionMode_SourceIn
-                )
-                p2.fillRect(tinted.rect(), QtGui.QColor(item.color))
-                p2.end()
-                painter.drawPixmap(
-                    left_icon_rect.toRect(),
-                    tinted,
-                )
-            else:
-                painter.drawPixmap(
-                    left_icon_rect.toRect(),
-                    l_icon_scaled,
-                )
+                l_icon_scaled = BlocksPixmap.tinted(l_icon_scaled, item.color)
+            painter.drawPixmap(left_icon_rect.toRect(), l_icon_scaled)
 
         text_margin = int(
             rect.right() - ellipse_size - ellipse_margin - rect.height() * 0.10

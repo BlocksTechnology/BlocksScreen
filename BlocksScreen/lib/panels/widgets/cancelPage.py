@@ -1,11 +1,14 @@
+import logging
+import typing
+
+from lib.moonrakerComm import MoonWebSocket
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_frame import BlocksCustomFrame
 from lib.utils.blocks_label import BlocksLabel
 from lib.utils.blocks_pixmap import BlocksPixmap, Icon
 from PyQt6 import QtCore, QtGui, QtWidgets
-import typing
 
-from lib.moonrakerComm import MoonWebSocket
+logger = logging.getLogger(__name__)
 
 
 class CancelPage(QtWidgets.QWidget):
@@ -76,12 +79,7 @@ class CancelPage(QtWidgets.QWidget):
         # Scene rectangle (available display area)
         graphics_rect = self.cf_thumbnail.rect().toRectF()
 
-        # Scale pixmap preserving aspect ratio
-        pixmap = pixmap.scaled(
-            graphics_rect.size().toSize(),
-            QtCore.Qt.AspectRatioMode.KeepAspectRatio,
-            QtCore.Qt.TransformationMode.SmoothTransformation,
-        )
+        pixmap = BlocksPixmap.get(pixmap, graphics_rect)
 
         adjusted_x = (graphics_rect.width() - pixmap.width()) / 2.0
         adjusted_y = (graphics_rect.height() - pixmap.height()) / 2.0
@@ -105,14 +103,10 @@ class CancelPage(QtWidgets.QWidget):
             last_thumb = QtGui.QPixmap.fromImage(thumbnails[-1])
 
             if last_thumb.isNull():
-                last_thumb = QtGui.QPixmap(
-                    "BlocksScreen/lib/ui/resources/media/logoblocks400x300.png"
-                )
+                last_thumb = BlocksPixmap.source(Icon.LOGO_BLOCKS)
         except Exception as e:
-            print(e)
-            last_thumb = QtGui.QPixmap(
-                "BlocksScreen/lib/ui/resources/media/logoblocks400x300.png"
-            )
+            logger.warning("No job thumbnail, falling back to the logo: %s", e)
+            last_thumb = BlocksPixmap.source(Icon.LOGO_BLOCKS)
         self.set_pixmap(last_thumb)
 
     def _setupUI(self) -> None:

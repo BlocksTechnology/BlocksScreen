@@ -59,13 +59,13 @@ class OptionCard(QtWidgets.QAbstractButton):
 
     def set_card_icon(self, pixmap: QtGui.QPixmap) -> None:
         """Set widget icon"""
-        scaled = pixmap.scaled(
-            300,
-            300,
-            QtCore.Qt.AspectRatioMode.IgnoreAspectRatio,
-            QtCore.Qt.TransformationMode.SmoothTransformation,
+        self.option_icon.setPixmap(
+            BlocksPixmap.get(
+                pixmap,
+                QtCore.QSize(300, 300),
+                QtCore.Qt.AspectRatioMode.IgnoreAspectRatio,
+            )
         )
-        self.option_icon.setPixmap(scaled)
         self.repaint()
 
     def set_card_text(self, text: str) -> None:
