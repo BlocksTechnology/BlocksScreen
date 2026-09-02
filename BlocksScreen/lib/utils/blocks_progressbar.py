@@ -2,6 +2,8 @@ import typing
 
 from PyQt6 import QtCore, QtGui, QtWidgets
 
+from lib.utils.blocks_pixmap import BlocksPixmap
+
 
 class CustomProgressBar(QtWidgets.QProgressBar):
     """Custom circular progress bar for tracking print jobs
@@ -41,11 +43,7 @@ class CustomProgressBar(QtWidgets.QProgressBar):
 
     def _scale_pixmap(self) -> None:
         self._inner_rect = self._calculate_inner_geometry()
-        self._pixmap_cached = self._pixmap.scaled(
-            self._inner_rect.size().toSize(),
-            QtCore.Qt.AspectRatioMode.KeepAspectRatio,
-            QtCore.Qt.TransformationMode.SmoothTransformation,
-        )
+        self._pixmap_cached = BlocksPixmap.get(self._pixmap, self._inner_rect)
 
     def set_inner_pixmap(self, pixmap: QtGui.QPixmap) -> None:
         """Set the inner icon pixmap on the progress bar

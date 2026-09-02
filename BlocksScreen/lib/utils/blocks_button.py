@@ -1,6 +1,7 @@
 import enum
 import typing
 
+from lib.utils.blocks_pixmap import BlocksPixmap
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 
@@ -130,7 +131,7 @@ class BlocksCustomButton(QtWidgets.QAbstractButton):
             self.text_color = QtGui.QColor(value)
         self.update()
 
-    def paintEvent(self, e: typing.Optional[QtGui.QPaintEvent]):
+    def paintEvent(self, e: QtGui.QPaintEvent | None):
         """Re-implemented method, paint widget"""
         painter = QtGui.QPainter(self)
         painter.setRenderHint(painter.RenderHint.Antialiasing, True)
@@ -191,11 +192,7 @@ class BlocksCustomButton(QtWidgets.QAbstractButton):
             icon_size,
             icon_size,
         )
-        _icon_scaled = self.icon_pixmap.scaled(
-            _icon_rect.size().toSize(),
-            QtCore.Qt.AspectRatioMode.KeepAspectRatio,
-            QtCore.Qt.TransformationMode.SmoothTransformation,
-        )
+        _icon_scaled = BlocksPixmap.get(self.icon_pixmap, _icon_rect)
         scaled_width = _icon_scaled.width()
         scaled_height = _icon_scaled.height()
         adjusted_x = (_icon_rect.width() - scaled_width) / 2.0
@@ -207,23 +204,14 @@ class BlocksCustomButton(QtWidgets.QAbstractButton):
             scaled_height,
         )
         if not self.isEnabled():
-            tinted_icon_pixmap = QtGui.QPixmap(_icon_scaled.size())
-            tinted_icon_pixmap.fill(QtCore.Qt.GlobalColor.transparent)
-            icon_painter = QtGui.QPainter(tinted_icon_pixmap)
-            icon_painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
-            icon_painter.setRenderHint(QtGui.QPainter.RenderHint.SmoothPixmapTransform)
-            icon_painter.drawPixmap(0, 0, _icon_scaled)
-            icon_painter.setCompositionMode(
-                QtGui.QPainter.CompositionMode.CompositionMode_SourceAtop
+            # SourceAtop over the background at alpha 120 dims rather than recolours.
+            _icon_scaled = BlocksPixmap.tinted(
+                _icon_scaled,
+                QtGui.QColor(bg_color.red(), bg_color.green(), bg_color.blue(), 120),
+                QtGui.QPainter.CompositionMode.CompositionMode_SourceAtop,
             )
-            tint = QtGui.QColor(bg_color.red(), bg_color.green(), bg_color.blue(), 120)
-            icon_painter.fillRect(tinted_icon_pixmap.rect(), tint)
-            icon_painter.end()
-            final_pixmap = tinted_icon_pixmap
-        else:
-            final_pixmap = _icon_scaled
         destination_point = adjusted_icon_rect.toRect().topLeft()
-        painter.drawPixmap(destination_point, final_pixmap)
+        painter.drawPixmap(destination_point, _icon_scaled)
 
     def _paint_text(
         self, painter: QtGui.QPainter, rect: QtCore.QRect, text_color: QtGui.QColor

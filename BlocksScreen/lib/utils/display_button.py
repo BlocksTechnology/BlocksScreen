@@ -2,6 +2,8 @@ import typing
 
 from PyQt6 import QtCore, QtGui, QtWidgets
 
+from lib.utils.blocks_pixmap import BlocksPixmap
+
 
 class DisplayButton(QtWidgets.QPushButton):
     def __init__(self, parent: typing.Optional["QtWidgets.QWidget"] = None) -> None:
@@ -140,12 +142,7 @@ class DisplayButton(QtWidgets.QPushButton):
                 _rect.height() - 5,
             )
 
-            _icon_scaled = self.icon_pixmap.scaled(
-                int(_icon_rect.width()),
-                int(_icon_rect.height()),
-                QtCore.Qt.AspectRatioMode.KeepAspectRatio,
-                QtCore.Qt.TransformationMode.SmoothTransformation,
-            )
+            _icon_scaled = BlocksPixmap.get(self.icon_pixmap, _icon_rect)
 
             scaled_width = _icon_scaled.width()
             scaled_height = _icon_scaled.height()
@@ -279,11 +276,8 @@ class DisplayButton(QtWidgets.QPushButton):
                         _icon_size,
                         _icon_size,
                     )
-                    _first_icon_scaled = self.icon_pixmap.scaled(
-                        int(_icon_size),
-                        int(_icon_size),
-                        QtCore.Qt.AspectRatioMode.KeepAspectRatio,
-                        QtCore.Qt.TransformationMode.SmoothTransformation,
+                    _first_icon_scaled = BlocksPixmap.get(
+                        self.icon_pixmap, QtCore.QSizeF(_icon_size, _icon_size)
                     )
                     _first_adjusted_icon_rect = QtCore.QRectF(
                         _first_icon_rect.x()
@@ -324,11 +318,9 @@ class DisplayButton(QtWidgets.QPushButton):
                         _icon_size,
                         _icon_size,
                     )
-                    _second_icon_scaled = self.icon_pixmap_secondary.scaled(
-                        int(_icon_size),
-                        int(_icon_size),
-                        QtCore.Qt.AspectRatioMode.KeepAspectRatio,
-                        QtCore.Qt.TransformationMode.SmoothTransformation,
+                    _second_icon_scaled = BlocksPixmap.get(
+                        self.icon_pixmap_secondary,
+                        QtCore.QSizeF(_icon_size, _icon_size),
                     )
                     _second_adjusted_icon_rect = QtCore.QRectF(
                         _second_icon_rect.x()

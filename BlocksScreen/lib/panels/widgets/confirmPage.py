@@ -27,7 +27,9 @@ class ConfirmWidget(QtWidgets.QWidget):
         self.setMouseTracking(True)
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_AcceptTouchEvents, True)
         self.thumbnail: QtGui.QImage = self._blocksthumbnail
-        self._thumbnails: typing.List = []
+        self._thumbnail_key: int = 0
+        self._thumbnail_cache: QtGui.QPixmap = QtGui.QPixmap()
+        self._thumbnails: list = []
         self.directory = "gcodes"
         self.filename = ""
         self.confirm_button.clicked.connect(
@@ -108,6 +110,13 @@ class ConfirmWidget(QtWidgets.QWidget):
         self.filename = ""
         return super().hide()
 
+    def _thumbnail_as_pixmap(self) -> QtGui.QPixmap:
+        """Convert the thumbnail QImage once per image, not once per paint."""
+        if self.thumbnail.cacheKey() != self._thumbnail_key:
+            self._thumbnail_key = self.thumbnail.cacheKey()
+            self._thumbnail_cache = QtGui.QPixmap.fromImage(self.thumbnail)
+        return self._thumbnail_cache
+
     def paintEvent(self, event: QtGui.QPaintEvent) -> None:
         """Re-implemented method, paint widget"""
         if not self.isVisible():
@@ -120,12 +129,7 @@ class ConfirmWidget(QtWidgets.QWidget):
         # Scene rectangle (available display area)
         graphics_rect = self.cf_thumbnail.rect().toRectF()
 
-        # Scale pixmap preserving aspect ratio
-        pixmap = QtGui.QPixmap.fromImage(self.thumbnail).scaled(
-            graphics_rect.size().toSize(),
-            QtCore.Qt.AspectRatioMode.KeepAspectRatio,
-            QtCore.Qt.TransformationMode.SmoothTransformation,
-        )
+        pixmap = BlocksPixmap.get(self._thumbnail_as_pixmap(), graphics_rect)
 
         # Centering offsets
         adjusted_x = (graphics_rect.width() - pixmap.width()) / 2.0
@@ -316,6 +320,4 @@ class ConfirmWidget(QtWidgets.QWidget):
             QtCore.Qt.AlignmentFlag.AlignRight | QtCore.Qt.AlignmentFlag.AlignVCenter,
         )
         self.verticalLayout_4.addLayout(self.cf_content_vertical_layout)
-        self._blocksthumbnail = QtGui.QImage(
-            "BlocksScreen/lib/ui/resources/media/logoblocks400x300.png"
-        )
+        self._blocksthumbnail = QtGui.QImage(str(Icon.LOGO_BLOCKS))

@@ -2,6 +2,8 @@ import typing
 
 from PyQt6 import QtCore, QtGui, QtWidgets
 
+from lib.utils.blocks_pixmap import BlocksPixmap
+
 
 class BlocksLabel(QtWidgets.QLabel):
     """Custom QLabel with marquee scrolling, glow animation, and icon overlay support."""
@@ -216,11 +218,7 @@ class BlocksLabel(QtWidgets.QLabel):
                 self.width() - self.icon_margin,
                 self.height() - self.icon_margin,
             )
-            _icon_scaled = self.icon_pixmap.scaled(
-                icon_rect.size().toSize(),
-                QtCore.Qt.AspectRatioMode.KeepAspectRatio,
-                QtCore.Qt.TransformationMode.SmoothTransformation,
-            )
+            _icon_scaled = BlocksPixmap.get(self.icon_pixmap, icon_rect)
             scaled_width = _icon_scaled.width()
             scaled_height = _icon_scaled.height()
             adjusted_x = (icon_rect.width() - scaled_width) // 2.0
