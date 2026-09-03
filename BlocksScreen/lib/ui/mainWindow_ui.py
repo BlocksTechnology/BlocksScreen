@@ -356,7 +356,7 @@ class Ui_MainWindow:
         self.notification_btn.setIconSize(QtCore.QSize(60, 60))
         self.notification_btn.setFlat(True)
         self.notification_btn.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/notification.svg")
+            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/ui/notification.svg")
         )
         self.notification_btn.setObjectName("notification_btn")
         self.header_main_layout.addWidget(
@@ -368,7 +368,7 @@ class Ui_MainWindow:
         self.extruder_temp_display.setFlat(True)
         self.extruder_temp_display.setProperty(
             "icon_pixmap",
-            QtGui.QPixmap(":/extruder_related/media/btn_icons/nozzle_topbar.svg"),
+            QtGui.QPixmap(":/extruder_related/media/btn_icons/extruder_related/nozzle_topbar.svg"),
         )
         self.extruder_temp_display.setObjectName("extruder_temp_display")
         self.header_main_layout.addWidget(
@@ -381,7 +381,7 @@ class Ui_MainWindow:
         self.bed_temp_display.setProperty(
             "icon_pixmap",
             QtGui.QPixmap(
-                ":/temperature_related/media/btn_icons/temperature_plate.svg"
+                ":/temperature_related/media/btn_icons/temperature_related/temperature_plate.svg"
             ),
         )
         self.bed_temp_display.setObjectName("bed_temp_display")
@@ -398,7 +398,7 @@ class Ui_MainWindow:
         )
         self.chamber_temp_display.setProperty(
             "secondary_pixmap",
-            QtGui.QPixmap(":/temperature_related/media/btn_icons/humidity.svg"),
+            QtGui.QPixmap(":/temperature_related/media/btn_icons/temperature_related/humidity.svg"),
         )
         self.chamber_temp_display.setObjectName("chamber_temp_display")
         self.header_main_layout.addWidget(
@@ -410,7 +410,7 @@ class Ui_MainWindow:
         self.filament_type_icon.setFlat(True)
         self.filament_type_icon.setProperty(
             "icon_pixmap",
-            QtGui.QPixmap(":/filament_related/media/btn_icons/load_filament.svg"),
+            QtGui.QPixmap(":/filament_related/media/btn_icons/filament_related/load_filament.svg"),
         )
         self.filament_type_icon.setObjectName("filament_type_icon")
         self.header_main_layout.addWidget(
@@ -423,7 +423,7 @@ class Ui_MainWindow:
         self.nozzle_size_icon.setProperty(
             "icon_pixmap",
             QtGui.QPixmap(
-                ":/temperature_related/media/btn_icons/standard_temperature.svg"
+                ":/temperature_related/media/btn_icons/temperature_related/standard_temperature.svg"
             ),
         )
         self.nozzle_size_icon.setObjectName("nozzle_size_icon")

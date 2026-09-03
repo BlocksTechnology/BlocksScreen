@@ -563,7 +563,7 @@ QPushButton:pressed{
         <bool>true</bool>
        </property>
        <property name="icon_pixmap" stdset="0">
-        <pixmap resource="resources/icon_resources.qrc">:/ui/media/btn_icons/notification.svg</pixmap>
+        <pixmap resource="resources/icon_resources.qrc">:/ui/media/btn_icons/ui/notification.svg</pixmap>
        </property>
        <property name="button_type" stdset="0">
         <string>icon_text</string>
@@ -594,7 +594,7 @@ QPushButton:pressed{
         <string>secondary_display</string>
        </property>
        <property name="icon_pixmap" stdset="0">
-        <pixmap resource="resources/icon_resources.qrc">:/extruder_related/media/btn_icons/nozzle_topbar.svg</pixmap>
+        <pixmap resource="resources/icon_resources.qrc">:/extruder_related/media/btn_icons/extruder_related/nozzle_topbar.svg</pixmap>
        </property>
        <property name="name" stdset="0">
         <string>extruder_temperature_display</string>
@@ -625,7 +625,7 @@ QPushButton:pressed{
         <string>secondary_display</string>
        </property>
        <property name="icon_pixmap" stdset="0">
-        <pixmap resource="resources/icon_resources.qrc">:/temperature_related/media/btn_icons/temperature_plate.svg</pixmap>
+        <pixmap resource="resources/icon_resources.qrc">:/temperature_related/media/btn_icons/temperature_related/temperature_plate.svg</pixmap>
        </property>
       </widget>
      </item>
@@ -659,7 +659,7 @@ QPushButton:pressed{
         <string>display_secondary</string>
        </property>
        <property name="secondary_pixmap" stdset="0">
-        <pixmap resource="resources/icon_resources.qrc">:/temperature_related/media/btn_icons/humidity.svg</pixmap>
+        <pixmap resource="resources/icon_resources.qrc">:/temperature_related/media/btn_icons/temperature_related/humidity.svg</pixmap>
        </property>
       </widget>
      </item>
@@ -684,7 +684,7 @@ QPushButton:pressed{
         <bool>true</bool>
        </property>
        <property name="icon_pixmap" stdset="0">
-        <pixmap resource="resources/icon_resources.qrc">:/filament_related/media/btn_icons/load_filament.svg</pixmap>
+        <pixmap resource="resources/icon_resources.qrc">:/filament_related/media/btn_icons/filament_related/load_filament.svg</pixmap>
        </property>
        <property name="button_type" stdset="0">
         <string>icon_text</string>
@@ -715,7 +715,7 @@ QPushButton:pressed{
         <string>icon_text</string>
        </property>
        <property name="icon_pixmap" stdset="0">
-        <pixmap resource="resources/icon_resources.qrc">:/temperature_related/media/btn_icons/standard_temperature.svg</pixmap>
+        <pixmap resource="resources/icon_resources.qrc">:/temperature_related/media/btn_icons/temperature_related/standard_temperature.svg</pixmap>
        </property>
       </widget>
      </item>

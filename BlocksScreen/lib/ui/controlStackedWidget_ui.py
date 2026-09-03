@@ -95,7 +95,7 @@ class Ui_controlStackedWidget:
         self.cp_z_tilt_btn.setFlat(True)
         self.cp_z_tilt_btn.setProperty(
             "icon_pixmap",
-            QtGui.QPixmap(":/z_levelling/media/btn_icons/bed_levelling.svg"),
+            QtGui.QPixmap(":/z_levelling/media/btn_icons/z_levelling/bed_levelling.svg"),
         )
         self.cp_z_tilt_btn.setObjectName("cp_z_tilt_btn")
         self.cp_content_layout.addWidget(self.cp_z_tilt_btn, 1, 1, 1, 1)
@@ -130,7 +130,7 @@ class Ui_controlStackedWidget:
         self.cp_temperature_btn.setFlat(True)
         self.cp_temperature_btn.setProperty(
             "icon_pixmap",
-            QtGui.QPixmap(":/temperature_related/media/btn_icons/temperature.svg"),
+            QtGui.QPixmap(":/temperature_related/media/btn_icons/temperature_related/temperature.svg"),
         )
         self.cp_temperature_btn.setObjectName("cp_temperature_btn")
         self.cp_content_layout.addWidget(self.cp_temperature_btn, 0, 1, 1, 1)
@@ -165,7 +165,7 @@ class Ui_controlStackedWidget:
         self.cp_nozzles_calibration_btn.setFlat(True)
         self.cp_nozzles_calibration_btn.setProperty(
             "icon_pixmap",
-            QtGui.QPixmap(":/z_levelling/media/btn_icons/bed_levelling.svg"),
+            QtGui.QPixmap(":/z_levelling/media/btn_icons/z_levelling/bed_levelling.svg"),
         )
         self.cp_nozzles_calibration_btn.setObjectName("cp_nozzles_calibration_btn")
         self.cp_content_layout.addWidget(self.cp_nozzles_calibration_btn, 1, 0, 1, 1)
@@ -198,7 +198,7 @@ class Ui_controlStackedWidget:
         self.cp_motion_btn.setFlat(True)
         self.cp_motion_btn.setProperty(
             "icon_pixmap",
-            QtGui.QPixmap(":/motion/media/btn_icons/axis_maintenance.svg"),
+            QtGui.QPixmap(":/motion/media/btn_icons/motion/axis_maintenance.svg"),
         )
         self.cp_motion_btn.setObjectName("cp_motion_btn")
         self.cp_content_layout.addWidget(self.cp_motion_btn, 0, 0, 1, 1)
@@ -226,7 +226,7 @@ class Ui_controlStackedWidget:
         self.cp_fans_btn.setAutoDefault(False)
         self.cp_fans_btn.setFlat(True)
         self.cp_fans_btn.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/fan_related/media/btn_icons/fan.svg")
+            "icon_pixmap", QtGui.QPixmap(":/fan_related/media/btn_icons/fan_related/fan.svg")
         )
         self.cp_fans_btn.setObjectName("cp_fans_btn")
         self.cp_content_layout.addWidget(self.cp_fans_btn, 2, 0, 1, 1)
@@ -261,7 +261,7 @@ class Ui_controlStackedWidget:
         self.cp_switch_print_core_btn.setFlat(True)
         self.cp_switch_print_core_btn.setProperty(
             "icon_pixmap",
-            QtGui.QPixmap(":/extruder_related/media/btn_icons/switch_print_core.svg"),
+            QtGui.QPixmap(":/extruder_related/media/btn_icons/extruder_related/switch_print_core.svg"),
         )
         self.cp_switch_print_core_btn.setObjectName("cp_switch_print_core_btn")
         self.cp_content_layout.addWidget(self.cp_switch_print_core_btn, 2, 1, 1, 1)
@@ -335,7 +335,7 @@ class Ui_controlStackedWidget:
         self.mp_back_btn.setAutoDefault(False)
         self.mp_back_btn.setFlat(True)
         self.mp_back_btn.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/back.svg")
+            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/ui/back.svg")
         )
         self.mp_back_btn.setObjectName("mp_back_btn")
         self.mp_header_layout.addWidget(self.mp_back_btn)
@@ -373,7 +373,7 @@ class Ui_controlStackedWidget:
         self.motion_move_axis_btn.setFlat(True)
         self.motion_move_axis_btn.setProperty(
             "icon_pixmap",
-            QtGui.QPixmap(":/motion/media/btn_icons/axis_maintenance.svg"),
+            QtGui.QPixmap(":/motion/media/btn_icons/motion/axis_maintenance.svg"),
         )
         self.motion_move_axis_btn.setObjectName("motion_move_axis_btn")
         self.cp_content_layout_2.addWidget(self.motion_move_axis_btn, 1, 0, 1, 1)
@@ -408,7 +408,7 @@ class Ui_controlStackedWidget:
         self.motion_disable_steppers_btn.setFlat(True)
         self.motion_disable_steppers_btn.setProperty(
             "icon_pixmap",
-            QtGui.QPixmap(":/motion/media/btn_icons/disable_steppers.svg"),
+            QtGui.QPixmap(":/motion/media/btn_icons/motion/disable_steppers.svg"),
         )
         self.motion_disable_steppers_btn.setObjectName("motion_disable_steppers_btn")
         self.cp_content_layout_2.addWidget(self.motion_disable_steppers_btn, 0, 1, 1, 1)
@@ -443,7 +443,7 @@ class Ui_controlStackedWidget:
         self.motion_extrude_btn.setFlat(True)
         self.motion_extrude_btn.setProperty(
             "icon_pixmap",
-            QtGui.QPixmap(":/extruder_related/media/btn_icons/extrude.svg"),
+            QtGui.QPixmap(":/extruder_related/media/btn_icons/extruder_related/extrude.svg"),
         )
         self.motion_extrude_btn.setObjectName("motion_extrude_btn")
         self.cp_content_layout_2.addWidget(self.motion_extrude_btn, 1, 1, 1, 1)
@@ -477,7 +477,7 @@ class Ui_controlStackedWidget:
         self.motion_auto_home_btn.setAutoDefault(False)
         self.motion_auto_home_btn.setFlat(True)
         self.motion_auto_home_btn.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/motion/media/btn_icons/home_all.svg")
+            "icon_pixmap", QtGui.QPixmap(":/motion/media/btn_icons/motion/home_all.svg")
         )
         self.motion_auto_home_btn.setObjectName("motion_auto_home_btn")
         self.cp_content_layout_2.addWidget(self.motion_auto_home_btn, 0, 0, 1, 1)
@@ -563,7 +563,7 @@ class Ui_controlStackedWidget:
         self.exp_back_btn.setAutoDefault(False)
         self.exp_back_btn.setFlat(True)
         self.exp_back_btn.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/back.svg")
+            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/ui/back.svg")
         )
         self.exp_back_btn.setObjectName("exp_back_btn")
         self.exp_header_layout.addWidget(
@@ -1402,7 +1402,7 @@ class Ui_controlStackedWidget:
         self.exp_unextrude_btn.setFlat(True)
         self.exp_unextrude_btn.setProperty(
             "icon_pixmap",
-            QtGui.QPixmap(":/extruder_related/media/btn_icons/extrude.svg"),
+            QtGui.QPixmap(":/extruder_related/media/btn_icons/extruder_related/extrude.svg"),
         )
         self.exp_unextrude_btn.setObjectName("exp_unextrude_btn")
         self.exp_buttons_layout.addWidget(self.exp_unextrude_btn)
@@ -1418,7 +1418,7 @@ class Ui_controlStackedWidget:
         self.exp_nozzle_icon_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self.exp_nozzle_icon_label.setProperty(
             "icon_pixmap",
-            QtGui.QPixmap(":/extruder_related/media/btn_icons/nozzle.svg"),
+            QtGui.QPixmap(":/extruder_related/media/btn_icons/extruder_related/nozzle.svg"),
         )
         self.exp_nozzle_icon_label.setObjectName("exp_nozzle_icon_label")
         self.exp_buttons_layout.addWidget(self.exp_nozzle_icon_label)
@@ -1452,7 +1452,7 @@ class Ui_controlStackedWidget:
         self.exp_extrude_btn.setFlat(True)
         self.exp_extrude_btn.setProperty(
             "icon_pixmap",
-            QtGui.QPixmap(":/extruder_related/media/btn_icons/extrude.svg"),
+            QtGui.QPixmap(":/extruder_related/media/btn_icons/extruder_related/extrude.svg"),
         )
         self.exp_extrude_btn.setObjectName("exp_extrude_btn")
         self.exp_buttons_layout.addWidget(self.exp_extrude_btn)
@@ -1603,7 +1603,7 @@ class Ui_controlStackedWidget:
         self.mva_back_btn.setAutoDefault(False)
         self.mva_back_btn.setFlat(True)
         self.mva_back_btn.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/back.svg")
+            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/ui/back.svg")
         )
         self.mva_back_btn.setObjectName("mva_back_btn")
         self.mva_header_layout.addWidget(
@@ -1636,7 +1636,7 @@ class Ui_controlStackedWidget:
         self.mva_z_up.setChecked(False)
         self.mva_z_up.setFlat(True)
         self.mva_z_up.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/arrow_icons/media/btn_icons/up_arrow.svg")
+            "icon_pixmap", QtGui.QPixmap(":/arrow_icons/media/btn_icons/arrow_icons/up_arrow.svg")
         )
         self.mva_z_up.setObjectName("mva_z_up")
         self.mva_z_layout.addWidget(
@@ -1661,7 +1661,7 @@ class Ui_controlStackedWidget:
         self.mva_z_down.setChecked(False)
         self.mva_z_down.setFlat(True)
         self.mva_z_down.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/arrow_icons/media/btn_icons/down_arrow.svg")
+            "icon_pixmap", QtGui.QPixmap(":/arrow_icons/media/btn_icons/arrow_icons/down_arrow.svg")
         )
         self.mva_z_down.setObjectName("mva_z_down")
         self.mva_z_layout.addWidget(
@@ -1694,7 +1694,7 @@ class Ui_controlStackedWidget:
         self.mva_home_x_btn.setChecked(False)
         self.mva_home_x_btn.setFlat(True)
         self.mva_home_x_btn.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/motion/media/btn_icons/home_x.svg")
+            "icon_pixmap", QtGui.QPixmap(":/motion/media/btn_icons/motion/home_x.svg")
         )
         self.mva_home_x_btn.setObjectName("mva_home_x_btn")
         self.mva_home_axis_layout.addWidget(
@@ -1721,7 +1721,7 @@ class Ui_controlStackedWidget:
         self.mva_home_y_btn.setChecked(False)
         self.mva_home_y_btn.setFlat(True)
         self.mva_home_y_btn.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/motion/media/btn_icons/home_y.svg")
+            "icon_pixmap", QtGui.QPixmap(":/motion/media/btn_icons/motion/home_y.svg")
         )
         self.mva_home_y_btn.setObjectName("mva_home_y_btn")
         self.mva_home_axis_layout.addWidget(
@@ -1748,7 +1748,7 @@ class Ui_controlStackedWidget:
         self.mva_home_z_btn.setChecked(False)
         self.mva_home_z_btn.setFlat(True)
         self.mva_home_z_btn.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/motion/media/btn_icons/home_z.svg")
+            "icon_pixmap", QtGui.QPixmap(":/motion/media/btn_icons/motion/home_z.svg")
         )
         self.mva_home_z_btn.setObjectName("mva_home_z_btn")
         self.mva_home_axis_layout.addWidget(
@@ -1775,7 +1775,7 @@ class Ui_controlStackedWidget:
         self.mva_home_all_btn.setChecked(False)
         self.mva_home_all_btn.setFlat(True)
         self.mva_home_all_btn.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/motion/media/btn_icons/home_all.svg")
+            "icon_pixmap", QtGui.QPixmap(":/motion/media/btn_icons/motion/home_all.svg")
         )
         self.mva_home_all_btn.setObjectName("mva_home_all_btn")
         self.mva_home_axis_layout.addWidget(
@@ -2233,7 +2233,7 @@ class Ui_controlStackedWidget:
         self.mva_left_btn.setChecked(False)
         self.mva_left_btn.setFlat(True)
         self.mva_left_btn.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/arrow_icons/media/btn_icons/left_arrow.svg")
+            "icon_pixmap", QtGui.QPixmap(":/arrow_icons/media/btn_icons/arrow_icons/left_arrow.svg")
         )
         self.mva_left_btn.setObjectName("mva_left_btn")
         self.gridLayout_2.addWidget(self.mva_left_btn, 1, 0, 1, 1)
@@ -2258,7 +2258,7 @@ class Ui_controlStackedWidget:
         self.mva_right_btn.setFlat(True)
         self.mva_right_btn.setProperty(
             "icon_pixmap",
-            QtGui.QPixmap(":/arrow_icons/media/btn_icons/right_arrow.svg"),
+            QtGui.QPixmap(":/arrow_icons/media/btn_icons/arrow_icons/right_arrow.svg"),
         )
         self.mva_right_btn.setObjectName("mva_right_btn")
         self.gridLayout_2.addWidget(self.mva_right_btn, 1, 2, 1, 1)
@@ -2280,7 +2280,7 @@ class Ui_controlStackedWidget:
         self.mva_down_btn.setChecked(False)
         self.mva_down_btn.setFlat(True)
         self.mva_down_btn.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/arrow_icons/media/btn_icons/down_arrow.svg")
+            "icon_pixmap", QtGui.QPixmap(":/arrow_icons/media/btn_icons/arrow_icons/down_arrow.svg")
         )
         self.mva_down_btn.setObjectName("mva_down_btn")
         self.gridLayout_2.addWidget(self.mva_down_btn, 2, 1, 1, 1)
@@ -2302,7 +2302,7 @@ class Ui_controlStackedWidget:
         self.mva_up_btn.setChecked(False)
         self.mva_up_btn.setFlat(True)
         self.mva_up_btn.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/arrow_icons/media/btn_icons/up_arrow.svg")
+            "icon_pixmap", QtGui.QPixmap(":/arrow_icons/media/btn_icons/arrow_icons/up_arrow.svg")
         )
         self.mva_up_btn.setObjectName("mva_up_btn")
         self.gridLayout_2.addWidget(self.mva_up_btn, 0, 1, 1, 1)
@@ -2320,7 +2320,7 @@ class Ui_controlStackedWidget:
         self.mva_middle.setText("")
         self.mva_middle.setFlat(True)
         self.mva_middle.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/center_arrows.svg")
+            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/ui/center_arrows.svg")
         )
         self.mva_middle.setObjectName("mva_middle")
         self.gridLayout_2.addWidget(self.mva_middle, 1, 1, 1, 1)
@@ -2398,7 +2398,7 @@ class Ui_controlStackedWidget:
         self.temp_back_button.setAutoDefault(False)
         self.temp_back_button.setFlat(True)
         self.temp_back_button.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/back.svg")
+            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/ui/back.svg")
         )
         self.temp_back_button.setObjectName("temp_back_button")
         self.horizontalLayout.addWidget(self.temp_back_button)
@@ -2441,7 +2441,7 @@ class Ui_controlStackedWidget:
         self.extruder_temp_display.setFlat(True)
         self.extruder_temp_display.setProperty(
             "icon_pixmap",
-            QtGui.QPixmap(":/extruder_related/media/btn_icons/nozzle.svg"),
+            QtGui.QPixmap(":/extruder_related/media/btn_icons/extruder_related/nozzle.svg"),
         )
         self.extruder_temp_display.setObjectName("extruder_temp_display")
         self.tp_content_horizontal_layout.addWidget(self.extruder_temp_display)
@@ -2608,7 +2608,7 @@ class Ui_controlStackedWidget:
         self.bed_temp_display.setProperty(
             "icon_pixmap",
             QtGui.QPixmap(
-                ":/temperature_related/media/btn_icons/temperature_plate.svg"
+                ":/temperature_related/media/btn_icons/temperature_related/temperature_plate.svg"
             ),
         )
         self.bed_temp_display.setObjectName("bed_temp_display")
@@ -2641,7 +2641,7 @@ class Ui_controlStackedWidget:
         self.cooldown_btn.setFlat(True)
         self.cooldown_btn.setProperty(
             "icon_pixmap",
-            QtGui.QPixmap(":/temperature_related/media/btn_icons/cooldown.svg"),
+            QtGui.QPixmap(":/temperature_related/media/btn_icons/temperature_related/cooldown.svg"),
         )
         self.cooldown_btn.setObjectName("cooldown_btn")
         self.gridLayout.addWidget(self.cooldown_btn, 2, 1, 1, 1)
@@ -2683,7 +2683,7 @@ class Ui_controlStackedWidget:
         self.temperature_cooldown_btn.setFlat(True)
         self.temperature_cooldown_btn.setProperty(
             "icon_pixmap",
-            QtGui.QPixmap(":/temperature_related/media/btn_icons/heatsoak.svg"),
+            QtGui.QPixmap(":/temperature_related/media/btn_icons/temperature_related/heatsoak.svg"),
         )
         self.temperature_cooldown_btn.setObjectName("temperature_cooldown_btn")
         self.gridLayout.addWidget(self.temperature_cooldown_btn, 2, 0, 1, 1)
@@ -2768,7 +2768,7 @@ class Ui_controlStackedWidget:
         self.z_adjust_back_button.setText("")
         self.z_adjust_back_button.setFlat(True)
         self.z_adjust_back_button.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/back.svg")
+            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/ui/back.svg")
         )
         self.z_adjust_back_button.setObjectName("z_adjust_back_button")
         self.z_adjustment_header_layout.addWidget(self.z_adjust_back_button)
@@ -2799,7 +2799,7 @@ class Ui_controlStackedWidget:
         self.z_adjust_up_btn.setAutoDefault(False)
         self.z_adjust_up_btn.setFlat(True)
         self.z_adjust_up_btn.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/arrow_icons/media/btn_icons/up_arrow.svg")
+            "icon_pixmap", QtGui.QPixmap(":/arrow_icons/media/btn_icons/arrow_icons/up_arrow.svg")
         )
         self.z_adjust_up_btn.setObjectName("z_adjust_up_btn")
         self.z_adjust_move_buttons_layout.addWidget(
@@ -2824,7 +2824,7 @@ class Ui_controlStackedWidget:
         self.z_adjust_down_btn.setAutoDefault(False)
         self.z_adjust_down_btn.setFlat(True)
         self.z_adjust_down_btn.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/arrow_icons/media/btn_icons/down_arrow.svg")
+            "icon_pixmap", QtGui.QPixmap(":/arrow_icons/media/btn_icons/arrow_icons/down_arrow.svg")
         )
         self.z_adjust_down_btn.setObjectName("z_adjust_down_btn")
         self.z_adjust_move_buttons_layout.addWidget(
@@ -2891,7 +2891,7 @@ class Ui_controlStackedWidget:
         self.z_adjust_confirm_btn.setAutoDefault(False)
         self.z_adjust_confirm_btn.setFlat(True)
         self.z_adjust_confirm_btn.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/dialog/media/btn_icons/yes.svg")
+            "icon_pixmap", QtGui.QPixmap(":/dialog/media/btn_icons/dialog/yes.svg")
         )
         self.z_adjust_confirm_btn.setObjectName("z_adjust_confirm_btn")
         self.z_adjust_buttons_layout.addWidget(self.z_adjust_confirm_btn)
@@ -2927,7 +2927,7 @@ class Ui_controlStackedWidget:
         self.z_adjust_cancel_btn.setAutoDefault(False)
         self.z_adjust_cancel_btn.setFlat(True)
         self.z_adjust_cancel_btn.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/dialog/media/btn_icons/no.svg")
+            "icon_pixmap", QtGui.QPixmap(":/dialog/media/btn_icons/dialog/no.svg")
         )
         self.z_adjust_cancel_btn.setObjectName("z_adjust_cancel_btn")
         self.z_adjust_buttons_layout.addWidget(self.z_adjust_cancel_btn)
@@ -2996,7 +2996,7 @@ class Ui_controlStackedWidget:
         self.printer_settings_back_btn.setAutoDefault(False)
         self.printer_settings_back_btn.setFlat(True)
         self.printer_settings_back_btn.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/back.svg")
+            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/ui/back.svg")
         )
         self.printer_settings_back_btn.setObjectName("printer_settings_back_btn")
         self.printer_setting_header_layout.addWidget(self.printer_settings_back_btn)
@@ -3078,7 +3078,7 @@ class Ui_controlStackedWidget:
         self.fans_back_btn.setAutoDefault(False)
         self.fans_back_btn.setFlat(True)
         self.fans_back_btn.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/back.svg")
+            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/ui/back.svg")
         )
         self.fans_back_btn.setObjectName("fans_back_btn")
         self.fans_header_layout.addWidget(self.fans_back_btn)
