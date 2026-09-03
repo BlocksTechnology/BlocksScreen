@@ -128,6 +128,11 @@ class MainWindow(QtWidgets.QMainWindow):
         self._klipper_restart_timeout.setSingleShot(True)
         self._klipper_restart_timeout.setInterval(30_000)
         self._klipper_restart_timeout.timeout.connect(self._on_klipper_restart_timeout)
+
+        self._intro_timeout = QtCore.QTimer(self)
+        self._intro_timeout.setSingleShot(True)
+        self._intro_timeout.setInterval(15_000)
+
         self.ui.main_content_widget.setCurrentIndex(0)
 
         usb_config = self.config.get_section("usb_manager", fallback=None)
@@ -308,6 +313,11 @@ class MainWindow(QtWidgets.QMainWindow):
             self, LoadingOverlayWidget.AnimationGIF.DEFAULT
         )
         self.loadscreen.add_widget(self.loadwidget)
+        self.introscreen = BasePopup(self, floating=False, dialog=False)
+        self.introwidget = LoadingOverlayWidget(
+            self, LoadingOverlayWidget.AnimationGIF.PLACEHOLDER
+        )
+        self.introscreen.add_widget(self.introwidget)
         self.controlPanel.toggle_conn_page.connect(self.conn_window.set_toggle)
         self.cancelpage = CancelPage(self, ws=self.ws)
         self.cancelpage.request_file_info.connect(self.file_data.on_request_fileinfo)
@@ -340,6 +350,11 @@ class MainWindow(QtWidgets.QMainWindow):
             self.bo_ws_startup.emit()
         self.reset_tab_indexes()
         self.conn_window.show()
+
+        self.introscreen.show()
+        self.introscreen.raise_()
+        self._intro_timeout.timeout.connect(self.introscreen.hide)
+        self._intro_timeout.start()
 
     @QtCore.pyqtSlot(str, str, name="handleDisplayUpdate")
     @QtCore.pyqtSlot(str, float, name="handleDisplayUpdate")
@@ -430,6 +445,9 @@ class MainWindow(QtWidgets.QMainWindow):
     @QtCore.pyqtSlot(str, name="on-klippy-state")
     def _on_klippy_state(self, state: str) -> None:
         self._klippy_ready = state == "ready"
+        if state == "ready" and self._intro_timeout.isActive():
+            self._intro_timeout.stop()
+            self.introscreen.hide()
         if state == "shutdown":
             if self._update_in_progress:
                 _logger.warning("Klipper E-stop detected — cancelling active update")
@@ -442,8 +460,6 @@ class MainWindow(QtWidgets.QMainWindow):
         ):
             _logger.info("Klipper disconnected — auto-restarting service")
             self._klipper_auto_restart_pending = True
-            self.loadwidget.set_status_message("Restarting Klipper...")
-            self.loadscreen.show()
             self._klipper_restart_timeout.start()
             self.ws.api.restart_service("klipper")
         elif state == "ready" and self._klipper_auto_restart_pending:
@@ -518,7 +534,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     @QtCore.pyqtSlot(name="on-post-update-reconnect")
     def _on_post_update_reconnect(self) -> None:
-        """Called when an update finishes: hold the loading screen and retry Moonraker until it's up."""
+        """Called when an update finishes: drop the overlay and retry Moonraker until it's up."""
         _logger.debug(
             "_on_post_update_reconnect: ws.connected=%s update_in_progress=%s",
             self.ws.connected,
@@ -530,7 +546,7 @@ class MainWindow(QtWidgets.QMainWindow):
             return
         self._post_update_reconnect = True
         self._reconnect_retries = 0
-        self.loadwidget.set_status_message("Reconnecting...")
+        self.loadscreen.hide()
         self.ws.retry_wb_conn()
         self._reconnect_timer.start()
 
