@@ -715,7 +715,7 @@ QPushButton:pressed{
         <string>icon_text</string>
        </property>
        <property name="icon_pixmap" stdset="0">
-        <pixmap resource="resources/icon_resources.qrc">:/temperature_related/media/btn_icons/standart_temperature.svg</pixmap>
+        <pixmap resource="resources/icon_resources.qrc">:/temperature_related/media/btn_icons/standard_temperature.svg</pixmap>
        </property>
       </widget>
      </item>
@@ -767,7 +767,7 @@ QPushButton:pressed{
         <string>icon</string>
        </property>
        <property name="icon_pixmap" stdset="0">
-        <pixmap resource="resources/icon_resources.qrc">:/network/media/btn_icons/network/3bar_wifi.svg</pixmap>
+        <pixmap resource="resources/icon_resources.qrc">:/network/media/btn_icons/network/wifi_3bar.svg</pixmap>
        </property>
       </widget>
      </item>

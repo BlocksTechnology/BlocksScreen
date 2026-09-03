@@ -4960,7 +4960,7 @@ Home</string>
          <string>menu_btn</string>
         </property>
         <property name="icon_pixmap" stdset="0">
-         <pixmap resource="resources/icon_resources.qrc">:/temperature_related/media/btn_icons/heatsoak_icon.svg</pixmap>
+         <pixmap resource="resources/icon_resources.qrc">:/temperature_related/media/btn_icons/heatsoak.svg</pixmap>
         </property>
        </widget>
       </item>

@@ -2,16 +2,16 @@
   <qresource prefix="network">
     <file>media/btn_icons/network/static_ip.svg</file>
     <file>media/btn_icons/wifi_config.svg</file>
-    <file>media/btn_icons/network/0bar_wifi.svg</file>
-    <file>media/btn_icons/network/0bar_wifi_protected.svg</file>
-    <file>media/btn_icons/network/1bar_wifi.svg</file>
-    <file>media/btn_icons/network/1bar_wifi_protected.svg</file>
-    <file>media/btn_icons/network/2bar_wifi.svg</file>
-    <file>media/btn_icons/network/2bar_wifi_protected.svg</file>
-    <file>media/btn_icons/network/3bar_wifi.svg</file>
-    <file>media/btn_icons/network/3bar_wifi_protected.svg</file>
-    <file>media/btn_icons/network/4bar_wifi.svg</file>
-    <file>media/btn_icons/network/4bar_wifi_protected.svg</file>
+    <file>media/btn_icons/network/wifi_0bar.svg</file>
+    <file>media/btn_icons/network/wifi_0bar_protected.svg</file>
+    <file>media/btn_icons/network/wifi_1bar.svg</file>
+    <file>media/btn_icons/network/wifi_1bar_protected.svg</file>
+    <file>media/btn_icons/network/wifi_2bar.svg</file>
+    <file>media/btn_icons/network/wifi_2bar_protected.svg</file>
+    <file>media/btn_icons/network/wifi_3bar.svg</file>
+    <file>media/btn_icons/network/wifi_3bar_protected.svg</file>
+    <file>media/btn_icons/network/wifi_4bar.svg</file>
+    <file>media/btn_icons/network/wifi_4bar_protected.svg</file>
     <file>media/btn_icons/network/ethernet_connected.svg</file>
     <file>media/btn_icons/hotspot.svg</file>
   </qresource>
@@ -24,14 +24,14 @@
     <file>media/btn_icons/yes.svg</file>
   </qresource>
   <qresource prefix="files">
-    <file>media/btn_icons/file_icon.svg</file>
+    <file>media/btn_icons/file.svg</file>
   </qresource>
   <qresource prefix="system">
     <file>media/btn_icons/reboot.svg</file>
     <file>media/btn_icons/restart_firmware.svg</file>
     <file>media/btn_icons/restart_klipper.svg</file>
     <file>media/btn_icons/restart_printer.svg</file>
-    <file>media/btn_icons/update-software-icon.svg</file>
+    <file>media/btn_icons/update_software.svg</file>
   </qresource>
   <qresource prefix="fan_related">
     <file>media/btn_icons/fan.svg</file>
@@ -40,11 +40,11 @@
   </qresource>
   <qresource prefix="temperature_related">
     <file>media/btn_icons/humidity.svg</file>
-    <file>media/btn_icons/standart_temperature.svg</file>
+    <file>media/btn_icons/standard_temperature.svg</file>
     <file>media/btn_icons/temperature.svg</file>
     <file>media/btn_icons/temperature_plate.svg</file>
     <file>media/btn_icons/cooldown.svg</file>
-    <file>media/btn_icons/heatsoak_icon.svg</file>
+    <file>media/btn_icons/heatsoak.svg</file>
   </qresource>
   <qresource prefix="motion">
     <file>media/btn_icons/disable_steppers.svg</file>
@@ -56,11 +56,11 @@
     <file>media/btn_icons/speed.svg</file>
   </qresource>
   <qresource prefix="filament_related">
-    <file>media/btn_icons/add spool.svg</file>
-    <file>media/btn_icons/add filament.svg</file>
+    <file>media/btn_icons/add_spool.svg</file>
+    <file>media/btn_icons/add_filament.svg</file>
     <file>media/btn_icons/spoolman.svg</file>
-    <file>media/btn_icons/base dados spool 1.svg</file>
-    <file>media/btn_icons/check gate 1.svg</file>
+    <file>media/btn_icons/spool_database_1.svg</file>
+    <file>media/btn_icons/check_gate_1.svg</file>
     <file>media/btn_icons/eject.svg</file>
     <file>media/btn_icons/change_filament.svg</file>
     <file>media/btn_icons/filament_sensor.svg</file>
@@ -69,21 +69,20 @@
     <file>media/btn_icons/load_filament.svg</file>
     <file>media/btn_icons/unload_filament.svg</file>
     <file>media/btn_icons/loaded_spool.svg</file>
-    <file>media/btn_icons/half_spoll.svg</file>
+    <file>media/btn_icons/half_spool.svg</file>
   </qresource>
   <qresource prefix="ui">
     <file>media/btn_icons/notification.svg</file>
-    <file>media/btn_icons/usb_icon.svg</file>
-    <file>media/btn_icons/garbage-icon.svg</file>
+    <file>media/btn_icons/usb.svg</file>
+    <file>media/btn_icons/garbage.svg</file>
     <file>media/btn_icons/back.svg</file>
     <file>media/btn_icons/refresh.svg</file>
     <file>media/btn_icons/back_folder.svg</file>
-    <file>media/btn_icons/folderIcon.svg</file>
+    <file>media/btn_icons/folder.svg</file>
     <file>media/btn_icons/center_arrows.svg</file>
     <file>media/btn_icons/error.svg</file>
     <file>media/btn_icons/info.svg</file>
-    <file>media/btn_icons/LCD_settings.svg</file>
-    <file>media/btn_icons/LEDs.svg</file>
+    <file>media/btn_icons/leds.svg</file>
     <file>media/btn_icons/pause.svg</file>
     <file>media/btn_icons/play.svg</file>
     <file>media/btn_icons/print.svg</file>
@@ -99,7 +98,7 @@
     <file>media/btn_icons/unsee.svg</file>
   </qresource>
   <qresource prefix="z_levelling">
-    <file>media/btn_icons/baby_step_icon.svg</file>
+    <file>media/btn_icons/baby_step.svg</file>
     <file>media/btn_icons/bed_levelling.svg</file>
     <file>media/btn_icons/eddy_mech.svg</file>
     <file>media/btn_icons/inductive.svg</file>
@@ -113,8 +112,6 @@
     <file>media/btn_icons/switch_zoom.svg</file>
   </qresource>
   <qresource prefix="input_shaper">
-    <file>media/btn_icons/frequency_X.svg</file>
-    <file>media/btn_icons/frequency_Y.svg</file>
     <file>media/btn_icons/input_shaper.svg</file>
     <file>media/btn_icons/input_shaper_auto.svg</file>
     <file>media/btn_icons/input_shaper_manual.svg</file>

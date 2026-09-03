@@ -417,7 +417,7 @@ Shaper</string>
          <string>menu_btn</string>
         </property>
         <property name="icon_pixmap" stdset="0">
-         <pixmap resource="resources/icon_resources.qrc">:/ui/media/btn_icons/LEDs.svg</pixmap>
+         <pixmap resource="resources/icon_resources.qrc">:/ui/media/btn_icons/leds.svg</pixmap>
         </property>
        </widget>
       </item>
