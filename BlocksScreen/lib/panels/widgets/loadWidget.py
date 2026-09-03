@@ -1,7 +1,9 @@
-from PyQt6 import QtCore, QtGui, QtWidgets
 import enum
-import os
-from configfile import BlocksScreenConfig, get_configparser
+from pathlib import Path
+
+from PyQt6 import QtCore, QtGui, QtWidgets
+
+_INTRO_GIF = Path(__file__).parents[2] / "ui" / "resources" / "intro_blocks.gif"
 
 
 class LoadingOverlayWidget(QtWidgets.QLabel):
@@ -31,36 +33,14 @@ class LoadingOverlayWidget(QtWidgets.QLabel):
 
         self._setupUI()
 
-        config: BlocksScreenConfig = get_configparser()
-        animation_path = None
-
-        if initial_anim_type == LoadingOverlayWidget.AnimationGIF.PLACEHOLDER:
-            animation_path = (
-                "~/BlocksScreen/BlocksScreen/lib/ui/resources/intro_blocks.gif"
-            )
-            self.anim_type = initial_anim_type
-
-        else:
-            try:
-                loading_config = config.loading
-                animation_path = loading_config.get(
-                    str(initial_anim_type.name),
-                )
-                self.anim_type = initial_anim_type
-            except Exception:
-                self.anim_type = LoadingOverlayWidget.AnimationGIF.DEFAULT
-
-        if (
-            self.anim_type != LoadingOverlayWidget.AnimationGIF.DEFAULT
-            and animation_path
-        ):
-            abs_animation_path = os.path.expanduser(animation_path)
-
-            self.movie = QtGui.QMovie(abs_animation_path)
+        self.anim_type = initial_anim_type
+        if self.anim_type == LoadingOverlayWidget.AnimationGIF.PLACEHOLDER:
+            self.movie = QtGui.QMovie(str(_INTRO_GIF))
+            self._movie_size = QtGui.QImageReader(str(_INTRO_GIF)).size()
 
             if self.movie.isValid():
                 self.gifshow.setMovie(self.movie)
-                self.gifshow.setScaledContents(True)
+                self.gifshow.setScaledContents(False)
                 self.movie.start()
                 self.gifshow.show()
             else:
@@ -77,19 +57,22 @@ class LoadingOverlayWidget(QtWidgets.QLabel):
         self.label.setText("Loading...")
         self.repaint()
 
-    def set_animation_path(self, path: str) -> None:
+    def set_animation_path(self, path: str | Path) -> None:
         """Set widget animation path"""
-        abs_animation_path = os.path.expanduser(path)
-        if os.path.isfile(abs_animation_path):
-            self.movie = QtGui.QMovie(abs_animation_path)
-            if self.movie.isValid():
-                self.gifshow.setMovie(self.movie)
-                self.gifshow.setScaledContents(True)
-                self.movie.start()
-                self.gifshow.show()
-                self.anim_type = LoadingOverlayWidget.AnimationGIF.PLACEHOLDER
-                if self.timer.isActive():
-                    self.timer.stop()
+        gif = Path(path).expanduser()
+        if not gif.is_file():
+            return
+        self.movie = QtGui.QMovie(str(gif))
+        self._movie_size = QtGui.QImageReader(str(gif)).size()
+
+        if self.movie.isValid():
+            self.gifshow.setMovie(self.movie)
+            self.gifshow.setScaledContents(False)
+            self.movie.start()
+            self.gifshow.show()
+            self.anim_type = LoadingOverlayWidget.AnimationGIF.PLACEHOLDER
+            if self.timer.isActive():
+                self.timer.stop()
 
     def set_status_message(self, message: str) -> None:
         """Set widget message"""
@@ -161,12 +144,16 @@ class LoadingOverlayWidget(QtWidgets.QLabel):
         margin = 20
         self.label.setGeometry(label_x, label_y, label_width, label_height)
         gifshow_max_height = label_y - margin
-        size = min(self.width() - margin * 2, gifshow_max_height)
 
-        gifshow_x = (self.width() - size) // 2
-        gifshow_y = (gifshow_max_height - size) // 2
-
-        self.gifshow.setGeometry(gifshow_x, gifshow_y, size, size)
+        self.gifshow.setGeometry(
+            margin, 0, self.width() - margin * 2, gifshow_max_height
+        )
+        if self.anim_type != LoadingOverlayWidget.AnimationGIF.DEFAULT:
+            self.movie.setScaledSize(
+                self._movie_size.scaled(
+                    self.gifshow.size(), QtCore.Qt.AspectRatioMode.KeepAspectRatio
+                )
+            )
 
     def show(self) -> None:
         """Re-implemented method, show widget"""

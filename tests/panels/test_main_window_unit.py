@@ -15,6 +15,7 @@ def _make_fake_window(*, manual_restart_pending: bool) -> SimpleNamespace:
         _klipper_auto_restart_pending=False,
         _post_update_reconnect=False,
         _klipper_restart_timeout=MagicMock(),
+        _intro_timeout=MagicMock(),
         updater_worker=MagicMock(),
         conn_window=SimpleNamespace(manual_restart_pending=manual_restart_pending),
         loadwidget=MagicMock(),
@@ -30,7 +31,7 @@ class TestKlippyDisconnectedAutoRestartGuard:
         MainWindow._on_klippy_state(fake_window, "disconnected")
 
         fake_window.ws.api.restart_service.assert_called_once_with("klipper")
-        fake_window.loadscreen.show.assert_called_once()
+        fake_window.loadscreen.show.assert_not_called()
         assert fake_window._klipper_auto_restart_pending is True
 
     def test_skips_auto_restart_when_manual_restart_pending(self) -> None:
