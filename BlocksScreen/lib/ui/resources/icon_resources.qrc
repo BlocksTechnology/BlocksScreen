@@ -1,7 +1,7 @@
 <RCC>
   <qresource prefix="network">
     <file>media/btn_icons/network/static_ip.svg</file>
-    <file>media/btn_icons/wifi_config.svg</file>
+    <file>media/btn_icons/network/wifi_config.svg</file>
     <file>media/btn_icons/network/wifi_0bar.svg</file>
     <file>media/btn_icons/network/wifi_0bar_protected.svg</file>
     <file>media/btn_icons/network/wifi_1bar.svg</file>
@@ -13,116 +13,116 @@
     <file>media/btn_icons/network/wifi_4bar.svg</file>
     <file>media/btn_icons/network/wifi_4bar_protected.svg</file>
     <file>media/btn_icons/network/ethernet_connected.svg</file>
-    <file>media/btn_icons/hotspot.svg</file>
+    <file>media/btn_icons/network/hotspot.svg</file>
   </qresource>
   <qresource prefix="baby_step">
-    <file>media/btn_icons/move_nozzle_away.svg</file>
-    <file>media/btn_icons/move_nozzle_close.svg</file>
+    <file>media/btn_icons/baby_step/move_nozzle_away.svg</file>
+    <file>media/btn_icons/baby_step/move_nozzle_close.svg</file>
   </qresource>
   <qresource prefix="dialog">
-    <file>media/btn_icons/no.svg</file>
-    <file>media/btn_icons/yes.svg</file>
+    <file>media/btn_icons/dialog/no.svg</file>
+    <file>media/btn_icons/dialog/yes.svg</file>
   </qresource>
   <qresource prefix="files">
-    <file>media/btn_icons/file.svg</file>
+    <file>media/btn_icons/files/file.svg</file>
   </qresource>
   <qresource prefix="system">
-    <file>media/btn_icons/reboot.svg</file>
-    <file>media/btn_icons/restart_firmware.svg</file>
-    <file>media/btn_icons/restart_klipper.svg</file>
-    <file>media/btn_icons/restart_printer.svg</file>
-    <file>media/btn_icons/update_software.svg</file>
+    <file>media/btn_icons/system/reboot.svg</file>
+    <file>media/btn_icons/system/restart_firmware.svg</file>
+    <file>media/btn_icons/system/restart_klipper.svg</file>
+    <file>media/btn_icons/system/restart_printer.svg</file>
+    <file>media/btn_icons/system/update_software.svg</file>
   </qresource>
   <qresource prefix="fan_related">
-    <file>media/btn_icons/fan.svg</file>
-    <file>media/btn_icons/fan_cage.svg</file>
-    <file>media/btn_icons/blower.svg</file>
+    <file>media/btn_icons/fan_related/fan.svg</file>
+    <file>media/btn_icons/fan_related/fan_cage.svg</file>
+    <file>media/btn_icons/fan_related/blower.svg</file>
   </qresource>
   <qresource prefix="temperature_related">
-    <file>media/btn_icons/humidity.svg</file>
-    <file>media/btn_icons/standard_temperature.svg</file>
-    <file>media/btn_icons/temperature.svg</file>
-    <file>media/btn_icons/temperature_plate.svg</file>
-    <file>media/btn_icons/cooldown.svg</file>
-    <file>media/btn_icons/heatsoak.svg</file>
+    <file>media/btn_icons/temperature_related/humidity.svg</file>
+    <file>media/btn_icons/temperature_related/standard_temperature.svg</file>
+    <file>media/btn_icons/temperature_related/temperature.svg</file>
+    <file>media/btn_icons/temperature_related/temperature_plate.svg</file>
+    <file>media/btn_icons/temperature_related/cooldown.svg</file>
+    <file>media/btn_icons/temperature_related/heatsoak.svg</file>
   </qresource>
   <qresource prefix="motion">
-    <file>media/btn_icons/disable_steppers.svg</file>
-    <file>media/btn_icons/home_all.svg</file>
-    <file>media/btn_icons/home_x.svg</file>
-    <file>media/btn_icons/home_z.svg</file>
-    <file>media/btn_icons/home_y.svg</file>
-    <file>media/btn_icons/axis_maintenance.svg</file>
-    <file>media/btn_icons/speed.svg</file>
+    <file>media/btn_icons/motion/disable_steppers.svg</file>
+    <file>media/btn_icons/motion/home_all.svg</file>
+    <file>media/btn_icons/motion/home_x.svg</file>
+    <file>media/btn_icons/motion/home_z.svg</file>
+    <file>media/btn_icons/motion/home_y.svg</file>
+    <file>media/btn_icons/motion/axis_maintenance.svg</file>
+    <file>media/btn_icons/motion/speed.svg</file>
   </qresource>
   <qresource prefix="filament_related">
-    <file>media/btn_icons/add_spool.svg</file>
-    <file>media/btn_icons/add_filament.svg</file>
-    <file>media/btn_icons/spoolman.svg</file>
-    <file>media/btn_icons/spool_database_1.svg</file>
-    <file>media/btn_icons/check_gate_1.svg</file>
-    <file>media/btn_icons/eject.svg</file>
-    <file>media/btn_icons/change_filament.svg</file>
-    <file>media/btn_icons/filament_sensor.svg</file>
-    <file>media/btn_icons/filament_sensor_off.svg</file>
-    <file>media/btn_icons/filament_sensor_turn_on.svg</file>
-    <file>media/btn_icons/load_filament.svg</file>
-    <file>media/btn_icons/unload_filament.svg</file>
-    <file>media/btn_icons/loaded_spool.svg</file>
-    <file>media/btn_icons/half_spool.svg</file>
+    <file>media/btn_icons/filament_related/add_spool.svg</file>
+    <file>media/btn_icons/filament_related/add_filament.svg</file>
+    <file>media/btn_icons/filament_related/spoolman.svg</file>
+    <file>media/btn_icons/filament_related/spool_database_1.svg</file>
+    <file>media/btn_icons/filament_related/check_gate_1.svg</file>
+    <file>media/btn_icons/filament_related/eject.svg</file>
+    <file>media/btn_icons/filament_related/change_filament.svg</file>
+    <file>media/btn_icons/filament_related/filament_sensor.svg</file>
+    <file>media/btn_icons/filament_related/filament_sensor_off.svg</file>
+    <file>media/btn_icons/filament_related/filament_sensor_turn_on.svg</file>
+    <file>media/btn_icons/filament_related/load_filament.svg</file>
+    <file>media/btn_icons/filament_related/unload_filament.svg</file>
+    <file>media/btn_icons/filament_related/loaded_spool.svg</file>
+    <file>media/btn_icons/filament_related/half_spool.svg</file>
   </qresource>
   <qresource prefix="ui">
-    <file>media/btn_icons/notification.svg</file>
-    <file>media/btn_icons/usb.svg</file>
-    <file>media/btn_icons/garbage.svg</file>
-    <file>media/btn_icons/back.svg</file>
-    <file>media/btn_icons/refresh.svg</file>
-    <file>media/btn_icons/back_folder.svg</file>
-    <file>media/btn_icons/folder.svg</file>
-    <file>media/btn_icons/center_arrows.svg</file>
-    <file>media/btn_icons/error.svg</file>
-    <file>media/btn_icons/info.svg</file>
-    <file>media/btn_icons/leds.svg</file>
-    <file>media/btn_icons/pause.svg</file>
-    <file>media/btn_icons/play.svg</file>
-    <file>media/btn_icons/print.svg</file>
-    <file>media/btn_icons/stop.svg</file>
-    <file>media/btn_icons/layers.svg</file>
-    <file>media/btn_icons/printer_settings.svg</file>
-    <file>media/btn_icons/routine.svg</file>
-    <file>media/btn_icons/save.svg</file>
-    <file>media/btn_icons/time.svg</file>
-    <file>media/btn_icons/troubleshoot.svg</file>
-    <file>media/btn_icons/tune.svg</file>
-    <file>media/btn_icons/see.svg</file>
-    <file>media/btn_icons/unsee.svg</file>
+    <file>media/btn_icons/ui/notification.svg</file>
+    <file>media/btn_icons/ui/usb.svg</file>
+    <file>media/btn_icons/ui/garbage.svg</file>
+    <file>media/btn_icons/ui/back.svg</file>
+    <file>media/btn_icons/ui/refresh.svg</file>
+    <file>media/btn_icons/ui/back_folder.svg</file>
+    <file>media/btn_icons/ui/folder.svg</file>
+    <file>media/btn_icons/ui/center_arrows.svg</file>
+    <file>media/btn_icons/ui/error.svg</file>
+    <file>media/btn_icons/ui/info.svg</file>
+    <file>media/btn_icons/ui/leds.svg</file>
+    <file>media/btn_icons/ui/pause.svg</file>
+    <file>media/btn_icons/ui/play.svg</file>
+    <file>media/btn_icons/ui/print.svg</file>
+    <file>media/btn_icons/ui/stop.svg</file>
+    <file>media/btn_icons/ui/layers.svg</file>
+    <file>media/btn_icons/ui/printer_settings.svg</file>
+    <file>media/btn_icons/ui/routine.svg</file>
+    <file>media/btn_icons/ui/save.svg</file>
+    <file>media/btn_icons/ui/time.svg</file>
+    <file>media/btn_icons/ui/troubleshoot.svg</file>
+    <file>media/btn_icons/ui/tune.svg</file>
+    <file>media/btn_icons/ui/see.svg</file>
+    <file>media/btn_icons/ui/unsee.svg</file>
   </qresource>
   <qresource prefix="z_levelling">
-    <file>media/btn_icons/baby_step.svg</file>
-    <file>media/btn_icons/bed_levelling.svg</file>
-    <file>media/btn_icons/eddy_mech.svg</file>
-    <file>media/btn_icons/inductive.svg</file>
-    <file>media/btn_icons/bltouch.svg</file>
+    <file>media/btn_icons/z_levelling/baby_step.svg</file>
+    <file>media/btn_icons/z_levelling/bed_levelling.svg</file>
+    <file>media/btn_icons/z_levelling/eddy_mech.svg</file>
+    <file>media/btn_icons/z_levelling/inductive.svg</file>
+    <file>media/btn_icons/z_levelling/bltouch.svg</file>
   </qresource>
   <qresource prefix="extruder_related">
-    <file>media/btn_icons/extrude.svg</file>
-    <file>media/btn_icons/nozzle.svg</file>
-    <file>media/btn_icons/nozzle_topbar.svg</file>
-    <file>media/btn_icons/switch_print_core.svg</file>
-    <file>media/btn_icons/switch_zoom.svg</file>
+    <file>media/btn_icons/extruder_related/extrude.svg</file>
+    <file>media/btn_icons/extruder_related/nozzle.svg</file>
+    <file>media/btn_icons/extruder_related/nozzle_topbar.svg</file>
+    <file>media/btn_icons/extruder_related/switch_print_core.svg</file>
+    <file>media/btn_icons/extruder_related/switch_zoom.svg</file>
   </qresource>
   <qresource prefix="input_shaper">
-    <file>media/btn_icons/input_shaper.svg</file>
-    <file>media/btn_icons/input_shaper_auto.svg</file>
-    <file>media/btn_icons/input_shaper_manual.svg</file>
+    <file>media/btn_icons/input_shaper/input_shaper.svg</file>
+    <file>media/btn_icons/input_shaper/input_shaper_auto.svg</file>
+    <file>media/btn_icons/input_shaper/input_shaper_manual.svg</file>
   </qresource>
   <qresource prefix="arrow_icons">
-    <file>media/btn_icons/arrow_left.svg</file>
-    <file>media/btn_icons/arrow_down.svg</file>
-    <file>media/btn_icons/arrow_right.svg</file>
-    <file>media/btn_icons/left_arrow.svg</file>
-    <file>media/btn_icons/right_arrow.svg</file>
-    <file>media/btn_icons/down_arrow.svg</file>
-    <file>media/btn_icons/up_arrow.svg</file>
+    <file>media/btn_icons/arrow_icons/arrow_left.svg</file>
+    <file>media/btn_icons/arrow_icons/arrow_down.svg</file>
+    <file>media/btn_icons/arrow_icons/arrow_right.svg</file>
+    <file>media/btn_icons/arrow_icons/left_arrow.svg</file>
+    <file>media/btn_icons/arrow_icons/right_arrow.svg</file>
+    <file>media/btn_icons/arrow_icons/down_arrow.svg</file>
+    <file>media/btn_icons/arrow_icons/up_arrow.svg</file>
   </qresource>
 </RCC>

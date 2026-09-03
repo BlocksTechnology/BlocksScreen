@@ -157,7 +157,7 @@
          <string>menu_btn</string>
         </property>
         <property name="icon_pixmap" stdset="0">
-         <pixmap resource="resources/icon_resources.qrc">:/z_levelling/media/btn_icons/bed_levelling.svg</pixmap>
+         <pixmap resource="resources/icon_resources.qrc">:/z_levelling/media/btn_icons/z_levelling/bed_levelling.svg</pixmap>
         </property>
        </widget>
       </item>
@@ -218,7 +218,7 @@ Control</string>
          <string>menu_btn</string>
         </property>
         <property name="icon_pixmap" stdset="0">
-         <pixmap resource="resources/icon_resources.qrc">:/temperature_related/media/btn_icons/temperature.svg</pixmap>
+         <pixmap resource="resources/icon_resources.qrc">:/temperature_related/media/btn_icons/temperature_related/temperature.svg</pixmap>
         </property>
        </widget>
       </item>
@@ -279,7 +279,7 @@ Calibration</string>
          <string>menu_btn</string>
         </property>
         <property name="icon_pixmap" stdset="0">
-         <pixmap resource="resources/icon_resources.qrc">:/z_levelling/media/btn_icons/bed_levelling.svg</pixmap>
+         <pixmap resource="resources/icon_resources.qrc">:/z_levelling/media/btn_icons/z_levelling/bed_levelling.svg</pixmap>
         </property>
        </widget>
       </item>
@@ -340,7 +340,7 @@ Control</string>
          <string>menu_btn</string>
         </property>
         <property name="icon_pixmap" stdset="0">
-         <pixmap resource="resources/icon_resources.qrc">:/motion/media/btn_icons/axis_maintenance.svg</pixmap>
+         <pixmap resource="resources/icon_resources.qrc">:/motion/media/btn_icons/motion/axis_maintenance.svg</pixmap>
         </property>
        </widget>
       </item>
@@ -400,7 +400,7 @@ Control</string>
          <string>menu_btn</string>
         </property>
         <property name="icon_pixmap" stdset="0">
-         <pixmap resource="resources/icon_resources.qrc">:/fan_related/media/btn_icons/fan.svg</pixmap>
+         <pixmap resource="resources/icon_resources.qrc">:/fan_related/media/btn_icons/fan_related/fan.svg</pixmap>
         </property>
        </widget>
       </item>
@@ -461,7 +461,7 @@ Print Core</string>
          <string>menu_btn</string>
         </property>
         <property name="icon_pixmap" stdset="0">
-         <pixmap resource="resources/icon_resources.qrc">:/extruder_related/media/btn_icons/switch_print_core.svg</pixmap>
+         <pixmap resource="resources/icon_resources.qrc">:/extruder_related/media/btn_icons/extruder_related/switch_print_core.svg</pixmap>
         </property>
        </widget>
       </item>
@@ -609,7 +609,7 @@ Print Core</string>
          <string>icon</string>
         </property>
         <property name="icon_pixmap" stdset="0">
-         <pixmap resource="resources/icon_resources.qrc">:/ui/media/btn_icons/back.svg</pixmap>
+         <pixmap resource="resources/icon_resources.qrc">:/ui/media/btn_icons/ui/back.svg</pixmap>
         </property>
        </widget>
       </item>
@@ -673,7 +673,7 @@ Print Core</string>
          <string>menu_btn</string>
         </property>
         <property name="icon_pixmap" stdset="0">
-         <pixmap resource="resources/icon_resources.qrc">:/motion/media/btn_icons/axis_maintenance.svg</pixmap>
+         <pixmap resource="resources/icon_resources.qrc">:/motion/media/btn_icons/motion/axis_maintenance.svg</pixmap>
         </property>
        </widget>
       </item>
@@ -734,7 +734,7 @@ Steppers</string>
          <string>menu_btn</string>
         </property>
         <property name="icon_pixmap" stdset="0">
-         <pixmap resource="resources/icon_resources.qrc">:/motion/media/btn_icons/disable_steppers.svg</pixmap>
+         <pixmap resource="resources/icon_resources.qrc">:/motion/media/btn_icons/motion/disable_steppers.svg</pixmap>
         </property>
        </widget>
       </item>
@@ -794,7 +794,7 @@ Steppers</string>
          <string>menu_btn</string>
         </property>
         <property name="icon_pixmap" stdset="0">
-         <pixmap resource="resources/icon_resources.qrc">:/extruder_related/media/btn_icons/extrude.svg</pixmap>
+         <pixmap resource="resources/icon_resources.qrc">:/extruder_related/media/btn_icons/extruder_related/extrude.svg</pixmap>
         </property>
        </widget>
       </item>
@@ -855,7 +855,7 @@ Home</string>
          <string>menu_btn</string>
         </property>
         <property name="icon_pixmap" stdset="0">
-         <pixmap resource="resources/icon_resources.qrc">:/motion/media/btn_icons/home_all.svg</pixmap>
+         <pixmap resource="resources/icon_resources.qrc">:/motion/media/btn_icons/motion/home_all.svg</pixmap>
         </property>
        </widget>
       </item>
@@ -1032,7 +1032,7 @@ Home</string>
          <string>icon</string>
         </property>
         <property name="icon_pixmap" stdset="0">
-         <pixmap resource="resources/icon_resources.qrc">:/ui/media/btn_icons/back.svg</pixmap>
+         <pixmap resource="resources/icon_resources.qrc">:/ui/media/btn_icons/ui/back.svg</pixmap>
         </property>
        </widget>
       </item>
@@ -2407,7 +2407,7 @@ Home</string>
              <string>menu_btn</string>
             </property>
             <property name="icon_pixmap" stdset="0">
-             <pixmap resource="resources/icon_resources.qrc">:/extruder_related/media/btn_icons/extrude.svg</pixmap>
+             <pixmap resource="resources/icon_resources.qrc">:/extruder_related/media/btn_icons/extruder_related/extrude.svg</pixmap>
             </property>
            </widget>
           </item>
@@ -2441,7 +2441,7 @@ Home</string>
              <set>Qt::AlignCenter</set>
             </property>
             <property name="icon_pixmap" stdset="0">
-             <pixmap resource="resources/icon_resources.qrc">:/extruder_related/media/btn_icons/nozzle.svg</pixmap>
+             <pixmap resource="resources/icon_resources.qrc">:/extruder_related/media/btn_icons/extruder_related/nozzle.svg</pixmap>
             </property>
            </widget>
           </item>
@@ -2501,7 +2501,7 @@ Home</string>
              <string>menu_btn</string>
             </property>
             <property name="icon_pixmap" stdset="0">
-             <pixmap resource="resources/icon_resources.qrc">:/extruder_related/media/btn_icons/extrude.svg</pixmap>
+             <pixmap resource="resources/icon_resources.qrc">:/extruder_related/media/btn_icons/extruder_related/extrude.svg</pixmap>
             </property>
            </widget>
           </item>
@@ -2851,7 +2851,7 @@ Home</string>
         <string>icon</string>
        </property>
        <property name="icon_pixmap" stdset="0">
-        <pixmap resource="resources/icon_resources.qrc">:/ui/media/btn_icons/back.svg</pixmap>
+        <pixmap resource="resources/icon_resources.qrc">:/ui/media/btn_icons/ui/back.svg</pixmap>
        </property>
       </widget>
      </item>
@@ -2915,7 +2915,7 @@ Home</string>
         <string>icon</string>
        </property>
        <property name="icon_pixmap" stdset="0">
-        <pixmap resource="resources/icon_resources.qrc">:/arrow_icons/media/btn_icons/up_arrow.svg</pixmap>
+        <pixmap resource="resources/icon_resources.qrc">:/arrow_icons/media/btn_icons/arrow_icons/up_arrow.svg</pixmap>
        </property>
       </widget>
      </item>
@@ -2967,7 +2967,7 @@ Home</string>
         <string>icon</string>
        </property>
        <property name="icon_pixmap" stdset="0">
-        <pixmap resource="resources/icon_resources.qrc">:/arrow_icons/media/btn_icons/down_arrow.svg</pixmap>
+        <pixmap resource="resources/icon_resources.qrc">:/arrow_icons/media/btn_icons/arrow_icons/down_arrow.svg</pixmap>
        </property>
       </widget>
      </item>
@@ -3043,7 +3043,7 @@ Home</string>
         <string>icon</string>
        </property>
        <property name="icon_pixmap" stdset="0">
-        <pixmap resource="resources/icon_resources.qrc">:/motion/media/btn_icons/home_x.svg</pixmap>
+        <pixmap resource="resources/icon_resources.qrc">:/motion/media/btn_icons/motion/home_x.svg</pixmap>
        </property>
       </widget>
      </item>
@@ -3095,7 +3095,7 @@ Home</string>
         <string>icon</string>
        </property>
        <property name="icon_pixmap" stdset="0">
-        <pixmap resource="resources/icon_resources.qrc">:/motion/media/btn_icons/home_y.svg</pixmap>
+        <pixmap resource="resources/icon_resources.qrc">:/motion/media/btn_icons/motion/home_y.svg</pixmap>
        </property>
       </widget>
      </item>
@@ -3147,7 +3147,7 @@ Home</string>
         <string>icon</string>
        </property>
        <property name="icon_pixmap" stdset="0">
-        <pixmap resource="resources/icon_resources.qrc">:/motion/media/btn_icons/home_z.svg</pixmap>
+        <pixmap resource="resources/icon_resources.qrc">:/motion/media/btn_icons/motion/home_z.svg</pixmap>
        </property>
       </widget>
      </item>
@@ -3199,7 +3199,7 @@ Home</string>
         <string>icon</string>
        </property>
        <property name="icon_pixmap" stdset="0">
-        <pixmap resource="resources/icon_resources.qrc">:/motion/media/btn_icons/home_all.svg</pixmap>
+        <pixmap resource="resources/icon_resources.qrc">:/motion/media/btn_icons/motion/home_all.svg</pixmap>
        </property>
       </widget>
      </item>
@@ -4103,7 +4103,7 @@ Home</string>
         <string>icon</string>
        </property>
        <property name="icon_pixmap" stdset="0">
-        <pixmap resource="resources/icon_resources.qrc">:/arrow_icons/media/btn_icons/left_arrow.svg</pixmap>
+        <pixmap resource="resources/icon_resources.qrc">:/arrow_icons/media/btn_icons/arrow_icons/left_arrow.svg</pixmap>
        </property>
       </widget>
      </item>
@@ -4155,7 +4155,7 @@ Home</string>
         <string>icon</string>
        </property>
        <property name="icon_pixmap" stdset="0">
-        <pixmap resource="resources/icon_resources.qrc">:/arrow_icons/media/btn_icons/right_arrow.svg</pixmap>
+        <pixmap resource="resources/icon_resources.qrc">:/arrow_icons/media/btn_icons/arrow_icons/right_arrow.svg</pixmap>
        </property>
       </widget>
      </item>
@@ -4207,7 +4207,7 @@ Home</string>
         <string>icon</string>
        </property>
        <property name="icon_pixmap" stdset="0">
-        <pixmap resource="resources/icon_resources.qrc">:/arrow_icons/media/btn_icons/down_arrow.svg</pixmap>
+        <pixmap resource="resources/icon_resources.qrc">:/arrow_icons/media/btn_icons/arrow_icons/down_arrow.svg</pixmap>
        </property>
       </widget>
      </item>
@@ -4259,7 +4259,7 @@ Home</string>
         <string>icon</string>
        </property>
        <property name="icon_pixmap" stdset="0">
-        <pixmap resource="resources/icon_resources.qrc">:/arrow_icons/media/btn_icons/up_arrow.svg</pixmap>
+        <pixmap resource="resources/icon_resources.qrc">:/arrow_icons/media/btn_icons/arrow_icons/up_arrow.svg</pixmap>
        </property>
       </widget>
      </item>
@@ -4293,7 +4293,7 @@ Home</string>
         <string>icon</string>
        </property>
        <property name="icon_pixmap" stdset="0">
-        <pixmap resource="resources/icon_resources.qrc">:/ui/media/btn_icons/center_arrows.svg</pixmap>
+        <pixmap resource="resources/icon_resources.qrc">:/ui/media/btn_icons/ui/center_arrows.svg</pixmap>
        </property>
       </widget>
      </item>
@@ -4448,7 +4448,7 @@ Home</string>
          <string>icon</string>
         </property>
         <property name="icon_pixmap" stdset="0">
-         <pixmap resource="resources/icon_resources.qrc">:/ui/media/btn_icons/back.svg</pixmap>
+         <pixmap resource="resources/icon_resources.qrc">:/ui/media/btn_icons/ui/back.svg</pixmap>
         </property>
        </widget>
       </item>
@@ -4542,7 +4542,7 @@ Home</string>
            <bool>true</bool>
           </property>
           <property name="icon_pixmap" stdset="0">
-           <pixmap resource="resources/icon_resources.qrc">:/extruder_related/media/btn_icons/nozzle.svg</pixmap>
+           <pixmap resource="resources/icon_resources.qrc">:/extruder_related/media/btn_icons/extruder_related/nozzle.svg</pixmap>
           </property>
           <property name="name" stdset="0">
            <string>extruder_temperature_display</string>
@@ -4816,7 +4816,7 @@ Home</string>
            <bool>true</bool>
           </property>
           <property name="icon_pixmap" stdset="0">
-           <pixmap resource="resources/icon_resources.qrc">:/temperature_related/media/btn_icons/temperature_plate.svg</pixmap>
+           <pixmap resource="resources/icon_resources.qrc">:/temperature_related/media/btn_icons/temperature_related/temperature_plate.svg</pixmap>
           </property>
           <property name="name" stdset="0">
            <string>bed_temperature_display</string>
@@ -4884,7 +4884,7 @@ Home</string>
          <string>menu_btn</string>
         </property>
         <property name="icon_pixmap" stdset="0">
-         <pixmap resource="resources/icon_resources.qrc">:/temperature_related/media/btn_icons/cooldown.svg</pixmap>
+         <pixmap resource="resources/icon_resources.qrc">:/temperature_related/media/btn_icons/temperature_related/cooldown.svg</pixmap>
         </property>
        </widget>
       </item>
@@ -4960,7 +4960,7 @@ Home</string>
          <string>menu_btn</string>
         </property>
         <property name="icon_pixmap" stdset="0">
-         <pixmap resource="resources/icon_resources.qrc">:/temperature_related/media/btn_icons/heatsoak.svg</pixmap>
+         <pixmap resource="resources/icon_resources.qrc">:/temperature_related/media/btn_icons/temperature_related/heatsoak.svg</pixmap>
         </property>
        </widget>
       </item>
@@ -5122,7 +5122,7 @@ Home</string>
         <bool>true</bool>
        </property>
        <property name="icon_pixmap" stdset="0">
-        <pixmap resource="resources/icon_resources.qrc">:/ui/media/btn_icons/back.svg</pixmap>
+        <pixmap resource="resources/icon_resources.qrc">:/ui/media/btn_icons/ui/back.svg</pixmap>
        </property>
        <property name="button_type" stdset="0">
         <string>icon</string>
@@ -5206,7 +5206,7 @@ Home</string>
         <string>icon</string>
        </property>
        <property name="icon_pixmap" stdset="0">
-        <pixmap resource="resources/icon_resources.qrc">:/arrow_icons/media/btn_icons/up_arrow.svg</pixmap>
+        <pixmap resource="resources/icon_resources.qrc">:/arrow_icons/media/btn_icons/arrow_icons/up_arrow.svg</pixmap>
        </property>
       </widget>
      </item>
@@ -5263,7 +5263,7 @@ Home</string>
         <string>icon</string>
        </property>
        <property name="icon_pixmap" stdset="0">
-        <pixmap resource="resources/icon_resources.qrc">:/arrow_icons/media/btn_icons/down_arrow.svg</pixmap>
+        <pixmap resource="resources/icon_resources.qrc">:/arrow_icons/media/btn_icons/arrow_icons/down_arrow.svg</pixmap>
        </property>
       </widget>
      </item>
@@ -5392,7 +5392,7 @@ Home</string>
         <string>menu_btn</string>
        </property>
        <property name="icon_pixmap" stdset="0">
-        <pixmap resource="resources/icon_resources.qrc">:/dialog/media/btn_icons/yes.svg</pixmap>
+        <pixmap resource="resources/icon_resources.qrc">:/dialog/media/btn_icons/dialog/yes.svg</pixmap>
        </property>
       </widget>
      </item>
@@ -5446,7 +5446,7 @@ Home</string>
         <string>menu_btn</string>
        </property>
        <property name="icon_pixmap" stdset="0">
-        <pixmap resource="resources/icon_resources.qrc">:/dialog/media/btn_icons/no.svg</pixmap>
+        <pixmap resource="resources/icon_resources.qrc">:/dialog/media/btn_icons/dialog/no.svg</pixmap>
        </property>
       </widget>
      </item>
@@ -5557,7 +5557,7 @@ Home</string>
         <string>icon</string>
        </property>
        <property name="icon_pixmap" stdset="0">
-        <pixmap resource="resources/icon_resources.qrc">:/ui/media/btn_icons/back.svg</pixmap>
+        <pixmap resource="resources/icon_resources.qrc">:/ui/media/btn_icons/ui/back.svg</pixmap>
        </property>
       </widget>
      </item>
@@ -5698,7 +5698,7 @@ Home</string>
          <string>icon</string>
         </property>
         <property name="icon_pixmap" stdset="0">
-         <pixmap resource="resources/icon_resources.qrc">:/ui/media/btn_icons/back.svg</pixmap>
+         <pixmap resource="resources/icon_resources.qrc">:/ui/media/btn_icons/ui/back.svg</pixmap>
         </property>
        </widget>
       </item>
