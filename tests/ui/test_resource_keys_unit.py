@@ -166,6 +166,20 @@ def test_qrc_declared_files_exist_on_disk():
     assert not missing, _report("declared in a .qrc but absent from disk:", missing)
 
 
+def test_no_orphan_assets_on_disk():
+    """Every .svg under resources/media is declared by some .qrc, the reverse check."""
+    declared = {path for _, path in _qrc_entries()}
+    orphans = sorted(
+        str(svg.relative_to(REPO_ROOT))
+        for svg in (RESOURCES / "media").rglob("*.svg")
+        if svg not in declared
+    )
+    assert not orphans, (
+        "on-disk .svg files no .qrc declares (dead weight):\n"
+        + "\n".join(f"  {path}" for path in orphans)
+    )
+
+
 def test_compiled_blobs_match_the_qrc_xml():
     """The _rc.py blobs match the .qrc XML, i.e. nobody skipped `make rcc`."""
     declared = _qrc_keys()

@@ -140,7 +140,7 @@ Maint.</string>
          <string>menu_btn</string>
         </property>
         <property name="icon_pixmap" stdset="0">
-         <pixmap resource="resources/icon_resources.qrc">:/motion/media/btn_icons/axis_maintenance.svg</pixmap>
+         <pixmap resource="resources/icon_resources.qrc">:/motion/media/btn_icons/motion/axis_maintenance.svg</pixmap>
         </property>
        </widget>
       </item>
@@ -236,7 +236,7 @@ Check</string>
          <string>menu_btn</string>
         </property>
         <property name="icon_pixmap" stdset="0">
-         <pixmap resource="resources/icon_resources.qrc">:/ui/media/btn_icons/routine.svg</pixmap>
+         <pixmap resource="resources/icon_resources.qrc">:/ui/media/btn_icons/ui/routine.svg</pixmap>
         </property>
        </widget>
       </item>
@@ -297,7 +297,7 @@ Shaper</string>
          <string>menu_btn</string>
         </property>
         <property name="icon_pixmap" stdset="0">
-         <pixmap resource="resources/icon_resources.qrc">:/input_shaper/media/btn_icons/input_shaper.svg</pixmap>
+         <pixmap resource="resources/icon_resources.qrc">:/input_shaper/media/btn_icons/input_shaper/input_shaper.svg</pixmap>
         </property>
        </widget>
       </item>
@@ -357,7 +357,7 @@ Shaper</string>
          <string>menu_btn</string>
         </property>
         <property name="icon_pixmap" stdset="0">
-         <pixmap resource="resources/icon_resources.qrc">:/ui/media/btn_icons/info.svg</pixmap>
+         <pixmap resource="resources/icon_resources.qrc">:/ui/media/btn_icons/ui/info.svg</pixmap>
         </property>
        </widget>
       </item>
@@ -417,7 +417,7 @@ Shaper</string>
          <string>menu_btn</string>
         </property>
         <property name="icon_pixmap" stdset="0">
-         <pixmap resource="resources/icon_resources.qrc">:/ui/media/btn_icons/LEDs.svg</pixmap>
+         <pixmap resource="resources/icon_resources.qrc">:/ui/media/btn_icons/ui/leds.svg</pixmap>
         </property>
        </widget>
       </item>
@@ -554,7 +554,7 @@ Shaper</string>
          <string>icon</string>
         </property>
         <property name="icon_pixmap" stdset="0">
-         <pixmap resource="resources/icon_resources.qrc">:/ui/media/btn_icons/back.svg</pixmap>
+         <pixmap resource="resources/icon_resources.qrc">:/ui/media/btn_icons/ui/back.svg</pixmap>
         </property>
        </widget>
       </item>
@@ -777,7 +777,7 @@ Shaper</string>
          <string>icon</string>
         </property>
         <property name="icon_pixmap" stdset="0">
-         <pixmap resource="resources/icon_resources.qrc">:/ui/media/btn_icons/back.svg</pixmap>
+         <pixmap resource="resources/icon_resources.qrc">:/ui/media/btn_icons/ui/back.svg</pixmap>
         </property>
        </widget>
       </item>
@@ -951,7 +951,7 @@ Shaper</string>
          <string>icon</string>
         </property>
         <property name="icon_pixmap" stdset="0">
-         <pixmap resource="resources/icon_resources.qrc">:/ui/media/btn_icons/back.svg</pixmap>
+         <pixmap resource="resources/icon_resources.qrc">:/ui/media/btn_icons/ui/back.svg</pixmap>
         </property>
        </widget>
       </item>
@@ -1034,7 +1034,7 @@ Shaper</string>
          <string>menu_btn</string>
         </property>
         <property name="icon_pixmap" stdset="0">
-         <pixmap resource="resources/icon_resources.qrc">:/temperature_related/media/btn_icons/temperature_plate.svg</pixmap>
+         <pixmap resource="resources/icon_resources.qrc">:/temperature_related/media/btn_icons/temperature_related/temperature_plate.svg</pixmap>
         </property>
        </widget>
       </item>
@@ -1094,7 +1094,7 @@ Shaper</string>
          <string>menu_btn</string>
         </property>
         <property name="icon_pixmap" stdset="0">
-         <pixmap resource="resources/icon_resources.qrc">:/fan_related/media/btn_icons/fan_cage.svg</pixmap>
+         <pixmap resource="resources/icon_resources.qrc">:/fan_related/media/btn_icons/fan_related/fan_cage.svg</pixmap>
         </property>
        </widget>
       </item>
@@ -1154,7 +1154,7 @@ Shaper</string>
          <string>menu_btn</string>
         </property>
         <property name="icon_pixmap" stdset="0">
-         <pixmap resource="resources/icon_resources.qrc">:/motion/media/btn_icons/axis_maintenance.svg</pixmap>
+         <pixmap resource="resources/icon_resources.qrc">:/motion/media/btn_icons/motion/axis_maintenance.svg</pixmap>
         </property>
        </widget>
       </item>
@@ -1214,7 +1214,7 @@ Shaper</string>
          <string>menu_btn</string>
         </property>
         <property name="icon_pixmap" stdset="0">
-         <pixmap resource="resources/icon_resources.qrc">:/extruder_related/media/btn_icons/nozzle.svg</pixmap>
+         <pixmap resource="resources/icon_resources.qrc">:/extruder_related/media/btn_icons/extruder_related/nozzle.svg</pixmap>
         </property>
        </widget>
       </item>
@@ -1378,7 +1378,7 @@ Shaper</string>
            <string>menu_btn</string>
           </property>
           <property name="icon_pixmap" stdset="0">
-           <pixmap resource="resources/icon_resources.qrc">:/dialog/media/btn_icons/yes.svg</pixmap>
+           <pixmap resource="resources/icon_resources.qrc">:/dialog/media/btn_icons/dialog/yes.svg</pixmap>
           </property>
          </widget>
         </item>
@@ -1454,7 +1454,7 @@ Shaper</string>
            <string>menu_btn</string>
           </property>
           <property name="icon_pixmap" stdset="0">
-           <pixmap resource="resources/icon_resources.qrc">:/dialog/media/btn_icons/no.svg</pixmap>
+           <pixmap resource="resources/icon_resources.qrc">:/dialog/media/btn_icons/dialog/no.svg</pixmap>
           </property>
          </widget>
         </item>
@@ -1593,7 +1593,7 @@ Shaper</string>
          <string>icon</string>
         </property>
         <property name="icon_pixmap" stdset="0">
-         <pixmap resource="resources/icon_resources.qrc">:/ui/media/btn_icons/back.svg</pixmap>
+         <pixmap resource="resources/icon_resources.qrc">:/ui/media/btn_icons/ui/back.svg</pixmap>
         </property>
        </widget>
       </item>
@@ -1806,7 +1806,7 @@ Shaper</string>
           <string>menu_btn</string>
          </property>
          <property name="icon_pixmap" stdset="0">
-          <pixmap resource="resources/icon_resources.qrc">:/dialog/media/btn_icons/yes.svg</pixmap>
+          <pixmap resource="resources/icon_resources.qrc">:/dialog/media/btn_icons/dialog/yes.svg</pixmap>
          </property>
         </widget>
        </item>
@@ -2204,7 +2204,7 @@ Shaper</string>
          <string>icon</string>
         </property>
         <property name="icon_pixmap" stdset="0">
-         <pixmap resource="resources/icon_resources.qrc">:/ui/media/btn_icons/back.svg</pixmap>
+         <pixmap resource="resources/icon_resources.qrc">:/ui/media/btn_icons/ui/back.svg</pixmap>
         </property>
        </widget>
       </item>
@@ -2634,7 +2634,7 @@ Shaper</string>
          <string>menu_btn</string>
         </property>
         <property name="icon_pixmap" stdset="0">
-         <pixmap resource="resources/icon_resources.qrc">:/dialog/media/btn_icons/no.svg</pixmap>
+         <pixmap resource="resources/icon_resources.qrc">:/dialog/media/btn_icons/dialog/no.svg</pixmap>
         </property>
        </widget>
       </item>
@@ -2694,7 +2694,7 @@ Shaper</string>
          <string>menu_btn</string>
         </property>
         <property name="icon_pixmap" stdset="0">
-         <pixmap resource="resources/icon_resources.qrc">:/dialog/media/btn_icons/yes.svg</pixmap>
+         <pixmap resource="resources/icon_resources.qrc">:/dialog/media/btn_icons/dialog/yes.svg</pixmap>
         </property>
        </widget>
       </item>
@@ -2969,7 +2969,7 @@ Shaper</string>
         <string>icon</string>
        </property>
        <property name="icon_pixmap" stdset="0">
-        <pixmap resource="resources/icon_resources.qrc">:/ui/media/btn_icons/back.svg</pixmap>
+        <pixmap resource="resources/icon_resources.qrc">:/ui/media/btn_icons/ui/back.svg</pixmap>
        </property>
       </widget>
      </item>
