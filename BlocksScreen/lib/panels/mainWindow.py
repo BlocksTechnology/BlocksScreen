@@ -587,7 +587,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def on_update_available(self, state: bool = False):
         """Signal render for red dot on utilities tab icon and Update button"""
         self.main_content_widget.setNotification(3, state)
-        self.utilitiesPanel.panel.update_btn.setShowNotification(state)
+        self.utilitiesPanel.up_update_btn.setShowNotification(state)
         self.repaint()
 
     def enable_tab_bar(self) -> bool:
