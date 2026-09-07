@@ -2,7 +2,7 @@ import typing
 
 from devices.amu import AMUManager
 from devices.amu.models import GateInfo
-from lib.panels.widgets.amuWidgets import SpoolCarousel, SpoolInfoPanel
+from lib.panels.widgets.FilamentTab.amuWidgets import SpoolCarousel, SpoolInfoPanel
 from lib.utils.blocks_frame import BlocksCustomFrame
 from lib.utils.icon_button import IconButton
 from PyQt6 import QtCore, QtGui, QtWidgets
