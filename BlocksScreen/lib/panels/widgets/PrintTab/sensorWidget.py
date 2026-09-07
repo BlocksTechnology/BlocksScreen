@@ -64,7 +64,7 @@ class SensorWidget(QtWidgets.QWidget):
         self.icon_pixmap_fnp: QtGui.QPixmap = QtGui.QPixmap(
             ":/filament_related/media/btn_icons/filament_sensor_off.svg"
         )
-        self._setupUI()
+        self._setup_ui()
         self.toggle_button.stateChange.connect(self.toggle_sensor_state)
 
     @property
@@ -188,7 +188,7 @@ class SensorWidget(QtWidgets.QWidget):
         )
         style_painter.end()
 
-    def _setupUI(self):
+    def _setup_ui(self):
         _policy = QtWidgets.QSizePolicy.Policy.MinimumExpanding
         size_policy = QtWidgets.QSizePolicy(_policy, _policy)
         size_policy.setHeightForWidth(self.sizePolicy().hasHeightForWidth())

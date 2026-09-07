@@ -4,16 +4,16 @@ from typing import Deque
 
 from devices.amu import AMUManager
 from devices.amu.models import GateStatus
-from lib.panels.widgets.basePopup import BasePopup
-from lib.panels.widgets.colorWheelWidget import ColorWheelWidget
+from lib.panels.widgets.Common.basePopup import BasePopup
+from lib.panels.widgets.FilamentTab.colorWheelWidget import ColorWheelWidget
 from lib.panels.widgets.FilamentTab.addFilamentPage import AddFilamentPage
 from lib.panels.widgets.FilamentTab.addSpoolPage import AddSpoolPage
 from lib.panels.widgets.FilamentTab.amuPage import AMUpage
 from lib.panels.widgets.FilamentTab.basicFilamentPanel import BasicFilamentPanel
 from lib.panels.widgets.FilamentTab.spoolmanPage import SpoolmanPage
-from lib.panels.widgets.keyboardPage import CustomQwertyKeyboard
-from lib.panels.widgets.loadWidget import LoadingOverlayWidget
-from lib.panels.widgets.numpadPage import CustomNumpad
+from lib.panels.widgets.Common.keyboardPage import CustomQwertyKeyboard
+from lib.panels.widgets.Common.loadWidget import LoadingOverlayWidget
+from lib.panels.widgets.Common.numpadPage import CustomNumpad
 from lib.printer import Printer
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_frame import BlocksCustomFrame

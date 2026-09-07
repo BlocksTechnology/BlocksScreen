@@ -936,13 +936,13 @@ class TestOnNetworkError:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# _setupUI smoke test — covers ~1 200 statements in _setupUI + page helpers
+# _setup_ui smoke test — covers ~1 200 statements in _setup_ui + page helpers
 # ─────────────────────────────────────────────────────────────────────────────
 
 
 @pytest.mark.unit
 class TestSetupUIRunsWithoutError:
-    """Calling _setupUI() must not raise — covers the entire UI construction path."""
+    """Calling _setup_ui() must not raise — covers the entire UI construction path."""
 
     def test_setup_ui_completes(self, qapp):
         from unittest.mock import patch
@@ -957,7 +957,7 @@ class TestSetupUIRunsWithoutError:
         with patch.object(NetworkControlWindow, "__init__", _stub_init):
             w = NetworkControlWindow()
 
-        w._setupUI()
+        w._setup_ui()
         assert w.main_network_page is not None
         assert w.network_list_page is not None
         assert w.add_network_page is not None

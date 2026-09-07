@@ -37,7 +37,7 @@ _blocks_button = types.ModuleType("lib.utils.blocks_button")
 _blocks_label = types.ModuleType("lib.utils.blocks_label")
 _display_button = types.ModuleType("lib.utils.display_button")
 _progress_bar = types.ModuleType("lib.utils.blocks_progressbar")
-_base_popup = types.ModuleType("lib.panels.widgets.basePopup")
+_base_popup = types.ModuleType("lib.panels.widgets.Common.basePopup")
 
 _blocks_button.BlocksCustomButton = _make_stub(QtWidgets.QPushButton)
 _blocks_label.BlocksLabel = _make_stub(QtWidgets.QLabel)
@@ -50,7 +50,7 @@ for _name, _mod in [
     ("lib.utils.blocks_label", _blocks_label),
     ("lib.utils.display_button", _display_button),
     ("lib.utils.blocks_progressbar", _progress_bar),
-    ("lib.panels.widgets.basePopup", _base_popup),
+    ("lib.panels.widgets.Common.basePopup", _base_popup),
 ]:
     sys.modules[_name] = _mod  # force-set so network conftest stubs don't win
 

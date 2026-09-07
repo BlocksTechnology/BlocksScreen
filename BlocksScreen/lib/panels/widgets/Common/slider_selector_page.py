@@ -32,7 +32,7 @@ class SliderPage(QtWidgets.QWidget):
             "#SliderPage{background-image: url(:/background/media/1st_background.png);}\n"
         )
         self.setObjectName("SliderPage")
-        self._setupUI()
+        self._setup_ui()
         self.back_button.clicked.connect(self.request_back.emit)
         self.back_button.clicked.connect(self.value_selected.disconnect)
         self.slider.sliderReleased.connect(self.on_slider_value_change)
@@ -83,7 +83,7 @@ class SliderPage(QtWidgets.QWidget):
         self.object_name_label.setText(str(self.name))
         painter.end()
 
-    def _setupUI(self) -> None:
+    def _setup_ui(self) -> None:
         """Setup the components for the widget"""
         self.setMinimumSize(QtCore.QSize(700, 410))
         self.setMaximumSize(QtCore.QSize(720, 420))

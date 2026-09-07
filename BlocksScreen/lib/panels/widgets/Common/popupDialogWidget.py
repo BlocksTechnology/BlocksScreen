@@ -41,7 +41,7 @@ class Popup(QtWidgets.QDialog):
             | QtCore.Qt.WindowType.FramelessWindowHint
             | QtCore.Qt.WindowType.X11BypassWindowManagerHint
         )
-        self._setupUI()
+        self._setup_ui()
         self.slide_in_animation = QtCore.QPropertyAnimation(self, b"geometry")
         self.slide_in_animation.setDuration(1000)
         self.slide_in_animation.setEasingCurve(QtCore.QEasingCurve.Type.OutCubic)
@@ -231,7 +231,7 @@ class Popup(QtWidgets.QDialog):
         painter.setPen(QtCore.Qt.PenStyle.NoPen)
         painter.drawRoundedRect(self.rect(), 10, 10)
 
-    def _setupUI(self) -> None:
+    def _setup_ui(self) -> None:
         self.horizontal_layout = QtWidgets.QHBoxLayout(self)
         self.horizontal_layout.setContentsMargins(5, 5, 5, 5)
 

@@ -5,10 +5,10 @@ from enum import Enum, auto
 from functools import partial
 
 from lib.moonrakerComm import MoonWebSocket
-from lib.panels.widgets.basePopup import BasePopup
-from lib.panels.widgets.inputshaperPage import InputShaperPage
-from lib.panels.widgets.optionCardWidget import OptionCard
-from lib.panels.widgets.troubleshootPage import TroubleshootPage
+from lib.panels.widgets.Common.basePopup import BasePopup
+from lib.panels.widgets.UtilitiesTab.inputshaperPage import InputShaperPage
+from lib.panels.widgets.Common.optionCardWidget import OptionCard
+from lib.panels.widgets.UtilitiesTab.troubleshootPage import TroubleshootPage
 from lib.printer import Printer
 from lib.ui.utilitiesStackedWidget_ui import Ui_utilitiesStackedWidget
 from lib.utils.blocks_button import BlocksCustomButton

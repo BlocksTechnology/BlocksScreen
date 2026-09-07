@@ -41,11 +41,12 @@ sys.modules.pop("lib.utils.icon_button", None)
 sys.modules.pop("lib.panels.printTab", None)
 sys.modules.pop("lib.panels.controlTab", None)
 sys.modules.pop("lib.ui", None)
-sys.modules.pop("lib.ui.controlStackedWidget_ui", None)
+for _stubbed in [_m for _m in sys.modules if _m.startswith("lib.panels.widgets")]:
+    sys.modules.pop(_stubbed, None)
 
 from lib.panels.controlTab import ControlTab  # noqa: E402
 from lib.panels.printTab import PrintTab  # noqa: E402
-from lib.panels.widgets.slider_selector_page import SliderPage  # noqa: E402
+from lib.panels.widgets.Common.slider_selector_page import SliderPage  # noqa: E402
 
 
 @pytest.fixture
