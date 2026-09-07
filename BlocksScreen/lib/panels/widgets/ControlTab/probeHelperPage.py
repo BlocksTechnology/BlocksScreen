@@ -97,7 +97,7 @@ class ProbeHelper(QtWidgets.QWidget):
         self._eddy_command: str = ""
 
         self.setObjectName("probe_offset_page")
-        self._setupUi()
+        self._setup_ui()
         self.inductive_icon = QtGui.QPixmap(
             ":/z_levelling/media/btn_icons/inductive.svg"
         )
@@ -731,7 +731,7 @@ class ProbeHelper(QtWidgets.QWidget):
         btn.setObjectName(obj_name)
         return btn
 
-    def _setupUi(self) -> None:
+    def _setup_ui(self) -> None:
         """Build and lay out all UI elements for the probe helper page."""
         self.bbp_offset_value_selector_group = QtWidgets.QButtonGroup(self)
         self.bbp_offset_value_selector_group.setExclusive(True)
