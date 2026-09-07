@@ -1,6 +1,5 @@
-from PyQt6 import QtCore, QtGui, QtWidgets
-
 from lib.utils.icon_button import IconButton
+from PyQt6 import QtCore, QtGui, QtWidgets
 
 
 class TroubleshootPage(QtWidgets.QDialog):
@@ -48,85 +47,82 @@ class TroubleshootPage(QtWidgets.QDialog):
         return super().show()
 
     def _setup_ui(self) -> None:
+
         self.setObjectName("troubleshoot_page")
+
         self.verticalLayout = QtWidgets.QVBoxLayout(self)
         self.verticalLayout.setObjectName("verticalLayout")
-        self.leds_slider_header_layout_2 = QtWidgets.QHBoxLayout()
-        self.leds_slider_header_layout_2.setObjectName("leds_slider_header_layout_2")
         spacerItem18 = QtWidgets.QSpacerItem(
             60,
             60,
             QtWidgets.QSizePolicy.Policy.Minimum,
             QtWidgets.QSizePolicy.Policy.Minimum,
         )
-        self.leds_slider_header_layout_2.addItem(spacerItem18)
         spacerItem19 = QtWidgets.QSpacerItem(
             181,
             60,
             QtWidgets.QSizePolicy.Policy.Expanding,
             QtWidgets.QSizePolicy.Policy.Minimum,
         )
-        self.leds_slider_header_layout_2.addItem(spacerItem19)
-        self.tb_tittle_label = QtWidgets.QLabel("Troubleshoot", parent=self)
-        self.tb_tittle_label.setMinimumSize(QtCore.QSize(0, 60))
-        self.tb_tittle_label.setMaximumSize(QtCore.QSize(16777215, 60))
-        font = QtGui.QFont()
-        font.setFamily("Momcake")
-        font.setPointSize(24)
-        self.tb_tittle_label.setFont(font)
-        self.tb_tittle_label.setStyleSheet("background: transparent; color: white;")
-        self.tb_tittle_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
-        self.tb_tittle_label.setObjectName("tb_tittle_label")
-        self.leds_slider_header_layout_2.addWidget(self.tb_tittle_label)
+
         spacerItem20 = QtWidgets.QSpacerItem(
             0,
             60,
             QtWidgets.QSizePolicy.Policy.Expanding,
             QtWidgets.QSizePolicy.Policy.Minimum,
         )
-        self.leds_slider_header_layout_2.addItem(spacerItem20)
-        self.tb_back_btn = IconButton(parent=self)
-        sizePolicy = QtWidgets.QSizePolicy(
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
-        )
-        sizePolicy.setHorizontalStretch(0)
-        sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(self.tb_back_btn.sizePolicy().hasHeightForWidth())
-        self.tb_back_btn.setSizePolicy(sizePolicy)
-        self.tb_back_btn.setMinimumSize(QtCore.QSize(60, 60))
-        self.tb_back_btn.setMaximumSize(QtCore.QSize(60, 60))
+
+        self.leds_slider_header_layout_2 = QtWidgets.QHBoxLayout()
+        self.leds_slider_header_layout_2.setObjectName("leds_slider_header_layout_2")
+
+        self.leds_slider_header_layout_2.addItem(spacerItem18)
+        self.leds_slider_header_layout_2.addItem(spacerItem19)
+
         font = QtGui.QFont()
         font.setFamily("Momcake")
         font.setPointSize(24)
-        font.setItalic(False)
-        font.setStyleStrategy(QtGui.QFont.StyleStrategy.PreferAntialias)
-        self.tb_back_btn.setFont(font)
-        self.tb_back_btn.setMouseTracking(False)
-        self.tb_back_btn.setTabletTracking(True)
-        self.tb_back_btn.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.NoContextMenu)
-        self.tb_back_btn.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
-        self.tb_back_btn.setStyleSheet("")
-        self.tb_back_btn.setAutoDefault(False)
-        self.tb_back_btn.setFlat(True)
+
+        self.tb_tittle_label = QtWidgets.QLabel("Troubleshoot", parent=self)
+        self.tb_tittle_label.setMinimumSize(QtCore.QSize(0, 60))
+        self.tb_tittle_label.setMaximumSize(QtCore.QSize(16777215, 60))
+        self.tb_tittle_label.setFont(font)
+        self.tb_tittle_label.setStyleSheet("background: transparent; color: white;")
+        self.tb_tittle_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+
+        self.leds_slider_header_layout_2.addWidget(self.tb_tittle_label)
+        self.leds_slider_header_layout_2.addItem(spacerItem20)
+
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
+            QtWidgets.QSizePolicy.Policy.MinimumExpanding,
+        )
+
+        self.tb_back_btn = IconButton(parent=self)
+        self.tb_back_btn.setSizePolicy(sizePolicy)
+        self.tb_back_btn.setMinimumSize(QtCore.QSize(60, 60))
+        self.tb_back_btn.setMaximumSize(QtCore.QSize(60, 60))
         self.tb_back_btn.setProperty(
             "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/back.svg")
         )
-        self.tb_back_btn.setObjectName("tb_back_btn")
+
         self.leds_slider_header_layout_2.addWidget(self.tb_back_btn)
+
         self.verticalLayout.addLayout(self.leds_slider_header_layout_2)
+
         self.horizontalLayout = QtWidgets.QHBoxLayout()
         self.horizontalLayout.setObjectName("horizontalLayout")
+
         self.verticalLayout_10 = QtWidgets.QVBoxLayout()
         self.verticalLayout_10.setObjectName("verticalLayout_10")
-        self.label_4 = QtWidgets.QLabel("idk whar to type this", parent=self)
+
         sizePolicy = QtWidgets.QSizePolicy(
             QtWidgets.QSizePolicy.Policy.Expanding,
             QtWidgets.QSizePolicy.Policy.Expanding,
         )
-        sizePolicy.setHorizontalStretch(0)
-        sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(self.label_4.sizePolicy().hasHeightForWidth())
+        self.label_4 = QtWidgets.QLabel(
+            "For more information check our website \n www.blockstec.com \n or \nsupport@blockstec.com",
+            parent=self,
+        )
         self.label_4.setSizePolicy(sizePolicy)
         font = QtGui.QFont()
         font.setPointSize(24)
