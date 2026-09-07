@@ -159,7 +159,7 @@ class ExtruderPage(QtWidgets.QWidget):
         widget = QtWidgets.QWidget(parent=self)
         widget.setMinimumSize(QtCore.QSize(710, 410))
         widget.setMaximumSize(QtCore.QSize(710, 410))
-        self.setObjectName("fans_page")
+        self.setObjectName("extruder_page")
         self.extrude_page = QtWidgets.QWidget()
         self.extrude_page.setMinimumSize(QtCore.QSize(710, 400))
         self.extrude_page.setMaximumSize(QtCore.QSize(720, 420))
