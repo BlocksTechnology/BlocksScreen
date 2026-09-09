@@ -608,6 +608,16 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
             ):
                 new_state = not item.is_expanded
                 model.setData(index, new_state, EntryListModel.ExpandRole)
+                # Toggling expand must also select — the arrow covers most of
+                # the row, so a tap there would otherwise silently skip
+                # selection and leave the info panel stale (first-click bug).
+                if self.prev_index != index.row():
+                    prev_index: QtCore.QModelIndex = model.index(self.prev_index)
+                    if prev_index.isValid():
+                        model.setData(prev_index, False, EntryListModel.EnableRole)
+                    self.prev_index = index.row()
+                model.setData(index, True, EntryListModel.EnableRole)
+                self.item_selected.emit(item)
                 return True
 
             if self.prev_index != index.row():
