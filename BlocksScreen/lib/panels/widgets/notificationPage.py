@@ -148,7 +148,7 @@ class NotificationPage(QtWidgets.QWidget):
             self.popup.new_message(message_type=msg_type, message=message, timeout=3000)
 
         self.build_model_list()
-        self.has_new_notification.emit(True)
+        self.has_new_notification.emit(not self.isVisible())
 
     def _add_notif_entry(
         self,

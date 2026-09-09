@@ -75,6 +75,13 @@ def test_show_notification_panel_clears_dot(page, qtbot):
     assert blocker.args == [False]
 
 
+def test_new_notification_while_open_does_not_set_dot(page, qtbot):
+    page.show()
+    with qtbot.waitSignal(page.has_new_notification, timeout=200) as blocker:
+        page.new_notication("test", "hello", 1, False)
+    assert blocker.args == [False]
+
+
 def test_reset_view_model_clears_dot(page, qtbot):
     page.new_notication("test", "hello", 1, False)
     with qtbot.waitSignal(page.has_new_notification, timeout=200) as blocker:
