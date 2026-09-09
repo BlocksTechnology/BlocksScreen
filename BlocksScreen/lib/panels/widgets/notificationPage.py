@@ -1,4 +1,3 @@
-from collections import deque
 from typing import ClassVar
 
 from lib.panels.widgets.popupDialogWidget import Popup
@@ -10,14 +9,8 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 
 
 class NotificationPage(QtWidgets.QWidget):
-    """Update GUI Page,
-    retrieves from moonraker available clients and adds functionality
-    for updating or recovering them
-    """
+    """Notification panel, lists moonraker/UI notifications and lets the user clear them"""
 
-    on_update_message: ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
-        dict, name="on-update-message"
-    )
     has_new_notification: ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         bool, name="has-new-notification"
     )
@@ -28,18 +21,18 @@ class NotificationPage(QtWidgets.QWidget):
         self._ICON_WARN = QtGui.QPixmap(":/ui/media/btn_icons/troubleshoot.svg")
         self._ICON_ERROR = QtGui.QPixmap(":/ui/media/btn_icons/error.svg")
         self._setupUI()
-        self.cli_tracking: deque = deque()
         self.selected_item: ListItem | None = None
         self.popup = Popup(self)
 
         self.model = EntryListModel()
-        self.model.setParent(self.update_buttons_list_widget)
+        self.model.setParent(self.notification_list_view)
         self.entry_delegate = EntryDelegate()
-        self.update_buttons_list_widget.setModel(self.model)
-        self.update_buttons_list_widget.setItemDelegate(self.entry_delegate)
+        self.notification_list_view.setModel(self.model)
+        self.notification_list_view.setItemDelegate(self.entry_delegate)
         self.entry_delegate.item_selected.connect(self.on_item_clicked)
+        self.model.rowsInserted.connect(self._on_rows_inserted)
 
-        self.update_back_btn.clicked.connect(self.hide)
+        self.back_btn.clicked.connect(self.hide)
         self.delete_btn.clicked.connect(self.delete_selected_item)
         self.delete_all_btn.clicked.connect(self.reset_view_model)
 
@@ -60,14 +53,19 @@ class NotificationPage(QtWidgets.QWidget):
         self.show()
         self.raise_()
         self.has_new_notification.emit(False)
+        if self.model.entries:
+            self._select_row(0)
 
     def delete_selected_item(self) -> None:
         """Deletes currently selected item from the list view"""
         if self.selected_item is None:
             return
         self.model.remove_item(self.selected_item)
-        self.delete_btn.setEnabled(False)
         self.selected_item = None
+        if self.model.entries:
+            self._select_row(0)
+        else:
+            self._clear_info_box()
 
     def reset_view_model(self) -> None:
         """Clears items from ListView
@@ -75,25 +73,58 @@ class NotificationPage(QtWidgets.QWidget):
         """
         self.model.clear()
         self.entry_delegate.clear()
+        self.selected_item = None
+        self._clear_info_box()
         self.has_new_notification.emit(False)
 
-    def build_model_list(self) -> None:
-        """Builds the model list (`self.model`) containing updatable clients"""
-        self.update_buttons_list_widget.blockSignals(True)
+    def _clear_info_box(self) -> None:
+        """Resets the info box to its empty-list default (no item selected)."""
+        self.delete_btn.setEnabled(False)
+        self.type_label.setText("N/A")
+        self.time_label.setText("N/A")
+
+    def _on_rows_inserted(
+        self, _parent: QtCore.QModelIndex, first: int, _last: int
+    ) -> None:
+        """Keep the delegate's prev_index valid when a notification is prepended above it."""
+        if first <= self.entry_delegate.prev_index:
+            self.entry_delegate.prev_index += 1
+
+    def _select_row(self, row: int) -> None:
+        """Selects *row*, clearing the previous selection and refreshing the info box."""
+        index = self.model.index(row)
+        if not index.isValid():
+            return
+        if self.entry_delegate.prev_index != row:
+            prev_index = self.model.index(self.entry_delegate.prev_index)
+            if prev_index.isValid():
+                self.model.setData(prev_index, False, EntryListModel.EnableRole)
+            self.entry_delegate.prev_index = row
+        self.model.setData(index, True, EntryListModel.EnableRole)
+        self.on_item_clicked(index.data(QtCore.Qt.ItemDataRole.UserRole))
+
+    def _ingest_notification(self, message: str, priority: int) -> None:
+        """Adds *message* to the model, collapsing a repeat of the last entry (moonraker echo spam)."""
+        match priority:
+            case 1:
+                color, icon = "#1A8FBF", self._ICON_INFO
+            case 2:
+                color, icon = "#E7E147", self._ICON_WARN
+            case 3:
+                color, icon = "#CA4949", self._ICON_ERROR
+            case _:
+                color, icon = "#a4a4a4", self._ICON_INFO
+
+        if self.model.refresh_last_if_duplicate(message, color):
+            self._select_row(0)
+            return
+
+        self.notification_list_view.blockSignals(True)
         try:
-            message, _, priority = self.cli_tracking.popleft()
-            match priority:
-                case 1:
-                    self._add_notif_entry(message, "#1A8FBF", self._ICON_INFO)
-                case 2:
-                    self._add_notif_entry(message, "#E7E147", self._ICON_WARN)
-                case 3:
-                    self._add_notif_entry(message, "#CA4949", self._ICON_ERROR)
-                case _:
-                    self._add_notif_entry(message, "#a4a4a4", self._ICON_INFO)
-            self.model.setData(self.model.index(0), True, EntryListModel.EnableRole)
+            self._add_notif_entry(message, color, icon)
+            self._select_row(0)
         finally:
-            self.update_buttons_list_widget.blockSignals(False)
+            self.notification_list_view.blockSignals(False)
 
     @QtCore.pyqtSlot(ListItem, name="on-item-clicked")
     def on_item_clicked(self, item: ListItem) -> None:
@@ -118,7 +149,7 @@ class NotificationPage(QtWidgets.QWidget):
     @QtCore.pyqtSlot(str, str, int, bool, name="new-notication")
     def new_notication(
         self,
-        origin: str | None = None,
+        _origin: str | None = None,
         message: str = "",
         priority: int = 0,
         popup: bool = False,
@@ -131,8 +162,7 @@ class NotificationPage(QtWidgets.QWidget):
         :param popup: sets if notification should appear as popup
         :type popup: bool
         """
-        self.cli_tracking.append((message, origin, priority))
-        self.model.delete_duplicates()
+        self._ingest_notification(message, priority)
 
         if popup:
             match priority:
@@ -147,7 +177,6 @@ class NotificationPage(QtWidgets.QWidget):
 
             self.popup.new_message(message_type=msg_type, message=message, timeout=3000)
 
-        self.build_model_list()
         self.has_new_notification.emit(not self.isVisible())
 
     def _add_notif_entry(
@@ -171,10 +200,10 @@ class NotificationPage(QtWidgets.QWidget):
         )
         time = QtCore.QDateTime.currentDateTime().toString("hh:mm:ss")
         item._cache[-1] = time
-        self.model.add_item(item)
+        self.model.insert_item(0, item)
 
     def _setupUI(self) -> None:
-        """Setup UI for updatePage"""
+        """Setup UI for the notification panel"""
         sizePolicy = QtWidgets.QSizePolicy(
             QtWidgets.QSizePolicy.Policy.MinimumExpanding,
             QtWidgets.QSizePolicy.Policy.MinimumExpanding,
@@ -184,16 +213,16 @@ class NotificationPage(QtWidgets.QWidget):
         font = QtGui.QFont()
         font.setPointSize(20)
         self.setSizePolicy(sizePolicy)
-        self.setObjectName("updatePage")
+        self.setObjectName("notificationPage")
         self.setStyleSheet(
-            """#updatePage {
+            """#notificationPage {
                 background-image: url(:/background/media/1st_background.png);
             }"""
         )
         self.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
-        self.update_page_content_layout = QtWidgets.QVBoxLayout()
+        self.content_layout = QtWidgets.QVBoxLayout()
         self.setMinimumSize(800, 480)
-        self.update_page_content_layout.setContentsMargins(15, 15, 15, 15)
+        self.content_layout.setContentsMargins(15, 15, 15, 15)
 
         self.header_content_layout = QtWidgets.QHBoxLayout()
         self.header_content_layout.setAlignment(QtCore.Qt.AlignmentFlag.AlignTop)
@@ -224,75 +253,75 @@ class NotificationPage(QtWidgets.QWidget):
         self.header_content_layout.addWidget(
             self.header_title, alignment=QtCore.Qt.AlignmentFlag.AlignCenter
         )
-        self.update_back_btn = IconButton(self)
-        self.update_back_btn.setMinimumSize(QtCore.QSize(60, 60))
-        self.update_back_btn.setMaximumSize(QtCore.QSize(60, 60))
-        self.update_back_btn.setFlat(True)
-        self.update_back_btn.setPixmap(QtGui.QPixmap(":/ui/media/btn_icons/back.svg"))
+        self.back_btn = IconButton(self)
+        self.back_btn.setMinimumSize(QtCore.QSize(60, 60))
+        self.back_btn.setMaximumSize(QtCore.QSize(60, 60))
+        self.back_btn.setFlat(True)
+        self.back_btn.setPixmap(QtGui.QPixmap(":/ui/media/btn_icons/back.svg"))
         self.header_content_layout.addWidget(
-            self.update_back_btn
+            self.back_btn
         )  # alignment=QtCore.Qt.AlignmentFlag.AlignCenter)
-        self.update_page_content_layout.addLayout(self.header_content_layout, 0)
+        self.content_layout.addLayout(self.header_content_layout, 0)
 
         self.main_content_layout = QtWidgets.QHBoxLayout()
         self.main_content_layout.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
 
-        self.update_buttons_frame = BlocksCustomFrame(self)
+        self.list_frame = BlocksCustomFrame(self)
 
-        self.update_buttons_frame.setMinimumSize(QtCore.QSize(500, 380))
-        self.update_buttons_frame.setMaximumSize(QtCore.QSize(560, 500))
+        self.list_frame.setMinimumSize(QtCore.QSize(500, 380))
+        self.list_frame.setMaximumSize(QtCore.QSize(560, 500))
 
-        self.update_buttons_list_widget = QtWidgets.QListView(self.update_buttons_frame)
-        self.update_buttons_list_widget.setMouseTracking(True)
-        self.update_buttons_list_widget.setTabletTracking(True)
+        self.notification_list_view = QtWidgets.QListView(self.list_frame)
+        self.notification_list_view.setMouseTracking(True)
+        self.notification_list_view.setTabletTracking(True)
 
-        self.update_buttons_list_widget.setPalette(palette)
-        self.update_buttons_list_widget.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
-        self.update_buttons_list_widget.setStyleSheet("background-color:transparent")
-        self.update_buttons_list_widget.setFrameShadow(QtWidgets.QFrame.Shadow.Sunken)
-        self.update_buttons_list_widget.setMinimumSize(self.update_buttons_frame.size())
-        self.update_buttons_list_widget.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
-        self.update_buttons_list_widget.setVerticalScrollBarPolicy(
+        self.notification_list_view.setPalette(palette)
+        self.notification_list_view.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
+        self.notification_list_view.setStyleSheet("background-color:transparent")
+        self.notification_list_view.setFrameShadow(QtWidgets.QFrame.Shadow.Sunken)
+        self.notification_list_view.setMinimumSize(self.list_frame.size())
+        self.notification_list_view.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
+        self.notification_list_view.setVerticalScrollBarPolicy(
             QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff
         )
-        self.update_buttons_list_widget.setHorizontalScrollBarPolicy(
+        self.notification_list_view.setHorizontalScrollBarPolicy(
             QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff
         )
-        self.update_buttons_list_widget.setSizeAdjustPolicy(
+        self.notification_list_view.setSizeAdjustPolicy(
             QtWidgets.QAbstractScrollArea.SizeAdjustPolicy.AdjustToContents
         )
-        self.update_buttons_list_widget.setAutoScroll(False)
-        self.update_buttons_list_widget.setProperty("showDropIndicator", False)
-        self.update_buttons_list_widget.setDefaultDropAction(
+        self.notification_list_view.setAutoScroll(False)
+        self.notification_list_view.setProperty("showDropIndicator", False)
+        self.notification_list_view.setDefaultDropAction(
             QtCore.Qt.DropAction.IgnoreAction
         )
-        self.update_buttons_list_widget.setAlternatingRowColors(False)
-        self.update_buttons_list_widget.setSelectionMode(
+        self.notification_list_view.setAlternatingRowColors(False)
+        self.notification_list_view.setSelectionMode(
             QtWidgets.QAbstractItemView.SelectionMode.NoSelection
         )
-        self.update_buttons_list_widget.setSelectionBehavior(
+        self.notification_list_view.setSelectionBehavior(
             QtWidgets.QAbstractItemView.SelectionBehavior.SelectItems
         )
-        self.update_buttons_list_widget.setVerticalScrollMode(
+        self.notification_list_view.setVerticalScrollMode(
             QtWidgets.QAbstractItemView.ScrollMode.ScrollPerPixel
         )
-        self.update_buttons_list_widget.setHorizontalScrollMode(
+        self.notification_list_view.setHorizontalScrollMode(
             QtWidgets.QAbstractItemView.ScrollMode.ScrollPerPixel
         )
         QtWidgets.QScroller.grabGesture(
-            self.update_buttons_list_widget,
+            self.notification_list_view,
             QtWidgets.QScroller.ScrollerGestureType.TouchGesture,
         )
         QtWidgets.QScroller.grabGesture(
-            self.update_buttons_list_widget,
+            self.notification_list_view,
             QtWidgets.QScroller.ScrollerGestureType.LeftMouseButtonGesture,
         )
-        self.update_buttons_layout = QtWidgets.QVBoxLayout()
-        self.update_buttons_layout.setContentsMargins(0, 0, 0, 0)
-        self.update_buttons_layout.addWidget(self.update_buttons_list_widget, 0)
-        self.update_buttons_frame.setLayout(self.update_buttons_layout)
+        self.list_frame_layout = QtWidgets.QVBoxLayout()
+        self.list_frame_layout.setContentsMargins(0, 0, 0, 0)
+        self.list_frame_layout.addWidget(self.notification_list_view, 0)
+        self.list_frame.setLayout(self.list_frame_layout)
 
-        self.main_content_layout.addWidget(self.update_buttons_frame)
+        self.main_content_layout.addWidget(self.list_frame)
 
         self.vlayout = QtWidgets.QVBoxLayout()
         self.vlayout.setContentsMargins(5, 5, 5, 5)
@@ -303,36 +332,33 @@ class NotificationPage(QtWidgets.QWidget):
         self.info_box_layout = QtWidgets.QGridLayout(self.info_frame)
         self.info_box_layout.setContentsMargins(0, 0, 0, 0)
 
-        self.info_box_layout.addItem(
-            QtWidgets.QSpacerItem(
-                20,
-                20,
-                QtWidgets.QSizePolicy.Policy.Minimum,
-                QtWidgets.QSizePolicy.Policy.Minimum,
-            ),
-            0,
-            0,
-        )
-
         self.type_title = QtWidgets.QLabel(self.info_frame)
         self.type_title.setText("Type:")
         self.type_title.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
-        self.info_box_layout.addWidget(self.type_title, 1, 0)
+        self.info_box_layout.addWidget(self.type_title, 1, 1)
 
         self.type_label = QtWidgets.QLabel(self.info_frame)
         self.type_label.setText("N/A")
         self.type_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
-        self.info_box_layout.addWidget(self.type_label, 1, 1)
+        self.info_box_layout.addWidget(self.type_label, 1, 2)
 
         self.time_title = QtWidgets.QLabel(self.info_frame)
         self.time_title.setText("Time:")
         self.time_title.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
-        self.info_box_layout.addWidget(self.time_title, 2, 0)
+        self.info_box_layout.addWidget(self.time_title, 2, 1)
 
         self.time_label = QtWidgets.QLabel(self.info_frame)
         self.time_label.setText("N/A")
         self.time_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
-        self.info_box_layout.addWidget(self.time_label, 2, 1)
+        self.info_box_layout.addWidget(self.time_label, 2, 2)
+
+        # Rows 1/2 outweigh the outer padding so most slack goes into the Type/Time gap.
+        self.info_box_layout.setColumnStretch(0, 1)
+        self.info_box_layout.setColumnStretch(3, 1)
+        self.info_box_layout.setRowStretch(0, 1)
+        self.info_box_layout.setRowStretch(1, 2)
+        self.info_box_layout.setRowStretch(2, 2)
+        self.info_box_layout.setRowStretch(3, 1)
 
         self.type_title.setFont(font)
         self.type_title.setStyleSheet("color:#FFFFFF")
@@ -409,5 +435,5 @@ class NotificationPage(QtWidgets.QWidget):
         self.vlayout.addWidget(self.buttons_frame)
 
         self.main_content_layout.addLayout(self.vlayout)
-        self.update_page_content_layout.addLayout(self.main_content_layout, 1)
-        self.setLayout(self.update_page_content_layout)
+        self.content_layout.addLayout(self.main_content_layout, 1)
+        self.setLayout(self.content_layout)
