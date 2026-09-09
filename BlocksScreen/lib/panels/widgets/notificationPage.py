@@ -170,7 +170,6 @@ class NotificationPage(QtWidgets.QWidget):
             allow_expand=True,
             notificate=False,
             color_left_icon=True,
-            text_left_padding=10,
         )
         time = QtCore.QDateTime.currentDateTime().toString("hh:mm:ss")
         item._cache[-1] = time

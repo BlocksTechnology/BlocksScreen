@@ -3,6 +3,8 @@ from dataclasses import dataclass, field
 
 from PyQt6 import QtCore, QtGui, QtWidgets  # pylint: disable=import-error
 
+_TEXT_LEFT_PADDING = 10  # gap between the left icon and the text, all list pages
+
 
 @dataclass(slots=True)
 class ListItem:
@@ -31,7 +33,6 @@ class ListItem:
 
     height: int = 60
     notificate: bool = False
-    text_left_padding: int = 0  # extra gap between the left icon and the text
 
     # cached per-width height, plus the -1 key for a notification's display timestamp (str)
     _cache: dict[int, typing.Any] = field(default_factory=dict)
@@ -348,8 +349,7 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
 
         left_reserved = 10
         if item.left_icon:
-            left_reserved = (base_h * 0.1) + ellipse_size + 8
-        left_reserved += item.text_left_padding
+            left_reserved = (base_h * 0.1) + ellipse_size + 8 + _TEXT_LEFT_PADDING
 
         if item._lfontsize > 0 and item._lfontsize != option.font.pointSize():
             f = QtGui.QFont(option.font)
@@ -492,8 +492,7 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
         text_left = (
             rect.left()
             + left_margin
-            + (left_icon_rect.width() if item.left_icon else 0)
-            + item.text_left_padding
+            + (left_icon_rect.width() + _TEXT_LEFT_PADDING if item.left_icon else 0)
         )
         text_rect = QtCore.QRectF(
             text_left,
