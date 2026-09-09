@@ -332,36 +332,31 @@ class NotificationPage(QtWidgets.QWidget):
         self.info_box_layout = QtWidgets.QGridLayout(self.info_frame)
         self.info_box_layout.setContentsMargins(0, 0, 0, 0)
 
-        self.info_box_layout.addItem(
-            QtWidgets.QSpacerItem(
-                20,
-                20,
-                QtWidgets.QSizePolicy.Policy.Minimum,
-                QtWidgets.QSizePolicy.Policy.Minimum,
-            ),
-            0,
-            0,
-        )
-
         self.type_title = QtWidgets.QLabel(self.info_frame)
         self.type_title.setText("Type:")
         self.type_title.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
-        self.info_box_layout.addWidget(self.type_title, 1, 0)
+        self.info_box_layout.addWidget(self.type_title, 1, 1)
 
         self.type_label = QtWidgets.QLabel(self.info_frame)
         self.type_label.setText("N/A")
         self.type_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
-        self.info_box_layout.addWidget(self.type_label, 1, 1)
+        self.info_box_layout.addWidget(self.type_label, 1, 2)
 
         self.time_title = QtWidgets.QLabel(self.info_frame)
         self.time_title.setText("Time:")
         self.time_title.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
-        self.info_box_layout.addWidget(self.time_title, 2, 0)
+        self.info_box_layout.addWidget(self.time_title, 2, 1)
 
         self.time_label = QtWidgets.QLabel(self.info_frame)
         self.time_label.setText("N/A")
         self.time_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
-        self.info_box_layout.addWidget(self.time_label, 2, 1)
+        self.info_box_layout.addWidget(self.time_label, 2, 2)
+
+        # Stretch columns/rows surrounding the content block to center it in the frame.
+        self.info_box_layout.setColumnStretch(0, 1)
+        self.info_box_layout.setColumnStretch(3, 1)
+        self.info_box_layout.setRowStretch(0, 1)
+        self.info_box_layout.setRowStretch(3, 1)
 
         self.type_title.setFont(font)
         self.type_title.setStyleSheet("color:#FFFFFF")

@@ -239,7 +239,7 @@ class Ui_MainWindow(object):
         self.notification_btn.setFlat(True)
         self.notification_btn.setProperty("icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/notification.svg"))
         self.notification_btn.setObjectName("notification_btn")
-        self.header_main_layout.addWidget(self.notification_btn, 0, QtCore.Qt.AlignmentFlag.AlignLeft)
+        self.header_main_layout.addWidget(self.notification_btn, 0, QtCore.Qt.AlignmentFlag.AlignHCenter)
         self.extruder_temp_display = DisplayButton(parent=self.main_header_layout)
         self.extruder_temp_display.setMinimumSize(QtCore.QSize(140, 60))
         self.extruder_temp_display.setMaximumSize(QtCore.QSize(160, 60))

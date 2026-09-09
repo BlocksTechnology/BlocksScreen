@@ -531,7 +531,7 @@ QPushButton:pressed{
      <property name="bottomMargin">
       <number>0</number>
      </property>
-     <item alignment="Qt::AlignLeft">
+     <item alignment="Qt::AlignHCenter">
       <widget class="IconButton" name="notification_btn">
        <property name="sizePolicy">
         <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
