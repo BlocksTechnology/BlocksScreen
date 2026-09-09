@@ -38,9 +38,9 @@ _notification_page_module = sys.modules[NotificationPage.__module__]
 
 
 def _mock_setup(self) -> None:
-    self.update_buttons_list_widget = QtWidgets.QListView()
+    self.notification_list_view = QtWidgets.QListView()
     for attr in (
-        "update_back_btn",
+        "back_btn",
         "delete_btn",
         "delete_all_btn",
         "header_title",

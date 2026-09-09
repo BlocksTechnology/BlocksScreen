@@ -13,12 +13,12 @@ class ListItem:
     _rfontsize: int = 0
     _lfontsize: int = 0
 
-    callback: typing.Optional[typing.Callable] = None
+    callback: typing.Callable | None = None
 
     color: str = "#dfdfdf"
     color_left_icon: bool = False
-    right_icon: typing.Optional[QtGui.QPixmap] = None
-    left_icon: typing.Optional[QtGui.QPixmap] = None
+    right_icon: QtGui.QPixmap | None = None
+    left_icon: QtGui.QPixmap | None = None
 
     selected: bool = False
     allow_check: bool = True
@@ -31,9 +31,10 @@ class ListItem:
 
     height: int = 60
     notificate: bool = False
+    text_left_padding: int = 0  # extra gap between the left icon and the text
 
-    # stores width and heitgh of the button so we dont need to recalculate it every time
-    _cache: typing.Dict[int, int] = field(default_factory=dict)
+    # cached per-width height, plus the -1 key for a notification's display timestamp (str)
+    _cache: dict[int, typing.Any] = field(default_factory=dict)
 
     def clear_cache(self):
         """Call this if text or font size changes dynamically"""
@@ -68,28 +69,17 @@ class EntryListModel(QtCore.QAbstractListModel):
             self.entries.pop(index)
             self.endRemoveRows()
 
-    def delete_duplicates(self) -> None:
-        """
-        Removes items that have identical text, color, and
-        last time entry (get(-1)).
-        """
-        seen_identifiers: set[tuple[str, str, str]] = set()
-        unique_entries: list[ListItem] = []
-
-        for item in self.entries:
-            text_val = item.text
-            color_val = item.color
-            time_val = item._cache.get(-1)
-
-            identifier = (text_val, color_val, time_val)
-
-            if identifier not in seen_identifiers:
-                unique_entries.append(item)
-                seen_identifiers.add(identifier)
-
-        self.beginResetModel()
-        self.entries = unique_entries
-        self.endResetModel()
+    def refresh_last_if_duplicate(self, text: str, color: str) -> bool:
+        """Collapse a repeat of the most recent entry (O(1)) instead of inserting a new row."""
+        if not self.entries:
+            return False
+        last = self.entries[0]
+        if last.text != text or last.color != color:
+            return False
+        last._cache[-1] = QtCore.QDateTime.currentDateTime().toString("hh:mm:ss")
+        idx = self.index(0)
+        self.dataChanged.emit(idx, idx)
+        return True
 
     def clear(self) -> None:
         """Clear model rows"""
@@ -359,6 +349,7 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
         left_reserved = 10
         if item.left_icon:
             left_reserved = (base_h * 0.1) + ellipse_size + 8
+        left_reserved += item.text_left_padding
 
         if item._lfontsize > 0 and item._lfontsize != option.font.pointSize():
             f = QtGui.QFont(option.font)
@@ -380,8 +371,7 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
             right_reserved += ellipse_size
 
         text_avail_width = target_width - left_reserved - right_reserved
-        if text_avail_width < 50:
-            text_avail_width = 50
+        text_avail_width = max(text_avail_width, 50)
 
         single_line_width = fm.horizontalAdvance(item.text)
 
@@ -499,15 +489,16 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
             rect.right() - ellipse_size - ellipse_margin - rect.height() * 0.10
         )
 
-        text_rect = QtCore.QRectF(
+        text_left = (
             rect.left()
             + left_margin
-            + (left_icon_rect.width() if item.left_icon else 0),
+            + (left_icon_rect.width() if item.left_icon else 0)
+            + item.text_left_padding
+        )
+        text_rect = QtCore.QRectF(
+            text_left,
             rect.top(),
-            text_margin
-            - rect.left()
-            - left_margin
-            - (left_icon_rect.width() if item.left_icon else 0),
+            text_margin - text_left,
             rect.height(),
         )
 
