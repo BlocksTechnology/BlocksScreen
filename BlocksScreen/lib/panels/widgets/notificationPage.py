@@ -53,14 +53,19 @@ class NotificationPage(QtWidgets.QWidget):
         self.show()
         self.raise_()
         self.has_new_notification.emit(False)
+        if self.model.entries:
+            self._select_row(0)
 
     def delete_selected_item(self) -> None:
         """Deletes currently selected item from the list view"""
         if self.selected_item is None:
             return
         self.model.remove_item(self.selected_item)
-        self.delete_btn.setEnabled(False)
         self.selected_item = None
+        if self.model.entries:
+            self._select_row(0)
+        else:
+            self._clear_info_box()
 
     def reset_view_model(self) -> None:
         """Clears items from ListView
@@ -68,7 +73,15 @@ class NotificationPage(QtWidgets.QWidget):
         """
         self.model.clear()
         self.entry_delegate.clear()
+        self.selected_item = None
+        self._clear_info_box()
         self.has_new_notification.emit(False)
+
+    def _clear_info_box(self) -> None:
+        """Resets the info box to its empty-list default (no item selected)."""
+        self.delete_btn.setEnabled(False)
+        self.type_label.setText("N/A")
+        self.time_label.setText("N/A")
 
     def _on_rows_inserted(
         self, _parent: QtCore.QModelIndex, first: int, _last: int
@@ -76,6 +89,19 @@ class NotificationPage(QtWidgets.QWidget):
         """Keep the delegate's prev_index valid when a notification is prepended above it."""
         if first <= self.entry_delegate.prev_index:
             self.entry_delegate.prev_index += 1
+
+    def _select_row(self, row: int) -> None:
+        """Selects *row*, clearing the previous selection and refreshing the info box."""
+        index = self.model.index(row)
+        if not index.isValid():
+            return
+        if self.entry_delegate.prev_index != row:
+            prev_index = self.model.index(self.entry_delegate.prev_index)
+            if prev_index.isValid():
+                self.model.setData(prev_index, False, EntryListModel.EnableRole)
+            self.entry_delegate.prev_index = row
+        self.model.setData(index, True, EntryListModel.EnableRole)
+        self.on_item_clicked(index.data(QtCore.Qt.ItemDataRole.UserRole))
 
     def _ingest_notification(self, message: str, priority: int) -> None:
         """Adds *message* to the model, collapsing a repeat of the last entry (moonraker echo spam)."""
@@ -90,12 +116,13 @@ class NotificationPage(QtWidgets.QWidget):
                 color, icon = "#a4a4a4", self._ICON_INFO
 
         if self.model.refresh_last_if_duplicate(message, color):
+            self._select_row(0)
             return
 
         self.notification_list_view.blockSignals(True)
         try:
             self._add_notif_entry(message, color, icon)
-            self.model.setData(self.model.index(0), True, EntryListModel.EnableRole)
+            self._select_row(0)
         finally:
             self.notification_list_view.blockSignals(False)
 

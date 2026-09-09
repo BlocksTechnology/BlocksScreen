@@ -264,6 +264,7 @@ class EntryListModel(QtCore.QAbstractListModel):
             item.is_expanded = value
             self.layoutChanged.emit()
             self.dataChanged.emit(index, index, [EntryListModel.ExpandRole])
+            return True
         if role == QtCore.Qt.ItemDataRole.UserRole:
             self.dataChanged.emit(index, index, [QtCore.Qt.ItemDataRole.UserRole])
             return True
