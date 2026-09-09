@@ -1,5 +1,8 @@
 import typing
+
 from PyQt6 import QtCore, QtGui, QtWidgets
+
+NOTIFICATION_DOT_COLOR = QtGui.QColor(226, 31, 31)
 
 
 class IconButton(QtWidgets.QPushButton):
@@ -12,8 +15,15 @@ class IconButton(QtWidgets.QPushButton):
         self._text: str = ""
         self._name: str = ""
         self.text_color: QtGui.QColor = QtGui.QColor(255, 255, 255)
+        self._show_notification: bool = False
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_AcceptTouchEvents, True)
         self.pressed_bg_color = QtGui.QColor(223, 223, 223, 70)  # Set to solid white
+
+    def setShowNotification(self, show: bool) -> None:
+        """Set notification dot on button"""
+        if self._show_notification != show:
+            self._show_notification = show
+            self.update()
 
     @property
     def name(self):
@@ -124,7 +134,18 @@ class IconButton(QtWidgets.QPushButton):
                 str(self.text()),
             )
 
+        if self._show_notification:
+            self._paint_notification(painter)
+
         painter.end()
+
+    def _paint_notification(self, painter: QtGui.QPainter) -> None:
+        """Draw the unread-notification dot in the top-right corner"""
+        dot_diameter = min(14, self.height() * 0.35)
+        dot_x = self.width() - dot_diameter
+        painter.setBrush(NOTIFICATION_DOT_COLOR)
+        painter.setPen(QtCore.Qt.PenStyle.NoPen)
+        painter.drawEllipse(QtCore.QRectF(dot_x, 0, dot_diameter, dot_diameter))
 
     def setProperty(self, name: str, value: typing.Any) -> bool:
         """Re-implemented method, set widget properties"""

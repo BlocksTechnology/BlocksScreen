@@ -18,6 +18,9 @@ class NotificationPage(QtWidgets.QWidget):
     on_update_message: ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         dict, name="on-update-message"
     )
+    has_new_notification: ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        bool, name="has-new-notification"
+    )
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -56,6 +59,7 @@ class NotificationPage(QtWidgets.QWidget):
         self.update()
         self.show()
         self.raise_()
+        self.has_new_notification.emit(False)
 
     def delete_selected_item(self) -> None:
         """Deletes currently selected item from the list view"""
@@ -71,6 +75,7 @@ class NotificationPage(QtWidgets.QWidget):
         """
         self.model.clear()
         self.entry_delegate.clear()
+        self.has_new_notification.emit(False)
 
     def build_model_list(self) -> None:
         """Builds the model list (`self.model`) containing updatable clients"""
@@ -143,6 +148,7 @@ class NotificationPage(QtWidgets.QWidget):
             self.popup.new_message(message_type=msg_type, message=message, timeout=3000)
 
         self.build_model_list()
+        self.has_new_notification.emit(True)
 
     def _add_notif_entry(
         self,
