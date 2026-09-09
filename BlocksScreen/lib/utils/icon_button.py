@@ -141,7 +141,7 @@ class IconButton(QtWidgets.QPushButton):
 
     def _paint_notification(self, painter: QtGui.QPainter) -> None:
         """Draw the unread-notification dot in the top-right corner"""
-        dot_diameter = min(14, self.height() * 0.35)
+        dot_diameter = min(10, self.height() * 0.25)
         dot_x = self.width() - dot_diameter
         painter.setBrush(NOTIFICATION_DOT_COLOR)
         painter.setPen(QtCore.Qt.PenStyle.NoPen)
