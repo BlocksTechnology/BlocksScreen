@@ -352,10 +352,12 @@ class NotificationPage(QtWidgets.QWidget):
         self.time_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self.info_box_layout.addWidget(self.time_label, 2, 2)
 
-        # Stretch columns/rows surrounding the content block to center it in the frame.
+        # Equal stretch keeps the Type/Time gap instead of collapsing it into the padding.
         self.info_box_layout.setColumnStretch(0, 1)
         self.info_box_layout.setColumnStretch(3, 1)
         self.info_box_layout.setRowStretch(0, 1)
+        self.info_box_layout.setRowStretch(1, 1)
+        self.info_box_layout.setRowStretch(2, 1)
         self.info_box_layout.setRowStretch(3, 1)
 
         self.type_title.setFont(font)
