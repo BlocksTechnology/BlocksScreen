@@ -186,7 +186,7 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
                 message="Filament is already loaded.",
             )
             return
-        if not self.state in ("printing", "paused"):
+        if self.state not in ("printing", "paused"):
             self.run_gcode.emit(
                 f"""SAVE_VARIABLE VARIABLE=filament_type VALUE='"{filament.value.name}"'"""
             )
@@ -213,7 +213,7 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
             )
             return
         self.find_routine_objects()
-        if not self.state in ("printing", "paused"):
+        if self.state not in ("printing", "paused"):
             self.run_gcode.emit(
                 f"""SAVE_VARIABLE VARIABLE=filament_type VALUE='"{FilamentTypes.UNKNOWN.value.name}"'"""
             )
