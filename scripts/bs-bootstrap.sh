@@ -32,7 +32,7 @@ fi
 # 2. Python deps. PyYAML is required by the updater daemon's component loader.
 _as_blocks "$BSENV/bin/python3.11" -c "import yaml" 2>/dev/null \
     || _as_blocks "$BSENV/bin/pip" install --quiet "PyYAML==6.0.3" || true
-# Emergency repair only — requirements.txt below carries the canonical pin.
+# Emergency repair only - requirements.txt below carries the canonical pin.
 _as_blocks "$BSENV/bin/python3.11" -c "import sdbus" 2>/dev/null \
     || _as_blocks "$BSENV/bin/pip" install --quiet \
         --no-binary sdbus,sdbus-networkmanager \
@@ -54,7 +54,7 @@ if [ ! -f "$SENTINEL" ] || [ "$(cat "$SENTINEL")" != "$REQS_HASH" ]; then
     else
         # pip resolves -r atomically: a single dep without an aarch64 wheel
         # rejects the whole set, the sentinel never advances, and bootstrap
-        # re-thrashes this install on every boot. Bound the retries — keep
+        # re-thrashes this install on every boot. Bound the retries - keep
         # trying for a few boots (covers transient/offline failures), then
         # accept the partial venv so a deterministically-failing set stops
         # thrashing the boot path.
@@ -72,8 +72,10 @@ if [ ! -f "$SENTINEL" ] || [ "$(cat "$SENTINEL")" != "$REQS_HASH" ]; then
     fi
 fi
 
-# 4. Updater stack (local files only — works offline).
-if [ ! -f /etc/systemd/system/BlocksScreen-updater.service ]; then
+# 4. Updater stack (local files only - works offline).
+# Verify each critical artifact: an old-installer box can have the service but no apt helper.
+if [ ! -f /etc/systemd/system/BlocksScreen-updater.service ] \
+    || [ ! -x /usr/local/sbin/bs-apt-helper ]; then
     bash "$SCRIPT_PATH/install-updater.sh" || true
 fi
 
@@ -81,9 +83,11 @@ fi
 _HOLDER_SRC="$SCRIPT_PATH/BlocksScreen-splash-holder.service"
 _HOLDER_DST="/etc/systemd/system/BlocksScreen-splash-holder.service"
 if [ ! -f "$_HOLDER_DST" ]; then
-    cp "$_HOLDER_SRC" "$_HOLDER_DST" || true
-    systemctl daemon-reload || true
-    systemctl enable BlocksScreen-splash-holder.service 2>/dev/null || true
+    # Atomic install: a truncated-but-present unit would never be retried by the [ ! -f ] guard.
+    if cp "$_HOLDER_SRC" "${_HOLDER_DST}.new" && mv -Tf "${_HOLDER_DST}.new" "$_HOLDER_DST"; then
+        systemctl daemon-reload || true
+        systemctl enable BlocksScreen-splash-holder.service 2>/dev/null || true
+    fi
 fi
 systemctl is-active --quiet BlocksScreen-splash-holder.service \
     || systemctl start --no-block BlocksScreen-splash-holder.service || true

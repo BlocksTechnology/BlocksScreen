@@ -1,5 +1,5 @@
 # CI pipeline (mirrors .github/workflows/dev-ci.yml)
-ruff
+ruff==0.15.7
 pylint
 pytest
 pytest-cov

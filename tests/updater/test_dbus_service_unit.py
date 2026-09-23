@@ -1,6 +1,6 @@
 import asyncio
 import json
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -107,7 +107,7 @@ class TestServiceRestartRollback:
         from updater.service import UpdateService
         from updater.models import ComponentConfig
         from pathlib import Path
-        from unittest.mock import AsyncMock, patch
+        from unittest.mock import AsyncMock
 
         cfg = ComponentConfig(
             name="klipper",
@@ -366,3 +366,32 @@ class TestMethodReturnValues:
         called_with = svc._svc.update_all.call_args[0][0]
         assert "RF50-Klipper" in called_with
         assert "klipper" not in called_with  # clean repo not updated
+
+
+class TestLockHeldSurfacesError:
+    def _held_lock(self):
+        lock = MagicMock()
+        lock.return_value.__enter__.return_value = False
+        return lock
+
+    @pytest.mark.asyncio
+    async def test_update_all_lock_held_emits_error(self, svc):
+        with patch("updater.dbus_service.process_lock", self._held_lock()):
+            await svc._run_update_all()
+        svc.error.emit.assert_called_once_with(("updater", "another update is running"))
+        svc._svc.update_all.assert_not_called()
+        assert svc._busy is False
+
+    @pytest.mark.asyncio
+    async def test_update_component_lock_held_emits_error(self, svc):
+        with patch("updater.dbus_service.process_lock", self._held_lock()):
+            await svc._run_update_component("klipper")
+        svc.error.emit.assert_called_once_with(("klipper", "another update is running"))
+        svc._svc.update_component.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_recover_lock_held_emits_error(self, svc):
+        with patch("updater.dbus_service.process_lock", self._held_lock()):
+            await svc._run_recover("klipper", hard=False)
+        svc.error.emit.assert_called_once_with(("klipper", "another update is running"))
+        svc._svc.recover.assert_not_called()

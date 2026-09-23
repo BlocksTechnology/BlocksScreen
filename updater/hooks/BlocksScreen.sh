@@ -1,7 +1,5 @@
 #!/bin/bash
-# Runs after a successful BlocksScreen git update (via updater daemon).
-# Uses only sudo-free mechanisms: symlink + dbus-send (polkit) for service
-# file changes, flag file + BlocksScreen-deploy.path for install-updater.sh.
+# Post-update hook: sudo-free unit sync + deploy-flag mechanics only.
 set -euo pipefail
 
 if [ -z "${COMPONENT_PATH:-}" ] || [ -z "${PREV_HASH:-}" ] || [ -z "${NEW_HASH:-}" ]; then
@@ -9,9 +7,7 @@ if [ -z "${COMPONENT_PATH:-}" ] || [ -z "${PREV_HASH:-}" ] || [ -z "${NEW_HASH:-
 fi
 
 _set_deploy_flag() {
-    # Under the updater (mid-batch), do NOT trigger install-updater now: record
-    # to the sentinel so the daemon touches the deploy flag once the batch is
-    # done. Setting the flag here could fire BlocksScreen-deploy.path mid-batch.
+    # Mid-batch: record to the sentinel; setting the flag now would fire deploy mid-batch.
     if [ -n "${BS_UPDATER_SELF_UPDATE:-}" ] && [ -n "${BS_UPDATER_RESTART_SENTINEL:-}" ]; then
         mkdir -p "$(dirname "$BS_UPDATER_RESTART_SENTINEL")" 2>/dev/null || true
         echo "install" >>"$BS_UPDATER_RESTART_SENTINEL"
@@ -21,14 +17,14 @@ _set_deploy_flag() {
     local _flag="${HOME}/.config/blockscreen/.run-install-updater"
     mkdir -p "$(dirname "$_flag")"
     touch "$_flag"
-    echo "[hook:BlocksScreen] deploy flag set — BlocksScreen-deploy.path will run install-updater.sh"
+    echo "[hook:BlocksScreen] deploy flag set - BlocksScreen-deploy.path will run install-updater.sh"
 }
 
 # --- BlocksScreen.service changed ---
 if ! git -C "$COMPONENT_PATH" diff --quiet "$PREV_HASH" "$NEW_HASH" \
         -- scripts/BlocksScreen.service 2>/dev/null; then
 
-    echo "[hook:BlocksScreen] unit file changed — reinstalling"
+    echo "[hook:BlocksScreen] unit file changed - reinstalling"
 
     _env_dir="${HOME}/.config/blockscreen"
     _env_file="${_env_dir}/env"
@@ -46,7 +42,7 @@ if ! git -C "$COMPONENT_PATH" diff --quiet "$PREV_HASH" "$NEW_HASH" \
     if [[ ! -L /etc/systemd/system/BlocksScreen.service ]]; then
         sudo cp "$COMPONENT_PATH/scripts/BlocksScreen.service" \
             /etc/systemd/system/BlocksScreen.service 2>/dev/null || {
-            echo "[hook:BlocksScreen] sudo cp blocked — triggering deploy to bootstrap symlink"
+            echo "[hook:BlocksScreen] sudo cp blocked - triggering deploy to bootstrap symlink"
             _set_deploy_flag
         }
     fi
@@ -63,7 +59,7 @@ fi
 if ! git -C "$COMPONENT_PATH" diff --quiet "$PREV_HASH" "$NEW_HASH" \
         -- scripts/BlocksScreen-xorg.service 2>/dev/null; then
 
-    echo "[hook:BlocksScreen] xorg unit file changed — reinstalling"
+    echo "[hook:BlocksScreen] xorg unit file changed - reinstalling"
 
     if [[ -f "$COMPONENT_PATH/scripts/BlocksScreen-xorg.service" ]] && \
        [[ ! -L /etc/systemd/system/BlocksScreen-xorg.service ]]; then
@@ -79,16 +75,11 @@ if ! git -C "$COMPONENT_PATH" diff --quiet "$PREV_HASH" "$NEW_HASH" \
     echo "[hook:BlocksScreen] daemon-reload done (xorg service)"
 fi
 
-# --- install-updater.sh changed (checked independently) ---
+# --- install files changed (checked independently) ---
 if ! git -C "$COMPONENT_PATH" diff --quiet "$PREV_HASH" "$NEW_HASH" \
-        -- scripts/install-updater.sh 2>/dev/null; then
-    echo "[hook:BlocksScreen] install-updater.sh changed — setting deploy flag"
+        -- scripts/install-updater.sh scripts/bs-apt-helper.sh 2>/dev/null; then
+    echo "[hook:BlocksScreen] install files changed - setting deploy flag"
     _set_deploy_flag
 fi
 
-# NOTE: do NOT trigger a daemon restart here when updater/ changes. The deploy
-# flag fires BlocksScreen-deploy.path immediately, which runs install-updater.sh
-# and restarts BlocksScreen-updater.service while it is still running this very
-# update batch, which cancels the batch and reverts the update. The daemon picks
-# up new updater/ code on the next reboot; a clean post-batch self-restart is the
-# proper fix (see docs/superpowers/specs/2026-06-19-updater-self-update-ordering-design.md).
+# NOTE: no daemon restart here on updater/ changes: mid-batch restart cancels+reverts (see 2026-06-19 self-update-ordering spec).

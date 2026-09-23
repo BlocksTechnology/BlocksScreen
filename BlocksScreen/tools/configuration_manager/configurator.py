@@ -14,12 +14,12 @@ from typing import Literal
 from tools.serial_scanner import SerialScanner
 
 HOME = pathlib.Path.home()
-CONFIG_REPO = pathlib.Path.joinpath(HOME, "RF50-Klipper")
-KLIPPER_CONFIG_DIR = pathlib.Path.joinpath(HOME, "printer_data", "config")
-BACKUP_DIR = pathlib.Path(HOME, ".rf50_backups")
-DETECTION_CACHE = pathlib.Path.joinpath(HOME, ".rf50_config.json")
-VARIABLES_FILE = pathlib.Path.joinpath(KLIPPER_CONFIG_DIR, "variables.cfg")
-PRINTER_CONFIG = pathlib.Path.joinpath(KLIPPER_CONFIG_DIR, "printer.cfg")
+CONFIG_REPO: pathlib.Path = HOME / "RF50-Klipper"
+KLIPPER_CONFIG_DIR: pathlib.Path = HOME / "printer_data" / "config"
+BACKUP_DIR: pathlib.Path = HOME / ".rf50_backups"
+DETECTION_CACHE: pathlib.Path = HOME / ".rf50_config.json"
+VARIABLES_FILE: pathlib.Path = KLIPPER_CONFIG_DIR / "variables.cfg"
+PRINTER_CONFIG: pathlib.Path = KLIPPER_CONFIG_DIR / "printer.cfg"
 SV_CONFIG_MARKER = "#*# <---------------------- SAVE_CONFIG ---------------------->"
 
 _logger = logging.getLogger(__name__)
@@ -282,7 +282,7 @@ class ConfigManager:
         _root = pathlib.Path(root)
         if not _root.is_dir():
             raise NotADirectoryError("Provided root directory for file does not exist")
-        file_dir = _root.joinpath(file)
+        file_dir = _root / file
         if not file_dir.is_file():
             raise FileNotFoundError(f"Provided file {file} not found on {root}")
         return file_dir.stat(follow_symlinks=False)

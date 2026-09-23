@@ -16,6 +16,7 @@ class BlocksCustomCheckButton(QtWidgets.QAbstractButton):
         super().__init__(parent)
         self.button_ellipse = None
         self._text: str = ""
+        self.font = QtGui.QFont("Momcake", 14)
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_AcceptTouchEvents, True)
 
     def setFlat(self, flat) -> None:
@@ -29,6 +30,10 @@ class BlocksCustomCheckButton(QtWidgets.QAbstractButton):
     def text(self) -> str:
         """returns Widget text"""
         return self._text
+
+    def setFont(self, font: QtGui.QFont):
+        self.font = font
+        self.update()
 
     def setText(self, text: str | None) -> None:
         """Set widget text"""
@@ -78,7 +83,7 @@ class BlocksCustomCheckButton(QtWidgets.QAbstractButton):
 
         if self.text():
             painter.setPen(text_color)
-            painter.setFont(QtGui.QFont("Momcake", 14))
+            painter.setFont(self.font)
             painter.drawText(
                 rect_f,
                 QtCore.Qt.AlignmentFlag.AlignCenter,

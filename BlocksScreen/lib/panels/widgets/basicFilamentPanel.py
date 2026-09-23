@@ -17,15 +17,15 @@ class FilamentTypes(enum.Enum):
     PLA = Filament(name="PLA", temperature=220)
     PETG = Filament(name="PETG", temperature=240)
     ABS = Filament(name="ABS", temperature=250)
-    HIPS = Filament(name="HIPS", temperature=250)
+    PP = Filament(name="PP", temperature=250)
     NYLON = Filament(name="NYLON", temperature=270)
-    TPU = Filament(name="TPU", temperature=230)
+    PC = Filament(name="PC", temperature=230)
     UNKNOWN = Filament(name="UNKNOWN", temperature=250)
 
 
 class BasicFilamentPanel(QtWidgets.QStackedWidget):
     run_gcode = QtCore.pyqtSignal(str, name="run_gcode")
-    call_load_panel = QtCore.pyqtSignal(bool, str, name="call-load-panel")
+    call_load_panel = QtCore.pyqtSignal(bool, str, bool, name="call-load-panel")
     request_back = QtCore.pyqtSignal(name="request_back")
     request_change_tab = QtCore.pyqtSignal(int, name="request_change_tab")
     filament_selected = QtCore.pyqtSignal(
@@ -155,12 +155,13 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         if "state" in status.keys():
             if not status["state"]:
                 self.target_temp = 0
-                self.call_load_panel.emit(False, "")
+                self.call_load_panel.emit(False, "", False)
+                self.change_page(0)
                 if self.state == "paused":
                     self.request_change_tab.emit(0)
                 return
         self.call_load_panel.emit(
-            True, f"Loading Filament\n{status['step'].capitalize()}"
+            True, f"Loading Filament\n{status['step'].capitalize()}", False
         )
 
     @QtCore.pyqtSlot(dict, name="on_unload_filament")
@@ -169,10 +170,11 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         if "state" in status.keys():
             if not status["state"]:
                 self.target_temp = 0
-                self.call_load_panel.emit(False, "")
+                self.call_load_panel.emit(False, "", False)
+                self.change_page(0)
                 return
         self.call_load_panel.emit(
-            True, f"Unloading Filament\n{status['step'].capitalize()}"
+            True, f"Unloading Filament\n{status['step'].capitalize()}", False
         )
 
     @QtCore.pyqtSlot(int, int, name="load_filament")
@@ -197,6 +199,10 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         self.run_gcode.emit(
             f"""SAVE_VARIABLE VARIABLE=filament_type VALUE='"{filament.value.name}"'"""
         )
+        self.call_load_panel.emit(True, "Loading", True)
+        if not self.mmu_configured:
+            self.run_gcode.emit("LOAD_FILAMENT")
+            return
         self.run_gcode.emit("MMU_LOAD")
 
     @QtCore.pyqtSlot(str, int, name="unload_filament")
@@ -219,7 +225,12 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         self.run_gcode.emit(
             f"""SAVE_VARIABLE VARIABLE=filament_type VALUE='"{FilamentTypes.UNKNOWN.value.name}"'"""
         )
-        self.run_gcode.emit("MMU_UNLOAD")
+
+        self.call_load_panel.emit(True, "Unloading", True)
+        if not self.mmu_configured:
+            self.run_gcode.emit("UNLOAD_FILAMENT")
+            return
+        self.run_gcode.emit("MMU_EJECT")
 
     def open_pre_gate_popup(self, filament_type: FilamentTypes):
         callback_action = partial(self.load_filament, 0, filament_type)
@@ -650,28 +661,28 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
                 FilamentTypes.ABS,
             ),
             (
-                "load_hips_btn",
-                "HIPS",
-                ":/filament_related/media/topbar/hips_filament_topbar.svg",
+                "load_PP_btn",
+                "PP",
+                ":/top_bar_icons/media/topbar/pp_filament_topbar.svg",
                 1,
                 1,
-                FilamentTypes.HIPS,
+                FilamentTypes.PP,
             ),
             (
                 "load_nylon_btn",
                 "NYLON",
-                ":/filament_related/media/topbar/nylon_filament_topbar.svg",
+                ":/top_bar_icons/media/topbar/nylon_filament_topbar.svg",
                 2,
                 0,
                 FilamentTypes.NYLON,
             ),
             (
-                "load_tpu_btn",
-                "TPU",
-                ":/filament_related/media/topbar/tpu_filament_topbar.svg",
+                "load_PC_btn",
+                "PC",
+                ":/top_bar_icons/media/topbar/pc_filament_topbar.svg",
                 2,
                 1,
-                FilamentTypes.TPU,
+                FilamentTypes.PC,
             ),
         ]
 
@@ -687,6 +698,9 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
             btn.setFont(font)
             btn.setText(text)
             btn.clicked.connect(partial(self.load_filament, 0, _filament_type))
+            btn.clicked.connect(
+                partial(self.change_page, self.indexOf(self.filament_control_page))
+            )
             btn.setProperty("icon_pixmap", QtGui.QPixmap(pixmap_path))
             btn.setObjectName(obj_name)
             self.load_page_content_layout.addWidget(btn, row, col, 1, 1)

@@ -245,6 +245,13 @@ RULES: tuple[MessageRule, ...] = (
     ),
     MessageRule(
         source=MessageSource.GCODE_ERROR,
+        matcher=_sub("is empty (and EndlessSpool on load"),
+        display="Gate is empty",
+        hint="Insert filament before loading",
+        severity=Severity.ERROR,
+    ),
+    MessageRule(
+        source=MessageSource.GCODE_ERROR,
         matcher=_re(r"filament.*(stuck|jammed)"),
         display="Filament Jammed",
         hint="Clear the obstruction",
@@ -636,6 +643,7 @@ IGNORED_RULE = MessageRule(
 
 _IGNORED: tuple[re.Pattern, ...] = (
     re.compile(r"REMOVED log_path=", re.I),
+    re.compile(r"Alert: Automatically heating extruder to gatemap temp", re.I),
     # add more patterns as needed,
 )
 

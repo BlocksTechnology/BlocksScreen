@@ -1,4 +1,4 @@
-"""Update page widget — displays component status from the D-Bus updater daemon."""
+"""Update page widget - displays component status from the D-Bus updater daemon."""
 
 import json
 import logging
@@ -31,7 +31,7 @@ class UpdatePage(QtWidgets.QWidget):
         bool, name="update-available"
     )
     call_load_panel: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
-        bool, str, name="call-load-panel"
+        bool, str, bool, name="call-load-panel"
     )
     disable_popups: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         bool, name="disable-popups"
@@ -111,7 +111,10 @@ class UpdatePage(QtWidgets.QWidget):
             self._busy = False
             self._overlay_shown = False
             self.show_loading(False)
-            self.call_load_panel.emit(False, "")
+            self.call_load_panel.emit(False, "", False)
+            self._show_toast(
+                "Update is taking longer than expected - tap refresh to check status"
+            )
 
     def showEvent(self, a0: QtGui.QShowEvent | None) -> None:
         """Rebuild cards and request a fresh status poll each time the page becomes visible."""
@@ -137,13 +140,13 @@ class UpdatePage(QtWidgets.QWidget):
         return super().resizeEvent(a0)
 
     def _needs_update(self, status: ComponentStatus) -> bool:
-        # Mirrors the daemon's dirty-set in _run_update_all: an errored git repo
-        # (e.g. a corrupt repo) is included so the one "Update" button shows and
-        # the update flow self-heals it. apt errors are not repairable this way.
+        # Mirrors daemon dirty-set: errored git repos self-heal; apt errors don't.
         return bool(
             status.commits_behind
             or status.packages_upgradable > 0
             or status.has_local_changes
+            or status.branch_mismatch
+            or status.needs_install
             or (status.error is not None and status.kind != "apt")
         )
 
@@ -312,20 +315,29 @@ class UpdatePage(QtWidgets.QWidget):
         _log.debug("handle_status_ready: busy=%s", self._busy)
         try:
             data: dict[str, dict] = json.loads(json_str)
-            self._statuses = {
-                name: ComponentStatus(**fields) for name, fields in data.items()
-            }
         except (json.JSONDecodeError, TypeError) as exc:
             _log.error("handle_status_ready: bad payload '%s'", exc)
             _log.debug(json_str)
+            # Keep the last good list but tell the user it may be stale.
+            self._show_toast("Status update failed - tap refresh to retry")
             return
+        # Build per-component so one malformed entry can't blank the whole list.
+        self._statuses = {}
+        for name, fields in data.items():
+            try:
+                self._statuses[name] = ComponentStatus(**fields)
+            except (TypeError, ValueError) as exc:
+                _log.error("handle_status_ready: skipping %r - %s", name, exc)
+                self._statuses[name] = ComponentStatus(
+                    name=name, kind="unknown", error="malformed status"
+                )
         _update_avail = any(self._needs_update(s) for s in self._statuses.values())
         self._update_avail = _update_avail
         if not self._busy:
             self.show_loading(False)
             if self._post_update_status_pending:
                 _log.debug("status_ready: emitting call_load_panel(False)")
-                self.call_load_panel.emit(False, "")
+                self.call_load_panel.emit(False, "", False)
                 self._post_update_status_pending = False
         else:
             _log.debug("status_ready: skipping loadscreen dismiss (busy=True)")
@@ -354,7 +366,7 @@ class UpdatePage(QtWidgets.QWidget):
             self.update_all_btn.setEnabled(True)
             if self._overlay_shown:
                 self._overlay_shown = False
-                self.call_load_panel.emit(False, "")
+                self.call_load_panel.emit(False, "", False)
             self._request_status_debounced()
 
     @QtCore.pyqtSlot(name="on-update-all-clicked")
@@ -373,6 +385,9 @@ class UpdatePage(QtWidgets.QWidget):
         self._show_update_confirm()
 
     def _show_update_confirm(self) -> None:
+        # Dialogs parented to the page outlive close(); drop the previous one.
+        if self._update_confirm_popup is not None:
+            self._update_confirm_popup.deleteLater()
         popup = BasePopup(self, floating=True)
         popup.set_message(
             "The printer will restart.\n"
@@ -395,7 +410,7 @@ class UpdatePage(QtWidgets.QWidget):
     def _do_update(self) -> None:
         self._overlay_shown = True
         self.request_update.emit("")
-        self.call_load_panel.emit(True, "Updating all components ...")
+        self.call_load_panel.emit(True, "Updating all components ...", False)
 
     @QtCore.pyqtSlot(str, int, int, name="handle-step-complete")
     def handle_step_complete(self, name: str, step: int, total: int) -> None:
@@ -412,7 +427,7 @@ class UpdatePage(QtWidgets.QWidget):
         self._overlay_shown = True
         overlay_msg = f"{name}: {label}"
         self._progress_label.setText(f"Step {step}/{total}")
-        self.call_load_panel.emit(True, overlay_msg)
+        self.call_load_panel.emit(True, overlay_msg, False)
 
     def _show_toast(self, message: str, *, success: bool = False) -> None:
         color = "#4caf50" if success else "#ef5350"
@@ -428,6 +443,14 @@ class UpdatePage(QtWidgets.QWidget):
         """Show a toast with the error reason and prompt the user to refresh."""
         error_msg = f"{name} update failed: {reason}. Tap refresh to retry."
         self._show_toast(error_msg)
+
+    def handle_update_rejected(self) -> None:
+        """Daemon refused the request (already busy): drop the optimistic overlay and toast."""
+        self._busy = False
+        self._overlay_shown = False
+        self.show_loading(False)
+        self.call_load_panel.emit(False, "", False)
+        self._show_toast("Another update is already in progress")
 
     def handle_rollback_done(self, name: str, success: bool) -> None:
         """Show a success or failure toast after an automatic rollback completes."""

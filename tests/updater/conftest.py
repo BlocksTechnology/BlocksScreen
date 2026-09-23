@@ -67,4 +67,5 @@ def svc():
     s._status_pending = False
     s.busy_changed = MagicMock()
     s.status_ready = MagicMock()
+    s.error = MagicMock()
     return s
