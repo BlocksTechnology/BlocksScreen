@@ -1,6 +1,5 @@
 import logging
 from collections import deque
-from typing import Deque
 
 from devices.amu import AMUManager
 from devices.amu.models import GateStatus
@@ -52,7 +51,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
 
         self._previous_gate_states: dict[int, bool] = {}
         self.pre_gate_idx = {}
-        self.popup_gates: Deque = deque()
+        self.popup_gates: deque = deque()
         self._spool_id_map: dict[str, dict] = {}
         self._current_field: QtWidgets.QLineEdit | None = None
         self._color_target_field = None

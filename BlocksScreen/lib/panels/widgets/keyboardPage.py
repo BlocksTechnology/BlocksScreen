@@ -185,7 +185,7 @@ class CustomQwertyKeyboard(QtWidgets.QDialog):
                 return value.endswith(".")
         return True
 
-    def _get_mainWindow_widget(self) -> typing.Optional[QtWidgets.QMainWindow]:
+    def _get_mainWindow_widget(self) -> QtWidgets.QMainWindow | None:
         """Get the main application window"""
         app_instance = QtWidgets.QApplication.instance()
         if not app_instance:

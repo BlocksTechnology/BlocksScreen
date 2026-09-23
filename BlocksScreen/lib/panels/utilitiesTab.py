@@ -113,8 +113,8 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         self.x_inputshaper: dict = {}
         self.stepper_limits: dict = {}
 
-        self.current_object: typing.Optional[str] = None
-        self.current_process: typing.Optional[Process] = None
+        self.current_object: str | None = None
+        self.current_process: Process | None = None
         self.axis_in: str = "x"
         self.amount: int = 1
         self.tb: bool = False
@@ -375,7 +375,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
 
     @QtCore.pyqtSlot(dict, name="on_object_config")
     @QtCore.pyqtSlot(list, name="on_object_config")
-    def on_object_config(self, config: typing.Union[dict, list]) -> None:
+    def on_object_config(self, config: dict | list) -> None:
         """Handle receiving printer object configurations"""
         if not config:
             return

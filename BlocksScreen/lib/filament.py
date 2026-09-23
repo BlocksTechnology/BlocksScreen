@@ -1,7 +1,5 @@
 # Class that represents a filament spool
 
-from __future__ import annotations
-
 import enum
 
 
@@ -58,8 +56,6 @@ class Filament:
 
     @property
     def weight(self) -> float | None:
-        if self._weight is None:
-            return
         return self._weight
 
     @weight.setter
@@ -81,5 +77,5 @@ class Filament:
     @spool_type.setter
     def spool_type(self, new) -> None:
         if new is not None and not isinstance(new, self.SpoolMaterial):
-            raise ValueError(f"Spool Material type is invalid: {new!r}")
+            raise TypeError(f"Spool Material type is invalid: {new!r}")
         self._spool_type = new

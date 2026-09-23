@@ -28,7 +28,7 @@ class FileAction(Enum):
     UNKNOWN = auto()
 
     @classmethod
-    def from_string(cls, action: str) -> "FileAction":
+    def from_string(cls, action: str) -> FileAction:
         """Convert Moonraker action string to enum."""
         mapping = {
             "create_file": cls.CREATE_FILE,
@@ -108,7 +108,7 @@ class FileMetadata:
     @classmethod
     def from_dict(
         cls, data: dict, thumbnail_images: list[QtGui.QImage]
-    ) -> "FileMetadata":
+    ) -> FileMetadata:
         """
         `Create FileMetadata from Moonraker API response.`
 

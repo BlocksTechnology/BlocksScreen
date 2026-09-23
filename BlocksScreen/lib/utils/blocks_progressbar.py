@@ -154,7 +154,7 @@ class CustomProgressBar(QtWidgets.QProgressBar):
         bg_pen.setCapStyle(QtCore.Qt.PenCapStyle.RoundCap)
         painter.setPen(bg_pen)
         painter.drawArc(arc_rect, arc_start, arc_span)
-        if self.progress_value is not None and self.progress_value > 0:
+        if self.progress_value > 0:
             gradient = QtGui.QConicalGradient(arc_rect.center(), -90)
             gradient.setColorAt(0.0, self._bar_color)
             gradient.setColorAt(1.0, QtGui.QColor(100, 100, 100))

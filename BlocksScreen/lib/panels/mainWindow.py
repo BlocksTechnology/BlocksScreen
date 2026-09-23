@@ -120,7 +120,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def __init__(self):
         """Set up UI, instantiate subsystems, and wire all inter-component signals."""
-        super(MainWindow, self).__init__()
+        super().__init__()
         self.config: BlocksScreenConfig = get_configparser()
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
