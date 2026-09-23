@@ -87,6 +87,7 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         self.change_page(0)
         return super().showEvent(a0)
 
+    @QtCore.pyqtSlot(dict)
     def on_save_variables_update(self, save_variables: dict):
         """receives save variables from the printer and updates the filament type accordingly
 
@@ -281,6 +282,7 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
     def change_page(self, index: int) -> None:
         self.setCurrentIndex(index)
 
+    @QtCore.pyqtSlot()
     def back_button(self) -> None:
         self.request_back.emit()
 
@@ -296,9 +298,7 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
             return True
         if "gcode_macro LOAD_FILAMENT" in _available_objects.keys():
             return True
-        if "gcode_macro UNLOAD_FILAMENT" in _available_objects.keys():
-            return True
-        return False
+        return "gcode_macro UNLOAD_FILAMENT" in _available_objects.keys()
 
     def _setupInfoBox(self):
         root = BlocksCustomFrame(parent=self.filament_control_page)

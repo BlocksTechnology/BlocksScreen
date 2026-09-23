@@ -15,12 +15,11 @@ class SwapPrintcorePage(QtWidgets.QDialog):
             QtCore.Qt.WindowType.Popup | QtCore.Qt.WindowType.FramelessWindowHint
         )
         self._setupUI()
-        self.repaint()
 
     def setText(self, text: str) -> None:
         """Set widget text"""
         self.label.setText(text)
-        self.repaint()
+        self.update()
 
     def text(self) -> str:
         """Return current widget text"""
@@ -78,7 +77,7 @@ class SwapPrintcorePage(QtWidgets.QDialog):
     def show(self) -> None:
         """Re-implemented method, widget show"""
         self._geometry_calc()
-        self.repaint()
+        self.update()
         return super().show()
 
     def _setupUI(self) -> None:

@@ -215,6 +215,7 @@ class CustomQwertyKeyboard(QtWidgets.QDialog):
         self._geometry_calc()
         return super().show()
 
+    @QtCore.pyqtSlot()
     def handle_keyboard_layout(self) -> None:
         """Update key labels based on current shift/keychange state."""
         shift = self.K_shift.isChecked()
@@ -237,7 +238,7 @@ class CustomQwertyKeyboard(QtWidgets.QDialog):
         else:
             layout = _LOWERCASE
 
-        for btn, txt in zip(self._key_buttons, layout):
+        for btn, txt in zip(self._key_buttons, layout, strict=False):
             btn.setText(txt)
 
         self.K_shift.setText("#+=") if keychange else self.K_shift.setText("⇧")

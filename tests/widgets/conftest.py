@@ -8,7 +8,7 @@ import pytest
 from PyQt6 import QtWidgets
 
 _project_root = Path(__file__).resolve().parent.parent.parent
-# Add project root (not BlocksScreen/) — adding BlocksScreen/ would cause
+# Add project root (not BlocksScreen/) - adding BlocksScreen/ would cause
 # BlocksScreen.py to shadow the BlocksScreen namespace package.
 if str(_project_root) not in sys.path:
     sys.path.insert(0, str(_project_root))

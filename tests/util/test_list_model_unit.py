@@ -1,4 +1,4 @@
-"""Unit tests for EntryListModel.reconcile() — locks behaviour before refactoring."""
+"""Unit tests for EntryListModel.reconcile() - locks behaviour before refactoring."""
 
 import pytest
 

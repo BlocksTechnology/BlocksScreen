@@ -54,8 +54,8 @@ class SensorWidget(QtWidgets.QWidget):
             SensorWidget.FilamentState.PRESENT
         )
         self.sensor_state: SensorWidget.SensorState = SensorWidget.SensorState.ON
-        self._icon_label = None
-        self._text_label = None
+        self._icon_label: BlocksLabel | None = None
+        self._text_label: BlocksLabel | None = None
         self._text = self.name
         self._item_rect: QtCore.QRect = QtCore.QRect()
         self.icon_pixmap_fp: QtGui.QPixmap = QtGui.QPixmap(
@@ -64,8 +64,39 @@ class SensorWidget(QtWidgets.QWidget):
         self.icon_pixmap_fnp: QtGui.QPixmap = QtGui.QPixmap(
             ":/filament_related/media/btn_icons/filament_sensor_off.svg"
         )
+
+        # Constant paint state
+        self._name_font = QtGui.QFont()
+        self._name_font.setPointSize(20)
+        self._value_font = QtGui.QFont()
+        self._value_font.setPointSize(16)
+        self._text_palette = QtGui.QPalette()
+        self._text_palette.setColor(
+            QtGui.QPalette.ColorRole.WindowText, QtGui.QColorConstants.White
+        )
+        self._filament_text = ""
+        self._enable_text = ""
+
         self._setupUI()
+        self._refresh_state()
         self.toggle_button.stateChange.connect(self.toggle_sensor_state)
+
+    def _refresh_state(self) -> None:
+        """Rebuild the drawn strings and the icon, both only change with the state"""
+        filament_tabs = "\t" * 12
+        enable_tabs = "\t" * 15
+        self._filament_text = (
+            f"Filament: {filament_tabs}{self.filament_state.name.capitalize()}"
+        )
+        self._enable_text = (
+            f"Enable: {enable_tabs}{self.sensor_state.name.capitalize()}"
+        )
+        if self._icon_label is not None:
+            self._icon_label.setPixmap(
+                self.icon_pixmap_fp
+                if self.filament_state == self.FilamentState.PRESENT
+                else self.icon_pixmap_fnp
+            )
 
     @property
     def type(self) -> SensorType:
@@ -102,6 +133,7 @@ class SensorWidget(QtWidgets.QWidget):
         if not isinstance(state, SensorWidget.FilamentState):
             return
         self.filament_state = SensorWidget.FilamentState(not state.value)
+        self._refresh_state()
         self.update()
 
     def toggle_button_state(self, state: ToggleAnimatedButton.State) -> None:
@@ -112,6 +144,7 @@ class SensorWidget(QtWidgets.QWidget):
             self.toggle_button.state = ToggleAnimatedButton.State(
                 self.sensor_state.value
             )
+            self._refresh_state()
             self.update()
 
     @QtCore.pyqtSlot(ToggleAnimatedButton.State, name="state-change")
@@ -124,10 +157,6 @@ class SensorWidget(QtWidgets.QWidget):
             )
             self.update()
 
-    def resizeEvent(self, a0: QtGui.QResizeEvent) -> None:
-        """Handle widget resize events."""
-        return super().resizeEvent(a0)
-
     def paintEvent(self, a0: QtGui.QPaintEvent) -> None:
         """Re-implemented method, paint widget"""
         style_painter = QtWidgets.QStylePainter(self)
@@ -135,25 +164,13 @@ class SensorWidget(QtWidgets.QWidget):
         style_painter.setRenderHint(
             style_painter.RenderHint.SmoothPixmapTransform, True
         )
-        style_painter.setRenderHint(
-            style_painter.RenderHint.LosslessImageRendering, True
-        )
-        if self._icon_label:
-            self._icon_label.setPixmap(
-                self.icon_pixmap_fp
-                if self.filament_state == self.FilamentState.PRESENT
-                else self.icon_pixmap_fnp
-            )
-        _font = QtGui.QFont()
-        _font.setPointSize(20)
-        style_painter.setFont(_font)
+        style_painter.setFont(self._name_font)
 
         label_name = self._text_label_name_
         label_detected = self._text_label_detected
         label_state = self._text_label_state
+        palette = self._text_palette
 
-        palette = label_name.palette()
-        palette.setColor(palette.ColorRole.WindowText, QtGui.QColorConstants.White)
         style_painter.drawItemText(
             label_name.geometry(),
             label_name.alignment(),
@@ -163,27 +180,22 @@ class SensorWidget(QtWidgets.QWidget):
             QtGui.QPalette.ColorRole.WindowText,
         )
 
-        _font.setPointSize(16)
-        style_painter.setFont(_font)
-        filament_text = self.filament_state.name.capitalize()
-        tab_spacer = 12 * "\t"
+        style_painter.setFont(self._value_font)
         style_painter.drawItemText(
             label_state.geometry(),
             label_state.alignment(),
             palette,
             True,
-            f"Filament: {tab_spacer}{filament_text}",
+            self._filament_text,
             QtGui.QPalette.ColorRole.WindowText,
         )
 
-        sensor_state_text = self.sensor_state.name.capitalize()
-        tab_spacer += 3 * "\t"
         style_painter.drawItemText(
             label_detected.geometry(),
             label_detected.alignment(),
             palette,
             True,
-            f"Enable: {tab_spacer}{sensor_state_text}",
+            self._enable_text,
             QtGui.QPalette.ColorRole.WindowText,
         )
         style_painter.end()

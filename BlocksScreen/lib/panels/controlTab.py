@@ -149,6 +149,7 @@ class ControlTab(QtWidgets.QStackedWidget):
         self.panel.motion_extrude_btn.clicked.connect(
             partial(self.change_page, self.indexOf(self.panel.extrude_page))
         )
+        self.panel.motion_extrude_btn.clicked.connect(self._refresh_extrude_message)
         self.panel.motion_move_axis_btn.clicked.connect(
             partial(self.change_page, self.indexOf(self.panel.move_axis_page))
         )
@@ -302,6 +303,7 @@ class ControlTab(QtWidgets.QStackedWidget):
         self.ztilt_result_screen_timer.setInterval(5000)
         self.ztilt_result_screen_timer.timeout.connect(self.ztilt_result_screen.hide)
 
+    @QtCore.pyqtSlot(str, bool)
     def _handle_z_tilt_object_update(self, value, state):
         if not self.isVisible():
             return
@@ -313,9 +315,7 @@ class ControlTab(QtWidgets.QStackedWidget):
 
     @QtCore.pyqtSlot(str, str, float, name="on_fan_update")
     @QtCore.pyqtSlot(str, str, int, name="on_fan_update")
-    def on_fan_object_update(
-        self, name: str, field: str, new_value: int | float
-    ) -> None:
+    def on_fan_object_update(self, name: str, field: str, new_value: float) -> None:
         """Slot that receives updates from fan objects.
 
         Args:
@@ -422,6 +422,7 @@ class ControlTab(QtWidgets.QStackedWidget):
         display_button.setFont(font)
         return display_button
 
+    @QtCore.pyqtSlot(dict)
     def handle_printcoreupdate(self, value: dict):
         _swapping = value.get("swapping")
         if _swapping is None or _swapping == "idle":
@@ -439,6 +440,7 @@ class ControlTab(QtWidgets.QStackedWidget):
         if _swapping == "cleaning":
             self.call_load_panel.emit(True, "Cleaning print core", False)
 
+    @QtCore.pyqtSlot(list)
     def _handle_gcode_response(self, messages: list):
         """Handle gcode response for Z-tilt adjustment"""
         pattern = r"Retries:\s*(\d+)/(\d+).*?range:\s*([\d.]+)\s*tolerance:\s*([\d.]+)"
@@ -548,15 +550,17 @@ class ControlTab(QtWidgets.QStackedWidget):
         layout = self.panel.cp_content_layout
         layout.removeWidget(self.panel.cp_fans_btn)
         layout.addWidget(self.panel.cp_fans_btn, row, 0, 1, 1)
-        # When fans moves to row 1, row 2 is empty — pin its height so the
+        # When fans moves to row 1, row 2 is empty - pin its height so the
         # grid doesn't shrink and shift the "Control" header.
         layout.setRowMinimumHeight(2, 80 if row == 1 else 0)
 
+    @QtCore.pyqtSlot()
     def show_swapcore(self):
         """Show swap printcore"""
         self.run_gcode_signal.emit("CHANGE_PRINTCORES")
         self.call_load_panel.emit(True, "Preparing to swap print core", False)
 
+    @QtCore.pyqtSlot()
     def handle_swapcore(self):
         """Handle swap printcore routine finish"""
         self.printcores_page.setText("Executing \n Firmware Restart")
@@ -598,6 +602,7 @@ class ControlTab(QtWidgets.QStackedWidget):
         """Handles changing page"""
         self.request_change_page.emit(2, index)
 
+    @QtCore.pyqtSlot()
     def back_button(self):
         """Handle back button click"""
         self.request_back_button.emit()
@@ -754,8 +759,7 @@ class ControlTab(QtWidgets.QStackedWidget):
             self.panel.bed_temp_display.secondary_text = f"{new_value:.1f}"
         self.bed_info.update({f"{name}": {f"{field}": new_value}})
 
-    def paintEvent(self, a0: QtGui.QPaintEvent) -> None:
-        """Handles ControlTab Widget painting"""
-        if self.panel.extrude_page.isVisible():
-            self.panel.exp_info_label.setText(self.extrude_page_message)
-        return super().paintEvent(a0)
+    @QtCore.pyqtSlot()
+    def _refresh_extrude_message(self) -> None:
+        """Push the extrude status to the label, paintEvent used to do this"""
+        self.panel.exp_info_label.setText(self.extrude_page_message)

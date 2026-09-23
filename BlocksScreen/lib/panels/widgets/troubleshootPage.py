@@ -1,6 +1,5 @@
-from PyQt6 import QtCore, QtGui, QtWidgets
-
 from lib.utils.icon_button import IconButton
+from PyQt6 import QtCore, QtGui, QtWidgets
 
 
 class TroubleshootPage(QtWidgets.QDialog):
@@ -24,7 +23,6 @@ class TroubleshootPage(QtWidgets.QDialog):
         self.label_4.setText(
             "For more information check our website \n www.blockstec.com \n or \nsupport@blockstec.com"
         )
-        self.repaint()
 
     def _geometry_calc(self) -> None:
         """Calculate widget position relative to the screen"""
@@ -44,7 +42,7 @@ class TroubleshootPage(QtWidgets.QDialog):
     def show(self) -> None:
         """Re-implemented method, widget show"""
         self._geometry_calc()
-        self.repaint()
+        self.update()
         return super().show()
 
     def _setupUI(self) -> None:

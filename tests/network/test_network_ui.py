@@ -9,18 +9,18 @@ assert on widget visibility and text state.
 
 Coverage targets
 ----------------
-* _handle_first_run — all 5 branches (ethernet / wifi-full / hotspot /
+* _handle_first_run - all 5 branches (ethernet / wifi-full / hotspot /
   wifi-on-no-conn / disconnected)
-* _on_network_state_changed — normal display path + loading-state machine
-* _display_connected_state — ethernet vs Wi-Fi vs hotspot
+* _on_network_state_changed - normal display path + loading-state machine
+* _display_connected_state - ethernet vs Wi-Fi vs hotspot
 * _display_disconnected_state / _display_wifi_on_no_connection
-* _sync_ethernet_panel — carrier visibility + toggle sync
+* _sync_ethernet_panel - carrier visibility + toggle sync
 * _set_loading_state / _clear_loading
-* _handle_load_timeout — each pending-operation branch
+* _handle_load_timeout - each pending-operation branch
 * _on_reconnect_complete
-* _on_operation_complete — success/failure branches
+* _on_operation_complete - success/failure branches
 * _handle_wifi_toggle / _handle_hotspot_toggle / _handle_ethernet_toggle
-* _emit_status_icon — ethernet / hotspot / wifi / disconnected
+* _emit_status_icon - ethernet / hotspot / wifi / disconnected
 """
 
 from unittest.mock import MagicMock, patch
@@ -481,7 +481,7 @@ class TestReconnectComplete:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# _on_network_state_changed — normal (not connecting) path
+# _on_network_state_changed - normal (not connecting) path
 # ─────────────────────────────────────────────────────────────────────────────
 
 
@@ -533,7 +533,7 @@ class TestOnNetworkStateChangedNormal:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# _on_network_state_changed — loading state machine
+# _on_network_state_changed - loading state machine
 # ─────────────────────────────────────────────────────────────────────────────
 
 
@@ -575,7 +575,7 @@ class TestLoadingStateMachine:
         self._start_loading(w, PendingOperation.CONNECT)
         w._target_ssid = "OtherNet"
         w._on_network_state_changed(_wifi_state())
-        # Should still be loading — SSID doesn't match target
+        # Should still be loading - SSID doesn't match target
         assert w._is_connecting
 
     def test_ethernet_on_clears_on_connected(self, win):
@@ -701,7 +701,7 @@ class TestOnOperationComplete:
         with patch("BlocksScreen.lib.panels.networkWindow.QTimer") as mock_timer:
             w._on_operation_complete(result)
             mock_timer.singleShot.assert_called_once()
-        # Loading should still be visible — retry is pending
+        # Loading should still be visible - retry is pending
         assert w._is_connecting
 
 
@@ -936,13 +936,13 @@ class TestOnNetworkError:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# _setupUI smoke test — covers ~1 200 statements in _setupUI + page helpers
+# _setupUI smoke test - covers ~1 200 statements in _setupUI + page helpers
 # ─────────────────────────────────────────────────────────────────────────────
 
 
 @pytest.mark.unit
 class TestSetupUIRunsWithoutError:
-    """Calling _setupUI() must not raise — covers the entire UI construction path."""
+    """Calling _setupUI() must not raise - covers the entire UI construction path."""
 
     def test_setup_ui_completes(self, qapp):
         from unittest.mock import patch
@@ -966,7 +966,7 @@ class TestSetupUIRunsWithoutError:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Step 4a: Helper classes — PixmapCache, WifiIconProvider, IPAddressLineEdit
+# Step 4a: Helper classes - PixmapCache, WifiIconProvider, IPAddressLineEdit
 # ─────────────────────────────────────────────────────────────────────────────
 
 

@@ -1,5 +1,3 @@
-import typing
-
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 
@@ -39,6 +37,11 @@ class BasePopup(QtWidgets.QDialog):
         self.confirm_bk_color = "#4CAF50"
         self.confirm_ft_color = "#ffffff"
         self.cancel_ft_color = "#ffffff"
+
+        # Constant paint state and cached window lookup, paintEvent runs per frame
+        self._main_window: QtWidgets.QMainWindow | None = None
+        self._brush = QtGui.QBrush(QtGui.QColor(63, 63, 63))
+        self._pen = QtGui.QPen(QtGui.QColor(128, 128, 128), self.border_margin)
 
         self.setupUI()
         self.update()
@@ -152,8 +155,10 @@ class BasePopup(QtWidgets.QDialog):
         layout.insertWidget(index, self.ui)
         self.ui.show()
 
-    def _get_mainWindow_widget(self) -> typing.Optional[QtWidgets.QMainWindow]:
-        """Get the main application window"""
+    def _get_mainWindow_widget(self) -> QtWidgets.QMainWindow | None:
+        """Get the main application window, cached, allWidgets() is expensive"""
+        if self._main_window is not None:
+            return self._main_window
         app_instance = QtWidgets.QApplication.instance()
         if not app_instance:
             return None
@@ -163,7 +168,10 @@ class BasePopup(QtWidgets.QDialog):
                 if isinstance(widget, QtWidgets.QMainWindow):
                     main_window = widget
                     break
-        return main_window if isinstance(main_window, QtWidgets.QMainWindow) else None
+        if isinstance(main_window, QtWidgets.QMainWindow):
+            self._main_window = main_window
+            return main_window
+        return None
 
     def _geometry_calc(self) -> None:
         """Calculate dialog widget position relative to the window"""
@@ -182,7 +190,9 @@ class BasePopup(QtWidgets.QDialog):
             width = main_window.width()
             height = main_window.height()
 
-        self.setGeometry(x, y, width, height)
+        # Guard the write, paintEvent calls this and setGeometry re-triggers paint
+        if self.geometry() != QtCore.QRect(x, y, width, height):
+            self.setGeometry(x, y, width, height)
 
     def sizeHint(self) -> QtCore.QSize:
         """Re-implemented method, widget size hint"""
@@ -212,13 +222,9 @@ class BasePopup(QtWidgets.QDialog):
         self._geometry_calc()
         painter = QtGui.QPainter(self)
         painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing, True)
-        rect = self.rect()
-        painter.setBrush(QtGui.QBrush(QtGui.QColor(63, 63, 63)))
-        border_color = QtGui.QColor(128, 128, 128)
-        pen = QtGui.QPen()
-        pen.setCapStyle(QtCore.Qt.PenCapStyle.RoundCap)
-        painter.setPen(QtGui.QPen(border_color, self.border_margin))
-        painter.drawRoundedRect(rect, self.border_radius, self.border_radius)
+        painter.setBrush(self._brush)
+        painter.setPen(self._pen)
+        painter.drawRoundedRect(self.rect(), self.border_radius, self.border_radius)
         painter.end()
 
     def setupUI(self) -> None:

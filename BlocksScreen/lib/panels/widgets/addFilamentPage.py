@@ -134,6 +134,7 @@ class AddFilamentPage(QtWidgets.QWidget):
         self._numpad_popup.hide()
         self._bed_temp_field.setText(str(value))
 
+    @QtCore.pyqtSlot()
     def _open_color_wheel(self) -> None:
         self.color_whell.set_color_hex(
             self._color_field.text().strip().lstrip("#") or "ffffff"
@@ -144,6 +145,7 @@ class AddFilamentPage(QtWidgets.QWidget):
     def _on_color_selected(self, hex_str: str) -> None:
         self._color_field.setText(hex_str)
 
+    @QtCore.pyqtSlot()
     def _update_swatch(self) -> None:
         hex_text = self._color_field.text().strip("#").strip()
         if len(hex_text) == 6:
@@ -154,6 +156,7 @@ class AddFilamentPage(QtWidgets.QWidget):
                 f"border: 2px solid rgba(255,255,255,80);"
             )
 
+    @QtCore.pyqtSlot()
     def _on_submit(self) -> None:
         body: dict = {}
         name = self._name_field.text().strip()
@@ -184,7 +187,7 @@ class AddFilamentPage(QtWidgets.QWidget):
             body["density"] = 1.24
 
         body["diameter"] = 1.75  # Default diameter, can be modified later if needed
-        if not vendor_text == "---":
+        if vendor_text != "---":
             self.request_add_manufacturer.emit({"name": vendor_text})
             self.request_filament_body = body
             return

@@ -82,8 +82,8 @@ class NetworkStatus(IntEnum):
     ``NetworkInfo.is_open`` (derived from ``security_type``) instead.
     """
 
-    DISCOVERED = 0  # Seen in scan, not saved — protected security
-    OPEN = 1  # Seen in scan, not saved — open (no passphrase)
+    DISCOVERED = 0  # Seen in scan, not saved - protected security
+    OPEN = 1  # Seen in scan, not saved - open (no passphrase)
     SAVED = 2  # Profile saved on this device
     ACTIVE = 3  # Currently connected
     HIDDEN = 4  # Hidden-network placeholder
@@ -287,7 +287,7 @@ class HotspotSecurity(str, Enum):
     """
 
     WPA1 = "wpa1"
-    WPA2_PSK = "wpa-psk"  # WPA2-PSK (CCMP) — default
+    WPA2_PSK = "wpa-psk"  # WPA2-PSK (CCMP) - default
 
     @classmethod
     def is_valid(cls, value: str) -> bool:

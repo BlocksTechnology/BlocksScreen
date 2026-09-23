@@ -79,7 +79,7 @@ class TestHistoryLog:
         assert second["event"] == "rollback" and second["ok"] is False
 
     def test_history_write_failure_is_non_fatal(self, tmp_path: Path):
-        """A write error must never break an update — _history swallows OSError."""
+        """A write error must never break an update - _history swallows OSError."""
         svc = UpdateService()
         # Point at a path whose parent can't be created (a file, not a dir).
         blocker = tmp_path / "blocker"

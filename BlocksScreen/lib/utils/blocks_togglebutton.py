@@ -7,7 +7,7 @@ class NetworkWidgetbuttons(QtWidgets.QWidget):
     clicked = QtCore.pyqtSignal()
 
     def __init__(self, parent):
-        super(NetworkWidgetbuttons, self).__init__(parent)
+        super().__init__(parent)
 
         self.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
         self._icon_label = None
@@ -15,6 +15,15 @@ class NetworkWidgetbuttons(QtWidgets.QWidget):
         self._text: str = "la test"
         self.icon_pixmap_fp: QtGui.QPixmap = QtGui.QPixmap(
             ":/filament_related/media/btn_icons/filament_sensor_turn_on.svg"
+        )
+
+        # Paint caches, invalidated on resize
+        self._background: QtGui.QPainterPath | None = None
+        self._enabled_brush = QtGui.QBrush(
+            QtGui.QColor(13, 99, 128, 54), QtCore.Qt.BrushStyle.SolidPattern
+        )
+        self._disabled_brush = QtGui.QBrush(
+            QtGui.QColor(255, 255, 255, 54), QtCore.Qt.BrushStyle.SolidPattern
         )
 
         self._setupUI()
@@ -33,6 +42,8 @@ class NetworkWidgetbuttons(QtWidgets.QWidget):
     def setPixmap(self, pixmap: QtGui.QPixmap):
         """Set widget pixmap"""
         self.icon_pixmap_fp = pixmap
+        if self._icon_label:
+            self._icon_label.setPixmap(pixmap)
 
     def mousePressEvent(self, event: QtGui.QMouseEvent):
         """Re-implemented method, handle mouse press events"""
@@ -43,6 +54,11 @@ class NetworkWidgetbuttons(QtWidgets.QWidget):
             self.clicked.emit()
         event.accept()
 
+    def resizeEvent(self, a0: QtGui.QResizeEvent) -> None:
+        """Re-implemented method, drop the cached background path"""
+        self._background = None
+        super().resizeEvent(a0)
+
     def paintEvent(self, a0: QtGui.QPaintEvent) -> None:
         """Re-implemented method, paint widget"""
         style_painter = QtWidgets.QStylePainter(self)
@@ -50,38 +66,25 @@ class NetworkWidgetbuttons(QtWidgets.QWidget):
         style_painter.setRenderHint(
             style_painter.RenderHint.SmoothPixmapTransform, True
         )
-        style_painter.setRenderHint(
-            style_painter.RenderHint.LosslessImageRendering, True
-        )
-        if self.isEnabled():
-            _color = QtGui.QColor(13, 99, 128, 54)
-        else:
-            _color = QtGui.QColor(255, 255, 255, 54)
+        _brush = self._enabled_brush if self.isEnabled() else self._disabled_brush
 
-        _brush = QtGui.QBrush()
-        _brush.setColor(_color)
-
-        _brush.setStyle(QtCore.Qt.BrushStyle.SolidPattern)
-        pen = style_painter.pen()
-        pen.setStyle(QtCore.Qt.PenStyle.NoPen)
-        if self._icon_label:
-            self._icon_label.setPixmap(self.icon_pixmap_fp)
-        background_rect = QtGui.QPainterPath()
-        background_rect.addRoundedRect(
-            self.contentsRect().toRectF(),
-            15,
-            15,
-            QtCore.Qt.SizeMode.AbsoluteSize,
-        )
-        style_painter.setBrush(_brush)
-        style_painter.fillPath(background_rect, _brush)
+        if self._background is None:
+            background_rect = QtGui.QPainterPath()
+            background_rect.addRoundedRect(
+                self.contentsRect().toRectF(),
+                15,
+                15,
+                QtCore.Qt.SizeMode.AbsoluteSize,
+            )
+            self._background = background_rect
+        style_painter.fillPath(self._background, _brush)
         style_painter.end()
 
     def setDisabled(self, a0: bool) -> None:
         """Re-implemented method, disable widget"""
         self.toggle_button.setDisabled(a0)
-        self.repaint()
-        self.toggle_button.repaint()
+        self.update()
+        self.toggle_button.update()
         return super().setDisabled(a0)
 
     def _setupUI(self):

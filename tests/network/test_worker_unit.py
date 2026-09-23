@@ -1,10 +1,10 @@
 """Unit tests for BlocksScreen.lib.network.worker.NetworkManagerWorker.
 
-All D-Bus modules are mocked via conftest.py — these tests run
+All D-Bus modules are mocked via conftest.py - these tests run
 without NetworkManager or a system bus.
 
 Architecture: Tests target the sdbus_async worker API.
-Async coroutines are tested directly via ``pytest-asyncio`` — NO daemon
+Async coroutines are tested directly via ``pytest-asyncio`` - NO daemon
 thread, NO ``_run_sync``, NO ``run_coroutine_threadsafe``.
 
 The ``_make_worker`` helper bypasses ``__init__`` so the asyncio daemon
@@ -48,7 +48,7 @@ def _make_worker(qapp, *, running=True, with_wifi=True, with_wired=False):
     ):
         w = NetworkManagerWorker()
 
-    # Core state — mirrors real __init__
+    # Core state - mirrors real __init__
     w._running = running
     w._system_bus = MagicMock(name="mock_system_bus")
     w._primary_wifi_path = (
@@ -84,7 +84,7 @@ def _make_worker(qapp, *, running=True, with_wifi=True, with_wired=False):
 
 
 def _bare_worker(qapp):
-    """Minimal worker for signal / property tests — no mock state."""
+    """Minimal worker for signal / property tests - no mock state."""
     with patch.object(
         NetworkManagerWorker, "__init__", lambda self: QObject.__init__(self)
     ):
@@ -1265,7 +1265,7 @@ class TestBuildConnectionProperties:
         assert result["802-11-wireless-security"]["key-mgmt"] == ("s", "wpa-psk")
 
     def test_wep_returns_none(self, qapp):
-        """WEP is unsupported — returns None."""
+        """WEP is unsupported - returns None."""
         result = self._call(qapp, flags=1)  # privacy flag but no WPA/RSN
         assert result is None
 
@@ -1832,7 +1832,7 @@ class TestEnterpriseNetworkHandling:
         assert result is None
 
     def test_wep_connection_returns_none(self, qapp):
-        """WEP is unsupported — _build_connection_properties returns None."""
+        """WEP is unsupported - _build_connection_properties returns None."""
         w = _make_worker(qapp)
         ap_props = {"flags": 1, "wpa_flags": 0, "rsn_flags": 0}
         result = w._build_connection_properties(
@@ -2584,7 +2584,7 @@ class TestStartSignalListeners:
             w._listen_wifi_state_changed = AsyncMock()
             w._listen_settings_new_connection = AsyncMock()
             w._listen_settings_connection_removed = AsyncMock()
-            # _resilient_listener wraps them — mock it to just return
+            # _resilient_listener wraps them - mock it to just return
             w._resilient_listener = AsyncMock()
             w._track_task = MagicMock()
             await w._start_signal_listeners()

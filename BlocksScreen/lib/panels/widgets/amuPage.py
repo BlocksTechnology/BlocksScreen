@@ -124,6 +124,7 @@ class AMUpage(QtWidgets.QStackedWidget):
                         lambda: self.request_back.emit()
                     )
 
+    @QtCore.pyqtSlot(object)
     def on_mmu_state_changed(self, mmu_state):
         if mmu_state is None:
             return
@@ -142,6 +143,7 @@ class AMUpage(QtWidgets.QStackedWidget):
             gate_info.status,
         )
 
+    @QtCore.pyqtSlot(int)
     def _select_gate(self, idx: int):
         self.carousel.selectIndex(self.current_index)
         self.amu_manager.select_gate(idx)

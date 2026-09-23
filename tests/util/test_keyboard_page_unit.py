@@ -22,7 +22,7 @@ _icon_stub = types.ModuleType("lib.utils.icon_button")
 _icon_stub.IconButton = QtWidgets.QPushButton  # type: ignore[attr-defined]
 sys.modules.setdefault("lib.utils.icon_button", _icon_stub)
 
-# Force-reload the real module — the network conftest registers a stub
+# Force-reload the real module - the network conftest registers a stub
 # that lacks the layout constants we need.
 for _key in [
     "lib.panels.widgets.keyboardPage",

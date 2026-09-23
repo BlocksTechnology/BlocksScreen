@@ -54,7 +54,6 @@ def validate_label(label: str, strict: bool = True, max_length: int = 100) -> st
 
     dangerous_chars = {
         "\0",
-        "\x00",
         "/",
         "\\",
         ";",
@@ -89,7 +88,7 @@ def validate_label(label: str, strict: bool = True, max_length: int = 100) -> st
         )
 
     final_label = clean_label.strip(" .")[:max_length]
-    return final_label if final_label else ""
+    return final_label or ""
 
 
 def fire_n_forget(
@@ -412,9 +411,9 @@ class UDisksDBusAsync(QtCore.QThread):
         Updates tracked objects
         """
         async for (
-            path,
-            changed_properties,
-            invalid_properties,
+            _path,
+            _changed_properties,
+            _invalid_properties,
         ) in self.obj_manager.properties_changed:
             pass
 
@@ -528,7 +527,7 @@ class UDisksDBusAsync(QtCore.QThread):
             label = validate_label(label, strict=True)
             label = "USB-" + label
         fallback: str = "USB DRIVE" if _index == 0 else str(f"USB DRIVE {_index}")
-        dstb = pathlib.Path(dst_path).joinpath(label if label else fallback)
+        dstb = pathlib.Path(dst_path).joinpath(label or fallback)
         try:
             if not os.path.islink(dstb):
                 os.symlink(src=path, dst=dstb)

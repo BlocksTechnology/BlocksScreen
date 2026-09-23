@@ -1,8 +1,10 @@
-import numpy as np
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 
 class CustomScrollBar(QtWidgets.QScrollBar):
+    HANDLE_EDGE = QtGui.QColor(164, 164, 164, 100)
+    HANDLE_CENTER = QtGui.QColor(164, 164, 164, 164)
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setFixedWidth(40)
@@ -12,12 +14,10 @@ class CustomScrollBar(QtWidgets.QScrollBar):
         painter = QtGui.QPainter(self)
         painter.setRenderHint(painter.RenderHint.Antialiasing, True)
         painter.setRenderHint(painter.RenderHint.SmoothPixmapTransform, True)
-        painter.setRenderHint(painter.RenderHint.LosslessImageRendering, True)
 
         groove = self.rect().adjusted(0, 0, -35, 0)
         min_val, max_val = self.minimum(), self.maximum()
         page_step = self.pageStep()
-        val = self.value()
 
         handle_width = 5
 
@@ -26,7 +26,13 @@ class CustomScrollBar(QtWidgets.QScrollBar):
 
         handle_percentage = int((self.value() / max_val) * 100)
 
-        val = np.interp((handle_percentage), [15, 85], [0, 100]) / 100 * max_val
+        # Linear remap of 15..85 onto 0..100, clamped outside that band
+        if handle_percentage <= 15:
+            val = 0.0
+        elif handle_percentage >= 85:
+            val = float(max_val)
+        else:
+            val = (handle_percentage - 15) / 70.0 * max_val
 
         base_handle_length = int(
             (groove.height() * page_step / (max_val - min_val + page_step)) + 40
@@ -49,8 +55,8 @@ class CustomScrollBar(QtWidgets.QScrollBar):
             QtCore.QPointF(handle_rect.bottomLeft()),
         )
 
-        gradient.setColorAt(0.0, QtGui.QColor(164, 164, 164, 100))  # Top
-        gradient.setColorAt(0.5, QtGui.QColor(164, 164, 164, 164))  # Center
-        gradient.setColorAt(1.0, QtGui.QColor(164, 164, 164, 100))  # Bottom
+        gradient.setColorAt(0.0, self.HANDLE_EDGE)  # Top
+        gradient.setColorAt(0.5, self.HANDLE_CENTER)  # Center
+        gradient.setColorAt(1.0, self.HANDLE_EDGE)  # Bottom
         painter.setBrush(gradient)
         painter.drawRoundedRect(handle_rect, 1, 1)

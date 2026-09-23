@@ -248,6 +248,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
             lambda: self.change_page(self.indexOf(self.panel.input_shaper_page))
         )
 
+    @QtCore.pyqtSlot(list)
     def handle_gcode_response(self, data: list[str]) -> None:
         """
         Parses a Klipper Input Shaper console message and updates self.is_types.
@@ -315,10 +316,10 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
                     return
                 return
 
-            reordered = {recommended_type: self.is_types[recommended_type]}
-            for key, value in self.is_types.items():
-                if key not in ("suggested_type", recommended_type, "Axis"):
-                    reordered[key] = value
+            skip = ("suggested_type", recommended_type, "Axis")
+            reordered = {recommended_type: self.is_types[recommended_type]} | {
+                key: value for key, value in self.is_types.items() if key not in skip
+            }
 
             self.is_page.set_type_dictionary(self.is_types)
             first_key = next(iter(reordered.keys()), None)
@@ -358,6 +359,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         self._is_timeout_timer.start()
         self.call_load_panel.emit(True, "Running Input Shaper...", False)
 
+    @QtCore.pyqtSlot()
     def _on_is_timeout(self) -> None:
         self.call_load_panel.emit(False, "", False)
 
@@ -405,6 +407,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
                             "homes_at_min": homes_at_min,
                         }
 
+    @QtCore.pyqtSlot(dict)
     def on_printer_config_received(self, config: dict) -> None:
         """Handle printer configuration"""
         for axis in ("x", "y", "z"):
@@ -487,6 +490,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
             self.current_object = obj_list[0]
             return True
 
+    @QtCore.pyqtSlot()
     def on_routine_answer(self) -> None:
         """Handle routine ongoing process"""
         if self.current_process is None or self.current_object is None:
@@ -582,6 +586,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         self.panel.rc_tittle.setText(title)
         self.panel.rc_label.setText(label)
 
+    @QtCore.pyqtSlot()
     def update_led_values(self) -> None:
         """Update led state and color values"""
         if self.current_object not in self.objects["leds"]:
@@ -638,6 +643,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
                 self.panel.utilities_leds_btn, self.panel.leds_page
             )
 
+    @QtCore.pyqtSlot()
     def toggle_led_state(self) -> None:
         """Toggle leds"""
         if self.current_object not in self.objects["leds"]:
@@ -669,6 +675,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
                 led_state: LedState = self.objects["leds"][self.current_object]
                 self.run_gcode_signal.emit(led_state.get_gcode(self.current_object))
 
+    @QtCore.pyqtSlot()
     def axis_maintenance(self) -> None:
         """Routine, checks axis movement for printer debugging"""
         self.current_process = Process.AXIS_MAINTENANCE

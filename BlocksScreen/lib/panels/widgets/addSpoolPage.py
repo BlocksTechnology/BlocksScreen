@@ -199,6 +199,7 @@ class AddSpoolPage(QtWidgets.QWidget):
         self._numpad_popup.hide()
         self._weight_field.setText(str(value))
 
+    @QtCore.pyqtSlot()
     def _on_submit(self) -> None:
         if self._selected_filament_id is None:
             return

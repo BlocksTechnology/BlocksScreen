@@ -1,6 +1,5 @@
 import json
 import logging
-import typing
 
 import helper_methods
 from lib.utils.blocks_Scrollbar import CustomScrollBar
@@ -40,11 +39,12 @@ class FilesPage(QtWidgets.QWidget):
         "refresh": ":/ui/media/btn_icons/refresh.svg",
     }
 
-    def __init__(self, parent: typing.Optional[QtWidgets.QWidget] = None) -> None:
+    def __init__(self, parent: QtWidgets.QWidget | None = None) -> None:
         super().__init__(parent)
 
         self._file_list: list[dict] = []
         self._files_data: dict[str, dict] = {}  # filename -> metadata dict
+        self._display_name_to_key: dict[str, str] = {}  # display_name -> filename key
         self._directories: list[dict] = []
         self._curr_dir: str = ""
         self._pending_action: bool = False
@@ -86,6 +86,7 @@ class FilesPage(QtWidgets.QWidget):
     def clear_files_data(self) -> None:
         """Clear all cached file data."""
         self._files_data.clear()
+        self._display_name_to_key.clear()
         self._pending_metadata_requests.clear()
         self._metadata_retry_count.clear()
 
@@ -155,6 +156,7 @@ class FilesPage(QtWidgets.QWidget):
 
         # Cache the file data
         self._files_data[filename] = filedata
+        self._display_name_to_key[self._get_display_name(filename)] = filename
 
         # Remove from pending requests and reset retry count (success)
         self._pending_metadata_requests.discard(filename)
@@ -237,10 +239,7 @@ class FilesPage(QtWidgets.QWidget):
         """
         insert_pos = 0
 
-        for i in range(self._model.rowCount()):
-            index = self._model.index(i)
-            item = self._model.data(index, QtCore.Qt.ItemDataRole.UserRole)
-
+        for i, item in enumerate(self._model.entries):
             if not item:
                 continue
 
@@ -263,12 +262,9 @@ class FilesPage(QtWidgets.QWidget):
 
         return insert_pos
 
-    def _find_file_key_by_display_name(self, display_name: str) -> typing.Optional[str]:
+    def _find_file_key_by_display_name(self, display_name: str) -> str | None:
         """Find the file key in _files_data by its display name."""
-        for key in self._files_data:
-            if self._get_display_name(key) == display_name:
-                return key
-        return None
+        return self._display_name_to_key.get(display_name)
 
     @QtCore.pyqtSlot(dict, name="on_file_added")
     def on_file_added(self, file_data: dict) -> None:
@@ -344,6 +340,10 @@ class FilesPage(QtWidgets.QWidget):
         current = self._curr_dir.removeprefix("/")
 
         # Always clean up cache
+        display_name = self._get_display_name(filepath)
+        # Same basename can live in another directory, keep its entry
+        if self._display_name_to_key.get(display_name) == filepath:
+            del self._display_name_to_key[display_name]
         self._files_data.pop(filepath, None)
         self._pending_metadata_requests.discard(filepath)
         self._metadata_retry_count.pop(filepath, None)
@@ -650,6 +650,7 @@ class FilesPage(QtWidgets.QWidget):
         self._list_widget.blockSignals(False)
         self._list_widget.update()
 
+    @QtCore.pyqtSlot()
     def _delayed_scrollbar_update(self) -> None:
         """Update scrollbar after model changes."""
         QtCore.QTimer.singleShot(10, self._setup_scrollbar)
@@ -691,7 +692,7 @@ class FilesPage(QtWidgets.QWidget):
         if item:
             self._model.add_item(item)
 
-    def _create_file_list_item(self, filedata: dict) -> typing.Optional[ListItem]:
+    def _create_file_list_item(self, filedata: dict) -> ListItem | None:
         """Create a ListItem from file metadata."""
         filename = filedata.get("filename", "")
         if not filename:
@@ -850,6 +851,7 @@ class FilesPage(QtWidgets.QWidget):
                 return True
         return False
 
+    @QtCore.pyqtSlot(int)
     def _handle_scrollbar_value_changed(self, value: int) -> None:
         """Sync scrollbar with list widget."""
         self._scrollbar.blockSignals(True)

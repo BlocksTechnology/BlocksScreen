@@ -33,7 +33,7 @@ help: ## Show this help message
 ##@ Environment
 # ─────────────────────────────────────────────────────────────────────────────
 
-venv: ## Print venv activation command (source manually — subshells cannot export)
+venv: ## Print venv activation command (source manually - subshells cannot export)
 	@echo "Run:  source $(VENV)/bin/activate"
 
 init: ## Install production dependencies
@@ -123,7 +123,7 @@ test-all: ## All tests including D-Bus integration (requires NetworkManager)
 
 COVERAGE_FLAGS := --cov-report=term-missing --cov-report=html:htmlcov --cov-fail-under=40
 
-coverage: ## Coverage report — HTML + terminal (fail-under=40%)
+coverage: ## Coverage report - HTML + terminal (fail-under=40%)
 	$(PYTHON) -m pytest $(PYTEST_IGNORE) --cov=$(SRC) $(COVERAGE_FLAGS) $(TESTS)
 	@echo "Coverage report: htmlcov/index.html"
 

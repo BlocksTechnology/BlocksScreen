@@ -78,6 +78,7 @@ class CustomNumpad(QtWidgets.QWidget):
 
         self.inserted_value.setText(str(self.current_value))
 
+    @QtCore.pyqtSlot()
     def back_button(self):
         """Request back page"""
         self.request_back.emit()

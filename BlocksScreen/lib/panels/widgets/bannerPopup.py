@@ -24,6 +24,8 @@ class BannerPopup(QtWidgets.QWidget):
         self.messages: deque = deque()
         self.isShown = False
         self.default_background_color = QtGui.QColor(164, 164, 164)
+        self._gradient: QtGui.QRadialGradient | None = None
+        self._gradient_rect = QtCore.QRect()
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_TranslucentBackground, True)
         self.setMouseTracking(True)
         self.setWindowFlags(
@@ -49,7 +51,7 @@ class BannerPopup(QtWidgets.QWidget):
         self.actionbtn.clicked.connect(self.slide_out_animation.start)
 
     def event(self, a0):
-        if a0.type() in (QtCore.QEvent.Type.MouseButtonPress,):
+        if a0.type() == QtCore.QEvent.Type.MouseButtonPress:
             if self.rect().contains(a0.position().toPoint()):
                 self.timeout_timer.stop()
                 self.slide_out_animation.setStartValue(
@@ -60,10 +62,12 @@ class BannerPopup(QtWidgets.QWidget):
 
         return super().event(a0)
 
+    @QtCore.pyqtSlot()
     def on_slide_in_finished(self):
         """Handle slide in animation finished"""
         self.timeout_timer.start()
 
+    @QtCore.pyqtSlot()
     def on_slide_out_finished(self):
         """Handle slide out animation finished"""
         self.hide()
@@ -119,6 +123,7 @@ class BannerPopup(QtWidgets.QWidget):
         )
         return self._add_popup()
 
+    @QtCore.pyqtSlot()
     def _add_popup(self) -> None:
         """Add popup to queue"""
         if self.isShown:
@@ -179,17 +184,21 @@ class BannerPopup(QtWidgets.QWidget):
         painter = QtGui.QPainter(self)
         painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing, True)
 
-        _base_color = self.default_background_color
+        rect = self.rect()
+        # Gradient only depends on the rect, the slide animation moves it not resizes it
+        if self._gradient is None or self._gradient_rect != rect:
+            _base_color = self.default_background_color
+            gradient = QtGui.QRadialGradient(
+                QtCore.QPointF(rect.center()), rect.width() / 2.0
+            )
+            gradient.setColorAt(0, _base_color.darker(160))
+            gradient.setColorAt(1.0, _base_color.darker(200))
+            self._gradient = gradient
+            self._gradient_rect = QtCore.QRect(rect)
 
-        center_point = QtCore.QPointF(self.rect().center())
-        gradient = QtGui.QRadialGradient(center_point, self.rect().width() / 2.0)
-
-        gradient.setColorAt(0, _base_color.darker(160))
-        gradient.setColorAt(1.0, _base_color.darker(200))
-
-        painter.setBrush(gradient)
+        painter.setBrush(self._gradient)
         painter.setPen(QtCore.Qt.PenStyle.NoPen)
-        painter.drawRoundedRect(self.rect(), 50, 70)
+        painter.drawRoundedRect(rect, 50, 70)
 
     def _setupUI(self) -> None:
         self.horizontal_layout = QtWidgets.QHBoxLayout(self)

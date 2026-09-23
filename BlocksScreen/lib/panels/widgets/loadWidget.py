@@ -1,13 +1,16 @@
-from PyQt6 import QtCore, QtGui, QtWidgets
 import enum
 import os
+
 from configfile import BlocksScreenConfig, get_configparser
+from PyQt6 import QtCore, QtGui, QtWidgets
 
 
 class LoadingOverlayWidget(QtWidgets.QLabel):
     """
     A full-overlay widget to display a loading animation (GIF or spinning arc).
     """
+
+    ARC_SIZE = 150
 
     class AnimationGIF(enum.Enum):
         """Animation type"""
@@ -28,6 +31,14 @@ class LoadingOverlayWidget(QtWidgets.QLabel):
         self.min_length = 5.0
         self.max_length = 150.0
         self.length_step = 2.5
+
+        # Constant spinner paint state, rebuilt per frame would cost 62 allocs/s
+        self._arc_pen = QtGui.QPen(QtGui.QColor("#ffffff"))
+        self._arc_pen.setWidth(8)
+        self._arc_pen.setCapStyle(QtCore.Qt.PenCapStyle.RoundCap)
+        self._arc_rect = QtCore.QRectF(
+            -self.ARC_SIZE / 2, -self.ARC_SIZE / 2, self.ARC_SIZE, self.ARC_SIZE
+        )
 
         self._setupUI()
 
@@ -75,7 +86,7 @@ class LoadingOverlayWidget(QtWidgets.QLabel):
             self.gifshow.hide()
 
         self.label.setText("Loading...")
-        self.repaint()
+        self.update()
 
     def set_animation_path(self, path: str) -> None:
         """Set widget animation path"""
@@ -108,6 +119,17 @@ class LoadingOverlayWidget(QtWidgets.QLabel):
             self.movie.stop()
         return super().close()
 
+    def _spinner_rect(self) -> QtCore.QRect:
+        """Rotation-invariant arc bounds, the only pixels the timer dirties"""
+        half = self.ARC_SIZE // 2 + self._arc_pen.width()
+        return QtCore.QRect(
+            self.width() // 2 - half,
+            int(self.height() * 0.4) - half,
+            half * 2,
+            half * 2,
+        )
+
+    @QtCore.pyqtSlot()
     def _update_animation(self) -> None:
         self._angle = (self._angle + 5) % 360
         if self._is_span_growing:
@@ -120,34 +142,20 @@ class LoadingOverlayWidget(QtWidgets.QLabel):
             if self._span_angle <= self.min_length:
                 self._span_angle = self.min_length
                 self._is_span_growing = True
-        self.update()
+        self.update(self._spinner_rect())
 
     def paintEvent(self, a0: QtGui.QPaintEvent | None) -> None:
         """Re-implemented method, paint widget"""
         painter = QtGui.QPainter(self)
         if self.anim_type == LoadingOverlayWidget.AnimationGIF.DEFAULT:
             painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing, True)
-            painter.setRenderHint(
-                QtGui.QPainter.RenderHint.LosslessImageRendering, True
-            )
             painter.setRenderHint(QtGui.QPainter.RenderHint.SmoothPixmapTransform, True)
             painter.setRenderHint(QtGui.QPainter.RenderHint.TextAntialiasing, True)
-            pen = QtGui.QPen()
-            pen.setWidth(8)
-            pen.setColor(QtGui.QColor("#ffffff"))
-            pen.setCapStyle(QtCore.Qt.PenCapStyle.RoundCap)
-            painter.setPen(pen)
+            painter.setPen(self._arc_pen)
 
-            center_x = self.width() // 2
-            center_y = int(self.height() * 0.4)
-            arc_size = 150
-
-            painter.translate(center_x, center_y)
+            painter.translate(self.width() // 2, int(self.height() * 0.4))
             painter.rotate(self._angle)
-
-            arc_rect = QtCore.QRectF(-arc_size / 2, -arc_size / 2, arc_size, arc_size)
-            span_angle = int(self._span_angle * 16)
-            painter.drawArc(arc_rect, 0, span_angle)
+            painter.drawArc(self._arc_rect, 0, int(self._span_angle * 16))
 
         super().paintEvent(a0)
 
@@ -168,10 +176,16 @@ class LoadingOverlayWidget(QtWidgets.QLabel):
 
         self.gifshow.setGeometry(gifshow_x, gifshow_y, size, size)
 
-    def show(self) -> None:
-        """Re-implemented method, show widget"""
-        self.repaint()
-        return super().show()
+    def setVisible(self, visible: bool) -> None:
+        """Re-implemented method, pause animation timer when hidden"""
+        if self.anim_type == LoadingOverlayWidget.AnimationGIF.DEFAULT:
+            if visible:
+                self.timer.start(16)
+            else:
+                self.timer.stop()
+        if visible:
+            self.update()
+        super().setVisible(visible)
 
     def _setupUI(self) -> None:
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_TranslucentBackground, True)

@@ -1,3 +1,4 @@
+import math
 import typing
 
 from lib.utils.blocks_button import BlocksCustomButton
@@ -26,6 +27,8 @@ class _ColorWheel(QtWidgets.QWidget):
         self._sat = 0.0
         self._wheel_img: QtGui.QImage | None = None
         self._selector = QtCore.QPointF(diameter / 2.0, diameter / 2.0)
+        self._selector_shadow_pen = QtGui.QPen(QtGui.QColor(0, 0, 0, 100), 1.5)
+        self._selector_pen = QtGui.QPen(QtGui.QColor(255, 255, 255), 2.5)
         self.setFixedSize(diameter, diameter)
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_AcceptTouchEvents, True)
         self._build_image()
@@ -81,17 +84,17 @@ class _ColorWheel(QtWidgets.QWidget):
         painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
         if self._wheel_img:
             painter.drawImage(0, 0, self._wheel_img)
-        painter.setPen(QtGui.QPen(QtGui.QColor(0, 0, 0, 100), 1.5))
+        painter.setPen(self._selector_shadow_pen)
         painter.setBrush(QtCore.Qt.BrushStyle.NoBrush)
         painter.drawEllipse(self._selector, 11, 11)
-        painter.setPen(QtGui.QPen(QtGui.QColor(255, 255, 255), 2.5))
+        painter.setPen(self._selector_pen)
         painter.drawEllipse(self._selector, 9, 9)
         painter.end()
 
     def _pick(self, pos: QtCore.QPointF) -> None:
         dx = pos.x() - self._center_x
         dy = pos.y() - self._center_y
-        dist = QtCore.QLineF(QtCore.QPointF(), QtCore.QPointF(dx, dy)).length()
+        dist = math.hypot(dx, dy)
         clamped = min(dist, self._radius)
         self._hue = QtCore.QLineF(0, 0, dx, dy).angle()
         self._sat = clamped / self._radius
@@ -164,15 +167,18 @@ class ColorWheelWidget(QtWidgets.QWidget):
         self._swatch.setText(f"#{color.name().lstrip('#').upper()}")
         self._swatch.update()
 
+    @QtCore.pyqtSlot(float, float)
     def _on_hue_sat(self, hue: float, sat: float) -> None:
         self._hue = hue
         self._sat = sat
         self._sync_all()
 
+    @QtCore.pyqtSlot(int)
     def _on_brightness(self, value: int) -> None:
         self._val = value / 100.0
         self._sync_all()
 
+    @QtCore.pyqtSlot()
     def _on_select(self) -> None:
         self.color_selected.emit(self._current_color().name().lstrip("#"))
         self.request_back.emit()
@@ -245,7 +251,7 @@ class ColorWheelWidget(QtWidgets.QWidget):
         card_lay.setContentsMargins(14, 14, 14, 14)
         card_lay.setSpacing(10)
 
-        # Combined swatch + hex code — one element instead of two
+        # Combined swatch + hex code - one element instead of two
         self._swatch = BlocksLabel(card)
         self._swatch.setFixedHeight(76)
         self._swatch.rounded = True
