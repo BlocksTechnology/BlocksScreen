@@ -96,7 +96,6 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
         with self._state_lock:
             if self.connecting is True and self.connected is False:
                 return False
-            self._reconnect_count = 0
         self.try_connection()
 
     @QtCore.pyqtSlot(name="try_connection")
@@ -104,6 +103,7 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
         """Try connecting to websocket"""
         with self._state_lock:
             self.connecting = True
+            self._reconnect_count = 0
         if self._retry_timer is not None:
             self._retry_timer.stopTimer()
         self._retry_timer = RepeatedTimer(self.timeout, self.reconnect)
@@ -140,6 +140,7 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
             logger.warning(
                 "Maximum number of connection retries reached, Unable to establish connection with Moonraker"
             )
+            return False
         return self.connect()
 
     def connect(self) -> bool:
@@ -352,13 +353,15 @@ class MoonWebSocket(QtCore.QObject, threading.Thread):
                         metadata=_entry,
                     )
         elif "method" in response:
-            if str(response["method"]).lower() in (
-                "notify_klippy_disconnected",
-                "notify_klippy_shutdown",
-            ):
-                self.klippy_state_signal.emit("disconnected")
+            if response["method"] in self._KLIPPY_NOTIFY_METHODS:
                 self._klippy_retry_count = 0
                 self.evaluate_klippy_status()
+            elif (
+                response["method"] == "notify_klippy_ready"
+                and not self.query_klippy_status_timer.running
+            ):
+                # Poll may have hit its retry cap; re-query so the ready path still runs
+                self.query_server_info_signal.emit()
             message_event = (
                 WebSocketMessageReceived(  # mainly used to pass websocket notifications
                     method=response["method"],

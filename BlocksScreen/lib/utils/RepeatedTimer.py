@@ -45,24 +45,18 @@ class RepeatedTimer:
         with self._lock:
             if self.running:
                 return
-            # New event per generation so a thread still in a slow callback cannot resume
+            # New event per start so a thread stuck in a slow callback cannot resume
             self.stopEvent = threading.Event()
-            try:
-                timer = threading.Thread(
-                    target=self._run,
-                    args=(self.stopEvent,),
-                    name=self.name,
-                    daemon=True,
-                )
-                self._timer = timer
-                self.running = True
-            except Exception as e:
-                self.running = False
-                raise Exception(
-                    f"RepeatedTimer {self.name} error while starting timer, error: {e}"
-                ) from e
-        # Start outside the lock to avoid holding it during thread creation
-        timer.start()
+            timer = threading.Thread(
+                target=self._run,
+                args=(self.stopEvent,),
+                name=self.name,
+                daemon=True,
+            )
+            # Start under the lock so stopTimer can never join an unstarted thread
+            timer.start()
+            self._timer = timer
+            self.running = True
 
     def stopTimer(self) -> None:
         """Stop timer"""
