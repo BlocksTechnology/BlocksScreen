@@ -31,12 +31,14 @@ class AMUpage(QtWidgets.QStackedWidget):
         int, name="request_change_tab"
     )
 
-    def __init__(self, amu_manager, parent=None, load_popup: BasePopup | None = None):
+    def __init__(
+        self, amu_manager, parent=None, *, load_popup: BasePopup | None = None
+    ):
         super().__init__(parent)
         self.current_index = -1
         self.amu_manager: AMUManager = amu_manager
-        self._build_ui()
         self.load_popup = load_popup
+        self._build_ui()
 
         self.main_back_button.clicked.connect(self.request_back)
 

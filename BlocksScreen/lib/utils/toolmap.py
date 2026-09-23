@@ -171,6 +171,8 @@ class MmuToolmapWidget(QtWidgets.QWidget):
         return 0.0
 
     def _animate_fill_to(self, value: float) -> None:
+        if value == self._fill_animation.endValue():
+            return
         self._fill_animation.stop()
         self._fill_animation.setStartValue(self._fill_progress)
         self._fill_animation.setEndValue(value)

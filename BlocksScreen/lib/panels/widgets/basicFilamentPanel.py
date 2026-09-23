@@ -42,7 +42,7 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
             return f"<{self.__class__.__name__}.{self._name_}>"
 
     def __init__(
-        self, printer: Printer, cfg, parent=None, load_popup: BasePopup | None = None
+        self, printer: Printer, cfg, parent=None, *, load_popup: BasePopup | None = None
     ) -> None:
         super().__init__(parent)
         self.printer = printer

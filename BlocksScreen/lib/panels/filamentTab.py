@@ -129,6 +129,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self.reset_spool_info()
         self._add_spool_page.setFilter(None)
         self._add_filament_page.setData("---", 0)
+        self.load_state = False
         self.load_popup.hide()
 
     def handle_moonraker_components(self):
@@ -169,7 +170,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
         load_layout.addWidget(self.load_status_label)
 
         self.load_status_widget = MmuToolmapWidget(load_container)
-        self.load_status_widget.set_left_text("Auxiliar Extruder")
+        self.load_status_widget.set_left_text("Auxiliary Extruder")
         load_layout.addWidget(self.load_status_widget)
 
         self.load_popup.add_widget(load_container)
@@ -943,12 +944,25 @@ class FilamentTab(QtWidgets.QStackedWidget):
                 self.amupage.request_keyboard.connect(self._on_show_keyboard)
                 self.amupage.request_color_wheel.connect(self._open_color_wheel)
             else:
-                self.load_status_widget.set_left_text("Auxiliar Extruder")
+                self.load_status_widget.set_left_text("Auxiliary Extruder")
             self.amu_configured = True
 
+        if self.load_state:
+            if mmu_state.action == "Idle":
+                self.load_state = False
+                self.load_popup.hide()
+                if not len(mmu_state.gates) > 1:
+                    self._basic_panel.change_page(0)
+        elif mmu_state.action in ("Loading", "Unloading"):
+            self.load_state = True
+            self.load_popup.show()
+
+        if not self.load_popup.isVisible():
+            return
         self.load_status_widget.set_filament_pos(
             mmu_state.filament_pos, mmu_state.bowden_progress
         )
+
         for sensor_name in ("mmu_pre_gate", "mmu_gate", "toolhead"):
             self.load_status_widget.set_sensor(
                 sensor_name, bool(mmu_state.sensors.get(sensor_name))
@@ -964,18 +978,10 @@ class FilamentTab(QtWidgets.QStackedWidget):
         parsed_color = QtGui.QColor("#" + raw_color) if raw_color else QtGui.QColor()
         if parsed_color.isValid():
             self.load_status_widget.set_gate_color(parsed_color)
+        else:
+            self.load_status_widget.set_gate_color(QtGui.QColor("#ffffff"))
 
         self.load_status_label.setText(mmu_state.action)
-
-        if self.load_state:
-            if mmu_state.action == "Idle":
-                self.load_state = False
-                self.load_popup.hide()
-                if not len(mmu_state.gates) > 1:
-                    self._basic_panel.change_page(0)
-        elif mmu_state.action in ("Loading", "Unloading"):
-            self.load_state = True
-            self.load_popup.show()
 
     def setupUi(self):
         """Build the tab's landing page (title + Filament Control / Spoolman buttons)."""
