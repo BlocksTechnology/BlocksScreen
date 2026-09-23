@@ -83,8 +83,6 @@ class BlocksCustomLinEdit(QtWidgets.QLineEdit):
 
     def mousePressEvent(self, event: QtGui.QMouseEvent) -> None:
         """Handle mouse press"""
-        if not self.isEnabled():
-            return
         self.clicked.emit()
         super().mousePressEvent(event)
 

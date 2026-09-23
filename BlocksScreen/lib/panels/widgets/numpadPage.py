@@ -42,7 +42,6 @@ class CustomNumpad(QtWidgets.QWidget):
 
     def showEvent(self, a0: QtGui.QShowEvent | None) -> None:
         self.firsttime = True
-        self.enforce_range = True
         self.min_max_label.setVisible(True)
         return super().showEvent(a0)
 
@@ -75,6 +74,7 @@ class CustomNumpad(QtWidgets.QWidget):
                 self.current_value = self.current_value[:-1]
             else:
                 self.current_value = "0"
+        in_range = self.min_value <= int(self.current_value) <= self.max_value
 
         if not in_range and self.enforce_range:
             self.start_glow_animation.emit()
@@ -116,6 +116,7 @@ class CustomNumpad(QtWidgets.QWidget):
 
     def update_min_max_label(self) -> None:
         """Updates the text of the min/max label."""
+        self.enforce_range = True
         self.min_max_label.setText(f"Range: {self.min_value} - {self.max_value}")
 
     def _setupUI(self) -> None:
@@ -144,9 +145,13 @@ class CustomNumpad(QtWidgets.QWidget):
         self.header_layout.setContentsMargins(0, 0, 0, 0)
         self.header_layout.setObjectName("header_layout")
 
-        blank = QtWidgets.QWidget(self)
-        blank.setFixedSize(60, 60)
-        self.header_layout.addWidget(blank)
+        spacerItem1 = QtWidgets.QSpacerItem(
+            60,
+            60,
+            QtWidgets.QSizePolicy.Policy.Minimum,
+            QtWidgets.QSizePolicy.Policy.Minimum,
+        )
+        self.header_layout.addItem(spacerItem1)
 
         self.numpad_title = BlocksLabel(self)
         self.numpad_title.setMinimumSize(QtCore.QSize(500, 60))

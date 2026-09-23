@@ -105,9 +105,12 @@ class _ColorWheel(QtWidgets.QWidget):
         self.update()
         self.hue_sat_changed.emit(self._hue, self._sat)
 
-    def mouseMoveEvent(self, event: QtGui.QMouseEvent) -> None:
-        if event.buttons() & QtCore.Qt.MouseButton.LeftButton:
-            self._pick(event.position())
+    def mouseMoveEvent(self, a0: QtGui.QMouseEvent | None) -> None:
+        if a0.buttons() & QtCore.Qt.MouseButton.LeftButton:
+            self._pick(a0.position())
+
+    def mousePressEvent(self, a0: QtGui.QMouseEvent | None) -> None:
+        self._pick(a0.position())
 
 
 class ColorWheelWidget(QtWidgets.QWidget):
