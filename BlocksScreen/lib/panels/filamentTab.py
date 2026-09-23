@@ -636,14 +636,12 @@ class FilamentTab(QtWidgets.QStackedWidget):
 
     @QtCore.pyqtSlot(dict, name="on-spools-received")
     def on_spools_received(self, result: dict) -> None:
-        """Handles the result from the API call to get spools for the spoolman page."""
         self._spool_load_widget.hide()
         self._spool_list_view.show()
-        self._no_spools_label.hide()
-
         self.reset_spool_info()
-
         if result.get("error") is not None:
+            self._no_spools_label.setText("Could not reach Spoolman")
+            self._no_spools_label.show()
             return
         spools = result.get("response")
         if not isinstance(spools, list):

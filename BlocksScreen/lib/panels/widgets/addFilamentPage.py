@@ -9,6 +9,7 @@ from lib.utils.blocks_frame import BlocksCustomFrame
 from lib.utils.blocks_linedit import BlocksCustomLinEdit
 from lib.utils.icon_button import IconButton
 from PyQt6 import QtCore, QtGui, QtWidgets
+from lib.utils.blocks_label import BlocksLabel
 
 
 class AddFilamentPage(QtWidgets.QWidget):
@@ -47,6 +48,8 @@ class AddFilamentPage(QtWidgets.QWidget):
 
         self.color_whell = ColorWheelWidget(self)
         self.color_whell.hide()
+
+        self.request_filament_body: dict | None = None
 
         self._color_whell_popup = BasePopup(self, True, False)
         self._color_whell_popup.x_offset = 0.95
@@ -202,9 +205,11 @@ class AddFilamentPage(QtWidgets.QWidget):
     def on_add_manufacturer_result(self, result: dict) -> None:
         if result.get("error") is None:
             vendor_id = result.get("response", {}).get("id")
-            if vendor_id is not None:
-                self.request_filament_body["vendor_id"] = vendor_id
-                self.request_add_filament.emit(self.request_filament_body)
+            if self.request_filament_body is None:
+                return
+            body, self.request_filament_body = self.request_filament_body, None
+            body["vendor_id"] = vendor_id
+            self.request_add_filament.emit(body)
         else:
             ...
 
@@ -270,14 +275,15 @@ class AddFilamentPage(QtWidgets.QWidget):
         self._color_field.setFont(_f(14))
         self._color_field.setFixedHeight(46)
         self._color_field.setStyleSheet("color: rgb(255, 255, 255);")
+        self._color_field.setTextFormat(QtCore.Qt.TextFormat.RichText)
 
-        self._color_swatch = QtWidgets.QLabel(left_frame)
+        self._color_swatch = BlocksLabel(left_frame)
+        self._color_swatch.clicked.connect(self._open_color_wheel)
         self._color_swatch.setFixedSize(70, 70)
         self._color_swatch.setStyleSheet(
             "border-radius: 8px; background: #ffffff; border: 2px solid rgba(255,255,255,80);"
         )
         self._color_swatch.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
-        self._color_swatch.mousePressEvent = lambda event: self._open_color_wheel()
 
         left_lay.addWidget(_key_lbl("Name:", left_frame))
         left_lay.addWidget(self._name_field)
