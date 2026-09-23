@@ -52,6 +52,7 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
         self.has_load_unload_objects = None
         self.filament_buttons_list = []
         self.mmu_configured = False
+        self._mmu_state = None
         self._setupUi()
         self.filament_state = self.FilamentStates.UNKNOWN
 
@@ -257,13 +258,25 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
                 btn.clicked.connect(partial(self.open_pre_gate_popup, _filament_type))
             self.mmu_configured = True
 
-        if mmu_state.filament_pos == FilamentPos.UNLOADED:
+        self._mmu_state = mmu_state
+        if mmu_state.filament_pos == FilamentPos.UNKNOWN:
+            self.filament_state = self.FilamentStates.UNKNOWN
+        elif mmu_state.filament_pos == FilamentPos.UNLOADED:
             self.filament_state = self.FilamentStates.UNLOADED
-            gate_info = mmu_state.current_gate_info
-            status = gate_info.status if gate_info is not None else GateStatus.UNKNOWN
-            self.filament_page_load_btn.setEnabled(status != GateStatus.EMPTY)
         else:
             self.filament_state = self.FilamentStates.LOADED
+
+    @property
+    def _gate_has_filament(self) -> bool:
+        _gate = self._mmu_state.current_gate_info if self._mmu_state else None
+        return _gate is None or _gate.status != GateStatus.EMPTY
+
+    @property
+    def _mmu_busy(self) -> bool:
+        return self._mmu_state is not None and self._mmu_state.action not in (
+            "",
+            "Idle",
+        )
 
     @property
     def filament_state(self):
@@ -272,15 +285,13 @@ class BasicFilamentPanel(QtWidgets.QStackedWidget):
     @filament_state.setter
     def filament_state(self, update: FilamentStates) -> None:
         self._filament_state = update
-        if update is self.FilamentStates.LOADED:
-            self.filament_page_unload_btn.setEnabled(True)
-            self.filament_page_load_btn.setEnabled(False)
-        elif update is self.FilamentStates.UNLOADED:
-            self.filament_page_unload_btn.setEnabled(False)
-            self.filament_page_load_btn.setEnabled(True)
-        else:
-            self.filament_page_load_btn.setEnabled(True)
-            self.filament_page_unload_btn.setEnabled(True)
+        _idle = not self._mmu_busy
+        _loaded = update is self.FilamentStates.LOADED
+        _unloaded = update is self.FilamentStates.UNLOADED
+        self.filament_page_unload_btn.setEnabled(_idle and not _unloaded)
+        self.filament_page_load_btn.setEnabled(
+            _idle and not _loaded and self._gate_has_filament
+        )
 
     def change_page(self, index: int) -> None:
         self.setCurrentIndex(index)

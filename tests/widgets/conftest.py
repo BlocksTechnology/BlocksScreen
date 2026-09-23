@@ -20,23 +20,19 @@ for _pkg in (
     "lib.utils",
     "devices",
     "devices.amu",
+    "devices.amu.models",
 ):
     sys.modules.pop(_pkg, None)
 
-_lib_mod = types.ModuleType("lib")
-_lib_mod.__path__ = [str(_project_root / "BlocksScreen" / "lib")]
-_lib_mod.__package__ = "lib"
-sys.modules["lib"] = _lib_mod
-
-_devices_mod = types.ModuleType("devices")
-_devices_mod.__path__ = [str(_project_root / "BlocksScreen" / "devices")]
-_devices_mod.__package__ = "devices"
-sys.modules["devices"] = _devices_mod
-
-_devices_amu_mod = types.ModuleType("devices.amu")
-_devices_amu_mod.__path__ = [str(_project_root / "BlocksScreen" / "devices" / "amu")]
-_devices_amu_mod.__package__ = "devices.amu"
-sys.modules["devices.amu"] = _devices_amu_mod
+for _name, _parts in (
+    ("lib", ("lib",)),
+    ("devices", ("devices",)),
+    ("devices.amu", ("devices", "amu")),
+):
+    _m = types.ModuleType(_name)
+    _m.__path__ = [str(_project_root.joinpath("BlocksScreen", *_parts))]
+    _m.__package__ = _name
+    sys.modules[_name] = _m
 
 for _mod_name in ("events", "helper_methods"):
     _mod_path = _project_root / "BlocksScreen" / f"{_mod_name}.py"
