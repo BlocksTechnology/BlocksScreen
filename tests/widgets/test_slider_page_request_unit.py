@@ -19,13 +19,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-# printTab/controlTab import configfile, lib.files, lib.printer purely for
-# type hints and passthrough attribute assignment -- stub them so importing
-# the tab classes doesn't require the real config/websocket/printer stack.
-# Always replace (not setdefault): tests/util/test_configfile_unit.py may
-# already have imported the *real* configfile module by this point in
-# collection, and mutating its attributes in place (instead of swapping in
-# a fresh stub) would corrupt BlocksScreenConfig for the rest of the session.
+# fresh stubs, not setdefault: patching an already-imported real configfile leaks
 for _name in ("configfile", "lib.files", "lib.printer"):
     sys.modules[_name] = types.ModuleType(_name)
 sys.modules["configfile"].BlocksScreenConfig = MagicMock

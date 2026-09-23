@@ -1,8 +1,4 @@
-"""Unit tests for BlocksScreen/configfile.py
-
-Covers: parsing, read methods, get_section views, add/update/save, get_configparser factory,
-comment handling, and thread-safety (RLock reentrancy).
-"""
+"""Unit tests for BlocksScreen/configfile.py."""
 
 from __future__ import annotations
 
@@ -15,15 +11,11 @@ import threading
 
 import pytest
 
-# configfile.py lives in BlocksScreen/ and imports helper_methods from the same dir;
-# both resolve when BlocksScreen/ is on sys.path.
 _BLOCKSSCREEN = pathlib.Path(__file__).parent.parent.parent / "BlocksScreen"
 if str(_BLOCKSSCREEN) not in sys.path:
     sys.path.insert(0, str(_BLOCKSSCREEN))
 
-# tests/network/conftest.py installs a mock at sys.modules["configfile"] for network
-# tests. Popping it here is safe — network modules already bound the mock's symbols
-# at their own import time and won't re-import.
+# drop tests/network's configfile mock; network modules already bound its symbols
 sys.modules.pop("configfile", None)
 
 import configfile as cfmod  # noqa: E402
@@ -34,11 +26,6 @@ from configfile import (
     get_configparser,
     reset_configparser,
 )  # noqa: E402
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
 
 
 def _make_cfg(
@@ -52,11 +39,6 @@ def _make_cfg(
     return cfg
 
 
-# ---------------------------------------------------------------------------
-# Sentinel
-# ---------------------------------------------------------------------------
-
-
 @pytest.mark.unit
 class TestSentinel:
     def test_missing_value_is_an_instance_not_the_class(self):
@@ -65,11 +47,6 @@ class TestSentinel:
 
     def test_missing_is_an_enum_member(self):
         assert isinstance(Sentinel.MISSING, Sentinel)
-
-
-# ---------------------------------------------------------------------------
-# Parsing (_parse_file via load_config)
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.unit
@@ -150,19 +127,25 @@ class TestParsing:
         )
         assert cfg.get("color") == "#ff0000"
 
-    def test_duplicate_section_uses_first_occurrence(self, tmp_path):
+    def test_duplicate_section_merges_like_klipper(self, tmp_path):
         cfg = _make_cfg(
             tmp_path,
             """
             [server]
             host: first
+            port: 1
+            [display]
+            width: 800
             [server]
             host: second
         """,
         )
-        assert cfg.get("host") == "first"
+        assert cfg.get("host") == "second"
+        assert cfg.get("port") == "1"
+        assert cfg.get_section("display").get_options() == ["width"]
+        assert cfg.raw_config.count("[server]") == 1
 
-    def test_duplicate_option_uses_first_occurrence(self, tmp_path):
+    def test_duplicate_option_last_wins(self, tmp_path):
         cfg = _make_cfg(
             tmp_path,
             """
@@ -171,7 +154,39 @@ class TestParsing:
             host: second
         """,
         )
-        assert cfg.get("host") == "first"
+        assert cfg.get("host") == "second"
+        assert [ln for ln in cfg.raw_config if ln.startswith("host")] == [
+            "host: second"
+        ]
+
+    def test_case_duplicate_option_loads(self, tmp_path):
+        cfg = _make_cfg(tmp_path, "[server]\nHost: first\nhost: second\n")
+        assert cfg.get("host") == "second"
+        cfg.update_option("server", "host", "third")
+        assert [ln for ln in cfg.raw_config if ln.lower().startswith("host")] == [
+            "host: third"
+        ]
+
+    def test_dash_dot_and_bare_keys_kept(self, tmp_path):
+        cfg = _make_cfg(tmp_path, "[server]\napi-key: a\nlog.level: b\nflag\n")
+        assert cfg.get("api-key") == "a"
+        assert cfg.get("log.level") == "b"
+        assert cfg.has_option("flag")
+
+    def test_header_inline_comment_stripped(self, tmp_path):
+        cfg = _make_cfg(tmp_path, "[server]  # main\nhost: localhost\n")
+        cfg.add_option("server", "port", "7125")
+        assert "[server]" in cfg.raw_config
+        assert cfg.getint("port") == 7125
+
+    def test_option_before_any_section_ignored(self, tmp_path):
+        cfg = _make_cfg(tmp_path, "orphan: 1\n[server]\nhost: localhost\n")
+        assert cfg.sections() == ["server"]
+        assert not any("orphan" in ln for ln in cfg.raw_config)
+
+    def test_full_line_comments_kept_in_raw_config(self, tmp_path):
+        cfg = _make_cfg(tmp_path, "# top\n[server]\n; why\nhost: localhost\n")
+        assert cfg.raw_config[:4] == ["# top", "[server]", "; why", "host: localhost"]
 
     def test_multiple_sections_all_loaded(self, tmp_path):
         cfg = _make_cfg(
@@ -241,11 +256,6 @@ class TestParsing:
         )
         assert cfg.has_section("fan:heater_fan")
         assert cfg.get("pin") == "PA8"
-
-
-# ---------------------------------------------------------------------------
-# Read methods (get, getint, getfloat, getboolean, sections, get_options)
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.unit
@@ -334,8 +344,7 @@ class TestReadMethods:
         assert "port" in opts
 
     def test_get_default_returned_as_is_not_parsed(self, cfg):
-        """When the option is absent the default is returned without passing through parser.
-        Previously parser(default) was called — int('N/A') would raise ValueError."""
+        """An absent option returns the default unparsed, so int("N/A") never runs."""
         result = cfg.get("missing", parser=int, default="N/A")
         assert result == "N/A"
 
@@ -353,11 +362,6 @@ class TestReadMethods:
         """getboolean() with no default must raise, not silently return Sentinel.MISSING."""
         with pytest.raises((configparser.NoOptionError, configparser.NoSectionError)):
             cfg.getboolean("missing")
-
-
-# ---------------------------------------------------------------------------
-# get_section / __getitem__ / __contains__
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.unit
@@ -421,18 +425,12 @@ class TestGetSection:
         assert view is not None
         assert view.raw_config is cfg.raw_config  # same list object
 
-        # Reload with new content — view must reflect the updated list
         cfg_file.write_text(
             "[server]\nhost: second\n[display]\nwidth: 1024\n", encoding="utf-8"
         )
         cfg.load_config()
         assert view.raw_config is cfg.raw_config  # still the same list object
         assert any("1024" in line for line in view.raw_config)
-
-
-# ---------------------------------------------------------------------------
-# add_section
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.unit
@@ -470,11 +468,6 @@ class TestAddSection:
 
     def test_duplicate_section_does_not_raise(self, cfg):
         cfg.add_section("server")  # must not propagate an exception
-
-
-# ---------------------------------------------------------------------------
-# add_option
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.unit
@@ -521,10 +514,12 @@ class TestAddOption:
         cfg.add_option("server", "flag", None)
         assert cfg.has_option("flag")
 
-
-# ---------------------------------------------------------------------------
-# update_option
-# ---------------------------------------------------------------------------
+    def test_existing_option_not_duplicated(self, cfg, caplog):
+        with caplog.at_level(logging.ERROR):
+            cfg.add_option("server", "host", "other")
+        assert cfg.get("host") == "localhost"
+        assert sum(ln.startswith("host") for ln in cfg.raw_config) == 1
+        assert cfg.update_pending is False
 
 
 @pytest.mark.unit
@@ -567,16 +562,34 @@ class TestUpdateOption:
         assert view.get("width") == "800"
 
     def test_reentrancy_does_not_deadlock(self, tmp_path):
-        """update_option calls add_section/add_option while holding the RLock — must not deadlock."""
+        """update_option re-enters add_section/add_option under the RLock."""
         cfg = _make_cfg(tmp_path, "[server]\nhost: localhost\n")
         cfg.update_option("brandnew", "key", "value")
         assert cfg.has_section("brandnew")
         assert cfg.get_section("brandnew").get("key") == "value"
 
+    def test_newline_in_value_rejected(self, cfg):
+        cfg.update_option("server", "host", "evil\n[injected]")
+        assert cfg.get("host") == "localhost"
+        assert "[injected]" not in cfg.raw_config
+        assert cfg.update_pending is False
 
-# ---------------------------------------------------------------------------
-# save_configuration
-# ---------------------------------------------------------------------------
+
+@pytest.mark.unit
+class TestValueRoundTrip:
+    @pytest.mark.parametrize(
+        "value", ["Printer #2", "my pass ;1 #2", "#ff0000", "100%", "%(x)s", "a=b:c"]
+    )
+    def test_value_survives_save_and_reload(self, tmp_path, value):
+        cfg = _make_cfg(tmp_path, "[server]\nhost: localhost\n")
+        cfg.update_option("server", "password", value)
+        cfg.save_configuration()
+        cfg.load_config()
+        assert cfg.get("password") == value
+
+    def test_percent_in_file_is_literal(self, tmp_path):
+        cfg = _make_cfg(tmp_path, "[server]\npassword: 50%off\n")
+        assert cfg.get("password") == "50%off"
 
 
 @pytest.mark.unit
@@ -620,10 +633,37 @@ class TestSaveConfiguration:
         cfg.save_configuration()
         assert cfg.update_pending is True
 
+    def test_save_keeps_mode_and_leaves_no_temp_file(self, tmp_path):
+        cfg_file = tmp_path / "test.cfg"
+        cfg_file.write_text("[server]\nhost: localhost\n", encoding="utf-8")
+        cfg_file.chmod(0o644)
+        cfg = BlocksScreenConfig(cfg_file, "server")
+        cfg.load_config()
+        cfg.update_option("server", "host", "newhost")
+        cfg.save_configuration()
+        assert cfg_file.stat().st_mode & 0o777 == 0o644
+        assert [f.name for f in tmp_path.iterdir()] == ["test.cfg"]
 
-# ---------------------------------------------------------------------------
-# get_configparser factory
-# ---------------------------------------------------------------------------
+    def test_save_through_symlink_keeps_link(self, tmp_path):
+        target = tmp_path / "real.cfg"
+        target.write_text("[server]\nhost: localhost\n", encoding="utf-8")
+        link = tmp_path / "test.cfg"
+        link.symlink_to(target)
+        cfg = BlocksScreenConfig(link, "server")
+        cfg.load_config()
+        cfg.update_option("server", "host", "newhost")
+        cfg.save_configuration()
+        assert link.is_symlink()
+        assert "host: newhost" in target.read_text(encoding="utf-8")
+
+    def test_full_line_comments_survive_save(self, tmp_path):
+        cfg_file = tmp_path / "test.cfg"
+        cfg_file.write_text("[server]\n# keep me\nhost: localhost\n", encoding="utf-8")
+        cfg = BlocksScreenConfig(cfg_file, "server")
+        cfg.load_config()
+        cfg.update_option("server", "host", "newhost")
+        cfg.save_configuration()
+        assert "# keep me" in cfg_file.read_text(encoding="utf-8")
 
 
 @pytest.mark.unit
@@ -639,7 +679,9 @@ class TestGetConfigparser:
         cfg_file = tmp_path / "BlocksScreen.cfg"
         cfg_file.write_text("[server]\nhost: localhost\n", encoding="utf-8")
 
-        monkeypatch.setattr(cfmod, "_DEFAULT_CONFIG", tmp_path / "nonexistent" / "BlocksScreen.cfg")
+        monkeypatch.setattr(
+            cfmod, "_DEFAULT_CONFIG", tmp_path / "nonexistent" / "BlocksScreen.cfg"
+        )
         monkeypatch.setattr(cfmod, "_FALLBACK_CONFIG", cfg_file)
 
         cfg = get_configparser()
@@ -651,7 +693,9 @@ class TestGetConfigparser:
         cfg_file = tmp_path / "BlocksScreen.cfg"
         cfg_file.write_text("[display]\nwidth: 800\n", encoding="utf-8")
 
-        monkeypatch.setattr(cfmod, "_DEFAULT_CONFIG", tmp_path / "nonexistent" / "BlocksScreen.cfg")
+        monkeypatch.setattr(
+            cfmod, "_DEFAULT_CONFIG", tmp_path / "nonexistent" / "BlocksScreen.cfg"
+        )
         monkeypatch.setattr(cfmod, "_FALLBACK_CONFIG", cfg_file)
 
         with pytest.raises(ConfigError, match=r"\[server\]"):
@@ -661,15 +705,41 @@ class TestGetConfigparser:
         cfg_file = tmp_path / "BlocksScreen.cfg"
         cfg_file.write_text("[server]\nhost: localhost\n", encoding="utf-8")
 
-        monkeypatch.setattr(cfmod, "_DEFAULT_CONFIG", tmp_path / "nonexistent" / "BlocksScreen.cfg")
+        monkeypatch.setattr(
+            cfmod, "_DEFAULT_CONFIG", tmp_path / "nonexistent" / "BlocksScreen.cfg"
+        )
         monkeypatch.setattr(cfmod, "_FALLBACK_CONFIG", cfg_file)
 
         assert get_configparser() is get_configparser()
 
+    def test_concurrent_first_calls_build_one_instance(self, tmp_path, monkeypatch):
+        cfg_file = tmp_path / "BlocksScreen.cfg"
+        cfg_file.write_text("[server]\nhost: localhost\n", encoding="utf-8")
+        monkeypatch.setattr(cfmod, "_DEFAULT_CONFIG", tmp_path / "missing.cfg")
+        monkeypatch.setattr(cfmod, "_FALLBACK_CONFIG", cfg_file)
+        barrier = threading.Barrier(8)
+        results: list[BlocksScreenConfig] = []
 
-# ---------------------------------------------------------------------------
-# Thread safety
-# ---------------------------------------------------------------------------
+        def worker() -> None:
+            barrier.wait()
+            results.append(get_configparser())
+
+        threads = [threading.Thread(target=worker) for _ in range(8)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        assert len({id(r) for r in results}) == 1
+
+    def test_failed_load_is_retried_not_cached(self, tmp_path, monkeypatch):
+        cfg_file = tmp_path / "BlocksScreen.cfg"
+        cfg_file.write_text("[display]\nwidth: 800\n", encoding="utf-8")
+        monkeypatch.setattr(cfmod, "_DEFAULT_CONFIG", tmp_path / "missing.cfg")
+        monkeypatch.setattr(cfmod, "_FALLBACK_CONFIG", cfg_file)
+        with pytest.raises(ConfigError):
+            get_configparser()
+        cfg_file.write_text("[server]\nhost: localhost\n", encoding="utf-8")
+        assert get_configparser().get("host") == "localhost"
 
 
 @pytest.mark.unit
@@ -700,20 +770,15 @@ class TestThreadSafety:
         assert cfg.has_option("host")
 
 
-# ---------------------------------------------------------------------------
-# Bug fixes (regression tests)
-# ---------------------------------------------------------------------------
-
-
 @pytest.mark.unit
 class TestEdgeCases:
     def test_parse_empty_file_does_not_crash(self, tmp_path):
-        """Empty (or comment-only) file must not raise IndexError."""
+        """A comment-only file must not raise IndexError."""
         cfg_file = tmp_path / "test.cfg"
         cfg_file.write_text("# only a comment\n", encoding="utf-8")
         cfg = BlocksScreenConfig(cfg_file, "server")
-        cfg.load_config()  # must not raise
-        assert cfg.raw_config == [""]
+        cfg.load_config()
+        assert cfg.raw_config == ["# only a comment", ""]
 
     def test_parse_completely_empty_file_does_not_crash(self, tmp_path):
         cfg_file = tmp_path / "test.cfg"
