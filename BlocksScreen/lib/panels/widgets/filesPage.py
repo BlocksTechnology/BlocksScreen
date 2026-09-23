@@ -1,6 +1,5 @@
 import json
 import logging
-import typing
 
 import helper_methods
 from lib.utils.blocks_Scrollbar import CustomScrollBar
@@ -40,7 +39,7 @@ class FilesPage(QtWidgets.QWidget):
         "refresh": ":/ui/media/btn_icons/refresh.svg",
     }
 
-    def __init__(self, parent: typing.Optional[QtWidgets.QWidget] = None) -> None:
+    def __init__(self, parent: QtWidgets.QWidget | None = None) -> None:
         super().__init__(parent)
 
         self._file_list: list[dict] = []
@@ -263,7 +262,7 @@ class FilesPage(QtWidgets.QWidget):
 
         return insert_pos
 
-    def _find_file_key_by_display_name(self, display_name: str) -> typing.Optional[str]:
+    def _find_file_key_by_display_name(self, display_name: str) -> str | None:
         """Find the file key in _files_data by its display name."""
         return self._display_name_to_key.get(display_name)
 
@@ -341,7 +340,10 @@ class FilesPage(QtWidgets.QWidget):
         current = self._curr_dir.removeprefix("/")
 
         # Always clean up cache
-        self._display_name_to_key.pop(self._get_display_name(filepath), None)
+        display_name = self._get_display_name(filepath)
+        # Same basename can live in another directory, keep its entry
+        if self._display_name_to_key.get(display_name) == filepath:
+            del self._display_name_to_key[display_name]
         self._files_data.pop(filepath, None)
         self._pending_metadata_requests.discard(filepath)
         self._metadata_retry_count.pop(filepath, None)
@@ -690,7 +692,7 @@ class FilesPage(QtWidgets.QWidget):
         if item:
             self._model.add_item(item)
 
-    def _create_file_list_item(self, filedata: dict) -> typing.Optional[ListItem]:
+    def _create_file_list_item(self, filedata: dict) -> ListItem | None:
         """Create a ListItem from file metadata."""
         filename = filedata.get("filename", "")
         if not filename:

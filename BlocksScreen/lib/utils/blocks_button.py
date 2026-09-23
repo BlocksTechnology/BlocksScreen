@@ -136,6 +136,7 @@ class BlocksCustomButton(QtWidgets.QAbstractButton):
         """Set widget properties"""
         if name == "icon_pixmap":
             self.icon_pixmap = value
+            self._icon_cache_size = QtCore.QSize()
         if name == "name":
             self._name = value
         if name == "text_color":
