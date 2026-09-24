@@ -80,6 +80,8 @@ class BannerPopup(QtWidgets.QWidget):
                 if isinstance(widget, QtWidgets.QMainWindow):
                     main_window = widget
                     break
+        if main_window is None:
+            return QtCore.QRect()
         parent_rect = main_window.geometry()
         width = int(parent_rect.width() * 0.35)
         height = 80

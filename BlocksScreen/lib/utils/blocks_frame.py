@@ -1,5 +1,6 @@
-from PyQt6 import QtCore, QtGui, QtWidgets
 import typing
+
+from PyQt6 import QtCore, QtGui, QtWidgets
 
 
 class BlocksCustomFrame(QtWidgets.QFrame):
