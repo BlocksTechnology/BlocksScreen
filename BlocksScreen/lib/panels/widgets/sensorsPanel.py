@@ -11,9 +11,6 @@ class SensorsWindow(QtWidgets.QWidget):
     run_gcode_signal: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         str, name="run_gcode"
     )
-    change_fil_sensor_state: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
-        SensorWidget.FilamentState, name="change_fil_sensor_state"
-    )
     request_back: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         name="request_back"
     )
@@ -32,11 +29,15 @@ class SensorsWindow(QtWidgets.QWidget):
         self.fs_back_button.clicked.connect(self.request_back)
 
     def reset_view_model(self) -> None:
-        """Clears items from ListView
-        (Resets `QAbstractListModel` by clearing entries)
-        """
+        """Clears items from ListView and removes existing sensor widgets."""
         self.model.clear()
         self.entry_delegate.clear()
+        for widget in self.sensor_tracking_widget.values():
+            self.info_box_layout.removeWidget(widget)
+            widget.deleteLater()
+        self.sensor_tracking_widget.clear()
+        self.sensor_list.clear()
+        self.current_widget = None
 
     @QtCore.pyqtSlot(dict, name="handle_available_fil_sensors")
     def handle_available_fil_sensors(self, sensors: dict) -> None:
@@ -132,7 +133,8 @@ class SensorsWindow(QtWidgets.QWidget):
         font_id = QtGui.QFontDatabase.addApplicationFont(
             ":/font/media/fonts for text/Momcake-Bold.ttf"
         )
-        font_family = QtGui.QFontDatabase.applicationFontFamilies(font_id)[0]
+        _families = QtGui.QFontDatabase.applicationFontFamilies(font_id)
+        font_family = _families[0] if _families else ""
         sizePolicy = QtWidgets.QSizePolicy(
             QtWidgets.QSizePolicy.Policy.MinimumExpanding,
             QtWidgets.QSizePolicy.Policy.MinimumExpanding,

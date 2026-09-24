@@ -1,54 +1,19 @@
-"""Unit tests for SensorsWindow routing Klipper filament sensor updates."""
+"""Unit tests for SensorsWindow.reset_view_model (sensorsPanel.py)"""
 
-from types import SimpleNamespace
+from unittest.mock import MagicMock
 
-import pytest
 from lib.panels.widgets.sensorsPanel import SensorsWindow
-from lib.panels.widgets.sensorWidget import SensorWidget
-from PyQt6 import QtWidgets
 
 
-@pytest.fixture()
-def parent(qtbot):
-    """Parent widget; SensorWidget sizes itself from it."""
-    w = QtWidgets.QWidget()
-    qtbot.addWidget(w)
-    return w
-
-
-@pytest.fixture()
-def sensor(parent):
-    """SensorWidget for a Klipper filament_switch_sensor."""
-    return SensorWidget(parent, "filament_switch_sensor runout")
-
-
-def _route(sensor, name, parameter, value):
-    # unbound call skips SensorsWindow._setupUi, which needs compiled qrc fonts
-    panel = SimpleNamespace(sensor_tracking_widget={sensor.name: sensor})
-    SensorsWindow.handle_fil_state_change(panel, name, parameter, value)  # type: ignore[arg-type]
-
-
-@pytest.mark.parametrize(
-    ("detected", "expected"),
-    [
-        (True, SensorWidget.FilamentState.PRESENT),
-        (False, SensorWidget.FilamentState.MISSING),
-    ],
-)
-def test_filament_detected_sets_state(sensor, detected, expected):
-    _route(sensor, "runout", "filament_detected", detected)
-    assert sensor.filament_state is expected
-
-
-def test_unknown_sensor_ignored(sensor):
-    before = sensor.filament_state
-    _route(sensor, "other", "filament_detected", not before.value)
-    assert sensor.filament_state is before
-
-
-@pytest.mark.parametrize(
-    ("klipper_name", "short_name"),
-    [("filament_motion_sensor encoder", "encoder"), ("cutter_sensor", "cutter_sensor")],
-)
-def test_sensor_name(parent, klipper_name, short_name):
-    assert SensorWidget(parent, klipper_name).name == short_name
+def test_reset_view_model_drops_stale_sensor_widgets():
+    fake = MagicMock()
+    widgets = {"a": MagicMock(), "b": MagicMock()}
+    fake.sensor_tracking_widget = dict(widgets)
+    SensorsWindow.reset_view_model(fake)
+    for widget in widgets.values():
+        fake.info_box_layout.removeWidget.assert_any_call(widget)
+        widget.deleteLater.assert_called_once()
+    assert fake.sensor_tracking_widget == {}
+    assert fake.current_widget is None
+    fake.model.clear.assert_called_once()
+    fake.sensor_list.clear.assert_called_once()

@@ -141,7 +141,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
         """Build the pre-gate popup pages once, choosing spoolman vs. manual-entry order."""
         if self.moonraker_run:
             components = self.ws._moonRest.get_server_info()
-            if "spoolman" not in components["result"].get("components", []):
+            if "spoolman" not in components.get("result", {}).get("components", []):
                 self.fp_button_2.hide()
                 self._popup_stack.addWidget(self._build_form_page())
                 self._popup_stack.addWidget(self._build_spool_page())

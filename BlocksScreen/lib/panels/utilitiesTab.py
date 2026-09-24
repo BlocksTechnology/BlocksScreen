@@ -1,3 +1,4 @@
+import logging
 import re
 import typing
 from dataclasses import dataclass
@@ -14,6 +15,8 @@ from lib.ui.utilitiesStackedWidget_ui import Ui_utilitiesStackedWidget
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.toggleAnimatedButton import ToggleAnimatedButton
 from PyQt6 import QtCore, QtGui, QtWidgets
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -254,8 +257,9 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         """
 
         if not isinstance(data, list) or len(data) != 1 or not isinstance(data[0], str):
-            print(
-                f"WARNING: Invalid input format. Expected a list with one string. Received: {data}"
+            logger.warning(
+                "handle_gcode_response: invalid input format. Expected list[str], received: %r",
+                data,
             )
             return
 
@@ -322,7 +326,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
 
             self.is_page.set_type_dictionary(self.is_types)
             first_key = next(iter(reordered.keys()), None)
-            for key in reordered.keys():
+            for key in reordered:
                 if key == first_key:
                     self.is_page.add_type_entry(key, "Recommended type")
                 else:

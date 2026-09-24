@@ -45,13 +45,11 @@ class BasePopup(QtWidgets.QDialog):
             self.setAttribute(QtCore.Qt.WidgetAttribute.WA_TranslucentBackground, True)
             self.setWindowModality(QtCore.Qt.WindowModality.ApplicationModal)
         else:
-            self.setStyleSheet(
-                """
+            self.setStyleSheet("""
                 #MyParent {
                     background-image: url(:/background/media/1st_background.png);
                 }
-            """
-            )
+            """)
 
     def _update_button_style(self) -> None:
         """Applies the current color variables and adds the central border to the stylesheets."""
@@ -59,26 +57,21 @@ class BasePopup(QtWidgets.QDialog):
             return
 
         if not self.floating:
-            self.confirm_button.setStyleSheet(
-                f"""
+            self.confirm_button.setStyleSheet(f"""
                 background-color: {self.confirm_bk_color};
                 color: {self.confirm_ft_color};
                 border: none;
                 padding: 10px;
-                """
-            )
+                """)
 
-            self.cancel_button.setStyleSheet(
-                f"""
+            self.cancel_button.setStyleSheet(f"""
                 background-color: {self.cancel_bk_color};
                 color: {self.cancel_ft_color};
                 border: none;
                 padding: 10px;
-                """
-            )
+                """)
         else:
-            self.confirm_button.setStyleSheet(
-                f"""
+            self.confirm_button.setStyleSheet(f"""
                 background-color: {self.confirm_bk_color};
                 color: {self.confirm_ft_color};
                 border-top: none; 
@@ -87,11 +80,9 @@ class BasePopup(QtWidgets.QDialog):
                 border-right: 1px solid #80807e; 
                 border-bottom-left-radius: 16px;
                 padding: 10px;
-                """
-            )
+                """)
 
-            self.cancel_button.setStyleSheet(
-                f"""
+            self.cancel_button.setStyleSheet(f"""
                 background-color: {self.cancel_bk_color};
                 color: {self.cancel_ft_color};
                 border-left: 1px solid #80807e;; 
@@ -99,8 +90,7 @@ class BasePopup(QtWidgets.QDialog):
                 border-right: 2px solid #80807e; 
                 border-bottom-right-radius: 16px;
                 padding: 10px;
-                """
-            )
+                """)
 
     def set_message(self, message: str) -> None:
         self.label.setText(message)
