@@ -122,7 +122,7 @@ class StreamToLogger(TextIO):
     def closed(self) -> bool:
         return False
 
-    def __enter__(self) -> "StreamToLogger":
+    def __enter__(self) -> StreamToLogger:
         return self
 
     def __exit__(self, *args) -> None:
