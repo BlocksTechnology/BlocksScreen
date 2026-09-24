@@ -9,7 +9,18 @@ module before the real module is imported.
 
 import sys
 import types
+from pathlib import Path
 from unittest.mock import MagicMock
+
+_project_root = Path(__file__).resolve().parent.parent.parent
+
+# Other test directories (e.g. tests/lib/conftest.py) leak a bare
+# ``MagicMock()`` stub for "lib.utils" into sys.modules with no teardown,
+# which breaks the real ``lib.utils.*`` imports below on a full-suite run.
+# Clear any stale "lib"/"lib.*" entries before rebuilding our own stubs.
+for _stale in list(sys.modules):
+    if _stale == "lib" or _stale.startswith("lib."):
+        del sys.modules[_stale]
 
 _STUB_MODULES = (
     "events",
@@ -31,11 +42,11 @@ _STUB_MODULES = (
     "lib.panels.utilitiesTab",
     "lib.panels.widgets",
     "lib.panels.widgets.basePopup",
-    "lib.panels.widgets.cancelPage",
-    "lib.panels.widgets.connectionPage",
+    "lib.panels.widgets.MainWindow.cancelPage",
+    "lib.panels.widgets.MainWindow.connectionPage",
     "lib.panels.widgets.loadWidget",
-    "lib.panels.widgets.notificationPage",
-    "lib.panels.widgets.updatePage",
+    "lib.panels.widgets.MainWindow.notificationPage",
+    "lib.panels.widgets.MainWindow.updatePage",
     "lib.printer",
     "lib.ui",
     "lib.ui.mainWindow_ui",
@@ -55,6 +66,11 @@ for _name in _STUB_MODULES:
     _mod = types.ModuleType(_name)
     _mod.__path__ = []  # marks it as a package so submodule imports resolve
     sys.modules[_name] = _mod
+
+# "lib.utils" is deliberately NOT in _STUB_MODULES: blocks_tabwidget,
+# display_button, and icon_button are plain PyQt6 widgets with no heavy
+# deps, so let them load for real from disk instead of stubbing them.
+sys.modules["lib"].__path__ = [str(_project_root / "BlocksScreen" / "lib")]
 
 # events.* is referenced as a bare attribute in type annotations
 # (e.g. ``event: events.WebSocketMessageReceived``), evaluated eagerly at
@@ -79,11 +95,11 @@ sys.modules["lib.panels.networkWindow"].PixmapCache = MagicMock
 sys.modules["lib.panels.printTab"].PrintTab = MagicMock
 sys.modules["lib.panels.utilitiesTab"].UtilitiesTab = MagicMock
 sys.modules["lib.panels.widgets.basePopup"].BasePopup = MagicMock
-sys.modules["lib.panels.widgets.cancelPage"].CancelPage = MagicMock
-sys.modules["lib.panels.widgets.connectionPage"].ConnectionPage = MagicMock
+sys.modules["lib.panels.widgets.MainWindow.cancelPage"].CancelPage = MagicMock
+sys.modules["lib.panels.widgets.MainWindow.connectionPage"].ConnectionPage = MagicMock
 sys.modules["lib.panels.widgets.loadWidget"].LoadingOverlayWidget = MagicMock
-sys.modules["lib.panels.widgets.notificationPage"].NotificationPage = MagicMock
-sys.modules["lib.panels.widgets.updatePage"].UpdatePage = MagicMock
+sys.modules["lib.panels.widgets.MainWindow.notificationPage"].NotificationPage = MagicMock
+sys.modules["lib.panels.widgets.MainWindow.updatePage"].UpdatePage = MagicMock
 sys.modules["lib.printer"].Printer = MagicMock
 sys.modules["lib.ui.mainWindow_ui"].Ui_MainWindow = MagicMock
 sys.modules["lib.updater_worker"].UpdaterWorker = MagicMock
