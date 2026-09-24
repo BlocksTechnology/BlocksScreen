@@ -20,6 +20,7 @@ class BlocksCustomLinEdit(QtWidgets.QLineEdit):
 
         # Pre-allocated colors (avoid allocation in paint)
         self._bg_color = QtGui.QColor(223, 223, 223)
+        self._disabled_bg_color = QtGui.QColor(169, 169, 169)
         self._bg_pressed_color = QtGui.QColor(200, 200, 200)
         self._text_color = QtGui.QColor(0, 0, 0)
         self._placeholder_color = QtGui.QColor(130, 130, 130)
@@ -93,7 +94,9 @@ class BlocksCustomLinEdit(QtWidgets.QLineEdit):
         painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing, True)
 
         # Background
-        painter.setBrush(self._bg_color)
+        painter.setBrush(
+            self._bg_color if self.isEnabled() else self._disabled_bg_color
+        )
         painter.setPen(QtCore.Qt.PenStyle.NoPen)
         painter.drawRoundedRect(self.rect(), self.CORNER_RADIUS, self.CORNER_RADIUS)
 
