@@ -283,7 +283,7 @@ class Printer(QtCore.QObject):
         return _config[0].get(section_name, {})
 
     def search_config_list(
-        self, search_list: list[str], _objects: typing.Optional[list] = None
+        self, search_list: list[str], _objects: list | None = None
     ) -> list:
         """
         Search a list of printer objects recursively

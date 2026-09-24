@@ -1,5 +1,3 @@
-import typing
-
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 
@@ -152,7 +150,7 @@ class BasePopup(QtWidgets.QDialog):
         layout.insertWidget(index, self.ui)
         self.ui.show()
 
-    def _get_mainWindow_widget(self) -> typing.Optional[QtWidgets.QMainWindow]:
+    def _get_mainWindow_widget(self) -> QtWidgets.QMainWindow | None:
         """Get the main application window"""
         app_instance = QtWidgets.QApplication.instance()
         if not app_instance:

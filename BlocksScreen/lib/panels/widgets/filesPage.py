@@ -1,6 +1,5 @@
 import json
 import logging
-import typing
 
 import helper_methods
 from lib.utils.blocks_Scrollbar import CustomScrollBar
@@ -34,13 +33,13 @@ class FilesPage(QtWidgets.QWidget):
     ICON_PATHS = {
         "back_folder": ":/ui/media/btn_icons/back_folder.svg",
         "folder": ":/ui/media/btn_icons/folderIcon.svg",
-        "right_arrow": ":/arrow_icons/media/btn_icons/right_arrow.svg",
+        "right_arrow": ":/arrow_icons/media/btn_icons/arrow_right.svg",
         "usb": ":/ui/media/btn_icons/usb_icon.svg",
         "back": ":/ui/media/btn_icons/back.svg",
         "refresh": ":/ui/media/btn_icons/refresh.svg",
     }
 
-    def __init__(self, parent: typing.Optional[QtWidgets.QWidget] = None) -> None:
+    def __init__(self, parent: QtWidgets.QWidget | None = None) -> None:
         super().__init__(parent)
 
         self._file_list: list[dict] = []
@@ -263,7 +262,7 @@ class FilesPage(QtWidgets.QWidget):
 
         return insert_pos
 
-    def _find_file_key_by_display_name(self, display_name: str) -> typing.Optional[str]:
+    def _find_file_key_by_display_name(self, display_name: str) -> str | None:
         """Find the file key in _files_data by its display name."""
         for key in self._files_data:
             if self._get_display_name(key) == display_name:
@@ -691,7 +690,7 @@ class FilesPage(QtWidgets.QWidget):
         if item:
             self._model.add_item(item)
 
-    def _create_file_list_item(self, filedata: dict) -> typing.Optional[ListItem]:
+    def _create_file_list_item(self, filedata: dict) -> ListItem | None:
         """Create a ListItem from file metadata."""
         filename = filedata.get("filename", "")
         if not filename:
