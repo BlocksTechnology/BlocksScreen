@@ -1,7 +1,8 @@
 import typing
 
-from devices.amu.models import GateStatus, GateInfo, FilamentPos
+from devices.amu.models import FilamentPos, GateInfo, GateStatus
 from lib.utils.blocks_button import BlocksCustomButton
+from lib.utils.blocks_label import BlocksLabel
 from lib.utils.blocks_linedit import BlocksCustomLinEdit
 from lib.utils.icon_button import IconButton
 from PyQt6 import QtCore, QtGui, QtWidgets
@@ -18,7 +19,7 @@ class Spoll_button(QtWidgets.QAbstractButton):
         self.has_color = False
         self.status = GateStatus.UNKNOWN
         self.slot_id = ""
-        self.gate_info: GateInfo = None
+        self.gate_info: GateInfo | None = None
         self.filament_pos: FilamentPos = FilamentPos.UNKNOWN
         self.setCheckable(True)
         self.setMinimumHeight(80)
@@ -73,6 +74,9 @@ class Spoll_button(QtWidgets.QAbstractButton):
 
     def resizeEvent(self, a0: QtGui.QResizeEvent) -> None:
         super().resizeEvent(a0)
+        self._rebuild_geometry()
+
+    def _rebuild_geometry(self) -> None:
         r = QtCore.QRect(self.rect())
         r.setTop(self.height() // 9)
         r.setBottom(self.height() // 4)
@@ -85,10 +89,13 @@ class Spoll_button(QtWidgets.QAbstractButton):
         self._strip_path.addRoundedRect(QtCore.QRectF(self._strip_rect), 5, 5)
 
     def update_entry(self, gate_info: GateInfo, fm: FilamentPos):
-        raw = str(gate_info.color).lstrip("#")[:6] if gate_info.color else ""
-        parsed = QtGui.QColor("#" + raw) if raw else QtGui.QColor()
-        has_color = parsed.isValid()
-        color = parsed if has_color else QtGui.QColor(0, 0, 0)
+        # color_rgb is Happy Hare's parsed form, so w3c names like "red" work too
+        has_color = bool(gate_info.color)
+        color = (
+            QtGui.QColor.fromRgbF(*gate_info.color_rgb)
+            if has_color
+            else QtGui.QColor(0, 0, 0)
+        )
 
         self.filament_pos = fm
         self.gate_info = gate_info
@@ -101,7 +108,7 @@ class Spoll_button(QtWidgets.QAbstractButton):
 
     def paintEvent(self, a0: QtGui.QPaintEvent) -> None:
         if self._text_rect is None or self._strip_path is None:
-            return
+            self._rebuild_geometry()
 
         painter = QtGui.QPainter(self)
         painter.setRenderHint(painter.RenderHint.Antialiasing)
@@ -113,14 +120,14 @@ class Spoll_button(QtWidgets.QAbstractButton):
         )
         is_active = self.has_color and is_loaded
 
+        if not self.isChecked():
+            painter.setOpacity(self._UNCHECKED_OPACITY)
+
         painter.setPen(self._label_pen)
         painter.setFont(self._label_font)
         painter.drawText(
             self._text_rect, QtCore.Qt.AlignmentFlag.AlignCenter, f"Gate {self.slot_id}"
         )
-
-        if not self.isChecked():
-            painter.setOpacity(self._UNCHECKED_OPACITY)
 
         if is_active:
             painter.fillPath(self._strip_path, self.color)
@@ -269,7 +276,10 @@ class SpoolInfoPanel(QtWidgets.QWidget):
         "PyQt_PyObject", str, str, str, int, name="request-keyboard"
     )  # value, slot index, caller widget
     colorSwatchClicked: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
-        name="color-swatch-clicked"
+        str, name="color-swatch-clicked"
+    )  # current color hex
+    colorSelected: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        str, name="color-selected"
     )
     _STATUS_TEXT: dict[GateStatus, str] = {
         GateStatus.AVAILABLE: "<span style='color:#2ec4a0'>● PRE-LOADED</span>",
@@ -284,6 +294,7 @@ class SpoolInfoPanel(QtWidgets.QWidget):
         super().__init__(parent)
         self.amu_manager = amu_manager
         self._slot_index = -1
+        self._color_hex = ""
         self.Gate = -1
         self._build_ui()
 
@@ -310,13 +321,15 @@ class SpoolInfoPanel(QtWidgets.QWidget):
         header = QtWidgets.QHBoxLayout()
         header.setSpacing(12)
 
-        self._swatch = QtWidgets.QLabel()
+        self._swatch = BlocksLabel(self)
+        self._swatch.clicked.connect(
+            lambda: self.colorSwatchClicked.emit(self._color_hex)
+        )
         self._swatch.setFixedHeight(40)
         self._swatch.setSizePolicy(
             QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Fixed
         )
         self._swatch.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
-        self._swatch.mousePressEvent = lambda event: self.colorSwatchClicked.emit()
 
         title_col = QtWidgets.QVBoxLayout()
         title_col.setSpacing(0)
@@ -343,11 +356,6 @@ class SpoolInfoPanel(QtWidgets.QWidget):
 
         self._lbl_temp = _make_val()
         self._lbl_mat = _make_val()
-        self._color_field = BlocksCustomLinEdit(self)
-        self._color_field.hide()
-        self._color_field.editingFinished.connect(
-            lambda: self._set_color(self._color_field.text())
-        )
 
         self._lbl_mat.clicked.connect(
             lambda: self.request_keypad["PyQt_PyObject", str, str, str, int].emit(
@@ -465,30 +473,25 @@ class SpoolInfoPanel(QtWidgets.QWidget):
         is_active_gate = index == self.Gate
         filament_pos = btn.filament_pos
 
-        if filament_pos == FilamentPos.UNLOADED:
+        # filament_pos is MMU-wide, so it only describes the active gate
+        if not is_active_gate or filament_pos == FilamentPos.UNLOADED:
             en_unload = False
         else:
-            en_unload = True
-            en_load = False
-
-            if is_active_gate:
-                en_purge = False
-                if filament_pos == FilamentPos.LOADED:
-                    text = self._LOADED_TEXT
-                else:
-                    text = self._STUCK_TEXT
+            en_unload, en_load, en_purge = True, False, False
+            if filament_pos == FilamentPos.LOADED:
+                text = self._LOADED_TEXT
+            else:
+                text = self._STUCK_TEXT
 
         spool_id = gate_info.spool_id if gate_info is not None else -1
         if spool_id != -1:
             text += (
                 "<span style='color:rgba(255,255,255,110)'>"
-                f" · Spoll ID {spool_id}</span>"
+                f" · Spool ID {spool_id}</span>"
             )
 
         # fields are read-only while the gate is bound to a spoolman spool
-        editable = (
-            gate_info is not None and spool_id == -1 and status != GateStatus.EMPTY
-        )
+        editable = gate_info is not None and spool_id == -1
         for w in (self._lbl_temp, self._swatch, self._lbl_mat):
             w.setEnabled(editable)
 
@@ -505,7 +508,6 @@ class SpoolInfoPanel(QtWidgets.QWidget):
             gate_info.material if gate_info and gate_info.material else "—"
         )
         color_hex = f"{r:02X}{g:02X}{b:02X}" if gate_info and gate_info.color else ""
-        self._color_field.setText(color_hex)
         self._set_color(color_hex)
 
         self._btn_load.setEnabled(en_load)
@@ -532,8 +534,18 @@ class SpoolInfoPanel(QtWidgets.QWidget):
                 "font-size: 28px; font-weight: bold;"
             )
 
+    def set_selected_color(self, hex_str: str) -> None:
+        """Show a color picked for the current gate and emit ``colorSelected``.
+
+        Args:
+            hex_str: The picked color as a hex string, with or without ``#``.
+        """
+        self._set_color(hex_str)
+        self.colorSelected.emit(self._color_hex)
+
     def _set_color(self, hex_str: str) -> None:
         hex_text = (hex_str or "").strip().lstrip("#")
+        self._color_hex = hex_text
         if len(hex_text) != 6:
             self._apply_swatch(None)
             return

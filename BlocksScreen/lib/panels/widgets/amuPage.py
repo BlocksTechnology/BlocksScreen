@@ -24,8 +24,8 @@ class AMUpage(QtWidgets.QStackedWidget):
         "PyQt_PyObject", str, str, str, int, name="request-keyboard"
     )
     request_color_wheel: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
-        "PyQt_PyObject", name="request-color-wheel"
-    )
+        str, "PyQt_PyObject", name="request-color-wheel"
+    )  # current hex, callback receiving the picked hex
     request_change_tab: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         int, name="request_change_tab"
     )
@@ -43,14 +43,13 @@ class AMUpage(QtWidgets.QStackedWidget):
 
         self.amu_manager.mmu_state_changed.connect(self.on_mmu_state_changed)
         self.on_mmu_state_changed(self.amu_manager.get_state())
-        self.info_panel._color_field.editingFinished.connect(
-            lambda: self.amu_manager.set_gate_color(
-                self.current_index,
-                self.info_panel._color_field.text().strip("#"),
-            )
+        self.info_panel.colorSelected.connect(
+            lambda hx: self.amu_manager.set_gate_color(self.current_index, hx)
         )
         self.info_panel.colorSwatchClicked.connect(
-            lambda: self.request_color_wheel.emit(self.info_panel._color_field)
+            lambda hx: self.request_color_wheel.emit(
+                hx, self.info_panel.set_selected_color
+            )
         )
         self.info_panel._lbl_mat.editingFinished.connect(
             lambda: self.amu_manager.set_gate_material(
@@ -123,16 +122,6 @@ class AMUpage(QtWidgets.QStackedWidget):
             self.carousel.addSpool(mmu_state.gates[i], mmu_state.filament_pos)
         self.update()
         self._on_selection(mmu_state.gate)
-
-    def addSpool(self, gate_info: GateInfo):
-        """Add or refresh a gate's carousel button from its GateInfo."""
-        self.carousel.addSpool(
-            QtGui.QColor("#" + str(gate_info.color)[:6]),
-            gate_info.index,
-            gate_info.material,
-            int(gate_info.temperature or 0),
-            gate_info.status,
-        )
 
     def _select_gate(self, idx: int):
         self.carousel.selectIndex(self.current_index)

@@ -1,4 +1,5 @@
 import logging
+import typing
 from collections import deque
 
 from devices.amu import AMUManager
@@ -55,7 +56,8 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self.popup_gates: deque = deque()
         self._spool_id_map: dict[str, dict] = {}
         self._current_field: QtWidgets.QLineEdit | None = None
-        self._color_target_field = None
+        self._color_selected_callback: typing.Callable[[str], None] | None = None
+        self._selected_spool: dict | None = None
         self._material_filter: str | None = None
         self.moonraker_run = True
 
@@ -312,7 +314,9 @@ class FilamentTab(QtWidgets.QStackedWidget):
             lambda: self._on_show_keyboard(self._popup_name)
         )
         self._popup_color.clicked.connect(
-            lambda: self._open_color_wheel(self._popup_color)
+            lambda: self._open_color_wheel(
+                self._popup_color.text(), self._popup_color.setText
+            )
         )
         self._popup_material.clicked.connect(
             lambda: self._on_show_keyboard(self._popup_material)
@@ -749,12 +753,16 @@ class FilamentTab(QtWidgets.QStackedWidget):
 
     @QtCore.pyqtSlot(ListItem)
     def _on_list_item_tapped(self, item: ListItem) -> None:
+        if not item:
+            return
         if item.text == "+ Add Spool":
+            self.reset_spool_info()
             self._add_popup.show()
             return
         spool = self._spool_id_map.get(item.text)
         if spool is None:
             return
+        self._selected_spool = spool
         self.accept_btn.setEnabled(True)
         filament = spool.get("filament") or {}
         self.filament_name_label.setText(item.text)
@@ -771,10 +779,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
         )
 
     def _on_accept_clicked(self) -> None:
-        item = self._spool_model.get_selected_item()
-        if item is None:
-            return
-        spool = self._spool_id_map.get(item.text)
+        spool = self._selected_spool
         if not spool:
             return
         filament = spool.get("filament") or {}
@@ -785,6 +790,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
         f_temp = filament.get("settings_extruder_temp", -1)
         gate = self.pre_gate_idx.get("gate", 0)
 
+        self._selected_spool = None
         self.accept_btn.setEnabled(False)
         self.popup.hide()
         self._material_filter = None
@@ -809,6 +815,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self.material_label.setText("N/A")
         self.weight_label.setText("N/A")
         self.vendor_label.setText("N/A")
+        self._selected_spool = None
         self.accept_btn.setEnabled(False)
 
     @staticmethod
@@ -896,18 +903,19 @@ class FilamentTab(QtWidgets.QStackedWidget):
             self._current_field.setText(value)
             self._current_field.editingFinished.emit()
 
-    def _open_color_wheel(self, field) -> None:
-        self._color_target_field = field
-        self._color_wheel.set_color_hex(field.text().strip("#") or "ffffff")
+    def _open_color_wheel(
+        self, current_hex: str, on_selected: typing.Callable[[str], None]
+    ) -> None:
+        self._color_selected_callback = on_selected
+        self._color_wheel.set_color_hex(current_hex.strip("#") or "ffffff")
         self._color_wheel_popup.show()
         self._color_wheel_popup.raise_()
 
     @QtCore.pyqtSlot(str, name="on-color-selected")
     def _on_color_selected(self, hex_str: str) -> None:
-        if self._color_target_field is not None:
-            self._color_target_field.setText(hex_str)
-            self._color_target_field.editingFinished.emit()
-            self._color_target_field = None
+        callback, self._color_selected_callback = self._color_selected_callback, None
+        if callback is not None:
+            callback(hex_str)
 
     def _clear_gate_map(self, gate_info) -> None:
         """Blank a gate's map entry when its filament runs out."""
