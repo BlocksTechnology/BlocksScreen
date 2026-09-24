@@ -22,6 +22,7 @@ class CustomNumpad(QtWidgets.QWidget):
         self.name: str = ""
         self.min_value: int = 0
         self.max_value: int = 100
+        self.enforce_range: bool = True
         self.firsttime: bool = True
 
         self.numpad_0.clicked.connect(lambda: self.value_inserted("0"))
@@ -41,6 +42,7 @@ class CustomNumpad(QtWidgets.QWidget):
 
     def showEvent(self, a0: QtGui.QShowEvent | None) -> None:
         self.firsttime = True
+        self.min_max_label.setVisible(True)
         return super().showEvent(a0)
 
     def value_inserted(self, value: str) -> None:
@@ -58,10 +60,12 @@ class CustomNumpad(QtWidgets.QWidget):
             else:
                 self.current_value += str(value)
 
+        in_range = self.min_value <= int(self.current_value) <= self.max_value
+
         if "enter" in value and self.current_value.isnumeric():
             if len(self.current_value) == 0:
                 self.current_value = "0"
-            if self.min_value <= int(self.current_value) <= self.max_value:
+            if in_range or not self.enforce_range:
                 self.value_selected.emit(self.name, int(self.current_value))
                 self.request_back.emit()
 
@@ -70,8 +74,9 @@ class CustomNumpad(QtWidgets.QWidget):
                 self.current_value = self.current_value[:-1]
             else:
                 self.current_value = "0"
+        in_range = self.min_value <= int(self.current_value) <= self.max_value
 
-        if not (self.min_value <= int(self.current_value) <= self.max_value):
+        if not in_range and self.enforce_range:
             self.start_glow_animation.emit()
         else:
             self.inserted_value.glow_animation.stop()
@@ -104,8 +109,14 @@ class CustomNumpad(QtWidgets.QWidget):
         self.max_value = max_value
         self.update_min_max_label()
 
+    def set_enforce_range(self, enforce: bool = True) -> None:
+        """Enable or disable min/max range enforcement. Enabled by default."""
+        self.enforce_range = enforce
+        self.min_max_label.setVisible(enforce)
+
     def update_min_max_label(self) -> None:
         """Updates the text of the min/max label."""
+        self.enforce_range = True
         self.min_max_label.setText(f"Range: {self.min_value} - {self.max_value}")
 
     def _setupUI(self) -> None:
@@ -133,6 +144,15 @@ class CustomNumpad(QtWidgets.QWidget):
 
         self.header_layout.setContentsMargins(0, 0, 0, 0)
         self.header_layout.setObjectName("header_layout")
+
+        spacerItem1 = QtWidgets.QSpacerItem(
+            60,
+            60,
+            QtWidgets.QSizePolicy.Policy.Minimum,
+            QtWidgets.QSizePolicy.Policy.Minimum,
+        )
+        self.header_layout.addItem(spacerItem1)
+
         self.numpad_title = BlocksLabel(self)
         self.numpad_title.setMinimumSize(QtCore.QSize(500, 60))
         self.numpad_title.setMaximumSize(QtCore.QSize(16777215, 60))
