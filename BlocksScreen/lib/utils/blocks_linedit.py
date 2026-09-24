@@ -1,5 +1,3 @@
-import typing
-
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 
@@ -10,7 +8,7 @@ class BlocksCustomLinEdit(QtWidgets.QLineEdit):
     TEXT_MARGIN = 10
     CORNER_RADIUS = 8
 
-    def __init__(self, parent: typing.Optional[QtWidgets.QWidget] = None) -> None:
+    def __init__(self, parent: QtWidgets.QWidget | None = None) -> None:
         super().__init__(parent)
 
         # State
@@ -86,7 +84,11 @@ class BlocksCustomLinEdit(QtWidgets.QLineEdit):
         self.clicked.emit()
         super().mousePressEvent(event)
 
-    def paintEvent(self, event: typing.Optional[QtGui.QPaintEvent]) -> None:
+    def mouseReleaseEvent(self, event: QtGui.QMouseEvent) -> None:
+        """Handle mouse release"""
+        super().mouseReleaseEvent(event)
+
+    def paintEvent(self, event: QtGui.QPaintEvent | None) -> None:
         """Custom paint with embedded toggle button."""
         painter = QtGui.QPainter(self)
         painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing, True)

@@ -19,7 +19,7 @@ class SensorsWindow(QtWidgets.QWidget):
     )
 
     def __init__(self, parent):
-        super(SensorsWindow, self).__init__(parent)
+        super().__init__(parent)
         self.model = EntryListModel()
         self.entry_delegate = EntryDelegate()
         self.sensor_tracking_widget = {}
@@ -46,7 +46,7 @@ class SensorsWindow(QtWidgets.QWidget):
         self.reset_view_model()
         filtered_sensors = [
             sensor
-            for sensor in sensors.keys()
+            for sensor in sensors
             if sensor.startswith(
                 ("filament_switch_sensor", "filament_motion_sensor", "cutter_sensor")
             )
@@ -67,8 +67,7 @@ class SensorsWindow(QtWidgets.QWidget):
         _item = self.sensor_tracking_widget.get(sensor_name)
         if _item:
             if parameter == "filament_detected":
-                state = SensorWidget.FilamentState(not value)
-                _item.change_fil_sensor_state(state)
+                _item.set_filament_state(SensorWidget.FilamentState(value))
             elif parameter == "enabled":
                 _item.toggle_button_state(SensorWidget.SensorState(value))
 
@@ -108,7 +107,7 @@ class SensorsWindow(QtWidgets.QWidget):
         else:
             _item_widget.show()
             self.current_widget = _item_widget
-        name_id = str(name).split(" ")[1]
+        name_id = _item_widget.name
         item = ListItem(
             text=name_id,
             right_text="",
