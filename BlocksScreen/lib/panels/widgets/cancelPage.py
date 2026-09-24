@@ -26,6 +26,7 @@ class CancelPage(QtWidgets.QWidget):
         super().__init__(parent)
         self._setupUI()
         self.filename = ""
+        self._thumbnail_scan_done: bool = False
 
         self.confirm_button.clicked.connect(lambda: self._handle_accept())
         self.refuse_button.clicked.connect(lambda: self._handle_refuse())
@@ -42,9 +43,9 @@ class CancelPage(QtWidgets.QWidget):
         self.run_gcode.emit("SDCARD_RESET_FILE")
 
     _REASON_HEADERS: typing.ClassVar[dict[str, str]] = {
-        "complete": "Print Completed",
+        "complete": "Print Finished",
         "error": "Print Error",
-        "cancelled": "Print job was\ncancelled",
+        "cancelled": "Print Canceled",
     }
 
     @QtCore.pyqtSlot(str, dict, name="on_print_stats_update")
@@ -53,11 +54,19 @@ class CancelPage(QtWidgets.QWidget):
     def on_print_stats_update(self, field: str, value: dict | float | str) -> None:
         if isinstance(value, str):
             if "filename" in field:
+                if value != self.filename:
+                    self._thumbnail_scan_done = False
                 self.filename = value
                 if self.isVisible():
                     self.set_file_name(value)
-            elif "state" in field and value in self._REASON_HEADERS:
-                self.cf_info_tf.setText(self._REASON_HEADERS[value])
+            elif "state" in field:
+                if value in self._REASON_HEADERS:
+                    self.cf_info_tf.setText(self._REASON_HEADERS[value])
+                elif value == "printing":
+                    # New job started: drop any reason text left over from the
+                    # previous cycle so it can't leak through if this one ends
+                    # without hitting a state in _REASON_HEADERS.
+                    self.cf_info_tf.clear()
 
     def show(self):
         self.request_file_info.emit(self.filename)
