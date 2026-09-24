@@ -55,7 +55,7 @@ class NetworkManager(QObject):
         self._shutting_down: bool = False
         self._worker_ready: bool = False
 
-        self._pending_futures: set["asyncio.Future"] = set()
+        self._pending_futures: set[asyncio.Future] = set()
 
         self._worker = NetworkManagerWorker()
 
