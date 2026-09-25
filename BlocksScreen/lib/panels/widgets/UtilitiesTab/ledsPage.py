@@ -78,11 +78,20 @@ class LedsPage(QtWidgets.QStackedWidget):
 
     def update_led_values(self) -> None:
         """Update led state and color values"""
-        led_state: LedState = self.leds[str(self.current_led)]
+        if (led_state := self.leds.get(str(self.current_led))) is None:
+            return
         led_state.white = int(self.leds_w_slider.value() * 255 / 100)
         self.save_led_state()
 
     def on_object_list(self, config_file) -> bool:
+        """Rebuild the LED buttons from the printer's object list.
+
+        Args:
+            config_file: Printer object names, e.g. ``"neopixel status"``.
+
+        Returns:
+            Always True.
+        """
         layout = self.leds_content_layout
         cg = config_file
 
@@ -116,6 +125,11 @@ class LedsPage(QtWidgets.QStackedWidget):
         return True
 
     def handle_led_button(self, name: str):
+        """Open the brightness/on-off page for one LED.
+
+        Args:
+            name: The LED's config name.
+        """
         self.current_led = name
         led_state = self.leds.get(name)
         if not led_state:
@@ -358,7 +372,7 @@ class LedsPage(QtWidgets.QStackedWidget):
 
         _translate = QtCore.QCoreApplication.translate
 
-        self.leds_title_label.setText(_translate("self", "LED's"))
-        self.leds_back_btn.setText(_translate("self", "Back"))
-        self.leds_slider_back_btn.setText(_translate("self", "Back"))
-        self.leds_slider_tittle_label.setText(_translate("self", "LED's"))
+        self.leds_title_label.setText(_translate("ledsPage", "LED's"))
+        self.leds_back_btn.setText(_translate("ledsPage", "Back"))
+        self.leds_slider_back_btn.setText(_translate("ledsPage", "Back"))
+        self.leds_slider_tittle_label.setText(_translate("ledsPage", "LED's"))

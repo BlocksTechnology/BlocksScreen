@@ -1,6 +1,6 @@
 import math
 import typing
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 
 from lib.panels.widgets.Common.basePopup import BasePopup
 from lib.utils.blocks_button import BlocksCustomButton
@@ -229,6 +229,7 @@ class RoutineCheckPage(QtWidgets.QWidget):
 
     @classmethod
     def fan_steps(cls, fans: list[str]) -> list[Step]:
+        """Build one check step per fan, spinning it up and off again after."""
         steps = []
         for fan in fans:
             if fan == "fan":
@@ -258,7 +259,7 @@ class RoutineCheckPage(QtWidgets.QWidget):
                 cls.Step(
                     label=label,
                     prompt=(
-                        f"Please check if the {label} reaches 60ºC.\n"
+                        f"Please check if the {label} reaches 60°C.\n"
                         "It may take a few moments."
                     ),
                     gcode=f"SET_HEATER_TEMPERATURE HEATER={heater} TARGET=60\nM400",
@@ -337,13 +338,14 @@ class RoutineCheckPage(QtWidgets.QWidget):
         axes: typing.Sequence[str] = ("x", "y", "z"),
     ) -> list[Step]:
         """Build one check step per axis, homing once before the first of them."""
+
         y = limits.get("y")
         park_x = (
             (y.min + y.max) / 2 if y is not None and math.isfinite(y.span) else None
         )
 
         steps = []
-        for axis in ["x", "y", "z"]:
+        for axis in axes:
             limit = limits.get(axis)
             if limit is None:
                 continue
@@ -362,9 +364,6 @@ class RoutineCheckPage(QtWidgets.QWidget):
                     gcode=f"{prologue}{moves}\nM400",
                 )
             )
-
-        if steps:
-            steps[-1] = replace(steps[-1], cleanup="G28")
         return steps
 
     def _setup_ui(self) -> None:
@@ -483,12 +482,9 @@ class RoutineCheckPage(QtWidgets.QWidget):
         self.verticalLayout.addWidget(content_widget)
 
         _translate = QtCore.QCoreApplication.translate
-        self.setWindowTitle(_translate("controlStackedWidget", "StackedWidget"))
-        self.rp_header_title.setText(
-            _translate("controlStackedWidget", "Routine Check")
-        )
+        self.rp_header_title.setText(_translate("routinePage", "Routine Check"))
 
-        self.rp_button_1.setText(_translate("controlStackedWidget", "Fans"))
-        self.rp_button_2.setText(_translate("controlStackedWidget", "Axis"))
-        self.rp_button_3.setText(_translate("controlStackedWidget", "extruder"))
-        self.rp_button_4.setText(_translate("controlStackedWidget", "Bed Heater"))
+        self.rp_button_1.setText(_translate("routinePage", "Fans"))
+        self.rp_button_2.setText(_translate("routinePage", "Axis"))
+        self.rp_button_3.setText(_translate("routinePage", "extruder"))
+        self.rp_button_4.setText(_translate("routinePage", "Bed Heater"))

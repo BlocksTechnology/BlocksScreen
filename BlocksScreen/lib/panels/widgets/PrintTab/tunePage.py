@@ -469,7 +469,6 @@ class TuneWidget(QtWidgets.QWidget):
 
     def _retranslateUI(self):
         _translate = QtCore.QCoreApplication.translate
-        self.setWindowTitle(_translate("printStackedWidget", "StackedWidget"))
         self.tune_title_label.setText(_translate("printStackedWidget", "Tune"))
         self.tune_title_label.setProperty(
             "class", _translate("printStackedWidget", "title_text")

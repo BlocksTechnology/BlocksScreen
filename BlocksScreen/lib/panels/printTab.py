@@ -501,7 +501,7 @@ class PrintTab(QtWidgets.QStackedWidget):
 
     def setupMainPrintPage(self) -> None:
         """Setup UI for print page"""
-        self.setObjectName("printStackedWidget")
+        self.setObjectName("print_tab")
         self.setWindowModality(QtCore.Qt.WindowModality.WindowModal)
         self.resize(710, 410)
         sizePolicy = QtWidgets.QSizePolicy(
@@ -612,7 +612,6 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.addWidget(self.print_page)
 
         _translate = QtCore.QCoreApplication.translate
-        self.setWindowTitle(_translate("printStackedWidget", "StackedWidget"))
         self.main_print_btn.setText(_translate("printStackedWidget", "Print"))
         self.main_print_btn.setProperty(
             "class", _translate("printStackedWidget", "menu_btn")

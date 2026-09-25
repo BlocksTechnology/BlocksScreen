@@ -15,7 +15,7 @@ class FansPage(QtWidgets.QWidget):
     request_slider_page = QtCore.pyqtSignal(
         str, int, "PyQt_PyObject", int, int, name="on_slidePage_request"
     )
-    request_back_button = QtCore.pyqtSignal(name="request-back-button")
+    request_back = QtCore.pyqtSignal(name="request-back")
 
     run_gcode_signal: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         str, name="run-gcode"
@@ -30,7 +30,7 @@ class FansPage(QtWidgets.QWidget):
         self.tune_display_buttons: dict = {}
         self.card_options: dict = {}
         self._setup_ui()
-        self.fans_back_btn.clicked.connect(self.request_back_button.emit)
+        self.fans_back_btn.clicked.connect(self.request_back.emit)
 
         self.path = {
             "fan_cage": QtGui.QPixmap(":/fan_related/media/btn_icons/fan_cage.svg"),
@@ -73,19 +73,10 @@ class FansPage(QtWidgets.QWidget):
 
             card = OptionCard(self, name, str(name), icon)  # type: ignore
             card.setObjectName(str(name))
-
-            # Add card to layout and record reference
             self.card_options[name] = card
             self.fans_content_layout.addWidget(card)
 
-            # If the card doesn't have expected UI properties, discard it
-            if not hasattr(card, "continue_clicked"):
-                del card
-                self.card_options.pop(name, None)
-                return
-
             card.setMode(True)
-            card.secondtext.setText(f"{new_value}%")
             card.continue_clicked.connect(
                 lambda: self.request_slider_page.emit(
                     str(name),
@@ -110,16 +101,13 @@ class FansPage(QtWidgets.QWidget):
             Slider change handler
         Args:
             name (str): fan name
-            new_value (int): value from 0 to 255 to set fans speed
+            new_value (int): fan speed in percent, 0 to 100
         """
         self.run_gcode_signal.emit(fan_speed_gcode(name, new_value))
 
     def _setup_ui(self) -> None:
         """Build the fans page: header, back button, and fan slider area."""
         self.setObjectName("fans_page")
-        widget = QtWidgets.QWidget(parent=self)
-        widget.setGeometry(QtCore.QRect(0, 0, 720, 420))
-
         self.verticalLayout = QtWidgets.QVBoxLayout(self)
         self.verticalLayout.setObjectName("verticalLayout")
 
@@ -204,8 +192,6 @@ class FansPage(QtWidgets.QWidget):
             QtWidgets.QSizePolicy.Policy.Expanding,
         )
         self.verticalLayout.addItem(spacerItem12)
-
-        widget.setLayout(self.verticalLayout)
 
         _translate = QtCore.QCoreApplication.translate
         self.fans_title_label.setText(_translate("controlStackedWidget", "Fans"))

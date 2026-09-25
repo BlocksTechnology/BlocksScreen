@@ -18,6 +18,7 @@ from lib.panels.widgets.Common.slider_selector_page import SliderPage
 from lib.printer import Printer
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.icon_button import IconButton
+from lib.utils.menu_grid import fixed_menu_grid
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 _logger = logging.getLogger(__name__)
@@ -28,14 +29,6 @@ class ControlTab(QtWidgets.QStackedWidget):
 
     request_back_button = QtCore.pyqtSignal(name="request-back-button")
     request_change_page = QtCore.pyqtSignal(int, int, name="request-change-page")
-    request_numpad_signal = QtCore.pyqtSignal(
-        int,
-        str,
-        str,
-        "PyQt_PyObject",
-        QtWidgets.QStackedWidget,
-        name="request-numpad",
-    )
     run_gcode_signal: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         str, name="run-gcode"
     )
@@ -44,11 +37,6 @@ class ControlTab(QtWidgets.QStackedWidget):
     )
     lock_ui: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         bool, name="lock-ui"
-    )
-    request_numpad: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
-        [str, int, "PyQt_PyObject"],
-        [str, int, "PyQt_PyObject", int, int],
-        name="request-numpad",
     )
     request_file_info: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         str, name="request-file-info"
@@ -72,7 +60,6 @@ class ControlTab(QtWidgets.QStackedWidget):
         self._true_zero_state: bool | None = None
         self._motion_active: bool = False
         self.setLayoutDirection(QtCore.Qt.LayoutDirection.LeftToRight)
-        self.timers = []
         self.ztilt_state = False
         self.ztilt_result_screen = BasePopup(self, False, False)
         self.ztilt_result_screen_timer = QtCore.QTimer()
@@ -91,7 +78,7 @@ class ControlTab(QtWidgets.QStackedWidget):
 
         self.fans_page = FansPage(self)
         self.addWidget(self.fans_page)
-        self.fans_page.request_back_button.connect(self.request_back_button)
+        self.fans_page.request_back.connect(self.request_back_button)
         self.fans_page.run_gcode_signal.connect(self.run_gcode_signal)
         self.fans_page.request_slider_page.connect(self.on_slidePage_request)
 
@@ -166,7 +153,6 @@ class ControlTab(QtWidgets.QStackedWidget):
         self.printer.printer_config.connect(self.temperature_page.on_printer_config)
         self.printer.request_object_subscription_signal.connect(self._on_object_list)
         self.run_gcode_signal.connect(self.ws.api.run_gcode)
-        # # @ object temperature change clicked
         self.printcores_page.pc_accept.clicked.connect(self.handle_swapcore)
 
         self.ws.klippy_state_signal.connect(self.on_klippy_status)
@@ -185,104 +171,83 @@ class ControlTab(QtWidgets.QStackedWidget):
         )
         self._button_change(False)
 
+    def _menu(self, active: bool) -> list[tuple[str, str, typing.Callable]]:
+        # (text, icon, slot) for each grid button, in grid order
+        if active:
+            return [
+                (
+                    "Auto Home",
+                    ":/motion/media/btn_icons/home_all.svg",
+                    lambda: self.run_gcode_signal.emit("G28\nM400"),
+                ),
+                (
+                    "Disable\nSteppers",
+                    ":/motion/media/btn_icons/disable_steppers.svg",
+                    lambda: self.run_gcode_signal.emit("M84\nM400"),
+                ),
+                (
+                    "Axis",
+                    ":/motion/media/btn_icons/axis_maintenance.svg",
+                    lambda: self.change_page(self.indexOf(self.axis_page)),
+                ),
+                (
+                    "Extruder",
+                    ":/extruder_related/media/btn_icons/extrude.svg",
+                    lambda: self.change_page(self.indexOf(self.extruder_page)),
+                ),
+            ]
+        return [
+            (
+                "Motion\nControl",
+                ":/motion/media/btn_icons/axis_maintenance.svg",
+                lambda: self._button_change(True),
+            ),
+            (
+                "Temp.\nControl",
+                ":/temperature_related/media/btn_icons/temperature.svg",
+                lambda: self.change_page(self.indexOf(self.temperature_page)),
+            ),
+            (
+                "Nozzle\nCalibration",
+                ":/z_levelling/media/btn_icons/bed_levelling.svg",
+                lambda: self.change_page(self.indexOf(self.probe_helper_page)),
+            ),
+            (
+                "Z-Tilt",
+                ":/z_levelling/media/btn_icons/bed_levelling.svg",
+                self.handle_ztilt,
+            ),
+            (
+                "Fans",
+                ":/temperature_related/media/btn_icons/fan.svg",
+                lambda: self.change_page(self.indexOf(self.fans_page)),
+            ),
+            (
+                "Swap\nPrint Core",
+                ":/ui/media/btn_icons/LEDs.svg",
+                self.show_swapcore,
+            ),
+        ]
+
     def _button_change(self, active: bool):
         self._motion_active = active
-        for btn in [
-            self.cp_button_1,
-            self.cp_button_2,
-            self.cp_button_3,
-            self.cp_button_4,
-            self.cp_button_5,
-            self.cp_button_6,
-        ]:
+        for btn in self.cp_buttons:
             with contextlib.suppress(RuntimeError, TypeError):
                 btn.clicked.disconnect()
-        if active:
-            self.cp_header_title.setText("Montion")
-            self.cp_button_1.setText("Auto Home")
-
-            self.cp_button_1.setPixmap(
-                QtGui.QPixmap(":/motion/media/btn_icons/home_all.svg")
-            )
-            self.cp_button_1.clicked.connect(
-                lambda: self.run_gcode_signal.emit("G28\nM400")
-            )
-            self.cp_button_2.setText("Disable\nSteppers")
-            self.cp_button_2.clicked.connect(
-                lambda: self.run_gcode_signal.emit("M84\nM400")
-            )
-            self.cp_button_2.setPixmap(
-                QtGui.QPixmap(":/motion/media/btn_icons/disable_steppers.svg")
-            )
-            self.cp_button_3.setText("Axis")
-            self.cp_button_3.clicked.connect(
-                lambda: self.change_page(self.indexOf(self.axis_page))
-            )
-            self.cp_button_3.setPixmap(
-                QtGui.QPixmap(":/motion/media/btn_icons/axis_maintenance.svg")
-            )
-            self.cp_button_4.setText("Extruder")
-            self.cp_button_4.setPixmap(
-                QtGui.QPixmap(":/extruder_related/media/btn_icons/extrude.svg")
-            )
-            self.cp_button_4.clicked.connect(
-                lambda: self.change_page(self.indexOf(self.extruder_page))
-            )
-
-            self.back_button.show()
-            self.Hblank.show()
-
-            self.cp_content_layout.addWidget(self.blank, 2, 0, 1, 1)
-            self.cp_button_5.hide()
-            self.blank.show()
-        else:
-            self.cp_header_title.setText("Control")
-
-            self.cp_button_1.setText("Motion\nControl")
-            self.cp_button_1.setPixmap(
-                QtGui.QPixmap(":/motion/media/btn_icons/axis_maintenance.svg")
-            )
-            self.cp_button_1.clicked.connect(lambda: self._button_change(True))
-
-            self.cp_button_2.setText("Temp.\nControl")
-            self.cp_button_2.setPixmap(
-                QtGui.QPixmap(":/temperature_related/media/btn_icons/temperature.svg")
-            )
-            self.cp_button_2.clicked.connect(
-                lambda: self.change_page(self.indexOf(self.temperature_page))
-            )
-
-            self.cp_button_3.setText("Nozzle\nCalibration")
-            self.cp_button_3.setPixmap(
-                QtGui.QPixmap(":/z_levelling/media/btn_icons/bed_levelling.svg")
-            )
-            self.cp_button_3.clicked.connect(
-                lambda: self.change_page(self.indexOf(self.probe_helper_page))
-            )
-
-            self.cp_button_4.setText("Z-Tilt")
-            self.cp_button_4.setPixmap(
-                QtGui.QPixmap(":/z_levelling/media/btn_icons/bed_levelling.svg")
-            )
-            self.cp_button_4.clicked.connect(lambda: self.handle_ztilt())
-
-            self.cp_button_5.setText("Fans")
-            self.cp_button_5.setPixmap(
-                QtGui.QPixmap(":/temperature_related/media/btn_icons/fan.svg")
-            )
-            self.cp_button_5.clicked.connect(
-                lambda: self.change_page(self.indexOf(self.fans_page))
-            )
-
-            self.cp_button_6.clicked.connect(self.show_swapcore)
-
-            self.back_button.hide()
-            self.Hblank.hide()
-            self.cp_button_5.show()
-            self.cp_content_layout.removeWidget(self.blank)
-            self.blank.hide()
+        for btn, (text, icon, slot) in zip(self.cp_buttons, self._menu(active)):
+            btn.setText(text)
+            btn.setPixmap(QtGui.QPixmap(icon))
+            btn.clicked.connect(slot)
+        self.cp_header_title.setText("Motion" if active else "Control")
+        self.back_button.setVisible(active)
+        self.Hblank.setVisible(active)
+        self._show_blank(active)
         self._apply_true_zero_layout()
         self.repaint()
+
+    def _show_blank(self, on: bool) -> None:
+        self.blank.setVisible(on)
+        self.cp_button_5.setVisible(not on)
 
     def showEvent(self, a0: QtGui.QShowEvent | None) -> None:
         self._button_change(False)
@@ -400,11 +365,7 @@ class ControlTab(QtWidgets.QStackedWidget):
         self._apply_true_zero_layout()
 
     def _apply_true_zero_layout(self) -> None:
-        """When true zero is used, repurpose the nozzle-calibration slot as a
-        second Fans button and hide the dedicated one, instead of moving
-        widgets between grid cells (QGridLayout doesn't fully forget a
-        widget's old cell after removeWidget/addWidget, which shifts the
-        whole page by a few px)."""
+        """With true zero, show Fans in the nozzle-calibration slot instead."""
         if self._motion_active:
             return
         has_true_zero = bool(self._true_zero_state)
@@ -418,9 +379,7 @@ class ControlTab(QtWidgets.QStackedWidget):
             self.cp_button_3.clicked.connect(
                 lambda: self.change_page(self.indexOf(self.fans_page))
             )
-            self.cp_button_5.hide()
-            self.cp_content_layout.addWidget(self.blank, 2, 0, 1, 1)
-            self.blank.show()
+            self._show_blank(True)
         else:
             self.cp_button_3.setText("Nozzle\nCalibration")
             self.cp_button_3.setPixmap(
@@ -429,9 +388,7 @@ class ControlTab(QtWidgets.QStackedWidget):
             self.cp_button_3.clicked.connect(
                 lambda: self.change_page(self.indexOf(self.probe_helper_page))
             )
-            self.cp_content_layout.removeWidget(self.blank)
-            self.blank.hide()
-            self.cp_button_5.show()
+            self._show_blank(False)
 
     def show_swapcore(self):
         """Show swap printcore"""
@@ -470,7 +427,6 @@ class ControlTab(QtWidgets.QStackedWidget):
 
     def _setup_ui(self) -> None:
         """Build the control tab page: header, back button, and option grid."""
-        self.resize(710, 410)
         root = QtWidgets.QWidget()
         root.setObjectName("control_page")
         root.setMinimumSize(QtCore.QSize(710, 410))
@@ -522,92 +478,29 @@ class ControlTab(QtWidgets.QStackedWidget):
             QtWidgets.QSizePolicy.Policy.Expanding,
             QtWidgets.QSizePolicy.Policy.Expanding,
         )
-
         font = QtGui.QFont()
         font.setFamily("Momcake")
         font.setPointSize(19)
 
-        self.cp_button_1 = BlocksCustomButton(parent=root)
-        self.cp_button_1.setSizePolicy(sizePolicy)
-        self.cp_button_1.setMinimumSize(QtCore.QSize(250, 80))
-        self.cp_button_1.setMaximumSize(QtCore.QSize(250, 80))
-        self.cp_button_1.setFont(font)
-        self.cp_button_1.setProperty(
-            "icon_pixmap",
-            QtGui.QPixmap(":/motion/media/btn_icons/axis_maintenance.svg"),
-        )
-        self.cp_content_layout.addWidget(self.cp_button_1, 0, 0, 1, 1)
+        self.cp_buttons: list[BlocksCustomButton] = []
+        for i in range(6):
+            btn = BlocksCustomButton(parent=root)
+            btn.setSizePolicy(sizePolicy)
+            btn.setFixedSize(QtCore.QSize(250, 80))
+            btn.setFont(font)
+            self.cp_content_layout.addWidget(btn, i // 2, i % 2, 1, 1)
+            self.cp_buttons.append(btn)
+        (
+            self.cp_button_1,
+            self.cp_button_2,
+            self.cp_button_3,
+            self.cp_button_4,
+            self.cp_button_5,
+            self.cp_button_6,
+        ) = self.cp_buttons
 
-        self.cp_button_2 = BlocksCustomButton(parent=root)
-        self.cp_button_2.setSizePolicy(sizePolicy)
-        self.cp_button_2.setMinimumSize(QtCore.QSize(250, 80))
-        self.cp_button_2.setMaximumSize(QtCore.QSize(250, 80))
-        self.cp_button_2.setFont(font)
-        self.cp_content_layout.addWidget(self.cp_button_2, 0, 1, 1, 1)
+        self.cp_content_layout.addWidget(self.blank, 2, 0, 1, 1)
+        self.blank.hide()
 
-        self.cp_button_3 = BlocksCustomButton(parent=root)
-        self.cp_button_3.setSizePolicy(sizePolicy)
-        self.cp_button_3.setMinimumSize(QtCore.QSize(250, 80))
-        self.cp_button_3.setMaximumSize(QtCore.QSize(250, 80))
-        self.cp_button_3.setFont(font)
-        self.cp_button_3.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/routine.svg")
-        )
-        self.cp_content_layout.addWidget(self.cp_button_3, 1, 0, 1, 1)
-
-        self.cp_button_4 = BlocksCustomButton(parent=root)
-        self.cp_button_4.setSizePolicy(sizePolicy)
-        self.cp_button_4.setMinimumSize(QtCore.QSize(250, 80))
-        self.cp_button_4.setMaximumSize(QtCore.QSize(250, 80))
-        self.cp_button_4.setFont(font)
-        self.cp_button_4.setProperty(
-            "icon_pixmap",
-            QtGui.QPixmap(":/input_shaper/media/btn_icons/input_shaper.svg"),
-        )
-        self.cp_content_layout.addWidget(self.cp_button_4, 1, 1, 1, 1)
-
-        self.cp_button_5 = BlocksCustomButton(parent=root)
-        self.cp_button_5.setSizePolicy(sizePolicy)
-        self.cp_button_5.setMinimumSize(QtCore.QSize(250, 80))
-        self.cp_button_5.setMaximumSize(QtCore.QSize(250, 80))
-        self.cp_button_5.setFont(font)
-        self.cp_button_5.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/info.svg")
-        )
-        self.cp_content_layout.addWidget(self.cp_button_5, 2, 0, 1, 1)
-
-        self.cp_button_6 = BlocksCustomButton(parent=root)
-        self.cp_button_6.setSizePolicy(sizePolicy)
-        self.cp_button_6.setMinimumSize(QtCore.QSize(250, 80))
-        self.cp_button_6.setMaximumSize(QtCore.QSize(250, 80))
-        self.cp_button_6.setFont(font)
-        self.cp_button_6.setProperty(
-            "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/LEDs.svg")
-        )
-        self.cp_content_layout.addWidget(self.cp_button_6, 2, 1, 1, 1)
-        self.cp_content_layout.setRowMinimumHeight(0, 80)
-        self.cp_content_layout.setRowMinimumHeight(1, 80)
-        self.cp_content_layout.setRowMinimumHeight(2, 80)
-
-        content_widget = QtWidgets.QWidget(parent=root)
-        content_widget.setLayout(self.cp_content_layout)
-        content_widget.setSizePolicy(
-            QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Fixed
-        )
-        self.cp_content_layout.setContentsMargins(0, 0, 0, 0)
-        content_widget.setFixedHeight(self.cp_content_layout.sizeHint().height())
-        self.verticalLayout.addWidget(content_widget)
-
-        _translate = QtCore.QCoreApplication.translate
-        self.setWindowTitle(_translate("controlStackedWidget", "StackedWidget"))
-        self.cp_header_title.setText(_translate("controlStackedWidget", "Control"))
-
-        self.cp_button_1.setText(_translate("controlStackedWidget", "Motion\nControl"))
-        self.cp_button_2.setText(_translate("controlStackedWidget", "Temp.\nControl"))
-        self.cp_button_3.setText(
-            _translate("controlStackedWidget", "Nozzle\nCalibration")
-        )
-        self.cp_button_4.setText(_translate("controlStackedWidget", "Z-Tilt"))
-        self.cp_button_5.setText(_translate("controlStackedWidget", "Fans"))
-        self.cp_button_6.setText(_translate("controlStackedWidget", "Swap\nPrint Core"))
+        self.verticalLayout.addWidget(fixed_menu_grid(root, self.cp_content_layout))
         self.addWidget(root)

@@ -1,23 +1,16 @@
-import logging
-import re
 import typing
-from enum import Enum, auto
 
 from lib.moonrakerComm import MoonWebSocket
 from lib.panels.widgets.Common.basePopup import BasePopup
 from lib.panels.widgets.UtilitiesTab.axisMaintPage import AxisMaintPage
 from lib.panels.widgets.UtilitiesTab.infoPage import InfoPage
-from lib.panels.widgets.UtilitiesTab.InputShaPage import InputShaperPage
+from lib.panels.widgets.UtilitiesTab.inputshaperPage import InputShaperPage
 from lib.panels.widgets.UtilitiesTab.ledsPage import LedsPage
 from lib.panels.widgets.UtilitiesTab.routinePage import RoutineCheckPage
 from lib.panels.widgets.UtilitiesTab.troubleshootPage import TroubleshootPage
 from lib.printer import Printer
 from lib.utils.blocks_button import BlocksCustomButton
 from PyQt6 import QtCore, QtGui, QtWidgets
-
-
-class Process(Enum):
-    AXIS = auto()
 
 
 class UtilitiesTab(QtWidgets.QStackedWidget):
@@ -27,29 +20,14 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
     request_change_page: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         int, int, name="request-change-page"
     )
-    request_available_objects_signal: typing.ClassVar[QtCore.pyqtSignal] = (
-        QtCore.pyqtSignal(name="get-available-objects")
-    )
     run_gcode_signal: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         str, name="run-gcode"
-    )
-    request_numpad_signal: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
-        int,
-        str,
-        str,
-        "PyQt_PyObject",
-        QtWidgets.QStackedWidget,
-        name="request-numpad",
     )
     subscribe_config: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         [list, "PyQt_PyObject"],
         [str, "PyQt_PyObject"],
         name="on-subscribe-config",
     )
-    on_update_message: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
-        dict, name="handle-update-message"
-    )
-
     update_available: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         bool, name="update-available"
     )
@@ -76,7 +54,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         self.is_page: InputShaperPage = InputShaperPage(self, logic=True)
         self.is_page.hide()
 
-        self.setupUi()
+        self._setup_ui()
 
         self.ws = ws
         self.printer: Printer = printer
@@ -101,9 +79,6 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         )
         self.up_routine_check_btn.clicked.connect(
             lambda: self.change_page(self.indexOf(self.routines_page))
-        )
-        self.axes_page.axes_back_btn.clicked.connect(
-            lambda: self.change_page(self.indexOf(self.utilitiesPage))
         )
         self.troubleshoot_page.tb_back_btn.clicked.connect(
             lambda: self.change_page(self.indexOf(self.utilitiesPage))
@@ -183,8 +158,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         """Request back"""
         self.request_back.emit()
 
-    def setupUi(self):
-
+    def _setup_ui(self) -> None:
         self.setObjectName("utilitiesTab")
 
         sizePolicy = QtWidgets.QSizePolicy(
@@ -279,6 +253,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
             "icon_pixmap",
             QtGui.QPixmap(":/motion/media/btn_icons/axis_maintenance.svg"),
         )
+        self.up_axes_btn.setObjectName("up_axes_btn")
         self.up_content_layout.addWidget(self.up_axes_btn, 1, 1, 1, 1)
 
         self.up_update_btn = BlocksCustomButton(parent=self.utilitiesPage)
@@ -286,10 +261,10 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         self.up_update_btn.setMinimumSize(QtCore.QSize(250, 80))
         self.up_update_btn.setMaximumSize(QtCore.QSize(250, 80))
         self.up_update_btn.setFont(font)
-        self.up_update_btn.setPixmap(
-            QtGui.QPixmap(":/system/media/btn_icons/update-software-icon.svg")
+        self.up_update_btn.setProperty(
+            "icon_pixmap",
+            QtGui.QPixmap(":/system/media/btn_icons/update-software-icon.svg"),
         )
-
         self.up_update_btn.setObjectName("up_update_btn")
         self.up_content_layout.addWidget(self.up_update_btn, 2, 0, 1, 1)
 
@@ -302,6 +277,7 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
             "icon_pixmap",
             QtGui.QPixmap(":/input_shaper/media/btn_icons/input_shaper.svg"),
         )
+        self.up_input_shaper_btn.setObjectName("up_input_shaper_btn")
         self.up_content_layout.addWidget(self.up_input_shaper_btn, 2, 1, 1, 1)
 
         self.verticalLayout.addLayout(self.up_content_layout)
@@ -331,10 +307,10 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
 
         _translate = QtCore.QCoreApplication.translate
 
-        self.up_title_label.setText(_translate("self", "Utilities"))
-        self.up_info_btn.setText(_translate("self", "Info"))
-        self.up_leds_btn.setText(_translate("self", "LED's"))
-        self.up_routine_check_btn.setText(_translate("self", "Routine\nCheck"))
-        self.up_axes_btn.setText(_translate("self", "Axis\nMaint."))
-        self.up_update_btn.setText(_translate("self", "Update"))
-        self.up_input_shaper_btn.setText(_translate("self", "Input\nShaper"))
+        self.up_title_label.setText(_translate("utilitiesTab", "Utilities"))
+        self.up_info_btn.setText(_translate("utilitiesTab", "Info"))
+        self.up_leds_btn.setText(_translate("utilitiesTab", "LED's"))
+        self.up_routine_check_btn.setText(_translate("utilitiesTab", "Routine\nCheck"))
+        self.up_axes_btn.setText(_translate("utilitiesTab", "Axis\nMaint."))
+        self.up_update_btn.setText(_translate("utilitiesTab", "Update"))
+        self.up_input_shaper_btn.setText(_translate("utilitiesTab", "Input\nShaper"))

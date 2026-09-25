@@ -1,3 +1,4 @@
+import logging
 import re
 import typing
 
@@ -8,6 +9,8 @@ from lib.utils.blocks_frame import BlocksCustomFrame
 from lib.utils.icon_button import IconButton
 from lib.utils.list_model import EntryDelegate, EntryListModel, ListItem
 from PyQt6 import QtCore, QtGui, QtWidgets
+
+_logger = logging.getLogger(__name__)
 
 
 class InputShaperPage(QtWidgets.QStackedWidget):
@@ -97,9 +100,7 @@ class InputShaperPage(QtWidgets.QStackedWidget):
         """
 
         if not isinstance(data, list) or len(data) != 1 or not isinstance(data[0], str):
-            print(
-                f"WARNING: Invalid input format. Expected a list with one string. Received: {data}"
-            )
+            _logger.warning("Invalid IS response format: %s", data)
             return
 
         message = data[0]
@@ -186,7 +187,15 @@ class InputShaperPage(QtWidgets.QStackedWidget):
         self.call_load_panel.emit(False, "", False)
 
     def handle_is(self, gcode: str) -> None:
+        """Start an input shaper run.
+
+        Args:
+            gcode: ``"SHAPER_CALIBRATE"`` for the automatic run on both axes,
+                ``""`` to ask which axis to calibrate, or a single-axis
+                ``SHAPER_CALIBRATE AXIS=...`` command to send as is.
+        """
         if gcode == "SHAPER_CALIBRATE":
+            self.is_aut_types.clear()
             self.run_gcode_signal.emit("G28\nM400")
             self.aut = True
             self.run_gcode_signal.emit(gcode)

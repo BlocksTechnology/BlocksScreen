@@ -12,7 +12,11 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 class TemperaturePage(QtWidgets.QWidget):
     """Heater temperature page of the control tab."""
 
-    request_back = QtCore.pyqtSignal(name="request-back-button")
+    # fallback (min, max) limits until printer_config reports the real ones
+    _E_LIMITS = (0, 300)
+    _B_LIMITS = (0, 100)
+
+    request_back = QtCore.pyqtSignal(name="request-back")
 
     run_gcode_signal: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         str, name="run-gcode"
@@ -39,7 +43,7 @@ class TemperaturePage(QtWidgets.QWidget):
         self.cooldown_btn.hide()
         self.temperature_cooldown_btn.hide()
 
-        self._connect_temp_displays(0, 370, 0, 120)
+        self._connect_temp_displays(*self._E_LIMITS, *self._B_LIMITS)
 
     @QtCore.pyqtSlot(dict, name="printer_config")
     def on_printer_config(self, config: dict) -> None:
@@ -47,10 +51,10 @@ class TemperaturePage(QtWidgets.QWidget):
         extruder = config.get("extruder") or {}
         bed = config.get("heater_bed") or {}
         self._connect_temp_displays(
-            int(extruder.get("min_temp", 0)),
-            int(extruder.get("max_temp", 300)),
-            int(bed.get("min_temp", 0)),
-            int(bed.get("max_temp", 100)),
+            int(extruder.get("min_temp", self._E_LIMITS[0])),
+            int(extruder.get("max_temp", self._E_LIMITS[1])),
+            int(bed.get("min_temp", self._B_LIMITS[0])),
+            int(bed.get("max_temp", self._B_LIMITS[1])),
         )
 
     def _connect_temp_displays(
@@ -64,7 +68,7 @@ class TemperaturePage(QtWidgets.QWidget):
         self.extruder_temp_display.clicked.connect(
             lambda: self.request_numpad.emit(
                 "Extruder Temperature",
-                round(float(self.extruder_temp_display.secondary_text)),
+                round(float(self.extruder_temp_display.secondary_text or 0)),
                 self.on_numpad_change,
                 e_min,
                 e_max,
@@ -73,7 +77,7 @@ class TemperaturePage(QtWidgets.QWidget):
         self.bed_temp_display.clicked.connect(
             lambda: self.request_numpad.emit(
                 "Bed Temperature",
-                round(float(self.bed_temp_display.secondary_text)),
+                round(float(self.bed_temp_display.secondary_text or 0)),
                 self.on_numpad_change,
                 b_min,
                 b_max,
@@ -112,8 +116,6 @@ class TemperaturePage(QtWidgets.QWidget):
     def _setup_ui(self) -> None:
         """Build the temperature page: heater cards and preset controls."""
         self.setObjectName("temperature_page")
-        widget = QtWidgets.QWidget(parent=self)
-        widget.setGeometry(QtCore.QRect(0, 0, 720, 420))
         self.verticalLayout = QtWidgets.QVBoxLayout(self)
         self.verticalLayout.setObjectName("verticalLayout")
         spacerItem3 = QtWidgets.QSpacerItem(
@@ -290,8 +292,6 @@ class TemperaturePage(QtWidgets.QWidget):
             QtWidgets.QSizePolicy.Policy.Minimum,
         )
         self.verticalLayout.addItem(spacerItem7)
-
-        widget.setLayout(self.verticalLayout)
 
         _translate = QtCore.QCoreApplication.translate
         self.temp_header_title.setText(
