@@ -330,6 +330,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self.printer.display_update.connect(self._handle_display_status)
 
         self.print_status = "idle"
+        # Device templates applied to printer.cfg since the last restart
+        # prompt; the prompt waits for the end of a running print.
+        self._pending_device_config: list[str] = []
+        self._device_config_popup: BasePopup | None = None
         self.ui.chamber_temp_display.hide()
 
         if self.config.has_section("server"):
@@ -604,6 +608,46 @@ class MainWindow(QtWidgets.QMainWindow):
                 not self.ui.header_main_layout.isEnabled(),
             ]
         )
+
+    @QtCore.pyqtSlot(list, name="on-device-config-changed")
+    def on_device_config_changed(self, profiles: list) -> None:
+        """Offer a Klipper restart after a plugged-in device changed printer.cfg.
+
+        While printing, the prompt is held until the print ends.
+        """
+        for name in profiles:
+            if name not in self._pending_device_config:
+                self._pending_device_config.append(name)
+        if self.print_status == "printing":
+            _logger.info(
+                "printer.cfg updated for %s; restart prompt deferred until print ends",
+                ", ".join(profiles),
+            )
+            return
+        self._prompt_device_config_restart()
+
+    def _prompt_device_config_restart(self) -> None:
+        if not self._pending_device_config:
+            return
+        try:
+            self._show_device_config_prompt()
+        except Exception:  # noqa: BLE001  # pylint: disable=broad-except
+            # Optional prompt: never let it take the screen down.
+            _logger.exception("Could not show the device restart prompt")
+
+    def _show_device_config_prompt(self) -> None:
+        devices = ", ".join(n.upper() for n in self._pending_device_config)
+        self._pending_device_config = []
+        if self._device_config_popup is None:
+            self._device_config_popup = BasePopup(self, floating=True)
+            self._device_config_popup.accepted.connect(self.ws.api.firmware_restart)
+        self._device_config_popup.set_message(
+            f"New device detected: {devices}\n"
+            "The printer configuration was updated.\n"
+            "Restart Klipper now to apply it?"
+        )
+        self._device_config_popup.cancel_button_text("Later")
+        self._device_config_popup.open()
 
     @QtCore.pyqtSlot(bool, name="toggle-popups")
     def popup_toggle(self, toggle: bool) -> None:
@@ -1161,6 +1205,8 @@ class MainWindow(QtWidgets.QMainWindow):
             events.PrintCancelled.type(),
         ):
             self.print_status = "idle"
+            if self._pending_device_config:
+                QtCore.QTimer.singleShot(0, self._prompt_device_config_restart)
             if event.type() == events.PrintCancelled.type():
                 self.handle_cancel_print()
             self.enable_tab_bar()

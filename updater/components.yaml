@@ -55,6 +55,17 @@ components:
     reset_mode: hard
     order: 13
 
+  # Device discovery daemon (BlocksTechnology/DeviceDiscovery). Needs a one-time
+  # `~/DeviceDiscovery/scripts/install.sh` (apt deps + systemd unit, sudo), so
+  # it is not auto-provisioned; machines without the clone skip it.
+  - name: DeviceDiscovery
+    type: git
+    path: ~/DeviceDiscovery
+    branch: main
+    service: device-discoveryd.service
+    reset_mode: hard
+    order: 15
+
   - name: crowsnest
     type: git
     path: ~/crowsnest

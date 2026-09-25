@@ -14,7 +14,7 @@ from configfile import get_configparser
 from lib.panels.mainWindow import MainWindow  # noqa: E402
 from logger import CrashHandler, LogManager, install_crash_handler, setup_logging
 from PyQt6 import QtCore, QtGui, QtWidgets  # noqa: E402
-from tools.configuration_manager import ConfigManager
+from tools.configuration_manager import DeviceConfigManager, DeviceConfigWatcher
 
 install_crash_handler()
 
@@ -167,10 +167,14 @@ def on_quit() -> None:
     LogManager.shutdown()
 
 
+conf_man: DeviceConfigManager | None = None
+device_watcher: DeviceConfigWatcher | None = None
+
+
 def initialize_conf_manager() -> None:
     global conf_man
     try:
-        conf_man = ConfigManager(get_configparser())
+        conf_man = DeviceConfigManager(get_configparser())
     except Exception as e:
         _logger.error(
             "Caught Exception on configuration_manager tool: %s" % e, exc_info=True
@@ -310,6 +314,19 @@ if __name__ == "__main__":
     BlocksScreen.setDesktopFileName("BlocksScreen")
     _splash = show_splash()
     main_window = MainWindow()
+    if conf_man is not None:
+        # Live side of the device templates: printer.cfg follows devices
+        # plugged in while running, and the user is offered a Klipper restart.
+        # Optional: without it the screen works as before, just no hotplug.
+        try:
+            device_watcher = DeviceConfigWatcher(conf_man, parent=main_window)
+            device_watcher.config_changed.connect(
+                main_window.on_device_config_changed
+            )
+            device_watcher.start()
+            BlocksScreen.aboutToQuit.connect(device_watcher.stop)
+        except Exception as e:  # noqa: BLE001
+            _logger.error("Device hotplug disabled: %s", e, exc_info=True)
     BlocksScreen.processEvents()
     BlocksScreen.aboutToQuit.connect(on_quit)
     _setup_sigterm(BlocksScreen)

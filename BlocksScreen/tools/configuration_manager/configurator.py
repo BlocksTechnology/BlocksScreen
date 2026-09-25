@@ -11,7 +11,7 @@ import threading
 from datetime import datetime
 from typing import Literal
 
-from tools.serial_scanner import SerialScanner
+from devices.discovery.serial_devices import SerialScanner
 
 HOME = pathlib.Path.home()
 CONFIG_REPO = pathlib.Path.joinpath(HOME, "RF50-Klipper")

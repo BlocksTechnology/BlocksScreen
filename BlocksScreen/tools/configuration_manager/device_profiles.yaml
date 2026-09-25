@@ -1,0 +1,54 @@
+# Device templates: how printer.cfg changes when a known device is plugged in.
+#
+# Override or extend per machine in ~/printer_data/config/blockscreen_devices.yaml
+# (same format). Entries merge by `name`: listed keys replace the bundled
+# ones, unknown names are added, `enabled: false` switches a profile off.
+# The override is ignored if it's writable by group/others.
+#
+# Keys:
+#   match             case-insensitive regex searched in the device's
+#                     /dev/serial/by-id name (e.g. usb-Beacon_Beacon_RevH_...-if00)
+#   section           printer.cfg section to create or update (without brackets)
+#   options           option -> value; placeholders: ${serial} (full by-id path),
+#                     ${device_path} (/dev/ttyACM*), ${name}
+#   enable_includes   [include ...] paths to uncomment
+#   disable_includes  [include ...] paths to comment out
+#   vendor_id         optional USB vendor ID (int or hex string, e.g. '0x1d50').
+#                     When set and the discovered device reports a nonzero
+#                     vendor_id (daemon + Klipper firmware both ID-aware),
+#                     matching uses this instead of `match`. `match` stays
+#                     required as the fallback for daemon/firmware versions
+#                     that don't report USB IDs yet.
+#   product_id        optional USB product ID (int or hex string), only
+#                     meaningful together with vendor_id. Klipper sets both
+#                     at build time via Kconfig's "USB ids" menu
+#                     (USB_VENDOR_ID/USB_DEVICE_ID, under LOW_LEVEL_OPTIONS).
+#                     See USB_IDS.md (next to this file) for the standard
+#                     BlocksTechnology vendor_id/product_id allocation table.
+#
+# Profiles are applied at every boot for the devices plugged in at that
+# moment (on top of the RF50-Klipper printer.cfg), and live when the
+# device_discoveryd daemon reports a device being plugged in.
+
+profiles:
+  - name: beacon
+    match: 'beacon'
+    section: beacon
+    options:
+      serial: ${serial}
+
+  - name: amu
+    # match: fallback for firmware still on Klipper's stock USB ID (see
+    # USB_IDS.md) - must match the USB serial string the AMU firmware is
+    # flashed with. vendor_id/product_id: the standard AMU board ID, used
+    # instead once the firmware reports it.
+    match: 'AMU'
+    vendor_id: '0x1d50'
+    product_id: '0xb001'
+    section: mcu AMU
+    options:
+      serial: ${serial}
+    enable_includes:
+      - config/variant_mmu/base/*.cfg
+    disable_includes:
+      - config/variant_sync_single/*.cfg
