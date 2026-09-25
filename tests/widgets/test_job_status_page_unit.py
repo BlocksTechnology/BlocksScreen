@@ -2,9 +2,10 @@
 
 import sys
 import types
+from unittest.mock import MagicMock
 
 import pytest
-from PyQt6 import QtWidgets
+from PyQt6 import QtGui, QtWidgets
 
 
 # STUBS must be in sys.modules BEFORE jobStatusPage is imported so the widget
@@ -55,8 +56,8 @@ for _name, _mod in [
 ]:
     sys.modules[_name] = _mod  # force-set so network conftest stubs don't win
 
-import events  # noqa: F401  # ensure events is importable before jobStatusPage loads
-from lib.panels.widgets.jobStatusPage import JobStatusWidget
+import events  # noqa: F401, E402  # ensure events is importable before jobStatusPage loads
+from lib.panels.widgets.jobStatusPage import JobStatusWidget  # noqa: E402
 
 
 @pytest.fixture()
@@ -399,7 +400,7 @@ class TestOnFileInfo:
             "object_height": 10.0,
             "layer_height": 0.2,
             "first_layer_height": 0.2,
-            "thumbnail_images": [],
+            "thumbnail_paths": [],
         }
 
     def test_load_correct_info(self, widget):
@@ -438,6 +439,44 @@ class TestOnFileInfo:
         widget.on_fileinfo(_metadata)
         widget.on_fileinfo({"filename": "other.gcode", "layer_count": 999})
         assert widget.total_layers == "20"
+
+    def test_browsed_metadata_ignored_without_job(self, widget):
+        """With no job a browsed file must not fill the page; a leading / matches."""
+        widget.on_fileinfo({"filename": "b.gcode", "layer_count": 5})
+        assert widget.file_metadata is None
+        widget._current_file_name = "a.gcode"
+        widget.on_fileinfo({"filename": "/a.gcode", "layer_count": 5})
+        assert widget.total_layers == "5"
+
+
+class TestLoadThumbnails:
+    """Only the largest readable thumbnail is decoded."""
+
+    @pytest.fixture(autouse=True)
+    def _no_view(self, widget, monkeypatch):
+        """The progress bar is stubbed here; test the decode, not the scene."""
+        monkeypatch.setattr(widget, "_ensure_thumbnail_widget", lambda: None)
+        monkeypatch.setattr(widget, "thumbnail_view", MagicMock(), raising=False)
+        monkeypatch.setattr(widget, "printing_progress_bar", MagicMock())
+
+    @staticmethod
+    def _png(path, side: int) -> str:
+        """Write a side x side PNG and return its path."""
+        img = QtGui.QImage(side, side, QtGui.QImage.Format.Format_ARGB32)
+        img.fill(0)
+        assert img.save(str(path))
+        return str(path)
+
+    def test_decodes_only_largest(self, widget, tmp_path):
+        small = self._png(tmp_path / "s.png", 8)
+        big = self._png(tmp_path / "b.png", 32)
+        widget._load_thumbnails(small, big)
+        assert [p.width() for p in widget.thumbnail_graphics] == [32]
+
+    def test_unreadable_largest_falls_back_to_smaller(self, widget, tmp_path):
+        small = self._png(tmp_path / "s.png", 8)
+        widget._load_thumbnails(small, str(tmp_path / "missing.png"))
+        assert [p.width() for p in widget.thumbnail_graphics] == [8]
 
 
 class TestComputeProgress:

@@ -173,6 +173,13 @@ class MainWindow(QtWidgets.QMainWindow):
         self.printPanel = PrintTab(
             self.ui.printTab, self.file_data, self.ws, self.printer
         )
+        self.usb_manager.usb_mounted.connect(
+            self.printPanel.filesPage_widget.on_usb_added
+        )
+        # usb_unmounted only; also wiring hardware_removed refreshes twice.
+        self.usb_manager.usb_unmounted.connect(
+            self.printPanel.filesPage_widget.on_usb_removed
+        )
         if not os.environ.get("BLOCKSCREEN_DEV"):
             QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.CursorShape.BlankCursor)
         self.filamentPanel = FilamentTab(

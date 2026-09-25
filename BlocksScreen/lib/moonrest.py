@@ -27,6 +27,7 @@
 
 
 import logging
+from urllib.parse import quote
 
 import requests
 
@@ -43,18 +44,16 @@ class UncallableError(Exception):
 
 
 class MoonRest:
-    """MoonRest Basic API for sending end posting requests to MoonrakerAPI
-
-    Raises:
-        UncallableError: An error occurred when the request type invalid
-    """
+    """Moonraker HTTP client."""
 
     timeout = 3
 
-    def __init__(self, host: str = "localhost", port: int = 7125, api_key=False):
+    def __init__(
+        self, host: str = "localhost", port: int = 7125, api_key: str | None = None
+    ):
         self._host = host
         self._port = port
-        self._api_key = api_key
+        self._api_key: str | None = api_key
 
     @property
     def build_endpoint(self):
@@ -62,13 +61,8 @@ class MoonRest:
         return f"http://{self._host}:{self._port}"
 
     def get_oneshot_token(self):
-        """Requests Moonraker API for a oneshot token to be used on
-        API key authentication
-
-        Returns:
-            str: A oneshot token
-        """
-        # Response data is generally an object itself, however for some requests this may simply be an "ok" string.
+        """Oneshot token for API-key auth."""
+        # Some requests reply with a bare "ok" string, not an object.
         response = self.get_request(method="access/oneshot_token")
         if response is None:
             return None
@@ -79,40 +73,25 @@ class MoonRest:
         )
 
     def get_server_info(self):
-        """GET MoonrakerAPI /server/info
-
-        Returns:
-            dict: server info from Moonraker
-        """
+        """Fetch server info from Moonraker."""
         return self.get_request(method="server/info")
 
     def get_spool(self, spool_id: int) -> dict | None:
-        """GET /server/spoolman/spool/{spool_id} via Moonraker
-
-        Returns spool dict on success, None on HTTP/network/JSON error.
-        """
+        """Spoolman spool via Moonraker, None on error."""
         response = self.get_request(f"server/spoolman/spool/{spool_id}")
         if not isinstance(response, dict):
             return None
         return response.get("result")
 
     def set_spool_used_weight(self, spool_id: int, weight: float) -> bool:
-        """POST /server/spoolman/spool/{spool_id} to update used_weight.
-
-        Returns True on sucess, False on any error.
-        """
+        """Set a spool's used_weight; True on success."""
         response = self.post_request(
             f"server/spoolman/spool/{spool_id}", json={"used_weight": weight}
         )
         return response is not None
 
     def firmware_restart(self):
-        """firmware_restart
-            POST to /printer/firmware_restart to firmware restart Klipper
-
-        Returns:
-            str: Returns an 'ok' from Moonraker
-        """
+        """POST firmware_restart to Moonraker."""
         return self.post_request(method="printer/firmware_restart")
 
     def post_request(self, method, data=None, json=None, json_response=True):
@@ -133,6 +112,40 @@ class MoonRest:
             json_response=json,
             timeout=timeout,
         )
+
+    def get_gcode_header(self, rel_path: str, max_bytes: int = 131072) -> bytes | None:
+        """First *max_bytes* of a gcode, for embedded thumbnails."""
+        return self._stream_gcode(rel_path, f"bytes=0-{max_bytes - 1}", max_bytes)
+
+    def get_gcode_tail(self, rel_path: str, max_bytes: int = 65536) -> bytes | None:
+        """Last *max_bytes* of a gcode, for the slicer footer."""
+        data = self._stream_gcode(rel_path, f"bytes=-{max_bytes}", max_bytes + 1)
+        # More than asked for means the server ignored Range.
+        if data is not None and len(data) > max_bytes:
+            logger.info("gcode tail fetch for %s ignored Range", rel_path)
+            return None
+        return data
+
+    def _stream_gcode(self, rel_path: str, byte_range: str, limit: int) -> bytes | None:
+        """Range GET a gcode, stopping once *limit* bytes arrived."""
+        url = f"{self.build_endpoint}/server/files/gcodes/{quote(rel_path)}"
+        headers = {"Range": byte_range}
+        if self._api_key:
+            headers["x-api-key"] = self._api_key
+        try:
+            with requests.get(
+                url, headers=headers, stream=True, timeout=self.timeout
+            ) as resp:
+                resp.raise_for_status()
+                data = bytearray()
+                for chunk in resp.iter_content(chunk_size=65536):
+                    data.extend(chunk)
+                    if len(data) >= limit:
+                        break
+                return bytes(data[:limit])
+        except requests.RequestException as exc:
+            logger.info("gcode fetch (%s) failed for %s: %s", byte_range, rel_path, exc)
+            return None
 
     def _request(
         self,

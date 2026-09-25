@@ -3,6 +3,7 @@ import typing
 
 from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_frame import BlocksCustomFrame
+from lib.utils import gcode_loader
 from lib.utils.blocks_label import BlocksLabel
 from PyQt6 import QtCore, QtGui, QtWidgets
 
@@ -95,24 +96,26 @@ class CancelPage(QtWidgets.QWidget):
         self.cf_file_name.setText(file_name)
 
     def _show_screen_thumbnail(self, metadata: dict | None) -> None:
-        """Display the largest thumbnail from file metadata.
+        """Show the largest thumbnail, else the embedded one or the logo."""
+        metadata = metadata or {}
+        meta_file = metadata.get("filename", "")
+        # fileinfo is global, every listed file emits it: decode only ours.
+        if meta_file.removeprefix("/") != self.filename.removeprefix("/"):
+            return
+        thumbnails = metadata.get("thumbnail_paths") or []
+        last_thumb = QtGui.QPixmap(thumbnails[-1]) if thumbnails else QtGui.QPixmap()
+        if last_thumb.isNull():
+            last_thumb = self._embedded_pixmap(meta_file)
+        self.set_pixmap(last_thumb)
 
-        ``thumbnail_images`` values are pre-loaded ``QImage``
-        objects produced by ``Files._process_metadata``.
-        """
-        fallback = QtGui.QPixmap(
+    def _embedded_pixmap(self, gcode_path: str) -> QtGui.QPixmap:
+        """Cached embedded thumbnail, else the logo."""
+        pixmap = gcode_loader.cached_pixmap(gcode_path)
+        if pixmap is not None:
+            return pixmap
+        return QtGui.QPixmap(
             "BlocksScreen/lib/ui/resources/media/logoblocks400x300.png"
         )
-        thumbnails = metadata.get("thumbnail_images", []) if metadata else []
-        if not thumbnails:
-            self.set_pixmap(fallback)
-            return
-
-        last_thumb = thumbnails[-1]
-        if isinstance(last_thumb, QtGui.QImage) and not last_thumb.isNull():
-            self.set_pixmap(QtGui.QPixmap.fromImage(last_thumb))
-        else:
-            self.set_pixmap(fallback)
 
     def _setupUI(self) -> None:
         """Setup widget ui"""

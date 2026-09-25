@@ -258,6 +258,9 @@ _STUB_MODULES = {
     "lib.utils.blocks_Scrollbar": {
         "CustomScrollBar": QtWidgets.QScrollBar,
     },
+    "lib.utils.blocks_combobox": {
+        "BlocksComboBox": QtWidgets.QComboBox,
+    },
     "lib.utils.list_model": {
         "EntryDelegate": _EntryDelegateStub,
         "EntryListModel": _EntryListModelStub,

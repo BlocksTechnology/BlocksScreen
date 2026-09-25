@@ -1,3 +1,4 @@
+import contextlib
 import logging
 import typing
 
@@ -12,6 +13,8 @@ from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.blocks_label import BlocksLabel
 from lib.utils.blocks_progressbar import CustomProgressBar
 from lib.utils.display_button import DisplayButton
+from lib.utils import gcode_loader
+from lib.utils.icon_button import IconButton
 from lib.utils.flowguard import FlowguardWidget
 from PyQt6 import QtCore, QtGui, QtWidgets
 
@@ -19,14 +22,7 @@ logger = logging.getLogger(__name__)
 
 
 class JobStatusWidget(QtWidgets.QWidget):
-    """Job status widget page, page shown when there is a active print job.
-
-    Enables mid print printer tuning and inspection of print progress.
-
-
-    Args:
-        QtWidgets (QtWidgets.QWidget): Parent widget
-    """
+    """Active print job status page."""
 
     print_start: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         str, name="print_start"
@@ -58,6 +54,9 @@ class JobStatusWidget(QtWidgets.QWidget):
     request_file_info: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         str, name="request_file_info"
     )
+    show_metadata: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
+        str, dict, name="show_metadata"
+    )
     call_cancel_panel = QtCore.pyqtSignal(bool, name="call-load-panel")
 
     _internal_print_status: str = ""
@@ -84,6 +83,7 @@ class JobStatusWidget(QtWidgets.QWidget):
     def __init__(self, parent) -> None:
         super().__init__(parent)
         self.thumbnail_graphics = []
+        self._loader_connected = False
         self._reported_layer: int | None = None
         self.total_layer_reported = False
         self._displayed_layer = 0
@@ -99,6 +99,7 @@ class JobStatusWidget(QtWidgets.QWidget):
         self._setupUI()
         self.cancel_print_dialog = BasePopup(self, floating=True)
         self.tune_menu_btn.clicked.connect(self.tune_clicked.emit)
+        self.js_file_name_icon.clicked.connect(self._on_file_info_clicked)
         self.pause_printing_btn.clicked.connect(self.pause_resume_print)
         self.stop_printing_btn.clicked.connect(self.handleCancel)
 
@@ -119,6 +120,12 @@ class JobStatusWidget(QtWidgets.QWidget):
         ):
             widget.setVisible(not expand)
 
+    @QtCore.pyqtSlot(name="on_file_info_clicked")
+    def _on_file_info_clicked(self) -> None:
+        """Show metadata for the printing file."""
+        if self._current_file_name:
+            self.show_metadata.emit(self._current_file_name, self.file_metadata or {})
+
     def showEvent(self, a0) -> None:
         """Reimplemented method, handle `show` Event"""
         super().showEvent(a0)
@@ -126,10 +133,7 @@ class JobStatusWidget(QtWidgets.QWidget):
             self.request_file_info.emit(self._current_file_name)
 
     def eventFilter(self, sender_obj: QtCore.QObject, event: events.QEvent) -> bool:
-        """Filter events,
-
-        currently only filters events from `self.thumbnail_view` QGraphicsView widget
-        """
+        """Filter events from thumbnail_view QGraphicsView."""
         if (
             sender_obj == self.thumbnail_view
             and event.type() == QtCore.QEvent.Type.MouseButtonPress
@@ -139,13 +143,23 @@ class JobStatusWidget(QtWidgets.QWidget):
         return super().eventFilter(sender_obj, event)
 
     def _load_thumbnails(self, *thumbnails) -> None:
-        """Pre-load available thumbnails for the current print object."""
-        self.thumbnail_graphics = [
-            px for thumb in thumbnails if not (px := QtGui.QPixmap(thumb)).isNull()
-        ]
+        """Load the largest readable thumbnail for the current print object."""
+        # Only [-1] is shown: decode largest first and stop at the first readable.
+        biggest = next(
+            (
+                px
+                for thumb in reversed(thumbnails)
+                if not (px := QtGui.QPixmap(thumb)).isNull()
+            ),
+            None,
+        )
+        self.thumbnail_graphics = [biggest] if biggest is not None else []
         if not self.thumbnail_graphics:
-            logger.debug("Unable to load thumbnails, no thumbnails provided")
-            return
+            embedded = self._embedded_pixmap()
+            if embedded is None:
+                logger.debug("Unable to load thumbnails, no thumbnails provided")
+                return
+            self.thumbnail_graphics = [embedded]
         self._ensure_thumbnail_widget()
         _biggest_thumb = self.thumbnail_graphics[-1]
         scene = QtWidgets.QGraphicsScene()
@@ -167,19 +181,41 @@ class JobStatusWidget(QtWidgets.QWidget):
         self.thumbnail_view.setScene(scene)
         self.printing_progress_bar.set_inner_pixmap(self.thumbnail_graphics[-1])
 
+    def _embedded_pixmap(self) -> QtGui.QPixmap | None:
+        """Cached embedded thumbnail, or None."""
+        self._ensure_loader_connected()
+        return gcode_loader.cached_pixmap(
+            (self.file_metadata or {}).get("filename", "")
+        )
+
+    def _ensure_loader_connected(self) -> None:
+        """Connect once so a late thumbnail repaints."""
+        if self._loader_connected:
+            return
+        loader = gcode_loader.get_loader()
+        if loader is None:
+            return
+        loader.ready.connect(self._on_embedded_ready)
+        self._loader_connected = True
+
+    def _on_embedded_ready(self, gcode_path: str, image: object) -> None:
+        """Repaint when the current file's thumbnail loads."""
+        filename = (self.file_metadata or {}).get("filename", "").removeprefix("/")
+        if not filename or gcode_path != filename or self.thumbnail_graphics:
+            return
+        self._load_thumbnails(*(self.file_metadata or {}).get("thumbnail_paths", ()))
+
     @QtCore.pyqtSlot(name="handle-cancel")
     def handleCancel(self) -> None:
         """Handle cancel print job dialog"""
         self.cancel_print_dialog.set_message(
             "Are you sure you \n want to cancel \n the current print job?"
         )
-        try:
+        with contextlib.suppress(TypeError):
             self.cancel_print_dialog.accepted.connect(
                 self.print_cancel,
                 QtCore.Qt.ConnectionType.UniqueConnection,  # type: ignore
             )
-        except TypeError:
-            pass
         self.cancel_print_dialog.open()
 
     @QtCore.pyqtSlot(name="in-error-case")
@@ -187,9 +223,7 @@ class JobStatusWidget(QtWidgets.QWidget):
         self.pause_printing_btn.setEnabled(True)
 
     def _reset_job_display(self) -> None:
-        """Clear all per-job layer/progress state so a new print never shows
-        stale values. Runs for both screen- and Mainsail-initiated prints
-        (see ``on_print_start`` and the filename-change branch)."""
+        """Clear per-job state; runs for screen and Mainsail prints."""
         self.total_layers = "?"
         self.total_layer_reported = False
         self._reported_layer = None
@@ -222,13 +256,9 @@ class JobStatusWidget(QtWidgets.QWidget):
     @QtCore.pyqtSlot(dict, name="on_fileinfo")
     def on_fileinfo(self, metadata: dict) -> None:
         """Handle received file info/metadata (loads regardless of visibility)."""
-        _meta_file = metadata.get("filename", "")
-        # The fileinfo signal is global: drop metadata for a file browsed mid-print.
-        if (
-            self._current_file_name
-            and _meta_file
-            and _meta_file != self._current_file_name
-        ):
+        meta_file = metadata.get("filename", "").removeprefix("/")
+        # fileinfo is global, every listed file emits it: keep only this job's.
+        if meta_file != self._current_file_name.removeprefix("/"):
             return
         _count = metadata.get("layer_count")  # Moonraker sends null when unsliced
         layer_count = int(_count) if isinstance(_count, (int, float)) else -1
@@ -238,7 +268,7 @@ class JobStatusWidget(QtWidgets.QWidget):
         self._gcode_start_byte = int(metadata.get("gcode_start_byte", 0) or 0)
         self._gcode_end_byte = int(metadata.get("gcode_end_byte", 0) or 0)
         self.file_metadata = metadata
-        self._load_thumbnails(*metadata.get("thumbnail_images", ()))
+        self._load_thumbnails(*metadata.get("thumbnail_paths", ()))
         self._refresh_layer_display()
 
     def pause_resume_print(self) -> None:
@@ -252,9 +282,7 @@ class JobStatusWidget(QtWidgets.QWidget):
             self.print_resume.emit()
 
     def _handle_print_state(self, state: str) -> None:
-        """Handle print state change received from
-        printer_status object updated
-        """
+        """Handle print state change from printer_status."""
         lstate = state.lower()
         _was_active = self._internal_print_status in ("printing", "paused")
         event_state = lstate
@@ -335,12 +363,7 @@ class JobStatusWidget(QtWidgets.QWidget):
     @QtCore.pyqtSlot(str, float, name="on_print_stats_update")
     @QtCore.pyqtSlot(str, str, name="on_print_stats_update")
     def on_print_stats_update(self, field: str, value: dict | float | str) -> None:
-        """Process updates from the ``print_stats`` printer object.
-
-        Args:
-            field: The name of the updated field.
-            value: The value for the field.
-        """
+        """Process print_stats updates."""
         if isinstance(value, str):
             if "state" in field:
                 self._handle_print_state(value)
@@ -459,12 +482,7 @@ class JobStatusWidget(QtWidgets.QWidget):
     @QtCore.pyqtSlot(str, float, name="virtual_sdcard_update")
     @QtCore.pyqtSlot(str, bool, name="virtual_sdcard_update")
     def virtual_sdcard_update(self, field: str, value: float | bool) -> None:
-        """Handle virtual sdcard
-
-        Args:
-            field (str): Name of the updated field on the virtual_sdcard object
-            value (float | bool): The updated information for the corresponding field
-        """
+        """Handle virtual_sdcard updates."""
         # Track position/progress always so the bar is correct on next show.
         if field == "file_position":
             self._file_position = float(value)
@@ -479,12 +497,7 @@ class JobStatusWidget(QtWidgets.QWidget):
             self.printing_progress_bar.set_progress(self._compute_progress())
 
     def _compute_progress(self) -> float:
-        """File-relative progress [0, 1], matching Mainsail's default.
-
-        From Mainsail's getPrintPercentByFilepositionRelative (getters.ts):
-        clip file position to gcode_start_byte/gcode_end_byte so start macros
-        read 0% and end gcode isn't counted; fall back to virtual_sdcard.progress.
-        """
+        """Progress in [0, 1] between gcode_start/end, as Mainsail does."""
         start = self._gcode_start_byte
         end = self._gcode_end_byte
         if start and end and end > start:
@@ -544,14 +557,11 @@ class JobStatusWidget(QtWidgets.QWidget):
         font = QtGui.QFont()
         font.setFamily("Montserrat")
         font.setPointSize(14)
-        self.js_file_name_icon = BlocksLabel(parent=self)
+        self.js_file_name_icon = IconButton(self)
         self.js_file_name_icon.setSizePolicy(sizePolicy)
         self.js_file_name_icon.setMinimumSize(QtCore.QSize(60, 60))
         self.js_file_name_icon.setMaximumSize(QtCore.QSize(60, 60))
-        self.js_file_name_icon.setLayoutDirection(QtCore.Qt.LayoutDirection.RightToLeft)
-        self.js_file_name_icon.setStyleSheet("background: transparent; color: white;")
-        self.js_file_name_icon.setText("")
-        self.js_file_name_icon.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.js_file_name_icon.setFlat(True)
         self.js_file_name_icon.setProperty(
             "icon_pixmap",
             QtGui.QPixmap(":/files/media/btn_icons/file_icon.svg"),

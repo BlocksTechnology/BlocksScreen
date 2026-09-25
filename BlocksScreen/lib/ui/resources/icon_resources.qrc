@@ -200,6 +200,8 @@
     <file>media/btn_icons/right_arrow.svg</file>
     <file>media/btn_icons/down_arrow.svg</file>
     <file>media/btn_icons/up_arrow.svg</file>
+    <file>media/btn_icons/sort_desc.svg</file>
+    <file>media/btn_icons/sort_asc.svg</file>
   </qresource>
   <qresource prefix="language_settings">
     <file>media/btn_icons/eng.svg</file>
