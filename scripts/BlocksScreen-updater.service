@@ -1,6 +1,8 @@
 [Unit]
 Description=BlocksScreen Updater D-Bus Daemon
-After=dbus.service network.target
+# network-online.target, not network.target: the boot poll needs DNS, not just an interface.
+After=dbus.service network.target network-online.target
+Wants=network-online.target
 Requires=dbus.service
 StartLimitIntervalSec=0
 

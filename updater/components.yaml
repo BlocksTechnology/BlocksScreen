@@ -63,8 +63,7 @@ components:
     reset_mode: hard
     order: 20
 
-  # Provisioned by hooks/Spoolman.sh (uv sync from source + stub client/dist);
-  # backend-only, used via the moonraker API.
+  # Provisioned by hooks/Spoolman.sh
   - name: Spoolman
     type: git
     path: ~/Spoolman
@@ -74,6 +73,7 @@ components:
     reset_mode: hard
     order: 21
     install_if_missing: true
+    health_url: http://127.0.0.1:7912/api/v1/health
 
   - name: BlocksScreen
     type: git

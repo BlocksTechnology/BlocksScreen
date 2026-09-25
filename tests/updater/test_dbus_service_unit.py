@@ -104,10 +104,11 @@ class TestServiceRestartRollback:
         """If restart_service fails, _run_git_update must rollback, not emit done(True)."""
         import asyncio
         import logging
-        from updater.service import UpdateService
-        from updater.models import ComponentConfig
         from pathlib import Path
         from unittest.mock import AsyncMock
+
+        from updater.models import ComponentConfig
+        from updater.service import UpdateService
 
         cfg = ComponentConfig(
             name="klipper",
@@ -215,8 +216,9 @@ class TestEmitStatusErrorFallback:
     @pytest.mark.asyncio
     async def test_emits_error_status_per_component_on_check_failure(self, svc):
         """When check_status raises, status_ready must contain per-component error entries."""
-        from updater.models import ComponentConfig
         from pathlib import Path
+
+        from updater.models import ComponentConfig
 
         svc._svc.check_status = AsyncMock(side_effect=RuntimeError("boom"))
         svc._svc._components = [
@@ -292,6 +294,59 @@ class TestPollIntervalUsage:
             await task
         except asyncio.CancelledError:
             pass
+
+    async def _record_sleeps(self, svc, count=2):
+        """Drive _periodic_status_check with a stubbed sleep, returning the delays it asked for."""
+        from updater import dbus_service
+
+        sleeps: list[float] = []
+
+        async def fake_sleep(delay):
+            sleeps.append(delay)
+            if len(sleeps) >= count:
+                raise asyncio.CancelledError
+
+        with (
+            patch.object(dbus_service.asyncio, "sleep", fake_sleep),
+            pytest.raises(asyncio.CancelledError),
+        ):
+            await svc._periodic_status_check()
+        return sleeps
+
+    @pytest.mark.asyncio
+    async def test_periodic_check_retries_soon_on_fetch_failure(self, svc):
+        """A failing git fetch must re-poll at the retry interval, not hide updates for a full poll."""
+        from updater import dbus_service
+
+        svc._svc.poll_interval = 86_400.0
+        svc._svc.has_fetch_failures = MagicMock(return_value=True)
+        svc._svc.check_status = AsyncMock(return_value={})
+
+        sleeps = await self._record_sleeps(svc)
+
+        assert sleeps == [3.0, dbus_service._FETCH_RETRY_INTERVAL_S]
+
+    @pytest.mark.asyncio
+    async def test_periodic_check_keeps_full_interval_when_healthy(self, svc):
+        """No fetch failures: the loop must sleep the configured poll interval."""
+        svc._svc.poll_interval = 86_400.0
+        svc._svc.has_fetch_failures = MagicMock(return_value=False)
+        svc._svc.check_status = AsyncMock(return_value={})
+
+        sleeps = await self._record_sleeps(svc)
+
+        assert sleeps == [3.0, 86_400.0]
+
+    @pytest.mark.asyncio
+    async def test_periodic_check_never_lengthens_a_short_poll_interval(self, svc):
+        """A poll interval below the retry interval wins: min(), not a blind override."""
+        svc._svc.poll_interval = 42.0
+        svc._svc.has_fetch_failures = MagicMock(return_value=True)
+        svc._svc.check_status = AsyncMock(return_value={})
+
+        sleeps = await self._record_sleeps(svc)
+
+        assert sleeps == [3.0, 42.0]
 
 
 class TestMethodReturnValues:

@@ -6,6 +6,8 @@ import asyncio
 import dataclasses
 import json
 import logging
+from collections.abc import Awaitable, Callable
+from functools import partial
 from pathlib import Path
 
 import sdbus
@@ -16,19 +18,19 @@ from updater.service import UpdateService
 
 _log = logging.getLogger(__name__)
 _STATUS_PATH = Path("/run/blockscreen/updater_status.json")
+# Poll again this soon while a git fetch is failing: a boot-time DNS miss must not hide updates for a full poll interval.
+_FETCH_RETRY_INTERVAL_S = 300.0
 
 
 class DbusProgressCallback:
-    """Adapter that forwards ProgressCallback events to D-Bus signals.
-
-    Holds a reference to the server interface so each on_* call invokes
-    the corresponding signal's .emit() - decoupling UpdateService from D-Bus.
-    """
+    """Forward ProgressCallback events to D-Bus signals (decouples UpdateService"""
 
     def __init__(self, iface: UpdaterInterface) -> None:
+        """Bind the callback to the D-Bus interface whose signals it emits."""
         self._iface = iface
 
     def on_step(self, name: str, step: int, total: int) -> None:
+        """Emit step_complete and write the current step to the status file."""
         self._iface.step_complete.emit((name, step, total))
         try:
             _STATUS_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -38,16 +40,20 @@ class DbusProgressCallback:
         except OSError as e:
             _log.debug("status write failed: %s", e)
 
-    def on_component_done(self, name: str, success: bool) -> None:  # noqa: FBT001
+    def on_component_done(self, name: str, success: bool) -> None:
+        """Emit the component_done signal."""
         self._iface.component_done.emit((name, success))
 
     def on_error(self, name: str, reason: str) -> None:
+        """Emit the error signal."""
         self._iface.error.emit((name, reason))
 
-    def on_rollback(self, name: str, success: bool) -> None:  # noqa: FBT001
+    def on_rollback(self, name: str, success: bool) -> None:
+        """Emit the rollback signal."""
         self._iface.rollback.emit((name, success))
 
-    def on_recover(self, name: str, success: bool) -> None:  # noqa: FBT001
+    def on_recover(self, name: str, success: bool) -> None:
+        """Emit the recover_done signal."""
         self._iface.recover_done.emit((name, success))
 
 
@@ -55,11 +61,7 @@ class UpdaterInterface(
     sdbus.DbusInterfaceCommonAsync,
     interface_name="com.blockscreen.Updater",
 ):
-    """D-Bus interface contract shared by server and client proxy.
-
-    Signals are declared once here, sdbus replaces each descriptor with
-    emit machinery on the server side and an async-iterable on the client.
-    """
+    """D-Bus contract shared by server and client proxy: signals declared once,"""
 
     @sdbus.dbus_signal_async("sii")
     def step_complete(self) -> tuple[str, int, int]:
@@ -97,6 +99,7 @@ class UpdaterInterface(
         raise NotImplementedError
 
     def __init__(self) -> None:
+        """Wire the service and busy state, then spawn the boot, poll, and self-heal tasks."""
         super().__init__()
         self._svc = UpdateService(callback=DbusProgressCallback(self))
         self._busy: bool = False
@@ -114,10 +117,19 @@ class UpdaterInterface(
         """Create a task and hold a strong reference so GC cannot cancel it."""
         task = asyncio.get_running_loop().create_task(coro, name=name)
         self._background_tasks.add(task)
-        task.add_done_callback(self._background_tasks.discard)
+        task.add_done_callback(self._task_done)
         return task
 
-    def _set_busy(self, busy: bool) -> None:  # noqa: FBT001
+    def _task_done(self, task: asyncio.Task) -> None:
+        """Drop the task ref and log its exception now, not at some later GC."""
+        self._background_tasks.discard(task)
+        if task.cancelled():
+            return
+        exc = task.exception()
+        if exc is not None:
+            _log.error("task %r failed", task.get_name(), exc_info=exc)
+
+    def _set_busy(self, busy: bool) -> None:
         """Emit busy_changed only on state transitions to avoid redundant signals."""
         if busy != self._busy:
             self._busy = busy
@@ -125,10 +137,7 @@ class UpdaterInterface(
             self.busy_changed.emit((busy,))
 
     def _validate_component_name(self, name: str) -> bool:
-        """SEC: verify component exists to prevent abuse on unknown names.
-
-        Also rate-limits invalid requests to detect/prevent fuzzing attacks.
-        """
+        """SEC: verify component exists to prevent abuse on unknown names."""
         is_valid = self._svc.has_component(name)
         if not is_valid:
             self._invalid_requests += 1
@@ -143,7 +152,7 @@ class UpdaterInterface(
         return is_valid
 
     async def _emit_status(self, force: bool = False) -> None:
-        """Run check_status() and emit status_ready; emits error status per component on failure."""  # noqa: E501
+        """Run check_status() and emit status_ready; emits error status per component on failure."""
         if self._status_check_in_progress:
             _log.debug("_emit_status: already in progress, queueing retry")
             self._status_pending = True
@@ -181,18 +190,24 @@ class UpdaterInterface(
         self.status_ready.emit((json_payload,))
 
     async def _periodic_status_check(self) -> None:
-        """Emit status shortly after startup, then at the configured poll interval."""
+        """Emit status shortly after startup, then at the poll interval - or sooner while fetches fail."""
         await asyncio.sleep(3.0)
         while True:
             try:
                 await self._emit_status()
+                if await self._svc.provision_missing():
+                    await self._emit_status()  # reflect freshly-installed components
             except Exception as exc:  # noqa: BLE001
                 _log.error("periodic_check failed: %s", exc)
-            await asyncio.sleep(self._svc.poll_interval)
+            interval = self._svc.poll_interval
+            if self._svc.has_fetch_failures():
+                interval = min(_FETCH_RETRY_INTERVAL_S, interval)
+                _log.info("fetch failures pending - re-polling in %.0fs", interval)
+            await asyncio.sleep(interval)
 
     @sdbus.dbus_method_async(result_signature="b")
     async def update_all(self) -> bool:
-        """D-Bus method: fire-and-forget; reply is sent immediately, update runs as a task."""  # noqa: E501
+        """D-Bus method: fire-and-forget; reply is sent immediately, update runs as a task."""
         if self._busy:
             return False
         self._set_busy(busy=True)
@@ -201,7 +216,7 @@ class UpdaterInterface(
 
     @sdbus.dbus_method_async(input_signature="s", result_signature="b")
     async def update_component(self, name: str) -> bool:
-        """D-Bus method: fire-and-forget; reply is sent immediately, update runs as a task."""  # noqa: E501
+        """D-Bus method: fire-and-forget; reply is sent immediately, update runs as a task."""
         if self._busy:
             return False
         if not self._validate_component_name(name):  # SEC: reject unknown components
@@ -212,8 +227,8 @@ class UpdaterInterface(
         return True
 
     @sdbus.dbus_method_async(input_signature="sb", result_signature="b")
-    async def recover(self, name: str, hard: bool) -> bool:  # noqa: FBT001
-        """D-Bus method: fire-and-forget; reply is sent immediately, recover runs as a task."""  # noqa: E501
+    async def recover(self, name: str, hard: bool) -> bool:
+        """D-Bus method: fire-and-forget; reply is sent immediately, recover runs as a task."""
         if self._busy:
             return False
         if not self._validate_component_name(name):  # SEC: reject unknown components
@@ -231,21 +246,34 @@ class UpdaterInterface(
             return False
         return await self._svc.bless_healthy(name, hash_val)
 
-    async def _run_update_all(self) -> None:
+    async def _run_with_lock(
+        self,
+        work: Callable[[], Awaitable[object]],
+        label: str,
+        target: str,
+    ) -> bool:
+        """Run work() under the cross-process lock, always clearing busy; True if the lock was held."""
         ran = False
         try:
             with process_lock() as acquired:
                 if not acquired:
-                    _log.warning("update_all: a CLI run holds the lock; skipping")
+                    _log.warning("%s: a CLI run holds the lock; skipping", label)
                     # Surface the rejection so the UI toasts instead of going silent.
-                    self.error.emit(("updater", "another update is running"))
-                    return
+                    self.error.emit((target, "another update is running"))
+                    return False
                 ran = True
-                await self._update_all_locked()
+                await work()
         except Exception as exc:  # noqa: BLE001
-            _log.error("_run_update_all failed: %s", exc, exc_info=True)
+            _log.error("_run_%s failed: %s", label, exc, exc_info=True)
         finally:
             self._set_busy(busy=False)
+        return ran
+
+    async def _run_update_all(self) -> None:
+        """Update dirty components under the process lock, then a background apt pass."""
+        ran = await self._run_with_lock(
+            self._update_all_locked, "update_all", "updater"
+        )
         # Silent apt pass only if we held the lock; else the CLI run owns apt.
         if ran:
             self._spawn(
@@ -253,6 +281,7 @@ class UpdaterInterface(
             )
 
     async def _update_all_locked(self) -> None:
+        """Update only the components whose status is dirty."""
         statuses = await self._svc.check_status()
         dirty = {
             name
@@ -271,30 +300,16 @@ class UpdaterInterface(
             _log.info("update_all: no dirty components found")
 
     async def _run_update_component(self, name: str) -> None:
-        try:
-            with process_lock() as acquired:
-                if not acquired:
-                    _log.warning("update_component: a CLI run holds the lock; skipping")
-                    self.error.emit((name, "another update is running"))
-                    return
-                await self._svc.update_component(name)
-        except Exception as exc:  # noqa: BLE001
-            _log.error("_run_update_component failed: %s", exc, exc_info=True)
-        finally:
-            self._set_busy(busy=False)
+        """Run a single-component update under the process lock; always clears busy."""
+        await self._run_with_lock(
+            partial(self._svc.update_component, name), "update_component", name
+        )
 
-    async def _run_recover(self, name: str, hard: bool) -> None:  # noqa: FBT001
-        try:
-            with process_lock() as acquired:
-                if not acquired:
-                    _log.warning("recover: a CLI run holds the lock; skipping")
-                    self.error.emit((name, "another update is running"))
-                    return
-                await self._svc.recover(name, hard)
-        except Exception as exc:  # noqa: BLE001
-            _log.error("_run_recover failed: %s", exc, exc_info=True)
-        finally:
-            self._set_busy(busy=False)
+    async def _run_recover(self, name: str, hard: bool) -> None:
+        """Run a recover under the process lock; always clears busy."""
+        await self._run_with_lock(
+            partial(self._svc.recover, name, hard), "recover", name
+        )
 
     @sdbus.dbus_method_async()
     async def request_status(self) -> None:
@@ -312,7 +327,7 @@ class UpdaterInterface(
         """D-Bus method: cancel the running update or recover task and wait for cleanup."""
         cancelled_tasks: list[asyncio.Task] = []
         for task in list(self._background_tasks):
-            name = task.get_name() or ""
+            name = task.get_name()
             if name.startswith(("update_", "recover_")):
                 task.cancel()
                 cancelled_tasks.append(task)

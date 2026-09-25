@@ -98,4 +98,4 @@ max-line-length = 88
 addopts = "--cov=BlocksScreen --cov-report=html"
 
 [tool.bandit]
-exclude_dirs = ["tests", "BlocksScreen/lib/ui/resources/"]
+exclude_dirs = ["tests", "BlocksScreen/lib/ui/resources/", ".venv", "mutants", "htmlcov"]

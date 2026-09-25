@@ -271,9 +271,13 @@ class ConfigManager:
             if not first.is_dir():
                 break
             second = first / "config"
-            if not second.is_dir():
+            if not second.is_dir() and not second.is_symlink():
                 break
-            shutil.rmtree(second, ignore_errors=True)
+            # is_dir() follows symlinks and rmtree refuses them, so a symlinked nest survives every boot.
+            if second.is_symlink():
+                second.unlink(missing_ok=True)
+            else:
+                shutil.rmtree(second, ignore_errors=True)
             _logger.warning("Removed nested dir: %s", second)
             current = first
 

@@ -72,6 +72,24 @@ class TestKlippyNotifications:
         assert states == []  # server.info reply reports the real state
 
 
+class TestServerInfoComponents:
+    def _reply(self, sock, payload: dict) -> None:
+        sock.request_table[7] = ["server.info", {}, None]
+        sock.on_message(None, json.dumps({"jsonrpc": "2.0", "id": 7, **payload}))
+
+    def test_emits_components_even_without_klippy_state(self, ws):
+        seen = []
+        ws.server_components_signal.connect(seen.append)
+        self._reply(ws, {"result": {"components": ["spoolman", "history"]}})
+        assert seen == [["spoolman", "history"]]
+
+    def test_error_reply_emits_nothing(self, ws):
+        seen = []
+        ws.server_components_signal.connect(seen.append)
+        self._reply(ws, {"error": {"code": 500, "message": "boom"}})
+        assert seen == []
+
+
 class TestReconnectCycle:
     def test_gives_up_without_another_attempt(self, ws, monkeypatch):
         connect = MagicMock()
