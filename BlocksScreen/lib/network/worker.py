@@ -286,8 +286,11 @@ class NetworkManagerWorker(QObject):
 
         Detects network interfaces, activates any saved VLANs if ethernet is
         present, triggers an initial Wi-Fi scan, and starts all D-Bus signal
-        listeners. Emits ``initialized`` when done (even on failure, so the
+        listeners.  Emits ``initialized`` when done (even on failure, so the
         manager can unblock its caller).
+
+        Wired autoconnect is deliberately not re-armed here: NM's latch is what
+        persists the user's "ethernet off" choice across reboots.
         """
         try:
             if not self._system_bus:
@@ -755,31 +758,12 @@ class NetworkManagerWorker(QObject):
         return False
 
     async def _async_get_current_state(self) -> None:
-        """Rebuild and emit the full NetworkState, enforcing runtime mutual exclusion."""
+        """Rebuild and emit the full NetworkState. Read-only: never mutates NM."""
         try:
             if not await self._ensure_dbus_connection():
                 self.state_changed.emit(NetworkState())
                 return
-            state = await self._build_current_state()
-            if (
-                state.ethernet_connected
-                and state.wifi_enabled
-                and not state.hotspot_enabled
-                and not self._is_hotspot_active
-            ):
-                logger.info(
-                    "Runtime mutual exclusion: ethernet active + "
-                    "Wi-Fi — disabling Wi-Fi"
-                )
-                if self._primary_wifi_path:
-                    try:
-                        await self._wifi().disconnect()
-                    except Exception as exc:
-                        logger.debug("Disconnect before Wi-Fi disable ignored: %s", exc)
-                await self._nm().wireless_enabled.set_async(False)
-                await asyncio.sleep(0.5)
-                state = await self._build_current_state()
-            self.state_changed.emit(state)
+            self.state_changed.emit(await self._build_current_state())
         except Exception as exc:
             logger.error("Failed to get current state: %s", exc)
             self.error_occurred.emit("get_current_state", str(exc))

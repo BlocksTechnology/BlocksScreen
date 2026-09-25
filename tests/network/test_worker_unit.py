@@ -751,6 +751,23 @@ class TestGetCurrentState:
         await w._async_get_current_state()
         assert len(errors) == 1
 
+    @pytest.mark.asyncio
+    async def test_cable_with_radio_on_never_kills_radio(self, qapp):
+        w = _make_worker(qapp)
+        w._ensure_dbus_connection = AsyncMock(return_value=True)
+        state = NetworkState(ethernet_connected=True, wifi_enabled=True)
+        w._build_current_state = AsyncMock(return_value=state)
+        nm_proxy = AsyncProxyMock(wireless_enabled=True)
+        wifi_proxy = AsyncProxyMock()
+        w._nm = _ProxyFactory(nm_proxy)
+        w._wifi = _ProxyFactory(wifi_proxy)
+        received = []
+        w.state_changed.connect(received.append)
+        await w._async_get_current_state()
+        assert received == [state]
+        nm_proxy.wireless_enabled.set_async.assert_not_awaited()
+        wifi_proxy.disconnect.assert_not_awaited()
+
 
 class TestBuildCurrentState:
     @pytest.mark.asyncio
