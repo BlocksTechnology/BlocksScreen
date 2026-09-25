@@ -11,6 +11,16 @@ from updater.models import ComponentConfig, ComponentStatus
 from updater.service import LoggingCallback, UpdateService
 
 
+@pytest.fixture(autouse=True)
+def units_installed():
+    """Report every systemd unit as installed so restart-failure tests don't
+    depend on which units exist on the machine running them."""
+    with patch(
+        "updater.service.service_unit_missing", AsyncMock(return_value=False)
+    ) as mock:
+        yield mock
+
+
 class TestLoggingCallback:
     def test_all_methods_do_not_raise(self):
         cb = LoggingCallback()
@@ -798,6 +808,36 @@ class TestAtomicBatch:
         assert cb.on_error.call_args[0][1] == "restart"
 
     @pytest.mark.asyncio
+    async def test_restart_of_uninstalled_unit_does_not_abort(
+        self, tmp_path, units_installed
+    ):
+        # A component cloned before its unit was set up (install-updater still
+        # pending) must not revert every other component in the batch.
+        cb = MagicMock()
+        svc, comps = self._svc(tmp_path, cb, n=2, service="device-discoveryd.service")
+        units_installed.return_value = True
+        with (
+            patch(
+                "updater.service.UpdateService._stage_component",
+                return_value=(True, ""),
+            ),
+            patch("updater.service.git_reset_to_hash") as mr,
+            patch(
+                "updater.service.UpdateService._install_dependencies",
+                return_value=(True, ""),
+            ),
+            patch("updater.service.run_hook", return_value=(True, "")),
+            patch("updater.service.restart_service", return_value=(False, "no unit")),
+            patch("updater.service.wait_for_service_active") as mock_wait,
+            patch.object(UpdateService, "_apply_deferred_restart", new=AsyncMock()),
+        ):
+            await svc._run_git_batch(comps)
+        mr.assert_not_called()
+        mock_wait.assert_not_called()
+        assert all(c.args[1] is True for c in cb.on_component_done.call_args_list)
+        cb.on_error.assert_not_called()
+
+    @pytest.mark.asyncio
     async def test_cancel_mid_batch_reverts_staged(self, tmp_path):
         cb = MagicMock()
         svc, comps = self._svc(tmp_path, cb, n=2)
@@ -1210,6 +1250,39 @@ class TestProvisionMissingComponent:
         assert cb.on_error.call_args[0][1] == "restart_timeout"
 
     @pytest.mark.asyncio
+    async def test_provision_with_uninstalled_unit_defers_setup(
+        self, tmp_path, units_installed
+    ):
+        # First clone: the hook deferred setup to install-updater, so the unit
+        # does not exist yet. Provisioning succeeds, keeps the clone, and applies
+        # the deferred install (touches the deploy flag).
+        comp = self._comp(tmp_path, service="newcomp.service")
+        cb = MagicMock()
+        units_installed.return_value = True
+        deferred = AsyncMock()
+        with (
+            patch("updater.service.git_clone", return_value=(True, "")),
+            patch("updater.service.git_get_hash", return_value="newhash"),
+            patch(
+                "updater.service.UpdateService._install_dependencies",
+                return_value=(True, ""),
+            ),
+            patch("updater.service.run_hook", return_value=(True, "")),
+            patch("updater.service.restart_service", return_value=(False, "no unit")),
+            patch("updater.service.wait_for_service_active") as mock_wait,
+            patch("updater.service.shutil.rmtree") as mock_rmtree,
+            patch.object(UpdateService, "_apply_deferred_restart", new=deferred),
+        ):
+            svc = UpdateService(callback=cb)
+            svc._components = [comp]
+            ok = await svc.update_component("newcomp")
+        assert ok is True
+        mock_wait.assert_not_called()
+        mock_rmtree.assert_not_called()
+        deferred.assert_awaited_once()
+        cb.on_component_done.assert_called_once_with("newcomp", True)
+
+    @pytest.mark.asyncio
     async def test_check_status_reports_needs_install(self, tmp_path):
         comp = self._comp(tmp_path)
         svc = UpdateService()
@@ -1484,3 +1557,70 @@ class TestDeferredRestart:
             UpdateService()._touch_deploy_flag()
         assert flag.exists() and not flag.is_symlink()
         assert target.read_text() == "keep"  # symlink not followed
+
+
+class TestPendingProvision:
+    """A self-update that adds a component provisions it on the next daemon start."""
+
+    def _svc(self, tmp_path: Path, *, present: bool = False) -> UpdateService:
+        path = tmp_path / "DeviceDiscovery"
+        if present:
+            path.mkdir()
+        svc = UpdateService()
+        svc._state_path = tmp_path / "state.json"
+        svc._components = [
+            ComponentConfig(
+                name="DeviceDiscovery",
+                kind="git",
+                path=path,
+                url="https://github.com/test/dd",
+                install_if_missing=True,
+            ),
+            ComponentConfig(name="klipper", kind="git", path=tmp_path / "klipper"),
+        ]
+        return svc
+
+    @pytest.mark.asyncio
+    async def test_new_updater_head_returns_missing_opted_in(self, tmp_path):
+        svc = self._svc(tmp_path)
+        with patch("updater.service.git_get_hash", return_value="newhead"):
+            pending = await svc.pending_provision()
+        # klipper is missing too but not opted in.
+        assert [c.name for c in pending] == ["DeviceDiscovery"]
+        assert svc._read_state()["_updater_head"] == "newhead"
+
+    @pytest.mark.asyncio
+    async def test_same_head_is_plain_reboot(self, tmp_path):
+        svc = self._svc(tmp_path)
+        svc._write_state({"_updater_head": "samehead"})
+        with patch("updater.service.git_get_hash", return_value="samehead"):
+            assert await svc.pending_provision() == []
+
+    @pytest.mark.asyncio
+    async def test_head_recorded_once_so_failures_do_not_retry_each_boot(
+        self, tmp_path
+    ):
+        svc = self._svc(tmp_path)
+        with patch("updater.service.git_get_hash", return_value="newhead"):
+            assert await svc.pending_provision()
+            assert await svc.pending_provision() == []
+
+    @pytest.mark.asyncio
+    async def test_present_component_not_pending(self, tmp_path):
+        svc = self._svc(tmp_path, present=True)
+        with patch("updater.service.git_get_hash", return_value="newhead"):
+            assert await svc.pending_provision() == []
+
+    @pytest.mark.asyncio
+    async def test_unreadable_updater_head_does_nothing(self, tmp_path):
+        svc = self._svc(tmp_path)
+        with patch("updater.service.git_get_hash", return_value=""):
+            assert await svc.pending_provision() == []
+        assert svc._read_state() == {}
+
+    @pytest.mark.asyncio
+    async def test_head_key_does_not_break_recover(self, tmp_path):
+        svc = self._svc(tmp_path)
+        svc._write_state({"_updater_head": "abc"})
+        # "_updater_head" is not a valid component name, so it can't be recovered.
+        assert await svc.recover("_updater_head") is False

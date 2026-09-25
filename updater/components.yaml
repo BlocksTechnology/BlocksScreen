@@ -55,12 +55,14 @@ components:
     reset_mode: hard
     order: 13
 
-  # Device discovery daemon (BlocksTechnology/DeviceDiscovery). Needs a one-time
-  # `~/DeviceDiscovery/scripts/install.sh` (apt deps + systemd unit, sudo), so
-  # it is not auto-provisioned; machines without the clone skip it.
+  # Device discovery daemon (BlocksTechnology/DeviceDiscovery). Cloned on
+  # machines that lack it; the hook then defers first-time setup (apt deps,
+  # full build, systemd unit - root) to scripts/install-updater.sh.
   - name: DeviceDiscovery
     type: git
     path: ~/DeviceDiscovery
+    url: https://github.com/BlocksTechnology/DeviceDiscovery.git
+    install_if_missing: true
     branch: main
     service: device-discoveryd.service
     reset_mode: hard

@@ -104,8 +104,40 @@ class UpdaterInterface(
         self._status_check_in_progress: bool = False
         self._status_pending: bool = False
         self._invalid_requests: int = 0
-        self._spawn(self._svc.reconcile(), name="boot_reconcile")
+        self._spawn(self._boot(), name="boot")
         self._spawn(self._periodic_status_check(), name="periodic_status_check")
+
+    async def _boot(self) -> None:
+        """Repair damaged repos, then finish a self-update that added components."""
+        try:
+            await self._svc.reconcile()
+            pending = await self._svc.pending_provision()
+        except Exception as exc:  # noqa: BLE001
+            _log.error("boot tasks failed: %s", exc, exc_info=True)
+            return
+        # A user-started update already provisions needs_install components.
+        if not pending or self._busy:
+            return
+        _log.info(
+            "self-update added component(s) %s, provisioning",
+            ", ".join(c.name for c in pending),
+        )
+        self._set_busy(busy=True)
+        # update_ prefix: cancel() can stop it like any other update.
+        self._spawn(self._run_provision(pending), name="update_provision")
+
+    async def _run_provision(self, components: list) -> None:
+        try:
+            with process_lock() as acquired:
+                if not acquired:
+                    _log.warning("provision: a CLI run holds the lock; skipping")
+                    return
+                await self._svc.provision(components)
+        except Exception as exc:  # noqa: BLE001
+            _log.error("_run_provision failed: %s", exc, exc_info=True)
+        finally:
+            self._set_busy(busy=False)
+        self._spawn(self._emit_status(force=True), name="provision_status")
 
     def _spawn(self, coro, *, name: str | None = None) -> asyncio.Task:
         """Create a task and hold a strong reference so GC cannot cancel it."""

@@ -40,6 +40,7 @@ from updater.executor import (
     restart_service,
     restart_service_noblock,
     run_hook,
+    service_unit_missing,
     verify_updater_importable,
     wait_for_service_active,
 )
@@ -68,6 +69,12 @@ _FIRE_AND_FORGET_SERVICES = frozenset({_UI_SERVICE})
 # install-updater.sh out-of-band (its own cgroup), the cgroup-safe way to apply
 # unit/sudoers/install changes after a batch completes.
 _DEPLOY_FLAG = Path.home() / ".config" / "blockscreen" / ".run-install-updater"
+
+# The repo this updater runs from, and the state key recording its HEAD as of the
+# daemon's last start. Component names must start with an alphanumeric, so the
+# key cannot collide with a component entry.
+_UPDATER_REPO = Path(__file__).resolve().parent.parent
+_UPDATER_HEAD_KEY = "_updater_head"
 
 
 class ProgressCallback(Protocol):
@@ -264,6 +271,40 @@ class UpdateService:
                 self._cb("on_error", c.name, msg)
             return False
         return True
+
+    async def pending_provision(self) -> list[ComponentConfig]:
+        """Return opted-in missing components to provision after a self-update.
+
+        A self-update can add a component to components.yaml that the daemon
+        running that batch never loaded. The restarted daemon provisions it
+        straight away, so one Update is enough. Only runs when the updater's own
+        HEAD changed since the last daemon start, so a plain reboot never clones.
+        HEAD is recorded first: a failed provision is retried by the next Update
+        (needs_install), not on every boot.
+        """
+        head = await git_get_hash(_UPDATER_REPO)
+        if head == "":
+            return []
+        async with self._state_lock:
+            state = await asyncio.to_thread(self._read_state)
+            if state.get(_UPDATER_HEAD_KEY) == head:
+                return []
+            state[_UPDATER_HEAD_KEY] = head
+            await asyncio.to_thread(self._write_state, state)
+        return [
+            c
+            for c in self._components
+            if c.kind == "git"
+            and c.install_if_missing
+            and c.url
+            and c.path is not None
+            and not c.path.exists()
+        ]
+
+    async def provision(self, components: list[ComponentConfig]) -> None:
+        """Provision each component in order (see _provision_component)."""
+        for c in components:
+            await self._provision_component(c)
 
     async def _run_git_batch(self, batch: list[ComponentConfig]) -> None:
         """Apply existing git components all-or-nothing.
@@ -747,12 +788,20 @@ class UpdateService:
             self._cb("on_step", component.name, 4, 4)
             if component.service:
                 svc_ok, svc_err = await restart_service(component.service)
-                if not svc_ok:
+                if not svc_ok and await service_unit_missing(component.service):
+                    # Unit not installed yet: the hook deferred first-time setup
+                    # to install-updater.sh, which installs and starts it.
+                    self._log.info(
+                        "%s: %s not installed yet, setup deferred to install-updater",
+                        component.name,
+                        component.service,
+                    )
+                elif not svc_ok:
                     self._log.error(
                         "%s: provision restart: %s", component.name, svc_err
                     )
                     return await self._fail_provision(component, "restart")
-                if not await wait_for_service_active(component.service, timeout=90.0):
+                elif not await wait_for_service_active(component.service, timeout=90.0):
                     self._log.error(
                         "%s: provisioned service not active", component.name
                     )
@@ -760,6 +809,9 @@ class UpdateService:
 
             self._history("install_success", component.name, new_hash=new_hash[:12])
             self._cb("on_component_done", component.name, True)
+            # Provisioning runs after any git batch, so a setup the hook deferred
+            # to the sentinel is applied here rather than by the batch.
+            await self._apply_deferred_restart()
             return True
         except asyncio.CancelledError:
             self._log.warning(
@@ -846,6 +898,15 @@ class UpdateService:
         self._log.info("restarting %s and waiting for active", service)
         ok, err = await restart_service(service)
         if not ok:
+            if await service_unit_missing(service):
+                # Cloned but not set up yet (first-time setup failed or is still
+                # pending): reverting code cannot fix a missing unit, and aborting
+                # would block every other component in the batch.
+                self._log.warning(
+                    "%s is not installed, skipping restart until its setup runs",
+                    service,
+                )
+                return True
             self._log.error("restart %s failed: %s", service, err)
             return False
         if not await wait_for_service_active(service, timeout=90.0):

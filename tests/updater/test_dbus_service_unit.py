@@ -366,3 +366,55 @@ class TestMethodReturnValues:
         called_with = svc._svc.update_all.call_args[0][0]
         assert "RF50-Klipper" in called_with
         assert "klipper" not in called_with  # clean repo not updated
+
+
+class TestBootProvision:
+    """_boot: reconcile, then provision components a self-update just added."""
+
+    @pytest.mark.asyncio
+    async def test_pending_components_are_provisioned_while_busy(self, svc):
+        from updater.models import ComponentConfig
+
+        comp = ComponentConfig(name="DeviceDiscovery", kind="git")
+        busy_seen = []
+        svc._svc.reconcile = AsyncMock()
+        svc._svc.pending_provision = AsyncMock(return_value=[comp])
+        svc._svc.provision = AsyncMock(
+            side_effect=lambda comps: busy_seen.append(svc._busy)
+        )
+        await svc._boot()
+        await asyncio.gather(*svc._background_tasks)
+        svc._svc.reconcile.assert_awaited_once()
+        svc._svc.provision.assert_awaited_once_with([comp])
+        assert busy_seen == [True]
+        assert svc._busy is False
+        svc.status_ready.emit.assert_called()
+
+    @pytest.mark.asyncio
+    async def test_nothing_pending_stays_idle(self, svc):
+        svc._svc.reconcile = AsyncMock()
+        svc._svc.pending_provision = AsyncMock(return_value=[])
+        svc._svc.provision = AsyncMock()
+        await svc._boot()
+        svc._svc.provision.assert_not_awaited()
+        svc.busy_changed.emit.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_user_update_already_running_is_left_alone(self, svc):
+        from updater.models import ComponentConfig
+
+        svc._busy = True
+        svc._svc.reconcile = AsyncMock()
+        svc._svc.pending_provision = AsyncMock(
+            return_value=[ComponentConfig(name="DeviceDiscovery", kind="git")]
+        )
+        svc._svc.provision = AsyncMock()
+        await svc._boot()
+        svc._svc.provision.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_reconcile_failure_does_not_raise(self, svc):
+        svc._svc.reconcile = AsyncMock(side_effect=RuntimeError("boom"))
+        svc._svc.pending_provision = AsyncMock()
+        await svc._boot()
+        svc._svc.pending_provision.assert_not_awaited()

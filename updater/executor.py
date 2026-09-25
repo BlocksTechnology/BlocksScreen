@@ -781,6 +781,22 @@ async def wait_for_service_active(name: str, timeout: float = 90.0) -> bool:
     return False
 
 
+async def service_unit_missing(name: str) -> bool:
+    """Return True only when systemd reports the unit file does not exist.
+
+    A component can be cloned before its unit is installed (first-time setup
+    runs later, as root, via install-updater.sh). Anything short of a definite
+    'not-found' (query failure, masked, invalid name) returns False so the
+    caller keeps treating the service as real and restart failures still count.
+    """
+    if not _SERVICE_RE.match(name):
+        return False
+    ok, out = await _run(
+        [SYSTEMCTL, "show", "--property=LoadState", "--value", name], timeout=10.0
+    )
+    return ok and out.strip() == "not-found"
+
+
 async def restart_service_noblock(name: str | None) -> tuple[bool, str]:
     """Queue a service restart without waiting (systemctl --no-block).
 

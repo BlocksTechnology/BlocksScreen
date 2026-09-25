@@ -31,6 +31,7 @@ from updater.executor import (
     git_prune_extra_remotes,
     restart_service,
     restart_service_noblock,
+    service_unit_missing,
 )
 
 
@@ -864,3 +865,31 @@ class TestVerifyUpdaterImportable:
             new=AsyncMock(return_value=(False, "ModuleNotFoundError: sdbus")),
         ):
             assert await verify_updater_importable(tmp_path) is False
+
+
+class TestServiceUnitMissing:
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("returncode", "stdout", "expected"),
+        [
+            (0, b"not-found\n", True),
+            (0, b"loaded\n", False),
+            (0, b"masked\n", False),
+            (1, b"", False),  # query failed: not a definite "missing"
+        ],
+    )
+    async def test_only_definite_not_found_is_missing(
+        self, returncode, stdout, expected
+    ):
+        proc = _make_proc(returncode=returncode, stdout=stdout)
+        with patch(
+            "asyncio.create_subprocess_exec", new_callable=AsyncMock, return_value=proc
+        ) as mock_exec:
+            assert await service_unit_missing("device-discoveryd.service") is expected
+        assert "--property=LoadState" in mock_exec.call_args[0]
+
+    @pytest.mark.asyncio
+    async def test_invalid_name_never_queries(self):
+        with patch("asyncio.create_subprocess_exec") as mock_exec:
+            assert await service_unit_missing("bad;name.service") is False
+        mock_exec.assert_not_called()

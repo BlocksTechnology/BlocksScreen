@@ -38,8 +38,7 @@ SERVICE=${SERVICE//BS_PRIMARY_HOME/$_BSENV_HOME}
 echo "$SERVICE" | sudo tee /etc/systemd/system/BlocksScreen-updater.service >/dev/null
 sudo systemctl daemon-reload
 sudo systemctl enable BlocksScreen-updater.service
-sudo systemctl restart BlocksScreen-updater.service || true
-echo_ok "BlocksScreen-updater service installed and started"
+echo_ok "BlocksScreen-updater service installed (restarted at the end)"
 
 echo_info "Installing sudoers rules for updater ..."
 SUDOERS_FILE="/etc/sudoers.d/blockscreen-updater"
@@ -209,5 +208,52 @@ echo_ok "Python requirements installed"
 echo_info "Pre-generating framebuffer splash cache ..."
 "$BSENV/bin/python3.11" "$SCRIPT_PATH/bs-splash.py" --precompute 2>/dev/null || true
 echo_ok "Splash cache ready"
+
+# First-time setup of a DeviceDiscovery clone the updater provisioned (the same
+# steps as that repo's scripts/install.sh, which needs sudo the hook lacks).
+# Later updates only rebuild, through updater/hooks/DeviceDiscovery.sh.
+_DD_REPO="$_BSENV_HOME/DeviceDiscovery"
+_DD_UNIT="device-discoveryd.service"
+_setup_device_discovery() {
+    # Called in an `||` context, where set -e is off: every step checks itself.
+    if [[ "$(cat "$_DD_REPO/.install-mode" 2>/dev/null)" == "prebuilt" ]]; then
+        sudo apt-get install -y --no-install-recommends \
+            curl ca-certificates libusb-1.0-0 libudev1 || return 1
+    else
+        sudo apt-get install -y --no-install-recommends \
+            build-essential cmake pkg-config \
+            libusb-1.0-0-dev libudev-dev nlohmann-json3-dev || return 1
+    fi
+    # As blocks, so build/ and bin/ stay writable by later updater hook runs.
+    sudo -u "$_BSENV_USER" "$_DD_REPO/scripts/build.sh" || return 1
+    if [[ "$(systemctl show --property=LoadState --value "$_DD_UNIT")" != "loaded" ]]; then
+        sudo systemctl link "$_DD_REPO/systemd/$_DD_UNIT" || return 1
+        sudo systemctl daemon-reload || return 1
+    fi
+    sudo systemctl enable "$_DD_UNIT" || return 1
+    sudo systemctl restart "$_DD_UNIT" || return 1
+}
+if [[ -d "$_DD_REPO/.git" ]]; then
+    if [[ -x "$_DD_REPO/bin/device_discoveryd" ]] &&
+        [[ "$(systemctl show --property=LoadState --value "$_DD_UNIT")" == "loaded" ]]; then
+        echo_ok "DeviceDiscovery already set up"
+    else
+        echo_info "Setting up DeviceDiscovery (first build can take several minutes) ..."
+        if _setup_device_discovery; then
+            echo_ok "DeviceDiscovery installed and started"
+        else
+            # Non-fatal: the next updater run defers to this script again.
+            echo_error "DeviceDiscovery setup failed, retried on the next update"
+        fi
+    fi
+fi
+
+# Restart the daemon last, --no-block, so it starts after everything above is in
+# place and after this run ends. The restarted daemon may provision components a
+# self-update added and touch the deploy flag again; restarting earlier could
+# let that happen mid-run, and BlocksScreen-deploy.service's ExecStartPost would
+# then delete the flag and drop the follow-up setup.
+sudo systemctl --no-block restart BlocksScreen-updater.service || true
+echo_ok "BlocksScreen-updater restart queued"
 
 echo_ok "BlocksScreen updater setup complete"
