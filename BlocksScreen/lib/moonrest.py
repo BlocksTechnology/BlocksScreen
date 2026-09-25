@@ -30,7 +30,6 @@ import logging
 from urllib.parse import quote
 
 import requests
-from requests import Request, Response
 
 logger = logging.getLogger(__name__)
 
@@ -161,7 +160,7 @@ class MoonRest:
         _headers = {"x-api-key": self._api_key} if self._api_key else {}
         try:
             if hasattr(requests, request_type):
-                _request_method: Request = getattr(requests, request_type)
+                _request_method = getattr(requests, request_type)
                 if not callable(_request_method):
                     raise UncallableError(
                         "Invalid request method",
@@ -175,9 +174,9 @@ class MoonRest:
                     headers=_headers,
                     timeout=timeout,
                 )
-                if isinstance(response, Response):
+                if isinstance(response, requests.Response):
                     response.raise_for_status()
                     return response.json() if json_response else response.content
 
         except Exception as e:
-            logger.info(f"Unexpected error while sending HTTP request: {e}")
+            logger.info("Unexpected error while sending HTTP request: %s", e)

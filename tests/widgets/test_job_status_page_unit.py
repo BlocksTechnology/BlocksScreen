@@ -3,6 +3,7 @@
 import sys
 import types
 from unittest.mock import MagicMock
+
 import pytest
 from PyQt6 import QtGui, QtWidgets
 
@@ -154,13 +155,14 @@ class TestOnPrintStatsUpdate:
         widget.on_print_stats_update("print_duration", 42.5)
         assert widget._print_duration == 42.5
 
-    def test_current_layer_not_none_disables_fallback(self, widget):
+    def test_reported_current_layer_wins(self, widget):
         widget.on_print_stats_update("info", {"current_layer": 5})
-        assert widget.layer_fallback is False
+        assert widget._reported_layer == 5
+        assert widget.layer_display_button.text() == "5"
 
-    def test_current_layer_none_enables_fallback(self, widget):
+    def test_current_layer_none_keeps_estimate_active(self, widget):
         widget.on_print_stats_update("info", {"current_layer": None})
-        assert widget.layer_fallback is True
+        assert widget._reported_layer is None
 
     def test_total_layer_value_stored(self, widget):
         widget.on_print_stats_update("info", {"total_layer": 120})
@@ -174,7 +176,6 @@ class TestOnGcodeMoveUpdate:
         """Put widget in the state where gcode_move_update should fire."""
         widget.show()
         widget._internal_print_status = "printing"
-        widget.layer_fallback = True
         widget._print_duration = 10.0
         widget.layer_display_button.setText("sentinel")
         widget.file_metadata = {
@@ -254,7 +255,6 @@ class TestOnGcodeMoveUpdate:
         """Restart mid-print: filament already used + late metadata must fill both fields."""
         widget.show()
         widget._internal_print_status = "printing"
-        widget.layer_fallback = True
         widget._print_duration = 500.0
         widget.on_print_stats_update("filament_used", 1234.0)  # already printing
         widget.on_gcode_move_update(
@@ -265,6 +265,13 @@ class TestOnGcodeMoveUpdate:
         )
         assert widget.layer_display_button.text() == "4"
         assert widget.layer_display_button.secondary_text != ""
+
+    def test_estimate_runs_without_any_info_update(self, widget):
+        """Klipper never resends an unchanged print_stats.info, so the estimate cannot wait to be armed."""
+        widget.on_print_start("job.gcode")
+        self._ready_widget(widget)
+        self._feed(widget, 0.6, 1)  # z=0.6 -> layer 3
+        assert widget.layer_display_button.text() == "3"
 
 
 class TestVirtualSdcardUpdate:
@@ -387,7 +394,6 @@ class TestOnFileInfo:
         """Put widget in the state where gcode_move_update should fire."""
         widget.show()
         widget._internal_print_status = "printing"
-        widget.layer_fallback = True
         widget._print_duration = 10.0
         return {
             "layer_count": 20,
@@ -424,6 +430,15 @@ class TestOnFileInfo:
         _metadata = self._ready_widget(widget)
         widget.on_fileinfo(_metadata)
         assert widget.layer_display_button.secondary_text == "20"
+
+    def test_browsed_file_metadata_ignored_midprint(self, widget):
+        """fileinfo is global: a file browsed mid-print must not steal the job's totals."""
+        _metadata = self._ready_widget(widget)
+        _metadata["filename"] = "job.gcode"
+        widget._current_file_name = "job.gcode"
+        widget.on_fileinfo(_metadata)
+        widget.on_fileinfo({"filename": "other.gcode", "layer_count": 999})
+        assert widget.total_layers == "20"
 
     def test_browsed_metadata_ignored_without_job(self, widget):
         """With no job a browsed file must not fill the page; a leading / matches."""
@@ -539,7 +554,6 @@ class TestPauseFreeze:
     def test_frozen_blocks_z_recompute(self, widget):
         widget.show()
         widget._internal_print_status = "printing"
-        widget.layer_fallback = True
         widget._print_duration = 10.0
         widget.file_metadata = {
             "object_height": 10.0,

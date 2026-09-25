@@ -6,15 +6,17 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 class BlocksLabel(QtWidgets.QLabel):
     """Custom QLabel with marquee scrolling, glow animation, and icon overlay support."""
 
-    def __init__(self, parent: QtWidgets.QWidget = None, *args, **kwargs):
+    clicked = QtCore.pyqtSignal()
+
+    def __init__(self, parent: QtWidgets.QWidget | None, *args, **kwargs):
         """Initialise the label and configure default scroll/animation state."""
         super().__init__(parent, *args, **kwargs)
 
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_AcceptTouchEvents, True)
-        self.icon_pixmap: typing.Optional[QtGui.QPixmap] = None
+        self.icon_pixmap: QtGui.QPixmap | None = None
         self._text: str = ""
-        self._background_color: typing.Optional[QtGui.QColor] = None
-        self._border_color: typing.Optional[QtGui.QColor] = None
+        self._background_color: QtGui.QColor | None = None
+        self._border_color: QtGui.QColor | None = None
         self._rounded: bool = False
         self._marquee: bool = True
         self.timer = QtCore.QTimer()
@@ -57,6 +59,7 @@ class BlocksLabel(QtWidgets.QLabel):
             and not self.timer.isActive()
             and self._marquee
         ):
+            self.clicked.emit()
             self.start_scroll()
 
     def setPixmap(self, a0: QtGui.QPixmap) -> None:
@@ -76,7 +79,7 @@ class BlocksLabel(QtWidgets.QLabel):
         self.update_text_metrics()
 
     @property
-    def background_color(self) -> typing.Optional[QtGui.QColor]:
+    def background_color(self) -> QtGui.QColor | None:
         """Widget background color"""
         return self._background_color
 
@@ -85,7 +88,7 @@ class BlocksLabel(QtWidgets.QLabel):
         self._background_color = color
 
     @property
-    def border_color(self) -> typing.Optional[QtGui.QColor]:
+    def border_color(self) -> QtGui.QColor | None:
         """Widget border color"""
         return self._border_color
 

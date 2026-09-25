@@ -91,6 +91,7 @@ class CustomQwertyKeyboard(QtWidgets.QDialog):
         self._key_buttons: list[QtWidgets.QPushButton] = []
         self._pattern: str = ""
         self._max_length: int = 0
+        self.firsttime: bool = True
 
         self._setup_ui()
         self.setCursor(QtCore.Qt.CursorShape.BlankCursor)
@@ -185,7 +186,7 @@ class CustomQwertyKeyboard(QtWidgets.QDialog):
                 return value.endswith(".")
         return True
 
-    def _get_mainWindow_widget(self) -> typing.Optional[QtWidgets.QMainWindow]:
+    def _get_mainWindow_widget(self) -> QtWidgets.QMainWindow | None:
         """Get the main application window"""
         app_instance = QtWidgets.QApplication.instance()
         if not app_instance:
@@ -211,9 +212,10 @@ class CustomQwertyKeyboard(QtWidgets.QDialog):
 
         self.setGeometry(x, y, width, height)
 
-    def show(self) -> None:
+    def showEvent(self, a0: QtGui.QShowEvent | None) -> None:
         self._geometry_calc()
-        return super().show()
+        self.firsttime = True
+        return super().showEvent(a0)
 
     def handle_keyboard_layout(self) -> None:
         """Update key labels based on current shift/keychange state."""
@@ -244,6 +246,11 @@ class CustomQwertyKeyboard(QtWidgets.QDialog):
 
     def value_inserted(self, value: str) -> None:
         """Handle key press: append char, delete, or submit on enter."""
+
+        if self.firsttime and value not in ("enter", "clear"):
+            self.current_value = ""
+            self.firsttime = False
+
         if value == "&&":
             value = "&"
 

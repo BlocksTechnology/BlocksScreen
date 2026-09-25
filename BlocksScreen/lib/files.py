@@ -9,7 +9,6 @@ from pathlib import Path
 
 import events
 import helper_methods
-from events import ReceivedFileData
 from lib.moonrakerComm import MoonWebSocket
 from lib.utils import gcode_loader
 from PyQt6 import QtCore, QtWidgets
@@ -707,8 +706,8 @@ class Files(QtCore.QObject):
 
     def event(self, event: QtCore.QEvent) -> bool:
         """Handle object-level events."""
-        if event.type() == ReceivedFileData.type():
-            if isinstance(event, ReceivedFileData):
+        if event.type() == events.ReceivedFileData.type():
+            if isinstance(event, events.ReceivedFileData):
                 self.handle_message_received(event.method, event.data, event.params)
                 return True
         return super().event(event)

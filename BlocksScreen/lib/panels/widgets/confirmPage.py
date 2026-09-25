@@ -11,6 +11,8 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 
 
 class ConfirmWidget(QtWidgets.QWidget):
+    """Widget displayed when a user selects a file to print."""
+
     on_accept: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         str, name="on_accept"
     )
@@ -50,23 +52,30 @@ class ConfirmWidget(QtWidgets.QWidget):
         )
 
     @QtCore.pyqtSlot(str, dict, name="on_show_widget")
-    def on_show_widget(self, text: str, filedata: dict | None = None) -> None:
-        """Handle widget show"""
-        if not filedata:
-            return
+    def on_show_widget(self, text: str, metadata: dict | None = None) -> None:
+        """Handle widget show."""
         directory = os.path.dirname(text)
         filename = os.path.basename(text)
         self.directory = directory
         self.filename = filename
         self.cf_file_name.setText(self.filename)
         self._current_gcode = text.removeprefix("/")
-        self._filedata = filedata
-        self._thumbnails = filedata.get("thumbnail_paths", [])
+        self._filedata = metadata or {}
+        self._update_metadata_labels(self._filedata)
+        self.update()
+
+    def _update_metadata_labels(self, metadata: dict) -> None:
+        """Update thumbnail and text labels from metadata."""
+        self._thumbnails = metadata.get("thumbnail_paths", [])
         self.thumbnail = self._resolve_thumbnail()
-        weight = filedata.get("filament_weight_total")
-        estimated = filedata.get("estimated_time")
-        seconds = int(estimated) if isinstance(estimated, (int, float)) else 0
-        time_str = helper_methods.format_duration(seconds) if seconds > 0 else "??"
+        weight = metadata.get("filament_weight_total")
+        estimated = metadata.get("estimated_time")
+        seconds = (
+            int(estimated)
+            if isinstance(estimated, (int, float)) and estimated > 0
+            else 0
+        )
+        time_str = helper_methods.format_duration(seconds) if seconds else "Unknown"
         filament_str = (
             helper_methods.format_weight(weight)
             if isinstance(weight, (int, float)) and weight > 0
@@ -74,13 +83,17 @@ class ConfirmWidget(QtWidgets.QWidget):
         )
         self.cf_info_tf.setText(f"Total Filament: {filament_str}")
         self.cf_info_tr.setText(f"Slicer time: {time_str}")
-        self.repaint()
 
     @QtCore.pyqtSlot(dict, name="on_fileinfo")
     def on_fileinfo(self, filedata: dict) -> None:
         """Refresh the shown file's metadata, e.g. a late duration."""
-        if filedata.get("filename", "").removeprefix("/") == self._current_gcode:
-            self._filedata = filedata
+        if filedata.get("filename", "").removeprefix("/") != self._current_gcode:
+            return
+        self._filedata = filedata
+        # A file opened before its metadata arrived shows it once it lands.
+        if self.isVisible():
+            self._update_metadata_labels(filedata)
+            self.update()
 
     def _resolve_thumbnail(self) -> QtGui.QImage:
         """Largest on-disk thumbnail, else embedded, else placeholder."""
@@ -104,7 +117,7 @@ class ConfirmWidget(QtWidgets.QWidget):
         """Show a late embedded thumbnail for the shown file."""
         if gcode_path == self._current_gcode and not image.isNull():
             self.thumbnail = image
-            self.repaint()
+            self.update()
 
     def estimate_print_time(self, seconds: int) -> list:
         """Convert seconds to [days, hours, minutes, seconds]."""
@@ -154,8 +167,8 @@ class ConfirmWidget(QtWidgets.QWidget):
 
     def showEvent(self, a0: QtGui.QShowEvent) -> None:
         """Re-implemented method, Handle widget show event"""
-        if not self.thumbnail:
-            self.cf_thumbnail.close()
+        if self.thumbnail.isNull():
+            self.cf_thumbnail.hide()
         return super().showEvent(a0)
 
     def _setupUI(self) -> None:
@@ -268,7 +281,6 @@ class ConfirmWidget(QtWidgets.QWidget):
             "icon_pixmap", QtGui.QPixmap(":/dialog/media/btn_icons/yes.svg")
         )
         self.confirm_button.setText("Print")
-        # 2. Align buttons to the right
         self.cf_confirm_layout.addWidget(
             self.confirm_button, 0, QtCore.Qt.AlignmentFlag.AlignCenter
         )
@@ -282,7 +294,6 @@ class ConfirmWidget(QtWidgets.QWidget):
             "icon_pixmap", QtGui.QPixmap(":/ui/media/btn_icons/garbage-icon.svg")
         )
         self.delete_file_button.setText("Delete")
-        # 2. Align buttons to the right
         self.cf_confirm_layout.addWidget(
             self.delete_file_button, 0, QtCore.Qt.AlignmentFlag.AlignCenter
         )
