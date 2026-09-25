@@ -143,6 +143,8 @@ class Printer(QtCore.QObject):
         self.query_printer_object.connect(self.ws.api.object_query)
         self._klippy_callback: typing.Callable[[str], None] | None = None
         self._callbacks: dict[str, typing.Callable[[dict, str], None]] = {}
+        self._webhooks_state: str = ""
+        self._webhooks_state_message: str = ""
 
     @property
     def uses_true_zero_offset(self) -> bool:
@@ -365,10 +367,16 @@ class Printer(QtCore.QObject):
             value (dict): _description_
             name (str, optional): _description_. Defaults to "".
         """
-        if "state" in value.keys() and "state_message" in value.keys():
-            self.webhooks_update.emit(value["state"], value["state_message"])
+        if "state" in value.keys() or "state_message" in value.keys():
+            self._webhooks_state = value.get("state", self._webhooks_state)
+            self._webhooks_state_message = value.get(
+                "state_message", self._webhooks_state_message
+            )
+            self.webhooks_update.emit(
+                self._webhooks_state, self._webhooks_state_message
+            )
             logger.debug("Webhooks message received")
-            _state: str = value["state"]
+            _state: str = self._webhooks_state
             if _state == "shutdown":
                 return
             _state_upper = _state[0].upper()
@@ -377,7 +385,7 @@ class Printer(QtCore.QObject):
                 _event_callback = getattr(events, f"Klippy{_state_call}")
                 if callable(_event_callback):
                     try:
-                        event = _event_callback(value["state"], value["state_message"])
+                        event = _event_callback(_state, self._webhooks_state_message)
                         instance = QtWidgets.QApplication.instance()
                         if instance is not None and isinstance(event, QtCore.QEvent):
                             instance.sendEvent(self.parent(), event)
@@ -586,38 +594,6 @@ class Printer(QtCore.QObject):
                 "file_position", float(values["file_position"])
             )
 
-    def send_print_event(self, event: str):
-        """Dispatches a print event throughout the gui
-
-        Args:
-            event (str): event name
-
-        Raises:
-            TypeError: Thrown when QApplication is None
-        """
-        _print_state_upper = event[0].upper()
-        _print_state_call = f"{_print_state_upper}{event[1:]}"
-        if hasattr(events, f"Print{_print_state_call}"):
-            logger.debug(
-                "Print Event Caught, print is %s, calling event %s",
-                _print_state_call,
-                f"Print{_print_state_call}",
-            )
-            _event_callback: QtCore.QEvent = getattr(
-                events, f"Print{_print_state_call}"
-            )
-            if callable(_event_callback):
-                try:
-                    instance = QtWidgets.QApplication.instance()
-                    if instance:
-                        instance.postEvent(self.window(), _event_callback)
-                    else:
-                        raise TypeError("QApplication.instance expected non None value")
-                except Exception as e:
-                    logger.info(
-                        "Unexpected error while posting print job start event: %s", e
-                    )
-
     def _print_stats_object_updated(
         self, values: dict, name: str = "print_stats"
     ) -> None:
@@ -641,7 +617,6 @@ class Printer(QtCore.QObject):
             self.printing_state = values.get("state", None)
             if not self.printing_state:
                 return
-            self.send_print_event(self.printing_state)
             if values["state"] == "standby" or values["state"] == "error":
                 self.print_file_loaded = False
                 self.printing = False

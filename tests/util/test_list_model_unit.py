@@ -1,7 +1,6 @@
 """Unit tests for EntryListModel.reconcile() — locks behaviour before refactoring."""
 
 import pytest
-from PyQt6 import QtWidgets
 
 from BlocksScreen.lib.utils.list_model import EntryListModel, ListItem
 

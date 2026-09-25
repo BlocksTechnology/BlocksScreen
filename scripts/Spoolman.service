@@ -1,0 +1,12 @@
+[Unit]
+Description=Spoolman
+
+[Service]
+Type=simple
+ExecStart=bash BS_PRIMARY_HOME/Spoolman/scripts/start.sh
+WorkingDirectory=BS_PRIMARY_HOME/Spoolman
+User=blocks
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

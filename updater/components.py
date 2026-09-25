@@ -18,6 +18,14 @@ _GIT_URL_RE = re.compile(r"^https://[a-zA-Z0-9._~:/?#\[\]@!$&'()*+,;=%-]+$")
 _SERVICE_BANNED = set("/\\;&|$`") | {" ", "\t"}
 OVERRIDE_PATH = Path("~/printer_data/config/blockscreen_updater.yaml").expanduser()
 
+# Unioned into EVERY apt component: a kernel/firmware bump is unrecoverable on a 1-partition no-SSH Pi.
+_KERNEL_FIRMWARE_EXCLUDES: tuple[str, ...] = (
+    "^linux-image",
+    "^linux-headers",
+    "^raspberrypi-",
+    "^firmware-",
+)
+
 
 def _validate_service(name: str) -> bool:
     """Return True if name is a safe, well-formed systemd .service unit name."""
@@ -35,27 +43,27 @@ def _validate_component(data: dict) -> ComponentConfig | None:
         logger.warning("Component missing name,  skipped")
         return None
     if len(name) > 255:
-        logger.warning("Component name too long (%d chars) — skipped", len(name))
+        logger.warning("Component name too long (%d chars) - skipped", len(name))
         return None
     if not _COMPONENT_NAME_RE.match(name):
         logger.warning(
-            "Component %r has invalid name (must match [a-zA-Z0-9_-]+) — skipped", name
+            "Component %r has invalid name (must match [a-zA-Z0-9_-]+) - skipped", name
         )
         return None
 
     comp_type = data.get("type", "")
     if comp_type not in ("git", "apt"):
-        logger.warning("Component %r has invalid type %r — skipped", name, comp_type)
+        logger.warning("Component %r has invalid type %r - skipped", name, comp_type)
         return None
 
     if comp_type == "git":
         raw_path = data.get("path")
         if not raw_path:
-            logger.warning("Component %r missing path — skipped", name)
+            logger.warning("Component %r missing path - skipped", name)
             return None
         resolved = Path(str(raw_path)).expanduser().resolve()
         if not resolved.is_relative_to(Path.home()):
-            logger.warning("Component %r path escapes home dir — skipped", name)
+            logger.warning("Component %r path escapes home dir - skipped", name)
             return None
 
         service = data.get("service")
@@ -93,14 +101,14 @@ def _validate_component(data: dict) -> ComponentConfig | None:
         url = data.get("url")
         if url is not None and not _GIT_URL_RE.match(str(url)):
             logger.warning(
-                "Component %r has invalid (non-https) url %r — dropping url", name, url
+                "Component %r has invalid (non-https) url %r - dropping url", name, url
             )
             url = None
 
         install_if_missing = bool(data.get("install_if_missing", False))
         if install_if_missing and not url:
             logger.warning(
-                "Component %r sets install_if_missing but has no valid url — "
+                "Component %r sets install_if_missing but has no valid url - "
                 "cannot provision, disabling",
                 name,
             )
@@ -118,6 +126,7 @@ def _validate_component(data: dict) -> ComponentConfig | None:
             url=str(url) if url else None,
             install_if_missing=install_if_missing,
             restart_ui=bool(data.get("restart_ui", False)),
+            restart_klipper=bool(data.get("restart_klipper", False)),
         )
     apt_order = 50
     try:
@@ -128,6 +137,10 @@ def _validate_component(data: dict) -> ComponentConfig | None:
     apt_exclude: tuple[str, ...] = ()
     if isinstance(raw_exclude, list):
         apt_exclude = tuple(str(p) for p in raw_exclude if isinstance(p, str))
+    # Kernel/firmware guard is non-negotiable: prepend it, drop any duplicates.
+    apt_exclude = _KERNEL_FIRMWARE_EXCLUDES + tuple(
+        p for p in apt_exclude if p not in _KERNEL_FIRMWARE_EXCLUDES
+    )
     return ComponentConfig(
         name=name,
         kind="apt",
@@ -197,7 +210,7 @@ def load_components() -> tuple[list[ComponentConfig], float]:
                 )
                 override_exists = False
         except OSError:
-            logger.warning("Cannot stat override path %s — skipping", OVERRIDE_PATH)
+            logger.warning("Cannot stat override path %s - skipping", OVERRIDE_PATH)
             override_exists = False
 
     if override_exists:
@@ -224,18 +237,13 @@ def load_components() -> tuple[list[ComponentConfig], float]:
                 name="system",
                 kind="apt",
                 order=1,
-                apt_exclude=(
-                    "^linux-image",
-                    "^linux-headers",
-                    "^raspberrypi-",
-                    "^firmware-",
-                ),
+                apt_exclude=_KERNEL_FIRMWARE_EXCLUDES,
             ),
         )
     try:
         poll_seconds = float(bundled_data.get("poll_interval_minutes", 1440)) * 60.0
     except (TypeError, ValueError):
-        logger.warning("Invalid poll_interval_minutes — using 1440")
+        logger.warning("Invalid poll_interval_minutes - using 1440")
         poll_seconds = 1440 * 60.0
     configs.sort(key=lambda c: c.order)
     return configs, poll_seconds

@@ -144,7 +144,7 @@ class UDisksDBusAsync(QtCore.QThread):
         str, name="device-unmounted"
     )
 
-    def __init__(self, parent: QtCore.QObject, gcodes_dir: str) -> None:
+    def __init__(self, parent: QtCore.QObject, gcodes_dir: str | pathlib.Path) -> None:
         super().__init__(parent)
         self.task_stack: set[asyncio.Task[typing.Any]] = set()
         self.gcodes_path: pathlib.Path = pathlib.Path(gcodes_dir)

@@ -9,6 +9,7 @@ assignees: ''
 
 # PR Checklist (Delete the section after checking everything)
 
+- [ ] PR title follows Conventional Commits: `type: description` or `type(scope): description`, type is one of `feat|fix|docs|refactor|test|chore|perf` (e.g. `fix(updater): retry apt lock on timeout`). Enforced by CI - this is what drives automatic version bumps, so a rejected title means no version credit for this change.
 - [ ] Make sure you are requesting to PR **feature/bugfix/refactor branch**.
 - [ ] Make sure you are making the pull request against the **dev** branch. 
 - [ ] Make sure you include labels to the PR 

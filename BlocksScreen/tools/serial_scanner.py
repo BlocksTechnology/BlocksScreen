@@ -65,7 +65,7 @@ class SerialScanner:
         return FirmwareState.Unknown
 
     def extract_mcu(self, product: str) -> str:
-
+        """Extract mcu information"""
         return product.split("_")[0] if product else ""
 
     def _parse_symlink(self, symlink_name: str, resolved: str) -> Device:

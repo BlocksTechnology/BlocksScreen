@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import MagicMock
-from events import KlippyDisconnected, KlippyReady, KlippyShutdown
+from events import KlippyDisconnected, KlippyReady
 from BlocksScreen.lib.panels.widgets.connectionPage import (
     ConnectionState,
     ConnectionPage,
@@ -201,10 +201,6 @@ class TestEventFilter:
         page.eventFilter(page, KlippyReady(None))
         assert page._state == ConnectionState.KLIPPER_READY
 
-    def test_klippy_shutdown_event(self, page):
-        page.eventFilter(page, KlippyShutdown(None))
-        assert page._state == ConnectionState.KLIPPER_SHUTDOWN
-
 
 class TestBugRegressions:
     def test_base_text_initialized(self, page):
@@ -225,3 +221,19 @@ class TestBugRegressions:
         page.conn_toggle = False
         page._set_state(ConnectionState.WEBSOCKET_LOST)
         assert not page.isVisible()
+
+    def test_estop_shutdown_arms_watchdog_without_self_cancel(self, page):
+        page.webhook_update("shutdown", "Printers Emergency Button Pressed.")
+        assert page._firmware_restarting_pending is True
+        assert page._restart_10s_timer.isActive()
+        assert page._restart_30s_timer.isActive()
+        assert page._state == ConnectionState.KLIPPER_SHUTDOWN
+
+    def test_estop_context_matches_auto_recover_key(self, page):
+        assert page._is_auto_recovering_context("Printers Emergency Button Pressed.")
+
+    def test_unmapped_shutdown_reason_strips_prefix(self, page):
+        result = ConnectionPage._clean_shutdown_context(
+            "Shutdown due to some obscure fault"
+        )
+        assert result == "Some obscure fault"

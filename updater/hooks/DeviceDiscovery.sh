@@ -1,12 +1,11 @@
 #!/bin/bash
 # Runs after a DeviceDiscovery git update or first clone (via updater daemon).
-# Rebuilds the daemon; the updater then restarts device-discoveryd.service.
-# run_hook kills hooks after 60 s, which is why build.sh is incremental and
-# daemon-only.
+# Rebuilds the daemon (build.sh is incremental and daemon-only, well inside
+# run_hook's HOOK_TIMEOUT); the updater then restarts device-discoveryd.service.
 #
-# First-time setup (apt build deps, first full compile, systemd unit) needs
-# root and more than 60 s, so it is not done here: the hook asks for
-# install-updater.sh, which runs as root once the update batch is done.
+# First-time setup (apt build deps, systemd unit) needs root, which hooks do
+# not have, so it is not done here: the hook asks for install-updater.sh, which
+# runs as root once the update batch is done.
 set -euo pipefail
 
 if [ -z "${COMPONENT_PATH:-}" ]; then

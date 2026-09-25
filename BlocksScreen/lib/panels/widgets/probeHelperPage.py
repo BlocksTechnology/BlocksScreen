@@ -66,7 +66,7 @@ class ProbeHelper(QtWidgets.QWidget):
         name="request_page_view"
     )
     call_load_panel: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
-        bool, str, name="call-load-panel"
+        bool, str, bool, name="call-load-panel"
     )
     toggle_conn_page: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         bool, name="toggles-conn-panel"
@@ -130,7 +130,7 @@ class ProbeHelper(QtWidgets.QWidget):
                 _CalibPhase.EDDY_PHASE1_RESTART,
             ):
                 self.call_load_panel.emit(
-                    True, "Running Z offset calibration\nMoving to position..."
+                    True, "Running Z offset calibration\nMoving to position...", False
                 )
                 self.run_gcode_signal.emit(self._eddy_command)
                 self.request_page_view.emit()
@@ -165,7 +165,7 @@ class ProbeHelper(QtWidgets.QWidget):
                         msg = "Saving configuration\nRestarting Klipper..."
                     case _:
                         msg = "Restarting Klipper..."
-                self.call_load_panel.emit(True, msg)
+                self.call_load_panel.emit(True, msg, False)
             else:
                 self._cancel_calibration()
         elif _state == "ready":
@@ -176,14 +176,15 @@ class ProbeHelper(QtWidgets.QWidget):
                         True,
                         "Wait for the toolhead to park.\nPlace a sheet of paper under the nozzle."
                         "\nAdjust until it drags slightly.",
+                        False,
                     )
                 case _CalibPhase.EDDY_PHASE2:
                     self.call_load_panel.emit(
-                        True, "Calibration saved\nHoming printer..."
+                        True, "Calibration saved\nHoming printer...", False
                     )
                 case _CalibPhase.SAVE_RESTART:
                     self.call_load_panel.emit(
-                        True, "Configuration saved\nHoming printer..."
+                        True, "Configuration saved\nHoming printer...", False
                     )
         elif _state == "shutdown":
             if self._calib_phase != _CalibPhase.IDLE:
@@ -428,11 +429,13 @@ class ProbeHelper(QtWidgets.QWidget):
             if len(_name_parts) < 2:
                 return
             if _clean_nozzle:
-                self.call_load_panel.emit(True, "Cleaning nozzle...\nPlease wait")
+                self.call_load_panel.emit(
+                    True, "Cleaning nozzle...\nPlease wait", False
+                )
                 self.run_gcode_signal.emit("CLEAN_NOZZLE")
             else:
                 self.call_load_panel.emit(
-                    True, "Calibrating drive current\nHoming axes..."
+                    True, "Calibrating drive current\nHoming axes...", False
                 )
             self.toggle_conn_page.emit(False)
             self.run_gcode_signal.emit(_cmd)
@@ -440,10 +443,12 @@ class ProbeHelper(QtWidgets.QWidget):
             self._calib_phase = _CalibPhase.EDDY_PHASE1
             return
         if _clean_nozzle and _cmd != "Z_ENDSTOP_CALIBRATE":
-            self.call_load_panel.emit(True, "Cleaning nozzle...\nPlease wait")
+            self.call_load_panel.emit(True, "Cleaning nozzle...\nPlease wait", False)
             self.run_gcode_signal.emit("CLEAN_NOZZLE")
         else:
-            self.call_load_panel.emit(True, "Starting calibration\nHoming axes...")
+            self.call_load_panel.emit(
+                True, "Starting calibration\nHoming axes...", False
+            )
         self._calib_phase = _CalibPhase.PROBE_ACTIVE
         self.run_gcode_signal.emit(_cmd)
 
@@ -460,17 +465,19 @@ class ProbeHelper(QtWidgets.QWidget):
             if self.isVisible():
                 if self.target_temp > 0:
                     self.call_load_panel.emit(
-                        True, "Heating nozzle\nCleaning before calibration..."
+                        True, "Heating nozzle\nCleaning before calibration...", False
                     )
                 elif prev_temp > 0:
                     # Heater turned off — brushing is starting
-                    self.call_load_panel.emit(True, "Cleaning nozzle...\nPlease wait")
+                    self.call_load_panel.emit(
+                        True, "Cleaning nozzle...\nPlease wait", False
+                    )
             return
         if self.target_temp != 0:
             if self.current_temp == self.target_temp:
                 if self.isVisible():
                     self.call_load_panel.emit(
-                        True, "Nozzle at temperature\nCleaning nozzle..."
+                        True, "Nozzle at temperature\nCleaning nozzle...", False
                     )
                 return
             if field == "temperature":
@@ -479,6 +486,7 @@ class ProbeHelper(QtWidgets.QWidget):
                     self.call_load_panel.emit(
                         True,
                         f"Heating nozzle ({new_value}/{self.target_temp}°C)\nPlease wait...",
+                        False,
                     )
 
     @QtCore.pyqtSlot(name="handle_accept")
@@ -493,12 +501,15 @@ class ProbeHelper(QtWidgets.QWidget):
             self.call_load_panel.emit(
                 True,
                 "Finalising Eddy calibration...\nThis may take a few minutes",
+                False,
             )
         else:
             self._show_option_cards()
             self._calib_phase = _CalibPhase.SAVE_RESTART
             self.call_load_panel.emit(
-                True, "Saving configuration...\nMachine will restart"
+                True,
+                "Saving configuration...\nMachine will restart",
+                False,
             )
         self.toggle_conn_page.emit(False)
         self.run_gcode_signal.emit("ACCEPT")
@@ -527,11 +538,11 @@ class ProbeHelper(QtWidgets.QWidget):
         if _name == "homing_origin" and self.isVisible():
             if self._calib_phase == _CalibPhase.EDDY_PHASE1:
                 self.call_load_panel.emit(
-                    True, "Calibrating drive current\nPlease wait..."
+                    True, "Calibrating drive current\nPlease wait...", False
                 )
             else:
                 self.call_load_panel.emit(
-                    True, "Moving to calibration position\nPlease wait..."
+                    True, "Moving to calibration position\nPlease wait...", False
                 )
 
     @QtCore.pyqtSlot(dict, name="on_manual_probe_update")
@@ -631,7 +642,7 @@ class ProbeHelper(QtWidgets.QWidget):
     def _restore_ui(self) -> None:
         """Dismiss loading overlay and re-enable navigation."""
         self._show_option_cards()
-        self.call_load_panel.emit(False, "")
+        self.call_load_panel.emit(False, "", False)
         self.disable_popups.emit(False)
         self.lock_ui.emit(False)
         self.toggle_conn_page.emit(True)
@@ -654,7 +665,7 @@ class ProbeHelper(QtWidgets.QWidget):
             for i in self.card_options.values():
                 i.setDisabled(False)
             self.lock_ui.emit(True)
-            self.call_load_panel.emit(False, "")
+            self.call_load_panel.emit(False, "", False)
             self.po_back_button.setEnabled(False)
             self.po_back_button.hide()
             self.po_header_title.setEnabled(False)

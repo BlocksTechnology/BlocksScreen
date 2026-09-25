@@ -1,6 +1,6 @@
 import asyncio
 import json
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -107,7 +107,7 @@ class TestServiceRestartRollback:
         from updater.service import UpdateService
         from updater.models import ComponentConfig
         from pathlib import Path
-        from unittest.mock import AsyncMock, patch
+        from unittest.mock import AsyncMock
 
         cfg = ComponentConfig(
             name="klipper",
@@ -418,3 +418,4 @@ class TestBootProvision:
         svc._svc.pending_provision = AsyncMock()
         await svc._boot()
         svc._svc.pending_provision.assert_not_awaited()
+
