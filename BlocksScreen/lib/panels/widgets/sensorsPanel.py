@@ -64,20 +64,13 @@ class SensorsWindow(QtWidgets.QWidget):
     def handle_fil_state_change(
         self, sensor_name: str, parameter: str, value: bool
     ) -> None:
-        """Handle Klipper signals for filament sensor changes."""
+        """Handle Klipper signals for filament sensor changes"""
         _item = self.sensor_tracking_widget.get(sensor_name)
-        if not _item:
-            return
-        if parameter == "filament_detected":
-            # filament_detected=True means filament IS present
-            state = (
-                SensorWidget.FilamentState.PRESENT
-                if value
-                else SensorWidget.FilamentState.MISSING
-            )
-            _item.set_filament_state(state)
-        elif parameter == "enabled":
-            _item.toggle_button_state(SensorWidget.SensorState(value))
+        if _item:
+            if parameter == "filament_detected":
+                _item.set_filament_state(SensorWidget.FilamentState(value))
+            elif parameter == "enabled":
+                _item.toggle_button_state(SensorWidget.SensorState(value))
 
     def showEvent(self, event: QtGui.QShowEvent | None) -> None:
         """Re-add clients to update list"""
@@ -115,8 +108,7 @@ class SensorsWindow(QtWidgets.QWidget):
         else:
             _item_widget.show()
             self.current_widget = _item_widget
-        _parts = str(name).split(" ", 1)
-        name_id = _parts[1] if len(_parts) > 1 else _parts[0]
+        name_id = _item_widget.name
         item = ListItem(
             text=name_id,
             right_text="",

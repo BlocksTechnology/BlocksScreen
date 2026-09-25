@@ -183,7 +183,6 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         self._current_network_is_hidden = False
         self._is_connecting = False
         self._target_ssid: str | None = None
-        self._was_ethernet_connected: bool = False
         self._initial_priority: ConnectionPriority = ConnectionPriority.MEDIUM
         self._pending_operation: PendingOperation = PendingOperation.NONE
         self._pending_expected_ip: str = (
@@ -303,30 +302,9 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             self._handle_first_run(state)
             self._emit_status_icon(state)
             self._is_first_run = False
-            self._was_ethernet_connected = state.ethernet_connected
             return
 
-        # Cable just plugged in while Wi-Fi is active -> disable Wi-Fi
-        if (
-            state.ethernet_connected
-            and not self._was_ethernet_connected
-            and state.wifi_enabled
-            and not self._is_connecting
-        ):
-            logger.info("Ethernet connected — turning off Wi-Fi")
-            self._was_ethernet_connected = True
-            wifi_btn = self.wifi_button.toggle_button
-            hotspot_btn = self.hotspot_button.toggle_button
-            with QtCore.QSignalBlocker(wifi_btn):
-                wifi_btn.state = wifi_btn.State.OFF
-            with QtCore.QSignalBlocker(hotspot_btn):
-                hotspot_btn.state = hotspot_btn.State.OFF
-            self._nm.set_wifi_enabled(False)
-            self._sync_ethernet_panel(state)
-            self._emit_status_icon(state)
-            return
-
-        self._was_ethernet_connected = state.ethernet_connected
+        # Exclusivity applies to user toggles only; a cable never kills the radio.
 
         # Ethernet panel visibility is pure hardware state (carrier +
         # connection) and must update even while a loading operation is
@@ -420,9 +398,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
             return
 
         # Normal (not connecting) display updates.
-        if state.ethernet_connected:
-            self._display_connected_state(state)
-        elif (
+        if state.ethernet_connected or (
             state.current_ssid
             and state.current_ip
             and state.connectivity
@@ -691,8 +667,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         hotspot_on = False
 
         if state.ethernet_connected:
-            if state.wifi_enabled:
-                self._nm.set_wifi_enabled(False)
+            # Display only: never force the radio off here, it is the recovery path.
             self._display_connected_state(state)
         elif state.connectivity == ConnectivityState.FULL and state.current_ssid:
             wifi_on = True
@@ -735,6 +710,7 @@ class NetworkControlWindow(QtWidgets.QStackedWidget):
         wifi_on = False
         hotspot_on = False
 
+        # One link at a time: the cable wins the display, then hotspot, then Wi-Fi.
         if state.ethernet_connected:
             pass
         elif state.hotspot_enabled:
