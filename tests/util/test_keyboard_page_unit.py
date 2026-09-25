@@ -22,7 +22,11 @@ _icon_stub = types.ModuleType("lib.utils.icon_button")
 _icon_stub.IconButton = QtWidgets.QPushButton  # type: ignore[attr-defined]
 sys.modules.setdefault("lib.utils.icon_button", _icon_stub)
 
-# Force-reload the real module — the network conftest registers a stub
+_numpad_stub = types.ModuleType("lib.utils.numpad_button")
+_numpad_stub.NumpadButton = QtWidgets.QPushButton  # type: ignore[attr-defined]
+sys.modules.setdefault("lib.utils.numpad_button", _numpad_stub)
+
+# Force-reload the real module: the network conftest registers a stub
 # that lacks the layout constants we need.
 for _key in [
     "lib.panels.widgets.keyboardPage",
@@ -177,6 +181,43 @@ class TestSetValue:
         keyboard.value_inserted("d")
         assert keyboard.current_value == "d"
 
+    def test_set_value_then_clear_edits_in_place(self, keyboard):
+        keyboard.set_value("10.0.0.12")
+        keyboard.value_inserted("clear")
+        keyboard.value_inserted("5")
+        assert keyboard.current_value == "10.0.0.15"
+
+    def test_set_value_then_enter_keeps_prefill(self, keyboard, qtbot):
+        keyboard.set_value("abc")
+        with qtbot.waitSignal(keyboard.value_selected, timeout=1000) as sig:
+            keyboard.value_inserted("enter")
+        assert sig.args == ["abc"]
+
+
+class TestPatternValidation:
+    """Pattern validators accept partial entries and reject impossible ones."""
+
+    @pytest.mark.parametrize(
+        ("pattern", "value", "ok"),
+        [
+            ("ip", "192.168.1.1", True),
+            ("ip", "10..", True),
+            ("ip", "256", False),
+            ("ip", "1.2.3.4.5", False),
+            ("ip", "1a", False),
+            ("hex", "aF09", True),
+            ("hex", "g", False),
+            ("int", "-12", True),
+            ("int", "1.5", False),
+            ("float", "1.", True),
+            ("float", "a", False),
+            ("", "anything", True),
+        ],
+    )
+    def test_validate_pattern(self, keyboard, pattern, value, ok):
+        keyboard.setPattern(pattern)
+        assert keyboard._validate_pattern(value) is ok
+
 
 class TestDotButton:
     """Dedicated dot button is always accessible regardless of layout."""
@@ -224,3 +265,78 @@ class TestButtonClicks:
     def test_back_button_emits_signal(self, keyboard, qtbot):
         with qtbot.waitSignal(keyboard.request_back, timeout=1000):
             qtbot.mouseClick(keyboard.numpad_back_btn, QtCore.Qt.MouseButton.LeftButton)
+
+
+class TestNumericOnly:
+    """Numeric-only swaps the QWERTY rows for the numpad on IP/mask/gateway fields."""
+
+    _EXTRA_KEYS = ("K_shift", "K_keychange", "K_space", "K_dot", "k_delete", "k_Enter")
+
+    def test_default_is_qwerty(self, keyboard):
+        assert keyboard._numeric_only is False
+        assert keyboard._numpad_widget.isHidden()
+
+    def test_enabling_hides_qwerty_rows(self, keyboard):
+        keyboard.setNumericOnly(True)
+        assert all(w.isHidden() for w in keyboard._row_widgets)
+
+    def test_enabling_shows_numpad(self, keyboard):
+        keyboard.setNumericOnly(True)
+        assert not keyboard._numpad_widget.isHidden()
+
+    def test_enabling_hides_qwerty_only_keys(self, keyboard):
+        keyboard.setNumericOnly(True)
+        assert all(getattr(keyboard, n).isHidden() for n in self._EXTRA_KEYS)
+
+    def test_enabling_clears_shift_and_symbols(self, keyboard):
+        keyboard.K_shift.setChecked(True)
+        keyboard.symbolsrun = True
+        keyboard.setNumericOnly(True)
+        assert keyboard.K_shift.isChecked() is False
+        assert keyboard.K_keychange.isChecked() is False
+        assert keyboard.symbolsrun is False
+
+    def test_disabling_restores_qwerty(self, keyboard):
+        keyboard.setNumericOnly(True)
+        keyboard.setNumericOnly(False)
+        assert all(not w.isHidden() for w in keyboard._row_widgets)
+        assert keyboard._numpad_widget.isHidden()
+        assert all(not getattr(keyboard, n).isHidden() for n in self._EXTRA_KEYS)
+
+    def test_repeat_enable_is_a_noop(self, keyboard):
+        keyboard.setNumericOnly(True)
+        keyboard.K_shift.setChecked(True)
+        keyboard.setNumericOnly(True)
+        assert keyboard.K_shift.isChecked() is True
+
+    def test_numpad_keeps_digits_after_toggle_cycle(self, keyboard):
+        keyboard.setNumericOnly(True)
+        keyboard.setNumericOnly(False)
+        keyboard.setNumericOnly(True)
+        assert not keyboard._numpad_widget.isHidden()
+        assert keyboard._numeric_only is True
+
+    def test_numpad_keys_insert_and_delete(self, keyboard):
+        keyboard.setNumericOnly(True)
+        digits = {b.text(): b for b in keyboard._numpad_digits}
+        for key in (digits["1"], keyboard.np_dot, digits["0"], digits["7"]):
+            key.click()
+        keyboard.np_delete.click()
+        assert keyboard.current_value == "1.0"
+
+    def test_ip_pattern_rejects_octet_over_255(self, keyboard):
+        keyboard.setPattern("ip")
+        keyboard.setNumericOnly(True)
+        digits = {b.text(): b for b in keyboard._numpad_digits}
+        for d in "256":
+            digits[d].click()
+        assert keyboard.current_value == "25"
+
+    def test_enter_submits_and_restores_qwerty(self, keyboard, qtbot):
+        keyboard.setNumericOnly(True)
+        keyboard.set_value("10.0.0.1")
+        with qtbot.waitSignal(keyboard.value_selected, timeout=1000) as sig:
+            keyboard.np_enter.click()
+        assert sig.args == ["10.0.0.1"]
+        assert keyboard._numeric_only is False
+        assert keyboard._numpad_widget.isHidden()
