@@ -16,7 +16,7 @@ from lib.utils.blocks_button import BlocksCustomButton
 from lib.utils.toggleAnimatedButton import ToggleAnimatedButton
 from PyQt6 import QtCore, QtGui, QtWidgets
 
-_logger = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -257,8 +257,9 @@ class UtilitiesTab(QtWidgets.QStackedWidget):
         """
 
         if not isinstance(data, list) or len(data) != 1 or not isinstance(data[0], str):
-            _logger.warning(
-                "Invalid gcode response, expected a single-string list: %s", data
+            logger.warning(
+                "handle_gcode_response: invalid input format. Expected list[str], received: %r",
+                data,
             )
             return
 

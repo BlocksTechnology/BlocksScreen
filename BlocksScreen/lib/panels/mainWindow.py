@@ -9,7 +9,7 @@ from configfile import BlocksScreenConfig, get_configparser
 from devices.amu import AMUManager
 from devices.storage import USBManager
 from lib.files import Files
-from lib.klipper_message_filter import (  # noqa: F405
+from lib.klipper_message_filter import (
     MessageSource,
     Severity,
     match_message,
@@ -120,7 +120,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def __init__(self):
         """Set up UI, instantiate subsystems, and wire all inter-component signals."""
-        super(MainWindow, self).__init__()
+        super().__init__()
         self.config: BlocksScreenConfig = get_configparser()
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
@@ -195,6 +195,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.printPanel.request_back.connect(slot=self.global_back)
         self.printPanel.on_cancel_print.connect(slot=self.on_cancel_print)
         self.in_case_error.connect(self.printPanel.in_case_error)
+        self.in_case_error.connect(self.filamentPanel.in_case_error)
 
         self.show_notifications.connect(self.notiPage.new_notication)
 
@@ -320,7 +321,7 @@ class MainWindow(QtWidgets.QMainWindow):
         )
         self.loadscreen.add_widget(self.loadwidget)
         self.controlPanel.toggle_conn_page.connect(self.conn_window.set_toggle)
-        self.cancelpage = CancelPage(self, ws=self.ws)
+        self.cancelpage = CancelPage(self)
         self.cancelpage.request_file_info.connect(self.file_data.on_request_fileinfo)
         self.cancelpage.run_gcode.connect(self.ws.api.run_gcode)
         self.printer.print_stats_update[str, str].connect(
@@ -388,11 +389,14 @@ class MainWindow(QtWidgets.QMainWindow):
         if not force:
             if _sender is self.update_page:
                 self._update_in_progress = show
-            if not show and self._post_update_reconnect:
-                return
-            elif not show and self._update_in_progress:
-                return
-            elif not show and self._klipper_auto_restart_pending:
+            if (
+                not show
+                and self._post_update_reconnect
+                or not show
+                and self._update_in_progress
+                or not show
+                and self._klipper_auto_restart_pending
+            ):
                 return
 
             if _sender == self.filamentPanel:
@@ -1052,7 +1056,7 @@ class MainWindow(QtWidgets.QMainWindow):
     @api_handler
     def _handle_notify_gcode_response_message(self, method, data, metadata) -> None:
         """Handle websocket gcode responses messages"""
-        _gcode_response = data.get("params")
+        _gcode_response = data.get("params", [])
         self.gcode_response[list].emit(_gcode_response)
         if _gcode_response:
             if self._popup_toggle:
