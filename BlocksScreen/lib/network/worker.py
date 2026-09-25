@@ -8,6 +8,7 @@ import os
 import socket as _socket
 import struct
 import threading
+from typing import Callable
 from uuid import uuid4
 
 import sdbus
@@ -1049,6 +1050,15 @@ class NetworkManagerWorker(QObject):
             logger.debug("GetAll failed for AP %s: %s", ap_path, exc)
             return {}
 
+    async def _gather_ap_properties(
+        self, ap_paths: list[str]
+    ) -> list[tuple[str, dict[str, object]]]:
+        """Read every AP's properties in one concurrent batch, preserving order."""
+        props = await asyncio.gather(
+            *(self._get_all_ap_properties(p) for p in ap_paths)
+        )
+        return list(zip(ap_paths, props))
+
     async def _build_signal_map(self) -> dict[str, int]:
         """Return a mapping of lowercase SSID to best-seen signal strength (0-100)."""
         signal_map: dict[str, int] = {}
@@ -1174,18 +1184,32 @@ class NetworkManagerWorker(QObject):
             self.error_occurred.emit("load_saved_networks", str(exc))
             self.saved_networks_loaded.emit([])
 
+    async def _gather_settings(self, paths: list[str]) -> list[tuple[str, dict]]:
+        """Read every profile's settings in one concurrent batch, dropping failures."""
+
+        async def one(path: str) -> tuple[str, dict | None]:
+            """Fetch one profile's settings, returning None if the read fails."""
+            try:
+                return path, await self._conn_settings(path).get_settings()
+            except Exception as exc:
+                logger.debug("GetSettings failed for %s: %s", path, exc)
+                return path, None
+
+        results = await asyncio.gather(*(one(p) for p in paths))
+        return [(p, s) for p, s in results if s is not None]
+
     async def _get_saved_networks_impl(self) -> list[SavedNetwork]:
         """Enumerate NM connection profiles and return infrastructure Wi-Fi ones."""
         if not self._system_bus:
             return []
         try:
-            connections = await self._nm_settings().list_connections()
-            signal_map = await self._build_signal_map()
+            connections, signal_map = await asyncio.gather(
+                self._nm_settings().list_connections(), self._build_signal_map()
+            )
             saved: list[SavedNetwork] = []
 
-            for conn_path in connections:
+            for conn_path, settings in await self._gather_settings(connections):
                 try:
-                    settings = await self._conn_settings(conn_path).get_settings()
                     if settings["connection"]["type"][1] != "802-11-wireless":
                         continue
 
@@ -1205,10 +1229,9 @@ class NetworkManagerWorker(QObject):
                     )[1]
                     timestamp = settings["connection"].get("timestamp", (None, 0))[1]
                     signal = signal_map.get(ssid.lower(), 0)
-                    ipv4_method = settings.get("ipv4", {}).get(
-                        "method", (None, "auto")
-                    )[1]
-                    is_dhcp = ipv4_method != "manual"
+                    ipv4 = settings.get("ipv4", {})
+                    is_dhcp = ipv4.get("method", (None, "auto"))[1] != "manual"
+                    ip_addr, netmask, gateway, dns = self._parse_ipv4_settings(ipv4)
 
                     saved.append(
                         SavedNetwork(
@@ -1221,6 +1244,10 @@ class NetworkManagerWorker(QObject):
                             signal_strength=signal,
                             timestamp=int(timestamp or 0),
                             is_dhcp=is_dhcp,
+                            ip_address=ip_addr,
+                            netmask=netmask,
+                            gateway=gateway,
+                            dns_servers=dns,
                         )
                     )
                 except Exception as exc:
@@ -1277,17 +1304,8 @@ class NetworkManagerWorker(QObject):
         except Exception as exc:
             logger.debug("Pre-connect scan request ignored: %s", exc)
 
-        ap_paths = await self._wifi().get_all_access_points()
-        target_ap_path: str | None = None
-        target_ap_props: dict[str, object] = {}
-        for ap_path in ap_paths:
-            props = await self._get_all_ap_properties(ap_path)
-            if self._decode_ssid(props.get("ssid", b"")) == ssid:
-                target_ap_path = ap_path
-                target_ap_props = props
-                break
-
-        if not target_ap_path:
+        target_ap_props = await self._find_ap_props(ssid)
+        if target_ap_props is None:
             return ConnectionResult(False, f"Network '{ssid}' not found", "not_found")
 
         interface = await self._wifi().interface
@@ -1314,11 +1332,7 @@ class NetworkManagerWorker(QObject):
                 )
             return ConnectionResult(False, str(exc), "add_failed")
 
-        if _CAN_RELOAD_CONNECTIONS:
-            try:
-                await self._nm_settings().reload_connections()
-            except Exception as reload_err:
-                logger.debug("reload_connections non-fatal: %s", reload_err)
+        await self._reload_connections()
 
         try:
             await self._nm().activate_connection(conn_path)
@@ -1337,99 +1351,22 @@ class NetworkManagerWorker(QObject):
             logger.warning("Activate after add failed: %s", act_err)
             return ConnectionResult(True, f"Network '{ssid}' added (activate manually)")
 
-    def _build_connection_properties(
-        self,
-        ssid: str,
-        password: str,
-        interface: str,
-        priority: int,
-        ap_props: dict[str, object],
-    ) -> dict[str, object] | None:
-        """Build NM connection property dict for *ssid* from its AP capability flags.
+    async def _reload_connections(self) -> None:
+        """Ask NM to re-read connection files; non-fatal and root-only."""
+        if not _CAN_RELOAD_CONNECTIONS:
+            return
+        try:
+            await self._nm_settings().reload_connections()
+        except Exception as reload_err:
+            logger.debug("reload_connections non-fatal: %s", reload_err)
 
-        Returns None if the security type is unsupported (e.g. WPA-EAP).
-        Handles OPEN, WPA-PSK, WPA2-PSK, and WPA3-SAE (including SAE-transition).
-        """
-        flags = int(ap_props.get("flags", 0))
-        wpa_flags = int(ap_props.get("wpa_flags", 0))
-        rsn_flags = int(ap_props.get("rsn_flags", 0))
-
-        props: dict[str, object] = {
-            "connection": {
-                "id": ("s", ssid),
-                "uuid": ("s", str(uuid4())),
-                "type": ("s", "802-11-wireless"),
-                "interface-name": ("s", interface),
-                "autoconnect": ("b", True),
-                "autoconnect-priority": ("i", priority),
-            },
-            "802-11-wireless": {
-                "mode": ("s", "infrastructure"),
-                "ssid": ("ay", ssid.encode("utf-8")),
-            },
-            "ipv4": {
-                "method": ("s", "auto"),
-                "route-metric": ("i", 200),
-            },
-            "ipv6": {"method": ("s", "auto")},
-        }
-
-        if (flags & 1) == 0:
-            return props
-
-        props["802-11-wireless"]["security"] = (
-            "s",
-            "802-11-wireless-security",
-        )
-        security = self._determine_security_type(flags, wpa_flags, rsn_flags)
-
-        if not is_connectable_security(security):
-            logger.warning(
-                "Rejecting connection to '%s': unsupported security %s",
-                ssid,
-                security.value,
-            )
-            return None
-
-        if security == SecurityType.WPA3_SAE:
-            has_psk = bool((rsn_flags & 0x100) or wpa_flags)
-            if has_psk:
-                logger.debug(
-                    "SAE transition for '%s' — using wpa-psk + PMF optional",
-                    ssid,
-                )
-                props["802-11-wireless-security"] = {
-                    "key-mgmt": ("s", "wpa-psk"),
-                    "auth-alg": ("s", "open"),
-                    "psk": ("s", password),
-                    "pmf": ("u", 2),  # OPTIONAL — required for SAE-transition APs
-                }
-            else:
-                logger.debug("Pure SAE detected for '%s'", ssid)
-                props["802-11-wireless-security"] = {
-                    "key-mgmt": ("s", "sae"),
-                    "auth-alg": ("s", "open"),
-                    "psk": ("s", password),
-                    "pmf": ("u", 3),  # REQUIRED — mandatory for pure WPA3-SAE
-                }
-        elif security in (
-            SecurityType.WPA2_PSK,
-            SecurityType.WPA_PSK,
-        ):
-            props["802-11-wireless-security"] = {
-                "key-mgmt": ("s", "wpa-psk"),
-                "auth-alg": ("s", "open"),
-                "psk": ("s", password),
-            }
-        else:
-            logger.warning(
-                "Unsupported security type '%s' for '%s'",
-                security.value,
-                ssid,
-            )
-            return None
-
-        return props
+    async def _backup_and_drop_existing(self, ssid: str) -> dict | None:
+        """Return the scanned AP properties for *ssid*, or None if it is not visible."""
+        ap_paths = await self._wifi().get_all_access_points()
+        for _ap_path, props in await self._gather_ap_properties(ap_paths):
+            if self._decode_ssid(props.get("ssid", b"")) == ssid:
+                return props
+        return None
 
     async def _async_connect_network(self, ssid: str) -> None:
         """Activate an existing saved Wi-Fi profile and emit connection_result."""
@@ -1573,11 +1510,7 @@ class NetworkManagerWorker(QObject):
         try:
             await self._conn_settings(conn_path).delete()
 
-            if _CAN_RELOAD_CONNECTIONS:
-                try:
-                    await self._nm_settings().reload_connections()
-                except Exception as reload_err:
-                    logger.debug("reload_connections non-fatal: %s", reload_err)
+            await self._reload_connections()
 
             current_ssid = await self._get_current_ssid()
             if current_ssid and current_ssid.lower() == ssid.lower():
@@ -1786,36 +1719,17 @@ class NetworkManagerWorker(QObject):
 
             iface = self._primary_wired_iface or "eth0"
 
-            try:
-                existing_conns = await self._nm_settings().list_connections()
-                for existing_path in existing_conns:
-                    try:
-                        s = await self._conn_settings(existing_path).get_settings()
-                        if (
-                            s.get("connection", {}).get("type", (None, ""))[1] == "vlan"
-                            and s.get("vlan", {}).get("id", (None, -1))[1] == vlan_id
-                            and s.get("vlan", {}).get("parent", (None, ""))[1] == iface
-                        ):
-                            self.connection_result.emit(
-                                ConnectionResult(
-                                    False,
-                                    f"VLAN {vlan_id} already exists on "
-                                    f"{iface}.\nRemove it first before "
-                                    "creating a new one.",
-                                    "duplicate_vlan",
-                                )
-                            )
-                            return
-                    except Exception as exc:
-                        logger.debug(
-                            "Skipping connection in duplicate VLAN check: %s", exc
-                        )
-                        continue
-            except Exception as dup_err:
-                logger.debug(
-                    "Duplicate VLAN check failed (non-fatal): %s",
-                    dup_err,
+            if await self._vlan_profile_exists(vlan_id, iface):
+                self.connection_result.emit(
+                    ConnectionResult(
+                        False,
+                        f"VLAN {vlan_id} already exists on "
+                        f"{iface}.\nRemove it first before "
+                        "creating a new one.",
+                        "duplicate_vlan",
+                    )
                 )
+                return
 
             vlan_conn_id = f"VLAN {vlan_id}"
 
@@ -1872,6 +1786,25 @@ class NetworkManagerWorker(QObject):
             self.error_occurred.emit("create_vlan", str(exc))
             self.state_changed.emit(await self._build_current_state())
 
+    async def _vlan_profile_exists(self, vlan_id: int, iface: str) -> bool:
+        """Check whether a VLAN profile with *vlan_id* already rides on *iface*."""
+        try:
+            for existing_path in await self._nm_settings().list_connections():
+                try:
+                    s = await self._conn_settings(existing_path).get_settings()
+                except Exception as exc:
+                    logger.debug("Skipping connection in duplicate VLAN check: %s", exc)
+                    continue
+                if (
+                    s.get("connection", {}).get("type", (None, ""))[1] == "vlan"
+                    and s.get("vlan", {}).get("id", (None, -1))[1] == vlan_id
+                    and s.get("vlan", {}).get("parent", (None, ""))[1] == iface
+                ):
+                    return True
+        except Exception as dup_err:
+            logger.debug("Duplicate VLAN check failed (non-fatal): %s", dup_err)
+        return False
+
     async def _async_delete_vlan(self, vlan_id: int) -> None:
         """Delete all NM connection profiles for *vlan_id* and emit connection_result."""
         try:
@@ -1893,82 +1826,70 @@ class NetworkManagerWorker(QObject):
         """Return a tuple of VlanInfo for all currently active VLAN connections."""
         vlans: list[VlanInfo] = []
         try:
-            active_paths = await self._nm().active_connections
-            for active_path in active_paths:
+            for active_path in await self._nm().active_connections:
                 try:
-                    ac = self._active_conn(active_path)
-                    conn_path = await ac.connection
-                    settings = await self._conn_settings(conn_path).get_settings()
-                    conn_type = settings.get("connection", {}).get("type", (None, ""))[
-                        1
-                    ]
-                    if conn_type != "vlan":
-                        continue
-
-                    vlan_id = settings.get("vlan", {}).get("id", (None, 0))[1]
-                    iface = settings.get("connection", {}).get(
-                        "interface-name", (None, "")
-                    )[1]
-                    if not iface:
-                        parent = settings.get("vlan", {}).get("parent", (None, "eth0"))[
-                            1
-                        ]
-                        iface = f"{parent}.{vlan_id}"
-
-                    ipv4_method = settings.get("ipv4", {}).get(
-                        "method", (None, "auto")
-                    )[1]
-                    is_dhcp = ipv4_method != "manual"
-
-                    dns_data = settings.get("ipv4", {}).get("dns-data", (None, []))[1]
-                    dns_servers: tuple[str, ...] = ()
-                    if dns_data:
-                        dns_servers = tuple(str(d) for d in dns_data)
-                    else:
-                        dns_raw = settings.get("ipv4", {}).get("dns", (None, []))[1]
-                        if dns_raw:
-                            dns_servers = tuple(
-                                self._nm_uint32_to_ip(d) for d in dns_raw
-                            )
-
-                    ip_addr = ""
-                    gateway = ""
-                    try:
-                        ip4_path = await self._active_conn(active_path).ip4_config
-                        if ip4_path and ip4_path != "/":
-                            ip4_cfg = self._ipv4(ip4_path)
-                            addr_data = await ip4_cfg.address_data
-                            if addr_data:
-                                ip_addr = str(addr_data[0]["address"][1])
-                            gw = await ip4_cfg.gateway
-                            if gw:
-                                gateway = str(gw)
-                    except Exception as exc:
-                        logger.debug(
-                            "D-Bus IP read for VLAN failed, falling back to OS: %s", exc
-                        )
-                        if iface:
-                            ip_addr = await self._get_ip_by_interface(iface)
-
-                    if not ip_addr and iface:
-                        ip_addr = self._get_ip_os_fallback(iface)
-
-                    vlans.append(
-                        VlanInfo(
-                            vlan_id=int(vlan_id),
-                            ip_address=ip_addr,
-                            interface=iface,
-                            gateway=gateway,
-                            dns_servers=dns_servers,
-                            is_dhcp=is_dhcp,
-                        )
-                    )
+                    vlan = await self._vlan_from_active(active_path)
                 except Exception as exc:
                     logger.debug("Skipping connection in active VLAN list: %s", exc)
                     continue
+                if vlan:
+                    vlans.append(vlan)
         except Exception as exc:
             logger.debug("Error getting active VLANs: %s", exc)
         return tuple(vlans)
+
+    async def _vlan_from_active(self, active_path: str) -> VlanInfo | None:
+        """Build VlanInfo for an active connection path, or None if it is not a VLAN."""
+        conn_path = await self._active_conn(active_path).connection
+        settings = await self._conn_settings(conn_path).get_settings()
+        conn = settings.get("connection", {})
+        if conn.get("type", (None, ""))[1] != "vlan":
+            return None
+
+        vlan_cfg = settings.get("vlan", {})
+        vlan_id = vlan_cfg.get("id", (None, 0))[1]
+        iface = conn.get("interface-name", (None, ""))[1]
+        if not iface:
+            iface = f"{vlan_cfg.get('parent', (None, 'eth0'))[1]}.{vlan_id}"
+
+        ipv4 = settings.get("ipv4", {})
+        ip_addr, gateway = await self._vlan_ip_gateway(active_path, iface)
+        return VlanInfo(
+            vlan_id=int(vlan_id),
+            ip_address=ip_addr,
+            interface=iface,
+            gateway=gateway,
+            dns_servers=self._vlan_dns(ipv4),
+            is_dhcp=ipv4.get("method", (None, "auto"))[1] != "manual",
+        )
+
+    def _vlan_dns(self, ipv4: dict) -> tuple[str, ...]:
+        """Extract DNS servers from an ipv4 settings dict, preferring ``dns-data``."""
+        dns_data = ipv4.get("dns-data", (None, []))[1]
+        if dns_data:
+            return tuple(str(d) for d in dns_data)
+        return tuple(self._nm_uint32_to_ip(d) for d in ipv4.get("dns", (None, []))[1])
+
+    async def _vlan_ip_gateway(self, active_path: str, iface: str) -> tuple[str, str]:
+        """Read a VLAN's IPv4 address and gateway, falling back to the OS on failure."""
+        ip_addr = ""
+        gateway = ""
+        try:
+            ip4_path = await self._active_conn(active_path).ip4_config
+            if ip4_path and ip4_path != "/":
+                ip4_cfg = self._ipv4(ip4_path)
+                addr_data = await ip4_cfg.address_data
+                if addr_data:
+                    ip_addr = str(addr_data[0]["address"][1])
+                gateway = str(await ip4_cfg.gateway or "")
+        except Exception as exc:
+            logger.debug("D-Bus IP read for VLAN failed, falling back to OS: %s", exc)
+            if iface:
+                ip_addr = await self._get_ip_by_interface(iface)
+
+        if not ip_addr and iface:
+            ip_addr = self._get_ip_os_fallback(iface)
+        return ip_addr, gateway
 
     async def _deactivate_all_vlans(self) -> None:
         """Deactivate all active VLAN connections via the NM D-Bus interface."""
@@ -2473,26 +2394,143 @@ class NetworkManagerWorker(QObject):
             logger.debug("Error deactivating '%s': %s", conn_id, exc)
         return False
 
-    async def _delete_all_connections_by_id(self, conn_id: str) -> int:
-        """Delete every NM connection profile whose id exactly matches *conn_id*."""
+    @staticmethod
+    def _setting(settings: dict, section: str, key: str, default: str = "") -> str:
+        """Unwrap a NM settings value from its (signature, value) variant tuple."""
+        try:
+            return settings.get(section, {}).get(key, (None, default))[1]
+        except (TypeError, IndexError, KeyError):
+            return default
+
+    async def _delete_connections_where(
+        self, match: Callable[[dict], bool], label: str
+    ) -> int:
+        """Delete every profile whose settings satisfy *match*, returning the count."""
         deleted = 0
         try:
-            connections = await self._nm_settings().list_connections()
-            for conn_path in connections:
+            paths = await self._nm_settings().list_connections()
+            for conn_path, settings in await self._gather_settings(paths):
                 try:
-                    cs = self._conn_settings(conn_path)
-                    settings = await cs.get_settings()
-                    cid = settings.get("connection", {}).get("id", (None, ""))[1]
-                    if cid == conn_id:
-                        await cs.delete()
-                        deleted += 1
+                    if not match(settings):
+                        continue
+                    await self._conn_settings(conn_path).delete()
+                    deleted += 1
+                    logger.debug("Deleted profile at %s (%s)", conn_path, label)
                 except Exception as exc:
                     logger.debug(
-                        "Skipping connection in cleanup for '%s': %s", conn_id, exc
+                        "Skip %s during '%s' cleanup: %s", conn_path, label, exc
                     )
         except Exception as exc:
-            logger.error("Cleanup for '%s' failed: %s", conn_id, exc)
+            logger.error("Cleanup for '%s' failed: %s", label, exc)
         return deleted
+
+    async def _find_ap_props(self, ssid: str) -> dict[str, object] | None:
+        """Return the scanned AP properties for *ssid*, or None if it is not visible."""
+        ap_paths = await self._wifi().get_all_access_points()
+        for _ap_path, props in await self._gather_ap_properties(ap_paths):
+            if self._decode_ssid(props.get("ssid", b"")) == ssid:
+                return props
+        return None
+
+    def _build_connection_properties(
+        self,
+        ssid: str,
+        password: str,
+        interface: str,
+        priority: int,
+        ap_props: dict[str, object],
+    ) -> dict[str, object] | None:
+        """Build NM connection property dict for *ssid* from its AP capability flags.
+
+        Returns None if the security type is unsupported (e.g. WPA-EAP).
+        Handles OPEN, WPA-PSK, WPA2-PSK, and WPA3-SAE (including SAE-transition).
+        """
+        flags = int(ap_props.get("flags", 0))
+        wpa_flags = int(ap_props.get("wpa_flags", 0))
+        rsn_flags = int(ap_props.get("rsn_flags", 0))
+
+        props: dict[str, object] = {
+            "connection": {
+                "id": ("s", ssid),
+                "uuid": ("s", str(uuid4())),
+                "type": ("s", "802-11-wireless"),
+                "interface-name": ("s", interface),
+                "autoconnect": ("b", True),
+                "autoconnect-priority": ("i", priority),
+            },
+            "802-11-wireless": {
+                "mode": ("s", "infrastructure"),
+                "ssid": ("ay", ssid.encode("utf-8")),
+            },
+            "ipv4": {
+                "method": ("s", "auto"),
+                "route-metric": ("i", 200),
+            },
+            "ipv6": {"method": ("s", "auto")},
+        }
+
+        if (flags & 1) == 0:
+            return props
+
+        props["802-11-wireless"]["security"] = (
+            "s",
+            "802-11-wireless-security",
+        )
+        security = self._determine_security_type(flags, wpa_flags, rsn_flags)
+
+        if not is_connectable_security(security):
+            logger.warning(
+                "Rejecting connection to '%s': unsupported security %s",
+                ssid,
+                security.value,
+            )
+            return None
+
+        if security == SecurityType.WPA3_SAE:
+            has_psk = bool((rsn_flags & 0x100) or wpa_flags)
+            if has_psk:
+                logger.debug(
+                    "SAE transition for '%s': using wpa-psk + PMF optional",
+                    ssid,
+                )
+                props["802-11-wireless-security"] = {
+                    "key-mgmt": ("s", "wpa-psk"),
+                    "auth-alg": ("s", "open"),
+                    "psk": ("s", password),
+                    "pmf": ("u", 2),  # OPTIONAL: required for SAE-transition APs
+                }
+            else:
+                logger.debug("Pure SAE detected for '%s'", ssid)
+                props["802-11-wireless-security"] = {
+                    "key-mgmt": ("s", "sae"),
+                    "auth-alg": ("s", "open"),
+                    "psk": ("s", password),
+                    "pmf": ("u", 3),  # REQUIRED: mandatory for pure WPA3-SAE
+                }
+        elif security in (
+            SecurityType.WPA2_PSK,
+            SecurityType.WPA_PSK,
+        ):
+            props["802-11-wireless-security"] = {
+                "key-mgmt": ("s", "wpa-psk"),
+                "auth-alg": ("s", "open"),
+                "psk": ("s", password),
+            }
+        else:
+            logger.warning(
+                "Unsupported security type '%s' for '%s'",
+                security.value,
+                ssid,
+            )
+            return None
+
+        return props
+
+    async def _delete_all_connections_by_id(self, conn_id: str) -> int:
+        """Delete every NM connection profile whose id exactly matches *conn_id*."""
+        return await self._delete_connections_where(
+            lambda s: self._setting(s, "connection", "id") == conn_id, conn_id
+        )
 
     async def _delete_all_ap_mode_connections(self) -> int:
         """Delete all saved Wi-Fi connections in AP mode.
@@ -2502,67 +2540,22 @@ class NetworkManagerWorker(QObject):
         old AP-mode profiles accumulate in NetworkManager and NM may
         auto-activate them on the next boot.
         """
-        deleted = 0
-        try:
-            connections = await self._nm_settings().list_connections()
-            for conn_path in connections:
-                try:
-                    cs = self._conn_settings(conn_path)
-                    settings = await cs.get_settings()
-                    conn_type = settings.get("connection", {}).get("type", (None, ""))[
-                        1
-                    ]
-                    if conn_type != "802-11-wireless":
-                        continue
-                    mode = settings.get("802-11-wireless", {}).get("mode", (None, ""))[
-                        1
-                    ]
-                    if mode == "ap":
-                        conn_id = settings.get("connection", {}).get("id", (None, ""))[
-                            1
-                        ]
-                        await cs.delete()
-                        deleted += 1
-                        logger.debug(
-                            "Removed stale AP profile '%s' at %s", conn_id, conn_path
-                        )
-                except Exception as exc:
-                    logger.debug("Skipping connection in AP profile cleanup: %s", exc)
-        except Exception as exc:
-            logger.error("Failed to remove stale AP profiles: %s", exc)
-        if deleted:
-            self._invalidate_saved_cache()
-        return deleted
+
+        def is_ap_mode(s: dict) -> bool:
+            """Check if this is a Wi-Fi connection in AP mode."""
+            conn_type = self._setting(s, "connection", "type")
+            if conn_type != "802-11-wireless":
+                return False
+            mode = self._setting(s, "802-11-wireless", "mode")
+            return mode == "ap"
+
+        return await self._delete_connections_where(is_ap_mode, "ap-mode connections")
 
     async def _delete_connections_by_id(self, ssid: str) -> int:
         """Delete every NM connection profile whose id matches *ssid* (case-insensitive)."""
-        deleted = 0
-        try:
-            connections = await self._nm_settings().list_connections()
-            for conn_path in connections:
-                try:
-                    cs = self._conn_settings(conn_path)
-                    settings = await cs.get_settings()
-                    conn_id = settings.get("connection", {}).get("id", (None, ""))[1]
-                    if conn_id.lower() == ssid.lower():
-                        await cs.delete()
-                        deleted += 1
-                        logger.debug(
-                            "Deleted stale profile '%s' at %s",
-                            conn_id,
-                            conn_path,
-                        )
-                except Exception as exc:
-                    logger.debug(
-                        "Skip connection %s during cleanup: %s",
-                        conn_path,
-                        exc,
-                    )
-        except Exception as exc:
-            logger.error(
-                "Failed to enumerate connections for cleanup: %s",
-                exc,
-            )
+        deleted = await self._delete_connections_where(
+            lambda s: self._setting(s, "connection", "id").lower() == ssid.lower(), ssid
+        )
         if deleted:
             self._invalidate_saved_cache()
         return deleted
@@ -2576,6 +2569,51 @@ class NetworkManagerWorker(QObject):
     def _nm_uint32_to_ip(uint_ip: int) -> str:
         """Convert a native-endian uint32 from NM back to a dotted-decimal IPv4 string."""
         return str(ipaddress.IPv4Address(struct.pack("=I", uint_ip)))
+
+    @staticmethod
+    def _prefix_to_mask(prefix: int) -> str:
+        """Convert an integer prefix length to a dotted-decimal subnet mask."""
+        if not 0 <= prefix <= 32:
+            return ""
+        return str(ipaddress.IPv4Network(f"0.0.0.0/{prefix}").netmask)
+
+    @classmethod
+    def _parse_ipv4_settings(cls, ipv4: dict) -> tuple[str, str, str, tuple[str, ...]]:
+        """Extract address, mask, gateway and DNS from an NM ipv4 settings dict."""
+        ip_addr, prefix = "", 0
+        try:
+            # NM syncs legacy 'addresses' with 'address-data'; either one works.
+            addrs = ipv4.get("addresses", (None, []))[1] or []
+            if addrs:
+                ip_addr = cls._nm_uint32_to_ip(addrs[0][0])
+                prefix = int(addrs[0][1])
+            else:
+                data = ipv4.get("address-data", (None, []))[1] or []
+                if data:
+                    ip_addr = str(cls._unwrap(data[0].get("address", "")))
+                    prefix = int(cls._unwrap(data[0].get("prefix", 0)) or 0)
+        except Exception as exc:
+            logger.debug("parse_ipv4_settings: address parse failed: %s", exc)
+            ip_addr, prefix = "", 0
+
+        gateway = str(ipv4.get("gateway", (None, ""))[1] or "")
+        dns = tuple(str(d) for d in (ipv4.get("dns-data", (None, []))[1] or []))
+        if not dns:
+            try:
+                dns = tuple(
+                    cls._nm_uint32_to_ip(d)
+                    for d in ipv4.get("dns", (None, []))[1] or []
+                )
+            except Exception as exc:
+                logger.debug("parse_ipv4_settings: dns parse failed: %s", exc)
+        return ip_addr, cls._prefix_to_mask(prefix) if prefix else "", gateway, dns
+
+    @staticmethod
+    def _unwrap(value: object) -> object:
+        """Return the payload of an NM (signature, value) variant tuple."""
+        if isinstance(value, tuple) and len(value) == 2:
+            return value[1]
+        return value
 
     @staticmethod
     def _mask_to_prefix(mask_str: str) -> int:

@@ -237,6 +237,10 @@ class SavedNetwork:
     signal_strength: int = 0
     timestamp: int = 0  # Unix time of last successful activation
     is_dhcp: bool = True  # True = auto (DHCP), False = manual (static IP)
+    ip_address: str = ""
+    netmask: str = ""
+    gateway: str = ""
+    dns_servers: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
