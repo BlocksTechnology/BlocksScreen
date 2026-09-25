@@ -2028,46 +2028,6 @@ class TestFallbackPoll:
         w._async_load_saved_networks.assert_awaited_once()
 
 
-class TestEnforceBootMutualExclusion:
-    def test_no_ethernet_returns_early(self, qapp):
-        w = _make(qapp)
-        nm = AsyncProxyMock(wireless_enabled=True)
-        _wire(w, nm=nm)
-        w._is_ethernet_connected = AsyncMock(return_value=False)
-        _run(w._enforce_boot_mutual_exclusion())
-        # wireless_enabled.set_async should NOT be called
-        assert (
-            not hasattr(nm.wireless_enabled, "set_async")
-            or not nm.wireless_enabled.set_async.called
-        )
-
-    def test_ethernet_active_wifi_on_disables_wifi(self, qapp):
-        w = _make(qapp)
-        nm = AsyncProxyMock(wireless_enabled=True)
-        _wire(w, nm=nm)
-        wifi = AsyncProxyMock()
-        wifi.disconnect = AsyncMock()
-        _wire(w, wifi_proxy=wifi)
-        w._is_ethernet_connected = AsyncMock(return_value=True)
-        w._wait_for_wifi_radio = AsyncMock(return_value=True)
-        _run(w._enforce_boot_mutual_exclusion())
-        nm.wireless_enabled.set_async.assert_awaited_once_with(False)
-        assert w._is_hotspot_active is False
-
-    def test_ethernet_active_wifi_off_no_action(self, qapp):
-        w = _make(qapp)
-        nm = AsyncProxyMock(wireless_enabled=False)
-        _wire(w, nm=nm)
-        w._is_ethernet_connected = AsyncMock(return_value=True)
-        _run(w._enforce_boot_mutual_exclusion())
-        nm.wireless_enabled.set_async.assert_not_awaited()
-
-    def test_exception_is_non_fatal(self, qapp):
-        w = _make(qapp)
-        w._is_ethernet_connected = AsyncMock(side_effect=RuntimeError("boom"))
-        _run(w._enforce_boot_mutual_exclusion())  # must not raise
-
-
 class TestWaitForWifiRadio:
     def test_returns_true_when_already_matching(self, qapp):
         w = _make(qapp)
@@ -2105,17 +2065,15 @@ class TestSetWifiEnabled:
         assert received[0].success is True
         assert w._is_hotspot_active is False
 
-    def test_enable_wifi_disconnects_ethernet(self, qapp):
+    def test_enable_wifi_leaves_ethernet_untouched(self, qapp):
         w = _make(qapp)
         nm = AsyncProxyMock(wireless_enabled=False)
         _wire(w, nm=nm)
         w._is_ethernet_connected = AsyncMock(return_value=True)
-        w._async_disconnect_ethernet = AsyncMock()
         w._wait_for_wifi_radio = AsyncMock(return_value=True)
         w._build_current_state = AsyncMock(return_value=NetworkState())
 
         _run(w._async_set_wifi_enabled(True))
-        w._async_disconnect_ethernet.assert_awaited_once()
         nm.wireless_enabled.set_async.assert_awaited_once_with(True)
 
     def test_already_matching_skips_toggle(self, qapp):
@@ -2178,11 +2136,7 @@ class TestConnectEthernetAsync:
         nm = AsyncProxyMock(wireless_enabled=True)
         nm.activate_connection = AsyncMock()
         _wire(w, nm=nm)
-        wifi = AsyncProxyMock()
-        wifi.disconnect = AsyncMock()
-        _wire(w, wifi_proxy=wifi)
-        w._is_ethernet_connected = AsyncMock(return_value=False)
-        w._wait_for_wifi_radio = AsyncMock(return_value=True)
+        w._ensure_wired_autoconnect = AsyncMock()
         w._build_current_state = AsyncMock(return_value=NetworkState())
         w._activate_saved_vlans = AsyncMock()
         w._is_hotspot_active = False
@@ -2191,15 +2145,17 @@ class TestConnectEthernetAsync:
         w.connection_result.connect(results.append)
         _run(w._async_connect_ethernet())
 
-        nm.wireless_enabled.set_async.assert_awaited_once_with(False)
+        w._ensure_wired_autoconnect.assert_awaited_once()
         nm.activate_connection.assert_awaited_once()
         assert len(results) == 1
         assert results[0].success is True
 
     def test_exception_emits_error_and_state(self, qapp):
         w = _make(qapp)
-        nm = AsyncProxyMock(wireless_enabled=AsyncMock(side_effect=RuntimeError("x")))
+        nm = AsyncProxyMock(wireless_enabled=True)
+        nm.activate_connection = AsyncMock(side_effect=RuntimeError("x"))
         w._nm = _ProxyFactory(nm)
+        w._ensure_wired_autoconnect = AsyncMock()
         w._build_current_state = AsyncMock(return_value=NetworkState())
 
         errors = []
@@ -2600,7 +2556,6 @@ class TestAsyncInitializeFull:
     def test_happy_path_full_init(self, qapp):
         w = _make(qapp, running=False)
         w._detect_interfaces = AsyncMock()
-        w._enforce_boot_mutual_exclusion = AsyncMock()
         w._is_ethernet_connected = AsyncMock(return_value=False)
         w._activate_saved_vlans = AsyncMock()
         w._start_signal_listeners = AsyncMock()
@@ -2617,7 +2572,6 @@ class TestAsyncInitializeFull:
 
         assert w._running is True
         w._detect_interfaces.assert_awaited_once()
-        w._enforce_boot_mutual_exclusion.assert_awaited_once()
         w._start_signal_listeners.assert_awaited_once()
         assert len(init_signals) == 1
         assert len(hotspot_info) == 1

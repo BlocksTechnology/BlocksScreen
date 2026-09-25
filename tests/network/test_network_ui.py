@@ -698,7 +698,7 @@ class TestOnOperationComplete:
             message="not compatible with device",
             error_code="nm_error",
         )
-        with patch("BlocksScreen.lib.panels.networkWindow.QtCore.QTimer") as mock_timer:
+        with patch("BlocksScreen.lib.panels.networkWindow.QTimer") as mock_timer:
             w._on_operation_complete(result)
             mock_timer.singleShot.assert_called_once()
         # Loading should still be visible — retry is pending
@@ -745,7 +745,7 @@ class TestWifiToggle:
             )
         ]
         nm.saved_networks = saved
-        with patch("BlocksScreen.lib.panels.networkWindow.QtCore.QTimer") as mock_timer:
+        with patch("BlocksScreen.lib.panels.networkWindow.QTimer") as mock_timer:
             w._handle_wifi_toggle(True)
             mock_timer.singleShot.assert_called()
         assert w._pending_operation == PendingOperation.WIFI_ON
