@@ -554,14 +554,12 @@ class MoonAPI(QtCore.QObject):
         )
 
     @QtCore.pyqtSlot(name="api_get_gcode_thumbnail")
-    def get_gcode_thumbnail(self, filename_dir: str, callback=None) -> bool:
-        """Request the thumbnail paths Moonraker already extracted for a gcode."""
-        if not isinstance(filename_dir, str):
+    def get_gcode_thumbnail(self, filename_dir: str):
+        """Request gcode thumbnail"""
+        if isinstance(filename_dir, str) is False or filename_dir is None:
             return False
         return self._ws.send_request(
-            method="server.files.thumbnails",
-            params={"filename": filename_dir},
-            callback=callback,
+            method="server.files.thumbnails", params={"filename": filename_dir}
         )
 
     @QtCore.pyqtSlot(str, str, name="api-delete-file")
@@ -832,7 +830,7 @@ class MoonAPI(QtCore.QObject):
         raise NotImplementedError
 
     def history_get_job(self, uid: str, callback=None) -> bool:
-        """Request a past job entry; callback gets {"job": {...}}"""
+        """Request a history job; callback gets {"job": {...}}."""
         return self._ws.send_request(
             method="server.history.get_job", params={"uid": uid}, callback=callback
         )

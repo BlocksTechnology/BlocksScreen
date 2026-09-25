@@ -1,9 +1,4 @@
-"""Regression tests for FileMetadataWidget sentinel hiding (metadataPage.py).
-
-Drives the REAL pipeline FileMetadata.from_dict(raw, []).to_dict() -> on_show_widget
-so dataclass asdict() sentinel defaults (-1.0 / 0 / {} / "Unknown") are exercised,
-under both LeftToRight and app-global RightToLeft layout (the app runs RTL).
-"""
+"""FileMetadataWidget sentinel hiding via the real from_dict pipeline, LTR and RTL."""
 
 import importlib.util
 import sys
@@ -13,7 +8,7 @@ from pathlib import Path
 import pytest
 from PyQt6 import QtCore, QtWidgets
 
-# metadataPage imports these custom widgets; stub before it is imported.
+# Stub metadataPage's custom widgets before importing it.
 _blocks_label = types.ModuleType("lib.utils.blocks_label")
 _blocks_label.BlocksLabel = QtWidgets.QLabel
 _scrollbar = types.ModuleType("lib.utils.blocks_Scrollbar")
@@ -21,8 +16,7 @@ _scrollbar.CustomScrollBar = QtWidgets.QScrollBar
 sys.modules["lib.utils.blocks_label"] = _blocks_label
 sys.modules["lib.utils.blocks_Scrollbar"] = _scrollbar
 
-# Load the REAL FileMetadata by path under a private module name: sibling
-# conftests stub sys.modules["lib.files"], so a plain import is unsafe.
+# Real FileMetadata by path: sibling conftests stub lib.files.
 _files_path = Path(__file__).resolve().parents[2] / "BlocksScreen" / "lib" / "files.py"
 _spec = importlib.util.spec_from_file_location("_bs_real_files", _files_path)
 _files = importlib.util.module_from_spec(_spec)  # type: ignore[arg-type]
@@ -40,7 +34,7 @@ _DIRECTIONS = (
 
 @pytest.fixture()
 def render(qtbot, qapp):
-    """Feed raw metadata through the real pipeline, return non-empty label texts."""
+    """Render raw metadata; return the non-empty label texts."""
     original = qapp.layoutDirection()
 
     def _render(raw, direction):
@@ -61,7 +55,6 @@ def render(qtbot, qapp):
 
 @pytest.mark.parametrize("direction", _DIRECTIONS)
 def test_empty_metadata_shows_placeholder_no_sentinels(render, direction):
-    """Empty metadata -> 'No metadata available', never a raw sentinel string."""
     texts = render({}, direction)
     joined = " ".join(texts)
     assert "No metadata available" in texts
@@ -84,7 +77,7 @@ def test_missing_time_and_length_hidden_not_leaked(render, direction):
 
 @pytest.mark.parametrize("direction", _DIRECTIONS)
 def test_real_values_render(render, direction):
-    """Real metadata values render through the pipeline (no over-suppression)."""
+    """Guards against over-suppression."""
     raw = {
         "estimated_time": 3600,
         "filament_total": 1234.5,
@@ -97,3 +90,24 @@ def test_real_values_render(render, direction):
     assert "205" in joined
     assert "{}" not in joined
     assert "??" not in joined
+
+
+@pytest.mark.parametrize("direction", _DIRECTIONS)
+def test_nozzle_temp_falls_back_to_filament_type(render, direction):
+    joined = " ".join(render({"filament_type": "PLA+"}, direction))
+    assert "Nozzle Temperature" in joined
+    assert "210 °C" in joined
+
+
+@pytest.mark.parametrize("direction", _DIRECTIONS)
+def test_slicer_nozzle_temp_beats_fallback(render, direction):
+    raw = {"filament_type": "PETG", "first_layer_extr_temp": 245.0}
+    joined = " ".join(render(raw, direction))
+    assert "245 °C" in joined
+    assert "235 °C" not in joined
+
+
+@pytest.mark.parametrize("direction", _DIRECTIONS)
+def test_unknown_material_has_no_nozzle_fallback(render, direction):
+    joined = " ".join(render({"filament_type": "Unobtainium"}, direction))
+    assert "Nozzle Temperature" not in joined

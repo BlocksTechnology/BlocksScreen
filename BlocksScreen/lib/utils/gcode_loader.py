@@ -1,11 +1,13 @@
-"""Off-thread gcode header parsing: embedded thumbnails + client-side metadata (USB)."""
+"""Off-thread gcode parsing: embedded thumbnails and USB metadata."""
 
 from __future__ import annotations
 
 import base64
 import binascii
+import enum
 import logging
 import re
+import typing
 from collections import OrderedDict
 from collections.abc import Callable
 
@@ -13,9 +15,8 @@ from PyQt6 import QtCore, QtGui
 
 logger = logging.getLogger(__name__)
 
-# --- Thumbnail parsing -------------------------------------------------------
 
-# Matches PrusaSlicer/Cura "thumbnail begin" and the Creality "png begin" variant.
+# PrusaSlicer/Cura "thumbnail begin" and Creality "png begin".
 _THUMBNAIL_RE = re.compile(
     r"; (?:thumbnail|png) begin (\d+)[x*](\d+) \d+\s*\n(.*?); (?:thumbnail|png) end",
     re.DOTALL,
@@ -23,7 +24,7 @@ _THUMBNAIL_RE = re.compile(
 
 
 def parse_embedded_thumbnail(header: bytes) -> bytes | None:
-    """Return PNG bytes of the largest thumbnail embedded in a gcode header."""
+    """PNG bytes of the largest thumbnail in a gcode header."""
     text = header.decode("latin-1", errors="ignore")
     best_area = -1
     best_block = None
@@ -40,9 +41,7 @@ def parse_embedded_thumbnail(header: bytes) -> bytes | None:
         return None
 
 
-# --- Metadata parsing --------------------------------------------------------
-
-# Slicer footer/header comments use "; key = value" (Orca/Prusa/Super) or "; key: value".
+# "; key = value" (Orca/Prusa/Super) or "; key: value".
 _KV_RE = re.compile(r"^;+\s*([^=:\n]+?)\s*[=:]\s*(.+?)\s*$", re.MULTILINE)
 # Cura banner: ";Generated with Cura_SteamEngine 5.6.0".
 _CURA_RE = re.compile(r"generated with cura[_ ]?\w*\s+([\d.]+)", re.IGNORECASE)
@@ -64,7 +63,7 @@ def _to_int(value: str) -> int | None:
 
 
 def _parse_time(value: str) -> int | None:
-    """Seconds from "1h 20m 2s"-style or a bare seconds count (Cura ;TIME:)."""
+    """Seconds from "1h 20m 2s" or a bare count (Cura ;TIME:)."""
     parts = re.findall(r"(\d+)\s*([dhms])", value.lower())
     if parts:
         return sum(int(n) * _TIME_UNITS[u] for n, u in parts)
@@ -72,16 +71,16 @@ def _parse_time(value: str) -> int | None:
 
 
 def _unquote(value: str) -> str:
-    """Slicer values are often quoted."""
+    """Strip the quotes slicers often add."""
     return value.strip('"')
 
 
 def _first_token(value: str) -> str:
-    """First entry of a possibly multi-extruder ";"-separated value."""
+    """First entry of a multi-extruder ";"-separated value."""
     return value.strip('"').split(";")[0].strip()
 
 
-# Slicer comment key -> (output field, converter); first alias present wins.
+# Slicer key -> (field, converter); the first alias found wins.
 _FIELD_ALIASES: dict[str, tuple[str, Callable[[str], object | None]]] = {
     "estimated printing time (normal mode)": ("estimated_time", _parse_time),
     "estimated printing time": ("estimated_time", _parse_time),
@@ -110,7 +109,7 @@ _FIELD_ALIASES: dict[str, tuple[str, Callable[[str], object | None]]] = {
 
 
 def parse_gcode_metadata(header: bytes, footer: bytes) -> dict:
-    """Moonraker-shaped metadata dict parsed from a gcode header + footer blob."""
+    """Moonraker-shaped metadata from a gcode header and footer."""
     text = (
         header.decode("latin-1", "ignore") + "\n" + footer.decode("latin-1", "ignore")
     )
@@ -131,34 +130,44 @@ def parse_gcode_metadata(header: bytes, footer: bytes) -> dict:
     return meta
 
 
-# --- Off-thread loaders ------------------------------------------------------
+_P = typing.TypeVar("_P")
 
 
-def _fetch_thumbnail(rest, gcode_path: str) -> QtGui.QImage | None:
-    """Range-fetch a gcode header and decode its embedded thumbnail."""
+class _Miss(enum.Enum):
+    """Cached for files with nothing usable, so they are not refetched."""
+
+    MISS = enum.auto()
+
+
+def _fetch_thumbnail(rest, gcode_path: str) -> QtGui.QImage | _Miss | None:
+    """Thumbnail QImage; MISS if none, None if unread."""
     header = rest.get_gcode_header(gcode_path)
-    png = parse_embedded_thumbnail(header) if header else None
-    if not png:
+    if header is None:
         return None
+    png = parse_embedded_thumbnail(header)
     image = QtGui.QImage()
-    return image if image.loadFromData(png, "PNG") and not image.isNull() else None
+    if png and image.loadFromData(png, "PNG") and not image.isNull():
+        return image
+    return _Miss.MISS
 
 
-def _fetch_metadata(rest, gcode_path: str) -> dict:
-    """Range-fetch both ends of a gcode and parse its slicer metadata."""
-    header = rest.get_gcode_header(gcode_path) or b""
-    footer = rest.get_gcode_tail(gcode_path) or b""
-    return parse_gcode_metadata(header, footer) if (header or footer) else {}
+def _fetch_metadata(rest, gcode_path: str) -> dict | _Miss | None:
+    """Metadata from both gcode ends; MISS if none, None if unread."""
+    header = rest.get_gcode_header(gcode_path)
+    footer = rest.get_gcode_tail(gcode_path)
+    if header is None and footer is None:
+        return None
+    return parse_gcode_metadata(header or b"", footer or b"") or _Miss.MISS
 
 
 class _LoaderSignals(QtCore.QObject):
-    """Carries a worker result back to the UI thread (QRunnable can't hold signals)."""
+    """Worker result signal; QRunnable can't hold signals."""
 
     result = QtCore.pyqtSignal(str, object)  # (gcode_path, payload)
 
 
 class _FetchTask(QtCore.QRunnable):
-    """Runs one loader's fetch + parse for a single gcode off the UI thread."""
+    """One off-thread fetch and parse."""
 
     def __init__(self, rest, gcode_path: str, fetch, signals: _LoaderSignals) -> None:
         super().__init__()
@@ -169,7 +178,7 @@ class _FetchTask(QtCore.QRunnable):
 
     @QtCore.pyqtSlot()
     def run(self) -> None:
-        """Fetch in the worker; the loader caches + re-emits on the UI thread."""
+        """Fetch here; the loader caches on the UI thread."""
         try:
             payload = self._fetch(self._rest, self._gcode_path)
         except Exception:  # a bad file must not kill the pool thread
@@ -178,63 +187,76 @@ class _FetchTask(QtCore.QRunnable):
         self._signals.result.emit(self._gcode_path, payload)
 
 
-class _GcodeLoader(QtCore.QObject):
-    """Serves parsed gcode data via a capped thread pool + bounded LRU cache."""
+class _GcodeLoader(QtCore.QObject, typing.Generic[_P]):
+    """Parsed gcode data via a capped pool and LRU cache."""
 
+    ready: typing.ClassVar[QtCore.pyqtSignal]  # each subclass declares (gcode_path, _P)
     _CACHE_MAX = 32
-    _fetch = staticmethod(_fetch_thumbnail)
+    _fetch: typing.ClassVar[Callable[[typing.Any, str], typing.Any]]
 
     def __init__(self, rest, parent: QtCore.QObject | None = None) -> None:
         super().__init__(parent)
         self._rest = rest
         self._pool = QtCore.QThreadPool(self)
         self._pool.setMaxThreadCount(2)  # bound concurrent fetches on the 2GB Pi
-        self._cache: OrderedDict[str, object] = OrderedDict()
+        self._cache: OrderedDict[str, _P | _Miss] = OrderedDict()
         self._inflight: set[str] = set()
         self._signals = _LoaderSignals()
         self._signals.result.connect(self._on_result)
 
-    def cached(self, gcode_path: str):
-        """Return an already-fetched payload (promoted to MRU), or None."""
+    def cached(self, gcode_path: str) -> _P | None:
+        """Fetched payload (marked MRU), or None."""
         payload = self._cache.get(gcode_path)
-        if payload is not None:
-            self._cache.move_to_end(gcode_path)
-        return payload
+        if payload is None:
+            return None
+        self._cache.move_to_end(gcode_path)
+        return None if payload is _Miss.MISS else payload
 
     def request(self, gcode_path: str) -> None:
-        """Fetch off-thread; emits ready() once the payload is available."""
-        cached = self.cached(gcode_path)
-        if cached is not None:
-            self.ready.emit(gcode_path, cached)
+        """Fetch off-thread; ready() fires when available."""
+        if gcode_path in self._cache:
+            if (payload := self.cached(gcode_path)) is not None:
+                self.ready.emit(gcode_path, payload)
             return
         if not gcode_path or self._rest is None or gcode_path in self._inflight:
             return
         self._inflight.add(gcode_path)
         self._pool.start(_FetchTask(self._rest, gcode_path, self._fetch, self._signals))
 
-    def _on_result(self, gcode_path: str, payload: object) -> None:
-        """Cache the payload (LRU-bounded) and notify listeners."""
+    def forget(self, path: str) -> None:
+        """Drop cached and in-flight entries at or under *path*."""
+        root = f"{path}/"
+        for p in [
+            p for p in (*self._cache, *self._inflight) if f"{p}/".startswith(root)
+        ]:
+            self._cache.pop(p, None)
+            self._inflight.discard(p)
+
+    def _on_result(self, gcode_path: str, payload: _P | _Miss | None) -> None:
+        """Cache a payload or miss; emit ready() on a hit."""
+        if gcode_path not in self._inflight:
+            return  # forgotten mid-fetch, e.g. the drive was pulled
         self._inflight.discard(gcode_path)
-        if payload is None or payload == {}:
-            return
+        if payload is None:
+            return  # unread (network/HTTP error), the next request retries
         if len(self._cache) >= self._CACHE_MAX:
             self._cache.popitem(last=False)
         self._cache[gcode_path] = payload
-        self.ready.emit(gcode_path, payload)
+        if payload is not _Miss.MISS:
+            self.ready.emit(gcode_path, payload)
 
 
-class ThumbnailLoader(_GcodeLoader):
+class ThumbnailLoader(_GcodeLoader[QtGui.QImage]):
     """Embedded gcode thumbnails, decoded off the UI thread."""
 
     ready = QtCore.pyqtSignal(str, object)  # (gcode_path, QImage)
 
-    _CACHE_MAX = 32
     _fetch = staticmethod(_fetch_thumbnail)
 
     request_embedded = _GcodeLoader.request
 
 
-class GcodeMetadataLoader(_GcodeLoader):
+class GcodeMetadataLoader(_GcodeLoader[dict]):
     """Client-parsed metadata for gcodes Moonraker cannot scan (USB)."""
 
     ready = QtCore.pyqtSignal(str, dict)  # (gcode_path, metadata)
@@ -243,38 +265,36 @@ class GcodeMetadataLoader(_GcodeLoader):
     _fetch = staticmethod(_fetch_metadata)
 
 
-# --- Shared module singletons ------------------------------------------------
-
 _thumb_loader: ThumbnailLoader | None = None
 _meta_loader: GcodeMetadataLoader | None = None
 
 
 def configure(rest) -> ThumbnailLoader:
-    """Create the shared thumbnail loader from a MoonRest client (call once at startup)."""
+    """Create the shared thumbnail loader; call once at startup."""
     global _thumb_loader
     _thumb_loader = ThumbnailLoader(rest)
     return _thumb_loader
 
 
 def get_loader() -> ThumbnailLoader | None:
-    """Return the shared thumbnail loader, or None if not configured yet."""
+    """Shared thumbnail loader, None until configured."""
     return _thumb_loader
 
 
 def configure_metadata(rest) -> GcodeMetadataLoader:
-    """Create the shared metadata loader from a MoonRest client (call once at startup)."""
+    """Create the shared metadata loader."""
     global _meta_loader
     _meta_loader = GcodeMetadataLoader(rest)
     return _meta_loader
 
 
 def get_metadata_loader() -> GcodeMetadataLoader | None:
-    """Return the shared metadata loader, or None if not configured yet."""
+    """Shared metadata loader, None until configured."""
     return _meta_loader
 
 
 def cached_pixmap(gcode_path: str) -> QtGui.QPixmap | None:
-    """Cached embedded thumbnail as a main-thread QPixmap; queues a fetch on miss."""
+    """Cached thumbnail QPixmap; queues a fetch on a miss."""
     loader = _thumb_loader
     gcode_path = gcode_path.removeprefix("/")
     if loader is None or not gcode_path:

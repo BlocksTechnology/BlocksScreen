@@ -1,6 +1,5 @@
 import json
 import logging
-import typing
 
 import helper_methods
 from lib.utils.blocks_combobox import BlocksComboBox
@@ -22,8 +21,7 @@ class FilesPage(QtWidgets.QWidget):
 
     # Constants
     GCODE_EXTENSION = ".gcode"
-    USB_PREFIX = "USB-"
-    # Moonraker indexes the fresh symlink asynchronously, so refresh once more after it.
+    # Moonraker indexes a new symlink async; refresh again after this.
     USB_SETTLE_MS = 1500
     ITEM_HEIGHT = 80
     LEFT_FONT_SIZE = 17
@@ -50,7 +48,7 @@ class FilesPage(QtWidgets.QWidget):
         "sort_asc": ":/arrow_icons/media/btn_icons/sort_asc.svg",
     }
 
-    def __init__(self, parent: typing.Optional[QtWidgets.QWidget] = None) -> None:
+    def __init__(self, parent: QtWidgets.QWidget | None = None) -> None:
         super().__init__(parent)
 
         self._file_list: list[dict] = []
@@ -97,8 +95,7 @@ class FilesPage(QtWidgets.QWidget):
     def on_directories(self, directories_data: list) -> None:
         """Handle receiving full directories list."""
         self._directories = directories_data.copy() if directories_data else []
-        # New directory: drop the previous dir's cached metadata (bounds memory).
-        self._files_data.clear()
+        # _files_data persists: Files emits each file's metadata only once.
         logger.debug(f"Received {len(self._directories)} directories")
 
         if self.isVisible():
@@ -106,7 +103,7 @@ class FilesPage(QtWidgets.QWidget):
 
     @QtCore.pyqtSlot(dict, name="on_fileinfo")
     def on_fileinfo(self, filedata: dict) -> None:
-        """Cache file metadata and refresh the affected row in place."""
+        """Cache metadata and refresh its row."""
         if not filedata:
             return
         filename = filedata.get("filename", "")
@@ -130,28 +127,30 @@ class FilesPage(QtWidgets.QWidget):
 
     @QtCore.pyqtSlot(dict, name="on_file_added")
     def on_file_added(self, file_data: dict) -> None:
-        """Add a created file to backing data and refresh the current view."""
+        """Add a created file and refresh."""
         path = file_data.get("path", file_data.get("filename", "")).removeprefix("/")
         current = self._curr_dir.removeprefix("/")
         if not path or helper_methods.get_parent_dir(path) != current:
             return
-        # Store the bare basename to match the get_directory listing convention.
+        # Bare name, as get_directory lists it.
         name = helper_methods.get_file_name(path)
         if not any(
             helper_methods.get_file_name(f.get("filename", f.get("path", ""))) == name
             for f in self._file_list
         ):
             self._file_list.append(file_data | {"filename": name})
-        # Metadata is owned + requested by Files (_handle_file_created); no re-request.
+        # Files already requests its metadata.
         if self.isVisible():
             self._build_file_list()
 
     @QtCore.pyqtSlot(str, name="on_file_removed")
     def on_file_removed(self, filepath: str) -> None:
-        """Drop a deleted file from backing data/cache and refresh."""
+        """Drop a deleted file and refresh."""
         filepath = filepath.removeprefix("/")
         self._files_data.pop(filepath, None)
-        # _file_list holds bare basenames; match on basename to drop the row.
+        if helper_methods.get_parent_dir(filepath) != self._curr_dir.removeprefix("/"):
+            return
+        # _file_list holds bare names.
         name = helper_methods.get_file_name(filepath)
         self._file_list = [
             f
@@ -159,8 +158,7 @@ class FilesPage(QtWidgets.QWidget):
             if helper_methods.get_file_name(f.get("filename", f.get("path", "")))
             != name
         ]
-        current = self._curr_dir.removeprefix("/")
-        if self.isVisible() and helper_methods.get_parent_dir(filepath) == current:
+        if self.isVisible():
             self._build_file_list()
 
     @QtCore.pyqtSlot(dict, name="on_file_modified")
@@ -174,9 +172,9 @@ class FilesPage(QtWidgets.QWidget):
 
     @QtCore.pyqtSlot(dict, name="on_dir_added")
     def on_dir_added(self, dir_data: dict) -> None:
-        """Add a created directory to backing data and refresh."""
+        """Add a created dir and refresh."""
         path = dir_data.get("path", "").removeprefix("/")
-        dirname = dir_data.get("dirname", "") or helper_methods.get_parent_dir(path)
+        dirname = dir_data.get("dirname", "") or helper_methods.get_file_name(path)
         if not dirname or dirname.startswith("."):
             return
         parent_dir = helper_methods.get_parent_dir(path) if path else ""
@@ -188,26 +186,25 @@ class FilesPage(QtWidgets.QWidget):
             self._build_file_list()
 
     @QtCore.pyqtSlot(str, name="on_dir_removed")
-    def on_dir_removed(self, dirname_or_path: str) -> None:
-        """Remove a directory from backing data, or bail to root if it is current."""
-        dirname_or_path = dirname_or_path.removeprefix("/")
-        dirname = (
-            helper_methods.get_parent_dir(dirname_or_path)
-            if "/" in dirname_or_path
-            else dirname_or_path
-        )
-        if not dirname:
+    def on_dir_removed(self, path: str) -> None:
+        """Drop a deleted dir, or go to root if inside it."""
+        rel = path.strip("/")
+        if not rel:
             return
-        current = self._curr_dir.removeprefix("/")
-        if current == dirname or current.startswith(dirname + "/"):
+        # Mirror Files._forget_cached so a recreated dir gets fresh metadata.
+        for key in [k for k in self._files_data if k.startswith(f"{rel}/")]:
+            del self._files_data[key]
+        current = self._curr_dir.strip("/")
+        if current == rel or current.startswith(rel + "/"):
             logger.warning(
                 "Current directory '%s' was removed, returning to root", current
             )
             self.on_directory_error()
             return
-        self._directories = [
-            d for d in self._directories if d.get("dirname", "") != dirname
-        ]
+        if helper_methods.get_parent_dir(rel) != current:
+            return
+        name = helper_methods.get_file_name(rel)
+        self._directories = [d for d in self._directories if d.get("dirname") != name]
         if self.isVisible():
             self._build_file_list()
 
@@ -220,7 +217,7 @@ class FilesPage(QtWidgets.QWidget):
 
     @QtCore.pyqtSlot(name="on_directory_error")
     def on_directory_error(self) -> None:
-        """Navigate back to the root gcodes folder after a directory error."""
+        """Go back to root after a directory error."""
         logger.info("Directory Error - returning to root directory")
         self._curr_dir = ""
         self._pending_action = False
@@ -230,20 +227,21 @@ class FilesPage(QtWidgets.QWidget):
 
     @QtCore.pyqtSlot(str, str, name="on_usb_added")
     def on_usb_added(self, _device_path: str = "", _symlink: str = "") -> None:
-        """Re-fetch the current directory so a newly mounted USB folder shows up."""
+        """Re-fetch the current dir so a new USB folder shows."""
         logger.info("USB mounted, refreshing current directory")
         self.request_dir_info[str].emit(self._curr_dir)
         QtCore.QTimer.singleShot(self.USB_SETTLE_MS, self._refresh_current_dir)
 
     def _refresh_current_dir(self) -> None:
-        """Ask Moonraker for the current directory again, used by delayed retries."""
+        """Re-request the current directory."""
         self.request_dir_info[str].emit(self._curr_dir)
 
     @QtCore.pyqtSlot(str, name="on_usb_removed")
-    def on_usb_removed(self, _device_path: str = "") -> None:
-        """Return to root when inside the USB folder, else refresh so it disappears."""
-        current = self._curr_dir.removeprefix("/")
-        if current.startswith(self.USB_PREFIX):
+    def on_usb_removed(self, symlink: str = "") -> None:
+        """Leave a removed USB folder, else refresh to hide it."""
+        drive = self._curr_dir.strip("/").split("/", 1)[0]
+        gone = helper_methods.get_file_name(symlink)
+        if helper_methods.is_usb_mount(drive) and gone in ("", drive):
             logger.info("USB removed while inside its folder, returning to root")
             self.on_directory_error()
         else:
@@ -254,18 +252,13 @@ class FilesPage(QtWidgets.QWidget):
     def _on_item_selected(self, item: ListItem) -> None:
         """Handle list item selection."""
         if not item.left_icon:
-            # File selected (files don't have left icon).
+            # Only files lack a left icon.
             filename = self._selected_file_path(item.text)
             if filename:
                 self._on_file_item_clicked(filename)
         elif item.text == "Go Back":
-            # Go back selected
-            go_back_path = helper_methods.get_parent_dir(self._curr_dir)
-            if go_back_path == "/":
-                go_back_path = ""
-            self._on_go_back_dir(go_back_path)
+            self._on_go_back_dir(helper_methods.get_parent_dir(self._curr_dir))
         else:
-            # Directory selected
             self._on_dir_item_clicked("/" + item.text)
 
     @QtCore.pyqtSlot(name="reset_dir")
@@ -282,11 +275,11 @@ class FilesPage(QtWidgets.QWidget):
 
     @staticmethod
     def _item_key(item: ListItem) -> str:
-        """Stable identity for reconcile: dirs/back vs files, namespaced by text."""
+        """Reconcile identity: row kind plus text."""
         return f"{'d' if item.left_icon else 'f'}:{item.text}"
 
     def _schedule_rebuild(self) -> None:
-        """Coalesce bursts of metadata arrivals into one deferred rebuild."""
+        """Coalesce metadata bursts into one deferred rebuild."""
         if self._rebuild_pending:
             return
         self._rebuild_pending = True
@@ -299,7 +292,7 @@ class FilesPage(QtWidgets.QWidget):
             self._build_file_list()
 
     def _build_file_list(self) -> None:
-        """Rebuild the model from backing data via keyed reconcile."""
+        """Rebuild the model via keyed reconcile."""
         self._pending_action = False
         meta = self._metadata_map()
         is_root = not self._curr_dir or self._curr_dir == "/"
@@ -312,7 +305,7 @@ class FilesPage(QtWidgets.QWidget):
         self._model.reconcile(self._desired_items(is_root, meta), self._item_key)
 
     def _metadata_map(self) -> dict[str, dict | None]:
-        """Each file's bare name to its cached metadata, one lookup pass per rebuild."""
+        """Bare name -> cached metadata, built once per rebuild."""
         meta: dict[str, dict | None] = {}
         for f in self._file_list:
             name = f.get("filename", f.get("path", ""))
@@ -326,7 +319,7 @@ class FilesPage(QtWidgets.QWidget):
         return self._files_data.get(self._build_filepath(filename))
 
     def _desired_items(self, is_root: bool, meta: dict) -> list[ListItem]:
-        """Ordered rows: Go Back (subdir), dirs A-Z, then files newest-first."""
+        """Rows: Go Back (subdirs), dirs A-Z, then sorted files."""
         items: list[ListItem] = []
         if not is_root:
             items.append(self._make_back_folder_item())
@@ -335,7 +328,7 @@ class FilesPage(QtWidgets.QWidget):
         return items
 
     def _desired_directory_items(self) -> list[ListItem]:
-        """Directory rows sorted alphabetically, excluding dot-dirs."""
+        """Dir rows A-Z, skipping dot-dirs."""
         rows = sorted(self._directories, key=lambda d: d.get("dirname", "").lower())
         return [
             self._make_directory_item(d)
@@ -344,7 +337,7 @@ class FilesPage(QtWidgets.QWidget):
         ]
 
     def _desired_file_items(self, meta: dict) -> list[ListItem]:
-        """Gcode file rows ordered by the active sort key and direction."""
+        """File rows in the active sort order."""
         files = [
             f
             for f in self._file_list
@@ -352,22 +345,27 @@ class FilesPage(QtWidgets.QWidget):
             .lower()
             .endswith(self.GCODE_EXTENSION)
         ]
-        if self._sort_key == "Import Order":
-            if not self._sort_descending:
-                files.reverse()
-        else:
-            files.sort(
-                key=lambda f: self._sort_value(f, meta),
-                reverse=self._sort_descending,
-            )
+        # Stable sorts: upload time orders the ties, e.g. never-printed files.
+        files.sort(key=self._upload_time, reverse=self._sort_descending)
+        files.sort(
+            key=lambda f: self._sort_value(f, meta), reverse=self._sort_descending
+        )
         return [
             self._make_file_item(f.get("filename", f.get("path", "")), meta)
             for f in files
         ]
 
-    def _sort_value(self, filedata: dict, meta: dict) -> object:
-        """Comparable key for the active sort column (uniform type per column)."""
+    @staticmethod
+    def _upload_time(filedata: dict) -> float:
+        """File mtime; Moonraker lists in os.listdir order, not upload order."""
+        modified = filedata.get("modified", 0)
+        return modified if isinstance(modified, (int, float)) else 0
+
+    def _sort_value(self, filedata: dict, meta: dict) -> float | str:
+        """Sort key for the active column, one type per column."""
         name = filedata.get("filename", filedata.get("path", ""))
+        if self._sort_key == "Import Order":
+            return self._upload_time(filedata)
         if self._sort_key == "Last Print":
             cached = self._lookup_meta(name, meta) or {}
             return cached.get("print_start_time") or 0
@@ -385,18 +383,18 @@ class FilesPage(QtWidgets.QWidget):
         return name.lower()
 
     def _on_sort_key_changed(self, sort_key: str) -> None:
-        """Apply the selected sort column and rebuild the list."""
+        """Apply the chosen sort column."""
         self._sort_key = sort_key or self.SORTING_TYPES[0]
         self._build_file_list()
 
     def _on_sort_order_toggled(self) -> None:
-        """Flip the sort direction, refresh the toggle icon, and rebuild."""
+        """Flip the sort direction."""
         self._sort_descending = not self._sort_descending
         self._update_sort_order_icon()
         self._build_file_list()
 
     def _update_sort_order_icon(self) -> None:
-        """Point the order-toggle button at the icon for the current direction."""
+        """Match the toggle icon to the sort direction."""
         key = "sort_desc" if self._sort_descending else "sort_asc"
         self._sort_order_btn.setProperty(
             "icon_pixmap", QtGui.QPixmap(self.ICON_PATHS[key])
@@ -404,11 +402,11 @@ class FilesPage(QtWidgets.QWidget):
         self._sort_order_btn.update()
 
     def _make_back_folder_item(self) -> ListItem:
-        """The leading Go Back navigation row."""
+        """The Go Back row."""
         return self._row("Go Back", "", self._icons.get("back_folder"), None)
 
     def _make_directory_item(self, dir_data: dict) -> ListItem:
-        """A directory row; USB mounts at root get the USB icon."""
+        """Dir row; root USB mounts get the USB icon."""
         name = str(dir_data.get("dirname", ""))
         icon = self._icons.get("folder")
         if not self._curr_dir and helper_methods.is_usb_mount(name):
@@ -416,7 +414,7 @@ class FilesPage(QtWidgets.QWidget):
         return self._row(name, "", icon, None)
 
     def _make_file_item(self, filename: str, meta: dict | None = None) -> ListItem:
-        """A file row from cached metadata, or an Unknown placeholder."""
+        """File row from cached metadata, else Unknown."""
         cached = self._lookup_meta(filename, meta)
         right = (
             self._format_file_meta(cached)
@@ -434,10 +432,10 @@ class FilesPage(QtWidgets.QWidget):
         self,
         text: str,
         right_text: str,
-        left_icon: typing.Optional[QtGui.QPixmap],
-        right_icon: typing.Optional[QtGui.QPixmap],
+        left_icon: QtGui.QPixmap | None,
+        right_icon: QtGui.QPixmap | None,
     ) -> ListItem:
-        """ListItem with this page's standard sizing/flags."""
+        """ListItem with this page's sizing and flags."""
         return ListItem(
             text=text,
             right_text=right_text,
@@ -461,7 +459,7 @@ class FilesPage(QtWidgets.QWidget):
 
     @staticmethod
     def _parse_materials(filament_type) -> list[str]:
-        """filament_type (str/list/JSON/comma) -> ordered list of material names."""
+        """filament_type (str, list, JSON or CSV) as material names."""
         if isinstance(filament_type, str):
             text = filament_type.strip()
             if text.startswith("[") and text.endswith("]"):
@@ -479,20 +477,11 @@ class FilesPage(QtWidgets.QWidget):
 
     @classmethod
     def _filament_label(cls, filament_type) -> str:
-        """Normalize filament_type to a comma-joined display label."""
+        """filament_type as a comma-joined label."""
         label = ",".join(dict.fromkeys(cls._parse_materials(filament_type)))
         if not label or label == "Unknown":
             return "Unknown Filament"
         return label
-
-    @classmethod
-    def _material_set(cls, filedata: dict) -> set[str]:
-        """Distinct printable materials declared in a file's metadata."""
-        return {
-            m
-            for m in cls._parse_materials(filedata.get("filament_type"))
-            if m != "Unknown"
-        }
 
     def _delayed_scrollbar_update(self) -> None:
         """Update scrollbar after model changes."""
@@ -505,7 +494,7 @@ class FilesPage(QtWidgets.QWidget):
         self.file_selected.emit(clean_filename, file_data)
 
     def _selected_file_path(self, display_name: str) -> str:
-        """Full path of the gcode row whose display name matches (extension-agnostic)."""
+        """Full path of the gcode shown as *display_name*."""
         for f in self._file_list:
             name = f.get("filename", f.get("path", ""))
             if name.lower().endswith(self.GCODE_EXTENSION) and (
@@ -667,14 +656,12 @@ class FilesPage(QtWidgets.QWidget):
 
         layout.addStretch(1)
 
-        # Sort key selector
         self._sort_combo = BlocksComboBox(parent=self)
         for name in self.SORTING_TYPES:
             self._sort_combo.addItem(name)
         self._sort_combo.currentTextChanged.connect(self._on_sort_key_changed)
         layout.addWidget(self._sort_combo, 0, QtCore.Qt.AlignmentFlag.AlignVCenter)
 
-        # Sort order toggle (ascending/descending)
         self._sort_order_btn = IconButton(parent=self)
         self._sort_order_btn.setMinimumSize(QtCore.QSize(60, 60))
         self._sort_order_btn.setMaximumSize(QtCore.QSize(60, 60))
@@ -743,7 +730,7 @@ class FilesPage(QtWidgets.QWidget):
         list_widget.setProperty("selectionMode", "NoSelection")
         list_widget.setStyleSheet("background: transparent;")
         list_widget.setDefaultDropAction(QtCore.Qt.DropAction.IgnoreAction)
-        # No setUniformItemSizes: expanded rows return a taller sizeHint.
+        # No setUniformItemSizes: expanded rows are taller.
         list_widget.setObjectName("list_widget")
         list_widget.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
         list_widget.setSelectionBehavior(

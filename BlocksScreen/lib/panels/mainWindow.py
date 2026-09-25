@@ -176,7 +176,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.usb_manager.usb_mounted.connect(
             self.printPanel.filesPage_widget.on_usb_added
         )
-        # Only usb_unmounted, it fires per reaped symlink so the listing really changed.
+        # usb_unmounted only; also wiring hardware_removed refreshes twice.
         self.usb_manager.usb_unmounted.connect(
             self.printPanel.filesPage_widget.on_usb_removed
         )

@@ -1,7 +1,11 @@
-import pytest
 from pathlib import Path
 
-from BlocksScreen.helper_methods import resolve_thumbnail_path, get_parent_dir, is_usb_mount
+from BlocksScreen.helper_methods import (
+    get_parent_dir,
+    is_usb_mount,
+    is_usb_path,
+    resolve_thumbnail_path,
+)
 
 GCODE_ROOT = Path("/home/pi/printer_data/gcodes")
 
@@ -18,6 +22,7 @@ class TestThumbnailsPath:
             GCODE_ROOT, "Cube.gcode", ".thumbs/Cube-300x300.png"
         )
         assert result == GCODE_ROOT / ".thumbs/Cube-300x300.png"
+
 
 class TestPathHelpers:
     def test_parent_of_root_file_is_empty(self):
@@ -38,7 +43,16 @@ class TestPathHelpers:
         assert is_usb_mount("USB DRIVE") is True
         assert is_usb_mount("USB DRIVE 2") is True
 
+    def test_usb_path_covers_anything_under_a_mount(self):
+        assert is_usb_path("USB-BLOCKS/sub/Cube.gcode") is True
+        assert is_usb_path("/USB DRIVE/Cube.gcode") is True
+        assert is_usb_path("USB DRIVE 2") is True
+
+    def test_usb_path_ignores_usb_named_folders_below_root(self):
+        assert is_usb_path("sub/USB-BLOCKS/Cube.gcode") is False
+        assert is_usb_path("Cube.gcode") is False
+        assert is_usb_path("") is False
+
     def test_usb_mount_rejects_empty(self):
         assert is_usb_mount("") is False
         assert is_usb_mount("/") is False
-

@@ -1,4 +1,4 @@
-"""Unit tests for embedded-thumbnail parsing + off-thread ThumbnailLoader."""
+"""Gcode thumbnail/metadata parsing and loaders."""
 
 from BlocksScreen.lib.utils.gcode_loader import (
     GcodeMetadataLoader,
@@ -13,7 +13,7 @@ _PNG_1x1 = (
 
 
 def _header(*blocks) -> bytes:
-    """Build a fake gcode header carrying the given (keyword, w, h) thumbnails."""
+    """Fake header with (keyword, w, h) thumbnails."""
     parts = []
     for keyword, width, height in blocks:
         sep = "x" if keyword == "thumbnail" else "*"
@@ -43,8 +43,10 @@ class TestParse:
 class _FakeRest:
     def __init__(self, header):
         self._header = header
+        self.calls = 0
 
     def get_gcode_header(self, rel_path, max_bytes=131072):
+        self.calls += 1
         return self._header
 
 
@@ -63,6 +65,56 @@ class TestLoader:
         with qtbot.assertNotEmitted(loader.ready, wait=300):
             loader.request_embedded("x.gcode")
 
+    def test_miss_is_cached_and_never_refetched(self, qtbot):
+        rest = _FakeRest(b"G1 X0 Y0\n")
+        loader = ThumbnailLoader(rest)
+        loader.request_embedded("x.gcode")
+        qtbot.waitUntil(lambda: "x.gcode" in loader._cache, timeout=2000)
+        with qtbot.assertNotEmitted(loader.ready, wait=100):
+            loader.request_embedded("x.gcode")
+        assert rest.calls == 1
+        assert loader.cached("x.gcode") is None
+
+    def test_unread_header_is_retried(self, qtbot):
+        rest = _FakeRest(None)
+        loader = ThumbnailLoader(rest)
+        for _ in range(2):
+            loader.request_embedded("x.gcode")
+            qtbot.waitUntil(lambda: not loader._inflight, timeout=2000)
+        assert rest.calls == 2
+        assert "x.gcode" not in loader._cache
+
+    def test_forget_is_scoped_to_the_path(self, qtbot):
+        loader = GcodeMetadataLoader(None)
+        loader._cache.update({"USB-X/a.gcode": {}, "USB-XY/b.gcode": {}})
+        loader._inflight.add("USB-X/c.gcode")
+        loader.forget("USB-X")
+        assert list(loader._cache) == ["USB-XY/b.gcode"]
+        assert not loader._inflight
+
+    def test_forgotten_fetch_result_is_dropped(self, qtbot):
+        """A pulled drive's late result must not re-cache it."""
+        loader = GcodeMetadataLoader(None)
+        loader._inflight.add("USB-X/a.gcode")
+        loader.forget("USB-X")
+        with qtbot.assertNotEmitted(loader.ready):
+            loader._on_result("USB-X/a.gcode", {"estimated_time": 1})
+        assert "USB-X/a.gcode" not in loader._cache
+
+
+class _EmptyMetaRest:
+    """Serves gcode with no slicer comments, counting header reads."""
+
+    def __init__(self):
+        self.calls = 0
+
+    def get_gcode_header(self, rel_path, max_bytes=131072):
+        self.calls += 1
+        return b"G1 X0 Y0\n"
+
+    def get_gcode_tail(self, rel_path, max_bytes=131072):
+        return b"G1 X1 Y1\n"
+
 
 class _FakeMetaRest:
     """Serves a slicer footer for the metadata loader."""
@@ -76,7 +128,7 @@ class _FakeMetaRest:
 
 class TestMetadataLoader:
     def test_emits_ready_with_parsed_metadata(self, qtbot):
-        """The metadata loader shares the base but keeps its dict-typed ready signal."""
+        """The subclass keeps its dict-typed ready signal."""
         loader = GcodeMetadataLoader(_FakeMetaRest())
         with qtbot.waitSignal(loader.ready, timeout=2000) as sig:
             loader.request("USB-X/cube.gcode")
@@ -84,3 +136,14 @@ class TestMetadataLoader:
         assert path == "USB-X/cube.gcode"
         assert meta["estimated_time"] == 4802
         assert loader.cached("USB-X/cube.gcode") == meta
+
+    def test_metadata_miss_is_cached(self, qtbot):
+        """Parsed once, not on every list rebuild."""
+        rest = _EmptyMetaRest()
+        loader = GcodeMetadataLoader(rest)
+        loader.request("x.gcode")
+        qtbot.waitUntil(lambda: "x.gcode" in loader._cache, timeout=2000)
+        with qtbot.assertNotEmitted(loader.ready, wait=100):
+            loader.request("x.gcode")
+        assert rest.calls == 1
+        assert loader.cached("x.gcode") is None

@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 
 class PrintTab(QtWidgets.QStackedWidget):
-    """Stacked widget with main, files, confirm, print, tune, babystep, and filament change pages."""
+    """Print tab: files, confirm, job status and tuning pages."""
 
     request_query_print_stats: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         dict, name="request_query_print_stats"
@@ -73,7 +73,7 @@ class PrintTab(QtWidgets.QStackedWidget):
 
         self.setupMainPrintPage()
         self.ws: MoonWebSocket = ws
-        # Shared embedded-thumbnail fallback for read-only USB drives.
+        # Embedded-thumbnail fallback for USB gcodes.
         gcode_loader.configure(ws._moonRest)
         self.printer: Printer = printer
         self.config: BlocksScreenConfig = get_configparser()
@@ -115,8 +115,13 @@ class PrintTab(QtWidgets.QStackedWidget):
         self.confirmPage_widget.show_metadata.connect(
             lambda: self.change_page(self.indexOf(self.metadataPage_widget))
         )
+        self.confirmPage_widget.show_metadata.connect(
+            self.file_data.request_print_duration
+        )
         self.metadataPage_widget.back_btn.clicked.connect(self.back_button)
         self.file_data.fileinfo.connect(self.filesPage_widget.on_fileinfo)
+        self.file_data.fileinfo.connect(self.confirmPage_widget.on_fileinfo)
+        self.file_data.fileinfo.connect(self.metadataPage_widget.on_fileinfo)
 
         self.file_data.on_dirs.connect(self.filesPage_widget.on_directories)
 
@@ -154,6 +159,9 @@ class PrintTab(QtWidgets.QStackedWidget):
         )
         self.jobStatusPage_widget.show_metadata.connect(
             lambda: self.change_page(self.indexOf(self.metadataPage_widget))
+        )
+        self.jobStatusPage_widget.show_metadata.connect(
+            self.file_data.request_print_duration
         )
         self.jobStatusPage_widget.request_file_info.connect(
             self.file_data.on_request_fileinfo

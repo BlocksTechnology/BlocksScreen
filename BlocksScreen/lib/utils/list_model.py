@@ -66,7 +66,7 @@ class EntryListModel(QtCore.QAbstractListModel):
         self.endInsertRows()
 
     def remove_item(self, item: ListItem) -> None:
-        """Remove one row item from the model by identity."""
+        """Remove *item* by identity."""
         if item in self.entries:
             index = self.entries.index(item)
             self.beginRemoveRows(QtCore.QModelIndex(), index, index)
@@ -87,7 +87,7 @@ class EntryListModel(QtCore.QAbstractListModel):
         self.endResetModel()
 
     def remove_item_by_text(self, text: str) -> bool:
-        """Remove item by text value; True if found, False otherwise."""
+        """Remove the item with *text*; True if found."""
         for i, item in enumerate(self.entries):
             if item.text == text:
                 self.beginRemoveRows(QtCore.QModelIndex(), i, i)
@@ -104,7 +104,7 @@ class EntryListModel(QtCore.QAbstractListModel):
         self.endInsertRows()
 
     def remove_item_at(self, position: int) -> bool:
-        """Remove item at position; True if removed, False if out of range."""
+        """Remove the item at *position*; True if in range."""
         if position < 0 or position >= len(self.entries):
             return False
         self.beginRemoveRows(QtCore.QModelIndex(), position, position)
@@ -120,7 +120,7 @@ class EntryListModel(QtCore.QAbstractListModel):
         return None
 
     def update_item_at(self, position: int, item: ListItem) -> bool:
-        """Update item at position (left_icon, right_text, right_icon); emit dataChanged."""
+        """Update an item's icons and right text; emits dataChanged."""
         if position < 0 or position >= len(self.entries):
             return False
         existing = self.entries[position]
@@ -136,7 +136,7 @@ class EntryListModel(QtCore.QAbstractListModel):
         desired: list[ListItem],
         key_fn: typing.Callable[[ListItem], str],
     ) -> None:
-        """Diff against desired entries and apply minimal mutations using key_fn."""
+        """Minimally edit the model to match *desired*, keyed by key_fn."""
         desired_keys = {key_fn(d) for d in desired}
         self._remove_stale_entries(desired_keys, key_fn)
 
@@ -285,7 +285,7 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
         pixmap: QtGui.QPixmap,
         size: QtCore.QSize,
     ) -> QtGui.QPixmap:
-        """Return scaled pixmap (cached by cacheKey, width, height)."""
+        """Scaled pixmap, LRU-cached per (cacheKey, size)."""
         key = (pixmap.cacheKey(), size.width(), size.height())
         cached = self._scaled_cache.get(key)
         if cached is not None:
@@ -297,7 +297,7 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
             QtCore.Qt.TransformationMode.SmoothTransformation,
         )
         self._scaled_cache[key] = scaled
-        # Bound growth: LRU-evict past 64 (covers all wifi/icon variants).
+        # 64 covers every wifi/icon variant.
         if len(self._scaled_cache) > 64:
             self._scaled_cache.popitem(last=False)
         return scaled
@@ -308,7 +308,7 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
         size: QtCore.QSize,
         color: str,
     ) -> QtGui.QPixmap:
-        """Return *pixmap* scaled to *size* and tinted *color*, cached per paint."""
+        """*pixmap* scaled to *size* and tinted *color*, LRU-cached."""
         key = (pixmap.cacheKey(), size.width(), size.height(), color)
         cached = self._tinted_cache.get(key)
         if cached is not None:
@@ -328,7 +328,7 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
         return tinted
 
     def _expand_arrow(self, expanded: bool) -> QtGui.QPixmap:
-        """Lazily load + cache the expand/collapse arrow pixmap (no per-paint decode)."""
+        """Arrow pixmap, decoded once rather than per paint."""
         arrow = self._arrow_cache.get(expanded)
         if arrow is None:
             name = "arrow_down" if expanded else "arrow_right"
@@ -559,7 +559,7 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
         if (press or release) and item and item.not_clickable:
             return True
         if press:
-            # Record the press origin so a scroll drag is not mistaken for a tap.
+            # Press origin, to tell scroll drags from taps.
             self._press_pos = event.position()
             return False
         if release:
@@ -577,7 +577,7 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
         """Turn a release into a drag, an arrow toggle or a row selection."""
         if self._is_drag(event):
             return False
-        # Expand-arrow hit-test before callback so an arrow tap does not also fire it.
+        # Arrow first, so an arrow tap does not also select the row.
         if self._toggle_expand(event, model, option, index, item):
             return True
         if item.callback and callable(item.callback):
@@ -588,12 +588,12 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
         return True
 
     def _is_drag(self, event: QtCore.QEvent) -> bool:
-        """A release that drifted far from its press is a scroll gesture, not a tap."""
+        """True if the release drifted far enough to be a scroll."""
         press_pos = self._press_pos
         self._press_pos = None
         if press_pos is None:
             return False
-        # Fingers drift more than a mouse, so double the platform drag slop.
+        # Fingers drift more than a mouse.
         threshold = QtWidgets.QApplication.startDragDistance() * 2
         delta = event.position() - press_pos
         return abs(delta.x()) + abs(delta.y()) > threshold
@@ -606,7 +606,7 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
         index: QtCore.QModelIndex,
         item: ListItem,
     ) -> bool:
-        """Flip expansion when the tap landed on the arrow, else report a miss."""
+        """Toggle expansion if the tap hit the arrow; True if it did."""
         if self.prev_index is None or not item.allow_expand or not item.needs_expansion:
             return False
         ellipse_size = item.height * 0.8
@@ -625,7 +625,7 @@ class EntryDelegate(QtWidgets.QStyledItemDelegate):
     def _select_row(
         self, model: EntryListModel, index: QtCore.QModelIndex, item: ListItem
     ) -> None:
-        """Disable the previously selected row, enable this one and announce it."""
+        """Select this row, deselecting the previous one."""
         if self.prev_index != index.row():
             prev_index: QtCore.QModelIndex = model.index(self.prev_index)
             if prev_index.isValid():

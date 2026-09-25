@@ -30,7 +30,7 @@ class ConfirmWidget(QtWidgets.QWidget):
         self.setMouseTracking(True)
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_AcceptTouchEvents, True)
         self.thumbnail: QtGui.QImage = self._blocksthumbnail
-        self._thumbnails: typing.List = []
+        self._thumbnails: list = []
         self._current_gcode: str = ""
         self._loader_connected: bool = False
         self.directory = "gcodes"
@@ -76,8 +76,14 @@ class ConfirmWidget(QtWidgets.QWidget):
         self.cf_info_tr.setText(f"Slicer time: {time_str}")
         self.repaint()
 
+    @QtCore.pyqtSlot(dict, name="on_fileinfo")
+    def on_fileinfo(self, filedata: dict) -> None:
+        """Refresh the shown file's metadata, e.g. a late duration."""
+        if filedata.get("filename", "").removeprefix("/") == self._current_gcode:
+            self._filedata = filedata
+
     def _resolve_thumbnail(self) -> QtGui.QImage:
-        """Biggest on-disk thumbnail, else a cached/queued embedded one, else placeholder."""
+        """Largest on-disk thumbnail, else embedded, else placeholder."""
         if self._thumbnails:
             disk = QtGui.QImage(self._thumbnails[-1])
             if not disk.isNull():
@@ -94,9 +100,9 @@ class ConfirmWidget(QtWidgets.QWidget):
         loader.request_embedded(self._current_gcode)
         return self._blocksthumbnail
 
-    def _on_embedded_ready(self, gcode_path: str, image: object) -> None:
-        """Swap in an embedded thumbnail that arrived for the shown file."""
-        if gcode_path == self._current_gcode and image and not image.isNull():
+    def _on_embedded_ready(self, gcode_path: str, image: QtGui.QImage) -> None:
+        """Show a late embedded thumbnail for the shown file."""
+        if gcode_path == self._current_gcode and not image.isNull():
             self.thumbnail = image
             self.repaint()
 

@@ -16,8 +16,10 @@ import struct
 
 logger = logging.getLogger(__name__)
 
-# Symlink names udisks2.add_symlink can produce, kept in sync with USB_LINK_PREFIXES there.
-USB_LINK_PREFIXES: tuple[str, ...] = ("USB-", "USB DRIVE")
+# Shared by udisks2.add_symlink and the files UI USB checks.
+USB_LABEL_PREFIX = "USB-"
+USB_FALLBACK_NAME = "USB DRIVE"
+USB_LINK_PREFIXES: tuple[str, ...] = (USB_LABEL_PREFIX, USB_FALLBACK_NAME)
 
 try:
     ctypes.cdll.LoadLibrary("libXext.so.6")
@@ -228,7 +230,7 @@ except Exception as e:
     logger.exception(f"Unexpected exception occurred {e}")
 
 
-def convert_bytes_to_mb(size_bytes: int | float) -> float:
+def convert_bytes_to_mb(size_bytes: float) -> float:
     """Converts byte size to megabyte size.
 
     Args:
@@ -265,7 +267,7 @@ def calculate_current_layer(
     layer = math.ceil((z_position - first_layer_height) / layer_height + 1)
     if max_layers > 0 and layer > max_layers:
         return max_layers
-    return layer if layer > 0 else 0
+    return max(0, layer)
 
 
 def calculate_max_layers(
@@ -298,7 +300,7 @@ def estimate_print_time(seconds: int) -> list[int]:
 
 
 def format_duration(seconds: int) -> str:
-    """Human "1d 2h 3m" duration; sub-minute values render as seconds."""
+    """Seconds as "1d 2h 3m", or "Ns" under a minute."""
     if seconds < 60:
         return f"{seconds}s"
     days, hours, mins, _ = estimate_print_time(seconds)
@@ -310,7 +312,7 @@ def format_duration(seconds: int) -> str:
 
 
 def format_weight(grams: float) -> str:
-    """Filament mass in grams, switching to kg past 499g."""
+    """Grams as "g", or "kg" past 499g."""
     return f"{grams / 1000:.2f}kg" if grams > 499 else f"{grams:.2f}g"
 
 
@@ -367,20 +369,25 @@ def get_file_name(filename: str | None) -> str:
 
 
 def get_parent_dir(path: str) -> str:
-    """Return the parent directory of *path*, POSIX-style (for root-level)."""
+    """POSIX parent of *path*, "" at the gcodes root."""
     parent = pathlib.PurePosixPath(path.removeprefix("/")).parent
     return "" if str(parent) == "." else str(parent)
 
 
 def is_usb_mount(path: str) -> bool:
-    """Return True if *path* is a top-level USB mount, under either name add_symlink gives."""
+    """True for a top-level USB symlink name."""
     name = path.strip("/")
     return bool(name) and "/" not in name and name.startswith(USB_LINK_PREFIXES)
+
+
+def is_usb_path(path: str) -> bool:
+    """True for a USB mount or anything under one."""
+    return is_usb_mount(path.strip("/").split("/", 1)[0])
 
 
 def resolve_thumbnail_path(
     gcode_root: pathlib.Path, requested_path: str, relative_path: str
 ) -> pathlib.Path:
-    """Resolve a thumbnails absolute path from the *requested* gcode path"""
+    """Thumbnail path resolved against the gcode's own directory."""
     parent = pathlib.PurePosixPath(requested_path.removeprefix("/")).parent
     return gcode_root / parent / relative_path

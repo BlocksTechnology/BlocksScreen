@@ -4,10 +4,11 @@ import os
 import pathlib
 import shutil
 import typing
-from collections.abc import Coroutine
 import unicodedata
+from collections.abc import Coroutine
 
 import sdbus
+from helper_methods import USB_FALLBACK_NAME, USB_LABEL_PREFIX, USB_LINK_PREFIXES
 from PyQt6 import QtCore
 
 from .device import Device
@@ -24,8 +25,6 @@ from .udisks2_dbus_async import (
 UDisks2_service: str = "org.freedesktop.UDisks2"
 UDisks2_obj_path: str = "org/freedesktop/UDisks2"
 AlreadyMountedException = "org.freedesktop.UDisks2.Error.AlreadyMounted"
-# Names add_symlink can produce, the only links this module is allowed to reap.
-USB_LINK_PREFIXES: tuple[str, ...] = ("USB-", "USB DRIVE")
 
 _T = typing.TypeVar(name="_T")
 
@@ -56,7 +55,6 @@ def validate_label(label: str, strict: bool = True, max_length: int = 100) -> st
 
     dangerous_chars = {
         "\0",
-        "\x00",
         "/",
         "\\",
         ";",
@@ -432,7 +430,7 @@ class UDisksDBusAsync(QtCore.QThread):
                         device: Device = self.controlled_devs.pop(path)
                         device.kill()
                         del device
-                        # Clean first: a refresh fired now would still list the symlink.
+                        # Reap first: a refresh now would still list the link.
                         self._cleanup_broken_symlinks()
                         self.hardware_removed[str].emit(path)
                         continue
@@ -467,7 +465,7 @@ class UDisksDBusAsync(QtCore.QThread):
             )
 
     def _announce_mount(self, dev_path: str, symlink: str) -> str:
-        """Publish a new USB folder, without this the file view never learns it exists."""
+        """Announce a new USB folder to the files view."""
         if symlink:
             self.device_mounted[str, str].emit(dev_path, symlink)
         return symlink
@@ -548,8 +546,8 @@ class UDisksDBusAsync(QtCore.QThread):
         """
         if not _validated and label:
             label = validate_label(label, strict=True)
-            label = "USB-" + label
-        fallback: str = "USB DRIVE" if _index == 0 else str(f"USB DRIVE {_index}")
+            label = USB_LABEL_PREFIX + label
+        fallback = USB_FALLBACK_NAME if _index == 0 else f"{USB_FALLBACK_NAME} {_index}"
         dstb = pathlib.Path(dst_path).joinpath(label if label else fallback)
         try:
             if not os.path.islink(dstb):
@@ -606,15 +604,16 @@ class UDisksDBusAsync(QtCore.QThread):
                 _ = self.rem_symlink(dir.as_posix())
 
     def _is_symlink_live(self, link: pathlib.Path) -> bool:
-        """A USB symlink is live only while its target is still a real mountpoint."""
+        """Live only while the target is still a mountpoint."""
         if not os.path.exists(link):
             return False
+        # Never reap links we did not create.
         if not link.name.startswith(USB_LINK_PREFIXES):
             return True
         return os.path.ismount(os.path.realpath(link))
 
     def _cleanup_broken_symlinks(self) -> None:
-        """Reap USB symlinks left behind by an unmount and tell the UI they are gone."""
+        """Remove dead USB symlinks and announce each removal."""
         for dir in self.gcodes_path.rglob("*"):
             if not os.path.islink(dir) or self._is_symlink_live(dir):
                 continue

@@ -1,4 +1,4 @@
-"""Unit tests for EntryDelegate press/release handling: drag slop, expand arrow, row selection."""
+"""EntryDelegate press/release: drag slop, expand arrow, selection."""
 
 import importlib.util
 import sys
@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 from PyQt6 import QtCore, QtGui, QtWidgets
 
-# tests/network/conftest.py swaps in a list_model stub, so load the real file by path.
+# tests/network/conftest.py stubs list_model; load the real file.
 _MODULE_PATH = (
     Path(__file__).resolve().parents[2]
     / "BlocksScreen"
@@ -42,24 +42,22 @@ def _event(kind, x, y):
 
 
 def _press(x, y):
-    """Press at a point."""
     return _event(QtCore.QEvent.Type.MouseButtonPress, x, y)
 
 
 def _release(x, y):
-    """Release at a point."""
     return _event(QtCore.QEvent.Type.MouseButtonRelease, x, y)
 
 
 def _option(row=0):
-    """The style option the view would hand the delegate for a given row."""
+    """Style option the view passes for *row*."""
     option = QtWidgets.QStyleOptionViewItem()
     option.rect = QtCore.QRect(0, row * ROW_H, ROW_W, ROW_H)
     return option
 
 
 def _arrow_center(option):
-    """Centre of the expand arrow, mirroring the hit-test geometry in _toggle_expand."""
+    """Arrow centre, mirroring the _toggle_expand hit-test."""
     size = ROW_H * 0.8
     margin = (ROW_H - size) / 2
     return (option.rect.right() - margin - size / 2, option.rect.top() + ROW_H / 2)
@@ -84,7 +82,7 @@ def model(qapp):
 
 
 def _tap(delegate, model, row, x, y, option=None):
-    """Full press+release at one point, returning the editorEvent result of the release."""
+    """Press and release at one point; returns the release result."""
     option = option or _option(row)
     index = model.index(row)
     delegate.editorEvent(_press(x, y), model, option, index)
@@ -154,7 +152,7 @@ class TestDragSlop:
         assert delegate.editorEvent(_release(11, 11), model, option, index) is True
 
     def test_release_without_press_still_taps(self, delegate, model):
-        # A release with no recorded origin (view stole the press) must not be dropped.
+        # A release with no recorded press (the view took it) still counts.
         assert (
             delegate.editorEvent(_release(10, 10), model, _option(0), model.index(0))
             is True

@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 
 class JobStatusWidget(QtWidgets.QWidget):
-    """Job status page for active print jobs, with mid-print tuning and progress."""
+    """Active print job status page."""
 
     print_start: typing.ClassVar[QtCore.pyqtSignal] = QtCore.pyqtSignal(
         str, name="print_start"
@@ -122,7 +122,7 @@ class JobStatusWidget(QtWidgets.QWidget):
 
     @QtCore.pyqtSlot(name="on_file_info_clicked")
     def _on_file_info_clicked(self) -> None:
-        """Open the metadata page for the file currently printing."""
+        """Show metadata for the printing file."""
         if self._current_file_name:
             self.show_metadata.emit(self._current_file_name, self.file_metadata or {})
 
@@ -143,10 +143,17 @@ class JobStatusWidget(QtWidgets.QWidget):
         return super().eventFilter(sender_obj, event)
 
     def _load_thumbnails(self, *thumbnails) -> None:
-        """Pre-load available thumbnails for the current print object."""
-        self.thumbnail_graphics = [
-            px for thumb in thumbnails if not (px := QtGui.QPixmap(thumb)).isNull()
-        ]
+        """Load the largest readable thumbnail for the current print object."""
+        # Only [-1] is shown: decode largest first and stop at the first readable.
+        biggest = next(
+            (
+                px
+                for thumb in reversed(thumbnails)
+                if not (px := QtGui.QPixmap(thumb)).isNull()
+            ),
+            None,
+        )
+        self.thumbnail_graphics = [biggest] if biggest is not None else []
         if not self.thumbnail_graphics:
             embedded = self._embedded_pixmap()
             if embedded is None:
@@ -175,14 +182,14 @@ class JobStatusWidget(QtWidgets.QWidget):
         self.printing_progress_bar.set_inner_pixmap(self.thumbnail_graphics[-1])
 
     def _embedded_pixmap(self) -> QtGui.QPixmap | None:
-        """Cached embedded thumbnail (read-only USB fallback) as a pixmap, or None."""
+        """Cached embedded thumbnail, or None."""
         self._ensure_loader_connected()
         return gcode_loader.cached_pixmap(
             (self.file_metadata or {}).get("filename", "")
         )
 
     def _ensure_loader_connected(self) -> None:
-        """Connect once so a late embedded thumbnail repaints instead of staying blank."""
+        """Connect once so a late thumbnail repaints."""
         if self._loader_connected:
             return
         loader = gcode_loader.get_loader()
@@ -192,7 +199,7 @@ class JobStatusWidget(QtWidgets.QWidget):
         self._loader_connected = True
 
     def _on_embedded_ready(self, gcode_path: str, image: object) -> None:
-        """Repaint when the embedded thumbnail for the current file finishes loading."""
+        """Repaint when the current file's thumbnail loads."""
         filename = (self.file_metadata or {}).get("filename", "").removeprefix("/")
         if not filename or gcode_path != filename or self.thumbnail_graphics:
             return
@@ -249,6 +256,10 @@ class JobStatusWidget(QtWidgets.QWidget):
     @QtCore.pyqtSlot(dict, name="on_fileinfo")
     def on_fileinfo(self, metadata: dict) -> None:
         """Handle received file info/metadata (loads regardless of visibility)."""
+        meta_file = metadata.get("filename", "").removeprefix("/")
+        # fileinfo is global, every listed file emits it: keep only this job's.
+        if meta_file != self._current_file_name.removeprefix("/"):
+            return
         # Metadata has no current_layer (that's live print_stats); don't reset it here.
         layer_count = metadata.get("layer_count", -1)
         self.total_layers = str(layer_count) if layer_count >= 0 else "---"
@@ -465,7 +476,7 @@ class JobStatusWidget(QtWidgets.QWidget):
             self.printing_progress_bar.set_progress(self._compute_progress())
 
     def _compute_progress(self) -> float:
-        """File-relative progress [0, 1] matching Mainsail (clipped to gcode_start/end)."""
+        """Progress in [0, 1] between gcode_start/end, as Mainsail does."""
         start = self._gcode_start_byte
         end = self._gcode_end_byte
         if start and end and end > start:

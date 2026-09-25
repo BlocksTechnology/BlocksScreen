@@ -2,9 +2,8 @@ from __future__ import annotations
 
 from PyQt6 import QtCore, QtGui, QtWidgets
 
-# BlocksScreen accent (#1A8FBF)
 _ACCENT = "26, 143, 191"
-# Font size shared by the shown title and the popup rows.
+# Shared by the title and the popup rows.
 _FONT_PX = 22
 
 _STYLE = f"""
@@ -54,27 +53,27 @@ _STYLE = f"""
 
 
 class _TouchRowDelegate(QtWidgets.QStyledItemDelegate):
-    """Enlarges popup rows so they meet touch-target sizing."""
+    """Touch-sized popup rows."""
 
     def sizeHint(self, option, index):
-        """Row height at least 48px for finger taps."""
+        """At least 48px tall for finger taps."""
         size = super().sizeHint(option, index)
         size.setHeight(max(size.height(), 48))
         return size
 
     def initStyleOption(self, option, index):
-        """Center popup rows and match the shown title's font size."""
+        """Center rows at the title's font size."""
         super().initStyleOption(option, index)
         option.displayAlignment = QtCore.Qt.AlignmentFlag.AlignCenter
         option.font.setPixelSize(_FONT_PX)
 
 
 class BlocksComboBox(QtWidgets.QComboBox):
-    """QComboBox skinned to the app theme with touch-sized popup rows."""
+    """Themed QComboBox with touch-sized rows."""
 
     def __init__(self, parent: QtWidgets.QWidget | None = None) -> None:
         super().__init__(parent)
-        # A real QListView guarantees the ::item stylesheet rules apply.
+        # ::item stylesheet rules need a real QListView.
         self.setView(QtWidgets.QListView(self))
         self.setStyleSheet(_STYLE)
         self.setItemDelegate(_TouchRowDelegate(self))
@@ -83,18 +82,17 @@ class BlocksComboBox(QtWidgets.QComboBox):
         self.setMaximumHeight(50)
 
     def showPopup(self) -> None:
-        """Open the drop-down list directly below the button, never above it."""
+        """Open the list below the button, never above."""
         super().showPopup()
         popup = self.findChild(QtWidgets.QFrame)
         if popup is not None:
-            # Opaque fill (no radius/translucency) avoids white corners on the
-            # popup window without needing a compositor.
+            # Opaque square fill: no white corners without a compositor.
             popup.setStyleSheet("background: #10242E;")
             below = self.mapToGlobal(self.rect().bottomLeft()).y()
             popup.move(popup.x(), below)
 
     def paintEvent(self, event: QtGui.QPaintEvent) -> None:
-        """Paint the combo with its current text horizontally centered."""
+        """Paint with the current text centered."""
         painter = QtWidgets.QStylePainter(self)
         painter.setPen(QtCore.Qt.GlobalColor.white)
         opt = QtWidgets.QStyleOptionComboBox()
@@ -111,7 +109,7 @@ class BlocksComboBox(QtWidgets.QComboBox):
         painter.drawText(rect, QtCore.Qt.AlignmentFlag.AlignCenter, text)
 
     def set_options(self, options: list[str]) -> None:
-        """Repopulate options, preserving the current selection when still present."""
+        """Replace options, keeping the selection if still present."""
         current = self.currentText()
         with QtCore.QSignalBlocker(self):
             self.clear()

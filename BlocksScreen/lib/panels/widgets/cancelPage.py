@@ -96,6 +96,10 @@ class CancelPage(QtWidgets.QWidget):
         self.cf_file_name.setText(file_name)
 
     def _show_screen_thumbnail(self, dict):
+        meta_file = dict.get("filename", "").removeprefix("/")
+        # fileinfo is global, every listed file emits it: decode only ours.
+        if meta_file != self.filename.removeprefix("/"):
+            return
         try:
             thumbnails = dict["thumbnail_paths"]
 
@@ -109,7 +113,7 @@ class CancelPage(QtWidgets.QWidget):
         self.set_pixmap(last_thumb)
 
     def _embedded_pixmap(self, gcode_path: str) -> QtGui.QPixmap:
-        """Cached embedded thumbnail (read-only USB fallback), else the logo placeholder."""
+        """Cached embedded thumbnail, else the logo."""
         pixmap = gcode_loader.cached_pixmap(gcode_path)
         if pixmap is not None:
             return pixmap
