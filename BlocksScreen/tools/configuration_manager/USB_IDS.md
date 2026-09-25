@@ -62,9 +62,15 @@ CONFIG_USB_VENDOR_ID=0x1d50
 CONFIG_USB_DEVICE_ID=0xb001   # this board's PID from the table above
 ```
 
-Until a board's firmware is rebuilt with its assigned PID,
-`device_profiles.py`'s matching falls back to the `match` regex
-unchanged - `device.vendor_id` reads `0` for any board still on the stock
-ID, and `DeviceProfile.matches()` only trusts the ID when the device
-reports a nonzero one. So updating this table and `device_profiles.yaml`
-is safe to ship ahead of the firmware rebuild.
+## How matching uses the IDs
+
+device_discoveryd reports each serial device's USB vendor/product ID (read
+from sysfs for the USB device behind the tty). `DeviceProfile.matches()`
+treats a reported ID as final for profiles that set `vendor_id`: a board
+still on Klipper's stock `1d50:614e` does **not** match the AMU profile, even
+if its USB serial string contains "AMU". Reflash every AMU with its assigned
+PID before relying on detection.
+
+The profile's `match` regex is only used when no ID is reported (0): the
+legacy `/dev/serial/by-id` scan used while the daemon is unreachable, or a
+daemon older than the sysfs ID lookup.

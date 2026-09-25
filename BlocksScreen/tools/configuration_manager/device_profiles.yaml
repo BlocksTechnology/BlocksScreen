@@ -14,11 +14,11 @@
 #   enable_includes   [include ...] paths to uncomment
 #   disable_includes  [include ...] paths to comment out
 #   vendor_id         optional USB vendor ID (int or hex string, e.g. '0x1d50').
-#                     When set and the discovered device reports a nonzero
-#                     vendor_id (daemon + Klipper firmware both ID-aware),
-#                     matching uses this instead of `match`. `match` stays
-#                     required as the fallback for daemon/firmware versions
-#                     that don't report USB IDs yet.
+#                     When set and the device reports a nonzero vendor_id
+#                     (device_discoveryd reads it from sysfs), matching uses
+#                     the IDs instead of `match`, and a mismatch is final.
+#                     `match` stays required as the fallback when no ID is
+#                     reported (legacy scan without the daemon, older daemon).
 #   product_id        optional USB product ID (int or hex string), only
 #                     meaningful together with vendor_id. Klipper sets both
 #                     at build time via Kconfig's "USB ids" menu
@@ -38,10 +38,10 @@ profiles:
       serial: ${serial}
 
   - name: amu
-    # match: fallback for firmware still on Klipper's stock USB ID (see
-    # USB_IDS.md) - must match the USB serial string the AMU firmware is
-    # flashed with. vendor_id/product_id: the standard AMU board ID, used
-    # instead once the firmware reports it.
+    # vendor_id/product_id: the standard AMU board ID (USB_IDS.md); an AMU
+    # on Klipper's stock ID is not recognised. match: only used when no ID
+    # is reported (legacy scan, older daemon) - must match the USB serial
+    # string the AMU firmware is flashed with.
     match: 'AMU'
     vendor_id: '0x1d50'
     product_id: '0xb001'
