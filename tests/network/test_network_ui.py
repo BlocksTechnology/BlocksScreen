@@ -9,18 +9,18 @@ assert on widget visibility and text state.
 
 Coverage targets
 ----------------
-* _handle_first_run — all 5 branches (ethernet / wifi-full / hotspot /
+* _handle_first_run: all 5 branches (ethernet / wifi-full / hotspot /
   wifi-on-no-conn / disconnected)
-* _on_network_state_changed — normal display path + loading-state machine
-* _display_connected_state — ethernet vs Wi-Fi vs hotspot
+* _on_network_state_changed: normal display path + loading-state machine
+* _display_connected_state: ethernet vs Wi-Fi vs hotspot
 * _display_disconnected_state / _display_wifi_on_no_connection
-* _sync_ethernet_panel — carrier visibility + toggle sync
+* _sync_ethernet_panel: carrier visibility + toggle sync
 * _set_loading_state / _clear_loading
-* _handle_load_timeout — each pending-operation branch
+* _handle_load_timeout: each pending-operation branch
 * _on_reconnect_complete
-* _on_operation_complete — success/failure branches
+* _on_operation_complete: success/failure branches
 * _handle_wifi_toggle / _handle_hotspot_toggle / _handle_ethernet_toggle
-* _emit_status_icon — ethernet / hotspot / wifi / disconnected
+* _emit_status_icon: ethernet / hotspot / wifi / disconnected
 """
 
 from unittest.mock import MagicMock, patch
@@ -56,6 +56,17 @@ def test_new_ip_signal_removed():
 # ─────────────────────────────────────────────────────────────────────────────
 # Helpers
 # ─────────────────────────────────────────────────────────────────────────────
+
+
+def _all_on(w) -> None:
+    """Force all three link toggles ON so exclusivity is observable."""
+    for btn in (w.wifi_button, w.hotspot_button, w.ethernet_button):
+        btn.toggle_button.state = btn.toggle_button.State.ON
+
+
+def _off(btn) -> bool:
+    """True when a link toggle reads OFF."""
+    return btn.toggle_button.state == btn.toggle_button.State.OFF
 
 
 def _eth_state(**kw) -> NetworkState:
@@ -178,11 +189,14 @@ class TestHandleFirstRun:
         assert w.netlist_ssuid.isVisible()
         assert w.netlist_ssuid.text() == "Ethernet"
 
-    def test_ethernet_disables_wifi_if_enabled(self, win):
+    def test_ethernet_never_kills_radio_at_boot(self, win):
+        """Boot is display-only: the radio is the recovery path, never touched here."""
         w, nm = win
         state = _eth_state(wifi_enabled=True)
         w._handle_first_run(state)
-        nm.set_wifi_enabled.assert_called_once_with(False)
+        nm.set_wifi_enabled.assert_not_called()
+        wifi_btn = w.wifi_button.toggle_button
+        assert wifi_btn.state == wifi_btn.State.OFF
 
     def test_ethernet_does_not_disable_wifi_if_already_off(self, win):
         w, nm = win
@@ -481,7 +495,7 @@ class TestReconnectComplete:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# _on_network_state_changed — normal (not connecting) path
+# _on_network_state_changed: normal (not connecting) path
 # ─────────────────────────────────────────────────────────────────────────────
 
 
@@ -490,7 +504,6 @@ class TestOnNetworkStateChangedNormal:
         """Mark first-run as done so the normal display path runs."""
         w._is_first_run = False
         w._is_connecting = False
-        w._was_ethernet_connected = False
 
     def test_ethernet_shows_connected(self, win):
         w, _ = win
@@ -522,18 +535,17 @@ class TestOnNetworkStateChangedNormal:
         w._on_network_state_changed(_disconnected_state())
         assert w._is_first_run is False
 
-    def test_ethernet_plug_disables_wifi(self, win):
-        """Ethernet cable plugged in during Wi-Fi session -> Wi-Fi disabled."""
+    def test_ethernet_plug_keeps_wifi_enabled(self, win):
+        """Wi-Fi is the recovery path; a plugged cable must never kill the radio."""
         w, nm = win
         self._prime(w)
-        w._was_ethernet_connected = False
         state = _eth_state(wifi_enabled=True)
         w._on_network_state_changed(state)
-        nm.set_wifi_enabled.assert_called_with(False)
+        nm.set_wifi_enabled.assert_not_called()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# _on_network_state_changed — loading state machine
+# _on_network_state_changed: loading state machine
 # ─────────────────────────────────────────────────────────────────────────────
 
 
@@ -575,7 +587,7 @@ class TestLoadingStateMachine:
         self._start_loading(w, PendingOperation.CONNECT)
         w._target_ssid = "OtherNet"
         w._on_network_state_changed(_wifi_state())
-        # Should still be loading — SSID doesn't match target
+        # Should still be loading: SSID doesn't match target
         assert w._is_connecting
 
     def test_ethernet_on_clears_on_connected(self, win):
@@ -701,7 +713,7 @@ class TestOnOperationComplete:
         with patch("BlocksScreen.lib.panels.networkWindow.QTimer") as mock_timer:
             w._on_operation_complete(result)
             mock_timer.singleShot.assert_called_once()
-        # Loading should still be visible — retry is pending
+        # Loading should still be visible: retry is pending
         assert w._is_connecting
 
 
@@ -756,6 +768,19 @@ class TestWifiToggle:
         w._handle_wifi_toggle(True)
         nm.set_wifi_enabled.assert_called_once_with(True)
 
+    def test_wifi_on_drops_ethernet(self, win):
+        w, nm = win
+        nm.saved_networks = []
+        w._handle_wifi_toggle(True)
+        nm.disconnect_ethernet.assert_called_once()
+
+    def test_wifi_on_turns_other_toggles_off(self, win):
+        w, nm = win
+        nm.saved_networks = []
+        _all_on(w)
+        w._handle_wifi_toggle(True)
+        assert _off(w.hotspot_button) and _off(w.ethernet_button)
+
 
 class TestHotspotToggle:
     def test_hotspot_off_calls_toggle_hotspot_false(self, win):
@@ -783,6 +808,17 @@ class TestHotspotToggle:
         w._handle_hotspot_toggle(True)
         assert w.loadingwidget.isVisible()
 
+    def test_hotspot_on_drops_ethernet(self, win):
+        w, nm = win
+        w._handle_hotspot_toggle(True)
+        nm.disconnect_ethernet.assert_called_once()
+
+    def test_hotspot_on_turns_other_toggles_off(self, win):
+        w, nm = win
+        _all_on(w)
+        w._handle_hotspot_toggle(True)
+        assert _off(w.wifi_button) and _off(w.ethernet_button)
+
 
 class TestEthernetToggle:
     def test_ethernet_on_calls_connect_ethernet(self, win):
@@ -804,6 +840,22 @@ class TestEthernetToggle:
         w, nm = win
         w._handle_ethernet_toggle(False)
         assert w._pending_operation == PendingOperation.ETHERNET_OFF
+
+    def test_ethernet_on_drops_wifi(self, win):
+        w, nm = win
+        w._handle_ethernet_toggle(True)
+        nm.set_wifi_enabled.assert_called_once_with(False)
+
+    def test_ethernet_on_turns_other_toggles_off(self, win):
+        w, nm = win
+        _all_on(w)
+        w._handle_ethernet_toggle(True)
+        assert _off(w.wifi_button) and _off(w.hotspot_button)
+
+    def test_ethernet_off_leaves_wifi_alone(self, win):
+        w, nm = win
+        w._handle_ethernet_toggle(False)
+        nm.set_wifi_enabled.assert_not_called()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -936,13 +988,13 @@ class TestOnNetworkError:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# _setupUI smoke test — covers ~1 200 statements in _setupUI + page helpers
+# _setupUI smoke test: covers ~1 200 statements in _setupUI + page helpers
 # ─────────────────────────────────────────────────────────────────────────────
 
 
 @pytest.mark.unit
 class TestSetupUIRunsWithoutError:
-    """Calling _setupUI() must not raise — covers the entire UI construction path."""
+    """Calling _setupUI() must not raise: covers the entire UI construction path."""
 
     def test_setup_ui_completes(self, qapp):
         from unittest.mock import patch
@@ -966,7 +1018,7 @@ class TestSetupUIRunsWithoutError:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Step 4a: Helper classes — PixmapCache, WifiIconProvider, IPAddressLineEdit
+# Step 4a: Helper classes PixmapCache, WifiIconProvider, IPAddressLineEdit
 # ─────────────────────────────────────────────────────────────────────────────
 
 
@@ -1882,3 +1934,51 @@ class TestHotspotQRCode:
             w._show_hotspot_qr("TestAP", "testpass123", "wpa-psk")
         w.qrcode_img.clearPixmap.assert_called()
         w.qrcode_img.setText.assert_called_with("QR error")
+
+
+class TestOnNetworkPasswordLoaded:
+    """Prefill of the change-password field, including the stale-ssid guard."""
+
+    def test_matching_ssid_fills_field(self, win):
+        w, _ = win
+        w._password_ssid = "HomeNet"
+        w._on_network_password_loaded("HomeNet", "secret123")
+        assert w.saved_connection_change_password_field.text() == "secret123"
+
+    def test_matching_ssid_updates_baseline(self, win):
+        w, _ = win
+        w._password_ssid = "HomeNet"
+        w._on_network_password_loaded("HomeNet", "secret123")
+        assert w._initial_password == "secret123"
+
+    def test_non_empty_password_clears_placeholder(self, win):
+        w, _ = win
+        w._password_ssid = "HomeNet"
+        w.saved_connection_change_password_field.setPlaceholderText("Enter password")
+        w._on_network_password_loaded("HomeNet", "secret123")
+        assert w.saved_connection_change_password_field.placeholderText() == ""
+
+    def test_empty_password_keeps_placeholder(self, win):
+        w, _ = win
+        w._password_ssid = "HomeNet"
+        w.saved_connection_change_password_field.setPlaceholderText("Enter password")
+        w._on_network_password_loaded("HomeNet", "")
+        assert w.saved_connection_change_password_field.placeholderText() == (
+            "Enter password"
+        )
+
+    def test_stale_ssid_ignored(self, win):
+        """A late reply for a previously viewed network must not leak its psk."""
+        w, _ = win
+        w._password_ssid = "HomeNet"
+        w.saved_connection_change_password_field.setText("")
+        w._initial_password = ""
+        w._on_network_password_loaded("OtherNet", "othersecret")
+        assert w.saved_connection_change_password_field.text() == ""
+        assert w._initial_password == ""
+
+    def test_empty_tracked_ssid_ignores_reply(self, win):
+        w, _ = win
+        w._password_ssid = ""
+        w._on_network_password_loaded("HomeNet", "secret123")
+        assert w.saved_connection_change_password_field.text() == ""

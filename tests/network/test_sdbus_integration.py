@@ -27,18 +27,41 @@ accommodate real D-Bus scans on Raspberry Pi hardware.
 import asyncio
 import os
 from contextlib import contextmanager
+from pathlib import Path
 
 import pytest
 from PyQt6.QtCore import Qt
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Gate — skip entire module when opt-in flag is absent
+# Gate: skip entire module when opt-in flag is absent
 # ─────────────────────────────────────────────────────────────────────────────
 _ENABLED = os.environ.get("NM_INTEGRATION_TESTS", "0") == "1"
 _SKIP = pytest.mark.skipif(not _ENABLED, reason="NM_INTEGRATION_TESTS not set")
 _TEST_PREFIX = "TEST_BLOCKS_"
 
 pytestmark = [_SKIP, pytest.mark.timeout(120)]
+
+
+def _host_has_wired_nic() -> bool:
+    """True when sysfs shows a physical ARPHRD_ETHER NIC that is not Wi-Fi."""
+    try:
+        entries = list(Path("/sys/class/net").iterdir())
+    except OSError:
+        return False
+    for p in entries:
+        try:
+            if (p / "type").read_text().strip() != "1":
+                continue
+        except OSError:
+            continue
+        if not (p / "wireless").is_dir() and (p / "device").exists():
+            return True
+    return False
+
+
+_NEEDS_WIRED = pytest.mark.skipif(
+    not _host_has_wired_nic(), reason="host has no wired NIC"
+)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -82,7 +105,6 @@ def real_worker(qapp):
     """
     import sys
     import threading
-    from pathlib import Path
 
     # Add BlocksScreen/ to sys.path so `import configfile` resolves to
     # BlocksScreen/configfile.py (worker.py imports it at module level).
@@ -107,7 +129,7 @@ def real_worker(qapp):
     try:
         from BlocksScreen.lib.network.worker import NetworkManagerWorker
     except ImportError as exc:
-        # Real sdbus packages not installed on this host — skip gracefully.
+        # Real sdbus packages not installed on this host: skip gracefully.
         sys.modules.update(_saved_stubs)
         if _path_was_added and sys.path and sys.path[0] == _bs_dir:
             sys.path.pop(0)
@@ -195,6 +217,7 @@ class TestRealInterfaces:
     def test_wifi_path_detected(self, real_worker):
         assert real_worker._primary_wifi_path, "No Wi-Fi interface found"
 
+    @_NEEDS_WIRED
     def test_wired_path_detected(self, real_worker):
         assert real_worker._primary_wired_path, "No wired interface found"
 
@@ -330,7 +353,7 @@ class TestRealIpHelpers:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Destructive write tests — TEST_-prefixed profiles only
+# Destructive write tests: TEST_-prefixed profiles only
 # ─────────────────────────────────────────────────────────────────────────────
 
 
