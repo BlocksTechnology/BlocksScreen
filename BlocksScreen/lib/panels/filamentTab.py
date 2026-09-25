@@ -128,7 +128,7 @@ class FilamentTab(QtWidgets.QStackedWidget):
             lambda: self.change_page(self.indexOf(self._basic_panel))
         )
 
-        self.ws.connected_signal.connect(self.handle_moonraker_components)
+        self.ws.server_components_signal.connect(self.handle_moonraker_components)
 
         self.run_gcode.connect(self.ws.api.run_gcode)
 
@@ -141,12 +141,10 @@ class FilamentTab(QtWidgets.QStackedWidget):
         self.load_state = False
         self.load_popup.hide()
 
-    def handle_moonraker_components(self) -> None:
-        """Re-check spoolman per connect: an update can add it without a UI restart."""
-        info = self.ws._moonRest.get_server_info()
-        if not isinstance(info, dict):
-            return  # transient REST failure: keep the current layout
-        available = "spoolman" in info.get("result", {}).get("components", [])
+    @QtCore.pyqtSlot(list, name="handle_moonraker_components")
+    def handle_moonraker_components(self, components: list) -> None:
+        """Re-check spoolman on each server.info: updates add it without a UI restart."""
+        available = "spoolman" in components
         if available == self._spoolman_available:
             return
         self._spoolman_available = available

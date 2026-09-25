@@ -354,6 +354,24 @@ async def git_is_dirty(path: Path) -> bool:
     return ok and bool(output.strip())
 
 
+async def git_untracked_paths(worktree: Path, git_dir: Path) -> list[str] | None:
+    """Worktree entries git_dir's index lacks (ignored too, dirs collapsed); None on error."""
+    ok, output = await _run(
+        [
+            GIT,
+            f"--git-dir={git_dir}",
+            f"--work-tree={worktree}",
+            "ls-files",
+            "--others",
+            "--directory",
+            "-z",
+        ],
+        cwd=worktree,
+        timeout=30.0,
+    )
+    return [p for p in output.split("\0") if p] if ok else None
+
+
 async def git_prune_extra_remotes(path: Path) -> None:
     """Remove every git remote except origin."""
     ok, output = await _run([GIT, "remote"], cwd=path, timeout=10.0)

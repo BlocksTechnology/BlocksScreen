@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import shutil
 import time
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -37,6 +38,7 @@ from updater.executor import (
     git_repair,
     git_reset_to_hash,
     git_prune_extra_remotes,
+    git_untracked_paths,
     enable_service,
     restart_service,
     restart_service_noblock,
@@ -260,6 +262,34 @@ class TestGitIsDirty:
             "asyncio.create_subprocess_exec", new_callable=AsyncMock, return_value=proc
         ):
             assert await git_is_dirty(tmp_path) is False
+
+
+@pytest.mark.skipif(shutil.which("git") is None, reason="needs a real git binary")
+class TestGitUntrackedPaths:
+    """Real git: untracked-vs-a-foreign-index listing used by the reclone carry-over."""
+
+    @pytest.mark.asyncio
+    async def test_lists_untracked_against_fresh_index(self, tmp_path):
+        new, old = tmp_path / "new", tmp_path / "old"
+        for tree in (new, old):
+            (tree / "klippy" / "extras").mkdir(parents=True)
+            (tree / "a.py").write_text("a")
+            (tree / "klippy" / "extras" / "x.py").write_text("x")
+        assert (await _run(["git", "init", "-q", str(new)], timeout=10.0))[0]
+        assert (await _run(["git", "add", "-A"], cwd=new, timeout=10.0))[0]
+        (old / ".config").write_text("cfg")
+        (old / "out").mkdir()
+        (old / "out" / "klipper.bin").write_text("bin")
+        (old / "klippy" / "extras" / "mmu.py").symlink_to("/nonexistent")
+        (old / ".git").mkdir()
+        (old / ".git" / "HEAD").write_text("corrupt")  # old repo unreadable
+        entries = await git_untracked_paths(old, new / ".git")
+        assert entries is not None
+        assert sorted(entries) == [".config", "klippy/extras/mmu.py", "out/"]
+
+    @pytest.mark.asyncio
+    async def test_bad_git_dir_returns_none(self, tmp_path):
+        assert await git_untracked_paths(tmp_path, tmp_path / ".git") is None
 
 
 class TestGitCommitsBehind:

@@ -2008,6 +2008,51 @@ class TestReclone:
         assert not (comp.path.parent / ".klipper.reclone-tmp").exists()
 
     @pytest.mark.asyncio
+    async def test_carries_untracked_files_into_fresh_tree(self, tmp_path):
+        # klipper .config, build out/ and a plugin symlink survive; a clash keeps fresh.
+        comp = self._comp(tmp_path)
+        (comp.path / ".config").write_text("menuconfig")
+        (comp.path / "out").mkdir()
+        (comp.path / "out" / "klipper.bin").write_text("fw")
+        (comp.path / "mmu.py").symlink_to("/nonexistent")
+        (comp.path / "fresh").write_text("stale")
+        listed = AsyncMock(return_value=[".config", "out/", "mmu.py", "fresh"])
+        with (
+            patch("updater.service.git_clone", side_effect=self._fake_clone),
+            patch("updater.service.git_untracked_paths", listed),
+        ):
+            ok = await UpdateService()._reclone_component(comp)
+        assert ok is True
+        assert listed.await_args.args == (
+            comp.path.parent / ".klipper.reclone-old",
+            comp.path / ".git",
+        )
+        assert (comp.path / ".config").read_text() == "menuconfig"
+        assert (comp.path / "out" / "klipper.bin").read_text() == "fw"
+        assert (comp.path / "mmu.py").is_symlink()
+        assert (comp.path / "fresh").read_text() == "y"
+        assert not (comp.path / "corrupt").exists()
+        assert not (comp.path.parent / ".klipper.reclone-old").exists()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "listed",
+        [AsyncMock(return_value=None), AsyncMock(side_effect=OSError("no git"))],
+    )
+    async def test_unlistable_untracked_still_completes_swap(self, tmp_path, listed):
+        comp = self._comp(tmp_path)
+        (comp.path / ".config").write_text("menuconfig")
+        with (
+            patch("updater.service.git_clone", side_effect=self._fake_clone),
+            patch("updater.service.git_untracked_paths", listed),
+        ):
+            ok = await UpdateService()._reclone_component(comp)
+        assert ok is True
+        assert (comp.path / "fresh").exists()
+        assert not (comp.path / ".config").exists()
+        assert not (comp.path.parent / ".klipper.reclone-old").exists()
+
+    @pytest.mark.asyncio
     async def test_clone_failure_leaves_original_intact(self, tmp_path):
         comp = self._comp(tmp_path)
         with patch("updater.service.git_clone", return_value=(False, "boom")):

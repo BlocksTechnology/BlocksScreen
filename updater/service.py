@@ -45,6 +45,7 @@ from updater.executor import (
     git_repair,
     git_reset_to_hash,
     git_tree_has_path,
+    git_untracked_paths,
     is_git_repo,
     restart_service,
     restart_service_noblock,
@@ -106,6 +107,20 @@ def _ensure_comp(state: dict, name: str) -> dict:
 def _is_sha(val: object) -> TypeGuard[str]:
     """True only for a syntactically valid git hash (guards corrupt/non-str state)."""
     return isinstance(val, str) and bool(_GIT_SHA_RE.match(val))
+
+
+def _move_untracked(src: Path, dst: Path, entries: list[str]) -> list[str]:
+    """Rename each entry from src into dst unless dst already has it; return failures."""
+    failed = []
+    for rel in entries:
+        target = dst / rel
+        if os.path.lexists(target):
+            continue  # the fresh clone wins
+        try:
+            (src / rel).rename(target)
+        except OSError:
+            failed.append(rel)
+    return failed
 
 
 class _Backoff:
@@ -1804,8 +1819,27 @@ class UpdateService:
             await asyncio.to_thread(shutil.rmtree, tmp, ignore_errors=True)
             self._log.error("%s: reclone swap failed: %s", component.name, exc)
             return False
+        if old.exists():
+            await self._carry_untracked(component, old, path)
         await asyncio.to_thread(shutil.rmtree, old, ignore_errors=True)
         return True
+
+    async def _carry_untracked(
+        self, component: ComponentConfig, old: Path, path: Path
+    ) -> None:
+        """Carry untracked files (.config, venvs, symlinks) into the fresh tree."""
+        entries = None
+        # The fresh index is used as the old one may be the corrupt part.
+        with contextlib.suppress(OSError):  # a spawn failure must not undo the swap
+            entries = await git_untracked_paths(old, path / ".git")
+        if entries is None:
+            self._log.warning(
+                "%s: untracked files not listable, dropped", component.name
+            )
+            return
+        failed = await asyncio.to_thread(_move_untracked, old, path, entries)
+        if failed:
+            self._log.warning("%s: untracked files lost: %s", component.name, failed)
 
     async def _reclone_component(self, component: ComponentConfig) -> bool:
         """Reclone an unrepairable repo: fresh clone to a temp dir, then atomic swap."""
@@ -1820,7 +1854,7 @@ class UpdateService:
             return False
         if not await self._reclone_swap(component, path, tmp, old):
             return False
-        # A fresh clone has no in-repo venv: drop any cached pip path for it.
+        # An in-repo venv may not have been carried over: re-resolve pip.
         self._component_pip_cache.pop(str(path), None)
         self._history("reclone", component.name, url=component.url)
         self._log.warning("%s: recloned successfully", component.name)
