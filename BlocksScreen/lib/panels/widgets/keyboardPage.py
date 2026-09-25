@@ -121,6 +121,7 @@ class CustomQwertyKeyboard(QtWidgets.QDialog):
         self._pattern: str = ""
         self._max_length: int = 0
         self._numeric_only: bool = False
+        self.firsttime: bool = True
 
         self._setup_ui()
         self.setCursor(QtCore.Qt.CursorShape.BlankCursor)
@@ -253,10 +254,11 @@ class CustomQwertyKeyboard(QtWidgets.QDialog):
 
         self.setGeometry(x, y, width, height)
 
-    def show(self) -> None:
+    def showEvent(self, a0: QtGui.QShowEvent | None) -> None:
         """Re-implemented method, recompute layout geometry before showing."""
         self._geometry_calc()
-        return super().show()
+        self.firsttime = True
+        return super().showEvent(a0)
 
     @QtCore.pyqtSlot()
     def handle_keyboard_layout(self) -> None:
@@ -288,6 +290,13 @@ class CustomQwertyKeyboard(QtWidgets.QDialog):
 
     def value_inserted(self, value: str) -> None:
         """Handle key press: append char, delete, or submit on enter."""
+
+        if self.firsttime:
+            self.firsttime = False
+            # Only a typed key replaces the prefill; delete edits it in place.
+            if value not in ("enter", "clear"):
+                self.current_value = ""
+
         if value == "&&":
             value = "&"
 
