@@ -10,7 +10,10 @@ echo_info() { printf "${Blue}%s${Normal}\n" "$1"; }
 echo_ok() { printf "${Green}%s${Normal}\n" "$1"; }
 echo_error() { printf "${Red}%s${Normal}\n" "$1"; }
 
-exec 200>/tmp/blockscreen-install-updater.lock
+# Root and blocks both run this: O_CREAT on the other's file in sticky /tmp is denied, a read-only open is not.
+_LOCK=/tmp/blockscreen-install-updater.lock
+: 2>/dev/null >>"$_LOCK" || true
+exec 200<"$_LOCK"
 flock -x -w 30 200 || { echo_error "Another install-updater.sh is already running"; exit 1; }
 
 SCRIPT_PATH=$(dirname -- "$(readlink -f -- "$0")")
@@ -223,6 +226,8 @@ echo_ok "post-merge hook installed"
 echo_info "Installing Python requirements ..."
 # Skip pip's PyPI self-check: it stalls every install on an offline box and only prints a notice.
 export PIP_DISABLE_PIP_VERSION_CHECK=1
+# Older runs of this script ran pip as root; hand those files back or every pip-as-blocks run fails.
+[ -d "$BSENV" ] && sudo find "$BSENV" ! -user "$_BSENV_USER" -exec chown -h "$_BSENV_USER" {} + || true
 # Best-effort pip self-update; must not block the requirements install below.
 _as_blocks "$BSENV/bin/pip" install --quiet --upgrade pip 2>/dev/null || true
 sudo apt-get -o DPkg::Lock::Timeout=60 install -y --quiet libsystemd-dev python3-dev 2>/dev/null || true

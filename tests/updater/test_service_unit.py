@@ -475,8 +475,8 @@ class TestGitUpdate:
             svc = UpdateService()
             result = await svc._run_git_update(component)
             assert result is True
-            assert mock_reset.call_count == 2  # hard reset (origin/main) + version pin
-            mock_reset.assert_any_call(Path("/fake/path"), "origin/main")
+            assert mock_reset.call_count == 2  # hard reset (resolved tip) + version pin
+            mock_reset.assert_any_call(Path("/fake/path"), "a" * 40)
             mock_reset.assert_any_call(Path("/fake/path"), "abc1234")
             mock_pull.assert_not_called()
 
@@ -495,7 +495,7 @@ class TestGitUpdate:
             patch("pathlib.Path.exists", return_value=True),
             patch("updater.service.git_get_hash", return_value="oldhash"),
             patch("updater.service.git_fetch", return_value=(True, "")),
-            patch("updater.service.git_ref_hash", return_value="a" * 40),
+            patch("updater.service.git_ref_hash", return_value="a" * 40) as m_ref,
             patch(
                 "updater.service.git_checkout",
                 side_effect=lambda *a, **k: call_order.append("checkout") or (True, ""),
@@ -519,9 +519,9 @@ class TestGitUpdate:
             mock_checkout.assert_called_once_with(
                 Path("/fake/path"), "testing_branch", force=True
             )
-            mock_reset.assert_called_once_with(
-                Path("/fake/path"), "origin/testing_branch"
-            )
+            # Resolved once and reset by SHA: a concurrent fetch cannot swap the target.
+            m_ref.assert_called_once_with(Path("/fake/path"), "origin/testing_branch")
+            mock_reset.assert_called_once_with(Path("/fake/path"), "a" * 40)
             mock_pull.assert_not_called()  # hard mode advances via reset, not pull
             assert call_order == ["checkout", "reset"]  # checkout first, then reset
 
@@ -1336,6 +1336,32 @@ class TestAtomicBatch:
             pytest.raises(asyncio.CancelledError),
         ):
             await svc._run_git_batch(comps)
+        assert [c.args[0] for c in mock_reset.call_args_list] == [
+            comps[0].path,
+            comps[1].path,
+        ]
+
+    @pytest.mark.asyncio
+    async def test_abort_skips_already_dropped_repo(self, tmp_path):
+        """A repo dropped at stage is reported once, not again by a later abort."""
+        cb = MagicMock()
+        svc, comps = self._svc(tmp_path, cb, n=2)
+        with (
+            patch(
+                "updater.service.UpdateService._stage_component",
+                side_effect=[(False, "conflict"), (True, "")],
+            ),
+            patch(
+                "updater.service.UpdateService._install_dependencies",
+                side_effect=RuntimeError("boom"),
+            ),
+            patch(
+                "updater.service.git_reset_to_hash", return_value=(True, "")
+            ) as mock_reset,
+        ):
+            assert await svc._run_git_batch(comps) is False
+        done = [c.args for c in cb.on_component_done.call_args_list]
+        assert done == [("c0", False), ("c1", False)]
         assert [c.args[0] for c in mock_reset.call_args_list] == [
             comps[0].path,
             comps[1].path,
@@ -2579,14 +2605,14 @@ class TestInflightClearedOnEarlyReturn:
         cb = MagicMock()
 
         async def fake_reset(path, ref=""):
-            # Target reset (origin/<branch>) fails; the prev_hash rollback works.
-            return (False, "boom") if str(ref).startswith("origin/") else (True, "")
+            # Target reset (resolved tip) fails; the prev_hash rollback works.
+            return (False, "boom") if ref == "b" * 40 else (True, "")
 
         with (
             patch("pathlib.Path.exists", return_value=True),
             patch("updater.service.git_get_hash", return_value="a" * 40),
             patch("updater.service.git_fetch", return_value=(True, "")),
-            patch("updater.service.git_ref_hash", return_value="a" * 40),
+            patch("updater.service.git_ref_hash", return_value="b" * 40),
             patch("updater.service.git_get_current_branch", return_value="master"),
             patch("updater.service.git_checkout", return_value=(True, "")),
             patch("updater.service.git_reset_to_hash", side_effect=fake_reset),
@@ -2973,6 +2999,35 @@ class TestUpdaterDowngradeGuard:
             ok, _ = await svc._stage_component(comp)
         assert ok is True
         mc.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_stage_resets_the_guarded_sha_when_fetch_moves_ref(self, tmp_path):
+        """A fetch landing between guard and reset must not swap in an unchecked tree."""
+        comp = self._bs(tmp_path)
+        svc = UpdateService(callback=MagicMock())
+        svc._components = [comp]
+        refs = {"origin/main": "a" * 40}
+        landed: list[str] = []
+
+        async def fake_tree(_path, ref, _marker):
+            ok = refs.get(ref, ref) == "a" * 40  # only the checked tip has updater/
+            refs["origin/main"] = "b" * 40  # concurrent fetch: markerless new tip
+            return ok
+
+        async def fake_reset(_path, ref):
+            landed.append(refs.get(ref, ref))
+            return (True, "")
+
+        with (
+            patch("updater.service.git_fetch", return_value=(True, "")),
+            patch("updater.service.git_ref_hash", side_effect=lambda _p, r: refs[r]),
+            patch("updater.service.git_tree_has_path", side_effect=fake_tree),
+            patch("updater.service.git_checkout", return_value=(True, "")),
+            patch("updater.service.git_reset_to_hash", side_effect=fake_reset),
+        ):
+            ok, _ = await svc._stage_component(comp)
+        assert ok is True
+        assert landed == ["a" * 40]
 
     @pytest.mark.asyncio
     async def test_single_update_refusal_no_rollback_clears_marker(self, tmp_path):

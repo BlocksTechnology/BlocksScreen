@@ -60,6 +60,8 @@ echo_info "BlocksScreen path ->  ${BS_PATH}"
 BSENV="${BLOCKSSCREEN_VENV:-${HOME}/.BlocksScreen-env}"
 echo_info "BlocksScreen virtual environment path -> ${BSENV}"
 PYTHON_VERSION=3.11.2
+# SHA-256 of python.org's GPG-signed Python-$PYTHON_VERSION.tgz; bump together.
+PYTHON_TGZ_SHA256=2411c74bda5bbcfcddaf4531f66d1adc73f247f529aee981b029513aefdbf849
 
 XSERVER=(xinit xinput x11-xserver-utils xserver-xorg-input-evdev xserver-xorg-input-libinput xserver-xorg-legacy xserver-xorg-video-fbdev)
 CAGE=(cage seatd xwayland)
@@ -166,8 +168,14 @@ function install_app_python_version() {
         echo_warning "BlocksScreen requires python $PYTHON_VERSION, Installing ...."
 
         echo_info "Downloading Python 3.11.2"
-        # Download the specific Python version
-        sudo wget -P /usr/src/ https://www.python.org/ftp/python/$PYTHON_VERSION/Python-$PYTHON_VERSION.tgz #Download to a dir
+        # -O replaces a stale copy (-P would save .tgz.1 and unpack the old one).
+        _tgz=/usr/src/Python-$PYTHON_VERSION.tgz
+        if ! sudo wget --https-only -O "$_tgz" "https://www.python.org/ftp/python/$PYTHON_VERSION/Python-$PYTHON_VERSION.tgz" \
+            || ! echo "$PYTHON_TGZ_SHA256  $_tgz" | sha256sum -c --quiet -; then
+            sudo rm -f "$_tgz"
+            echo_error "Python $PYTHON_VERSION download failed or checksum mismatch. Exiting"
+            exit 1
+        fi
 
         sudo tar xzf /usr/src/Python-$PYTHON_VERSION.tgz -C /usr/src/ #Unpack to a dir
 
@@ -212,7 +220,11 @@ function create_virtualenv() {
 
     if [ -d "$BSENV" ]; then
         echo_text "Removing old virtual environment"
-        rm -rf "${BSENV}"
+        # A survivor (e.g. root-owned pip) makes venv skip pip, so never continue past a partial rm.
+        if ! rm -rf "${BSENV}"; then
+            echo_error "Could not remove ${BSENV}, run: sudo rm -rf ${BSENV}"
+            exit 1
+        fi
     fi
 
     echo_text "Creating virtual environment"
@@ -228,8 +240,8 @@ function create_virtualenv() {
         echo_text "Using $(uname -m)! Building sdbus from source, installing PyQt6 + rest from wheels (piwheels)..."
         grep -v "^sdbus==" "${BS_PATH}/scripts/requirements.txt" >/tmp/bs-requirements.txt
         SDBUS_VERSION=$(grep "^sdbus==" "${BS_PATH}/scripts/requirements.txt")
-        pip3 --disable-pip-version-check install --use-pep517 --no-binary sdbus --use-feature=no-binary-enable-wheel-cache "$SDBUS_VERSION"
-        pip3 --disable-pip-version-check install --extra-index-url https://www.piwheels.org/simple -r /tmp/bs-requirements.txt
+        pip3 --disable-pip-version-check install --use-pep517 --no-binary sdbus --use-feature=no-binary-enable-wheel-cache "$SDBUS_VERSION" &&
+            pip3 --disable-pip-version-check install --extra-index-url https://www.piwheels.org/simple -r /tmp/bs-requirements.txt
     else
         pip3 --disable-pip-version-check install -r "${BS_PATH}"/scripts/requirements.txt
     fi
@@ -242,8 +254,8 @@ function create_virtualenv() {
             echo_text "Adding piwheels.org as extra index..."
             echo_info "Installing with pip setuptools and app requirements"
             pip3 install --extra-index-url https://www.piwheels.org/simple --upgrade pip setuptools
-            pip3 install --use-pep517 --no-binary sdbus --use-feature=no-binary-enable-wheel-cache "$SDBUS_VERSION"
-            pip3 install --extra-index-url https://www.piwheels.org/simple -r /tmp/bs-requirements.txt
+            pip3 install --use-pep517 --no-binary sdbus --use-feature=no-binary-enable-wheel-cache "$SDBUS_VERSION" &&
+                pip3 install --extra-index-url https://www.piwheels.org/simple -r /tmp/bs-requirements.txt
             pip_status=$?
         else
             echo_info "Upgrading pip and Installing with pip setuptools and app requirements"
@@ -488,7 +500,7 @@ configure_hostname_setter
 configure_usb_max_current
 install_graphical_backend
 install_systemd_service
-bash "$SCRIPT_PATH/install-updater.sh"
+bash "$SCRIPT_PATH/install-updater.sh" || { echo_error "install-updater.sh failed, aborting install"; exit 1; }
 install_packages
 
 create_virtualenv

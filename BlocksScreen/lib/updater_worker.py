@@ -72,6 +72,7 @@ class UpdaterWorker(QtCore.QObject):
         self._proxy: UpdaterInterface | None = None
         self._reconnect_attempt: int = 0
         self._reconnecting: bool = False
+        self._reconnect_task: asyncio.Task | None = None
         self._shutting_down: bool = False
         self._last_activity: float = 0.0
         # Unique bus name of the live daemon; a change means it restarted.
@@ -155,6 +156,10 @@ class UpdaterWorker(QtCore.QObject):
         if self._busy_false_event is not None:
             self._busy_false_event.set()
         self._busy_false_event = asyncio.Event()
+        # This attempt supersedes a pending backoff retry; a failure below re-arms one.
+        pending, self._reconnect_task = self._reconnect_task, None
+        if pending is not None and pending is not asyncio.current_task():
+            pending.cancel()
         self._reconnecting = False
 
         try:
@@ -252,7 +257,7 @@ class UpdaterWorker(QtCore.QObject):
             "scheduling reconnect in %.0fs (attempt %d)", delay, self._reconnect_attempt
         )
         try:
-            self._track_task(
+            self._reconnect_task = self._track_task(
                 asyncio.get_running_loop().create_task(
                     self._delayed_reconnect(delay), name="reconnect"
                 )
@@ -280,7 +285,9 @@ class UpdaterWorker(QtCore.QObject):
                 await self._escalate_restart()
             await self._async_initialize()
         except asyncio.CancelledError:
-            self._reconnecting = False
+            # A superseded retry must not clear the latch of the one that replaced it.
+            if self._reconnect_task in (None, asyncio.current_task()):
+                self._reconnecting = False
             raise
         except Exception:  # noqa: BLE001
             # Never leave the latch stuck: it would silence every future reconnect.
@@ -297,18 +304,25 @@ class UpdaterWorker(QtCore.QObject):
         but the new instance never re-emits busy_changed, leaving a mid-update UI stuck
         until the 6-minute busy watchdog. This turns that into a millisecond recovery.
         """
+        resync = False  # the first seed races updater_init's own connect
         while not self._shutting_down:
             try:
                 signals = _dbus_daemon(self._system_bus).name_owner_changed
                 async with aclosing(aiter(signals)) as stream:
                     # Seeded after subscribing so no change can slip through the gap.
-                    self._daemon_owner = await self._name_owner()
+                    owner = await self._name_owner()
+                    if resync and owner and owner != self._daemon_owner:
+                        # Restarted while the watch was down: no signal will report it.
+                        await self._async_initialize(owner)
+                    else:
+                        self._daemon_owner = owner
+                    resync = True
                     async for name, _old, new_owner in stream:
                         if name != _DAEMON_BUS_NAME or new_owner == self._daemon_owner:
                             continue
                         if not new_owner:
                             self._daemon_owner = ""
-                            # No reconnect armed: systemd restarts it, and arming one would double-connect; if systemd gave up, the next call escalates via _handle_proxy_error.
+                            # No retry: systemd restarts it; a failing call escalates.
                             _log.error("updater daemon left the bus - awaiting restart")
                             self.daemon_unavailable.emit()
                             continue
@@ -381,7 +395,8 @@ class UpdaterWorker(QtCore.QObject):
             with suppress(ProcessLookupError):
                 proc.kill()
             with suppress(Exception):
-                await proc.wait()
+                async with asyncio.timeout(5):
+                    await proc.communicate()
             return
         if proc.returncode:
             _log.error(

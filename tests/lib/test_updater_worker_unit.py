@@ -25,6 +25,7 @@ def _make_worker():
     w._bg_tasks = set()
     w._reconnect_attempt = 0
     w._reconnecting = False
+    w._reconnect_task = None
     w._busy_false_event = asyncio.Event()
     w._last_activity = 0.0
     w._proxy = MagicMock()
@@ -309,6 +310,26 @@ class TestDaemonOwnerWatch:
         assert closed == [True]
         worker._async_initialize.assert_awaited_once_with(":1.9")
 
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(("reseed", "resyncs"), [(":1.6", True), (":1.5", False)])
+    async def test_reseed_after_gap_resyncs_new_owner(self, worker, reseed, resyncs):
+        """A restart while the watch was down emits no signal: the re-seed must catch it."""
+        worker._async_initialize = AsyncMock()
+        fake = _FakeDbus()
+        fake.get_name_owner = AsyncMock(side_effect=[":1.5", reseed])
+        sleeps = []
+
+        async def _sleep(delay):
+            sleeps.append(delay)
+            worker._shutting_down = len(sleeps) >= 2
+
+        with _dbus_module(fake), patch("asyncio.sleep", _sleep):
+            await worker._watch_daemon_owner()
+        if resyncs:
+            worker._async_initialize.assert_awaited_once_with(reseed)
+        else:
+            worker._async_initialize.assert_not_awaited()
+
 
 class TestEscalation:
     @pytest.mark.asyncio
@@ -390,12 +411,12 @@ class TestEscalation:
     async def test_run_systemctl_kills_on_timeout(self, worker):
         """A hung sudo must be reaped, else it holds the pipe and child slot forever."""
         proc = MagicMock(returncode=None)
-        proc.communicate = AsyncMock(side_effect=TimeoutError)
-        proc.wait = AsyncMock(return_value=-9)
+        proc.communicate = AsyncMock(side_effect=[TimeoutError, (b"", b"")])
         with patch("asyncio.create_subprocess_exec", AsyncMock(return_value=proc)):
             await worker._run_systemctl(("reset-failed", _UNIT))
         proc.kill.assert_called_once()
-        proc.wait.assert_awaited_once()
+        # Reaped via communicate so the stderr PIPE is drained, not a bare wait().
+        assert proc.communicate.await_count == 2
 
     @pytest.mark.asyncio
     async def test_name_owner_empty_on_error(self, worker):
@@ -423,6 +444,34 @@ class TestEscalation:
         with patch("asyncio.sleep", AsyncMock()), pytest.raises(asyncio.CancelledError):
             await worker._delayed_reconnect(5.0)
         assert worker._reconnecting is False
+
+    @pytest.mark.asyncio
+    async def test_superseded_reconnect_keeps_new_latch(self, worker):
+        """A cancelled stale retry must not clear the latch its replacement armed."""
+        worker._async_initialize = AsyncMock(side_effect=asyncio.CancelledError)
+        worker._reconnecting = True
+        worker._reconnect_task = MagicMock()  # the replacement retry
+        with patch("asyncio.sleep", AsyncMock()), pytest.raises(asyncio.CancelledError):
+            await worker._delayed_reconnect(5.0)
+        assert worker._reconnecting is True
+
+    @pytest.mark.asyncio
+    async def test_connect_cancels_pending_retry(self, worker, mock_sdbus):
+        """An owner-watch resync plus a sleeping retry would connect twice."""
+        pending = MagicMock()
+        worker._reconnect_task = pending
+        worker._reconnecting = True
+        worker._schedule_reconnect = MagicMock()
+        new_proxy = MagicMock(side_effect=mock_sdbus.SdBusBaseError("gone"))
+        fake_mod = SimpleNamespace(
+            UpdaterInterface=SimpleNamespace(new_proxy=new_proxy)
+        )
+        with patch.dict(sys.modules, {"updater.dbus_service": fake_mod}):
+            await worker._connect()
+        pending.cancel.assert_called_once()
+        assert worker._reconnect_task is None
+        assert worker._reconnecting is False
+        worker._schedule_reconnect.assert_called_once()
 
 
 class TestInitSerialization:

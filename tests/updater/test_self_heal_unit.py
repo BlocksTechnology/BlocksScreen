@@ -477,7 +477,9 @@ class TestRecoveryLadder:
             assert (
                 len(m_fetch.call_args[0]) == 1
             )  # path only, no bad "origin" positional
-            assert m_reset.call_args[0][1] == "origin/main"
+            # Reset to the resolved SHA, never the movable ref name.
+            assert m_ref.call_args[0][1] == "origin/main"
+            assert m_reset.call_args[0][1] == "b" * 40
             state_after = svc._read_state()
             assert state_after["BlocksScreen"]["last_failed_remote"] == "b" * 40
             assert state_after["BlocksScreen"]["fast_attempt"] == 2
@@ -617,7 +619,7 @@ class TestForwardHeal:
                 patch("updater.service.git_fetch") as m_fetch,
                 patch("updater.service.git_ref_hash") as m_ref,
                 patch("updater.service.git_reset_to_hash") as m_reset,
-                patch("updater.service.git_tree_has_path", return_value=True),
+                patch("updater.service.git_tree_has_path", return_value=True) as m_tree,
                 patch("updater.service.get_service_nrestarts") as m_nr,
                 patch.object(svc, "_restart_ui_service") as m_restart,
             ):
@@ -628,6 +630,9 @@ class TestForwardHeal:
                 m_restart.return_value = True
                 ok = await svc._forward_heal_once()
             assert ok
+            # Guard and reset both use the resolved SHA: a fetch in between cannot swap the tree.
+            assert m_tree.call_args[0][1] == "c" * 40
+            assert m_reset.call_args[0][1] == "c" * 40
             state_after = svc._read_state()
             assert state_after["BlocksScreen"]["fast_attempt"] == 0
             assert state_after["BlocksScreen"]["last_failed_remote"] == "c" * 40

@@ -462,7 +462,7 @@ class UpdateService:
         return ok
 
     async def provision_missing(self) -> bool:
-        """Clone absent install_if_missing components without waiting for a manual"""
+        """Clone absent install_if_missing components at boot (no manual update)."""
         missing = [
             c
             for c in self._components
@@ -569,23 +569,20 @@ class UpdateService:
         prev: dict[str, str],
         touched: list[ComponentConfig],
         pending_revert: dict[str, str],
-    ) -> tuple[list[ComponentConfig], bool]:
-        """Stage each repo to its target ref, reverting the ones that fail."""
+    ) -> bool:
+        """Stage each repo to its target ref, dropping the ones that fail."""
         self._log.info("git batch: stage phase (%d repo(s))", len(alive))
         failed = False
-        survivors: list[ComponentConfig] = []
-        for c in alive:
+        for c in alive.copy():
             self._cb("on_step", c.name, 1, 4)
             touched.append(c)  # mark before staging so a partial stage is reverted
             ok, reason = await self._stage_component(c)
-            if ok:
-                survivors.append(c)
-                continue
-            failed = True
-            if not await self._drop_component(c, prev[c.name], reason):
-                pending_revert[c.name] = prev[c.name]
-            touched.remove(c)
-        return survivors, failed
+            if not ok:
+                failed = True
+                await self._drop_component(
+                    c, reason, alive, prev, touched, pending_revert
+                )
+        return failed
 
     async def _batch_deps_phase(
         self,
@@ -593,23 +590,20 @@ class UpdateService:
         prev: dict[str, str],
         touched: list[ComponentConfig],
         pending_revert: dict[str, str],
-    ) -> tuple[list[ComponentConfig], bool]:
-        """Install each survivor's deps, reverting the ones whose install fails."""
+    ) -> bool:
+        """Install each survivor's deps, dropping the ones whose install fails."""
         self._log.info("git batch: deps phase")
         failed = False
-        survivors: list[ComponentConfig] = []
-        for c in alive:
+        for c in alive.copy():
             self._cb("on_step", c.name, 2, 4)
             deps_ok, deps_err = await self._install_dependencies(c)
-            if deps_ok:
-                survivors.append(c)
-                continue
-            self._log.warning("%s: deps failed: %s", c.name, deps_err)
-            failed = True
-            if not await self._drop_component(c, prev[c.name], "deps"):
-                pending_revert[c.name] = prev[c.name]
-            touched.remove(c)
-        return survivors, failed
+            if not deps_ok:
+                self._log.warning("%s: deps failed: %s", c.name, deps_err)
+                failed = True
+                await self._drop_component(
+                    c, "deps", alive, prev, touched, pending_revert
+                )
+        return failed
 
     async def _batch_hook_phase(
         self,
@@ -617,13 +611,12 @@ class UpdateService:
         prev: dict[str, str],
         touched: list[ComponentConfig],
         pending_revert: dict[str, str],
-    ) -> tuple[list[ComponentConfig], dict[str, str], bool]:
-        """Run each survivor's post-update hook, reverting the ones whose hook fails."""
+    ) -> tuple[dict[str, str], bool]:
+        """Run each survivor's post-update hook, dropping the ones whose hook fails."""
         self._log.info("git batch: hook phase")
         new_hashes: dict[str, str] = {}
         failed = False
-        survivors: list[ComponentConfig] = []
-        for c in alive:
+        for c in alive.copy():
             self._cb("on_step", c.name, 3, 4)
             new_hashes[c.name] = await git_get_hash(c.path)
             self._log.info(
@@ -644,15 +637,13 @@ class UpdateService:
                 3,
                 4,
             )
-            if hook_ok:
-                survivors.append(c)
-                continue
-            self._log.error("%s: hook failed: %s", c.name, hook_err)
-            failed = True
-            if not await self._drop_component(c, prev[c.name], "hook"):
-                pending_revert[c.name] = prev[c.name]
-            touched.remove(c)
-        return survivors, new_hashes, failed
+            if not hook_ok:
+                self._log.error("%s: hook failed: %s", c.name, hook_err)
+                failed = True
+                await self._drop_component(
+                    c, "hook", alive, prev, touched, pending_revert
+                )
+        return new_hashes, failed
 
     async def _batch_restart_services(
         self,
@@ -684,10 +675,9 @@ class UpdateService:
                 continue
             failed = True
             for m in [m for m in alive if m.service == c.service]:
-                if not await self._drop_component(m, prev[m.name], "restart"):
-                    pending_revert[m.name] = prev[m.name]
-                alive.remove(m)
-                touched.remove(m)
+                await self._drop_component(
+                    m, "restart", alive, prev, touched, pending_revert
+                )
             # Members reverted: bring the service back up on the old code.
             if not await self._restart_one(c.service):
                 self._log.error("%s did not recover after revert", c.service)
@@ -718,10 +708,9 @@ class UpdateService:
             return False
         failed = True
         for m in requesters:
-            if not await self._drop_component(m, prev[m.name], "restart"):
-                pending_revert[m.name] = prev[m.name]
-            alive.remove(m)
-            touched.remove(m)
+            await self._drop_component(
+                m, "restart", alive, prev, touched, pending_revert
+            )
             # Service runs new code: revert it to old code unless a surviving component shares the service.
             shared = any(o.service == m.service for o in alive)
             if m.service and m.service in restarted and not shared:
@@ -811,25 +800,20 @@ class UpdateService:
         restarted: list[str],
         pending_revert: dict[str, str],
         failed: bool,
-    ) -> tuple[list[ComponentConfig], dict[str, str], list[ComponentConfig], bool]:
-        """Run stage->deps->hook->restart; return (survivors, new_hashes, ui_components, failed)."""
-        alive, stage_failed = await self._batch_stage_phase(
+    ) -> tuple[dict[str, str], list[ComponentConfig], bool]:
+        """Run stage->deps->hook->restart, pruning alive in place; return (new_hashes, ui_components, failed)."""
+        stage_failed = await self._batch_stage_phase(
             alive, prev, touched, pending_revert
         )
-        failed = failed or stage_failed
-        alive, deps_failed = await self._batch_deps_phase(
+        deps_failed = await self._batch_deps_phase(alive, prev, touched, pending_revert)
+        new_hashes, hook_failed = await self._batch_hook_phase(
             alive, prev, touched, pending_revert
         )
-        failed = failed or deps_failed
-        alive, new_hashes, hook_failed = await self._batch_hook_phase(
-            alive, prev, touched, pending_revert
-        )
-        failed = failed or hook_failed
         restart_failed, ui_components = await self._batch_restart_phase(
             alive, prev, touched, restarted, pending_revert
         )
-        failed = failed or restart_failed
-        return alive, new_hashes, ui_components, failed
+        failed = failed or stage_failed or deps_failed or hook_failed or restart_failed
+        return new_hashes, ui_components, failed
 
     async def _run_git_batch(self, batch: list[ComponentConfig]) -> bool:
         """Apply existing git components with per-component failure isolation."""
@@ -849,7 +833,8 @@ class UpdateService:
         pending_revert: dict[str, str] = {}
         committed = False
         try:
-            alive, new_hashes, ui_components, failed = await self._run_batch_phases(
+            # Phases prune alive in place, so an abort never re-reports a dropped repo.
+            new_hashes, ui_components, failed = await self._run_batch_phases(
                 alive, prev, touched, restarted, pending_revert, failed
             )
             if not alive:
@@ -945,9 +930,16 @@ class UpdateService:
             self._cb("on_component_done", c.name, False)
 
     async def _drop_component(
-        self, component: ComponentConfig, prev_hash: str, reason: str
-    ) -> bool:
-        """Revert one failed component and report it; the rest of the batch continues."""
+        self,
+        component: ComponentConfig,
+        reason: str,
+        alive: list[ComponentConfig],
+        prev: dict[str, str],
+        touched: list[ComponentConfig],
+        pending_revert: dict[str, str],
+    ) -> None:
+        """Revert and report one failed component, then prune it from the batch."""
+        prev_hash = prev[component.name]
         self._log.warning(
             "%s: dropped from batch (reason=%s), reverting to %s",
             component.name,
@@ -957,13 +949,16 @@ class UpdateService:
         ok = await self._safe_revert(component, prev_hash)
         if not ok:
             self._log.error("%s: revert to %s failed", component.name, prev_hash[:12])
+            pending_revert[component.name] = prev_hash
         self._history(
             "rollback", component.name, reason=reason, reverted_to=prev_hash[:12], ok=ok
         )
         self._cb("on_error", component.name, reason)
         self._cb("on_rollback", component.name, ok)
         self._cb("on_component_done", component.name, False)
-        return ok
+        # No await since the revert: a cancel cannot leave it reported yet still listed.
+        alive.remove(component)
+        touched.remove(component)
 
     async def _settle_inflight(self, pending_revert: dict[str, str]) -> None:
         """Shrink the in-flight marker to repos whose revert still needs a boot retry."""
@@ -1201,14 +1196,14 @@ class UpdateService:
                 return False
             # Never heal the host onto a pre-updater tip (would re-brick, not fix).
             if name == _UI_COMPONENT and not await git_tree_has_path(
-                component.path, _HEAL_REMOTE_REF, _UPDATER_MARKER
+                component.path, tip, _UPDATER_MARKER
             ):
                 self._log.error(
                     "recovery rung 2: %s lacks the updater package - skipping",
                     _HEAL_REMOTE_REF,
                 )
                 return False
-            ok_reset, _ = await git_reset_to_hash(component.path, _HEAL_REMOTE_REF)
+            ok_reset, _ = await git_reset_to_hash(component.path, tip)
         if not ok_reset:
             self._log.error("reset to %s failed", _HEAL_REMOTE_REF)
             return False
@@ -1312,10 +1307,8 @@ class UpdateService:
             tip = await git_ref_hash(component.path, _HEAL_REMOTE_REF)
         if not tip or tip == comp_state.get("last_failed_remote"):
             return None  # no new stable tip since the last failure
-        # Never forward-heal onto a pre-updater tip (would brick, not upgrade).
-        if not await git_tree_has_path(
-            component.path, _HEAL_REMOTE_REF, _UPDATER_MARKER
-        ):
+        # Never heal onto a pre-updater tip; by SHA, as a later fetch may move the ref.
+        if not await git_tree_has_path(component.path, tip, _UPDATER_MARKER):
             self._log.warning(
                 "forward-heal: %s lacks the updater package - skipping",
                 _HEAL_REMOTE_REF,
@@ -1340,7 +1333,7 @@ class UpdateService:
             "forward-heal: new %s tip %s, upgrading", _HEAL_REMOTE_REF, tip[:8]
         )
         async with self._git_lock:
-            ok_reset, _ = await git_reset_to_hash(component.path, _HEAL_REMOTE_REF)
+            ok_reset, _ = await git_reset_to_hash(component.path, tip)
         if not ok_reset:
             return False
 
@@ -1834,13 +1827,12 @@ class UpdateService:
         return True
 
     @staticmethod
-    def _self_update_target(component: ComponentConfig) -> str:
-        """The ref _stage_component would move the host to (version/branch/HEAD)."""
-        if component.version:
-            return component.version
+    async def _stage_remote_ref(component: ComponentConfig) -> str:
+        """The remote-tracking ref a hard reset lands on (branch, else current, else HEAD)."""
         if component.branch:
             return f"origin/{component.branch}"
-        return "origin/HEAD"
+        cur = await git_get_current_branch(component.path) if component.path else ""
+        return f"origin/{cur}" if cur else "origin/HEAD"
 
     async def _stage_fetch_gate(
         self, component: ComponentConfig
@@ -1871,22 +1863,17 @@ class UpdateService:
         return None
 
     async def _stage_guard_target(
-        self, component: ComponentConfig
+        self, component: ComponentConfig, ref: str, tip: str
     ) -> tuple[bool, str] | None:
         """Pre-checkout guards: dead upstream branch + updater-marker brick guard."""
         # A deleted upstream branch must fail here, not strand the repo mid-switch.
-        if component.branch and not await git_ref_hash(
-            component.path, f"origin/{component.branch}"
-        ):
-            return (
-                False,
-                f"branch origin/{component.branch} not found - fix components.yaml",
-            )
+        if component.branch and not tip:
+            return (False, f"branch {ref} not found - fix components.yaml")
 
         # Updater host must never checkout code lacking updater: Type=notify unit lacks sd_notify READY causes crash loop with no self-heal.
         if component.name == _UI_COMPONENT:
-            target = self._self_update_target(component)
-            if target and not await git_tree_has_path(
+            target = component.version or tip
+            if not target or not await git_tree_has_path(
                 component.path, target, _UPDATER_MARKER
             ):
                 self._log.error(
@@ -1897,8 +1884,10 @@ class UpdateService:
                 return (False, "refusing downgrade past updater")
         return None
 
-    async def _stage_apply_ref(self, component: ComponentConfig) -> tuple[bool, str]:
-        """Checkout target branch, then hard-reset / version-pin / soft-pull to the tip."""
+    async def _stage_apply_ref(
+        self, component: ComponentConfig, tip: str
+    ) -> tuple[bool, str]:
+        """Checkout target branch, then hard-reset to the guarded tip / version-pin / soft-pull."""
         if component.path is None:
             return (False, "path not found")
         # Switch to the target branch FIRST so reset/pull act on the right branch.
@@ -1912,12 +1901,11 @@ class UpdateService:
 
         if component.reset_mode == "hard":
             # Reset the (now current) branch to its remote tip, discarding divergence.
-            if component.branch:
-                hard_ref = f"origin/{component.branch}"
-            else:
-                _cur = await git_get_current_branch(component.path)
-                hard_ref = f"origin/{_cur}" if _cur else "origin/HEAD"
-            ok, err = await git_reset_to_hash(component.path, hard_ref)
+            ok, err = (
+                await git_reset_to_hash(component.path, tip)
+                if tip
+                else (False, "remote tip unresolved")
+            )
             if not ok:
                 self._log.error(
                     "%s: pre-update hard reset failed: %s", component.name, err
@@ -1942,10 +1930,13 @@ class UpdateService:
         gate = await self._stage_fetch_gate(component)
         if gate is not None:
             return gate
-        guard = await self._stage_guard_target(component)
+        # Resolve once: check_status fetches outside _git_lock and may move the ref.
+        ref = await self._stage_remote_ref(component)
+        tip = await git_ref_hash(component.path, ref)
+        guard = await self._stage_guard_target(component, ref, tip)
         if guard is not None:
             return guard
-        return await self._stage_apply_ref(component)
+        return await self._stage_apply_ref(component, tip)
 
     async def _restart_one(self, service: str, health_url: str | None = None) -> bool:
         """Restart a service and verify it came active (kill-fallback aware)."""

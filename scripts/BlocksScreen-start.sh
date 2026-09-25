@@ -98,7 +98,11 @@ bs_ensure_usb_max_current /boot/firmware/config.txt BlocksScreen-start || true
 # the daemon's boot reconcile can heal this same repo concurrently. Proceed after
 # 20s rather than hold up the UI; the fd is closed before exec'ing the UI.
 _BS_LOCK_DIR="/run/blockscreen"
-mkdir -p "$_BS_LOCK_DIR" 2>/dev/null || _BS_LOCK_DIR="$_BSENV_HOME/.cache/blockscreen"
+if ! mkdir -p "$_BS_LOCK_DIR" 2>/dev/null; then
+    # Same fallback as updater/locking.py, which also creates it.
+    _BS_LOCK_DIR="$_BSENV_HOME/.cache/blockscreen"
+    mkdir -p "$_BS_LOCK_DIR" 2>/dev/null || true
+fi
 if exec 9>"$_BS_LOCK_DIR/updater.lock" 2>/dev/null; then
     flock -w 20 9 2>/dev/null \
         || echo "[BlocksScreen-start] updater lock busy - proceeding without it"

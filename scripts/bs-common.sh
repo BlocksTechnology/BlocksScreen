@@ -31,8 +31,8 @@ bs_migrate_moonraker_conf() {
         patched=true
         echo "[$tag] moonraker.conf: fixed BlocksScreen primary_branch (master -> main)"
     fi
-    if ! grep -q "blocksscreen-single-owner" "$conf"; then
-        bs_disable_overlapping_update_managers "$conf" "$tag" && patched=true
+    if bs_disable_overlapping_update_managers "$conf" "$tag"; then
+        patched=true
     fi
     if bs_ensure_spoolman_moonraker "$conf" "$tag"; then
         patched=true
@@ -77,7 +77,8 @@ _bs_append_line() {
 # Moonraker refuses to restart units absent from moonraker.asvc, so old images break UI updates silently.
 bs_ensure_asvc() {
     local asvc="$1" tag="${2:-bs-common}" changed=false
-    [ -e "$asvc" ] || : >"$asvc" 2>/dev/null || return 1
+    # Moonraker seeds its default allowlist only when the file is absent; creating it here would drop those.
+    [ -e "$asvc" ] || return 1
     [ -w "$asvc" ] || return 1
     # Pre-rename images called the unit BlocksPrinter; the entry now names a service that does not exist.
     if grep -qx 'BlocksPrinter' "$asvc" 2>/dev/null; then
@@ -93,8 +94,10 @@ bs_ensure_asvc() {
 
 # install.sh runs only at flash time, so re-assert the artifacts old images shipped wrong or not at all.
 bs_ensure_install_state() {
-    local bs_path="$1" bsenv="$2" tag="${3:-bs-common}" home env_file logs k
-    home=$(getent passwd "$(id -un)" | cut -d: -f6)
+    local bs_path="$1" bsenv="$2" tag="${3:-bs-common}" user home env_file logs k
+    # post-merge runs under a root pull and sets _BSENV_USER: never derive /root.
+    user="${_BSENV_USER:-$(id -un)}"
+    home=$(getent passwd "$user" | cut -d: -f6)
     [ -n "$home" ] || return 0
     env_file="$home/.config/blockscreen/env"
     mkdir -p "$home/.config/blockscreen" 2>/dev/null || true
@@ -104,6 +107,10 @@ bs_ensure_install_state() {
         _bs_append_line "$env_file" "$k" 2>/dev/null &&
             echo "[$tag] env: declared ${k%%=*}"
     done
+    # A root-created dir would block the hook's deploy flag, which runs as the service user.
+    if [ "$(id -u)" = 0 ]; then
+        chown "$user" "$home/.config/blockscreen" "$env_file" 2>/dev/null || true
+    fi
     logs="$bs_path/logs"
     # Without setgid, files the updater writes as root land root-owned and the UI cannot rotate them.
     if [ -d "$logs" ] && [ "$(stat -c %a "$logs" 2>/dev/null)" != "2775" ]; then
@@ -118,7 +125,7 @@ bs_ensure_install_state() {
 
 # Pi 5 ports cap at 600mA combined vs the fleet's 824mA declared draw; not a proven fix for the RF50 MCU shutdowns (cause unknown), shipped because the oversubscription is real regardless, takes effect after reboot.
 bs_ensure_usb_max_current() {
-    local f="${1:-/boot/firmware/config.txt}" tag="${2:-bs-common}" mnt opts
+    local f="${1:-/boot/firmware/config.txt}" tag="${2:-bs-common}" mnt opts remounted=false
     [ -f "$f" ] || return 0
     if grep -qE '^[[:space:]]*usb_max_current_enable[[:space:]]*=[[:space:]]*1[[:space:]]*$' "$f" 2>/dev/null; then
         return 0
@@ -128,16 +135,30 @@ bs_ensure_usb_max_current() {
         opts=$(findmnt -no OPTIONS "$mnt" 2>/dev/null)
         case ",$opts," in
         *,ro,*)
+            # ro without ro in fstab means the kernel remounted a damaged FAT (errors=remount-ro): never write to it.
+            case ",$(findmnt --fstab -no OPTIONS "$mnt" 2>/dev/null)," in
+            *,ro,*) ;;
+            *)
+                echo "[$tag] $mnt went read-only unexpectedly, usb_max_current_enable NOT applied"
+                return 1
+                ;;
+            esac
             echo "[$tag] $mnt is mounted read-only, remounting rw to write usb_max_current_enable"
             sudo mount -o remount,rw "$mnt" 2>/dev/null || {
                 echo "[$tag] remount rw of $mnt failed, usb_max_current_enable NOT applied"
                 return 1
             }
+            remounted=true
             ;;
         esac
     fi
-    printf '\nusb_max_current_enable=1\n' | sudo tee -a "$f" >/dev/null 2>&1
+    # [all] closes whatever conditional section ([pi4], [cm5], ...) is still open at EOF.
+    printf '\n[all]\nusb_max_current_enable=1\n' | sudo tee -a "$f" >/dev/null 2>&1
     sync
+    if $remounted; then
+        sudo mount -o remount,ro "$mnt" 2>/dev/null ||
+            echo "[$tag] WARN: could not restore $mnt to read-only"
+    fi
     # tee's exit status isn't proof of a landed write (a prior field attempt silently no-op'd against a ro remount), so read the file back before trusting it.
     if ! grep -qE '^[[:space:]]*usb_max_current_enable[[:space:]]*=[[:space:]]*1[[:space:]]*$' "$f" 2>/dev/null; then
         echo "[$tag] write to $f did not land, usb_max_current_enable NOT applied"
@@ -151,15 +172,18 @@ bs_ensure_usb_max_current() {
 # Mainsail "Update All" can't trip on them. Grep-gated marker so it runs once.
 bs_disable_overlapping_update_managers() {
     local conf="$1" tag="${2:-bs-common}"
+    # Bump the version whenever `owned` grows, else already-migrated boxes never pick it up.
+    local mark="blocksscreen-single-owner-v2"
     [ -f "$conf" ] || return 1
-    grep -q "blocksscreen-single-owner" "$conf" && return 1
+    grep -q "$mark" "$conf" && return 1
     local owned="klipper RF50-Klipper happy-hare Klippain-ShakeTune mainsail-config crowsnest"
     local tmp
     # Same-dir temp + atomic rename: a power cut can never truncate moonraker.conf.
     tmp="$(mktemp -p "$(dirname "$conf")" .moonraker.conf.XXXXXX)" || return 1
     if awk -v owned="$owned" '
         BEGIN { n = split(owned, a, " "); for (i = 1; i <= n; i++) own[a[i]] = 1 }
-        /^\[/ {
+        # A commented header also closes the section, else re-runs double-comment it.
+        /^#*\[/ {
             insec = 0
             if ($0 ~ /^\[update_manager [^]]+\]/) {
                 name = $0; sub(/^\[update_manager /, "", name); sub(/\].*/, "", name)
@@ -174,7 +198,7 @@ bs_disable_overlapping_update_managers() {
         rm -f "$tmp"
         return 1
     fi
-    printf '\n# blocksscreen-single-owner applied by %s\n' "$tag" >> "$conf"
+    printf '\n# %s applied by %s\n' "$mark" "$tag" >> "$conf"
     echo "[$tag] moonraker.conf: disabled Moonraker management of daemon-owned repos"
 }
 

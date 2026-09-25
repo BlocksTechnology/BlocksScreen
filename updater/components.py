@@ -185,7 +185,7 @@ def _validate_component(data: dict) -> ComponentConfig | None:
     """Parse and validate a raw component dict; returns None and logs a warning on any error."""  # noqa: E501
     name = data.get("name", "")
     if not isinstance(name, str) or not name:
-        logger.warning("Component missing name,  skipped")
+        logger.warning("Component missing name, skipped")
         return None
     if len(name) > 255:
         logger.warning("Component name too long (%d chars) - skipped", len(name))

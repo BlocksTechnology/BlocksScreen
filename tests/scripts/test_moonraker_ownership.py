@@ -125,3 +125,39 @@ def test_migrate_is_idempotent(tmp_path: Path) -> None:
     first = _migrate(conf)
     second = _migrate(conf)
     assert first == second
+
+
+def test_v1_marker_box_picks_up_newly_owned_klipper(tmp_path: Path) -> None:
+    conf = tmp_path / "moonraker.conf"
+    # A box migrated before klipper joined `owned`: crowsnest done, klipper still live.
+    conf.write_text(
+        _CONF.replace("[update_manager crowsnest]", "#[update_manager crowsnest]")
+        + "\n# blocksscreen-single-owner applied by post-merge\n"
+    )
+    out = _run(conf)
+    assert "#[update_manager klipper]" in out
+    assert "##[update_manager crowsnest]" not in out
+    assert _run(conf) == out  # the v2 marker gates the re-run
+
+
+def _asvc(asvc: Path) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ["bash", "-c", f'. "{_FN}"; bs_ensure_asvc "{asvc}" test'],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+
+def test_asvc_absent_is_left_for_moonraker_to_seed(tmp_path: Path) -> None:
+    asvc = tmp_path / "moonraker.asvc"
+    assert _asvc(asvc).returncode != 0
+    assert not asvc.exists()  # else Moonraker never writes its default allowlist
+
+
+def test_asvc_existing_gets_blocksscreen_and_drops_legacy(tmp_path: Path) -> None:
+    asvc = tmp_path / "moonraker.asvc"
+    asvc.write_text("klipper_mcu\ncrowsnest\nBlocksPrinter")
+    assert _asvc(asvc).returncode == 0
+    assert asvc.read_text().splitlines() == ["klipper_mcu", "crowsnest", "BlocksScreen"]
+    assert _asvc(asvc).returncode != 0  # no change on re-run, so no moonraker restart
