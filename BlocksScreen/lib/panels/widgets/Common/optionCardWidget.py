@@ -25,7 +25,7 @@ class OptionCard(QtWidgets.QAbstractButton):
         self.name = name
         self.card_text = text
         self.doubleT: bool = False
-        self._setupUi(self)
+        self._setup_ui(self)
         self.option_icon.setAttribute(
             QtCore.Qt.WidgetAttribute.WA_TransparentForMouseEvents
         )
@@ -200,7 +200,7 @@ class OptionCard(QtWidgets.QAbstractButton):
 
         painter.end()
 
-    def _setupUi(self, option_card):
+    def _setup_ui(self, option_card):
         option_card.setObjectName("option_card")
         option_card.resize(200, 300)
         sizePolicy = QtWidgets.QSizePolicy(
