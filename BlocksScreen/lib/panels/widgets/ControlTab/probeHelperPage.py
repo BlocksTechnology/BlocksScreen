@@ -946,9 +946,6 @@ class ProbeHelper(QtWidgets.QWidget):
         self.current_offset_info.setFont(font)
         self.current_offset_info.setStyleSheet("background: transparent; color: white;")
         self.current_offset_info.setText("Z:0.000mm")
-        self.current_offset_info.setPixmap(
-            QtGui.QPixmap(":/graphics/media/btn_icons/z_offset_adjust.svg")
-        )
         self.current_offset_info.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         self.current_offset_info.setObjectName("current_offset_info")
         # Add graphic frame AFTER the offset buttons group box

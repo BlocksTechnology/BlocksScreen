@@ -27,7 +27,7 @@ class SliderPage(QtWidgets.QWidget):
         self.decrease_button_icon = QtGui.QPixmap(
             ":/arrow_icons/media/btn_icons/left_arrow.svg"
         )
-        self.background = QtGui.QPixmap(":/ui/background/media/1st_background.png")
+        self.background = QtGui.QPixmap(":/background/media/1st_background.png")
         self.setStyleSheet(
             "#SliderPage{background-image: url(:/background/media/1st_background.png);}\n"
         )
